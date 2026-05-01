@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Virtual env
+.venv/
+venv/
+
+# uv
+# (uv.lock is committed)
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+*.key
+credentials.json
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Claude Code agent folder may contain auth tokens; per spec-kit guidance.
+# Keep skills/commands committed but ignore anything sensitive.
+.claude/settings.local.json
+.claude/.credentials*
+
+# Build / dist
+build/
+dist/
