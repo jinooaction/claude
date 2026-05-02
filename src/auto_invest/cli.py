@@ -162,6 +162,79 @@ def version() -> None:
     typer.echo("auto-invest 0.1.0")
 
 
+@app.command()
+def halt(
+    reason: str = typer.Option(..., "--reason",
+                                help="Operator-supplied reason for halting."),
+    halt_path: Path = typer.Option(
+        Path("data/halt.flag"), "--halt-path",
+        help="Filesystem halt-flag path.",
+    ),
+    db_path: Path = typer.Option(
+        Path("data/auto_invest.db"), "--db",
+        help="SQLite database path (audit log destination).",
+    ),
+) -> None:
+    """Set the halt flag so no new orders are submitted."""
+    from auto_invest.persistence.audit import HaltSetPayload
+    from auto_invest.worker.halt import set_halt as _set_halt
+
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    state = _set_halt(halt_path, reason)
+    conn = db.get_connection(db_path)
+    db.migrate(conn)
+    try:
+        from auto_invest.persistence import audit as _audit
+
+        _audit.append(conn, HaltSetPayload(reason=state.reason))
+    finally:
+        conn.close()
+    typer.echo(f"Halt set: {state.reason!r} at {state.ts_utc}")
+
+
+@app.command()
+def resume(
+    confirm: bool = typer.Option(
+        False, "--confirm",
+        help="Required to actually clear the halt; prevents accidental resume.",
+    ),
+    halt_path: Path = typer.Option(
+        Path("data/halt.flag"), "--halt-path",
+        help="Filesystem halt-flag path.",
+    ),
+    db_path: Path = typer.Option(
+        Path("data/auto_invest.db"), "--db",
+        help="SQLite database path (audit log destination).",
+    ),
+) -> None:
+    """Clear the halt flag (requires --confirm)."""
+    from auto_invest.persistence.audit import HaltClearedPayload
+    from auto_invest.worker.halt import clear_halt as _clear_halt
+
+    if not confirm:
+        typer.echo(
+            "Pass --confirm to actually clear the halt flag.",
+            err=True,
+        )
+        _exit(2)
+
+    cleared = _clear_halt(halt_path)
+    if not cleared:
+        typer.echo("No halt flag was set.")
+        return
+
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = db.get_connection(db_path)
+    db.migrate(conn)
+    try:
+        from auto_invest.persistence import audit as _audit
+
+        _audit.append(conn, HaltClearedPayload(cleared_by="cli"))
+    finally:
+        conn.close()
+    typer.echo("Halt cleared.")
+
+
 async def _run_live(
     *,
     cfg,

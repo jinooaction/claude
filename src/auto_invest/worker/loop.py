@@ -41,6 +41,10 @@ from auto_invest.persistence.audit import (
     WorkerStartedPayload,
     WorkerStoppedPayload,
 )
+from auto_invest.reconciliation.runner import (
+    ReconciliationOutcome,
+    run_reconciliation,
+)
 from auto_invest.strategy.canary import restore_pause_status
 from auto_invest.strategy.triggers import TriggerContext, evaluate
 from auto_invest.worker.halt import is_halted
@@ -244,6 +248,23 @@ class Worker:
             price = quote_price if pos.symbol == symbol else pos.avg_cost_usd
             total += Decimal(pos.qty) * price
         return total
+
+    # ---------------------------------------------- reconciliation
+
+    async def reconcile_now(self) -> ReconciliationOutcome:
+        """Run reconciliation immediately. Used by tests and the
+        CLI's `reconcile` subcommand; the scheduled session-close
+        path uses the same entrypoint."""
+        return await run_reconciliation(
+            self.conn,
+            self.broker,
+            access_token=self.access_token,
+            app_key=self.app_key,
+            app_secret=self.app_secret,
+            account=self.account_no,
+            halt_path=self.settings.halt_path,
+            market=self.settings.market_order,
+        )
 
     # ---------------------------------------------- forever loop
 
