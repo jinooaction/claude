@@ -15,7 +15,7 @@ Build a Python 3.11 background worker, packaged as `auto_invest`, that loads ope
 **Primary Dependencies**:
 - `httpx` — HTTP client for KIS REST and WebSocket
 - `tenacity` — retry with exponential backoff (constitution VII)
-- `pandas` + `pandas-ta` — indicator computation (FR-016)
+- `pandas` + `ta` — indicator computation (FR-016). NOTE: research entry R-2 originally selected `pandas-ta`; substituted to `ta` (bukosabino/ta) at implementation time because PyPI no longer publishes a `pandas-ta` version compatible with Python 3.11. The R-2 facade pattern made this a one-line swap with no spec impact.
 - `exchange_calendars` — US market session boundaries (FR-003)
 - `pydantic` — config/rule validation (already transitive via anthropic; v2)
 - `python-dotenv` — secret loading (constitution V)

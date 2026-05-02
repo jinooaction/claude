@@ -33,3 +33,13 @@ credentials.json
 # Build / dist
 build/
 dist/
+
+# auto-invest runtime artifacts
+data/
+*.db
+*.db-wal
+*.db-shm
+*.pid
+
+# operator-specific TOML rules (the example fixture under tests/fixtures/rules/ is committed).
+config/rules.toml

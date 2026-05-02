@@ -21,7 +21,7 @@
 **Purpose**: Project skeleton, dev dependencies, repo hygiene. Most of this is already done from the original scaffolding — these tasks fill the remaining gaps so user-story work can begin without churn.
 
 - [ ] T001 Create source-tree skeleton with empty `__init__.py` files: `src/auto_invest/{config,broker,market_data,strategy,risk,execution,persistence,reconciliation,reports,worker}/__init__.py` plus `tests/{unit,integration,fixtures/{kis_responses,rules}}/` and top-level `data/` and `config/` directories.
-- [ ] T002 Add runtime dependencies via `uv add httpx tenacity pandas pandas-ta exchange_calendars pydantic python-dotenv apscheduler typer` and verify `pyproject.toml` reflects them.
+- [ ] T002 Add runtime dependencies via `uv add httpx tenacity pandas ta exchange_calendars pydantic python-dotenv apscheduler typer` and verify `pyproject.toml` reflects them. (Note: `ta` substituted for `pandas-ta` per the R-2 implementation-time amendment in `research.md`.)
 - [ ] T003 Add dev dependencies via `uv add --dev pytest-asyncio freezegun respx` and verify `pyproject.toml`.
 - [ ] T004 [P] Create `.env.example` documenting required secrets (`KIS_APP_KEY`, `KIS_APP_SECRET`, `KIS_ACCOUNT_NO`) with inline comments and a header noting that `.env` is gitignored.
 - [ ] T005 [P] Extend `.gitignore` to add `data/`, `config/rules.toml` (operator-specific), `*.db-wal`, `*.db-shm`, and `.pid`.

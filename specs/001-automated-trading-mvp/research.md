@@ -23,16 +23,19 @@ unknown surfaced by `plan.md`. Each entry follows the required shape:
 
 ## R-2. Indicator computation library
 
-**Decision**: `pandas-ta`, accessed through a thin facade module (`strategy/indicators.py`) that validates inputs (sufficient bar count, monotonic timestamps, no NaNs) before delegating.
+**Decision**: `ta` (bukosabino/ta), accessed through a thin facade module (`strategy/indicators.py`) that validates inputs (sufficient bar count, monotonic timestamps, no NaNs) before delegating.
 
 **Rationale**:
-- Pure Python on top of `pandas`/`numpy`; no C compilation required (unlike TA-Lib), so the install story is friction-free across operator hosts.
-- Comprehensive coverage of standard indicators (EMA, SMA, RSI, MACD, Bollinger) — the v1 trigger set will not exhaust it.
-- A facade keeps the public dependency a single name and lets us swap implementations later (e.g., to a vectorized in-house impl) without disturbing strategies.
+- Pure Python on top of `pandas`/`numpy`; no C compilation required, so the install story is friction-free across operator hosts.
+- Covers EMA, SMA, RSI, MACD, Bollinger, etc. — the v1 trigger set will not exhaust it.
+- The facade keeps the public dependency a single name and lets us swap implementations later (e.g., to a vectorized in-house impl) without disturbing strategies.
+
+**Implementation-time amendment (2026-05-02)**: this entry originally chose `pandas-ta`. At dependency-install time we found PyPI only publishes `pandas-ta>=0.4.67b0`, which requires Python 3.12+; our `requires-python` is `>=3.11`. We considered (a) bumping `requires-python` to 3.12, (b) reverting to a yanked `pandas-ta<0.4`, (c) switching to `ta`. We chose (c): `ta` covers the same indicator surface, supports Python ≥3.7, and the facade pattern made the substitution local. This deviation does not affect spec, plan structure, or tasks beyond a single dependency name.
 
 **Alternatives considered**:
+- **`pandas-ta`** — original choice; not viable on Python 3.11 as of 2026-05.
 - **TA-Lib** — battle-tested, but requires a system-level C library; install pain on operator machines is a recurring support tax.
-- **In-house only (numpy + pandas)** — fine for SMA/EMA, but quickly reinvents the wheel for RSI/MACD/Bollinger. Reject for v1; revisit if `pandas-ta` becomes a maintenance liability.
+- **In-house only (numpy + pandas)** — fine for SMA/EMA, but quickly reinvents the wheel for RSI/MACD/Bollinger. Reject for v1.
 
 ---
 
