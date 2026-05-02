@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain — **3 open decisions tracked in `## Open Decisions` (OD-1, OD-2, OD-3)**; one inline marker on `FR-015` linked to OD-3.
+- [x] No [NEEDS CLARIFICATION] markers remain — OD-1 / OD-2 / OD-3 resolved (C / D / A) and folded into FR-001, FR-005, FR-015, FR-016, FR-017.
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,5 +31,8 @@
 
 ## Notes
 
-- The three open decisions (OD-1, OD-2, OD-3) MUST be resolved before `/speckit-plan`. Resolution may happen via `/speckit-clarify` or by direct operator answer recorded back into the spec.
-- Items marked incomplete require spec updates before `/speckit-clarify` or `/speckit-plan`.
+- Open decisions OD-1, OD-2, OD-3 resolved by operator on 2026-05-02 (C / D / A). Spec updated accordingly; ready for `/speckit-plan`.
+- Implementation-significant follow-ups for `/speckit-plan` to resolve (these are not spec-level [NEEDS CLARIFICATION] but design choices the plan must declare):
+  - Concrete numeric values for sizing caps (per-trade, per-symbol, global) and canary capital share.
+  - Indicator library choice (community vs minimal in-house) and the persistence shape of `PriceBar` history.
+  - The operator-controlled halt mechanism (FR-013) — file flag, signal, CLI command, etc. — is a plan-level decision.
