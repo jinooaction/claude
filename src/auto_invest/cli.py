@@ -163,6 +163,113 @@ def version() -> None:
 
 
 @app.command()
+def report(
+    date: str = typer.Option(
+        None, "--date", "-d",
+        help="Session date in YYYY-MM-DD (default: yesterday UTC).",
+    ),
+    db_path: Path = typer.Option(
+        Path("data/auto_invest.db"), "--db",
+        help="SQLite database path.",
+    ),
+    output_root: Path = typer.Option(
+        Path("data/reports"), "--output-root",
+        help="Reports directory; one folder per session date.",
+    ),
+) -> None:
+    """Generate the daily report for the given session date."""
+    from datetime import UTC as _UTC
+    from datetime import datetime as _datetime
+    from datetime import timedelta
+
+    from auto_invest.reports.daily import build_report, write_report
+
+    session_date = date or (
+        (_datetime.now(_UTC) - timedelta(days=1)).strftime("%Y-%m-%d")
+    )
+
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = db.get_connection(db_path)
+    db.migrate(conn)
+    try:
+        rep = build_report(conn, session_date=session_date)
+        md_path, json_path = write_report(rep, output_root=output_root)
+    finally:
+        conn.close()
+
+    typer.echo(f"Daily report written: {md_path}")
+    typer.echo(f"  JSON sibling:        {json_path}")
+    typer.echo(f"  orders attempted:    {rep.counters.get('orders_attempted', 0)}")
+    typer.echo(f"  orders submitted:    {rep.counters.get('orders_submitted', 0)}")
+    typer.echo(f"  orders rejected:     {rep.counters.get('orders_rejected_by_gate', 0)}")
+    typer.echo(f"  reconciliation:      {rep.reconciliation}")
+
+
+@app.command()
+def status(
+    db_path: Path = typer.Option(
+        Path("data/auto_invest.db"), "--db",
+        help="SQLite database path.",
+    ),
+    halt_path: Path = typer.Option(
+        Path("data/halt.flag"), "--halt-path",
+        help="Filesystem halt-flag path.",
+    ),
+) -> None:
+    """Print a one-screen JSON summary of the current state."""
+    import json as _json
+    from datetime import UTC as _UTC
+    from datetime import datetime as _datetime
+
+    from auto_invest.persistence import positions as _positions
+    from auto_invest.worker.halt import read_halt as _read_halt
+
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = db.get_connection(db_path)
+    db.migrate(conn)
+    try:
+        halt_state = _read_halt(halt_path)
+        last_recon = conn.execute(
+            "SELECT result, started_at_utc FROM reconciliation_runs "
+            "ORDER BY seq DESC LIMIT 1"
+        ).fetchone()
+        today = _datetime.now(_UTC).strftime("%Y-%m-%d")
+        order_counts = dict(
+            conn.execute(
+                """
+                SELECT event_type, COUNT(*) FROM audit_log
+                WHERE substr(ts_utc, 1, 10) = ?
+                  AND event_type IN ('ORDER_INTENT','ORDER_SUBMITTED',
+                                     'ORDER_REJECTED_BY_GATE','FILL')
+                GROUP BY event_type
+                """,
+                (today,),
+            ).fetchall()
+        )
+        positions = [
+            {"symbol": p.symbol, "qty": p.qty,
+             "avg_cost_usd": str(p.avg_cost_usd)}
+            for p in _positions.get_all_positions(conn)
+        ]
+    finally:
+        conn.close()
+
+    summary = {
+        "halt": (
+            {"reason": halt_state.reason, "ts_utc": halt_state.ts_utc}
+            if halt_state else None
+        ),
+        "last_reconciliation": (
+            {"result": last_recon["result"], "started_at_utc": last_recon["started_at_utc"]}
+            if last_recon else None
+        ),
+        "today_order_counts": order_counts,
+        "positions": positions,
+    }
+    typer.echo(_json.dumps(summary, sort_keys=True, indent=2))
+
+
+@app.command()
 def halt(
     reason: str = typer.Option(..., "--reason",
                                 help="Operator-supplied reason for halting."),
