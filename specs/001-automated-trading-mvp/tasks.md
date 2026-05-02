@@ -167,6 +167,7 @@
 - [ ] T061 [P] Run `uv run ruff format .` and `uv run ruff check --fix .` across `src/` and `tests/`; commit any formatting deltas in a separate commit.
 - [ ] T062 [P] Manually validate `quickstart.md` against a fresh checkout (HUMAN-IN-LOOP step; document the result in the commit message).
 - [ ] T063 Update `README.md` with a short "what this does / what it does not do (yet)" summary and link to `quickstart.md` and the constitution.
+- [ ] T064 [P] Optional live KIS smoke test in `tests/integration/test_live_broker.py`, gated by `@pytest.mark.live` and skipped unless `KIS_LIVE_TEST=1` is set. Verifies a single read-only call (e.g., `get_quote("AAPL")`) against the operator's real KIS account so any drift between our mocked shapes and the broker's actual response surfaces before the next deploy. NEVER places a real order.
 
 ---
 
