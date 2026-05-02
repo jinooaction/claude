@@ -1,0 +1,105 @@
+"""TradingRule, Trigger, Action — the operator's rule-language data model.
+
+A rule answers the question: "when X happens, do Y for symbol Z up to
+size W?" The trigger discriminator (`kind`) selects between the three
+families v1 supports — time, price-threshold, indicator — per OD-1.
+"""
+
+from __future__ import annotations
+
+import re
+from decimal import Decimal
+from typing import Annotated, Any, Literal
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from auto_invest.config.enums import OrderType, Side, StrategyStage
+
+TIME_PATTERN = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
+TIMEFRAME_PATTERN = re.compile(r"^\d+[mhd]$")  # 1m, 5m, 1h, 1d, etc.
+PRICE_DIRECTIONS: tuple[str, ...] = ("<=", ">=")
+
+
+class TimeTrigger(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["time"] = "time"
+    at_time: str
+    weekdays: tuple[int, ...] | None = None  # 0=Mon..6=Sun; None means every day
+    cooldown_seconds: int = Field(..., ge=0)
+
+    @field_validator("at_time")
+    @classmethod
+    def _check_time_format(cls, v: str) -> str:
+        if not TIME_PATTERN.match(v):
+            raise ValueError(f"at_time must be HH:MM (24h), got {v!r}")
+        return v
+
+    @field_validator("weekdays")
+    @classmethod
+    def _check_weekdays(cls, v: tuple[int, ...] | None) -> tuple[int, ...] | None:
+        if v is None:
+            return v
+        for d in v:
+            if not 0 <= d <= 6:
+                raise ValueError(f"weekday must be 0-6 (0=Mon), got {d}")
+        return v
+
+
+class PriceTrigger(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["price"] = "price"
+    direction: Literal["<=", ">="]
+    threshold: Decimal = Field(..., gt=0)
+    cooldown_seconds: int = Field(..., ge=0)
+
+
+class IndicatorTrigger(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["indicator"] = "indicator"
+    indicator: str = Field(..., min_length=1)
+    params: dict[str, Any] = Field(default_factory=dict)
+    timeframe: str
+    cooldown_seconds: int = Field(..., ge=0)
+
+    @field_validator("timeframe")
+    @classmethod
+    def _check_timeframe(cls, v: str) -> str:
+        if not TIMEFRAME_PATTERN.match(v):
+            raise ValueError(
+                f"timeframe must match pattern <int><m|h|d>, got {v!r}"
+            )
+        return v
+
+
+Trigger = Annotated[
+    TimeTrigger | PriceTrigger | IndicatorTrigger,
+    Field(discriminator="kind"),
+]
+
+
+class Action(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    side: Side
+    order_type: OrderType
+    qty: int = Field(..., gt=0)
+    limit_price: str = Field(..., min_length=1)
+    # `limit_price` is parsed by execution/order_router.py at runtime.
+    # It may be a Decimal-like literal ("180.00") or a formula
+    # ("trigger - 0.10", "last_close * 1.001"). The grammar is part of
+    # the order_router contract, not this model.
+
+
+class TradingRule(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    id: str = Field(..., min_length=1)
+    symbol: str
+    stage: StrategyStage
+    priority: int
+    enabled: bool = True
+    trigger: Trigger
+    action: Action
+
+    @field_validator("symbol")
+    @classmethod
+    def _normalize_symbol(cls, v: str) -> str:
+        return v.upper()
