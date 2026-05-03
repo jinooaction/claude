@@ -114,9 +114,7 @@ async def test_reconciliation_ok_when_positions_match(tmp_path: Path):
         assert is_halted(halt_path) is False
         events = [r["event_type"] for r in audit.read_all(conn)]
         assert "RECONCILIATION_OK" in events
-        run_row = conn.execute(
-            "SELECT result FROM reconciliation_runs"
-        ).fetchone()
+        run_row = conn.execute("SELECT result FROM reconciliation_runs").fetchone()
         assert run_row["result"] == "OK"
 
 
@@ -158,9 +156,7 @@ async def test_reconciliation_mismatch_qty_halts_worker(tmp_path: Path):
         assert outcome.state == "MISMATCH"
         assert outcome.diff is not None
         position_diffs = outcome.diff["position_diffs"]
-        assert position_diffs == [
-            {"symbol": "AAPL", "local_qty": 10, "broker_qty": 7}
-        ]
+        assert position_diffs == [{"symbol": "AAPL", "local_qty": 10, "broker_qty": 7}]
         assert is_halted(halt_path) is True
         events = [r["event_type"] for r in audit.read_all(conn)]
         assert "RECONCILIATION_MISMATCH" in events
@@ -174,9 +170,7 @@ async def test_reconciliation_mismatch_when_local_has_unknown_symbol(tmp_path: P
         # Broker reports zero positions.
         with respx.mock(base_url=BASE) as mock:
             mock.get("/uapi/overseas-stock/v1/trading/inquire-balance").mock(
-                return_value=httpx.Response(
-                    200, json=_balance_payload(positions=[])
-                )
+                return_value=httpx.Response(200, json=_balance_payload(positions=[]))
             )
             outcome = await run_reconciliation(
                 conn,
@@ -216,7 +210,5 @@ async def test_reconciliation_inconclusive_on_broker_error(tmp_path: Path):
         assert is_halted(halt_path) is False
         events = [r["event_type"] for r in audit.read_all(conn)]
         assert "ERROR" in events
-        run_row = conn.execute(
-            "SELECT result FROM reconciliation_runs"
-        ).fetchone()
+        run_row = conn.execute("SELECT result FROM reconciliation_runs").fetchone()
         assert run_row["result"] == "INCONCLUSIVE"

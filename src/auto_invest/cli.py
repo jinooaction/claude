@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import os
 import signal
 from decimal import Decimal
 from pathlib import Path
@@ -37,6 +38,8 @@ from auto_invest.persistence import db
 from auto_invest.worker.loop import Worker, WorkerSettings
 
 app = typer.Typer(no_args_is_help=True, add_completion=False)
+db_app = typer.Typer(help="Database management subcommands.", no_args_is_help=True)
+app.add_typer(db_app, name="db")
 logger = logging.getLogger(__name__)
 
 
@@ -65,31 +68,39 @@ def _require_clean_migrations(db_path: Path, *, allow_apply: bool) -> None:
 @app.command()
 def run(
     config: Path = typer.Option(
-        Path("config/rules.toml"), "--config", "-c",
+        Path("config/rules.toml"),
+        "--config",
+        "-c",
         help="Path to the rules TOML.",
     ),
     db_path: Path = typer.Option(
-        Path("data/auto_invest.db"), "--db",
+        Path("data/auto_invest.db"),
+        "--db",
         help="SQLite database path.",
     ),
     halt_path: Path = typer.Option(
-        Path("data/halt.flag"), "--halt-path",
+        Path("data/halt.flag"),
+        "--halt-path",
         help="Filesystem halt-flag path.",
     ),
     env_file: Path | None = typer.Option(
-        None, "--env-file",
+        None,
+        "--env-file",
         help="Optional .env file (defaults to process environment only).",
     ),
     dry_run: bool = typer.Option(
-        False, "--dry-run",
+        False,
+        "--dry-run",
         help="Validate config, run migrations, then exit 0 — never contacts the broker.",
     ),
     base_url: str = typer.Option(
-        "https://openapi.koreainvestment.com:9443", "--base-url",
+        "https://openapi.koreainvestment.com:9443",
+        "--base-url",
         help="KIS REST base URL.",
     ),
     capital: float = typer.Option(
-        0.0, "--capital",
+        0.0,
+        "--capital",
         help="Operator-declared total capital in USD; required for live runs.",
     ),
     require_session_open: bool = typer.Option(
@@ -162,18 +173,64 @@ def version() -> None:
     typer.echo("auto-invest 0.1.0")
 
 
+@db_app.command("migrate")
+def db_migrate(
+    db_path: Path = typer.Option(
+        Path("data/auto_invest.db"),
+        "--db",
+        help="SQLite database path.",
+    ),
+) -> None:
+    """Apply any pending schema migrations.
+
+    Refuses to run when the worker's PID file exists and the recorded
+    process is still alive — running migrations against an open DB
+    risks corrupting the audit log.
+    """
+    pid_file = db_path.parent / "auto_invest.pid"
+    if pid_file.exists():
+        try:
+            pid = int(pid_file.read_text().strip())
+            os.kill(pid, 0)
+        except (ValueError, OSError):
+            # Stale PID file: process is gone, safe to remove.
+            pid_file.unlink(missing_ok=True)
+        else:
+            typer.echo(
+                f"Worker process {pid} appears to be running; stop it first.",
+                err=True,
+            )
+            _exit(2)
+
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = db.get_connection(db_path)
+    try:
+        applied = db.migrate(conn)
+    finally:
+        conn.close()
+
+    if applied:
+        typer.echo("Applied migrations: " + ", ".join(applied))
+    else:
+        typer.echo("No pending migrations.")
+
+
 @app.command()
 def report(
     date: str = typer.Option(
-        None, "--date", "-d",
+        None,
+        "--date",
+        "-d",
         help="Session date in YYYY-MM-DD (default: yesterday UTC).",
     ),
     db_path: Path = typer.Option(
-        Path("data/auto_invest.db"), "--db",
+        Path("data/auto_invest.db"),
+        "--db",
         help="SQLite database path.",
     ),
     output_root: Path = typer.Option(
-        Path("data/reports"), "--output-root",
+        Path("data/reports"),
+        "--output-root",
         help="Reports directory; one folder per session date.",
     ),
 ) -> None:
@@ -184,9 +241,7 @@ def report(
 
     from auto_invest.reports.daily import build_report, write_report
 
-    session_date = date or (
-        (_datetime.now(_UTC) - timedelta(days=1)).strftime("%Y-%m-%d")
-    )
+    session_date = date or ((_datetime.now(_UTC) - timedelta(days=1)).strftime("%Y-%m-%d"))
 
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = db.get_connection(db_path)
@@ -208,11 +263,13 @@ def report(
 @app.command()
 def status(
     db_path: Path = typer.Option(
-        Path("data/auto_invest.db"), "--db",
+        Path("data/auto_invest.db"),
+        "--db",
         help="SQLite database path.",
     ),
     halt_path: Path = typer.Option(
-        Path("data/halt.flag"), "--halt-path",
+        Path("data/halt.flag"),
+        "--halt-path",
         help="Filesystem halt-flag path.",
     ),
 ) -> None:
@@ -230,8 +287,7 @@ def status(
     try:
         halt_state = _read_halt(halt_path)
         last_recon = conn.execute(
-            "SELECT result, started_at_utc FROM reconciliation_runs "
-            "ORDER BY seq DESC LIMIT 1"
+            "SELECT result, started_at_utc FROM reconciliation_runs ORDER BY seq DESC LIMIT 1"
         ).fetchone()
         today = _datetime.now(_UTC).strftime("%Y-%m-%d")
         order_counts = dict(
@@ -247,8 +303,7 @@ def status(
             ).fetchall()
         )
         positions = [
-            {"symbol": p.symbol, "qty": p.qty,
-             "avg_cost_usd": str(p.avg_cost_usd)}
+            {"symbol": p.symbol, "qty": p.qty, "avg_cost_usd": str(p.avg_cost_usd)}
             for p in _positions.get_all_positions(conn)
         ]
     finally:
@@ -256,12 +311,12 @@ def status(
 
     summary = {
         "halt": (
-            {"reason": halt_state.reason, "ts_utc": halt_state.ts_utc}
-            if halt_state else None
+            {"reason": halt_state.reason, "ts_utc": halt_state.ts_utc} if halt_state else None
         ),
         "last_reconciliation": (
             {"result": last_recon["result"], "started_at_utc": last_recon["started_at_utc"]}
-            if last_recon else None
+            if last_recon
+            else None
         ),
         "today_order_counts": order_counts,
         "positions": positions,
@@ -271,14 +326,15 @@ def status(
 
 @app.command()
 def halt(
-    reason: str = typer.Option(..., "--reason",
-                                help="Operator-supplied reason for halting."),
+    reason: str = typer.Option(..., "--reason", help="Operator-supplied reason for halting."),
     halt_path: Path = typer.Option(
-        Path("data/halt.flag"), "--halt-path",
+        Path("data/halt.flag"),
+        "--halt-path",
         help="Filesystem halt-flag path.",
     ),
     db_path: Path = typer.Option(
-        Path("data/auto_invest.db"), "--db",
+        Path("data/auto_invest.db"),
+        "--db",
         help="SQLite database path (audit log destination).",
     ),
 ) -> None:
@@ -302,15 +358,18 @@ def halt(
 @app.command()
 def resume(
     confirm: bool = typer.Option(
-        False, "--confirm",
+        False,
+        "--confirm",
         help="Required to actually clear the halt; prevents accidental resume.",
     ),
     halt_path: Path = typer.Option(
-        Path("data/halt.flag"), "--halt-path",
+        Path("data/halt.flag"),
+        "--halt-path",
         help="Filesystem halt-flag path.",
     ),
     db_path: Path = typer.Option(
-        Path("data/auto_invest.db"), "--db",
+        Path("data/auto_invest.db"),
+        "--db",
         help="SQLite database path (audit log destination).",
     ),
 ) -> None:

@@ -138,11 +138,7 @@ def _insert_intent(
             request.side.value,
             request.order_type.value,
             request.qty,
-            (
-                str(request.limit_price_usd)
-                if request.limit_price_usd is not None
-                else None
-            ),
+            (str(request.limit_price_usd) if request.limit_price_usd is not None else None),
         ),
     )
     _record_transition(conn, correlation_id, None, "INTENT", None)
@@ -164,8 +160,7 @@ def _record_transition(
         (correlation_id, from_state, to_state, _utcnow_iso_ms(), reason),
     )
     conn.execute(
-        "UPDATE orders SET state = ?, final_state_at_utc = ? "
-        "WHERE correlation_id = ?",
+        "UPDATE orders SET state = ?, final_state_at_utc = ? WHERE correlation_id = ?",
         (to_state, _utcnow_iso_ms(), correlation_id),
     )
 
@@ -244,9 +239,7 @@ class OrderRouter:
         limit_price: Decimal | None = None
         if rule.action.order_type is OrderType.LIMIT:
             timeframe = getattr(rule.trigger, "timeframe", "1d")
-            latest = get_latest_bar(
-                self.conn, symbol=rule.symbol, timeframe=timeframe
-            )
+            latest = get_latest_bar(self.conn, symbol=rule.symbol, timeframe=timeframe)
             try:
                 limit_price = evaluate_limit_price(
                     rule.action.limit_price,
@@ -396,12 +389,8 @@ class OrderRouter:
             symbol=rule.symbol,
             correlation_id=correlation_id,
         )
-        _record_transition(
-            self.conn, correlation_id, "INTENT", "SUBMITTED", None
-        )
-        _set_kis_order_id(
-            self.conn, correlation_id, result.kis_order_id, submitted_at
-        )
+        _record_transition(self.conn, correlation_id, "INTENT", "SUBMITTED", None)
+        _set_kis_order_id(self.conn, correlation_id, result.kis_order_id, submitted_at)
         return OrderOutcome(
             state="SUBMITTED",
             correlation_id=correlation_id,
@@ -424,6 +413,4 @@ class OrderRouter:
             symbol=rule.symbol,
             correlation_id=correlation_id,
         )
-        return OrderOutcome(
-            state="ERROR", correlation_id=correlation_id, reason=reason
-        )
+        return OrderOutcome(state="ERROR", correlation_id=correlation_id, reason=reason)

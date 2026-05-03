@@ -26,8 +26,7 @@ def _bars(closes: list[float]) -> tuple[PriceBar, ...]:
         PriceBar(
             symbol="AAPL",
             timeframe="1d",
-            bar_open_utc=(start + timedelta(days=i))
-            .strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+            bar_open_utc=(start + timedelta(days=i)).strftime("%Y-%m-%dT%H:%M:%S.000Z"),
             open_usd=Decimal(str(c)),
             high_usd=Decimal(str(c)),
             low_usd=Decimal(str(c)),
@@ -77,8 +76,7 @@ def test_time_trigger_cooldown_suppresses_refire():
 
 
 def test_price_trigger_below_fires_when_price_under_threshold():
-    trigger = PriceTrigger(direction="<=", threshold=Decimal("100"),
-                           cooldown_seconds=0)
+    trigger = PriceTrigger(direction="<=", threshold=Decimal("100"), cooldown_seconds=0)
     ctx = TriggerContext(
         now=datetime(2026, 5, 4, tzinfo=UTC),
         current_price_usd=Decimal("99.99"),
@@ -87,8 +85,7 @@ def test_price_trigger_below_fires_when_price_under_threshold():
 
 
 def test_price_trigger_below_inclusive_at_threshold():
-    trigger = PriceTrigger(direction="<=", threshold=Decimal("100"),
-                           cooldown_seconds=0)
+    trigger = PriceTrigger(direction="<=", threshold=Decimal("100"), cooldown_seconds=0)
     ctx = TriggerContext(
         now=datetime(2026, 5, 4, tzinfo=UTC),
         current_price_usd=Decimal("100"),
@@ -97,8 +94,7 @@ def test_price_trigger_below_inclusive_at_threshold():
 
 
 def test_price_trigger_below_does_not_fire_above():
-    trigger = PriceTrigger(direction="<=", threshold=Decimal("100"),
-                           cooldown_seconds=0)
+    trigger = PriceTrigger(direction="<=", threshold=Decimal("100"), cooldown_seconds=0)
     ctx = TriggerContext(
         now=datetime(2026, 5, 4, tzinfo=UTC),
         current_price_usd=Decimal("100.01"),
@@ -107,8 +103,7 @@ def test_price_trigger_below_does_not_fire_above():
 
 
 def test_price_trigger_above_direction():
-    trigger = PriceTrigger(direction=">=", threshold=Decimal("100"),
-                           cooldown_seconds=0)
+    trigger = PriceTrigger(direction=">=", threshold=Decimal("100"), cooldown_seconds=0)
     ctx_above = TriggerContext(
         now=datetime(2026, 5, 4, tzinfo=UTC),
         current_price_usd=Decimal("101"),
@@ -122,16 +117,13 @@ def test_price_trigger_above_direction():
 
 
 def test_price_trigger_no_quote_does_not_fire():
-    trigger = PriceTrigger(direction="<=", threshold=Decimal("100"),
-                           cooldown_seconds=0)
-    ctx = TriggerContext(now=datetime(2026, 5, 4, tzinfo=UTC),
-                         current_price_usd=None)
+    trigger = PriceTrigger(direction="<=", threshold=Decimal("100"), cooldown_seconds=0)
+    ctx = TriggerContext(now=datetime(2026, 5, 4, tzinfo=UTC), current_price_usd=None)
     assert evaluate_price_trigger(trigger, ctx) is False
 
 
 def test_price_trigger_cooldown_suppresses_refire():
-    trigger = PriceTrigger(direction="<=", threshold=Decimal("100"),
-                           cooldown_seconds=600)
+    trigger = PriceTrigger(direction="<=", threshold=Decimal("100"), cooldown_seconds=600)
     base = datetime(2026, 5, 4, 13, 30, tzinfo=UTC)
     ctx = TriggerContext(
         now=base + timedelta(seconds=10),
@@ -149,8 +141,7 @@ def test_indicator_trigger_warmup_returns_false_quietly():
         indicator="EMA_CROSS",
         timeframe="1d",
         cooldown_seconds=0,
-        params={"fast_period": 5, "slow_period": 20,
-                "direction": "fast_above_slow"},
+        params={"fast_period": 5, "slow_period": 20, "direction": "fast_above_slow"},
     )
     # Far fewer than slow_period bars: insufficient warm-up.
     ctx = TriggerContext(
@@ -165,8 +156,7 @@ def test_indicator_trigger_ema_cross_fires_on_uptrend():
         indicator="EMA_CROSS",
         timeframe="1d",
         cooldown_seconds=0,
-        params={"fast_period": 5, "slow_period": 20,
-                "direction": "fast_above_slow"},
+        params={"fast_period": 5, "slow_period": 20, "direction": "fast_above_slow"},
     )
     ctx = TriggerContext(
         now=datetime(2026, 6, 1, tzinfo=UTC),
@@ -209,12 +199,14 @@ def test_indicator_trigger_unknown_indicator_returns_false():
 
 def test_dispatch_routes_by_type():
     time_trigger = TimeTrigger(at_time="13:30", cooldown_seconds=0)
-    price_trigger = PriceTrigger(direction="<=", threshold=Decimal("100"),
-                                 cooldown_seconds=0)
+    price_trigger = PriceTrigger(direction="<=", threshold=Decimal("100"), cooldown_seconds=0)
     moment = datetime(2026, 5, 4, 13, 30, tzinfo=UTC)
 
     assert evaluate(time_trigger, TriggerContext(now=moment)) is True
-    assert evaluate(
-        price_trigger,
-        TriggerContext(now=moment, current_price_usd=Decimal("90")),
-    ) is True
+    assert (
+        evaluate(
+            price_trigger,
+            TriggerContext(now=moment, current_price_usd=Decimal("90")),
+        )
+        is True
+    )

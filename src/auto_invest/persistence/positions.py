@@ -41,16 +41,12 @@ def _row_to_position(row: sqlite3.Row) -> Position:
 
 
 def get_position(conn: sqlite3.Connection, symbol: str) -> Position | None:
-    row = conn.execute(
-        "SELECT * FROM current_positions WHERE symbol = ?", (symbol,)
-    ).fetchone()
+    row = conn.execute("SELECT * FROM current_positions WHERE symbol = ?", (symbol,)).fetchone()
     return _row_to_position(row) if row else None
 
 
 def get_all_positions(conn: sqlite3.Connection) -> list[Position]:
-    rows = conn.execute(
-        "SELECT * FROM current_positions ORDER BY symbol"
-    ).fetchall()
+    rows = conn.execute("SELECT * FROM current_positions ORDER BY symbol").fetchall()
     return [_row_to_position(r) for r in rows]
 
 
@@ -74,15 +70,13 @@ def rebuild_from_fills(conn: sqlite3.Connection) -> None:
         price = Decimal(row["price_usd"])
         ts = row["executed_at_utc"]
 
-        agg = aggregates.setdefault(
-            symbol, {"qty": 0, "avg": Decimal("0"), "ts": ""}
-        )
+        agg = aggregates.setdefault(symbol, {"qty": 0, "avg": Decimal("0"), "ts": ""})
         if side == "BUY":
             new_qty = agg["qty"] + qty
             if new_qty > 0:
-                agg["avg"] = (
-                    Decimal(agg["qty"]) * agg["avg"] + Decimal(qty) * price
-                ) / Decimal(new_qty)
+                agg["avg"] = (Decimal(agg["qty"]) * agg["avg"] + Decimal(qty) * price) / Decimal(
+                    new_qty
+                )
             agg["qty"] = new_qty
         else:  # SELL
             agg["qty"] -= qty

@@ -65,8 +65,7 @@ def test_first_write_wins_on_duplicate(conn):
 
 
 def test_get_bars_returns_in_ascending_order(conn):
-    for ts in ["2026-05-03T00:00:00.000Z", "2026-05-01T00:00:00.000Z",
-               "2026-05-02T00:00:00.000Z"]:
+    for ts in ["2026-05-03T00:00:00.000Z", "2026-05-01T00:00:00.000Z", "2026-05-02T00:00:00.000Z"]:
         insert_bar(conn, _bar(bar_open=ts))
     bars = get_bars(conn, symbol="AAPL", timeframe="1d")
     assert [b.bar_open_utc for b in bars] == [
@@ -79,8 +78,7 @@ def test_get_bars_returns_in_ascending_order(conn):
 def test_get_bars_filters_by_symbol_and_timeframe(conn):
     insert_bar(conn, _bar(symbol="AAPL", timeframe="1d"))
     insert_bar(conn, _bar(symbol="MSFT", timeframe="1d"))
-    insert_bar(conn, _bar(symbol="AAPL", timeframe="1h",
-                          bar_open="2026-05-02T13:00:00.000Z"))
+    insert_bar(conn, _bar(symbol="AAPL", timeframe="1h", bar_open="2026-05-02T13:00:00.000Z"))
 
     aapl_daily = get_bars(conn, symbol="AAPL", timeframe="1d")
     assert len(aapl_daily) == 1
@@ -110,8 +108,7 @@ def test_get_bars_limit(conn):
 
 def test_get_latest_bar_returns_most_recent(conn):
     for day in ("01", "02", "03"):
-        insert_bar(conn, _bar(bar_open=f"2026-05-{day}T00:00:00.000Z",
-                              close=f"18{day}"))
+        insert_bar(conn, _bar(bar_open=f"2026-05-{day}T00:00:00.000Z", close=f"18{day}"))
     latest = get_latest_bar(conn, symbol="AAPL", timeframe="1d")
     assert latest is not None
     assert latest.bar_open_utc == "2026-05-03T00:00:00.000Z"

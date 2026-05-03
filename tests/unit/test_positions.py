@@ -86,12 +86,20 @@ def test_first_buy_creates_position(conn):
 
 def test_subsequent_buy_recomputes_avg_cost(conn):
     positions.update_from_fill(
-        conn, symbol="AAPL", side=Side.BUY, qty=10,
-        price_usd=Decimal("180"), ts_utc="t1",
+        conn,
+        symbol="AAPL",
+        side=Side.BUY,
+        qty=10,
+        price_usd=Decimal("180"),
+        ts_utc="t1",
     )
     pos = positions.update_from_fill(
-        conn, symbol="AAPL", side=Side.BUY, qty=10,
-        price_usd=Decimal("200"), ts_utc="t2",
+        conn,
+        symbol="AAPL",
+        side=Side.BUY,
+        qty=10,
+        price_usd=Decimal("200"),
+        ts_utc="t2",
     )
     assert pos is not None
     assert pos.qty == 20
@@ -101,12 +109,20 @@ def test_subsequent_buy_recomputes_avg_cost(conn):
 
 def test_partial_sell_keeps_avg_cost(conn):
     positions.update_from_fill(
-        conn, symbol="AAPL", side=Side.BUY, qty=10,
-        price_usd=Decimal("180"), ts_utc="t1",
+        conn,
+        symbol="AAPL",
+        side=Side.BUY,
+        qty=10,
+        price_usd=Decimal("180"),
+        ts_utc="t1",
     )
     pos = positions.update_from_fill(
-        conn, symbol="AAPL", side=Side.SELL, qty=3,
-        price_usd=Decimal("200"), ts_utc="t2",
+        conn,
+        symbol="AAPL",
+        side=Side.SELL,
+        qty=3,
+        price_usd=Decimal("200"),
+        ts_utc="t2",
     )
     assert pos is not None
     assert pos.qty == 7
@@ -115,12 +131,20 @@ def test_partial_sell_keeps_avg_cost(conn):
 
 def test_full_sell_deletes_row(conn):
     positions.update_from_fill(
-        conn, symbol="AAPL", side=Side.BUY, qty=10,
-        price_usd=Decimal("180"), ts_utc="t1",
+        conn,
+        symbol="AAPL",
+        side=Side.BUY,
+        qty=10,
+        price_usd=Decimal("180"),
+        ts_utc="t1",
     )
     pos = positions.update_from_fill(
-        conn, symbol="AAPL", side=Side.SELL, qty=10,
-        price_usd=Decimal("200"), ts_utc="t2",
+        conn,
+        symbol="AAPL",
+        side=Side.SELL,
+        qty=10,
+        price_usd=Decimal("200"),
+        ts_utc="t2",
     )
     assert pos is None
     assert positions.get_position(conn, "AAPL") is None
@@ -136,11 +160,13 @@ def test_rebuild_from_empty_fills(conn):
 
 def test_rebuild_aggregates_buys_into_avg_cost(conn):
     _seed_order(conn, correlation_id="o1", symbol="AAPL", side="BUY", qty=10)
-    _seed_fill(conn, correlation_id="o1", fill_id="f1", qty=10,
-               price="180", ts="2026-05-02T13:31:00.000Z")
+    _seed_fill(
+        conn, correlation_id="o1", fill_id="f1", qty=10, price="180", ts="2026-05-02T13:31:00.000Z"
+    )
     _seed_order(conn, correlation_id="o2", symbol="AAPL", side="BUY", qty=10)
-    _seed_fill(conn, correlation_id="o2", fill_id="f2", qty=10,
-               price="200", ts="2026-05-02T13:32:00.000Z")
+    _seed_fill(
+        conn, correlation_id="o2", fill_id="f2", qty=10, price="200", ts="2026-05-02T13:32:00.000Z"
+    )
 
     positions.rebuild_from_fills(conn)
 
@@ -152,11 +178,9 @@ def test_rebuild_aggregates_buys_into_avg_cost(conn):
 
 def test_rebuild_handles_partial_sell(conn):
     _seed_order(conn, correlation_id="o1", symbol="AAPL", side="BUY", qty=10)
-    _seed_fill(conn, correlation_id="o1", fill_id="f1", qty=10,
-               price="180", ts="t1")
+    _seed_fill(conn, correlation_id="o1", fill_id="f1", qty=10, price="180", ts="t1")
     _seed_order(conn, correlation_id="o2", symbol="AAPL", side="SELL", qty=3)
-    _seed_fill(conn, correlation_id="o2", fill_id="f2", qty=3,
-               price="220", ts="t2")
+    _seed_fill(conn, correlation_id="o2", fill_id="f2", qty=3, price="220", ts="t2")
 
     positions.rebuild_from_fills(conn)
 
@@ -168,11 +192,9 @@ def test_rebuild_handles_partial_sell(conn):
 
 def test_rebuild_drops_fully_closed_positions(conn):
     _seed_order(conn, correlation_id="o1", symbol="AAPL", side="BUY", qty=10)
-    _seed_fill(conn, correlation_id="o1", fill_id="f1", qty=10,
-               price="180", ts="t1")
+    _seed_fill(conn, correlation_id="o1", fill_id="f1", qty=10, price="180", ts="t1")
     _seed_order(conn, correlation_id="o2", symbol="AAPL", side="SELL", qty=10)
-    _seed_fill(conn, correlation_id="o2", fill_id="f2", qty=10,
-               price="200", ts="t2")
+    _seed_fill(conn, correlation_id="o2", fill_id="f2", qty=10, price="200", ts="t2")
 
     positions.rebuild_from_fills(conn)
 
@@ -183,8 +205,7 @@ def test_rebuild_handles_multiple_symbols(conn):
     for symbol, qty, price in [("AAPL", 10, "180"), ("MSFT", 5, "400")]:
         cid = f"o-{symbol}"
         _seed_order(conn, correlation_id=cid, symbol=symbol, side="BUY", qty=qty)
-        _seed_fill(conn, correlation_id=cid, fill_id=f"f-{symbol}",
-                   qty=qty, price=price, ts="t1")
+        _seed_fill(conn, correlation_id=cid, fill_id=f"f-{symbol}", qty=qty, price=price, ts="t1")
 
     positions.rebuild_from_fills(conn)
 
@@ -196,8 +217,7 @@ def test_rebuild_handles_multiple_symbols(conn):
 
 def test_rebuild_is_idempotent(conn):
     _seed_order(conn, correlation_id="o1", symbol="AAPL", side="BUY", qty=10)
-    _seed_fill(conn, correlation_id="o1", fill_id="f1", qty=10,
-               price="180", ts="t1")
+    _seed_fill(conn, correlation_id="o1", fill_id="f1", qty=10, price="180", ts="t1")
 
     positions.rebuild_from_fills(conn)
     snapshot1 = positions.get_all_positions(conn)

@@ -104,8 +104,7 @@ class Worker:
         self._stop_requested = asyncio.Event()
         self._last_fired: dict[str, datetime] = {}
         self._paused_rules: set[str] = {
-            r.id for r in settings.config.rules
-            if restore_pause_status(self.conn, r.id)
+            r.id for r in settings.config.rules if restore_pause_status(self.conn, r.id)
         }
 
         self.router = OrderRouter(

@@ -49,8 +49,7 @@ def _config(symbols: set[str], rules: list[TradingRule]) -> LoadedConfig:
     )
 
 
-def _rule(*, symbol: str = "AAPL", qty: int = 5,
-          threshold: str = "100") -> TradingRule:
+def _rule(*, symbol: str = "AAPL", qty: int = 5, threshold: str = "100") -> TradingRule:
     return TradingRule(
         id=f"{symbol.lower()}-rule",
         symbol=symbol,
@@ -124,9 +123,7 @@ async def test_tick_skips_when_halted(tmp_path: Path):
 
 @pytest.mark.asyncio
 async def test_tick_skips_when_session_closed(tmp_path: Path):
-    async with _worker(
-        tmp_path, rules=[_rule()], require_session_open=True
-    ) as worker:
+    async with _worker(tmp_path, rules=[_rule()], require_session_open=True) as worker:
         # Saturday — session closed.
         report = await worker.tick(datetime(2024, 6, 8, 15, 0, tzinfo=UTC))
     assert report.skipped_reason == "session_closed"
@@ -143,19 +140,14 @@ async def test_tick_fires_rule_and_routes_order(tmp_path: Path):
             mock.get("/uapi/overseas-price/v1/quotations/price").mock(
                 return_value=httpx.Response(
                     200,
-                    json={"output": {"last": "150.00", "bidp": "149.99",
-                                     "askp": "150.01"}},
+                    json={"output": {"last": "150.00", "bidp": "149.99", "askp": "150.01"}},
                 )
             )
             mock.post("/uapi/overseas-stock/v1/trading/order").mock(
-                return_value=httpx.Response(
-                    200, json={"output": {"ODNO": "K-001"}}
-                )
+                return_value=httpx.Response(200, json={"output": {"ODNO": "K-001"}})
             )
 
-            report = await worker.tick(
-                datetime(2026, 6, 3, 15, 0, tzinfo=UTC)
-            )
+            report = await worker.tick(datetime(2026, 6, 3, 15, 0, tzinfo=UTC))
 
         assert report.skipped_reason is None
         assert report.rules_evaluated == 1
@@ -178,19 +170,14 @@ async def test_tick_does_not_fire_when_price_above_threshold(tmp_path: Path):
             mock.get("/uapi/overseas-price/v1/quotations/price").mock(
                 return_value=httpx.Response(
                     200,
-                    json={"output": {"last": "150.00", "bidp": "149.99",
-                                     "askp": "150.01"}},
+                    json={"output": {"last": "150.00", "bidp": "149.99", "askp": "150.01"}},
                 )
             )
             placed = mock.post("/uapi/overseas-stock/v1/trading/order").mock(
-                return_value=httpx.Response(
-                    200, json={"output": {"ODNO": "x"}}
-                )
+                return_value=httpx.Response(200, json={"output": {"ODNO": "x"}})
             )
 
-            report = await worker.tick(
-                datetime(2026, 6, 3, 15, 0, tzinfo=UTC)
-            )
+            report = await worker.tick(datetime(2026, 6, 3, 15, 0, tzinfo=UTC))
 
         assert report.rules_evaluated == 1
         assert report.rules_fired == 0
@@ -208,22 +195,17 @@ async def test_cooldown_suppresses_refire(tmp_path: Path):
             mock.get("/uapi/overseas-price/v1/quotations/price").mock(
                 return_value=httpx.Response(
                     200,
-                    json={"output": {"last": "150.00", "bidp": "149.99",
-                                     "askp": "150.01"}},
+                    json={"output": {"last": "150.00", "bidp": "149.99", "askp": "150.01"}},
                 )
             )
             placed = mock.post("/uapi/overseas-stock/v1/trading/order").mock(
-                return_value=httpx.Response(
-                    200, json={"output": {"ODNO": "K-001"}}
-                )
+                return_value=httpx.Response(200, json={"output": {"ODNO": "K-001"}})
             )
 
             now = datetime(2026, 6, 3, 15, 0, tzinfo=UTC)
             await worker.tick(now)
             # Second tick within cooldown — should not re-fire.
-            report = await worker.tick(
-                datetime(2026, 6, 3, 15, 0, 30, tzinfo=UTC)
-            )
+            report = await worker.tick(datetime(2026, 6, 3, 15, 0, 30, tzinfo=UTC))
 
         assert report.rules_fired == 0
         assert placed.call_count == 1

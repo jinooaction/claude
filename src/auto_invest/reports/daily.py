@@ -117,8 +117,7 @@ def build_report(
         elif event == "FILL":
             counter["fills"] += 1
 
-    rule_ids = sorted(set(per_rule_triggers) | set(per_rule_submitted)
-                      | set(per_rule_rejected))
+    rule_ids = sorted(set(per_rule_triggers) | set(per_rule_submitted) | set(per_rule_rejected))
     rules = [
         RuleActivity(
             rule_id=rid,
@@ -201,9 +200,7 @@ def render_markdown(report: DailyReport) -> str:
         lines.append("| rule_id | triggers | submitted | rejected |")
         lines.append("|---------|---------:|----------:|---------:|")
         for r in report.rules:
-            lines.append(
-                f"| {r.rule_id} | {r.triggers} | {r.submitted} | {r.rejected} |"
-            )
+            lines.append(f"| {r.rule_id} | {r.triggers} | {r.submitted} | {r.rejected} |")
     else:
         lines.append("(none)")
     lines.append("")

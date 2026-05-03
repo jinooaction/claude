@@ -24,8 +24,7 @@ def _bars(closes: list[float], start: datetime | None = None) -> list[PriceBar]:
         PriceBar(
             symbol="AAPL",
             timeframe="1d",
-            bar_open_utc=(start + timedelta(days=i))
-            .strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+            bar_open_utc=(start + timedelta(days=i)).strftime("%Y-%m-%dT%H:%M:%S.000Z"),
             open_usd=Decimal(str(c)),
             high_usd=Decimal(str(c)),
             low_usd=Decimal(str(c)),
@@ -115,30 +114,25 @@ def test_rsi_too_few_bars_raises():
 def test_ema_cross_fast_above_slow_on_uptrend():
     # On an ascending series, fast EMA tracks recent values closer than slow.
     bars = _bars([float(i) for i in range(1, 31)])
-    assert ema_cross(bars, fast_period=5, slow_period=20,
-                     direction="fast_above_slow") is True
-    assert ema_cross(bars, fast_period=5, slow_period=20,
-                     direction="fast_below_slow") is False
+    assert ema_cross(bars, fast_period=5, slow_period=20, direction="fast_above_slow") is True
+    assert ema_cross(bars, fast_period=5, slow_period=20, direction="fast_below_slow") is False
 
 
 def test_ema_cross_fast_below_slow_on_downtrend():
     bars = _bars([float(i) for i in range(30, 0, -1)])
-    assert ema_cross(bars, fast_period=5, slow_period=20,
-                     direction="fast_below_slow") is True
+    assert ema_cross(bars, fast_period=5, slow_period=20, direction="fast_below_slow") is True
 
 
 def test_ema_cross_fast_must_be_less_than_slow():
     bars = _bars([float(i) for i in range(1, 31)])
     with pytest.raises(IndicatorError, match="fast_period"):
-        ema_cross(bars, fast_period=20, slow_period=10,
-                  direction="fast_above_slow")
+        ema_cross(bars, fast_period=20, slow_period=10, direction="fast_above_slow")
 
 
 def test_ema_cross_unknown_direction():
     bars = _bars([float(i) for i in range(1, 31)])
     with pytest.raises(IndicatorError, match="direction"):
-        ema_cross(bars, fast_period=5, slow_period=20,
-                  direction="diagonal")
+        ema_cross(bars, fast_period=5, slow_period=20, direction="diagonal")
 
 
 # --------------------------------------------------------- RSI threshold
@@ -147,12 +141,10 @@ def test_ema_cross_unknown_direction():
 def test_rsi_threshold_below():
     closes = [float(i) for i in range(30, 1, -1)]  # descending -> low RSI
     bars = _bars(closes)
-    assert rsi_threshold(bars, period=14, direction="below",
-                         threshold=Decimal("30")) is True
+    assert rsi_threshold(bars, period=14, direction="below", threshold=Decimal("30")) is True
 
 
 def test_rsi_threshold_above():
     closes = [float(i) for i in range(1, 30)]  # ascending -> high RSI
     bars = _bars(closes)
-    assert rsi_threshold(bars, period=14, direction="above",
-                         threshold=Decimal("70")) is True
+    assert rsi_threshold(bars, period=14, direction="above", threshold=Decimal("70")) is True

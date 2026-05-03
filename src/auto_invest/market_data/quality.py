@@ -82,10 +82,7 @@ def assess_quality(
     if now - latest > max_staleness:
         return QualityReport(
             state=QualityState.STALE,
-            detail=(
-                f"latest bar {bars[-1].bar_open_utc} older than "
-                f"max_staleness={max_staleness}"
-            ),
+            detail=(f"latest bar {bars[-1].bar_open_utc} older than max_staleness={max_staleness}"),
         )
 
     tolerance = period / 10

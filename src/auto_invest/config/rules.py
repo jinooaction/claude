@@ -65,9 +65,7 @@ class IndicatorTrigger(BaseModel):
     @classmethod
     def _check_timeframe(cls, v: str) -> str:
         if not TIMEFRAME_PATTERN.match(v):
-            raise ValueError(
-                f"timeframe must match pattern <int><m|h|d>, got {v!r}"
-            )
+            raise ValueError(f"timeframe must match pattern <int><m|h|d>, got {v!r}")
         return v
 
 

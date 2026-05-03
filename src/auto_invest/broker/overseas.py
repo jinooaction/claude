@@ -125,9 +125,7 @@ async def place_order(
             "PDNO": request.symbol,
             "ORD_QTY": str(request.qty),
             "OVRS_ORD_UNPR": (
-                str(request.limit_price_usd)
-                if request.limit_price_usd is not None
-                else "0"
+                str(request.limit_price_usd) if request.limit_price_usd is not None else "0"
             ),
             "ORD_DVSN": "00" if request.order_type.value == "LIMIT" else "01",
         },

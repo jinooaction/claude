@@ -21,8 +21,7 @@ def _bars(timeframe: str, count: int, start: datetime) -> list[PriceBar]:
         PriceBar(
             symbol="AAPL",
             timeframe=timeframe,
-            bar_open_utc=(start + period * i)
-            .strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+            bar_open_utc=(start + period * i).strftime("%Y-%m-%dT%H:%M:%S.000Z"),
             open_usd=Decimal("180"),
             high_usd=Decimal("180"),
             low_usd=Decimal("180"),

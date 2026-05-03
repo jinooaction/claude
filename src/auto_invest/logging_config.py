@@ -99,9 +99,7 @@ class RedactionFilter(logging.Filter):
         if record.exc_info:
             etype, evalue, etb = record.exc_info
             if evalue is not None and evalue.args:
-                evalue.args = tuple(
-                    _redact(a) if isinstance(a, str) else a for a in evalue.args
-                )
+                evalue.args = tuple(_redact(a) if isinstance(a, str) else a for a in evalue.args)
             if not record.exc_text:
                 record.exc_text = "".join(traceback.format_exception(*record.exc_info))
             record.exc_text = _redact(record.exc_text)

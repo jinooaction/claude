@@ -69,9 +69,12 @@ def test_dry_run_succeeds_with_valid_config(env, tmp_path: Path):
         [
             "run",
             "--dry-run",
-            "--config", str(rules),
-            "--db", str(db_path),
-            "--halt-path", str(halt_path),
+            "--config",
+            str(rules),
+            "--db",
+            str(db_path),
+            "--halt-path",
+            str(halt_path),
         ],
     )
     assert result.exit_code == 0, result.output
@@ -98,7 +101,8 @@ def test_dry_run_exit_2_on_missing_secret(monkeypatch: pytest.MonkeyPatch, tmp_p
 
 def test_dry_run_exit_2_on_invalid_caps(env, tmp_path: Path):
     bad_rules = VALID_RULES_TOML.replace(
-        "per_trade_pct = 5.0", "per_trade_pct = 30.0"  # 30 > per_symbol 20
+        "per_trade_pct = 5.0",
+        "per_trade_pct = 30.0",  # 30 > per_symbol 20
     )
     rules = _write_rules(tmp_path, bad_rules)
 
@@ -121,7 +125,9 @@ def test_dry_run_exit_2_on_unknown_symbol(env, tmp_path: Path):
 
 
 def test_dry_run_exit_2_on_stage_uniqueness_conflict(env, tmp_path: Path):
-    bad_rules = VALID_RULES_TOML + """
+    bad_rules = (
+        VALID_RULES_TOML
+        + """
 [[rules]]
 id = "aapl-live"
 symbol = "AAPL"
@@ -141,6 +147,7 @@ enabled = true
   qty = 1
   limit_price = "200.00"
 """
+    )
     rules = _write_rules(tmp_path, bad_rules)
 
     result = runner.invoke(
@@ -160,18 +167,28 @@ def test_live_run_refuses_zero_capital(env, tmp_path: Path):
     # Apply migrations once via dry-run so we hit the capital gate cleanly.
     runner.invoke(
         app,
-        ["run", "--dry-run",
-         "--config", str(rules), "--db", str(db_path),
-         "--halt-path", str(tmp_path / "halt.flag")],
+        [
+            "run",
+            "--dry-run",
+            "--config",
+            str(rules),
+            "--db",
+            str(db_path),
+            "--halt-path",
+            str(tmp_path / "halt.flag"),
+        ],
     )
 
     result = runner.invoke(
         app,
         [
             "run",
-            "--config", str(rules),
-            "--db", str(db_path),
-            "--halt-path", str(tmp_path / "halt.flag"),
+            "--config",
+            str(rules),
+            "--db",
+            str(db_path),
+            "--halt-path",
+            str(tmp_path / "halt.flag"),
         ],
     )
     assert result.exit_code == 2
@@ -181,6 +198,7 @@ def test_live_run_refuses_zero_capital(env, tmp_path: Path):
 def test_python_module_form_invokes_cli():
     """`python -m auto_invest --help` should exit 0 and show the usage banner."""
     import subprocess
+
     result = subprocess.run(
         ["python", "-m", "auto_invest", "--help"],
         capture_output=True,

@@ -58,9 +58,7 @@ def load_secrets(env_path: Path | None = None) -> dict[str, str]:
 
     missing = [name for name in REQUIRED_SECRETS if not merged.get(name, "").strip()]
     if missing:
-        raise ConfigError(
-            f"required secret(s) missing from environment: {sorted(missing)}"
-        )
+        raise ConfigError(f"required secret(s) missing from environment: {sorted(missing)}")
 
     for name in REQUIRED_SECRETS:
         register_secret(merged[name])
@@ -75,9 +73,7 @@ def _expand_env(value: Any, env: dict[str, str]) -> Any:
         def replace(m: re.Match[str]) -> str:
             name = m.group(1)
             if name not in env:
-                raise ConfigError(
-                    f"unknown environment variable referenced in config: ${{{name}}}"
-                )
+                raise ConfigError(f"unknown environment variable referenced in config: ${{{name}}}")
             return env[name]
 
         return ENV_VAR_PATTERN.sub(replace, value)
@@ -136,14 +132,11 @@ def load_config(rules_path: Path, env_path: Path | None = None) -> LoadedConfig:
         seen_ids.add(rule.id)
 
         if rule.symbol not in whitelist.symbols:
-            raise ConfigError(
-                f"rule {rule.id!r}: symbol {rule.symbol!r} is not on the whitelist"
-            )
+            raise ConfigError(f"rule {rule.id!r}: symbol {rule.symbol!r} is not on the whitelist")
 
         if rule.action.order_type not in whitelist.order_types:
             raise ConfigError(
-                f"rule {rule.id!r}: order_type {rule.action.order_type!r} "
-                "is not on the whitelist"
+                f"rule {rule.id!r}: order_type {rule.action.order_type!r} is not on the whitelist"
             )
 
         rules.append(rule)

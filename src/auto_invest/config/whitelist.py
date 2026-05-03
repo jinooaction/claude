@@ -25,12 +25,8 @@ class Whitelist(BaseModel):
 
     symbols: frozenset[str] = Field(default_factory=frozenset)
     accounts: frozenset[str] = Field(default_factory=frozenset)
-    order_types: frozenset[OrderType] = Field(
-        default_factory=lambda: frozenset({OrderType.LIMIT})
-    )
-    sessions: frozenset[Session] = Field(
-        default_factory=lambda: frozenset({Session.REGULAR})
-    )
+    order_types: frozenset[OrderType] = Field(default_factory=lambda: frozenset({OrderType.LIMIT}))
+    sessions: frozenset[Session] = Field(default_factory=lambda: frozenset({Session.REGULAR}))
 
     @field_validator("symbols", mode="before")
     @classmethod
@@ -40,9 +36,7 @@ class Whitelist(BaseModel):
         normalized: list[str] = []
         for s in value:
             if not isinstance(s, str):
-                raise ValueError(
-                    f"symbol must be a string, got {type(s).__name__}: {s!r}"
-                )
+                raise ValueError(f"symbol must be a string, got {type(s).__name__}: {s!r}")
             up = s.upper()
             if not SYMBOL_PATTERN.match(up):
                 raise ValueError(

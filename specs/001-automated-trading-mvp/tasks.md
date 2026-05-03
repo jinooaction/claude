@@ -161,13 +161,13 @@
 
 **Purpose**: Final hardening, documentation, and validation that the whole system meets the success criteria from `spec.md`.
 
-- [ ] T058 [P] Implement `db migrate` CLI subcommand with PID-file safety check (refuses if a worker process is detected), in `src/auto_invest/cli.py`.
-- [ ] T059 [P] Add `--dry-run` end-to-end smoke test scripted in `tests/integration/test_quickstart_dry_run.py` that follows the quickstart steps against `tests/fixtures/rules/sample-canary.toml`.
-- [ ] T060 [P] Performance smoke test: assert trigger-eval p95 < 1 s with 20 active rules using stub triggers, in `tests/integration/test_performance.py`.
-- [ ] T061 [P] Run `uv run ruff format .` and `uv run ruff check --fix .` across `src/` and `tests/`; commit any formatting deltas in a separate commit.
-- [ ] T062 [P] Manually validate `quickstart.md` against a fresh checkout (HUMAN-IN-LOOP step; document the result in the commit message).
-- [ ] T063 Update `README.md` with a short "what this does / what it does not do (yet)" summary and link to `quickstart.md` and the constitution.
-- [ ] T064 [P] Optional live KIS smoke test in `tests/integration/test_live_broker.py`, gated by `@pytest.mark.live` and skipped unless `KIS_LIVE_TEST=1` is set. Verifies a single read-only call (e.g., `get_quote("AAPL")`) against the operator's real KIS account so any drift between our mocked shapes and the broker's actual response surfaces before the next deploy. NEVER places a real order.
+- [x] T058 [P] Implement `db migrate` CLI subcommand with PID-file safety check (refuses if a worker process is detected), in `src/auto_invest/cli.py`.
+- [x] T059 [P] Add `--dry-run` end-to-end smoke test scripted in `tests/integration/test_quickstart_dry_run.py` that follows the quickstart steps against `tests/fixtures/rules/sample-canary.toml`.
+- [x] T060 [P] Performance smoke test: assert trigger-eval p95 < 1 s with 20 active rules using stub triggers, in `tests/integration/test_performance.py`.
+- [x] T061 [P] Run `uv run ruff format .` and `uv run ruff check --fix .` across `src/` and `tests/`; commit any formatting deltas in a separate commit.
+- [ ] T062 [P] Manually validate `quickstart.md` against a fresh checkout (HUMAN-IN-LOOP step; pending operator follow-up).
+- [x] T063 Update `README.md` with a short "what this does / what it does not do (yet)" summary, CLI cheatsheet, and links to `quickstart.md` and the constitution.
+- [x] T064 [P] Optional live KIS smoke test in `tests/integration/test_live_broker.py`, gated by `KIS_LIVE_TEST=1` (skipped otherwise). Verifies a single read-only call (`issue_token` + `get_quote("AAPL")`) against the operator's real KIS account. Run via `scripts/live_smoke.py` (interactive, hidden-input credentials). NEVER places a real order.
 
 ---
 

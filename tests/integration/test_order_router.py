@@ -120,22 +120,18 @@ async def _router(
 
 
 def test_evaluate_limit_price_literal():
-    assert evaluate_limit_price(
-        "100.50", trigger_price=Decimal("99"), last_close=None
-    ) == Decimal("100.50")
+    assert evaluate_limit_price("100.50", trigger_price=Decimal("99"), last_close=None) == Decimal(
+        "100.50"
+    )
 
 
 def test_evaluate_limit_price_trigger_minus():
-    result = evaluate_limit_price(
-        "trigger - 0.10", trigger_price=Decimal("100"), last_close=None
-    )
+    result = evaluate_limit_price("trigger - 0.10", trigger_price=Decimal("100"), last_close=None)
     assert result == Decimal("99.90")
 
 
 def test_evaluate_limit_price_trigger_plus():
-    result = evaluate_limit_price(
-        "trigger + 0.25", trigger_price=Decimal("100"), last_close=None
-    )
+    result = evaluate_limit_price("trigger + 0.25", trigger_price=Decimal("100"), last_close=None)
     assert result == Decimal("100.25")
 
 
@@ -159,9 +155,7 @@ def test_evaluate_limit_price_last_close_required():
 
 def test_evaluate_limit_price_unknown_form():
     with pytest.raises(LimitPriceExprError, match="unsupported"):
-        evaluate_limit_price(
-            "trigger ** 2", trigger_price=Decimal("10"), last_close=None
-        )
+        evaluate_limit_price("trigger ** 2", trigger_price=Decimal("10"), last_close=None)
 
 
 # ------------------------------------------------------ stage uniqueness
@@ -195,9 +189,7 @@ async def test_submit_order_happy_path(tmp_path: Path):
     async with _router(tmp_path) as router:
         with respx.mock(base_url=BASE) as mock:
             mock.post("/uapi/overseas-stock/v1/trading/order").mock(
-                return_value=httpx.Response(
-                    200, json={"output": {"ODNO": "K-001"}}
-                )
+                return_value=httpx.Response(200, json={"output": {"ODNO": "K-001"}})
             )
 
             outcome = await router.submit_order(
@@ -213,9 +205,7 @@ async def test_submit_order_happy_path(tmp_path: Path):
         events = [r["event_type"] for r in audit.read_all(router.conn)]
         assert events == ["ORDER_INTENT", "ORDER_SUBMITTED"]
 
-        order_row = router.conn.execute(
-            "SELECT state, kis_order_id FROM orders"
-        ).fetchone()
+        order_row = router.conn.execute("SELECT state, kis_order_id FROM orders").fetchone()
         assert order_row["state"] == "SUBMITTED"
         assert order_row["kis_order_id"] == "K-001"
 
@@ -245,9 +235,7 @@ async def test_submit_order_rejected_by_per_trade_cap(tmp_path: Path):
         events = [r["event_type"] for r in audit.read_all(router.conn)]
         assert events == ["ORDER_INTENT", "ORDER_REJECTED_BY_GATE"]
 
-        order_row = router.conn.execute(
-            "SELECT state FROM orders"
-        ).fetchone()
+        order_row = router.conn.execute("SELECT state FROM orders").fetchone()
         assert order_row["state"] == "REJECTED_BY_GATE"
 
 
@@ -292,9 +280,7 @@ async def test_submit_order_rejected_by_broker_5xx(tmp_path: Path):
         events = [r["event_type"] for r in audit.read_all(router.conn)]
         assert "ORDER_REJECTED_BY_BROKER" in events
 
-        order_row = router.conn.execute(
-            "SELECT state FROM orders"
-        ).fetchone()
+        order_row = router.conn.execute("SELECT state FROM orders").fetchone()
         assert order_row["state"] == "REJECTED_BY_BROKER"
 
 
@@ -303,9 +289,7 @@ async def test_submit_order_records_correlation_id_across_events(tmp_path: Path)
     async with _router(tmp_path) as router:
         with respx.mock(base_url=BASE) as mock:
             mock.post("/uapi/overseas-stock/v1/trading/order").mock(
-                return_value=httpx.Response(
-                    200, json={"output": {"ODNO": "K-001"}}
-                )
+                return_value=httpx.Response(200, json={"output": {"ODNO": "K-001"}})
             )
 
             outcome = await router.submit_order(

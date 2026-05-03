@@ -69,9 +69,7 @@ def evaluate_session_close(
     if state.peak_value_usd == 0:
         return CanaryDecision(action="CONTINUE")
 
-    drawdown_pct = (
-        (state.peak_value_usd - current_value_usd) / state.peak_value_usd * Decimal(100)
-    )
+    drawdown_pct = (state.peak_value_usd - current_value_usd) / state.peak_value_usd * Decimal(100)
     if drawdown_pct > caps.canary_acceptance_drawdown_pct:
         state.paused = True
         return CanaryDecision(

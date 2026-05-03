@@ -32,7 +32,9 @@ CAPS = SizingCaps(
 def test_continue_when_value_rises():
     state = initial_state("r1", Decimal("1000"))
     decision = evaluate_session_close(
-        state, current_value_usd=Decimal("1010"), caps=CAPS,
+        state,
+        current_value_usd=Decimal("1010"),
+        caps=CAPS,
     )
     assert decision.action == "CONTINUE"
     assert state.peak_value_usd == Decimal("1010")
@@ -43,7 +45,9 @@ def test_continue_when_drawdown_within_acceptance():
     state = initial_state("r1", Decimal("1000"))
     # 2% drawdown — under the 3% acceptance.
     decision = evaluate_session_close(
-        state, current_value_usd=Decimal("980"), caps=CAPS,
+        state,
+        current_value_usd=Decimal("980"),
+        caps=CAPS,
     )
     assert decision.action == "CONTINUE"
     assert decision.drawdown_pct == Decimal("2")
@@ -54,7 +58,9 @@ def test_continue_at_exact_acceptance_boundary():
     state = initial_state("r1", Decimal("1000"))
     # Exactly 3% drawdown — boundary is inclusive (<=).
     decision = evaluate_session_close(
-        state, current_value_usd=Decimal("970"), caps=CAPS,
+        state,
+        current_value_usd=Decimal("970"),
+        caps=CAPS,
     )
     assert decision.action == "CONTINUE"
     assert state.paused is False
@@ -64,7 +70,9 @@ def test_pause_when_drawdown_exceeds_acceptance():
     state = initial_state("r1", Decimal("1000"))
     # 4% drawdown — over the 3% acceptance.
     decision = evaluate_session_close(
-        state, current_value_usd=Decimal("960"), caps=CAPS,
+        state,
+        current_value_usd=Decimal("960"),
+        caps=CAPS,
     )
     assert decision.action == "PAUSE_NOW"
     assert state.paused is True
@@ -75,7 +83,9 @@ def test_already_paused_stays_paused():
     state = initial_state("r1", Decimal("1000"))
     state.paused = True
     decision = evaluate_session_close(
-        state, current_value_usd=Decimal("500"), caps=CAPS,
+        state,
+        current_value_usd=Decimal("500"),
+        caps=CAPS,
     )
     assert decision.action == "ALREADY_PAUSED"
     # State must not be tampered with.
@@ -90,7 +100,9 @@ def test_transient_dip_then_recovery_does_not_pause():
     evaluate_session_close(state, current_value_usd=Decimal("1010"), caps=CAPS)
     # Day 3: 1% drawdown from new peak (1010) — CONTINUE.
     decision = evaluate_session_close(
-        state, current_value_usd=Decimal("1000"), caps=CAPS,
+        state,
+        current_value_usd=Decimal("1000"),
+        caps=CAPS,
     )
     assert decision.action == "CONTINUE"
     assert state.paused is False

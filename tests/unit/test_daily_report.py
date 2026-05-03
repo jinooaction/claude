@@ -119,8 +119,12 @@ def _seed_session(conn) -> None:
         """
     )
     positions_mod.update_from_fill(
-        conn, symbol="AAPL", side=Side.BUY, qty=5,
-        price_usd=Decimal("100"), ts_utc="2026-05-04T13:31:02.000Z",
+        conn,
+        symbol="AAPL",
+        side=Side.BUY,
+        qty=5,
+        price_usd=Decimal("100"),
+        ts_utc="2026-05-04T13:31:02.000Z",
     )
 
 
@@ -129,7 +133,8 @@ def _seed_session(conn) -> None:
 
 def test_empty_session_produces_zeroed_report(conn):
     report = build_report(
-        conn, session_date="2026-05-04",
+        conn,
+        session_date="2026-05-04",
         generated_at="2026-05-05T04:00:00Z",
     )
     assert report.counters == {}
@@ -146,7 +151,8 @@ def test_empty_session_produces_zeroed_report(conn):
 def test_report_counts_orders_and_fills(conn):
     _seed_session(conn)
     report = build_report(
-        conn, session_date="2026-05-04",
+        conn,
+        session_date="2026-05-04",
         generated_at="2026-05-05T04:00:00Z",
     )
     assert report.counters["orders_attempted"] == 2
@@ -158,7 +164,8 @@ def test_report_counts_orders_and_fills(conn):
 def test_report_per_rule_activity(conn):
     _seed_session(conn)
     report = build_report(
-        conn, session_date="2026-05-04",
+        conn,
+        session_date="2026-05-04",
         generated_at="2026-05-05T04:00:00Z",
     )
     rule_ids = [r.rule_id for r in report.rules]
@@ -171,7 +178,8 @@ def test_report_per_rule_activity(conn):
 def test_report_lists_rejections_with_gate_and_metadata(conn):
     _seed_session(conn)
     report = build_report(
-        conn, session_date="2026-05-04",
+        conn,
+        session_date="2026-05-04",
         generated_at="2026-05-05T04:00:00Z",
     )
     assert len(report.rejections) == 1
@@ -184,18 +192,18 @@ def test_report_lists_rejections_with_gate_and_metadata(conn):
 def test_report_includes_positions(conn):
     _seed_session(conn)
     report = build_report(
-        conn, session_date="2026-05-04",
+        conn,
+        session_date="2026-05-04",
         generated_at="2026-05-05T04:00:00Z",
     )
-    assert report.positions == [
-        {"symbol": "AAPL", "qty": 5, "avg_cost_usd": "100"}
-    ]
+    assert report.positions == [{"symbol": "AAPL", "qty": 5, "avg_cost_usd": "100"}]
 
 
 def test_report_reflects_reconciliation_result(conn):
     _seed_session(conn)
     report = build_report(
-        conn, session_date="2026-05-04",
+        conn,
+        session_date="2026-05-04",
         generated_at="2026-05-05T04:00:00Z",
     )
     assert report.reconciliation == "OK"
@@ -208,7 +216,8 @@ def test_report_reflects_active_halt(conn):
         ts_utc="2026-05-04T15:00:00.000Z",
     )
     report = build_report(
-        conn, session_date="2026-05-04",
+        conn,
+        session_date="2026-05-04",
         generated_at="2026-05-05T04:00:00Z",
     )
     assert report.halt is not None
@@ -230,7 +239,8 @@ def test_report_filters_by_session_date(conn):
         ts_utc="2026-05-04T15:00:00.000Z",
     )
     report = build_report(
-        conn, session_date="2026-05-04",
+        conn,
+        session_date="2026-05-04",
         generated_at="2026-05-05T04:00:00Z",
     )
     assert report.halt["reason"] == "day-2"
@@ -242,12 +252,17 @@ def test_report_filters_by_session_date(conn):
 def test_render_markdown_contains_all_sections(conn):
     _seed_session(conn)
     report = build_report(
-        conn, session_date="2026-05-04",
+        conn,
+        session_date="2026-05-04",
         generated_at="2026-05-05T04:00:00Z",
     )
     md = render_markdown(report)
-    for section in ("## Summary", "## Per-rule activity",
-                    "## Risk-gate rejections", "## Positions (current)"):
+    for section in (
+        "## Summary",
+        "## Per-rule activity",
+        "## Risk-gate rejections",
+        "## Positions (current)",
+    ):
         assert section in md
     assert "AAPL" in md
     assert "per_trade_cap_gate" in md
@@ -256,7 +271,8 @@ def test_render_markdown_contains_all_sections(conn):
 def test_render_json_round_trips(conn):
     _seed_session(conn)
     report = build_report(
-        conn, session_date="2026-05-04",
+        conn,
+        session_date="2026-05-04",
         generated_at="2026-05-05T04:00:00Z",
     )
     payload = json.loads(render_json(report))
@@ -268,14 +284,10 @@ def test_render_json_round_trips(conn):
 def test_byte_stable_when_inputs_unchanged(conn):
     _seed_session(conn)
     fixed = "2026-05-05T04:00:00Z"
-    md_a = render_markdown(build_report(conn, session_date="2026-05-04",
-                                        generated_at=fixed))
-    json_a = render_json(build_report(conn, session_date="2026-05-04",
-                                      generated_at=fixed))
-    md_b = render_markdown(build_report(conn, session_date="2026-05-04",
-                                        generated_at=fixed))
-    json_b = render_json(build_report(conn, session_date="2026-05-04",
-                                      generated_at=fixed))
+    md_a = render_markdown(build_report(conn, session_date="2026-05-04", generated_at=fixed))
+    json_a = render_json(build_report(conn, session_date="2026-05-04", generated_at=fixed))
+    md_b = render_markdown(build_report(conn, session_date="2026-05-04", generated_at=fixed))
+    json_b = render_json(build_report(conn, session_date="2026-05-04", generated_at=fixed))
     assert md_a == md_b
     assert json_a == json_b
 
@@ -283,7 +295,8 @@ def test_byte_stable_when_inputs_unchanged(conn):
 def test_write_report_creates_files(conn, tmp_path: Path):
     _seed_session(conn)
     report = build_report(
-        conn, session_date="2026-05-04",
+        conn,
+        session_date="2026-05-04",
         generated_at="2026-05-05T04:00:00Z",
     )
     md_path, json_path = write_report(report, output_root=tmp_path)

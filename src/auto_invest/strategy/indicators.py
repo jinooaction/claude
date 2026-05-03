@@ -30,9 +30,7 @@ class IndicatorError(ValueError):
 
 def _validate_bars(bars: list[PriceBar], min_bars: int) -> None:
     if len(bars) < min_bars:
-        raise IndicatorError(
-            f"need at least {min_bars} bars, got {len(bars)}"
-        )
+        raise IndicatorError(f"need at least {min_bars} bars, got {len(bars)}")
     seen_ts: set[str] = set()
     prev: str | None = None
     for bar in bars:
@@ -40,9 +38,7 @@ def _validate_bars(bars: list[PriceBar], min_bars: int) -> None:
             raise IndicatorError(f"duplicate bar timestamp: {bar.bar_open_utc}")
         seen_ts.add(bar.bar_open_utc)
         if prev is not None and bar.bar_open_utc <= prev:
-            raise IndicatorError(
-                f"non-monotonic timestamps: {prev!r} -> {bar.bar_open_utc!r}"
-            )
+            raise IndicatorError(f"non-monotonic timestamps: {prev!r} -> {bar.bar_open_utc!r}")
         prev = bar.bar_open_utc
         for field, value in (
             ("open", bar.open_usd),
@@ -61,9 +57,7 @@ def _closes(bars: list[PriceBar]) -> pd.Series:
 def _last_finite(series: pd.Series, name: str) -> Decimal:
     last = series.iloc[-1]
     if pd.isna(last):
-        raise IndicatorError(
-            f"{name} returned NaN at the last bar — likely insufficient warm-up"
-        )
+        raise IndicatorError(f"{name} returned NaN at the last bar — likely insufficient warm-up")
     return Decimal(str(last))
 
 
@@ -101,9 +95,7 @@ def ema_cross(
 ) -> bool:
     """Return True when fast EMA stands on the requested side of slow EMA."""
     if fast_period >= slow_period:
-        raise IndicatorError(
-            f"fast_period ({fast_period}) must be < slow_period ({slow_period})"
-        )
+        raise IndicatorError(f"fast_period ({fast_period}) must be < slow_period ({slow_period})")
     if direction not in ("fast_above_slow", "fast_below_slow"):
         raise IndicatorError(f"unknown ema_cross direction: {direction!r}")
     fast = ema(bars, fast_period)
