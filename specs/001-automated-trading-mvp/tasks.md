@@ -165,7 +165,7 @@
 - [x] T059 [P] Add `--dry-run` end-to-end smoke test scripted in `tests/integration/test_quickstart_dry_run.py` that follows the quickstart steps against `tests/fixtures/rules/sample-canary.toml`.
 - [x] T060 [P] Performance smoke test: assert trigger-eval p95 < 1 s with 20 active rules using stub triggers, in `tests/integration/test_performance.py`.
 - [x] T061 [P] Run `uv run ruff format .` and `uv run ruff check --fix .` across `src/` and `tests/`; commit any formatting deltas in a separate commit.
-- [ ] T062 [P] Manually validate `quickstart.md` against a fresh checkout (HUMAN-IN-LOOP step; pending operator follow-up).
+- [x] T062 [P] Manually validate `quickstart.md` against a fresh checkout (operator's MacBook, 2026-05): clone via `gh repo clone`, install uv, `uv sync`, `uv run python scripts/live_smoke.py` → live AAPL quote `$279.4475` returned via real KIS account.
 - [x] T063 Update `README.md` with a short "what this does / what it does not do (yet)" summary, CLI cheatsheet, and links to `quickstart.md` and the constitution.
 - [x] T064 [P] Optional live KIS smoke test in `tests/integration/test_live_broker.py`, gated by `KIS_LIVE_TEST=1` (skipped otherwise). Verifies a single read-only call (`issue_token` + `get_quote("AAPL")`) against the operator's real KIS account. Run via `scripts/live_smoke.py` (interactive, hidden-input credentials). NEVER places a real order.
 
