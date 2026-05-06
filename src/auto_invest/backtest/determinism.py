@@ -120,6 +120,13 @@ def rule_snapshot_hash(text: str) -> str:
     return config_hash(text)
 
 
+def hash_dict(payload: dict) -> str:
+    """SHA-256 of a JSON-canonical dict — used for hashing already-validated configs."""
+    import json as _json
+    blob = _json.dumps(payload, sort_keys=True, default=str).encode("utf-8")
+    return "sha256:" + hashlib.sha256(blob).hexdigest()
+
+
 def run_id(*, rule_hash: str, config_hash_: str, data_pin_hash: str) -> str:
     """Compose the 12-char run_id from the three input hashes."""
     h = hashlib.sha256()

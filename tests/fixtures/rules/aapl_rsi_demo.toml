@@ -1,0 +1,36 @@
+# Sample backtest rule for spec 002 US1 integration tests.
+# Single rule, RSI-below trigger on AAPL daily bars.
+
+[caps]
+per_trade_pct                  = 5.0
+per_symbol_pct                 = 20.0
+global_exposure_pct            = 80.0
+canary_capital_pct             = 5.0
+canary_min_duration_days       = 10
+canary_acceptance_drawdown_pct = 3.0
+
+[whitelist]
+symbols     = ["AAPL"]
+accounts    = ["BACKTEST"]
+order_types = ["MARKET"]
+sessions    = ["REGULAR"]
+
+[[rules]]
+id       = "aapl-rsi-below-30"
+symbol   = "AAPL"
+stage    = "BACKTEST"
+priority = 100
+enabled  = true
+
+  [rules.trigger]
+  kind             = "indicator"
+  indicator        = "RSI_BELOW"
+  params           = { period = 14, threshold = "30" }
+  timeframe        = "1d"
+  cooldown_seconds = 86400
+
+  [rules.action]
+  side        = "BUY"
+  order_type  = "MARKET"
+  qty         = 1
+  limit_price = "0.0"

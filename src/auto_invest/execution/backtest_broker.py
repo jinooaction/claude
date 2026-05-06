@@ -14,6 +14,8 @@ from decimal import Decimal
 from typing import Protocol, runtime_checkable
 
 from auto_invest.broker.models import OrderRequest, OrderResult
+from auto_invest.config.backtest import CostModel
+from auto_invest.config.enums import OrderType
 from auto_invest.market_data.revisions import HistoricalBar
 
 
@@ -41,29 +43,60 @@ class SimulatedFill:
 
 @dataclass
 class BacktestBroker:
-    """Default-allow simulated broker.
+    """Cost-model-driven simulated broker (Phase 3, T024).
 
-    Phase 2 leaves the fill model trivial (fill at bar close, zero
-    cost). Phase 3 (T023, T024) replaces `simulate_fill` with the
-    cost-model-driven implementation.
+    Phase 4 (T035-T036) layers point-in-time enforcement on the read
+    side, square-root market impact, participation cap, and limit-
+    order time-in-force handling.
     """
 
-    cost_model: object | None = None  # CostModel; typed loosely to avoid circular import
+    cost_model: CostModel
     halt_flag: bool = field(default=False)
 
-    def simulate_fill(self, request: OrderRequest, bar: HistoricalBar) -> SimulatedFill | None:
-        """Phase 2 placeholder: fill at bar close, zero cost.
+    def simulate_fill(
+        self,
+        request: OrderRequest,
+        bar: HistoricalBar,
+    ) -> SimulatedFill | None:
+        """Simulate a fill against `bar` using the cost model.
 
-        Phase 3 replaces this with full cost-model-driven simulation.
-        Returns None when the bar cannot satisfy the order (e.g.,
-        limit price out of range).
+        Phase 3 simplifications:
+          * MARKET orders fill at bar close ± half-spread.
+          * LIMIT orders fill iff the limit price is inside the bar's
+            high-low range. Buy limits fill at `min(limit, close+spread)`,
+            sell limits at `max(limit, close-spread)`. (Phase 4 hardens
+            this with proper TIF semantics.)
         """
         if self.halt_flag:
             return None
-        return SimulatedFill(
-            price_usd=bar.close,
+
+        from auto_invest.backtest.cost_model import quote_cost
+
+        per_symbol = self.cost_model.for_symbol(request.symbol)
+        cost = quote_cost(
+            cost_model=per_symbol,
+            side=request.side,
             qty=request.qty,
-            commission_usd=Decimal("0"),
-            half_spread_usd=Decimal("0"),
-            impact_usd=Decimal("0"),
+            bar_close_usd=bar.close,
+        )
+
+        fill_price = cost.fill_price_usd
+        if request.order_type is OrderType.LIMIT:
+            if request.limit_price_usd is None:
+                return None
+            in_range = bar.low <= request.limit_price_usd <= bar.high
+            if not in_range:
+                return None
+            # Use the more conservative of (limit, close±half_spread).
+            if request.side.value == "BUY":
+                fill_price = min(request.limit_price_usd, cost.fill_price_usd)
+            else:
+                fill_price = max(request.limit_price_usd, cost.fill_price_usd)
+
+        return SimulatedFill(
+            price_usd=fill_price,
+            qty=request.qty,
+            commission_usd=cost.commission_usd,
+            half_spread_usd=cost.half_spread_usd,
+            impact_usd=cost.impact_usd,
         )

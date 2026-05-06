@@ -142,3 +142,62 @@ def load_config(rules_path: Path, env_path: Path | None = None) -> LoadedConfig:
         rules.append(rule)
 
     return LoadedConfig(caps=caps, whitelist=whitelist, rules=tuple(rules))
+
+
+def load_config_for_backtest(rules_path: Path) -> LoadedConfig:
+    """Spec 002 (T029): load a rules TOML for backtest use.
+
+    Differs from `load_config` in two ways:
+      1. Does NOT require KIS secrets (backtest is offline).
+      2. Substitutes a placeholder account string for any
+         `${KIS_ACCOUNT_NO}` reference in the whitelist so a real
+         operator config can be backtested without the live env.
+
+    All other validation (caps invariants, whitelist symbols, per-rule
+    schema, no-duplicate-ids) runs identically.
+    """
+    if not rules_path.exists():
+        raise ConfigError(f"rules file not found: {rules_path}")
+
+    try:
+        raw = tomllib.loads(rules_path.read_text(encoding="utf-8"))
+    except tomllib.TOMLDecodeError as e:
+        raise ConfigError(f"rules file is not valid TOML: {e}") from e
+
+    placeholder_secrets = {
+        "KIS_APP_KEY": "BACKTEST",
+        "KIS_APP_SECRET": "BACKTEST",
+        "KIS_ACCOUNT_NO": "BACKTEST",
+    }
+    expanded = _expand_env(raw, placeholder_secrets)
+
+    try:
+        caps = SizingCaps.model_validate(expanded.get("caps", {}))
+    except ValidationError as e:
+        raise ConfigError(f"[caps] section invalid: {e}") from e
+
+    try:
+        whitelist = Whitelist.model_validate(expanded.get("whitelist", {}))
+    except ValidationError as e:
+        raise ConfigError(f"[whitelist] section invalid: {e}") from e
+
+    rules_raw = expanded.get("rules", [])
+    rules: list[TradingRule] = []
+    seen_ids: set[str] = set()
+    for i, rule_data in enumerate(rules_raw):
+        try:
+            rule = TradingRule.model_validate(rule_data)
+        except ValidationError as e:
+            raise ConfigError(f"[[rules]] entry {i} invalid: {e}") from e
+        if rule.id in seen_ids:
+            raise ConfigError(f"duplicate rule id: {rule.id!r}")
+        seen_ids.add(rule.id)
+        if rule.symbol not in whitelist.symbols:
+            raise ConfigError(f"rule {rule.id!r}: symbol {rule.symbol!r} is not on the whitelist")
+        if rule.action.order_type not in whitelist.order_types:
+            raise ConfigError(
+                f"rule {rule.id!r}: order_type {rule.action.order_type!r} is not on the whitelist"
+            )
+        rules.append(rule)
+
+    return LoadedConfig(caps=caps, whitelist=whitelist, rules=tuple(rules))

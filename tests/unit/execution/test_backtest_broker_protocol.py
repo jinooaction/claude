@@ -2,19 +2,15 @@
 
 from __future__ import annotations
 
-from decimal import Decimal
+from auto_invest.config.backtest import CostModel
+from auto_invest.execution.backtest_broker import BacktestBroker
 
-from auto_invest.execution.backtest_broker import BacktestBroker, BrokerProtocol
 
-
-def test_backtest_broker_implements_broker_protocol() -> None:
-    broker = BacktestBroker()
-    # Structural / runtime check; validates `place_order` is callable.
-    # The Phase 2 stub does not implement place_order yet — Phase 3
-    # adds it. The protocol check should still recognise the class
-    # *would* implement it once the method is wired.
-    assert isinstance(broker, object)
-    # The runtime_checkable Protocol only checks attribute presence,
-    # so we explicitly assert the attribute exists once we add it.
-    # Phase 2 ships the placeholder; Phase 3 fills it in.
+def test_backtest_broker_protocol_surface() -> None:
+    broker = BacktestBroker(cost_model=CostModel())
+    # The runtime_checkable Protocol only checks attribute presence; the
+    # backtest broker's `simulate_fill` is the documented entry point and
+    # must exist before Phase 3's engine wires it.
     assert hasattr(broker, "simulate_fill")
+    assert hasattr(broker, "cost_model")
+    assert hasattr(broker, "halt_flag")

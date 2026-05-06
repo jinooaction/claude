@@ -43,6 +43,119 @@ app.add_typer(db_app, name="db")
 logger = logging.getLogger(__name__)
 
 
+# --- Spec 002 backtest subcommand (T029) -------------------------------------
+@app.command("backtest")
+def backtest_cmd(
+    rule: Path = typer.Option(..., "--rule", help="Rule TOML path"),
+    config: Path | None = typer.Option(
+        None, "--config", help="Backtest run TOML (overrides flags below)"
+    ),
+    from_: str | None = typer.Option(
+        None, "--from", help="ISO date (UTC) inclusive start"
+    ),
+    to: str | None = typer.Option(None, "--to", help="ISO date (UTC) exclusive end"),
+    vendor: str | None = typer.Option(None, "--vendor", help="Per-run vendor pin"),
+    capital: str = typer.Option("10000", "--capital", help="Starting capital USD (decimal)"),
+    db_path: Path = typer.Option(
+        Path("data/auto_invest.db"), "--db", help="SQLite database path"
+    ),
+    backtests_root: Path = typer.Option(
+        Path("data/backtests"), "--backtests-root", help="Run-directory parent"
+    ),
+    data_config: Path = typer.Option(
+        Path("config/data.toml"), "--data-config", help="DataSourcesConfig TOML"
+    ),
+) -> None:
+    """Run a backtest of `rule` over the chosen window."""
+    from auto_invest.backtest.runner import execute_run
+    from auto_invest.config.data import DataSourcesConfig, load_data_sources
+    from auto_invest.config.loader import load_config_for_backtest
+
+    if not rule.exists():
+        typer.echo(f"rule file not found: {rule}", err=True)
+        raise typer.Exit(1)
+
+    rule_text = rule.read_text(encoding="utf-8")
+    if config is not None:
+        config_text = config.read_text(encoding="utf-8")
+    else:
+        if from_ is None or to is None:
+            typer.echo("--from and --to are required when --config is omitted", err=True)
+            raise typer.Exit(1)
+        config_text = _generate_run_toml(
+            rule=rule, rule_text=rule_text, from_=from_, to=to, vendor=vendor
+        )
+
+    if data_config.exists():
+        ds = load_data_sources(data_config)
+    else:
+        ds = DataSourcesConfig()
+
+    cfg = load_config_for_backtest(rule)
+    rule_obj = cfg.rules[0]
+
+    _require_clean_migrations(db_path, allow_apply=False)
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    backtests_root.mkdir(parents=True, exist_ok=True)
+    conn = db.get_connection(db_path)
+    try:
+        run_dir, run_id = execute_run(
+            conn=conn,
+            config_text=config_text,
+            rule_text=rule_text,
+            rule=rule_obj,
+            data_sources=ds,
+            whitelist=cfg.whitelist,
+            caps=cfg.caps,
+            starting_capital_usd=Decimal(capital),
+            backtests_root=backtests_root,
+        )
+        typer.echo(str(run_dir / "report.md"))
+    finally:
+        conn.close()
+
+
+def _generate_run_toml(
+    *, rule: Path, rule_text: str, from_: str, to: str, vendor: str | None
+) -> str:
+    """Materialise a minimal run.toml from CLI flags."""
+    from auto_invest.backtest.determinism import rule_snapshot_hash
+    from auto_invest.config.loader import load_config_for_backtest
+
+    parsed = load_config_for_backtest(rule)
+    r = parsed.rules[0]
+    snapshot = rule_snapshot_hash(rule_text)
+    asset_class = "equity"  # Spec 002 v1 only US-equity rules; multi-asset rules in 003.
+    venue = "nasdaq"
+    vendor_line = f'vendor = "{vendor}"' if vendor else ""
+    timeframe = getattr(r.trigger, "timeframe", "1d")
+    pin_iso = "9999-12-31T00:00:00Z"  # well in the future ⇒ no late-revision filtering
+    return f"""schema_version = "002.1"
+
+[rule]
+path = "{rule.as_posix()}"
+snapshot_hash = "{snapshot}"
+
+[window]
+from_utc = "{from_}T00:00:00Z"
+to_utc   = "{to}T00:00:00Z"
+as_of_ts_pin_utc = "{pin_iso}"
+
+[[instruments]]
+asset_class = "{asset_class}"
+venue       = "{venue}"
+symbol      = "{r.symbol}"
+{vendor_line}
+
+[mode]
+kind = "single"
+
+[runtime]
+seed = 0
+max_runtime_seconds = 600
+"""
+
+
 def _exit(code: int) -> None:
     raise typer.Exit(code)
 
