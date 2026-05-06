@@ -24,7 +24,7 @@ every feature begins as a spec under [`specs/`](specs/).
 ## What v1 does NOT do (yet)
 
 - Does **not** call any LLM. Claude-assisted judgment is reserved for
-  a later spec.
+  a later spec (see 004 stub).
 - Does **not** hot-reload rules; edits take effect after a restart.
 - Does **not** trade derivatives, options, futures, crypto, on margin,
   short, or domestic Korean equities.
@@ -51,6 +51,7 @@ auto-invest halt --reason "..."   # block new orders (persists across restarts)
 auto-invest resume --confirm      # clear the halt flag
 auto-invest status                # one-screen JSON state summary
 auto-invest report --date 2026-05-04   # emit yesterday's daily report
+auto-invest efficiency --window 7d     # JSON snapshot of LLM token KPIs (spec 002)
 auto-invest version
 ```
 
@@ -74,12 +75,25 @@ Continuous integration runs the full test suite **without** ever
 touching live broker endpoints; the live smoke test is gated by
 `KIS_LIVE_TEST=1` and skipped otherwise.
 
-## Active spec
+## Active specs
 
-Feature 001 — automated US-equity trading MVP — under
-[`specs/001-automated-trading-mvp/`](specs/001-automated-trading-mvp/).
-Read in this order: `spec.md` → `plan.md` → `research.md` →
-`data-model.md` → `contracts/` → `quickstart.md` → `tasks.md`.
+- **001 — automated US-equity trading MVP** (shipped):
+  [`specs/001-automated-trading-mvp/`](specs/001-automated-trading-mvp/).
+  Read in this order: `spec.md` → `plan.md` → `research.md` →
+  `data-model.md` → `contracts/` → `quickstart.md` → `tasks.md`.
+- **002 — token telemetry & efficiency KPIs** (shipped on
+  `claude/optimize-token-efficiency-uYiKk`):
+  [`specs/002-token-telemetry/`](specs/002-token-telemetry/). Adds the
+  `auto-invest efficiency` CLI plus a Token-Efficiency section in the
+  daily report.
+- **003 — Claude Code session cache** (shipped, operator-side
+  validation pending): [`specs/003-session-cache/`](specs/003-session-cache/).
+  Configures `.claude/settings.json` and a SessionStart hook that
+  surfaces the long-lived constitution + active-spec context.
+- **004 — LLM judgment points** (stub):
+  [`specs/004-llm-judgment-points/`](specs/004-llm-judgment-points/).
+- **005 — autonomous tuner** (stub):
+  [`specs/005-autonomous-tuner/`](specs/005-autonomous-tuner/).
 
 ## Repository layout
 

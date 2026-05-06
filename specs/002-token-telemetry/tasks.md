@@ -80,5 +80,6 @@
 - [x] T500 Run `ruff check src tests` and `ruff format src tests` (format-only changes); fix any new findings.
 - [x] T501 Run full `pytest`; verify the existing 256 tests still pass plus the new ones.
 - [x] T502 Update `README.md` with a one-line pointer to `specs/002-token-telemetry/spec.md` and the `efficiency` CLI.
+- [ ] T503 Wire `PRICE_TABLE_LOADED` audit emission from `cli.efficiency` and `cli.run` (one row per process). Test belongs in `tests/integration/test_efficiency_cli.py`. **Deferred to next session** — see `HANDOFF-002-003.md` item 5.
 
 **Checkpoint**: CI-equivalent commands (`ruff check && pytest`) pass with zero new failures.
