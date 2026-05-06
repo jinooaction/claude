@@ -135,6 +135,28 @@ def run(
     # in one safe step.
     _require_clean_migrations(db_path, allow_apply=dry_run)
 
+    # 4. Telemetry integrity check (FR-T12). Mismatches produce a
+    # DATA_QUALITY_ISSUE audit row but do not block startup.
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    _integrity_conn = db.get_connection(db_path)
+    try:
+        from auto_invest.persistence import audit as _audit_mod
+        from auto_invest.persistence.audit import DataQualityIssuePayload as _DQIP
+        from auto_invest.telemetry.store import integrity_check as _integrity
+
+        mismatches = _integrity(_integrity_conn)
+        for m in mismatches:
+            _audit_mod.append(
+                _integrity_conn,
+                _DQIP(
+                    issue="token_usage_audit_mismatch",
+                    detail={"correlation_id": m.correlation_id, "kind": m.kind},
+                ),
+                correlation_id=m.correlation_id,
+            )
+    finally:
+        _integrity_conn.close()
+
     if dry_run:
         typer.echo("Dry run successful.")
         typer.echo(f"  rules:    {len(cfg.rules)}")
@@ -171,6 +193,102 @@ def run(
 def version() -> None:
     """Print the auto-invest package version."""
     typer.echo("auto-invest 0.1.0")
+
+
+@app.command()
+def efficiency(
+    window: str = typer.Option(
+        "7d",
+        "--window",
+        help="Window size: Nd (days) or Nh (hours). Default 7d.",
+    ),
+    as_of: str | None = typer.Option(
+        None,
+        "--as-of",
+        help="Window end (exclusive). YYYY-MM-DD; default: now (UTC).",
+    ),
+    db_path: Path = typer.Option(
+        Path("data/auto_invest.db"),
+        "--db",
+        help="SQLite database path.",
+    ),
+    prices_path: Path = typer.Option(
+        Path("config/llm_prices.toml"),
+        "--prices",
+        help="Anthropic price table (TOML).",
+    ),
+    thresholds_path: Path = typer.Option(
+        Path("config/llm_kpi_thresholds.toml"),
+        "--thresholds",
+        help="KPI threshold table (TOML).",
+    ),
+) -> None:
+    """Emit a JSON snapshot of LLM token-efficiency KPIs over a window."""
+    import json as _json
+    from datetime import UTC as _UTC
+    from datetime import datetime as _datetime
+    from datetime import timedelta
+
+    from auto_invest.telemetry.kpi import compute_snapshot
+    from auto_invest.telemetry.prices import PriceTableError, load_prices
+    from auto_invest.telemetry.thresholds import TierTableError, load_thresholds
+
+    if window.endswith("d"):
+        delta = timedelta(days=int(window[:-1]))
+    elif window.endswith("h"):
+        delta = timedelta(hours=int(window[:-1]))
+    else:
+        typer.echo("--window must be Nd or Nh", err=True)
+        _exit(2)
+
+    end = (
+        _datetime.fromisoformat(as_of).replace(tzinfo=_UTC)
+        if as_of is not None
+        else _datetime.now(_UTC)
+    )
+    start = end - delta
+
+    def _iso_ms(d: _datetime) -> str:
+        return d.strftime("%Y-%m-%dT%H:%M:%S.") + f"{d.microsecond // 1000:03d}Z"
+
+    try:
+        load_prices(prices_path)  # validate; cost is already persisted at meter time
+        tiers = load_thresholds(thresholds_path)
+    except (PriceTableError, TierTableError) as exc:
+        typer.echo(f"Configuration error: {exc}", err=True)
+        _exit(2)
+
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = db.get_connection(db_path)
+    db.migrate(conn)
+    try:
+        snapshot = compute_snapshot(
+            conn,
+            window_start_utc=_iso_ms(start),
+            window_end_utc=_iso_ms(end),
+            tiers=tiers,
+        )
+    finally:
+        conn.close()
+
+    payload = {
+        "window_start_utc": snapshot.window_start_utc,
+        "window_end_utc": snapshot.window_end_utc,
+        "call_count": snapshot.call_count,
+        "kpis": [
+            {
+                "name": k.name,
+                "value": str(k.value),
+                "tier": k.tier,
+                "direction": k.direction,
+                "threshold_used": k.threshold_used,
+            }
+            for k in snapshot.kpis
+        ],
+        "per_decision_class": snapshot.per_decision_class,
+        "top_n_calls": snapshot.top_n_calls,
+    }
+    typer.echo(_json.dumps(payload, sort_keys=True, indent=2))
 
 
 @db_app.command("migrate")
@@ -233,6 +351,11 @@ def report(
         "--output-root",
         help="Reports directory; one folder per session date.",
     ),
+    thresholds_path: Path = typer.Option(
+        Path("config/llm_kpi_thresholds.toml"),
+        "--thresholds",
+        help="KPI threshold table for the Token Efficiency section (spec 002).",
+    ),
 ) -> None:
     """Generate the daily report for the given session date."""
     from datetime import UTC as _UTC
@@ -240,14 +363,23 @@ def report(
     from datetime import timedelta
 
     from auto_invest.reports.daily import build_report, write_report
+    from auto_invest.telemetry.thresholds import TierTableError, load_thresholds
 
     session_date = date or ((_datetime.now(_UTC) - timedelta(days=1)).strftime("%Y-%m-%d"))
+
+    tiers = None
+    if thresholds_path.exists():
+        try:
+            tiers = load_thresholds(thresholds_path)
+        except TierTableError as exc:
+            typer.echo(f"Threshold table error: {exc}", err=True)
+            _exit(2)
 
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = db.get_connection(db_path)
     db.migrate(conn)
     try:
-        rep = build_report(conn, session_date=session_date)
+        rep = build_report(conn, session_date=session_date, tiers=tiers)
         md_path, json_path = write_report(rep, output_root=output_root)
     finally:
         conn.close()
@@ -258,6 +390,8 @@ def report(
     typer.echo(f"  orders submitted:    {rep.counters.get('orders_submitted', 0)}")
     typer.echo(f"  orders rejected:     {rep.counters.get('orders_rejected_by_gate', 0)}")
     typer.echo(f"  reconciliation:      {rep.reconciliation}")
+    if rep.efficiency is not None:
+        typer.echo(f"  llm_calls:           {rep.efficiency.call_count}")
 
 
 @app.command()

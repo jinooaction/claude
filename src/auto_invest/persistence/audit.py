@@ -38,6 +38,8 @@ EventType = Literal[
     "SECRETS_LOADED",
     "WORKER_STARTED",
     "WORKER_STOPPED",
+    "LLM_CALL",
+    "PRICE_TABLE_LOADED",
 ]
 
 
@@ -161,6 +163,26 @@ class DataQualityIssuePayload(AuditPayload):
     detail: dict[str, Any] = Field(default_factory=dict)
 
 
+class LlmCallPayload(AuditPayload):
+    """Per FR-T03 / FR-T11: token counts and metadata only — no prompt text."""
+
+    event_type: Literal["LLM_CALL"] = "LLM_CALL"
+    model: str
+    decision_class: str | None = None
+    tokens_total: int
+    cost_usd: str | None = None
+    latency_ms: int
+    error_class: str | None = None
+
+
+class PriceTableLoadedPayload(AuditPayload):
+    """Per spec 002 R-T3: pin the price-table version that priced each call."""
+
+    event_type: Literal["PRICE_TABLE_LOADED"] = "PRICE_TABLE_LOADED"
+    path: str
+    sha256: str
+
+
 AnyPayload = (
     WorkerStartedPayload
     | WorkerStoppedPayload
@@ -180,6 +202,8 @@ AnyPayload = (
     | StrategyPausedPayload
     | StrategyPromotedPayload
     | DataQualityIssuePayload
+    | LlmCallPayload
+    | PriceTableLoadedPayload
 )
 
 

@@ -24,6 +24,8 @@ from pathlib import Path
 from typing import Any
 
 from auto_invest.persistence import positions as positions_mod
+from auto_invest.telemetry.kpi import EfficiencySnapshot, compute_snapshot
+from auto_invest.telemetry.thresholds import TierTable
 
 
 @dataclass(frozen=True)
@@ -54,6 +56,7 @@ class DailyReport:
     positions: list[dict[str, Any]]
     reconciliation: str
     halt: dict[str, Any] | None = None
+    efficiency: EfficiencySnapshot | None = None
 
 
 def _utcnow_iso() -> str:
@@ -65,6 +68,7 @@ def build_report(
     *,
     session_date: str,
     generated_at: str | None = None,
+    tiers: TierTable | None = None,
 ) -> DailyReport:
     """Build a DailyReport from the audit log + positions cache.
 
@@ -163,6 +167,15 @@ def build_report(
         for p in positions_mod.get_all_positions(conn)
     ]
 
+    efficiency: EfficiencySnapshot | None = None
+    if tiers is not None:
+        efficiency = compute_snapshot(
+            conn,
+            window_start_utc=f"{session_date}T00:00:00.000Z",
+            window_end_utc=f"{session_date}T23:59:59.999Z",
+            tiers=tiers,
+        )
+
     return DailyReport(
         session_date=session_date,
         generated_at=generated_at or _utcnow_iso(),
@@ -172,6 +185,7 @@ def build_report(
         positions=positions_payload,
         reconciliation=reconciliation,
         halt=halt,
+        efficiency=efficiency,
     )
 
 
@@ -216,6 +230,25 @@ def render_markdown(report: DailyReport) -> str:
         lines.append("(none)")
     lines.append("")
 
+    lines.append("## Token Efficiency")
+    if report.efficiency is None or report.efficiency.call_count == 0:
+        lines.append("(no LLM calls today)")
+    else:
+        eff = report.efficiency
+        lines.append(f"- LLM calls:        {eff.call_count}")
+        for kpi in eff.kpis:
+            lines.append(f"- {kpi.name:<28} {kpi.value} (Tier {kpi.tier})")
+        if eff.per_decision_class:
+            lines.append("")
+            lines.append("| decision_class | count | tokens_total | cost_usd | p95_tokens |")
+            lines.append("|----------------|------:|-------------:|---------:|-----------:|")
+            for klass, agg in eff.per_decision_class.items():
+                lines.append(
+                    f"| {klass} | {agg['count']} | {agg['tokens_total']} | "
+                    f"{agg['cost_usd']} | {agg['p95_tokens']} |"
+                )
+    lines.append("")
+
     lines.append("## Positions (current)")
     if report.positions:
         lines.append("| symbol | qty | avg_cost_usd |")
@@ -229,6 +262,28 @@ def render_markdown(report: DailyReport) -> str:
 
 
 def render_json(report: DailyReport) -> str:
+    eff_payload: dict[str, Any] | None
+    if report.efficiency is None:
+        eff_payload = None
+    else:
+        eff = report.efficiency
+        eff_payload = {
+            "window_start_utc": eff.window_start_utc,
+            "window_end_utc": eff.window_end_utc,
+            "call_count": eff.call_count,
+            "kpis": [
+                {
+                    "name": k.name,
+                    "value": str(k.value),
+                    "tier": k.tier,
+                    "direction": k.direction,
+                    "threshold_used": k.threshold_used,
+                }
+                for k in eff.kpis
+            ],
+            "per_decision_class": eff.per_decision_class,
+            "top_n_calls": eff.top_n_calls,
+        }
     payload = {
         "session_date": report.session_date,
         "generated_at": report.generated_at,
@@ -256,6 +311,7 @@ def render_json(report: DailyReport) -> str:
         "positions": report.positions,
         "reconciliation": report.reconciliation,
         "halt": report.halt,
+        "efficiency": eff_payload,
     }
     return json.dumps(payload, sort_keys=True, indent=2) + "\n"
 

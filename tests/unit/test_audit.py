@@ -60,14 +60,14 @@ def test_migrate_is_idempotent(tmp_path: Path):
     c = db.get_connection(path)
     first = db.migrate(c)
     second = db.migrate(c)
-    assert first == ["0001_initial"]
+    assert "0001_initial" in first
     assert second == []
 
 
 def test_pending_migrations_reports_unapplied(tmp_path: Path):
     path = tmp_path / "test.db"
     c = db.get_connection(path)
-    assert db.pending_migrations(c) == ["0001_initial"]
+    assert "0001_initial" in db.pending_migrations(c)
     db.migrate(c)
     assert db.pending_migrations(c) == []
 

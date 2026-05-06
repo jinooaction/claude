@@ -1,0 +1,23 @@
+# Anthropic model price table — public pricing as of 2026-05-06.
+# Per `specs/002-token-telemetry/contracts/price-table.md`.
+# Operators MUST update this file when Anthropic publishes price changes;
+# the loader records a PRICE_TABLE_LOADED audit event with this file's
+# SHA-256 so cost-history is reproducible.
+
+["claude-opus-4-7"]
+usd_per_million_input_tokens       = 15.0
+usd_per_million_output_tokens      = 75.0
+usd_per_million_cache_read_tokens  = 1.5
+usd_per_million_cache_write_tokens = 18.75
+
+["claude-sonnet-4-6"]
+usd_per_million_input_tokens       = 3.0
+usd_per_million_output_tokens      = 15.0
+usd_per_million_cache_read_tokens  = 0.3
+usd_per_million_cache_write_tokens = 3.75
+
+["claude-haiku-4-5-20251001"]
+usd_per_million_input_tokens       = 1.0
+usd_per_million_output_tokens      = 5.0
+usd_per_million_cache_read_tokens  = 0.1
+usd_per_million_cache_write_tokens = 1.25
