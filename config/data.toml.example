@@ -1,0 +1,23 @@
+# Example data-source configuration for auto-invest spec 002.
+# Copy to `config/data.toml` and edit. The default file is gitignored.
+
+schema_version = "002.1"
+
+# Adapters that this worker is allowed to instantiate at startup.
+# Deny-by-default per constitution principle II — an adapter not in
+# this list cannot be invoked even if its module is importable.
+enabled_adapters = ["kis_us_equity", "crypto_public"]
+
+# Per (asset_class:kind) the vendor whose records the backtest engine
+# reads when a run config does not pin one explicitly.
+[default_vendor_per_kind]
+"equity:ohlcv_1d" = "kis"
+"equity:ohlcv_1m" = "kis"
+"crypto:ohlcv_1h" = "crypto_public"
+"crypto:ohlcv_1d" = "crypto_public"
+
+# When two vendors record the same bar with prices that disagree by
+# more than this many basis points (open / high / low / close, abs),
+# a `vendor_disagreement` row is written to `data_quality_events`
+# and the bar is excluded from any backtest.
+vendor_disagreement_tolerance_bps = "10"

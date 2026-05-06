@@ -1,0 +1,29 @@
+# Example promotion-threshold configuration for auto-invest spec 002.
+# Copy to `config/promotion.toml` to override the in-code defaults.
+#
+# Defaults below come from spec 002 research R-4 and are deliberately
+# conservative — no current hand-written rule from spec 001 should
+# trivially pass without a real measurable edge. Promotion is earned.
+
+schema_version = "002.1"
+
+# Minimum out-of-sample Sharpe ratio. Below 1.0 is generally
+# indistinguishable from random noise after transaction costs.
+min_oos_sharpe = "1.0"
+
+# Maximum out-of-sample peak-to-trough drawdown, percent.
+# Caps canary downside at a level the operator can absorb.
+max_oos_drawdown_pct = "15"
+
+# Below 30 trades, Sharpe and hit rate are statistically unreliable.
+min_oos_trade_count = 30
+
+# Less than ~3 months of OOS data hides regime risk.
+min_oos_window_days = 90
+
+# Live-vs-backtest divergence threshold. When the live drawdown
+# differs from the backtest drawdown by more than this many percent
+# for `divergence_alert_window_days` consecutive days, the rule is
+# auto-halted (per-rule halt, separate from the global halt).
+max_live_vs_backtest_drawdown_divergence_pct = "5"
+divergence_alert_window_days = 5

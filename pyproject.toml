@@ -13,6 +13,7 @@ dependencies = [
     "exchange-calendars>=4.13.2",
     "httpx>=0.28.1",
     "pandas>=3.0.2",
+    "pyarrow>=24.0.0",
     "pydantic>=2.13.3",
     "python-dotenv>=1.2.2",
     "ta>=0.11.0",

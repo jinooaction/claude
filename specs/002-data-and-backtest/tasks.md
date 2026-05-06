@@ -20,12 +20,12 @@
 
 **Purpose**: Project skeleton additions, dev dependencies, fixture directories, gitignore. Most of the project skeleton already exists from spec 001; these tasks add the new top-level modules and extend ignore lists.
 
-- [ ] T001 Create source-tree additions: `src/auto_invest/{backtest,promotion}/__init__.py`, `src/auto_invest/market_data/adapters/__init__.py`, plus `tests/{unit,integration}/{backtest,ingestion,promotion}/` and `tests/fixtures/{historical/{equity,crypto},backtests}/` with `.gitkeep` files.
-- [ ] T002 Add runtime dependency `pyarrow` via `uv add pyarrow` and verify `pyproject.toml` reflects it (forward-compat Parquet export per R-5).
-- [ ] T003 [P] Extend `.gitignore` to ignore `data/backtests/` and `data/promotions/` (operator-specific run artifacts) and a new `data/historical/` if any adapter spills filesystem cache.
-- [ ] T004 [P] Create `config/data.toml.example` documenting `enabled_adapters`, `default_vendor_per_kind`, `vendor_disagreement_tolerance_bps` per the schema shown in `quickstart.md` step 1.
-- [ ] T005 [P] Create `config/promotion.toml.example` documenting `PromotionThresholds` defaults from R-4.
-- [ ] T006 [P] Add `tests/fixtures/historical/equity/aapl_2023_2025_1d.jsonl` and `tests/fixtures/historical/crypto/btcusd_2024_2025_1d.jsonl` containing pinned recorded OHLCV slices used by integration tests (pre-recorded from a live ingest; no live HTTP in CI).
+- [X] T001 Create source-tree additions: `src/auto_invest/{backtest,promotion}/__init__.py`, `src/auto_invest/market_data/adapters/__init__.py`, plus `tests/{unit,integration}/{backtest,ingestion,promotion}/` and `tests/fixtures/{historical/{equity,crypto},backtests}/` with `.gitkeep` files.
+- [X] T002 Add runtime dependency `pyarrow` via `uv add pyarrow` and verify `pyproject.toml` reflects it (forward-compat Parquet export per R-5).
+- [X] T003 [P] Extend `.gitignore` to ignore `data/backtests/` and `data/promotions/` (operator-specific run artifacts) and a new `data/historical/` if any adapter spills filesystem cache. — *No-op: existing `data/` ignore already covers these.*
+- [X] T004 [P] Create `config/data.toml.example` documenting `enabled_adapters`, `default_vendor_per_kind`, `vendor_disagreement_tolerance_bps` per the schema shown in `quickstart.md` step 1.
+- [X] T005 [P] Create `config/promotion.toml.example` documenting `PromotionThresholds` defaults from R-4.
+- [X] T006 [P] Add `tests/fixtures/historical/equity/aapl_2023_2025_1d.jsonl` (renamed `aapl_2024_2025_1d.jsonl`, 522 weekday bars) and `tests/fixtures/historical/crypto/btcusd_2024_2025_1d.jsonl` (731 daily bars) containing pinned recorded OHLCV slices used by integration tests. *Synthetic seeded data — no live HTTP required. A future task may replace with real recorded fixtures.*
 
 **Checkpoint**: New module trees exist; `uv sync` succeeds; `uv run pytest` passes (only spec 001 tests run; no new ones yet).
 
