@@ -9,12 +9,12 @@ needs to do.
 
 | Spec | Status | Artefacts |
 |------|--------|-----------|
-| 002 — token telemetry & KPIs | **shipped** | `specs/002-token-telemetry/`, `src/auto_invest/telemetry/`, migration `0002_token_usage.sql`, `audit.LLM_CALL`/`PRICE_TABLE_LOADED`, `auto-invest efficiency` CLI, daily-report Token Efficiency section |
+| 002 — token telemetry & KPIs | **shipped** (T503 closed) | `specs/002-token-telemetry/`, `src/auto_invest/telemetry/`, migration `0002_token_usage.sql`, `audit.LLM_CALL`/`PRICE_TABLE_LOADED`, `auto-invest efficiency` CLI, daily-report Token Efficiency section, `--prices` validated at `auto-invest run` startup |
 | 003 — Claude Code session cache | **shipped (validation pending)** | `specs/003-session-cache/spec.md`, `.claude/settings.json`, `.claude/hooks/session_context.py` |
 | 004 — LLM judgment points | **STUB** | `specs/004-llm-judgment-points/spec.md` |
 | 005 — autonomous tuner | **STUB** | `specs/005-autonomous-tuner/spec.md` |
 
-**Tests**: 301 passing, 1 skipped (live KIS). `ruff check` clean.
+**Tests**: 302 passing, 1 skipped (live KIS). `ruff check` clean.
 
 ## What still needs doing
 
@@ -57,15 +57,13 @@ either real time, real LLM traffic, or an operator decision.
 
 ### Code-side, ready for the next session
 
-5. **Wire `PRICE_TABLE_LOADED` audit emission.** The contract
-   (`specs/002-token-telemetry/contracts/price-table.md`) calls for
-   the price-table loader to record a `PRICE_TABLE_LOADED` audit row
-   on every load. The payload class exists
-   (`PriceTableLoadedPayload`), but no call site emits it yet.
-   Implementation hint: emit it from inside `cli.efficiency` and
-   inside `cli.run`'s startup flow, once per process. Test belongs
-   in `tests/integration/test_efficiency_cli.py` (assert one
-   `PRICE_TABLE_LOADED` row in `audit_log` after the command runs).
+5. ~~**Wire `PRICE_TABLE_LOADED` audit emission.**~~ **Done (T503).**
+   `cli.efficiency` and `cli.run`'s startup flow each emit one
+   `PRICE_TABLE_LOADED` audit row pinned to the price-table
+   SHA-256. `auto-invest run` now takes a `--prices` option and
+   validates the table at startup (exit 2 on missing/invalid).
+   Tests: `tests/integration/test_efficiency_cli.py::test_emits_price_table_loaded_audit_row`
+   and `tests/integration/test_cli_dry_run.py::test_dry_run_succeeds_with_valid_config`.
 
 6. **PR-merge to `main`.** Branch is currently local + pushed to
    `origin/claude/optimize-token-efficiency-uYiKk`. The operator must

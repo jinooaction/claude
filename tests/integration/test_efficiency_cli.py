@@ -85,6 +85,38 @@ def test_populated_db_returns_kpis(tmp_path: Path):
     }
 
 
+def test_emits_price_table_loaded_audit_row(tmp_path: Path):
+    """T503: cli.efficiency must record one PRICE_TABLE_LOADED row per process,
+    pinned to the loaded table's SHA-256 (price-table.md §Validation)."""
+    db_path = tmp_path / "audit.db"
+    result = runner.invoke(
+        app,
+        [
+            "efficiency",
+            "--db",
+            str(db_path),
+            "--window",
+            "7d",
+            "--as-of",
+            "2026-05-06",
+        ],
+    )
+    assert result.exit_code == 0, result.stdout
+
+    conn = db.get_connection(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT payload_json FROM audit_log WHERE event_type='PRICE_TABLE_LOADED'"
+        ).fetchall()
+    finally:
+        conn.close()
+
+    assert len(rows) == 1
+    payload = json.loads(rows[0]["payload_json"])
+    assert payload["path"].endswith("llm_prices.toml")
+    assert len(payload["sha256"]) == 64
+
+
 def test_byte_stable_for_same_input(tmp_path: Path):
     db_path = tmp_path / "stable.db"
     conn = db.get_connection(db_path)

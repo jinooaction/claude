@@ -84,6 +84,18 @@ def test_dry_run_succeeds_with_valid_config(env, tmp_path: Path):
     # live run does not need a separate migrate step.
     assert db_path.exists()
 
+    # T503: startup pins the price-table version via PRICE_TABLE_LOADED.
+    from auto_invest.persistence import db as _db
+
+    conn = _db.get_connection(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT payload_json FROM audit_log WHERE event_type='PRICE_TABLE_LOADED'"
+        ).fetchall()
+    finally:
+        conn.close()
+    assert len(rows) == 1
+
 
 def test_dry_run_exit_2_on_missing_secret(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     monkeypatch.delenv("KIS_APP_KEY", raising=False)

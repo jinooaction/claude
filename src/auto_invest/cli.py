@@ -108,14 +108,22 @@ def run(
         "--require-session-open/--ignore-session-window",
         help="Skip ticks outside US regular hours (default) or run anyway.",
     ),
+    prices_path: Path = typer.Option(
+        Path("config/llm_prices.toml"),
+        "--prices",
+        help="Anthropic price table (TOML); validated at startup per spec 002.",
+    ),
 ) -> None:
     configure_logging()
 
     # 1. Secrets + config (refuses on missing required values).
+    from auto_invest.telemetry.prices import PriceTableError, load_prices
+
     try:
         secrets = load_secrets(env_file)
         cfg = load_config(config, env_path=env_file)
-    except ConfigError as exc:
+        prices = load_prices(prices_path)
+    except (ConfigError, PriceTableError) as exc:
         typer.echo(f"Configuration error: {exc}", err=True)
         _exit(2)
 
@@ -136,14 +144,22 @@ def run(
     _require_clean_migrations(db_path, allow_apply=dry_run)
 
     # 4. Telemetry integrity check (FR-T12). Mismatches produce a
-    # DATA_QUALITY_ISSUE audit row but do not block startup.
+    # DATA_QUALITY_ISSUE audit row but do not block startup. Also pin
+    # the price-table version that priced this process (T503 / spec 002 R-T3).
     db_path.parent.mkdir(parents=True, exist_ok=True)
     _integrity_conn = db.get_connection(db_path)
     try:
         from auto_invest.persistence import audit as _audit_mod
         from auto_invest.persistence.audit import DataQualityIssuePayload as _DQIP
+        from auto_invest.persistence.audit import (
+            PriceTableLoadedPayload as _PTLP,
+        )
         from auto_invest.telemetry.store import integrity_check as _integrity
 
+        _audit_mod.append(
+            _integrity_conn,
+            _PTLP(path=prices.source_path, sha256=prices.sha256),
+        )
         mismatches = _integrity(_integrity_conn)
         for m in mismatches:
             _audit_mod.append(
@@ -229,6 +245,8 @@ def efficiency(
     from datetime import datetime as _datetime
     from datetime import timedelta
 
+    from auto_invest.persistence import audit as _audit
+    from auto_invest.persistence.audit import PriceTableLoadedPayload
     from auto_invest.telemetry.kpi import compute_snapshot
     from auto_invest.telemetry.prices import PriceTableError, load_prices
     from auto_invest.telemetry.thresholds import TierTableError, load_thresholds
@@ -252,7 +270,7 @@ def efficiency(
         return d.strftime("%Y-%m-%dT%H:%M:%S.") + f"{d.microsecond // 1000:03d}Z"
 
     try:
-        load_prices(prices_path)  # validate; cost is already persisted at meter time
+        prices = load_prices(prices_path)
         tiers = load_thresholds(thresholds_path)
     except (PriceTableError, TierTableError) as exc:
         typer.echo(f"Configuration error: {exc}", err=True)
@@ -262,6 +280,10 @@ def efficiency(
     conn = db.get_connection(db_path)
     db.migrate(conn)
     try:
+        _audit.append(
+            conn,
+            PriceTableLoadedPayload(path=prices.source_path, sha256=prices.sha256),
+        )
         snapshot = compute_snapshot(
             conn,
             window_start_utc=_iso_ms(start),
