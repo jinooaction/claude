@@ -39,39 +39,39 @@
 
 ### Database schema (constitution IV — append-only)
 
-- [ ] T007 Author migration `0002_data_and_backtest.sql` defining `historical_bars`, `event_series`, `corporate_actions`, `data_quality_events`, `backtest_runs`, `promotion_seals`, `divergence_events` exactly as `data-model.md` specifies, including UPDATE/DELETE-blocking triggers and indices, at `src/auto_invest/persistence/migrations/0002_data_and_backtest.sql`.
-- [ ] T008 [P] Extend `src/auto_invest/persistence/db.py` migration runner test fixture so spec 001's `test_db_migrate.py` still passes after `0002` is applied; add `tests/unit/persistence/test_migration_0002.py` asserting every new table rejects UPDATE/DELETE while `frozen = 1`.
+- [X] T007 Author migration `0002_data_and_backtest.sql` defining `historical_bars`, `event_series`, `corporate_actions`, `data_quality_events`, `backtest_runs`, `promotion_seals`, `divergence_events` exactly as `data-model.md` specifies, including UPDATE/DELETE-blocking triggers and indices, at `src/auto_invest/persistence/migrations/0002_data_and_backtest.sql`.
+- [X] T008 [P] Extend `src/auto_invest/persistence/db.py` migration runner test fixture so spec 001's `test_db_migrate.py` still passes after `0002` is applied; add `tests/unit/persistence/test_migration_0002.py` asserting every new table rejects UPDATE/DELETE while `frozen = 1`.
 
 ### Data-source + backtest config models (FR-D-001, FR-B-001)
 
-- [ ] T009 [P] Implement `DataSourcesConfig` pydantic model with `enabled_adapters` deny-by-default and `default_vendor_per_kind` validation in `src/auto_invest/config/data.py`.
-- [ ] T010 [P] Implement `CostModel`, `WalkForwardConfig`, `OOSWindowConfig`, and `BacktestConfig` pydantic models in `src/auto_invest/config/backtest.py` per `contracts/backtest-config.md` (decimal-as-string, no float literals).
-- [ ] T011 Implement canonical TOML hashing in `src/auto_invest/backtest/determinism.py`: sort keys, normalize decimals, SHA-256 the canonical bytes; expose `config_hash(toml_text)` and `rule_snapshot_hash(rule_text)`. Includes property-based test in `tests/unit/backtest/test_canonical_hash.py` confirming whitespace / key-order / decimal-format invariance.
-- [ ] T012 [P] Implement `PromotionThresholds` pydantic model (R-4 defaults) in `src/auto_invest/config/promotion.py`; loader reads `config/promotion.toml` if present, falls back to defaults.
+- [X] T009 [P] Implement `DataSourcesConfig` pydantic model with `enabled_adapters` deny-by-default and `default_vendor_per_kind` validation in `src/auto_invest/config/data.py`.
+- [X] T010 [P] Implement `CostModel`, `WalkForwardConfig`, `OOSWindowConfig`, and `BacktestConfig` pydantic models in `src/auto_invest/config/backtest.py` per `contracts/backtest-config.md` (decimal-as-string, no float literals).
+- [X] T011 Implement canonical TOML hashing in `src/auto_invest/backtest/determinism.py`: sort keys, normalize decimals, SHA-256 the canonical bytes; expose `config_hash(toml_text)` and `rule_snapshot_hash(rule_text)`. Includes property-based test in `tests/unit/backtest/test_canonical_hash.py` confirming whitespace / key-order / decimal-format invariance.
+- [X] T012 [P] Implement `PromotionThresholds` pydantic model (R-4 defaults) in `src/auto_invest/config/promotion.py`; loader reads `config/promotion.toml` if present, falls back to defaults.
 
 ### Market calendar abstraction (FR-D-006)
 
-- [ ] T013 Refactor `src/auto_invest/worker/schedule.py` into `src/auto_invest/market_data/calendar.py` exposing `MarketCalendar` ABC with two implementations: `DiscreteSessionCalendar` (existing exchange_calendars wrapper, used for nasdaq/nyse/krx/lse) and `AlwaysOpenCalendar` (used for crypto). Update spec 001 imports so the existing worker behaviour is preserved; add `tests/unit/market_data/test_calendar.py` covering both implementations.
+- [X] T013 Refactor `src/auto_invest/worker/schedule.py` into `src/auto_invest/market_data/calendar.py` exposing `MarketCalendar` ABC with two implementations: `DiscreteSessionCalendar` (existing exchange_calendars wrapper, used for nasdaq/nyse/krx/lse) and `AlwaysOpenCalendar` (used for crypto). Update spec 001 imports so the existing worker behaviour is preserved; add `tests/unit/market_data/test_calendar.py` covering both implementations.
 
 ### Ingestion adapter ABC (FR-D-003)
 
-- [ ] T014 Implement `IngestionAdapter` ABC, `InstrumentRef`, `BarRecord`, `EventRecord`, `CorporateActionRecord` dataclasses, `ADAPTERS` registry, and `register_adapter` decorator in `src/auto_invest/market_data/adapters/__init__.py` per `contracts/ingestion-adapter.md`.
-- [ ] T015 [P] Add the shared adapter conformance test scaffold at `tests/integration/ingestion/test_adapter_conformance.py` parametrising over `ADAPTERS.values()`. The scaffold passes with zero adapters registered (each adapter's PR adds its own registration).
+- [X] T014 Implement `IngestionAdapter` ABC, `InstrumentRef`, `BarRecord`, `EventRecord`, `CorporateActionRecord` dataclasses, `ADAPTERS` registry, and `register_adapter` decorator in `src/auto_invest/market_data/adapters/__init__.py` per `contracts/ingestion-adapter.md`.
+- [X] T015 [P] Add the shared adapter conformance test scaffold at `tests/integration/ingestion/test_adapter_conformance.py` parametrising over `ADAPTERS.values()`. The scaffold passes with zero adapters registered (each adapter's PR adds its own registration).
 
 ### Data store extensions (FR-D-002, FR-B-002)
 
-- [ ] T016 Extend `src/auto_invest/market_data/store.py` with `HistoricalBarsStore.write_bars(records, *, as_of_ts)` and `HistoricalBarsStore.write_events(records, *, as_of_ts)` and `HistoricalBarsStore.write_corporate_actions(records, *, as_of_ts)`. Writers are append-only; idempotent on duplicate `(asset_class, venue, symbol, kind, vendor, ts, as_of_ts)`.
-- [ ] T017 Implement `src/auto_invest/market_data/revisions.py` exposing `latest_as_of(...)`, `iter_bars(..., as_of_ts_pin)`, `iter_events(..., as_of_ts_pin)` and `iter_corporate_actions(..., as_of_ts_pin)`. **Reads enforce the point-in-time barrier**: any bar / event / action whose `as_of_ts > as_of_ts_pin` or whose content `ts > requested_window_end` is filtered before yielding (depends on T007, T016).
-- [ ] T018 Add `tests/unit/market_data/test_revisions.py` covering: as_of_ts pin filters out late revisions, original revision still returned at its own `as_of_ts`, ordering invariants, NULL-aware key handling for instrument-agnostic events.
+- [X] T016 Extend `src/auto_invest/market_data/store.py` with `HistoricalBarsStore.write_bars(records, *, as_of_ts)` and `HistoricalBarsStore.write_events(records, *, as_of_ts)` and `HistoricalBarsStore.write_corporate_actions(records, *, as_of_ts)`. Writers are append-only; idempotent on duplicate `(asset_class, venue, symbol, kind, vendor, ts, as_of_ts)`.
+- [X] T017 Implement `src/auto_invest/market_data/revisions.py` exposing `latest_as_of(...)`, `iter_bars(..., as_of_ts_pin)`, `iter_events(..., as_of_ts_pin)` and `iter_corporate_actions(..., as_of_ts_pin)`. **Reads enforce the point-in-time barrier**: any bar / event / action whose `as_of_ts > as_of_ts_pin` or whose content `ts > requested_window_end` is filtered before yielding (depends on T007, T016).
+- [X] T018 Add `tests/unit/market_data/test_revisions.py` covering: as_of_ts pin filters out late revisions, original revision still returned at its own `as_of_ts`, ordering invariants, NULL-aware key handling for instrument-agnostic events.
 
 ### Data quality (FR-D-005)
 
-- [ ] T019 [P] Extend `src/auto_invest/market_data/quality.py` with `detect_gaps(instrument, kind, calendar, from_utc, to_utc)` and `detect_vendor_disagreement(instrument, kind, tolerance_bps)`; both write rows into `data_quality_events`. Add `tests/unit/market_data/test_quality.py`.
+- [X] T019 [P] Extend `src/auto_invest/market_data/quality.py` with `detect_gaps(instrument, kind, calendar, from_utc, to_utc)` and `detect_vendor_disagreement(instrument, kind, tolerance_bps)`; both write rows into `data_quality_events`. Add `tests/unit/market_data/test_quality.py`.
 
 ### Risk-gate single source of truth (SC-005)
 
-- [ ] T020 Audit `src/auto_invest/risk/` and `src/auto_invest/execution/router.py` for any live-only assumptions (e.g., references to a real broker client). Refactor so the gate chain is constructible against any `Broker`-protocol implementation. No new behaviour; existing 256 tests must still pass.
-- [ ] T021 Implement `src/auto_invest/execution/backtest_broker.py` exposing the same `Broker` protocol as the live KIS adapter, but with a `place_order(order, *, bar)` method that defers to the cost model (added in Phase 3). Add `tests/unit/execution/test_backtest_broker_protocol.py` confirming protocol parity (mypy-style structural check via `runtime_checkable`).
+- [X] T020 Audit `src/auto_invest/risk/` and `src/auto_invest/execution/router.py` for any live-only assumptions (e.g., references to a real broker client). Refactor so the gate chain is constructible against any `Broker`-protocol implementation. No new behaviour; existing 256 tests must still pass.
+- [X] T021 Implement `src/auto_invest/execution/backtest_broker.py` exposing the same `Broker` protocol as the live KIS adapter, but with a `place_order(order, *, bar)` method that defers to the cost model (added in Phase 3). Add `tests/unit/execution/test_backtest_broker_protocol.py` confirming protocol parity (mypy-style structural check via `runtime_checkable`).
 
 **Checkpoint**: New tables exist; new config models load; calendar abstraction covers both venue families; ingestion ABC + conformance scaffold compiles; data store reader enforces the point-in-time barrier; risk-gate code path is import-clean from both routers.
 

@@ -60,14 +60,17 @@ def test_migrate_is_idempotent(tmp_path: Path):
     c = db.get_connection(path)
     first = db.migrate(c)
     second = db.migrate(c)
-    assert first == ["0001_initial"]
+    # 0001 must be applied on the first call; second call must be a no-op.
+    # Additional spec 002+ migrations may also appear in `first`.
+    assert "0001_initial" in first
     assert second == []
 
 
 def test_pending_migrations_reports_unapplied(tmp_path: Path):
     path = tmp_path / "test.db"
     c = db.get_connection(path)
-    assert db.pending_migrations(c) == ["0001_initial"]
+    pending = db.pending_migrations(c)
+    assert "0001_initial" in pending
     db.migrate(c)
     assert db.pending_migrations(c) == []
 
