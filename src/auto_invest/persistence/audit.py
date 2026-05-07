@@ -40,6 +40,7 @@ EventType = Literal[
     "WORKER_STOPPED",
     "LLM_CALL",
     "PRICE_TABLE_LOADED",
+    "DEPLOY_BLOCKED_KERNEL_TOUCH",
 ]
 
 
@@ -183,6 +184,21 @@ class PriceTableLoadedPayload(AuditPayload):
     sha256: str
 
 
+class DeployBlockedKernelTouchPayload(AuditPayload):
+    """Per constitution IX.B-1 / spec 006 FR-D13.
+
+    Recorded when the deploy automation refuses to proceed because the
+    proposed change set's diff intersects the Kernel manifest.
+    """
+
+    event_type: Literal["DEPLOY_BLOCKED_KERNEL_TOUCH"] = "DEPLOY_BLOCKED_KERNEL_TOUCH"
+    sha_before: str
+    sha_after: str
+    touched_paths: list[str]
+    touched_groups: list[str]
+    triggered_by: str = "manual"  # "manual" | "auto-tuner"
+
+
 AnyPayload = (
     WorkerStartedPayload
     | WorkerStoppedPayload
@@ -204,6 +220,7 @@ AnyPayload = (
     | DataQualityIssuePayload
     | LlmCallPayload
     | PriceTableLoadedPayload
+    | DeployBlockedKernelTouchPayload
 )
 
 
