@@ -17,8 +17,8 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
-  - **Three open clarifications** (the documented maximum): FR-B06 (OHLCV vendor), FR-B07 (fill model), FR-B17 (migration-file kernel-touch policy). These are routed to `/speckit-clarify` per the operator's explicit instruction in the seed prompt ("Vendor for OHLCV TBD during /speckit-clarify").
+- [x] No [NEEDS CLARIFICATION] markers remain
+  - All five clarifications resolved in the 2026-05-07 `/speckit-clarify` session and recorded in the spec's `## Clarifications` section. FR-B06 (vendor), FR-B07 (fill model), FR-B17 (migration kernel-touch policy), FR-B18 (OPEX freeze), FR-B21 (promotion thresholds) all updated in place; previous markers removed.
 - [x] Requirements are testable and unambiguous
   - Each FR-B## either has a binary acceptance condition (e.g. FR-B12 byte-identical reports), a numerical threshold (FR-B21 default thresholds), or a referenced contract (FR-B13 contracts directory). The three NEEDS-CLARIFICATION items are bounded — once the operator picks an option, the FR becomes testable without further spec edits.
 - [x] Success criteria are measurable
@@ -58,9 +58,10 @@
 
 ## Notes
 
-- Three [NEEDS CLARIFICATION] markers remain. They are intentional and routed to `/speckit-clarify`:
-  1. **OHLCV vendor** (FR-B06) — operator's explicit deferral in the seed prompt.
-  2. **Fill model** (FR-B07) — materially affects whether the engine overstates live PnL; operator judgement required.
-  3. **Migration-file kernel-touch policy** (FR-B17) — determines whether 008 ships as a single human-merge change set or splits the migration into a separate K-meta amendment.
-- Items marked incomplete here are limited to that single row about [NEEDS CLARIFICATION]. They do **not** require spec updates before `/speckit-clarify`; that command exists precisely to resolve them.
-- After `/speckit-clarify` resolves the three markers, this checklist's first row converts to `[x]` and the spec is ready for `/speckit-plan`.
+- All clarifications closed during the 2026-05-07 `/speckit-clarify` session:
+  1. **OHLCV vendor** (FR-B06) → yfinance + KIS historical, both via a vendor-agnostic adapter interface; Polygon and CSV deferred.
+  2. **Fill model** (FR-B07) → hybrid: limit orders use range-aware-at-limit; market orders (per-symbol opt-in only) use next-bar-open + 5 bps default slippage. Branched on the live `order_type`.
+  3. **Migration kernel-touch policy** (FR-B17) → new migration is added to `kernel.toml` K4 in the same change set as spec 008's first landing. That landing is a one-time K-meta human-merge event; subsequent engine work is non-Kernel.
+  4. **Promotion verdict thresholds** (FR-B21) → v1 baseline frozen: `total_return_pct ≥ 0`, `max_drawdown_pct ≤ 10`, `sharpe ≥ 0.5`. Advisory only in v1; binding gate is spec 007.
+  5. **Synthetic-shock OPEX freeze** (FR-B18) → `synthetic_shock_v1` membership frozen at 2026-05-07 to: 2020-03-12, 2020-04-20, 2024-08-05, 2026-03-20. Subsequent OPEX days do not auto-roll.
+- Spec is now ready for `/speckit-plan`. Recommended next command: `/speckit-plan`.
