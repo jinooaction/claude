@@ -2,9 +2,10 @@
 
 **Feature Branch**: `006-deploy-automation` (developed on `claude/optimize-token-efficiency-uYiKk`)
 **Created**: 2026-05-06
+**Last revised**: 2026-05-06 (constitution v2.0.0 alignment — kernel-touch guard added)
 **Status**: Draft
-**Constitution**: v1.1.0 (this feature consumes principle VIII.B which was added by this same change set; the constitution amendment is committed alongside)
-**Input**: Operator description: "배포도 자동화해줘. 필요하다면 헌법도 수정할거야." Operator wants a single command that pulls the latest branch, applies migrations, validates config, restarts the worker, and confirms health — refusing to run during US regular hours and recording every step in the audit log.
+**Constitution**: v2.0.0 (consumes principles VIII.A, VIII.B, and IX)
+**Input**: Operator description: "배포도 자동화해줘. 필요하다면 헌법도 수정할거야 ... 나는 머지도 개입하고 싶지 않아." Operator wants a single command that pulls the latest branch, applies migrations, validates config, restarts the worker, and confirms health — refusing to run during US regular hours, recording every step in the audit log, AND auto-merging non-Kernel change sets that pass spec 007's hardened canary.
 
 ## User Scenarios & Testing
 
@@ -70,6 +71,8 @@ A cron line or systemd timer can call the deploy script every 30 minutes during 
 - **FR-D10**: System MUST refuse to deploy if any required secret is missing (FR-011 from spec 001), failing at the `precondition` phase.
 - **FR-D11**: Idempotency: if `git rev-parse HEAD == git rev-parse origin/<branch>`, the command exits 0 with no side effects and no audit rows.
 - **FR-D12**: System MUST ship a systemd unit + timer template at `deploy/auto-invest.service` and `deploy/auto-invest-deploy.timer` so operators on Linux hosts can wire it up in two `systemctl enable` invocations.
+- **FR-D13** (constitution IX.B-1): System MUST consult `.specify/memory/kernel.toml` BEFORE the migrate phase and BEFORE the start-worker phase. If the change set's diff (`git diff --name-only <sha_before>..<sha_after>`) intersects ANY path in the manifest, the command MUST emit `DEPLOY_BLOCKED_KERNEL_TOUCH` carrying the touched paths and the matched manifest groups, abort, and exit 2. The previous worker version MUST remain running.
+- **FR-D14** (constitution IX.B-2): When the deploy is initiated by the autonomous tuner (spec 005, identified by a request flag like `--triggered-by=auto-tuner`), the command MUST additionally verify the change set has passed the spec 007 hardened-canary acceptance criteria. Until 007 ships, autonomous-tuner deploys are refused at this phase regardless of kernel-touch result; the change set falls back to the human-merge path.
 
 ## Key Entities
 
