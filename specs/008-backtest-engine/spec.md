@@ -6,6 +6,12 @@
 **Constitution**: v2.0.0 — implements the historical-replay infrastructure required by principle IX.B-2 (via spec 007). Strictly outside the Kernel.
 **Input**: User description: "Backtest engine for auto-invest. Hard prerequisite for spec 007 (hardened canary, constitution IX.B-2). Replays historical OHLCV against the existing Worker.tick / risk-gate stack to produce a deterministic returns/drawdown/Sharpe report. NOT a Kernel change. Vendor for OHLCV TBD during /speckit-clarify."
 
+## Clarifications
+
+### Session 2026-05-07
+
+- Q: OHLCV vendor (FR-B06) → A: yfinance and KIS historical, both supported. Engine reads via a vendor-agnostic OHLCV adapter interface; concrete adapters for the two vendors are part of v1 scope. Adapter selection per backtest run is an input field. Polygon and CSV remain follow-ups, not v1.
+
 ## Why this feature exists
 
 Constitution v2.0.0 principle IX.B-2 conditions every autonomous merge on a hardened canary (spec 007), and the hardened canary itself depends on three replay-driven gates:
@@ -109,7 +115,8 @@ The engine writes a structured directory under `data/backtests/<run_id>/` contai
 
 - **FR-B04**: System MUST accept as input: a candidate rule TOML (or live config), a historical-OHLCV dataset reference, a window `[start_date, end_date]`, optional symbol filter, and a deterministic random seed.
 - **FR-B05**: System MUST validate the OHLCV dataset before replay: every required (date, symbol) pair present, no `NaN`/zero-volume bars on required pairs, content hash recorded in the run manifest.
-- **FR-B06**: OHLCV vendor and ingest path: [NEEDS CLARIFICATION: vendor candidates include yfinance (free, daily-adjusted, US equities, T+1), KIS historical OHLCV API (already integrated, daily, KIS-account-scoped), Polygon.io (paid, intraday, low-latency), vendor CSV (operator drops files into `data/ohlcv/`); choice impacts cost, freshness, and whether intraday backtests are feasible at all].
+- **FR-B06**: System MUST support two OHLCV vendors in v1 — `yfinance` (free, daily-adjusted, US equities) and `KIS historical` (already-integrated KIS overseas-equity historical endpoint). Selection per backtest run is an explicit input. Both vendors are accessed through a vendor-agnostic OHLCV adapter interface so future vendors (Polygon, CSV ingest, others) can be added without changing the replay engine. The KIS adapter MUST NOT cause live-broker side effects during replay (FR-B09 still binds); reading historical bars is permitted, placing orders is not.
+- **FR-B06a**: Vendor adapter contract MUST normalise output into a single canonical OHLCV row shape (date, symbol, open, high, low, close, volume, adjusted_flag, vendor_id), with content-hash computed over the canonical form so that two vendors returning equivalent bars for a given (date, symbol) produce the same `dataset_hash` (FR-B05).
 
 #### Replay semantics
 
