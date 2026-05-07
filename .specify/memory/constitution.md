@@ -1,6 +1,21 @@
 <!--
 Sync Impact Report
 ==================
+Version change: 1.0.0 -> 1.1.0  (MINOR: principle VIII materially expanded for deploy automation)
+Modified principles:
+  VIII. Change Discipline — split into 8.A (no market-hours deploys, unchanged in spirit) and 8.B (automated-deploy requirements: market-hours guard, audit events, health-check gate, rollback obligation). Spirit preserved; guidance materially expanded.
+Added sections: none (expansion is inside principle VIII).
+Removed sections: n/a
+Templates requiring updates:
+  ✅ .specify/memory/constitution.md  (this file)
+  ✅ specs/006-deploy-automation/spec.md  (new feature; consumes the 8.B clauses)
+  ⚠ specs/001-automated-trading-mvp/plan.md  — Constitution Check table still references VIII as a single block; left as-is because v1 was authored under v1.0.0 and is shipped. New plans MUST cite VIII.A / VIII.B explicitly.
+Follow-up TODOs:
+  - Reconsider adding an explicit daily/cumulative loss-limit principle (deliberately omitted; carried over from v1.0.0).
+  - At /speckit-specify for 004 (LLM judgment points), declare per-judgment-point cost + latency budgets and confirm VIII.B audit events still cover an LLM-bearing deploy.
+
+Sync Impact Report (v1.0.0 -> 1.0.0)
+==================
 Version change: (none) -> 1.0.0  (initial ratification)
 Modified principles: n/a (initial draft)
 Added sections:
@@ -95,13 +110,34 @@ All calls to external services (KIS, market data vendors, Anthropic) MUST implem
 
 **Rationale**: External APIs fail. Without these protections a vendor outage cascades into invalid system state, missed cancels, and unbounded retries.
 
-### VIII. Change Discipline — No Live Deploys During Market Hours
+### VIII. Change Discipline
+
+#### VIII.A — No Live Deploys During Market Hours
 
 - Code changes affecting trading logic MUST NOT be deployed during US regular trading hours (NYSE/NASDAQ regular session). Declared emergency hotfixes are the only exception and MUST be logged.
 - All changes go through Git with descriptive commit messages.
 - Changes to this constitution MUST be a dedicated amendment commit with a version bump.
 
 **Rationale**: Mid-session deploys are the single most reliable way to introduce undefined behavior into a running strategy.
+
+#### VIII.B — Deploy Automation Requirements (added v1.1.0)
+
+Operator-triggered automated deploys are explicitly permitted (and preferred over hand-typed deploys) when ALL of the following hold:
+
+1. **Market-hours guard.** The automation MUST check the US market state via `exchange_calendars` (or equivalent) and refuse to proceed during regular hours. The guard MUST be in code, not in operator memory.
+2. **Append-only audit events.** Every deploy attempt MUST emit:
+   - `DEPLOY_STARTED` before any code, dependency, or schema change.
+   - `DEPLOY_COMPLETED` on success after the post-deploy health check passes.
+   - `DEPLOY_FAILED` on any abort, with `phase` and `reason` populated.
+   These are first-class entries in the existing `audit_log` (principle IV); no parallel deploy log is permitted.
+3. **Health-check gate.** After restarting the worker, the automation MUST poll for evidence of liveness for at least 30 s before declaring success: a fresh `WORKER_STARTED` audit row whose `ts_utc` is after `DEPLOY_STARTED.ts_utc`, no `ERROR` rows in the same window, and no `DATA_QUALITY_ISSUE` rows referencing telemetry mismatches.
+4. **Rollback obligation.** On any health-check failure or migration failure, the automation MUST emit `DEPLOY_FAILED` and either (a) restore the previous worker version and confirm it boots, or (b) leave the system halted with a clear surfaced reason. The automation MUST NOT silently leave the worker stopped.
+5. **Operator-triggered, not autonomous.** A scheduler that fires the deploy script at a fixed off-hours time IS still operator-triggered (the operator configured the schedule). Code that decides to deploy itself based on observed system state is NOT — that crosses into spec 005 (autonomous tuner) territory and is constrained by VIII.B clause 5 to PR-only proposals (L3 in 005).
+6. **Secrets isolation preserved.** Deploy automation MUST NOT log, persist, or transmit any secret material; it inherits principle V.
+
+**Rationale**: Manual deploys are the single most reliable way for principle VIII.A to be violated by accident. Automation that *enforces* the rule is therefore safer than the absence of automation. Treating deploys as audited operations puts them on the same forensic surface as orders and judgment calls (principle IV), so an unexpected change in worker behavior can be traced to a specific deploy event.
+
+**Boundary with spec 005**: 005's autonomous tuner can *propose* changes (open a PR for L3 changes; auto-apply L1 changes outside market hours), but applying any L1 change still goes through the VIII.B deploy automation — there is exactly one path to a running worker.
 
 ## Investment Domain Constraints
 
@@ -131,4 +167,4 @@ This constitution supersedes all other practices, conventions, and ad-hoc decisi
 
 **Compliance**: every `/speckit-plan` artifact MUST include a Constitution Check section verifying the plan does not violate principles I–VIII. Violations require explicit, written justification and a sign-off recorded in the audit log.
 
-**Version**: 1.0.0 | **Ratified**: 2026-05-01 | **Last Amended**: 2026-05-01
+**Version**: 1.1.0 | **Ratified**: 2026-05-01 | **Last Amended**: 2026-05-06
