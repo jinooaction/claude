@@ -1,0 +1,66 @@
+# Kernel manifest — files protected from autonomous modification.
+#
+# Constitution v2.0.0, principle IX (Self-Modification Boundary).
+#
+# Spec 005's autonomous tuner and spec 006's deploy automation MUST
+# refuse to auto-merge any change set whose diff touches a path
+# listed below. Such change sets fall back to the human-merge path.
+#
+# Adding a path here is a forward-compatible safety improvement.
+# Removing a path is a constitutional concern (see principle IX.C)
+# and SHOULD be paired with a constitution amendment.
+#
+# Modifying THIS file is itself a kernel touch (group K-meta).
+#
+# Path semantics: each entry is a posix-style path relative to repo
+# root. Directory paths end with "/" and protect every file under
+# them recursively. File paths protect exactly that file.
+
+[K1_position_sizing]
+description = "Position sizing caps (constitution principle I). Without K1, the system can autonomously raise its own leverage."
+files = [
+    "src/auto_invest/risk/gates.py",
+    "src/auto_invest/risk/__init__.py",
+    "src/auto_invest/config/caps.py",
+]
+
+[K2_whitelist]
+description = "Deny-by-default whitelist (constitution principle II). Without K2, auto-expand defeats the protection."
+files = [
+    "src/auto_invest/config/whitelist.py",
+]
+
+[K3_judgment_points]
+description = "LLM-only-at-judgment-points contract (constitution principle III). Without K3, autonomous deploys can uncap LLM cost."
+files = [
+    "src/auto_invest/telemetry/meter.py",
+    "src/auto_invest/telemetry/store.py",
+]
+
+[K4_append_only_audit]
+description = "Append-only audit log (constitution principle IV). Without K4, post-mortem evidence becomes forgeable."
+files = [
+    "src/auto_invest/persistence/audit.py",
+    "src/auto_invest/persistence/migrations/0001_initial.sql",
+    "src/auto_invest/persistence/migrations/0002_token_usage.sql",
+]
+
+[K5_secret_isolation]
+description = "Secret isolation (constitution principle V). Without K5, KIS key leak is one autonomous deploy away."
+files = [
+    "src/auto_invest/logging_config.py",
+    "src/auto_invest/config/loader.py",
+]
+
+[K6_market_hours_guard]
+description = "No live deploys during market hours (constitution principle VIII.A). Without K6, autonomous tuner can deploy mid-session."
+files = [
+    "src/auto_invest/worker/schedule.py",
+]
+
+[K_meta]
+description = "Kernel manifest itself + the constitution. Without K-meta, K1-K6 are autonomously revocable; the safety perimeter must be its own fixed-point."
+files = [
+    ".specify/memory/constitution.md",
+    ".specify/memory/kernel.toml",
+]

@@ -1,6 +1,27 @@
 <!--
 Sync Impact Report
 ==================
+Version change: 1.1.0 -> 2.0.0  (MAJOR: kernel concept introduced; principle IX added; VIII.B-3 health window relaxed; VIII.B-5 redefined to permit autonomous merge outside the kernel)
+Modified principles:
+  VIII.B-3 — health-check minimum window 30 s -> 90 s. Material relaxation toward more conservative.
+  VIII.B-5 — was "Operator-triggered, not autonomous". Replaced by reference to new principle IX. Backward-incompatible: code that read VIII.B-5 as forbidding autonomous deploys must now read it as deferring to IX's tiered model.
+Added principles:
+  IX. Self-Modification Boundary (NEW). Defines a Kernel (K1-K6 + K-meta) that cannot be modified by autonomous deploys; permits autonomous merge for everything outside the kernel subject to a hardened canary (spec 007). Rationale: closes the gap between operator's "autonomous execution & autonomous improvement" goal and the safety reality that a system able to rewrite its own safety rules has no safety guarantees.
+Added sections:
+  - Kernel manifest reference: `.specify/memory/kernel.toml` (machine-readable list of files protected by principle IX). Modifying this file is itself a kernel touch.
+Templates requiring updates:
+  ✅ .specify/memory/constitution.md (this file)
+  ✅ .specify/memory/kernel.toml (new; machine-readable kernel manifest)
+  ✅ specs/005-autonomous-tuner/spec.md (tiered authority extended with L4 = kernel)
+  ✅ specs/006-deploy-automation/spec.md (deploy guard MUST consult kernel manifest)
+  ✅ specs/007-canary-hardening/spec.md (new; defines the hardened-canary that gates autonomous merges)
+Follow-up TODOs:
+  - 007 implementation depends on a backtest engine (option D from main HANDOFF.md). Until 007 ships, autonomous merge stays disabled in production; the kernel guard still applies and the existing 10-day canary is the upper bound on autonomy.
+  - Spec 001's plan.md Constitution Check still references VIII as a single block; left as-is (shipped under v1.0.0). New plans MUST cite VIII.A / VIII.B / IX explicitly.
+  - Reconsider adding an explicit daily/cumulative loss-limit principle (carried over from v1.0.0).
+
+Sync Impact Report (v1.0.0 -> 1.1.0)
+==================
 Version change: 1.0.0 -> 1.1.0  (MINOR: principle VIII materially expanded for deploy automation)
 Modified principles:
   VIII. Change Discipline — split into 8.A (no market-hours deploys, unchanged in spirit) and 8.B (automated-deploy requirements: market-hours guard, audit events, health-check gate, rollback obligation). Spirit preserved; guidance materially expanded.
@@ -130,14 +151,51 @@ Operator-triggered automated deploys are explicitly permitted (and preferred ove
    - `DEPLOY_COMPLETED` on success after the post-deploy health check passes.
    - `DEPLOY_FAILED` on any abort, with `phase` and `reason` populated.
    These are first-class entries in the existing `audit_log` (principle IV); no parallel deploy log is permitted.
-3. **Health-check gate.** After restarting the worker, the automation MUST poll for evidence of liveness for at least 30 s before declaring success: a fresh `WORKER_STARTED` audit row whose `ts_utc` is after `DEPLOY_STARTED.ts_utc`, no `ERROR` rows in the same window, and no `DATA_QUALITY_ISSUE` rows referencing telemetry mismatches.
+3. **Health-check gate.** After restarting the worker, the automation MUST poll for evidence of liveness for at least 90 s (default; operator may configure a longer window per environment, never shorter) before declaring success: a fresh `WORKER_STARTED` audit row whose `ts_utc` is after `DEPLOY_STARTED.ts_utc`, no `ERROR` rows in the same window, and no `DATA_QUALITY_ISSUE` rows referencing telemetry mismatches. Rationale for 90 s: covers KIS auth refresh retry (~10 s), broker first-quote latency under load (~5 s), and at least two full asyncio loop ticks against a live market-data feed.
 4. **Rollback obligation.** On any health-check failure or migration failure, the automation MUST emit `DEPLOY_FAILED` and either (a) restore the previous worker version and confirm it boots, or (b) leave the system halted with a clear surfaced reason. The automation MUST NOT silently leave the worker stopped.
-5. **Operator-triggered, not autonomous.** A scheduler that fires the deploy script at a fixed off-hours time IS still operator-triggered (the operator configured the schedule). Code that decides to deploy itself based on observed system state is NOT — that crosses into spec 005 (autonomous tuner) territory and is constrained by VIII.B clause 5 to PR-only proposals (L3 in 005).
+5. **Tiered autonomy — see principle IX.** Whether a given deploy may be initiated autonomously (by spec 005's tuner) versus requires explicit human merge depends on whether the change touches the Kernel defined in principle IX. The market-hours guard, audit events, health-check gate, and rollback obligation (clauses 1–4) apply to ALL deploys, autonomous or human-initiated, equally.
 6. **Secrets isolation preserved.** Deploy automation MUST NOT log, persist, or transmit any secret material; it inherits principle V.
 
 **Rationale**: Manual deploys are the single most reliable way for principle VIII.A to be violated by accident. Automation that *enforces* the rule is therefore safer than the absence of automation. Treating deploys as audited operations puts them on the same forensic surface as orders and judgment calls (principle IV), so an unexpected change in worker behavior can be traced to a specific deploy event.
 
-**Boundary with spec 005**: 005's autonomous tuner can *propose* changes (open a PR for L3 changes; auto-apply L1 changes outside market hours), but applying any L1 change still goes through the VIII.B deploy automation — there is exactly one path to a running worker.
+### IX. Self-Modification Boundary (NON-NEGOTIABLE, added v2.0.0)
+
+The system is permitted — and encouraged — to evolve its own code, configuration, prompts, KPI thresholds, dependencies, schemas, and even its own non-kernel principles, as long as the modifications stay outside a small, explicitly enumerated **Kernel**. The Kernel is the safety perimeter that even the autonomous tuner (spec 005) MUST NOT cross without an explicit human merge.
+
+#### IX.A — The Kernel
+
+The Kernel is the closed set of files listed in the machine-readable manifest at `.specify/memory/kernel.toml`. As of v2.0.0 the Kernel comprises seven groups, each tied to one constitutional invariant:
+
+| Group | Invariant | Why it must stay in the Kernel |
+|-------|-----------|--------------------------------|
+| **K1** | Position sizing caps (principle I) | Without K1, the system can autonomously raise its own leverage to ruinous levels. |
+| **K2** | Deny-by-default whitelist (principle II) | Without K2, "auto-expand the whitelist" defeats the protection. |
+| **K3** | LLM-only-at-judgment-points contract (principle III) | Without K3, autonomous deploys can re-define what "judgment point" means and uncap LLM cost. |
+| **K4** | Append-only audit log (principle IV) | Without K4, all post-mortem and reconciliation evidence becomes forgeable. |
+| **K5** | Secret isolation (principle V) | Without K5, a leaked KIS key is one autonomous deploy away. |
+| **K6** | Market-hours deploy guard (principle VIII.A) | Without K6, the autonomous tuner can deploy mid-session by mistake or by adversarial action. |
+| **K-meta** | The Kernel manifest itself + this constitution | Without K-meta, K1–K6 are revocable by the system; the safety perimeter must be its own fixed-point. |
+
+#### IX.B — Autonomous-merge eligibility
+
+A change set MAY be merged and deployed autonomously by the spec 005 tuner IFF ALL of the following hold:
+
+1. **Kernel-untouched.** No file listed under any group in `kernel.toml` appears in the change set's diff. The deploy guard (spec 006) MUST verify this before any other deploy phase and MUST emit `DEPLOY_BLOCKED_KERNEL_TOUCH` and abort if violated.
+2. **Hardened canary passed (spec 007).** The change set has progressed through the spec 007 hardened-canary acceptance criteria (multi-metric, ≥30 trading-day window, synthetic-shock replay, property-based fuzz of risk math). Until 007 is shipped, autonomous merge is DISABLED in production and the existing 10-day spec-001 canary is the upper bound.
+3. **Constitution VIII.A and VIII.B unchanged in spirit.** Market-hours guard, audit events, health-check gate, and rollback obligation all still apply.
+4. **No L4 escalation.** A change set that adds new files to `kernel.toml`, OR removes files from it, OR redefines the L1/L2/L3/L4 classification in spec 005, is treated as L4 and follows the human-merge path.
+
+A change set that fails any of (1)–(4) follows the **human-merge path**: the tuner opens a pull request and waits. The operator's review attention is therefore concentrated exclusively on Kernel changes — predicted frequency is 0–2 events per year.
+
+#### IX.C — Kernel manifest discipline
+
+- The manifest at `.specify/memory/kernel.toml` is the single source of truth. Code that decides "is this file kernel?" MUST read it; hard-coded paths in deploy code are forbidden so that a Kernel addition is one TOML edit, not a code release.
+- The manifest is itself in the K-meta group; modifying it autonomously is forbidden by IX.B-1.
+- Adding a file to the Kernel is always a forward-compatible safety improvement and never requires an amendment of this constitution. Removing a file from the Kernel is a constitutional concern and SHOULD be paired with a constitution amendment (PATCH or MINOR depending on whether a principle is also relaxed).
+
+**Rationale**: The operator's stated goal is autonomous execution and autonomous improvement. A naive reading of that goal — "the system can change anything" — gives a system with no safety guarantees, because any safety property is one self-modification away from being revocable. Naming the smallest possible Kernel and freezing it under autonomous control is the maximum-autonomy point that still admits a coherent safety argument. Outside the Kernel, the system is genuinely free to evolve.
+
+**Trade-off acknowledgement**: this still places the operator in the loop on Kernel changes. The expected frequency of those changes is low (new asset class, new principle, new schema migration that touches audit-log structure). When they happen, they merit the operator's full attention, which is the entire point of carving them out.
 
 ## Investment Domain Constraints
 
@@ -165,6 +223,6 @@ This constitution supersedes all other practices, conventions, and ad-hoc decisi
 - **MINOR**: principle addition or material expansion of guidance.
 - **PATCH**: clarifications, wording, typo fixes.
 
-**Compliance**: every `/speckit-plan` artifact MUST include a Constitution Check section verifying the plan does not violate principles I–VIII. Violations require explicit, written justification and a sign-off recorded in the audit log.
+**Compliance**: every `/speckit-plan` artifact MUST include a Constitution Check section verifying the plan does not violate principles I–IX. Violations require explicit, written justification and a sign-off recorded in the audit log.
 
-**Version**: 1.1.0 | **Ratified**: 2026-05-01 | **Last Amended**: 2026-05-06
+**Version**: 2.0.0 | **Ratified**: 2026-05-01 | **Last Amended**: 2026-05-06
