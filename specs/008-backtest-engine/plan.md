@@ -72,7 +72,7 @@ The constitution at v2.0.0 has nine principles (I–IX). Each is mapped explicit
 | VII | External API Robustness | OHLCV ingest is the only external-API surface. The yfinance adapter wraps every call in `tenacity` retry + a per-host rate limiter + a circuit breaker (mirroring `broker/client.py`); the KIS adapter reuses `ResilientClient` directly. Replay itself touches no network. | ✅ pass |
 | VIII.A | No live deploys during market hours | Engine code, like all repo code, is deployed off-hours. *Running* a backtest does not deploy the live worker; backtest invocation is safe at any hour. K6 (`worker/schedule.py`) is read-only. | ✅ pass |
 | VIII.B | Deploy automation requirements | Engine deploys ride on the spec 006 deploy automation once 006's runner ships. Until then, engine code lands via human merge like every other change. The market-hours guard, audit events, health-check gate, and rollback obligation all apply unchanged. | ✅ pass |
-| IX | Self-Modification Boundary | **Engine is NOT a Kernel change** in steady state — FR-B02 forbids modifying any file under any group in `kernel.toml`. The engine adds two new optional kwargs to `Worker.__init__` (`quote_provider`, `clock`) — `worker/loop.py` is non-Kernel, so this is in-bounds. The **first landing** of spec 008 *is* a Kernel touch because it adds `0003_backtest_events.sql` to K4 — this is the documented one-time K-meta human-merge event (Q3 clarification, constitution IX.C "adding a file to the Kernel is always a forward-compatible safety improvement"). | ✅ pass *(with the documented one-time K-meta event)* |
+| IX | Self-Modification Boundary | **Engine is NOT a Kernel change** in steady state — FR-B02 forbids modifying any file under any group in `kernel.toml`. The engine adds two new optional kwargs to `Worker.__init__` (`quote_provider`, `clock`) — `worker/loop.py` is non-Kernel, so this is in-bounds. The **first landing** of spec 008 *is* a Kernel touch in three coordinated ways, all consolidated into the documented one-time K-meta human-merge event (Q3 clarification, constitution IX.C "adding a file to the Kernel is always a forward-compatible safety improvement"): (a) `0003_backtest_events.sql` is added to `kernel.toml` group K4; (b) `audit.py` (already in K4) is extended with three new payload classes and three new `EventType` literals (additive only); (c) **a new group `[K7_named_datasets]` is added to `kernel.toml`** containing `data/ohlcv/datasets/synthetic_shock_v1.json` so that FR-B20's "operator-only mutation" promise is enforced at deploy-guard time, not just at spec-005-tuner classification time. After this single landing, all subsequent engine work is non-Kernel. | ✅ pass *(with the documented one-time K-meta event)* |
 
 **Constitution check status**: pass. The single Kernel-adjacent action (adding `0003_backtest_events.sql` to `kernel.toml` K4) is explicit, documented, expected, and constitutional under IX.C.
 
@@ -152,9 +152,13 @@ tests/
         └── synthetic_shock_v1/        # frozen golden output for goldens
 
 .specify/memory/
-└── kernel.toml                        # MODIFIED ONCE — adds
-                                       # src/auto_invest/persistence/migrations/0003_backtest_events.sql
-                                       # to [K4_append_only_audit].files
+└── kernel.toml                        # MODIFIED ONCE (one-time K-meta event):
+                                       #   1. K4 += migrations/0003_backtest_events.sql
+                                       #   2. NEW group [K7_named_datasets] containing
+                                       #      data/ohlcv/datasets/synthetic_shock_v1.json
+                                       # K7 enforces FR-B20 at deploy-guard time so
+                                       # named datasets are protected even before
+                                       # spec 005's L4 classifier ships.
 ```
 
 **Structure Decision**: extend the existing single-package layout with one new subpackage `auto_invest.backtest`. Reuses the existing `auto_invest.persistence.audit` writer, `auto_invest.risk.gates` checks, `auto_invest.config.whitelist` lookup, `auto_invest.execution.order_router` (with the broker substituted), and `auto_invest.worker.loop` (with two new kwargs). No new top-level package; no new database file; no new audit-log table — just a new event-type family inside the existing one. Rationale: spec 007 SC-C04 (reproducibility) is materially easier when only one process can hold the SQLite write lock and only one writer schema exists.
