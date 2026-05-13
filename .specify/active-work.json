@@ -1,0 +1,53 @@
+{
+  "$schema_version": 1,
+  "active_branch": "claude/review-docs-sdd-cycle-SbbBy",
+  "active_feature_dir": "specs/008-backtest-engine",
+  "active_feature_id": "008-backtest-engine",
+  "active_handoff_doc": "HANDOFF-008.md",
+  "increment": 2,
+  "phase_focus": "Phase 3 — User Story 1 (synthetic-shock replay): T016/T017/T018 red tests are landed; greening them requires T019+T020+T021+T022 next.",
+  "next_tasks": ["T019", "T020", "T021", "T022"],
+  "next_tasks_detail": {
+    "T019": "src/auto_invest/backtest/named_dataset.py — load NamedDatasetManifest from data/ohlcv/datasets/<name>.json (NON-Kernel)",
+    "T020": "data/ohlcv/datasets/synthetic_shock_v1.json — initial K7 file containing the four shock dates (KERNEL TOUCH — operator must explicitly approve as a one-off; this file is in K7_named_datasets)",
+    "T021": "src/auto_invest/backtest/engine.py — engine.kernel_touch_check() pre-flight (NON-Kernel)",
+    "T022": "engine.run() main loop wired enough to satisfy test_synthetic_shock_mode.py (NON-Kernel)"
+  },
+  "test_baseline": {
+    "passing": 329,
+    "skipped": 1,
+    "red_tests_pending": ["tests/backtest/test_named_dataset.py", "tests/backtest/test_kernel_safety.py", "tests/backtest/test_synthetic_shock_mode.py"],
+    "green_after": "T019 lands -> test_named_dataset.py green; T021 lands -> test_kernel_safety.py green; T022 + T020 + T041 land -> test_synthetic_shock_mode.py green"
+  },
+  "tasks_progress": {
+    "completed_through": "T015 + T016/T017/T018 red tests committed",
+    "tip_commit_short": "dc2cb95",
+    "tip_commit_subject": "test(008): T016/T017/T018 — Phase 3 US1 red tests (non-Kernel)"
+  },
+  "kernel_status": {
+    "manifest_groups": ["K1_position_sizing", "K2_whitelist", "K3_judgment_points", "K4_append_only_audit", "K5_secret_isolation", "K6_market_hours_guard", "K7_named_datasets", "K_meta"],
+    "k7_added_in": "3828f5d",
+    "next_kernel_touch_expected": "T020 only (one file added under K7); after T020 lands, no further Kernel touches expected for spec 008",
+    "deploy_guard_blocks": "any commit whose diff intersects any K1-K7 + K_meta path will be blocked by spec 006 FR-D13 unless the operator explicitly approves the touch"
+  },
+  "operator_workflow": {
+    "next_session_first_message": "이어가",
+    "first_message_alt_en": "resume",
+    "session_init_hook_responsibilities": [
+      "git fetch origin --prune (idempotent; failures swallowed)",
+      "Surface active_branch from this file vs current HEAD; warn on mismatch",
+      "Surface tip_commit_short so the assistant can verify expected state",
+      "Resolve active_feature_dir dynamically (no hardcoding to 001) so the long-lived constitution+spec context tracks the current feature"
+    ],
+    "if_session_misroutes_branch": "see HANDOFF-008.md 'CASE A / CASE B' diagnostic block — operator can paste it into a fresh session as a recovery prompt"
+  },
+  "stop_checkpoints": {
+    "increment_2_natural_stops": [
+      "End of Phase 3 (T023): synthetic-shock mode reachable",
+      "End of Phase 4 (T045): full engine + CLI; operator can run ad-hoc backtests",
+      "End of Phase 6 (T059): audit + artifact wired (natural Increment 2 end)"
+    ]
+  },
+  "last_session_end_utc": "2026-05-13T07:30:00Z",
+  "last_updated_by": "session continuation 2026-05-13"
+}
