@@ -44,14 +44,10 @@ class ThresholdEntry(BaseModel):
     def _check_band_order(self) -> ThresholdEntry:
         if self.direction == "higher_is_better":
             if not (self.tier_c < self.tier_b < self.tier_a):
-                raise ValueError(
-                    "higher_is_better requires tier_c < tier_b < tier_a"
-                )
+                raise ValueError("higher_is_better requires tier_c < tier_b < tier_a")
         else:
             if not (self.tier_c > self.tier_b > self.tier_a):
-                raise ValueError(
-                    "lower_is_better requires tier_c > tier_b > tier_a"
-                )
+                raise ValueError("lower_is_better requires tier_c > tier_b > tier_a")
         return self
 
 

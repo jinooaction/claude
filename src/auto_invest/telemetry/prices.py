@@ -78,9 +78,7 @@ def load_prices(path: Path) -> PriceTable:
     entries: dict[str, PriceEntry] = {}
     for model, block in raw.items():
         if not isinstance(block, dict):
-            raise PriceTableError(
-                f"price-table entry for {model!r} must be a TOML table"
-            )
+            raise PriceTableError(f"price-table entry for {model!r} must be a TOML table")
         try:
             entries[model] = PriceEntry(**block)
         except (ValueError, TypeError) as exc:

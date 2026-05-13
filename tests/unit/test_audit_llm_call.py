@@ -58,9 +58,7 @@ def test_llm_call_appended_to_audit_log(conn: sqlite3.Connection):
         ),
         correlation_id="cid-1",
     )
-    row = conn.execute(
-        "SELECT event_type, correlation_id FROM audit_log"
-    ).fetchone()
+    row = conn.execute("SELECT event_type, correlation_id FROM audit_log").fetchone()
     assert row["event_type"] == "LLM_CALL"
     assert row["correlation_id"] == "cid-1"
 

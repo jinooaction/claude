@@ -68,17 +68,13 @@ async def test_success_path_persists_both_rows(conn: sqlite3.Connection, prices:
     assert tu["latency_ms"] >= 0
     assert tu["cost_usd"] is not None  # known model -> priced
 
-    al = conn.execute(
-        "SELECT * FROM audit_log WHERE event_type='LLM_CALL'"
-    ).fetchone()
+    al = conn.execute("SELECT * FROM audit_log WHERE event_type='LLM_CALL'").fetchone()
     assert al is not None
     assert al["correlation_id"] == "cid-success"
 
 
 @pytest.mark.asyncio
-async def test_exception_path_persists_with_error_class(
-    conn: sqlite3.Connection, prices: Any
-):
+async def test_exception_path_persists_with_error_class(conn: sqlite3.Connection, prices: Any):
     with pytest.raises(RuntimeError):
         async with TokenMeter(
             conn=conn,
@@ -96,9 +92,7 @@ async def test_exception_path_persists_with_error_class(
 
 
 @pytest.mark.asyncio
-async def test_decision_class_none_preserved_as_null(
-    conn: sqlite3.Connection, prices: Any
-):
+async def test_decision_class_none_preserved_as_null(conn: sqlite3.Connection, prices: Any):
     async with TokenMeter(
         conn=conn,
         prices=prices,
@@ -118,9 +112,7 @@ async def test_decision_class_none_preserved_as_null(
 
 
 @pytest.mark.asyncio
-async def test_unknown_model_yields_null_cost(
-    conn: sqlite3.Connection, prices: Any
-):
+async def test_unknown_model_yields_null_cost(conn: sqlite3.Connection, prices: Any):
     async with TokenMeter(
         conn=conn,
         prices=prices,
@@ -140,9 +132,7 @@ async def test_unknown_model_yields_null_cost(
 
 
 @pytest.mark.asyncio
-async def test_latency_clamped_non_negative(
-    conn: sqlite3.Connection, prices: Any
-):
+async def test_latency_clamped_non_negative(conn: sqlite3.Connection, prices: Any):
     async with TokenMeter(
         conn=conn,
         prices=prices,
@@ -150,9 +140,7 @@ async def test_latency_clamped_non_negative(
         correlation_id="cid-lat",
         model="claude-opus-4-7",
     ) as call:
-        call.record_response(
-            _FakeResponse(model="claude-opus-4-7", usage=_FakeUsage())
-        )
+        call.record_response(_FakeResponse(model="claude-opus-4-7", usage=_FakeUsage()))
 
     tu = conn.execute("SELECT * FROM token_usage").fetchone()
     assert tu["latency_ms"] >= 0

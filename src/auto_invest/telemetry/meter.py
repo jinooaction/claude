@@ -65,16 +65,12 @@ class MeteredCall:
                 "input_tokens": getattr(usage, "input_tokens", 0),
                 "output_tokens": getattr(usage, "output_tokens", 0),
                 "cache_read_input_tokens": getattr(usage, "cache_read_input_tokens", 0),
-                "cache_creation_input_tokens": getattr(
-                    usage, "cache_creation_input_tokens", 0
-                ),
+                "cache_creation_input_tokens": getattr(usage, "cache_creation_input_tokens", 0),
             }
         self._counts.input_tokens = int(usage.get("input_tokens") or 0)
         self._counts.output_tokens = int(usage.get("output_tokens") or 0)
         self._counts.cache_read_tokens = int(usage.get("cache_read_input_tokens") or 0)
-        self._counts.cache_write_tokens = int(
-            usage.get("cache_creation_input_tokens") or 0
-        )
+        self._counts.cache_write_tokens = int(usage.get("cache_creation_input_tokens") or 0)
         self._counts.model = getattr(response, "model", None) or self._counts.model
 
     def record_model(self, model: str) -> None:

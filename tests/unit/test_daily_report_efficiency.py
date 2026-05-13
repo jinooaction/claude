@@ -73,9 +73,7 @@ def test_populated_session_renders_kpis(conn: sqlite3.Connection, tiers):
 
 def test_per_decision_class_listed(conn: sqlite3.Connection, tiers):
     append_token_usage(conn, _u("2026-05-01T10:00:00.000Z", decision_class="news"))
-    append_token_usage(
-        conn, _u("2026-05-01T11:00:00.000Z", decision_class="volatility")
-    )
+    append_token_usage(conn, _u("2026-05-01T11:00:00.000Z", decision_class="volatility"))
     rep = build_report(conn, session_date="2026-05-01", tiers=tiers)
     md = render_markdown(rep)
     assert "news" in md

@@ -92,9 +92,7 @@ def load_kernel_manifest(path: Path | None = None) -> KernelManifest:
     groups: dict[str, KernelGroup] = {}
     for name, block in raw.items():
         if not isinstance(block, dict):
-            raise KernelManifestError(
-                f"kernel manifest entry {name!r} must be a TOML table"
-            )
+            raise KernelManifestError(f"kernel manifest entry {name!r} must be a TOML table")
         try:
             groups[name] = KernelGroup(
                 description=block.get("description", ""),
@@ -111,9 +109,7 @@ def load_kernel_manifest(path: Path | None = None) -> KernelManifest:
     # K-meta MUST exist — without it the kernel is autonomously revocable
     # (constitution IX.A "K-meta must be its own fixed-point").
     if "K_meta" not in groups:
-        raise KernelManifestError(
-            f"kernel manifest {manifest_path} missing required K_meta group"
-        )
+        raise KernelManifestError(f"kernel manifest {manifest_path} missing required K_meta group")
 
     return KernelManifest(groups=groups, source_path=str(manifest_path))
 
@@ -148,9 +144,7 @@ class KernelTouchReport:
     def reason(self) -> str:
         if self.is_clean:
             return "no kernel files in diff"
-        parts = [
-            f"{t.path} (groups: {', '.join(t.groups)})" for t in self.touches
-        ]
+        parts = [f"{t.path} (groups: {', '.join(t.groups)})" for t in self.touches]
         return "kernel files touched: " + "; ".join(parts)
 
 

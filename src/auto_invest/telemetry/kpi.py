@@ -103,10 +103,7 @@ def compute_snapshot(
     sum_cache_read = sum(r["cache_read_tokens"] for r in rows)
     sum_cost = sum((_decimal_or_zero(r["cost_usd"]) for r in rows), Decimal(0))
     tokens_per_call = [
-        r["input_tokens"]
-        + r["output_tokens"]
-        + r["cache_read_tokens"]
-        + r["cache_write_tokens"]
+        r["input_tokens"] + r["output_tokens"] + r["cache_read_tokens"] + r["cache_write_tokens"]
         for r in rows
     ]
     latencies = [int(r["latency_ms"]) for r in rows]
