@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain — 3 markers present (FR-B07 fill model, FR-B08 judgment fixture, FR-B16 OHLCV vendor); resolution deferred to `/speckit-clarify` per spec's own Promotion criteria
+- [x] No [NEEDS CLARIFICATION] markers remain — all three resolved 2026-05-13 via `/speckit-clarify` (see spec `## Clarifications` § Session 2026-05-13)
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,14 +31,15 @@
 
 ## Constitutional Fit (v2.0.0)
 
-- [x] Confirmed NOT a Kernel change — no file under `.specify/memory/kernel.toml` is modified
+- [x] One-time additive Kernel touch acknowledged — only `src/auto_invest/persistence/audit.py` is modified (K4) by appending three event-type literals. Operator-approved at merge time per principle IX.B-1 (same precedent as spec 002 → migration 0002). NO SQL schema change, NO UPDATE/DELETE, NO other Kernel file touched.
 - [x] Principle IV (append-only audit) honoured — only new event types appended; no UPDATE/DELETE
 - [x] Principle VI (Backtest → Canary → Full Live) — this feature IS the Backtest stage
 - [x] Principle III defended — FR-B08 prevents real Anthropic calls during replay
 - [x] K6 (`worker/schedule.py`) explicitly NOT modified — FR-B01 requires injection rather than edit
+- [x] K2 (whitelist) explicitly NOT modified — see Assumption #6 (today's whitelist applies to historical dates)
 - [x] Hard-prerequisite relationship to spec 007 documented in Dependencies section
 
 ## Notes
 
-- The three [NEEDS CLARIFICATION] markers (FR-B07, FR-B08, FR-B16) are intentional and listed under the spec's "Promotion criteria". They are within the 3-marker limit and prioritized by scope/safety impact (vendor → fill realism → LLM-call discipline). Resolve them via `/speckit-clarify` before `/speckit-plan`.
-- All other items pass on the first iteration; no spec rewrite required.
+- 2026-05-13 update: Clarifications session resolved all three NEEDS CLARIFICATION markers (FR-B07 pessimistic zero-slippage fill, FR-B08 deterministic stub for spec-004 judgment points, FR-B16 operator-provided CSV ingest with pluggable adapter). During the clarification we also discovered that the original "NOT a Kernel change" claim was technically wrong: adding event-type literals to `audit.py` is a Kernel touch (K4). The spec now honestly documents this as a one-time additive touch that requires operator approval per IX.B-1 — exactly what the spec 006 kernel guard is designed to enforce.
+- All other items pass; spec is `/speckit-plan`-ready.

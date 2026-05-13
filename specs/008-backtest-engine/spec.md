@@ -4,7 +4,7 @@
 **Created**: 2026-05-13
 **Status**: Draft
 **Constitution**: v2.0.0 (this feature is the principle VI "Backtest" stage made real, and the hard prerequisite for spec 007's hardened canary referenced by principle IX.B-2)
-**Input**: Operator wants the backtest stage promised by constitution principle VI to actually exist. Today, "backtest" in spec 001 is an explicit OUT-OF-SCOPE placeholder. Without it, no rule change can be evidence-promoted to canary, and spec 007 (hardened canary, principle IX.B-2 gate) cannot ship — autonomous merge therefore stays disabled. v1 covers US-listed equities only (matches spec 001 scope) and changes NO Kernel file.
+**Input**: Operator wants the backtest stage promised by constitution principle VI to actually exist. Today, "backtest" in spec 001 is an explicit OUT-OF-SCOPE placeholder. Without it, no rule change can be evidence-promoted to canary, and spec 007 (hardened canary, principle IX.B-2 gate) cannot ship — autonomous merge therefore stays disabled. v1 covers US-listed equities only (matches spec 001 scope). The engine itself runs entirely outside the Kernel; the only Kernel touch is a one-time additive extension of K4's `audit.py` event-type Union (`BACKTEST_STARTED`, `BACKTEST_COMPLETED`, `LLM_CALL_STUBBED`), operator-approved at merge time per principle IX.B-1.
 
 ## Why now
 
@@ -12,6 +12,14 @@
 - Spec 007's synthetic-shock replay, property-fuzz harness, and audit-integrity check all assume a working replay infrastructure. The "Promotion criteria" block at the bottom of `specs/007-canary-hardening/spec.md` names this feature as the hard prerequisite.
 - Spec 005's autonomous tuner cannot promote any L2/L3 change without spec 007, which means it cannot promote ANY change without this feature.
 - The operator stated goal is "autonomous execution & autonomous improvement." Without backtest evidence, every strategy edit requires operator judgment, and the human-in-the-loop blocks autonomy.
+
+## Clarifications
+
+### Session 2026-05-13
+
+- Q: OHLCV vendor for v1 backtest? → A: Operator-provided CSV ingest with a pluggable vendor adapter slot; alternate vendors (yfinance / KIS historical / IEX Cloud) deferred to a later spec via the adapter interface.
+- Q: Limit-order fill model in v1? → A: Pessimistic with zero slippage — a fill requires the limit price to lie inside the bar's [low, high] range AND the bar's total volume to be at least the order quantity; otherwise the order remains open or expires per its time-in-force.
+- Q: Spec 004 judgment-point behavior during backtest? → A: Deterministic stub — every judgment-point call site short-circuits to the rule's documented "no-op" branch and emits an `LLM_CALL_STUBBED` audit row. Real Anthropic calls are forbidden; any attempt fails the run.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -84,8 +92,8 @@ After any backtest completes, the engine produces a single human-readable summar
 - **FR-B04**: System MUST emit a `BACKTEST_STARTED` audit row at run start carrying: `run_id`, ruleset SHA-256, date range, dataset version, replay seed, invoker (CLI or canary harness).
 - **FR-B05**: System MUST emit a `BACKTEST_COMPLETED` audit row at run end carrying: `run_id`, end-of-run summary metrics (per-rule and aggregate), and outcome (`completed` | `failed`).
 - **FR-B06**: Backtest MUST NOT issue any real broker order. The order-router MUST be wired to a deterministic in-memory broker that produces fills (or rejections) based ONLY on the replayed OHLCV and the configured fill model (see FR-B07). Defense-in-depth: a backtest run that produces an `ORDER_SUBMITTED` audit row whose adapter is anything other than the in-memory mock MUST cause the run to fail.
-- **FR-B07**: Limit-order fill model in v1 MUST be: [NEEDS CLARIFICATION: optimistic (any bar that touches the limit price within the range counts as a full fill) vs. pessimistic (require the limit price to be inside the bar AND the bar's volume to exceed the order quantity)]. Default per Assumptions: pessimistic with zero slippage.
-- **FR-B08**: Backtest MUST NOT make any real Anthropic API call. Any spec-004 judgment-point call site reached during replay MUST be served from [NEEDS CLARIFICATION: a per-run fixture file recorded from a prior live capture vs. a deterministic stub keyed on input hash vs. an unconditional `BACKTEST_JUDGMENT_DISALLOWED` failure]. Default per Assumptions: deterministic stub (returns the rule's documented "no-op" branch).
+- **FR-B07**: Limit-order fill model in v1 MUST be **pessimistic with zero slippage**: a fill is produced only when (a) the limit price lies inside `[bar.low, bar.high]` AND (b) `bar.volume ≥ order.quantity`. Otherwise the order remains open (or expires per its declared time-in-force). Partial fills are NOT modelled in v1. Slippage assumption is logged in every per-rule report header so the operator cannot misread a result. (Rationale: constitution VI requires backtests not overstate live performance.)
+- **FR-B08**: Backtest MUST NOT make any real Anthropic API call. Any spec-004 judgment-point call site reached during replay MUST be served by a **deterministic stub** that returns the rule's documented "no-op" branch (i.e., the safe default the rule already declares for the case where the judgment call cannot be made). Each invocation MUST emit an `LLM_CALL_STUBBED` audit row carrying the decision_class, the input hash, and the stubbed return. Any code path that would issue a real Anthropic call during a backtest MUST cause the run to fail with `BACKTEST_JUDGMENT_LEAK`.
 - **FR-B09**: Synthetic-shock date set MUST at minimum include `2020-03-12`, `2020-04-20`, `2024-08-05`, and the most recent quarterly options-expiration day relative to today's run date. Date set MUST be configurable but adding/removing a date is itself a safety-surface change (operator-only; constitution-amendment-adjacent — see spec 007's promotion criteria).
 - **FR-B10**: Engine MUST refuse to start when any (symbol, date) pair in the requested range lacks OHLCV coverage. The error message MUST list missing pairs and MUST NOT silently shrink the window.
 - **FR-B11**: Backtest outputs MUST be written under `data/backtest/<run_id>/` with this deterministic structure: `backtest-run.json` (run header + final metrics), `summary.md` (human-readable, see User Story 3), `metrics.csv` (per-rule row), `per-rule/<rule_id>/orders.json`, `per-rule/<rule_id>/fills.json`, `per-rule/<rule_id>/gate-rejections.json`. The directory MUST be immutable after `BACKTEST_COMPLETED` is emitted.
@@ -93,7 +101,7 @@ After any backtest completes, the engine produces a single human-readable summar
 - **FR-B13**: OHLCV ingest MUST validate at load time and emit `DATA_QUALITY_ISSUE` audit rows for: negative or zero prices, zero-volume bars during regular session hours that are not the result of a documented halt, gap detection between consecutive trading days exceeding one calendar week without a documented exchange-closure reason.
 - **FR-B14**: Per-rule backtest report MUST include: total return % (gross), max drawdown %, Sharpe ratio (assuming 0% risk-free rate; documented in summary), order count, fill count, gate-rejection count grouped by gate, slippage assumption used, and total notional traded.
 - **FR-B15**: Re-running a backtest with identical inputs — same ruleset SHA-256, same dataset version, same replay seed — MUST produce byte-identical `metrics.csv`, `per-rule/**/orders.json`, `per-rule/**/fills.json`, and `per-rule/**/gate-rejections.json`. The `backtest-run.json` MAY differ only in `run_id` and `start_ts`. This is the determinism contract spec 007's hardened canary depends on.
-- **FR-B16**: OHLCV vendor for v1: [NEEDS CLARIFICATION: yfinance (free, redistributed Yahoo data, terms-of-service grey zone for production) vs. KIS historical endpoint (already-authenticated, but limited overseas-equity history) vs. paid IEX Cloud (clean licensing, ~$10/mo) vs. operator-provided CSV ingest only (zero vendor dependency, manual maintenance)]. Default per Assumptions: operator-provided CSV ingest in v1; vendor adapter pluggable so a later spec can add yfinance/IEX without re-doing the engine.
+- **FR-B16**: OHLCV vendor for v1 MUST be **operator-provided CSV ingest** via the `auto-invest ingest-history` job. The engine MUST expose a `HistoricalDataSource` adapter interface (one method group: list-coverage, read-bars) so a later spec can plug in yfinance / KIS historical / IEX Cloud without changing engine code. The CSV format and validation rules MUST be documented in `specs/008-backtest-engine/contracts/ohlcv-csv.md` during planning. v1 ships ONE adapter (CSV); shipping additional adapters is explicitly out of scope.
 - **FR-B17**: Backtest results MUST be queryable from the same audit-log table the live worker uses; `correlation_id = run_id`. The live `auto-invest report` and `auto-invest status` CLIs MUST NOT count backtest rows toward live PnL or live position state — they are filtered by event type.
 
 ### Key Entities
@@ -124,7 +132,7 @@ After any backtest completes, the engine produces a single human-readable summar
 - Historical OHLCV ingest is a separate one-shot job (`auto-invest ingest-history`), not part of the live worker loop. The job is itself outside the Kernel.
 - Judgment-point modules from spec 004 (when they ship) MUST short-circuit during a backtest run — see FR-B08 and Q3 in clarifications.
 - The current whitelist applies to ALL historical dates in v1. Historical whitelist drift is out of scope; documented in the summary header so the operator knows.
-- Existing audit-log infrastructure (principle IV, K4) is reused by adding new event types; NO change to `persistence/audit.py` table schema beyond appending two new event-type literals. Migration 0001 / 0002 SQL is NOT touched (those are K4 — Kernel).
+- Existing audit-log infrastructure (principle IV, K4) is reused by appending new event-type literals only: `BACKTEST_STARTED`, `BACKTEST_COMPLETED`, `LLM_CALL_STUBBED`. The two failure conditions (`WALL_CLOCK_LEAK`, `BACKTEST_JUDGMENT_LEAK`) are emitted as `ERROR` rows with a `reason` field, not as new event types. **Important — one-time Kernel touch acknowledged**: adding event-type literals modifies `src/auto_invest/persistence/audit.py`, which is in K4 by kernel.toml. This is the same precedent set by spec 002 when it added migration `0002_token_usage.sql` to K4. The change is additive (extends a Union, never removes or renames existing literals; no SQL schema change; no UPDATE/DELETE pathway added). It requires explicit operator approval per constitution IX.B-1 — exactly what the kernel guard from spec 006 produces. NO change to the existing migration SQL files; NO new migration is required (audit_log table already accepts arbitrary event_type strings via the `EventType` Union).
 - Determinism contract (FR-B15) is non-negotiable because spec 007's hardened canary depends on it.
 - "Most recent quarterly OPEX day" is resolved at engine-startup time, not hard-coded.
 
@@ -141,10 +149,11 @@ After any backtest completes, the engine produces a single human-readable summar
 
 ### Constitutional fit
 
-- **NOT a Kernel change.** The engine introduces new files (under `src/auto_invest/backtest/`) and new audit event types, but modifies zero file listed in `.specify/memory/kernel.toml`. The kernel-touch guard from spec 006 verifies this automatically.
-- **Principle IV satisfied.** New audit events (`BACKTEST_STARTED`, `BACKTEST_COMPLETED`) are append-only; no UPDATE/DELETE.
+- **One-time minor Kernel touch.** The engine introduces many new files under `src/auto_invest/backtest/` (none in the kernel). It also appends three event-type literals (`BACKTEST_STARTED`, `BACKTEST_COMPLETED`, `LLM_CALL_STUBBED`) to `src/auto_invest/persistence/audit.py`, which IS K4 by kernel.toml. This touch is additive (extends a Union; adds no UPDATE/DELETE pathway; no SQL change) and follows the precedent set when spec 002 added migration 0002 to K4. The spec 006 kernel-touch guard MUST detect this and route the merge through the operator-approved (principle IX.B-1) path — exactly the behavior the guard is designed for. After this spec ships, no further Kernel touch is required for ongoing backtest operation.
+- **Principle IV satisfied.** New audit events (`BACKTEST_STARTED`, `BACKTEST_COMPLETED`, `LLM_CALL_STUBBED`) are append-only; no UPDATE/DELETE introduced.
 - **Principle VI satisfied.** This feature IS the "backtest" stage referenced by principle VI; before this feature, the stage was a paper rule.
-- **Principle III defended.** FR-B08 prevents real LLM calls during a backtest, defending the "Claude only at judgment points, with bounded cost" contract from autonomous misuse.
+- **Principle III defended.** FR-B08 forbids real LLM calls during a backtest, defending the "Claude only at judgment points, with bounded cost" contract from autonomous misuse.
+- **Principle IX.B-1 honoured.** The Kernel touch above is operator-approved via the merge of THIS spec; the autonomous tuner cannot do it.
 
 ### Out of scope (this feature)
 
@@ -161,6 +170,6 @@ After any backtest completes, the engine produces a single human-readable summar
 
 This spec is promoted to implementation only after:
 
-1. `/speckit-clarify` resolves the three NEEDS CLARIFICATION markers in FR-B07, FR-B08, and FR-B16 (fill model, judgment-point fixture, OHLCV vendor).
+1. ~~`/speckit-clarify` resolves the three NEEDS CLARIFICATION markers~~ — **resolved 2026-05-13**, see `## Clarifications` § Session 2026-05-13 (CSV-only OHLCV ingest; pessimistic zero-slippage fill model; deterministic stub for judgment points).
 2. Operator approves the four-date synthetic-shock set in FR-B09 (or amends it).
 3. Operator confirms v1 may use today's whitelist for all historical dates (Assumption #6).
