@@ -1,0 +1,33 @@
+# Synthetic-shock date set for the backtest engine (spec 008, FR-B09).
+#
+# Spec 007's hardened canary replays the new code against these days
+# to surface regressions that single-metric PnL cannot catch. Adding
+# or removing a date here expands the safety surface and is operator-
+# only per spec 007's promotion criteria.
+
+[[shocks]]
+name = "covid_circuit_breakers_2020_03_12"
+session_date = "2020-03-12"
+expected_gate_trip = "exchange_halt_or_volatility"
+note = "Multiple Level-1 circuit breakers; cross-asset liquidity vacuum."
+
+[[shocks]]
+name = "negative_oil_futures_2020_04_20"
+session_date = "2020-04-20"
+expected_gate_trip = ""
+note = "WTI futures went negative; equity reaction. Sanity check that limit-only enforcement holds."
+
+[[shocks]]
+name = "yen_carry_unwind_2024_08_05"
+session_date = "2024-08-05"
+expected_gate_trip = "global_exposure"
+note = "Global risk-off; spec 005 tuner-era stress."
+
+# Fourth entry is dynamic — most-recent-quarterly-OPEX day, resolved
+# at engine-startup time by `synthetic_shocks.resolve_synthetic_shock_dates`.
+# Hard-coded entry below is a default the resolver overrides when run.
+[[shocks]]
+name = "most_recent_quarterly_opex"
+session_date = "DYNAMIC"
+expected_gate_trip = ""
+note = "Third Friday of last completed Mar/Jun/Sep/Dec, adjusted for early close. Resolver replaces session_date at startup."

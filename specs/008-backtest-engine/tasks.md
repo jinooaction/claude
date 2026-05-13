@@ -26,9 +26,9 @@ Single-package layout under `src/auto_invest/`. Tests under `tests/unit/` and `t
 
 **Purpose**: Skeleton directories + dependency confirmation. Nothing risky here.
 
-- [ ] T001 Create `src/auto_invest/backtest/` with empty `__init__.py`; create `tests/unit/` and `tests/integration/` placeholders confirmed
-- [ ] T002 Verify `pyproject.toml` already pins `pandas`, `pydantic`, `numpy` (transitive via pandas), `tomllib` (stdlib); add NO new third-party dependencies (per plan Technical Context). Confirm `uv lock` is clean.
-- [ ] T003 [P] Create empty `config/synthetic_shocks.toml` with placeholder structure documenting the four canonical dates (real content goes in via T029)
+- [X] T001 Create `src/auto_invest/backtest/` with empty `__init__.py`; create `tests/unit/` and `tests/integration/` placeholders confirmed
+- [X] T002 Verify `pyproject.toml` already pins `pandas`, `pydantic`, `numpy` (transitive via pandas), `tomllib` (stdlib); add NO new third-party dependencies (per plan Technical Context). Confirm `uv lock` is clean.
+- [X] T003 [P] Create empty `config/synthetic_shocks.toml` with placeholder structure documenting the four canonical dates (real content goes in via T029)
 
 **Checkpoint**: directory skeleton ready; no behavior shipped.
 
