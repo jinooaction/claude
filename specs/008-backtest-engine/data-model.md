@@ -97,9 +97,9 @@ Invariants enforced at ingest (FR-B13):
 ```text
 data/history/<dataset_version>/
 ├── manifest.json                  # see schema below
-├── AAPL.parquet                   # OHLCVBar rows for symbol AAPL
-├── SPY.parquet
-└── ...
+└── bars.sqlite                    # one indexed table ohlcv_bars(symbol, session_date, ...)
+                                   # (Parquet was the original design; we use SQLite so v1
+                                   #  ships with zero new dependencies — see contracts/historical-data-source.md.)
 ```
 
 `manifest.json` schema:

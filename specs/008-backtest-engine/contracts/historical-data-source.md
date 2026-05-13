@@ -46,9 +46,9 @@ class HistoricalDataSource(Protocol):
 
 ## v1 adapter — `CSVDataSource`
 
-- Reads from `data/history/<dataset_version>/<SYMBOL>.parquet`.
+- Reads from a single SQLite file `data/history/<dataset_version>/bars.sqlite` produced by `ingest-history`. (Parquet was the original design intent, but it would require adding `pyarrow` to deps; SQLite is already pinned for the audit log and indexes (symbol, session_date) cheaply for our scale.) The class name `CSVDataSource` reflects the *source* format the operator supplies (CSV); the on-disk cache is SQLite.
 - Constructed with `dataset_version` (default: latest under `data/history/`).
-- `coverage_holes` reads parquet metadata (row counts + date ranges) without loading the full files; full read happens only when the engine asks for a specific symbol's bars.
+- `coverage_holes` reads pre-computed `(symbol, session_date_min, session_date_max, row_count)` rows from `manifest.json` so it does not load any bar bytes; only `read_bars` does a SQL query against `bars.sqlite`.
 
 ## Future adapters (out of scope for v1)
 
