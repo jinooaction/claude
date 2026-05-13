@@ -21,8 +21,11 @@
   },
   "tasks_progress": {
     "completed_through": "T015 + T016/T017/T018 red tests committed",
-    "tip_commit_short": "dc2cb95",
-    "tip_commit_subject": "test(008): T016/T017/T018 — Phase 3 US1 red tests (non-Kernel)"
+    "tip_commit_short": "3ee0a80",
+    "tip_commit_subject": "feat(session-handoff): cross-session continuity system (active-work + dynamic hook)",
+    "last_spec_008_code_commit": "dc2cb95",
+    "last_spec_008_code_subject": "test(008): T016/T017/T018 — Phase 3 US1 red tests (non-Kernel)",
+    "note_for_next_session": "tip_commit_short above is the handoff-system commit (infrastructure, not spec-008 progress). The last actual spec-008 code change is `dc2cb95` — three red tests waiting for T019/T020/T021/T022 to turn green."
   },
   "kernel_status": {
     "manifest_groups": ["K1_position_sizing", "K2_whitelist", "K3_judgment_points", "K4_append_only_audit", "K5_secret_isolation", "K6_market_hours_guard", "K7_named_datasets", "K_meta"],
@@ -48,6 +51,6 @@
       "End of Phase 6 (T059): audit + artifact wired (natural Increment 2 end)"
     ]
   },
-  "last_session_end_utc": "2026-05-13T07:30:00Z",
-  "last_updated_by": "session continuation 2026-05-13"
+  "last_session_end_utc": "2026-05-13T12:00:00Z",
+  "last_updated_by": "session continuation 2026-05-13 (handoff system landed; tip pointer reconciled)"
 }
