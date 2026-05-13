@@ -43,6 +43,7 @@ files = [
     "src/auto_invest/persistence/audit.py",
     "src/auto_invest/persistence/migrations/0001_initial.sql",
     "src/auto_invest/persistence/migrations/0002_token_usage.sql",
+    "src/auto_invest/persistence/migrations/0003_backtest_events.sql",
 ]
 
 [K5_secret_isolation]
@@ -56,6 +57,12 @@ files = [
 description = "No live deploys during market hours (constitution principle VIII.A). Without K6, autonomous tuner can deploy mid-session."
 files = [
     "src/auto_invest/worker/schedule.py",
+]
+
+[K7_named_datasets]
+description = "Curated synthetic-shock named datasets used by the spec 007 hardened canary (constitution IX.B-2 prerequisite, delivered via spec 008). Without K7, the autonomous tuner could silently mutate the safety surface that spec 007's FR-C03 synthetic-shock replay rests on. Spec 005 separately classifies these as L4; K7 is the runtime-enforcement counterpart so spec 006's deploy guard blocks unintentional mutations even before spec 005's tuner ships."
+files = [
+    "data/ohlcv/datasets/synthetic_shock_v1.json",
 ]
 
 [K_meta]

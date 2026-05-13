@@ -15,7 +15,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from collections.abc import Iterable
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -51,6 +51,12 @@ from auto_invest.worker.halt import is_halted
 from auto_invest.worker.schedule import is_session_open
 
 logger = logging.getLogger(__name__)
+
+# Spec 008 dependency-injection seams (FR-B01, FR-B02). Both default to
+# None so live behaviour is byte-identical to before; the backtest engine
+# constructs Worker with non-None values to drive replay.
+QuoteProvider = Callable[[str, datetime], Awaitable[Any]]
+ClockCallable = Callable[[], datetime]
 
 
 @dataclass
@@ -90,6 +96,8 @@ class Worker:
         app_key: str,
         app_secret: str,
         account_no: str,
+        quote_provider: QuoteProvider | None = None,
+        clock: ClockCallable | None = None,
     ) -> None:
         self.settings = settings
         self.broker = broker
@@ -97,6 +105,9 @@ class Worker:
         self.app_key = app_key
         self.app_secret = app_secret
         self.account_no = account_no
+        # Spec 008 DI seams. None preserves live behaviour byte-for-byte.
+        self.quote_provider = quote_provider
+        self.clock = clock
 
         self.conn = db.get_connection(settings.db_path)
         db.migrate(self.conn)
@@ -153,7 +164,12 @@ class Worker:
 
     async def tick(self, now: datetime | None = None) -> TickReport:
         """One pass: skip-checks, then evaluate every enabled, unpaused rule."""
-        moment = now or datetime.now(UTC)
+        if now is not None:
+            moment = now
+        elif self.clock is not None:
+            moment = self.clock()
+        else:
+            moment = datetime.now(UTC)
         report = TickReport()
 
         if is_halted(self.settings.halt_path):
@@ -181,14 +197,20 @@ class Worker:
         now: datetime,
     ) -> OrderOutcome | None:
         # Fetch a fresh quote (also accumulates a synthetic bar for indicators).
-        quote = await get_quote(
-            self.broker,
-            access_token=self.access_token,
-            app_key=self.app_key,
-            app_secret=self.app_secret,
-            symbol=rule.symbol,
-            market=self.settings.market_quote,
-        )
+        # Spec 008: when a quote_provider DI seam is wired (backtest mode),
+        # call it instead of the live KIS endpoint. Live behaviour (None)
+        # is unchanged.
+        if self.quote_provider is not None:
+            quote = await self.quote_provider(rule.symbol, now)
+        else:
+            quote = await get_quote(
+                self.broker,
+                access_token=self.access_token,
+                app_key=self.app_key,
+                app_secret=self.app_secret,
+                symbol=rule.symbol,
+                market=self.settings.market_quote,
+            )
         timeframe = getattr(rule.trigger, "timeframe", "1d")
         store_synthetic_bar(
             self.conn,

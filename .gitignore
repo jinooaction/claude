@@ -36,6 +36,11 @@ dist/
 
 # auto-invest runtime artifacts
 data/
+# Curated synthetic-shock named datasets are spec-008 K7 Kernel files;
+# they are versioned in git and protected by kernel.toml [K7_named_datasets].
+!data/ohlcv/
+!data/ohlcv/datasets/
+!data/ohlcv/datasets/*.json
 *.db
 *.db-wal
 *.db-shm

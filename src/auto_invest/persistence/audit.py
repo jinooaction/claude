@@ -41,6 +41,9 @@ EventType = Literal[
     "LLM_CALL",
     "PRICE_TABLE_LOADED",
     "DEPLOY_BLOCKED_KERNEL_TOUCH",
+    "BACKTEST_STARTED",
+    "BACKTEST_COMPLETED",
+    "BACKTEST_FAILED",
 ]
 
 
@@ -199,6 +202,52 @@ class DeployBlockedKernelTouchPayload(AuditPayload):
     triggered_by: str = "manual"  # "manual" | "auto-tuner"
 
 
+class BacktestStartedPayload(AuditPayload):
+    """Per spec 008 FR-B14 + contracts/audit-events.md."""
+
+    event_type: Literal["BACKTEST_STARTED"] = "BACKTEST_STARTED"
+    run_id: str
+    code_sha: str  # 40 hex; may carry "+dirty" suffix when allow_dirty
+    dataset_hash: str  # 64 hex
+    rules_hash: str  # 64 hex
+    caps_hash: str  # 64 hex
+    whitelist_hash: str  # 64 hex
+    seed: int
+    vendor: Literal["yfinance", "kis_historical"]
+    window_start: str | None = None  # YYYY-MM-DD
+    window_end: str | None = None  # YYYY-MM-DD
+    named_dataset: str | None = None  # e.g. "synthetic_shock_v1"
+
+
+class BacktestCompletedPayload(AuditPayload):
+    """Per spec 008 FR-B15 + contracts/audit-events.md."""
+
+    event_type: Literal["BACKTEST_COMPLETED"] = "BACKTEST_COMPLETED"
+    run_id: str
+    total_return_pct: str  # Decimal as string
+    max_drawdown_pct: str  # Decimal as string
+    sharpe: str | None  # Decimal as string; null on bankruptcy
+    fills_count: int
+    gate_rejections_count: int
+    promote_eligible: bool
+    artifact_dir: str  # repo-relative path; absolute paths are forbidden
+
+
+class BacktestFailedPayload(AuditPayload):
+    """Per spec 008 FR-B16 + contracts/audit-events.md.
+
+    Emitted exactly once for any run that crossed BACKTEST_STARTED but did
+    not reach BACKTEST_COMPLETED. Runs that fail before BACKTEST_STARTED
+    (input validation, dirty-tree refusal, kernel-touch refusal) emit
+    NO audit row.
+    """
+
+    event_type: Literal["BACKTEST_FAILED"] = "BACKTEST_FAILED"
+    run_id: str
+    phase: Literal["ingest_ohlcv", "replay", "report"]
+    reason: str  # one-line, max 256 chars, no secrets, no stack traces
+
+
 AnyPayload = (
     WorkerStartedPayload
     | WorkerStoppedPayload
@@ -221,6 +270,9 @@ AnyPayload = (
     | LlmCallPayload
     | PriceTableLoadedPayload
     | DeployBlockedKernelTouchPayload
+    | BacktestStartedPayload
+    | BacktestCompletedPayload
+    | BacktestFailedPayload
 )
 
 
