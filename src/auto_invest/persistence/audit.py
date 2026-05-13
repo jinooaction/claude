@@ -41,6 +41,9 @@ EventType = Literal[
     "LLM_CALL",
     "PRICE_TABLE_LOADED",
     "DEPLOY_BLOCKED_KERNEL_TOUCH",
+    "BACKTEST_STARTED",
+    "BACKTEST_COMPLETED",
+    "LLM_CALL_STUBBED",
 ]
 
 
@@ -199,6 +202,49 @@ class DeployBlockedKernelTouchPayload(AuditPayload):
     triggered_by: str = "manual"  # "manual" | "auto-tuner"
 
 
+class BacktestStartedPayload(AuditPayload):
+    """Per spec 008 FR-B04 — run header recorded at backtest start."""
+
+    event_type: Literal["BACKTEST_STARTED"] = "BACKTEST_STARTED"
+    run_id: str
+    invoker: Literal["cli", "canary"]
+    ruleset_sha256: str
+    dataset_version: str
+    date_start: str
+    date_end: str
+    replay_seed: int
+    fill_model: Literal["pessimistic_zero_slip"]
+    judgment_mode: Literal["stub"]
+    synthetic_shock: bool
+
+
+class BacktestCompletedPayload(AuditPayload):
+    """Per spec 008 FR-B05 — terminal row with summary metrics."""
+
+    event_type: Literal["BACKTEST_COMPLETED"] = "BACKTEST_COMPLETED"
+    run_id: str
+    outcome: Literal["completed", "failed"]
+    failure_reason: str | None = None
+    aggregate_return_pct: str
+    aggregate_max_drawdown_pct: str
+    aggregate_sharpe: str
+    total_orders: int
+    total_fills: int
+    total_gate_rejections: int
+
+
+class LlmCallStubbedPayload(AuditPayload):
+    """Per spec 008 FR-B08 — every judgment-point call during a backtest
+    is short-circuited to a deterministic stub; this row records that.
+    """
+
+    event_type: Literal["LLM_CALL_STUBBED"] = "LLM_CALL_STUBBED"
+    run_id: str
+    decision_class: str
+    input_sha256: str
+    stubbed_branch: str
+
+
 AnyPayload = (
     WorkerStartedPayload
     | WorkerStoppedPayload
@@ -221,6 +267,9 @@ AnyPayload = (
     | LlmCallPayload
     | PriceTableLoadedPayload
     | DeployBlockedKernelTouchPayload
+    | BacktestStartedPayload
+    | BacktestCompletedPayload
+    | LlmCallStubbedPayload
 )
 
 

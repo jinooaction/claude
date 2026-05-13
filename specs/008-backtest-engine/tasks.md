@@ -42,8 +42,8 @@ Single-package layout under `src/auto_invest/`. Tests under `tests/unit/` and `t
 
 **⚠️ K4 NOTE**: T004 + T005 form the ONLY Kernel touch in this entire spec. They MUST be committed together as a single commit with subject `feat(008): K4 — append BACKTEST_* + LLM_CALL_STUBBED event types to audit.py` so the operator review per constitution IX.B-1 has a single, atomic, additive change to inspect. No other task may modify any file listed under `.specify/memory/kernel.toml`.
 
-- [ ] T004 Append `BACKTEST_STARTED`, `BACKTEST_COMPLETED`, `LLM_CALL_STUBBED` to the `EventType` Union in `src/auto_invest/persistence/audit.py` (K4 — same commit as T005)
-- [ ] T005 Add `BacktestStartedPayload`, `BacktestCompletedPayload`, `LLMCallStubbedPayload` pydantic models in `src/auto_invest/persistence/audit.py` per `data-model.md § Audit-log payloads` (K4 — same commit as T004)
+- [X] T004 Append `BACKTEST_STARTED`, `BACKTEST_COMPLETED`, `LLM_CALL_STUBBED` to the `EventType` Union in `src/auto_invest/persistence/audit.py` (K4 — same commit as T005)
+- [X] T005 Add `BacktestStartedPayload`, `BacktestCompletedPayload`, `LLMCallStubbedPayload` pydantic models in `src/auto_invest/persistence/audit.py` per `data-model.md § Audit-log payloads` (K4 — same commit as T004)
 - [ ] T006 [P] Implement `src/auto_invest/backtest/data_model.py` — `BacktestRun`, `RuleBacktestResult`, `BacktestSummary`, `OHLCVBar`, `DataQualityWarning`, `SyntheticShockDay` pydantic v2 models per `data-model.md § In-memory entities`, with Decimal canonicalisation via `quantize(Decimal("0.000001"))`
 - [ ] T007 Implement `src/auto_invest/backtest/clock.py` — `Clock` Protocol, `ReplayClock`, `WallClockLeakError`, and `WallClockGuard` context manager that monkey-patches `datetime.datetime` and `time.time` in `auto_invest.*` module namespaces during the guarded scope (R-B2)
 - [ ] T008 [P] Unit test `tests/unit/test_backtest_clock_guard.py` — `WallClockGuard` raises `WallClockLeakError` on any `datetime.now()` / `time.time()` call from within `auto_invest.*` inside the scope; live-worker call sites outside the scope are unaffected
