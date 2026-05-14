@@ -1,9 +1,9 @@
 # Implementation Plan: Deploy Automation
 
-**Branch**: `claude/optimize-token-efficiency-uYiKk`
-**Date**: 2026-05-06
+**Branch**: `claude/review-merge-tasks-vpAhp`
+**Date**: 2026-05-14 (resumed under constitution v3.0.0)
 **Spec**: [spec.md](./spec.md)
-**Constitution**: v1.1.0 (principle VIII.B added in same change set)
+**Constitution**: v3.0.0 (IX.A forensic-list kernel; IX.B-1 repealed → kernel touches non-blocking; IX.B-2 production-deploy gate via spec 007; IX.D operator autonomy supremacy)
 
 ## Summary
 
@@ -23,11 +23,15 @@ dep, used by the worker for session boundaries), the config loader
 **New runtime dependencies**: none. Reuses `httpx` (transitive),
 `exchange_calendars`, `pydantic`, `tomllib`, `typer`, plus stdlib
 `subprocess` for git and supervisor calls.
-**Storage**: extends `audit_log` with four new event-type literals
+**Storage**: extends `audit_log` with five new event-type literals
 (`DEPLOY_STARTED`, `DEPLOY_COMPLETED`, `DEPLOY_FAILED`,
-`DEPLOY_ROLLED_BACK`) and matching pydantic payload classes. **No new
-tables or migrations.** This keeps the deploy script's surface area
-small enough to review line-by-line.
+`DEPLOY_ROLLED_BACK`, `DEPLOY_KERNEL_TOUCHED`) and matching pydantic
+payload classes. **No new tables or migrations** — every row lands in
+the existing `audit_log`. The deprecated `DEPLOY_BLOCKED_KERNEL_TOUCH`
+literal (from the v2.0.0 era) is retained in the union for backward
+compatibility with rows already on disk but is no longer emitted.
+This keeps the deploy script's surface area small enough to review
+line-by-line.
 **Testing**: unit tests for the market-hours guard, lock acquisition,
 phase-state machine, and audit emission; integration test with a
 fake git worktree + a fake worker subprocess (no real `systemctl`
@@ -47,21 +51,25 @@ of this size of codebase completes < 60 s including health check.
 worker. Designed to extend to a small fleet by replacing the
 worker-supervisor calls with a remote-exec backend; not in scope here.
 
-## Constitution Check (v1.1.0)
+## Constitution Check (v3.0.0)
 
 | # | Principle | How this plan satisfies it | Status |
 |---|-----------|---------------------------|--------|
 | I | Position Sizing & Exposure Limits | Deploy never places orders; vacuously satisfied. | ✅ pass |
 | II | Deny-by-Default (Whitelist) | Deploy refuses on missing required secrets, dirty tree, or open market session — explicit allowlist of conditions. | ✅ pass |
 | III | Claude at Defined Judgment Points Only | Deploy makes zero LLM calls. | ✅ pass |
-| IV | Append-Only Audit Log + Daily Reconciliation | All deploy events flow into the existing `audit_log` table; no parallel deploy log. | ✅ pass |
+| IV | Append-Only Audit Log + Daily Reconciliation | All deploy events flow into the existing `audit_log` table; no parallel deploy log. Extending `EventType` is a K4 touch (forensic-attention under v3.0.0). | ✅ pass (K4 touch logged) |
 | V | Secret Isolation | Deploy script never logs or transmits secrets; existing redaction filter is sufficient. | ✅ pass |
-| VI | Backtest → Canary → Full Live | Deploy is infrastructure, not a strategy promotion; vacuously satisfied. | ✅ pass |
+| VI | Backtest → Canary → Full Live | Deploy is infrastructure, not a strategy promotion. Spec 007 hardened canary is the production-deploy gate consumed by FR-D14 when `--triggered-by=auto-tuner`. | ✅ pass |
 | VII | External API Robustness | Deploy uses git/subprocess; failures surface as `DEPLOY_FAILED` and trigger rollback. The worker's own resilience handles its external APIs after restart. | ✅ pass |
 | VIII.A | No Live Deploys During Market Hours | Market-hours guard refuses to proceed; verified by integration test. | ✅ pass |
-| VIII.B (new) | Deploy Automation Requirements | All six clauses implemented: market-hours guard (FR-D02), audit events (FR-D03/04), health-check gate (FR-D07), rollback obligation (FR-D08), operator-triggered (the script never re-arms itself), secrets isolation (FR-D10). | ✅ pass |
+| VIII.B | Deploy Automation Requirements | All six clauses implemented: market-hours guard (FR-D02), audit events (FR-D03/04), 90 s health-check gate (FR-D07), rollback obligation (FR-D08), operator-triggered (the script never re-arms itself), secrets isolation (FR-D10). | ✅ pass |
+| IX.A | Kernel forensic-list | Kernel touch surfaces as `DEPLOY_KERNEL_TOUCHED` (informational, non-blocking) per v3.0.0 IX.A. | ✅ pass |
+| IX.B-1 | Repealed (kernel-touch no longer halts merge) | Runner consumes `kernel_diff_check` and emits the informational row; deploy continues. | ✅ pass |
+| IX.B-2 | Production-deploy gate | FR-D14 consumes `CANARY_PASSED` audit row when `--triggered-by=auto-tuner`. | ✅ pass |
+| IX.D | Operator Autonomy Supremacy | Operator-initiated deploys bypass IX.B-2; the operator instruction IS the approval surface. | ✅ pass |
 
-**No violations identified.**
+**No violations identified.** Two K4 touches expected: (1) audit.py EventType union extension for 5 new literals; (2) one frozen pydantic payload class per new literal in audit.py. Both are additive.
 
 ## Project Structure
 
@@ -69,9 +77,12 @@ worker-supervisor calls with a remote-exec backend; not in scope here.
 specs/006-deploy-automation/
 ├── plan.md                       # this file
 ├── spec.md
-├── tasks.md
+├── research.md                   # R-D1..R-D8 decisions
+├── data-model.md                 # deploy audit payload schemas
+├── tasks.md                      # dependency-ordered task list
+├── quickstart.md                 # operator install on Linux/systemd
 └── contracts/
-    └── deploy-cli.md             # `auto-invest deploy` flag surface
+    └── deploy-cli.md             # `auto-invest deploy` flag surface + exit codes
 
 src/auto_invest/
 ├── deploy/
