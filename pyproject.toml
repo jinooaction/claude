@@ -12,6 +12,7 @@ dependencies = [
     "apscheduler>=3.11.2",
     "exchange-calendars>=4.13.2",
     "httpx>=0.28.1",
+    "hypothesis>=6.115.0",
     "pandas>=3.0.2",
     "pydantic>=2.13.3",
     "python-dotenv>=1.2.2",
@@ -48,6 +49,7 @@ select = ["E", "F", "I", "B", "UP", "SIM"]
 # B008 ("function call in argument default") would force unidiomatic
 # rewrites of every CLI signature.
 "src/auto_invest/cli.py" = ["B008"]
+"src/auto_invest/canary/cli.py" = ["B008"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,0 +1,26 @@
+# Acceptance bands for the hardened canary (spec 007 / constitution v3.0.0 IX.B-2).
+#
+# Defaults derive directly from FR-C01 / FR-C02 in specs/007-canary-hardening/spec.md.
+# Edit and PR to amend. Schema validated by auto_invest.canary.bands at load time.
+#
+# Hard constraints (rejected by loader, NOT operator-amendable in config):
+#   - risk_gate_violations and audit_integrity_failures MUST equal 0
+#     (FR-C01 #2 / #3 — any non-zero value is a spec amendment, not a config edit)
+#   - trading_days >= 30 for L2 (FR-C02), >= 45 for L3 (FR-C02)
+#   - all rate metrics >= 0 (negative is improvement; band rejects regressions only)
+
+[L2]
+trading_days = 30
+pnl_drawdown_pct = 3.0                  # FR-C01 #1
+risk_gate_violations = 0                # FR-C01 #2 — pinned at 0
+audit_integrity_failures = 0            # FR-C01 #3 — pinned at 0
+latency_p95_regression_pct = 20.0       # FR-C01 #4
+llm_cost_regression_pct = 10.0          # FR-C01 #5
+
+[L3]
+trading_days = 45                       # FR-C02
+pnl_drawdown_pct = 2.0
+risk_gate_violations = 0
+audit_integrity_failures = 0
+latency_p95_regression_pct = 15.0
+llm_cost_regression_pct = 7.5
