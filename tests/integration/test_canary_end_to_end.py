@@ -128,6 +128,10 @@ def test_canary_run_end_to_end_passes_and_writes_artefact_tree(tmp_path: Path) -
             str(history_root),
             "--halt-path",
             str(tmp_path / "HALT"),
+            # US1 e2e — keep fast. Fuzz + shock have their own dedicated
+            # tests (test_canary_fuzz.py, test_canary_audit_integrity_drop.py).
+            "--skip-fuzz",
+            "--skip-shock",
         ],
     )
     assert result.exit_code == 0, result.output

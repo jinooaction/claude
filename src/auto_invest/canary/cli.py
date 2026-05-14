@@ -93,6 +93,21 @@ def run_cmd(
     hypothesis_iterations: int = typer.Option(
         10_000, "--hypothesis-iterations", help="Per FR-C04, minimum 10000."
     ),
+    skip_fuzz: bool = typer.Option(
+        False,
+        "--skip-fuzz",
+        help="Skip the property-fuzz pass (test-only; production canaries MUST fuzz).",
+    ),
+    shocks_toml: Path = typer.Option(
+        None,
+        "--shocks-toml",
+        help="Path to synthetic_shocks.toml; default uses spec 008's config.",
+    ),
+    skip_shock: bool = typer.Option(
+        False,
+        "--skip-shock",
+        help="Skip the synthetic-shock pass (test-only; production canaries MUST shock).",
+    ),
     dry_run: bool = typer.Option(
         False,
         "--dry-run",
@@ -143,6 +158,24 @@ def run_cmd(
         _exit(EXIT_USAGE)
         return
 
+    # Build ShockInputs (US2) unless skipped.
+    shock_inputs = None
+    if not skip_shock:
+        from auto_invest.canary.shock import ShockInputs
+
+        shock_inputs = ShockInputs(
+            rules_path=replay_inputs.rules_path,
+            rules=replay_inputs.rules,
+            ruleset_sha256=replay_inputs.ruleset_sha256,
+            data_source=replay_inputs.data_source,
+            caps=replay_inputs.caps,
+            whitelist=replay_inputs.whitelist,
+            halt_path=replay_inputs.halt_path,
+            out_root=Path("data/backtest/shock"),
+            today=ds_end,
+            shocks_toml=shocks_toml,
+        )
+
     run_id_uuid: uuid.UUID | None = None
     if canary_run_id is not None:
         try:
@@ -159,9 +192,11 @@ def run_cmd(
         out_root=out_root,
         audit_db_path=db_path,
         replay_inputs=replay_inputs,
+        shock_inputs=shock_inputs,
         canary_run_id=run_id_uuid,
         hypothesis_seed=hypothesis_seed,
         hypothesis_iterations=hypothesis_iterations,
+        skip_fuzz=skip_fuzz,
         dry_run=dry_run,
     )
 
@@ -206,17 +241,91 @@ def run_cmd(
 
 
 @app.command("shock")
-def shock_cmd() -> None:
-    """Synthetic-shock pass only — Phase 4 US2."""
-    typer.echo("`canary shock` is implemented in Phase 4 US2 (T028).", err=True)
-    _exit(EXIT_INTERNAL)
+def shock_cmd(
+    rules: Path = typer.Option(..., "--rules"),
+    history_root: Path = typer.Option(Path("data/history"), "--history-root"),
+    halt_path: Path = typer.Option(Path("data/halt.flag"), "--halt-path"),
+    db_path: Path = typer.Option(Path("data/auto_invest.db"), "--db"),
+    out_root: Path = typer.Option(Path("data/backtest/shock"), "--out-dir"),
+    shocks_toml: Path = typer.Option(None, "--shocks-toml"),
+) -> None:
+    """Synthetic-shock pass only — forensic debug aid.
+
+    Useful when investigating a single adverse day; emits the same
+    BACKTEST_* rows the full canary would, but does NOT emit
+    CANARY_ENTERED / CANARY_PASSED. Returns 0 iff all shocks clean.
+    """
+    from datetime import date as _dt
+
+    from auto_invest.canary.shock import (
+        ShockInputs,
+        run_synthetic_shock_battery,
+    )
+
+    try:
+        replay_inputs = _build_replay_inputs(
+            rules_path=rules,
+            history_root=history_root,
+            date_start=_dt.today(),
+            date_end=_dt.today(),
+            halt_path=halt_path,
+            out_root=out_root,
+        )
+    except _CanaryUsageError as exc:
+        typer.echo(str(exc), err=True)
+        _exit(EXIT_USAGE)
+        return
+
+    inputs = ShockInputs(
+        rules_path=replay_inputs.rules_path,
+        rules=replay_inputs.rules,
+        ruleset_sha256=replay_inputs.ruleset_sha256,
+        data_source=replay_inputs.data_source,
+        caps=replay_inputs.caps,
+        whitelist=replay_inputs.whitelist,
+        halt_path=replay_inputs.halt_path,
+        out_root=out_root,
+        today=_dt.today(),
+        shocks_toml=shocks_toml,
+    )
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = db.get_connection(db_path)
+    db.migrate(conn)
+    try:
+        result = run_synthetic_shock_battery(inputs, audit_conn=conn)
+    finally:
+        conn.close()
+    typer.echo(
+        f"shock_battery: resolved={len(result.resolved_dates)} "
+        f"total_violations={result.total_violations} "
+        f"skipped={result.skipped_count}"
+    )
+    _exit(EXIT_FAILED if result.total_violations > 0 else EXIT_OK)
 
 
 @app.command("fuzz")
-def fuzz_cmd() -> None:
-    """Property-fuzz pass only — Phase 4 US2."""
-    typer.echo("`canary fuzz` is implemented in Phase 4 US2 (T028).", err=True)
-    _exit(EXIT_INTERNAL)
+def fuzz_cmd(
+    iterations: int = typer.Option(10_000, "--iterations"),
+    seed: int = typer.Option(0, "--seed"),
+    out_dir: Path = typer.Option(None, "--out-dir"),
+) -> None:
+    """Property-fuzz pass only — forensic debug aid for risk/gates.py."""
+    from auto_invest.canary.fuzz import run_fuzz_pass
+    from auto_invest.canary.report import write_fuzz_artefacts
+
+    result = run_fuzz_pass(iterations=iterations, database_seed=seed)
+    typer.echo(
+        f"fuzz: iterations={result.iterations} "
+        f"counterexamples={len(result.counterexamples)}"
+    )
+    if out_dir is not None:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        write_fuzz_artefacts(
+            canary_run_dir=out_dir,
+            counterexamples=result.counterexamples,
+            seeds=[seed],
+        )
+    _exit(EXIT_FAILED if result.counterexamples else EXIT_OK)
 
 
 # ---------------------------------------------------------- helpers

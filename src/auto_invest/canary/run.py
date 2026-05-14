@@ -50,13 +50,24 @@ from auto_invest.canary.diff import (
     resolve_baseline,
     resolve_rev,
 )
+from auto_invest.canary.fuzz import DEFAULT_ITERATIONS as DEFAULT_FUZZ_ITERATIONS
+from auto_invest.canary.fuzz import run_fuzz_pass
 from auto_invest.canary.metrics import evaluate_metrics
 from auto_invest.canary.replay_window import (
     ReplayWindowInputs,
     WindowReplayResult,
     replay_window,
 )
-from auto_invest.canary.report import copy_window_artefact, write_report
+from auto_invest.canary.report import (
+    copy_window_artefact,
+    write_fuzz_artefacts,
+    write_report,
+)
+from auto_invest.canary.shock import (
+    ShockBatteryResult,
+    ShockInputs,
+    run_synthetic_shock_battery,
+)
 from auto_invest.deploy import load_kernel_manifest
 from auto_invest.persistence import audit
 from auto_invest.persistence.audit import (
@@ -75,7 +86,7 @@ EXIT_USAGE = 4
 
 @dataclass(frozen=True)
 class CanaryOptions:
-    """Inputs for a canary run (Phase 3 US1 surface)."""
+    """Inputs for a canary run."""
 
     tier: Tier
     candidate_rev: str | None = None  # default: HEAD
@@ -85,10 +96,12 @@ class CanaryOptions:
     out_root: Path = Path("data/canary")
     audit_db_path: Path = Path("data/auto_invest.db")
     replay_inputs: ReplayWindowInputs | None = None  # injected by CLI
+    shock_inputs: ShockInputs | None = None  # if None: shock pass skipped
     repo_root: Path | None = None  # default: cwd
     canary_run_id: uuid.UUID | None = None  # default: uuid4
     hypothesis_seed: int | None = None
-    hypothesis_iterations: int = 10_000
+    hypothesis_iterations: int = DEFAULT_FUZZ_ITERATIONS
+    skip_fuzz: bool = False
     dry_run: bool = False
 
 
@@ -263,10 +276,31 @@ def run_canary(
     if window.candidate.summary is not None:
         candidate_drawdown_pct = float(window.candidate.summary.aggregate_max_drawdown_pct)
 
-    # ---------------- shock + fuzz (US2 plugs in here) ----------
+    # ---------------- shock pass (US2) ----------
     shock_violations = 0
+    shock_dates: list[date] = []
+    if options.shock_inputs is not None:
+        shock_result: ShockBatteryResult = run_synthetic_shock_battery(
+            options.shock_inputs,
+            audit_conn=audit_conn,
+        )
+        shock_violations = shock_result.total_violations
+        shock_dates = shock_result.resolved_dates
+        audit_conn.commit()
+
+    # ---------------- property fuzz (US2) ----------
     fuzz_counterexamples = 0
-    # In Phase 3 US1 these stay 0; Phase 4 US2 will wire shock.py + fuzz.py.
+    fuzz_seed = _derive_seed(canary_run_id, options.hypothesis_seed)
+    if not options.skip_fuzz:
+        fuzz_result = run_fuzz_pass(
+            iterations=options.hypothesis_iterations,
+            database_seed=fuzz_seed,
+        )
+        fuzz_counterexamples = len(fuzz_result.counterexamples)
+        # Stash artefacts for report writer; written under property-fuzz/.
+        _pending_fuzz = (fuzz_result.counterexamples, [fuzz_seed])
+    else:
+        _pending_fuzz = ([], [])
 
     # ---------------- metrics ----------
     metrics = evaluate_metrics(
@@ -281,10 +315,12 @@ def run_canary(
 
     # ---------------- build CanaryRun ----------
     seed_bundle = SeedBundle(
-        hypothesis_database_seed=_derive_seed(canary_run_id, options.hypothesis_seed),
+        hypothesis_database_seed=fuzz_seed,
         hypothesis_iterations=options.hypothesis_iterations,
-        synthetic_shock_dates=[],  # US2 populates from spec 008 resolver
-        quarterly_opex_resolved_for=date.today(),  # placeholder, US2 replaces
+        synthetic_shock_dates=shock_dates,
+        quarterly_opex_resolved_for=(
+            options.shock_inputs.today if options.shock_inputs is not None else date.today()
+        ),
     )
 
     finished_at = _utcnow()
@@ -321,6 +357,14 @@ def run_canary(
             canary_run_dir=canary_run_dir,
             side="baseline",
         )
+
+    # Persist property-fuzz artefacts (FR-C07).
+    fuzz_counterexamples_list, fuzz_seeds = _pending_fuzz
+    write_fuzz_artefacts(
+        canary_run_dir=canary_run_dir,
+        counterexamples=fuzz_counterexamples_list,
+        seeds=fuzz_seeds,
+    )
 
     artefact_path = str(canary_run_dir / "canary-run.json")
 

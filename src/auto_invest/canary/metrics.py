@@ -1,4 +1,4 @@
-"""Metric evaluator — converts BacktestRun outputs into 5 MetricResults (T013).
+"""Metric evaluator + audit-integrity baseline (T013, T023).
 
 Per FR-C01 the canary evaluates exactly five metrics. This module owns
 the conversion from raw replay/shock outputs to MetricResult values
@@ -19,6 +19,8 @@ orchestrator. This module does NOT decide pass/fail by itself.
 
 from __future__ import annotations
 
+import sqlite3
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -28,6 +30,38 @@ from auto_invest.canary.data_model import (
     MetricSource,
     TierBands,
 )
+
+
+def compute_audit_integrity_baseline_mean(
+    *,
+    audit_conn: sqlite3.Connection,
+    baseline_window_end: date,
+    lookback_days: int = 30,
+) -> float:
+    """Per FR-C01 #3 — running mean of DATA_QUALITY_ISSUE rows in the
+    prior ``lookback_days`` calendar days, computed once per canary entry.
+
+    Used by the orchestrator to decide whether the candidate's audit-
+    integrity count (observed during window replay) is ABOVE the
+    historical baseline. v1 returns a flat mean; future versions can
+    add per-day weighting.
+    """
+    lookback_start = baseline_window_end - timedelta(days=lookback_days)
+    rows = audit_conn.execute(
+        """
+        SELECT COUNT(*) AS cnt
+        FROM audit_log
+        WHERE event_type = 'DATA_QUALITY_ISSUE'
+          AND ts_utc >= ?
+          AND ts_utc < ?
+        """,
+        (
+            lookback_start.isoformat() + "T00:00:00.000Z",
+            baseline_window_end.isoformat() + "T00:00:00.000Z",
+        ),
+    ).fetchone()
+    count = int(rows["cnt"]) if rows is not None else 0
+    return float(count) / float(lookback_days)
 
 
 def _band_check_upper(observed: float, band_upper: float) -> bool:
