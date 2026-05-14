@@ -1,16 +1,23 @@
-# Kernel manifest — files protected from autonomous modification.
+# Kernel manifest — high-attention forensic list (v3.0.0 semantics).
 #
-# Constitution v2.0.0, principle IX (Self-Modification Boundary).
+# Constitution v3.0.0, principle IX (Self-Modification Boundary).
 #
-# Spec 005's autonomous tuner and spec 006's deploy automation MUST
-# refuse to auto-merge any change set whose diff touches a path
-# listed below. Such change sets fall back to the human-merge path.
+# UNDER v3.0.0 (this is a behavioural change from v2.0.0): touching a
+# path listed below NO LONGER halts the merge. The deploy guard
+# (spec 006) emits an informational DEPLOY_KERNEL_TOUCHED audit row
+# and continues. The real production-deploy gate is spec 007's
+# hardened canary, which protects real money at the live-worker
+# boundary, not at the merge boundary.
 #
-# Adding a path here is a forward-compatible safety improvement.
-# Removing a path is a constitutional concern (see principle IX.C)
-# and SHOULD be paired with a constitution amendment.
+# Adding a path here is a forward-compatible audit-attention
+# improvement (broader forensic surface). Removing a path is a
+# contraction of the forensic surface and SHOULD include a
+# commit-message justification.
 #
-# Modifying THIS file is itself a kernel touch (group K-meta).
+# Modifying THIS file is itself a K-meta touch. Commit messages for
+# K-meta touches MUST include the literal string
+# "this changes the safety perimeter" so a forensic grep can find
+# every such event in `git log`.
 #
 # Path semantics: each entry is a posix-style path relative to repo
 # root. Directory paths end with "/" and protect every file under
