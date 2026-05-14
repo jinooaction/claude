@@ -1,141 +1,90 @@
-# auto-invest — Next-Session Handoff
+# auto-invest — Next-Session Handoff (main baseline)
 
-This file is the entry point for **the next Claude session** working on
-this repository. It summarises what's done, where to read, and the
-options the operator is considering for the next milestone.
+This file is the entry point for **any Claude session landing on `main`** for this repository. It tells you the canonical "what is going on right now" so you don't waste tokens re-discovering it.
+
+## How to start a session in this repo (mandatory)
+
+Per `CLAUDE.md`'s "Autonomous workflow policy", every fresh session MUST run this discovery sequence BEFORE inventing a plan or asking the operator what to do:
+
+```bash
+# 1. See every claude/* branch on origin.
+git fetch origin
+git ls-remote --heads origin 'claude/*' | awk '{print $2}'
+
+# 2. List open PRs — the canonical source of truth for in-flight work.
+#    Use: mcp__github__list_pull_requests owner=jinooaction repo=claude state=open
+
+# 3. If there's an open PR pointing at an in-flight branch, check that branch out
+#    rather than creating a new one off main.
+git checkout <branch from step 2>
+git pull --ff-only
+
+# 4. Read the HANDOFF-*.md on that branch (e.g. HANDOFF-008.md) for task-level state.
+```
 
 ## Status as of last commit on `main`
 
-* **Spec 001 (automated US-equity trading MVP)** — fully implemented
-  and validated end-to-end.
-* **Test count**: 256 passing + 1 skipped (live KIS smoke is gated by
-  `KIS_LIVE_TEST=1`).
-* **Live broker validation**: operator (mason) ran
-  `scripts/live_smoke.py` against their real KIS account on
-  2026-05-04; returned a real-time AAPL quote (`$279.4475`). The
-  KIS overseas-equity adapter is verified against production.
-* **Constitution v1.0.0** — all eight principles satisfied for v1.
+* **Constitution `v3.0.0`** (live since 2026-05-14, merge commit `f849fab`). Principle IX.D (NEW): Operator Autonomy Supremacy. PRs and merges are part of the autonomous workflow. Kernel touches no longer block merge — the safety perimeter is now spec 007's hardened canary at the **production-deploy** boundary, not at the merge boundary.
+* **Spec 001 (automated US-equity trading MVP)** — shipped (since 2026-05-04). Live broker verified.
+* **Spec 002 (token telemetry)** — shipped.
+* **Spec 003 (session cache)** — shipped.
+* **Spec 004 (LLM judgment points)** — stub. Implementation deferred.
+* **Spec 005 (autonomous tuner)** — stub. Blocked on spec 007.
+* **Spec 006 (deploy automation)** — kernel-touch guard shipped; runner pending.
+* **Spec 007 (hardened canary)** — stub. Blocked on spec 008.
+* **Spec 008 (backtest engine)** — **IN FLIGHT on `claude/continue-work-ID7Ec`**. 15/41 tasks done; 26 remaining (T016-T041). See `HANDOFF-008.md` for task-level detail.
+* **Tests on main**: 363 passing, 1 skipped (live KIS smoke is gated by `KIS_LIVE_TEST=1`).
+* **Lint**: clean (`uv run ruff check src tests`).
+* **Live broker validation**: operator (mason) ran `scripts/live_smoke.py` against their real KIS account on 2026-05-04; verified.
 
-## Reading order for the next session
+## Active feature
 
-Read in this exact order before doing anything new:
+`specs/008-backtest-engine/` — backtest engine. Hard prerequisite for spec 007 hardened canary.
 
-1. `.specify/memory/constitution.md`
-2. `specs/001-automated-trading-mvp/spec.md`
-3. `specs/001-automated-trading-mvp/plan.md`
-4. `specs/001-automated-trading-mvp/research.md`
-5. `specs/001-automated-trading-mvp/data-model.md`
-6. `specs/001-automated-trading-mvp/contracts/`
-7. `specs/001-automated-trading-mvp/tasks.md` (every task box checked)
-8. `README.md`
-9. This file (`HANDOFF.md`)
+In-flight branch: `claude/continue-work-ID7Ec`. The branch is fast-forward-mergeable into main (all earlier work merged via PR #1). When the next session lands on main, it should check that branch out and resume implementation.
 
-## Open milestone options (operator chooses)
+Read in this order before doing anything new:
 
-The operator (non-developer) needs to pick one of these directions.
-Whichever they pick, start by writing a new spec under
-`specs/002-<short-name>/spec.md` via the SDD workflow
-(`/speckit-specify` → `/speckit-plan` → `/speckit-tasks` →
-`/speckit-implement`).
+1. `.specify/memory/constitution.md` — v3.0.0; IX.D Operator Autonomy Supremacy.
+2. `.specify/memory/kernel.toml` — high-attention forensic list (no longer a barrier under v3.0.0).
+3. `HANDOFF-008.md` — task-level state for spec 008 (committed to main via PR #1).
+4. `specs/008-backtest-engine/spec.md` → `plan.md` → `research.md` → `data-model.md` → `contracts/` → `tasks.md`.
+5. `CLAUDE.md` — autonomous-workflow + autonomous-merge policy. **Read this before opening or merging a PR.**
 
-### Option A — v2: Claude judgment integration
+## What is NOT pending operator review
 
-The original founding intent ("Python core, Claude only at judgment
-points") was deliberately deferred in v1 (OD-2 in spec 001). Reviving
-it means defining concrete judgment points and binding them to the
-order pipeline.
+Under constitution v3.0.0, none of this requires a human "approve" click:
 
-Likely scope for v2:
+- PR creation — part of the autonomous workflow.
+- PR merge — operator instruction in chat counts as approval.
+- Kernel touches — they emit a forensic audit row and continue. No merge block.
 
-- New principle in the constitution OR re-confirmation of principle
-  III with concrete judgment-point definitions.
-- New spec section for what triggers a Claude consult: "unusual size",
-  "high-vol regime", "news event" — pick something concrete.
-- A `judgment/` module that uses the `anthropic` SDK already in
-  `pyproject.toml`. Tool use + structured output for yes/no decisions.
-- Tests with a mocked Anthropic client (similar to how `respx` mocks
-  KIS).
-- Latency + cost budgets per judgment point.
+Trading-safety invariants (principles I-VII and VIII.A — position caps, whitelist, LLM-only-at-judgment-points, append-only audit, secret isolation, Backtest→Canary→Full, API robustness, no-market-hours-deploys) are still non-negotiable. They're enforced at the **production-deploy** boundary by spec 007's hardened canary (when shipped).
 
-### Option B — First canary live trade
+## Historical handoff files (informational only)
 
-The system is wired and verified, but has never placed a real order.
-A single small canary trade is the next concrete proof.
-
-Likely scope:
-
-- Operator declares total capital and writes one rule with a real
-  symbol (e.g. SPY) and a small qty.
-- Run the worker live during US session.
-- After the session: review audit log, run `auto-invest report`,
-  verify reconciliation.
-- Document the experience back into a "first run" appendix in
-  quickstart.md.
-
-This is mostly **operator action**, not new code. The next Claude
-session might just answer questions and review the audit log.
-
-### Option C — Operational hardening
-
-Make the worker survive in real conditions: cloud deploy, push
-notifications, monitoring dashboard, scheduled restart, backup of the
-SQLite db.
-
-Likely scope:
-
-- New spec: "auto-invest hosting & alerting"
-- systemd / launchd service definition (or Docker)
-- Push notification channel (telegram bot, email, or apple push)
-- Daily backup of `data/auto_invest.db` to cloud storage
-- Health-check endpoint or heartbeat audit row
-
-### Option D — Backtest engine (sibling spec)
-
-Spec 001 explicitly listed "backtest engine" as out of scope (it
-consumes results, doesn't produce them). v1 is fine without it, but
-operator needs backtests before promoting any new strategy from
-canary. So a backtest spec is a real follow-up.
-
-Likely scope:
-
-- Historical bar dataset (CSV ingest or vendor API).
-- Replay loop that drives the existing `Worker.tick` against
-  historical quotes instead of live.
-- Backtest report (returns, Sharpe, drawdown, per-rule).
-- Promotion gate that consumes a passing backtest as input to canary.
-
-## How to start the next session
-
-Have Claude (or the operator) say something like:
-
-> Read HANDOFF.md, the constitution, and tasks.md. The operator has
-> picked Option <A/B/C/D>. Start the SDD cycle for spec 002.
-
-If the operator is undecided, the right move is to ask them which
-one they value most — speed of feature delivery (B), system
-intelligence (A), production reliability (C), or strategy validation
-discipline (D).
+- `HANDOFF-002-003.md` — branch state through specs 002/003/004/005/006/007 + v2.0.0 constitution bump. Predates v3.0.0; do NOT use its "operator merges manually" guidance.
+- `HANDOFF-008.md` — current spec 008 in-flight state. Authoritative for that work.
 
 ## What NOT to do in the next session
 
-- Do **not** modify any spec 001 file unless the operator explicitly
-  asks for an amendment. v1 is shipped.
-- Do **not** invent a feature without writing a spec first. SDD
-  discipline is the project's working agreement.
-- Do **not** push KIS credentials anywhere. They live only in the
-  operator's local `.env`. Live testing is via the existing
-  `scripts/live_smoke.py` runner; future live integration tests must
-  follow the same gating pattern (`KIS_LIVE_TEST=1` env var).
-- Do **not** push to `main` without operator permission. The
-  branching convention going forward is one feature branch per spec
-  (e.g. `claude/002-llm-judgment`), merged after operator review.
+- Do **not** create a new branch off main when an in-flight branch already exists (the discovery recipe above prevents this).
+- Do **not** ask the operator "어떤 작업을 원하세요?" when an open PR + `HANDOFF-008.md` already tell you what's next.
+- Do **not** modify spec 001 / 002 / 003 files unless the operator explicitly asks for an amendment. They are shipped.
+- Do **not** push KIS credentials anywhere. `.env` is gitignored; live tests are gated by `KIS_LIVE_TEST=1`.
+- Do **not** push to `main` (no direct push; merges land via PR per the autonomous-workflow policy).
 
-## Quick state summary table
+## Quick state summary
 
-| What | State |
+| Item | State |
 |------|-------|
-| Constitution | v1.0.0 ratified |
-| Spec 001 | shipped to `main`, 256/256 tests, live broker verified |
-| Operator local env | working `uv` venv, working `gh` auth, KIS keys in `.env` (operator's machine only) |
-| Outstanding T062 | now done (live smoke run on operator's MacBook) |
-| Pending operator decision | which of options A–D to start as spec 002 |
+| Constitution | v3.0.0 (IX.D supremacy) |
+| Last main commit | `f849fab Merge PR #2: constitution v3.0.0` (plus this HANDOFF refresh) |
+| Active in-flight feature | spec 008 backtest engine |
+| Active in-flight branch | `claude/continue-work-ID7Ec` |
+| Spec 008 progress | 15/41 tasks (Phases 1-2 done; US1 4/17 done) |
+| Spec 008 next action | T016 broker_mock.py; see `HANDOFF-008.md` for full sequence |
+| Open PRs | check via `mcp__github__list_pull_requests` |
+| Tests on main | 363 passing, 1 skipped |
+| Lint on main | clean |
+| Operator local env | `uv` venv, `gh` auth, KIS keys in `.env` (operator's machine only) |
