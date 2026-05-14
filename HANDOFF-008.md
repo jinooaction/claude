@@ -2,6 +2,25 @@
 
 **Read this if you're resuming spec 008 implementation work.** The repo-root `HANDOFF.md` describes the `main` baseline; `HANDOFF-002-003.md` covers the 002/003/004/005/006/007 branch state through `f55f8ea` on `main`. This file is specific to the spec 008 implementation currently underway on `claude/continue-work-ID7Ec`.
 
+> **Canonical discoverability surface**: [PR #1](https://github.com/jinooaction/claude/pull/1) (draft). If you're a fresh session and you can't find this file on your branch, list open PRs via `mcp__github__list_pull_requests owner=jinooaction repo=claude state=open` and the PR description has everything below.
+
+## Session-start discovery recipe (NEW — mandated by CLAUDE.md)
+
+Every fresh session MUST run this BEFORE deciding what to do:
+
+```bash
+# 1. See every claude/* branch on origin.
+git fetch origin
+git ls-remote --heads origin 'claude/*' | awk '{print $2}'
+
+# 2. List open PRs (the true source of truth for in-flight work).
+#    Use mcp__github__list_pull_requests owner=jinooaction repo=claude state=open
+
+# 3. Checkout the in-flight branch if one exists; do NOT create a new branch off main.
+git checkout claude/continue-work-ID7Ec
+git pull --ff-only
+```
+
 ## TL;DR
 
 - Spec 008 (Backtest Engine) is **15 / 41 tasks done** and pushed.
@@ -127,14 +146,19 @@ grep "^- \[ \]" specs/008-backtest-engine/tasks.md | wc -l   # expect 26
 ## First message to send to the next session (copy-paste ready)
 
 ```
-Read HANDOFF-008.md and specs/008-backtest-engine/{spec,plan,research,
-data-model,tasks}.md. Resume /speckit-implement at T016. Pick Path B
-for T023 (slim replay loop using gates+triggers+OrderRouter directly,
-not the full async Worker.tick) and document this as R-B13 in
-research.md before writing replay.py. Use SPECIFY_FEATURE=008-backtest-engine
-for spec-kit scripts. Do NOT modify any path in .specify/memory/kernel.toml
-— K4 is closed; the audit.py extension already shipped in bc47361.
+Run the session-start discovery sequence in CLAUDE.md (git ls-remote +
+mcp__github__list_pull_requests). You will find PR #1 with
+head=claude/continue-work-ID7Ec. git checkout that branch, git pull,
+then read HANDOFF-008.md and specs/008-backtest-engine/{spec,plan,
+research,data-model,tasks}.md.
 
-Verify state first: git log -1 should be e4c3eee; pytest should show
-363 passed, 1 skipped.
+Resume /speckit-implement at T016. Pick Path B for T023 (slim replay
+loop using gates+triggers+OrderRouter directly, not the full async
+Worker.tick) and document this as R-B13 in research.md before writing
+replay.py. Use SPECIFY_FEATURE=008-backtest-engine for spec-kit scripts.
+Do NOT modify any path in .specify/memory/kernel.toml — K4 is closed;
+the audit.py extension already shipped in bc47361.
+
+Verify state first: git log -1 should be the latest commit on
+claude/continue-work-ID7Ec; pytest should show 363 passed, 1 skipped.
 ```
