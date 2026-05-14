@@ -1,20 +1,27 @@
-# Spec 008 Backtest Engine — In-Progress Handoff
+# Spec 008 Backtest Engine — Merged to Main
 
-**Read this if you're resuming spec 008 work.** This file is on `main` (PR #1 merged 2026-05-14 as `5b9d001`; PR #2 v3.0.0 constitution amendment merged 2026-05-14 as `f849fab`).
+**Read this if you're touching the backtest engine.** Spec 008 is now part of `main`; this file is the historical record of how it shipped.
 
-> **2026-05-14 — spec 008 IMPLEMENTATION COMPLETE on `claude/continue-work-ID7Ec`.**
-> All 41 tasks shipped through commits T016→T041. Test count:
-> **494 passed, 1 skipped, lint clean**. Draft PR #4 is the discoverability
-> surface — operator may merge via the autonomous-merge channel in
-> CLAUDE.md when ready.
+> **2026-05-14 — PR #4 MERGED to `main` as `7f8fb99`** via the IX.D
+> autonomous-merge channel. Spec 008 is complete and live on main:
+> 41/41 tasks, **494 passed / 1 skipped, lint clean**. Pre-merge tests
+> + lint re-run on head `38c77ce` immediately before invoking
+> `mcp__github__merge_pull_request` (IX.D rule 4). Merge method was
+> `merge` so every implementation commit hash (962ae77 → 38c77ce)
+> survives in `git log` for forensic queries; no Kernel-touch commit
+> was in this PR's diff (the only K4 touch, `bc47361`, was already on
+> main via PR #1).
 >
-> Quickstart smoke (T041, AAPL fixture, 30 sessions, single `buy_aapl_dip`
-> rule with per_symbol_cap=10%): `run_id = 3482fad709f34a7fb60826f8d117d175`.
-> Artefact tree matched `data-model.md § On-disk per-run layout`
-> (backtest-run.json + metrics.csv + summary.md +
-> per-rule/<rid>/{orders,fills,gate-rejections}.json +
-> _meta/kernel-guard-report.json). 6 orders, 2 fills, 4
-> per_symbol_cap_gate rejections, aggregate sharpe 0.500286.
+> Spec 007 (hardened canary) is now structurally unblocked — it has
+> a deterministic backtest artefact (`backtest-run.json` + `metrics.csv`
+> + `per-rule/*.json` + `summary.md`, FR-B15 byte-identical) to diff
+> baseline vs candidate against.
+>
+> Quickstart smoke (T041, AAPL fixture, 30 sessions, single
+> `buy_aapl_dip` rule with per_symbol_cap=10%):
+> `run_id = 3482fad709f34a7fb60826f8d117d175`. Artefact tree matched
+> `data-model.md § On-disk per-run layout` verbatim. 6 orders, 2 fills,
+> 4 per_symbol_cap_gate rejections, aggregate sharpe 0.500286.
 
 > **2026-05-14 earlier — PR #1 + PR #2 both merged.**
 > - **PR #1** (`5b9d001`): spec 008 mid-flight (15/41 tasks) + autonomous-workflow + autonomous-merge policy → `main`.
