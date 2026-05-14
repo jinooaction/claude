@@ -35,6 +35,29 @@ When constitution principle IX.B-1 says "operator approval at merge", the PR rev
 
 The change is narrowly: PRs are now part of the autonomous workflow, not a permission-gated escalation.
 
+## Autonomous merge — IX.B-1 approval channel
+
+`mcp__github__merge_pull_request` is part of the autonomous workflow too. The operator (mason) authorised this on 2026-05-14 as a follow-on to the PR-creation policy above. Auto-merge is permitted under these rules:
+
+1. **The operator's chat-channel approval IS the IX.B-1 "operator approval at merge".** When the operator instructs the session to merge (explicit Korean/English request, e.g. "머지해", "merge it", "ship it"), that instruction satisfies the constitution's explicit-operator-approval requirement for any Kernel touch in the PR. The audit trail is: the chat transcript + the PR description that pin-points the Kernel-touching commit hash.
+2. **The session MUST still call out which commit is the Kernel touch BEFORE merging** so the operator's approval is informed, not blind. This is the same discipline the manual-review flow demanded — just now it's a chat exchange instead of a PR review click.
+3. **Use merge method `merge` (not squash, not rebase) when the PR contains a Kernel touch.** The K4 commit hash MUST survive into `main`'s history so future forensic queries can locate it. Squash would erase it.
+4. **Re-run tests + lint immediately before invoking `merge_pull_request`.** Failing tests on the head SHA = abort the merge, fix forward.
+5. **IX.B-2 still gates *autonomous* merge (i.e. merges initiated by the tuner without operator instruction).** The hardened canary (spec 007) is the only path for those. This section is about *operator-instructed* merges, which are a different category.
+6. **Mark draft PRs ready before merging** via `mcp__github__update_pull_request draft=false`. Some merge configurations refuse draft PRs.
+
+After a successful merge, the session SHOULD:
+
+- Confirm the merge commit on `main` and report its hash.
+- Update any HANDOFF-*.md to reflect the new `main` baseline (the in-flight pointer is no longer needed for the merged work).
+- Delete the feature branch ONLY if explicitly asked; in-flight branches that still have unfinished tasks (e.g. spec 008's T016-T041) stay alive.
+
+## What this DOES NOT change (autonomous merge edition)
+
+- The constitution itself is K-meta. ANY change to `.specify/memory/constitution.md` or `.specify/memory/kernel.toml` is a kernel touch with extra weight — the operator's chat approval STILL counts but the session SHOULD explicitly call out "this changes the safety perimeter" so the operator can object before merge.
+- `main` protection (no force-push, no direct push) still applies. Merges land via PR, not via push.
+- Live trading contracts are unaffected — a merge that introduces a regression in `risk/gates.py` (K1) would still need to pass spec 007's hardened canary before any *autonomous* deploy could promote it. Operator-instructed merges land the code but don't auto-deploy.
+
 ---
 
 <!-- SPECKIT START -->
