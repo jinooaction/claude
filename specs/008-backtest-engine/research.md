@@ -124,3 +124,27 @@ intentionally short: a decision, the reasoning, and what was rejected.
 **Rejected alternatives**:
 - *Use ingest timestamp* — not reproducible across machines.
 - *Git LFS* — too heavyweight for v1.
+
+## R-B13 — Replay loop shape: slim per-bar gate+broker invocation (Path B)
+
+**Decision**: `backtest/replay.py` evaluates each (session_date, rule) pair in declaration order by:
+  1. Advancing `ReplayClock` to the bar's `session_close` instant (via `exchange_calendars.XNYS.session_close(date)`, which handles DST and early-close days correctly).
+  2. Re-attempting any open GTC/DAY orders for the rule's symbol against this bar (`BacktestBroker.try_fill_open_orders`).
+  3. Building a `TriggerContext` (`now`, `current_price_usd=bar.close`, indicator history as `PriceBar` objects derived from prior `OHLCVBar`s for that symbol) and calling `strategy.triggers.evaluate()`.
+  4. If the trigger fires, building an `OrderRequest`, writing `ORDER_INTENT`, running the existing gate chain from `risk/gates.py` (whitelist → halt → per_trade_cap → per_symbol_cap → global_exposure) in the same declaration order as `execution/order_router.py`, writing `ORDER_REJECTED_BY_GATE` on the first deny, otherwise calling `BacktestBroker.submit_order(req, now=, bar=)` and writing `ORDER_SUBMITTED` + (when fill happened) `FILL`.
+  5. At the end of each session_date, calling `BacktestBroker.expire_day_orders()` and writing `CANCEL` rows for each DAY expiry.
+
+This is Path B from `HANDOFF-008.md`. The async `Worker.tick(...)` shell from spec 001 is bypassed; we call the same gates and trigger evaluators directly. The async lifecycle is irrelevant for offline replay because (a) there is no real network or broker IO, and (b) the gate functions and trigger evaluators are already pure (no module-level state, all inputs explicit) and so behave identically when called directly.
+
+**Why this is safety-equivalent to live trading**:
+- Same gate code path. `risk/gates.py` is K1; we import it unmodified and call its functions in the same declared order the live `OrderRouter` uses (line-by-line equivalent in `execution/order_router.py:288-317`). A gate regression that would break live also breaks backtest.
+- Same trigger code path. `strategy/triggers.py` is the source of trigger semantics; we call `evaluate(trigger, ctx)` identically to the worker.
+- Same audit-row vocabulary. Every order goes `ORDER_INTENT → ORDER_REJECTED_BY_GATE | (ORDER_SUBMITTED → [FILL] → [CANCEL])`. Spec 007's hardened canary can diff backtest vs live audit on payload-equality.
+- Same defense-in-depth boundary. `BacktestBroker.assert_backtest_adapter(adapter_id)` is the FR-B06 router-side check; this replaces the live `place_order(...)` call that would talk to KIS. A non-mock adapter cannot reach this code path because we never import `broker.overseas.place_order`.
+
+**Rejected alternatives**:
+- *Path A — reuse `Worker.tick(...)` unmodified*: would require shimming `market_data/feed.py`'s quote source to return synthetic quotes per bar, faking a `ResilientClient` whose `place_order` calls the mock, and running the async event loop offline. Heavier wiring (~3 shims) for no additional safety; the gates and triggers it would invoke are the same ones Path B already reaches.
+- *Re-implement the gates inside the replay loop*: doubles the code that has to stay in lockstep with live. Hard no — Kernel divergence is exactly what the K1 designation prevents.
+- *Skip the audit-row emission and synthesize artefacts after the fact*: breaks principle IV (single append-only audit log) and breaks spec 007's replay-verifier which diffs audit-row payloads.
+
+**Operator-visible consequences**: the spec text says "reuses `Worker.tick` unmodified". Path B reuses the things that matter (gates + triggers + audit + broker boundary) but not the async lifecycle. This is documented here so a future reader doesn't get confused by the spec wording. If spec 007's canary later finds a divergence that Path A would have caught, this entry is the rollback pointer.
