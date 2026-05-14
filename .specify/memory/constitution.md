@@ -1,5 +1,37 @@
 <!--
-Sync Impact Report
+Sync Impact Report (v2.0.0 -> 3.0.0)
+==================
+Version change: 2.0.0 -> 3.0.0  (MAJOR: operator's autonomy preference enshrined as supreme decision criterion; IX.B-1 and IX.B-4 repealed so autonomous merge is the default path including Kernel touches; IX.B-2 reclassified as deploy-stage gate not merge-stage gate; trading-safety invariants preserved via principles I-VII and VIII.A unchanged; spec 007 hardened canary remains the production-deploy gate that protects real money)
+Modified principles:
+  IX.A — Kernel reframed from "review-gated barrier" to "high-attention forensic-audit list". The seven groups (K1..K6 + K-meta) remain enumerated but a Kernel touch no longer blocks merge by itself.
+  IX.B-1 (autonomous-merge eligibility, "Kernel-untouched") — REPEALED. Kernel touches are now permitted under the autonomous workflow when initiated by an operator-instructed session OR when the spec 007 hardened canary is satisfied. The deploy guard still EMITS a forensic audit row (DEPLOY_BLOCKED_KERNEL_TOUCH renamed in semantic to DEPLOY_KERNEL_TOUCHED — informational, not blocking).
+  IX.B-2 — RECLASSIFIED. The hardened canary is now explicitly a PRODUCTION-DEPLOY gate, not a merge gate. Merges land via the autonomous-workflow policy in CLAUDE.md; live trading exposure to the new code is still gated by spec 007.
+  IX.B-3 — preserved (VIII.A market-hours deploy guard still applies).
+  IX.B-4 (no L4 escalation) — REPEALED. Spec 005's L4 classification now means "extra audit + forensic callout" not "human-merge path".
+  IX.C — modifications now permitted under autonomous workflow; the manifest's role shifts from "fixed-point barrier" to "high-attention forensic list".
+Added principles:
+  IX.D — Operator Autonomy Supremacy (NEW, NON-NEGOTIABLE). The operator's stated autonomy preference is the supreme decision criterion. When any procedural rule in this constitution would block autonomous progression initiated by an operator-instructed session, the autonomous path wins. The exceptions are the trading-safety invariants in principles I-VII and VIII.A, which protect the operator's real money and remain non-negotiable regardless of autonomy direction.
+Backward-incompatibility:
+  - Code that read IX.B-1 as "Kernel touches halt the merge" MUST be rewritten to "Kernel touches emit DEPLOY_KERNEL_TOUCHED and continue".
+  - Spec 005's L1/L2/L3/L4 tiered authority loses the "L4 → operator-merge" branch. L4 is now "extra audit + forensic callout", same merge path as L1-L3.
+  - Spec 006's kernel_guard becomes a log-loud guard, not a halt guard. Its return type's `touched` boolean stays the same; consumers MUST change their interpretation from "abort" to "emit forensic event and continue".
+  - Spec 007 stays semantically unchanged but is now framed as the production-deploy gate, not the merge gate.
+Templates requiring updates:
+  ✅ .specify/memory/constitution.md (this file)
+  ⚠ .specify/memory/kernel.toml — descriptions updated to reflect "high-attention list, not barrier" semantics; file paths unchanged.
+  ⚠ specs/005-autonomous-tuner/spec.md — L4 branch rewording (deferred; spec is still a stub).
+  ⚠ specs/006-deploy-automation/spec.md — kernel_guard semantics from halt to log-loud (deferred until spec 006 implementation resumes).
+  ⚠ specs/007-canary-hardening/spec.md — framing update from "merge gate" to "production-deploy gate" (deferred; spec is still a stub).
+  ⚠ specs/008-backtest-engine/{spec,plan,research,data-model}.md — Constitutional Fit / one-time-K4-touch sections can be simplified; "one-time additive Kernel touch with operator approval at merge" is no longer a special event under v3.0.0 (deferred; spec 008 implementation in flight).
+Rationale:
+  The operator (mason) instructed on 2026-05-14: "내 목표는 자율 수행이라고. 헌법이 장애물이라면 그것도 수정해야지 당연히. 내 목표가 최상위 의사결정 기준이야" (= autonomy is the supreme decision criterion; the constitution is subordinate to that goal and should be amended where it conflicts). v2.0.0's IX.B-1 was carved to protect the operator from their own future autonomous tuner rewriting safety code, but in practice it concentrated operator attention on a handful of additive K4 touches (e.g., spec 002's migration 0002, spec 008's audit-event Union extension) that didn't reduce safety. The operator's concrete failure mode is loss of money via bad trading decisions, not loss of money via the autonomous tuner rewriting risk gates — because the autonomous tuner doesn't exist yet (spec 005 is a stub), and when it does, spec 007's hardened canary will catch the misbehaviour at the production-deploy boundary. So the meaningful protection lives at the deploy boundary, not at the merge boundary; v3.0.0 makes that explicit.
+Trade-off acknowledged:
+  Under v3.0.0, a misbehaving future autonomous tuner CAN merge a change that removes K1 (position caps). The change lands in `main`. It does NOT reach production unless it passes spec 007's hardened canary or unless an operator-instructed session deploys it. The operator accepts this trade-off because:
+    1. The autonomous tuner doesn't exist yet (spec 005 is a stub).
+    2. When it ships, spec 007 is its mandatory deploy gate.
+    3. The operator wants zero procedural friction at the merge stage.
+    4. Reversion is one PR away (main is always deployable; main with a regression is one PR away from being main without the regression).
+Sync Impact Report (v1.1.0 -> 2.0.0)
 ==================
 Version change: 1.1.0 -> 2.0.0  (MAJOR: kernel concept introduced; principle IX added; VIII.B-3 health window relaxed; VIII.B-5 redefined to permit autonomous merge outside the kernel)
 Modified principles:
@@ -158,44 +190,64 @@ Operator-triggered automated deploys are explicitly permitted (and preferred ove
 
 **Rationale**: Manual deploys are the single most reliable way for principle VIII.A to be violated by accident. Automation that *enforces* the rule is therefore safer than the absence of automation. Treating deploys as audited operations puts them on the same forensic surface as orders and judgment calls (principle IV), so an unexpected change in worker behavior can be traced to a specific deploy event.
 
-### IX. Self-Modification Boundary (NON-NEGOTIABLE, added v2.0.0)
+### IX. Self-Modification Boundary (NON-NEGOTIABLE, amended v3.0.0)
 
-The system is permitted — and encouraged — to evolve its own code, configuration, prompts, KPI thresholds, dependencies, schemas, and even its own non-kernel principles, as long as the modifications stay outside a small, explicitly enumerated **Kernel**. The Kernel is the safety perimeter that even the autonomous tuner (spec 005) MUST NOT cross without an explicit human merge.
+The system is permitted — and encouraged — to evolve its own code, configuration, prompts, KPI thresholds, dependencies, schemas, and principles, as long as the trading-safety invariants in principles I–VII and VIII.A are honoured at production-deploy time. The Kernel (defined below) is no longer a merge-time barrier under v3.0.0; it is now a **high-attention forensic list** that triggers loud audit on touch. The real defence against a misbehaving autonomous tuner is spec 007's **hardened canary as a production-deploy gate** (IX.B-2), not IX.B-1's old merge-time approval requirement.
 
-#### IX.A — The Kernel
+#### IX.A — The Kernel (forensic-attention list)
 
-The Kernel is the closed set of files listed in the machine-readable manifest at `.specify/memory/kernel.toml`. As of v2.0.0 the Kernel comprises seven groups, each tied to one constitutional invariant:
+The Kernel is the closed set of files listed in the machine-readable manifest at `.specify/memory/kernel.toml`. As of v3.0.0 the Kernel still comprises seven groups, each tied to one constitutional invariant — but a Kernel touch no longer halts merge by itself.
 
-| Group | Invariant | Why it must stay in the Kernel |
-|-------|-----------|--------------------------------|
-| **K1** | Position sizing caps (principle I) | Without K1, the system can autonomously raise its own leverage to ruinous levels. |
-| **K2** | Deny-by-default whitelist (principle II) | Without K2, "auto-expand the whitelist" defeats the protection. |
-| **K3** | LLM-only-at-judgment-points contract (principle III) | Without K3, autonomous deploys can re-define what "judgment point" means and uncap LLM cost. |
-| **K4** | Append-only audit log (principle IV) | Without K4, all post-mortem and reconciliation evidence becomes forgeable. |
-| **K5** | Secret isolation (principle V) | Without K5, a leaked KIS key is one autonomous deploy away. |
-| **K6** | Market-hours deploy guard (principle VIII.A) | Without K6, the autonomous tuner can deploy mid-session by mistake or by adversarial action. |
-| **K-meta** | The Kernel manifest itself + this constitution | Without K-meta, K1–K6 are revocable by the system; the safety perimeter must be its own fixed-point. |
+| Group | Invariant | Forensic-attention reason |
+|-------|-----------|---------------------------|
+| **K1** | Position sizing caps (principle I) | Modification expands the loss surface; emit `DEPLOY_KERNEL_TOUCHED` and require spec 007 canary before production deploy. |
+| **K2** | Deny-by-default whitelist (principle II) | Modification expands the universe; same gate. |
+| **K3** | LLM-only-at-judgment-points contract (principle III) | Modification uncaps LLM cost or moves call sites; same gate. |
+| **K4** | Append-only audit log (principle IV) | Modification could erase forensic trail; same gate. |
+| **K5** | Secret isolation (principle V) | Modification could leak KIS keys; same gate. |
+| **K6** | Market-hours deploy guard (principle VIII.A) | Modification could permit mid-session deploys; same gate. |
+| **K-meta** | The Kernel manifest itself + this constitution | Modification reshapes the safety surface; same gate AND the commit message MUST include the literal string "this changes the safety perimeter" so a forensic grep can find every such event. |
 
-#### IX.B — Autonomous-merge eligibility
+#### IX.B — Autonomous-merge eligibility (v3.0.0)
 
-A change set MAY be merged and deployed autonomously by the spec 005 tuner IFF ALL of the following hold:
+A change set MAY be merged autonomously by ANY of these paths:
 
-1. **Kernel-untouched.** No file listed under any group in `kernel.toml` appears in the change set's diff. The deploy guard (spec 006) MUST verify this before any other deploy phase and MUST emit `DEPLOY_BLOCKED_KERNEL_TOUCH` and abort if violated.
-2. **Hardened canary passed (spec 007).** The change set has progressed through the spec 007 hardened-canary acceptance criteria (multi-metric, ≥30 trading-day window, synthetic-shock replay, property-based fuzz of risk math). Until 007 is shipped, autonomous merge is DISABLED in production and the existing 10-day spec-001 canary is the upper bound.
-3. **Constitution VIII.A and VIII.B unchanged in spirit.** Market-hours guard, audit events, health-check gate, and rollback obligation all still apply.
-4. **No L4 escalation.** A change set that adds new files to `kernel.toml`, OR removes files from it, OR redefines the L1/L2/L3/L4 classification in spec 005, is treated as L4 and follows the human-merge path.
+1. **REPEALED** (was: "Kernel-untouched required for autonomous merge"). Kernel touches no longer block merge. The deploy guard (spec 006) MUST emit an informational `DEPLOY_KERNEL_TOUCHED` audit row when a Kernel touch lands; it MUST NOT abort the deploy on this signal alone.
+2. **Hardened canary as production-deploy gate (spec 007).** Before any change set reaches the production worker, it MUST pass spec 007's hardened-canary acceptance criteria: multi-metric, ≥30 trading-day window for L2 / ≥45 for L3, synthetic-shock replay, property-based fuzz of risk math. This gate protects real money. Until spec 007 ships, the existing 10-day spec-001 canary is the operator-facing upper bound on production autonomy; merges still land freely, but a human (or future tuner) decides when a merge is deploy-eligible.
+3. **VIII.A market-hours guard unchanged.** Mid-session deploys remain forbidden whether the change set is Kernel-touching or not.
+4. **REPEALED** (was: "L4 escalation → human-merge"). Spec 005's L4 classification now means "extra audit + forensic callout in the PR description"; the merge path is the same as L1-L3.
+5. **Operator-instructed session merges** (autonomous-workflow policy in CLAUDE.md) are first-class. The session's reasoning trace + the PR description + the merge commit message form the forensic record. No second human in the loop is required.
 
-A change set that fails any of (1)–(4) follows the **human-merge path**: the tuner opens a pull request and waits. The operator's review attention is therefore concentrated exclusively on Kernel changes — predicted frequency is 0–2 events per year.
+#### IX.C — Kernel manifest discipline (v3.0.0)
 
-#### IX.C — Kernel manifest discipline
+- The manifest at `.specify/memory/kernel.toml` is the single source of truth for "what counts as Kernel". Code that asks "is this path Kernel?" MUST read the manifest; hard-coded paths are forbidden so a Kernel addition or removal is one TOML edit, not a code release.
+- The manifest is itself in K-meta. Modifications to it (adding paths, removing paths, restructuring groups) ARE permitted under the autonomous workflow but MUST include the K-meta forensic callout in the commit message (see IX.A's K-meta row).
+- Adding a file to the Kernel is a forward-compatible safety improvement (broadens the forensic-attention list). Removing a file is a contraction of the safety surface and SHOULD be paired with a brief commit-message justification.
 
-- The manifest at `.specify/memory/kernel.toml` is the single source of truth. Code that decides "is this file kernel?" MUST read it; hard-coded paths in deploy code are forbidden so that a Kernel addition is one TOML edit, not a code release.
-- The manifest is itself in the K-meta group; modifying it autonomously is forbidden by IX.B-1.
-- Adding a file to the Kernel is always a forward-compatible safety improvement and never requires an amendment of this constitution. Removing a file from the Kernel is a constitutional concern and SHOULD be paired with a constitution amendment (PATCH or MINOR depending on whether a principle is also relaxed).
+#### IX.D — Operator Autonomy Supremacy (NEW, NON-NEGOTIABLE, added v3.0.0)
 
-**Rationale**: The operator's stated goal is autonomous execution and autonomous improvement. A naive reading of that goal — "the system can change anything" — gives a system with no safety guarantees, because any safety property is one self-modification away from being revocable. Naming the smallest possible Kernel and freezing it under autonomous control is the maximum-autonomy point that still admits a coherent safety argument. Outside the Kernel, the system is genuinely free to evolve.
+The operator's stated autonomy preference is the **supreme decision criterion** for procedural conflicts. When a procedural rule anywhere in this constitution, in a spec, in CLAUDE.md, or in this session's reasoning would block autonomous progression initiated by an operator-instructed session, the autonomous path wins.
 
-**Trade-off acknowledgement**: this still places the operator in the loop on Kernel changes. The expected frequency of those changes is low (new asset class, new principle, new schema migration that touches audit-log structure). When they happen, they merit the operator's full attention, which is the entire point of carving them out.
+This DOES NOT relax the trading-safety invariants:
+
+- **Principle I** (position caps) — still non-negotiable. A change that removes a cap is still subject to the spec 007 canary at production-deploy time.
+- **Principle II** (deny-by-default whitelist) — still non-negotiable, same gate.
+- **Principle III** (LLM-only-at-judgment-points) — still non-negotiable, same gate.
+- **Principle IV** (append-only audit log) — still non-negotiable, same gate.
+- **Principle V** (secret isolation) — still non-negotiable, same gate.
+- **Principle VI** (Backtest → Canary → Full Live) — still non-negotiable; spec 008's backtest engine is the first stage, spec 007 the hardened canary is the second.
+- **Principle VII** (external API robustness) — still non-negotiable.
+- **Principle VIII.A** (no live deploys during market hours) — still non-negotiable.
+
+What IX.D explicitly relaxes:
+
+- "Wait for the operator to approve a PR" — the session's chat-channel approval (or the operator-instructed merge command) IS the approval.
+- "Wait for the operator to amend the constitution" — when the constitution itself is the procedural barrier, the session MAY amend it under operator instruction, recording the change as a K-meta forensic event.
+- "Defer Kernel touches to a separate human review" — under v3.0.0 they ride the same PR.
+
+**Rationale**: The operator's failure mode is loss of money via bad trading decisions, not loss of money via a self-rewriting safety perimeter — because the autonomous tuner doesn't exist yet (spec 005 is a stub), and when it does, spec 007's hardened canary will catch misbehaviour at the production-deploy boundary. Procedural friction at the merge boundary delivered no safety benefit in practice (the operator's K4 touches were all additive: spec 002's migration 0002, spec 008's event-type Union extension) and consumed operator attention that should have gone to trading-strategy quality. v3.0.0 moves the safety perimeter from the merge boundary to the production-deploy boundary, where it actually defends real money.
+
+**Trade-off acknowledged**: under v3.0.0, a future misbehaving autonomous tuner CAN merge a change that removes K1 (position caps). The change lands in `main`. It does NOT reach the live worker unless it passes spec 007's hardened canary or unless an operator-instructed session deploys it. Reversion is one PR away (main is always deployable; main with a regression is one PR away from being main without the regression).
 
 ## Investment Domain Constraints
 
@@ -225,4 +277,4 @@ This constitution supersedes all other practices, conventions, and ad-hoc decisi
 
 **Compliance**: every `/speckit-plan` artifact MUST include a Constitution Check section verifying the plan does not violate principles I–IX. Violations require explicit, written justification and a sign-off recorded in the audit log.
 
-**Version**: 2.0.0 | **Ratified**: 2026-05-01 | **Last Amended**: 2026-05-06
+**Version**: 3.0.0 | **Ratified**: 2026-05-01 | **Last Amended**: 2026-05-14
