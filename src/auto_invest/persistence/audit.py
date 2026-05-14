@@ -44,6 +44,10 @@ EventType = Literal[
     "BACKTEST_STARTED",
     "BACKTEST_COMPLETED",
     "LLM_CALL_STUBBED",
+    "CANARY_ENTERED",
+    "CANARY_PASSED",
+    "CANARY_FAILED",
+    "CANARY_KERNEL_TOUCH_DETECTED",
 ]
 
 
@@ -245,6 +249,71 @@ class LlmCallStubbedPayload(AuditPayload):
     stubbed_branch: str
 
 
+class CanaryEnteredPayload(AuditPayload):
+    """Per spec 007 FR-C09 — run header at canary start.
+
+    Carries the bands snapshot so a forensic reader can reconstruct
+    which thresholds were in force without having to git-archaeology
+    `config/canary_bands.toml` at the canary's `started_at`.
+    """
+
+    event_type: Literal["CANARY_ENTERED"] = "CANARY_ENTERED"
+    canary_run_id: str
+    candidate_rev: str
+    baseline_rev: str
+    tier: Literal["L2", "L3"]
+    window_trading_days: int
+    window_start_date: str
+    window_end_date: str
+    bands_snapshot: dict[str, Any]
+
+
+class CanaryKernelTouchDetectedPayload(AuditPayload):
+    """Per spec 007 FR-C08 (v3.0.0 semantics).
+
+    Emitted when the candidate diff intersects `kernel.toml` paths. Under
+    constitution v3.0.0 the Kernel is a forensic-attention list, NOT a
+    barrier — this row records the forensic attention but does NOT halt
+    the canary. The metric battery still runs and decides pass/fail.
+    """
+
+    event_type: Literal["CANARY_KERNEL_TOUCH_DETECTED"] = "CANARY_KERNEL_TOUCH_DETECTED"
+    canary_run_id: str
+    candidate_rev: str
+    touched_groups: list[str]
+    touched_files: list[str]
+
+
+class CanaryPassedPayload(AuditPayload):
+    """Per spec 007 FR-C09 — terminal row on successful canary."""
+
+    event_type: Literal["CANARY_PASSED"] = "CANARY_PASSED"
+    canary_run_id: str
+    candidate_rev: str
+    baseline_rev: str
+    tier: Literal["L2", "L3"]
+    finished_at: str
+    artefact_path: str
+
+
+class CanaryFailedPayload(AuditPayload):
+    """Per spec 007 FR-C09 — terminal row on canary failure.
+
+    `failing_metrics` is the subset of metric ids whose `inside_band`
+    came back False; empty in pass would be a contradiction (which is
+    why pass has its own event type).
+    """
+
+    event_type: Literal["CANARY_FAILED"] = "CANARY_FAILED"
+    canary_run_id: str
+    candidate_rev: str
+    baseline_rev: str
+    tier: Literal["L2", "L3"]
+    finished_at: str
+    failing_metrics: list[str]
+    artefact_path: str
+
+
 AnyPayload = (
     WorkerStartedPayload
     | WorkerStoppedPayload
@@ -270,6 +339,10 @@ AnyPayload = (
     | BacktestStartedPayload
     | BacktestCompletedPayload
     | LlmCallStubbedPayload
+    | CanaryEnteredPayload
+    | CanaryKernelTouchDetectedPayload
+    | CanaryPassedPayload
+    | CanaryFailedPayload
 )
 
 
