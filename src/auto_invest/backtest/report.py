@@ -44,6 +44,7 @@ from .data_model import (
     BacktestSummary,
     DataQualityWarning,
     RuleBacktestResult,
+    SyntheticShockDay,
     canonicalise_decimal,
 )
 from .metrics import (
@@ -402,9 +403,90 @@ def _chmod_tree_readonly(root: Path) -> None:
         os.chmod(root, dir_mode)
 
 
+def write_synthetic_shock_report(
+    *,
+    run: BacktestRun,
+    merged_result: ReplayResult,
+    per_shock: list[tuple[SyntheticShockDay, ReplayResult]],
+    kernel_guard_report: KernelGuardReport,
+    out_root: Path,
+    chmod_readonly: bool = True,
+) -> Path:
+    """Synthetic-shock variant of `write_report` (T032).
+
+    Lays artefacts out as:
+
+        <run_dir>/
+        ├── backtest-run.json   (combined summary across all shocks)
+        ├── metrics.csv          (one row per rule across ALL shocks + _aggregate)
+        ├── per-rule/<rule_id>/by-date/<YYYY-MM-DD>/
+        │   ├── orders.json
+        │   ├── fills.json
+        │   └── gate-rejections.json
+        └── _meta/kernel-guard-report.json
+
+    The merged_result is used for the combined summary (metrics.csv +
+    backtest-run.json summary block). Each per_shock entry's ReplayResult
+    is laid out under by-date/<session_date>/ so the operator can drill
+    into one shock day at a time.
+    """
+    run_dir = out_root / run.run_id
+    per_rule_dir = run_dir / "per-rule"
+    meta_dir = run_dir / "_meta"
+    per_rule_dir.mkdir(parents=True, exist_ok=True)
+    meta_dir.mkdir(parents=True, exist_ok=True)
+
+    per_rule_results = build_per_rule_results(merged_result)
+    summary = build_summary(merged_result, per_rule_results)
+
+    _write_backtest_run_json(
+        path=run_dir / "backtest-run.json",
+        run=run,
+        summary=summary,
+        kernel_guard_report=kernel_guard_report,
+    )
+    _write_metrics_csv(run_dir / "metrics.csv", summary)
+    _write_json(
+        meta_dir / "kernel-guard-report.json",
+        {
+            "touched": kernel_guard_report.touched,
+            "checked_paths": list(kernel_guard_report.checked_paths),
+            "manifest_sha256": kernel_guard_report.manifest_sha256,
+        },
+    )
+
+    # Per-shock per-rule artefacts under per-rule/<rid>/by-date/<date>/.
+    for shock, sub in per_shock:
+        date_str = shock.session_date.isoformat()
+        for rule_id in sorted(sub.per_rule_symbol):
+            by_date_dir = per_rule_dir / rule_id / "by-date" / date_str
+            by_date_dir.mkdir(parents=True, exist_ok=True)
+            orders = _sort_by_ts_then_insertion(
+                list(sub.per_rule_orders.get(rule_id, []))
+            )
+            fills = _sort_by_ts_then_insertion(
+                list(sub.per_rule_fills.get(rule_id, []))
+            )
+            rejections = _sort_by_ts_then_insertion(
+                list(sub.per_rule_gate_rejections.get(rule_id, []))
+            )
+            _write_json(by_date_dir / "orders.json", [_record_dict(o) for o in orders])
+            _write_json(by_date_dir / "fills.json", [_record_dict(f) for f in fills])
+            _write_json(
+                by_date_dir / "gate-rejections.json",
+                [_record_dict(r) for r in rejections],
+            )
+
+    if chmod_readonly and os.name == "posix":
+        _chmod_tree_readonly(run_dir)
+
+    return run_dir
+
+
 __all__ = [
     "KernelGuardReport",
     "build_per_rule_results",
     "build_summary",
     "write_report",
+    "write_synthetic_shock_report",
 ]

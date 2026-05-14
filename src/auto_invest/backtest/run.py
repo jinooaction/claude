@@ -63,12 +63,18 @@ from auto_invest.persistence.audit import (
 
 from .broker_mock import BacktestBroker, BacktestLiveBrokerLeakError
 from .clock import ReplayClock, WallClockLeakError, wall_clock_guard
-from .data_model import BacktestRun, canonicalise_decimal
+from .data_model import BacktestRun, SyntheticShockDay, canonicalise_decimal
 from .data_source import HistoricalDataSource
 from .judgment_stub import BACKTEST_MODE_ENV, BacktestJudgmentLeakError
 from .kernel_pre_flight import PreFlightResult, run_pre_flight
 from .replay import DEFAULT_TOTAL_CAPITAL_USD, ReplayResult, replay
-from .report import KernelGuardReport, build_per_rule_results, build_summary, write_report
+from .report import (
+    KernelGuardReport,
+    build_per_rule_results,
+    build_summary,
+    write_report,
+    write_synthetic_shock_report,
+)
 
 EXIT_OK = 0
 EXIT_COVERAGE = 66
@@ -76,6 +82,68 @@ EXIT_WALL_CLOCK_LEAK = 77
 EXIT_KERNEL_TOUCHED = 78
 EXIT_JUDGMENT_LEAK = 79
 EXIT_LIVE_BROKER_LEAK = 80
+
+
+class SyntheticShockNotConfigured(RuntimeError):
+    """Raised when synthetic_shock=True but no shocks are supplied."""
+
+
+def _merge_replay_results(
+    subs: list[ReplayResult], *, rules
+) -> ReplayResult:
+    """Combine per-shock ReplayResults into one (orders/fills/rejections concat).
+
+    Equity curves are concatenated in chronological order across shocks;
+    notional is summed. Used only by the synthetic-shock branch.
+    """
+    from .data_model import DataQualityWarning  # local import — avoid cycle at module load
+
+    if not subs:
+        return ReplayResult(
+            per_rule_orders={r.id: [] for r in rules},
+            per_rule_fills={r.id: [] for r in rules},
+            per_rule_gate_rejections={r.id: [] for r in rules},
+            per_rule_equity_curve={r.id: [] for r in rules},
+            per_rule_symbol={r.id: r.symbol for r in rules},
+            per_rule_notional_traded_usd={r.id: Decimal("0") for r in rules},
+            data_quality_warnings=[],
+            total_orders=0,
+            total_fills=0,
+            total_gate_rejections=0,
+        )
+
+    rule_ids = sorted({r.id for r in rules})
+    merged_orders: dict[str, list] = {rid: [] for rid in rule_ids}
+    merged_fills: dict[str, list] = {rid: [] for rid in rule_ids}
+    merged_rej: dict[str, list] = {rid: [] for rid in rule_ids}
+    merged_equity: dict[str, list[tuple[date, Decimal]]] = {rid: [] for rid in rule_ids}
+    merged_symbol: dict[str, str] = {r.id: r.symbol for r in rules}
+    merged_notional: dict[str, Decimal] = {rid: Decimal("0") for rid in rule_ids}
+    warnings: list[DataQualityWarning] = []
+
+    for sub in subs:
+        for rid in rule_ids:
+            merged_orders[rid].extend(sub.per_rule_orders.get(rid, []))
+            merged_fills[rid].extend(sub.per_rule_fills.get(rid, []))
+            merged_rej[rid].extend(sub.per_rule_gate_rejections.get(rid, []))
+            merged_equity[rid].extend(sub.per_rule_equity_curve.get(rid, []))
+            merged_notional[rid] += sub.per_rule_notional_traded_usd.get(
+                rid, Decimal("0")
+            )
+        warnings.extend(sub.data_quality_warnings)
+
+    return ReplayResult(
+        per_rule_orders=merged_orders,
+        per_rule_fills=merged_fills,
+        per_rule_gate_rejections=merged_rej,
+        per_rule_equity_curve=merged_equity,
+        per_rule_symbol=merged_symbol,
+        per_rule_notional_traded_usd=merged_notional,
+        data_quality_warnings=warnings,
+        total_orders=sum(len(v) for v in merged_orders.values()),
+        total_fills=sum(len(v) for v in merged_fills.values()),
+        total_gate_rejections=sum(len(v) for v in merged_rej.values()),
+    )
 
 
 @dataclass(frozen=True)
@@ -100,6 +168,8 @@ class RunOptions:
     chmod_readonly: bool = True
     repo_root: Path | None = None
     pre_flight_result: PreFlightResult | None = None  # injected by tests
+    shocks: tuple[SyntheticShockDay, ...] = ()  # set by CLI when --synthetic-shock
+    shock_windows: tuple[tuple[date, date], ...] = ()  # parallel to shocks; (start, end)
 
 
 @dataclass(frozen=True)
@@ -306,32 +376,65 @@ def run_backtest(options: RunOptions, *, conn: sqlite3.Connection) -> RunOutcome
         ts_utc=start_iso,
     )
 
-    broker = BacktestBroker()
-    # ReplayClock starts BEFORE the first bar so the replay can advance to
-    # each bar's session_close without rewinding. The wall-clock `start_ts`
-    # is only used in the audit-log header — it is NOT what the engine reads.
-    clock = ReplayClock(datetime.combine(options.date_start, datetime.min.time(), UTC))
-
     failure_reason: str | None = None
     exit_code = EXIT_OK
     result: ReplayResult | None = None
+    per_shock_results: list[tuple[SyntheticShockDay, ReplayResult]] = []
 
     try:
         with wall_clock_guard():
-            result = replay(
-                rules=list(options.rules),
-                data_source=options.data_source,
-                date_start=options.date_start,
-                date_end=options.date_end,
-                caps=options.caps,
-                whitelist=options.whitelist,
-                halt_path=options.halt_path,
-                conn=conn,
-                clock=clock,
-                broker=broker,
-                run_id=run_id,
-                total_capital_usd=options.total_capital_usd,
-            )
+            if options.synthetic_shock:
+                if not options.shocks or not options.shock_windows:
+                    raise SyntheticShockNotConfigured(
+                        "synthetic_shock=True but options.shocks / shock_windows are empty"
+                    )
+                for shock, (ws, we) in zip(
+                    options.shocks, options.shock_windows, strict=True
+                ):
+                    broker = BacktestBroker()
+                    clock = ReplayClock(
+                        datetime.combine(ws, datetime.min.time(), UTC)
+                    )
+                    sub = replay(
+                        rules=list(options.rules),
+                        data_source=options.data_source,
+                        date_start=ws,
+                        date_end=we,
+                        caps=options.caps,
+                        whitelist=options.whitelist,
+                        halt_path=options.halt_path,
+                        conn=conn,
+                        clock=clock,
+                        broker=broker,
+                        run_id=run_id,
+                        total_capital_usd=options.total_capital_usd,
+                    )
+                    per_shock_results.append((shock, sub))
+                result = _merge_replay_results(
+                    [r for _, r in per_shock_results], rules=list(options.rules)
+                )
+            else:
+                broker = BacktestBroker()
+                # ReplayClock starts BEFORE the first bar so the replay can advance
+                # to each bar's session_close without rewinding. The wall-clock
+                # start_ts is only for the audit header.
+                clock = ReplayClock(
+                    datetime.combine(options.date_start, datetime.min.time(), UTC)
+                )
+                result = replay(
+                    rules=list(options.rules),
+                    data_source=options.data_source,
+                    date_start=options.date_start,
+                    date_end=options.date_end,
+                    caps=options.caps,
+                    whitelist=options.whitelist,
+                    halt_path=options.halt_path,
+                    conn=conn,
+                    clock=clock,
+                    broker=broker,
+                    run_id=run_id,
+                    total_capital_usd=options.total_capital_usd,
+                )
     except WallClockLeakError as exc:
         failure_reason = f"WALL_CLOCK_LEAK: {exc}"
         exit_code = EXIT_WALL_CLOCK_LEAK
@@ -384,13 +487,23 @@ def run_backtest(options: RunOptions, *, conn: sqlite3.Connection) -> RunOutcome
             status="completed",
             summary=summary,
         )
-        run_dir = write_report(
-            run=run,
-            result=result,
-            kernel_guard_report=kernel_guard_report,
-            out_root=options.out_root,
-            chmod_readonly=options.chmod_readonly,
-        )
+        if options.synthetic_shock and per_shock_results:
+            run_dir = write_synthetic_shock_report(
+                run=run,
+                merged_result=result,
+                per_shock=per_shock_results,
+                kernel_guard_report=kernel_guard_report,
+                out_root=options.out_root,
+                chmod_readonly=options.chmod_readonly,
+            )
+        else:
+            run_dir = write_report(
+                run=run,
+                result=result,
+                kernel_guard_report=kernel_guard_report,
+                out_root=options.out_root,
+                chmod_readonly=options.chmod_readonly,
+            )
         _emit_completed(
             conn=conn,
             run_id=run_id,

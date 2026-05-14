@@ -822,28 +822,42 @@ def backtest_cmd(
             return
         dataset_dir = latest
 
-    # Parse dates (synthetic-shock mode overrides these in v1's later T032 path;
-    # for plain backtest we require --from and --to).
+    # Parse dates / resolve shocks.
+    shocks: tuple = ()
+    shock_windows: tuple = ()
     if synthetic_shock:
-        typer.echo(
-            "--synthetic-shock is not yet wired in this CLI invocation; "
-            "use --from/--to for v1",
-            err=True,
+        from datetime import date as _date_today
+
+        from auto_invest.backtest.synthetic_shocks import (
+            SyntheticShockConfigError,
+            resolve_synthetic_shock_dates,
+            shock_window,
         )
-        _exit(64)
-    if date_from is None or date_to is None:
-        typer.echo("--from and --to are required (YYYY-MM-DD)", err=True)
-        _exit(64)
-    try:
-        ds_start = _date.fromisoformat(date_from)
-        ds_end = _date.fromisoformat(date_to)
-    except ValueError as exc:
-        typer.echo(f"date parsing failed: {exc}", err=True)
-        _exit(64)
-        return
-    if ds_end < ds_start:
-        typer.echo(f"--to ({ds_end}) is before --from ({ds_start})", err=True)
-        _exit(64)
+
+        try:
+            resolved = resolve_synthetic_shock_dates(today=_date_today.today())
+        except SyntheticShockConfigError as exc:
+            typer.echo(f"synthetic shock config error: {exc}", err=True)
+            _exit(64)
+            return
+        shocks = tuple(resolved)
+        shock_windows = tuple(shock_window(s) for s in resolved)
+        ds_start = min(w[0] for w in shock_windows)
+        ds_end = max(w[1] for w in shock_windows)
+    else:
+        if date_from is None or date_to is None:
+            typer.echo("--from and --to are required (YYYY-MM-DD)", err=True)
+            _exit(64)
+        try:
+            ds_start = _date.fromisoformat(date_from)
+            ds_end = _date.fromisoformat(date_to)
+        except ValueError as exc:
+            typer.echo(f"date parsing failed: {exc}", err=True)
+            _exit(64)
+            return
+        if ds_end < ds_start:
+            typer.echo(f"--to ({ds_end}) is before --from ({ds_start})", err=True)
+            _exit(64)
 
     # Load rules (no secrets — backtest never reaches KIS / Anthropic).
     try:
@@ -885,6 +899,8 @@ def backtest_cmd(
             replay_seed=replay_seed,
             synthetic_shock=synthetic_shock,
             allow_kernel_edits=allow_kernel_edits,
+            shocks=shocks,
+            shock_windows=shock_windows,
         )
         outcome = run_backtest(options, conn=conn)
     finally:
