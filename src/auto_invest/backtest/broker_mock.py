@@ -18,7 +18,6 @@ fails fast if a non-mock leaked into the replay loop.
 
 from __future__ import annotations
 
-import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
@@ -85,19 +84,15 @@ class SubmitOutcome:
     open_order: OpenOrder | None
 
 
-def _attempt_fill(
-    request: OrderRequest,
-    bar: OHLCVBar,
-    *,
-    now: datetime,
-    kis_order_id: str,
-) -> FillEvent | None:
-    """Apply R-B3 to (request, bar). Returns a FillEvent or None if untouched.
+def _compute_fill_price(
+    request: OrderRequest, bar: OHLCVBar
+) -> Decimal | None:
+    """Apply R-B3 to (request, bar). Returns fill price or None if untouched.
 
     MARKET orders fill at the conservative side of the bar (BUY at high,
-    SELL at low) iff bar.volume >= qty. Spec 008 v1 strategies use LIMIT
-    primarily; MARKET is supported as the defensive worst-case so a
-    misconfigured rule never silently fills at a flattering price.
+    SELL at low) iff bar.volume >= qty. v1 LIMIT semantics: BUY fills at
+    min(limit, bar.open) iff bar.low <= limit; SELL fills at max(limit,
+    bar.open) iff bar.high >= limit. Volume gate applies to both.
     """
     if bar.volume < request.qty:
         return None
@@ -109,23 +104,12 @@ def _attempt_fill(
         if request.side is Side.BUY:
             if bar.low > limit:
                 return None
-            fill_price = min(limit, bar.open)
-        else:
-            if bar.high < limit:
-                return None
-            fill_price = max(limit, bar.open)
-    else:
-        fill_price = bar.high if request.side is Side.BUY else bar.low
-
-    return FillEvent(
-        kis_fill_id=f"BT-FILL-{uuid.uuid4().hex[:12]}",
-        kis_order_id=kis_order_id,
-        symbol=request.symbol,
-        side=request.side,
-        qty=request.qty,
-        fill_price_usd=fill_price,
-        executed_at_utc=now,
-    )
+            return min(limit, bar.open)
+        if bar.high < limit:
+            return None
+        return max(limit, bar.open)
+    # MARKET — defensive worst-case
+    return bar.high if request.side is Side.BUY else bar.low
 
 
 @dataclass
@@ -148,6 +132,17 @@ class BacktestBroker:
     adapter_id: Literal["backtest-mock-v1"] = ADAPTER_ID
     _open_orders: dict[str, OpenOrder] = field(default_factory=dict)
     _fills: list[FillEvent] = field(default_factory=list)
+    _order_seq: int = 0
+    _fill_seq: int = 0
+
+    def _next_order_id(self) -> str:
+        """Deterministic broker order id — required for FR-B15 byte-stability."""
+        self._order_seq += 1
+        return f"BT-ORD-{self._order_seq:08d}"
+
+    def _next_fill_id(self) -> str:
+        self._fill_seq += 1
+        return f"BT-FILL-{self._fill_seq:08d}"
 
     def submit_order(
         self,
@@ -162,11 +157,20 @@ class BacktestBroker:
                 f"bar.symbol {bar.symbol!r} does not match request.symbol {req.symbol!r}"
             )
 
-        kis_order_id = f"BT-ORD-{uuid.uuid4().hex[:12]}"
+        kis_order_id = self._next_order_id()
         result = OrderResult(kis_order_id=kis_order_id, accepted_at_utc=now)
 
-        fill = _attempt_fill(req, bar, now=now, kis_order_id=kis_order_id)
-        if fill is not None:
+        fill_price = _compute_fill_price(req, bar)
+        if fill_price is not None:
+            fill = FillEvent(
+                kis_fill_id=self._next_fill_id(),
+                kis_order_id=kis_order_id,
+                symbol=req.symbol,
+                side=req.side,
+                qty=req.qty,
+                fill_price_usd=fill_price,
+                executed_at_utc=now,
+            )
             self._fills.append(fill)
             return SubmitOutcome(result=result, fill=fill, open_order=None)
 
@@ -187,11 +191,21 @@ class BacktestBroker:
         for kis_order_id, order in list(self._open_orders.items()):
             if order.request.symbol != bar.symbol:
                 continue
-            fill = _attempt_fill(order.request, bar, now=now, kis_order_id=kis_order_id)
-            if fill is not None:
-                self._fills.append(fill)
-                filled.append(fill)
-                del self._open_orders[kis_order_id]
+            fill_price = _compute_fill_price(order.request, bar)
+            if fill_price is None:
+                continue
+            fill = FillEvent(
+                kis_fill_id=self._next_fill_id(),
+                kis_order_id=kis_order_id,
+                symbol=order.request.symbol,
+                side=order.request.side,
+                qty=order.request.qty,
+                fill_price_usd=fill_price,
+                executed_at_utc=now,
+            )
+            self._fills.append(fill)
+            filled.append(fill)
+            del self._open_orders[kis_order_id]
         return filled
 
     def expire_day_orders(self, *, now: datetime) -> list[OpenOrder]:

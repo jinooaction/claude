@@ -25,7 +25,6 @@ worker uses to decide on an order.
 from __future__ import annotations
 
 import sqlite3
-import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
@@ -251,6 +250,7 @@ class _RuleState:
     """Per-rule mutable bookkeeping accumulated across the replay."""
 
     last_fired_at_utc: datetime | None = None
+    order_seq: int = 0  # monotonic per-rule; feeds deterministic correlation_id (R-B5)
     orders: list[OrderRecord] = field(default_factory=list)
     fills: list[FillRecord] = field(default_factory=list)
     rejections: list[GateRejectionRecord] = field(default_factory=list)
@@ -387,7 +387,8 @@ def replay(
                 qty=rule.action.qty,
                 limit_price_usd=limit_price,
             )
-            correlation_id = f"bt-ord-{uuid.uuid4().hex[:12]}"
+            state.order_seq += 1
+            correlation_id = f"bt-ord-{rule.id}-{state.order_seq:06d}"
 
             # (d) ORDER_INTENT + per-rule order record.
             audit.append(
