@@ -18,14 +18,11 @@ counterexample set is available for forensic inspection.
 
 from __future__ import annotations
 
-import sys
-from collections.abc import Iterable
 from dataclasses import dataclass
 from decimal import Decimal
-from pathlib import Path
-from typing import Any
 
-from hypothesis import HealthCheck, given, seed as hypothesis_seed, settings
+from hypothesis import HealthCheck, given, settings
+from hypothesis import seed as hypothesis_seed
 from hypothesis import strategies as st
 
 from auto_invest.broker.models import OrderRequest

@@ -16,7 +16,6 @@ test pins:
 from __future__ import annotations
 
 import json
-import sqlite3
 import typing
 
 import pytest
@@ -30,7 +29,6 @@ from auto_invest.persistence.audit import (
     CanaryPassedPayload,
     EventType,
 )
-
 
 # ---------------------------------------------------------- K4 additive contract
 

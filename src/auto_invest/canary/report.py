@@ -24,10 +24,8 @@ import csv
 import json
 import shutil
 from collections.abc import Iterable
-from datetime import date, datetime
 from io import StringIO
 from pathlib import Path
-from uuid import UUID
 
 from auto_invest.canary.data_model import (
     CanaryMetrics,
@@ -36,7 +34,6 @@ from auto_invest.canary.data_model import (
     KernelTouch,
     MetricResult,
 )
-
 
 CANARY_RUN_JSON = "canary-run.json"
 METRICS_CSV = "metrics.csv"

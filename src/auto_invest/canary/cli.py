@@ -15,7 +15,6 @@ are stubbed to ``EXIT_INTERNAL`` until Phase 4 US2 fills them.
 from __future__ import annotations
 
 import sys
-import sqlite3
 import traceback
 import uuid
 from datetime import date as _date
@@ -114,7 +113,11 @@ def run_cmd(
         help="Resolve revs + plan only; do NOT emit CANARY_ENTERED or write artefacts.",
     ),
 ) -> None:
-    """Run the full canary battery (Phase 3 US1: window replay + 5-metric eval)."""
+    """Run the full canary battery: window replay + synthetic shock + property
+    fuzz + 5-metric eval. Emits CANARY_ENTERED, optional
+    CANARY_KERNEL_TOUCH_DETECTED, and a terminal CANARY_PASSED or
+    CANARY_FAILED audit row tagged with the run's correlation_id.
+    """
 
     if tier not in ("L2", "L3"):
         typer.echo(
@@ -356,7 +359,6 @@ def _build_replay_inputs(
     from auto_invest.backtest.data_source import CSVDataSource, latest_dataset_dir
     from auto_invest.cli import (
         _load_rules_for_backtest,
-        _require_clean_migrations,
     )
 
     latest = latest_dataset_dir(history_root)

@@ -18,12 +18,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
 from typer.testing import CliRunner
 
 from auto_invest.canary import diff as diff_module
 from auto_invest.canary.cli import app as canary_app
-from auto_invest.canary.data_model import KernelTouch
 from auto_invest.canary.report import CANARY_RUN_JSON
 from auto_invest.cli import app as main_app
 from auto_invest.persistence import audit, db

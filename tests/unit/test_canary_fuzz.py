@@ -11,13 +11,10 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-import pytest
-
 from auto_invest.canary import fuzz as fuzz_module
 from auto_invest.canary.data_model import FuzzCounterexample
 from auto_invest.canary.fuzz import (
     DEFAULT_ITERATIONS,
-    FuzzPassResult,
     run_fuzz_pass,
 )
 
@@ -39,10 +36,6 @@ def test_off_by_one_in_per_trade_is_caught_under_10k_iterations(
     so an over-cap order is wrongly allowed by 1 USD. Property fuzz
     MUST catch this within the default 10k iterations.
     """
-    from auto_invest.risk import gates as gates_module
-
-    real_per_trade = gates_module.per_trade_cap_gate
-
     def buggy_per_trade_cap_gate(request, *, caps, total_capital_usd, quote_price_usd):
         # Off-by-one: under-tight cap. Allow slightly-over-cap orders.
         from auto_invest.risk.gates import GateDecision

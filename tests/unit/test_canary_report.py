@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path
 from uuid import UUID
 
@@ -14,7 +14,6 @@ from auto_invest.canary.data_model import (
     CanaryMetrics,
     CanaryRun,
     KernelTouch,
-    MetricResult,
     SeedBundle,
 )
 from auto_invest.canary.metrics import evaluate_metrics
@@ -40,9 +39,12 @@ def _passing_metrics() -> CanaryMetrics:
     )
 
 
+_DEFAULT_RUN_UUID = UUID("12345678-1234-1234-1234-1234567890ab")
+
+
 def _run(
     *,
-    canary_run_id: UUID = UUID("12345678-1234-1234-1234-1234567890ab"),
+    canary_run_id: UUID = _DEFAULT_RUN_UUID,
     outcome: str = "passed",
     metrics: CanaryMetrics | None = None,
     kernel_touches: list[KernelTouch] | None = None,
@@ -56,8 +58,8 @@ def _run(
         window_trading_days=30,
         window_start_date=date(2026, 3, 31),
         window_end_date=date(2026, 5, 13),
-        started_at=datetime(2026, 5, 14, 8, 30, 0, tzinfo=timezone.utc),
-        finished_at=datetime(2026, 5, 14, 8, 42, 17, tzinfo=timezone.utc),
+        started_at=datetime(2026, 5, 14, 8, 30, 0, tzinfo=UTC),
+        finished_at=datetime(2026, 5, 14, 8, 42, 17, tzinfo=UTC),
         outcome=outcome,  # type: ignore[arg-type]
         failing_metrics=failing_metrics or [],
         kernel_touches=kernel_touches or [],
@@ -223,7 +225,7 @@ def test_write_report_requires_metrics(tmp_path: Path) -> None:
         window_trading_days=30,
         window_start_date=date(2026, 3, 31),
         window_end_date=date(2026, 5, 13),
-        started_at=datetime(2026, 5, 14, 8, 30, 0, tzinfo=timezone.utc),
+        started_at=datetime(2026, 5, 14, 8, 30, 0, tzinfo=UTC),
     )
     with pytest.raises(ValueError, match="metrics"):
         write_report(run, tmp_path)

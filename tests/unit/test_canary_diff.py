@@ -6,7 +6,6 @@ ignored), R-C8 (kernel-touch payload), and the SHA-40 contract.
 
 from __future__ import annotations
 
-import json
 import subprocess
 from pathlib import Path
 
@@ -23,7 +22,6 @@ from auto_invest.canary.diff import (
 from auto_invest.deploy.kernel_guard import KernelGroup, KernelManifest
 from auto_invest.persistence import audit, db
 from auto_invest.persistence.audit import CanaryPassedPayload
-
 
 # ---------------------------------------------------------- fixtures: tiny git repo
 

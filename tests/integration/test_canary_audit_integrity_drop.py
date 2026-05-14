@@ -85,8 +85,6 @@ def test_audit_integrity_regression_rejects_canary(
 
     # Inject the regression: candidate code's replay produces N quality
     # issues. FR-C01 #3 pins the band at 0; any non-zero count fails.
-    real_count = replay_module._count_audit_integrity
-
     def buggy_count(run, run_dir):  # noqa: ARG001
         return 3  # 3 data-quality issues "observed" by candidate
 

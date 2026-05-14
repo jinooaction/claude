@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import sqlite3
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
@@ -159,7 +159,7 @@ def run_synthetic_shock_battery(
             today=inputs.today,
             path=inputs.shocks_toml,
         )
-    except SyntheticShockConfigError as exc:
+    except SyntheticShockConfigError:
         # No shocks configured / unparseable config: treat as zero
         # violations + zero outcomes. Orchestrator records the empty list.
         return ShockBatteryResult(

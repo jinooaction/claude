@@ -15,7 +15,7 @@ function load-bearing.
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 from auto_invest.canary.metrics import compute_audit_integrity_baseline_mean
@@ -30,7 +30,7 @@ def _utc_ms(dt: datetime) -> str:
 def _seed_data_quality_rows(conn, *, count: int, day: date) -> None:
     """Append ``count`` DATA_QUALITY_ISSUE rows at noon UTC on ``day``."""
     ts = datetime.combine(day, datetime.min.time()).replace(
-        hour=12, tzinfo=timezone.utc
+        hour=12, tzinfo=UTC
     )
     for i in range(count):
         audit.append(

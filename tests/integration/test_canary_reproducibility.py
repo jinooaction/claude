@@ -73,7 +73,6 @@ def _setup_fixture(tmp_path: Path, *, label: str) -> tuple[Path, Path, Path, Pat
     rules_path = tmp_path / "rules.toml"
     if not rules_path.exists():
         rules_path.write_text(_RULES_TOML)
-    history_root = tmp_path / "history"
     canary_out = tmp_path / f"canary-{label}"
     db_path = tmp_path / f"audit-{label}.db"
     return csv_root, rules_path, canary_out, db_path

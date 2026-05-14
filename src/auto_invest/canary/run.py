@@ -26,10 +26,8 @@ Sequence (per spec.md US1 + data-model.md state machine):
 
 from __future__ import annotations
 
-import os
 import sqlite3
 import uuid
-from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from pathlib import Path

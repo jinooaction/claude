@@ -49,6 +49,7 @@ select = ["E", "F", "I", "B", "UP", "SIM"]
 # B008 ("function call in argument default") would force unidiomatic
 # rewrites of every CLI signature.
 "src/auto_invest/cli.py" = ["B008"]
+"src/auto_invest/canary/cli.py" = ["B008"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
