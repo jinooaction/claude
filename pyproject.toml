@@ -12,6 +12,7 @@ dependencies = [
     "apscheduler>=3.11.2",
     "exchange-calendars>=4.13.2",
     "httpx>=0.28.1",
+    "hypothesis>=6.115.0",
     "pandas>=3.0.2",
     "pydantic>=2.13.3",
     "python-dotenv>=1.2.2",
