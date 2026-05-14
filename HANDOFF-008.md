@@ -1,8 +1,22 @@
 # Spec 008 Backtest Engine — In-Progress Handoff
 
-**Read this if you're resuming spec 008 implementation work.** This file is on `main` (PR #1 merged 2026-05-14 as `5b9d001`; PR #2 v3.0.0 constitution amendment merged 2026-05-14 as `f849fab`). Remaining spec 008 implementation tasks (T016-T041) continue on `claude/continue-work-ID7Ec`.
+**Read this if you're resuming spec 008 work.** This file is on `main` (PR #1 merged 2026-05-14 as `5b9d001`; PR #2 v3.0.0 constitution amendment merged 2026-05-14 as `f849fab`).
 
-> **2026-05-14 update — PR #1 + PR #2 both merged.**
+> **2026-05-14 — spec 008 IMPLEMENTATION COMPLETE on `claude/continue-work-ID7Ec`.**
+> All 41 tasks shipped through commits T016→T041. Test count:
+> **494 passed, 1 skipped, lint clean**. Draft PR #4 is the discoverability
+> surface — operator may merge via the autonomous-merge channel in
+> CLAUDE.md when ready.
+>
+> Quickstart smoke (T041, AAPL fixture, 30 sessions, single `buy_aapl_dip`
+> rule with per_symbol_cap=10%): `run_id = 3482fad709f34a7fb60826f8d117d175`.
+> Artefact tree matched `data-model.md § On-disk per-run layout`
+> (backtest-run.json + metrics.csv + summary.md +
+> per-rule/<rid>/{orders,fills,gate-rejections}.json +
+> _meta/kernel-guard-report.json). 6 orders, 2 fills, 4
+> per_symbol_cap_gate rejections, aggregate sharpe 0.500286.
+
+> **2026-05-14 earlier — PR #1 + PR #2 both merged.**
 > - **PR #1** (`5b9d001`): spec 008 mid-flight (15/41 tasks) + autonomous-workflow + autonomous-merge policy → `main`.
 > - **PR #2** (`f849fab`): constitution **v2.0.0 → v3.0.0** — IX.B-1/B-4 repealed, IX.B-2 reclassified as production-deploy gate, IX.D Operator Autonomy Supremacy added. K-meta touch — `git log --grep="this changes the safety perimeter"` will find it.
 > - Net effect for future sessions: **no merge-stage gate**; the production-deploy gate (spec 007 hardened canary, when shipped) is the only structural safety boundary between merged code and live trading. Trading-safety invariants (I-VII, VIII.A) preserved.

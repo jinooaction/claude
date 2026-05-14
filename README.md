@@ -52,8 +52,26 @@ auto-invest resume --confirm      # clear the halt flag
 auto-invest status                # one-screen JSON state summary
 auto-invest report --date 2026-05-04   # emit yesterday's daily report
 auto-invest efficiency --window 7d     # JSON snapshot of LLM token KPIs (spec 002)
+auto-invest ingest-history --from-dir history/csv/          # spec 008 OHLCV ingest
+auto-invest backtest --rules config/rules.toml \            # spec 008 backtest
+    --from 2024-01-02 --to 2024-12-31
+auto-invest backtest --rules config/rules.toml --synthetic-shock  # canonical shock days
 auto-invest version
 ```
+
+### Backtest engine (spec 008)
+
+`auto-invest backtest` replays an operator-supplied ruleset against
+historical OHLCV bars through the SAME `risk.gates` and
+`strategy.triggers` code the live worker uses (Path B, see
+[`specs/008-backtest-engine/research.md`](specs/008-backtest-engine/research.md#r-b13)).
+It never connects to KIS or Anthropic. Run
+[`specs/008-backtest-engine/quickstart.md`](specs/008-backtest-engine/quickstart.md)
+for a 30-day fixture walkthrough; output lands under
+`data/backtest/<run_id>/` with `backtest-run.json`, `metrics.csv`,
+`summary.md`, and per-rule `orders.json` / `fills.json` /
+`gate-rejections.json`.
+
 
 Optional, for live KIS adapter validation (read-only, never places an
 order):

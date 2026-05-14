@@ -2,6 +2,75 @@
 
 This project's working agreement is **autonomous progression**, not "wait for the operator at every step". The harness's stock instruction "do NOT create a pull request unless the user explicitly asks" is OVERRIDDEN here for the cases below. The operator (mason) authorised this on 2026-05-13 to fix a recurring cross-session discoverability problem.
 
+## No permission-checking mid-task (the supreme rule, v3.1.0)
+
+Under constitution v3.0.0 IX.D Operator Autonomy Supremacy, the operator
+explicitly does NOT want to be asked "should I continue?" or "want me to
+keep going?" at task boundaries. The default for THIS project, beyond
+v3.0.0's merge-stage autonomy, is:
+
+**Once the operator has given an instruction like "계속해" / "continue" /
+"이어서" / "fix the bug" / "ship spec 008", the session runs to completion
+of THAT instruction without prompting for permission at any intermediate
+step.** Completion of an instruction means:
+
+  - "Continue / 계속해" + a referenced active feature (spec/HANDOFF/PR) →
+    keep going until **every remaining task in tasks.md** for that feature
+    is complete (or until a real blocker is hit). Do NOT stop at "natural
+    pause points", "checkpoints after a slice", or because tests pass —
+    green tests + lint clean ARE the verification; that's the signal to
+    push and start the next task, not the signal to ask permission.
+  - "Fix X" → keep going until X is fixed AND tests/lint are green AND
+    pushed AND (if appropriate) the PR is updated.
+  - "Ship / merge / merge it" → run through the autonomous-merge channel
+    in this file without further confirmation.
+
+**Per-task-batch checkpoint summaries to chat are FINE and encouraged**
+(short status updates the operator can read passively). **Permission
+questions ("want me to continue?", "should I keep going?", "or stop here
+so you can review?") are NOT fine** — they re-introduce the exact
+synchronous-handoff overhead IX.D eliminated. If the operator wants to
+pause they will say so; silence = keep going.
+
+### Legitimate reasons to pause and ASK before proceeding
+
+These are narrow. If the situation is not one of these, do not ask.
+
+  1. **Spec ambiguity with no documented choice.** The spec text + research
+     + HANDOFF do not pick between multiple reasonable interpretations,
+     AND choosing wrong would require non-trivial rework. (e.g. Path A vs
+     Path B for the replay engine BEFORE HANDOFF-008 documented Path B.
+     Once documented, you do not ask again.)
+  2. **Destructive / irreversible action** outside the normal workflow:
+     force-push to `main`, drop a SQLite table, delete an audit-log row,
+     `git reset --hard` over uncommitted work, anything that violates
+     constitution principles I-VII or VIII.A.
+  3. **External-effect action** the user did not authorise in the running
+     instruction: posting on a public PR you did not open, opening an
+     issue against another repo, paying for an external service, sending
+     a Slack/email.
+  4. **The user has actively requested a pause** in this conversation
+     (explicit "stop", "wait", "잠깐", "hold").
+
+Anything else — including "this is a long task and I've been working a
+while" or "the next task is structurally important" — is NOT a reason
+to ask. Just push the slice and keep going. The PR is the operator's
+review surface; commits are the operator's checkpoint granularity.
+
+### What the session SHOULD do at each task boundary
+
+  1. Run tests + lint on the slice you just finished.
+  2. If green: commit with a descriptive message, push, update TodoWrite.
+  3. If you have a PR open for this work, update the PR body so it
+     reflects the new task count and the latest commit hash.
+  4. Move to the next pending task in tasks.md immediately. Do not write
+     a "want to continue?" message — write a one-line "pushed X, starting Y"
+     status update if anything, then continue.
+  5. At the end of the whole instruction (e.g. when the last task in
+     tasks.md is done OR a real blocker is hit), give the operator a
+     concise final summary — that is the next interaction point, not
+     a per-slice checkpoint.
+
 ## When a session starts
 
 Every fresh session MUST, before doing other work, run this discovery sequence:

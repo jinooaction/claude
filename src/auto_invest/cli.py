@@ -611,3 +611,319 @@ async def _run_live(
         finally:
             worker.record_stop("normal_shutdown")
             worker.close()
+
+
+# ---------------------------------------------------------------------------
+# spec 008 backtest subcommands (T026)
+# ---------------------------------------------------------------------------
+
+
+def _load_rules_for_backtest(rules_path: Path) -> tuple[object, object, list[object], str]:
+    """Backtest-friendly TOML loader: no secrets required (contracts/backtest-cli.md).
+
+    Returns `(caps, whitelist, rules, ruleset_sha256)`. Raises `ConfigError`
+    on validation failure (caller maps to exit 65). The SHA-256 is over the
+    raw file bytes so the same file on two machines hashes identically.
+    """
+    import hashlib
+    import tomllib
+
+    from pydantic import ValidationError as _ValidationError
+
+    from auto_invest.config.caps import SizingCaps
+    from auto_invest.config.rules import TradingRule
+    from auto_invest.config.whitelist import Whitelist
+
+    if not rules_path.exists():
+        raise ConfigError(f"rules file not found: {rules_path}")
+    raw_bytes = rules_path.read_bytes()
+    ruleset_sha256 = hashlib.sha256(raw_bytes).hexdigest()
+    try:
+        raw = tomllib.loads(raw_bytes.decode("utf-8"))
+    except tomllib.TOMLDecodeError as e:
+        raise ConfigError(f"rules file is not valid TOML: {e}") from e
+
+    try:
+        caps = SizingCaps.model_validate(raw.get("caps", {}))
+    except _ValidationError as e:
+        raise ConfigError(f"[caps] section invalid: {e}") from e
+    try:
+        whitelist = Whitelist.model_validate(raw.get("whitelist", {}))
+    except _ValidationError as e:
+        raise ConfigError(f"[whitelist] section invalid: {e}") from e
+
+    rules_raw = raw.get("rules", [])
+    rules: list[TradingRule] = []
+    seen: set[str] = set()
+    for i, rule_data in enumerate(rules_raw):
+        try:
+            rule = TradingRule.model_validate(rule_data)
+        except _ValidationError as e:
+            raise ConfigError(f"[[rules]] entry {i} invalid: {e}") from e
+        if rule.id in seen:
+            raise ConfigError(f"duplicate rule id: {rule.id!r}")
+        seen.add(rule.id)
+        rules.append(rule)
+    return caps, whitelist, rules, ruleset_sha256
+
+
+@app.command("ingest-history")
+def ingest_history_cmd(
+    from_dir: Path = typer.Option(
+        ...,
+        "--from-dir",
+        help="Directory of <SYMBOL>.csv files (see contracts/ohlcv-csv.md).",
+    ),
+    out_dir: Path = typer.Option(
+        Path("data/history"),
+        "--out-dir",
+        help="Versioned subdirectory is created under this root.",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Validate CSVs and print what WOULD be ingested; write nothing.",
+    ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        help="Print per-file progress; default is one summary line.",
+    ),
+) -> None:
+    """One-shot OHLCV ingest from operator-provided CSVs (T026; see contracts/backtest-cli.md).
+
+    Exit codes:
+        0   success; stdout last line is the new dataset_version hex
+        64  usage error (missing dir, bad flags)
+        65  CSV validation failure (stderr lists offending rows)
+        73  out-dir not writable
+    """
+    from auto_invest.backtest.ingest import IngestError, ingest_history
+
+    if not from_dir.exists() or not from_dir.is_dir():
+        typer.echo(f"--from-dir does not exist or is not a directory: {from_dir}", err=True)
+        _exit(64)
+
+    if not dry_run:
+        try:
+            out_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            typer.echo(f"out-dir not writable: {out_dir} ({exc})", err=True)
+            _exit(73)
+
+    try:
+        result = ingest_history(from_dir, out_dir, dry_run=dry_run)
+    except IngestError as exc:
+        typer.echo(f"CSV validation failed: {exc}", err=True)
+        _exit(65)
+        return
+
+    if verbose:
+        typer.echo(f"dataset_version: {result.dataset_version}")
+        typer.echo(f"dataset_dir:     {result.dataset_dir}")
+        typer.echo(f"files_ingested:  {result.files_ingested}")
+        typer.echo(f"rows_ingested:   {result.rows_ingested}")
+        typer.echo(f"reused_existing: {result.reused_existing}")
+    else:
+        typer.echo(
+            f"ingested {result.files_ingested} file(s), "
+            f"{result.rows_ingested} row(s) → {result.dataset_dir}"
+        )
+    # Per contract: stdout's last line is the new dataset_version hex.
+    typer.echo(result.dataset_version)
+
+
+@app.command("backtest")
+def backtest_cmd(
+    rules: Path = typer.Option(
+        ..., "--rules", help="Path to rules TOML (same format as the live worker)."
+    ),
+    date_from: str = typer.Option(
+        None, "--from", help="Inclusive session-date start (YYYY-MM-DD)."
+    ),
+    date_to: str = typer.Option(
+        None, "--to", help="Inclusive session-date end (YYYY-MM-DD)."
+    ),
+    dataset_version: str = typer.Option(
+        None,
+        "--dataset-version",
+        help="Specific dataset_version; defaults to most recent under data/history/.",
+    ),
+    invoker: str = typer.Option(
+        "cli", "--invoker", help="cli (default) or canary (set by spec 007 harness)."
+    ),
+    replay_seed: int = typer.Option(
+        0, "--replay-seed", help="Reserved for future stochastic strategies."
+    ),
+    synthetic_shock: bool = typer.Option(
+        False,
+        "--synthetic-shock",
+        help="Replay the canonical shock dates from config/synthetic_shocks.toml.",
+    ),
+    out_dir: Path = typer.Option(
+        Path("data/backtest"),
+        "--out-dir",
+        help="Per-run subdirectory created under this root.",
+    ),
+    db_path: Path = typer.Option(
+        Path("data/auto_invest.db"),
+        "--db",
+        help="SQLite audit-log path.",
+    ),
+    halt_path: Path = typer.Option(
+        Path("data/halt.flag"),
+        "--halt-path",
+        help="Filesystem halt-flag path (reused unmodified from live worker).",
+    ),
+    history_root: Path = typer.Option(
+        Path("data/history"),
+        "--history-root",
+        help="Where ingested datasets live (parent of <dataset_version>/).",
+    ),
+    allow_kernel_edits: bool = typer.Option(
+        False,
+        "--allow-kernel-edits",
+        help="Bypass kernel-touched-tree check (R-B8). Logged on use.",
+    ),
+) -> None:
+    """Run a backtest against an ingested dataset (T026; contracts/backtest-cli.md)."""
+    from datetime import date as _date
+
+    from auto_invest.backtest.data_source import CSVDataSource, latest_dataset_dir
+    from auto_invest.backtest.run import (
+        EXIT_COVERAGE,
+        EXIT_OK,
+        RunOptions,
+        run_backtest,
+    )
+
+    if invoker not in ("cli", "canary"):
+        typer.echo(f"--invoker must be 'cli' or 'canary', got {invoker!r}", err=True)
+        _exit(64)
+
+    # Resolve dataset directory.
+    if dataset_version is not None:
+        dataset_dir = history_root / dataset_version
+        if not (dataset_dir / "manifest.json").exists():
+            typer.echo(
+                f"dataset_version {dataset_version!r} not found under {history_root}",
+                err=True,
+            )
+            _exit(64)
+    else:
+        latest = latest_dataset_dir(history_root)
+        if latest is None:
+            typer.echo(
+                f"no ingested datasets under {history_root}; "
+                "run `auto-invest ingest-history` first",
+                err=True,
+            )
+            _exit(64)
+            return
+        dataset_dir = latest
+
+    # Parse dates / resolve shocks.
+    shocks: tuple = ()
+    shock_windows: tuple = ()
+    if synthetic_shock:
+        from datetime import date as _date_today
+
+        from auto_invest.backtest.synthetic_shocks import (
+            SyntheticShockConfigError,
+            resolve_synthetic_shock_dates,
+            shock_window,
+        )
+
+        try:
+            resolved = resolve_synthetic_shock_dates(today=_date_today.today())
+        except SyntheticShockConfigError as exc:
+            typer.echo(f"synthetic shock config error: {exc}", err=True)
+            _exit(64)
+            return
+        shocks = tuple(resolved)
+        shock_windows = tuple(shock_window(s) for s in resolved)
+        ds_start = min(w[0] for w in shock_windows)
+        ds_end = max(w[1] for w in shock_windows)
+    else:
+        if date_from is None or date_to is None:
+            typer.echo("--from and --to are required (YYYY-MM-DD)", err=True)
+            _exit(64)
+        try:
+            ds_start = _date.fromisoformat(date_from)
+            ds_end = _date.fromisoformat(date_to)
+        except ValueError as exc:
+            typer.echo(f"date parsing failed: {exc}", err=True)
+            _exit(64)
+            return
+        if ds_end < ds_start:
+            typer.echo(f"--to ({ds_end}) is before --from ({ds_start})", err=True)
+            _exit(64)
+
+    # Load rules (no secrets — backtest never reaches KIS / Anthropic).
+    try:
+        caps, whitelist, parsed_rules, ruleset_sha256 = _load_rules_for_backtest(rules)
+    except ConfigError as exc:
+        typer.echo(f"rules validation failed: {exc}", err=True)
+        _exit(65)
+        return
+
+    data_source = CSVDataSource(dataset_dir)
+    # Coverage pre-check (FR-B10).
+    holes = data_source.coverage_holes(
+        list(data_source.list_symbols()), ds_start, ds_end
+    )
+    if holes:
+        for sym, d in holes[:20]:
+            typer.echo(f"coverage hole: {sym} {d.isoformat()}", err=True)
+        if len(holes) > 20:
+            typer.echo(f"...and {len(holes) - 20} more", err=True)
+        _exit(EXIT_COVERAGE)
+
+    # Open audit DB (reused with the live worker; new event types already
+    # in audit.py since K4 commit bc47361).
+    _require_clean_migrations(db_path, allow_apply=True)
+    conn = db.get_connection(db_path)
+    try:
+        options = RunOptions(
+            rules_path=rules,
+            rules=parsed_rules,
+            ruleset_sha256=ruleset_sha256,
+            data_source=data_source,
+            date_start=ds_start,
+            date_end=ds_end,
+            caps=caps,
+            whitelist=whitelist,
+            halt_path=halt_path,
+            out_root=out_dir,
+            invoker=invoker,  # type: ignore[arg-type]
+            replay_seed=replay_seed,
+            synthetic_shock=synthetic_shock,
+            allow_kernel_edits=allow_kernel_edits,
+            shocks=shocks,
+            shock_windows=shock_windows,
+        )
+        outcome = run_backtest(options, conn=conn)
+    finally:
+        conn.close()
+        data_source.close()
+
+    # Stdout layout per contracts/backtest-cli.md: run_id is the first AND
+    # last printable line so both `head -1` and `tail -1` work for scripting.
+    typer.echo(f"backtest run_id: {outcome.run_id}")
+    typer.echo(f"dataset_version: {data_source.dataset_version}")
+    typer.echo(f"ruleset_sha256:  {ruleset_sha256}")
+    typer.echo(f"date range:      {ds_start} → {ds_end}")
+    typer.echo(f"artefacts:       {outcome.run_dir}")
+    if outcome.exit_code == EXIT_OK:
+        typer.echo("")
+        summary_path = outcome.run_dir / "summary.md"
+        if summary_path.exists():
+            # Spec US3: identical content goes to stdout AND summary.md.
+            typer.echo(summary_path.read_text(encoding="utf-8"), nl=False)
+    else:
+        typer.echo("")
+        typer.echo(f"FAILED: {outcome.failure_reason}", err=True)
+    typer.echo(f"backtest run_id: {outcome.run_id}")
+
+    if outcome.exit_code != EXIT_OK:
+        _exit(outcome.exit_code)

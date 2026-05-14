@@ -80,6 +80,7 @@ def build_report(
                correlation_id
         FROM audit_log
         WHERE substr(ts_utc, 1, 10) = ?
+          AND event_type NOT IN ('BACKTEST_STARTED','BACKTEST_COMPLETED','LLM_CALL_STUBBED')
         ORDER BY seq
         """,
         (session_date,),
