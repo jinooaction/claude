@@ -1,8 +1,11 @@
 # Spec 008 Backtest Engine — In-Progress Handoff
 
-**Read this if you're resuming spec 008 implementation work.** The repo-root `HANDOFF.md` describes the `main` baseline; `HANDOFF-002-003.md` covers the 002/003/004/005/006/007 branch state through `f55f8ea` on `main`. This file is specific to the spec 008 implementation currently underway on `claude/continue-work-ID7Ec`.
+**Read this if you're resuming spec 008 implementation work.** This file is on `main` (PR #1 merged 2026-05-14 as `5b9d001`; PR #2 v3.0.0 constitution amendment merged 2026-05-14 as `f849fab`). Remaining spec 008 implementation tasks (T016-T041) continue on `claude/continue-work-ID7Ec`.
 
-> **Canonical discoverability surface**: [PR #1](https://github.com/jinooaction/claude/pull/1) (draft). If you're a fresh session and you can't find this file on your branch, list open PRs via `mcp__github__list_pull_requests owner=jinooaction repo=claude state=open` and the PR description has everything below.
+> **2026-05-14 update — PR #1 + PR #2 both merged.**
+> - **PR #1** (`5b9d001`): spec 008 mid-flight (15/41 tasks) + autonomous-workflow + autonomous-merge policy → `main`.
+> - **PR #2** (`f849fab`): constitution **v2.0.0 → v3.0.0** — IX.B-1/B-4 repealed, IX.B-2 reclassified as production-deploy gate, IX.D Operator Autonomy Supremacy added. K-meta touch — `git log --grep="this changes the safety perimeter"` will find it.
+> - Net effect for future sessions: **no merge-stage gate**; the production-deploy gate (spec 007 hardened canary, when shipped) is the only structural safety boundary between merged code and live trading. Trading-safety invariants (I-VII, VIII.A) preserved.
 
 ## Session-start discovery recipe (NEW — mandated by CLAUDE.md)
 
@@ -27,7 +30,7 @@ git pull --ff-only
 - **Phase 1 (Setup), Phase 2 (Foundational + K4 commit), and the first 4 of 17 US1 tasks** are complete.
 - All shipped tests pass: **363 passed, 1 skipped** (was 319+1 on `main`; +44 new tests).
 - Lint clean.
-- The K4 commit (`bc47361`) is the operator-review point per constitution IX.B-1 — please review BEFORE the operator merges this branch.
+- The K4 commit (`bc47361`) was a Kernel touch — already merged to `main` via PR #1 on 2026-05-14. Under constitution v3.0.0 (live as of `f849fab`), Kernel touches no longer block merge; they're logged for forensic attention. `git log --grep="K4"` finds the commit.
 
 ## What's done
 
