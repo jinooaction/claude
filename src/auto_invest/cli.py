@@ -916,16 +916,10 @@ def backtest_cmd(
     typer.echo(f"artefacts:       {outcome.run_dir}")
     if outcome.exit_code == EXIT_OK:
         typer.echo("")
-        typer.echo(
-            f"aggregate_return_pct={outcome.summary_aggregate_return_pct} "
-            f"aggregate_max_drawdown_pct={outcome.summary_aggregate_max_drawdown_pct} "
-            f"aggregate_sharpe={outcome.summary_aggregate_sharpe}"
-        )
-        typer.echo(
-            f"total_orders={outcome.total_orders} "
-            f"total_fills={outcome.total_fills} "
-            f"total_gate_rejections={outcome.total_gate_rejections}"
-        )
+        summary_path = outcome.run_dir / "summary.md"
+        if summary_path.exists():
+            # Spec US3: identical content goes to stdout AND summary.md.
+            typer.echo(summary_path.read_text(encoding="utf-8"), nl=False)
     else:
         typer.echo("")
         typer.echo(f"FAILED: {outcome.failure_reason}", err=True)

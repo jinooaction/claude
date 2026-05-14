@@ -210,6 +210,10 @@ def write_report(
         kernel_guard_report=kernel_guard_report,
     )
     _write_metrics_csv(run_dir / "metrics.csv", summary)
+    (run_dir / "summary.md").write_text(
+        render_summary_md(run=run, summary=summary, kernel_guard_report=kernel_guard_report),
+        encoding="utf-8",
+    )
     for rule_id in sorted(result.per_rule_symbol):
         _write_per_rule_artefacts(per_rule_dir / rule_id, result, rule_id)
     _write_json(
@@ -403,6 +407,106 @@ def _chmod_tree_readonly(root: Path) -> None:
         os.chmod(root, dir_mode)
 
 
+def render_summary_md(
+    *,
+    run: BacktestRun,
+    summary: BacktestSummary,
+    kernel_guard_report: KernelGuardReport,
+) -> str:
+    """Render the one-page operator summary (T035, US3) as Markdown.
+
+    Identical content goes to `summary.md` AND stdout per the spec —
+    the same string is the single source of truth for both surfaces.
+
+    Sections in order:
+        # Backtest summary — <run_id>
+        Header (date range, ruleset hash, dataset version, fill model,
+                judgment mode, slippage assumption, synthetic_shock?,
+                kernel touched?)
+        ## Aggregate metrics
+        ## Per-rule headline metrics  (table)
+        ## Data-quality warnings
+        ## Gate-rejection breakdown
+    """
+    lines: list[str] = []
+    lines.append(f"# Backtest summary — {run.run_id}")
+    lines.append("")
+    lines.append(f"- date range:           {run.date_start} → {run.date_end}")
+    lines.append(f"- ruleset sha256:       {run.ruleset_sha256}")
+    lines.append(f"- dataset_version:      {run.dataset_version}")
+    lines.append(f"- fill model:           {run.fill_model}")
+    lines.append(f"- judgment mode:        {run.judgment_mode}")
+    lines.append("- slippage assumption:  zero (R-B3 pessimistic limit-fill)")
+    lines.append(f"- synthetic_shock:      {str(run.synthetic_shock).lower()}")
+    lines.append(f"- replay_seed:          {run.replay_seed}")
+    lines.append(f"- invoker:              {run.invoker}")
+    lines.append(f"- status:               {run.status}")
+    lines.append(
+        f"- kernel guard touched: {str(kernel_guard_report.touched).lower()}"
+    )
+    lines.append("")
+
+    lines.append("## Aggregate metrics")
+    lines.append("")
+    lines.append(f"- total_return_pct:        {canonicalise_decimal(summary.aggregate_return_pct)}")
+    lines.append(
+        f"- max_drawdown_pct:        {canonicalise_decimal(summary.aggregate_max_drawdown_pct)}"
+    )
+    lines.append(f"- sharpe_ratio:            {canonicalise_decimal(summary.aggregate_sharpe)}")
+    lines.append(f"- total_orders:            {summary.total_orders}")
+    lines.append(f"- total_fills:             {summary.total_fills}")
+    lines.append(f"- total_gate_rejections:   {summary.total_gate_rejections}")
+    lines.append("")
+
+    lines.append("## Per-rule headline metrics")
+    lines.append("")
+    lines.append(
+        "| rule_id | symbol | return_pct | max_dd_pct | sharpe | orders | fills | "
+        "gate_rejections | notional_usd |"
+    )
+    lines.append(
+        "|---------|--------|-----------:|-----------:|-------:|-------:|------:|"
+        "----------------:|-------------:|"
+    )
+    for r in summary.per_rule:
+        lines.append(
+            f"| {r.rule_id} | {r.symbol} "
+            f"| {canonicalise_decimal(r.total_return_pct)} "
+            f"| {canonicalise_decimal(r.max_drawdown_pct)} "
+            f"| {canonicalise_decimal(r.sharpe_ratio)} "
+            f"| {r.order_count} | {r.fill_count} "
+            f"| {sum(r.gate_rejection_count_by_gate.values())} "
+            f"| {canonicalise_decimal(r.notional_traded_usd)} |"
+        )
+    lines.append("")
+
+    lines.append("## Data-quality warnings")
+    lines.append("")
+    if not summary.data_quality_warnings:
+        lines.append("_none_")
+    else:
+        for w in summary.data_quality_warnings:
+            d = w.session_date.isoformat() if w.session_date else "—"
+            lines.append(f"- {w.symbol} {d}: {w.kind} — {w.note}")
+    lines.append("")
+
+    lines.append("## Gate-rejection breakdown")
+    lines.append("")
+    # Aggregate across rules.
+    by_gate: dict[str, int] = {}
+    for r in summary.per_rule:
+        for gate, n in r.gate_rejection_count_by_gate.items():
+            by_gate[gate] = by_gate.get(gate, 0) + n
+    if not by_gate:
+        lines.append("_no rejections_")
+    else:
+        for gate in sorted(by_gate):
+            lines.append(f"- {gate}: {by_gate[gate]}")
+    lines.append("")
+
+    return "\n".join(lines) + "\n"
+
+
 def write_synthetic_shock_report(
     *,
     run: BacktestRun,
@@ -446,6 +550,10 @@ def write_synthetic_shock_report(
         kernel_guard_report=kernel_guard_report,
     )
     _write_metrics_csv(run_dir / "metrics.csv", summary)
+    (run_dir / "summary.md").write_text(
+        render_summary_md(run=run, summary=summary, kernel_guard_report=kernel_guard_report),
+        encoding="utf-8",
+    )
     _write_json(
         meta_dir / "kernel-guard-report.json",
         {
@@ -487,6 +595,7 @@ __all__ = [
     "KernelGuardReport",
     "build_per_rule_results",
     "build_summary",
+    "render_summary_md",
     "write_report",
     "write_synthetic_shock_report",
 ]
