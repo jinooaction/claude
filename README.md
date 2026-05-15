@@ -31,7 +31,9 @@ every feature begins as a spec under [`specs/`](specs/).
 
 ## Operator quickstart
 
-Walk through [`specs/001-automated-trading-mvp/quickstart.md`](specs/001-automated-trading-mvp/quickstart.md).
+**가장 빠른 길 (한글, 5분):** [`docs/OPERATOR_START.md`](docs/OPERATOR_START.md) — `git clone` → `.env` 채우기 → `bash scripts/operator_install.sh` → `systemctl enable` 두 줄. 자동 검증 5단계.
+
+**자세한 영어 가이드:** [`specs/001-automated-trading-mvp/quickstart.md`](specs/001-automated-trading-mvp/quickstart.md).
 TL;DR:
 
 ```bash

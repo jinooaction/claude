@@ -81,32 +81,32 @@ def test_dirty_tree(tmp_path):
 
 
 def test_secrets_via_env_vars(monkeypatch, tmp_path):
-    for key in ("KIS_APP_KEY", "KIS_APP_SECRET", "KIS_ACCOUNT_NUMBER"):
+    for key in ("KIS_APP_KEY", "KIS_APP_SECRET", "KIS_ACCOUNT_NO"):
         monkeypatch.setenv(key, "x")
     decision = secrets_present(env_path=tmp_path / "missing.env")
     assert decision.allowed is True
 
 
 def test_secrets_via_env_file(monkeypatch, tmp_path):
-    for key in ("KIS_APP_KEY", "KIS_APP_SECRET", "KIS_ACCOUNT_NUMBER"):
+    for key in ("KIS_APP_KEY", "KIS_APP_SECRET", "KIS_ACCOUNT_NO"):
         monkeypatch.delenv(key, raising=False)
     env = tmp_path / ".env"
     env.write_text(
         'KIS_APP_KEY=keyval\n'
         'KIS_APP_SECRET="secretval"\n'
-        "KIS_ACCOUNT_NUMBER=12345\n"
+        "KIS_ACCOUNT_NO=12345\n"
     )
     decision = secrets_present(env_path=env)
     assert decision.allowed is True
 
 
 def test_secrets_missing(monkeypatch, tmp_path):
-    for key in ("KIS_APP_KEY", "KIS_APP_SECRET", "KIS_ACCOUNT_NUMBER"):
+    for key in ("KIS_APP_KEY", "KIS_APP_SECRET", "KIS_ACCOUNT_NO"):
         monkeypatch.delenv(key, raising=False)
     decision = secrets_present(env_path=tmp_path / "missing.env")
     assert decision.allowed is False
     assert set(decision.missing) == {
-        "KIS_APP_KEY", "KIS_APP_SECRET", "KIS_ACCOUNT_NUMBER",
+        "KIS_APP_KEY", "KIS_APP_SECRET", "KIS_ACCOUNT_NO",
     }
 
 

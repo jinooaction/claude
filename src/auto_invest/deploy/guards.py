@@ -92,7 +92,7 @@ class SecretsDecision:
         return not self.missing
 
 
-REQUIRED_SECRETS = ("KIS_APP_KEY", "KIS_APP_SECRET", "KIS_ACCOUNT_NUMBER")
+REQUIRED_SECRETS = ("KIS_APP_KEY", "KIS_APP_SECRET", "KIS_ACCOUNT_NO")
 
 
 def secrets_present(env_path: Path | None = None) -> SecretsDecision:
