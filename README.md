@@ -31,7 +31,9 @@ every feature begins as a spec under [`specs/`](specs/).
 
 ## Operator quickstart
 
-**가장 빠른 길 (한글, 5분):** [`docs/OPERATOR_START.md`](docs/OPERATOR_START.md) — `git clone` → `.env` 채우기 → `bash scripts/operator_install.sh` → `systemctl enable` 두 줄. 자동 검증 5단계.
+**개발 지식이 없으신 분 (Vultr + KIS 처음):** [`docs/OPERATOR_START_NONDEV_KR.md`](docs/OPERATOR_START_NONDEV_KR.md) — Vultr 서버 만들기부터 1주일 dry-run + 실주문 전환까지 단계별 한글 가이드.
+
+**개발자 (Linux + systemd 보유):** [`docs/OPERATOR_START.md`](docs/OPERATOR_START.md) — `git clone` → `.env` 채우기 → `bash scripts/operator_install.sh` → `systemctl enable` 두 줄. 자동 검증 5단계.
 
 **자세한 영어 가이드:** [`specs/001-automated-trading-mvp/quickstart.md`](specs/001-automated-trading-mvp/quickstart.md).
 TL;DR:
