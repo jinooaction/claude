@@ -30,7 +30,7 @@ git pull --ff-only
 
 상세 규칙은 `CLAUDE.md` 본문 참조.
 
-## 현재 main 상태 (2026-05-14 기준)
+## 현재 main 상태 (2026-05-15 기준)
 
 * **헌법 v3.0.0** (2026-05-14 도입, 머지 커밋 `f849fab`). 원칙 IX.D — 운영자 자율 수행 보장. PR 생성과 머지는 모두 자동 워크플로우의 일부. Kernel 터치도 머지를 막지 않음. 안전 경계는 **생산 배포 단계**(스펙 007 하드닝 캐너리)에서 지킴.
 * **스펙 001 (미국 주식 자동 거래 MVP)** — 출시 완료 (2026-05-04). 실제 KIS 브로커 검증 완료.
@@ -38,30 +38,51 @@ git pull --ff-only
 * **스펙 003 (세션 캐시)** — 출시 완료.
 * **스펙 004 (LLM 판단 지점)** — 골격만. 구현 보류.
 * **스펙 005 (자율 튜너)** — 골격만. 스펙 007 의존성은 이제 해소됨; 후속 구현 가능.
-* **스펙 006 (배포 자동화)** — Kernel 터치 가드는 출시 완료, 실제 배포 러너는 보류 중. 스펙 007이 출시되었으므로 후속 구현 가능 (러너는 `CANARY_PASSED` 감사 로그 행을 보고 배포 판단).
-* **스펙 007 (하드닝 캐너리 — 생산 배포 게이트)** — **출시 완료** (2026-05-14, PR #5 머지 커밋 `775f53a`). 40/40 작업 6단계 전부 완료.
+* **스펙 006 (배포 자동화 러너)** — **출시 완료** (2026-05-15, PR #7 머지 커밋 `790c0c1`). 38/38 작업 7단계 전부 완료. K4 터치 커밋 `c1800a6` (audit.py에 5종 새 이벤트 타입 추가). systemd 유닛/타이머 템플릿 동봉(`deploy/`).
+* **스펙 007 (하드닝 캐너리 — 생산 배포 게이트)** — 출시 완료 (2026-05-14, PR #5 머지 커밋 `775f53a`). 40/40 작업 6단계 전부 완료.
 * **스펙 008 (백테스트 엔진)** — 출시 완료 (2026-05-14, PR #4 머지 커밋 `7f8fb99`).
-* **main의 테스트**: 577 통과, 1 스킵 (라이브 KIS 스모크는 `KIS_LIVE_TEST=1` 환경변수로 게이트).
+* **main의 테스트**: 617 통과, 1 스킵 (라이브 KIS 스모크는 `KIS_LIVE_TEST=1` 환경변수로 게이트).
 * **린트**: `uv run ruff check src tests` 깨끗.
 * **라이브 브로커 검증**: 운영자(mason)가 2026-05-04에 본인 실제 KIS 계좌에서 `scripts/live_smoke.py` 실행 — 검증 완료.
 
-## 활성 작업
+## 운영자 사용성 — 지금 바로 가능한 것
 
-**없음**. 스펙 007이 머지되면서 진행 중이던 모든 명시적 작업이 정리되었습니다.
+스펙 006이 출시되면서 운영자가 SSH로 들어가 git pull/restart를 손으로 안 해도 됩니다.
 
-다음 후보 (운영자 결정 대기):
+**한 줄 운영 절차** (Linux + systemd 호스트):
 
-* **스펙 005 (자율 튜너) 본격 구현** — 스펙 007의 캐너리가 게이트 역할을 하므로 이제 안전하게 진행 가능.
-* **스펙 006 (배포 자동화) 러너 구현** — `CANARY_PASSED` 감사 로그 행을 보고 자동 배포. 계약은 `specs/007-canary-hardening/contracts/canary-run-json.md` § "Spec 006 integration" 에 정의됨.
-* **스펙 004 (LLM 판단 지점)** — 골격에서 본격 구현으로 승격.
+1. 저장소를 `/opt/auto-invest`에 클론 + `.env`에 KIS 자격증명 + `AUTO_INVEST_CAPITAL` 채우기.
+2. `uv sync` 한 번 (의존성 설치).
+3. `deploy/auto-invest.service`, `deploy/auto-invest-deploy.service`, `deploy/auto-invest-deploy.timer` 세 파일을 `/etc/systemd/system/`에 복사.
+4. `systemctl daemon-reload && systemctl enable --now auto-invest.service auto-invest-deploy.timer`.
+
+이걸로 워커는 항상 떠 있고, 30분마다 `auto-invest deploy`가 알아서 origin/main을 끌어와 미국 장중에는 거부, 장 외에는 안전하게 적용합니다. 자세한 절차는 `deploy/README.md`와 `specs/006-deploy-automation/quickstart.md`.
+
+**즉시 사용 가능한 CLI**:
+
+* `auto-invest run --dry-run --config tests/fixtures/rules/sample-canary.toml` — 브로커 안 건드리고 룰 검증.
+* `auto-invest run --capital 10000` — 라이브 운영.
+* `auto-invest deploy --dry-run` — 다음 배포가 무엇을 할지 미리 확인.
+* `auto-invest deploy --branch main` — 실제 배포 (장중 자동 거부).
+* `auto-invest backtest --rules config/rules.toml --from 2024-01-02 --to 2024-12-31` — 과거 데이터 백테스트.
+* `auto-invest report --date 2026-05-04` — 일일 리포트.
+* `auto-invest status` — 현재 상태 한 화면 JSON.
+
+**다음 후보 (선택)**:
+
+* **스펙 004 (LLM 판단 지점)** — Claude를 거래 결정 루프에 처음 끌어들이는 작업. 결정성을 일부 양보하고 추론 능력을 얻는 트레이드오프. 골격은 `specs/004-llm-judgment-points/spec.md`. 30일치 토큰 텔레메트리(스펙 002)가 쌓인 후 본격 구현 권장.
+* **스펙 005 (자율 튜너)** — KPI 임계값을 자동으로 조정하는 작업. 스펙 007 캐너리가 게이트 역할을 하므로 이제 안전하게 진행 가능. 아직 골격만.
+
+이 두 스펙은 "운영자 손이 더 줄지만 필수는 아니다" 영역. 위 한 줄 운영 절차만으로도 v1 자동 거래 서비스는 굴러갑니다.
 
 ## 출시된 기능 읽는 순서
 
 1. `.specify/memory/constitution.md` — 헌법 v3.0.0, 원칙 IX.D 운영자 자율 수행 보장.
 2. `.specify/memory/kernel.toml` — Kernel 매니페스트(고관심 포렌식 목록; v3.0.0에서 머지 차단 역할은 없음).
 3. `CLAUDE.md` — 자동 워크플로우 + 자동 머지 + 한글 응답 정책. **PR을 열거나 머지하기 전에 반드시 읽으세요.**
-4. `specs/007-canary-hardening/` — 스펙 007 하드닝 캐너리 (생산 배포 게이트). `quickstart.md` 부터 시작.
-5. `specs/008-backtest-engine/` — 스펙 008 백테스트 엔진. 캐너리의 핵심 의존성.
+4. `deploy/README.md` + `specs/006-deploy-automation/quickstart.md` — 운영자 systemd 설치 절차. **새 호스트에 올릴 때 첫 진입점.**
+5. `specs/007-canary-hardening/` — 스펙 007 하드닝 캐너리 (생산 배포 게이트). `quickstart.md` 부터 시작.
+6. `specs/008-backtest-engine/` — 스펙 008 백테스트 엔진. 캐너리의 핵심 의존성.
 
 ## 자동 머지 시스템 (v3.2.0 신설)
 
@@ -101,7 +122,7 @@ git pull --ff-only
 
 - 진행 중인 브랜치가 있는데 main에서 새 브랜치를 만들지 **마세요** (위 발견 순서가 이를 막아줍니다).
 - 열린 PR + 활성 인수인계 파일이 다음 작업을 알려주고 있는데 운영자에게 "어떤 작업을 원하세요?"라고 묻지 **마세요**.
-- 출시 완료된 스펙(001 / 002 / 003 / 007 / 008)의 소스를 운영자의 명시적 수정 지시 없이 건드리지 **마세요**.
+- 출시 완료된 스펙(001 / 002 / 003 / 006 / 007 / 008)의 소스를 운영자의 명시적 수정 지시 없이 건드리지 **마세요**.
 - KIS 자격 증명을 어디에도 푸시하지 **마세요**. `.env`는 gitignore되어 있고, 라이브 테스트는 `KIS_LIVE_TEST=1`로 게이트됨.
 - `main`에 직접 푸시하지 **마세요** (직접 푸시 금지; 모든 변경은 PR을 통해 머지).
 
@@ -111,11 +132,12 @@ git pull --ff-only
 |------|-------|
 | 헌법 | v3.0.0 (IX.D 운영자 자율 수행 보장) |
 | 운영자 응대 정책 | CLAUDE.md v3.2.0 (한글 응답 / 쉬운 한글 / 자동 머지) |
-| 마지막 main 커밋 | `775f53a Merge PR #5: spec(007) 하드닝 캐너리` (+ 이 HANDOFF 갱신) |
+| 마지막 main 커밋 | `790c0c1 Merge PR #7: spec(006) 배포 자동화 러너` (+ 이 HANDOFF 갱신) |
 | 활성 작업 | 없음 (운영자 다음 지시 대기) |
-| 출시 완료 스펙 | 001, 002, 003, 007, 008 |
-| 골격 스펙 | 004 (LLM 판단 지점), 005 (자율 튜너), 006 (배포 자동화 러너) |
-| main 테스트 | 577 통과, 1 스킵 |
+| 출시 완료 스펙 | 001, 002, 003, 006, 007, 008 |
+| 골격 스펙 | 004 (LLM 판단 지점), 005 (자율 튜너) |
+| 운영 호스트 진입점 | `deploy/README.md` (systemd 설치 두 줄) |
+| main 테스트 | 617 통과, 1 스킵 |
 | main 린트 | 깨끗 |
 | 열린 PR | `mcp__github__list_pull_requests`로 확인 |
 | 운영자 로컬 환경 | `uv` 가상환경, `gh` 인증 완료, KIS 키는 `.env`에 (운영자 머신에만) |
