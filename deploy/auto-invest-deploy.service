@@ -1,0 +1,16 @@
+[Unit]
+Description=auto-invest deploy automation (one-shot)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=auto-invest
+Group=auto-invest
+WorkingDirectory=/opt/auto-invest
+EnvironmentFile=/opt/auto-invest/.env
+ExecStart=/usr/local/bin/uv run auto-invest deploy --branch main
+StandardOutput=journal
+StandardError=journal
+NoNewPrivileges=true
+PrivateTmp=true

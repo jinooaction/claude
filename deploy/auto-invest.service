@@ -1,0 +1,25 @@
+[Unit]
+Description=auto-invest live trading worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=auto-invest
+Group=auto-invest
+WorkingDirectory=/opt/auto-invest
+EnvironmentFile=/opt/auto-invest/.env
+ExecStart=/usr/local/bin/uv run auto-invest run --capital ${AUTO_INVEST_CAPITAL}
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/opt/auto-invest/data /opt/auto-invest/logs
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

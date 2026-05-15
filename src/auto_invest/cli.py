@@ -927,3 +927,132 @@ def backtest_cmd(
 
     if outcome.exit_code != EXIT_OK:
         _exit(outcome.exit_code)
+
+
+@app.command("deploy")
+def deploy(
+    branch: str = typer.Option(
+        "main",
+        "--branch",
+        help="Remote branch to deploy from.",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Run preconditions+pull+migrate+config-validate without restarting the worker.",
+    ),
+    allow_dirty: bool = typer.Option(
+        False,
+        "--allow-dirty",
+        help="Permit a dirty working tree (logged in DEPLOY_STARTED.allow_dirty).",
+    ),
+    health_window_s: int = typer.Option(
+        90,
+        "--health-window-s",
+        help="Seconds to poll for WORKER_STARTED after restart (>=90 per VIII.B-3).",
+    ),
+    triggered_by: str = typer.Option(
+        "manual",
+        "--triggered-by",
+        help="Routing tag: 'manual' bypasses canary gate (IX.D); 'auto-tuner' enforces it.",
+    ),
+    ruleset_sha256: str = typer.Option(
+        "",
+        "--ruleset-sha256",
+        help="Required when --triggered-by=auto-tuner; matched against CANARY_PASSED.",
+    ),
+    db_path: Path = typer.Option(
+        Path("data/auto_invest.db"),
+        "--db",
+        help="SQLite database path (audit log).",
+    ),
+    repo_path: Path = typer.Option(
+        Path("."),
+        "--repo",
+        help="Git repository root.",
+    ),
+    config_path: Path = typer.Option(
+        Path("config/rules.toml"),
+        "--config",
+        help="Worker rules config validated during the dry_run phase.",
+    ),
+    env_path: Path = typer.Option(
+        Path(".env"),
+        "--env-path",
+        help="Operator .env file (used as fallback if env vars are absent).",
+    ),
+    supervisor_kind: str = typer.Option(
+        "systemd",
+        "--supervisor",
+        help="Supervisor backend: 'systemd' (production) or 'dryrun' (test).",
+    ),
+    worker_unit: str = typer.Option(
+        "auto-invest.service",
+        "--worker-unit",
+        help="systemd unit name passed to systemctl restart (ignored for --supervisor=dryrun).",
+    ),
+) -> None:
+    """Deploy the latest branch off-hours per spec 006.
+
+    Runs the full phase machine: preconditions → pull → kernel_check →
+    canary_gate (if auto-tuner) → sync → migrate → dry_run → restart →
+    health_check, with rollback on failure. Exit codes per
+    `specs/006-deploy-automation/contracts/deploy-cli.md`.
+    """
+    if health_window_s < 90:
+        typer.echo(
+            f"--health-window-s must be >= 90 (got {health_window_s}); "
+            "constitution VIII.B-3 forbids shorter windows.",
+            err=True,
+        )
+        _exit(2)
+    if triggered_by not in ("manual", "auto-tuner"):
+        typer.echo(
+            f"--triggered-by must be 'manual' or 'auto-tuner' (got {triggered_by!r}).",
+            err=True,
+        )
+        _exit(2)
+    if triggered_by == "auto-tuner" and not ruleset_sha256:
+        typer.echo(
+            "--ruleset-sha256 is required when --triggered-by=auto-tuner.",
+            err=True,
+        )
+        _exit(2)
+    if supervisor_kind not in ("systemd", "dryrun"):
+        typer.echo(
+            f"--supervisor must be 'systemd' or 'dryrun' (got {supervisor_kind!r}).",
+            err=True,
+        )
+        _exit(2)
+
+    from auto_invest.deploy.runner import DeployRunner, RunnerConfig
+    from auto_invest.deploy.supervisor import (
+        DryRunSupervisor,
+        SystemdSupervisor,
+    )
+
+    if supervisor_kind == "systemd":
+        sup = SystemdSupervisor(unit=worker_unit)
+    else:
+        sup = DryRunSupervisor()
+
+    cfg = RunnerConfig(
+        repo=repo_path,
+        db_path=db_path,
+        branch=branch,
+        dry_run=dry_run,
+        allow_dirty=allow_dirty,
+        health_window_s=health_window_s,
+        triggered_by=triggered_by,  # type: ignore[arg-type]
+        ruleset_sha256=ruleset_sha256,
+        config_path=config_path,
+        env_path=env_path,
+    )
+    runner = DeployRunner(config=cfg, supervisor=sup)
+    result = runner.run()
+    for line in runner._stdout:
+        typer.echo(line)
+    for line in runner._stderr:
+        typer.echo(line, err=True)
+    if result.exit_code != 0:
+        _exit(result.exit_code)
