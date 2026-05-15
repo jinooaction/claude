@@ -51,7 +51,7 @@ def _commit(repo: Path, files: dict[str, str], message: str) -> str:
 
 
 def _ensure_secrets(monkeypatch: Any) -> None:
-    for key in ("KIS_APP_KEY", "KIS_APP_SECRET", "KIS_ACCOUNT_NUMBER"):
+    for key in ("KIS_APP_KEY", "KIS_APP_SECRET", "KIS_ACCOUNT_NO"):
         monkeypatch.setenv(key, "x")
 
 
