@@ -1,0 +1,14 @@
+[Unit]
+Description=auto-invest deploy timer (off-hours, every 30 min)
+Requires=auto-invest-deploy.service
+
+[Timer]
+# Fire half-hourly, but only OUTSIDE US regular trading hours (UTC).
+# NYSE regular session is 13:30-20:00 UTC year-round (DST varies; the
+# runner's market_hours_guard catches edge cases regardless).
+OnCalendar=*-*-* 00,01,02,03,04,05,06,07,08,09,10,11,12,21,22,23:00/30
+Persistent=true
+Unit=auto-invest-deploy.service
+
+[Install]
+WantedBy=timers.target

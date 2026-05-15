@@ -56,8 +56,23 @@ auto-invest ingest-history --from-dir history/csv/          # spec 008 OHLCV ing
 auto-invest backtest --rules config/rules.toml \            # spec 008 backtest
     --from 2024-01-02 --to 2024-12-31
 auto-invest backtest --rules config/rules.toml --synthetic-shock  # canonical shock days
+auto-invest deploy --branch main          # spec 006 off-hours deploy automation
+auto-invest deploy --dry-run              # validate without restarting the worker
 auto-invest version
 ```
+
+### Deploy automation (spec 006)
+
+`auto-invest deploy` is the single-command, off-hours deploy runner.
+It refuses to run during US regular hours (constitution VIII.A),
+acquires a PID lock, fetches `origin/<branch>`, runs the kernel-touch
+forensic check, applies migrations, restarts the worker, and waits
+90 s for a healthy `WORKER_STARTED` audit row before declaring success.
+On failure it rolls back to the previous sha. Every phase is recorded
+in `audit_log` joined by a single `correlation_id`. Systemd unit +
+timer templates ship under `deploy/`; install steps are in
+[`specs/006-deploy-automation/quickstart.md`](specs/006-deploy-automation/quickstart.md)
+and [`deploy/README.md`](deploy/README.md).
 
 ### Backtest engine (spec 008)
 
