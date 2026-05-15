@@ -41,6 +41,11 @@ EventType = Literal[
     "LLM_CALL",
     "PRICE_TABLE_LOADED",
     "DEPLOY_BLOCKED_KERNEL_TOUCH",
+    "DEPLOY_STARTED",
+    "DEPLOY_COMPLETED",
+    "DEPLOY_FAILED",
+    "DEPLOY_ROLLED_BACK",
+    "DEPLOY_KERNEL_TOUCHED",
     "BACKTEST_STARTED",
     "BACKTEST_COMPLETED",
     "LLM_CALL_STUBBED",
@@ -206,6 +211,88 @@ class DeployBlockedKernelTouchPayload(AuditPayload):
     triggered_by: str = "manual"  # "manual" | "auto-tuner"
 
 
+DeployPhase = Literal[
+    "precondition_lock",
+    "precondition_dirty_tree",
+    "precondition_secrets",
+    "market_hours_guard",
+    "pull",
+    "kernel_check",
+    "sync",
+    "migrate",
+    "dry_run",
+    "stop_worker",
+    "start_worker",
+    "health_check",
+    "canary_gate",
+    "rollback",
+]
+
+
+class DeployStartedPayload(AuditPayload):
+    """Per spec 006 FR-D03 — emitted before any side-effecting phase.
+
+    The deploy's `correlation_id` lives in the row column, not in this
+    payload — readers join via `WHERE correlation_id = ?`.
+    """
+
+    event_type: Literal["DEPLOY_STARTED"] = "DEPLOY_STARTED"
+    sha_before: str
+    sha_after: str
+    branch: str
+    triggered_by: Literal["manual", "auto-tuner"] = "manual"
+    dry_run: bool = False
+    allow_dirty: bool = False
+    health_window_s: int = 90
+
+
+class DeployCompletedPayload(AuditPayload):
+    """Per spec 006 FR-D03 — emitted on success (exactly once per run)."""
+
+    event_type: Literal["DEPLOY_COMPLETED"] = "DEPLOY_COMPLETED"
+    sha_before: str
+    sha_after: str
+    phase: Literal["live", "dry_run"]
+    duration_s: float
+
+
+class DeployFailedPayload(AuditPayload):
+    """Per spec 006 FR-D03 — emitted on any failure (exactly once per run)."""
+
+    event_type: Literal["DEPLOY_FAILED"] = "DEPLOY_FAILED"
+    sha_before: str
+    sha_after: str | None = None
+    phase: DeployPhase
+    reason: str
+    exit_code: int
+
+
+class DeployRolledBackPayload(AuditPayload):
+    """Per spec 006 FR-D08 — emitted after a successful rollback to sha_before."""
+
+    event_type: Literal["DEPLOY_ROLLED_BACK"] = "DEPLOY_ROLLED_BACK"
+    sha_before: str
+    sha_after_failed: str
+    rolled_back_phase: str
+
+
+class DeployKernelTouchedPayload(AuditPayload):
+    """Per spec 006 FR-D13 + constitution v3.0.0 IX.A — informational.
+
+    Recorded when a deploy's diff intersects the Kernel manifest. Under
+    v3.0.0 this is a forensic-attention signal, NOT a blocking gate;
+    the deploy continues after this row lands. Replaces (in semantic,
+    not in literal) the deprecated `DEPLOY_BLOCKED_KERNEL_TOUCH` event.
+    """
+
+    event_type: Literal["DEPLOY_KERNEL_TOUCHED"] = "DEPLOY_KERNEL_TOUCHED"
+    sha_before: str
+    sha_after: str
+    touched_paths: list[str]
+    touched_groups: list[str]
+    triggered_by: Literal["manual", "auto-tuner"] = "manual"
+
+
 class BacktestStartedPayload(AuditPayload):
     """Per spec 008 FR-B04 — run header recorded at backtest start."""
 
@@ -336,6 +423,11 @@ AnyPayload = (
     | LlmCallPayload
     | PriceTableLoadedPayload
     | DeployBlockedKernelTouchPayload
+    | DeployStartedPayload
+    | DeployCompletedPayload
+    | DeployFailedPayload
+    | DeployRolledBackPayload
+    | DeployKernelTouchedPayload
     | BacktestStartedPayload
     | BacktestCompletedPayload
     | LlmCallStubbedPayload
