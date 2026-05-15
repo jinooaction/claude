@@ -47,16 +47,31 @@ git pull --ff-only
 
 ## 운영자 사용성 — 지금 바로 가능한 것
 
-스펙 006이 출시되면서 운영자가 SSH로 들어가 git pull/restart를 손으로 안 해도 됩니다.
+스펙 006이 출시되면서 운영자가 SSH로 들어가 git pull/restart를 손으로 안 해도 됩니다. PR #9로 시작 키트가 들어가서 운영자가 자기 호스트에서 한 줄 명령으로 자동 검증 + 정확한 systemd 명령을 받아볼 수 있습니다.
 
-**한 줄 운영 절차** (Linux + systemd 호스트):
+**가장 짧은 경로** (한글 5분 가이드: `docs/OPERATOR_START.md`):
 
-1. 저장소를 `/opt/auto-invest`에 클론 + `.env`에 KIS 자격증명 + `AUTO_INVEST_CAPITAL` 채우기.
-2. `uv sync` 한 번 (의존성 설치).
-3. `deploy/auto-invest.service`, `deploy/auto-invest-deploy.service`, `deploy/auto-invest-deploy.timer` 세 파일을 `/etc/systemd/system/`에 복사.
-4. `systemctl daemon-reload && systemctl enable --now auto-invest.service auto-invest-deploy.timer`.
+```bash
+# 운영자 호스트 (Linux + systemd) 에서:
+sudo install -d -m 0750 -o $(whoami) -g $(whoami) /opt/auto-invest
+git clone https://github.com/jinooaction/claude.git /opt/auto-invest
+cd /opt/auto-invest
+uv sync
+cp .env.example .env
+nano .env                            # KIS_APP_KEY/SECRET/ACCOUNT_NO + AUTO_INVEST_CAPITAL
+bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl 명령 출력
+# 출력된 sudo systemctl 명령 6줄 그대로 실행
+```
 
-이걸로 워커는 항상 떠 있고, 30분마다 `auto-invest deploy`가 알아서 origin/main을 끌어와 미국 장중에는 거부, 장 외에는 안전하게 적용합니다. 자세한 절차는 `deploy/README.md`와 `specs/006-deploy-automation/quickstart.md`.
+`scripts/operator_install.sh`는 5단계 preflight를 수행합니다:
+
+1. CLI 표면 확인 (`auto-invest --help`).
+2. `.env`에 필수 키 4종(`KIS_APP_KEY`/`KIS_APP_SECRET`/`KIS_ACCOUNT_NO`/`AUTO_INVEST_CAPITAL`) 빈 값 아닌지.
+3. SQLite 감사 로그 마이그레이션 적용.
+4. 워커 dry-run — 브로커 호출 없이 룰 파일/캡 검증.
+5. `auto-invest deploy --dry-run` — 배포 파이프라인 검증.
+
+전부 통과해야만 systemd 명령을 출력하며, **root로 escalation은 절대 하지 않습니다** — 운영자가 출력된 명령을 검토한 다음 본인 손으로 실행합니다.
 
 **즉시 사용 가능한 CLI**:
 
@@ -132,11 +147,13 @@ git pull --ff-only
 |------|-------|
 | 헌법 | v3.0.0 (IX.D 운영자 자율 수행 보장) |
 | 운영자 응대 정책 | CLAUDE.md v3.2.0 (한글 응답 / 쉬운 한글 / 자동 머지) |
-| 마지막 main 커밋 | `790c0c1 Merge PR #7: spec(006) 배포 자동화 러너` (+ 이 HANDOFF 갱신) |
+| 마지막 main 커밋 | `0501428 Merge PR #9: 운영자 시작 키트 + KIS_ACCOUNT_NO 통일` |
 | 활성 작업 | 없음 (운영자 다음 지시 대기) |
 | 출시 완료 스펙 | 001, 002, 003, 006, 007, 008 |
 | 골격 스펙 | 004 (LLM 판단 지점), 005 (자율 튜너) |
-| 운영 호스트 진입점 | `deploy/README.md` (systemd 설치 두 줄) |
+| 운영자 5분 시작 가이드 | `docs/OPERATOR_START.md` (한글) |
+| 자동 검증 스크립트 | `scripts/operator_install.sh` (5단계 preflight) |
+| 운영 호스트 진입점 | `deploy/README.md` (systemd 설치 절차) |
 | main 테스트 | 617 통과, 1 스킵 |
 | main 린트 | 깨끗 |
 | 열린 PR | `mcp__github__list_pull_requests`로 확인 |
