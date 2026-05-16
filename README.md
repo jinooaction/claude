@@ -31,9 +31,11 @@ every feature begins as a spec under [`specs/`](specs/).
 
 ## Operator quickstart
 
-**개발 지식이 없으신 분 (Vultr + KIS 처음):** [`docs/OPERATOR_START_NONDEV_KR.md`](docs/OPERATOR_START_NONDEV_KR.md) — Vultr 서버 만들기부터 1주일 dry-run + 실주문 전환까지 단계별 한글 가이드.
+**Vultr 한 번에 가동 (비개발자 최단 경로, 권장):** [`docs/OPERATOR_VULTR_ONE_STEP_KR.md`](docs/OPERATOR_VULTR_ONE_STEP_KR.md) — Vultr 콘솔에서 인스턴스 만들 때 cloud-init 스크립트 + KIS 키 네 줄만 붙여넣으면, 인스턴스 부팅과 동시에 모든 셋업 + 워커 dry-run 가동까지 자동 완료. 운영자는 콘솔에 들어갈 필요 없음.
 
-**개발자 (Linux + systemd 보유):** [`docs/OPERATOR_START.md`](docs/OPERATOR_START.md) — `git clone` → `.env` 채우기 → `bash scripts/operator_install.sh` → `systemctl enable` 두 줄. 자동 검증 5단계.
+**Vultr 단계별 (이전 가이드, 학습용):** [`docs/OPERATOR_START_NONDEV_KR.md`](docs/OPERATOR_START_NONDEV_KR.md) — 명령어를 한 줄씩 직접 쳐가며 학습하고 싶으신 분.
+
+**개발자 (Linux + systemd 보유):** [`docs/OPERATOR_START.md`](docs/OPERATOR_START.md) — `git clone` → `.env` → `bash scripts/operator_install.sh`.
 
 **자세한 영어 가이드:** [`specs/001-automated-trading-mvp/quickstart.md`](specs/001-automated-trading-mvp/quickstart.md).
 TL;DR:
