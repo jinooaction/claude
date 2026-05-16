@@ -9,7 +9,8 @@ User=auto-invest
 Group=auto-invest
 WorkingDirectory=/opt/auto-invest
 EnvironmentFile=/opt/auto-invest/.env
-ExecStart=/usr/local/bin/uv run auto-invest run --capital ${AUTO_INVEST_CAPITAL}
+# Wrapper toggles dry-run / live based on AUTO_INVEST_MODE in .env.
+ExecStart=/opt/auto-invest/deploy/run-worker.sh
 Restart=on-failure
 RestartSec=10
 StandardOutput=journal
