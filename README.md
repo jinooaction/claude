@@ -31,7 +31,9 @@ every feature begins as a spec under [`specs/`](specs/).
 
 ## Operator quickstart
 
-**Vultr 한 번에 가동 (비개발자 최단 경로, 권장):** [`docs/OPERATOR_VULTR_ONE_STEP_KR.md`](docs/OPERATOR_VULTR_ONE_STEP_KR.md) — Vultr 콘솔에서 인스턴스 만들 때 cloud-init 스크립트 + KIS 키 네 줄만 붙여넣으면, 인스턴스 부팅과 동시에 모든 셋업 + 워커 dry-run 가동까지 자동 완료. 운영자는 콘솔에 들어갈 필요 없음.
+**GitHub Actions로 위임 (가장 자율 수행, 권장):** [`docs/OPERATOR_GITHUB_ACTIONS_KR.md`](docs/OPERATOR_GITHUB_ACTIONS_KR.md) — GitHub Secrets에 Vultr 토큰 한 번 박고 Actions 탭에서 "Run workflow" 한 번 클릭하면 인스턴스 자동 생성. KIS 키만 Vultr 콘솔에서 한 번 입력.
+
+**Vultr 콘솔에서 직접 만들기:** [`docs/OPERATOR_VULTR_ONE_STEP_KR.md`](docs/OPERATOR_VULTR_ONE_STEP_KR.md) — GitHub Actions 안 쓰고 Vultr 콘솔에서 직접 인스턴스 만드는 경로. cloud-init User-Data에 자본금 한 줄만 박음.
 
 **Vultr 단계별 (이전 가이드, 학습용):** [`docs/OPERATOR_START_NONDEV_KR.md`](docs/OPERATOR_START_NONDEV_KR.md) — 명령어를 한 줄씩 직접 쳐가며 학습하고 싶으신 분.
 
