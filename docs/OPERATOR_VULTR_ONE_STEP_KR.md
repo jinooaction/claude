@@ -19,16 +19,15 @@
    - **Server Size**: 가장 작은 것 (월 약 6달러, 1 CPU + 1GB RAM).
 3. 페이지 아래로 스크롤해서 **Additional Features** 옆 / 또는 **Server Hostname & Label** 위쪽에 있는 **"View advanced features"** 또는 **"Cloud-Init User-Data"** 영역을 펼치세요.
 
-### 2. User-Data에 스크립트 + KIS 키 한 번에 붙여넣기 (3분)
+### 2. User-Data에 스크립트 + 자본금만 한 번에 붙여넣기 (3분)
 
-저장소의 `deploy/vultr-userdata.sh` 파일을 통째로 복사해서 User-Data 칸에 붙여넣고, **그 안의 네 줄만** 채워주세요:
+저장소의 `deploy/vultr-userdata.sh` 파일을 통째로 복사해서 User-Data 칸에 붙여넣고, **그 안의 한 줄만** 채워주세요:
 
 ```bash
-KIS_APP_KEY="여기에_KIS앱키"          # ← 실제 KIS 앱 키로 교체
-KIS_APP_SECRET="여기에_KIS시크릿"      # ← 실제 KIS 시크릿으로 교체
-KIS_ACCOUNT_NO="여기에_계좌번호"        # ← 실제 미국 주식 계좌번호로 교체
 AUTO_INVEST_CAPITAL="100"               # ← 시작 자본금 (100달러 권장)
 ```
+
+KIS 키는 인스턴스 부팅 후 콘솔에서 한 번 입력합니다 (단계 4 참조). User-Data에 KIS 키를 박지 않으므로 Vultr 메타데이터에도 키가 안 남습니다.
 
 스크립트 전체 파일은 GitHub에서 바로 보실 수 있어요:
 https://github.com/jinooaction/claude/blob/main/deploy/vultr-userdata.sh
@@ -50,17 +49,35 @@ https://github.com/jinooaction/claude/blob/main/deploy/vultr-userdata.sh
 | 3 | `auto-invest` 시스템 계정 생성 + 디렉토리 권한 |
 | 4 | `uv` (파이썬 환경 관리자) 설치 |
 | 5 | 저장소 클론 + 의존성 설치 |
-| 6 | `.env` 생성 — KIS 키 4줄을 chmod 0600으로 디스크에 저장 |
+| 6 | `.env` 생성 (KIS 키는 빈 placeholder, chmod 0600) |
 | 7 | SQLite 감사 로그 마이그레이션 |
-| 8 | systemd 유닛 설치 + 활성화 → **워커 dry-run 모드로 가동** |
+| 8 | systemd 유닛 설치 — 배포 타이머 활성화 + 워커는 KIS 키 설정 대기 |
 
-5~10분 후 인스턴스 IP로 SSH 들어가거나 Vultr 웹 콘솔로 접속해서 다음 한 줄로 가동 상태 확인:
+## 단계 3 — KIS 키 박기 (한 번, 1분)
+
+5~10분 후 Vultr 콘솔의 인스턴스 페이지 오른쪽 위 **View Console** 버튼을 클릭. root 비밀번호로 로그인한 다음, 다음 한 줄을 붙여넣고 Enter:
 
 ```bash
-systemctl status auto-invest.service
+bash /opt/auto-invest/scripts/set_secrets.sh
 ```
 
-`active (running)` + 최근 `WORKER_STARTED` 행이 보이면 성공.
+세 가지 prompt가 차례로 뜹니다:
+
+```
+KIS_APP_KEY:               ← 키 입력 (화면에 안 보임)
+KIS_APP_SECRET:            ← 시크릿 입력 (화면에 안 보임)
+KIS_ACCOUNT_NO (계좌번호): ← 계좌번호 입력 (화면에 안 보임)
+```
+
+입력값은 화면에 표시되지 않고(비밀번호 마스킹), `.env`(chmod 0600)에만 저장되며, 로그에는 절대 남지 않습니다. 입력 후 워커가 자동으로 재시작되어 dry-run 모드로 가동됩니다.
+
+성공 메시지:
+
+```
+OK — auto-invest.service 가 정상 가동 중입니다 (dry-run 모드).
+```
+
+이 문구가 보이면 끝.
 
 ## 1주일 dry-run 후 실주문 전환 (한 줄)
 

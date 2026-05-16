@@ -1,40 +1,35 @@
 #!/usr/bin/env bash
 # Vultr cloud-init User-Data — auto-invest 인스턴스 부팅 시 한 번에 실행.
 #
-# 사용법: Vultr 콘솔에서 인스턴스를 만들 때 "User Data" / "Cloud-Init"
-# 필드에 이 파일 전체를 붙여넣고, 아래 CONFIGURE_ME 네 줄의 값을 채우세요.
-# 나머지는 부팅과 동시에 자동 실행되어 dry-run 모드로 워커가 가동됩니다.
+# 사용법:
+#   (A) 운영자가 Vultr 콘솔에서 인스턴스를 직접 만드는 경우:
+#       이 파일 전체를 "User Data" / "Cloud-Init" 필드에 붙여넣고,
+#       아래 CONFIGURE_ME에서 AUTO_INVEST_CAPITAL만 채우세요.
+#       KIS 키는 인스턴스 부팅 후 콘솔에서 한 번 실행할 명령으로 박습니다:
+#         bash /opt/auto-invest/scripts/set_secrets.sh
+#
+#   (B) API 토큰 위임으로 자동 생성하는 경우:
+#       동일. 운영자는 인스턴스 생성된 후 Vultr 콘솔에서 위 한 줄 실행.
 #
 # 1주일 dry-run 관찰 후 실주문 전환:
-#   ssh root@<인스턴스IP>
-#   sed -i 's/^AUTO_INVEST_MODE=.*/AUTO_INVEST_MODE=live/' /opt/auto-invest/.env
-#   systemctl restart auto-invest.service
+#   sed -i 's/^AUTO_INVEST_MODE=.*/AUTO_INVEST_MODE=live/' /opt/auto-invest/.env \
+#   && systemctl restart auto-invest.service
 #
 # 안전:
 #   - 이 스크립트는 cloud-init이 root로 한 번만 실행합니다.
-#   - KIS 키는 인스턴스 내부 /opt/auto-invest/.env (chmod 0600)로만 저장,
-#     로그/journal에 절대 echo하지 않습니다.
-#   - User-Data 자체는 Vultr 메타데이터에 보관되니, 가동 후 Vultr 콘솔의
-#     "Settings → User Data → Edit"에서 KIS 키 줄을 비우는 것도 가능
-#     (영구 보관 위험을 줄임 — cloud-init은 이미 실행됐으므로 안전).
+#   - KIS 키는 set_secrets.sh로 입력될 때까지 placeholder 상태이며,
+#     워커는 placeholder 상태에서는 fail-safe로 가동되지 않습니다.
+#   - 모든 로그는 /var/log/auto-invest-cloud-init.log에 남고, 비밀은 절대
+#     echo하지 않습니다.
 
 set -euo pipefail
 exec > >(tee /var/log/auto-invest-cloud-init.log) 2>&1
 
 # ============================================================================
-# CONFIGURE_ME — 이 네 줄만 채우세요. 다른 줄은 건드리지 마세요.
+# CONFIGURE_ME — 이 줄만 필요하면 바꾸세요. KIS 키는 부팅 후 set_secrets.sh로.
 # ============================================================================
-KIS_APP_KEY="여기에_KIS앱키"
-KIS_APP_SECRET="여기에_KIS시크릿"
-KIS_ACCOUNT_NO="여기에_계좌번호"
 AUTO_INVEST_CAPITAL="100"
 # ============================================================================
-
-# 안전: 비밀이 placeholder 그대로면 종료
-if [[ "$KIS_APP_KEY" == "여기에_KIS앱키" ]] || [[ -z "$KIS_APP_KEY" ]]; then
-    echo "ERROR: KIS_APP_KEY가 채워지지 않았습니다. User-Data를 수정 후 인스턴스를 재생성하세요." >&2
-    exit 100
-fi
 
 echo "[1/8] 시스템 업데이트 + 기본 도구 설치"
 export DEBIAN_FRONTEND=noninteractive
@@ -65,12 +60,14 @@ sudo -u auto-invest git checkout main --quiet
 sudo -u auto-invest git pull --ff-only --quiet
 sudo -u auto-invest /usr/local/bin/uv sync --quiet
 
-echo "[6/8] .env 생성 (chmod 0600, auto-invest 소유)"
+echo "[6/8] .env 생성 (chmod 0600, auto-invest 소유, KIS 키는 placeholder)"
 umask 077
 cat > /opt/auto-invest/.env <<EOF
-KIS_APP_KEY=${KIS_APP_KEY}
-KIS_APP_SECRET=${KIS_APP_SECRET}
-KIS_ACCOUNT_NO=${KIS_ACCOUNT_NO}
+# KIS 자격증명은 운영자가 다음 명령으로 박습니다:
+#   bash /opt/auto-invest/scripts/set_secrets.sh
+KIS_APP_KEY=
+KIS_APP_SECRET=
+KIS_ACCOUNT_NO=
 AUTO_INVEST_CAPITAL=${AUTO_INVEST_CAPITAL}
 AUTO_INVEST_MODE=dry-run
 EOF
@@ -82,26 +79,28 @@ echo "[7/8] SQLite 감사 로그 마이그레이션 적용"
 cd /opt/auto-invest
 sudo -u auto-invest /usr/local/bin/uv run auto-invest db migrate --db /opt/auto-invest/data/auto_invest.db
 
-echo "[8/8] systemd 유닛 + 타이머 설치 + 활성화"
+echo "[8/8] systemd 유닛 + 타이머 설치 (워커는 KIS 키 설정 전까지 fail-safe)"
 install -m 0644 /opt/auto-invest/deploy/auto-invest.service        /etc/systemd/system/auto-invest.service
 install -m 0644 /opt/auto-invest/deploy/auto-invest-deploy.service /etc/systemd/system/auto-invest-deploy.service
 install -m 0644 /opt/auto-invest/deploy/auto-invest-deploy.timer   /etc/systemd/system/auto-invest-deploy.timer
 systemctl daemon-reload
-systemctl enable --now auto-invest.service
+# 배포 타이머는 바로 활성화 (KIS 키와 무관하게 git pull 가능).
 systemctl enable --now auto-invest-deploy.timer
-
-# 비밀 변수를 메모리/디스크에서 즉시 제거 (cloud-init log에 남지 않게).
-unset KIS_APP_KEY KIS_APP_SECRET KIS_ACCOUNT_NO
+# 워커는 enable만 하고 start는 운영자가 set_secrets.sh로 KIS 키 박은 다음에
+# 자동으로 시작됩니다 (set_secrets.sh가 systemctl restart 호출).
+systemctl enable auto-invest.service
 
 echo
 echo "========================================================"
-echo "auto-invest 가동 완료 (dry-run 모드)"
+echo "auto-invest 인스턴스 셋업 완료."
 echo
-echo "확인:"
-echo "  systemctl status auto-invest.service"
-echo "  journalctl -u auto-invest.service -n 30"
-echo "  sqlite3 /opt/auto-invest/data/auto_invest.db \\"
-echo "    'SELECT ts_utc, event_type FROM audit_log ORDER BY seq DESC LIMIT 10;'"
+echo "다음 한 줄을 이 콘솔에서 실행하셔서 KIS 자격증명을 박으세요."
+echo "(입력값은 화면에 안 보이고, 로그/journal에도 절대 남지 않습니다)"
+echo
+echo "    bash /opt/auto-invest/scripts/set_secrets.sh"
+echo
+echo "그 명령이 KIS 키 3개를 prompt로 받고, .env에 저장하고, 워커를"
+echo "dry-run 모드로 자동 가동합니다."
 echo
 echo "1주일 후 실주문 전환 (한 줄):"
 echo "  sed -i 's/^AUTO_INVEST_MODE=.*/AUTO_INVEST_MODE=live/' /opt/auto-invest/.env \\"
