@@ -2,6 +2,12 @@
 Description=auto-invest live trading worker
 After=network-online.target
 Wants=network-online.target
+# 첫 부팅 직후 KIS 키가 placeholder면 워커가 즉시 죽고, 5분간 재시작 5회
+# 한도를 넘기면 systemd가 더 이상 시도하지 않음 (운영자가 set_secrets.sh
+# 실행한 다음 systemctl restart로 다시 띄움). 그 사이 ERROR 행이 audit_log를
+# 채우지 않음.
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 Type=simple
