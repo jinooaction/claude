@@ -1,0 +1,218 @@
+name: Provision Vultr instance (auto-invest)
+
+# 운영자가 GitHub UI에서 "Run workflow" 버튼으로 수동 실행하는 워크플로우.
+# Vultr API를 호출해 Tokyo 리전 / Ubuntu 22.04 / 가장 작은 인스턴스를 한 대
+# 만들고, cloud-init User-Data에 deploy/vultr-userdata.sh 를 박는다.
+# 인스턴스 IP는 워크플로우 Summary에 출력되며, root 비밀번호는 보안상
+# 워크플로우 로그에 출력하지 않고 운영자가 Vultr 콘솔에서 직접 확인하도록
+# 안내한다.
+#
+# 사전 준비 (운영자가 한 번만):
+#   1. Vultr 콘솔(https://my.vultr.com/settings/#settingsapi)에서
+#      Personal Access Token 확인 또는 Regenerate.
+#   2. Vultr 콘솔의 Access Control에 `0.0.0.0/0` 추가 (GitHub Actions
+#      runner의 IP가 매번 바뀌므로 IP 제한을 풀어야 함). 워크플로우 끝난
+#      직후 IP 허용 목록을 다시 좁히거나 토큰을 Regenerate 해서 폐기.
+#   3. 이 저장소 Settings → Secrets and variables → Actions →
+#      "New repository secret" 으로 다음 이름의 시크릿 한 개 등록:
+#        Name:  VULTR_API_KEY
+#        Value: (Vultr 토큰 문자열)
+#
+# 실행:
+#   Actions 탭 → "Provision Vultr instance (auto-invest)" → Run workflow.
+
+on:
+  workflow_dispatch:
+    inputs:
+      capital_usd:
+        description: "시작 자본금 (USD). 100 권장."
+        required: true
+        default: "100"
+        type: string
+      region:
+        description: "Vultr 리전 ID (nrt=Tokyo, sgp=Singapore, sea=Seattle, ewr=New Jersey)."
+        required: true
+        default: "nrt"
+        type: choice
+        options:
+          - nrt
+          - sgp
+          - sea
+          - ewr
+      plan:
+        description: "Vultr 플랜 ID. 기본은 월 약 6달러 (1 CPU + 1GB RAM)."
+        required: true
+        default: "vc2-1c-1gb"
+        type: string
+      label:
+        description: "인스턴스 라벨/호스트명."
+        required: true
+        default: "auto-invest"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify Vultr token
+        env:
+          VULTR_API_KEY: ${{ secrets.VULTR_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${VULTR_API_KEY:-}" ]]; then
+              echo "::error::VULTR_API_KEY secret이 등록되지 않았습니다."
+              echo "Settings → Secrets and variables → Actions 에서 추가하세요."
+              exit 1
+          fi
+          http_code=$(curl -sS -o /tmp/account.json -w "%{http_code}" \
+              -H "Authorization: Bearer ${VULTR_API_KEY}" \
+              https://api.vultr.com/v2/account)
+          if [[ "$http_code" != "200" ]]; then
+              echo "::error::Vultr 토큰 검증 실패 (HTTP $http_code)."
+              cat /tmp/account.json
+              if grep -q "Host not in allowlist" /tmp/account.json 2>/dev/null; then
+                  echo "::warning::Vultr 콘솔 → API → Access Control에 0.0.0.0/0 추가 필요."
+              fi
+              exit 1
+          fi
+          echo "Vultr 토큰 검증 OK."
+
+      - name: Look up Ubuntu 22.04 x64 OS ID
+        env:
+          VULTR_API_KEY: ${{ secrets.VULTR_API_KEY }}
+        run: |
+          set -euo pipefail
+          curl -sS -H "Authorization: Bearer ${VULTR_API_KEY}" \
+              "https://api.vultr.com/v2/os?per_page=500" > /tmp/os.json
+          os_id=$(jq -r '.os[] | select(.name | test("Ubuntu 22.04.*x64"; "i")) | .id' /tmp/os.json | head -1)
+          if [[ -z "$os_id" ]]; then
+              echo "::error::Ubuntu 22.04 x64 OS ID를 못 찾았습니다."
+              jq '.os[] | select(.name | test("Ubuntu"; "i"))' /tmp/os.json
+              exit 1
+          fi
+          echo "OS_ID=$os_id" >> "$GITHUB_ENV"
+          echo "Ubuntu 22.04 x64 OS ID: $os_id"
+
+      - name: Build cloud-init User-Data
+        env:
+          CAPITAL: ${{ inputs.capital_usd }}
+        run: |
+          set -euo pipefail
+          # vultr-userdata.sh의 AUTO_INVEST_CAPITAL 줄을 사용자 입력으로 교체.
+          sed "s|^AUTO_INVEST_CAPITAL=.*|AUTO_INVEST_CAPITAL=\"${CAPITAL}\"|" \
+              deploy/vultr-userdata.sh > /tmp/userdata.sh
+          # base64 인코딩 (Vultr API가 user_data를 base64로 요구).
+          base64 -w0 /tmp/userdata.sh > /tmp/userdata.b64
+          echo "User-Data 빌드 완료 (capital=${CAPITAL})."
+
+      - name: Create Vultr instance
+        env:
+          VULTR_API_KEY: ${{ secrets.VULTR_API_KEY }}
+          REGION: ${{ inputs.region }}
+          PLAN: ${{ inputs.plan }}
+          LABEL: ${{ inputs.label }}
+        run: |
+          set -euo pipefail
+          userdata_b64=$(cat /tmp/userdata.b64)
+          cat > /tmp/payload.json <<EOF
+          {
+            "region": "${REGION}",
+            "plan": "${PLAN}",
+            "os_id": ${OS_ID},
+            "label": "${LABEL}",
+            "hostname": "${LABEL}",
+            "user_data": "${userdata_b64}",
+            "tags": ["auto-invest"],
+            "backups": "disabled",
+            "enable_ipv6": false
+          }
+          EOF
+          http_code=$(curl -sS -X POST \
+              -o /tmp/create.json -w "%{http_code}" \
+              -H "Authorization: Bearer ${VULTR_API_KEY}" \
+              -H "Content-Type: application/json" \
+              --data @/tmp/payload.json \
+              https://api.vultr.com/v2/instances)
+          if [[ "$http_code" != "202" ]] && [[ "$http_code" != "200" ]]; then
+              echo "::error::인스턴스 생성 실패 (HTTP $http_code)."
+              cat /tmp/create.json
+              exit 1
+          fi
+          instance_id=$(jq -r '.instance.id' /tmp/create.json)
+          echo "INSTANCE_ID=$instance_id" >> "$GITHUB_ENV"
+          echo "인스턴스 생성 요청 OK (id=$instance_id). IP 할당 대기 중..."
+
+      - name: Wait for instance IP
+        env:
+          VULTR_API_KEY: ${{ secrets.VULTR_API_KEY }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+              sleep 10
+              curl -sS -H "Authorization: Bearer ${VULTR_API_KEY}" \
+                  "https://api.vultr.com/v2/instances/${INSTANCE_ID}" > /tmp/inst.json
+              status=$(jq -r '.instance.status' /tmp/inst.json)
+              ip=$(jq -r '.instance.main_ip' /tmp/inst.json)
+              echo "  [$attempt/30] status=$status ip=$ip"
+              if [[ "$status" == "active" ]] && [[ "$ip" != "0.0.0.0" ]] && [[ "$ip" != "null" ]]; then
+                  echo "INSTANCE_IP=$ip" >> "$GITHUB_ENV"
+                  echo "인스턴스 active, IP=$ip"
+                  exit 0
+              fi
+          done
+          echo "::error::5분 대기에도 인스턴스가 active 안 됨. Vultr 콘솔에서 직접 확인하세요."
+          jq '.' /tmp/inst.json
+          exit 1
+
+      - name: Write workflow summary
+        env:
+          REGION: ${{ inputs.region }}
+          CAPITAL: ${{ inputs.capital_usd }}
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          # auto-invest 인스턴스 가동 ✅
+
+          | 항목 | 값 |
+          |------|-----|
+          | 인스턴스 ID | \`${INSTANCE_ID}\` |
+          | IP 주소 | \`${INSTANCE_IP}\` |
+          | 리전 | ${REGION} |
+          | 자본금 | ${CAPITAL} USD |
+          | 상태 | active (cloud-init 5~10분 더 소요) |
+
+          ## 다음 단계 (운영자가 직접)
+
+          1. **5~10분 기다리세요** — cloud-init이 우분투 업데이트 + 저장소 클론 + 의존성 설치 중.
+          2. Vultr 콘솔에서 인스턴스 페이지 열기:
+             https://my.vultr.com/subs/?SUBID=${INSTANCE_ID}
+          3. 오른쪽 위 **"View Console"** 버튼 클릭 (브라우저 안에서 콘솔 열림).
+          4. \`root\` 로그인. **비밀번호는 인스턴스 페이지의 "Overview" 탭 "Password" 필드**에 있습니다 (눈 모양 아이콘으로 보기).
+          5. 다음 한 줄을 콘솔에 붙여넣고 Enter:
+             \`\`\`
+             bash /opt/auto-invest/scripts/set_secrets.sh
+             \`\`\`
+          6. 세 가지 prompt에 KIS 키 입력 (화면에 안 보이고, 로그에 안 남음).
+          7. \`OK — auto-invest.service 가 정상 가동 중입니다 (dry-run 모드).\` 메시지 확인.
+
+          ## ⚠ 워크플로우 끝난 직후 운영자가 할 일
+
+          - Vultr 콘솔 → API 페이지 → **"Regenerate"** 버튼 클릭으로 토큰 폐기.
+            (이 워크플로우는 토큰을 GitHub Secrets에서 한 번만 읽었지만, 폐기로 추가 안전).
+          - 또는 Vultr API 자체를 OFF 토글.
+
+          ## 1주일 dry-run 후 실주문 전환 (한 줄, 콘솔에서)
+
+          \`\`\`
+          sed -i 's/^AUTO_INVEST_MODE=.*/AUTO_INVEST_MODE=live/' /opt/auto-invest/.env \\
+            && systemctl restart auto-invest.service
+          \`\`\`
+          EOF
+          echo
+          echo "워크플로우 Summary에 인스턴스 IP + 다음 단계 안내가 출력됐습니다."
+          echo "다음: Vultr 콘솔에서 비밀번호 확인 + View Console + set_secrets.sh 실행."
