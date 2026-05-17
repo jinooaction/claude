@@ -47,24 +47,24 @@ apt-get install -y -qq git curl nano build-essential ca-certificates sqlite3
 echo "[2/8] timezone UTC"
 timedatectl set-timezone UTC
 
-echo "[3/8] auto-invest system user + dirs"
+echo "[3/8] auto-invest system user (no install dir yet -- git clone needs empty target)"
 if ! id auto-invest >/dev/null 2>&1; then
     useradd --system --create-home --home-dir /var/lib/auto-invest --shell /bin/bash auto-invest
 fi
-install -d -m 0750 -o auto-invest -g auto-invest /opt/auto-invest
-install -d -m 0750 -o auto-invest -g auto-invest /opt/auto-invest/data
-install -d -m 0750 -o auto-invest -g auto-invest /opt/auto-invest/logs
 
 echo "[4/8] install uv (system PATH)"
 curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh
 ln -sf /usr/local/bin/uv /usr/bin/uv
 
-echo "[5/8] clone repo + uv sync"
-sudo -u auto-invest git clone https://github.com/jinooaction/claude.git /opt/auto-invest 2>/dev/null || true
+echo "[5/8] clone repo (target must be empty) + create data/logs after + uv sync"
+# git clone refuses a non-empty target. Clone FIRST, then create data/logs.
+rm -rf /opt/auto-invest
+git clone https://github.com/jinooaction/claude.git /opt/auto-invest
+install -d -m 0750 -o auto-invest -g auto-invest /opt/auto-invest/data
+install -d -m 0750 -o auto-invest -g auto-invest /opt/auto-invest/logs
+chown -R auto-invest:auto-invest /opt/auto-invest
+chmod 0750 /opt/auto-invest
 cd /opt/auto-invest
-sudo -u auto-invest git fetch origin main --quiet
-sudo -u auto-invest git checkout main --quiet
-sudo -u auto-invest git pull --ff-only --quiet
 sudo -u auto-invest /usr/local/bin/uv sync --quiet
 
 echo "[6/8] create .env with placeholder KIS keys (chmod 0600, owned by auto-invest)"
