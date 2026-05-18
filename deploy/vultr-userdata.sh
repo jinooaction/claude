@@ -62,10 +62,15 @@ rm -rf /opt/auto-invest
 git clone https://github.com/jinooaction/claude.git /opt/auto-invest
 install -d -m 0750 -o auto-invest -g auto-invest /opt/auto-invest/data
 install -d -m 0750 -o auto-invest -g auto-invest /opt/auto-invest/logs
+# uv cache lives here so the ProtectSystem=strict worker unit can write to it
+# (default $HOME/.cache/uv = /var/lib/auto-invest/.cache/uv is read-only under
+# the hardened service). Same path is pinned via UV_CACHE_DIR for every uv
+# call below and in auto-invest.service.
+install -d -m 0750 -o auto-invest -g auto-invest /opt/auto-invest/.cache/uv
 chown -R auto-invest:auto-invest /opt/auto-invest
 chmod 0750 /opt/auto-invest
 cd /opt/auto-invest
-sudo -u auto-invest /usr/local/bin/uv sync --quiet
+sudo -u auto-invest UV_CACHE_DIR=/opt/auto-invest/.cache/uv /usr/local/bin/uv sync --quiet
 
 echo "[6/8] create .env with placeholder KIS keys (chmod 0600, owned by auto-invest)"
 umask 077
@@ -84,7 +89,7 @@ umask 022
 
 echo "[7/8] apply SQLite audit-log migrations"
 cd /opt/auto-invest
-sudo -u auto-invest /usr/local/bin/uv run auto-invest db migrate --db /opt/auto-invest/data/auto_invest.db
+sudo -u auto-invest UV_CACHE_DIR=/opt/auto-invest/.cache/uv /usr/local/bin/uv run auto-invest db migrate --db /opt/auto-invest/data/auto_invest.db
 
 echo "[8/8] install systemd units + timer (worker is fail-safe until KIS keys set)"
 install -m 0644 /opt/auto-invest/deploy/auto-invest.service        /etc/systemd/system/auto-invest.service

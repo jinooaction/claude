@@ -15,6 +15,10 @@ User=auto-invest
 Group=auto-invest
 WorkingDirectory=/opt/auto-invest
 EnvironmentFile=/opt/auto-invest/.env
+# uv는 매 호출마다 캐시 디렉터리에 락 임시파일을 만듦. ProtectSystem=strict
+# 환경에서 기본 위치($HOME/.cache/uv = /var/lib/auto-invest/.cache/uv)는
+# 읽기 전용이라 워커가 즉사. 캐시를 ReadWritePaths에 포함된 경로로 강제.
+Environment=UV_CACHE_DIR=/opt/auto-invest/.cache/uv
 # Wrapper toggles dry-run / live based on AUTO_INVEST_MODE in .env.
 ExecStart=/opt/auto-invest/deploy/run-worker.sh
 Restart=on-failure
@@ -25,7 +29,7 @@ StandardError=journal
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ReadWritePaths=/opt/auto-invest/data /opt/auto-invest/logs
+ReadWritePaths=/opt/auto-invest/data /opt/auto-invest/logs /opt/auto-invest/.cache
 ProtectHome=true
 
 [Install]
