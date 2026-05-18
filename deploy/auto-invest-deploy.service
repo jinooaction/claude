@@ -9,6 +9,8 @@ User=auto-invest
 Group=auto-invest
 WorkingDirectory=/opt/auto-invest
 EnvironmentFile=/opt/auto-invest/.env
+# Share uv cache with auto-invest.service so both reuse the same lockfile/wheel store.
+Environment=UV_CACHE_DIR=/opt/auto-invest/.cache/uv
 ExecStart=/usr/local/bin/uv run auto-invest deploy --branch main
 StandardOutput=journal
 StandardError=journal
