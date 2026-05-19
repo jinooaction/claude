@@ -342,6 +342,362 @@ def paper_run(
         _exit(exit_code)
 
 
+@app.command(name="design")
+def design(
+    intent: str = typer.Option(
+        ...,
+        "--intent",
+        help="운영자 자연어 의도 (예: \"자본 100달러, 미국 대형주 분산, 매주 적립, 위험 보통\")",
+    ),
+    db_path: Path = typer.Option(
+        Path("data/auto_invest.db"),
+        "--db",
+        help="SQLite database path.",
+    ),
+    env_file: Path | None = typer.Option(
+        None,
+        "--env-file",
+        help="Optional .env file.",
+    ),
+    base_url: str = typer.Option(
+        "https://openapi.koreainvestment.com:9443",
+        "--base-url",
+        help="KIS REST base URL (quote/잔고 조회용).",
+    ),
+    prices_path: Path = typer.Option(
+        Path("config/llm_prices.toml"),
+        "--prices",
+        help="Anthropic price table (spec 002).",
+    ),
+    intent_capital_usd: float = typer.Option(
+        0.0,
+        "--capital",
+        help="운영자 의도의 자본 (USD). 0이면 KIS 잔고 그대로 사용.",
+    ),
+    max_retries: int = typer.Option(
+        3,
+        "--max-retries",
+        help="자동 재설계 최대 횟수 (기본 3, FR-007).",
+    ),
+) -> None:
+    """Spec 010 — 자동 룰 설계자.
+
+    운영자가 자연어 한 줄로 의도를 적으면 시스템이 룰을 자동 생성하고
+    정적 검증한 뒤 운영자 OK 한 줄을 받아 라이브 시작. 본 PR에서는 KIS
+    주문 API는 단 한 번도 호출하지 않습니다 (잔고 조회 quote 제외).
+    """
+    import json as _json
+    import socket
+    from decimal import Decimal as _D
+
+    from auto_invest.design import claude_client, deploy, mutex, prompt, verifier
+    from auto_invest.persistence import audit as _audit
+    from auto_invest.persistence import db as _db
+    from auto_invest.persistence.audit import (
+        RuleDesignCompletedPayload,
+        RuleDesignDeployedPayload,
+        RuleDesignRejectedPayload,
+        RuleDesignRequestedPayload,
+    )
+    from auto_invest.telemetry.prices import PriceTableError, load_prices
+
+    configure_logging()
+
+    if not intent.strip():
+        typer.echo("--intent가 빈 문자열입니다.", err=True)
+        _exit(2)
+
+    # 1. config·secrets·prices 로드.
+    try:
+        secrets = load_secrets(env_file)
+        prices = load_prices(prices_path)
+    except (ConfigError, PriceTableError) as exc:
+        typer.echo(f"설정 오류: {exc}", err=True)
+        _exit(2)
+
+    # 2. DB + mutex check.
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = _db.get_connection(db_path)
+    _db.migrate(conn)
+
+    mx = mutex.check_and_acquire(conn)
+    if not mx.allowed:
+        typer.echo(
+            f"design 명령 시작 거부: 다른 design 명령이 이미 실행 중입니다 "
+            f"(seq={mx.conflicting_event_id}, 시작 {mx.conflicting_session_started_at})."
+            "\n기존 명령 종료 후 다시 시도해주세요.",
+            err=True,
+        )
+        conn.close()
+        _exit(mx.exit_code)
+
+    # 3. KIS 잔고 + 보유 종목 조회.
+    typer.echo("KIS 잔고 조회 중...")
+    try:
+        balance, holdings = asyncio.run(
+            _fetch_kis_account_state(
+                base_url=base_url,
+                app_key=secrets["KIS_APP_KEY"],
+                app_secret=secrets["KIS_APP_SECRET"],
+                account_no=secrets["KIS_ACCOUNT_NO"],
+                db_path=db_path,
+            )
+        )
+    except Exception as exc:  # noqa: BLE001 — KIS 오류는 모두 한글 보고
+        _audit.append(
+            conn,
+            RuleDesignRejectedPayload(
+                reason="kis_token_failed",
+                detail=f"KIS 잔고 조회 실패: {exc}",
+            ),
+        )
+        typer.echo(f"KIS 잔고 조회 실패: {exc}", err=True)
+        conn.close()
+        _exit(1)
+
+    typer.echo(f"잔고: ${balance.cash_usd} USD, 총 평가: ${balance.total_value_usd}")
+    typer.echo(verifier.availability_notice())
+
+    # 4. RULE_DESIGN_REQUESTED 기록.
+    design_session_id = _audit.append(
+        conn,
+        RuleDesignRequestedPayload(
+            intent=intent,
+            requested_at_utc=_d_iso_now(),
+            kis_balance_usd=str(balance.cash_usd),
+            kis_holdings=holdings,
+            host=socket.gethostname(),
+        ),
+    )
+
+    # 5. Claude 호출 + 검증 루프 (최대 max_retries).
+    intent_capital = _D(str(intent_capital_usd)) if intent_capital_usd > 0 else balance.cash_usd
+    retry_context: dict | None = None
+    generated_toml: str | None = None
+    completed_payload: RuleDesignCompletedPayload | None = None
+
+    async def _design_loop():
+        nonlocal retry_context, generated_toml, completed_payload
+        async with httpx.AsyncClient(timeout=60.0) as _:
+            # anthropic SDK 클라이언트 — async 버전.
+            import anthropic
+            anth_client = anthropic.AsyncAnthropic(
+                api_key=secrets.get("ANTHROPIC_API_KEY", ""),
+            )
+
+            for retry_index in range(1, max_retries + 1):
+                typer.echo(f"\nClaude 호출 중 (시도 {retry_index}/{max_retries})...")
+                sys_p = prompt.build_system_prompt()
+                user_p = prompt.build_user_prompt(
+                    intent=intent,
+                    kis_balance_usd=balance.cash_usd,
+                    kis_holdings=holdings,
+                    retry_context=retry_context,
+                )
+
+                try:
+                    response = await claude_client.call_rule_design(
+                        anth_client,
+                        system_prompt=sys_p,
+                        user_prompt=user_p,
+                        conn=conn,
+                        prices=prices,
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    _audit.append(
+                        conn,
+                        RuleDesignRejectedPayload(
+                            reason="claude_api_error",
+                            detail=f"Claude API 오류: {exc}",
+                            retry_index=retry_index,
+                        ),
+                    )
+                    typer.echo(f"Claude API 오류: {exc}", err=True)
+                    retry_context = {
+                        "reason": "claude_api_error",
+                        "detail": str(exc),
+                        "previous_toml": "",
+                    }
+                    continue
+
+                typer.echo(
+                    f"  모델 {response.model_id}, 토큰 입력 {response.tokens_input}/"
+                    f"출력 {response.tokens_output}, 비용 ${response.cost_usd:.4f}"
+                )
+                if response.cost_exceeded:
+                    _audit.append(
+                        conn,
+                        RuleDesignRejectedPayload(
+                            reason="claude_api_error",
+                            detail=(
+                                f"호출당 비용 한도(${response.cost_usd:.4f}) 초과. "
+                                "의도를 짧게 다시 시도해주세요."
+                            ),
+                            retry_index=retry_index,
+                        ),
+                    )
+                    typer.echo("호출 비용 한도 초과. 거부.", err=True)
+                    return False
+
+                parsed = prompt.parse_claude_response(response.text)
+                if parsed.error:
+                    _audit.append(
+                        conn,
+                        RuleDesignRejectedPayload(
+                            reason="insufficient_balance",
+                            detail=parsed.error,
+                            retry_index=retry_index,
+                        ),
+                    )
+                    typer.echo(f"Claude 응답 오류: {parsed.error}", err=True)
+                    return False
+
+                # 정적 + 백테스트(가용 시) 검증.
+                vr = verifier.verify_rules(
+                    parsed.rules_toml,
+                    intent_capital_usd=intent_capital,
+                    kis_balance_usd=balance.cash_usd,
+                )
+                if not vr.ok:
+                    _audit.append(
+                        conn,
+                        RuleDesignRejectedPayload(
+                            reason=vr.reason or "parse_error",  # type: ignore[arg-type]
+                            detail=vr.detail,
+                            retry_index=retry_index,
+                        ),
+                    )
+                    typer.echo(f"검증 실패: {vr.detail}", err=True)
+                    retry_context = {
+                        "reason": vr.reason or "parse_error",
+                        "detail": vr.detail,
+                        "previous_toml": parsed.rules_toml,
+                    }
+                    continue
+
+                # 통과 — COMPLETED 기록 + 생성된 TOML 보관.
+                completed_payload = RuleDesignCompletedPayload(
+                    intent=intent,
+                    interpretation=parsed.interpretation,
+                    generated_rules_toml=parsed.rules_toml,
+                    model_id=response.model_id,
+                    tokens_input=response.tokens_input,
+                    tokens_output=response.tokens_output,
+                    cost_usd=str(response.cost_usd),
+                    retry_index=retry_index,
+                    paper_run_session_id=None,
+                )
+                _audit.append(conn, completed_payload)
+                generated_toml = parsed.rules_toml
+                return True
+
+        return False
+
+    success = asyncio.run(_design_loop())
+
+    if not success:
+        if completed_payload is None:
+            _audit.append(
+                conn,
+                RuleDesignRejectedPayload(
+                    reason="max_retries",
+                    detail=(
+                        f"{max_retries}회 모두 검증 통과 못함. "
+                        "의도를 더 구체적으로 다시 시도해주세요."
+                    ),
+                ),
+            )
+        typer.echo(
+            f"\n자동 룰 설계 실패: {max_retries}회 모두 검증 통과 못함.",
+            err=True,
+        )
+        conn.close()
+        _exit(1)
+
+    # 6. 운영자 OK prompt + 라이브 시작 (stub).
+    assert completed_payload is not None
+    assert generated_toml is not None
+    typer.echo("\n=== 검증 통과 — 생성된 룰 요약 ===")
+    typer.echo(f"  해석: {_json.dumps(completed_payload.interpretation, ensure_ascii=False)}")
+    typer.echo(f"  자본: ${intent_capital} (KIS 잔고 ${balance.cash_usd})")
+    typer.echo(generated_toml[:500] + ("..." if len(generated_toml) > 500 else ""))
+    typer.echo("")
+
+    ok = deploy.prompt_operator_ok()
+    if not ok:
+        _audit.append(
+            conn,
+            RuleDesignRejectedPayload(
+                reason="operator_declined",
+                detail="운영자가 OK를 답하지 않거나 60초 안에 응답 없음.",
+            ),
+        )
+        typer.echo("라이브 시작 거부됨. 생성된 룰은 audit_log에 보관됨.")
+        conn.close()
+        return  # exit 0 (정상 종료)
+
+    # 라이브 시작은 본 PR에서 stub — RULE_DESIGN_DEPLOYED audit만 기록.
+    _audit.append(
+        conn,
+        RuleDesignDeployedPayload(
+            design_session_id=design_session_id,
+            live_session_id=0,  # TODO(후속 PR): 실제 worker subprocess 시작 후 session id
+            deployed_at_utc=_d_iso_now(),
+            total_capital_usd=str(intent_capital),
+        ),
+    )
+    typer.echo(
+        "\n라이브 시작 시뮬: RULE_DESIGN_DEPLOYED audit 기록됨. "
+        "실제 worker subprocess 시작은 후속 PR에서 활성화 예정. "
+        "현재는 운영자가 수동으로 `auto-invest run --capital ...`을 실행해주세요."
+    )
+    conn.close()
+
+
+async def _fetch_kis_account_state(
+    *,
+    base_url: str,
+    app_key: str,
+    app_secret: str,
+    account_no: str,
+    db_path: Path,
+):
+    """KIS 잔고 + 보유 종목 조회 helper."""
+    from auto_invest.broker.overseas import get_balance
+
+    async with httpx.AsyncClient(base_url=base_url, timeout=30.0) as inner:
+        token = await get_valid_token(
+            inner,
+            base_url=base_url,
+            app_key=app_key,
+            app_secret=app_secret,
+            cache_path=db_path.parent / "kis_token.json",
+        )
+        client = ResilientClient(
+            inner,
+            rate_limiter=AsyncTokenBucket(rate_per_sec=15.0, capacity=15.0),
+            breaker=CircuitBreaker(failure_threshold=5, cooldown_seconds=30.0),
+            max_retries=4,
+        )
+        balance = await get_balance(
+            client,
+            access_token=token.access_token,
+            app_key=app_key,
+            app_secret=app_secret,
+            account=account_no,
+        )
+    # 보유 종목 상세 조회는 본 PR에서 stub — 빈 리스트.
+    return balance, []
+
+
+def _d_iso_now() -> str:
+    """ISO8601 millis with Z suffix."""
+    from datetime import UTC, datetime
+
+    now = datetime.now(UTC)
+    return now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z"
+
+
 @app.command(name="paper-report")
 def paper_report(
     since: str = typer.Option(
