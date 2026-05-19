@@ -342,6 +342,73 @@ def paper_run(
         _exit(exit_code)
 
 
+@app.command(name="paper-report")
+def paper_report(
+    since: str = typer.Option(
+        ...,
+        "--since",
+        help="집계 시작 시각 (UTC ISO8601, 예: 2026-05-12T00:00:00Z).",
+    ),
+    until: str | None = typer.Option(
+        None,
+        "--until",
+        help="집계 종료 시각 (UTC ISO8601). 미지정 시 현재 시각.",
+    ),
+    db_path: Path = typer.Option(
+        Path("data/auto_invest.db"),
+        "--db",
+        help="SQLite database path.",
+    ),
+    output_format: str = typer.Option(
+        "text",
+        "--format",
+        help="text (사람용 표) 또는 json (외부 도구·자동 튜너 입력용).",
+    ),
+) -> None:
+    """Spec 009 — paper-run audit_log를 룰 튜닝용 리포트로 집계.
+
+    read-only — DB의 어떤 row도 수정하지 않는다 (SC-006). live 모드 이벤트는
+    집계에서 제외된다 (FR-011).
+    """
+    import json as _json
+    from datetime import UTC, datetime
+
+    from auto_invest.paper.report import build_paper_report, render_text
+
+    if output_format not in ("text", "json"):
+        typer.echo("--format must be 'text' or 'json'.", err=True)
+        _exit(2)
+
+    def _parse_iso(s: str) -> datetime:
+        # 'Z' 접미사를 +00:00로 변환해 fromisoformat에 통과시킴.
+        normalized = s.replace("Z", "+00:00")
+        return datetime.fromisoformat(normalized).astimezone(UTC)
+
+    try:
+        since_dt = _parse_iso(since)
+        until_dt = _parse_iso(until) if until else datetime.now(UTC)
+    except ValueError as exc:
+        typer.echo(f"잘못된 ISO8601 시각: {exc}", err=True)
+        _exit(2)
+
+    if not db_path.exists():
+        typer.echo(f"DB 파일을 찾을 수 없습니다: {db_path}", err=True)
+        _exit(1)
+
+    conn = db.get_connection(db_path)
+    try:
+        # read-only — PRAGMA query_only로 INSERT/UPDATE/DELETE를 차단.
+        conn.execute("PRAGMA query_only = ON")
+        report = build_paper_report(conn, since=since_dt, until=until_dt)
+    finally:
+        conn.close()
+
+    if output_format == "json":
+        typer.echo(_json.dumps(report.to_json_dict(), indent=2, ensure_ascii=False))
+    else:
+        typer.echo(render_text(report))
+
+
 @app.command()
 def version() -> None:
     """Print the auto-invest package version."""
