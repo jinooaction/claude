@@ -25,13 +25,13 @@ description: "Task list for spec 010 자동 룰 설계자 (Autonomous Rule Desig
 |--------|------|----------|
 | K1 position sizing | ❌ 무수정 | — |
 | K2 whitelist | ❌ 무수정 | — |
-| **K3 LLM judgment points** | ✅ additive | `telemetry/meter.py` (rule_design cost-band) |
+| K3 LLM judgment points | ❌ 코드 무수정 | (decision_class 문자열은 free-form, 호출 사이트에서만 `"rule_design"` 명시) |
 | **K4 append-only audit** | ✅ additive | `persistence/audit.py` (4 페이로드) |
 | K5 secret isolation | ❌ 무수정 | — |
 | K6 market hours guard | ❌ 무수정 | — |
 | K_meta | ❌ 무수정 | — |
 
-K3 + K4 변경은 IX.D 자율 머지 채널. PR 본문에 두 commit hash 명시 의무.
+K4 변경 1건만 — IX.D 자율 머지 채널. PR 본문에 commit hash 명시 의무. K3는 contract 확장이지만 K3 파일에는 영향 없음 (meter.py가 decision_class를 자유 문자열로 받음).
 
 ---
 
