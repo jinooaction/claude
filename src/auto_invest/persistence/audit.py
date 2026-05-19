@@ -57,6 +57,10 @@ EventType = Literal[
     "PAPER_RUN_STOPPED",
     "ORDER_PAPER_FILLED",
     "PAPER_RUN_REJECTED",
+    "RULE_DESIGN_REQUESTED",
+    "RULE_DESIGN_COMPLETED",
+    "RULE_DESIGN_REJECTED",
+    "RULE_DESIGN_DEPLOYED",
 ]
 
 
@@ -447,6 +451,82 @@ class OrderPaperFilledPayload(AuditPayload):
     paper_session_id: int
 
 
+class RuleDesignRequestedPayload(AuditPayload):
+    """Spec 010 FR-008 — 자동 룰 설계 호출 시작.
+
+    `auto-invest design --intent "..."` 명령이 mutex check + KIS 잔고 조회
+    이후, Claude 호출 직전에 1회 기록. 운영자의 원본 자연어 의도가 그대로
+    저장되어 사후 추적 가능 (SC-004).
+    """
+
+    event_type: Literal["RULE_DESIGN_REQUESTED"] = "RULE_DESIGN_REQUESTED"
+    intent: str
+    requested_at_utc: str
+    kis_balance_usd: str
+    kis_holdings: list[dict[str, Any]]
+    host: str
+
+
+class RuleDesignCompletedPayload(AuditPayload):
+    """Spec 010 — Claude 호출 + 정적 검증 + paper-run 1일분 통과 시 1회.
+
+    Claude가 사용한 정량 매개변수(`interpretation`)와 생성된 룰 TOML 전체
+    텍스트를 모두 보관 — 운영자가 사후 100% 재현 가능 (SC-004).
+    """
+
+    event_type: Literal["RULE_DESIGN_COMPLETED"] = "RULE_DESIGN_COMPLETED"
+    intent: str
+    interpretation: dict[str, Any]
+    generated_rules_toml: str
+    model_id: str
+    tokens_input: int = Field(ge=0)
+    tokens_output: int = Field(ge=0)
+    cost_usd: str
+    retry_index: int = Field(ge=1, le=3)
+    paper_run_session_id: int | None = None
+
+
+class RuleDesignRejectedPayload(AuditPayload):
+    """Spec 010 — 자동 룰 설계의 모든 거부 사유.
+
+    재시도 3회 카운트의 각 실패도 별도 row로 기록되어, 운영자가 "왜 룰 설계가
+    실패했나"를 audit_log grep으로 즉시 확인 가능.
+    """
+
+    event_type: Literal["RULE_DESIGN_REJECTED"] = "RULE_DESIGN_REJECTED"
+    reason: Literal[
+        "parse_error",
+        "whitelist_violation",
+        "cap_violation",
+        "backtest_fail",
+        "paper_run_fail",
+        "operator_declined",
+        "max_retries",
+        "mutex_conflict",
+        "insufficient_balance",
+        "kis_token_failed",
+        "claude_api_error",
+    ]
+    detail: str
+    retry_index: int | None = None
+    conflicting_event_id: int | None = None
+
+
+class RuleDesignDeployedPayload(AuditPayload):
+    """Spec 010 — 운영자 OK 후 새 라이브 worker 시작 시 1회.
+
+    `design_session_id`(대응 REQUESTED row seq)와 `live_session_id`(새 워커의
+    WORKER_STARTED row seq)를 짝맞춰 두어, design → live 흐름을 audit_log에서
+    즉시 추적 가능.
+    """
+
+    event_type: Literal["RULE_DESIGN_DEPLOYED"] = "RULE_DESIGN_DEPLOYED"
+    design_session_id: int
+    live_session_id: int
+    deployed_at_utc: str
+    total_capital_usd: str
+
+
 class PaperRunRejectedPayload(AuditPayload):
     """Spec 009 FR-015 — paper-run 시작 또는 시뮬 체결이 거부된 경우.
 
@@ -500,6 +580,10 @@ AnyPayload = (
     | PaperRunStoppedPayload
     | OrderPaperFilledPayload
     | PaperRunRejectedPayload
+    | RuleDesignRequestedPayload
+    | RuleDesignCompletedPayload
+    | RuleDesignRejectedPayload
+    | RuleDesignDeployedPayload
 )
 
 
