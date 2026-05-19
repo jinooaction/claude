@@ -23,10 +23,11 @@ fi
 echo "=========================================================="
 echo "auto-invest 비밀키 입력 도구"
 echo
-echo "다음 세 가지 값을 차례로 입력하세요."
+echo "다음 네 가지 값을 차례로 입력하세요."
 echo "  - KIS Developers 앱 키"
 echo "  - KIS Developers 앱 시크릿"
 echo "  - 미국 주식 거래 가능한 KIS 계좌번호"
+echo "  - Anthropic API 키 (auto-invest design 자동 룰 설계용; 비워두면 design 명령만 안 됨)"
 echo
 echo "입력은 화면에 표시되지 않습니다 (비밀번호처럼 마스킹)."
 echo "값은 $ENV_PATH (chmod 0600) 에만 저장되고, 로그에는 절대 남지 않습니다."
@@ -54,6 +55,10 @@ if [[ -z "$kis_account_no" ]]; then
     exit 3
 fi
 
+# Anthropic API 키는 선택 — 비워두면 design 명령만 안 됨, 실거래 워커는 정상 동작.
+read -rsp "ANTHROPIC_API_KEY (Enter만 누르면 건너뛰기): " anthropic_api_key
+echo
+
 # .env 백업 (만일을 위해, 권한은 유지)
 cp -p "$ENV_PATH" "${ENV_PATH}.bak.$(date +%Y%m%d-%H%M%S)"
 
@@ -74,9 +79,12 @@ update_key() {
 update_key "KIS_APP_KEY" "$kis_app_key"
 update_key "KIS_APP_SECRET" "$kis_app_secret"
 update_key "KIS_ACCOUNT_NO" "$kis_account_no"
+if [[ -n "$anthropic_api_key" ]]; then
+    update_key "ANTHROPIC_API_KEY" "$anthropic_api_key"
+fi
 
 # 비밀 변수를 메모리에서 즉시 제거.
-unset kis_app_key kis_app_secret kis_account_no
+unset kis_app_key kis_app_secret kis_account_no anthropic_api_key
 
 # 권한 보장
 chown auto-invest:auto-invest "$ENV_PATH" 2>/dev/null || true
