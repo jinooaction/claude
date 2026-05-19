@@ -205,6 +205,143 @@ def run(
     )
 
 
+@app.command(name="paper-run")
+def paper_run(
+    config: Path = typer.Option(
+        Path("config/rules.toml"),
+        "--config",
+        "-c",
+        help="Path to the rules TOML.",
+    ),
+    db_path: Path = typer.Option(
+        Path("data/auto_invest.db"),
+        "--db",
+        help="SQLite database path.",
+    ),
+    halt_path: Path = typer.Option(
+        Path("data/halt.flag"),
+        "--halt-path",
+        help="Filesystem halt-flag path.",
+    ),
+    env_file: Path | None = typer.Option(
+        None,
+        "--env-file",
+        help="Optional .env file (defaults to process environment only).",
+    ),
+    base_url: str = typer.Option(
+        "https://openapi.koreainvestment.com:9443",
+        "--base-url",
+        help="KIS REST base URL (quote 호출에만 사용; 주문 호출은 절대 발생하지 않음).",
+    ),
+    capital: float = typer.Option(
+        0.0,
+        "--capital",
+        help="Operator-declared total capital in USD; cap 게이트 평가에 사용.",
+    ),
+    require_session_open: bool = typer.Option(
+        True,
+        "--require-session-open/--ignore-session-window",
+        help="Skip ticks outside US regular hours (default) or run anyway.",
+    ),
+    prices_path: Path = typer.Option(
+        Path("config/llm_prices.toml"),
+        "--prices",
+        help="Anthropic price table (TOML); validated at startup per spec 002.",
+    ),
+) -> None:
+    """Spec 009 — paper-trading 데몬 (live 자본 노출 전 일주일 관찰용).
+
+    실시간 KIS quote를 받지만 broker 주문 API는 단 한 번도 호출하지 않는다
+    (FR-004). 게이트는 live와 동일 코드로 평가되며, 시뮬 체결은 audit_log의
+    ORDER_PAPER_FILLED 이벤트로 기록된다. paper-run · live-run은 상호 배타
+    (FR-015) — 다른 모드가 떠 있으면 exit 70.
+    """
+    import hashlib
+
+    configure_logging()
+
+    # 1. Secrets + config + prices (live와 동일 검증).
+    from auto_invest.telemetry.prices import PriceTableError, load_prices
+
+    try:
+        secrets = load_secrets(env_file)
+        cfg = load_config(config, env_path=env_file)
+        prices = load_prices(prices_path)
+    except (ConfigError, PriceTableError) as exc:
+        typer.echo(f"Configuration error: {exc}", err=True)
+        _exit(2)
+
+    # 2. Stage-uniqueness preflight (live와 동일).
+    decisions = verify_stage_uniqueness(list(cfg.rules))
+    blocked = [d for d in decisions if not d.allow]
+    if blocked:
+        for decision in blocked:
+            typer.echo(
+                f"Stage-uniqueness denied: {decision.reason}",
+                err=True,
+            )
+        _exit(2)
+
+    # 3. Migrations gate (paper-run은 dirty migration 적용 불허).
+    _require_clean_migrations(db_path, allow_apply=False)
+
+    # 4. Telemetry integrity check + price-table loaded audit (live와 동일).
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    _integrity_conn = db.get_connection(db_path)
+    try:
+        from auto_invest.persistence import audit as _audit_mod
+        from auto_invest.persistence.audit import DataQualityIssuePayload as _DQIP
+        from auto_invest.persistence.audit import (
+            PriceTableLoadedPayload as _PTLP,
+        )
+        from auto_invest.telemetry.store import integrity_check as _integrity
+
+        _audit_mod.append(
+            _integrity_conn,
+            _PTLP(path=prices.source_path, sha256=prices.sha256),
+        )
+        mismatches = _integrity(_integrity_conn)
+        for m in mismatches:
+            _audit_mod.append(
+                _integrity_conn,
+                _DQIP(
+                    issue="token_usage_audit_mismatch",
+                    detail={"correlation_id": m.correlation_id, "kind": m.kind},
+                ),
+                correlation_id=m.correlation_id,
+            )
+    finally:
+        _integrity_conn.close()
+
+    if capital <= 0:
+        typer.echo(
+            "--capital must be > 0 for a paper run (cap 게이트가 실계좌 잔고 "
+            "기준으로 평가하지만 시뮬 PnL 계산에는 declared capital이 필요).",
+            err=True,
+        )
+        _exit(2)
+
+    # 5. ruleset_sha256 계산 (PAPER_RUN_STARTED 페이로드에 들어감).
+    ruleset_sha256 = hashlib.sha256(config.read_bytes()).hexdigest()
+
+    # 6. paper-run 메인 루프. 리턴 코드를 exit code로 그대로 사용.
+    exit_code = asyncio.run(
+        _run_paper(
+            cfg=cfg,
+            secrets=secrets,
+            db_path=db_path,
+            halt_path=halt_path,
+            config_path=config,
+            base_url=base_url,
+            total_capital_usd=Decimal(str(capital)),
+            require_session_open=require_session_open,
+            ruleset_sha256=ruleset_sha256,
+        )
+    )
+    if exit_code != 0:
+        _exit(exit_code)
+
+
 @app.command()
 def version() -> None:
     """Print the auto-invest package version."""
@@ -611,6 +748,100 @@ async def _run_live(
         finally:
             worker.record_stop("normal_shutdown")
             worker.close()
+
+
+async def _run_paper(
+    *,
+    cfg,
+    secrets: dict,
+    db_path: Path,
+    halt_path: Path,
+    config_path: Path,
+    base_url: str,
+    total_capital_usd: Decimal,
+    require_session_open: bool,
+    ruleset_sha256: str,
+) -> int:
+    """Spec 009 — paper-trading 데몬 메인 루프.
+
+    mutex check → KIS token 발급 (quote용) → paper-mode Worker → run_forever.
+    종료 사유에 따라 PAPER_RUN_STOPPED 페이로드의 reason이 결정된다.
+    리턴 코드: 0 정상, 70 mutex 충돌.
+    """
+    from auto_invest.paper import mutex as paper_mutex
+
+    settings = WorkerSettings(
+        config=cfg,
+        db_path=db_path,
+        halt_path=halt_path,
+        config_path=config_path,
+        total_capital_usd=total_capital_usd,
+        require_session_open=require_session_open,
+        paper_mode=True,
+        ruleset_sha256=ruleset_sha256,
+    )
+
+    # mutex check는 token 발급 전에 — 충돌이면 KIS API 호출 0건으로 종료.
+    pre_conn = db.get_connection(db_path)
+    try:
+        mx = paper_mutex.check_and_acquire(pre_conn, attempted_mode="paper")
+    finally:
+        pre_conn.close()
+    if not mx.allowed:
+        typer.echo(
+            f"paper-run 시작 거부: {mx.conflicting_event_type} (seq={mx.conflicting_event_id}) "
+            f"가 {mx.conflicting_session_started_at}에 시작되어 아직 실행 중입니다. "
+            "기존 worker 종료 후 paper-run을 다시 시작하세요.",
+            err=True,
+        )
+        return mx.exit_code
+
+    async with httpx.AsyncClient(base_url=base_url, timeout=30.0) as inner:
+        token = await get_valid_token(
+            inner,
+            base_url=base_url,
+            app_key=secrets["KIS_APP_KEY"],
+            app_secret=secrets["KIS_APP_SECRET"],
+            cache_path=db_path.parent / "kis_token.json",
+        )
+        broker = ResilientClient(
+            inner,
+            rate_limiter=AsyncTokenBucket(rate_per_sec=15.0, capacity=15.0),
+            breaker=CircuitBreaker(failure_threshold=5, cooldown_seconds=30.0),
+            max_retries=4,
+        )
+        worker = Worker(
+            settings,
+            broker=broker,
+            access_token=token.access_token,
+            app_key=secrets["KIS_APP_KEY"],
+            app_secret=secrets["KIS_APP_SECRET"],
+            account_no=secrets["KIS_ACCOUNT_NO"],
+        )
+
+        loop = asyncio.get_running_loop()
+        stop_reason = {"value": "normal_shutdown"}
+
+        def _on_signal() -> None:
+            stop_reason["value"] = "signal_received"
+            worker.request_stop()
+
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            with contextlib.suppress(NotImplementedError):  # pragma: no cover (Windows)
+                loop.add_signal_handler(sig, _on_signal)
+
+        worker.record_start(secret_keys=list(secrets.keys()))
+        session_id = worker.router.paper_session_id
+        typer.echo(f"paper-run started (session_id={session_id}, ruleset_sha256={ruleset_sha256})")
+        try:
+            await worker.run_forever()
+        except Exception:  # pragma: no cover — best-effort crash recording
+            stop_reason["value"] = "crash"
+            raise
+        finally:
+            worker.record_stop(stop_reason["value"])
+            worker.close()
+    return 0
 
 
 # ---------------------------------------------------------------------------
