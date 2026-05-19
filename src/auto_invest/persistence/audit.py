@@ -53,6 +53,10 @@ EventType = Literal[
     "CANARY_PASSED",
     "CANARY_FAILED",
     "CANARY_KERNEL_TOUCH_DETECTED",
+    "PAPER_RUN_STARTED",
+    "PAPER_RUN_STOPPED",
+    "ORDER_PAPER_FILLED",
+    "PAPER_RUN_REJECTED",
 ]
 
 
@@ -401,6 +405,63 @@ class CanaryFailedPayload(AuditPayload):
     artefact_path: str
 
 
+class PaperRunStartedPayload(AuditPayload):
+    """Spec 009 FR-013 — paper-run 데몬 시작 단일 row.
+
+    `WorkerStartedPayload`를 대체. live worker와 분리된 event_type을 가져
+    paper-report가 paper 모드 이벤트만 집계할 수 있게 한다.
+    """
+
+    event_type: Literal["PAPER_RUN_STARTED"] = "PAPER_RUN_STARTED"
+    pid: int
+    config_path: str
+    ruleset_sha256: str = Field(min_length=64, max_length=64)
+    started_at_utc: str
+    host: str
+
+
+class PaperRunStoppedPayload(AuditPayload):
+    """Spec 009 — paper-run 데몬 종료. `WorkerStoppedPayload` 대체."""
+
+    event_type: Literal["PAPER_RUN_STOPPED"] = "PAPER_RUN_STOPPED"
+    reason: Literal["normal_shutdown", "signal_received", "mutex_conflict", "crash"]
+    stopped_at_utc: str
+    session_started_event_id: int
+
+
+class OrderPaperFilledPayload(AuditPayload):
+    """Spec 009 FR-006 — 단일 차단 지점에서 시뮬 체결된 주문 1건.
+
+    live의 `OrderSubmittedPayload` + `FillPayload` 쌍을 대체. paper 모드
+    에서만 기록되며 KIS 주문 API 호출 없이 audit_log에만 남는다.
+    """
+
+    event_type: Literal["ORDER_PAPER_FILLED"] = "ORDER_PAPER_FILLED"
+    rule_id: str
+    symbol: str
+    side: Literal["BUY", "SELL"]
+    qty: int = Field(gt=0)
+    simulated_fill_price_usd: str
+    quote_source: Literal["ask", "bid", "last"]
+    correlation_id: str
+    paper_session_id: int
+
+
+class PaperRunRejectedPayload(AuditPayload):
+    """Spec 009 FR-015 — paper-run 시작 또는 시뮬 체결이 거부된 경우.
+
+    mutex 충돌, quote 결측 등 paper-run이 정상 진행 못 한 사건을 추적.
+    forensic grep으로 운영자가 "어제 paper-run 왜 안 떴지?"를 즉시 확인.
+    """
+
+    event_type: Literal["PAPER_RUN_REJECTED"] = "PAPER_RUN_REJECTED"
+    attempted_mode: Literal["paper", "live"]
+    reason: Literal["mutex_conflict", "no_quote_field", "other"]
+    conflicting_event_id: int | None = None
+    conflicting_session_started_at: str | None = None
+    detail: str
+
+
 AnyPayload = (
     WorkerStartedPayload
     | WorkerStoppedPayload
@@ -435,6 +496,10 @@ AnyPayload = (
     | CanaryKernelTouchDetectedPayload
     | CanaryPassedPayload
     | CanaryFailedPayload
+    | PaperRunStartedPayload
+    | PaperRunStoppedPayload
+    | OrderPaperFilledPayload
+    | PaperRunRejectedPayload
 )
 
 

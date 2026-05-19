@@ -36,6 +36,8 @@ from auto_invest.market_data.store import get_bars
 from auto_invest.persistence import audit, db
 from auto_invest.persistence import positions as positions_mod
 from auto_invest.persistence.audit import (
+    PaperRunStartedPayload,
+    PaperRunStoppedPayload,
     RuleLoadPayload,
     SecretsLoadedPayload,
     WorkerStartedPayload,
@@ -53,9 +55,31 @@ from auto_invest.worker.schedule import is_session_open
 logger = logging.getLogger(__name__)
 
 
+def _utcnow_iso_ms_for_payload() -> str:
+    """페이로드 timestamp용 — audit_log.ts_utc와 같은 ISO8601 ms-precision."""
+    now = datetime.now(UTC)
+    return now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z"
+
+
+_PAPER_STOP_REASONS = {"normal_shutdown", "signal_received", "mutex_conflict", "crash"}
+
+
+def _normalize_paper_stop_reason(reason: str) -> str:
+    """live record_stop은 임의 문자열을 받지만 paper 페이로드는 enum-only.
+
+    인식 못 한 사유는 보수적으로 'crash'로 매핑한다 (best-effort audit).
+    """
+    return reason if reason in _PAPER_STOP_REASONS else "crash"
+
+
 @dataclass
 class WorkerSettings:
-    """Runtime configuration for one Worker instance."""
+    """Runtime configuration for one Worker instance.
+
+    spec 009: `paper_mode=True`면 데몬이 paper-trading 모드로 동작한다 —
+    quote는 실제 KIS에서 받지만 broker 주문 호출은 OrderRouter의 단일
+    차단 지점에서 시뮬 체결로 분기된다 (FR-004).
+    """
 
     config: LoadedConfig
     db_path: Path
@@ -66,6 +90,11 @@ class WorkerSettings:
     market_order: str = "NASD"
     tick_interval_seconds: float = 1.0
     require_session_open: bool = True
+    paper_mode: bool = False
+    # paper-mode일 때 PAPER_RUN_STARTED 페이로드의 ruleset_sha256 필드에 들어감.
+    # paper-run CLI(cli.py)가 룰 파일 바이트의 SHA-256으로 계산해 주입한다.
+    # live-mode에서는 사용되지 않음.
+    ruleset_sha256: str | None = None
 
 
 @dataclass
@@ -119,6 +148,7 @@ class Worker:
             halt_path=settings.halt_path,
             market=settings.market_order,
             quote_market=settings.market_quote,
+            paper_mode=settings.paper_mode,
         )
 
     # ---------------------------------------------- lifecycle audit
@@ -128,13 +158,32 @@ class Worker:
             self.conn,
             SecretsLoadedPayload(keys=sorted(secret_keys)),
         )
-        audit.append(
-            self.conn,
-            WorkerStartedPayload(
-                pid=os.getpid(),
-                config_path=str(self.settings.config_path),
-            ),
-        )
+        if self.settings.paper_mode:
+            import socket
+
+            started_at = _utcnow_iso_ms_for_payload()
+            ruleset_sha = self.settings.ruleset_sha256 or ("0" * 64)
+            session_id = audit.append(
+                self.conn,
+                PaperRunStartedPayload(
+                    pid=os.getpid(),
+                    config_path=str(self.settings.config_path),
+                    ruleset_sha256=ruleset_sha,
+                    started_at_utc=started_at,
+                    host=socket.gethostname(),
+                ),
+            )
+            # OrderRouter가 후속 ORDER_PAPER_FILLED row를 이 세션에 묶을 수 있도록
+            # paper_session_id를 즉시 갱신한다.
+            self.router.paper_session_id = session_id
+        else:
+            audit.append(
+                self.conn,
+                WorkerStartedPayload(
+                    pid=os.getpid(),
+                    config_path=str(self.settings.config_path),
+                ),
+            )
         audit.append(
             self.conn,
             RuleLoadPayload(
@@ -144,7 +193,17 @@ class Worker:
         )
 
     def record_stop(self, reason: str) -> None:
-        audit.append(self.conn, WorkerStoppedPayload(reason=reason))
+        if self.settings.paper_mode:
+            audit.append(
+                self.conn,
+                PaperRunStoppedPayload(
+                    reason=_normalize_paper_stop_reason(reason),
+                    stopped_at_utc=_utcnow_iso_ms_for_payload(),
+                    session_started_event_id=self.router.paper_session_id or 0,
+                ),
+            )
+        else:
+            audit.append(self.conn, WorkerStoppedPayload(reason=reason))
 
     def request_stop(self) -> None:
         self._stop_requested.set()
@@ -215,6 +274,8 @@ class Worker:
         outcome = await self.router.submit_order(
             rule=rule,
             quote_price_usd=quote.last_price_usd,
+            quote_ask_usd=quote.ask_usd,
+            quote_bid_usd=quote.bid_usd,
             total_capital_usd=self.settings.total_capital_usd,
             current_symbol_exposure_usd=self._symbol_exposure_usd(
                 rule.symbol, quote.last_price_usd

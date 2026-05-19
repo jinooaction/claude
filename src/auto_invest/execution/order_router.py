@@ -34,13 +34,14 @@ from auto_invest.broker.client import ResilientClient
 from auto_invest.broker.models import OrderRequest
 from auto_invest.broker.overseas import place_order
 from auto_invest.config.caps import SizingCaps
-from auto_invest.config.enums import OrderType, StrategyStage
+from auto_invest.config.enums import OrderType, Side, StrategyStage
 from auto_invest.config.rules import TradingRule
 from auto_invest.config.whitelist import Whitelist
 from auto_invest.market_data.store import get_latest_bar
 from auto_invest.persistence import audit
 from auto_invest.persistence.audit import (
     OrderIntentPayload,
+    OrderPaperFilledPayload,
     OrderRejectedByBrokerPayload,
     OrderRejectedByGatePayload,
     OrderSubmittedPayload,
@@ -63,6 +64,25 @@ class OrderOutcome:
     kis_order_id: str | None = None
     gate: str | None = None
     reason: str | None = None
+
+
+def _choose_paper_fill_price(
+    *,
+    side: Side,
+    quote_price_usd: Decimal,
+    quote_ask_usd: Decimal | None,
+    quote_bid_usd: Decimal | None,
+) -> tuple[Decimal, str]:
+    """Spec 009 FR-007 — 매수 ask / 매도 bid / 폴백 last.
+
+    아무 quote 필드도 양수가 아니면 quote_price_usd(last)를 그대로 폴백한다.
+    이 함수는 paper 분기에서만 호출되며 live 코드 패스에는 영향이 없다.
+    """
+    if side is Side.BUY and quote_ask_usd is not None and quote_ask_usd > 0:
+        return quote_ask_usd, "ask"
+    if side is Side.SELL and quote_bid_usd is not None and quote_bid_usd > 0:
+        return quote_bid_usd, "bid"
+    return quote_price_usd, "last"
 
 
 def _utcnow_iso_ms() -> str:
@@ -210,7 +230,14 @@ def verify_stage_uniqueness(rules: list[TradingRule]) -> list[GateDecision]:
 
 @dataclass
 class OrderRouter:
-    """Stateless-ish router: holds configuration handles, no per-call state."""
+    """Stateless-ish router: holds configuration handles, no per-call state.
+
+    spec 009: `paper_mode=True`로 만들면 broker 주문 호출(line 347 부근의
+    `place_order(self.broker, ...)`) 직전에 단일 차단 지점에서 시뮬 체결로
+    분기한다. 게이트 체인은 live와 동일 코드로 평가되며, paper 모드는
+    `orders`/`order_transitions` 테이블에 row를 추가하지 않아 SC-006을
+    만족한다.
+    """
 
     conn: sqlite3.Connection
     broker: ResilientClient
@@ -223,6 +250,8 @@ class OrderRouter:
     halt_path: Path
     market: str = "NASD"
     quote_market: str = "NAS"
+    paper_mode: bool = False
+    paper_session_id: int | None = None
 
     async def submit_order(
         self,
@@ -232,6 +261,8 @@ class OrderRouter:
         total_capital_usd: Decimal,
         current_symbol_exposure_usd: Decimal,
         current_global_exposure_usd: Decimal,
+        quote_ask_usd: Decimal | None = None,
+        quote_bid_usd: Decimal | None = None,
     ) -> OrderOutcome:
         correlation_id = f"ord-{uuid.uuid4().hex[:12]}"
 
@@ -277,12 +308,15 @@ class OrderRouter:
             symbol=rule.symbol,
             correlation_id=correlation_id,
         )
-        _insert_intent(
-            self.conn,
-            correlation_id=correlation_id,
-            rule_id=rule.id,
-            request=request,
-        )
+        # paper-mode는 orders/order_transitions 테이블을 건드리지 않아 SC-006을
+        # 만족한다. 모든 paper 사실은 audit_log에만 누적된다.
+        if not self.paper_mode:
+            _insert_intent(
+                self.conn,
+                correlation_id=correlation_id,
+                rule_id=rule.id,
+                request=request,
+            )
 
         # Run gate chain.
         gate_chain: tuple[tuple[Any, dict[str, Any]], ...] = (
@@ -329,19 +363,54 @@ class OrderRouter:
                     symbol=rule.symbol,
                     correlation_id=correlation_id,
                 )
-                _record_transition(
-                    self.conn,
-                    correlation_id,
-                    "INTENT",
-                    "REJECTED_BY_GATE",
-                    decision.reason,
-                )
+                if not self.paper_mode:
+                    _record_transition(
+                        self.conn,
+                        correlation_id,
+                        "INTENT",
+                        "REJECTED_BY_GATE",
+                        decision.reason,
+                    )
                 return OrderOutcome(
                     state="REJECTED_BY_GATE",
                     correlation_id=correlation_id,
                     gate=decision.gate,
                     reason=decision.reason,
                 )
+
+        # spec 009 단일 차단 지점: paper-mode면 broker 호출 대신 시뮬 체결.
+        # 이 위치(line 347 부근, 게이트 체인 통과 직후·broker 호출 직전)가
+        # FR-004의 "단일 차단 지점"이다. 다른 경로로는 broker.order_*()가
+        # 호출되지 않는다 (tests/integration/test_paper_order_router.py의
+        # test_paper_mode_never_calls_broker가 monkeypatch RuntimeError로
+        # 회귀를 가드한다).
+        if self.paper_mode:
+            fill_price, quote_source = _choose_paper_fill_price(
+                side=rule.action.side,
+                quote_price_usd=quote_price_usd,
+                quote_ask_usd=quote_ask_usd,
+                quote_bid_usd=quote_bid_usd,
+            )
+            audit.append(
+                self.conn,
+                OrderPaperFilledPayload(
+                    rule_id=rule.id,
+                    symbol=rule.symbol,
+                    side=rule.action.side.value,
+                    qty=rule.action.qty,
+                    simulated_fill_price_usd=str(fill_price),
+                    quote_source=quote_source,
+                    correlation_id=correlation_id,
+                    paper_session_id=self.paper_session_id or 0,
+                ),
+                rule_id=rule.id,
+                symbol=rule.symbol,
+                correlation_id=correlation_id,
+            )
+            return OrderOutcome(
+                state="PAPER_FILLED",
+                correlation_id=correlation_id,
+            )
 
         # Submit to broker.
         try:
