@@ -636,20 +636,55 @@ def design(
         conn.close()
         return  # exit 0 (정상 종료)
 
-    # 라이브 시작은 본 PR에서 stub — RULE_DESIGN_DEPLOYED audit만 기록.
+    # 라이브 worker subprocess 자동 시작.
+    config_dir = db_path.parent / ".." / "config"
+    rules_path = deploy.write_auto_rules_file(
+        generated_toml, config_dir=config_dir.resolve(),
+    )
+    typer.echo(f"\n생성된 룰을 저장: {rules_path}")
+    typer.echo("라이브 worker subprocess 시작 중...")
+
+    live_session_id = deploy.start_live_worker(
+        rules_path=rules_path,
+        capital_usd=intent_capital,
+        db_path=db_path,
+        halt_path=db_path.parent / "halt.flag",
+        env_file=env_file,
+        base_url=base_url,
+        prices_path=prices_path,
+        conn=conn,
+    )
+    if live_session_id is None:
+        _audit.append(
+            conn,
+            RuleDesignRejectedPayload(
+                reason="claude_api_error",  # 가장 가까운 reason — 후속 PR에서 새 reason 추가 가능
+                detail=(
+                    "라이브 worker subprocess가 30초 안에 WORKER_STARTED audit row를 "
+                    "남기지 않았습니다. 로그를 확인해주세요."
+                ),
+            ),
+        )
+        typer.echo(
+            "라이브 worker 시작 실패: 30초 안에 worker가 audit_log에 등록되지 않음. "
+            "로그 디렉토리를 확인해주세요.",
+            err=True,
+        )
+        conn.close()
+        _exit(1)
+
     _audit.append(
         conn,
         RuleDesignDeployedPayload(
             design_session_id=design_session_id,
-            live_session_id=0,  # TODO(후속 PR): 실제 worker subprocess 시작 후 session id
+            live_session_id=live_session_id,
             deployed_at_utc=_d_iso_now(),
             total_capital_usd=str(intent_capital),
         ),
     )
     typer.echo(
-        "\n라이브 시작 시뮬: RULE_DESIGN_DEPLOYED audit 기록됨. "
-        "실제 worker subprocess 시작은 후속 PR에서 활성화 예정. "
-        "현재는 운영자가 수동으로 `auto-invest run --capital ...`을 실행해주세요."
+        f"\n라이브 worker 시작됨. WORKER_STARTED seq={live_session_id}, "
+        f"자본 ${intent_capital}. design 명령은 종료. worker는 background에서 계속 실행."
     )
     conn.close()
 
