@@ -345,7 +345,7 @@ def paper_run(
 @app.command(name="design")
 def design(
     intent: str = typer.Option(
-        ...,
+        "",
         "--intent",
         help="운영자 자연어 의도 (예: \"자본 100달러, 미국 대형주 분산, 매주 적립, 위험 보통\")",
     ),
@@ -379,13 +379,36 @@ def design(
         "--max-retries",
         help="자동 재설계 최대 횟수 (기본 3, FR-007).",
     ),
+    check: bool = typer.Option(
+        False,
+        "--check",
+        help=(
+            "최근 design 결과로 시작된 라이브 worker의 현재 상태를 한글로 요약 "
+            "(intent 입력 없어도 됨)."
+        ),
+    ),
 ) -> None:
     """Spec 010 — 자동 룰 설계자.
 
     운영자가 자연어 한 줄로 의도를 적으면 시스템이 룰을 자동 생성하고
     정적 검증한 뒤 운영자 OK 한 줄을 받아 라이브 시작. 본 PR에서는 KIS
     주문 API는 단 한 번도 호출하지 않습니다 (잔고 조회 quote 제외).
+
+    `--check` 옵션으로 호출하면 가장 최근 RULE_DESIGN_DEPLOYED의 라이브 worker
+    현재 상태(시그널·체결·차단 카운트)를 한글 요약으로 출력하고 즉시 종료.
     """
+    # --check 모드: 최근 design 결과 요약만 출력하고 종료.
+    if check:
+        _design_check_summary(db_path)
+        return
+
+    if not intent.strip():
+        typer.echo(
+            "--intent가 빈 문자열입니다. (참고: `--check` 옵션으로 최근 상태 요약 가능.)",
+            err=True,
+        )
+        _exit(2)
+
     import json as _json
     import socket
     from decimal import Decimal as _D
@@ -402,10 +425,6 @@ def design(
     from auto_invest.telemetry.prices import PriceTableError, load_prices
 
     configure_logging()
-
-    if not intent.strip():
-        typer.echo("--intent가 빈 문자열입니다.", err=True)
-        _exit(2)
 
     # 1. config·secrets·prices 로드.
     try:
@@ -731,6 +750,109 @@ def _d_iso_now() -> str:
 
     now = datetime.now(UTC)
     return now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z"
+
+
+def _design_check_summary(db_path: Path) -> None:
+    """`auto-invest design --check` — 가장 최근 design 결과의 라이브 worker 상태 요약.
+
+    audit_log를 읽기 전용으로 조회해 한글 요약을 stdout에 출력한다. 출력 항목:
+    - 가장 최근 RULE_DESIGN_DEPLOYED의 design_session_id + live_session_id.
+    - 그 라이브 worker가 실행된 이후의 ORDER_INTENT / FILL / 차단 / ERROR 카운트.
+    - 운영자 원본 의도 + Claude 해석.
+
+    DB 파일이 없으면 한글 안내 후 exit 0.
+    """
+    import json as _json
+
+    if not db_path.exists():
+        typer.echo(f"DB 파일이 없습니다: {db_path}")
+        return
+
+    conn = db.get_connection(db_path)
+    try:
+        conn.execute("PRAGMA query_only = ON")
+
+        deployed = conn.execute(
+            "SELECT seq, ts_utc, payload_json FROM audit_log "
+            "WHERE event_type = 'RULE_DESIGN_DEPLOYED' "
+            "ORDER BY seq DESC LIMIT 1"
+        ).fetchone()
+
+        if deployed is None:
+            typer.echo(
+                "아직 라이브로 배포된 design 결과가 없습니다. "
+                "`auto-invest design --intent \"...\"`로 새 룰을 설계해주세요."
+            )
+            return
+
+        dep_payload = _json.loads(deployed["payload_json"])
+        design_session_id = int(dep_payload["design_session_id"])
+        live_session_id = int(dep_payload["live_session_id"])
+
+        # 대응 RULE_DESIGN_REQUESTED와 COMPLETED 조회.
+        requested = conn.execute(
+            "SELECT payload_json FROM audit_log WHERE seq = ?",
+            (design_session_id,),
+        ).fetchone()
+        completed = conn.execute(
+            "SELECT payload_json FROM audit_log "
+            "WHERE event_type = 'RULE_DESIGN_COMPLETED' AND seq > ? AND seq < ? "
+            "ORDER BY seq DESC LIMIT 1",
+            (design_session_id, int(deployed["seq"])),
+        ).fetchone()
+
+        # live worker session 시작 이후의 통계.
+        intents = conn.execute(
+            "SELECT COUNT(*) AS n FROM audit_log "
+            "WHERE event_type = 'ORDER_INTENT' AND seq > ?",
+            (live_session_id,),
+        ).fetchone()["n"]
+        fills = conn.execute(
+            "SELECT COUNT(*) AS n FROM audit_log "
+            "WHERE event_type = 'FILL' AND seq > ?",
+            (live_session_id,),
+        ).fetchone()["n"]
+        denied = conn.execute(
+            "SELECT COUNT(*) AS n FROM audit_log "
+            "WHERE event_type = 'ORDER_REJECTED_BY_GATE' AND seq > ?",
+            (live_session_id,),
+        ).fetchone()["n"]
+        errors = conn.execute(
+            "SELECT COUNT(*) AS n FROM audit_log "
+            "WHERE event_type IN ('ERROR', 'ORDER_REJECTED_BY_BROKER') AND seq > ?",
+            (live_session_id,),
+        ).fetchone()["n"]
+
+        # worker가 아직 실행 중인지 확인 — 같은 seq 이후 WORKER_STOPPED가 있나.
+        worker_stopped = conn.execute(
+            "SELECT seq FROM audit_log "
+            "WHERE event_type = 'WORKER_STOPPED' AND seq > ? LIMIT 1",
+            (live_session_id,),
+        ).fetchone()
+        worker_state = "종료됨" if worker_stopped is not None else "실행 중"
+    finally:
+        conn.close()
+
+    typer.echo("=== auto-invest design --check ===")
+    typer.echo(f"design session: seq={design_session_id}")
+    typer.echo(f"라이브 worker: seq={live_session_id} ({worker_state})")
+    typer.echo(f"라이브 시작 시각: {deployed['ts_utc']}")
+    typer.echo(f"자본: ${dep_payload['total_capital_usd']}")
+    if requested:
+        req_payload = _json.loads(requested["payload_json"])
+        typer.echo(f"운영자 의도: {req_payload.get('intent', '(없음)')}")
+    if completed:
+        com_payload = _json.loads(completed["payload_json"])
+        typer.echo(
+            "Claude 해석: "
+            f"{_json.dumps(com_payload.get('interpretation', {}), ensure_ascii=False)}"
+        )
+    typer.echo("")
+    typer.echo("라이브 worker 시작 이후 통계:")
+    typer.echo(f"  - 시그널 발생 (ORDER_INTENT):       {intents}")
+    typer.echo(f"  - 실제 체결 (FILL):                  {fills}")
+    typer.echo(f"  - 게이트 차단 (REJECTED_BY_GATE):    {denied}")
+    typer.echo(f"  - 외부 API 오류 (ERROR + BROKER):    {errors}")
 
 
 @app.command(name="paper-report")
