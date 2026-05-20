@@ -88,7 +88,7 @@ jobs:
           echo "  user=${USER}"
           echo "  port=${PORT}"
 
-      - name: Install SSH key
+      - name: "Install SSH key (robust — 줄바꿈 깨짐 자동 복구)"
         if: steps.check_secrets.outputs.secrets_status == 'ok'
         env:
           KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
@@ -96,17 +96,70 @@ jobs:
         run: |
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
+
+          # 1) 첫 시도: 그대로 사용
           if [[ "${KEY_FORM}" == "body_only_auto_wrapped" ]] && [[ -f /tmp/ssh_key_wrapped ]]; then
-              # 운영자가 BEGIN/END 마커 없이 base64 본문만 등록 — 자동 wrap 된 키 사용.
               cp /tmp/ssh_key_wrapped ~/.ssh/id_ed25519
           else
               echo "${KEY}" > ~/.ssh/id_ed25519
           fi
           chmod 600 ~/.ssh/id_ed25519
-          # 빠른 형식 검증 — ssh-keygen 이 거부하면 키 자체가 망가진 것.
-          if ! ssh-keygen -y -f ~/.ssh/id_ed25519 >/dev/null 2>&1; then
-              echo "::warning::ssh-keygen 이 id_ed25519 를 거부 — 키 내용이 손상됐거나 다른 형식. SSH 단계에서 추가 진단 시도."
+
+          # 검증 1: 그대로 동작?
+          if ssh-keygen -y -f ~/.ssh/id_ed25519 >/dev/null 2>&1; then
+              echo "  키 그대로 OK."
+              ssh-keygen -y -f ~/.ssh/id_ed25519 | head -c 50
+              echo
+              exit 0
           fi
+          echo "  키 그대로 거부됨 → 줄바꿈 깨짐 자동 복구 시도."
+
+          # 2) 두 번째 시도: 멀티라인이 한 줄로 합쳐졌을 가능성. 줄바꿈을 재구성.
+          # GitHub Secret UI 또는 운영자 클립보드가 멀티라인을 한 줄로 합쳤을 때
+          # 흔한 패턴: "-----BEGIN ...----- body body body -----END ...-----"
+          # base64 body 를 70자 단위로 잘라서 wrap.
+          python3 - <<'PY' > /tmp/ssh_key_fixed
+          import os, re, sys
+          raw = os.environ["KEY"].strip()
+
+          # BEGIN/END 마커 추출 (있다면)
+          m = re.match(r"(-----BEGIN [A-Z ]+ KEY-----)\s*(.*?)\s*(-----END [A-Z ]+ KEY-----)", raw, re.DOTALL)
+          if m:
+              begin, body, end = m.group(1), m.group(2), m.group(3)
+          else:
+              begin = "-----BEGIN OPENSSH PRIVATE KEY-----"
+              end = "-----END OPENSSH PRIVATE KEY-----"
+              body = raw
+
+          # body 에서 모든 공백/줄바꿈 제거 → 순수 base64 만 남김
+          body_compact = re.sub(r"\s+", "", body)
+
+          # 70자 단위로 wrap
+          wrapped_body = "\n".join(body_compact[i:i+70] for i in range(0, len(body_compact), 70))
+
+          print(begin)
+          print(wrapped_body)
+          print(end)
+          PY
+          chmod 600 /tmp/ssh_key_fixed
+          cp /tmp/ssh_key_fixed ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+          # 검증 2: 복구 후 동작?
+          if ssh-keygen -y -f ~/.ssh/id_ed25519 >/dev/null 2>&1; then
+              echo "  복구 후 OK ✅ (줄바꿈 깨짐 자동 복구 성공)."
+              ssh-keygen -y -f ~/.ssh/id_ed25519 | head -c 50
+              echo
+              exit 0
+          fi
+
+          # 둘 다 실패 — 추가 진단 출력
+          echo "::warning::ssh-keygen 이 둘 다 거부. 키 내용 자체가 손상 또는 다른 형식."
+          echo "  파일 크기: $(wc -c < ~/.ssh/id_ed25519) 바이트"
+          echo "  줄 수: $(wc -l < ~/.ssh/id_ed25519)"
+          echo "  첫 줄: $(head -n1 ~/.ssh/id_ed25519)"
+          echo "  마지막 줄: $(tail -n1 ~/.ssh/id_ed25519)"
+          # SSH 단계로 진행 (어차피 실패하지만 진단 정보 남김).
 
       - name: Test SSH connection
         id: ssh_test
