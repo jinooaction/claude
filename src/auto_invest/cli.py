@@ -1847,6 +1847,20 @@ def deploy(
     else:
         sup = DryRunSupervisor()
 
+    # Anchor every relative path to --repo so the CLI works regardless of
+    # the caller's working directory. Without this, `sudo -u auto-invest`
+    # from /root inherits cwd=/root and tries to create data/ under /root
+    # where the auto-invest user has no write permission (PermissionError
+    # observed when the operator drove deploy from the Vultr console).
+    repo_path = repo_path.resolve()
+    if not db_path.is_absolute():
+        db_path = repo_path / db_path
+    if not config_path.is_absolute():
+        config_path = repo_path / config_path
+    if not env_path.is_absolute():
+        env_path = repo_path / env_path
+    pid_path = repo_path / "data" / "auto_invest.deploy.pid"
+
     cfg = RunnerConfig(
         repo=repo_path,
         db_path=db_path,
@@ -1858,6 +1872,7 @@ def deploy(
         ruleset_sha256=ruleset_sha256,
         config_path=config_path,
         env_path=env_path,
+        pid_path=pid_path,
     )
     runner = DeployRunner(config=cfg, supervisor=sup)
     result = runner.run()
