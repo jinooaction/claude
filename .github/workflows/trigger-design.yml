@@ -1,0 +1,117 @@
+name: Trigger design (manual via push)
+
+# operator-design.yml 은 schedule + workflow_dispatch 만 받음 (운영자 UI).
+# 이 workflow 는 push 트리거가 있어서 .trigger/design-now.txt 가 변경되면
+# 자동 실행 → SSH 로 operator_design.sh 호출 → 결과를 .verify/last_design.md 로
+# commit 해서 mcp 가 직접 읽음.
+#
+# 사용:
+#   1) .trigger/design-now.txt 에 임의의 새 줄 추가 + push
+#   2) workflow 자동 실행 (1~3분)
+#   3) .verify/last_design.md 가 branch 에 commit 됨
+
+on:
+  push:
+    paths:
+      - '.trigger/design-now.txt'
+  workflow_dispatch:
+    inputs:
+      intent:
+        description: "design 의도"
+        required: true
+        default: "자본 100달러, 미국 대형주 분산, 매주 월요일 적립, 위험 보통"
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  design:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Install SSH key
+        env:
+          KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          echo "${KEY}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+      - name: Run design via SSH
+        id: design
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+          INTENT: ${{ inputs.intent || '자본 100달러, 미국 대형주 분산, 매주 월요일 적립, 위험 보통' }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          # operator_design.sh 는 인스턴스의 /opt/auto-invest/scripts/ 에 있음 (PR #27 머지).
+          # AUTO_OK=1 으로 검증 통과 즉시 라이브 worker 시작.
+          ssh -o StrictHostKeyChecking=accept-new \
+              -o ConnectTimeout=15 \
+              -p "${port}" \
+              -i ~/.ssh/id_ed25519 \
+              "${USER}@${HOST}" \
+              "AUTO_OK=1 sudo bash /opt/auto-invest/scripts/operator_design.sh '${INTENT}'" \
+              > /tmp/design_output.txt 2>&1
+          ssh_exit=$?
+          echo "ssh_exit=${ssh_exit}" >> "$GITHUB_OUTPUT"
+          # tee 로 GitHub Actions 로그에도 출력
+          cat /tmp/design_output.txt
+          # 출력을 GITHUB_OUTPUT 에 저장 (multi-line)
+          {
+              echo "output<<EOF_DESIGN_OUTPUT"
+              cat /tmp/design_output.txt
+              echo "EOF_DESIGN_OUTPUT"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Commit result file
+        if: always()
+        env:
+          INTENT: ${{ inputs.intent || '자본 100달러, 미국 대형주 분산, 매주 월요일 적립, 위험 보통' }}
+          SSH_EXIT: ${{ steps.design.outputs.ssh_exit }}
+          DESIGN_OUTPUT: ${{ steps.design.outputs.output }}
+        run: |
+          mkdir -p .verify
+          if [[ "${SSH_EXIT}" == "0" ]]; then
+              emoji="✅"
+              status="OK"
+          else
+              emoji="❌"
+              status="FAILED (exit ${SSH_EXIT})"
+          fi
+          cat > .verify/last_design.md <<EOF
+          # design 호출 결과 ${emoji}
+
+          - 의도: \`${INTENT}\`
+          - SSH exit: \`${SSH_EXIT}\`
+          - 상태: ${status}
+          - 시각: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          - run id: ${GITHUB_RUN_ID}
+
+          ## operator_design.sh 출력 (한글 깨짐 가능 — 인스턴스 콘솔 UTF-8 폰트 부재)
+
+          \`\`\`
+          ${DESIGN_OUTPUT:-(출력 없음)}
+          \`\`\`
+          EOF
+          git config user.email "github-actions@github.com"
+          git config user.name  "github-actions[bot]"
+          git add .verify/last_design.md
+          if git diff --cached --quiet; then
+              echo "변경 없음 — commit skip"
+          else
+              git commit -m "design result: ${status} [skip ci]"
+              git push origin HEAD:"${GITHUB_REF#refs/heads/}" || \
+                  echo "::warning::push 실패"
+          fi

@@ -43,3 +43,8 @@ data/
 
 # operator-specific TOML rules (the example fixture under tests/fixtures/rules/ is committed).
 config/rules.toml
+
+# Automation result/trigger files written by .github/workflows/ (verify-operator-setup.yml,
+# trigger-design.yml). 결과 파일이라 main 누적 X. workflow가 실행된 branch 에만 남음.
+.verify/
+.trigger/
