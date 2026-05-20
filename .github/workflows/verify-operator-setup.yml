@@ -147,76 +147,62 @@ jobs:
               echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Report to commit comment
+      - name: Write result file
         if: always()
-        uses: actions/github-script@v7
         env:
           STATUS: ${{ steps.overall.outputs.status }}
           EMOJI: ${{ steps.overall.outputs.emoji }}
           SECRETS_DETAIL: ${{ steps.check_secrets.outputs.secrets_detail }}
           SSH_EXIT: ${{ steps.ssh_test.outputs.ssh_exit }}
           SSH_OUTPUT: ${{ steps.ssh_test.outputs.ssh_output }}
-        with:
-          script: |
-            const status = process.env.STATUS;
-            const emoji = process.env.EMOJI;
-            const secretsDetail = process.env.SECRETS_DETAIL || '미확인';
-            const sshExit = process.env.SSH_EXIT || 'skipped';
-            const sshOutput = process.env.SSH_OUTPUT || '(SSH 시도 안 함 — secrets 단계에서 중단)';
+        run: |
+          # 결과를 file 로 작성해서 branch 에 commit + push.
+          # mcp__github__get_file_contents 로 직접 읽기 위함 (PR comment 권한 이슈 우회).
+          mkdir -p .verify
+          cat > .verify/last_result.md <<EOF
+          # 운영자 셋업 검증 결과 ${EMOJI}
 
-            const body = [
-              `## 운영자 셋업 검증 결과 ${emoji}`,
-              '',
-              `**종합**: \`${status}\``,
-              '',
-              `| 항목 | 결과 |`,
-              `|------|------|`,
-              `| Secrets 등록 | ${secretsDetail} |`,
-              `| SSH 접속 exit code | \`${sshExit}\` |`,
-              '',
-              '### SSH 출력 (인스턴스 상태 진단)',
-              '',
-              '```',
-              sshOutput,
-              '```',
-              '',
-              `_workflow run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}_`,
-            ].join('\n');
+          - 종합: \`${STATUS:-unknown}\`
+          - Secrets: ${SECRETS_DETAIL:-미확인}
+          - SSH exit: \`${SSH_EXIT:-skipped}\`
+          - 시각: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          - run id: ${GITHUB_RUN_ID}
 
-            // 1. PR 컨텍스트가 있으면 PR comment.
-            let prNumber = context.payload.pull_request?.number;
-            // 2. 없으면 (push 트리거 등) head SHA 로 PR 검색.
-            if (!prNumber) {
-              try {
-                const search = await github.rest.search.issuesAndPullRequests({
-                  q: `repo:${context.repo.owner}/${context.repo.repo} is:pr is:open sha:${context.sha}`,
-                });
-                if (search.data.items.length > 0) {
-                  prNumber = search.data.items[0].number;
-                  core.info(`PR ${prNumber} found by sha:${context.sha}`);
-                }
-              } catch (e) {
-                core.warning(`PR search failed: ${e.message}`);
-              }
-            }
-            if (prNumber) {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: prNumber,
-                body,
-              });
-              core.info(`Posted to PR #${prNumber}`);
-            } else {
-              // 3. fallback: commit comment (contents: write 권한 필요)
-              await github.rest.repos.createCommitComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                commit_sha: context.sha,
-                body,
-              });
-              core.info(`Posted as commit comment on ${context.sha}`);
-            }
+          ## SSH 출력 (인스턴스 상태)
+
+          \`\`\`
+          ${SSH_OUTPUT:-(SSH 시도 안 함 — secrets 단계에서 중단)}
+          \`\`\`
+          EOF
+
+          # JSON 도 같이 (mcp 가 markdown 더 잘 읽지만 jq 도 가능하게).
+          python3 - <<PY
+          import json, os
+          data = {
+              "status": os.environ.get("STATUS", "unknown"),
+              "secrets_detail": os.environ.get("SECRETS_DETAIL", ""),
+              "ssh_exit": os.environ.get("SSH_EXIT", ""),
+              "ssh_output": os.environ.get("SSH_OUTPUT", ""),
+              "run_id": os.environ.get("GITHUB_RUN_ID", ""),
+              "head_sha": os.environ.get("GITHUB_SHA", ""),
+          }
+          with open(".verify/last_result.json", "w", encoding="utf-8") as f:
+              json.dump(data, f, ensure_ascii=False, indent=2)
+          PY
+
+          git config user.email "github-actions@github.com"
+          git config user.name  "github-actions[bot]"
+          git add .verify/
+          # 이전 commit 과 동일한 내용이면 commit 안 함 (loop 방지).
+          if git diff --cached --quiet; then
+              echo "변경 없음 — commit skip"
+          else
+              # [skip ci] 로 자기 자신 재트리거 방지.
+              git commit -m "verify: ${STATUS:-unknown} [skip ci]"
+              # push 가 실패해도 workflow 전체는 그대로 결과 status 유지 (이미 결정됨).
+              git push origin HEAD:"${GITHUB_REF#refs/heads/}" || \
+                  echo "::warning::push 실패 — 결과는 workflow logs 또는 step summary 에서 확인하세요."
+          fi
 
       - name: Fail if not all OK
         if: steps.overall.outputs.status != 'all_ok'
