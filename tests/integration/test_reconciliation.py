@@ -64,15 +64,44 @@ def _seed_local_position(
 def _balance_payload(
     *,
     positions: list[dict],
-    cash_usd: str = "1000",
 ) -> dict:
+    """KIS 해외주식 잔고조회(TTTS3012R) 응답 stub.
+
+    output2는 P&L 위주 필드만 포함 — KIS는 이 endpoint에서 외화예수금(cash)
+    필드를 반환하지 않으므로 cash는 별도 inquire-psamount endpoint에서
+    조회한다. `_psamount_payload`를 참고.
+    """
     return {
         "output1": positions,
         "output2": {
-            "frcr_dncl_amt_2": cash_usd,
             "tot_evlu_pfls_amt": "0",
+            "tot_pftrt": "0",
         },
     }
+
+
+def _psamount_payload(cash_usd: str = "1000") -> dict:
+    """KIS 해외주식 주문가능금액조회(TTTS3007R) 응답 stub.
+
+    외화예수금(주문가능 외화금액)은 응답의 `output.ord_psbl_frcr_amt`에서
+    추출된다 (broker/overseas.get_purchasable_cash_usd).
+    """
+    return {"output": {"ord_psbl_frcr_amt": cash_usd}}
+
+
+def _mock_kis_endpoints(
+    mock,
+    *,
+    positions: list[dict],
+    cash_usd: str = "1000",
+) -> None:
+    """inquire-balance + inquire-psamount를 둘 다 mock."""
+    mock.get("/uapi/overseas-stock/v1/trading/inquire-balance").mock(
+        return_value=httpx.Response(200, json=_balance_payload(positions=positions))
+    )
+    mock.get("/uapi/overseas-stock/v1/trading/inquire-psamount").mock(
+        return_value=httpx.Response(200, json=_psamount_payload(cash_usd=cash_usd))
+    )
 
 
 # ----------------------------------------------------- match path
@@ -84,19 +113,15 @@ async def test_reconciliation_ok_when_positions_match(tmp_path: Path):
         _seed_local_position(conn, symbol="AAPL", qty=10)
 
         with respx.mock(base_url=BASE) as mock:
-            mock.get("/uapi/overseas-stock/v1/trading/inquire-balance").mock(
-                return_value=httpx.Response(
-                    200,
-                    json=_balance_payload(
-                        positions=[
-                            {
-                                "ovrs_pdno": "AAPL",
-                                "ovrs_cblc_qty": "10",
-                                "pchs_avg_pric": "100",
-                            }
-                        ]
-                    ),
-                )
+            _mock_kis_endpoints(
+                mock,
+                positions=[
+                    {
+                        "ovrs_pdno": "AAPL",
+                        "ovrs_cblc_qty": "10",
+                        "pchs_avg_pric": "100",
+                    }
+                ],
             )
 
             outcome = await run_reconciliation(
@@ -128,19 +153,15 @@ async def test_reconciliation_mismatch_qty_halts_worker(tmp_path: Path):
         _seed_local_position(conn, symbol="AAPL", qty=10)
 
         with respx.mock(base_url=BASE) as mock:
-            mock.get("/uapi/overseas-stock/v1/trading/inquire-balance").mock(
-                return_value=httpx.Response(
-                    200,
-                    json=_balance_payload(
-                        positions=[
-                            {
-                                "ovrs_pdno": "AAPL",
-                                "ovrs_cblc_qty": "7",
-                                "pchs_avg_pric": "100",
-                            }
-                        ]
-                    ),
-                )
+            _mock_kis_endpoints(
+                mock,
+                positions=[
+                    {
+                        "ovrs_pdno": "AAPL",
+                        "ovrs_cblc_qty": "7",
+                        "pchs_avg_pric": "100",
+                    }
+                ],
             )
 
             outcome = await run_reconciliation(
@@ -169,9 +190,7 @@ async def test_reconciliation_mismatch_when_local_has_unknown_symbol(tmp_path: P
         _seed_local_position(conn, symbol="AAPL", qty=5)
         # Broker reports zero positions.
         with respx.mock(base_url=BASE) as mock:
-            mock.get("/uapi/overseas-stock/v1/trading/inquire-balance").mock(
-                return_value=httpx.Response(200, json=_balance_payload(positions=[]))
-            )
+            _mock_kis_endpoints(mock, positions=[])
             outcome = await run_reconciliation(
                 conn,
                 client,
