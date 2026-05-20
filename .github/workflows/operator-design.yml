@@ -45,6 +45,13 @@ on:
         required: true
         default: true
         type: boolean
+  # 매주 월요일 UTC 04:00 (KST 13:00, 미국 시장 외 시간) 자동 실행.
+  # 운영자가 UI 클릭조차 안 해도 정기적으로 design 호출.
+  # schedule 트리거는 inputs 를 못 받으므로 의도는 아래 jobs.design.env.DEFAULT_INTENT
+  # 에 고정. 의도 변경하려면 이 파일을 GitHub UI 에서 한 줄만 수정 후 commit.
+  # 멈추려면 이 줄들을 삭제하거나 주석 처리.
+  schedule:
+    - cron: "0 4 * * 1"
 
 permissions:
   contents: read
@@ -112,14 +119,19 @@ jobs:
           HOST: ${{ secrets.VULTR_SSH_HOST }}
           USER: ${{ secrets.VULTR_SSH_USER }}
           PORT: ${{ secrets.VULTR_SSH_PORT }}
-          INTENT: ${{ inputs.intent }}
-          AUTO_OK: ${{ inputs.auto_ok && '1' || '0' }}
+          # workflow_dispatch 시 inputs.intent 를 사용, schedule 트리거 시 비어있으므로
+          # 아래 디폴트 의도로 fallback. 의도를 바꾸려면 이 default 줄을 GitHub UI 에서
+          # 수정하거나, workflow_dispatch 로 다른 의도를 입력하세요.
+          INTENT: ${{ inputs.intent || '자본 100달러, 미국 대형주 분산, 매주 월요일 적립, 위험 보통' }}
+          # schedule 트리거에서는 inputs.auto_ok 가 비어있으므로 기본 true 처리.
+          AUTO_OK: ${{ (inputs.auto_ok == false) && '0' || '1' }}
         run: |
           set -euo pipefail
           port="${PORT:-22}"
           echo "============================================================"
           echo "운영자 의도: ${INTENT}"
           echo "AUTO_OK: ${AUTO_OK} (1=검증 통과 즉시 라이브 시작, 0=룰만 보기)"
+          echo "트리거: ${GITHUB_EVENT_NAME}"
           echo "대상 인스턴스: ${USER}@${HOST}:${port}"
           echo "============================================================"
           # operator_design.sh 가 인스턴스의 /opt/auto-invest/scripts/ 에 있어야 함.
