@@ -98,8 +98,23 @@ echo
 systemctl restart "$WORKER_UNIT"
 sleep 2
 
+# Worker가 dry-run 모드면 한 번 검증 후 정상 종료(Type=simple + run-worker.sh의
+# dry-run 분기). 그래서 is-active로만 보면 "active 아님"으로 잘못 보임 —
+# journalctl을 조회해 "Dry run successful." 또는 ExecStart 정상 종료 흔적을
+# 같이 확인한다.
 if systemctl is-active --quiet "$WORKER_UNIT"; then
-    echo "OK — $WORKER_UNIT 가 정상 가동 중입니다 (dry-run 모드)."
+    echo "OK — $WORKER_UNIT 가 정상 가동 중입니다 (live 모드)."
+    worker_ok=1
+elif journalctl -u "$WORKER_UNIT" -n 30 --no-pager 2>/dev/null \
+        | grep -qE "Dry run successful\.|Deactivated successfully\."; then
+    echo "OK — $WORKER_UNIT 가 dry-run 검증을 성공적으로 마쳤습니다 (1주일 안전 관찰 단계)."
+    echo "   journalctl -u $WORKER_UNIT -n 10 에서 'Dry run successful.' 확인 가능."
+    worker_ok=1
+else
+    worker_ok=0
+fi
+
+if [[ "$worker_ok" -eq 1 ]]; then
     echo
     echo "다음 확인 명령:"
     echo "  systemctl status $WORKER_UNIT"
@@ -109,7 +124,8 @@ if systemctl is-active --quiet "$WORKER_UNIT"; then
     echo "  sed -i 's/^AUTO_INVEST_MODE=.*/AUTO_INVEST_MODE=live/' $ENV_PATH \\"
     echo "  && systemctl restart $WORKER_UNIT"
 else
-    echo "WARNING — 워커가 정상 가동되지 않았습니다. 다음 명령으로 원인 확인:"
+    echo "WARNING — 워커가 정상 가동되지 않았고 dry-run 성공 흔적도 없습니다."
+    echo "  다음 명령으로 원인 확인:"
     echo "  journalctl -u $WORKER_UNIT -n 50"
     exit 4
 fi
