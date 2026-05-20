@@ -1,8 +1,8 @@
 {
-  "status": "ssh_failed",
-  "secrets_detail": "4개 등록됨, 키 형식=body_only_auto_wrapped",
-  "ssh_exit": "255",
-  "ssh_output": "Warning: Permanently added '202.182.125.132' (ED25519) to the list of known hosts.\r\nLoad key \"/home/runner/.ssh/id_ed25519\": error in libcrypto\r\nroot@202.182.125.132: Permission denied (publickey,password).\r",
-  "run_id": "26168564355",
-  "head_sha": "6de459d05e0db6fa32e9917f2d1a3d9f567fe377"
+  "status": "all_ok",
+  "secrets_detail": "4개 등록됨, 키 형식=full_marker",
+  "ssh_exit": "0",
+  "ssh_output": "Warning: Permanently added '202.182.125.132' (ED25519) to the list of known hosts.\r\nSSH_OK\nauto-invest\nLinux 5.15.0-179-generic x86_64\nINSTALL_DIR_EXISTS=yes\nOPERATOR_DESIGN_SH=yes\nCONFIG_RULES_TOML=yes\nPOLKIT_RULE=yes\nENV_KIS_KEY_SET=1\nENV_ANTHROPIC_KEY_SET=1\nMAIN_SHA=unknown",
+  "run_id": "26192322782",
+  "head_sha": "a578d4a8df6e9fb30ff47c113d8b5486b961d201"
 }
