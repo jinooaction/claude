@@ -3,6 +3,6 @@
   "secrets_detail": "4개 등록됨, 키 형식=full_marker",
   "ssh_exit": "255",
   "ssh_output": "Warning: Permanently added '202.182.125.132' (ED25519) to the list of known hosts.\r\nLoad key \"/home/runner/.ssh/id_ed25519\": error in libcrypto\r\nroot@202.182.125.132: Permission denied (publickey,password).\r",
-  "run_id": "26167225333",
-  "head_sha": "b52cca3113f75699523b82b12d056b29d0406427"
+  "run_id": "26167366962",
+  "head_sha": "55105450a73b1ec401fc11c6497829ad9ecc3fbf"
 }
