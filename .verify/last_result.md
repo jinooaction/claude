@@ -1,10 +1,10 @@
 # 운영자 셋업 검증 결과 ❌
 
 - 종합: `ssh_failed`
-- Secrets: 4개 등록됨, 키 형식=body_only_auto_wrapped
+- Secrets: 4개 등록됨, 키 형식=full_marker
 - SSH exit: `255`
-- 시각: 2026-05-20T13:49:31Z
-- run id: 26166876011
+- 시각: 2026-05-20T13:55:31Z
+- run id: 26167225333
 
 ## SSH 출력 (인스턴스 상태)
 
