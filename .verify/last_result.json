@@ -1,0 +1,8 @@
+{
+  "status": "secrets_failed",
+  "secrets_detail": "VULTR_SSH_PRIVATE_KEY 형식 오류: BEGIN/END PRIVATE KEY 줄이 없습니다.",
+  "ssh_exit": "",
+  "ssh_output": "",
+  "run_id": "26165277654",
+  "head_sha": "826e293a28983173e7ff283f23d6074e530611fd"
+}
