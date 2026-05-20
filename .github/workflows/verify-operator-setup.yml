@@ -57,14 +57,32 @@ jobs:
               echo "::error::GitHub Secrets 누락: ${missing[*]}"
               exit 0
           fi
-          # 키 형식 검증
-          if ! echo "${KEY}" | grep -q "PRIVATE KEY"; then
-              echo "secrets_status=bad_key_format" >> "$GITHUB_OUTPUT"
-              echo "secrets_detail=VULTR_SSH_PRIVATE_KEY 형식 오류: BEGIN/END PRIVATE KEY 줄이 없습니다." >> "$GITHUB_OUTPUT"
+          # 키 형식 검증 + 자동 정상화.
+          # 운영자가 BEGIN/END 마커 없이 base64 본문만 등록했어도 자동 복구.
+          # 공개키(ssh-ed25519 ...)면 SSH 단계에서 별도 실패 → 진단.
+          if echo "${KEY}" | grep -q "PRIVATE KEY"; then
+              # 정상 — 마커 포함된 개인키.
+              key_form="full_marker"
+          elif echo "${KEY}" | head -n1 | grep -qE "^(ssh-(rsa|ed25519|dss)|ecdsa-)"; then
+              # 공개키를 잘못 등록한 경우 — 마커 추가해도 동작 안 함.
+              echo "secrets_status=public_key_registered" >> "$GITHUB_OUTPUT"
+              echo "secrets_detail=VULTR_SSH_PRIVATE_KEY 에 공개키(ssh-ed25519 ...)가 등록됨. 개인키 파일(/root/.ssh/auto_invest_gh, .pub 없음)로 교체 필요." >> "$GITHUB_OUTPUT"
               exit 0
+          else
+              # base64 본문만 등록된 경우 — 마커 자동 추가 시도.
+              key_form="body_only_auto_wrapped"
+              echo "  VULTR_SSH_PRIVATE_KEY 에 BEGIN/END 마커 없음 — 본문이라 가정하고 자동 wrap 시도."
+              # 자동 wrap 된 키를 다음 step 에서 쓰기 위해 환경 파일에 저장.
+              {
+                  echo "-----BEGIN OPENSSH PRIVATE KEY-----"
+                  echo "${KEY}"
+                  echo "-----END OPENSSH PRIVATE KEY-----"
+              } > /tmp/ssh_key_wrapped
+              # 다음 step 에서 cat /tmp/ssh_key_wrapped 로 사용.
           fi
           echo "secrets_status=ok" >> "$GITHUB_OUTPUT"
-          echo "secrets_detail=4개 모두 등록됨, 키 형식 OK" >> "$GITHUB_OUTPUT"
+          echo "secrets_detail=4개 등록됨, 키 형식=${key_form}" >> "$GITHUB_OUTPUT"
+          echo "key_form=${key_form}" >> "$GITHUB_OUTPUT"
           echo "  host=${HOST}"
           echo "  user=${USER}"
           echo "  port=${PORT}"
@@ -73,11 +91,21 @@ jobs:
         if: steps.check_secrets.outputs.secrets_status == 'ok'
         env:
           KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+          KEY_FORM: ${{ steps.check_secrets.outputs.key_form }}
         run: |
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          echo "${KEY}" > ~/.ssh/id_ed25519
+          if [[ "${KEY_FORM}" == "body_only_auto_wrapped" ]] && [[ -f /tmp/ssh_key_wrapped ]]; then
+              # 운영자가 BEGIN/END 마커 없이 base64 본문만 등록 — 자동 wrap 된 키 사용.
+              cp /tmp/ssh_key_wrapped ~/.ssh/id_ed25519
+          else
+              echo "${KEY}" > ~/.ssh/id_ed25519
+          fi
           chmod 600 ~/.ssh/id_ed25519
+          # 빠른 형식 검증 — ssh-keygen 이 거부하면 키 자체가 망가진 것.
+          if ! ssh-keygen -y -f ~/.ssh/id_ed25519 >/dev/null 2>&1; then
+              echo "::warning::ssh-keygen 이 id_ed25519 를 거부 — 키 내용이 손상됐거나 다른 형식. SSH 단계에서 추가 진단 시도."
+          fi
 
       - name: Test SSH connection
         id: ssh_test
