@@ -21,7 +21,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
   issues: write
 
@@ -183,21 +183,39 @@ jobs:
               `_workflow run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}_`,
             ].join('\n');
 
-            // PR 컨텍스트가 있으면 PR comment, 없으면 commit comment.
-            if (context.payload.pull_request) {
+            // 1. PR 컨텍스트가 있으면 PR comment.
+            let prNumber = context.payload.pull_request?.number;
+            // 2. 없으면 (push 트리거 등) head SHA 로 PR 검색.
+            if (!prNumber) {
+              try {
+                const search = await github.rest.search.issuesAndPullRequests({
+                  q: `repo:${context.repo.owner}/${context.repo.repo} is:pr is:open sha:${context.sha}`,
+                });
+                if (search.data.items.length > 0) {
+                  prNumber = search.data.items[0].number;
+                  core.info(`PR ${prNumber} found by sha:${context.sha}`);
+                }
+              } catch (e) {
+                core.warning(`PR search failed: ${e.message}`);
+              }
+            }
+            if (prNumber) {
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: context.payload.pull_request.number,
+                issue_number: prNumber,
                 body,
               });
+              core.info(`Posted to PR #${prNumber}`);
             } else {
+              // 3. fallback: commit comment (contents: write 권한 필요)
               await github.rest.repos.createCommitComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 commit_sha: context.sha,
                 body,
               });
+              core.info(`Posted as commit comment on ${context.sha}`);
             }
 
       - name: Fail if not all OK
