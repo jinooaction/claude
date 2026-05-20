@@ -48,7 +48,6 @@ class VerifyResult:
 def verify_rules(
     toml_text: str,
     *,
-    intent_capital_usd: Decimal,
     kis_balance_usd: Decimal,
 ) -> VerifyResult:
     """생성된 룰 TOML을 정적 + (가능하면) 동적 검증.
@@ -58,7 +57,6 @@ def verify_rules(
     # 1. 정적 검증.
     static = validate_generated_rules(
         toml_text,
-        intent_capital_usd=intent_capital_usd,
         kis_balance_usd=kis_balance_usd,
     )
     if not static.ok:

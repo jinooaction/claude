@@ -1,13 +1,16 @@
 """Spec 010 T012 — 생성된 룰 TOML 정적 검증.
 
 Claude 응답을 TOML로 파싱한 뒤 spec 001의 pydantic 모델로 1차 검증, 추가로
-contracts/claude-prompt.md "안전 추가 검증" 5종 검사:
+contracts/claude-prompt.md "안전 추가 검증" 검사:
 
 1. caps 값 양수 + 헌법 권장치 이내.
 2. 모든 rule.symbol이 whitelist.symbols에 포함.
 3. order_type이 whitelist.order_types에 포함.
-4. 자본 한도 (의도 자본 ≤ KIS 잔고, > $10).
+4. KIS 잔고 최소 한도($10) 충족.
 5. 종목이 미국 6자 미만 휴리스틱.
+
+운영자 "의도 자본 $100" 정책은 제거됨 — 자본은 항상 KIS 잔고를 그대로
+사용한다. 잔고 자체가 최소 한도($10) 미만일 때만 거부.
 
 실패 시 한글 사유 + RULE_DESIGN_REJECTED 호출자가 결정.
 """
@@ -55,14 +58,13 @@ _MAX_GLOBAL_EXPOSURE_PCT = Decimal("100")
 def validate_generated_rules(
     toml_text: str,
     *,
-    intent_capital_usd: Decimal,
     kis_balance_usd: Decimal,
 ) -> ValidationResult:
     """생성된 룰 TOML을 정적 검증.
 
-    파싱 실패·whitelist 위반·cap 위반·자본 부족 중 하나라도 걸리면 ok=False.
+    파싱 실패·whitelist 위반·cap 위반·잔고 부족 중 하나라도 걸리면 ok=False.
     """
-    # 1. 자본 한도 — TOML 파싱 전 사전 검증.
+    # 1. 잔고 최소 한도 — TOML 파싱 전 사전 검증.
     if kis_balance_usd < _MIN_BALANCE_USD:
         return ValidationResult(
             ok=False,
@@ -70,14 +72,6 @@ def validate_generated_rules(
             detail=(
                 f"KIS 잔고 ${kis_balance_usd}이 최소 한도 ${_MIN_BALANCE_USD} 미만입니다. "
                 "입금 후 다시 시도해주세요."
-            ),
-        )
-    if intent_capital_usd > kis_balance_usd:
-        return ValidationResult(
-            ok=False,
-            reason="insufficient_balance",
-            detail=(
-                f"의도 자본 ${intent_capital_usd}이 KIS 잔고 ${kis_balance_usd}보다 큽니다."
             ),
         )
 

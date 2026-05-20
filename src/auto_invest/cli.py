@@ -369,11 +369,6 @@ def design(
         "--prices",
         help="Anthropic price table (spec 002).",
     ),
-    intent_capital_usd: float = typer.Option(
-        0.0,
-        "--capital",
-        help="운영자 의도의 자본 (USD). 0이면 KIS 잔고 그대로 사용.",
-    ),
     max_retries: int = typer.Option(
         3,
         "--max-retries",
@@ -437,7 +432,6 @@ def design(
 
     import json as _json
     import socket
-    from decimal import Decimal as _D
 
     from auto_invest.design import claude_client, deploy, mutex, prompt, verifier
     from auto_invest.persistence import audit as _audit
@@ -516,7 +510,8 @@ def design(
     )
 
     # 5. Claude 호출 + 검증 루프 (최대 max_retries).
-    intent_capital = _D(str(intent_capital_usd)) if intent_capital_usd > 0 else balance.cash_usd
+    # 자본은 항상 KIS 잔고를 사용 — "의도 자본" 별도 입력 정책은 제거됨.
+    intent_capital = balance.cash_usd
     retry_context: dict | None = None
     generated_toml: str | None = None
     completed_payload: RuleDesignCompletedPayload | None = None
@@ -600,7 +595,6 @@ def design(
                 # 정적 + 백테스트(가용 시) 검증.
                 vr = verifier.verify_rules(
                     parsed.rules_toml,
-                    intent_capital_usd=intent_capital,
                     kis_balance_usd=balance.cash_usd,
                 )
                 if not vr.ok:
@@ -664,7 +658,7 @@ def design(
     assert generated_toml is not None
     typer.echo("\n=== 검증 통과 — 생성된 룰 요약 ===")
     typer.echo(f"  해석: {_json.dumps(completed_payload.interpretation, ensure_ascii=False)}")
-    typer.echo(f"  자본: ${intent_capital} (KIS 잔고 ${balance.cash_usd})")
+    typer.echo(f"  KIS 예수금: ${balance.cash_usd} / 총 평가: ${balance.total_value_usd}")
     typer.echo(generated_toml[:500] + ("..." if len(generated_toml) > 500 else ""))
     typer.echo("")
 
@@ -742,8 +736,12 @@ async def _fetch_kis_account_state(
     account_no: str,
     db_path: Path,
 ):
-    """KIS 잔고 + 보유 종목 조회 helper."""
-    from auto_invest.broker.overseas import get_balance
+    """KIS 잔고 + 보유 종목 조회 helper.
+
+    잔고는 외화예수금(주문가능액) + 보유 종목 평가금액의 합. 보유 종목은
+    Claude 프롬프트와 audit 페이로드 모두에서 활용된다.
+    """
+    from auto_invest.broker.overseas import get_balance, get_positions
 
     async with httpx.AsyncClient(base_url=base_url, timeout=30.0) as inner:
         token = await get_valid_token(
@@ -766,8 +764,22 @@ async def _fetch_kis_account_state(
             app_secret=app_secret,
             account=account_no,
         )
-    # 보유 종목 상세 조회는 본 PR에서 stub — 빈 리스트.
-    return balance, []
+        positions = await get_positions(
+            client,
+            access_token=token.access_token,
+            app_key=app_key,
+            app_secret=app_secret,
+            account=account_no,
+        )
+    holdings = [
+        {
+            "symbol": p.symbol,
+            "qty": p.qty,
+            "avg_cost_usd": str(p.avg_cost_usd),
+        }
+        for p in positions
+    ]
+    return balance, holdings
 
 
 def _d_iso_now() -> str:
