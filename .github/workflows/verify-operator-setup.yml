@@ -1,0 +1,207 @@
+name: Verify operator setup
+
+# 운영자의 1회 셋업이 정상 적용됐는지 자동 검증.
+# 운영자가 GitHub Actions UI 클릭하지 않아도 push 시 자동 실행되고,
+# 결과를 이 워크플로우가 들어있는 PR 또는 commit 에 자동 댓글로 보고한다.
+#
+# 검증 항목:
+#   1. GitHub Secrets 4개 등록 여부 (VULTR_SSH_HOST/USER/PRIVATE_KEY/PORT)
+#   2. 키 형식 (개인키 BEGIN/END 마커)
+#   3. SSH 접속 시도 (echo OK + hostname)
+#   4. 인스턴스 안에 operator_design.sh 존재 여부 + git 상태
+#
+# design 명령은 호출하지 않음 (Anthropic API 비용 0 — 셋업 검증만).
+
+on:
+  # 이 파일이 변경되면 자동 트리거.
+  push:
+    paths:
+      - '.github/workflows/verify-operator-setup.yml'
+  # 운영자가 수동으로도 트리거 가능.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check secrets
+        id: check_secrets
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          set +e  # 실패해도 다음 step 진행 (결과 보고 위해)
+          missing=()
+          [[ -z "${HOST:-}" ]] && missing+=("VULTR_SSH_HOST")
+          [[ -z "${USER:-}" ]] && missing+=("VULTR_SSH_USER")
+          [[ -z "${KEY:-}"  ]] && missing+=("VULTR_SSH_PRIVATE_KEY")
+          [[ -z "${PORT:-}" ]] && missing+=("VULTR_SSH_PORT")
+          if [[ ${#missing[@]} -gt 0 ]]; then
+              echo "secrets_status=missing" >> "$GITHUB_OUTPUT"
+              echo "secrets_detail=누락: ${missing[*]}" >> "$GITHUB_OUTPUT"
+              echo "::error::GitHub Secrets 누락: ${missing[*]}"
+              exit 0
+          fi
+          # 키 형식 검증
+          if ! echo "${KEY}" | grep -q "PRIVATE KEY"; then
+              echo "secrets_status=bad_key_format" >> "$GITHUB_OUTPUT"
+              echo "secrets_detail=VULTR_SSH_PRIVATE_KEY 형식 오류: BEGIN/END PRIVATE KEY 줄이 없습니다." >> "$GITHUB_OUTPUT"
+              exit 0
+          fi
+          echo "secrets_status=ok" >> "$GITHUB_OUTPUT"
+          echo "secrets_detail=4개 모두 등록됨, 키 형식 OK" >> "$GITHUB_OUTPUT"
+          echo "  host=${HOST}"
+          echo "  user=${USER}"
+          echo "  port=${PORT}"
+
+      - name: Install SSH key
+        if: steps.check_secrets.outputs.secrets_status == 'ok'
+        env:
+          KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          echo "${KEY}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+      - name: Test SSH connection
+        id: ssh_test
+        if: steps.check_secrets.outputs.secrets_status == 'ok'
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          ssh_out=$(ssh \
+              -o StrictHostKeyChecking=accept-new \
+              -o ConnectTimeout=10 \
+              -o BatchMode=yes \
+              -p "${port}" \
+              -i ~/.ssh/id_ed25519 \
+              "${USER}@${HOST}" \
+              "echo SSH_OK; hostname; uname -srm; \
+               echo INSTALL_DIR_EXISTS=\$(test -d /opt/auto-invest && echo yes || echo no); \
+               echo OPERATOR_DESIGN_SH=\$(test -x /opt/auto-invest/scripts/operator_design.sh && echo yes || echo no); \
+               echo CONFIG_RULES_TOML=\$(test -f /opt/auto-invest/config/rules.toml && echo yes || echo no); \
+               echo POLKIT_RULE=\$(test -f /etc/polkit-1/rules.d/50-auto-invest.rules && echo yes || echo no); \
+               echo ENV_KIS_KEY_SET=\$(grep -c '^KIS_APP_KEY=[^ ]' /opt/auto-invest/.env 2>/dev/null || echo 0); \
+               echo ENV_ANTHROPIC_KEY_SET=\$(grep -c '^ANTHROPIC_API_KEY=[^ ]' /opt/auto-invest/.env 2>/dev/null || echo 0); \
+               echo MAIN_SHA=\$(cd /opt/auto-invest && git rev-parse HEAD 2>/dev/null || echo unknown)" 2>&1)
+          ssh_exit=$?
+          {
+              echo "ssh_exit=${ssh_exit}"
+              echo "ssh_output<<EOF_OUTPUT"
+              echo "${ssh_out}"
+              echo "EOF_OUTPUT"
+          } >> "$GITHUB_OUTPUT"
+          echo "${ssh_out}"
+
+      - name: Determine overall status
+        id: overall
+        run: |
+          secrets_status="${{ steps.check_secrets.outputs.secrets_status }}"
+          ssh_exit="${{ steps.ssh_test.outputs.ssh_exit }}"
+          if [[ "${secrets_status}" != "ok" ]]; then
+              echo "status=secrets_failed" >> "$GITHUB_OUTPUT"
+              echo "emoji=❌" >> "$GITHUB_OUTPUT"
+          elif [[ "${ssh_exit}" != "0" ]]; then
+              echo "status=ssh_failed" >> "$GITHUB_OUTPUT"
+              echo "emoji=❌" >> "$GITHUB_OUTPUT"
+          else
+              echo "status=all_ok" >> "$GITHUB_OUTPUT"
+              echo "emoji=✅" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Write workflow summary
+        if: always()
+        env:
+          STATUS: ${{ steps.overall.outputs.status }}
+          EMOJI: ${{ steps.overall.outputs.emoji }}
+          SECRETS_DETAIL: ${{ steps.check_secrets.outputs.secrets_detail }}
+          SSH_EXIT: ${{ steps.ssh_test.outputs.ssh_exit }}
+          SSH_OUTPUT: ${{ steps.ssh_test.outputs.ssh_output }}
+        run: |
+          {
+              echo "# 운영자 셋업 검증 결과 ${EMOJI}"
+              echo
+              echo "| 항목 | 결과 |"
+              echo "|------|------|"
+              echo "| 종합 | ${EMOJI} ${STATUS} |"
+              echo "| Secrets | ${SECRETS_DETAIL:-미확인} |"
+              echo "| SSH exit | \`${SSH_EXIT:-skipped}\` |"
+              echo
+              echo "## SSH 출력"
+              echo
+              echo '```'
+              echo "${SSH_OUTPUT:-(SSH 시도 안 함 — secrets 검증 단계에서 중단)}"
+              echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Report to commit comment
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          STATUS: ${{ steps.overall.outputs.status }}
+          EMOJI: ${{ steps.overall.outputs.emoji }}
+          SECRETS_DETAIL: ${{ steps.check_secrets.outputs.secrets_detail }}
+          SSH_EXIT: ${{ steps.ssh_test.outputs.ssh_exit }}
+          SSH_OUTPUT: ${{ steps.ssh_test.outputs.ssh_output }}
+        with:
+          script: |
+            const status = process.env.STATUS;
+            const emoji = process.env.EMOJI;
+            const secretsDetail = process.env.SECRETS_DETAIL || '미확인';
+            const sshExit = process.env.SSH_EXIT || 'skipped';
+            const sshOutput = process.env.SSH_OUTPUT || '(SSH 시도 안 함 — secrets 단계에서 중단)';
+
+            const body = [
+              `## 운영자 셋업 검증 결과 ${emoji}`,
+              '',
+              `**종합**: \`${status}\``,
+              '',
+              `| 항목 | 결과 |`,
+              `|------|------|`,
+              `| Secrets 등록 | ${secretsDetail} |`,
+              `| SSH 접속 exit code | \`${sshExit}\` |`,
+              '',
+              '### SSH 출력 (인스턴스 상태 진단)',
+              '',
+              '```',
+              sshOutput,
+              '```',
+              '',
+              `_workflow run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}_`,
+            ].join('\n');
+
+            // PR 컨텍스트가 있으면 PR comment, 없으면 commit comment.
+            if (context.payload.pull_request) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                body,
+              });
+            } else {
+              await github.rest.repos.createCommitComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                commit_sha: context.sha,
+                body,
+              });
+            }
+
+      - name: Fail if not all OK
+        if: steps.overall.outputs.status != 'all_ok'
+        run: |
+          echo "::error::셋업 검증 실패: ${{ steps.overall.outputs.status }}"
+          exit 1
