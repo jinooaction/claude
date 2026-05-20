@@ -1,5 +1,5 @@
 name: Verify operator setup
-# trigger: operator regenerated key + re-registered as base64 single-line
+# trigger: operator used gh CLI to set secret directly (binary-safe)
 
 # 운영자의 1회 셋업이 정상 적용됐는지 자동 검증.
 # 운영자가 GitHub Actions UI 클릭하지 않아도 push 시 자동 실행되고,
