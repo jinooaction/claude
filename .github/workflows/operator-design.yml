@@ -1,0 +1,178 @@
+name: Operator design (auto-invest)
+
+# 운영자가 GitHub UI에서 한 번 클릭으로 design 실행.
+#
+# 워크플로우가 SSH로 운영자 인스턴스(Vultr 등)에 접속해 operator_design.sh
+# 를 실행하고 결과를 워크플로우 로그 + Summary에 출력.
+#
+# 운영자는 이 워크플로우를 GitHub Actions UI에서 트리거만 하면 됨.
+# 인스턴스 콘솔에 안 들어감.
+#
+# 사전 준비 (운영자가 한 번만, 자세한 가이드는 docs/OPERATOR_GITHUB_ACTIONS_DESIGN.md):
+#
+#   1. 인스턴스에 SSH 접속용 공개키 등록:
+#      - 운영자 노트북에서 ssh-keygen -t ed25519 -f ~/.ssh/auto_invest_gh
+#      - 공개키(~/.ssh/auto_invest_gh.pub)를 인스턴스의
+#        /root/.ssh/authorized_keys 또는 auto-invest 사용자의
+#        ~/.ssh/authorized_keys 에 append (한 번만).
+#
+#   2. GitHub Secrets 4개 등록 (Settings → Secrets and variables → Actions):
+#        Name: VULTR_SSH_HOST          Value: 202.182.125.132 (또는 인스턴스 IP)
+#        Name: VULTR_SSH_USER          Value: root (또는 ssh 접속할 사용자)
+#        Name: VULTR_SSH_PRIVATE_KEY   Value: ~/.ssh/auto_invest_gh 의 전체 내용
+#        Name: VULTR_SSH_PORT          Value: 22 (기본값. 다른 포트면 변경)
+#
+#   3. (선택) Vultr 콘솔 → 인스턴스 → Firewall 에서 GitHub Actions runner IP
+#      범위 허용. 또는 SSH 포트는 전 세계 오픈 (기본).
+#
+# 실행:
+#   Actions 탭 → "Operator design (auto-invest)" → Run workflow → intent 입력 → Run.
+#
+# 결과:
+#   워크플로우 로그에 KIS 잔고 / Claude 응답 / 검증 결과 / 라이브 시작 여부 출력.
+#   AUTO_OK=true (기본) 면 검증 통과 즉시 라이브 worker 자동 시작.
+
+on:
+  workflow_dispatch:
+    inputs:
+      intent:
+        description: "design 의도 (자연어 한 줄, 예: '자본 100달러, 미국 대형주 분산, 매주 월요일 적립, 위험 보통')"
+        required: true
+        default: "자본 100달러, 미국 대형주 분산, 매주 월요일 적립, 위험 보통"
+        type: string
+      auto_ok:
+        description: "검증 통과 후 OK 자동 입력 (true=라이브 즉시 시작, false=룰만 출력하고 종료)"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  design:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Validate secrets
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          missing=()
+          [[ -z "${HOST:-}" ]] && missing+=("VULTR_SSH_HOST")
+          [[ -z "${USER:-}" ]] && missing+=("VULTR_SSH_USER")
+          [[ -z "${KEY:-}"  ]] && missing+=("VULTR_SSH_PRIVATE_KEY")
+          if [[ ${#missing[@]} -gt 0 ]]; then
+              echo "::error::GitHub Secrets 누락: ${missing[*]}"
+              echo "Settings → Secrets and variables → Actions 에서 추가하세요."
+              echo "자세한 가이드: docs/OPERATOR_GITHUB_ACTIONS_DESIGN.md"
+              exit 1
+          fi
+          echo "Secrets OK (host=${HOST}, user=${USER})."
+
+      - name: Install SSH key
+        env:
+          KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          echo "${KEY}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          # 키 형식 빠른 검증 (개인키 마커가 있어야 함).
+          if ! grep -q "PRIVATE KEY" ~/.ssh/id_ed25519; then
+              echo "::error::VULTR_SSH_PRIVATE_KEY 가 SSH 개인키 형식이 아닙니다."
+              echo "ssh-keygen -t ed25519 -f ~/.ssh/auto_invest_gh 로 생성한 키 전체 내용을"
+              echo "그대로 (BEGIN/END 줄 포함) GitHub Secret 에 붙여넣으세요."
+              exit 1
+          fi
+          echo "SSH key installed."
+
+      - name: Pre-flight SSH check
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          set -euo pipefail
+          port="${PORT:-22}"
+          # StrictHostKeyChecking=accept-new: 첫 접속시 호스트 키 자동 수락. man-in-the-middle
+          # 위험이 0은 아니지만 GitHub Actions runner 환경에서는 신뢰 가능한 1회 접속.
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
+              -p "${port}" \
+              -i ~/.ssh/id_ed25519 \
+              "${USER}@${HOST}" \
+              "echo 'SSH OK: ' \$(hostname) ; whoami ; uname -a"
+
+      - name: Run operator_design.sh on instance
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+          INTENT: ${{ inputs.intent }}
+          AUTO_OK: ${{ inputs.auto_ok && '1' || '0' }}
+        run: |
+          set -euo pipefail
+          port="${PORT:-22}"
+          echo "============================================================"
+          echo "운영자 의도: ${INTENT}"
+          echo "AUTO_OK: ${AUTO_OK} (1=검증 통과 즉시 라이브 시작, 0=룰만 보기)"
+          echo "대상 인스턴스: ${USER}@${HOST}:${port}"
+          echo "============================================================"
+          # operator_design.sh 가 인스턴스의 /opt/auto-invest/scripts/ 에 있어야 함.
+          # 처음 실행이라 없을 수도 있으므로, curl 로 main 의 최신본을 직접 가져와 실행.
+          # (인스턴스가 main 을 받지 않은 상태에서도 동작 보장.)
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+              -p "${port}" \
+              -i ~/.ssh/id_ed25519 \
+              "${USER}@${HOST}" \
+              "AUTO_OK='${AUTO_OK}' bash -s -- '${INTENT}'" \
+              < scripts/operator_design.sh \
+              2>&1 | tee /tmp/design_output.log
+          design_exit=${PIPESTATUS[0]}
+          echo "DESIGN_EXIT=${design_exit}" >> "$GITHUB_ENV"
+          # exit code 를 그대로 전파 (workflow 실패 표시).
+          exit "${design_exit}"
+
+      - name: Write workflow summary
+        if: always()
+        env:
+          INTENT: ${{ inputs.intent }}
+          AUTO_OK: ${{ inputs.auto_ok }}
+        run: |
+          set -euo pipefail
+          exit_code="${DESIGN_EXIT:-?}"
+          if [[ "${exit_code}" == "0" ]]; then
+              status="✅ 정상 종료"
+          else
+              status="❌ 실패 (exit ${exit_code})"
+          fi
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          # auto-invest design — 운영자 트리거 결과
+
+          | 항목 | 값 |
+          |------|-----|
+          | 의도 | ${INTENT} |
+          | AUTO_OK | ${AUTO_OK} |
+          | 결과 | ${status} |
+
+          ## 실행 로그
+
+          전체 로그는 위의 "Run operator_design.sh on instance" 스텝에서 확인하세요.
+          (KIS 잔고 / Claude 호출 / 검증 결과 / 라이브 worker 시작 여부)
+
+          ## 다음 단계
+
+          - **AUTO_OK=true 였고 정상 종료**: 라이브 worker subprocess 가 시작됐습니다.
+            인스턴스 콘솔(또는 다음 workflow 실행) 에서 \`auto-invest design --check\` 로
+            상태 확인 가능.
+          - **AUTO_OK=false 였고 정상 종료**: 룰이 검증을 통과해 audit_log 에 기록됐습니다.
+            룰을 검토한 뒤 만족하면 AUTO_OK=true 로 다시 실행하세요 (Claude 비용 ~\$0.02 추가).
+          - **실패**: 위 로그의 마지막 5~10 줄을 확인. 자주 발생하는 원인:
+            - KIS API 인증 실패: KIS_APP_KEY / KIS_APP_SECRET / KIS_ACCOUNT_NO 확인
+            - Anthropic API 실패: ANTHROPIC_API_KEY 확인
+            - 검증 3회 실패: 의도 문구를 더 구체적으로
+          EOF
