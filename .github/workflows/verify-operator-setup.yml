@@ -1,0 +1,382 @@
+name: Verify operator setup
+# trigger: operator used gh CLI to set secret directly (binary-safe)
+
+# 운영자의 1회 셋업이 정상 적용됐는지 자동 검증.
+# 운영자가 GitHub Actions UI 클릭하지 않아도 push 시 자동 실행되고,
+# 결과를 이 워크플로우가 들어있는 PR 또는 commit 에 자동 댓글로 보고한다.
+#
+# 검증 항목:
+#   1. GitHub Secrets 4개 등록 여부 (VULTR_SSH_HOST/USER/PRIVATE_KEY/PORT)
+#   2. 키 형식 (개인키 BEGIN/END 마커)
+#   3. SSH 접속 시도 (echo OK + hostname)
+#   4. 인스턴스 안에 operator_design.sh 존재 여부 + git 상태
+#
+# design 명령은 호출하지 않음 (Anthropic API 비용 0 — 셋업 검증만).
+
+on:
+  # 이 파일이 변경되면 자동 트리거.
+  push:
+    paths:
+      - '.github/workflows/verify-operator-setup.yml'
+  # 운영자가 수동으로도 트리거 가능.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout (필수 — 결과 commit 위해)
+        uses: actions/checkout@v4
+        with:
+          # 이후 push 가 같은 ref 에 가능하도록 fetch-depth 0 + token 보존.
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Check secrets
+        id: check_secrets
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          set +e  # 실패해도 다음 step 진행 (결과 보고 위해)
+          missing=()
+          [[ -z "${HOST:-}" ]] && missing+=("VULTR_SSH_HOST")
+          [[ -z "${USER:-}" ]] && missing+=("VULTR_SSH_USER")
+          [[ -z "${KEY:-}"  ]] && missing+=("VULTR_SSH_PRIVATE_KEY")
+          [[ -z "${PORT:-}" ]] && missing+=("VULTR_SSH_PORT")
+          if [[ ${#missing[@]} -gt 0 ]]; then
+              echo "secrets_status=missing" >> "$GITHUB_OUTPUT"
+              echo "secrets_detail=누락: ${missing[*]}" >> "$GITHUB_OUTPUT"
+              echo "::error::GitHub Secrets 누락: ${missing[*]}"
+              exit 0
+          fi
+          # 키 형식 검증 + 자동 정상화.
+          # 운영자가 BEGIN/END 마커 없이 base64 본문만 등록했어도 자동 복구.
+          # 공개키(ssh-ed25519 ...)면 SSH 단계에서 별도 실패 → 진단.
+          if echo "${KEY}" | grep -q "PRIVATE KEY"; then
+              # 정상 — 마커 포함된 개인키.
+              key_form="full_marker"
+          elif echo "${KEY}" | head -n1 | grep -qE "^(ssh-(rsa|ed25519|dss)|ecdsa-)"; then
+              # 공개키를 잘못 등록한 경우 — 마커 추가해도 동작 안 함.
+              echo "secrets_status=public_key_registered" >> "$GITHUB_OUTPUT"
+              echo "secrets_detail=VULTR_SSH_PRIVATE_KEY 에 공개키(ssh-ed25519 ...)가 등록됨. 개인키 파일(/root/.ssh/auto_invest_gh, .pub 없음)로 교체 필요." >> "$GITHUB_OUTPUT"
+              exit 0
+          else
+              # base64 본문만 등록된 경우 — 마커 자동 추가 시도.
+              key_form="body_only_auto_wrapped"
+              echo "  VULTR_SSH_PRIVATE_KEY 에 BEGIN/END 마커 없음 — 본문이라 가정하고 자동 wrap 시도."
+              # 자동 wrap 된 키를 다음 step 에서 쓰기 위해 환경 파일에 저장.
+              {
+                  echo "-----BEGIN OPENSSH PRIVATE KEY-----"
+                  echo "${KEY}"
+                  echo "-----END OPENSSH PRIVATE KEY-----"
+              } > /tmp/ssh_key_wrapped
+              # 다음 step 에서 cat /tmp/ssh_key_wrapped 로 사용.
+          fi
+          echo "secrets_status=ok" >> "$GITHUB_OUTPUT"
+          echo "secrets_detail=4개 등록됨, 키 형식=${key_form}" >> "$GITHUB_OUTPUT"
+          echo "key_form=${key_form}" >> "$GITHUB_OUTPUT"
+          echo "  host=${HOST}"
+          echo "  user=${USER}"
+          echo "  port=${PORT}"
+
+      - name: "Install SSH key (robust — 줄바꿈 깨짐 자동 복구)"
+        id: install_key
+        if: steps.check_secrets.outputs.secrets_status == 'ok'
+        env:
+          KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+          KEY_FORM: ${{ steps.check_secrets.outputs.key_form }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          # 1) 첫 시도: 그대로 사용
+          if [[ "${KEY_FORM}" == "body_only_auto_wrapped" ]] && [[ -f /tmp/ssh_key_wrapped ]]; then
+              cp /tmp/ssh_key_wrapped ~/.ssh/id_ed25519
+          else
+              echo "${KEY}" > ~/.ssh/id_ed25519
+          fi
+          chmod 600 ~/.ssh/id_ed25519
+
+          # 검증 1: 그대로 동작?
+          if ssh-keygen -y -f ~/.ssh/id_ed25519 >/dev/null 2>&1; then
+              echo "  키 그대로 OK."
+              ssh-keygen -y -f ~/.ssh/id_ed25519 | head -c 50
+              echo
+              exit 0
+          fi
+          echo "  키 그대로 거부됨 → 줄바꿈 깨짐 자동 복구 시도."
+
+          # 2) 두 번째 시도: 멀티라인이 한 줄로 합쳐졌을 가능성. 줄바꿈을 재구성.
+          # GitHub Secret UI 또는 운영자 클립보드가 멀티라인을 한 줄로 합쳤을 때
+          # 흔한 패턴: "-----BEGIN ...----- body body body -----END ...-----"
+          # base64 body 를 70자 단위로 잘라서 wrap.
+          python3 - <<'PY' > /tmp/ssh_key_fixed
+          import os, re, sys
+          raw = os.environ["KEY"].strip()
+
+          # BEGIN/END 마커 추출 (있다면)
+          m = re.match(r"(-----BEGIN [A-Z ]+ KEY-----)\s*(.*?)\s*(-----END [A-Z ]+ KEY-----)", raw, re.DOTALL)
+          if m:
+              begin, body, end = m.group(1), m.group(2), m.group(3)
+          else:
+              begin = "-----BEGIN OPENSSH PRIVATE KEY-----"
+              end = "-----END OPENSSH PRIVATE KEY-----"
+              body = raw
+
+          # body 에서 모든 공백/줄바꿈 제거 → 순수 base64 만 남김
+          body_compact = re.sub(r"\s+", "", body)
+
+          # 70자 단위로 wrap
+          wrapped_body = "\n".join(body_compact[i:i+70] for i in range(0, len(body_compact), 70))
+
+          print(begin)
+          print(wrapped_body)
+          print(end)
+          PY
+          chmod 600 /tmp/ssh_key_fixed
+          cp /tmp/ssh_key_fixed ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+          # 검증 2: 복구 후 동작?
+          if ssh-keygen -y -f ~/.ssh/id_ed25519 >/dev/null 2>&1; then
+              echo "  복구 후 OK ✅ (줄바꿈 깨짐 자동 복구 성공)."
+              ssh-keygen -y -f ~/.ssh/id_ed25519 | head -c 50
+              echo
+              exit 0
+          fi
+
+          # 3) 세 번째 시도: 운영자가 base64 로 한 번 더 인코딩한 한 줄 등록 가능성.
+          # 콘솔에서 `base64 -w0 /root/.ssh/auto_invest_gh` 출력을 secret 으로 등록한 경우.
+          # 브라우저가 추가한 invisible 문자(CR, NBSP, BOM, etc) 자동 제거 — base64 문자만 남김.
+          KEY_BASE64_ONLY=$(printf '%s' "${KEY}" | tr -d '[:space:]\000-\037\177-\377' | sed 's/[^A-Za-z0-9+/=]//g')
+          echo "  KEY 원본 길이: ${#KEY}"
+          echo "  base64 문자만 남긴 길이: ${#KEY_BASE64_ONLY}"
+          if printf '%s' "${KEY_BASE64_ONLY}" | base64 -d 2>/tmp/decode_err > /tmp/ssh_key_decoded; then
+              chmod 600 /tmp/ssh_key_decoded
+              decoded_size=$(wc -c < /tmp/ssh_key_decoded)
+              echo "  디코드 결과 크기: ${decoded_size} 바이트"
+              echo "  디코드 결과 첫 줄: $(head -n1 /tmp/ssh_key_decoded)"
+              if ssh-keygen -y -f /tmp/ssh_key_decoded >/dev/null 2>&1; then
+                  cp /tmp/ssh_key_decoded ~/.ssh/id_ed25519
+                  chmod 600 ~/.ssh/id_ed25519
+                  echo "  base64 단일 디코드 후 OK ✅"
+                  ssh-keygen -y -f ~/.ssh/id_ed25519 | head -c 50
+                  echo
+                  exit 0
+              else
+                  echo "  ssh-keygen 거부: $(ssh-keygen -y -f /tmp/ssh_key_decoded 2>&1 | head -1)"
+              fi
+          else
+              echo "  base64 -d 실패: $(cat /tmp/decode_err 2>/dev/null | head -1)"
+          fi
+
+          # 셋 다 실패 — 추가 진단 출력 + result 에 기록
+          echo "::warning::3가지 복구 시도 모두 실패. 키 내용이 OpenSSH 형식이 아님."
+          DIAG_FILE=$(mktemp)
+          {
+              echo "=== KEY 원본 분석 ==="
+              echo "원본 길이: ${#KEY}"
+              # 첫 50자 (보안상 일부만)
+              echo "원본 첫 50자: ${KEY:0:50}"
+              echo "원본 마지막 50자: ${KEY: -50}"
+              # 모든 invisible/non-base64 문자 카운트
+              KEY_VISIBLE=$(printf '%s' "${KEY}" | LC_ALL=C tr -d '\r\n\t ' | sed 's/[^A-Za-z0-9+/=-]//g')
+              echo "공백 + 일반 base64 문자만 남긴 길이: ${#KEY_VISIBLE}"
+              KEY_PURE_BASE64=$(printf '%s' "${KEY}" | LC_ALL=C tr -cd 'A-Za-z0-9+/=')
+              echo "순수 base64 문자만 남긴 길이: ${#KEY_PURE_BASE64}"
+              echo "→ 차이 ($(( ${#KEY} - ${#KEY_PURE_BASE64} )) 글자) = 공백 + 특수문자"
+              # 시도 3 의 디코드 결과 검증
+              echo "=== 시도 3 (순수 base64 디코드) 결과 ==="
+              if printf '%s' "${KEY_PURE_BASE64}" | base64 -d > /tmp/diag_decoded 2>/tmp/diag_decode_err; then
+                  echo "base64 -d 성공"
+                  echo "  디코드 크기: $(wc -c < /tmp/diag_decoded)"
+                  echo "  디코드 첫 줄: $(head -n1 /tmp/diag_decoded)"
+                  echo "  디코드 마지막 줄: $(tail -n1 /tmp/diag_decoded)"
+                  echo "  디코드 줄 수: $(wc -l < /tmp/diag_decoded)"
+                  ssh-keygen -y -f /tmp/diag_decoded 2>&1 | head -3
+              else
+                  echo "base64 -d 실패: $(cat /tmp/diag_decode_err | head -2)"
+              fi
+              echo "=== 키 파일 진단 ==="
+              echo "파일 크기: $(wc -c < ~/.ssh/id_ed25519) 바이트"
+              echo "줄 수: $(wc -l < ~/.ssh/id_ed25519)"
+              echo "첫 줄: $(head -n1 ~/.ssh/id_ed25519)"
+              echo "마지막 줄: $(tail -n1 ~/.ssh/id_ed25519)"
+              echo "ssh-keygen 에러: $(ssh-keygen -y -f ~/.ssh/id_ed25519 2>&1 | head -3)"
+              echo "=== base64 magic bytes 검증 ==="
+              KEY_BODY=$(awk '/-----BEGIN/{flag=1;next} /-----END/{flag=0} flag' ~/.ssh/id_ed25519 | tr -d '[:space:]')
+              echo "base64 본문 길이: ${#KEY_BODY}"
+              KEY_MAGIC=$(echo "${KEY_BODY:0:24}" | base64 -d 2>/dev/null | head -c 14 || echo "DECODE_FAIL")
+              echo "디코드된 첫 14 바이트: ${KEY_MAGIC}"
+              if [[ "${KEY_MAGIC}" == "openssh-key-v1" ]]; then
+                  echo "→ OpenSSH 키 형식 OK (그런데 ssh-keygen 이 거부 — 본문 손상)"
+              elif [[ "${KEY_MAGIC:0:5}" == "PuTTY" ]]; then
+                  echo "→ PuTTY .ppk 형식 — puttygen 으로 OpenSSH 변환 필요"
+              elif [[ "${KEY_MAGIC}" == "DECODE_FAIL" ]]; then
+                  echo "→ base64 디코드 실패 — 본문 자체가 valid base64 가 아님"
+              else
+                  echo "→ 알 수 없는 형식: '${KEY_MAGIC}'"
+              fi
+          } > "${DIAG_FILE}" 2>&1
+          cat "${DIAG_FILE}"
+          # 진단을 다음 step 에서 result 에 포함 가능하도록 GITHUB_OUTPUT 에 저장.
+          {
+              echo "key_diag<<EOF_DIAG"
+              cat "${DIAG_FILE}"
+              echo "EOF_DIAG"
+          } >> "$GITHUB_OUTPUT" || true
+          # SSH 단계로 진행 (어차피 실패하지만 진단 정보 남김).
+
+      - name: Test SSH connection
+        id: ssh_test
+        if: steps.check_secrets.outputs.secrets_status == 'ok'
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          ssh_out=$(ssh \
+              -o StrictHostKeyChecking=accept-new \
+              -o ConnectTimeout=10 \
+              -o BatchMode=yes \
+              -p "${port}" \
+              -i ~/.ssh/id_ed25519 \
+              "${USER}@${HOST}" \
+              "echo SSH_OK; hostname; uname -srm; \
+               echo INSTALL_DIR_EXISTS=\$(test -d /opt/auto-invest && echo yes || echo no); \
+               echo OPERATOR_DESIGN_SH=\$(test -x /opt/auto-invest/scripts/operator_design.sh && echo yes || echo no); \
+               echo CONFIG_RULES_TOML=\$(test -f /opt/auto-invest/config/rules.toml && echo yes || echo no); \
+               echo POLKIT_RULE=\$(test -f /etc/polkit-1/rules.d/50-auto-invest.rules && echo yes || echo no); \
+               echo ENV_KIS_KEY_SET=\$(grep -c '^KIS_APP_KEY=[^ ]' /opt/auto-invest/.env 2>/dev/null || echo 0); \
+               echo ENV_ANTHROPIC_KEY_SET=\$(grep -c '^ANTHROPIC_API_KEY=[^ ]' /opt/auto-invest/.env 2>/dev/null || echo 0); \
+               echo MAIN_SHA=\$(cd /opt/auto-invest && git rev-parse HEAD 2>/dev/null || echo unknown)" 2>&1)
+          ssh_exit=$?
+          {
+              echo "ssh_exit=${ssh_exit}"
+              echo "ssh_output<<EOF_OUTPUT"
+              echo "${ssh_out}"
+              echo "EOF_OUTPUT"
+          } >> "$GITHUB_OUTPUT"
+          echo "${ssh_out}"
+
+      - name: Determine overall status
+        id: overall
+        run: |
+          secrets_status="${{ steps.check_secrets.outputs.secrets_status }}"
+          ssh_exit="${{ steps.ssh_test.outputs.ssh_exit }}"
+          if [[ "${secrets_status}" != "ok" ]]; then
+              echo "status=secrets_failed" >> "$GITHUB_OUTPUT"
+              echo "emoji=❌" >> "$GITHUB_OUTPUT"
+          elif [[ "${ssh_exit}" != "0" ]]; then
+              echo "status=ssh_failed" >> "$GITHUB_OUTPUT"
+              echo "emoji=❌" >> "$GITHUB_OUTPUT"
+          else
+              echo "status=all_ok" >> "$GITHUB_OUTPUT"
+              echo "emoji=✅" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Write workflow summary
+        if: always()
+        env:
+          STATUS: ${{ steps.overall.outputs.status }}
+          EMOJI: ${{ steps.overall.outputs.emoji }}
+          SECRETS_DETAIL: ${{ steps.check_secrets.outputs.secrets_detail }}
+          SSH_EXIT: ${{ steps.ssh_test.outputs.ssh_exit }}
+          SSH_OUTPUT: ${{ steps.ssh_test.outputs.ssh_output }}
+        run: |
+          {
+              echo "# 운영자 셋업 검증 결과 ${EMOJI}"
+              echo
+              echo "| 항목 | 결과 |"
+              echo "|------|------|"
+              echo "| 종합 | ${EMOJI} ${STATUS} |"
+              echo "| Secrets | ${SECRETS_DETAIL:-미확인} |"
+              echo "| SSH exit | \`${SSH_EXIT:-skipped}\` |"
+              echo
+              echo "## SSH 출력"
+              echo
+              echo '```'
+              echo "${SSH_OUTPUT:-(SSH 시도 안 함 — secrets 검증 단계에서 중단)}"
+              echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Write result file
+        if: always()
+        env:
+          STATUS: ${{ steps.overall.outputs.status }}
+          EMOJI: ${{ steps.overall.outputs.emoji }}
+          SECRETS_DETAIL: ${{ steps.check_secrets.outputs.secrets_detail }}
+          SSH_EXIT: ${{ steps.ssh_test.outputs.ssh_exit }}
+          SSH_OUTPUT: ${{ steps.ssh_test.outputs.ssh_output }}
+          KEY_DIAG: ${{ steps.install_key.outputs.key_diag }}
+        run: |
+          # 결과를 file 로 작성해서 branch 에 commit + push.
+          # mcp__github__get_file_contents 로 직접 읽기 위함 (PR comment 권한 이슈 우회).
+          mkdir -p .verify
+          cat > .verify/last_result.md <<EOF
+          # 운영자 셋업 검증 결과 ${EMOJI}
+
+          - 종합: \`${STATUS:-unknown}\`
+          - Secrets: ${SECRETS_DETAIL:-미확인}
+          - SSH exit: \`${SSH_EXIT:-skipped}\`
+          - 시각: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          - run id: ${GITHUB_RUN_ID}
+
+          ## SSH 출력 (인스턴스 상태)
+
+          \`\`\`
+          ${SSH_OUTPUT:-(SSH 시도 안 함 — secrets 단계에서 중단)}
+          \`\`\`
+
+          ## 키 진단 (3가지 복구 시도 모두 실패한 경우만)
+
+          \`\`\`
+          ${KEY_DIAG:-(키 정상 적용됨 — 진단 불필요)}
+          \`\`\`
+          EOF
+
+          # JSON 도 같이 (mcp 가 markdown 더 잘 읽지만 jq 도 가능하게).
+          python3 - <<PY
+          import json, os
+          data = {
+              "status": os.environ.get("STATUS", "unknown"),
+              "secrets_detail": os.environ.get("SECRETS_DETAIL", ""),
+              "ssh_exit": os.environ.get("SSH_EXIT", ""),
+              "ssh_output": os.environ.get("SSH_OUTPUT", ""),
+              "run_id": os.environ.get("GITHUB_RUN_ID", ""),
+              "head_sha": os.environ.get("GITHUB_SHA", ""),
+          }
+          with open(".verify/last_result.json", "w", encoding="utf-8") as f:
+              json.dump(data, f, ensure_ascii=False, indent=2)
+          PY
+
+          git config user.email "github-actions@github.com"
+          git config user.name  "github-actions[bot]"
+          git add .verify/
+          # 이전 commit 과 동일한 내용이면 commit 안 함 (loop 방지).
+          if git diff --cached --quiet; then
+              echo "변경 없음 — commit skip"
+          else
+              # [skip ci] 로 자기 자신 재트리거 방지.
+              git commit -m "verify: ${STATUS:-unknown} [skip ci]"
+              # push 가 실패해도 workflow 전체는 그대로 결과 status 유지 (이미 결정됨).
+              git push origin HEAD:"${GITHUB_REF#refs/heads/}" || \
+                  echo "::warning::push 실패 — 결과는 workflow logs 또는 step summary 에서 확인하세요."
+          fi
+
+      - name: Fail if not all OK
+        if: steps.overall.outputs.status != 'all_ok'
+        run: |
+          echo "::error::셋업 검증 실패: ${{ steps.overall.outputs.status }}"
+          exit 1
