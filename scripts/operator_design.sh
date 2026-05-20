@@ -138,14 +138,29 @@ echo "[4/5] auto-invest design 호출"
 echo "  --env-file ${ENV_PATH}"
 echo "  --db ${DB_PATH}"
 echo "  --prices ${PRICES_PATH}"
+if [[ "${AUTO_OK:-0}" == "1" ]]; then
+    echo "  AUTO_OK=1 — 검증 통과 시 OK prompt 에 자동 'OK' 입력 (라이브 즉시 시작)"
+fi
 echo
 # 모든 경로를 명시적으로 줘서 cwd 의존성 회피. PR #26 받지 않은 인스턴스에서도 동작.
-sudo -u auto-invest /usr/local/bin/uv run --project "${INSTALL_DIR}" \
-    auto-invest design \
-        --intent "${INTENT}" \
-        --env-file "${ENV_PATH}" \
-        --db "${DB_PATH}" \
-        --prices "${PRICES_PATH}"
+# AUTO_OK=1 이면 OK prompt 에 stdin 으로 자동 응답 (GitHub Actions workflow_dispatch
+# 같은 non-interactive 트리거에서 사용). workflow_dispatch 자체가 운영자 명시적
+# 액션이므로 OK 자동 입력은 워크플로우 트리거 = 운영자 동의로 해석.
+if [[ "${AUTO_OK:-0}" == "1" ]]; then
+    echo "OK" | sudo -u auto-invest /usr/local/bin/uv run --project "${INSTALL_DIR}" \
+        auto-invest design \
+            --intent "${INTENT}" \
+            --env-file "${ENV_PATH}" \
+            --db "${DB_PATH}" \
+            --prices "${PRICES_PATH}"
+else
+    sudo -u auto-invest /usr/local/bin/uv run --project "${INSTALL_DIR}" \
+        auto-invest design \
+            --intent "${INTENT}" \
+            --env-file "${ENV_PATH}" \
+            --db "${DB_PATH}" \
+            --prices "${PRICES_PATH}"
+fi
 design_exit=$?
 
 echo
