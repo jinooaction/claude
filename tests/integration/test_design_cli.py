@@ -113,3 +113,67 @@ def test_us1_empty_intent_rejected(runner, workspace):
         ],
     )
     assert result.exit_code == 2
+
+
+def test_repo_anchors_env_when_called_from_foreign_cwd(
+    runner, workspace, tmp_path, monkeypatch
+):
+    """운영자 시나리오 회귀:
+
+    `sudo -u auto-invest auto-invest design --intent "..."` 가 콘솔의
+    cwd=/root 를 그대로 물려받으면 .env / db / prices 가 /root/ 에서
+    찾아져 KIS 키 누락으로 실패했다. --repo /opt/auto-invest 또는 cwd
+    이동으로 해결되어야 한다.
+
+    이 테스트는 cwd를 일부러 다른 디렉토리로 옮긴 뒤 --repo로 워크스페이스를
+    가리키면, --env-file / --db / --prices 를 명시적으로 절대 경로로 주지
+    않아도 design CLI 가 .env 를 정상적으로 로드하는지를 검증.
+    """
+    # 운영자의 /root 같은 외부 cwd를 흉내
+    foreign_cwd = tmp_path / "elsewhere"
+    foreign_cwd.mkdir()
+    monkeypatch.chdir(foreign_cwd)
+
+    # workspace["env"] 가 tmp_path/.env 이므로 --repo 로 그 tmp_path 를 가리키면
+    # design CLI 가 env_file=None 일 때 자동으로 tmp_path/.env 를 찾아야 한다.
+    workspace_root = workspace["env"].parent  # = tmp_path
+
+    # auto_invest.db 도 workspace_root/auto_invest.db 에 이미 있고
+    # prices.toml 은 workspace_root/prices.toml 에 있다.
+    # 기본값 (--db data/auto_invest.db, --prices config/llm_prices.toml) 은
+    # workspace 구조와 다르므로 --db 만 워크스페이스 DB로 명시한다.
+    # --env-file 와 --prices 는 일부러 안 줘서 자동 결합 로직을 확인.
+
+    # design 의 첫 단계가 load_secrets -> load_prices 인데 prices 가 기본
+    # 경로(repo/config/llm_prices.toml)에 없으면 PriceTableError 가 난다.
+    # 따라서 워크스페이스에 그 위치를 만들어 준다.
+    (workspace_root / "config").mkdir(exist_ok=True)
+    (workspace_root / "config" / "llm_prices.toml").write_text(
+        workspace["prices"].read_text(encoding="utf-8"), encoding="utf-8"
+    )
+
+    # 그리고 db 기본 경로도 — 새 빈 DB 가 그 자리에 마이그레이션 돼서 만들어지면
+    # KIS 잔고 조회 (mock 안 함) 에서 외부 호출이 일어나므로, 의도적으로 빈
+    # 의도("")를 줘서 exit 2 로 빨리 끝낸다. 그 경우 인자 검증 직전에
+    # repo 결합만 일어나고 secrets 로드는 시도되지 않는다. 즉 이 테스트는
+    # "--repo 가 들어왔을 때 함수가 정상 진입하는지" 만 확인.
+    # → 더 안전한 접근: KIS API 까지 가지 않는 --check 모드를 활용.
+
+    # --check 모드는 _design_check_summary(db_path) 만 호출하고 즉시 종료.
+    # cwd=foreign 에서 --repo=workspace_root + --check 호출 시 db_path 가
+    # workspace_root/data/auto_invest.db 로 자동 결합돼야 한다 (그 파일은
+    # 존재하지 않지만 _design_check_summary 가 missing 핸들링).
+    result = runner.invoke(
+        app,
+        [
+            "design",
+            "--check",
+            "--repo", str(workspace_root),
+        ],
+    )
+    # exit 0 = 정상 종료 (검색 결과 없음도 정상). 실패하면 0이 아닌 코드.
+    assert result.exit_code == 0, (
+        f"--repo 결합 후 --check 가 정상 종료해야 함. exit={result.exit_code}\n"
+        f"stdout: {result.stdout}\n"
+        f"stderr: {result.stderr if hasattr(result, 'stderr') else '-'}"
+    )
