@@ -387,6 +387,17 @@ def design(
             "(intent 입력 없어도 됨)."
         ),
     ),
+    repo_path: Path = typer.Option(
+        Path("."),
+        "--repo",
+        help=(
+            "auto-invest 설치 디렉토리 (기본값 cwd). 콘솔에서 sudo -u auto-invest로"
+            " 직접 호출할 때 cwd가 /root 등 다른 디렉토리이면 .env / db / config를"
+            " 못 찾으므로, --repo /opt/auto-invest 같이 명시하거나 작업 디렉토리를"
+            " 옮기세요. 기본 운영 케이스(systemd)에서는 WorkingDirectory가 잡혀"
+            " 있으므로 신경 안 써도 됩니다."
+        ),
+    ),
 ) -> None:
     """Spec 010 — 자동 룰 설계자.
 
@@ -397,6 +408,21 @@ def design(
     `--check` 옵션으로 호출하면 가장 최근 RULE_DESIGN_DEPLOYED의 라이브 worker
     현재 상태(시그널·체결·차단 카운트)를 한글 요약으로 출력하고 즉시 종료.
     """
+    # 모든 상대 경로를 --repo 기준으로 절대화. sudo -u auto-invest 가 콘솔의
+    # cwd=/root 를 그대로 물려주면 .env / db / config 가 /root/ 아래에서
+    # 찾아져 KIS 키가 누락되거나 DB가 새로 생성되는 함정이 있어, deploy CLI
+    # (PR #24)와 동일한 패턴으로 진입 시점에 한 번에 결합한다.
+    repo_path = repo_path.resolve()
+    if not db_path.is_absolute():
+        db_path = repo_path / db_path
+    if not prices_path.is_absolute():
+        prices_path = repo_path / prices_path
+    if env_file is None:
+        # 명시 안 됐을 때만 repo 기준 .env로 자동 결정 (운영자가 명시하면 그대로).
+        env_file = repo_path / ".env"
+    elif not env_file.is_absolute():
+        env_file = repo_path / env_file
+
     # --check 모드: 최근 design 결과 요약만 출력하고 종료.
     if check:
         _design_check_summary(db_path)
