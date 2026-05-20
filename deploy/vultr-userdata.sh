@@ -56,23 +56,31 @@ echo "[4/8] install uv (system PATH)"
 curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh
 ln -sf /usr/local/bin/uv /usr/bin/uv
 
-echo "[5/8] clone repo (target must be empty) + create data/logs after + uv sync"
+echo "[5/9] clone repo (target must be empty) + create data/logs after + uv sync"
 # git clone refuses a non-empty target. Clone FIRST, then create data/logs.
 rm -rf /opt/auto-invest
 git clone https://github.com/jinooaction/claude.git /opt/auto-invest
 install -d -m 0750 -o auto-invest -g auto-invest /opt/auto-invest/data
 install -d -m 0750 -o auto-invest -g auto-invest /opt/auto-invest/logs
+install -d -m 0750 -o auto-invest -g auto-invest /opt/auto-invest/config
 # uv cache lives here so the ProtectSystem=strict worker unit can write to it
 # (default $HOME/.cache/uv = /var/lib/auto-invest/.cache/uv is read-only under
 # the hardened service). Same path is pinned via UV_CACHE_DIR for every uv
 # call below and in auto-invest.service.
 install -d -m 0750 -o auto-invest -g auto-invest /opt/auto-invest/.cache/uv
+# Seed config/rules.toml from the canary fixture so the first
+# `auto-invest deploy` dry_run_check has a valid file to validate.
+# spec 010's `auto-invest design` writes a fresh rules_auto_<ts>.toml on
+# operator OK; this seed only exists to unblock the first deploy.
+install -m 0640 -o auto-invest -g auto-invest \
+    /opt/auto-invest/tests/fixtures/rules/sample-canary.toml \
+    /opt/auto-invest/config/rules.toml
 chown -R auto-invest:auto-invest /opt/auto-invest
 chmod 0750 /opt/auto-invest
 cd /opt/auto-invest
 sudo -u auto-invest UV_CACHE_DIR=/opt/auto-invest/.cache/uv /usr/local/bin/uv sync --quiet
 
-echo "[6/8] create .env with placeholder KIS keys (chmod 0600, owned by auto-invest)"
+echo "[6/9] create .env with placeholder KIS keys (chmod 0600, owned by auto-invest)"
 umask 077
 cat > /opt/auto-invest/.env <<EOF
 # KIS credentials are written by:
@@ -87,11 +95,34 @@ chown auto-invest:auto-invest /opt/auto-invest/.env
 chmod 0600 /opt/auto-invest/.env
 umask 022
 
-echo "[7/8] apply SQLite audit-log migrations"
+echo "[7/9] apply SQLite audit-log migrations"
 cd /opt/auto-invest
 sudo -u auto-invest UV_CACHE_DIR=/opt/auto-invest/.cache/uv /usr/local/bin/uv run auto-invest db migrate --db /opt/auto-invest/data/auto_invest.db
 
-echo "[8/8] install systemd units + timer (worker is fail-safe until KIS keys set)"
+echo "[8/9] install polkit rule so auto-invest user can manage its own unit"
+# Without this, deploy's supervisor.start_worker() (a child of
+# `auto-invest deploy` running as the auto-invest user) hits a polkit
+# password prompt on `systemctl start auto-invest.service` and the
+# deploy's rollback path stalls. Scope is intentionally narrow: this
+# rule only authorises the auto-invest user + the auto-invest.service
+# unit + the manage-units action. Other users, other units, and other
+# actions remain governed by default polkit policy.
+install -d -m 0755 /etc/polkit-1/rules.d
+cat > /etc/polkit-1/rules.d/50-auto-invest.rules <<'POLKIT_EOF'
+polkit.addRule(function(action, subject) {
+    if ((action.id == "org.freedesktop.systemd1.manage-units") &&
+        subject.user == "auto-invest" &&
+        action.lookup("unit") == "auto-invest.service") {
+        return polkit.Result.YES;
+    }
+});
+POLKIT_EOF
+chmod 0644 /etc/polkit-1/rules.d/50-auto-invest.rules
+# polkit picks up new rules without a restart on most distros, but reload
+# defensively so the very first auto-invest-deploy.timer firing sees it.
+systemctl reload polkit 2>/dev/null || systemctl restart polkit 2>/dev/null || true
+
+echo "[9/9] install systemd units + timer (worker is fail-safe until KIS keys set)"
 install -m 0644 /opt/auto-invest/deploy/auto-invest.service        /etc/systemd/system/auto-invest.service
 install -m 0644 /opt/auto-invest/deploy/auto-invest-deploy.service /etc/systemd/system/auto-invest-deploy.service
 install -m 0644 /opt/auto-invest/deploy/auto-invest-deploy.timer   /etc/systemd/system/auto-invest-deploy.timer
