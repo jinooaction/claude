@@ -30,6 +30,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Checkout (필수 — 결과 commit 위해)
+        uses: actions/checkout@v4
+        with:
+          # 이후 push 가 같은 ref 에 가능하도록 fetch-depth 0 + token 보존.
+          fetch-depth: 0
+          persist-credentials: true
+
       - name: Check secrets
         id: check_secrets
         env:
