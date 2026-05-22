@@ -16,10 +16,15 @@ Run via:
 GitHub Actions의 `KIS smoke (autonomous)` workflow가 매 main push와 매일
 03:00 UTC에 인스턴스로 SSH 접속해 자동 실행한다 — 회귀가 운영자 손을
 거치지 않고 즉시 잡힘 (자율 수행 정책 v3.0.0 IX.D).
+
+토큰 발급은 module-scoped fixture로 1회만 수행. KIS OAuth API 는 짧은
+시간 내 중복 토큰 발급에 대해 403 Forbidden 을 반환하므로, 4개 테스트
+가 각자 토큰을 발급하면 첫 번째는 성공해도 나머지는 throttle 에 막힘.
 """
 
 from __future__ import annotations
 
+import asyncio
 import os
 from decimal import Decimal
 
@@ -55,33 +60,70 @@ def _required_env(name: str) -> str:
     return val
 
 
-@pytest.mark.asyncio
-async def test_live_kis_token_and_quote() -> None:
-    """Issues a token + fetches a single AAPL quote against the real
-    broker. No trading endpoint is touched."""
+@pytest.fixture(scope="module")
+def kis_token_bundle() -> dict:
+    """KIS OAuth 토큰을 module 단위 1회 발급. 4개 테스트가 공유.
+
+    KIS API 는 짧은 시간 내 중복 토큰 발급을 403 Forbidden 으로 거부함
+    (rate limit). per-test 토큰 발급 패턴은 첫 번째 테스트만 성공하고
+    나머지가 throttle 에 막히는 회귀를 일으킴 (run 26311865850 에서
+    실제 관측).
+
+    Sync fixture 안에서 `asyncio.run` 으로 토큰 1회 발급 → dict 반환.
+    각 async 테스트는 자기 event loop 에서 dict 의 access_token 만
+    재사용해 새 KIS endpoint 호출.
+    """
     app_key = _required_env("KIS_APP_KEY")
     app_secret = _required_env("KIS_APP_SECRET")
 
+    async def _issue() -> object:
+        async with httpx.AsyncClient(base_url=KIS_BASE_URL, timeout=30.0) as inner:
+            return await issue_token(
+                inner,
+                base_url=KIS_BASE_URL,
+                app_key=app_key,
+                app_secret=app_secret,
+            )
+
+    token = asyncio.run(_issue())
+    return {
+        "access_token": token.access_token,
+        "token_type": token.token_type,
+        "app_key": app_key,
+        "app_secret": app_secret,
+    }
+
+
+def _make_broker(client: httpx.AsyncClient) -> ResilientClient:
+    """모든 테스트가 동일한 ResilientClient 설정을 쓰도록 헬퍼."""
+    return ResilientClient(
+        client,
+        rate_limiter=AsyncTokenBucket(rate_per_sec=15.0, capacity=15.0),
+        breaker=CircuitBreaker(failure_threshold=3, cooldown_seconds=30.0),
+        max_retries=2,
+    )
+
+
+@pytest.mark.asyncio
+async def test_live_kis_token_and_quote(kis_token_bundle: dict) -> None:
+    """Token (fixture) + AAPL quote (T064 원본).
+
+    Token 자체는 module fixture 에서 발급. 본 테스트는 토큰 형식
+    검증 + 그 토큰으로 quote endpoint 호출만 검증.
+    """
+    access_token = kis_token_bundle["access_token"]
+    app_key = kis_token_bundle["app_key"]
+    app_secret = kis_token_bundle["app_secret"]
+    token_type = kis_token_bundle["token_type"]
+
+    assert access_token  # masked in logs by the redaction filter
+    assert token_type.lower() in ("bearer", "bearer ")
+
     async with httpx.AsyncClient(base_url=KIS_BASE_URL, timeout=30.0) as inner:
-        token = await issue_token(
-            inner,
-            base_url=KIS_BASE_URL,
-            app_key=app_key,
-            app_secret=app_secret,
-        )
-        assert token.access_token  # masked in logs by the redaction filter
-        assert token.token_type.lower() in ("bearer", "bearer ")
-
-        broker = ResilientClient(
-            inner,
-            rate_limiter=AsyncTokenBucket(rate_per_sec=15.0, capacity=15.0),
-            breaker=CircuitBreaker(failure_threshold=3, cooldown_seconds=30.0),
-            max_retries=2,
-        )
-
+        broker = _make_broker(inner)
         quote = await get_quote(
             broker,
-            access_token=token.access_token,
+            access_token=access_token,
             app_key=app_key,
             app_secret=app_secret,
             symbol="AAPL",
@@ -95,7 +137,7 @@ async def test_live_kis_token_and_quote() -> None:
 
 
 @pytest.mark.asyncio
-async def test_live_kis_purchasable_cash() -> None:
+async def test_live_kis_purchasable_cash(kis_token_bundle: dict) -> None:
     """회귀 방어: 외화예수금 조회가 정상 응답하는지 검증.
 
     지난 세션 회귀: get_balance가 inquire-balance의 output2에서 존재하지
@@ -105,27 +147,16 @@ async def test_live_kis_purchasable_cash() -> None:
     잔고가 정말로 0인 빈 계좌도 valid이므로 어설션은 ">=0 + Decimal 형식"만.
     실제 잔고 값은 stdout에 출력되어 운영자가 사후 확인 가능.
     """
-    app_key = _required_env("KIS_APP_KEY")
-    app_secret = _required_env("KIS_APP_SECRET")
+    access_token = kis_token_bundle["access_token"]
+    app_key = kis_token_bundle["app_key"]
+    app_secret = kis_token_bundle["app_secret"]
     account_no = _required_env("KIS_ACCOUNT_NO")
 
     async with httpx.AsyncClient(base_url=KIS_BASE_URL, timeout=30.0) as inner:
-        token = await issue_token(
-            inner,
-            base_url=KIS_BASE_URL,
-            app_key=app_key,
-            app_secret=app_secret,
-        )
-        broker = ResilientClient(
-            inner,
-            rate_limiter=AsyncTokenBucket(rate_per_sec=15.0, capacity=15.0),
-            breaker=CircuitBreaker(failure_threshold=3, cooldown_seconds=30.0),
-            max_retries=2,
-        )
-
+        broker = _make_broker(inner)
         cash = await get_purchasable_cash_usd(
             broker,
-            access_token=token.access_token,
+            access_token=access_token,
             app_key=app_key,
             app_secret=app_secret,
             account=account_no,
@@ -137,34 +168,23 @@ async def test_live_kis_purchasable_cash() -> None:
 
 
 @pytest.mark.asyncio
-async def test_live_kis_positions() -> None:
+async def test_live_kis_positions(kis_token_bundle: dict) -> None:
     """회귀 방어: 보유 종목 조회가 정상 응답하는지 검증.
 
     지난 세션 회귀: cli.py:_fetch_kis_account_state가 holdings를 stub
     빈 리스트로 반환. 이번 PR에서는 실제 get_positions를 호출한다.
     빈 포지션이어도 endpoint 호출 자체는 성공해야 한다.
     """
-    app_key = _required_env("KIS_APP_KEY")
-    app_secret = _required_env("KIS_APP_SECRET")
+    access_token = kis_token_bundle["access_token"]
+    app_key = kis_token_bundle["app_key"]
+    app_secret = kis_token_bundle["app_secret"]
     account_no = _required_env("KIS_ACCOUNT_NO")
 
     async with httpx.AsyncClient(base_url=KIS_BASE_URL, timeout=30.0) as inner:
-        token = await issue_token(
-            inner,
-            base_url=KIS_BASE_URL,
-            app_key=app_key,
-            app_secret=app_secret,
-        )
-        broker = ResilientClient(
-            inner,
-            rate_limiter=AsyncTokenBucket(rate_per_sec=15.0, capacity=15.0),
-            breaker=CircuitBreaker(failure_threshold=3, cooldown_seconds=30.0),
-            max_retries=2,
-        )
-
+        broker = _make_broker(inner)
         positions = await get_positions(
             broker,
-            access_token=token.access_token,
+            access_token=access_token,
             app_key=app_key,
             app_secret=app_secret,
             account=account_no,
@@ -181,34 +201,23 @@ async def test_live_kis_positions() -> None:
 
 
 @pytest.mark.asyncio
-async def test_live_kis_combined_balance() -> None:
+async def test_live_kis_combined_balance(kis_token_bundle: dict) -> None:
     """회귀 방어: get_balance가 cash + 평가금액 합산으로 정상 동작하는지.
 
     end-to-end 검증: design 명령이 호출하는 잔고 조회와 동일한 경로.
     total_value_usd가 cash_usd 보다 크거나 같아야 함 (보유 종목 평가금액
     은 음수 아님).
     """
-    app_key = _required_env("KIS_APP_KEY")
-    app_secret = _required_env("KIS_APP_SECRET")
+    access_token = kis_token_bundle["access_token"]
+    app_key = kis_token_bundle["app_key"]
+    app_secret = kis_token_bundle["app_secret"]
     account_no = _required_env("KIS_ACCOUNT_NO")
 
     async with httpx.AsyncClient(base_url=KIS_BASE_URL, timeout=30.0) as inner:
-        token = await issue_token(
-            inner,
-            base_url=KIS_BASE_URL,
-            app_key=app_key,
-            app_secret=app_secret,
-        )
-        broker = ResilientClient(
-            inner,
-            rate_limiter=AsyncTokenBucket(rate_per_sec=15.0, capacity=15.0),
-            breaker=CircuitBreaker(failure_threshold=3, cooldown_seconds=30.0),
-            max_retries=2,
-        )
-
+        broker = _make_broker(inner)
         balance = await get_balance(
             broker,
-            access_token=token.access_token,
+            access_token=access_token,
             app_key=app_key,
             app_secret=app_secret,
             account=account_no,
