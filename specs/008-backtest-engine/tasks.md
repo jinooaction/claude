@@ -5,6 +5,25 @@ description: "Task list for spec 008 Backtest Engine implementation"
 
 # Tasks: Backtest Engine
 
+> **출시 완료** (2026-05-14, main 머지). 41/41 task 모두 main 에 반영됨. 본 체크박스 갱신 PR 은 정합성 보정(코드는 이미 들어가 있었으나 체크박스가 미갱신 상태였음).
+>
+> 커밋 매핑:
+> - T001-T003 Phase 1 setup → `13004df`
+> - T004-T005 K4 audit payload (Kernel 터치, 단일 커밋) → `bc47361`
+> - T006-T011 Phase 2 foundational → `454a624`
+> - T012-T015 US1 ingest + data source → `e4c3eee`
+> - T016-T020 US1 execution layer (broker_mock + judgment_stub) → `962ae77`
+> - T021-T022 US1 metrics → `41f48a0`
+> - T023 US1 replay (R-B13 Path B) → `b56e88f`
+> - T024 US1 report writer → `ba917a3`
+> - T025 US1 run.py orchestration → `869698d`
+> - T026-T028 US1 CLI + e2e → `7c7e4ff`
+> - T029-T034 US2 synthetic-shock → `47051e5`
+> - T035-T036 US3 summary.md → `4803b1e`
+> - T037-T041 polish + quickstart smoke → `38c77ce`
+>
+> Quickstart smoke (T041) `run_id = 3482fad709f34a7fb60826f8d117d175` — 30 세션, AAPL fixture, 6 주문 / 2 체결 / 4 per_symbol_cap gate 거절, aggregate Sharpe 0.500286.
+
 **Input**: Design documents from `specs/008-backtest-engine/`
 **Prerequisites**: plan.md, spec.md, research.md, data-model.md, contracts/, quickstart.md (all committed at 8785298)
 **Tests**: INCLUDED. Spec's safety contracts (FR-B02, FR-B06, FR-B08, FR-B12, FR-B15) are non-negotiable and require test enforcement.
@@ -67,19 +86,19 @@ Single-package layout under `src/auto_invest/`. Tests under `tests/unit/` and `t
 - [X] T013 [US1] Implement `src/auto_invest/backtest/ingest.py` — CSV → parquet ingest per `contracts/ohlcv-csv.md`; validation rules 1–7 produce fatal errors; quality warnings emit `DATA_QUALITY_ISSUE` audit rows; writes `manifest.json` with content-hash `dataset_version`
 - [X] T014 [P] [US1] Unit test `tests/unit/test_backtest_csv_ingest.py` — each of `HEADER_MISMATCH`, `UNPARSEABLE_ROW`, `BAD_PRICE_RANGE`, `BAD_VOLUME`, `UNKNOWN_SCHEDULE_TAG`, `DUPLICATE_DATE`, `NON_MONOTONIC_DATE` produces a fatal error; `ZERO_VOLUME_REGULAR`, `GAP_OVER_7_DAYS`, `SCHEDULE_TAG_MISMATCH` produce warnings; two identical source dirs produce identical `dataset_version`
 - [X] T015 [P] [US1] Unit test `tests/unit/test_backtest_data_source.py` — `coverage_holes` returns missing (symbol, date) pairs only for exchange-open dates per `worker/schedule.py`; `read_bars` is sorted ascending and pre-validated; `dataset_version` matches manifest hash
-- [ ] T016 [US1] Implement `src/auto_invest/backtest/broker_mock.py` — `BacktestBroker(adapter_id="backtest-mock-v1")` implementing `submit_order` / `cancel_order` / `list_open_orders` with pessimistic zero-slippage fills per R-B3 (BUY fills at `min(limit, bar.open)` iff `bar.low ≤ limit AND bar.volume ≥ order.qty`; SELL symmetric); no partial fills in v1; `DAY` and `GTC` time-in-force supported
-- [ ] T017 [P] [US1] Unit test `tests/unit/test_backtest_fill_model.py` — exhaustive coverage of R-B3: limit-touched-volume-ok-BUY → fill; limit-untouched-BUY → no fill; volume-shortfall-BUY → no fill; limit-touched-volume-ok-SELL → fill; tie-break behaviour for limit exactly equal to bar.open
-- [ ] T018 [P] [US1] Unit test `tests/unit/test_backtest_broker_mock.py` — every `ORDER_SUBMITTED` audit row produced through `BacktestBroker` carries `adapter_id == "backtest-mock-v1"`; a router fed a non-mock adapter during backtest raises `BacktestLiveBrokerLeakError`
-- [ ] T019 [US1] Implement `src/auto_invest/backtest/judgment_stub.py` — `JudgmentStub.decide(decision_class, inputs)` emits `LLM_CALL_STUBBED` audit row (input hashed via canonical-JSON SHA-256) and returns rule's documented safe-default branch; raises `BacktestJudgmentLeakError` if instantiated when `BACKTEST_MODE!=1` AND a real `AnthropicClient` is on the call stack (handshake per R-B9; spec 004 plugs in when it ships)
-- [ ] T020 [P] [US1] Unit test `tests/unit/test_backtest_judgment_stub.py` — stub emits one `LLM_CALL_STUBBED` per call with stable `input_sha256`; attempting to construct an `AnthropicClient` while `BACKTEST_MODE=1` raises `BacktestJudgmentLeakError`
-- [ ] T021 [P] [US1] Implement `src/auto_invest/backtest/metrics.py` — `total_return_pct`, `max_drawdown_pct`, `sharpe_ratio` (annualised √252, RFR 0) per R-B4; pure numpy/pandas, no `empyrical`/`quantstats` (R-B11); inputs and outputs are `Decimal` for byte-stability
-- [ ] T022 [P] [US1] Unit test `tests/unit/test_backtest_metrics.py` — fixture: known monotonically increasing series → 0% drawdown, positive Sharpe; canned drawdown series → expected DD %; canned PnL series matches hand-computed Sharpe to 6 dp
-- [ ] T023 [US1] Implement `src/auto_invest/backtest/replay.py` — drives bar-level sequential per-(session_date, rule) replay (R-B7, R-B10); for each tick, advances `ReplayClock`, queries `CSVDataSource.read_bars` for the day, constructs `Worker.tick(now=clock.now())` injection, captures order events from the in-memory router. Reuses `risk/gates.py`, `config/whitelist.py`, `config/caps.py`, `worker/schedule.py` UNMODIFIED.
-- [ ] T024 [US1] Implement `src/auto_invest/backtest/report.py` — writes `backtest-run.json` per `contracts/backtest-run-json.md`, `metrics.csv` (one row per rule + `_aggregate`), `per-rule/<rule_id>/orders.json`, `fills.json`, `gate-rejections.json` per `data-model.md § On-disk per-run layout`; stable sort (ts asc, insertion order ties); chmods directory read-only at completion (POSIX)
-- [ ] T025 [US1] Implement `src/auto_invest/backtest/run.py` — top-level orchestration: invoke `kernel_pre_flight` → if touched and not `--allow-kernel-edits`, emit `ERROR`/`BACKTEST_BLOCKED_KERNEL_TOUCH`, exit 78 → enter `WallClockGuard` scope → emit `BACKTEST_STARTED` → run replay → write report → emit `BACKTEST_COMPLETED` → chmod-readonly → exit 0; all error branches set the correct exit code (77/78/79/80/81) and still attempt to write `backtest-run.json` so forensics survive failures
-- [ ] T026 [US1] Wire `auto-invest backtest` and `auto-invest ingest-history` Typer subcommands in `src/auto_invest/cli.py` per `contracts/backtest-cli.md`; stdout layout (first + last line = `backtest run_id: ...`); the CLI imports from `auto_invest.backtest` and ONLY adds entry-point glue (no business logic in cli.py)
-- [ ] T027 [US1] Filter backtest event types out of live observability paths: in `src/auto_invest/reports/daily.py` and the `status` subcommand in `src/auto_invest/cli.py`, exclude `event_type IN ('BACKTEST_STARTED', 'BACKTEST_COMPLETED', 'LLM_CALL_STUBBED')` from PnL and position queries (one-line WHERE addition each); add a comment pointing back to FR-B17
-- [ ] T028 [P] [US1] Integration test `tests/integration/test_backtest_end_to_end.py` — fixture: one-rule TOML + one-symbol one-year CSV under `tests/integration/fixtures/backtest/`; run `auto_invest.backtest.run.run_backtest(...)`; assert `backtest-run.json` exists, `metrics.csv` has one rule row + aggregate row, `per-rule/<rule>/orders.json` non-empty, `BACKTEST_STARTED`/`BACKTEST_COMPLETED` rows in `audit_log` with matching `run_id`; no `ORDER_SUBMITTED` payload has any adapter_id other than `backtest-mock-v1`
+- [X] T016 [US1] Implement `src/auto_invest/backtest/broker_mock.py` — `BacktestBroker(adapter_id="backtest-mock-v1")` implementing `submit_order` / `cancel_order` / `list_open_orders` with pessimistic zero-slippage fills per R-B3 (BUY fills at `min(limit, bar.open)` iff `bar.low ≤ limit AND bar.volume ≥ order.qty`; SELL symmetric); no partial fills in v1; `DAY` and `GTC` time-in-force supported
+- [X] T017 [P] [US1] Unit test `tests/unit/test_backtest_fill_model.py` — exhaustive coverage of R-B3: limit-touched-volume-ok-BUY → fill; limit-untouched-BUY → no fill; volume-shortfall-BUY → no fill; limit-touched-volume-ok-SELL → fill; tie-break behaviour for limit exactly equal to bar.open
+- [X] T018 [P] [US1] Unit test `tests/unit/test_backtest_broker_mock.py` — every `ORDER_SUBMITTED` audit row produced through `BacktestBroker` carries `adapter_id == "backtest-mock-v1"`; a router fed a non-mock adapter during backtest raises `BacktestLiveBrokerLeakError`
+- [X] T019 [US1] Implement `src/auto_invest/backtest/judgment_stub.py` — `JudgmentStub.decide(decision_class, inputs)` emits `LLM_CALL_STUBBED` audit row (input hashed via canonical-JSON SHA-256) and returns rule's documented safe-default branch; raises `BacktestJudgmentLeakError` if instantiated when `BACKTEST_MODE!=1` AND a real `AnthropicClient` is on the call stack (handshake per R-B9; spec 004 plugs in when it ships)
+- [X] T020 [P] [US1] Unit test `tests/unit/test_backtest_judgment_stub.py` — stub emits one `LLM_CALL_STUBBED` per call with stable `input_sha256`; attempting to construct an `AnthropicClient` while `BACKTEST_MODE=1` raises `BacktestJudgmentLeakError`
+- [X] T021 [P] [US1] Implement `src/auto_invest/backtest/metrics.py` — `total_return_pct`, `max_drawdown_pct`, `sharpe_ratio` (annualised √252, RFR 0) per R-B4; pure numpy/pandas, no `empyrical`/`quantstats` (R-B11); inputs and outputs are `Decimal` for byte-stability
+- [X] T022 [P] [US1] Unit test `tests/unit/test_backtest_metrics.py` — fixture: known monotonically increasing series → 0% drawdown, positive Sharpe; canned drawdown series → expected DD %; canned PnL series matches hand-computed Sharpe to 6 dp
+- [X] T023 [US1] Implement `src/auto_invest/backtest/replay.py` — drives bar-level sequential per-(session_date, rule) replay (R-B7, R-B10); for each tick, advances `ReplayClock`, queries `CSVDataSource.read_bars` for the day, constructs `Worker.tick(now=clock.now())` injection, captures order events from the in-memory router. Reuses `risk/gates.py`, `config/whitelist.py`, `config/caps.py`, `worker/schedule.py` UNMODIFIED.
+- [X] T024 [US1] Implement `src/auto_invest/backtest/report.py` — writes `backtest-run.json` per `contracts/backtest-run-json.md`, `metrics.csv` (one row per rule + `_aggregate`), `per-rule/<rule_id>/orders.json`, `fills.json`, `gate-rejections.json` per `data-model.md § On-disk per-run layout`; stable sort (ts asc, insertion order ties); chmods directory read-only at completion (POSIX)
+- [X] T025 [US1] Implement `src/auto_invest/backtest/run.py` — top-level orchestration: invoke `kernel_pre_flight` → if touched and not `--allow-kernel-edits`, emit `ERROR`/`BACKTEST_BLOCKED_KERNEL_TOUCH`, exit 78 → enter `WallClockGuard` scope → emit `BACKTEST_STARTED` → run replay → write report → emit `BACKTEST_COMPLETED` → chmod-readonly → exit 0; all error branches set the correct exit code (77/78/79/80/81) and still attempt to write `backtest-run.json` so forensics survive failures
+- [X] T026 [US1] Wire `auto-invest backtest` and `auto-invest ingest-history` Typer subcommands in `src/auto_invest/cli.py` per `contracts/backtest-cli.md`; stdout layout (first + last line = `backtest run_id: ...`); the CLI imports from `auto_invest.backtest` and ONLY adds entry-point glue (no business logic in cli.py)
+- [X] T027 [US1] Filter backtest event types out of live observability paths: in `src/auto_invest/reports/daily.py` and the `status` subcommand in `src/auto_invest/cli.py`, exclude `event_type IN ('BACKTEST_STARTED', 'BACKTEST_COMPLETED', 'LLM_CALL_STUBBED')` from PnL and position queries (one-line WHERE addition each); add a comment pointing back to FR-B17
+- [X] T028 [P] [US1] Integration test `tests/integration/test_backtest_end_to_end.py` — fixture: one-rule TOML + one-symbol one-year CSV under `tests/integration/fixtures/backtest/`; run `auto_invest.backtest.run.run_backtest(...)`; assert `backtest-run.json` exists, `metrics.csv` has one rule row + aggregate row, `per-rule/<rule>/orders.json` non-empty, `BACKTEST_STARTED`/`BACKTEST_COMPLETED` rows in `audit_log` with matching `run_id`; no `ORDER_SUBMITTED` payload has any adapter_id other than `backtest-mock-v1`
 
 **Checkpoint**: User Story 1 is fully functional. Operator can validate a rule change end-to-end. MVP shippable here.
 
@@ -93,12 +112,12 @@ Single-package layout under `src/auto_invest/`. Tests under `tests/unit/` and `t
 
 ### Implementation for User Story 2
 
-- [ ] T029 [P] [US2] Implement `src/auto_invest/backtest/synthetic_shocks.py` — load `config/synthetic_shocks.toml`; resolve "most recent quarterly OPEX day" at engine-startup time using `exchange_calendars` via existing `worker/schedule.py` helpers (third Friday of Mar/Jun/Sep/Dec on/before today, adjusted for early-close)
-- [ ] T030 [P] [US2] Populate `config/synthetic_shocks.toml` with the four canonical dates per FR-B09 (name, session_date, expected_gate_trip optional)
-- [ ] T031 [P] [US2] Unit test `tests/unit/test_backtest_synthetic_shocks.py` — `resolve_synthetic_shock_dates(today=date(2026,5,13))` returns the four expected dates; "most recent quarterly OPEX" walks back from today to a third Friday in {3,6,9,12}
-- [ ] T032 [US2] Extend `src/auto_invest/backtest/run.py` and `cli.py` for `--synthetic-shock` mode — per-day per-rule artefacts under `per-rule/<rule_id>/by-date/<date>/{orders,fills,gate-rejections}.json`; one combined `run_id` covering all shock days; `summary.md` lists per-day outcome
-- [ ] T033 [P] [US2] Integration test `tests/integration/test_backtest_synthetic_shock_2020_03_12.py` — fixture: deliberately loose ruleset + tiny shock-day CSV; assert ≥1 `ORDER_REJECTED_BY_GATE` event surfaces for 2020-03-12 (SC-B04)
-- [ ] T034 [P] [US2] Integration test `tests/integration/test_backtest_determinism.py` — run the same fixture-driven backtest twice; assert `metrics.csv` and every `per-rule/**/*.json` file are byte-identical between runs; `backtest-run.json` differs only in `run_id`, `start_ts`, `end_ts` (FR-B15 / SC-B02)
+- [X] T029 [P] [US2] Implement `src/auto_invest/backtest/synthetic_shocks.py` — load `config/synthetic_shocks.toml`; resolve "most recent quarterly OPEX day" at engine-startup time using `exchange_calendars` via existing `worker/schedule.py` helpers (third Friday of Mar/Jun/Sep/Dec on/before today, adjusted for early-close)
+- [X] T030 [P] [US2] Populate `config/synthetic_shocks.toml` with the four canonical dates per FR-B09 (name, session_date, expected_gate_trip optional)
+- [X] T031 [P] [US2] Unit test `tests/unit/test_backtest_synthetic_shocks.py` — `resolve_synthetic_shock_dates(today=date(2026,5,13))` returns the four expected dates; "most recent quarterly OPEX" walks back from today to a third Friday in {3,6,9,12}
+- [X] T032 [US2] Extend `src/auto_invest/backtest/run.py` and `cli.py` for `--synthetic-shock` mode — per-day per-rule artefacts under `per-rule/<rule_id>/by-date/<date>/{orders,fills,gate-rejections}.json`; one combined `run_id` covering all shock days; `summary.md` lists per-day outcome
+- [X] T033 [P] [US2] Integration test `tests/integration/test_backtest_synthetic_shock_2020_03_12.py` — fixture: deliberately loose ruleset + tiny shock-day CSV; assert ≥1 `ORDER_REJECTED_BY_GATE` event surfaces for 2020-03-12 (SC-B04)
+- [X] T034 [P] [US2] Integration test `tests/integration/test_backtest_determinism.py` — run the same fixture-driven backtest twice; assert `metrics.csv` and every `per-rule/**/*.json` file are byte-identical between runs; `backtest-run.json` differs only in `run_id`, `start_ts`, `end_ts` (FR-B15 / SC-B02)
 
 **Checkpoint**: User Story 2 is fully functional. Spec 007 prerequisite unlocked.
 
@@ -112,8 +131,8 @@ Single-package layout under `src/auto_invest/`. Tests under `tests/unit/` and `t
 
 ### Implementation for User Story 3
 
-- [ ] T035 [US3] Extend `src/auto_invest/backtest/report.py` (extends T024) to render `summary.md` with: header (date range, ruleset hash, dataset version, fill model, slippage assumption), aggregate metrics block, per-rule headline metrics table, data-quality warnings block, gate-rejection breakdown block; identical content goes to stdout
-- [ ] T036 [P] [US3] Unit test `tests/unit/test_backtest_summary_render.py` — given a canned `BacktestSummary`, the rendered `summary.md` contains headline metrics for each rule, surfaces every `DataQualityWarning`, and includes the slippage-assumption disclaimer line
+- [X] T035 [US3] Extend `src/auto_invest/backtest/report.py` (extends T024) to render `summary.md` with: header (date range, ruleset hash, dataset version, fill model, slippage assumption), aggregate metrics block, per-rule headline metrics table, data-quality warnings block, gate-rejection breakdown block; identical content goes to stdout
+- [X] T036 [P] [US3] Unit test `tests/unit/test_backtest_summary_render.py` — given a canned `BacktestSummary`, the rendered `summary.md` contains headline metrics for each rule, surfaces every `DataQualityWarning`, and includes the slippage-assumption disclaimer line
 
 **Checkpoint**: All three user stories functional.
 
@@ -121,11 +140,11 @@ Single-package layout under `src/auto_invest/`. Tests under `tests/unit/` and `t
 
 ## Phase 6: Polish & Cross-Cutting
 
-- [ ] T037 Update `README.md` with one paragraph + link to `specs/008-backtest-engine/quickstart.md`
-- [ ] T038 [P] Run `uv run ruff check src tests`; clean any new findings introduced by this spec
-- [ ] T039 [P] Run `uv run pytest` and confirm new test count (expected: 319 prior + new backtest tests; `1 skipped` for the live KIS gate remains unchanged)
-- [ ] T040 [P] Run `uv run python -c "from auto_invest.backtest import run_backtest; print('importable')"` to confirm public surface compiles
-- [ ] T041 Execute the `quickstart.md` walkthrough end-to-end on a tiny operator-style fixture (single rule, single symbol, 30 trading days); record the `run_id`; verify the artefact tree matches `data-model.md § On-disk per-run layout`; add the run_id to a HANDOFF section in `HANDOFF-002-003.md`
+- [X] T037 Update `README.md` with one paragraph + link to `specs/008-backtest-engine/quickstart.md`
+- [X] T038 [P] Run `uv run ruff check src tests`; clean any new findings introduced by this spec
+- [X] T039 [P] Run `uv run pytest` and confirm new test count (expected: 319 prior + new backtest tests; `1 skipped` for the live KIS gate remains unchanged)
+- [X] T040 [P] Run `uv run python -c "from auto_invest.backtest import run_backtest; print('importable')"` to confirm public surface compiles
+- [X] T041 Execute the `quickstart.md` walkthrough end-to-end on a tiny operator-style fixture (single rule, single symbol, 30 trading days); record the `run_id`; verify the artefact tree matches `data-model.md § On-disk per-run layout`; add the run_id to a HANDOFF section in `HANDOFF-002-003.md`
 
 ---
 
