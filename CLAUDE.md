@@ -182,22 +182,13 @@ After a successful merge, the session SHOULD:
 ---
 
 <!-- SPECKIT START -->
-Active feature: `specs/010-auto-rule-designer/` (specified + planned 2026-05-19)
+Active feature: 없음 — spec 010 (자동 룰 설계자) 머지 완료 (2026-05-20 PR #19/#20/#21 + 후속 #22), spec 008 (백테스트) 머지 완료, spec 009 (paper-run) 머지 완료.
 
-Read in order when working on this feature:
+새 작업이 시작되기 전에 `HANDOFF.md` (main 진입점) + 가장 최신 `HANDOFF-NNN-*.md`를 먼저 읽어 현재 상태 파악. 운영자가 새 의도를 알려주기 전까지 새 spec 시작 안 함 (IX.D 자율 수행 정책: 운영자 의도 = 작업 트리거).
 
-1. `.specify/memory/constitution.md` — non-negotiable principles (**v3.0.0**, IX.D Operator Autonomy Supremacy).
-2. `.specify/memory/kernel.toml` — Kernel manifest (this feature touches K3 + K4, both additive — IX.D autonomous-merge).
-3. `specs/010-auto-rule-designer/spec.md` — feature spec (3 user stories, 14 FRs, 8 SCs, 9 edge cases).
-4. `specs/010-auto-rule-designer/plan.md` — implementation plan.
-5. `specs/010-auto-rule-designer/research.md` — Phase 0 decisions (R-D1 … R-D11).
-6. `specs/010-auto-rule-designer/data-model.md` — 4 new K4 payloads, state transitions.
-7. `specs/010-auto-rule-designer/contracts/` — `design-cli.md`, `design-audit-events.md`, `claude-prompt.md`.
-8. `specs/010-auto-rule-designer/quickstart.md` — operator onboarding.
-
-Branch: `claude/spec-010-auto-rule-designer`. Use `SPECIFY_FEATURE=010-auto-rule-designer`.
-
-Background:
-- Specs 001~003 shipped, 004~008 stubs/in-flight, 009 (paper-run) shipped 2026-05-19 main `56ec260`.
-- spec 010 depends on spec 008 (backtest) — backtest call is import-guarded; activates when spec 008 merges.
+현재 검토 가능한 후속 후보(운영자 의도 대기):
+- 운영자 라이브 시작 코칭 (`HANDOFF-010-OPERATOR-RESUME.md` 참조 — Vultr 인스턴스 `202.182.125.132`에서 `auto-invest design` 실행 직전 단계).
+- 스펙 004 (LLM 판단 지점) 본격 구현 — 30일치 spec 002 텔레메트리 누적 후.
+- 스펙 005 (자율 튜너) 본격 구현 — spec 002 데이터 + spec 006 + spec 007 완료 후 가능.
+- KIS smoke 자율 감시는 활성 상태 — `automation/kis-smoke-last-run` 사이드카 브랜치에 매 run 진단 force-push 중.
 <!-- SPECKIT END -->
