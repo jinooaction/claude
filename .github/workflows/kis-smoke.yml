@@ -75,14 +75,13 @@ jobs:
               echo "셋업 후 다음 main push 부터 자동 KIS 회귀 감시 시작."
               echo "가이드: docs/OPERATOR_GITHUB_ACTIONS_DESIGN.md"
               echo "secrets_present=false" >> "$GITHUB_OUTPUT"
-              echo "[debug] secrets_present=false 출력 — 후속 SSH 스텝 건너뜀."
           else
               echo "Secrets OK (host=${HOST}, user=${USER})."
               echo "secrets_present=true" >> "$GITHUB_OUTPUT"
-              echo "[debug] secrets_present=true 출력 — 후속 SSH 스텝 실행 예정."
           fi
 
       - name: Install SSH key
+        id: ssh_key
         if: steps.secrets_check.outputs.secrets_present == 'true'
         env:
           KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
@@ -92,38 +91,53 @@ jobs:
           chmod 700 ~/.ssh
           echo "${KEY}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          if ! grep -q "PRIVATE KEY" ~/.ssh/id_ed25519; then
-              echo "::error::VULTR_SSH_PRIVATE_KEY 가 SSH 개인키 형식이 아닙니다."
-              exit 1
+          if grep -q "PRIVATE KEY" ~/.ssh/id_ed25519; then
+              echo "SSH key installed."
+              echo "key_valid=true" >> "$GITHUB_OUTPUT"
+          else
+              # 잘못된 키 형식도 셋업 보류 — 빨간 X 대신 통과 + warning.
+              echo "::warning::VULTR_SSH_PRIVATE_KEY 형식이 SSH 개인키가 아닙니다 (셋업 보류)."
+              echo "ssh-keygen -t ed25519 -f ~/.ssh/auto_invest_gh 로 생성한 키 전체 내용을"
+              echo "BEGIN/END 줄 포함해서 Secret 에 다시 붙여넣으세요."
+              echo "key_valid=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Run KIS smoke on instance
-        if: steps.secrets_check.outputs.secrets_present == 'true'
+        id: smoke_run
+        if: steps.secrets_check.outputs.secrets_present == 'true' && steps.ssh_key.outputs.key_valid == 'true'
         env:
           HOST: ${{ secrets.VULTR_SSH_HOST }}
           USER: ${{ secrets.VULTR_SSH_USER }}
           PORT: ${{ secrets.VULTR_SSH_PORT }}
+        # SSH/원격 셋업 미완료(인스턴스 미준비 / 키 미인가 / /opt/auto-invest 부재 /
+        # .env 미설정) 는 모두 "셋업 보류"로 분류해 빨간 X 가 아니라 ⏭️ 통과로 처리.
+        # 진짜 회귀(KIS API 응답 변경, pytest 실패)만 빨간 X.
+        #
+        # exit code 규약:
+        #   0   = pytest 전부 통과 (성공)
+        #   100 = 원격 스크립트가 셋업 보류 신호 (REPO 부재 / .env 부재)
+        #   255 = SSH 연결 실패 (호스트 unreachable / 인증 거부)
+        #   기타 = pytest 실패 (진짜 회귀 신호)
         run: |
-          set -euo pipefail
+          set -uo pipefail
           port="${PORT:-22}"
           echo "============================================================"
           echo "KIS smoke 자율 검증 — 트리거: ${GITHUB_EVENT_NAME}"
           echo "대상 인스턴스: ${USER}@${HOST}:${port}"
           echo "============================================================"
-          # 인스턴스에서 다음을 실행:
-          #   1. cd /opt/auto-invest && git pull (최신 코드로 동기화)
-          #   2. .env 로드 (KIS_APP_KEY 등)
-          #   3. KIS_LIVE_TEST=1 로 라이브 smoke 4건 실행
+
+          # set -e 없이 ssh 의 exit code 를 명시적으로 처리.
           ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+              -o BatchMode=yes \
               -p "${port}" \
               -i ~/.ssh/id_ed25519 \
               "${USER}@${HOST}" \
               bash -s <<'REMOTE_SCRIPT' 2>&1 | tee /tmp/smoke_output.log
-          set -euo pipefail
+          set -uo pipefail
           REPO=/opt/auto-invest
           if [[ ! -d "${REPO}" ]]; then
-              echo "::error::${REPO} 가 인스턴스에 없습니다. provision-vultr.yml 먼저 실행하세요."
-              exit 1
+              echo "::warning::${REPO} 가 인스턴스에 없습니다 — provision-vultr.yml 미실행 (셋업 보류)."
+              exit 100
           fi
           cd "${REPO}"
           echo "--- git pull ---"
@@ -134,14 +148,22 @@ jobs:
           echo "현재 HEAD: $(git rev-parse --short HEAD) ($(git log -1 --pretty=%s))"
           echo
           echo "--- .env 확인 (KIS 키만 ✓ 표시, 값 노출 안 함) ---"
+          if [[ ! -f "${REPO}/.env" ]]; then
+              echo "::warning::${REPO}/.env 파일이 없습니다 — scripts/set_secrets.sh 미실행 (셋업 보류)."
+              exit 100
+          fi
+          missing_env=()
           for k in KIS_APP_KEY KIS_APP_SECRET KIS_ACCOUNT_NO; do
               if grep -qE "^${k}=[^[:space:]]" "${REPO}/.env"; then
                   echo "  ${k}: ✓ 설정됨"
               else
-                  echo "::error::${k} 가 ${REPO}/.env 에 없습니다."
-                  exit 1
+                  missing_env+=("${k}")
               fi
           done
+          if [[ ${#missing_env[@]} -gt 0 ]]; then
+              echo "::warning::.env 에 다음 KIS 키 누락: ${missing_env[*]} (셋업 보류)."
+              exit 100
+          fi
           echo
           echo "--- KIS_LIVE_TEST=1 라이브 smoke 실행 ---"
           # .env 의 KIS_* 를 export. uv run 이 그 환경을 그대로 받음.
@@ -152,34 +174,70 @@ jobs:
               env "PATH=$PATH" "KIS_LIVE_TEST=1" "KIS_APP_KEY=$KIS_APP_KEY" \
                   "KIS_APP_SECRET=$KIS_APP_SECRET" "KIS_ACCOUNT_NO=$KIS_ACCOUNT_NO" \
               /usr/local/bin/uv run --project "${REPO}" pytest \
-                  tests/integration/test_live_broker.py -v -s 2>&1 || {
+                  tests/integration/test_live_broker.py -v -s 2>&1
+          pytest_exit=$?
+          if [[ "${pytest_exit}" -ne 0 ]]; then
               # sudo / uv 경로 차이 자동 fallback.
               echo "  (재시도: 직접 uv 호출)"
               cd "${REPO}"
               KIS_LIVE_TEST=1 uv run pytest \
                   tests/integration/test_live_broker.py -v -s
-          }
+              pytest_exit=$?
+          fi
+          # pytest 통과/실패가 진짜 회귀 신호 — exit code 그대로 propagate.
+          exit "${pytest_exit}"
           REMOTE_SCRIPT
           smoke_exit=${PIPESTATUS[0]}
-          echo "SMOKE_EXIT=${smoke_exit}" >> "$GITHUB_ENV"
-          exit "${smoke_exit}"
+          echo "smoke_exit=${smoke_exit}"
+
+          # 분류: 0=성공, 255=SSH 연결 실패, 100=원격 셋업 보류, 기타=회귀.
+          case "${smoke_exit}" in
+            0)
+              echo "smoke_state=success" >> "$GITHUB_OUTPUT"
+              ;;
+            255)
+              echo "::warning::SSH 연결 실패 (exit 255) — 인스턴스 unreachable 또는 키 미인가 (셋업 보류)."
+              echo "Vultr 인스턴스가 켜져 있고, 운영자 SSH 공개키가 ${USER}@${HOST} 의 authorized_keys 에 추가됐는지 확인."
+              echo "smoke_state=setup_pending" >> "$GITHUB_OUTPUT"
+              ;;
+            100)
+              # 원격에서 warning 이미 발행됨.
+              echo "smoke_state=setup_pending" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "::error::KIS smoke 실패 (exit ${smoke_exit}) — pytest 실패 또는 알 수 없는 오류 (진짜 회귀 가능성)."
+              echo "smoke_state=failure" >> "$GITHUB_OUTPUT"
+              exit "${smoke_exit}"
+              ;;
+          esac
 
       - name: Write workflow summary
         if: always()
         env:
-          SMOKE_EXIT: ${{ env.SMOKE_EXIT }}
           SECRETS_PRESENT: ${{ steps.secrets_check.outputs.secrets_present }}
+          KEY_VALID: ${{ steps.ssh_key.outputs.key_valid }}
+          SMOKE_STATE: ${{ steps.smoke_run.outputs.smoke_state }}
         run: |
           set -euo pipefail
+          # 우선순위 순으로 상태 분류.
           if [[ "${SECRETS_PRESENT:-}" != "true" ]]; then
-              status="⏭️ 건너뜀 (Vultr SSH 시크릿 미등록 — 1회 셋업 보류)"
-              detail="GitHub Settings → Secrets and variables → Actions 에서 VULTR_SSH_HOST/USER/PRIVATE_KEY 등록. 등록 후 다음 main push 부터 자동 회귀 감시 시작 — 운영자 추가 행동 불필요."
-          elif [[ "${SMOKE_EXIT:-?}" == "0" ]]; then
+              status="⏭️ 건너뜀 — Vultr SSH 시크릿 미등록 (셋업 보류)"
+              detail="GitHub Settings → Secrets and variables → Actions 에서 VULTR_SSH_HOST/USER/PRIVATE_KEY 등록."
+          elif [[ "${KEY_VALID:-}" != "true" ]]; then
+              status="⏭️ 건너뜀 — VULTR_SSH_PRIVATE_KEY 형식 잘못됨 (셋업 보류)"
+              detail="ssh-keygen 으로 생성한 ed25519 개인키 전체 내용(BEGIN/END 줄 포함)을 Secret 에 다시 붙여넣기."
+          elif [[ "${SMOKE_STATE:-}" == "success" ]]; then
               status="✅ 모든 KIS smoke 통과"
               detail="KIS quote / 외화예수금 / 보유 종목 / 합산 잔고 4건 모두 정상."
+          elif [[ "${SMOKE_STATE:-}" == "setup_pending" ]]; then
+              status="⏭️ 건너뜀 — 인스턴스/원격 셋업 미완료 (셋업 보류)"
+              detail="SSH 연결 실패 또는 원격의 /opt/auto-invest / .env 부재. 위 'Run KIS smoke on instance' 스텝 로그의 ::warning:: 메시지 참조."
+          elif [[ "${SMOKE_STATE:-}" == "failure" ]]; then
+              status="❌ 실패 — pytest 실패 (진짜 회귀 신호)"
+              detail="위 'Run KIS smoke on instance' 스텝 로그를 확인하세요. KIS 토큰 만료, KIS API 응답 필드 변경, broker 모듈 회귀 등."
           else
-              status="❌ 실패 (exit ${SMOKE_EXIT:-?})"
-              detail="위 'Run KIS smoke on instance' 스텝 로그를 확인하세요. 자주 발생하는 원인: KIS 토큰 만료, KIS API 응답 필드 변경, 인스턴스 .env 누락."
+              status="❓ 알 수 없는 상태"
+              detail="SMOKE_STATE=${SMOKE_STATE:-(unset)}, SECRETS_PRESENT=${SECRETS_PRESENT:-(unset)}, KEY_VALID=${KEY_VALID:-(unset)}"
           fi
           cat >> "$GITHUB_STEP_SUMMARY" <<EOF
           # KIS smoke 자율 검증 결과
