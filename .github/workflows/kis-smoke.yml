@@ -75,9 +75,11 @@ jobs:
               echo "셋업 후 다음 main push 부터 자동 KIS 회귀 감시 시작."
               echo "가이드: docs/OPERATOR_GITHUB_ACTIONS_DESIGN.md"
               echo "secrets_present=false" >> "$GITHUB_OUTPUT"
+              echo "[debug] secrets_present=false 출력 — 후속 SSH 스텝 건너뜀."
           else
               echo "Secrets OK (host=${HOST}, user=${USER})."
               echo "secrets_present=true" >> "$GITHUB_OUTPUT"
+              echo "[debug] secrets_present=true 출력 — 후속 SSH 스텝 실행 예정."
           fi
 
       - name: Install SSH key
