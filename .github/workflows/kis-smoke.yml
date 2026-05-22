@@ -141,9 +141,13 @@ jobs:
           fi
           cd "${REPO}"
           echo "--- git pull ---"
-          # 운영자 사용자가 fetch 권한 갖도록 보장. 충돌 시 abort (smoke 는 read-only).
-          sudo -u auto-invest git fetch --quiet origin main || git fetch --quiet origin main
-          sudo -u auto-invest git checkout main 2>/dev/null || git checkout main
+          # /opt/auto-invest 가 root 소유이면 sudo -u auto-invest git 이
+          # "dubious ownership" 으로 거부 → fallback 으로 root 가 fetch.
+          # 명시적으로 두 사용자 모두 safe.directory 등록해 warning 제거.
+          git config --global --add safe.directory /opt/auto-invest 2>/dev/null || true
+          sudo -u auto-invest git config --global --add safe.directory /opt/auto-invest 2>/dev/null || true
+          sudo -u auto-invest git fetch --quiet origin main 2>/dev/null || git fetch --quiet origin main
+          sudo -u auto-invest git checkout main 2>/dev/null || git checkout main 2>/dev/null
           sudo -u auto-invest git reset --hard origin/main 2>/dev/null || git reset --hard origin/main
           echo "현재 HEAD: $(git rev-parse --short HEAD) ($(git log -1 --pretty=%s))"
           echo
@@ -170,15 +174,24 @@ jobs:
           set -a
           source "${REPO}/.env"
           set +a
+          # sudo -E 가 root 의 HOME=/root 로 남으면서 auto-invest 가 root 의
+          # ~/.cache/uv 에 접근 시도 → permission denied. UV_CACHE_DIR /
+          # HOME 을 명시 전달로 우회. PATH 도 함께 보존.
+          AUTO_INVEST_HOME=$(getent passwd auto-invest 2>/dev/null | cut -d: -f6 || echo /tmp)
           KIS_LIVE_TEST=1 sudo -E -u auto-invest \
-              env "PATH=$PATH" "KIS_LIVE_TEST=1" "KIS_APP_KEY=$KIS_APP_KEY" \
-                  "KIS_APP_SECRET=$KIS_APP_SECRET" "KIS_ACCOUNT_NO=$KIS_ACCOUNT_NO" \
+              env "PATH=$PATH" \
+                  "HOME=${AUTO_INVEST_HOME}" \
+                  "UV_CACHE_DIR=${AUTO_INVEST_HOME}/.cache/uv" \
+                  "KIS_LIVE_TEST=1" \
+                  "KIS_APP_KEY=$KIS_APP_KEY" \
+                  "KIS_APP_SECRET=$KIS_APP_SECRET" \
+                  "KIS_ACCOUNT_NO=$KIS_ACCOUNT_NO" \
               /usr/local/bin/uv run --project "${REPO}" pytest \
                   tests/integration/test_live_broker.py -v -s 2>&1
           pytest_exit=$?
           if [[ "${pytest_exit}" -ne 0 ]]; then
-              # sudo / uv 경로 차이 자동 fallback.
-              echo "  (재시도: 직접 uv 호출)"
+              # sudo / uv 경로 차이 자동 fallback. root 환경에서 직접 실행.
+              echo "  (재시도: 직접 uv 호출 — root 환경)"
               cd "${REPO}"
               KIS_LIVE_TEST=1 uv run pytest \
                   tests/integration/test_live_broker.py -v -s
