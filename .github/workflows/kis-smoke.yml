@@ -43,7 +43,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write  # 사이드카 브랜치 force-push 용 (automation/kis-smoke-last-run).
 
 jobs:
   smoke:
@@ -189,6 +189,7 @@ jobs:
           REMOTE_SCRIPT
           smoke_exit=${PIPESTATUS[0]}
           echo "smoke_exit=${smoke_exit}"
+          echo "smoke_exit=${smoke_exit}" >> "$GITHUB_OUTPUT"
 
           # 분류 우선순위:
           #   1. /tmp/smoke_output.log 에 pytest 실행 마커가 없음 → pytest 단계 진입
@@ -266,3 +267,95 @@ jobs:
           실패 시 자동 머지 정책(IX.D) 하에서 다음 main push 가 들어오기 전에
           후속 PR 로 픽스해야 합니다.
           EOF
+
+      - name: Publish diagnostic to sidecar branch
+        # GitHub Actions UI 안 들어가도 외부(claude session 등) 에서
+        # smoke 실행 결과를 읽을 수 있게 force-push.
+        # 운영자 자율 수행 정책 IX.D — 운영자가 워크플로우 로그를 직접
+        # 확인 안 해도 자동으로 진단 가능한 채널 확보.
+        #
+        # 사용법:
+        #   git fetch origin automation/kis-smoke-last-run
+        #   git show origin/automation/kis-smoke-last-run:LAST_RUN.md
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SECRETS_PRESENT: ${{ steps.secrets_check.outputs.secrets_present }}
+          KEY_VALID: ${{ steps.ssh_key.outputs.key_valid }}
+          SMOKE_STATE: ${{ steps.smoke_run.outputs.smoke_state }}
+          SMOKE_EXIT: ${{ steps.smoke_run.outputs.smoke_exit }}
+        run: |
+          set -uo pipefail
+          BRANCH=automation/kis-smoke-last-run
+
+          # smoke_output.log 캡처 (없을 수 있음 — Run KIS smoke 단계 진입 못한 경우)
+          if [[ -f /tmp/smoke_output.log ]]; then
+              smoke_log_present=1
+          else
+              smoke_log_present=0
+          fi
+
+          tmpdir=$(mktemp -d)
+          cd "${tmpdir}"
+          git init -q
+          git config user.name "kis-smoke-bot"
+          git config user.email "kis-smoke-bot@noreply.github.com"
+
+          {
+              echo "# KIS smoke 자율 검증 — 최신 실행 진단"
+              echo ""
+              echo "이 파일은 \`.github/workflows/kis-smoke.yml\` 이 매 run 마다 자동 force-push 합니다. 운영자가 GitHub Actions UI 에 들어가지 않고도 외부 (예: claude session) 에서 \`git fetch origin ${BRANCH} && git show origin/${BRANCH}:LAST_RUN.md\` 로 진단 가능합니다."
+              echo ""
+              echo "## 메타데이터"
+              echo ""
+              echo "| 항목 | 값 |"
+              echo "|------|-----|"
+              echo "| run_id | ${GITHUB_RUN_ID} |"
+              echo "| run_url | https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} |"
+              echo "| commit | ${GITHUB_SHA} |"
+              echo "| trigger | ${GITHUB_EVENT_NAME} |"
+              echo "| timestamp_utc | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
+              echo ""
+              echo "## 상태"
+              echo ""
+              echo "| 변수 | 값 |"
+              echo "|------|-----|"
+              echo "| secrets_present | ${SECRETS_PRESENT:-(unset)} |"
+              echo "| key_valid | ${KEY_VALID:-(unset)} |"
+              echo "| smoke_state | ${SMOKE_STATE:-(unset)} |"
+              echo "| smoke_exit | ${SMOKE_EXIT:-(unset)} |"
+              echo ""
+              echo "## SSH/원격 출력 (smoke_output.log)"
+              echo ""
+              if [[ "${smoke_log_present}" == "1" ]]; then
+                  echo '```'
+                  cat /tmp/smoke_output.log
+                  echo '```'
+              else
+                  echo "(\`/tmp/smoke_output.log\` 없음 — Run KIS smoke 스텝까지 진입 못함. secrets_present 또는 key_valid 가 false 였을 가능성.)"
+              fi
+              echo ""
+              echo "## 다음 단계 추정"
+              echo ""
+              if [[ "${SECRETS_PRESENT:-}" != "true" ]]; then
+                  echo "- Vultr SSH 시크릿 미등록. GitHub Settings → Secrets and variables → Actions 에서 VULTR_SSH_HOST/USER/PRIVATE_KEY 등록."
+              elif [[ "${KEY_VALID:-}" != "true" ]]; then
+                  echo "- VULTR_SSH_PRIVATE_KEY 형식 잘못. ssh-keygen 으로 생성한 ed25519 개인키 전체 (BEGIN/END 포함) 다시 붙여넣기."
+              elif [[ "${SMOKE_STATE:-}" == "success" ]]; then
+                  echo "- 추가 액션 없음. 매일 03:00 UTC cron 으로 자동 감시 계속."
+              elif [[ "${SMOKE_STATE:-}" == "setup_pending" ]]; then
+                  echo "- 위 smoke_output.log 의 ::warning:: 메시지로 어느 셋업 단계가 빠졌는지 확인."
+              else
+                  echo "- pytest 자체가 실패. smoke_output.log 의 traceback/assertion 메시지로 원인 분석."
+              fi
+          } > LAST_RUN.md
+
+          git checkout --orphan publish
+          git add LAST_RUN.md
+          git commit -q -m "kis-smoke run ${GITHUB_RUN_ID} @ ${GITHUB_SHA:0:7}"
+
+          # force-push: 사이드카 브랜치는 항상 단일 커밋만 유지 (히스토리 누적 방지).
+          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "publish:${BRANCH}"
+
+          echo "Published diagnostic to branch ${BRANCH}."
+          echo "Read with: git fetch origin ${BRANCH} && git show origin/${BRANCH}:LAST_RUN.md"
