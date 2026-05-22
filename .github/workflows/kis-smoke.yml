@@ -190,26 +190,34 @@ jobs:
           smoke_exit=${PIPESTATUS[0]}
           echo "smoke_exit=${smoke_exit}"
 
-          # 분류: 0=성공, 255=SSH 연결 실패, 100=원격 셋업 보류, 기타=회귀.
-          case "${smoke_exit}" in
-            0)
-              echo "smoke_state=success" >> "$GITHUB_OUTPUT"
-              ;;
-            255)
-              echo "::warning::SSH 연결 실패 (exit 255) — 인스턴스 unreachable 또는 키 미인가 (셋업 보류)."
-              echo "Vultr 인스턴스가 켜져 있고, 운영자 SSH 공개키가 ${USER}@${HOST} 의 authorized_keys 에 추가됐는지 확인."
+          # 분류 우선순위:
+          #   1. /tmp/smoke_output.log 에 pytest 실행 마커가 없음 → pytest 단계 진입
+          #      자체를 못한 것 → 셋업 보류 (어떤 exit code 든).
+          #   2. exit 0 → 성공.
+          #   3. exit 1~4 → pytest 표준 실패/내부 오류 → 진짜 회귀 신호 (빨간 X).
+          #   4. 그 외 (5/no tests, 100/원격 보류, 126/permission, 127/cmd missing,
+          #      255/SSH 실패 등) → 셋업 보류.
+          pytest_marker="KIS_LIVE_TEST=1 라이브 smoke 실행"
+          if ! grep -qF "${pytest_marker}" /tmp/smoke_output.log 2>/dev/null; then
+              echo "::warning::pytest 실행 단계 진입 못함 (exit ${smoke_exit}) — SSH/원격 셋업 보류."
+              echo "원격 인스턴스 ${USER}@${HOST}:${port} 의 셋업 단계 어디선가 막힘 — provision-vultr / set_secrets / auto-invest 사용자 / uv 설치 등 확인."
               echo "smoke_state=setup_pending" >> "$GITHUB_OUTPUT"
-              ;;
-            100)
-              # 원격에서 warning 이미 발행됨.
-              echo "smoke_state=setup_pending" >> "$GITHUB_OUTPUT"
-              ;;
-            *)
-              echo "::error::KIS smoke 실패 (exit ${smoke_exit}) — pytest 실패 또는 알 수 없는 오류 (진짜 회귀 가능성)."
-              echo "smoke_state=failure" >> "$GITHUB_OUTPUT"
-              exit "${smoke_exit}"
-              ;;
-          esac
+          else
+              case "${smoke_exit}" in
+                0)
+                  echo "smoke_state=success" >> "$GITHUB_OUTPUT"
+                  ;;
+                1|2|3|4)
+                  echo "::error::KIS smoke 실패 (exit ${smoke_exit}) — pytest test 실패 또는 내부 오류 (진짜 회귀 신호)."
+                  echo "smoke_state=failure" >> "$GITHUB_OUTPUT"
+                  exit "${smoke_exit}"
+                  ;;
+                *)
+                  echo "::warning::Smoke 비정상 종료 (exit ${smoke_exit}) — 셋업 보류로 분류."
+                  echo "smoke_state=setup_pending" >> "$GITHUB_OUTPUT"
+                  ;;
+              esac
+          fi
 
       - name: Write workflow summary
         if: always()
