@@ -1,0 +1,185 @@
+name: KIS smoke (autonomous)
+
+# KIS API 회귀를 운영자 손 안 거치고 자동으로 잡는 워크플로우.
+#
+# 동작:
+#   1. main 으로 push 될 때마다 자동 실행 (PR 머지 직후 회귀 즉시 감지).
+#   2. 매일 03:00 UTC (KST 12:00, 미국 시장 외 시간) 정기 실행.
+#   3. 운영자가 GitHub Actions UI 에서 수동 트리거 가능.
+#
+# SSH 로 운영자 인스턴스(Vultr 등)에 접속 → /opt/auto-invest 에서
+# `KIS_LIVE_TEST=1 uv run pytest tests/integration/test_live_broker.py -v`
+# 실행. KIS 키는 인스턴스의 .env 에 이미 있으므로 secrets 로 노출 안 함.
+#
+# 검증 항목 (tests/integration/test_live_broker.py):
+#   - test_live_kis_token_and_quote: KIS OAuth + AAPL quote
+#   - test_live_kis_purchasable_cash: 외화예수금 조회 (잔고 0원 회귀)
+#   - test_live_kis_positions: 보유 종목 조회 (포트폴리오 stub 회귀)
+#   - test_live_kis_combined_balance: end-to-end 잔고 (cash + 평가금액)
+#
+# 실패하면 main 의 commit status 에 X 표시 + workflow log 에 한글 진단.
+#
+# 사전 준비:
+#   - operator-design.yml 과 동일한 4개 GitHub Secret 필요
+#     (VULTR_SSH_HOST/USER/PRIVATE_KEY/PORT).
+#   - 인스턴스의 /opt/auto-invest/.env 에 KIS_APP_KEY / KIS_APP_SECRET /
+#     KIS_ACCOUNT_NO 가 정상 설정돼 있어야 함.
+
+on:
+  push:
+    branches: [main]
+    # broker 또는 라이브 smoke 코드 변경이 있을 때만 트리거.
+    # 문서/스펙만 바뀐 PR 의 main 머지는 굳이 KIS API 안 호출.
+    paths:
+      - 'src/auto_invest/broker/**'
+      - 'src/auto_invest/cli.py'
+      - 'src/auto_invest/reconciliation/**'
+      - 'tests/integration/test_live_broker.py'
+      - '.github/workflows/kis-smoke.yml'
+  schedule:
+    # 매일 03:00 UTC = KST 12:00 (미국 시장 외 시간).
+    # 운영자가 만든 룰이 매일 정상 동작하는지 confirm.
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate secrets
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          missing=()
+          [[ -z "${HOST:-}" ]] && missing+=("VULTR_SSH_HOST")
+          [[ -z "${USER:-}" ]] && missing+=("VULTR_SSH_USER")
+          [[ -z "${KEY:-}"  ]] && missing+=("VULTR_SSH_PRIVATE_KEY")
+          if [[ ${#missing[@]} -gt 0 ]]; then
+              echo "::error::GitHub Secrets 누락: ${missing[*]}"
+              echo "docs/OPERATOR_GITHUB_ACTIONS_DESIGN.md 의 1회 셋업 안내 참고."
+              exit 1
+          fi
+          echo "Secrets OK (host=${HOST}, user=${USER})."
+
+      - name: Install SSH key
+        env:
+          KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          echo "${KEY}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          if ! grep -q "PRIVATE KEY" ~/.ssh/id_ed25519; then
+              echo "::error::VULTR_SSH_PRIVATE_KEY 가 SSH 개인키 형식이 아닙니다."
+              exit 1
+          fi
+
+      - name: Run KIS smoke on instance
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          set -euo pipefail
+          port="${PORT:-22}"
+          echo "============================================================"
+          echo "KIS smoke 자율 검증 — 트리거: ${GITHUB_EVENT_NAME}"
+          echo "대상 인스턴스: ${USER}@${HOST}:${port}"
+          echo "============================================================"
+          # 인스턴스에서 다음을 실행:
+          #   1. cd /opt/auto-invest && git pull (최신 코드로 동기화)
+          #   2. .env 로드 (KIS_APP_KEY 등)
+          #   3. KIS_LIVE_TEST=1 로 라이브 smoke 4건 실행
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+              -p "${port}" \
+              -i ~/.ssh/id_ed25519 \
+              "${USER}@${HOST}" \
+              bash -s <<'REMOTE_SCRIPT' 2>&1 | tee /tmp/smoke_output.log
+          set -euo pipefail
+          REPO=/opt/auto-invest
+          if [[ ! -d "${REPO}" ]]; then
+              echo "::error::${REPO} 가 인스턴스에 없습니다. provision-vultr.yml 먼저 실행하세요."
+              exit 1
+          fi
+          cd "${REPO}"
+          echo "--- git pull ---"
+          # 운영자 사용자가 fetch 권한 갖도록 보장. 충돌 시 abort (smoke 는 read-only).
+          sudo -u auto-invest git fetch --quiet origin main || git fetch --quiet origin main
+          sudo -u auto-invest git checkout main 2>/dev/null || git checkout main
+          sudo -u auto-invest git reset --hard origin/main 2>/dev/null || git reset --hard origin/main
+          echo "현재 HEAD: $(git rev-parse --short HEAD) ($(git log -1 --pretty=%s))"
+          echo
+          echo "--- .env 확인 (KIS 키만 ✓ 표시, 값 노출 안 함) ---"
+          for k in KIS_APP_KEY KIS_APP_SECRET KIS_ACCOUNT_NO; do
+              if grep -qE "^${k}=[^[:space:]]" "${REPO}/.env"; then
+                  echo "  ${k}: ✓ 설정됨"
+              else
+                  echo "::error::${k} 가 ${REPO}/.env 에 없습니다."
+                  exit 1
+              fi
+          done
+          echo
+          echo "--- KIS_LIVE_TEST=1 라이브 smoke 실행 ---"
+          # .env 의 KIS_* 를 export. uv run 이 그 환경을 그대로 받음.
+          set -a
+          source "${REPO}/.env"
+          set +a
+          KIS_LIVE_TEST=1 sudo -E -u auto-invest \
+              env "PATH=$PATH" "KIS_LIVE_TEST=1" "KIS_APP_KEY=$KIS_APP_KEY" \
+                  "KIS_APP_SECRET=$KIS_APP_SECRET" "KIS_ACCOUNT_NO=$KIS_ACCOUNT_NO" \
+              /usr/local/bin/uv run --project "${REPO}" pytest \
+                  tests/integration/test_live_broker.py -v -s 2>&1 || {
+              # sudo / uv 경로 차이 자동 fallback.
+              echo "  (재시도: 직접 uv 호출)"
+              cd "${REPO}"
+              KIS_LIVE_TEST=1 uv run pytest \
+                  tests/integration/test_live_broker.py -v -s
+          }
+          REMOTE_SCRIPT
+          smoke_exit=${PIPESTATUS[0]}
+          echo "SMOKE_EXIT=${smoke_exit}" >> "$GITHUB_ENV"
+          exit "${smoke_exit}"
+
+      - name: Write workflow summary
+        if: always()
+        env:
+          SMOKE_EXIT: ${{ env.SMOKE_EXIT }}
+        run: |
+          set -euo pipefail
+          if [[ "${SMOKE_EXIT:-?}" == "0" ]]; then
+              status="✅ 모든 KIS smoke 통과"
+              detail="KIS quote / 외화예수금 / 보유 종목 / 합산 잔고 4건 모두 정상."
+          else
+              status="❌ 실패 (exit ${SMOKE_EXIT:-?})"
+              detail="위 'Run KIS smoke on instance' 스텝 로그를 확인하세요. 자주 발생하는 원인: KIS 토큰 만료, KIS API 응답 필드 변경, 인스턴스 .env 누락."
+          fi
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          # KIS smoke 자율 검증 결과
+
+          | 항목 | 값 |
+          |------|-----|
+          | 트리거 | ${GITHUB_EVENT_NAME} |
+          | 결과 | ${status} |
+          | 상세 | ${detail} |
+
+          ## 검증 범위 (회귀 방어)
+
+          - KIS OAuth + AAPL quote
+          - 외화예수금 조회 — 잔고 0원 표시 회귀
+          - 보유 종목 조회 — 포트폴리오 stub 회귀
+          - 합산 잔고 (cash + 평가금액) — design 명령 동일 경로
+
+          실패 시 자동 머지 정책(IX.D) 하에서 다음 main push 가 들어오기 전에
+          후속 PR 로 픽스해야 합니다.
+          EOF
