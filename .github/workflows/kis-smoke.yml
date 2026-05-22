@@ -177,6 +177,11 @@ jobs:
           # sudo -E 가 root 의 HOME=/root 로 남으면서 auto-invest 가 root 의
           # ~/.cache/uv 에 접근 시도 → permission denied. UV_CACHE_DIR /
           # HOME 을 명시 전달로 우회. PATH 도 함께 보존.
+          #
+          # `-p no:cacheprovider` : /opt/auto-invest/.pytest_cache 가 root 소유
+          # (provision-vultr 시점 흔적) 라 auto-invest 가 못 씀 → 매 run 마다
+          # PytestCacheWarning 2 건. 4 테스트짜리 smoke 는 lastfailed/lf 가
+          # 의미 없으니 cache provider 자체를 끄는 게 chown 보다 깔끔.
           AUTO_INVEST_HOME=$(getent passwd auto-invest 2>/dev/null | cut -d: -f6 || echo /tmp)
           KIS_LIVE_TEST=1 sudo -E -u auto-invest \
               env "PATH=$PATH" \
@@ -187,14 +192,16 @@ jobs:
                   "KIS_APP_SECRET=$KIS_APP_SECRET" \
                   "KIS_ACCOUNT_NO=$KIS_ACCOUNT_NO" \
               /usr/local/bin/uv run --project "${REPO}" pytest \
-                  tests/integration/test_live_broker.py -v -s 2>&1
+                  tests/integration/test_live_broker.py -v -s \
+                  -p no:cacheprovider 2>&1
           pytest_exit=$?
           if [[ "${pytest_exit}" -ne 0 ]]; then
               # sudo / uv 경로 차이 자동 fallback. root 환경에서 직접 실행.
               echo "  (재시도: 직접 uv 호출 — root 환경)"
               cd "${REPO}"
               KIS_LIVE_TEST=1 uv run pytest \
-                  tests/integration/test_live_broker.py -v -s
+                  tests/integration/test_live_broker.py -v -s \
+                  -p no:cacheprovider
               pytest_exit=$?
           fi
           # pytest 통과/실패가 진짜 회귀 신호 — exit code 그대로 propagate.
