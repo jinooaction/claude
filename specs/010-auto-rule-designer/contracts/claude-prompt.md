@@ -74,13 +74,37 @@ limit_price = "<number>" | "0"
 
 당신이 적용한 정량 매개변수를 다음 JSON 주석으로 TOML 맨 위에 추가하세요:
 
-# INTERPRETATION: {"max_drawdown_pct": 5, "per_symbol_pct": 20, "universe": ["VOO", "QQQ"], "schedule": "weekly_monday"}
+# INTERPRETATION: {"max_drawdown_pct": 5, "per_symbol_pct": 20, "universe": ["VOO", "QQQ"], "schedule": "weekly_monday", "holdings_applied": ["averaging_down:VOO"]}
 
 # 자본 한도
 
 운영자 의도의 자본이 KIS 잔고보다 크면 잔고를 상한선으로 사용하세요. 잔고가 너무 작으면 (예: 10달러 미만) TOML을 생성하지 말고 정확히 다음 한 줄을 응답하세요:
 
 ERROR: 잔고 부족 (현재 잔고 $X, 의도 자본 $Y)
+
+# 보유 종목 활용 패턴
+
+보유 종목 정보(symbol·qty·평단 USD)가 함께 주어지면 다음 세 패턴 중 운영자 의도와 정렬되는 것을 적용. 적용한 패턴은 `INTERPRETATION`의 `holdings_applied` 배열에 기록 (적용 없으면 빈 배열).
+
+1. **추가 매수 (averaging-down) — 기본 적용**.
+   - trigger: `price <= avg_cost * 0.95` (기본 5% 하락폭)
+   - action: `BUY MARKET <분할 수량>`
+   - id: `rule_avgdown_<symbol>`
+   - `holdings_applied`: `"averaging_down:<SYMBOL>"`
+   - 의도에 "물타기 금지", "추가 매수 안 함", "no averaging down" 명시되면 생략.
+
+2. **익절 (take-profit) — 의도에 명시될 때만**.
+   - 의도에 "익절", "수익 실현", "차익 실현", "profit taking" 표현 있을 때만.
+   - trigger: `price >= avg_cost * (1 + 익절폭)` (기본 10%)
+   - action: `SELL MARKET <보유 수량 일부>`
+   - id: `rule_takeprofit_<symbol>`
+   - `holdings_applied`: `"take_profit:<SYMBOL>"`
+
+3. **분산 안전장치 (concentration cap) — 항상 검사**.
+   - `qty * avg_cost / kis_balance_usd > per_symbol_pct/100`이면 그 종목에 대한 신규 BUY 룰(averaging-down 포함) 생성 금지.
+   - `holdings_applied`: `"concentration_cap_skipped:<SYMBOL>"`
+
+보유 종목은 빠짐없이 `[whitelist].symbols`에 포함시켜야 위 세 패턴이 동작함.
 ```
 
 ### User prompt (호출마다 변동, 한국어)

@@ -36,7 +36,7 @@ SYSTEM_PROMPT = """\
 
 응답은 다음 형태로 작성하세요. 코드 펜스 사용 금지, 본문 외 설명 금지.
 
-# INTERPRETATION: {"max_drawdown_pct": <N>, "per_symbol_pct": <N>, "universe": [...], "schedule": "..."}
+# INTERPRETATION: {"max_drawdown_pct": <N>, "per_symbol_pct": <N>, "universe": [...], "schedule": "...", "holdings_applied": ["averaging_down:VOO", "concentration_cap_skipped:AAPL"]}
 
 [caps]
 per_trade_pct = <number>
@@ -81,11 +81,33 @@ limit_price = "0"
 
 # 자본 한도
 
-자본은 KIS 잔고(예수금)를 그대로 사용합니다. 운영자가 자연어로 "100달러 적립" 같이 적어도 그 숫자는 의도를 짐작하는 단서이지 자본 상한이 아닙니다. 보유 종목 정보가 함께 주어지면 그것을 활용해 룰을 구성하세요 (예: 이미 보유한 종목을 우선 매수 대상에 포함, 평단보다 낮은 트리거를 추가 매수 조건으로 사용).
+자본은 KIS 잔고(예수금)를 그대로 사용합니다. 운영자가 자연어로 "100달러 적립" 같이 적어도 그 숫자는 의도를 짐작하는 단서이지 자본 상한이 아닙니다.
 
 잔고 < $10이면 다음 한 줄만 응답:
 
 ERROR: 잔고 부족 (현재 잔고 $X)
+
+# 보유 종목 활용 패턴
+
+보유 종목 정보(symbol·qty·평단 USD)가 함께 주어지면 다음 세 패턴 중 운영자 의도와 정렬되는 것을 적용하세요. 적용한 패턴은 INTERPRETATION JSON의 `holdings_applied` 키에 배열로 기록하세요 (적용 안 한 경우 빈 배열 `[]`).
+
+1. **추가 매수 (averaging-down) — 기본 적용**. 보유 종목 X의 평단이 $A일 때, 다음 룰을 추가하세요:
+   - trigger: `kind = "price"`, `direction = "<="`, `threshold = A * 0.95` (기본 5% 하락폭)
+   - action: `side = "BUY"`, `order_type = "MARKET"`, `qty = <분할 매수 수량>`
+   - id: `rule_avgdown_<symbol>`
+   - `holdings_applied`에 `"averaging_down:<SYMBOL>"` 기록.
+   - 운영자 의도에 "물타기 금지", "추가 매수 안 함", "no averaging down" 같은 단서가 명시되면 생략.
+
+2. **익절 (take-profit) — 의도에 명시될 때만**. 의도에 "익절", "수익 실현", "차익 실현", "profit taking" 같은 표현이 있을 때만 적용:
+   - trigger: `kind = "price"`, `direction = ">="`, `threshold = A * (1 + 익절폭)` (의도에 익절폭 없으면 기본 10%)
+   - action: `side = "SELL"`, `order_type = "MARKET"`, `qty = <보유 수량의 일부>`
+   - id: `rule_takeprofit_<symbol>`
+   - `holdings_applied`에 `"take_profit:<SYMBOL>"` 기록.
+
+3. **분산 안전장치 (concentration cap) — 항상 검사**. 보유 종목의 비중(= qty * 평단 / KIS 예수금)이 `per_symbol_pct`를 이미 초과한 경우, 그 종목에 대한 새 BUY 룰을 생성하지 마세요 (위 1번 averaging-down도 생략).
+   - `holdings_applied`에 `"concentration_cap_skipped:<SYMBOL>"` 기록.
+
+세 패턴 모두 화이트리스트(`[whitelist].symbols`)에 종목이 포함돼야 작동하므로, 보유 종목은 빠짐없이 화이트리스트에 추가하세요.
 """
 
 

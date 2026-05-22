@@ -26,6 +26,25 @@ def test_system_prompt_includes_safety_constraints():
     assert "INTERPRETATION:" in p
 
 
+def test_system_prompt_includes_holdings_utilization_patterns():
+    """보유 종목 활용 패턴 3종(추가 매수·익절·분산 안전장치)이 모두 가이드돼야 함."""
+    p = build_system_prompt()
+    assert "보유 종목 활용 패턴" in p
+    assert "averaging-down" in p or "averaging_down" in p
+    assert "추가 매수" in p
+    assert "take-profit" in p or "take_profit" in p
+    assert "익절" in p
+    assert "concentration cap" in p or "concentration_cap" in p
+    assert "분산 안전장치" in p
+    # holdings_applied 키 사용 가이드 + 예시
+    assert "holdings_applied" in p
+    # 기본 하락폭/익절폭 명시 (Claude가 임의 값 못 만들도록)
+    assert "5%" in p  # averaging-down 기본 하락폭
+    assert "10%" in p  # take-profit 기본 익절폭
+    # 운영자가 averaging-down 명시 거부할 수 있는 단서 표현
+    assert "물타기 금지" in p or "추가 매수 안 함" in p
+
+
 # ---------------------------------------------------------- user prompt
 
 
