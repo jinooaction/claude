@@ -53,7 +53,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Validate secrets
+      - name: Check secrets presence
+        id: secrets_check
         env:
           HOST: ${{ secrets.VULTR_SSH_HOST }}
           USER: ${{ secrets.VULTR_SSH_USER }}
@@ -65,13 +66,22 @@ jobs:
           [[ -z "${USER:-}" ]] && missing+=("VULTR_SSH_USER")
           [[ -z "${KEY:-}"  ]] && missing+=("VULTR_SSH_PRIVATE_KEY")
           if [[ ${#missing[@]} -gt 0 ]]; then
-              echo "::error::GitHub Secrets 누락: ${missing[*]}"
-              echo "docs/OPERATOR_GITHUB_ACTIONS_DESIGN.md 의 1회 셋업 안내 참고."
-              exit 1
+              # 시크릿 미등록은 "실패"가 아니라 "셋업 보류". 이 단계까지가
+              # 자율 수행이 자기 자신을 셋업할 수 없는 영역이므로, 워크플로우는
+              # 통과 처리하고 다음 main push 부터 시크릿이 채워지면 자동으로
+              # 실제 회귀 감시가 시작되게 둔다. (헌법 IX.D 운영자 자율 수행
+              # 보장 — 셋업 안 됐다고 매 push 마다 빨간 X 노이즈를 띄우지 않음.)
+              echo "::warning::GitHub Secrets 미등록 (${missing[*]}). 1회 셋업 보류 — smoke 건너뜀."
+              echo "셋업 후 다음 main push 부터 자동 KIS 회귀 감시 시작."
+              echo "가이드: docs/OPERATOR_GITHUB_ACTIONS_DESIGN.md"
+              echo "secrets_present=false" >> "$GITHUB_OUTPUT"
+          else
+              echo "Secrets OK (host=${HOST}, user=${USER})."
+              echo "secrets_present=true" >> "$GITHUB_OUTPUT"
           fi
-          echo "Secrets OK (host=${HOST}, user=${USER})."
 
       - name: Install SSH key
+        if: steps.secrets_check.outputs.secrets_present == 'true'
         env:
           KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
         run: |
@@ -86,6 +96,7 @@ jobs:
           fi
 
       - name: Run KIS smoke on instance
+        if: steps.secrets_check.outputs.secrets_present == 'true'
         env:
           HOST: ${{ secrets.VULTR_SSH_HOST }}
           USER: ${{ secrets.VULTR_SSH_USER }}
@@ -155,9 +166,13 @@ jobs:
         if: always()
         env:
           SMOKE_EXIT: ${{ env.SMOKE_EXIT }}
+          SECRETS_PRESENT: ${{ steps.secrets_check.outputs.secrets_present }}
         run: |
           set -euo pipefail
-          if [[ "${SMOKE_EXIT:-?}" == "0" ]]; then
+          if [[ "${SECRETS_PRESENT:-}" != "true" ]]; then
+              status="⏭️ 건너뜀 (Vultr SSH 시크릿 미등록 — 1회 셋업 보류)"
+              detail="GitHub Settings → Secrets and variables → Actions 에서 VULTR_SSH_HOST/USER/PRIVATE_KEY 등록. 등록 후 다음 main push 부터 자동 회귀 감시 시작 — 운영자 추가 행동 불필요."
+          elif [[ "${SMOKE_EXIT:-?}" == "0" ]]; then
               status="✅ 모든 KIS smoke 통과"
               detail="KIS quote / 외화예수금 / 보유 종목 / 합산 잔고 4건 모두 정상."
           else
