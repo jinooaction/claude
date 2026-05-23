@@ -1059,12 +1059,19 @@ def performance(
         "--no-marks",
         help="현재 시세 조회를 생략하고 실현 손익만 계산.",
     ),
+    snapshot: bool = typer.Option(
+        False,
+        "--snapshot",
+        help="성과 결과를 audit_log 에 추가-전용 LIVE_PERFORMANCE_SNAPSHOT 이벤트로 "
+        "1건 기록 (FR-014, 튜너용). 기본은 미기록(순수 계산).",
+    ),
 ) -> None:
     """Spec 011 — 라이브/페이퍼 매매 성과를 측정 (실현·미실현 손익, 룰별·종목별 기여도).
 
     read-only — audit_log·positions·orders 의 어떤 row 도 수정하지 않는다 (SC-005).
     미실현 손익은 미청산 종목의 현재 KIS 시세로 계산하며, 시세 조회 실패 시 실현
     손익만 출력한다 (FR-005). live·paper 체결은 모드로 분리 집계된다 (FR-003).
+    `--snapshot` 지정 시에만 결과를 추가-전용 이벤트로 1건 기록한다(K4 추가 변경).
     """
     import json as _json
     from datetime import UTC, datetime, timedelta
@@ -1075,6 +1082,7 @@ def performance(
         read_fills,
         reconstruct,
         render_text,
+        snapshot_fields,
     )
 
     if output_format not in ("text", "json"):
@@ -1153,6 +1161,25 @@ def performance(
         )
     finally:
         conn.close()
+
+    if snapshot:
+        # 측정은 위에서 read-only(query_only)로 끝냈다. 스냅샷은 분리된 쓰기
+        # 연결에서 추가-전용으로 단 1건만 기록한다(append-only 불변량 보존).
+        from auto_invest.persistence import audit
+
+        write_conn = db.get_connection(db_path)
+        try:
+            seq = audit.append(
+                write_conn,
+                audit.LivePerformanceSnapshotPayload(
+                    **snapshot_fields(report, computed_at_utc=_d_iso_now())
+                ),
+            )
+        finally:
+            write_conn.close()
+        typer.echo(
+            f"(스냅샷 기록됨: LIVE_PERFORMANCE_SNAPSHOT seq={seq})", err=True
+        )
 
     if output_format == "json":
         typer.echo(_json.dumps(report.to_json_dict(), indent=2, ensure_ascii=False))
@@ -1356,7 +1383,9 @@ def report(
     conn = db.get_connection(db_path)
     db.migrate(conn)
     try:
-        rep = build_report(conn, session_date=session_date, tiers=tiers)
+        rep = build_report(
+            conn, session_date=session_date, tiers=tiers, include_performance=True
+        )
         md_path, json_path = write_report(rep, output_root=output_root)
     finally:
         conn.close()
@@ -1369,6 +1398,10 @@ def report(
     typer.echo(f"  reconciliation:      {rep.reconciliation}")
     if rep.efficiency is not None:
         typer.echo(f"  llm_calls:           {rep.efficiency.call_count}")
+    if rep.performance is not None:
+        perf = rep.performance
+        typer.echo(f"  perf mode:           {perf.mode}")
+        typer.echo(f"  day realized PnL:    {perf.day_realized_pnl_usd}")
 
 
 @app.command()

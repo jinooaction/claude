@@ -61,6 +61,7 @@ EventType = Literal[
     "RULE_DESIGN_COMPLETED",
     "RULE_DESIGN_REJECTED",
     "RULE_DESIGN_DEPLOYED",
+    "LIVE_PERFORMANCE_SNAPSHOT",
 ]
 
 
@@ -542,6 +543,35 @@ class PaperRunRejectedPayload(AuditPayload):
     detail: str
 
 
+class LivePerformanceSnapshotPayload(AuditPayload):
+    """Spec 011 FR-014 (T014) — 성과 평가 한 번의 결과를 남기는 추가-전용 스냅샷.
+
+    `auto-invest performance --snapshot` 으로만 기록되며 기본 동작은 순수 계산
+    (스냅샷 미기록)이다. 기존 이벤트 타입·row 를 전혀 건드리지 않는 K4 추가
+    변경이라 append-only 불변량(constitution IV)을 깨지 않는다. 미래 자율 튜너
+    (spec 005)가 시계열로 소비할 기계 판독 신호 면 — 손익·수익률·위험조정 지표를
+    `PerformanceReport` 와 같은 정의(문자열 Decimal)로 담는다. 거래 0건이면 위험
+    조정 필드는 null."""
+
+    event_type: Literal["LIVE_PERFORMANCE_SNAPSHOT"] = "LIVE_PERFORMANCE_SNAPSHOT"
+    mode: Literal["paper", "live"]
+    schema_version: str
+    since_utc: str
+    until_utc: str
+    fills_count: int
+    gross_invested_usd: str
+    realized_pnl_usd: str
+    unrealized_pnl_usd: str
+    total_pnl_usd: str
+    return_pct: str | None = None
+    closed_trades: int = 0
+    win_rate: str | None = None
+    sharpe_ratio: str | None = None
+    max_drawdown_pct: str | None = None
+    total_return_pct: str | None = None
+    computed_at_utc: str
+
+
 AnyPayload = (
     WorkerStartedPayload
     | WorkerStoppedPayload
@@ -584,6 +614,7 @@ AnyPayload = (
     | RuleDesignCompletedPayload
     | RuleDesignRejectedPayload
     | RuleDesignDeployedPayload
+    | LivePerformanceSnapshotPayload
 )
 
 

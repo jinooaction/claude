@@ -542,6 +542,37 @@ def build_performance_report(
     )
 
 
+def snapshot_fields(report: PerformanceReport, *, computed_at_utc: str) -> dict:
+    """`PerformanceReport` → `LivePerformanceSnapshotPayload` 생성용 평탄화 dict (T014, FR-014).
+
+    위험조정 블록은 한 단계 평탄화해 튜너(spec 005)가 시계열로 바로 읽게 한다.
+    청산 0건(risk None)이면 위험조정 필드는 None.
+    """
+
+    def _s(v: Decimal | None) -> str | None:
+        return None if v is None else str(v)
+
+    risk = report.risk
+    return {
+        "mode": report.mode,
+        "schema_version": report.SCHEMA_VERSION,
+        "since_utc": report.period_since_utc,
+        "until_utc": report.period_until_utc,
+        "fills_count": report.fills_count,
+        "gross_invested_usd": str(report.gross_invested_usd),
+        "realized_pnl_usd": str(report.realized_pnl_usd),
+        "unrealized_pnl_usd": str(report.unrealized_pnl_usd),
+        "total_pnl_usd": str(report.total_pnl_usd),
+        "return_pct": _s(report.return_pct),
+        "closed_trades": (risk.closed_trades if risk else 0),
+        "win_rate": _s(risk.win_rate) if risk else None,
+        "sharpe_ratio": _s(risk.sharpe_ratio) if risk else None,
+        "max_drawdown_pct": _s(risk.max_drawdown_pct) if risk else None,
+        "total_return_pct": _s(risk.total_return_pct) if risk else None,
+        "computed_at_utc": computed_at_utc,
+    }
+
+
 # --------------------------------------------------------------- text render
 
 

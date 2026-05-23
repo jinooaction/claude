@@ -15,6 +15,7 @@ from auto_invest.persistence.audit import (
     FillPayload,
     HaltSetPayload,
     OrderIntentPayload,
+    OrderPaperFilledPayload,
     OrderRejectedByGatePayload,
     OrderSubmittedPayload,
     ReconciliationOkPayload,
@@ -290,6 +291,99 @@ def test_byte_stable_when_inputs_unchanged(conn):
     json_b = render_json(build_report(conn, session_date="2026-05-04", generated_at=fixed))
     assert md_a == md_b
     assert json_a == json_b
+
+
+# ----------------------------------------------------------- performance (T013)
+
+
+def _paper_fill(conn, *, symbol, side, qty, price, ts, rule_id="r_dca"):
+    audit.append(
+        conn,
+        OrderPaperFilledPayload(
+            rule_id=rule_id,
+            symbol=symbol,
+            side=side,
+            qty=qty,
+            simulated_fill_price_usd=price,
+            quote_source="last",
+            correlation_id=f"paper-{symbol}-{ts}",
+            paper_session_id=1,
+        ),
+        rule_id=rule_id,
+        symbol=symbol,
+        correlation_id=f"paper-{symbol}-{ts}",
+        ts_utc=ts,
+    )
+
+
+def test_performance_section_absent_by_default(conn):
+    """후방 호환 — include_performance 미지정 시 섹션 없음(기존 호출부 불변)."""
+    _seed_session(conn)
+    report = build_report(conn, session_date="2026-05-04", generated_at="x")
+    assert report.performance is None
+    assert "## Performance" not in render_markdown(report)
+    assert json.loads(render_json(report))["performance"] is None
+
+
+def test_performance_section_realized_and_rolling(conn):
+    """그날 매수→매도 1라운드 청산 → 당일 실현 손익 + 롤링 위험조정 요약."""
+    _paper_fill(conn, symbol="VOO", side="BUY", qty=2, price="100", ts="2026-05-04T13:00:00.000Z")
+    _paper_fill(conn, symbol="VOO", side="SELL", qty=2, price="110", ts="2026-05-04T15:00:00.000Z")
+    report = build_report(
+        conn,
+        session_date="2026-05-04",
+        generated_at="2026-05-05T04:00:00Z",
+        include_performance=True,
+    )
+    perf = report.performance
+    assert perf is not None
+    assert perf.mode == "paper"
+    assert perf.day_fills == 2
+    assert perf.day_realized_pnl_usd == Decimal("20")  # (110-100)*2
+    assert perf.rolling_closed_trades == 1
+    assert perf.rolling_win_rate == Decimal("1")  # 1/1 이익 청산
+
+    md = render_markdown(report)
+    assert "## Performance (성과)" in md
+    assert "paper" in md
+
+    payload = json.loads(render_json(report))["performance"]
+    assert payload["mode"] == "paper"
+    assert payload["day_realized_pnl_usd"] == "20"
+    assert payload["rolling_closed_trades"] == 1
+
+
+def test_performance_section_no_fills_is_graceful(conn):
+    """체결 0건 — 섹션은 존재하되 실현 0·롤링 N/A, 예외 없음."""
+    report = build_report(
+        conn,
+        session_date="2026-05-04",
+        generated_at="x",
+        include_performance=True,
+    )
+    perf = report.performance
+    assert perf is not None
+    assert perf.day_fills == 0
+    assert perf.day_realized_pnl_usd == Decimal("0")
+    assert perf.rolling_closed_trades == 0
+    assert perf.rolling_sharpe is None
+    md = render_markdown(report)
+    assert "## Performance (성과)" in md
+    assert "N/A" in md
+
+
+def test_performance_section_byte_stable(conn):
+    """결정론 — 같은 audit_log 에 대해 성과 섹션 포함 출력이 바이트 동일."""
+    _paper_fill(conn, symbol="VOO", side="BUY", qty=1, price="100", ts="2026-05-04T13:00:00.000Z")
+    _paper_fill(conn, symbol="VOO", side="SELL", qty=1, price="90", ts="2026-05-04T15:00:00.000Z")
+    fixed = "2026-05-05T04:00:00Z"
+    a = render_json(
+        build_report(conn, session_date="2026-05-04", generated_at=fixed, include_performance=True)
+    )
+    b = render_json(
+        build_report(conn, session_date="2026-05-04", generated_at=fixed, include_performance=True)
+    )
+    assert a == b
 
 
 def test_write_report_creates_files(conn, tmp_path: Path):
