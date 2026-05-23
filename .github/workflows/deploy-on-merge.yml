@@ -1,0 +1,109 @@
+name: Deploy on merge to main
+
+# 각 단계(PR)가 main 에 머지되면 즉시 서버에 배포한다 (운영자 자율 수행 요구).
+# 새 배포 로직을 만들지 않는다 — 인스턴스에 이미 설치된, spec 006 안전 단계를
+# 전부 갖춘 oneshot 서비스 `auto-invest-deploy.service` 를 SSH 로 즉시 트리거할
+# 뿐이다. 같은 서비스를 `auto-invest-deploy.timer` 가 30분마다(장중 제외) 돌리므로,
+# 이 워크플로우가 실패하거나 머지가 장중에 일어나도 타이머가 안전망으로 받는다.
+#
+# 안전 속성 (자세한 설계는 deploy/AUTO-DEPLOY.md):
+#   - 워커는 dry-run 모드 — 배포는 코드 교체+재시작이며 실주문을 내지 않는다.
+#     실거래 전환(AUTO_INVEST_MODE=live)은 이 워크플로우가 건드리지 않는다.
+#   - 장중에는 배포 안 됨: market_hours_guard(헌법 VIII.A)가 거부하면 "장중 연기"로
+#     끝내고 타이머가 장 마감 후 올린다.
+#   - 실패 시 직전 good SHA 로 자동 롤백(health_check ≥90초).
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'specs/**'
+      - '.verify/**'
+      - '.trigger/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # 배포는 한 번에 하나만. 연속 머지가 나면 마지막 것까지 순차 반영.
+  group: deploy-main
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Install SSH key
+        env:
+          KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          echo "${KEY}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+      - name: Deploy via SSH (trigger off-hours-guarded oneshot)
+        id: deploy
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          # oneshot 서비스라 systemctl start 는 완료까지 블록하고 배포 결과 코드를
+          # 그대로 돌려준다. 이어 journal 마지막 120줄을 수집한다.
+          ssh -o StrictHostKeyChecking=accept-new \
+              -o ConnectTimeout=15 \
+              -p "${port}" \
+              -i ~/.ssh/id_ed25519 \
+              "${USER}@${HOST}" \
+              "sudo systemctl start auto-invest-deploy.service" \
+              > /tmp/deploy_start.txt 2>&1
+          start_exit=$?
+          ssh -o StrictHostKeyChecking=accept-new \
+              -o ConnectTimeout=15 \
+              -p "${port}" \
+              -i ~/.ssh/id_ed25519 \
+              "${USER}@${HOST}" \
+              "sudo journalctl -u auto-invest-deploy.service -n 120 --no-pager" \
+              > /tmp/deploy_journal.txt 2>&1
+          cat /tmp/deploy_start.txt
+          cat /tmp/deploy_journal.txt
+          echo "start_exit=${start_exit}" >> "$GITHUB_OUTPUT"
+
+      - name: Summarise result
+        if: always()
+        env:
+          START_EXIT: ${{ steps.deploy.outputs.start_exit }}
+        run: |
+          journal="$(cat /tmp/deploy_journal.txt 2>/dev/null || echo '(no journal captured)')"
+          # 장중 연기는 실패가 아니다 — market_hours_guard 거부 신호를 찾는다.
+          if grep -qiE 'market is open|market_hours_guard' /tmp/deploy_journal.txt 2>/dev/null; then
+              status="⏸ 장중 연기 — 타이머가 장 마감 후 자동 재배포"
+              effective_exit=0
+          elif [[ "${START_EXIT}" == "0" ]]; then
+              status="✅ 배포 성공 (워커 최신 main 으로 교체)"
+              effective_exit=0
+          else
+              status="❌ 배포 실패 (exit ${START_EXIT}) — 워커는 직전 good SHA 유지(롤백)"
+              effective_exit=1
+          fi
+          {
+              echo "## Deploy on merge — 결과"
+              echo ""
+              echo "- 상태: ${status}"
+              echo "- systemctl start exit: \`${START_EXIT}\`"
+              echo "- commit: \`${GITHUB_SHA}\`"
+              echo ""
+              echo "<details><summary>auto-invest-deploy.service journal (last 120)</summary>"
+              echo ""
+              echo '```'
+              echo "${journal}"
+              echo '```'
+              echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "${effective_exit}"

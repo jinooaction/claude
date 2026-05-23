@@ -22,6 +22,13 @@ from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 
+from auto_invest.backtest.metrics import (
+    daily_returns_from_equity,
+    max_drawdown_pct,
+    sharpe_ratio,
+    total_return_pct,
+)
+
 
 def _fmt_ts(dt: datetime) -> str:
     """audit_log.ts_utc 와 동일한 밀리초 정밀도 ISO8601(Z). 고정 폭이라
@@ -76,6 +83,55 @@ class RulePerformance:
     sells: int
 
 
+@dataclass(frozen=True)
+class RealizedTrade:
+    """청산(매도)으로 실현된 손익 한 건. 위험조정 지표의 표본."""
+
+    symbol: str
+    qty: int
+    pnl_usd: Decimal
+    date: str  # YYYY-MM-DD (체결 ts_utc 의 날짜 부분)
+    rule_id: str | None
+
+
+@dataclass
+class RiskMetrics:
+    """위험조정 성과 (US2). 계산식은 spec 008 backtest/metrics.py 재사용 (FR-007).
+
+    샤프·최대낙폭·총수익률은 **실현 손익 누적 자산곡선**(시작 자본 기준)에서
+    계산한다. 미실현 손익은 과거 시세 없이 시점별 평가가 불가능하므로 v1 곡선에
+    포함하지 않는다. 자산곡선은 실현 거래가 발생한 날만 표본으로 삼으므로,
+    거래가 드물면 연율화(√252)는 근사값이다. 승률·평균손익·손익비는 청산 건당
+    실현 손익에서 직접 집계한다.
+    """
+
+    closed_trades: int  # 청산(매도) 건수
+    win_rate: Decimal | None  # 0~1 (이익 청산 비율)
+    avg_win_usd: Decimal | None
+    avg_loss_usd: Decimal | None  # 음수
+    profit_factor: Decimal | None  # 총이익 / |총손실|
+    sharpe_ratio: Decimal | None  # 연율화 √252, RFR=0
+    max_drawdown_pct: Decimal | None  # 양수 %
+    total_return_pct: Decimal | None  # 시작 자본 대비 실현 누적 %
+    starting_capital_usd: Decimal
+
+    def to_json_dict(self) -> dict:
+        def _s(v: Decimal | None) -> str | None:
+            return None if v is None else str(v)
+
+        return {
+            "closed_trades": self.closed_trades,
+            "win_rate": _s(self.win_rate),
+            "avg_win_usd": _s(self.avg_win_usd),
+            "avg_loss_usd": _s(self.avg_loss_usd),
+            "profit_factor": _s(self.profit_factor),
+            "sharpe_ratio": _s(self.sharpe_ratio),
+            "max_drawdown_pct": _s(self.max_drawdown_pct),
+            "total_return_pct": _s(self.total_return_pct),
+            "starting_capital_usd": str(self.starting_capital_usd),
+        }
+
+
 @dataclass
 class PerformanceReport:
     mode: str  # "paper" | "live"
@@ -91,8 +147,9 @@ class PerformanceReport:
     per_rule: list[RulePerformance]
     unmarked_symbols: list[str]  # 미청산이나 시세 조회 못 한 종목
     data_quality_warnings: list[str]
+    risk: RiskMetrics | None = None  # 위험조정 성과 (US2); 청산 0건이면 None
 
-    SCHEMA_VERSION = "1.0"
+    SCHEMA_VERSION = "1.1"
 
     def to_json_dict(self) -> dict:
         def _s(v: Decimal | None) -> str | None:
@@ -136,6 +193,7 @@ class PerformanceReport:
             ],
             "unmarked_symbols": self.unmarked_symbols,
             "data_quality_warnings": self.data_quality_warnings,
+            "risk": None if self.risk is None else self.risk.to_json_dict(),
         }
 
 
@@ -287,6 +345,101 @@ def reconstruct(
     return positions, rules, gross_invested, warnings
 
 
+# --------------------------------------------------- risk-adjusted (US2, P2)
+
+
+def realized_trades(fills: list[FillRecord]) -> list[RealizedTrade]:
+    """체결 시퀀스에서 청산(매도)마다 실현 손익 한 건을 뽑아낸다.
+
+    평균단가 규약은 `reconstruct` 와 동일하다. 보유 초과 매도는 보유분까지만
+    실현 처리하여 음수 포지션을 만들지 않는다(데이터 품질 일관성).
+    """
+    avg_cost: dict[str, Decimal] = {}
+    qty: dict[str, int] = {}
+    trades: list[RealizedTrade] = []
+
+    for f in fills:
+        held = qty.get(f.symbol, 0)
+        cost = avg_cost.get(f.symbol, Decimal("0"))
+        if f.side == "BUY":
+            new_qty = held + f.qty
+            new_total = cost * Decimal(held) + f.price_usd * Decimal(f.qty)
+            avg_cost[f.symbol] = new_total / Decimal(new_qty) if new_qty else Decimal("0")
+            qty[f.symbol] = new_qty
+        elif f.side == "SELL":
+            sell_qty = min(f.qty, held)
+            if sell_qty <= 0:
+                continue
+            pnl = (f.price_usd - cost) * Decimal(sell_qty)
+            trades.append(
+                RealizedTrade(
+                    symbol=f.symbol,
+                    qty=sell_qty,
+                    pnl_usd=pnl,
+                    date=f.ts_utc[:10],
+                    rule_id=f.rule_id,
+                )
+            )
+            qty[f.symbol] = held - sell_qty
+    return trades
+
+
+def compute_risk_metrics(
+    fills: list[FillRecord], *, starting_capital: Decimal
+) -> RiskMetrics | None:
+    """위험조정 지표를 계산한다. 청산이 한 건도 없으면 None (US2 AC2: 거래 없음 N/A).
+
+    샤프·최대낙폭·총수익률은 spec 008 `backtest/metrics.py` 함수를 그대로 호출해
+    백테스트·캐너리·라이브가 한 잣대로 비교되도록 한다 (FR-007, SC-002).
+    """
+    trades = realized_trades(fills)
+    if not trades:
+        return None
+
+    pnls = [t.pnl_usd for t in trades]
+    wins = [p for p in pnls if p > 0]
+    losses = [p for p in pnls if p < 0]
+    closed = len(trades)
+
+    win_rate = Decimal(len(wins)) / Decimal(closed)
+    avg_win = (sum(wins, Decimal("0")) / Decimal(len(wins))) if wins else None
+    avg_loss = (sum(losses, Decimal("0")) / Decimal(len(losses))) if losses else None
+    gross_loss = abs(sum(losses, Decimal("0")))
+    profit_factor = (
+        (sum(wins, Decimal("0")) / gross_loss) if gross_loss > 0 else None
+    )
+
+    # 실현 손익 누적 자산곡선 (시작 자본 기준). 거래일별로 표본을 만든다.
+    daily: dict[str, Decimal] = {}
+    for t in trades:
+        daily[t.date] = daily.get(t.date, Decimal("0")) + t.pnl_usd
+    equity = [starting_capital]
+    running = starting_capital
+    for day in sorted(daily):
+        running += daily[day]
+        equity.append(running)
+
+    sharpe: Decimal | None = None
+    drawdown: Decimal | None = None
+    total_return: Decimal | None = None
+    if starting_capital > 0 and all(p > 0 for p in equity):
+        total_return = total_return_pct(equity)
+        drawdown = max_drawdown_pct(equity)
+        sharpe = sharpe_ratio(daily_returns_from_equity(equity))
+
+    return RiskMetrics(
+        closed_trades=closed,
+        win_rate=win_rate,
+        avg_win_usd=avg_win,
+        avg_loss_usd=avg_loss,
+        profit_factor=profit_factor,
+        sharpe_ratio=sharpe,
+        max_drawdown_pct=drawdown,
+        total_return_pct=total_return,
+        starting_capital_usd=starting_capital,
+    )
+
+
 def compute_performance(
     fills: list[FillRecord],
     marks: dict[str, Decimal],
@@ -294,8 +447,13 @@ def compute_performance(
     mode: str,
     since: datetime,
     until: datetime,
+    starting_capital: Decimal | None = None,
 ) -> PerformanceReport:
-    """정규화된 체결 + 시세(marks)로 성과 리포트를 합성한다. 순수 함수."""
+    """정규화된 체결 + 시세(marks)로 성과 리포트를 합성한다. 순수 함수.
+
+    `starting_capital` 은 위험조정 지표의 자산곡선 기준 자본이다. 미지정 시 기간
+    내 총 투입액(gross_invested)을 대용으로 쓴다(투입 자본 대비 실현 수익률 관점).
+    """
     positions, rules, gross_invested, warnings = reconstruct(fills)
 
     per_symbol: list[SymbolPerformance] = []
@@ -338,6 +496,13 @@ def compute_performance(
 
     per_rule = sorted(rules.values(), key=lambda r: r.rule_id)
 
+    cap = (
+        starting_capital
+        if starting_capital is not None and starting_capital > 0
+        else gross_invested
+    )
+    risk = compute_risk_metrics(fills, starting_capital=cap)
+
     return PerformanceReport(
         mode=mode,
         period_since_utc=_fmt_ts(since),
@@ -352,6 +517,7 @@ def compute_performance(
         per_rule=per_rule,
         unmarked_symbols=sorted(unmarked),
         data_quality_warnings=warnings,
+        risk=risk,
     )
 
 
@@ -362,11 +528,17 @@ def build_performance_report(
     since: datetime,
     until: datetime,
     marks: dict[str, Decimal] | None = None,
+    starting_capital: Decimal | None = None,
 ) -> PerformanceReport:
     """audit_log 에서 체결을 읽어 성과 리포트를 만든다 (read-only 진입점)."""
     fills = read_fills(conn, mode=mode, since=since, until=until)
     return compute_performance(
-        fills, marks or {}, mode=mode, since=since, until=until
+        fills,
+        marks or {},
+        mode=mode,
+        since=since,
+        until=until,
+        starting_capital=starting_capital,
     )
 
 
@@ -401,6 +573,31 @@ def render_text(report: PerformanceReport) -> str:
     if report.unmarked_symbols:
         lines.append(
             f"⚠ 시세 조회 불가 (미실현 미반영): {', '.join(report.unmarked_symbols)}"
+        )
+    lines.append("")
+    lines.append("Risk-adjusted (위험조정)")
+    lines.append("-" * 23)
+    r = report.risk
+    if r is None:
+        lines.append("거래 없음 (N/A) — 청산된 거래가 없어 위험조정 지표 계산 불가")
+    else:
+        def _pct(v: Decimal | None) -> str:
+            return "N/A" if v is None else f"{v.quantize(Decimal('0.01'))}"
+
+        def _ratio(v: Decimal | None) -> str:
+            return "N/A" if v is None else f"{v.quantize(Decimal('0.0001'))}"
+
+        wr = "N/A" if r.win_rate is None else f"{(r.win_rate * 100).quantize(Decimal('0.1'))}%"
+        lines.append(f"Closed trades: {r.closed_trades}")
+        lines.append(f"Win rate:      {wr}")
+        lines.append(f"Avg win:       ${_money(r.avg_win_usd)}")
+        lines.append(f"Avg loss:      ${_money(r.avg_loss_usd)}")
+        lines.append(f"Profit factor: {_ratio(r.profit_factor)}")
+        lines.append(f"Sharpe (√252): {_ratio(r.sharpe_ratio)}")
+        lines.append(f"Max drawdown:  {_pct(r.max_drawdown_pct)}%")
+        lines.append(
+            f"Total return:  {_pct(r.total_return_pct)}% "
+            f"(시작 자본 ${r.starting_capital_usd.quantize(Decimal('0.01'))} 기준)"
         )
     lines.append("")
     lines.append("Per-symbol")
