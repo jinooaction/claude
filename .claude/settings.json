@@ -11,6 +11,9 @@
       "Bash(git remote:*)",
       "Bash(git rev-parse:*)",
       "Bash(git ls-files:*)",
+      "Bash(git ls-remote:*)",
+      "Bash(git fetch:*)",
+      "Bash(git rev-list:*)",
       "Bash(ls:*)",
       "Bash(find:*)",
       "Bash(wc:*)",
@@ -49,6 +52,10 @@
           {
             "type": "command",
             "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/session_context.py"
+          },
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/git_ground_truth.py"
           }
         ]
       }

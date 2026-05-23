@@ -2,7 +2,7 @@
 
 This project's working agreement is **autonomous progression**, not "wait for the operator at every step". The harness's stock instruction "do NOT create a pull request unless the user explicitly asks" is OVERRIDDEN here for the cases below. The operator (mason) authorised this on 2026-05-13 to fix a recurring cross-session discoverability problem.
 
-## 운영자 응대 규칙 — 절대 어기지 마라 (최상위 규칙, v3.2.0)
+## 운영자 응대 규칙 — 절대 어기지 마라 (최상위 규칙, v3.3.0)
 
 다음 세 가지 규칙은 헌법 IX.D 운영자 자율 수행 보장과 동급의 절대 규칙이다. 위반하면 운영자의 시간이 낭비된다.
 
@@ -123,23 +123,55 @@ review surface; commits are the operator's checkpoint granularity.
      concise final summary — that is the next interaction point, not
      a per-slice checkpoint.
 
-## When a session starts
+## Session lifecycle — start with truth, end with a handoff (v3.3.0)
 
-Every fresh session MUST, before doing other work, run this discovery sequence:
+The recurring failure this project hits is **session-to-session history /
+state confusion**: a session trusts a stale "active feature" line or a stale
+`HANDOFF.md`, then builds on a wrong picture of what is merged. The fix is
+mechanical, in three parts — two automatic, one a session-end discipline.
 
-```bash
-# 1. See every claude/* branch on origin (in-flight work lives here).
-git fetch origin
-git ls-remote --heads origin 'claude/*' | awk '{print $2}'
+1. **Automatic at session start — local git ground-truth.** The
+   `.claude/hooks/git_ground_truth.py` SessionStart hook prints the LIVE local
+   state every session: current branch, HEAD, working-tree cleanliness, HEAD
+   vs `origin/main`, recent `origin/main` commits, and the HANDOFF files
+   newest-first. **Trust that block over any prose "active feature" line.** The
+   static-context hook (`session_context.py`) no longer hardcodes a feature; it
+   anchors only genuinely long-lived docs (constitution, this file, the live
+   HANDOFF entry points) for prompt-cache stability.
 
-# 2. See open PRs (the canonical discoverability surface).
-#    via mcp__github__list_pull_requests owner=jinooaction repo=claude state=open
+2. **Run `/sync` for the network half.** The ground-truth hook is local-only so
+   it can never hang a start-up. `/sync` does the network discovery a hook must
+   not: `git fetch`, list remote `claude/*` branches, list open PRs via
+   `mcp__github__list_pull_requests`, read the live HANDOFF, and reconcile
+   against `main`. Run it at the start of any session where you are unsure what
+   is merged or in-flight (it replaces hand-typing the sequence below).
 
-# 3. Look for HANDOFF-*.md on EVERY discovered branch (not just current).
-#    e.g. git show origin/<branch>:HANDOFF-008.md
-```
+   ```bash
+   # what /sync automates:
+   git fetch origin
+   git ls-remote --heads origin 'claude/*' | awk '{print $2}'
+   # + mcp__github__list_pull_requests owner=jinooaction repo=claude state=open
+   # + git show origin/<branch>:HANDOFF-<NNN>.md   (live HANDOFF on each branch)
+   # + git log origin/main -8 --pretty='%h %s'      (real main tip)
+   ```
 
-If a HANDOFF file points at active work, `git checkout` that branch BEFORE generating a plan or asking the user what to do. Do not invent a new branch off main when there's an in-flight branch the previous session was using.
+   If a HANDOFF file points at active work, `git checkout` that branch BEFORE
+   generating a plan or asking the user what to do. Do not invent a new branch
+   off main when there's an in-flight branch the previous session was using.
+
+3. **Run `/handoff` before the final summary (session-end discipline).**
+   Completing an instruction is not done until the next session can pick up from
+   truth. Once the work is merged/pushed and tests+lint are green, run `/handoff`
+   to refresh `HANDOFF.md` (especially the "한눈 요약표" rows — last `main`
+   commit, tests, lint, released specs, open PRs) and push it. A stale HANDOFF is
+   the single biggest cause of the confusion above; keeping it current is part
+   of finishing, not an optional extra. (Routine no-op sessions that changed
+   nothing on `main` do not need it.)
+
+To check that an autonomous merge actually reached the live (dry-run) worker,
+use `/deploy-status` — deploy is push-triggered (`deploy-on-merge.yml`) so it
+does not show up in a PR's check runs; that skill points at the surfaces that
+ARE reachable from this container.
 
 ## When the work is in-flight across sessions
 

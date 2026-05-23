@@ -24,15 +24,30 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 
 CONSTITUTION = REPO / ".specify" / "memory" / "constitution.md"
-ACTIVE_SPEC_DIR = REPO / "specs" / "001-automated-trading-mvp"
 
-LONG_LIVED = [
-    CONSTITUTION,
-    ACTIVE_SPEC_DIR / "spec.md",
-    ACTIVE_SPEC_DIR / "plan.md",
-    ACTIVE_SPEC_DIR / "data-model.md",
-    ACTIVE_SPEC_DIR / "research.md",
-]
+
+def _long_lived() -> list[Path]:
+    """The genuinely long-lived docs to anchor for prompt-cache stability.
+
+    Used to hardcode specs/001 (the first, long-shipped feature), which both
+    wasted the cached prefix on irrelevant content and lied to every session
+    about the "active feature". Anchor instead the docs that are actually
+    long-lived AND current: the constitution, the workflow policy (CLAUDE.md),
+    and the live HANDOFF entry points. These stay byte-stable until they
+    change, so the cache key is still natural — but it now reflects reality.
+
+    The newest-numbered HANDOFF-NNN.md is the live work pointer; HANDOFF.md is
+    the main-branch entry point. We include both and let the live git-state
+    hook supply the volatile details.
+    """
+    paths = [CONSTITUTION, REPO / "CLAUDE.md", REPO / "HANDOFF.md"]
+    numbered = sorted(REPO.glob("HANDOFF-*.md"), reverse=True)
+    if numbered:
+        paths.append(numbered[0])
+    return [p for p in paths if p.exists()]
+
+
+LONG_LIVED = _long_lived()
 
 
 def _read_safe(path: Path) -> str:
@@ -47,8 +62,9 @@ def _build_context() -> tuple[str, str]:
     parts: list[str] = []
     parts.append(
         "# auto-invest — long-lived session context\n"
-        "# (constitution + active feature: 001-automated-trading-mvp)\n"
+        "# (constitution + workflow policy + live HANDOFF entry points)\n"
         "# Anchored here so Claude Code can amortize this prefix via prompt caching.\n"
+        "# For the CURRENT branch / main / PR state, see the live git ground-truth block.\n"
     )
     for p in LONG_LIVED:
         body = _read_safe(p)
