@@ -57,12 +57,16 @@ jobs:
           port="${PORT:-22}"
           # operator_design.sh 는 인스턴스의 /opt/auto-invest/scripts/ 에 있음 (PR #27 머지).
           # AUTO_OK=1 으로 검증 통과 즉시 라이브 worker 시작.
+          # `sudo env AUTO_OK=1`: sudo 가 env_reset 으로 환경변수를 비우므로
+          # `AUTO_OK=1 sudo ...` 는 스크립트에 도달하지 못해 OK prompt 가
+          # interactive 로 빠져 Aborted 됐다 (run 26330437897). env 명령으로
+          # 자식 프로세스 환경에 AUTO_OK 를 명시 주입해 우회.
           ssh -o StrictHostKeyChecking=accept-new \
               -o ConnectTimeout=15 \
               -p "${port}" \
               -i ~/.ssh/id_ed25519 \
               "${USER}@${HOST}" \
-              "AUTO_OK=1 sudo bash /opt/auto-invest/scripts/operator_design.sh '${INTENT}'" \
+              "sudo env AUTO_OK=1 bash /opt/auto-invest/scripts/operator_design.sh '${INTENT}'" \
               > /tmp/design_output.txt 2>&1
           ssh_exit=$?
           echo "ssh_exit=${ssh_exit}" >> "$GITHUB_OUTPUT"
