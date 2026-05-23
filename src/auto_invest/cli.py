@@ -1009,15 +1009,25 @@ def paper_report(
 
 @app.command()
 def performance(
-    since: str = typer.Option(
-        ...,
+    since: str | None = typer.Option(
+        None,
         "--since",
-        help="집계 시작 시각 (UTC ISO8601, 예: 2026-05-16T00:00:00Z).",
+        help="집계 시작 시각 (UTC ISO8601, 예: 2026-05-16T00:00:00Z). --window 와 택일.",
+    ),
+    window: str | None = typer.Option(
+        None,
+        "--window",
+        help="롤링 기간 (예: 30d, 24h). 지정 시 시작 = 종료 − window. --since 와 택일.",
     ),
     until: str | None = typer.Option(
         None,
         "--until",
         help="집계 종료 시각 (UTC ISO8601). 미지정 시 현재 시각.",
+    ),
+    capital: float | None = typer.Option(
+        None,
+        "--capital",
+        help="위험조정 지표(샤프·낙폭·수익률)의 시작 자본(USD). 미지정 시 총 투입액 대용.",
     ),
     mode: str = typer.Option(
         "paper",
@@ -1057,7 +1067,8 @@ def performance(
     손익만 출력한다 (FR-005). live·paper 체결은 모드로 분리 집계된다 (FR-003).
     """
     import json as _json
-    from datetime import UTC, datetime
+    from datetime import UTC, datetime, timedelta
+    from decimal import Decimal
 
     from auto_invest.performance.engine import (
         compute_performance,
@@ -1072,16 +1083,37 @@ def performance(
     if mode not in ("paper", "live"):
         typer.echo("--mode must be 'paper' or 'live'.", err=True)
         _exit(2)
+    if since is None and window is None:
+        typer.echo("--since 또는 --window 중 하나를 지정하세요.", err=True)
+        _exit(2)
+    if since is not None and window is not None:
+        typer.echo("--since 와 --window 는 함께 쓸 수 없습니다.", err=True)
+        _exit(2)
 
     def _parse_iso(s: str) -> datetime:
         return datetime.fromisoformat(s.replace("Z", "+00:00")).astimezone(UTC)
 
+    def _parse_window(w: str) -> timedelta:
+        if w.endswith("d"):
+            return timedelta(days=int(w[:-1]))
+        if w.endswith("h"):
+            return timedelta(hours=int(w[:-1]))
+        raise ValueError("--window 는 Nd 또는 Nh 형식이어야 합니다 (예: 30d, 24h)")
+
     try:
-        since_dt = _parse_iso(since)
         until_dt = _parse_iso(until) if until else datetime.now(UTC)
+        since_dt = (
+            until_dt - _parse_window(window)
+            if window is not None
+            else _parse_iso(since)
+        )
     except ValueError as exc:
-        typer.echo(f"잘못된 ISO8601 시각: {exc}", err=True)
+        typer.echo(f"잘못된 기간 인자: {exc}", err=True)
         _exit(2)
+
+    starting_capital = (
+        Decimal(str(capital)) if capital is not None and capital > 0 else None
+    )
 
     if not db_path.exists():
         typer.echo(f"DB 파일을 찾을 수 없습니다: {db_path}", err=True)
@@ -1112,7 +1144,12 @@ def performance(
                     f"(시세 조회 실패 — 미실현 손익 미반영: {exc})", err=True
                 )
         report = compute_performance(
-            fills, marks, mode=mode, since=since_dt, until=until_dt
+            fills,
+            marks,
+            mode=mode,
+            since=since_dt,
+            until=until_dt,
+            starting_capital=starting_capital,
         )
     finally:
         conn.close()

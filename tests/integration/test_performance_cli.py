@@ -70,7 +70,7 @@ def test_realized_pnl_json(tmp_path: Path):
     )
     assert result.exit_code == 0, result.stdout
     payload = json.loads(result.stdout)
-    assert payload["schema_version"] == "1.0"
+    assert payload["schema_version"] == "1.1"
     assert payload["mode"] == "paper"
     assert payload["realized_pnl_usd"] == "15.00"  # (115-100)*1
     assert payload["total_pnl_usd"] == "15.00"
@@ -139,3 +139,62 @@ def test_empty_period_no_crash(tmp_path: Path):
     payload = json.loads(result.stdout)
     assert payload["fills_count"] == 0
     assert payload["return_pct"] is None
+    assert payload["risk"] is None  # 청산 없음 → 위험조정 N/A
+
+
+def test_window_option_json_has_risk(tmp_path: Path):
+    """--window 로 롤링 기간을 지정하면 위험조정 지표가 JSON 에 채워진다 (US2)."""
+    db_path = tmp_path / "perf.db"
+    _seed_paper_round(db_path)
+    # 시드 체결의 ts_utc 는 삽입 시각(now). 종료=now, 넉넉한 윈도우로 전부 포함.
+    result = runner.invoke(
+        app,
+        [
+            "performance", "--db", str(db_path),
+            "--window", "3650d",
+            "--no-marks", "--format", "json",
+        ],
+    )
+    assert result.exit_code == 0, result.stdout
+    payload = json.loads(result.stdout)
+    risk = payload["risk"]
+    assert risk is not None
+    assert risk["closed_trades"] == 1
+    assert risk["win_rate"] == "1"  # 1승 0패
+    assert risk["starting_capital_usd"] == "100.00"  # gross_invested 대용
+
+
+def test_capital_override_in_json(tmp_path: Path):
+    db_path = tmp_path / "perf.db"
+    _seed_paper_round(db_path)
+    result = runner.invoke(
+        app,
+        [
+            "performance", "--db", str(db_path),
+            "--since", "2000-01-01T00:00:00Z", "--capital", "1000",
+            "--no-marks", "--format", "json",
+        ],
+    )
+    assert result.exit_code == 0, result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["risk"]["starting_capital_usd"] == "1000.0"
+
+
+def test_since_and_window_conflict_exits_2(tmp_path: Path):
+    db_path = tmp_path / "perf.db"
+    _seed_paper_round(db_path)
+    result = runner.invoke(
+        app,
+        [
+            "performance", "--db", str(db_path),
+            "--since", "2000-01-01T00:00:00Z", "--window", "30d",
+        ],
+    )
+    assert result.exit_code == 2
+
+
+def test_neither_since_nor_window_exits_2(tmp_path: Path):
+    db_path = tmp_path / "perf.db"
+    _seed_paper_round(db_path)
+    result = runner.invoke(app, ["performance", "--db", str(db_path)])
+    assert result.exit_code == 2
