@@ -1,2 +1,3 @@
 trigger 1: 2026-05-20 first design call
 trigger 2: 2026-05-23 KIS 잔고 회귀(#33) 픽스 후 첫 재호출 — 현금 $292.61 확인, 의도 자본 정책 제거됨
+trigger 3: 2026-05-23 프롬프트 보강(PR#47, main 8512fc2) 후 재호출 — time 트리거+weekdays 사용법 추가됨, 적립 룰 표현 가능
