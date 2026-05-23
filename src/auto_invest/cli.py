@@ -782,6 +782,53 @@ async def _fetch_kis_account_state(
     return balance, holdings
 
 
+async def _fetch_marks(
+    symbols: list[str],
+    *,
+    base_url: str,
+    app_key: str,
+    app_secret: str,
+    db_path: Path,
+):
+    """Spec 011 — 미청산 종목의 현재 시세(mark)를 조회.
+
+    종목별로 독립 조회하며, 실패한 종목은 결과 dict 에서 빠진다(우아한 강등,
+    FR-005). 반환: {symbol: 현재가 Decimal}.
+    """
+    from auto_invest.broker.overseas import get_quote
+
+    marks: dict = {}
+    if not symbols:
+        return marks
+    async with httpx.AsyncClient(base_url=base_url, timeout=30.0) as inner:
+        token = await get_valid_token(
+            inner,
+            base_url=base_url,
+            app_key=app_key,
+            app_secret=app_secret,
+            cache_path=db_path.parent / "kis_token.json",
+        )
+        client = ResilientClient(
+            inner,
+            rate_limiter=AsyncTokenBucket(rate_per_sec=15.0, capacity=15.0),
+            breaker=CircuitBreaker(failure_threshold=5, cooldown_seconds=30.0),
+            max_retries=4,
+        )
+        for sym in symbols:
+            try:
+                quote = await get_quote(
+                    client,
+                    access_token=token.access_token,
+                    app_key=app_key,
+                    app_secret=app_secret,
+                    symbol=sym,
+                )
+                marks[sym] = quote.last_price_usd
+            except Exception:  # noqa: BLE001 — 종목별 실패는 미실현 미반영으로 흡수
+                continue
+    return marks
+
+
 def _d_iso_now() -> str:
     """ISO8601 millis with Z suffix."""
     from datetime import UTC, datetime
@@ -951,6 +998,122 @@ def paper_report(
         # read-only — PRAGMA query_only로 INSERT/UPDATE/DELETE를 차단.
         conn.execute("PRAGMA query_only = ON")
         report = build_paper_report(conn, since=since_dt, until=until_dt)
+    finally:
+        conn.close()
+
+    if output_format == "json":
+        typer.echo(_json.dumps(report.to_json_dict(), indent=2, ensure_ascii=False))
+    else:
+        typer.echo(render_text(report))
+
+
+@app.command()
+def performance(
+    since: str = typer.Option(
+        ...,
+        "--since",
+        help="집계 시작 시각 (UTC ISO8601, 예: 2026-05-16T00:00:00Z).",
+    ),
+    until: str | None = typer.Option(
+        None,
+        "--until",
+        help="집계 종료 시각 (UTC ISO8601). 미지정 시 현재 시각.",
+    ),
+    mode: str = typer.Option(
+        "paper",
+        "--mode",
+        help="paper (dry-run 시뮬 체결) 또는 live (실체결). 기본 paper.",
+    ),
+    db_path: Path = typer.Option(
+        Path("data/auto_invest.db"),
+        "--db",
+        help="SQLite database path.",
+    ),
+    output_format: str = typer.Option(
+        "text",
+        "--format",
+        help="text (사람용 표) 또는 json (외부 도구·자동 튜너 입력용).",
+    ),
+    env_file: Path | None = typer.Option(
+        None,
+        "--env",
+        help="KIS 시세 조회용 .env (미실현 손익 mark-to-market). 미지정 시 실현 손익만.",
+    ),
+    base_url: str = typer.Option(
+        "https://openapi.koreainvestment.com:9443",
+        "--base-url",
+        help="KIS REST base URL (미실현 손익 시세 조회용).",
+    ),
+    no_marks: bool = typer.Option(
+        False,
+        "--no-marks",
+        help="현재 시세 조회를 생략하고 실현 손익만 계산.",
+    ),
+) -> None:
+    """Spec 011 — 라이브/페이퍼 매매 성과를 측정 (실현·미실현 손익, 룰별·종목별 기여도).
+
+    read-only — audit_log·positions·orders 의 어떤 row 도 수정하지 않는다 (SC-005).
+    미실현 손익은 미청산 종목의 현재 KIS 시세로 계산하며, 시세 조회 실패 시 실현
+    손익만 출력한다 (FR-005). live·paper 체결은 모드로 분리 집계된다 (FR-003).
+    """
+    import json as _json
+    from datetime import UTC, datetime
+
+    from auto_invest.performance.engine import (
+        compute_performance,
+        read_fills,
+        reconstruct,
+        render_text,
+    )
+
+    if output_format not in ("text", "json"):
+        typer.echo("--format must be 'text' or 'json'.", err=True)
+        _exit(2)
+    if mode not in ("paper", "live"):
+        typer.echo("--mode must be 'paper' or 'live'.", err=True)
+        _exit(2)
+
+    def _parse_iso(s: str) -> datetime:
+        return datetime.fromisoformat(s.replace("Z", "+00:00")).astimezone(UTC)
+
+    try:
+        since_dt = _parse_iso(since)
+        until_dt = _parse_iso(until) if until else datetime.now(UTC)
+    except ValueError as exc:
+        typer.echo(f"잘못된 ISO8601 시각: {exc}", err=True)
+        _exit(2)
+
+    if not db_path.exists():
+        typer.echo(f"DB 파일을 찾을 수 없습니다: {db_path}", err=True)
+        _exit(1)
+
+    conn = db.get_connection(db_path)
+    try:
+        # read-only — PRAGMA query_only로 INSERT/UPDATE/DELETE를 차단.
+        conn.execute("PRAGMA query_only = ON")
+        fills = read_fills(conn, mode=mode, since=since_dt, until=until_dt)
+        positions, _, _, _ = reconstruct(fills)
+        open_symbols = sorted(s for s, p in positions.items() if p.qty != 0)
+        marks: dict = {}
+        if open_symbols and not no_marks and env_file is not None:
+            try:
+                secrets = load_secrets(env_file)
+                marks = asyncio.run(
+                    _fetch_marks(
+                        open_symbols,
+                        base_url=base_url,
+                        app_key=secrets["KIS_APP_KEY"],
+                        app_secret=secrets["KIS_APP_SECRET"],
+                        db_path=db_path,
+                    )
+                )
+            except Exception as exc:  # noqa: BLE001 — 시세 조회 실패는 미실현만 미반영
+                typer.echo(
+                    f"(시세 조회 실패 — 미실현 손익 미반영: {exc})", err=True
+                )
+        report = compute_performance(
+            fills, marks, mode=mode, since=since_dt, until=until_dt
+        )
     finally:
         conn.close()
 
