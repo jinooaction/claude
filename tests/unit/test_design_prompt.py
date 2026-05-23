@@ -26,6 +26,23 @@ def test_system_prompt_includes_safety_constraints():
     assert "INTERPRETATION:" in p
 
 
+def test_system_prompt_includes_time_trigger_for_dca():
+    """적립(DCA) 의도를 룰로 표현할 수 있도록 시간 트리거 사용법이 명시돼야 함.
+
+    회귀 방어: 이 가이드가 없으면 Claude가 'kind=schedule' 또는
+    at_time='MON_09:35' 같은 스키마 위반 룰을 만들어 검증 3회 모두 실패한다
+    (2026-05-23 design 호출 run 26330304139에서 실제 발생).
+    """
+    p = build_system_prompt()
+    assert 'kind = "time"' in p
+    assert "at_time" in p
+    assert "weekdays" in p
+    assert "604800" in p  # 매주 1회 cooldown 예시
+    assert "적립" in p
+    # kind는 셋 중 하나만 — schedule 등 금지 명시
+    assert "schedule" in p and "절대 쓰지 마세요" in p
+
+
 def test_system_prompt_includes_holdings_utilization_patterns():
     """보유 종목 활용 패턴 3종(추가 매수·익절·분산 안전장치)이 모두 가이드돼야 함."""
     p = build_system_prompt()
