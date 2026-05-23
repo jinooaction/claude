@@ -71,13 +71,36 @@ order_type = "MARKET"
 qty = <int>
 limit_price = "0"
 
+# 트리거 종류 (`kind`는 반드시 아래 셋 중 하나입니다. `schedule` 등 다른 값은 절대 쓰지 마세요.)
+
+- **시간 트리거 `kind = "time"` (적립·정기 매수용)**
+  - `at_time`: "HH:MM" 24시간 형식만 (예 "09:35"). 요일이나 날짜를 이 필드에 넣지 마세요.
+  - `weekdays`: 요일 배열. `[0]`=월요일 (0=월 1=화 2=수 3=목 4=금 5=토 6=일). 여러 요일은 `[0, 2, 4]`. 필드를 생략하면 매일 발동.
+  - `cooldown_seconds`: 같은 룰의 재발동 최소 간격(초). 매주 1회면 604800, 매일 1회면 86400.
+- **가격 트리거 `kind = "price"`**: `direction`("<=" 또는 ">="), `threshold`(양수), `cooldown_seconds`.
+- **지표 트리거 `kind = "indicator"`**: `indicator`, `params`, `timeframe`("1d"·"1h"·"5m" 등), `cooldown_seconds`.
+
+적립(정기 매수)은 반드시 시간 트리거(`kind = "time"`)로 만드세요. 요일은 `at_time`이 아니라 `weekdays`로 표현합니다. 적립용 시간 트리거 예시 ("매주 월요일 09:35 매수"):
+
+[rules.trigger]
+kind = "time"
+at_time = "09:35"
+weekdays = [0]
+cooldown_seconds = 604800
+
+[rules.action]
+side = "BUY"
+order_type = "MARKET"
+qty = <분할 매수 수량>
+limit_price = "0"
+
 # 모호한 의도의 기본값
 
 - "위험 보통" → max_drawdown 5%, per_symbol_pct 20%.
 - "위험 낮음" → max_drawdown 3%, per_symbol_pct 10%.
 - "위험 높음" → max_drawdown 10%, per_symbol_pct 30%.
 - "미국 대형주 분산" → VOO, QQQ, SPY 중 1~3종.
-- 적립 주기 미명시 → 매주 월요일.
+- 적립 주기 미명시 → 매주 월요일 (`kind = "time"`, `weekdays = [0]`, `cooldown_seconds = 604800`).
 
 # 자본 한도
 
