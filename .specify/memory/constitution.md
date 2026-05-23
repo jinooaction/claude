@@ -1,4 +1,17 @@
 <!--
+Sync Impact Report (v3.0.0 -> 3.1.0)
+==================
+Version change: 3.0.0 -> 3.1.0  (MINOR: principle X added — Measurement-Driven Autonomous Growth. No principle removed or redefined; trading-safety invariants I-VII and VIII.A unchanged; spec 007 hardened canary remains the production-deploy gate.)
+Added principles:
+  X. Measurement-Driven Autonomous Growth (NEW). Autonomous self-modification targeting trading performance (spec 005 tuner) MUST be justified by live/paper measurement (spec 011); live/paper/canary/backtest performance MUST share one metric definition (spec 008 backtest/metrics.py); completed merged phases auto-deploy via the VIII.B-guarded pipeline (deploy/AUTO-DEPLOY.md); deploy != live money (AUTO_INVEST_MODE=live stays operator-gated). Adds a requirement (evidence before tuning) and a standing mode (continuous deploy to a dry-run worker) entirely INSIDE the existing safety perimeter.
+Modified principles: none.
+Templates requiring updates:
+  ✅ .specify/memory/constitution.md (this file) — principle X added; Governance compliance line "I–IX" -> "I–X".
+  ⚠ .specify/templates/plan-template.md — Constitution Check should cover principle X for performance-targeting / tuner / deploy specs (deferred; applied at next /speckit-plan touching those areas).
+  ⚠ specs/005-autonomous-tuner/spec.md — tuner MUST cite spec 011 measurement as its input signal (deferred; spec 005 still a stub).
+Rationale:
+  The operator's vision is a world-class system that grows itself autonomously, driven by measured evidence rather than guesses. v3.0.0 enshrined operator-autonomy supremacy (IX.D) and the deploy guards (VIII.B), but nothing required the future tuner to act on MEASURED performance, nor named the standing "each merged phase auto-deploys" mode. Spec 011 (live performance eval, P2 risk-adjusted metrics) now provides the measurement; this principle ties it to spec 005's growth loop and to the deploy pipeline, without widening the loss surface. this changes the safety perimeter (K-meta forensic marker: principle addition).
+
 Sync Impact Report (v2.0.0 -> 3.0.0)
 ==================
 Version change: 2.0.0 -> 3.0.0  (MAJOR: operator's autonomy preference enshrined as supreme decision criterion; IX.B-1 and IX.B-4 repealed so autonomous merge is the default path including Kernel touches; IX.B-2 reclassified as deploy-stage gate not merge-stage gate; trading-safety invariants preserved via principles I-VII and VIII.A unchanged; spec 007 hardened canary remains the production-deploy gate that protects real money)
@@ -249,6 +262,19 @@ What IX.D explicitly relaxes:
 
 **Trade-off acknowledged**: under v3.0.0, a future misbehaving autonomous tuner CAN merge a change that removes K1 (position caps). The change lands in `main`. It does NOT reach the live worker unless it passes spec 007's hardened canary or unless an operator-instructed session deploys it. Reversion is one PR away (main is always deployable; main with a regression is one PR away from being main without the regression).
 
+### X. Measurement-Driven Autonomous Growth (added v3.1.0)
+
+The system's purpose is not merely to trade safely but to **grow itself toward world-class performance autonomously**, and that growth MUST be driven by measured evidence, not by guesses.
+
+1. **Measure before you tune.** Any autonomous self-modification that targets trading performance (spec 005's tuner) MUST be justified by live/paper performance measurement (spec 011) — realized/unrealized PnL, risk-adjusted metrics (Sharpe, max drawdown, win rate, profit factor), and per-rule/per-symbol attribution. A tuning action with no upstream measurement signal is not permitted.
+2. **One yardstick.** Live, paper, canary, and backtest performance MUST be computed with the **same metric definitions** (spec 008 `backtest/metrics.py` is the single source). This makes "backtest said X, live did Y" a meaningful comparison and lets the tuner detect strategy decay (e.g., rolling Sharpe 1.2 → 0.8).
+3. **Each completed phase auto-deploys.** A merged change auto-deploys to the running system via the VIII.B-guarded pipeline (`deploy/AUTO-DEPLOY.md`): an immediate on-merge trigger plus the off-hours timer safety net. This keeps the running worker continuously at `main`.
+4. **Deploy ≠ live money.** Auto-deploy lands code and restarts the worker; it does NOT move the system from dry-run to real orders. The `AUTO_INVEST_MODE=live` transition remains an explicit operator-gated decision and is never flipped autonomously.
+
+This DOES NOT relax principles I–VII or VIII.A. The production-money defence remains spec 007's hardened canary (IX.B-2). Measurement-driven growth operates entirely **within** the existing safety perimeter: it adds a *requirement* (evidence before tuning) and a *standing mode* (continuous deploy of merged work to a dry-run worker), neither of which widens the loss surface.
+
+**Rationale**: A self-growing system that tunes on guesses instead of measured performance is just a faster way to drift. spec 011 makes live behaviour measurable on the same yardstick as backtest, so the future tuner (spec 005) and the operator act on evidence. Naming the auto-deploy mode as a principle (not just an ops doc) ensures the "deploy ≠ live money" separation is a constitutional invariant, not a convention that could erode.
+
 ## Investment Domain Constraints
 
 - **Initial scope**: US listed equities (NYSE / NASDAQ / AMEX) traded via Korea Investment & Securities (KIS) OpenAPI.
@@ -275,6 +301,6 @@ This constitution supersedes all other practices, conventions, and ad-hoc decisi
 - **MINOR**: principle addition or material expansion of guidance.
 - **PATCH**: clarifications, wording, typo fixes.
 
-**Compliance**: every `/speckit-plan` artifact MUST include a Constitution Check section verifying the plan does not violate principles I–IX. Violations require explicit, written justification and a sign-off recorded in the audit log.
+**Compliance**: every `/speckit-plan` artifact MUST include a Constitution Check section verifying the plan does not violate principles I–X. Violations require explicit, written justification and a sign-off recorded in the audit log.
 
-**Version**: 3.0.0 | **Ratified**: 2026-05-01 | **Last Amended**: 2026-05-14
+**Version**: 3.1.0 | **Ratified**: 2026-05-01 | **Last Amended**: 2026-05-23
