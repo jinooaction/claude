@@ -20,8 +20,8 @@ description: "Task list — LLM Judgment Points (spec 004)"
 
 ## Phase 1: Setup (공유 인프라)
 
-- [ ] T001 `src/auto_invest/judgment/__init__.py` + `src/auto_invest/judgment/points/__init__.py` 생성 (새 비커널 패키지 골격, plan 구조대로).
-- [ ] T002 [P] `config/llm_prices.toml` 확인 — 판단 지점 기본 모델(`claude-haiku-4-5-20251001` 저비용, `daily_summary`는 `claude-sonnet-4-6`)이 가격표에 있는지 확인(이미 존재 → 변경 없으면 no-op, 누락 시에만 추가).
+- [x] T001 `src/auto_invest/judgment/__init__.py` + `src/auto_invest/judgment/points/__init__.py` 생성 (새 비커널 패키지 골격, plan 구조대로).
+- [x] T002 [P] `config/llm_prices.toml` 확인 — 판단 지점 기본 모델(`claude-haiku-4-5-20251001` 저비용, `daily_summary`는 `claude-sonnet-4-6`)이 가격표에 있는지 확인(이미 존재 → 변경 없으면 no-op, 누락 시에만 추가).
 
 **Checkpoint**: 패키지 골격 준비.
 
@@ -33,19 +33,19 @@ description: "Task list — LLM Judgment Points (spec 004)"
 
 ### Tests (먼저 작성, 구현 전 실패 확인)
 
-- [ ] T003 [P] `tests/unit/test_judgment_schemas.py` — 세 출력 스키마(Volatility/News/DailySummary)의 enum·범위(0..1)·길이(≤500) 검증과 위반 거부 테스트.
-- [ ] T004 [P] `tests/unit/test_judgment_audit_payloads.py` — `JUDGMENT_ADVISORY_APPLIED`·`JUDGMENT_FALLBACK` 페이로드가 append되고 기존 이벤트 타입을 깨지 않는지(추가-전용) 테스트.
-- [ ] T005 [P] `tests/unit/test_judgment_client.py` — 견고한 Anthropic 클라이언트: 정상 호출 시 token_usage+LLM_CALL 기록, 예외/타임아웃/서킷오픈 시 폴백 신호 반환(거래 막지 않음) 테스트(mock `_AnthropicProtocol`).
-- [ ] T006 [P] `tests/unit/test_judgment_budget.py` — 롤링 비용이 예산 초과 시 해당 판단 지점이 폴백 전환되는지 테스트.
-- [ ] T007 [P] `tests/unit/test_judgment_registry.py` — 레지스트리가 세 판단 지점의 헌법 III 계약(트리거·입력·스키마·지연 예산·비용 예산·폴백)을 조회 가능하게 선언하는지 테스트.
+- [x] T003 [P] `tests/unit/test_judgment_schemas.py` — 세 출력 스키마(Volatility/News/DailySummary)의 enum·범위(0..1)·길이(≤500) 검증과 위반 거부 테스트.
+- [x] T004 [P] `tests/unit/test_judgment_audit_payloads.py` — `JUDGMENT_ADVISORY_APPLIED`·`JUDGMENT_FALLBACK` 페이로드가 append되고 기존 이벤트 타입을 깨지 않는지(추가-전용) 테스트.
+- [x] T005 [P] `tests/unit/test_judgment_client.py` — 견고한 Anthropic 클라이언트: 정상 호출 시 token_usage+LLM_CALL 기록, 예외/타임아웃/서킷오픈 시 폴백 신호 반환(거래 막지 않음) 테스트(mock `_AnthropicProtocol`).
+- [x] T006 [P] `tests/unit/test_judgment_budget.py` — 롤링 비용이 예산 초과 시 해당 판단 지점이 폴백 전환되는지 테스트.
+- [x] T007 [P] `tests/unit/test_judgment_registry.py` — 레지스트리가 세 판단 지점의 헌법 III 계약(트리거·입력·스키마·지연 예산·비용 예산·폴백)을 조회 가능하게 선언하는지 테스트.
 
 ### Implementation
 
-- [ ] T008 [P] `src/auto_invest/judgment/schemas.py` — pydantic 출력 모델 `VolatilityAdvisory`/`NewsAdvisory`/`DailySummaryAdvisory` + `parse_and_validate(decision_class, raw_text)` (검증 실패 시 명시적 예외). (T003 통과시킴)
-- [ ] T009 `src/auto_invest/persistence/audit.py` — **K4 추가-전용**: `JudgmentAdvisoryAppliedPayload`(decision_class·advisory 요약·applied_decision·canary_cohort)·`JudgmentFallbackPayload`(decision_class·reason) 추가, `EventType` Literal + `AnyPayload` union에 등록. 기존 타입·행 미변경, 마이그레이션 불필요. (T004 통과시킴)
-- [ ] T010 `src/auto_invest/judgment/client.py` — 견고한 Anthropic 호출 래퍼: `broker/client.py`의 `AsyncTokenBucket`+`CircuitBreaker`+재시도 재사용, `design/claude_client.py`의 `TokenMeter` 감싸기 패턴 미러. 실패/타임아웃/서킷오픈을 폴백 신호로 변환. 프롬프트/응답 본문 미기록. (T005 통과시킴)
-- [ ] T011 [P] `src/auto_invest/judgment/budget.py` — 판단 지점별 롤링 비용 추적 + 예산 초과 시 `disabled` 전환(메모리 상태, token_usage 조회 기반). (T006 통과시킴)
-- [ ] T012 `src/auto_invest/judgment/registry.py` — `JudgmentPoint` 계약 dataclass + 세 판단 지점 등록(decision_class·트리거·입력 계약·output_schema·latency_budget_ms·cost_budget_usd·model·max_tokens·affects_capital·fallback). 조회 API. (T007 통과시킴)
+- [x] T008 [P] `src/auto_invest/judgment/schemas.py` — pydantic 출력 모델 `VolatilityAdvisory`/`NewsAdvisory`/`DailySummaryAdvisory` + `parse_and_validate(decision_class, raw_text)` (검증 실패 시 명시적 예외). (T003 통과시킴)
+- [x] T009 `src/auto_invest/persistence/audit.py` — **K4 추가-전용**: `JudgmentAdvisoryAppliedPayload`(decision_class·advisory 요약·applied_decision·canary_cohort)·`JudgmentFallbackPayload`(decision_class·reason) 추가, `EventType` Literal + `AnyPayload` union에 등록. 기존 타입·행 미변경, 마이그레이션 불필요. (T004 통과시킴)
+- [x] T010 `src/auto_invest/judgment/client.py` — 견고한 Anthropic 호출 래퍼: `broker/client.py`의 `AsyncTokenBucket`+`CircuitBreaker`+재시도 재사용, `design/claude_client.py`의 `TokenMeter` 감싸기 패턴 미러. 실패/타임아웃/서킷오픈을 폴백 신호로 변환. 프롬프트/응답 본문 미기록. (T005 통과시킴)
+- [x] T011 [P] `src/auto_invest/judgment/budget.py` — 판단 지점별 롤링 비용 추적 + 예산 초과 시 `disabled` 전환(메모리 상태, token_usage 조회 기반). (T006 통과시킴)
+- [x] T012 `src/auto_invest/judgment/registry.py` — `JudgmentPoint` 계약 dataclass + 세 판단 지점 등록(decision_class·트리거·입력 계약·output_schema·latency_budget_ms·cost_budget_usd·model·max_tokens·affects_capital·fallback). 조회 API. (T007 통과시킴)
 
 **Checkpoint**: 프레임워크(스키마·감사·클라이언트·예산·레지스트리) 준비 — User Story 착수 가능.
 
