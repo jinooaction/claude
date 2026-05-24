@@ -121,12 +121,12 @@ description: "Task list — LLM Judgment Points (spec 004)"
 
 ### Tests
 
-- [ ] T027 [P] [US4] `tests/integration/test_judgment_efficiency_budget.py` — efficiency 분해(폴백률 포함) + 예산 초과 폴백 전환 + 합산 보존(SC-006) 테스트.
+- [x] T027 [P] [US4] `tests/integration/test_judgment_efficiency_budget.py` — efficiency 분해(폴백률 포함) + 예산 초과 폴백 전환 + 합산 보존(SC-006) 테스트.
 
 ### Implementation
 
-- [ ] T028 [US4] `src/auto_invest/cli.py` `efficiency`(비커널) — 기존 `per_decision_class` 출력에 판단 지점 폴백 발생률·예산 대비 사용률 추가(FR-040). 판단 지점 decision_class 식별.
-- [ ] T029 [US4] order_router/거래 루프에 예산 가드 연결 — `judgment/budget.py`가 예산 초과 보고 시 그 판단 지점을 폴백 전환, `JUDGMENT_FALLBACK(reason="budget_exceeded")` 기록(FR-041). (T027 통과시킴)
+- [x] T028 [US4] `src/auto_invest/cli.py` `efficiency`(비커널) — 기존 `per_decision_class` 출력에 판단 지점 폴백 발생률·예산 대비 사용률 추가(FR-040). 판단 지점 decision_class 식별.
+- [x] T029 [US4] order_router/거래 루프에 예산 가드 연결 — `judgment/budget.py`가 예산 초과 보고 시 그 판단 지점을 폴백 전환, `JUDGMENT_FALLBACK(reason="budget_exceeded")` 기록(FR-041). (T027 통과시킴)
 
 **Checkpoint**: 전체 기능 동작. green이면 커밋·푸시.
 

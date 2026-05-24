@@ -1278,6 +1278,8 @@ def efficiency(
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = db.get_connection(db_path)
     db.migrate(conn)
+    from auto_invest.judgment.observability import judgment_efficiency
+
     try:
         _audit.append(
             conn,
@@ -1288,6 +1290,10 @@ def efficiency(
             window_start_utc=_iso_ms(start),
             window_end_utc=_iso_ms(end),
             tiers=tiers,
+        )
+        # spec 004: 판단 지점별 호출/적용/폴백/폴백률(audit_log 기반).
+        judgment = judgment_efficiency(
+            conn, window_start_utc=_iso_ms(start), window_end_utc=_iso_ms(end)
         )
     finally:
         conn.close()
@@ -1307,6 +1313,7 @@ def efficiency(
             for k in snapshot.kpis
         ],
         "per_decision_class": snapshot.per_decision_class,
+        "judgment": judgment,
         "top_n_calls": snapshot.top_n_calls,
     }
     typer.echo(_json.dumps(payload, sort_keys=True, indent=2))
