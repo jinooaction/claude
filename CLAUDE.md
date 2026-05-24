@@ -214,7 +214,7 @@ After a successful merge, the session SHOULD:
 ---
 
 <!-- SPECKIT START -->
-Active feature: 없음 — **라이브 worker(dry-run) 시작 완료** (2026-05-23, run `26330498160`, 잔고 $292.61, 룰 `rule_dca_voo_monday` 외). spec 010 (자동 룰 설계자) 머지 완료 (PR #19~#22), spec 008 (백테스트) 머지 완료, spec 009 (paper-run) 머지 완료. design 라이브 진입을 막던 버그 2개 해결: PR #47 (프롬프트 time 트리거), PR #48 (AUTO_OK sudo env).
+Active feature: 없음 — **빌드 가능한 스펙 전부 완료, 남은 스펙은 달력(텔레메트리 누적)에 막힘**. 라이브 worker(dry-run) 가동 중 (2026-05-23 시작, run `26330498160`). 머지 완료: spec 006 (배포 자동화 — `auto-invest deploy` CLI + 커널 가드), spec 007 (하드닝 카나리 — 5지표·합성충격·속성퍼즈, 테스트 93개), spec 008 (백테스트), spec 009 (paper-run), spec 010 (자동 룰 설계자), spec 011 (라이브 성과 측정 — P1·P2·P3 완료, P4 슬리피지는 데이터 토대 작업으로 진행). **주의: 006·007 의 tasks.md 는 한동안 0% 로 표시된 stale 상태였음 — 실제로는 main 에 구현·머지 완료. 체크박스 수치를 믿지 말고 코드/테스트 + 이 줄을 믿을 것.**
 
 새 작업이 시작되기 전에 `HANDOFF.md` (main 진입점) + 가장 최신 `HANDOFF-014-LIVE-DRYRUN-STARTED.md`를 먼저 읽어 현재 상태 파악. 운영자가 새 의도를 알려주기 전까지 새 spec 시작 안 함 (IX.D 자율 수행 정책: 운영자 의도 = 작업 트리거).
 
@@ -222,7 +222,7 @@ Active feature: 없음 — **라이브 worker(dry-run) 시작 완료** (2026-05-
 - **실거래 전환** — 1주일 dry-run 관찰 후 `AUTO_INVEST_MODE=live` 토글 (운영자 명시 지시 필요, 돈 움직이는 행동). `live-mode-toggle.yml` 워크플로우 작성 권장 (콘솔 없이 GitHub Actions 전환).
 - design 의도 변경/룰 갱신 — `claude/verify-operator-setup` 의 `.trigger/design-now.txt` push (AUTO_OK 이제 정상 동작).
 - ~~운영자 라이브 시작 코칭 (`HANDOFF-010-OPERATOR-RESUME.md`)~~ — **완료됨 (HANDOFF-010/011 은 historical). 잔고/키는 처음부터 정상이었음.**
-- 스펙 004 (LLM 판단 지점) 본격 구현 — 30일치 spec 002 텔레메트리 누적 후.
-- 스펙 005 (자율 튜너) 본격 구현 — spec 002 데이터 + spec 006 + spec 007 완료 후 가능.
+- 스펙 004 (LLM 판단 지점) 본격 구현 — **30일치 spec 002 텔레메트리 누적 후 (현재 ~1일치, 달력 대기)**.
+- 스펙 005 (자율 튜너) 본격 구현 — promotion 조건 3개 중 spec 006·007 출시는 충족, **남은 1개(텔레메트리 30일 누적)는 달력 대기 (현재 ~1일치)**. 데이터 누적 후 `/speckit-specify`→`/speckit-plan`→`/speckit-tasks` 로 스텁을 본 스펙으로 승격하고 착수.
 - KIS smoke 자율 감시는 활성 상태 — `automation/kis-smoke-last-run` 사이드카 브랜치에 매 run 진단 force-push 중.
 <!-- SPECKIT END -->
