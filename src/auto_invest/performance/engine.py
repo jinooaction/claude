@@ -47,6 +47,10 @@ class FillRecord:
     price_usd: Decimal
     ts_utc: str
     rule_id: str | None
+    # 슬리피지(US4, FR-009) 기준가. 페이퍼는 ORDER_PAPER_FILLED.reference_price_usd
+    # (결정 시점 last), 라이브는 같은 correlation_id 의 ORDER_INTENT.limit_price_usd.
+    # 없으면 None → "측정 불가"로 분리된다.
+    reference_price_usd: Decimal | None = None
 
 
 @dataclass
@@ -234,6 +238,7 @@ def _read_paper_fills(
         (since, until),
     ):
         p = json.loads(row["payload_json"])
+        ref = p.get("reference_price_usd")
         fills.append(
             FillRecord(
                 symbol=p["symbol"],
@@ -242,6 +247,7 @@ def _read_paper_fills(
                 price_usd=Decimal(str(p["simulated_fill_price_usd"])),
                 ts_utc=row["ts_utc"],
                 rule_id=p.get("rule_id") or row["rule_id"],
+                reference_price_usd=Decimal(str(ref)) if ref is not None else None,
             )
         )
     return fills
@@ -250,8 +256,10 @@ def _read_paper_fills(
 def _read_live_fills(
     conn: sqlite3.Connection, since: str, until: str
 ) -> list[FillRecord]:
-    # side 는 ORDER_INTENT 페이로드에 있다. correlation_id → side 매핑을 한 번에.
-    side_by_corr: dict[str, str] = {}
+    # side·기준가(limit_price)는 ORDER_INTENT 페이로드에 있다.
+    # correlation_id → (side, limit_price) 매핑을 한 번에. limit_price 는 슬리피지
+    # 기준가 — 시장가 주문이면 None 이라 "측정 불가"로 분리된다.
+    intent_by_corr: dict[str, tuple[str, Decimal | None]] = {}
     for row in conn.execute(
         "SELECT correlation_id, payload_json FROM audit_log "
         "WHERE event_type = 'ORDER_INTENT' AND correlation_id IS NOT NULL"
@@ -259,7 +267,11 @@ def _read_live_fills(
         p = json.loads(row["payload_json"])
         side = p.get("side")
         if side:
-            side_by_corr[row["correlation_id"]] = side
+            limit = p.get("limit_price_usd")
+            intent_by_corr[row["correlation_id"]] = (
+                side,
+                Decimal(str(limit)) if limit is not None else None,
+            )
 
     fills: list[FillRecord] = []
     for row in conn.execute(
@@ -270,10 +282,11 @@ def _read_live_fills(
     ):
         p = json.loads(row["payload_json"])
         corr = row["correlation_id"]
-        side = side_by_corr.get(corr) if corr else None
-        if side is None or not row["symbol"]:
+        intent = intent_by_corr.get(corr) if corr else None
+        if intent is None or not row["symbol"]:
             # side/symbol 을 확정 못 하면 손익 재구성에서 제외 (데이터 품질).
             continue
+        side, reference = intent
         fills.append(
             FillRecord(
                 symbol=row["symbol"],
@@ -282,6 +295,7 @@ def _read_live_fills(
                 price_usd=Decimal(str(p["price_usd"])),
                 ts_utc=row["ts_utc"],
                 rule_id=row["rule_id"],
+                reference_price_usd=reference,
             )
         )
     return fills
@@ -438,6 +452,136 @@ def compute_risk_metrics(
         total_return_pct=total_return,
         starting_capital_usd=starting_capital,
     )
+
+
+# --------------------------------------------------------- slippage (US4, P4)
+
+
+@dataclass
+class SlippageSideStats:
+    """매수 또는 매도 한 방향의 슬리피지 통계."""
+
+    side: str  # "BUY" | "SELL"
+    measurable_fills: int
+    avg_bps: Decimal | None  # 양수 = 불리(비용), 음수 = 가격 개선
+    median_bps: Decimal | None
+    total_cost_usd: Decimal  # 양수 = 불리하게 더 낸/덜 받은 누적 USD
+
+
+@dataclass
+class SlippageStats:
+    """슬리피지 집계 (FR-009). 기준가(reference) 대비 체결가의 불리한 차이.
+
+    부호 규약: BUY 는 기준가보다 비싸게 사면 불리(양수 bps/비용), SELL 은 기준가
+    보다 싸게 팔면 불리(양수). 기준가가 없는 체결(시장가 라이브 주문, reference 미
+    기록 과거 페이퍼 체결)은 `unmeasurable_fills` 로 분리한다.
+    """
+
+    by_side: list[SlippageSideStats]
+    measurable_fills: int
+    unmeasurable_fills: int
+    total_cost_usd: Decimal
+
+    def to_json_dict(self) -> dict:
+        def _s(v: Decimal | None) -> str | None:
+            return None if v is None else str(v)
+
+        return {
+            "measurable_fills": self.measurable_fills,
+            "unmeasurable_fills": self.unmeasurable_fills,
+            "total_cost_usd": str(self.total_cost_usd),
+            "by_side": [
+                {
+                    "side": s.side,
+                    "measurable_fills": s.measurable_fills,
+                    "avg_bps": _s(s.avg_bps),
+                    "median_bps": _s(s.median_bps),
+                    "total_cost_usd": str(s.total_cost_usd),
+                }
+                for s in self.by_side
+            ],
+        }
+
+
+def _median(values: list[Decimal]) -> Decimal:
+    s = sorted(values)
+    n = len(s)
+    mid = n // 2
+    if n % 2 == 1:
+        return s[mid]
+    return (s[mid - 1] + s[mid]) / Decimal("2")
+
+
+def compute_slippage(fills: list[FillRecord]) -> SlippageStats:
+    """체결별 기준가 대비 불리한 슬리피지를 매수/매도로 나눠 집계한다.
+
+    측정 가능 조건: reference_price_usd 가 있고 양수. 그 외(시장가·과거 페이퍼)는
+    unmeasurable 로 분리하여 측정 가능한 체결만으로 통계를 낸다 (US4 AC2).
+    """
+    per_side_bps: dict[str, list[Decimal]] = {"BUY": [], "SELL": []}
+    per_side_cost: dict[str, Decimal] = {"BUY": Decimal("0"), "SELL": Decimal("0")}
+    per_side_n: dict[str, int] = {"BUY": 0, "SELL": 0}
+    unmeasurable = 0
+
+    for f in fills:
+        ref = f.reference_price_usd
+        if ref is None or ref <= 0 or f.side not in ("BUY", "SELL"):
+            unmeasurable += 1
+            continue
+        # BUY 는 기준가보다 비싸게 사면 양수(불리), SELL 은 싸게 팔면 양수(불리).
+        adverse = f.price_usd - ref if f.side == "BUY" else ref - f.price_usd
+        bps = (adverse / ref) * Decimal("10000")
+        per_side_bps[f.side].append(bps)
+        per_side_cost[f.side] += adverse * Decimal(f.qty)
+        per_side_n[f.side] += 1
+
+    by_side: list[SlippageSideStats] = []
+    for side in ("BUY", "SELL"):
+        bps_list = per_side_bps[side]
+        n = per_side_n[side]
+        by_side.append(
+            SlippageSideStats(
+                side=side,
+                measurable_fills=n,
+                avg_bps=(sum(bps_list, Decimal("0")) / Decimal(n)) if n else None,
+                median_bps=_median(bps_list) if bps_list else None,
+                total_cost_usd=per_side_cost[side],
+            )
+        )
+
+    measurable = per_side_n["BUY"] + per_side_n["SELL"]
+    total_cost = per_side_cost["BUY"] + per_side_cost["SELL"]
+    return SlippageStats(
+        by_side=by_side,
+        measurable_fills=measurable,
+        unmeasurable_fills=unmeasurable,
+        total_cost_usd=total_cost,
+    )
+
+
+def render_slippage_text(stats: SlippageStats) -> str:
+    lines: list[str] = []
+    lines.append("Slippage (체결 품질)")
+    lines.append("-" * 20)
+    lines.append(
+        f"측정 가능 체결: {stats.measurable_fills}  /  측정 불가: {stats.unmeasurable_fills}"
+    )
+    if stats.measurable_fills == 0:
+        lines.append("측정 가능한 체결이 없습니다 (기준가 미기록 — N/A).")
+        return "\n".join(lines)
+
+    def _bps(v: Decimal | None) -> str:
+        return "N/A" if v is None else f"{v.quantize(Decimal('0.01'))} bps"
+
+    lines.append("side   fills   avg          median        cost(USD)")
+    for s in stats.by_side:
+        cost = s.total_cost_usd.quantize(Decimal("0.01"))
+        lines.append(
+            f"{s.side:<5}  {s.measurable_fills:>5}   {_bps(s.avg_bps):>10}   "
+            f"{_bps(s.median_bps):>11}   {cost:+}"
+        )
+    lines.append(f"총 슬리피지 비용: ${stats.total_cost_usd.quantize(Decimal('0.01')):+}")
+    return "\n".join(lines)
 
 
 def compute_performance(

@@ -402,6 +402,7 @@ class OrderRouter:
                     quote_source=quote_source,
                     correlation_id=correlation_id,
                     paper_session_id=self.paper_session_id or 0,
+                    reference_price_usd=str(quote_price_usd),
                 ),
                 rule_id=rule.id,
                 symbol=rule.symbol,

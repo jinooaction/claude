@@ -450,6 +450,10 @@ class OrderPaperFilledPayload(AuditPayload):
     quote_source: Literal["ask", "bid", "last"]
     correlation_id: str
     paper_session_id: int
+    # Spec 011 P4 (T015, FR-009) — 결정 시점 기준 시세(last). 슬리피지 측정의
+    # 기준가로 쓰인다(체결가는 spread 를 가로지른 ask/bid, 기준가는 last). 추가-
+    # 전용·옵션이라 과거 row 는 None 으로 읽혀 "측정 불가"로 분리된다(후방 호환).
+    reference_price_usd: str | None = None
 
 
 class RuleDesignRequestedPayload(AuditPayload):

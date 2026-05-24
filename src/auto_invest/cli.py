@@ -1065,6 +1065,12 @@ def performance(
         help="성과 결과를 audit_log 에 추가-전용 LIVE_PERFORMANCE_SNAPSHOT 이벤트로 "
         "1건 기록 (FR-014, 튜너용). 기본은 미기록(순수 계산).",
     ),
+    slippage: bool = typer.Option(
+        False,
+        "--slippage",
+        help="체결 품질(슬리피지) 섹션 추가 — 기준가 대비 체결가의 불리한 차이를 "
+        "매수/매도별 평균·중앙(bps)·총비용(USD)으로 (FR-009).",
+    ),
 ) -> None:
     """Spec 011 — 라이브/페이퍼 매매 성과를 측정 (실현·미실현 손익, 룰별·종목별 기여도).
 
@@ -1072,6 +1078,7 @@ def performance(
     미실현 손익은 미청산 종목의 현재 KIS 시세로 계산하며, 시세 조회 실패 시 실현
     손익만 출력한다 (FR-005). live·paper 체결은 모드로 분리 집계된다 (FR-003).
     `--snapshot` 지정 시에만 결과를 추가-전용 이벤트로 1건 기록한다(K4 추가 변경).
+    `--slippage` 지정 시 기준가 대비 체결 품질을 함께 출력한다.
     """
     import json as _json
     from datetime import UTC, datetime, timedelta
@@ -1079,8 +1086,10 @@ def performance(
 
     from auto_invest.performance.engine import (
         compute_performance,
+        compute_slippage,
         read_fills,
         reconstruct,
+        render_slippage_text,
         render_text,
         snapshot_fields,
     )
@@ -1181,10 +1190,18 @@ def performance(
             f"(스냅샷 기록됨: LIVE_PERFORMANCE_SNAPSHOT seq={seq})", err=True
         )
 
+    slippage_stats = compute_slippage(fills) if slippage else None
+
     if output_format == "json":
-        typer.echo(_json.dumps(report.to_json_dict(), indent=2, ensure_ascii=False))
+        payload = report.to_json_dict()
+        if slippage_stats is not None:
+            payload["slippage"] = slippage_stats.to_json_dict()
+        typer.echo(_json.dumps(payload, indent=2, ensure_ascii=False))
     else:
         typer.echo(render_text(report))
+        if slippage_stats is not None:
+            typer.echo("")
+            typer.echo(render_slippage_text(slippage_stats))
 
 
 @app.command()
