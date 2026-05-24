@@ -134,9 +134,9 @@ description: "Task list — LLM Judgment Points (spec 004)"
 
 ## Phase 7: Polish & 검증
 
-- [ ] T030 [P] `uv run pytest` 전체 통과(skip 허용, fail 없음) + `uv run ruff check src tests` 깨끗 확인.
-- [ ] T031 quickstart.md 8개 시나리오 수동/자동 검증(특히 SC-001 폴백, SC-002 결정성, SC-007 K1 불변).
-- [ ] T032 PR 본문에 K4 터치 커밋 해시(T009) 명시 + 헌법 IX.A 포렌식 콜아웃. 자동 머지 조건(CLAUDE.md 규칙 3) 점검.
+- [x] T030 [P] `uv run pytest` 전체 통과(skip 허용, fail 없음) + `uv run ruff check src tests` 깨끗 확인.
+- [x] T031 quickstart.md 8개 시나리오 수동/자동 검증(특히 SC-001 폴백, SC-002 결정성, SC-007 K1 불변).
+- [x] T032 PR 본문에 K4 터치 커밋 해시(T009) 명시 + 헌법 IX.A 포렌식 콜아웃. 자동 머지 조건(CLAUDE.md 규칙 3) 점검.
 
 ---
 
