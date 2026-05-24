@@ -87,6 +87,23 @@ class Action(BaseModel):
     # the order_router contract, not this model.
 
 
+class JudgmentConfig(BaseModel):
+    """Spec 004 — 판단 지점 자문을 이 룰이 어떻게 결정론적으로 소비하는지 선언.
+
+    `enabled=False`(기본)면 판단 지점 비활성 — 룰은 v1 동작. 안전 불변량:
+    `size_down_factor` 는 0..1 로 제약되어 자문은 노출을 **늘릴 수 없다**(줄이거나
+    건너뛰기만). `block_*` 는 news_screen 소비 노브다.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    enabled: bool = False
+    halt_min_confidence: float = Field(default=0.7, ge=0.0, le=1.0)
+    size_down_factor: float = Field(default=0.5, ge=0.0, le=1.0)
+    volatility_threshold: float = Field(default=0.0, ge=0.0)
+    block_buy_stance: Literal["bear"] | None = "bear"
+    block_min_confidence: float = Field(default=0.8, ge=0.0, le=1.0)
+
+
 class TradingRule(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     id: str = Field(..., min_length=1)
@@ -96,6 +113,7 @@ class TradingRule(BaseModel):
     enabled: bool = True
     trigger: Trigger
     action: Action
+    judgment: JudgmentConfig | None = None
 
     @field_validator("symbol")
     @classmethod

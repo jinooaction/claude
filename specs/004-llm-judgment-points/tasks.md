@@ -59,17 +59,17 @@ description: "Task list — LLM Judgment Points (spec 004)"
 
 ### Tests
 
-- [ ] T013 [P] [US1] `tests/integration/test_judgment_volatility_gate.py` — 자문 소비(축소/건너뛰기)·결정성·자문은 노출 증가 불가·K1 게이트 여전히 바인딩 테스트.
-- [ ] T014 [P] [US1] `tests/integration/test_judgment_fallback_chaos.py` — LLM이 항상 실패하는 mock에서 주문 경로가 v1과 동일하게 동작(0건 막힘)하고 `JUDGMENT_FALLBACK` 기록 (SC-001).
-- [ ] T015 [P] [US1] `tests/integration/test_judgment_audit_telemetry.py` — 매 호출 token_usage 1행 + LLM_CALL 1행 같은 correlation_id, 본문·비밀 미기록 (SC-003).
+- [x] T013 [P] [US1] `tests/integration/test_judgment_volatility_gate.py` — 자문 소비(축소/건너뛰기)·결정성·자문은 노출 증가 불가·K1 게이트 여전히 바인딩 테스트.
+- [x] T014 [P] [US1] `tests/integration/test_judgment_fallback_chaos.py` — LLM이 항상 실패하는 mock에서 주문 경로가 v1과 동일하게 동작(0건 막힘)하고 `JUDGMENT_FALLBACK` 기록 (SC-001).
+- [x] T015 [P] [US1] `tests/integration/test_judgment_audit_telemetry.py` — 매 호출 token_usage 1행 + LLM_CALL 1행 같은 correlation_id, 본문·비밀 미기록 (SC-003).
 
 ### Implementation
 
-- [ ] T016 [US1] `src/auto_invest/judgment/points/volatility.py` — `volatility_assessment` 프롬프트 빌더(요약 통계 입력, 원시 바 금지) + `VolatilityAdvisory` 파싱 + 결정론적 폴백 정의.
-- [ ] T017 [US1] `src/auto_invest/config/rules.py` (비커널) — 룰/액션에 판단 지점 소비 규칙 선언 필드 추가(`halt_min_confidence` 기본 0.7·`size_down_factor` 기본 0.5). 기존 룰 하위호환(필드 없으면 판단 지점 비활성).
-- [ ] T018 [US1] `src/auto_invest/execution/order_router.py` (비커널) — 게이트 체인 진입 **전** 자문 소비: `halt`+고신뢰 → 주문 미제출(기록), `size_down` → qty 축소. 그 뒤 기존 게이트 체인 변형 없이 실행. `JUDGMENT_ADVISORY_APPLIED` 기록(correlation_id·canary_cohort). (T013 통과시킴)
-- [ ] T019 [US1] 캐너리 코호트 연동 — `strategy/canary.py`/`canary/` 인프라로 5% 코호트 거래에만 자문 반영, 코호트 밖 v1 동작, `canary_cohort` 표식. (T013·SC-005 통과시킴)
-- [ ] T020 [US1] 거래 루프 트리거 연결 — 변동성 트리거 발화 시(쿨다운 존중) 판단 지점 호출. 기존 `strategy/triggers.py`/지표 인프라 재사용(`worker/loop.py` 또는 `run` 경로 비커널 통합). (T014 통과시킴)
+- [x] T016 [US1] `src/auto_invest/judgment/points/volatility.py` — `volatility_assessment` 프롬프트 빌더(요약 통계 입력, 원시 바 금지) + `VolatilityAdvisory` 파싱 + 결정론적 폴백 정의.
+- [x] T017 [US1] `src/auto_invest/config/rules.py` (비커널) — 룰/액션에 판단 지점 소비 규칙 선언 필드 추가(`halt_min_confidence` 기본 0.7·`size_down_factor` 기본 0.5). 기존 룰 하위호환(필드 없으면 판단 지점 비활성).
+- [x] T018 [US1] `src/auto_invest/execution/order_router.py` (비커널) — 게이트 체인 진입 **전** 자문 소비: `halt`+고신뢰 → 주문 미제출(기록), `size_down` → qty 축소. 그 뒤 기존 게이트 체인 변형 없이 실행. `JUDGMENT_ADVISORY_APPLIED` 기록(correlation_id·canary_cohort). (T013 통과시킴)
+- [x] T019 [US1] 캐너리 코호트 연동 — `strategy/canary.py`/`canary/` 인프라로 5% 코호트 거래에만 자문 반영, 코호트 밖 v1 동작, `canary_cohort` 표식. (T013·SC-005 통과시킴)
+- [x] T020 [US1] 거래 루프 트리거 연결 — 변동성 트리거 발화 시(쿨다운 존중) 판단 지점 호출. 기존 `strategy/triggers.py`/지표 인프라 재사용(`worker/loop.py` 또는 `run` 경로 비커널 통합). (T014 통과시킴)
 
 **Checkpoint**: US1 단독 동작·테스트 가능 — MVP. **여기서 테스트+린트 green이면 커밋·푸시.**
 

@@ -37,9 +37,12 @@ from auto_invest.config.caps import SizingCaps
 from auto_invest.config.enums import OrderType, Side, StrategyStage
 from auto_invest.config.rules import TradingRule
 from auto_invest.config.whitelist import Whitelist
+from auto_invest.judgment.points.volatility import apply_volatility_advisory
+from auto_invest.judgment.schemas import VolatilityAdvisory
 from auto_invest.market_data.store import get_latest_bar
 from auto_invest.persistence import audit
 from auto_invest.persistence.audit import (
+    JudgmentAdvisoryAppliedPayload,
     OrderIntentPayload,
     OrderPaperFilledPayload,
     OrderRejectedByBrokerPayload,
@@ -263,8 +266,49 @@ class OrderRouter:
         current_global_exposure_usd: Decimal,
         quote_ask_usd: Decimal | None = None,
         quote_bid_usd: Decimal | None = None,
+        volatility_advisory: VolatilityAdvisory | None = None,
+        judgment_correlation_id: str | None = None,
     ) -> OrderOutcome:
         correlation_id = f"ord-{uuid.uuid4().hex[:12]}"
+
+        # Spec 004: consume the volatility judgment advisory BEFORE the gate
+        # chain. The advisory can only shrink or skip the order — never enlarge
+        # it — so K1 position caps (risk/gates.py) still bind unchanged below.
+        # Only canary-stage rules consume the advisory (constitution VI); full-
+        # live rules behave as v1 until the judgment point is promoted.
+        effective_qty = rule.action.qty
+        canary_cohort = rule.stage is StrategyStage.CANARY
+        if (
+            volatility_advisory is not None
+            and rule.judgment is not None
+            and rule.judgment.enabled
+            and canary_cohort
+        ):
+            decision = apply_volatility_advisory(
+                volatility_advisory,
+                qty=rule.action.qty,
+                halt_min_confidence=rule.judgment.halt_min_confidence,
+                size_down_factor=rule.judgment.size_down_factor,
+            )
+            audit.append(
+                self.conn,
+                JudgmentAdvisoryAppliedPayload(
+                    decision_class="volatility_assessment",
+                    advisory=decision.advisory_summary,
+                    applied_decision=decision.applied_decision,
+                    canary_cohort=canary_cohort,
+                ),
+                rule_id=rule.id,
+                symbol=rule.symbol,
+                correlation_id=judgment_correlation_id or correlation_id,
+            )
+            if decision.skip:
+                return OrderOutcome(
+                    state="SKIPPED_BY_JUDGMENT",
+                    correlation_id=correlation_id,
+                    reason=decision.applied_decision,
+                )
+            effective_qty = decision.effective_qty
 
         # Resolve the limit-price expression for LIMIT orders.
         limit_price: Decimal | None = None
@@ -289,7 +333,7 @@ class OrderRouter:
             symbol=rule.symbol,
             side=rule.action.side,
             order_type=rule.action.order_type,
-            qty=rule.action.qty,
+            qty=effective_qty,
             limit_price_usd=limit_price,
         )
 
@@ -301,7 +345,7 @@ class OrderRouter:
                 symbol=rule.symbol,
                 side=rule.action.side.value,
                 order_type=rule.action.order_type.value,
-                qty=rule.action.qty,
+                qty=effective_qty,
                 limit_price_usd=str(limit_price) if limit_price is not None else None,
             ),
             rule_id=rule.id,
@@ -397,7 +441,7 @@ class OrderRouter:
                     rule_id=rule.id,
                     symbol=rule.symbol,
                     side=rule.action.side.value,
-                    qty=rule.action.qty,
+                    qty=effective_qty,
                     simulated_fill_price_usd=str(fill_price),
                     quote_source=quote_source,
                     correlation_id=correlation_id,
