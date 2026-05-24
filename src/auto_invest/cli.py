@@ -2216,3 +2216,120 @@ def deploy(
         typer.echo(line, err=True)
     if result.exit_code != 0:
         _exit(result.exit_code)
+
+
+@app.command()
+def tune(
+    apply: bool = typer.Option(
+        False,
+        "--apply/--dry-run",
+        help="--apply: 저위험(L1) 변경 자동 적용. --dry-run(기본): 분석만(무변경).",
+    ),
+    db_path: Path = typer.Option(
+        Path("data/auto_invest.db"),
+        "--db",
+        help="SQLite database path.",
+    ),
+    thresholds_path: Path = typer.Option(
+        Path("config/llm_kpi_thresholds.toml"),
+        "--thresholds",
+        help="튜닝 대상 KPI 임계값 파일.",
+    ),
+    kernel_path: Path = typer.Option(
+        Path(".specify/memory/kernel.toml"),
+        "--kernel",
+        help="Kernel 매니페스트(권한 등급 분류용).",
+    ),
+    as_of: str | None = typer.Option(
+        None,
+        "--as-of",
+        help="기준 세션 날짜(YYYY-MM-DD). 미지정 시 오늘(UTC).",
+    ),
+    window_short_days: int = typer.Option(
+        7,
+        "--window-short-days",
+        help="단기 롤링 윈도(드리프트 감지), 일 단위.",
+    ),
+    window_long_days: int = typer.Option(
+        30,
+        "--window-long-days",
+        help="장기 롤링 윈도(안정성 판정·조이기), 일 단위.",
+    ),
+    min_sample: int = typer.Option(
+        20,
+        "--min-sample",
+        help="헌법 X 최소 표본 — 윈도 호출 수가 미만이면 튜닝 거부.",
+    ),
+    output_root: Path | None = typer.Option(
+        None,
+        "--output-root",
+        help="주면 {root}/{session_date}/auto-tuner-report.json 작성.",
+    ),
+    output_json: bool = typer.Option(
+        False,
+        "--json/--no-json",
+        help="--json: stdout 에 TunerRunResult JSON.",
+    ),
+) -> None:
+    """Spec 005 — 자율 튜너. KPI 드리프트를 감지·분류하고 저위험 L1 변경을 자동 적용.
+
+    순수 결정론적(LLM 미호출). --dry-run(기본)은 어떤 파일·감사도 바꾸지 않는다.
+    --apply 라도 장 시간 마진 안(헌법 VIII.A)·측정 부족(헌법 X)이면 적용하지 않는다.
+    대상 파일이 kernel.toml 에 닿으면 무조건 L4(자동 적용 거부, 포렌식 콜아웃).
+    """
+    from datetime import UTC
+    from datetime import datetime as _dt
+
+    from auto_invest.telemetry.thresholds import TierTableError
+    from auto_invest.tuner.detect import parse_as_of
+    from auto_invest.tuner.report import to_json
+    from auto_invest.tuner.runner import run_tuner
+
+    try:
+        as_of_date = parse_as_of(as_of)
+    except ValueError:
+        typer.echo("--as-of must be YYYY-MM-DD.", err=True)
+        _exit(2)
+    if window_short_days < 1 or window_long_days < 1:
+        typer.echo("--window-*-days must be >= 1.", err=True)
+        _exit(2)
+    if not thresholds_path.exists():
+        typer.echo(f"thresholds file not found: {thresholds_path}", err=True)
+        _exit(2)
+    if not db_path.exists():
+        typer.echo(f"database not found: {db_path}", err=True)
+        _exit(2)
+
+    mode = "apply" if apply else "dry_run"
+    try:
+        result = run_tuner(
+            db_path=db_path,
+            thresholds_path=thresholds_path,
+            kernel_path=kernel_path,
+            as_of=as_of_date,
+            mode=mode,  # type: ignore[arg-type]
+            window_short_days=window_short_days,
+            window_long_days=window_long_days,
+            min_sample=min_sample,
+            now=_dt.now(UTC) if apply else None,
+            output_root=output_root,
+        )
+    except (TierTableError, ValueError) as exc:
+        typer.echo(f"tune failed: {exc}", err=True)
+        _exit(2)
+
+    if output_json:
+        typer.echo(to_json(result))
+    else:
+        typer.echo(
+            f"[tune {result.mode}] session={result.session_date} "
+            f"candidates={len(result.candidates)} applied={len(result.applied)} "
+            f"canary={len(result.canary_entered)} l4={len(result.awaiting_human_merge)} "
+            f"skipped={len(result.skipped)}"
+        )
+        for cls in result.candidates:
+            typer.echo(
+                f"  - {cls.candidate.candidate_id} [{cls.tier}] {cls.reason}"
+            )
+        for cid, reason in result.skipped:
+            typer.echo(f"  · skipped {cid}: {reason}")

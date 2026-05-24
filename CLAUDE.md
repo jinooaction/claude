@@ -214,12 +214,12 @@ After a successful merge, the session SHOULD:
 ---
 
 <!-- SPECKIT START -->
-Active feature: **스펙 004 (LLM 판단 지점) 진행 중** — 브랜치 `claude/beautiful-mayer-nDR3x`. 계획: `specs/004-llm-judgment-points/plan.md`. Claude를 거래 루프에 처음 부르는 기능. 세 판단 지점(`volatility_assessment` P1·`daily_summary` P2·`news_screen` P3) + 관측/예산(P4). 핵심 안전 설계: 자문은 `execution/order_router.py`(비커널)에서 주문을 **줄이거나 건너뛰기만** 하고 절대 키우지 못함 → K1 포지션 캡(`risk/gates.py`)은 그대로 바인딩. 모든 판단 지점에 결정론적 폴백(LLM 실패해도 거래 안 막힘). 유일한 Kernel 터치는 `persistence/audit.py`(K4) 추가-전용 판단 이벤트 2종.
+Active feature: **스펙 005 (자율 튜너) 진행 중** — 브랜치 `claude/wonderful-brown-dkVmU`. 계획: `specs/005-autonomous-tuner/plan.md`. 측정→분석→행동 루프를 헌법 안전 경계 안에서 닫는 **순수 결정론적** 엔진(LLM 미호출). 기존 KPI 스냅샷(`telemetry/kpi.py`)을 롤링 윈도로 읽어 드리프트 후보를 만들고, 기존 Kernel 매니페스트 리더(`deploy/kernel_guard.py`)로 L1/L2/L3/L4 권한 등급 분류(Kernel 교집합=무조건 L4). L1 적용 노브는 v1 한 종류 — `config/llm_kpi_thresholds.toml`의 `tier_b` 임계값 조이기(장외·측정 충분·멱등). 새 패키지 `src/auto_invest/tuner/`. 유일한 Kernel 터치는 `persistence/audit.py`(K4) 추가-전용 `AUTO_TUNED_*` 이벤트 4종. K1·K2·K3·K5·K6·K-meta 터치 0건.
 
-머지 완료(베이스라인): spec 006 (배포 자동화), spec 007 (하드닝 카나리), spec 008 (백테스트), spec 009 (paper-run), spec 010 (자동 룰 설계자), spec 011 (라이브 성과 측정). **주의: 일부 tasks.md 가 stale 0% 로 표시된 적 있음 — 코드/테스트를 믿을 것.**
+머지 완료(베이스라인): spec 004 (LLM 판단 지점), 006 (배포 자동화), 007 (하드닝 카나리), 008 (백테스트), 009 (paper-run), 010 (자동 룰 설계자), 011 (라이브 성과 측정). **주의: 일부 tasks.md 가 stale 0% 로 표시된 적 있음 — 코드/테스트를 믿을 것.**
 
-후속 후보(스펙 004 완료 후):
-- 스펙 005 (자율 튜너) — 스펙 004가 만든 판단 지점(프롬프트·파라미터)을 L2/L3 튜닝 대상으로 삼음. 즉시 착수 가능.
+후속 후보(스펙 005 완료 후):
+- L1 적용 표면 확장 — 모델 라우팅·캐시 TTL을 튜닝 가능 노브로(스펙 005가 의도적으로 범위 밖으로 둔 K3 인접 표면).
 - **실거래 전환** — `AUTO_INVEST_MODE=live` 토글 (운영자 명시 지시 필요, 돈 움직이는 행동).
 - KIS smoke 자율 감시 활성 — `automation/kis-smoke-last-run` 사이드카 브랜치.
 <!-- SPECKIT END -->
