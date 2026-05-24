@@ -3,7 +3,7 @@
 **Feature Branch**: `claude/wonderful-brown-dkVmU`
 **Spec Directory**: `specs/005-autonomous-tuner/`
 **Created**: 2026-05-06 (stub) · **Promoted**: 2026-05-24
-**Status**: Draft (본 스펙 승격 — 운영자 지시 2026-05-24로 텔레메트리 30일 착수 게이트 제거; 선행 스펙 006·007·011 충족)
+**Status**: Implemented (2026-05-24, 브랜치 `claude/wonderful-brown-dkVmU`. 22개 작업 전부 완료, 튜너 테스트 40개 + 전체 887 통과·4 스킵, 린트 깨끗. 본 스펙 승격 — 운영자 지시 2026-05-24로 텔레메트리 30일 착수 게이트 제거; 선행 스펙 006·007·011 충족)
 **Input**: Operator description: "Close the measure → analyze → act loop. Detect KPI drift and apply changes autonomously within the boundary set by constitution principle IX (Self-Modification Boundary) and principle X (Measurement-Driven Autonomous Growth). Goal: zero operator merges except for Kernel changes."
 
 ## 배경 — 왜 이 스펙인가, 그리고 왜 지금 안전한가
