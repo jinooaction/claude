@@ -214,15 +214,12 @@ After a successful merge, the session SHOULD:
 ---
 
 <!-- SPECKIT START -->
-Active feature: 없음 — **빌드 가능한 스펙 전부 완료, 남은 스펙은 달력(텔레메트리 누적)에 막힘**. 라이브 worker(dry-run) 가동 중 (2026-05-23 시작, run `26330498160`). 머지 완료: spec 006 (배포 자동화 — `auto-invest deploy` CLI + 커널 가드), spec 007 (하드닝 카나리 — 5지표·합성충격·속성퍼즈, 테스트 93개), spec 008 (백테스트), spec 009 (paper-run), spec 010 (자동 룰 설계자), spec 011 (라이브 성과 측정 — P1·P2·P3 완료, P4 슬리피지는 데이터 토대 작업으로 진행). **주의: 006·007 의 tasks.md 는 한동안 0% 로 표시된 stale 상태였음 — 실제로는 main 에 구현·머지 완료. 체크박스 수치를 믿지 말고 코드/테스트 + 이 줄을 믿을 것.**
+Active feature: **스펙 004 (LLM 판단 지점) 진행 중** — 브랜치 `claude/beautiful-mayer-nDR3x`. 계획: `specs/004-llm-judgment-points/plan.md`. Claude를 거래 루프에 처음 부르는 기능. 세 판단 지점(`volatility_assessment` P1·`daily_summary` P2·`news_screen` P3) + 관측/예산(P4). 핵심 안전 설계: 자문은 `execution/order_router.py`(비커널)에서 주문을 **줄이거나 건너뛰기만** 하고 절대 키우지 못함 → K1 포지션 캡(`risk/gates.py`)은 그대로 바인딩. 모든 판단 지점에 결정론적 폴백(LLM 실패해도 거래 안 막힘). 유일한 Kernel 터치는 `persistence/audit.py`(K4) 추가-전용 판단 이벤트 2종.
 
-새 작업이 시작되기 전에 `HANDOFF.md` (main 진입점) + 가장 최신 `HANDOFF-014-LIVE-DRYRUN-STARTED.md`를 먼저 읽어 현재 상태 파악. 운영자가 새 의도를 알려주기 전까지 새 spec 시작 안 함 (IX.D 자율 수행 정책: 운영자 의도 = 작업 트리거).
+머지 완료(베이스라인): spec 006 (배포 자동화), spec 007 (하드닝 카나리), spec 008 (백테스트), spec 009 (paper-run), spec 010 (자동 룰 설계자), spec 011 (라이브 성과 측정). **주의: 일부 tasks.md 가 stale 0% 로 표시된 적 있음 — 코드/테스트를 믿을 것.**
 
-현재 검토 가능한 후속 후보(운영자 의도 대기):
-- **실거래 전환** — 1주일 dry-run 관찰 후 `AUTO_INVEST_MODE=live` 토글 (운영자 명시 지시 필요, 돈 움직이는 행동). `live-mode-toggle.yml` 워크플로우 작성 권장 (콘솔 없이 GitHub Actions 전환).
-- design 의도 변경/룰 갱신 — `claude/verify-operator-setup` 의 `.trigger/design-now.txt` push (AUTO_OK 이제 정상 동작).
-- ~~운영자 라이브 시작 코칭 (`HANDOFF-010-OPERATOR-RESUME.md`)~~ — **완료됨 (HANDOFF-010/011 은 historical). 잔고/키는 처음부터 정상이었음.**
-- 스펙 004 (LLM 판단 지점) 본격 구현 — **즉시 착수 가능** (운영자 지시 2026-05-24: 텔레메트리 30일 착수 게이트 제거). 판단 지점은 여전히 헌법 VI 캐너리 ≥10 거래일을 탄다.
-- 스펙 005 (자율 튜너) 본격 구현 — **즉시 착수 가능** (운영자 지시 2026-05-24: 텔레메트리 30일 착수 게이트 제거; spec 006·007·011 선행 조건 충족). `/speckit-specify`→`/speckit-plan`→`/speckit-tasks` 로 스텁을 본 스펙으로 승격하고 착수. 단 런타임 자율 튜닝 행동은 헌법 원칙 X(측정 기반)에, 자율 머지는 spec 007 캐너리에 계속 종속(착수 시점만 앞당김, 안전 경계 불변).
-- KIS smoke 자율 감시는 활성 상태 — `automation/kis-smoke-last-run` 사이드카 브랜치에 매 run 진단 force-push 중.
+후속 후보(스펙 004 완료 후):
+- 스펙 005 (자율 튜너) — 스펙 004가 만든 판단 지점(프롬프트·파라미터)을 L2/L3 튜닝 대상으로 삼음. 즉시 착수 가능.
+- **실거래 전환** — `AUTO_INVEST_MODE=live` 토글 (운영자 명시 지시 필요, 돈 움직이는 행동).
+- KIS smoke 자율 감시 활성 — `automation/kis-smoke-last-run` 사이드카 브랜치.
 <!-- SPECKIT END -->
