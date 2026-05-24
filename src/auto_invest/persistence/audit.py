@@ -64,6 +64,10 @@ EventType = Literal[
     "LIVE_PERFORMANCE_SNAPSHOT",
     "JUDGMENT_ADVISORY_APPLIED",
     "JUDGMENT_FALLBACK",
+    "AUTO_TUNED_L1",
+    "AUTO_TUNED_L2_CANARY_ENTERED",
+    "AUTO_TUNED_L4_FORENSIC",
+    "AUTO_TUNER_RUN",
 ]
 
 
@@ -613,6 +617,78 @@ class JudgmentFallbackPayload(AuditPayload):
     ]
 
 
+class AutoTunedL1Payload(AuditPayload):
+    """Spec 005: 자율 튜너가 저위험(L1) 설정 변경을 자동 적용한 기록.
+
+    v1 적용 노브는 KPI 임계값 조이기(`config/llm_kpi_thresholds.toml`의
+    `tier_b`)뿐이다. `old_value`/`new_value`(문자열 Decimal)로 가역성을
+    보장한다(FR-A13). `session_date`는 멱등 dedup 키(R-8). 기존 이벤트·row
+    를 건드리지 않는 K4 추가-전용 변경이라 append-only 불변량(헌법 IV)을
+    깨지 않는다.
+    """
+
+    event_type: Literal["AUTO_TUNED_L1"] = "AUTO_TUNED_L1"
+    session_date: str
+    detection_rule: str
+    kpi_name: str
+    config_key: str
+    old_value: str
+    new_value: str
+    tier_before: str
+    tier_after: str
+    window: str
+
+
+class AutoTunedL2CanaryEnteredPayload(AuditPayload):
+    """Spec 005: L2/L3 후보를 캐너리 진입 후보로 기록(튜너는 동기 통과 안 함).
+
+    실제 캐너리 승격/실패(CANARY_PASSED/CANARY_FAILED)는 스펙 007 엔진이
+    별도로 수행한다. 이 이벤트는 "튜너가 이 변경을 캐너리 대상으로 식별했다"
+    는 포렌식 기록일 뿐 주문 경로에 닿지 않는다.
+    """
+
+    event_type: Literal["AUTO_TUNED_L2_CANARY_ENTERED"] = "AUTO_TUNED_L2_CANARY_ENTERED"
+    session_date: str
+    candidate_id: str
+    authority_tier: Literal["L2", "L3"]
+    detection_rule: str
+    proposed_change: str
+    target_paths: list[str]
+
+
+class AutoTunedL4ForensicPayload(AuditPayload):
+    """Spec 005: Kernel 터치 후보의 포렌식 콜아웃(인간 머지 대기).
+
+    튜너는 Kernel 파일을 절대 자동 적용하지 않는다(FR-A06). 대상 파일이
+    kernel.toml 매니페스트에 닿으면 분류와 무관하게 L4로 강등하고 이 이벤트로
+    forensic 기록만 남긴다. Kernel 변경은 운영자 지시 세션의 명시적 작업.
+    """
+
+    event_type: Literal["AUTO_TUNED_L4_FORENSIC"] = "AUTO_TUNED_L4_FORENSIC"
+    session_date: str
+    candidate_id: str
+    detection_rule: str
+    kernel_groups: list[str]
+    target_paths: list[str]
+    reason: str
+
+
+class AutoTunerRunPayload(AuditPayload):
+    """Spec 005: 튜너 한 번 실행의 요약(apply 모드에서만 기록).
+
+    dry-run은 어떤 감사도 쓰지 않는다(read-only 보장, SC-A03).
+    """
+
+    event_type: Literal["AUTO_TUNER_RUN"] = "AUTO_TUNER_RUN"
+    session_date: str
+    mode: Literal["dry_run", "apply"]
+    candidates_count: int
+    applied_count: int
+    canary_count: int
+    l4_count: int
+    skipped_count: int
+
+
 AnyPayload = (
     WorkerStartedPayload
     | WorkerStoppedPayload
@@ -658,6 +734,10 @@ AnyPayload = (
     | LivePerformanceSnapshotPayload
     | JudgmentAdvisoryAppliedPayload
     | JudgmentFallbackPayload
+    | AutoTunedL1Payload
+    | AutoTunedL2CanaryEnteredPayload
+    | AutoTunedL4ForensicPayload
+    | AutoTunerRunPayload
 )
 
 
