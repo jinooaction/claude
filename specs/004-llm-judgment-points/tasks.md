@@ -83,12 +83,12 @@ description: "Task list — LLM Judgment Points (spec 004)"
 
 ### Tests
 
-- [ ] T021 [P] [US2] `tests/integration/test_judgment_daily_summary.py` — 리포트 요약 섹션 + 폴백(요약 생성 불가, 나머지 정상) 테스트.
+- [x] T021 [P] [US2] `tests/integration/test_judgment_daily_summary.py` — 리포트 요약 섹션 + 폴백(요약 생성 불가, 나머지 정상) 테스트.
 
 ### Implementation
 
-- [ ] T022 [US2] `src/auto_invest/judgment/points/daily_summary.py` — 그날 audit 집계 카운터 입력 → `DailySummaryAdvisory` 파싱 + 폴백 정의.
-- [ ] T023 [US2] `src/auto_invest/cli.py` `report` 명령(비커널) — 판단 요약 섹션 추가(FR-022). LLM 실패 시 결정론적 카운터만. (T021 통과시킴)
+- [x] T022 [US2] `src/auto_invest/judgment/points/daily_summary.py` — 그날 audit 집계 카운터 입력 → `DailySummaryAdvisory` 파싱 + 폴백 정의.
+- [x] T023 [US2] `src/auto_invest/cli.py` `report` 명령(비커널) — 판단 요약 섹션 추가(FR-022). LLM 실패 시 결정론적 카운터만. (T021 통과시킴)
 
 **Checkpoint**: US1+US2 독립 동작. green이면 커밋·푸시.
 
