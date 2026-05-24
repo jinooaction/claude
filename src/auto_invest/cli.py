@@ -1278,6 +1278,8 @@ def efficiency(
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = db.get_connection(db_path)
     db.migrate(conn)
+    from auto_invest.judgment.observability import judgment_efficiency
+
     try:
         _audit.append(
             conn,
@@ -1288,6 +1290,10 @@ def efficiency(
             window_start_utc=_iso_ms(start),
             window_end_utc=_iso_ms(end),
             tiers=tiers,
+        )
+        # spec 004: 판단 지점별 호출/적용/폴백/폴백률(audit_log 기반).
+        judgment = judgment_efficiency(
+            conn, window_start_utc=_iso_ms(start), window_end_utc=_iso_ms(end)
         )
     finally:
         conn.close()
@@ -1307,6 +1313,7 @@ def efficiency(
             for k in snapshot.kpis
         ],
         "per_decision_class": snapshot.per_decision_class,
+        "judgment": judgment,
         "top_n_calls": snapshot.top_n_calls,
     }
     typer.echo(_json.dumps(payload, sort_keys=True, indent=2))
@@ -1352,6 +1359,41 @@ def db_migrate(
         typer.echo("Applied migrations: " + ", ".join(applied))
     else:
         typer.echo("No pending migrations.")
+
+
+def _attach_judgment_summary(conn, rep):  # noqa: ANN001, ANN201
+    """daily_summary 판단 지점으로 리포트에 요약 섹션을 채운다(spec 004).
+
+    ANTHROPIC_API_KEY 가 없으면 결정론적 폴백 문장을 쓴다. LLM 호출이 실패해도
+    summarize_day 가 폴백 문장을 돌려주므로 리포트는 항상 섹션을 갖는다.
+    """
+    import asyncio
+    import os
+
+    from auto_invest.judgment.points.daily_summary import (
+        attach_summary_to_report,
+        fallback_narrative,
+        summarize_day,
+    )
+
+    counters = rep.counters
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return attach_summary_to_report(rep, fallback_narrative(counters))
+    try:
+        import anthropic
+
+        from auto_invest.judgment.client import JudgmentClient
+        from auto_invest.telemetry.prices import load_prices
+
+        prices = load_prices(Path("config/llm_prices.toml"))
+        client = JudgmentClient(
+            anthropic.AsyncAnthropic(api_key=api_key), conn=conn, prices=prices
+        )
+        summary = asyncio.run(summarize_day(client, conn=conn, counters=counters))
+    except Exception:  # noqa: BLE001 — 어떤 실패든 결정론적 폴백으로
+        summary = fallback_narrative(counters)
+    return attach_summary_to_report(rep, summary)
 
 
 @app.command()
@@ -1403,6 +1445,10 @@ def report(
         rep = build_report(
             conn, session_date=session_date, tiers=tiers, include_performance=True
         )
+        # spec 004 daily_summary 판단 지점(순수 자문): ANTHROPIC_API_KEY 가 있으면
+        # Claude 서술 요약, 없거나 실패하면 결정론적 카운터 폴백. 어느 경우든
+        # 리포트는 정상 생성된다(FR-022).
+        rep = _attach_judgment_summary(conn, rep)
         md_path, json_path = write_report(rep, output_root=output_root)
     finally:
         conn.close()

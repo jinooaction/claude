@@ -82,6 +82,7 @@ class DailyReport:
     halt: dict[str, Any] | None = None
     efficiency: EfficiencySnapshot | None = None
     performance: PerformanceSection | None = None
+    judgment_summary: str | None = None  # spec 004 daily_summary 판단 지점(순수 자문)
 
 
 def _utcnow_iso() -> str:
@@ -324,6 +325,11 @@ def render_markdown(report: DailyReport) -> str:
     lines.append(f"- Fills:                   {report.counters.get('fills', 0)}")
     lines.append("")
 
+    if report.judgment_summary is not None:
+        lines.append("## Judgment Summary (daily_summary)")
+        lines.append(report.judgment_summary)
+        lines.append("")
+
     lines.append("## Per-rule activity")
     if report.rules:
         lines.append("| rule_id | triggers | submitted | rejected |")
@@ -448,6 +454,7 @@ def render_json(report: DailyReport) -> str:
         "halt": report.halt,
         "efficiency": eff_payload,
         "performance": _performance_json(report.performance),
+        "judgment_summary": report.judgment_summary,
     }
     return json.dumps(payload, sort_keys=True, indent=2) + "\n"
 

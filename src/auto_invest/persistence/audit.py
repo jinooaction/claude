@@ -62,6 +62,8 @@ EventType = Literal[
     "RULE_DESIGN_REJECTED",
     "RULE_DESIGN_DEPLOYED",
     "LIVE_PERFORMANCE_SNAPSHOT",
+    "JUDGMENT_ADVISORY_APPLIED",
+    "JUDGMENT_FALLBACK",
 ]
 
 
@@ -576,6 +578,41 @@ class LivePerformanceSnapshotPayload(AuditPayload):
     computed_at_utc: str
 
 
+class JudgmentAdvisoryAppliedPayload(AuditPayload):
+    """Spec 004: 판단 지점 자문이 결정론적으로 게이트에 적용된 기록.
+
+    `advisory` 는 자문 요약(action/stance + confidence)이며 프롬프트/응답 본문이
+    아니다(헌법 V). `applied_decision` 은 게이트에 실제 적용된 결정 표식
+    (`skip`/`size_down:0.5`/`block_buy`/`no_effect`). LLM_CALL 과 같은
+    correlation_id 로 짝지어진다(append 의 correlation_id 인자).
+    """
+
+    event_type: Literal["JUDGMENT_ADVISORY_APPLIED"] = "JUDGMENT_ADVISORY_APPLIED"
+    decision_class: str
+    advisory: str
+    applied_decision: str
+    canary_cohort: bool = False
+
+
+class JudgmentFallbackPayload(AuditPayload):
+    """Spec 004: 판단 지점이 결정론적 폴백으로 전환된 기록.
+
+    LLM 호출 실패/타임아웃/서킷오픈/예산초과/스키마위반/공급원부재 시 거래는
+    막히지 않고 v1 동작으로 진행하며 그 사실을 추가-전용으로 남긴다(SC-001).
+    """
+
+    event_type: Literal["JUDGMENT_FALLBACK"] = "JUDGMENT_FALLBACK"
+    decision_class: str
+    reason: Literal[
+        "failure",
+        "timeout",
+        "circuit_open",
+        "budget_exceeded",
+        "schema_invalid",
+        "no_source",
+    ]
+
+
 AnyPayload = (
     WorkerStartedPayload
     | WorkerStoppedPayload
@@ -619,6 +656,8 @@ AnyPayload = (
     | RuleDesignRejectedPayload
     | RuleDesignDeployedPayload
     | LivePerformanceSnapshotPayload
+    | JudgmentAdvisoryAppliedPayload
+    | JudgmentFallbackPayload
 )
 
 

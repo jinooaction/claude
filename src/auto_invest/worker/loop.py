@@ -119,6 +119,7 @@ class Worker:
         app_key: str,
         app_secret: str,
         account_no: str,
+        judgment_runner: Any | None = None,
     ) -> None:
         self.settings = settings
         self.broker = broker
@@ -126,6 +127,9 @@ class Worker:
         self.app_key = app_key
         self.app_secret = app_secret
         self.account_no = account_no
+        # Spec 004: optional volatility judgment runner. None(기본)이면 v1 동작
+        # — 판단 지점 비활성, 거래 루프는 LLM 을 전혀 부르지 않는다.
+        self.judgment_runner = judgment_runner
 
         self.conn = db.get_connection(settings.db_path)
         db.migrate(self.conn)
@@ -257,9 +261,16 @@ class Worker:
             last_price_usd=quote.last_price_usd,
         )
 
+        # Spec 004: 변동성 판단 지점도 최근 바가 필요하므로 judgment 활성 룰에도
+        # 바를 가져온다(IndicatorTrigger 외).
+        _needs_bars = isinstance(rule.trigger, IndicatorTrigger) or (
+            self.judgment_runner is not None
+            and rule.judgment is not None
+            and rule.judgment.enabled
+        )
         bars = (
             tuple(get_bars(self.conn, symbol=rule.symbol, timeframe=timeframe))
-            if isinstance(rule.trigger, IndicatorTrigger)
+            if _needs_bars
             else ()
         )
         ctx = TriggerContext(
@@ -270,6 +281,18 @@ class Worker:
         )
         if not evaluate(rule.trigger, ctx):
             return None
+
+        # Spec 004: trigger 발화 후 주문 라우팅 직전에 변동성 판단 지점을 호출.
+        # runner 가 없거나(=v1) 판단 지점이 비활성/폴백이면 advisory 는 None 이고
+        # submit_order 는 v1 그대로 동작한다 — 거래는 절대 막히지 않는다(SC-001).
+        volatility_advisory = None
+        judgment_correlation_id = None
+        if self.judgment_runner is not None:
+            volatility_advisory, judgment_correlation_id = (
+                await self.judgment_runner.assess(
+                    rule, bars, current_price=quote.last_price_usd
+                )
+            )
 
         outcome = await self.router.submit_order(
             rule=rule,
@@ -284,6 +307,8 @@ class Worker:
                 symbol=rule.symbol,
                 quote_price=quote.last_price_usd,
             ),
+            volatility_advisory=volatility_advisory,
+            judgment_correlation_id=judgment_correlation_id,
         )
         self._last_fired[rule.id] = now
         return outcome
