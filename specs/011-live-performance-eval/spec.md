@@ -3,7 +3,7 @@
 **Feature Branch**: `claude/magical-ramanujan-STiPr`
 **Spec Directory**: `specs/011-live-performance-eval/`
 **Created**: 2026-05-23
-**Status**: Draft
+**Status**: 완료 (P1 손익 엔진·CLI · P2 위험조정 · P3 일일 리포트 성과 섹션·튜너 스냅샷 · P4 슬리피지). 측정 신호 면 완비 — spec 005 튜너 입력 준비됨
 **Input**: "돌아가는 시스템의 실제 매매 성과(손익·샤프·낙폭·승률·슬리피지)를 측정하는 라이브 성과 평가 하네스. 자율 시스템 성장(spec 005 튜너)의 피드백 신호."
 
 ## 배경 — 왜 이 스펙이 토대인가

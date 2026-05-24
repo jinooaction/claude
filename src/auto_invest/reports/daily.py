@@ -19,10 +19,12 @@ import json
 import sqlite3
 from collections import Counter, defaultdict
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+from auto_invest.performance.engine import _fmt_ts, build_performance_report
 from auto_invest.persistence import positions as positions_mod
 from auto_invest.telemetry.kpi import EfficiencySnapshot, compute_snapshot
 from auto_invest.telemetry.thresholds import TierTable
@@ -47,6 +49,28 @@ class GateRejection:
 
 
 @dataclass(frozen=True)
+class PerformanceSection:
+    """Spec 011 T013 (FR-012) — 일일 리포트용 매매 성과 요약.
+
+    그날의 실현 손익·수익률(당일 윈도)과 롤링 기간(기본 30일)의 위험조정 요약을
+    담는다. spec 011 성과 엔진을 읽기 전용·시세 미조회(marks 없음)로 호출하므로
+    네트워크 의존이 없고 같은 audit_log 에 대해 바이트 동일 출력이 보장된다
+    (미실현 손익은 시세가 없어 0/N/A — 시세 기반 미실현은 `performance` CLI 전용).
+    """
+
+    mode: str  # "paper" | "live"
+    rolling_window_days: int
+    day_fills: int
+    day_realized_pnl_usd: Decimal
+    day_return_pct: Decimal | None
+    rolling_closed_trades: int
+    rolling_win_rate: Decimal | None
+    rolling_sharpe: Decimal | None
+    rolling_max_drawdown_pct: Decimal | None
+    rolling_total_return_pct: Decimal | None
+
+
+@dataclass(frozen=True)
 class DailyReport:
     session_date: str
     generated_at: str
@@ -57,10 +81,87 @@ class DailyReport:
     reconciliation: str
     halt: dict[str, Any] | None = None
     efficiency: EfficiencySnapshot | None = None
+    performance: PerformanceSection | None = None
 
 
 def _utcnow_iso() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _signed_money(v: Decimal | None) -> str:
+    return "N/A" if v is None else f"${v.quantize(Decimal('0.01')):+}"
+
+
+def _pct1(v: Decimal | None, *, scale: int = 1) -> str:
+    return "N/A" if v is None else f"{(v * Decimal(scale)).quantize(Decimal('0.1'))}%"
+
+
+def _pct2(v: Decimal | None) -> str:
+    return "N/A" if v is None else f"{v.quantize(Decimal('0.01'))}%"
+
+
+def _ratio4(v: Decimal | None) -> str:
+    return "N/A" if v is None else f"{v.quantize(Decimal('0.0001'))}"
+
+
+def _detect_performance_mode(
+    conn: sqlite3.Connection, since: datetime, until: datetime, *, default: str = "paper"
+) -> str:
+    """윈도 내 체결 이벤트 종류로 성과 모드를 자동 판별한다.
+
+    라이브 `FILL` 과 페이퍼 `ORDER_PAPER_FILLED` 중 더 많은 쪽을 택하고, 둘 다
+    없으면 `default`(현재 시스템 가동 모드 dry-run → "paper")를 쓴다.
+    """
+    s, u = _fmt_ts(since), _fmt_ts(until)
+    live = conn.execute(
+        "SELECT COUNT(*) AS c FROM audit_log "
+        "WHERE event_type = 'FILL' AND ts_utc >= ? AND ts_utc < ?",
+        (s, u),
+    ).fetchone()["c"]
+    paper = conn.execute(
+        "SELECT COUNT(*) AS c FROM audit_log "
+        "WHERE event_type = 'ORDER_PAPER_FILLED' AND ts_utc >= ? AND ts_utc < ?",
+        (s, u),
+    ).fetchone()["c"]
+    if live == 0 and paper == 0:
+        return default
+    return "live" if live >= paper else "paper"
+
+
+def build_performance_section(
+    conn: sqlite3.Connection,
+    *,
+    session_date: str,
+    window_days: int = 30,
+    mode: str | None = None,
+) -> PerformanceSection:
+    """그날의 실현 손익 + 롤링 위험조정 요약을 spec 011 엔진으로 만든다 (읽기 전용)."""
+    day_start = datetime.strptime(session_date, "%Y-%m-%d").replace(tzinfo=UTC)
+    day_end = day_start + timedelta(days=1)
+    rolling_start = day_end - timedelta(days=window_days)
+
+    resolved_mode = mode or _detect_performance_mode(conn, rolling_start, day_end)
+
+    day_rep = build_performance_report(
+        conn, mode=resolved_mode, since=day_start, until=day_end
+    )
+    rolling_rep = build_performance_report(
+        conn, mode=resolved_mode, since=rolling_start, until=day_end
+    )
+    risk = rolling_rep.risk
+
+    return PerformanceSection(
+        mode=resolved_mode,
+        rolling_window_days=window_days,
+        day_fills=day_rep.fills_count,
+        day_realized_pnl_usd=day_rep.realized_pnl_usd,
+        day_return_pct=day_rep.return_pct,
+        rolling_closed_trades=(risk.closed_trades if risk else 0),
+        rolling_win_rate=(risk.win_rate if risk else None),
+        rolling_sharpe=(risk.sharpe_ratio if risk else None),
+        rolling_max_drawdown_pct=(risk.max_drawdown_pct if risk else None),
+        rolling_total_return_pct=(risk.total_return_pct if risk else None),
+    )
 
 
 def build_report(
@@ -69,6 +170,9 @@ def build_report(
     session_date: str,
     generated_at: str | None = None,
     tiers: TierTable | None = None,
+    include_performance: bool = False,
+    performance_window_days: int = 30,
+    performance_mode: str | None = None,
 ) -> DailyReport:
     """Build a DailyReport from the audit log + positions cache.
 
@@ -177,6 +281,15 @@ def build_report(
             tiers=tiers,
         )
 
+    performance: PerformanceSection | None = None
+    if include_performance:
+        performance = build_performance_section(
+            conn,
+            session_date=session_date,
+            window_days=performance_window_days,
+            mode=performance_mode,
+        )
+
     return DailyReport(
         session_date=session_date,
         generated_at=generated_at or _utcnow_iso(),
@@ -187,6 +300,7 @@ def build_report(
         reconciliation=reconciliation,
         halt=halt,
         efficiency=efficiency,
+        performance=performance,
     )
 
 
@@ -249,6 +363,26 @@ def render_markdown(report: DailyReport) -> str:
                     f"{agg['cost_usd']} | {agg['p95_tokens']} |"
                 )
     lines.append("")
+
+    if report.performance is not None:
+        perf = report.performance
+        lines.append("## Performance (성과)")
+        lines.append(f"- Mode:              {perf.mode}")
+        lines.append(f"- Day fills:         {perf.day_fills}")
+        lines.append(f"- Day realized PnL:  {_signed_money(perf.day_realized_pnl_usd)}")
+        if perf.day_return_pct is None:
+            lines.append("- Day return:        N/A (투입 자본 없음)")
+        else:
+            lines.append(
+                f"- Day return:        {perf.day_return_pct.quantize(Decimal('0.01')):+}%"
+            )
+        lines.append(f"- Rolling {perf.rolling_window_days}d:")
+        lines.append(f"  - Closed trades:   {perf.rolling_closed_trades}")
+        lines.append(f"  - Win rate:        {_pct1(perf.rolling_win_rate, scale=100)}")
+        lines.append(f"  - Sharpe (√252):   {_ratio4(perf.rolling_sharpe)}")
+        lines.append(f"  - Max drawdown:    {_pct2(perf.rolling_max_drawdown_pct)}")
+        lines.append(f"  - Total return:    {_pct2(perf.rolling_total_return_pct)}")
+        lines.append("")
 
     lines.append("## Positions (current)")
     if report.positions:
@@ -313,8 +447,30 @@ def render_json(report: DailyReport) -> str:
         "reconciliation": report.reconciliation,
         "halt": report.halt,
         "efficiency": eff_payload,
+        "performance": _performance_json(report.performance),
     }
     return json.dumps(payload, sort_keys=True, indent=2) + "\n"
+
+
+def _performance_json(perf: PerformanceSection | None) -> dict[str, Any] | None:
+    if perf is None:
+        return None
+
+    def _s(v: Decimal | None) -> str | None:
+        return None if v is None else str(v)
+
+    return {
+        "mode": perf.mode,
+        "rolling_window_days": perf.rolling_window_days,
+        "day_fills": perf.day_fills,
+        "day_realized_pnl_usd": str(perf.day_realized_pnl_usd),
+        "day_return_pct": _s(perf.day_return_pct),
+        "rolling_closed_trades": perf.rolling_closed_trades,
+        "rolling_win_rate": _s(perf.rolling_win_rate),
+        "rolling_sharpe": _s(perf.rolling_sharpe),
+        "rolling_max_drawdown_pct": _s(perf.rolling_max_drawdown_pct),
+        "rolling_total_return_pct": _s(perf.rolling_total_return_pct),
+    }
 
 
 def write_report(

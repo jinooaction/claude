@@ -3,7 +3,7 @@
 **Feature Branch**: `006-deploy-automation` (resumed on `claude/review-merge-tasks-vpAhp`)
 **Created**: 2026-05-06
 **Last revised**: 2026-05-14 (constitution v3.0.0 alignment — kernel-touch downgraded from halt to informational; production-deploy gate clarified)
-**Status**: Active
+**Status**: Shipped (main 에 머지 완료; `auto-invest deploy` + 배포 테스트 8종 green; 2026-05-24 재조정 — tasks.md 가 stale 0% 였음)
 **Constitution**: v3.0.0 (consumes principles VIII.A, VIII.B, and IX.A/IX.B/IX.D)
 **Input**: Operator description: "배포도 자동화해줘. 필요하다면 헌법도 수정할거야 ... 나는 머지도 개입하고 싶지 않아." Operator wants a single command that pulls the latest branch, applies migrations, validates config, restarts the worker, and confirms health — refusing to run during US regular hours, recording every step in the audit log. Under constitution v3.0.0 the autonomous-merge path is the default; production-deploy is gated by spec 007's hardened canary, NOT by kernel-touch detection.
 

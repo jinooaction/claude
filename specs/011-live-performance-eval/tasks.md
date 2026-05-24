@@ -30,22 +30,44 @@
 P2 테스트: 단위 9건(`test_performance_risk.py`) + CLI 통합 5건. Kernel 터치 0건
 (엔진은 audit_log 읽기 전용). JSON 스키마 1.0 → 1.1 (`risk` 블록 추가, 하위호환).
 
-## P3 — 일일 리포트 통합 + 튜너 신호 면 (US5) ⏳ 대기
+## P3 — 일일 리포트 통합 + 튜너 신호 면 (US5) ✅ 완료
 
-- [ ] T013 `auto-invest report --date`에 성과 섹션 추가 (FR-012).
-- [ ] T014 (선택) `LIVE_PERFORMANCE_SNAPSHOT` 추가-전용 audit 이벤트 — K4 추가
-      변경, 기본 비활성 (FR-014).
+- [X] T013 `auto-invest report --date`에 성과 섹션 추가 (FR-012). `reports/daily.py`
+      에 `PerformanceSection` + `build_performance_section` 추가 — 그날 실현 손익·
+      수익률(당일 윈도) + 롤링 30일 위험조정 요약(샤프·낙폭·승률). spec 011 엔진을
+      marks 없이(네트워크 미사용) 호출해 바이트 동일 보장. 모드는 윈도 내 FILL vs
+      ORDER_PAPER_FILLED 로 자동 판별. CLI `report` 가 `include_performance=True`
+      로 켠다(기존 호출부는 기본 False 라 후방 호환).
+- [X] T014 (선택) `LIVE_PERFORMANCE_SNAPSHOT` 추가-전용 audit 이벤트 — K4 추가
+      변경, 기본 비활성 (FR-014). `performance --snapshot` 일 때만 분리된 쓰기
+      연결로 1건 기록(측정 자체는 query_only 읽기 전용 유지). `snapshot_fields`
+      가 PerformanceReport 를 평탄화해 튜너(spec 005)가 시계열로 소비.
 
-## P4 — 슬리피지/체결 품질 (US4) ⏳ 대기 (데이터 의존)
+P3 테스트: 일일 리포트 성과 섹션 4건(`test_daily_report.py`) + 스냅샷 4건
+(`test_performance_snapshot.py`). **K4 터치 1건** — `persistence/audit.py` 에
+이벤트 타입·`LivePerformanceSnapshotPayload`·유니온 항목 추가(추가-전용, 기존
+이벤트/row 불변). 일일 리포트 JSON 에 `performance` 키 추가(하위호환).
 
-- [ ] T015 주문/시그널 시점 기준 시세 대비 체결가 슬리피지(bps·USD) 집계 (FR-009).
-      **선행 의존성**: 현재 `FILL`(시장가)·`ORDER_PAPER_FILLED` 이벤트에는 "의도
-      가격(기준 시세)"이 기록되지 않아 슬리피지 측정 표본이 없다. 측정 토대를 만들려면
-      체결 경로에서 결정 시점 기준 시세를 추가-전용으로 한 필드 더 남겨야 한다(K4
-      페이로드 소폭 확장). 그 전까지 `--slippage` 는 대부분 "측정 불가"만 나오므로,
-      P2(위험조정) 완료 후 별도 데이터-캡처 변경과 함께 진행한다.
+## P4 — 슬리피지/체결 품질 (US4) ✅ 완료 (데이터 토대 + 집계 동시 구현)
+
+- [X] T015 주문/시그널 시점 기준 시세 대비 체결가 슬리피지(bps·USD) 집계 (FR-009).
+      **데이터 토대 (이번에 만듦)**: 기준가는 대부분 이미 데이터에 있었거나 한 줄로
+      캡처 가능했다 — 라이브는 `ORDER_INTENT.limit_price_usd`(correlation_id 조인,
+      기존 데이터), 페이퍼는 `OrderPaperFilledPayload` 에 `reference_price_usd`
+      (결정 시점 last) 필드를 추가(K4 추가-전용)하고 `order_router` 에서 채움.
+      **집계**: `engine.compute_slippage` — 매수는 기준가보다 비싸게 사면, 매도는
+      싸게 팔면 불리(양수 bps/비용). 매수/매도별 평균·중앙(bps)·총비용(USD),
+      기준가 없는 체결은 "측정 불가"로 분리(US4 AC2). CLI `performance --slippage`
+      로 텍스트/JSON 출력. 테스트 10건(`test_performance_slippage.py`).
+
+P4 테스트: 슬리피지 단위 10건. **K4 터치 1건** — `OrderPaperFilledPayload` 에
+옵션 `reference_price_usd` 필드 추가(추가-전용, 과거 row 는 None 으로 읽혀 측정
+불가로 분리, 후방 호환). 비-Kernel: `execution/order_router.py` 1줄·엔진·CLI.
+기준가 표본이 쌓일수록(라이브/페이퍼 가동) 측정 가능 비율이 올라간다.
 
 ## 비고
 
 - P1 Kernel(K1~K6, K-meta) 터치 **0건** — audit.py 는 읽기만, 수정 없음.
-- spec 005(자율 튜너)는 이 하네스의 P1~P3 신호를 피드백으로 소비할 예정.
+- P3·P4 는 K4 추가-전용 터치 각 1건(스냅샷 이벤트, 슬리피지 기준가 필드).
+- spec 005(자율 튜너)는 이 하네스의 P1~P4 신호(손익·위험조정·기여도·슬리피지·
+  스냅샷)를 피드백으로 소비할 예정 — 측정 신호 면이 이제 완비됐다.

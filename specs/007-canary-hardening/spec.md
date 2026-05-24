@@ -2,7 +2,7 @@
 
 **Feature Branch**: `claude/start-spec-007-6GntK`
 **Created**: 2026-05-06 (stub) — promoted 2026-05-14 (constitution v3.0.0)
-**Status**: Active
+**Status**: Shipped (main 에 머지 완료; 카나리 테스트 93개 green; 2026-05-24 재조정 — tasks.md 가 stale 0% 였음)
 **Constitution**: v3.0.0 (this feature implements the production-deploy gate referenced by principle IX.B-2; under v3.0.0 the canary protects real money at the live-worker boundary, not the merge boundary)
 **Input**: Operator wants zero intervention for production-deploy of code that has already landed on `main`. Under constitution v3.0.0 (IX.B-2) the hardened canary is the sole acceptance signal for autonomous production-deploy. Merges land freely via the autonomous-workflow policy in CLAUDE.md; this feature defines what gates the bits actually reaching the live worker.
 
