@@ -102,12 +102,12 @@ description: "Task list — LLM Judgment Points (spec 004)"
 
 ### Tests
 
-- [ ] T024 [P] [US3] `tests/integration/test_judgment_news_screen.py` — 스탠스 소비·결정성·공급원 부재 비활성·LLM 실패 neutral 폴백 테스트.
+- [x] T024 [P] [US3] `tests/integration/test_judgment_news_screen.py` — 스탠스 소비·결정성·공급원 부재 비활성·LLM 실패 neutral 폴백 테스트.
 
 ### Implementation
 
-- [ ] T025 [US3] `src/auto_invest/judgment/points/news_screen.py` — 헤드라인+종목 입력 → `NewsAdvisory` 파싱 + neutral 폴백 정의. 헤드라인 공급원 주입 인터페이스(없으면 비활성).
-- [ ] T026 [US3] `src/auto_invest/config/rules.py` + `execution/order_router.py`(비커널) — `block_buy_stance="bear"`·`block_min_confidence`(0.8) 소비 규칙으로 당일 신규 매수 보류 결정론적 적용. (T024 통과시킴)
+- [x] T025 [US3] `src/auto_invest/judgment/points/news_screen.py` — 헤드라인+종목 입력 → `NewsAdvisory` 파싱 + neutral 폴백 정의. 헤드라인 공급원 주입 인터페이스(없으면 비활성).
+- [x] T026 [US3] `src/auto_invest/config/rules.py` + `execution/order_router.py`(비커널) — `block_buy_stance="bear"`·`block_min_confidence`(0.8) 소비 규칙으로 당일 신규 매수 보류 결정론적 적용. (T024 통과시킴)
 
 **Checkpoint**: 세 판단 지점 독립 동작. green이면 커밋·푸시.
 

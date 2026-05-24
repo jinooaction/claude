@@ -37,8 +37,9 @@ from auto_invest.config.caps import SizingCaps
 from auto_invest.config.enums import OrderType, Side, StrategyStage
 from auto_invest.config.rules import TradingRule
 from auto_invest.config.whitelist import Whitelist
+from auto_invest.judgment.points.news_screen import should_block_buy
 from auto_invest.judgment.points.volatility import apply_volatility_advisory
-from auto_invest.judgment.schemas import VolatilityAdvisory
+from auto_invest.judgment.schemas import NewsAdvisory, VolatilityAdvisory
 from auto_invest.market_data.store import get_latest_bar
 from auto_invest.persistence import audit
 from auto_invest.persistence.audit import (
@@ -267,23 +268,51 @@ class OrderRouter:
         quote_ask_usd: Decimal | None = None,
         quote_bid_usd: Decimal | None = None,
         volatility_advisory: VolatilityAdvisory | None = None,
+        news_advisory: NewsAdvisory | None = None,
         judgment_correlation_id: str | None = None,
+        news_correlation_id: str | None = None,
     ) -> OrderOutcome:
         correlation_id = f"ord-{uuid.uuid4().hex[:12]}"
 
-        # Spec 004: consume the volatility judgment advisory BEFORE the gate
-        # chain. The advisory can only shrink or skip the order — never enlarge
-        # it — so K1 position caps (risk/gates.py) still bind unchanged below.
-        # Only canary-stage rules consume the advisory (constitution VI); full-
-        # live rules behave as v1 until the judgment point is promoted.
+        # Spec 004: consume judgment advisories BEFORE the gate chain. Advisories
+        # can only shrink, block, or skip the order — never enlarge it — so K1
+        # position caps (risk/gates.py) still bind unchanged below. Only canary-
+        # stage rules consume advisories (constitution VI); full-live rules behave
+        # as v1 until the judgment point is promoted.
         effective_qty = rule.action.qty
         canary_cohort = rule.stage is StrategyStage.CANARY
-        if (
-            volatility_advisory is not None
-            and rule.judgment is not None
-            and rule.judgment.enabled
-            and canary_cohort
-        ):
+        _judgment_on = (
+            rule.judgment is not None and rule.judgment.enabled and canary_cohort
+        )
+
+        # news_screen: bear+고신뢰면 당일 신규 매수 보류(가장 보수적 — 전체 skip).
+        if _judgment_on and news_advisory is not None:
+            block = should_block_buy(
+                news_advisory,
+                side=rule.action.side,
+                block_min_confidence=rule.judgment.block_min_confidence,
+                block_buy_stance=rule.judgment.block_buy_stance,
+            )
+            audit.append(
+                self.conn,
+                JudgmentAdvisoryAppliedPayload(
+                    decision_class="news_screen",
+                    advisory=f"{news_advisory.stance}@{news_advisory.confidence:.2f}",
+                    applied_decision="block_buy" if block else "no_effect",
+                    canary_cohort=canary_cohort,
+                ),
+                rule_id=rule.id,
+                symbol=rule.symbol,
+                correlation_id=news_correlation_id or correlation_id,
+            )
+            if block:
+                return OrderOutcome(
+                    state="SKIPPED_BY_JUDGMENT",
+                    correlation_id=correlation_id,
+                    reason="news_block_buy",
+                )
+
+        if volatility_advisory is not None and _judgment_on:
             decision = apply_volatility_advisory(
                 volatility_advisory,
                 qty=rule.action.qty,
