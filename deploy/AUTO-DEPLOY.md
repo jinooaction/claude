@@ -67,6 +67,38 @@ spec 006 배포 상태기계 (안전 단계 전부 통과해야 워커 교체)
 실행. (A)가 어떤 이유로든 트리거 안 됐거나 장중 연기됐을 때 결국 최신 main 을
 서버에 올리는 최종 보증.
 
+## (C) 자율 튜너 타이머 — `auto-invest-tune.timer` (스펙 005 후속)
+
+위 (A)/(B)는 **코드를 main 에서 서버로** 나르는 파이프라인이다. 이것과 **별개로**,
+서버에 이미 올라간 코드(스펙 005 자율 튜너)가 **자기 설정을 측정 기반으로 조정**하는
+오프아워 채널이 하나 더 있다. 코드 배포가 아니라 런타임 튜닝이라 (A)/(B)와 구분된다.
+
+- **트리거**: `auto-invest-tune.timer` — 매일 22:00 UTC 1회(미국 장 마감 후).
+  같은 oneshot `auto-invest-tune.service` 가 `deploy/run-tune.sh` 를 실행하고,
+  그 안에서 이미 검증·머지된 `auto-invest tune --apply`(스펙 005 CLI)를 호출한다.
+  **새 로직 없음** — 언제 돌릴지만 systemd 에 맡긴다.
+- **무엇을 하나**: 롤링 윈도 KPI 를 읽어 저위험 L1 변경 한 종류 —
+  `config/llm_kpi_thresholds.toml` 의 `tier_b` 임계값 조이기 — 만 자동 적용한다.
+  적용 시 이전값을 담은 `AUTO_TUNED_L1` 감사 행이 남아 되돌릴 수 있다.
+- **왜 안전한가**:
+  1. **튜닝 ≠ 실거래 ≠ 코드 배포.** KPI 임계값(관측 기준선)만 조인다. 주문·포지션·
+     워커 코드는 건드리지 않는다.
+  2. **장중에는 0건 적용.** 타이머가 장 마감 후(22:00 UTC)에만 켜지고, 그래도
+     튜너 자신의 `market_hours_guard`(헌법 VIII.A)가 한 번 더 막는다.
+  3. **측정 부족이면 거부.** 윈도 표본 < 최소 표본이면 적용 안 함(헌법 X).
+  4. **멱등.** 세션 날짜 기준 dedup — 같은 날 두 번 켜져도 한 번만 적용.
+  5. **Kernel 은 절대 자동 적용 안 함.** 대상이 `kernel.toml` 에 닿으면 무조건
+     L4 강등(자동 적용 거부 + 포렌식 콜아웃). 튜너는 헌법·kernel 을 쓰지 않는다.
+  6. **DB 없으면 무동작.** `run-tune.sh` 는 텔레메트리 DB 가 없으면(새 인스턴스)
+     조용히 종료 0 — 빨간 X 노이즈를 만들지 않는다.
+- **운영자 확인**: `systemctl list-timers auto-invest-tune.timer`,
+  `journalctl -u auto-invest-tune.service`. 적용 내역은 `audit_log` 의
+  `AUTO_TUNED_L1` / `AUTO_TUNER_RUN` 행. 끄려면
+  `systemctl disable --now auto-invest-tune.timer`.
+
+이 채널은 헌법 X(측정 기반 자율 성장)가 정의한 "dry-run 워커로의 지속 배포" 안전
+경계 **안에서** 동작한다 — 측정이 없으면 행동도 없고, 행동은 가역 L1 한 종류뿐이다.
+
 ## 운영자가 확인할 곳
 
 - **즉시 결과**: GitHub Actions → "Deploy on merge to main" 실행 Summary.

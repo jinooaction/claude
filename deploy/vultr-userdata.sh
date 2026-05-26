@@ -122,13 +122,19 @@ chmod 0644 /etc/polkit-1/rules.d/50-auto-invest.rules
 # defensively so the very first auto-invest-deploy.timer firing sees it.
 systemctl reload polkit 2>/dev/null || systemctl restart polkit 2>/dev/null || true
 
-echo "[9/9] install systemd units + timer (worker is fail-safe until KIS keys set)"
+echo "[9/9] install systemd units + timers (worker is fail-safe until KIS keys set)"
 install -m 0644 /opt/auto-invest/deploy/auto-invest.service        /etc/systemd/system/auto-invest.service
 install -m 0644 /opt/auto-invest/deploy/auto-invest-deploy.service /etc/systemd/system/auto-invest-deploy.service
 install -m 0644 /opt/auto-invest/deploy/auto-invest-deploy.timer   /etc/systemd/system/auto-invest-deploy.timer
+install -m 0644 /opt/auto-invest/deploy/auto-invest-tune.service   /etc/systemd/system/auto-invest-tune.service
+install -m 0644 /opt/auto-invest/deploy/auto-invest-tune.timer     /etc/systemd/system/auto-invest-tune.timer
 systemctl daemon-reload
 # Deploy timer activates immediately (does not need KIS keys; just git pull).
 systemctl enable --now auto-invest-deploy.timer
+# Tuner timer activates immediately too: the tuner needs no KIS keys (pure
+# deterministic, no LLM), and run-tune.sh is fail-safe until the worker has
+# created the telemetry DB. Fires daily at 22:00 UTC, after US close.
+systemctl enable --now auto-invest-tune.timer
 # Worker is enabled only -- operator starts it via set_secrets.sh which
 # writes the KIS keys and then calls systemctl restart auto-invest.service.
 systemctl enable auto-invest.service

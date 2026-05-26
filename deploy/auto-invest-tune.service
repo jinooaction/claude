@@ -1,0 +1,20 @@
+[Unit]
+Description=auto-invest autonomous tuner (one-shot, off-hours L1 apply)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=auto-invest
+Group=auto-invest
+WorkingDirectory=/opt/auto-invest
+# 튜너는 비밀키가 필요 없다(순수 결정론적, LLM 미호출). .env 는 AUTO_INVEST_DB /
+# AUTO_INVEST_REPORTS 같은 경로 오버라이드만 쓰므로 없어도 동작하도록 '-' 로 선택.
+EnvironmentFile=-/opt/auto-invest/.env
+# Share uv cache with the other units so all reuse the same lockfile/wheel store.
+Environment=UV_CACHE_DIR=/opt/auto-invest/.cache/uv
+ExecStart=/opt/auto-invest/deploy/run-tune.sh
+StandardOutput=journal
+StandardError=journal
+NoNewPrivileges=true
+PrivateTmp=true

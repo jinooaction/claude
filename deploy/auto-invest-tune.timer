@@ -1,0 +1,17 @@
+[Unit]
+Description=auto-invest tuner timer (daily, after US regular-session close)
+Requires=auto-invest-tune.service
+
+[Timer]
+# Fire once daily at 22:00 UTC — strictly AFTER the US regular session
+# close (20:00 UTC under EDT, 21:00 UTC under EST), so the tuner reads a
+# settled session's telemetry. This hour is well outside US regular hours
+# (13:30-20:00 UTC). The tuner's own market_hours_guard (constitution
+# VIII.A) + measurement gate (X) catch DST edges regardless, and it is
+# idempotent per session date, so any extra firing is a safe no-op.
+OnCalendar=*-*-* 22:00:00
+Persistent=true
+Unit=auto-invest-tune.service
+
+[Install]
+WantedBy=timers.target
