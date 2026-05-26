@@ -100,7 +100,7 @@ description: "Task list — spec 012 Tuner L2/L3 → Hardened-Canary Auto-Submis
 
 - [X] T028 [P] 전체 스위트·린트 — `uv run pytest`(전부 통과, fail 0) + `uv run ruff check src tests`("All checks passed!"). 회귀 0(기존 902 + 신규). (SC-C12-07)
 - [X] T029 [P] quickstart 검증 — `specs/012-tuner-canary-queue/quickstart.md` 명령들이 실제 동작하는지 확인(감사 조회 쿼리·테스트 경로).
-- [ ] T030 HANDOFF 갱신 — `/handoff` 로 HANDOFF.md 요약표(마지막 main 커밋·테스트 수·출시 스펙·열린 PR) + 마일스톤 절 갱신. 스펙 012 출시 반영.
+- [X] T030 HANDOFF 갱신 — `/handoff` 로 HANDOFF.md 요약표(마지막 main 커밋·테스트 수·출시 스펙·열린 PR) + 마일스톤 절 갱신. 스펙 012 출시 반영.
 
 ---
 
