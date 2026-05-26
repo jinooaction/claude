@@ -43,15 +43,15 @@ description: "Task list — spec 012 Tuner L2/L3 → Hardened-Canary Auto-Submis
 **Independent Test**: 모델 라우팅을 L2로 분류시키는 입력으로 apply 실행 → 리포트·감사에
 구조화 후보 기록 1건(멱등), dry-run 무변경.
 
-- [ ] T006 [US1] max_tokens 노브 계산 — `src/auto_invest/tuner/knobs.py` 에 `compute_max_tokens_reduce(current:int)->int|None`(STEP_FRACTION 만큼 축소, 바닥 클램프, 변화 없으면 None). 원자적 TOML 1줄 교체 `apply_max_tokens`(기존 `apply_threshold` 패턴 재사용). (research R3)
-- [ ] T007 [US1] 후보 구체화 — `src/auto_invest/tuner/candidate.py` 신설: `build_canary_candidate(c:Classification,*,tunables_path)->CanaryCandidate|None`. L2/L3·비커널·`max_tokens_reduce` 종류만 구체화, 권장 tier/window 채움. 결정론·LLM 미호출. (contracts C1, data-model §2)
-- [ ] T008 [US1] detect 확장 — `src/auto_invest/tuner/detect.py`: `cost_drift`·`latency_degradation` 드리프트가 `proposal_only` 대신 `max_tokens_reduce` 제안(target=config/judgment_tunables.toml, 가장 비싼/관련 판단 지점). `cache_miss` 는 proposal_only 유지. (research R3)
-- [ ] T009 [US1] classify 확장 — `src/auto_invest/tuner/classify.py`: `config/judgment_tunables.toml` 대상 변경을 L2로 분류(L2 규칙에 경로 추가). Kernel 교집합은 기존대로 무조건 L4. (research R4, FR-C12-08)
-- [ ] T010 [US1] runner 배선(후보 기록) — `src/auto_invest/tuner/runner.py`: L2/L3·비커널 분기에서 `build_canary_candidate` 호출 → `canary_candidates` 채움. apply 모드에서 멱등 체크(`_candidate_already_recorded`) 후 `AUTO_TUNED_CANARY_CANDIDATE` 감사 기록. dry-run 은 후보만(감사 없음). 구체 노브 없으면 기존 `canary_entered`+`AUTO_TUNED_L2_CANARY_ENTERED` 유지. (contracts C5)
-- [ ] T011 [US1] 리포트 후보 섹션 — `src/auto_invest/tuner/report.py`: 리포트 JSON 에 `canary_candidates` 섹션(후보별 target/old→new/권장 tier·window/근거). (contracts C6)
-- [ ] T012 [P] [US1] [test] 후보 구체화 단위 테스트 — `tests/unit/tuner/test_candidate.py`: 결정론(같은 입력 같은 출력), 클램프(바닥 이하 None), L4/Kernel 후보 제외, max_tokens 외 종류 None.
-- [ ] T013 [P] [US1] [test] max_tokens 노브 테스트 — `tests/unit/tuner/test_knobs_max_tokens.py`: 축소 계산·클램프·TOML 1줄 원자 교체(주석·다른 키 보존).
-- [ ] T014 [US1] [test] 후보 기록 통합 테스트 — `tests/integration/tuner/test_canary_candidate_record.py`: detect→classify→candidate→(apply)감사+리포트 1건, 멱등(재실행 중복 없음), dry-run 무변경(감사·config·git 불변).
+- [X] T006 [US1] max_tokens 노브 계산 — `src/auto_invest/tuner/knobs.py` 에 `compute_max_tokens_reduce(current:int)->int|None`(STEP_FRACTION 만큼 축소, 바닥 클램프, 변화 없으면 None). 원자적 TOML 1줄 교체 `apply_max_tokens`(기존 `apply_threshold` 패턴 재사용). (research R3)
+- [X] T007 [US1] 후보 구체화 — `src/auto_invest/tuner/candidate.py` 신설: `build_canary_candidate(c:Classification,*,tunables_path)->CanaryCandidate|None`. L2/L3·비커널·`max_tokens_reduce` 종류만 구체화, 권장 tier/window 채움. 결정론·LLM 미호출. (contracts C1, data-model §2)
+- [X] T008 [US1] detect 확장 — `src/auto_invest/tuner/detect.py`: `cost_drift`·`latency_degradation` 드리프트가 `proposal_only` 대신 `max_tokens_reduce` 제안(target=config/judgment_tunables.toml, 가장 비싼/관련 판단 지점). `cache_miss` 는 proposal_only 유지. (research R3)
+- [X] T009 [US1] classify 확장 — `src/auto_invest/tuner/classify.py`: `config/judgment_tunables.toml` 대상 변경을 L2로 분류(L2 규칙에 경로 추가). Kernel 교집합은 기존대로 무조건 L4. (research R4, FR-C12-08)
+- [X] T010 [US1] runner 배선(후보 기록) — `src/auto_invest/tuner/runner.py`: L2/L3·비커널 분기에서 `build_canary_candidate` 호출 → `canary_candidates` 채움. apply 모드에서 멱등 체크(`_candidate_already_recorded`) 후 `AUTO_TUNED_CANARY_CANDIDATE` 감사 기록. dry-run 은 후보만(감사 없음). 구체 노브 없으면 기존 `canary_entered`+`AUTO_TUNED_L2_CANARY_ENTERED` 유지. (contracts C5)
+- [X] T011 [US1] 리포트 후보 섹션 — `src/auto_invest/tuner/report.py`: 리포트 JSON 에 `canary_candidates` 섹션(후보별 target/old→new/권장 tier·window/근거). (contracts C6)
+- [X] T012 [P] [US1] [test] 후보 구체화 단위 테스트 — `tests/unit/tuner/test_candidate.py`: 결정론(같은 입력 같은 출력), 클램프(바닥 이하 None), L4/Kernel 후보 제외, max_tokens 외 종류 None.
+- [X] T013 [P] [US1] [test] max_tokens 노브 테스트 — `tests/unit/tuner/test_knobs_max_tokens.py`: 축소 계산·클램프·TOML 1줄 원자 교체(주석·다른 키 보존).
+- [X] T014 [US1] [test] 후보 기록 통합 테스트 — `tests/integration/tuner/test_canary_candidate_record.py`: detect→classify→candidate→(apply)감사+리포트 1건, 멱등(재실행 중복 없음), dry-run 무변경(감사·config·git 불변).
 
 **Checkpoint**: US1 독립 출시 가능. 죽은 로그 분기가 실행 가능 후보 기록으로 전환(MVP 가치).
 

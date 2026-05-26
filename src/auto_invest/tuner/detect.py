@@ -14,19 +14,53 @@
 from __future__ import annotations
 
 import sqlite3
+import tomllib
 from datetime import date, datetime, timedelta
+from pathlib import Path
 
 from auto_invest.telemetry.kpi import compute_snapshot
 from auto_invest.telemetry.thresholds import TierTable
-from auto_invest.tuner.knobs import compute_tighten
+from auto_invest.tuner.knobs import compute_max_tokens_reduce, compute_tighten
 from auto_invest.tuner.models import CandidateChange, ProposedChange
 
-# 드리프트 감지 대상(7일 윈도). 적용 노브가 v1 에 없어 proposal 로만 기록.
+# 드리프트 감지 대상(7일 윈도).
+#   - cost_drift / latency_degradation: 판단 지점 max_tokens 축소(L2, 캐너리)로 적용.
+#   - cache_miss: 깨끗한 숫자 노브 없음(프롬프트 캐시 구조) → proposal_only 유지.
 _DRIFT_RULES = {
     "usd_per_decision_mean": "cost_drift",
     "cache_hit_rate": "cache_miss",
     "latency_p95_ms": "latency_degradation",
 }
+
+# max_tokens 노브로 적용 가능한 드리프트(나머지는 proposal_only).
+_MAX_TOKENS_DRIFTS = {"cost_drift", "latency_degradation"}
+
+_DEFAULT_TUNABLES_PATH = "config/judgment_tunables.toml"
+
+
+def _pick_max_tokens_target(tunables_path: Path) -> tuple[str, int] | None:
+    """튜닝 config 에서 max_tokens 가 가장 큰 판단 지점을 결정론적으로 고른다.
+
+    가장 비싼/긴 응답 지점을 줄이는 것이 비용·지연 드리프트에 가장 효과적.
+    동률이면 이름 오름차순. 파일/유효 섹션 없으면 None(→ proposal_only 폴백).
+    """
+    try:
+        if not tunables_path.exists():
+            return None
+        data = tomllib.loads(tunables_path.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError):
+        return None
+    best: tuple[str, int] | None = None
+    for name in sorted(data):
+        section = data[name]
+        if not isinstance(section, dict):
+            continue
+        raw = section.get("max_tokens")
+        if not isinstance(raw, int) or isinstance(raw, bool):
+            continue
+        if best is None or raw > best[1]:
+            best = (name, raw)
+    return best
 
 
 def _day_bounds(d: date) -> tuple[str, str]:
@@ -85,9 +119,12 @@ def detect(
     thresholds_path: str,
     window_short_days: int = 7,
     window_long_days: int = 30,
+    tunables_path: str = _DEFAULT_TUNABLES_PATH,
 ) -> list[CandidateChange]:
     """롤링 윈도 KPI 를 읽어 후보 변경 리스트를 만든다(결정론적)."""
     candidates: list[CandidateChange] = []
+    tunables_target = str(tunables_path).replace("\\", "/")
+    max_tokens_target = _pick_max_tokens_target(Path(tunables_path))
 
     short_start, short_end = _window_bounds(as_of, window_short_days)
     long_start, long_end = _window_bounds(as_of, window_long_days)
@@ -146,6 +183,29 @@ def detect(
             continue
         if short_snap.call_count == 0:
             continue
+
+        proposed = ProposedChange(kind="proposal_only", target_paths=())
+        rationale = (
+            f"{window_short_days}일 {kpi_name} Tier {short_kpi.tier} (드리프트) — "
+            f"v1 적용 노브 없음, 제안으로만 기록"
+        )
+        # cost/latency 드리프트 → 가장 비싼 판단 지점 max_tokens 축소(L2, 캐너리).
+        if rule in _MAX_TOKENS_DRIFTS and max_tokens_target is not None:
+            dc, current = max_tokens_target
+            new_mt = compute_max_tokens_reduce(current)
+            if new_mt is not None:
+                proposed = ProposedChange(
+                    kind="max_tokens_reduce",
+                    target_paths=(tunables_target,),
+                    config_key=f"{dc}.max_tokens",
+                    old_value=str(current),
+                    new_value=str(new_mt),
+                )
+                rationale = (
+                    f"{window_short_days}일 {kpi_name} Tier {short_kpi.tier} (드리프트) → "
+                    f"{dc}.max_tokens {current}→{new_mt} 축소 후보 (L2 캐너리 검증 대상)"
+                )
+
         candidates.append(
             CandidateChange(
                 candidate_id=f"{rule}:{kpi_name}",
@@ -154,14 +214,8 @@ def detect(
                 observed_value=str(short_kpi.value),
                 observed_tier=short_kpi.tier,
                 window=f"{window_short_days}d",
-                proposed=ProposedChange(
-                    kind="proposal_only",
-                    target_paths=(),
-                ),
-                rationale=(
-                    f"{window_short_days}일 {kpi_name} Tier {short_kpi.tier} (드리프트) — "
-                    f"v1 적용 노브 없음, 제안으로만 기록"
-                ),
+                proposed=proposed,
+                rationale=rationale,
                 measurement_sample=short_snap.call_count,
             )
         )

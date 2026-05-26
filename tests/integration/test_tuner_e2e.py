@@ -201,5 +201,5 @@ def test_cli_dry_run_json(setup) -> None:
         ],
     )
     assert res.exit_code == 0, res.output
-    assert '"schema_version": "1.0"' in res.output
+    assert '"schema_version": "1.1"' in res.output
     assert '"mode": "dry_run"' in res.output
