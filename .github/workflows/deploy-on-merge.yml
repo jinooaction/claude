@@ -6,11 +6,17 @@ name: Deploy on merge to main
 # 뿐이다. 같은 서비스를 `auto-invest-deploy.timer` 가 30분마다(장중 제외) 돌리므로,
 # 이 워크플로우가 실패하거나 머지가 장중에 일어나도 타이머가 안전망으로 받는다.
 #
+# 배포 직후 deploy/sync-units.sh 를 서버 sudo bash 에 파이프해 systemd 유닛
+# (.service/.timer)을 /etc/systemd/system 에 설치하고 타이머를 활성화한다. 배포
+# 상태기계는 '새 유닛 설치'를 하지 않으므로 그 빈틈을 메운다. 유닛 동기화는 워커를
+# 재시작하지 않고(주문 라우팅 무관) git show 로 작업트리도 안 건드리므로 장중에도 안전 —
+# 배포가 "장중 연기"여도 유닛/타이머는 이번 실행에서 갱신된다.
+#
 # 안전 속성 (자세한 설계는 deploy/AUTO-DEPLOY.md):
 #   - 워커는 dry-run 모드 — 배포는 코드 교체+재시작이며 실주문을 내지 않는다.
 #     실거래 전환(AUTO_INVEST_MODE=live)은 이 워크플로우가 건드리지 않는다.
-#   - 장중에는 배포 안 됨: market_hours_guard(헌법 VIII.A)가 거부하면 "장중 연기"로
-#     끝내고 타이머가 장 마감 후 올린다.
+#   - 장중에는 (워커 교체) 배포 안 됨: market_hours_guard(헌법 VIII.A)가 거부하면
+#     "장중 연기"로 끝내고 타이머가 장 마감 후 올린다.
 #   - 실패 시 직전 good SHA 로 자동 롤백(health_check ≥90초).
 
 on:
@@ -36,6 +42,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - name: Checkout (to pipe deploy/sync-units.sh over SSH)
+        uses: actions/checkout@v4
+
       - name: Install SSH key
         env:
           KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
@@ -75,12 +84,39 @@ jobs:
           cat /tmp/deploy_journal.txt
           echo "start_exit=${start_exit}" >> "$GITHUB_OUTPUT"
 
+      - name: Sync systemd units (install/refresh + enable timers)
+        id: units
+        if: always()
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          # 배포 상태기계는 새 systemd 유닛을 설치하지 않는다. deploy/sync-units.sh 를
+          # 서버 sudo bash 에 파이프해 유닛 파일을 /etc/systemd/system 에 설치하고
+          # 타이머를 활성화한다. 워커는 재시작하지 않고 git show 로 작업트리도 안 건드리므로
+          # 장중에도 안전 — 그래서 배포가 "장중 연기"여도 유닛/타이머는 이번에 갱신된다.
+          ssh -o StrictHostKeyChecking=accept-new \
+              -o ConnectTimeout=15 \
+              -p "${port}" \
+              -i ~/.ssh/id_ed25519 \
+              "${USER}@${HOST}" \
+              'sudo bash -s' < deploy/sync-units.sh \
+              > /tmp/units_sync.txt 2>&1
+          units_exit=$?
+          cat /tmp/units_sync.txt
+          echo "units_exit=${units_exit}" >> "$GITHUB_OUTPUT"
+
       - name: Summarise result
         if: always()
         env:
           START_EXIT: ${{ steps.deploy.outputs.start_exit }}
+          UNITS_EXIT: ${{ steps.units.outputs.units_exit }}
         run: |
           journal="$(cat /tmp/deploy_journal.txt 2>/dev/null || echo '(no journal captured)')"
+          units_log="$(cat /tmp/units_sync.txt 2>/dev/null || echo '(no unit-sync output captured)')"
           # 장중 연기는 실패가 아니다 — market_hours_guard 거부 신호를 찾는다.
           if grep -qiE 'market is open|market_hours_guard' /tmp/deploy_journal.txt 2>/dev/null; then
               status="⏸ 장중 연기 — 타이머가 장 마감 후 자동 재배포"
@@ -92,17 +128,31 @@ jobs:
               status="❌ 배포 실패 (exit ${START_EXIT}) — 워커는 직전 good SHA 유지(롤백)"
               effective_exit=1
           fi
+          # 유닛 동기화는 배포와 독립 — 실패해도 코드 배포 결과를 가리지 않는다(별도 보고).
+          if [[ "${UNITS_EXIT}" == "0" ]]; then
+              units_status="✅ systemd 유닛 동기화 + 타이머 활성 완료"
+          else
+              units_status="⚠ 유닛 동기화 실패 (exit ${UNITS_EXIT}) — sudo 권한 범위 확인 필요(아래 로그). 코드 배포와 무관."
+          fi
           {
               echo "## Deploy on merge — 결과"
               echo ""
-              echo "- 상태: ${status}"
+              echo "- 배포 상태: ${status}"
               echo "- systemctl start exit: \`${START_EXIT}\`"
+              echo "- 유닛 동기화: ${units_status}"
               echo "- commit: \`${GITHUB_SHA}\`"
               echo ""
               echo "<details><summary>auto-invest-deploy.service journal (last 120)</summary>"
               echo ""
               echo '```'
               echo "${journal}"
+              echo '```'
+              echo "</details>"
+              echo ""
+              echo "<details><summary>sync-units.sh 출력</summary>"
+              echo ""
+              echo '```'
+              echo "${units_log}"
               echo '```'
               echo "</details>"
           } >> "$GITHUB_STEP_SUMMARY"
