@@ -1532,6 +1532,81 @@ def status(
 
 
 @app.command()
+def health(
+    db_path: Path = typer.Option(
+        Path("data/auto_invest.db"),
+        "--db",
+        help="SQLite database path.",
+    ),
+    halt_path: Path = typer.Option(
+        Path("data/halt.flag"),
+        "--halt-path",
+        help="Filesystem halt-flag path.",
+    ),
+    output_format: str = typer.Option(
+        "text",
+        "--format",
+        help="Output format: text or json.",
+    ),
+    stale_hours: float = typer.Option(
+        36.0,
+        "--stale-hours",
+        help="Hours after which reconciliation/activity is flagged stale.",
+    ),
+) -> None:
+    """Print a unified operational-health roll-up (read-only).
+
+    Exit codes: 0 healthy (OK), 1 unhealthy (DEGRADED/CRITICAL), 2 bad usage.
+    Never writes to the audit log and never runs migrations.
+    """
+    from datetime import UTC as _UTC
+    from datetime import datetime as _datetime
+
+    from auto_invest.reports import health as _health
+
+    if output_format not in ("text", "json"):
+        typer.echo("--format must be 'text' or 'json'.", err=True)
+        _exit(2)
+
+    now = _datetime.now(_UTC)
+    pid_path = db_path.parent / "auto_invest.pid"
+
+    if not db_path.exists():
+        report = _health.db_missing_report(now)
+    else:
+        conn = db.get_connection(db_path)
+        try:
+            report = _health.build_health_report(
+                conn,
+                pid_path=pid_path,
+                halt_path=halt_path,
+                now=now,
+                stale_hours=stale_hours,
+            )
+        finally:
+            conn.close()
+
+    if output_format == "json":
+        typer.echo(report.to_json())
+    else:
+        _icon = {"OK": "✓", "DEGRADED": "△", "CRITICAL": "✗"}
+        typer.echo(f"auto-invest health — 종합 판정: {report.overall}")
+        for c in report.checks:
+            typer.echo(f"  {_icon.get(c.status, '?')} [{c.status}] {c.name}: {c.detail}")
+        ctx = report.context
+        if ctx:
+            typer.echo("맥락:")
+            typer.echo(f"  오늘 주문: {ctx.get('today_order_counts', {})}")
+            typer.echo(f"  보유 종목 수: {ctx.get('position_count')}")
+            if ctx.get("last_performance"):
+                typer.echo(f"  마지막 성과: {ctx['last_performance']}")
+            typer.echo(f"  마지막 튜너 실행: {ctx.get('last_tuner_run_utc')}")
+            typer.echo(f"  마지막 캐너리 검증: {ctx.get('last_canary_validation_outcome')}")
+
+    _exit(0 if report.overall == "OK" else 1)
+
+
+@app.command()
 def halt(
     reason: str = typer.Option(..., "--reason", help="Operator-supplied reason for halting."),
     halt_path: Path = typer.Option(
