@@ -28,6 +28,11 @@ Run `uv sync` once as the `auto-invest` user to populate `.venv/`.
 
 ## 2. Install the units + timer
 
+> **CI 연결 인스턴스는 보통 수동 설치 불필요.** `deploy-on-merge.yml` 이 매 머지마다
+> `deploy/sync-units.sh` 를 서버에서 실행해 유닛을 설치/갱신하고 타이머를 활성화한다
+> (워커는 재시작 안 함, 장중에도 안전). 아래 단계는 최초 부트스트랩이나 CI 가 없는
+> 호스트를 위한 수동 절차다.
+
 ```bash
 install -m 0644 /opt/auto-invest/deploy/auto-invest.service /etc/systemd/system/auto-invest.service
 install -m 0644 /opt/auto-invest/deploy/auto-invest-deploy.service /etc/systemd/system/auto-invest-deploy.service
