@@ -32,6 +32,8 @@ Run `uv sync` once as the `auto-invest` user to populate `.venv/`.
 install -m 0644 /opt/auto-invest/deploy/auto-invest.service /etc/systemd/system/auto-invest.service
 install -m 0644 /opt/auto-invest/deploy/auto-invest-deploy.service /etc/systemd/system/auto-invest-deploy.service
 install -m 0644 /opt/auto-invest/deploy/auto-invest-deploy.timer /etc/systemd/system/auto-invest-deploy.timer
+install -m 0644 /opt/auto-invest/deploy/auto-invest-tune.service /etc/systemd/system/auto-invest-tune.service
+install -m 0644 /opt/auto-invest/deploy/auto-invest-tune.timer /etc/systemd/system/auto-invest-tune.timer
 
 systemctl daemon-reload
 
@@ -40,6 +42,11 @@ systemctl enable --now auto-invest.service
 
 # Deploy timer — fires every 30 min outside US regular hours:
 systemctl enable --now auto-invest-deploy.timer
+
+# Tuner timer — fires once daily at 22:00 UTC (after US close).
+# Runs `auto-invest tune --apply` (spec 005 L1 autonomous tuning). Needs
+# no KIS keys; fail-safe (no-op) until the worker has created the DB.
+systemctl enable --now auto-invest-tune.timer
 ```
 
 ## 3. Verify
@@ -48,14 +55,25 @@ systemctl enable --now auto-invest-deploy.timer
 systemctl status auto-invest.service
 journalctl -u auto-invest.service -n 50
 
-systemctl list-timers auto-invest-deploy.timer
+systemctl list-timers auto-invest-deploy.timer auto-invest-tune.timer
 journalctl -u auto-invest-deploy.service -n 50
+journalctl -u auto-invest-tune.service -n 50
 ```
 
-The timer's calendar expression intentionally OMITS hours `13..20`
-(US regular session UTC); the deploy runner's
+The deploy timer's calendar expression intentionally OMITS hours
+`13..20` (US regular session UTC); the deploy runner's
 `market_hours_guard` catches edge cases (DST shifts) regardless,
 refusing with `DEPLOY_FAILED(phase=market_hours_guard)`.
+
+The tuner timer fires once daily at `22:00` UTC — after the US close
+(`20:00` UTC EDT / `21:00` UTC EST) — and runs
+`auto-invest tune --apply` (spec 005). Its own `market_hours_guard`
+(constitution VIII.A) and minimum-sample gate (constitution X) make
+it a no-op inside the session window or on thin data, and it is
+idempotent per session date. The only L1 change it ever auto-applies
+is tightening a `tier_b` KPI threshold in
+`config/llm_kpi_thresholds.toml`, recorded as an `AUTO_TUNED_L1`
+audit row (with the prior value, so it is reversible).
 
 ## 4. Trigger a deploy manually (any time, off-hours only)
 
@@ -97,6 +115,7 @@ The worker is then running the previous good sha. Exit code is 1.
 
 ```bash
 systemctl disable --now auto-invest-deploy.timer
+systemctl disable --now auto-invest-tune.timer
 systemctl stop auto-invest.service
 ```
 
