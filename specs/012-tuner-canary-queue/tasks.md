@@ -65,15 +65,15 @@ description: "Task list — spec 012 Tuner L2/L3 → Hardened-Canary Auto-Submis
 **Independent Test**: 리플레이 데이터 있는 환경에서 L2 후보 apply → 캐너리 1회 실행 +
 결과(합격/불합격+실패지표) 감사·리포트 기록. 데이터 없으면 skipped + 종료 0.
 
-- [ ] T015 [US2] git plumbing 후보 구체화 — `src/auto_invest/tuner/canary_submit.py` 신설: 임시 인덱스(`GIT_INDEX_FILE`)+`hash-object`/`update-index`/`write-tree`/`commit-tree` 로 임시 후보 커밋 SHA 생성. 작업트리·실인덱스·HEAD·브랜치 미변경, ref 미생성, **push 미호출**, 임시 인덱스 `finally` 삭제. (contracts C4, research R1)
-- [ ] T016 [US2] 캐너리 투입 — `canary_submit.py`: `submit_to_canary(candidate,*,repo_root,audit_conn,session_date,history_root,run_canary_fn=run_canary)->CanaryValidationResult`. baseline_rev=HEAD 명시(R2). `replay_inputs` 는 캐너리 CLI 패턴으로 구성. (contracts C2·C3)
-- [ ] T017 [US2] fail-safe(데이터 없음) — `canary_submit.py`: `latest_dataset_dir(history_root) is None` → `CanaryValidationResult(skipped, no_replay_data)`, 캐너리 미호출, 종료 0. (research R5, FR-C12-09)
-- [ ] T018 [US2] 오류 격리 — `canary_submit.py`: `run_canary_fn` 예외/`EXIT_INTERNAL`/`in_progress` → `internal_error` 결과, 예외 미전파. (research R6, FR-C12-10)
-- [ ] T019 [US2] runner 배선(검증) — `runner.py`: 후보 기록 후 apply 모드에서 `submit_to_canary` 호출 → `canary_validations` 채움 + `AUTO_TUNED_CANARY_VALIDATED`(promoted=False) 감사. 멱등(`already_validated_this_session`). 후보별 독립 처리(한 후보 오류가 루프 중단 안 함). (contracts C5)
-- [ ] T020 [US2] 리포트 검증 섹션 — `report.py`: `canary_validations` 섹션(outcome/canary_run_id/failing_metrics/skip_reason/promoted). (contracts C6)
-- [ ] T021 [P] [US2] [test] git plumbing 테스트 — `tests/unit/tuner/test_canary_submit.py`: 임시 git repo 에서 후보 rev 생성 후 (a) 작업트리 `git status --porcelain` 불변, (b) origin ref 미생성, (c) candidate_rev 트리에 변경 반영, (d) 임시 인덱스 정리.
-- [ ] T022 [P] [US2] [test] fail-safe·오류격리 테스트 — `tests/unit/tuner/test_canary_submit_failsafe.py`: 데이터 없음→skipped, run_canary 더블 예외→internal_error(미전파), 더블 failed→failing_metrics 채움.
-- [ ] T023 [US2] [test] 파이프라인 통합 테스트 — `tests/integration/tuner/test_canary_pipeline.py`: detect→classify→candidate→submit(stub run_canary)→audit(CANDIDATE+VALIDATED)+report. passed/failed/skipped 분기 각각. 멱등 재실행.
+- [X] T015 [US2] git plumbing 후보 구체화 — `src/auto_invest/tuner/canary_submit.py` 신설: 임시 인덱스(`GIT_INDEX_FILE`)+`hash-object`/`update-index`/`write-tree`/`commit-tree` 로 임시 후보 커밋 SHA 생성. 작업트리·실인덱스·HEAD·브랜치 미변경, ref 미생성, **push 미호출**, 임시 인덱스 `finally` 삭제. (contracts C4, research R1)
+- [X] T016 [US2] 캐너리 투입 — `canary_submit.py`: `submit_to_canary(candidate,*,repo_root,audit_conn,session_date,history_root,run_canary_fn=run_canary)->CanaryValidationResult`. baseline_rev=HEAD 명시(R2). `replay_inputs` 는 캐너리 CLI 패턴으로 구성. (contracts C2·C3)
+- [X] T017 [US2] fail-safe(데이터 없음) — `canary_submit.py`: `latest_dataset_dir(history_root) is None` → `CanaryValidationResult(skipped, no_replay_data)`, 캐너리 미호출, 종료 0. (research R5, FR-C12-09)
+- [X] T018 [US2] 오류 격리 — `canary_submit.py`: `run_canary_fn` 예외/`EXIT_INTERNAL`/`in_progress` → `internal_error` 결과, 예외 미전파. (research R6, FR-C12-10)
+- [X] T019 [US2] runner 배선(검증) — `runner.py`: 후보 기록 후 apply 모드에서 `submit_to_canary` 호출 → `canary_validations` 채움 + `AUTO_TUNED_CANARY_VALIDATED`(promoted=False) 감사. 멱등(`already_validated_this_session`). 후보별 독립 처리(한 후보 오류가 루프 중단 안 함). (contracts C5)
+- [X] T020 [US2] 리포트 검증 섹션 — `report.py`: `canary_validations` 섹션(outcome/canary_run_id/failing_metrics/skip_reason/promoted). (contracts C6)
+- [X] T021 [P] [US2] [test] git plumbing 테스트 — `tests/unit/tuner/test_canary_submit.py`: 임시 git repo 에서 후보 rev 생성 후 (a) 작업트리 `git status --porcelain` 불변, (b) origin ref 미생성, (c) candidate_rev 트리에 변경 반영, (d) 임시 인덱스 정리.
+- [X] T022 [P] [US2] [test] fail-safe·오류격리 테스트 — `tests/unit/tuner/test_canary_submit_failsafe.py`: 데이터 없음→skipped, run_canary 더블 예외→internal_error(미전파), 더블 failed→failing_metrics 채움.
+- [X] T023 [US2] [test] 파이프라인 통합 테스트 — `tests/integration/tuner/test_canary_pipeline.py`: detect→classify→candidate→submit(stub run_canary)→audit(CANDIDATE+VALIDATED)+report. passed/failed/skipped 분기 각각. 멱등 재실행.
 
 **Checkpoint**: US2 출시 가능. 후보가 실제 캐너리 검증을 받고 결과가 기록됨.
 

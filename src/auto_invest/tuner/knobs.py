@@ -90,17 +90,14 @@ def compute_max_tokens_reduce(current: int, *, floor: int = MAX_TOKENS_FLOOR) ->
     return new_value
 
 
-def apply_max_tokens(
-    config_path: Path,
-    decision_class: str,
-    new_max_tokens: int,
+def render_max_tokens(
+    text: str, decision_class: str, new_max_tokens: int
 ) -> tuple[str, str]:
-    """`[decision_class].max_tokens` 한 줄만 원자적 교체. 반환 `(old, new)` 문자열.
+    """`[decision_class].max_tokens` 한 줄만 교체한 새 텍스트 생성(순수, 무 I/O).
 
-    `apply_threshold` 와 동일한 span 교체 패턴 — 주석·다른 키·다른 섹션 보존.
-    섹션이나 키를 못 찾으면 ValueError.
+    반환 `(old_value, new_text)`. 주석·다른 키·다른 섹션 보존(span 교체).
+    섹션이나 키를 못 찾으면 ValueError. apply_max_tokens 와 git plumbing 양쪽이 공유.
     """
-    text = config_path.read_text(encoding="utf-8")
     lines = text.splitlines(keepends=True)
     section_re = re.compile(r"^\s*\[(?P<name>[^\]]+)\]\s*$")
     key_re = re.compile(r"^\s*max_tokens\s*=\s*(?P<val>[^\s#]+)")
@@ -121,11 +118,24 @@ def apply_max_tokens(
                 lines[i] = line[:start] + new_text_value + line[end:]
                 break
     if old_value is None:
-        raise ValueError(
-            f"max_tokens for {decision_class!r} not found in {config_path}"
-        )
+        raise ValueError(f"max_tokens for {decision_class!r} not found")
+    return old_value, "".join(lines)
 
-    new_text = "".join(lines)
+
+def apply_max_tokens(
+    config_path: Path,
+    decision_class: str,
+    new_max_tokens: int,
+) -> tuple[str, str]:
+    """`[decision_class].max_tokens` 한 줄만 원자적 교체. 반환 `(old, new)` 문자열.
+
+    `apply_threshold` 와 동일한 span 교체 패턴 — 주석·다른 키·다른 섹션 보존.
+    섹션이나 키를 못 찾으면 ValueError.
+    """
+    text = config_path.read_text(encoding="utf-8")
+    old_value, new_text = render_max_tokens(text, decision_class, new_max_tokens)
+    new_text_value = str(new_max_tokens)
+
     dir_ = config_path.parent
     fd, tmp = tempfile.mkstemp(dir=dir_, prefix=".tune-", suffix=".tmp")
     try:
@@ -188,4 +198,13 @@ def apply_threshold(
     return old_value, new_text_value
 
 
-__all__ = ["STEP_FRACTION", "ThresholdKnob", "apply_threshold", "compute_tighten"]
+__all__ = [
+    "MAX_TOKENS_FLOOR",
+    "STEP_FRACTION",
+    "ThresholdKnob",
+    "apply_max_tokens",
+    "apply_threshold",
+    "compute_max_tokens_reduce",
+    "compute_tighten",
+    "render_max_tokens",
+]
