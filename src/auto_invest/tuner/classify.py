@@ -36,9 +36,12 @@ def _non_kernel_tier(candidate: CandidateChange) -> tuple[str, str]:
     """
     if candidate.proposed.kind == "threshold_tighten":
         return "L1", "non-kernel KPI threshold knob → L1 (low-risk, reversible)"
+    # 판단 지점 max_tokens 튜닝(LLM 비용/품질 영향, 헌법 III·VI) → 캐너리 검증 필수.
+    if candidate.proposed.kind == "max_tokens_reduce":
+        return "L2", "judgment max_tokens knob (LLM cost/quality) → L2 (canary)"
     # proposal_only / 미래 변경: 대상 파일 패턴으로 캐너리 등급 판정.
     for p in candidate.proposed.target_paths:
-        if "/judgment/" in p or "prompt" in p.lower():
+        if "/judgment/" in p or "judgment_tunables" in p or "prompt" in p.lower():
             return "L2", "prompt/judgment-parameter surface → L2 (canary)"
         if p.startswith("specs/") or "migrations/" in p:
             return "L3", "new scaffolding/schema → L3 (canary, extended window)"

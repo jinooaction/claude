@@ -2333,3 +2333,12 @@ def tune(
             )
         for cid, reason in result.skipped:
             typer.echo(f"  · skipped {cid}: {reason}")
+        if result.canary_candidates or result.canary_validations:
+            n = len(result.canary_candidates)
+            passed = sum(1 for v in result.canary_validations if v.outcome == "passed")
+            failed = sum(1 for v in result.canary_validations if v.outcome == "failed")
+            sk = sum(1 for v in result.canary_validations if v.outcome == "skipped")
+            typer.echo(
+                f"캐너리 후보 {n} / 합격 {passed} / 불합격 {failed} / 건너뜀 {sk}"
+                " — 라이브 미승격(운영자/스펙 006 게이트)"
+            )

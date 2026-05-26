@@ -22,6 +22,9 @@ from auto_invest.telemetry.thresholds import ThresholdEntry
 
 STEP_FRACTION = Decimal("0.2")
 
+# 판단 지점 max_tokens 를 이 아래로 내리지 않는다(품질 바닥, 스펙 012).
+MAX_TOKENS_FLOOR = 32
+
 
 @dataclass(frozen=True)
 class ThresholdKnob:
@@ -66,6 +69,84 @@ def compute_tighten(entry: ThresholdEntry) -> Decimal | None:
     if new_b == tb:
         return None
     return new_b
+
+
+def compute_max_tokens_reduce(current: int, *, floor: int = MAX_TOKENS_FLOOR) -> int | None:
+    """`max_tokens` 를 STEP_FRACTION 만큼 줄인 값. 조일 여지 없으면 None (스펙 012).
+
+    바닥(`floor`) 아래로는 내려가지 않는다. 한 스텝이 0 이거나 결과가 현재값과
+    같으면(이미 바닥 등) None. 결정론적·가역(old 보존).
+    """
+    if current <= floor:
+        return None
+    step = int((STEP_FRACTION * Decimal(current)).to_integral_value(rounding="ROUND_DOWN"))
+    if step <= 0:
+        step = 1
+    new_value = current - step
+    if new_value < floor:
+        new_value = floor
+    if new_value >= current:
+        return None
+    return new_value
+
+
+def render_max_tokens(
+    text: str, decision_class: str, new_max_tokens: int
+) -> tuple[str, str]:
+    """`[decision_class].max_tokens` 한 줄만 교체한 새 텍스트 생성(순수, 무 I/O).
+
+    반환 `(old_value, new_text)`. 주석·다른 키·다른 섹션 보존(span 교체).
+    섹션이나 키를 못 찾으면 ValueError. apply_max_tokens 와 git plumbing 양쪽이 공유.
+    """
+    lines = text.splitlines(keepends=True)
+    section_re = re.compile(r"^\s*\[(?P<name>[^\]]+)\]\s*$")
+    key_re = re.compile(r"^\s*max_tokens\s*=\s*(?P<val>[^\s#]+)")
+
+    in_section = False
+    old_value: str | None = None
+    new_text_value = str(new_max_tokens)
+    for i, line in enumerate(lines):
+        m = section_re.match(line)
+        if m:
+            in_section = m.group("name").strip() == decision_class
+            continue
+        if in_section:
+            km = key_re.match(line)
+            if km:
+                old_value = km.group("val")
+                start, end = km.span("val")
+                lines[i] = line[:start] + new_text_value + line[end:]
+                break
+    if old_value is None:
+        raise ValueError(f"max_tokens for {decision_class!r} not found")
+    return old_value, "".join(lines)
+
+
+def apply_max_tokens(
+    config_path: Path,
+    decision_class: str,
+    new_max_tokens: int,
+) -> tuple[str, str]:
+    """`[decision_class].max_tokens` 한 줄만 원자적 교체. 반환 `(old, new)` 문자열.
+
+    `apply_threshold` 와 동일한 span 교체 패턴 — 주석·다른 키·다른 섹션 보존.
+    섹션이나 키를 못 찾으면 ValueError.
+    """
+    text = config_path.read_text(encoding="utf-8")
+    old_value, new_text = render_max_tokens(text, decision_class, new_max_tokens)
+    new_text_value = str(new_max_tokens)
+
+    dir_ = config_path.parent
+    fd, tmp = tempfile.mkstemp(dir=dir_, prefix=".tune-", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(new_text)
+        os.replace(tmp, config_path)
+    except Exception:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+        raise
+    return old_value, new_text_value
 
 
 def apply_threshold(
@@ -117,4 +198,13 @@ def apply_threshold(
     return old_value, new_text_value
 
 
-__all__ = ["STEP_FRACTION", "ThresholdKnob", "apply_threshold", "compute_tighten"]
+__all__ = [
+    "MAX_TOKENS_FLOOR",
+    "STEP_FRACTION",
+    "ThresholdKnob",
+    "apply_max_tokens",
+    "apply_threshold",
+    "compute_max_tokens_reduce",
+    "compute_tighten",
+    "render_max_tokens",
+]

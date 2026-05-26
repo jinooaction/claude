@@ -11,9 +11,17 @@ import os
 import tempfile
 from pathlib import Path
 
-from auto_invest.tuner.models import Classification, TunerRunResult
+from auto_invest.tuner.models import (
+    CanaryCandidate,
+    CanaryValidationResult,
+    Classification,
+    TunerRunResult,
+)
 
-SCHEMA_VERSION = "1.0"
+SCHEMA_VERSION = "1.1"
+
+# 합격해도 라이브 자동 승격하지 않는다는 불변(헌법 IX.B-2)을 리포트에 명시.
+_PROMOTION_NOTE = "operator-gated (spec 006); NOT auto-promoted"
 
 
 def _classification_to_dict(c: Classification) -> dict:
@@ -40,6 +48,36 @@ def _classification_to_dict(c: Classification) -> dict:
     }
 
 
+def _canary_candidate_to_dict(c: CanaryCandidate) -> dict:
+    return {
+        "candidate_id": c.candidate_id,
+        "detection_rule": c.detection_rule,
+        "authority_tier": c.authority_tier,
+        "target_path": c.target_path,
+        "config_key": c.config_key,
+        "old_value": c.old_value,
+        "new_value": c.new_value,
+        "recommended_tier": c.recommended_tier,
+        "recommended_window_days": c.recommended_window_days,
+        "measurement_sample": c.measurement_sample,
+        "rationale": c.rationale,
+    }
+
+
+def _canary_validation_to_dict(v: CanaryValidationResult) -> dict:
+    return {
+        "candidate_id": v.candidate_id,
+        "outcome": v.outcome,
+        "canary_run_id": v.canary_run_id,
+        "candidate_rev": v.candidate_rev,
+        "baseline_rev": v.baseline_rev,
+        "failing_metrics": list(v.failing_metrics),
+        "skip_reason": v.skip_reason,
+        "promoted": v.promoted,
+        "promotion": _PROMOTION_NOTE,
+    }
+
+
 def to_dict(result: TunerRunResult) -> dict:
     return {
         "schema_version": SCHEMA_VERSION,
@@ -62,6 +100,12 @@ def to_dict(result: TunerRunResult) -> dict:
             _classification_to_dict(c) for c in result.awaiting_human_merge
         ],
         "skipped": [[cid, reason] for cid, reason in result.skipped],
+        "canary_candidates": [
+            _canary_candidate_to_dict(c) for c in result.canary_candidates
+        ],
+        "canary_validations": [
+            _canary_validation_to_dict(v) for v in result.canary_validations
+        ],
     }
 
 

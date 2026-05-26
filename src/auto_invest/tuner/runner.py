@@ -10,12 +10,15 @@ dry-run 은 순수 분석이다 — 벽시계 `now`·감사 상태에 의존하�
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Callable
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from auto_invest.persistence.audit import (
+    AutoTunedCanaryCandidatePayload,
+    AutoTunedCanaryValidatedPayload,
     AutoTunedL1Payload,
     AutoTunedL2CanaryEnteredPayload,
     AutoTunedL4ForensicPayload,
@@ -24,11 +27,15 @@ from auto_invest.persistence.audit import (
 )
 from auto_invest.telemetry.thresholds import load_thresholds
 from auto_invest.tuner import gates
+from auto_invest.tuner.canary_submit import submit_to_canary
+from auto_invest.tuner.candidate import build_canary_candidate
 from auto_invest.tuner.classify import classify_all
 from auto_invest.tuner.detect import detect
 from auto_invest.tuner.knobs import apply_threshold
 from auto_invest.tuner.models import (
     AppliedChange,
+    CanaryCandidate,
+    CanaryValidationResult,
     Classification,
     SkipReason,
     TunerRunResult,
@@ -58,6 +65,22 @@ def _already_applied(
     return int(row["n"]) > 0
 
 
+def _candidate_already_recorded(
+    conn: sqlite3.Connection, *, candidate_id: str, session_date: str
+) -> bool:
+    """같은 세션·같은 후보의 캐너리 후보 기록이 이미 있으면 True(멱등 dedup)."""
+    row = conn.execute(
+        """
+        SELECT COUNT(*) AS n FROM audit_log
+        WHERE event_type = 'AUTO_TUNED_CANARY_CANDIDATE'
+          AND json_extract(payload_json, '$.candidate_id') = ?
+          AND json_extract(payload_json, '$.session_date') = ?
+        """,
+        (candidate_id, session_date),
+    ).fetchone()
+    return int(row["n"]) > 0
+
+
 def run_tuner(
     *,
     db_path: Path,
@@ -70,9 +93,14 @@ def run_tuner(
     min_sample: int = gates.DEFAULT_MIN_SAMPLE,
     now: datetime | None = None,
     output_root: Path | None = None,
+    tunables_path: Path = Path("config/judgment_tunables.toml"),
+    repo_root: Path = Path("."),
+    history_root: Path = Path("data/history"),
+    submit_fn: Callable[..., Any] = submit_to_canary,
 ) -> TunerRunResult:
     session_date = as_of.isoformat()
     thresholds_target = str(thresholds_path).replace("\\", "/")
+    tunables_target = str(tunables_path).replace("\\", "/")
 
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
@@ -85,11 +113,14 @@ def run_tuner(
             thresholds_path=thresholds_target,
             window_short_days=window_short_days,
             window_long_days=window_long_days,
+            tunables_path=tunables_target,
         )
         classifications = classify_all(candidates, kernel_path=kernel_path)
 
         applied: list[AppliedChange] = []
         canary_entered: list[Classification] = []
+        canary_candidates: list[CanaryCandidate] = []
+        canary_validations: list[CanaryValidationResult] = []
         awaiting_human_merge: list[Classification] = []
         skipped: list[tuple[str, SkipReason]] = []
 
@@ -113,17 +144,71 @@ def run_tuner(
                     )
                 continue
             if c.tier in ("L2", "L3"):
-                canary_entered.append(c)
+                canary_candidate = build_canary_candidate(c)
+                if canary_candidate is None:
+                    # 구체 노브 없음 → 기존 동작(캐너리 진입 식별 마커만).
+                    canary_entered.append(c)
+                    if mode == "apply":
+                        append(
+                            conn,
+                            AutoTunedL2CanaryEnteredPayload(
+                                session_date=session_date,
+                                candidate_id=cand.candidate_id,
+                                authority_tier=c.tier,
+                                detection_rule=cand.detection_rule,
+                                proposed_change=cand.rationale,
+                                target_paths=list(cand.proposed.target_paths),
+                            ),
+                        )
+                    continue
+
+                canary_candidates.append(canary_candidate)
                 if mode == "apply":
+                    if _candidate_already_recorded(
+                        conn,
+                        candidate_id=canary_candidate.candidate_id,
+                        session_date=session_date,
+                    ):
+                        skipped.append(
+                            (canary_candidate.candidate_id, "already_validated_this_session")
+                        )
+                        continue
                     append(
                         conn,
-                        AutoTunedL2CanaryEnteredPayload(
+                        AutoTunedCanaryCandidatePayload(
                             session_date=session_date,
-                            candidate_id=cand.candidate_id,
-                            authority_tier=c.tier,
-                            detection_rule=cand.detection_rule,
-                            proposed_change=cand.rationale,
-                            target_paths=list(cand.proposed.target_paths),
+                            candidate_id=canary_candidate.candidate_id,
+                            detection_rule=canary_candidate.detection_rule,
+                            authority_tier=canary_candidate.authority_tier,
+                            target_path=canary_candidate.target_path,
+                            config_key=canary_candidate.config_key,
+                            old_value=canary_candidate.old_value,
+                            new_value=canary_candidate.new_value,
+                            recommended_tier=canary_candidate.recommended_tier,
+                            recommended_window_days=canary_candidate.recommended_window_days,
+                        ),
+                    )
+                    # 후보를 하드닝 캐너리로 검증(시뮬레이션, 미배포·미승격).
+                    validation = submit_fn(
+                        canary_candidate,
+                        repo_root=repo_root,
+                        audit_conn=conn,
+                        session_date=session_date,
+                        history_root=history_root,
+                    )
+                    canary_validations.append(validation)
+                    append(
+                        conn,
+                        AutoTunedCanaryValidatedPayload(
+                            session_date=session_date,
+                            candidate_id=validation.candidate_id,
+                            outcome=validation.outcome,
+                            canary_run_id=validation.canary_run_id,
+                            candidate_rev=validation.candidate_rev,
+                            baseline_rev=validation.baseline_rev,
+                            failing_metrics=list(validation.failing_metrics),
+                            skip_reason=validation.skip_reason,
+                            promoted=validation.promoted,
                         ),
                     )
                 continue
@@ -187,6 +272,8 @@ def run_tuner(
             canary_entered=tuple(canary_entered),
             awaiting_human_merge=tuple(awaiting_human_merge),
             skipped=tuple(skipped),
+            canary_candidates=tuple(canary_candidates),
+            canary_validations=tuple(canary_validations),
         )
 
         if mode == "apply":
@@ -197,7 +284,7 @@ def run_tuner(
                     mode=mode,
                     candidates_count=len(classifications),
                     applied_count=len(applied),
-                    canary_count=len(canary_entered),
+                    canary_count=len(canary_entered) + len(canary_candidates),
                     l4_count=len(awaiting_human_merge),
                     skipped_count=len(skipped),
                 ),

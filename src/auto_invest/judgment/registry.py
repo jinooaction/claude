@@ -7,8 +7,10 @@ max_tokens·자본 영향 여부·결정론적 폴백을 코드로 선언한다.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import tomllib
+from dataclasses import dataclass, replace
 from decimal import Decimal
+from pathlib import Path
 
 from pydantic import BaseModel
 
@@ -17,6 +19,11 @@ from auto_invest.judgment.schemas import (
     NewsAdvisory,
     VolatilityAdvisory,
 )
+
+# 비커널 튜닝 표면(스펙 012). 없으면 아래 하드코딩 기본값 사용 → 동작 무변경.
+_TUNABLES_PATH = Path("config/judgment_tunables.toml")
+# 튜너가 max_tokens 를 이 아래로 내리지 않는다(품질 바닥).
+JUDGMENT_MAX_TOKENS_FLOOR = 32
 
 # 비용 적합 기본 모델 (config/llm_prices.toml 에 존재):
 #   저비용 enum/score 판단 → Haiku, 서술형 일일 요약 → Sonnet.
@@ -82,6 +89,38 @@ _REGISTRY: dict[str, JudgmentPoint] = {
         fallback_description="neutral 취급 (거래 영향 없음).",
     ),
 }
+
+
+def _apply_tunables_overlay(
+    registry: dict[str, JudgmentPoint], path: Path
+) -> dict[str, JudgmentPoint]:
+    """`judgment_tunables.toml` 의 max_tokens 오버레이 적용 (스펙 012).
+
+    파일/섹션/키가 없거나 값이 유효하지 않으면 기존 하드코딩값을 유지한다
+    (조용한 폴백 — 절대 import 를 깨지 않는다). 바닥값 클램프.
+    """
+    try:
+        if not path.exists():
+            return registry
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError):
+        return registry
+
+    overlaid = dict(registry)
+    for decision_class, point in registry.items():
+        section = data.get(decision_class)
+        if not isinstance(section, dict):
+            continue
+        raw = section.get("max_tokens")
+        if not isinstance(raw, int) or isinstance(raw, bool):
+            continue
+        clamped = max(JUDGMENT_MAX_TOKENS_FLOOR, raw)
+        if clamped != point.max_tokens:
+            overlaid[decision_class] = replace(point, max_tokens=clamped)
+    return overlaid
+
+
+_REGISTRY = _apply_tunables_overlay(_REGISTRY, _TUNABLES_PATH)
 
 
 def get(decision_class: str) -> JudgmentPoint:

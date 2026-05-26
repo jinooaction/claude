@@ -55,12 +55,15 @@ def _result(mode: str = "apply") -> TunerRunResult:
 
 def test_report_structure() -> None:
     d = to_dict(_result())
-    assert d["schema_version"] == "1.0"
+    assert d["schema_version"] == "1.1"
     assert d["session_date"] == "2026-05-24"
     assert d["mode"] == "apply"
     assert d["candidates"][0]["authority_tier"] == "L1"
     assert d["candidates"][0]["proposed"]["new_value"] == "1760"
     assert d["applied"][0]["audit_seq"] == 123
+    # 스펙 012: 신규 섹션 존재(기본 빈 리스트).
+    assert d["canary_candidates"] == []
+    assert d["canary_validations"] == []
 
 
 def test_applied_matches_candidate() -> None:
