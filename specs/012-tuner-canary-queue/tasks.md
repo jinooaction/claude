@@ -87,10 +87,10 @@ description: "Task list — spec 012 Tuner L2/L3 → Hardened-Canary Auto-Submis
 **Independent Test**: 합격 후보가 있어도 배포/승격 이벤트 0건, 후보 대상 파일 작업트리
 불변, origin 새 ref 0건.
 
-- [ ] T024 [US3] 승격 금지 불변 — `runner.py`/`canary_submit.py`: 합격 경로가 `DEPLOY_*`·`STRATEGY_PROMOTED` 를 절대 발생시키지 않음 확인, `CanaryValidationResult.promoted` 항상 False 보장(코드 경로상 True 설정 불가). (FR-C12-07, research R8)
-- [ ] T025 [US3] CLI·리포트 승격 표식 — `report.py` + `src/auto_invest/cli.py` 의 `tune` 출력: 합격 후보 옆 `"promotion": "operator-gated (spec 006); NOT auto-promoted"` + 사람용 요약 줄("캐너리 후보 N / 합격 M / 불합격 K / 건너뜀 S — 라이브 미승격(운영자 게이트)"). (contracts C6)
-- [ ] T026 [US3] [test] 안전 불변 통합 테스트 — `tests/integration/tuner/test_canary_no_promote.py`: 합격(stub) 후 (a) `DEPLOY_*`·`STRATEGY_PROMOTED` 감사 0건, (b) 후보 대상 파일 작업트리 불변, (c) origin ref 불변, (d) 모든 VALIDATED 이벤트 promoted=False. (SC-C12-03·04)
-- [ ] T027 [P] [US3] [test] 결정론·dry-run 테스트 — `tests/integration/tuner/test_canary_determinism.py`: 같은 입력 dry-run 2회 동일 후보집합 + config·감사·git 변경 0건. (SC-C12-05)
+- [X] T024 [US3] 승격 금지 불변 — `runner.py`/`canary_submit.py`: 합격 경로가 `DEPLOY_*`·`STRATEGY_PROMOTED` 를 절대 발생시키지 않음 확인, `CanaryValidationResult.promoted` 항상 False 보장(코드 경로상 True 설정 불가). (FR-C12-07, research R8)
+- [X] T025 [US3] CLI·리포트 승격 표식 — `report.py` + `src/auto_invest/cli.py` 의 `tune` 출력: 합격 후보 옆 `"promotion": "operator-gated (spec 006); NOT auto-promoted"` + 사람용 요약 줄("캐너리 후보 N / 합격 M / 불합격 K / 건너뜀 S — 라이브 미승격(운영자 게이트)"). (contracts C6)
+- [X] T026 [US3] [test] 안전 불변 통합 테스트 — `tests/integration/tuner/test_canary_no_promote.py`: 합격(stub) 후 (a) `DEPLOY_*`·`STRATEGY_PROMOTED` 감사 0건, (b) 후보 대상 파일 작업트리 불변, (c) origin ref 불변, (d) 모든 VALIDATED 이벤트 promoted=False. (SC-C12-03·04)
+- [X] T027 [P] [US3] [test] 결정론·dry-run 테스트 — `tests/integration/tuner/test_canary_determinism.py`: 같은 입력 dry-run 2회 동일 후보집합 + config·감사·git 변경 0건. (SC-C12-05)
 
 **Checkpoint**: 안전 경계 테스트로 고정. 자동 승격 0건 증명.
 
@@ -98,8 +98,8 @@ description: "Task list — spec 012 Tuner L2/L3 → Hardened-Canary Auto-Submis
 
 ## Phase 6: Polish & Cross-Cutting
 
-- [ ] T028 [P] 전체 스위트·린트 — `uv run pytest`(전부 통과, fail 0) + `uv run ruff check src tests`("All checks passed!"). 회귀 0(기존 902 + 신규). (SC-C12-07)
-- [ ] T029 [P] quickstart 검증 — `specs/012-tuner-canary-queue/quickstart.md` 명령들이 실제 동작하는지 확인(감사 조회 쿼리·테스트 경로).
+- [X] T028 [P] 전체 스위트·린트 — `uv run pytest`(전부 통과, fail 0) + `uv run ruff check src tests`("All checks passed!"). 회귀 0(기존 902 + 신규). (SC-C12-07)
+- [X] T029 [P] quickstart 검증 — `specs/012-tuner-canary-queue/quickstart.md` 명령들이 실제 동작하는지 확인(감사 조회 쿼리·테스트 경로).
 - [ ] T030 HANDOFF 갱신 — `/handoff` 로 HANDOFF.md 요약표(마지막 main 커밋·테스트 수·출시 스펙·열린 PR) + 마일스톤 절 갱신. 스펙 012 출시 반영.
 
 ---
