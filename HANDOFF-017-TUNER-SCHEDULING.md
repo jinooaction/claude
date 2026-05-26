@@ -60,6 +60,25 @@
   토글(`AUTO_INVEST_MODE=live`)과 무관 — 실거래 전환은 여전히 운영자 전용.
 - 테스트 895 통과·4 스킵(라이브 KIS 가드), 린트 clean.
 
+## 유닛 자동 설치 (PR #65 `e8b3876`, 같은 날 후속)
+
+타이머 유닛을 라이브 서버에 올리는 데 **운영자가 서버에 접속할 필요가 없게** 했다.
+배포 상태기계(`auto-invest deploy`)는 코드만 git pull + 워커 재시작하고 새 systemd
+유닛 설치는 안 하므로, `deploy-on-merge.yml`이 그 빈틈을 메운다.
+
+- `deploy/sync-units.sh` — 서버에서 `deploy/`의 유닛을 `/etc/systemd/system`에 설치
+  + 타이머 `enable --now`. **워커 미재시작**(주문 라우팅 무관), `git show origin/main:<path>`
+  로 최신 유닛만 읽어 **작업트리 미오염**(배포 dirty-tree 검사와 무충돌). 멱등.
+- `deploy-on-merge.yml` — `actions/checkout` 후 `'sudo bash -s' < deploy/sync-units.sh`
+  파이프 단계 추가. 코드 배포와 독립(실패해도 배포 결과 안 가림), Summary에 별도 표시.
+- **장중 안전**: 유닛 설치는 워커 교체/재시작이 아니라 헌법 VIII.A에 해당 없음 →
+  장중 머지여도 타이머는 그 실행에서 설치된다.
+- **알려진 전제/한계**: (1) 서버 SSH 사용자의 `sudo`가 `sudo bash`까지 허용해야 함 —
+  막혀 있으면 Summary에 "⚠ 유닛 동기화 실패"로 뜨고 sudoers 한 줄 추가가 필요(같은 SSH
+  채널로 가능). (2) 인스턴스 내장 `auto-invest-deploy.timer` 경로(워크플로우 미경유)는
+  유닛 동기화를 하지 않음 — 유닛은 거의 안 바뀌고, 바뀌면 그 머지가 워크플로우를
+  트리거하므로 실무상 문제없음.
+
 ## 다음 세션이 할 수 있는 일 (HANDOFF-016 후속 후보 갱신)
 
 1. **L1 적용 표면 확장** — 모델 라우팅·캐시 TTL 노브. **주의: K3 인접**(LLM 비용=헌법
