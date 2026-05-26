@@ -1,0 +1,19 @@
+# 판단 지점 튜닝 표면 (스펙 012, 비커널).
+#
+# registry.py 가 이 파일을 폴백 기본값과 함께 읽는다. 파일/섹션/키가 없으면
+# registry.py 의 현재 하드코딩 기본값을 그대로 사용한다 → 동작 무변경.
+#
+# 이 표면은 LLM 비용/지연(헌법 III)에 영향하므로, 자율 튜너가 여기를 바꿀 때는
+# 즉시 적용(L1)이 아니라 반드시 L2(스펙 007 하드닝 캐너리) 검증을 거친다.
+# 튜너는 max_tokens 를 환경 바닥값(JUDGMENT_MAX_TOKENS_FLOOR) 아래로 내리지 않는다.
+#
+# 비커널: 이 파일은 kernel.toml 매니페스트에 없다. 그러나 변경은 캐너리 검증 대상.
+
+[volatility_assessment]
+max_tokens = 256
+
+[daily_summary]
+max_tokens = 700
+
+[news_screen]
+max_tokens = 128

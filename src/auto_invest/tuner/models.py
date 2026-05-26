@@ -17,9 +17,13 @@ SkipReason = Literal[
     "already_applied_this_session",
     "no_apply_path",
     "non_l1_tier",
+    "no_replay_data",
+    "already_validated_this_session",
 ]
 
-ChangeKind = Literal["threshold_tighten", "proposal_only"]
+ChangeKind = Literal["threshold_tighten", "proposal_only", "max_tokens_reduce"]
+
+ValidationOutcome = Literal["passed", "failed", "skipped", "internal_error"]
 
 
 @dataclass(frozen=True)
@@ -70,6 +74,45 @@ class AppliedChange:
 
 
 @dataclass(frozen=True)
+class CanaryCandidate:
+    """L2/L3 분류 후보를 캐너리가 평가 가능하게 구체화한 단위 (스펙 012).
+
+    불변식: `old_value != new_value`, `new_value` 는 바닥 클램프 이상.
+    결정성: 같은 Classification 입력이면 같은 CanaryCandidate(LLM 미호출).
+    """
+
+    candidate_id: str
+    detection_rule: str
+    authority_tier: AuthorityTier  # L2 | L3
+    target_path: str
+    config_key: str
+    old_value: str
+    new_value: str
+    recommended_tier: str
+    recommended_window_days: int
+    measurement_sample: int
+    rationale: str
+
+
+@dataclass(frozen=True)
+class CanaryValidationResult:
+    """후보 1건을 캐너리에 투입한 결과 (스펙 012).
+
+    불변식: `promoted is False` — 캐너리 합격은 검증일 뿐 자동 승격이 아니다
+    (헌법 IX.B-2). 라이브 승격은 운영자/스펙 006 게이트 전용.
+    """
+
+    candidate_id: str
+    outcome: ValidationOutcome
+    canary_run_id: str | None = None
+    candidate_rev: str | None = None
+    baseline_rev: str | None = None
+    failing_metrics: tuple[str, ...] = field(default_factory=tuple)
+    skip_reason: str | None = None
+    promoted: bool = False
+
+
+@dataclass(frozen=True)
 class TunerRunResult:
     """한 번의 `tune` 실행 산출물(→ auto-tuner-report.json)."""
 
@@ -81,15 +124,22 @@ class TunerRunResult:
     canary_entered: tuple[Classification, ...]
     awaiting_human_merge: tuple[Classification, ...]
     skipped: tuple[tuple[str, SkipReason], ...]
+    canary_candidates: tuple[CanaryCandidate, ...] = field(default_factory=tuple)
+    canary_validations: tuple[CanaryValidationResult, ...] = field(
+        default_factory=tuple
+    )
 
 
 __all__ = [
     "AppliedChange",
     "AuthorityTier",
+    "CanaryCandidate",
+    "CanaryValidationResult",
     "CandidateChange",
     "ChangeKind",
     "Classification",
     "ProposedChange",
     "SkipReason",
     "TunerRunResult",
+    "ValidationOutcome",
 ]

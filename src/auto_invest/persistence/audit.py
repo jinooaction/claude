@@ -68,6 +68,8 @@ EventType = Literal[
     "AUTO_TUNED_L2_CANARY_ENTERED",
     "AUTO_TUNED_L4_FORENSIC",
     "AUTO_TUNER_RUN",
+    "AUTO_TUNED_CANARY_CANDIDATE",
+    "AUTO_TUNED_CANARY_VALIDATED",
 ]
 
 
@@ -689,6 +691,48 @@ class AutoTunerRunPayload(AuditPayload):
     skipped_count: int
 
 
+class AutoTunedCanaryCandidatePayload(AuditPayload):
+    """Spec 012: L2/L3 후보를 캐너리가 평가 가능하게 구체화한 기록.
+
+    기존 `AUTO_TUNED_L2_CANARY_ENTERED`(투입 식별 마커)와 달리, 이 이벤트는
+    캐너리에 실제 투입 가능한 구체 변경(old→new + 권장 tier/window)을 담는다.
+    K4 추가-전용 — 기존 이벤트·row 미수정(헌법 IV).
+    """
+
+    event_type: Literal["AUTO_TUNED_CANARY_CANDIDATE"] = "AUTO_TUNED_CANARY_CANDIDATE"
+    session_date: str
+    candidate_id: str
+    detection_rule: str
+    authority_tier: Literal["L2", "L3"]
+    target_path: str
+    config_key: str
+    old_value: str
+    new_value: str
+    recommended_tier: str
+    recommended_window_days: int
+
+
+class AutoTunedCanaryValidatedPayload(AuditPayload):
+    """Spec 012: 후보를 하드닝 캐너리로 검증한 결과.
+
+    안전 불변: `promoted` 는 항상 False — 캐너리 합격은 검증일 뿐 자동 승격이
+    아니다(헌법 IX.B-2). 라이브 승격은 운영자/스펙 006 게이트 전용. 이 이벤트는
+    "검증됨, 승격 대기"의 포렌식 기록일 뿐 주문/배포 경로에 닿지 않는다.
+    K4 추가-전용.
+    """
+
+    event_type: Literal["AUTO_TUNED_CANARY_VALIDATED"] = "AUTO_TUNED_CANARY_VALIDATED"
+    session_date: str
+    candidate_id: str
+    outcome: Literal["passed", "failed", "skipped", "internal_error"]
+    canary_run_id: str | None = None
+    candidate_rev: str | None = None
+    baseline_rev: str | None = None
+    failing_metrics: list[str] = Field(default_factory=list)
+    skip_reason: str | None = None
+    promoted: bool = False
+
+
 AnyPayload = (
     WorkerStartedPayload
     | WorkerStoppedPayload
@@ -738,6 +782,8 @@ AnyPayload = (
     | AutoTunedL2CanaryEnteredPayload
     | AutoTunedL4ForensicPayload
     | AutoTunerRunPayload
+    | AutoTunedCanaryCandidatePayload
+    | AutoTunedCanaryValidatedPayload
 )
 
 
