@@ -171,6 +171,7 @@ def test_backtest_run_json_top_level_fields(tmp_path: Path) -> None:
         "date_end",
         "replay_seed",
         "fill_model",
+        "cost_model",
         "judgment_mode",
         "synthetic_shock",
         "start_ts",
@@ -183,6 +184,8 @@ def test_backtest_run_json_top_level_fields(tmp_path: Path) -> None:
 
     assert payload["fill_model"] == "pessimistic_zero_slip"
     assert payload["judgment_mode"] == "stub"
+    assert "total_commission_usd" in payload["summary"]
+    assert "total_slippage_cost_usd" in payload["summary"]
     assert payload["summary"]["total_orders"] == 2
     assert payload["summary"]["total_fills"] == 1
     assert payload["summary"]["total_gate_rejections"] == 1
@@ -242,6 +245,8 @@ def test_metrics_csv_columns_and_aggregate_row(tmp_path: Path) -> None:
         "fill_count",
         "total_gate_rejections",
         "notional_usd",
+        "commission_usd",
+        "slippage_cost_usd",
     ]
     # 2 rules + 1 aggregate row
     assert len(data) == 3

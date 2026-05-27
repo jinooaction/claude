@@ -139,16 +139,17 @@ def test_summary_header_includes_required_fields() -> None:
     assert "dataset_version:" in md
     assert "fill model:" in md
     assert "judgment mode:" in md
-    assert "slippage assumption:" in md
+    assert "cost model:" in md
     assert "synthetic_shock:" in md
 
 
-def test_summary_includes_slippage_disclaimer() -> None:
+def test_summary_discloses_cost_model_and_totals() -> None:
     md = render_summary_md(run=_run(), summary=_summary(), kernel_guard_report=_guard())
-    # Disclaimer references R-B3 + the locked "zero" assumption.
-    assert "slippage assumption:" in md
-    assert "zero" in md.lower()
-    assert "R-B3" in md
+    # Spec 016: the run's cost model + aggregate cost drag are disclosed
+    # (replacing the old hard-coded "zero slippage" disclaimer).
+    assert "cost model:" in md
+    assert "total_commission_usd:" in md
+    assert "total_slippage_cost_usd:" in md
 
 
 def test_summary_lists_every_rule_in_table() -> None:

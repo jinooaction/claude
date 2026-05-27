@@ -42,6 +42,7 @@ from auto_invest.backtest.broker_mock import (
     assert_backtest_adapter,
 )
 from auto_invest.backtest.clock import ReplayClock
+from auto_invest.backtest.costs import BacktestCostModel
 from auto_invest.backtest.data_model import (
     DataQualityWarning,
     OHLCVBar,
@@ -80,6 +81,10 @@ from auto_invest.strategy.triggers import TriggerContext, evaluate
 _XNYS = ec.get_calendar("XNYS")
 
 DEFAULT_TOTAL_CAPITAL_USD = Decimal("100000")
+
+# Shared immutable default — avoids a function call in the `replay` default
+# argument (ruff B008). Frozen dataclass, so sharing one instance is safe.
+_ZERO_COST_MODEL = BacktestCostModel.zero()
 
 
 # ---------- on-the-wire records consumed by report.py (T024) ----------------
@@ -137,6 +142,10 @@ class ReplayResult:
     total_orders: int
     total_fills: int
     total_gate_rejections: int
+    per_rule_commission_usd: dict[str, Decimal] = field(default_factory=dict)
+    per_rule_slippage_cost_usd: dict[str, Decimal] = field(default_factory=dict)
+    total_commission_usd: Decimal = Decimal("0")
+    total_slippage_cost_usd: Decimal = Decimal("0")
 
 
 # ---------- helpers --------------------------------------------------------
@@ -256,6 +265,8 @@ class _RuleState:
     rejections: list[GateRejectionRecord] = field(default_factory=list)
     equity_curve: list[tuple[date, Decimal]] = field(default_factory=list)
     notional_traded_usd: Decimal = Decimal("0")
+    commission_paid_usd: Decimal = Decimal("0")
+    slippage_cost_usd: Decimal = Decimal("0")
     position: _Position = field(default_factory=_Position)
 
 
@@ -276,6 +287,7 @@ def replay(
     broker: BacktestBroker,
     run_id: str,
     total_capital_usd: Decimal = DEFAULT_TOTAL_CAPITAL_USD,
+    cost_model: BacktestCostModel = _ZERO_COST_MODEL,
 ) -> ReplayResult:
     """Drive the bar-level replay; emit audit rows; return a ReplayResult.
 
@@ -345,6 +357,7 @@ def replay(
                     state=state,
                     fill=fill,
                     ts_iso=ts_iso,
+                    cost_model=cost_model,
                 )
 
             # (b) Evaluate trigger with indicator history if needed.
@@ -482,6 +495,7 @@ def replay(
                     fill=outcome.fill,
                     ts_iso=ts_iso,
                     correlation_id=correlation_id,
+                    cost_model=cost_model,
                 )
 
         # (g) Mark-to-market equity curve at end of session for every rule
@@ -541,15 +555,29 @@ def _record_fill(
     state: _RuleState,
     fill: FillEvent,
     ts_iso: str,
+    cost_model: BacktestCostModel,
     correlation_id: str | None = None,
 ) -> None:
-    """Emit a FILL audit row + update per-rule state (cashflow, position, notional)."""
+    """Emit a FILL audit row + update per-rule state (cashflow, position, notional).
+
+    Applies the spec-016 transaction-cost overlay: slippage worsens the
+    effective fill price (recorded in the audit row + FillRecord so the
+    forensic price is the realistic one), and commission is deducted from
+    cash separately. Per-rule commission/slippage totals accumulate for the
+    report. With `BacktestCostModel.zero()` the effective price equals the
+    broker's nominal price and no costs are charged (regression-preserving).
+    """
+    raw_price = fill.fill_price_usd
+    eff_price = cost_model.effective_fill_price(fill.side, raw_price)
+    commission = cost_model.commission_usd(fill.qty, eff_price)
+    eff_price_str = canonicalise_decimal(eff_price)
+
     audit.append(
         conn,
         FillPayload(
             kis_fill_id=fill.kis_fill_id,
             qty=fill.qty,
-            price_usd=canonicalise_decimal(fill.fill_price_usd),
+            price_usd=eff_price_str,
             executed_at_utc=ts_iso,
         ),
         rule_id=rule.id,
@@ -564,15 +592,18 @@ def _record_fill(
             symbol=rule.symbol,
             side=fill.side.value,
             qty=fill.qty,
-            fill_price_usd=canonicalise_decimal(fill.fill_price_usd),
+            fill_price_usd=eff_price_str,
             executed_at_utc=ts_iso,
             kis_fill_id=fill.kis_fill_id,
         )
     )
     signed = _signed_qty(fill.side.value, fill.qty)
     state.position.qty += signed
-    state.position.cashflow_usd -= Decimal(signed) * fill.fill_price_usd
-    state.notional_traded_usd += Decimal(fill.qty) * fill.fill_price_usd
+    state.position.cashflow_usd -= Decimal(signed) * eff_price
+    state.position.cashflow_usd -= commission
+    state.notional_traded_usd += Decimal(fill.qty) * eff_price
+    state.commission_paid_usd += commission
+    state.slippage_cost_usd += abs(eff_price - raw_price) * Decimal(fill.qty)
 
 
 def _record_rejection(
@@ -727,9 +758,17 @@ def _build_replay_result(
     per_rule_notional = {
         rid: s.notional_traded_usd for rid, s in rule_state.items()
     }
+    per_rule_commission = {
+        rid: s.commission_paid_usd for rid, s in rule_state.items()
+    }
+    per_rule_slippage = {
+        rid: s.slippage_cost_usd for rid, s in rule_state.items()
+    }
     total_orders = sum(len(o) for o in per_rule_orders.values())
     total_fills = sum(len(f) for f in per_rule_fills.values())
     total_rejections = sum(len(r) for r in per_rule_rejections.values())
+    total_commission = sum(per_rule_commission.values(), start=Decimal("0"))
+    total_slippage = sum(per_rule_slippage.values(), start=Decimal("0"))
     return ReplayResult(
         per_rule_orders=per_rule_orders,
         per_rule_fills=per_rule_fills,
@@ -741,6 +780,10 @@ def _build_replay_result(
         total_orders=total_orders,
         total_fills=total_fills,
         total_gate_rejections=total_rejections,
+        per_rule_commission_usd=per_rule_commission,
+        per_rule_slippage_cost_usd=per_rule_slippage,
+        total_commission_usd=total_commission,
+        total_slippage_cost_usd=total_slippage,
     )
 
 

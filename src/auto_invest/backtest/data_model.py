@@ -79,7 +79,9 @@ class RuleBacktestResult(_Frozen):
     fill_count: int = Field(ge=0)
     gate_rejection_count_by_gate: dict[str, int] = Field(default_factory=dict)
     notional_traded_usd: Decimal = Field(ge=0)
-    slippage_assumption: Literal["zero"] = "zero"
+    commission_usd: Decimal = Field(default=Decimal("0"), ge=0)
+    slippage_cost_usd: Decimal = Field(default=Decimal("0"), ge=0)
+    slippage_assumption: str = "zero"
 
     @field_validator("fill_count")
     @classmethod
@@ -98,6 +100,8 @@ class BacktestSummary(_Frozen):
     total_orders: int = Field(ge=0)
     total_fills: int = Field(ge=0)
     total_gate_rejections: int = Field(ge=0)
+    total_commission_usd: Decimal = Field(default=Decimal("0"), ge=0)
+    total_slippage_cost_usd: Decimal = Field(default=Decimal("0"), ge=0)
     data_quality_warnings: list[DataQualityWarning] = Field(default_factory=list)
 
 
@@ -113,6 +117,7 @@ class BacktestRun(_Frozen):
     date_end: date
     replay_seed: int = 0
     fill_model: Literal["pessimistic_zero_slip"] = "pessimistic_zero_slip"
+    cost_model: str = "zero"
     judgment_mode: Literal["stub"] = "stub"
     synthetic_shock: bool = False
     start_ts: datetime

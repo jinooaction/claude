@@ -22,6 +22,7 @@ import pytest
 
 from auto_invest.backtest.broker_mock import BacktestBroker, BacktestLiveBrokerLeakError
 from auto_invest.backtest.clock import ReplayClock
+from auto_invest.backtest.costs import BacktestCostModel
 from auto_invest.backtest.data_model import OHLCVBar
 from auto_invest.backtest.replay import replay
 from auto_invest.config.caps import SizingCaps
@@ -387,3 +388,68 @@ def test_disabled_rule_is_skipped(conn, tmp_path) -> None:
 
     assert result.total_orders == 0
     assert result.total_fills == 0
+
+
+# ---------- spec 016: transaction-cost overlay ----------------------------
+
+
+def _single_fill_scenario(conn, tmp_path, cost_model):
+    """BUY 20 @ limit 190; bar.low=185 touches, bar.open=190 → fill at 190."""
+    bars = {
+        "AAPL": [
+            _bar("AAPL", date(2024, 1, 3), close="195.00", low="185.00", high="200.00"),
+        ],
+    }
+    rules = [_price_rule("r1", "AAPL", "195", qty=20)]
+    return replay(
+        rules=rules,
+        data_source=_FakeDataSource(bars),
+        date_start=date(2024, 1, 3),
+        date_end=date(2024, 1, 3),
+        caps=_caps(),
+        whitelist=_whitelist(),
+        halt_path=tmp_path / "HALT",
+        conn=conn,
+        clock=_clock(),
+        broker=BacktestBroker(),
+        run_id="bt-cost",
+        cost_model=cost_model,
+    )
+
+
+def test_zero_cost_model_matches_legacy_behaviour(conn, tmp_path) -> None:
+    """SC-C03: zero() charges nothing and the fill price is the nominal 190."""
+    result = _single_fill_scenario(conn, tmp_path, BacktestCostModel.zero())
+
+    assert result.total_commission_usd == Decimal("0")
+    assert result.total_slippage_cost_usd == Decimal("0")
+    # Nominal fill price recorded unchanged.
+    assert result.per_rule_fills["r1"][0].fill_price_usd == "190.000000"
+
+
+def test_costs_reduce_equity_and_are_reported(tmp_path) -> None:
+    """SC-C01: costs lower terminal equity and the totals are surfaced."""
+    # Separate DBs so the two runs' append-only audit rows don't collide.
+    c_zero = db.get_connection(tmp_path / "zero.db")
+    db.migrate(c_zero)
+    c_costed = db.get_connection(tmp_path / "costed.db")
+    db.migrate(c_costed)
+    try:
+        zero = _single_fill_scenario(c_zero, tmp_path, BacktestCostModel.zero())
+        costed = _single_fill_scenario(
+            c_costed,
+            tmp_path,
+            BacktestCostModel(commission_bps=Decimal("25"), slippage_bps=Decimal("5")),
+        )
+    finally:
+        c_zero.close()
+        c_costed.close()
+
+    # 20 shares: slippage 5bps on a 190 fill → eff 190.095; commission 0.25%.
+    assert costed.per_rule_fills["r1"][0].fill_price_usd == "190.095000"
+    assert costed.total_commission_usd > Decimal("0")
+    assert costed.total_slippage_cost_usd > Decimal("0")
+
+    zero_equity = zero.per_rule_equity_curve["r1"][-1][1]
+    costed_equity = costed.per_rule_equity_curve["r1"][-1][1]
+    assert costed_equity < zero_equity
