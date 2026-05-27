@@ -4,6 +4,13 @@ Constitution principle I requires three caps to exist on every order:
 per-trade, per-symbol, and global. This module models them as a frozen
 pydantic value with cross-field invariants enforced at validation
 time so a misconfigured caps section cannot reach the worker loop.
+
+Spec 014 adds loss-based circuit-breaker limits here (not just exposure
+caps). Keeping them in K1 means the autonomous tuner can never widen the
+loss limits without an L4 human merge — the limits are part of the
+safety perimeter, not a tunable knob. The new fields are optional with
+safe enabled-by-default values so existing `[caps]` sections keep
+validating unchanged (additive, backward-compatible).
 """
 
 from __future__ import annotations
@@ -22,6 +29,15 @@ class SizingCaps(BaseModel):
     canary_capital_pct: Decimal = Field(..., gt=0, le=100)
     canary_min_duration_days: int = Field(..., ge=1)
     canary_acceptance_drawdown_pct: Decimal = Field(..., gt=0, le=100)
+
+    # Spec 014 — loss circuit breaker. Optional + enabled-by-default so
+    # existing configs gain the protection without a migration. The breaker
+    # only ever halts trading (never increases exposure); see
+    # risk/circuit_breaker.py. Defaults are catastrophe-level: they do not
+    # trip on normal operation but stop a runaway loss without operator action.
+    circuit_breaker_enabled: bool = True
+    daily_loss_limit_pct: Decimal = Field(default=Decimal("10"), gt=0, le=100)
+    max_total_drawdown_pct: Decimal = Field(default=Decimal("20"), gt=0, le=100)
 
     @model_validator(mode="after")
     def _check_cross_field_invariants(self) -> SizingCaps:

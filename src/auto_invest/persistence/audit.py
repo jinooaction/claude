@@ -70,6 +70,7 @@ EventType = Literal[
     "AUTO_TUNER_RUN",
     "AUTO_TUNED_CANARY_CANDIDATE",
     "AUTO_TUNED_CANARY_VALIDATED",
+    "CIRCUIT_BREAKER_TRIPPED",
 ]
 
 
@@ -733,6 +734,27 @@ class AutoTunedCanaryValidatedPayload(AuditPayload):
     promoted: bool = False
 
 
+class CircuitBreakerTrippedPayload(AuditPayload):
+    """Spec 014: 손실 서킷 브레이커가 트립해 워커가 자동 halt 한 기록.
+
+    추가-전용 K4 이벤트 — 기존 이벤트/row 를 전혀 건드리지 않는다(헌법 IV). 트립의
+    유일한 부수효과는 halt 플래그 세팅 + 이 row append 다(주문/청산 0건). 손익은
+    스펙 011 성과 엔진 정의로 계산된 값(문자열 Decimal). `breached` 는 걸린 한도
+    id 목록({"daily_loss", "total_drawdown"} 부분집합).
+    """
+
+    event_type: Literal["CIRCUIT_BREAKER_TRIPPED"] = "CIRCUIT_BREAKER_TRIPPED"
+    mode: Literal["paper", "live"]
+    tripped_at_utc: str
+    starting_capital_usd: str
+    realized_pnl_today_usd: str
+    current_equity_usd: str
+    breached: list[str]
+    daily_loss_limit_pct: str
+    max_total_drawdown_pct: str
+    reason: str
+
+
 AnyPayload = (
     WorkerStartedPayload
     | WorkerStoppedPayload
@@ -784,6 +806,7 @@ AnyPayload = (
     | AutoTunerRunPayload
     | AutoTunedCanaryCandidatePayload
     | AutoTunedCanaryValidatedPayload
+    | CircuitBreakerTrippedPayload
 )
 
 
