@@ -1204,6 +1204,138 @@ def performance(
             typer.echo(render_slippage_text(slippage_stats))
 
 
+async def _run_fill_sync(
+    conn,
+    *,
+    base_url: str,
+    app_key: str,
+    app_secret: str,
+    account_no: str,
+    db_path: Path,
+    market: str,
+):
+    """Spec 015 — 라이브 열린 주문의 체결을 브로커에서 당겨 장부에 반영."""
+    from auto_invest.execution.fill_sync import sync_fills
+
+    async with httpx.AsyncClient(base_url=base_url, timeout=30.0) as inner:
+        token = await get_valid_token(
+            inner,
+            base_url=base_url,
+            app_key=app_key,
+            app_secret=app_secret,
+            cache_path=db_path.parent / "kis_token.json",
+        )
+        client = ResilientClient(
+            inner,
+            rate_limiter=AsyncTokenBucket(rate_per_sec=15.0, capacity=15.0),
+            breaker=CircuitBreaker(failure_threshold=5, cooldown_seconds=30.0),
+            max_retries=4,
+        )
+        return await sync_fills(
+            conn,
+            client,
+            access_token=token.access_token,
+            app_key=app_key,
+            app_secret=app_secret,
+            account=account_no,
+            market=market,
+        )
+
+
+@app.command()
+def fills(
+    sync: bool = typer.Option(
+        False,
+        "--sync",
+        help="브로커 체결 조회로 라이브 열린 주문의 체결을 한 번 당겨 장부에 반영. "
+        "--env 필요. 미지정 시 읽기 전용 요약만 출력.",
+    ),
+    db_path: Path = typer.Option(
+        Path("data/auto_invest.db"), "--db", help="SQLite database path."
+    ),
+    env_file: Path | None = typer.Option(
+        None, "--env", help="KIS 자격 증명 .env (--sync 에 필요)."
+    ),
+    base_url: str = typer.Option(
+        "https://openapi.koreainvestment.com:9443",
+        "--base-url",
+        help="KIS REST base URL (--sync 체결 조회용).",
+    ),
+    market: str = typer.Option("NASD", "--market", help="해외거래소 코드."),
+) -> None:
+    """Spec 015 — 라이브 체결 동기화/조회.
+
+    `--sync` 는 열린 주문(SUBMITTED/PARTIALLY_FILLED)의 실제 체결을 브로커에서
+    당겨와 FILL 기록·보유 갱신·상태 전이를 멱등하게 적용한다(주문/취소 안 함).
+    인자 없이 실행하면 읽기 전용으로 열린 주문·최근 체결 요약만 출력한다.
+    종료 코드: 0 정상 / 1 동기화 오류 / 2 오용.
+    """
+    from auto_invest.persistence import db as _db
+
+    if not db_path.exists():
+        typer.echo(f"DB 파일이 없습니다: {db_path}", err=True)
+        _exit(1)
+
+    conn = _db.get_connection(db_path)
+    try:
+        if sync:
+            if env_file is None:
+                typer.echo("--sync 에는 --env (KIS 자격 증명) 가 필요합니다.", err=True)
+                _exit(2)
+            try:
+                secrets = load_secrets(env_file)
+            except ConfigError as exc:
+                typer.echo(f"환경 파일 오류: {exc}", err=True)
+                _exit(2)
+            result = asyncio.run(
+                _run_fill_sync(
+                    conn,
+                    base_url=base_url,
+                    app_key=secrets["KIS_APP_KEY"],
+                    app_secret=secrets["KIS_APP_SECRET"],
+                    account_no=secrets["KIS_ACCOUNT_NO"],
+                    db_path=db_path,
+                    market=market,
+                )
+            )
+            if not result.polled:
+                typer.echo("열린 주문이 없어 동기화할 대상이 없습니다.")
+            else:
+                typer.echo(
+                    f"체결 동기화: 열린 주문 {result.open_orders}건, "
+                    f"적용 FILL {result.fills_applied}건 "
+                    f"(수량 {result.qty_applied}), 상태 전이 {result.transitions}건."
+                )
+            if result.error is not None:
+                typer.echo(f"⚠ 브로커 조회 오류(거래 무중단): {result.error}", err=True)
+                _exit(1)
+
+        # 읽기 전용 요약 (항상 출력).
+        open_rows = conn.execute(
+            "SELECT correlation_id, symbol, side, qty, state, kis_order_id "
+            "FROM orders WHERE state IN ('SUBMITTED','PARTIALLY_FILLED') ORDER BY seq"
+        ).fetchall()
+        typer.echo(f"열린 주문: {len(open_rows)}건")
+        for r in open_rows:
+            typer.echo(
+                f"  {r['correlation_id']}  {r['symbol']} {r['side']} {r['qty']}  "
+                f"[{r['state']}]  kis={r['kis_order_id']}"
+            )
+        fill_rows = conn.execute(
+            "SELECT order_correlation_id, qty, price_usd, executed_at_utc "
+            "FROM fills ORDER BY seq DESC LIMIT 10"
+        ).fetchall()
+        typer.echo(f"최근 체결(최대 10): {len(fill_rows)}건")
+        for r in fill_rows:
+            typer.echo(
+                f"  {r['order_correlation_id']}  {r['qty']} @ {r['price_usd']}  "
+                f"{r['executed_at_utc']}"
+            )
+    finally:
+        conn.close()
+    _exit(0)
+
+
 @app.command()
 def version() -> None:
     """Print the auto-invest package version."""

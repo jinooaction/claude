@@ -22,11 +22,13 @@ from decimal import Decimal
 from auto_invest.broker.client import ResilientClient
 from auto_invest.broker.models import (
     BalanceSnapshot,
+    BrokerExecution,
     OrderRequest,
     OrderResult,
     PositionSnapshot,
     Quote,
 )
+from auto_invest.config.enums import Side
 
 # KIS Developers TR_IDs (real-account, overseas-equity v1 endpoints).
 TR_ID_QUOTE = "HHDFS00000300"
@@ -35,6 +37,7 @@ TR_ID_PURCHASABLE = "TTTS3007R"
 TR_ID_BUY = "TTTT1002U"
 TR_ID_SELL = "TTTT1006U"
 TR_ID_CANCEL = "TTTT1004U"
+TR_ID_EXECUTIONS = "TTTS3035R"  # 해외주식 주문체결내역 (inquire-ccnl)
 
 
 def _split_account(combined: str) -> tuple[str, str]:
@@ -344,3 +347,158 @@ async def get_balance(
         total_value_usd=cash + holdings_value,
         fetched_at_utc=datetime.now(UTC),
     )
+
+
+# ----------------------------------------------------------- order executions
+
+
+def _first_str(row: dict, *keys: str) -> str | None:
+    """후보 키를 순서대로 시도해 비어있지 않은 첫 문자열을 반환. spec 015.
+
+    KIS 체결조회 응답 필드명은 실전/모의·시점에 따라 다를 수 있어, 잔고조회의
+    `_row_eval_amount_usd`와 같은 폴백 전략을 쓴다."""
+    for k in keys:
+        v = row.get(k)
+        if v not in (None, ""):
+            return str(v)
+    return None
+
+
+def _to_int(text: str | None) -> int:
+    if text is None:
+        return 0
+    try:
+        return int(Decimal(text))
+    except (ArithmeticError, ValueError):
+        return 0
+
+
+def _exec_side(row: dict) -> Side | None:
+    """KIS sll_buy_dvsn_cd: 01=매도(SELL), 02=매수(BUY). 모르면 None."""
+    code = _first_str(row, "sll_buy_dvsn_cd", "SLL_BUY_DVSN_CD")
+    if code == "01":
+        return Side.SELL
+    if code == "02":
+        return Side.BUY
+    return None
+
+
+_TERMINAL_MARKERS = ("취소", "거부", "거절", "만료", "cancel", "reject", "expire")
+
+
+def _exec_terminal(row: dict) -> bool:
+    """브로커가 주문을 더 이상 열려 있지 않다고 **명시적으로** 보고하는지.
+
+    처리상태/주문상태 이름 필드에 취소·거부·만료 표식이 있을 때만 True.
+    미체결 수량이 남아있다는 사실만으로는 종료로 보지 않는다(보수적)."""
+    status = _first_str(row, "prcs_stat_name", "ord_stat_name", "rvse_cncl_dvsn_name")
+    if not status:
+        return False
+    low = status.lower()
+    return any(m in status or m in low for m in _TERMINAL_MARKERS)
+
+
+def _parse_executions(rows: list[dict]) -> list[BrokerExecution]:
+    """체결조회 row들을 주문번호(odno)별로 합산해 정규화한다.
+
+    한 주문에 여러 row(부분체결 누적)가 와도 누적 체결량 + 가중평균 체결가로
+    합산한다. KIS가 보통 주문당 한 row(누적)를 주므로 단일 row도 자연히 처리된다."""
+    by_order: dict[str, dict] = {}
+    for row in rows:
+        odno = _first_str(row, "odno", "ODNO", "orgn_odno")
+        if not odno:
+            continue
+        symbol = _first_str(row, "pdno", "PDNO", "ovrs_pdno") or ""
+        filled = _to_int(_first_str(row, "ft_ccld_qty", "ccld_qty", "tot_ccld_qty"))
+        unfilled_str = _first_str(row, "nccs_qty", "ord_psbl_qty")
+        price_str = _first_str(
+            row, "ft_ccld_unpr3", "avg_prvs", "ft_ccld_unpr", "ccld_unpr", "ovrs_ccld_unpr"
+        )
+        price = Decimal(price_str) if price_str else Decimal("0")
+        side = _exec_side(row)
+        terminal = _exec_terminal(row)
+
+        agg = by_order.setdefault(
+            odno,
+            {
+                "symbol": symbol,
+                "filled": 0,
+                "px_qty": Decimal("0"),
+                "unfilled": None,
+                "side": None,
+                "terminal": False,
+            },
+        )
+        if symbol and not agg["symbol"]:
+            agg["symbol"] = symbol
+        agg["filled"] += filled
+        agg["px_qty"] += price * Decimal(filled)
+        if unfilled_str is not None:
+            agg["unfilled"] = _to_int(unfilled_str)
+        if side is not None:
+            agg["side"] = side
+        agg["terminal"] = agg["terminal"] or terminal
+
+    executions: list[BrokerExecution] = []
+    for odno, agg in by_order.items():
+        filled = agg["filled"]
+        avg_price = (agg["px_qty"] / Decimal(filled)) if filled > 0 else Decimal("0")
+        executions.append(
+            BrokerExecution(
+                kis_order_id=odno,
+                symbol=agg["symbol"],
+                filled_qty=filled,
+                avg_fill_price_usd=avg_price,
+                unfilled_qty=agg["unfilled"],
+                side=agg["side"],
+                terminal=agg["terminal"],
+            )
+        )
+    return executions
+
+
+async def get_order_executions(
+    client: ResilientClient,
+    *,
+    access_token: str,
+    app_key: str,
+    app_secret: str,
+    account: str,
+    order_date_yyyymmdd: str,
+    market: str = "NASD",
+) -> list[BrokerExecution]:
+    """해외주식 주문체결내역(inquire-ccnl)을 조회해 정규화된 체결 상태 목록을 반환.
+
+    읽기 전용(GET). 체결·미체결 모두(CCLD_NCCS_DVSN='00') 가져와 부분체결과 종료
+    여부를 함께 파악한다. 주문을 내거나 취소하지 않는다(spec 015 FR-001)."""
+    cano, acnt_prdt = _split_account(account)
+    response = await client.request(
+        "GET",
+        "/uapi/overseas-stock/v1/trading/inquire-ccnl",
+        headers=_kis_headers(
+            access_token=access_token,
+            app_key=app_key,
+            app_secret=app_secret,
+            tr_id=TR_ID_EXECUTIONS,
+        ),
+        params={
+            "CANO": cano,
+            "ACNT_PRDT_CD": acnt_prdt,
+            "OVRS_EXCG_CD": market,
+            "PDNO": "%",
+            "ORD_STRT_DT": order_date_yyyymmdd,
+            "ORD_END_DT": order_date_yyyymmdd,
+            "SLL_BUY_DVSN": "00",
+            "CCLD_NCCS_DVSN": "00",
+            "SORT_SQN_DVSN": "00",
+            "ORD_DT": "",
+            "ODNO": "",
+            "CTX_AREA_FK200": "",
+            "CTX_AREA_NK200": "",
+        },
+    )
+    body = response.json()
+    rows = body.get("output") or body.get("output1") or []
+    if isinstance(rows, dict):
+        rows = [rows]
+    return _parse_executions(rows)
