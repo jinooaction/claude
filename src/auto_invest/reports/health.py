@@ -191,6 +191,45 @@ def check_activity(conn: sqlite3.Connection, now: datetime, stale_hours: float) 
     return HealthCheck("activity", _OK, "최근 활동 신선", data)
 
 
+def check_circuit_breaker(
+    conn: sqlite3.Connection, halt_path: Path, now: datetime
+) -> HealthCheck:
+    """손실 서킷 브레이커 상태(스펙 014). 읽기 전용.
+
+    현재 halt 가 브레이커 트립으로 걸렸으면 CRITICAL(손실 차단은 수동 halt 보다
+    심각). 그 외에는 OK 이되 과거 트립 이력을 정보로 덧붙인다. caps/시세가 없어도
+    되도록 감사 로그 + halt 사유만 읽는다(워커 평가를 재실행하지 않음).
+    """
+    count_row = conn.execute(
+        "SELECT COUNT(*) AS n FROM audit_log WHERE event_type = 'CIRCUIT_BREAKER_TRIPPED'"
+    ).fetchone()
+    trip_count = int(count_row["n"]) if count_row else 0
+    latest = _latest_payload(conn, "CIRCUIT_BREAKER_TRIPPED")
+
+    halt_state = read_halt(halt_path)
+    halted_by_breaker = halt_state is not None and halt_state.reason.startswith(
+        "circuit_breaker"
+    )
+
+    data = {
+        "trip_count": trip_count,
+        "halted_by_breaker": halted_by_breaker,
+        "last_breached": (latest or {}).get("breached") if latest else None,
+        "last_reason": (latest or {}).get("reason") if latest else None,
+    }
+    if halted_by_breaker:
+        return HealthCheck(
+            "circuit_breaker", _CRITICAL,
+            f"손실 서킷 브레이커 트립으로 거래 중지: {halt_state.reason}", data,
+        )
+    if trip_count > 0:
+        return HealthCheck(
+            "circuit_breaker", _OK,
+            f"브레이커 무장(현재 트립 아님); 과거 트립 {trip_count}건", data,
+        )
+    return HealthCheck("circuit_breaker", _OK, "브레이커 무장; 트립 이력 없음", data)
+
+
 # --------------------------------------------------------------------------
 # Context (informational; not graded)
 # --------------------------------------------------------------------------
@@ -281,6 +320,7 @@ def build_health_report(
         check_reconciliation(conn, now, stale_hours),
         check_recent_errors(conn, now),
         check_activity(conn, now, stale_hours),
+        check_circuit_breaker(conn, halt_path, now),
     )
     overall = _worst([c.status for c in checks])
     context = _build_context(conn, now)

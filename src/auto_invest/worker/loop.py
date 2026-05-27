@@ -32,10 +32,11 @@ from auto_invest.execution.order_router import (
     verify_stage_uniqueness,
 )
 from auto_invest.market_data.feed import store_synthetic_bar
-from auto_invest.market_data.store import get_bars
+from auto_invest.market_data.store import get_bars, get_latest_bar
 from auto_invest.persistence import audit, db
 from auto_invest.persistence import positions as positions_mod
 from auto_invest.persistence.audit import (
+    CircuitBreakerTrippedPayload,
     PaperRunStartedPayload,
     PaperRunStoppedPayload,
     RuleLoadPayload,
@@ -47,9 +48,10 @@ from auto_invest.reconciliation.runner import (
     ReconciliationOutcome,
     run_reconciliation,
 )
+from auto_invest.risk.circuit_breaker import BreakerDecision, evaluate_from_audit
 from auto_invest.strategy.canary import restore_pause_status
 from auto_invest.strategy.triggers import TriggerContext, evaluate
-from auto_invest.worker.halt import is_halted
+from auto_invest.worker.halt import is_halted, set_halt
 from auto_invest.worker.schedule import is_session_open
 
 logger = logging.getLogger(__name__)
@@ -62,6 +64,11 @@ def _utcnow_iso_ms_for_payload() -> str:
 
 
 _PAPER_STOP_REASONS = {"normal_shutdown", "signal_received", "mutex_conflict", "crash"}
+
+# Spec 014: 손실 서킷 브레이커 재평가 최소 간격(초). 1Hz 틱에서 매 틱 전체 감사
+# 로그를 다시 읽지 않도록 평가를 묶는다. 첫 틱은 무조건 평가한다(_last_breaker_eval_at
+# 가 None). 손실 반응 지연이 수 초인 것은 안전상 충분하다.
+_BREAKER_EVAL_GAP_SECONDS = 5.0
 
 
 def _normalize_paper_stop_reason(reason: str) -> str:
@@ -136,6 +143,8 @@ class Worker:
 
         self._stop_requested = asyncio.Event()
         self._last_fired: dict[str, datetime] = {}
+        # Spec 014: 브레이커 재평가 cadence 추적. None = 아직 평가 안 함(첫 틱에 평가).
+        self._last_breaker_eval_at: datetime | None = None
         self._paused_rules: set[str] = {
             r.id for r in settings.config.rules if restore_pause_status(self.conn, r.id)
         }
@@ -225,6 +234,17 @@ class Worker:
         if self.settings.require_session_open and not is_session_open(moment):
             report.skipped_reason = "session_closed"
             return report
+
+        # Spec 014: 손실 서킷 브레이커 — halt/세션 점검 이후. 트립이면 스스로 halt 를
+        # 세우고 감사 row 를 남긴 뒤 이 틱은 새 주문 없이 끝낸다. halt 가 선점하므로
+        # 다음 틱부터는 위 halt 점검에 걸려 중복 트립이 발생하지 않는다(멱등).
+        if self._should_eval_breaker(moment):
+            self._last_breaker_eval_at = moment
+            decision = self._check_circuit_breaker(moment)
+            if decision is not None and decision.tripped:
+                self._trip_circuit_breaker(decision, moment)
+                report.skipped_reason = "circuit_breaker_tripped"
+                return report
 
         for rule in self.settings.config.rules:
             if not rule.enabled:
@@ -333,6 +353,76 @@ class Worker:
             price = quote_price if pos.symbol == symbol else pos.avg_cost_usd
             total += Decimal(pos.qty) * price
         return total
+
+    # ---------------------------------------------- circuit breaker (spec 014)
+
+    def _should_eval_breaker(self, now: datetime) -> bool:
+        """브레이커를 이번 틱에 평가할지. 비활성이면 False, 아니면 cadence 적용."""
+        if not self.settings.config.caps.circuit_breaker_enabled:
+            return False
+        last = self._last_breaker_eval_at
+        if last is None:
+            return True
+        return (now - last).total_seconds() >= _BREAKER_EVAL_GAP_SECONDS
+
+    def _assemble_marks(self) -> dict[str, Decimal]:
+        """보유 종목별 최근 저장 바의 종가를 미실현 손익 시세로 조립(best-effort).
+
+        룰에서 종목→timeframe 매핑을 만든다(워커가 그 timeframe 으로 합성 바를
+        저장함). 바가 없는 종목은 마크 누락 → 미실현 0 으로 보수 처리된다.
+        """
+        tf_by_symbol: dict[str, str] = {}
+        for rule in self.settings.config.rules:
+            tf_by_symbol.setdefault(
+                rule.symbol, getattr(rule.trigger, "timeframe", "1d")
+            )
+        marks: dict[str, Decimal] = {}
+        for pos in positions_mod.get_all_positions(self.conn):
+            tf = tf_by_symbol.get(pos.symbol, "1d")
+            bar = get_latest_bar(self.conn, symbol=pos.symbol, timeframe=tf)
+            if bar is not None:
+                marks[pos.symbol] = bar.close_usd
+        return marks
+
+    def _check_circuit_breaker(self, now: datetime) -> BreakerDecision | None:
+        """현재 손익을 평가해 브레이커 결정을 반환(read-only). 비활성이면 None."""
+        caps = self.settings.config.caps
+        if not caps.circuit_breaker_enabled:
+            return None
+        mode = "paper" if self.settings.paper_mode else "live"
+        return evaluate_from_audit(
+            self.conn,
+            mode=mode,
+            starting_capital=self.settings.total_capital_usd,
+            caps=caps,
+            now=now,
+            marks=self._assemble_marks(),
+        )
+
+    def _trip_circuit_breaker(self, decision: BreakerDecision, now: datetime) -> None:
+        """트립 부수효과: halt 플래그 세팅 + CIRCUIT_BREAKER_TRIPPED 감사 append.
+
+        주문/청산은 하지 않는다 — 유일한 효과는 새 주문 차단이다(FR-007).
+        """
+        set_halt(self.settings.halt_path, f"circuit_breaker: {decision.reason}")
+        md = decision.metadata
+        audit.append(
+            self.conn,
+            CircuitBreakerTrippedPayload(
+                mode="paper" if self.settings.paper_mode else "live",
+                tripped_at_utc=_utcnow_iso_ms_for_payload(),
+                starting_capital_usd=md.get(
+                    "starting_capital_usd", str(self.settings.total_capital_usd)
+                ),
+                realized_pnl_today_usd=md.get("realized_pnl_today_usd", "0"),
+                current_equity_usd=md.get("current_equity_usd", "0"),
+                breached=decision.breached,
+                daily_loss_limit_pct=md.get("daily_loss_limit_pct", ""),
+                max_total_drawdown_pct=md.get("max_total_drawdown_pct", ""),
+                reason=decision.reason,
+            ),
+        )
+        logger.warning("circuit breaker tripped: %s", decision.reason)
 
     # ---------------------------------------------- reconciliation
 
