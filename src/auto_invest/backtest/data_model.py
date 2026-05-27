@@ -82,6 +82,13 @@ class RuleBacktestResult(_Frozen):
     commission_usd: Decimal = Field(default=Decimal("0"), ge=0)
     slippage_cost_usd: Decimal = Field(default=Decimal("0"), ge=0)
     slippage_assumption: str = "zero"
+    # spec 016 슬라이스 2 — 라이브 성과 엔진과 같은 거래 단위 잣대 (헌법 X.2 단일 잣대).
+    # 청산(매도) 손익에서 backtest/metrics.py 공용 정의로 계산. 청산 0건이면 win_rate/
+    # profit_factor 는 None(N/A), sortino 는 자산곡선 하방편차 기준(거래 없으면 0).
+    closed_trades: int = Field(default=0, ge=0)
+    win_rate: Decimal | None = None
+    profit_factor: Decimal | None = None
+    sortino_ratio: Decimal = Decimal("0")
 
     @field_validator("fill_count")
     @classmethod
@@ -103,6 +110,13 @@ class BacktestSummary(_Frozen):
     total_commission_usd: Decimal = Field(default=Decimal("0"), ge=0)
     total_slippage_cost_usd: Decimal = Field(default=Decimal("0"), ge=0)
     data_quality_warnings: list[DataQualityWarning] = Field(default_factory=list)
+    # spec 016 슬라이스 2 — 포트폴리오 거래 단위 잣대. aggregate_sortino 는 룰별
+    # 동일가중 평균(aggregate_sharpe 규약과 동일), 승률·손익비는 전 룰의 청산을
+    # 한데 모아(pooled) 계산한다(비율 평균보다 의미 있음). 청산 0건이면 None.
+    aggregate_sortino: Decimal = Decimal("0")
+    total_closed_trades: int = Field(default=0, ge=0)
+    aggregate_win_rate: Decimal | None = None
+    aggregate_profit_factor: Decimal | None = None
 
 
 class BacktestRun(_Frozen):

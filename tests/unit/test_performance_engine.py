@@ -161,7 +161,7 @@ def test_to_json_dict_schema_version() -> None:
         [_fill("X", "BUY", 1, "10")], {}, mode="live", since=SINCE, until=UNTIL
     )
     d = rep.to_json_dict()
-    assert d["schema_version"] == "1.1"
+    assert d["schema_version"] == "1.2"
     assert d["mode"] == "live"
     assert "per_symbol" in d and "per_rule" in d
     assert "risk" in d

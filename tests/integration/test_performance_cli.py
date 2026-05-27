@@ -70,7 +70,7 @@ def test_realized_pnl_json(tmp_path: Path):
     )
     assert result.exit_code == 0, result.stdout
     payload = json.loads(result.stdout)
-    assert payload["schema_version"] == "1.1"
+    assert payload["schema_version"] == "1.2"
     assert payload["mode"] == "paper"
     assert payload["realized_pnl_usd"] == "15.00"  # (115-100)*1
     assert payload["total_pnl_usd"] == "15.00"

@@ -23,10 +23,15 @@ from datetime import datetime
 from decimal import Decimal
 
 from auto_invest.backtest.metrics import (
+    ClosedTrade,
+    TradeFill,
     daily_returns_from_equity,
     max_drawdown_pct,
+    realized_closed_trades,
     sharpe_ratio,
+    sortino_ratio,
     total_return_pct,
+    win_loss_stats,
 )
 
 
@@ -87,15 +92,10 @@ class RulePerformance:
     sells: int
 
 
-@dataclass(frozen=True)
-class RealizedTrade:
-    """청산(매도)으로 실현된 손익 한 건. 위험조정 지표의 표본."""
-
-    symbol: str
-    qty: int
-    pnl_usd: Decimal
-    date: str  # YYYY-MM-DD (체결 ts_utc 의 날짜 부분)
-    rule_id: str | None
+# 청산(매도)으로 실현된 손익 한 건. 위험조정 지표의 표본. 재구성·필드 정의는
+# backtest/metrics.py 의 ClosedTrade 단일 정의를 재사용한다 (헌법 X.2 단일 잣대) —
+# 백테스트·라이브가 같은 평균단가 규약·같은 손익 공식을 쓰도록 보장한다.
+RealizedTrade = ClosedTrade
 
 
 @dataclass
@@ -115,6 +115,7 @@ class RiskMetrics:
     avg_loss_usd: Decimal | None  # 음수
     profit_factor: Decimal | None  # 총이익 / |총손실|
     sharpe_ratio: Decimal | None  # 연율화 √252, RFR=0
+    sortino_ratio: Decimal | None  # 연율화 √252, 하방편차 기준 (MAR=RFR=0)
     max_drawdown_pct: Decimal | None  # 양수 %
     total_return_pct: Decimal | None  # 시작 자본 대비 실현 누적 %
     starting_capital_usd: Decimal
@@ -130,6 +131,7 @@ class RiskMetrics:
             "avg_loss_usd": _s(self.avg_loss_usd),
             "profit_factor": _s(self.profit_factor),
             "sharpe_ratio": _s(self.sharpe_ratio),
+            "sortino_ratio": _s(self.sortino_ratio),
             "max_drawdown_pct": _s(self.max_drawdown_pct),
             "total_return_pct": _s(self.total_return_pct),
             "starting_capital_usd": str(self.starting_capital_usd),
@@ -153,7 +155,7 @@ class PerformanceReport:
     data_quality_warnings: list[str]
     risk: RiskMetrics | None = None  # 위험조정 성과 (US2); 청산 0건이면 None
 
-    SCHEMA_VERSION = "1.1"
+    SCHEMA_VERSION = "1.2"  # 1.2: risk 블록에 sortino_ratio 추가 (spec 016 슬라이스 2)
 
     def to_json_dict(self) -> dict:
         def _s(v: Decimal | None) -> str | None:
@@ -362,40 +364,25 @@ def reconstruct(
 # --------------------------------------------------- risk-adjusted (US2, P2)
 
 
-def realized_trades(fills: list[FillRecord]) -> list[RealizedTrade]:
+def realized_trades(fills: list[FillRecord]) -> list[ClosedTrade]:
     """체결 시퀀스에서 청산(매도)마다 실현 손익 한 건을 뽑아낸다.
 
-    평균단가 규약은 `reconstruct` 와 동일하다. 보유 초과 매도는 보유분까지만
-    실현 처리하여 음수 포지션을 만들지 않는다(데이터 품질 일관성).
+    평균단가 재구성은 backtest/metrics.py 의 `realized_closed_trades` 단일 정의에
+    위임한다(헌법 X.2). 라이브 FillRecord 를 공용 `TradeFill` 로 변환만 한다 —
+    체결 ts_utc 의 날짜 부분을 거래일로 쓴다. 보유 초과 매도는 공용 정의가
+    보유분까지만 실현 처리한다(음수 포지션 없음).
     """
-    avg_cost: dict[str, Decimal] = {}
-    qty: dict[str, int] = {}
-    trades: list[RealizedTrade] = []
-
-    for f in fills:
-        held = qty.get(f.symbol, 0)
-        cost = avg_cost.get(f.symbol, Decimal("0"))
-        if f.side == "BUY":
-            new_qty = held + f.qty
-            new_total = cost * Decimal(held) + f.price_usd * Decimal(f.qty)
-            avg_cost[f.symbol] = new_total / Decimal(new_qty) if new_qty else Decimal("0")
-            qty[f.symbol] = new_qty
-        elif f.side == "SELL":
-            sell_qty = min(f.qty, held)
-            if sell_qty <= 0:
-                continue
-            pnl = (f.price_usd - cost) * Decimal(sell_qty)
-            trades.append(
-                RealizedTrade(
-                    symbol=f.symbol,
-                    qty=sell_qty,
-                    pnl_usd=pnl,
-                    date=f.ts_utc[:10],
-                    rule_id=f.rule_id,
-                )
-            )
-            qty[f.symbol] = held - sell_qty
-    return trades
+    return realized_closed_trades(
+        TradeFill(
+            symbol=f.symbol,
+            side=f.side,
+            qty=f.qty,
+            price_usd=f.price_usd,
+            date=f.ts_utc[:10],
+            rule_id=f.rule_id,
+        )
+        for f in fills
+    )
 
 
 def compute_risk_metrics(
@@ -410,18 +397,8 @@ def compute_risk_metrics(
     if not trades:
         return None
 
-    pnls = [t.pnl_usd for t in trades]
-    wins = [p for p in pnls if p > 0]
-    losses = [p for p in pnls if p < 0]
-    closed = len(trades)
-
-    win_rate = Decimal(len(wins)) / Decimal(closed)
-    avg_win = (sum(wins, Decimal("0")) / Decimal(len(wins))) if wins else None
-    avg_loss = (sum(losses, Decimal("0")) / Decimal(len(losses))) if losses else None
-    gross_loss = abs(sum(losses, Decimal("0")))
-    profit_factor = (
-        (sum(wins, Decimal("0")) / gross_loss) if gross_loss > 0 else None
-    )
+    # 승률·평균손익·손익비는 backtest/metrics.py 의 공용 정의를 재사용한다 (헌법 X.2).
+    wl = win_loss_stats([t.pnl_usd for t in trades])
 
     # 실현 손익 누적 자산곡선 (시작 자본 기준). 거래일별로 표본을 만든다.
     daily: dict[str, Decimal] = {}
@@ -434,20 +411,24 @@ def compute_risk_metrics(
         equity.append(running)
 
     sharpe: Decimal | None = None
+    sortino: Decimal | None = None
     drawdown: Decimal | None = None
     total_return: Decimal | None = None
     if starting_capital > 0 and all(p > 0 for p in equity):
+        daily_rets = daily_returns_from_equity(equity)
         total_return = total_return_pct(equity)
         drawdown = max_drawdown_pct(equity)
-        sharpe = sharpe_ratio(daily_returns_from_equity(equity))
+        sharpe = sharpe_ratio(daily_rets)
+        sortino = sortino_ratio(daily_rets)
 
     return RiskMetrics(
-        closed_trades=closed,
-        win_rate=win_rate,
-        avg_win_usd=avg_win,
-        avg_loss_usd=avg_loss,
-        profit_factor=profit_factor,
+        closed_trades=wl.closed_trades,
+        win_rate=wl.win_rate,
+        avg_win_usd=wl.avg_win_usd,
+        avg_loss_usd=wl.avg_loss_usd,
+        profit_factor=wl.profit_factor,
         sharpe_ratio=sharpe,
+        sortino_ratio=sortino,
         max_drawdown_pct=drawdown,
         total_return_pct=total_return,
         starting_capital_usd=starting_capital,
@@ -769,6 +750,7 @@ def render_text(report: PerformanceReport) -> str:
         lines.append(f"Avg loss:      ${_money(r.avg_loss_usd)}")
         lines.append(f"Profit factor: {_ratio(r.profit_factor)}")
         lines.append(f"Sharpe (√252): {_ratio(r.sharpe_ratio)}")
+        lines.append(f"Sortino(√252): {_ratio(r.sortino_ratio)}")
         lines.append(f"Max drawdown:  {_pct(r.max_drawdown_pct)}%")
         lines.append(
             f"Total return:  {_pct(r.total_return_pct)}% "

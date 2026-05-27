@@ -49,7 +49,7 @@ def test_snapshot_fields_flatten_closed_trades() -> None:
     ]
     fields = snapshot_fields(_report(fills), computed_at_utc="2026-05-05T00:00:00.000Z")
     assert fields["mode"] == "paper"
-    assert fields["schema_version"] == "1.1"
+    assert fields["schema_version"] == "1.2"
     assert fields["fills_count"] == 2
     assert fields["realized_pnl_usd"] == "20"
     assert fields["total_pnl_usd"] == "20"

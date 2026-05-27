@@ -48,11 +48,15 @@ from .data_model import (
     canonicalise_decimal,
 )
 from .metrics import (
+    TradeFill,
     aggregate_metrics,
     daily_returns_from_equity,
     max_drawdown_pct,
+    realized_closed_trades,
     sharpe_ratio,
+    sortino_ratio,
     total_return_pct,
+    win_loss_stats,
 )
 from .replay import (
     FillRecord,
@@ -90,6 +94,9 @@ def build_per_rule_results(result: ReplayResult) -> list[RuleBacktestResult]:
         rejections_for_rule = result.per_rule_gate_rejections.get(rule_id, [])
         by_gate: dict[str, int] = dict(Counter(r.gate for r in rejections_for_rule))
 
+        # spec 016 슬라이스 2 — 라이브 엔진과 같은 거래 단위 잣대 (헌법 X.2).
+        wl = win_loss_stats(_closed_trade_pnls(result.per_rule_fills.get(rule_id, [])))
+
         per_rule.append(
             RuleBacktestResult(
                 rule_id=rule_id,
@@ -97,6 +104,7 @@ def build_per_rule_results(result: ReplayResult) -> list[RuleBacktestResult]:
                 total_return_pct=total_return_pct(equity),
                 max_drawdown_pct=max_drawdown_pct(equity),
                 sharpe_ratio=sharpe_ratio(daily_rets),
+                sortino_ratio=sortino_ratio(daily_rets),
                 order_count=len(result.per_rule_orders.get(rule_id, [])),
                 fill_count=len(result.per_rule_fills.get(rule_id, [])),
                 gate_rejection_count_by_gate=by_gate,
@@ -115,9 +123,37 @@ def build_per_rule_results(result: ReplayResult) -> list[RuleBacktestResult]:
                         result.per_rule_slippage_cost_usd.get(rule_id, Decimal("0"))
                     )
                 ),
+                closed_trades=wl.closed_trades,
+                win_rate=_canon_or_none(wl.win_rate),
+                profit_factor=_canon_or_none(wl.profit_factor),
             )
         )
     return per_rule
+
+
+def _closed_trade_pnls(fills: list[FillRecord]) -> list[Decimal]:
+    """백테스트 체결을 공용 `TradeFill` 로 변환해 청산 손익만 뽑는다 (헌법 X.2).
+
+    백테스트 FillRecord 의 fill_price_usd 는 슬리피지를 입힌 유효 체결가(슬라이스 1)
+    이므로, 여기서 나오는 손익·승률·손익비는 비용 반영 정직한 잣대다.
+    """
+    trades = realized_closed_trades(
+        TradeFill(
+            symbol=f.symbol,
+            side=f.side,
+            qty=f.qty,
+            price_usd=Decimal(f.fill_price_usd),
+            date=f.executed_at_utc[:10],
+            rule_id=f.rule_id,
+        )
+        for f in fills
+    )
+    return [t.pnl_usd for t in trades]
+
+
+def _canon_or_none(value: Decimal | None) -> Decimal | None:
+    """byte-stability 를 위해 6자리 정규화하되 None(N/A)은 보존한다."""
+    return None if value is None else Decimal(canonicalise_decimal(value))
 
 
 def build_summary(
@@ -125,10 +161,33 @@ def build_summary(
     per_rule: list[RuleBacktestResult],
 ) -> BacktestSummary:
     agg_return, agg_dd, agg_sharpe = aggregate_metrics(per_rule)
+
+    # spec 016 슬라이스 2 — aggregate_sortino 는 룰별 동일가중 평균(aggregate_sharpe
+    # 규약과 동일). 승률·손익비는 전 룰의 청산을 한데 모아 계산한다(비율의 평균보다
+    # 의미 있음).
+    agg_sortino = (
+        Decimal(
+            canonicalise_decimal(
+                sum((r.sortino_ratio for r in per_rule), start=Decimal("0"))
+                / Decimal(len(per_rule))
+            )
+        )
+        if per_rule
+        else Decimal(canonicalise_decimal("0"))
+    )
+    pooled_pnls: list[Decimal] = []
+    for rule_id in result.per_rule_symbol:
+        pooled_pnls.extend(_closed_trade_pnls(result.per_rule_fills.get(rule_id, [])))
+    pooled = win_loss_stats(pooled_pnls)
+
     return BacktestSummary(
         aggregate_return_pct=agg_return,
         aggregate_max_drawdown_pct=agg_dd,
         aggregate_sharpe=agg_sharpe,
+        aggregate_sortino=agg_sortino,
+        total_closed_trades=pooled.closed_trades,
+        aggregate_win_rate=_canon_or_none(pooled.win_rate),
+        aggregate_profit_factor=_canon_or_none(pooled.profit_factor),
         per_rule=per_rule,
         total_orders=result.total_orders,
         total_fills=result.total_fills,
@@ -287,6 +346,10 @@ def _summary_to_json(summary: BacktestSummary) -> dict[str, Any]:
             summary.aggregate_max_drawdown_pct
         ),
         "aggregate_sharpe": canonicalise_decimal(summary.aggregate_sharpe),
+        "aggregate_sortino": canonicalise_decimal(summary.aggregate_sortino),
+        "total_closed_trades": summary.total_closed_trades,
+        "aggregate_win_rate": _canon_str_or_none(summary.aggregate_win_rate),
+        "aggregate_profit_factor": _canon_str_or_none(summary.aggregate_profit_factor),
         "total_orders": summary.total_orders,
         "total_fills": summary.total_fills,
         "total_gate_rejections": summary.total_gate_rejections,
@@ -308,14 +371,28 @@ def _rule_result_to_json(r: RuleBacktestResult) -> dict[str, Any]:
         "total_return_pct": canonicalise_decimal(r.total_return_pct),
         "max_drawdown_pct": canonicalise_decimal(r.max_drawdown_pct),
         "sharpe_ratio": canonicalise_decimal(r.sharpe_ratio),
+        "sortino_ratio": canonicalise_decimal(r.sortino_ratio),
         "order_count": r.order_count,
         "fill_count": r.fill_count,
+        "closed_trades": r.closed_trades,
+        "win_rate": _canon_str_or_none(r.win_rate),
+        "profit_factor": _canon_str_or_none(r.profit_factor),
         "gate_rejection_count_by_gate": dict(r.gate_rejection_count_by_gate),
         "notional_traded_usd": canonicalise_decimal(r.notional_traded_usd),
         "commission_usd": canonicalise_decimal(r.commission_usd),
         "slippage_cost_usd": canonicalise_decimal(r.slippage_cost_usd),
         "slippage_assumption": r.slippage_assumption,
     }
+
+
+def _canon_str_or_none(value: Decimal | None) -> str | None:
+    """JSON 직렬화용 — None(N/A) 은 그대로 두고 그 외는 6자리 정규화 문자열."""
+    return None if value is None else canonicalise_decimal(value)
+
+
+def _md_or_na(value: Decimal | None) -> str:
+    """Markdown 표용 — None(청산/손실 없음)은 N/A 로 표기."""
+    return "N/A" if value is None else canonicalise_decimal(value)
 
 
 def _data_quality_warning_to_json(w: DataQualityWarning) -> dict[str, Any]:
@@ -333,13 +410,22 @@ _METRICS_CSV_COLUMNS = (
     "total_return_pct",
     "max_drawdown_pct",
     "sharpe",
+    "sortino",
     "order_count",
     "fill_count",
+    "closed_trades",
+    "win_rate",
+    "profit_factor",
     "total_gate_rejections",
     "notional_usd",
     "commission_usd",
     "slippage_cost_usd",
 )
+
+
+def _csv_cell(value: Decimal | None) -> str:
+    """metrics.csv 셀 — None(N/A, 청산/손실 없음)은 빈 칸으로 byte-stable 표기."""
+    return "" if value is None else canonicalise_decimal(value)
 
 
 def _write_metrics_csv(path: Path, summary: BacktestSummary) -> None:
@@ -356,8 +442,12 @@ def _write_metrics_csv(path: Path, summary: BacktestSummary) -> None:
                     canonicalise_decimal(r.total_return_pct),
                     canonicalise_decimal(r.max_drawdown_pct),
                     canonicalise_decimal(r.sharpe_ratio),
+                    canonicalise_decimal(r.sortino_ratio),
                     r.order_count,
                     r.fill_count,
+                    r.closed_trades,
+                    _csv_cell(r.win_rate),
+                    _csv_cell(r.profit_factor),
                     sum(r.gate_rejection_count_by_gate.values()),
                     canonicalise_decimal(r.notional_traded_usd),
                     canonicalise_decimal(r.commission_usd),
@@ -371,8 +461,12 @@ def _write_metrics_csv(path: Path, summary: BacktestSummary) -> None:
                 canonicalise_decimal(summary.aggregate_return_pct),
                 canonicalise_decimal(summary.aggregate_max_drawdown_pct),
                 canonicalise_decimal(summary.aggregate_sharpe),
+                canonicalise_decimal(summary.aggregate_sortino),
                 summary.total_orders,
                 summary.total_fills,
+                summary.total_closed_trades,
+                _csv_cell(summary.aggregate_win_rate),
+                _csv_cell(summary.aggregate_profit_factor),
                 summary.total_gate_rejections,
                 canonicalise_decimal(
                     sum(
@@ -482,6 +576,14 @@ def render_summary_md(
         f"- max_drawdown_pct:        {canonicalise_decimal(summary.aggregate_max_drawdown_pct)}"
     )
     lines.append(f"- sharpe_ratio:            {canonicalise_decimal(summary.aggregate_sharpe)}")
+    lines.append(f"- sortino_ratio:           {canonicalise_decimal(summary.aggregate_sortino)}")
+    lines.append(f"- closed_trades:           {summary.total_closed_trades}")
+    lines.append(
+        f"- win_rate:                {_md_or_na(summary.aggregate_win_rate)}"
+    )
+    lines.append(
+        f"- profit_factor:           {_md_or_na(summary.aggregate_profit_factor)}"
+    )
     lines.append(f"- total_orders:            {summary.total_orders}")
     lines.append(f"- total_fills:             {summary.total_fills}")
     lines.append(f"- total_gate_rejections:   {summary.total_gate_rejections}")
@@ -496,11 +598,13 @@ def render_summary_md(
     lines.append("## Per-rule headline metrics")
     lines.append("")
     lines.append(
-        "| rule_id | symbol | return_pct | max_dd_pct | sharpe | orders | fills | "
+        "| rule_id | symbol | return_pct | max_dd_pct | sharpe | sortino | "
+        "closed | win_rate | profit_factor | orders | fills | "
         "gate_rejections | notional_usd |"
     )
     lines.append(
-        "|---------|--------|-----------:|-----------:|-------:|-------:|------:|"
+        "|---------|--------|-----------:|-----------:|-------:|--------:|"
+        "------:|---------:|--------------:|-------:|------:|"
         "----------------:|-------------:|"
     )
     for r in summary.per_rule:
@@ -509,6 +613,9 @@ def render_summary_md(
             f"| {canonicalise_decimal(r.total_return_pct)} "
             f"| {canonicalise_decimal(r.max_drawdown_pct)} "
             f"| {canonicalise_decimal(r.sharpe_ratio)} "
+            f"| {canonicalise_decimal(r.sortino_ratio)} "
+            f"| {r.closed_trades} | {_md_or_na(r.win_rate)} "
+            f"| {_md_or_na(r.profit_factor)} "
             f"| {r.order_count} | {r.fill_count} "
             f"| {sum(r.gate_rejection_count_by_gate.values())} "
             f"| {canonicalise_decimal(r.notional_traded_usd)} |"
