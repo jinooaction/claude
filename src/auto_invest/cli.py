@@ -1336,6 +1336,110 @@ def fills(
     _exit(0)
 
 
+async def _run_reconcile(
+    conn,
+    *,
+    base_url: str,
+    app_key: str,
+    app_secret: str,
+    account_no: str,
+    halt_path: Path,
+    db_path: Path,
+    market: str,
+):
+    """스펙 001 T050 — 로컬 보유를 브로커 잔고와 1회 대조(읽기-기반)."""
+    from auto_invest.reconciliation.runner import run_reconciliation
+
+    async with httpx.AsyncClient(base_url=base_url, timeout=30.0) as inner:
+        token = await get_valid_token(
+            inner,
+            base_url=base_url,
+            app_key=app_key,
+            app_secret=app_secret,
+            cache_path=db_path.parent / "kis_token.json",
+        )
+        client = ResilientClient(
+            inner,
+            rate_limiter=AsyncTokenBucket(rate_per_sec=15.0, capacity=15.0),
+            breaker=CircuitBreaker(failure_threshold=5, cooldown_seconds=30.0),
+            max_retries=4,
+        )
+        return await run_reconciliation(
+            conn,
+            client,
+            access_token=token.access_token,
+            app_key=app_key,
+            app_secret=app_secret,
+            account=account_no,
+            halt_path=halt_path,
+            market=market,
+        )
+
+
+@app.command()
+def reconcile(
+    db_path: Path = typer.Option(
+        Path("data/auto_invest.db"), "--db", help="SQLite database path."
+    ),
+    halt_path: Path = typer.Option(
+        Path("data/halt.flag"), "--halt-path", help="Filesystem halt-flag path."
+    ),
+    env_file: Path | None = typer.Option(
+        None, "--env", help="KIS 자격 증명 .env (브로커 잔고 조회에 필요)."
+    ),
+    base_url: str = typer.Option(
+        "https://openapi.koreainvestment.com:9443",
+        "--base-url",
+        help="KIS REST base URL.",
+    ),
+    market: str = typer.Option("NASD", "--market", help="해외거래소 코드."),
+) -> None:
+    """스펙 001 P2 — 로컬 보유를 브로커 잔고와 대조(수동/모니터링용).
+
+    라이브 워커가 매 장 마감마다 자동 수행하는 것과 같은 정합성 검증을 한 번
+    실행한다(읽기-기반 — 주문/청산 안 함). 불일치면 halt 플래그를 세워 다음
+    거래를 차단한다. 종료 코드: 0 정상(OK) / 1 불일치 또는 결론 불가(브로커 오류)
+    / 2 설정·DB 오류.
+    """
+    import json as _json
+
+    if env_file is None:
+        typer.echo("--env (KIS 자격 증명) 가 필요합니다.", err=True)
+        _exit(2)
+    if not db_path.exists():
+        typer.echo(f"DB 파일이 없습니다: {db_path}", err=True)
+        _exit(2)
+    try:
+        secrets = load_secrets(env_file)
+    except ConfigError as exc:
+        typer.echo(f"환경 파일 오류: {exc}", err=True)
+        _exit(2)
+
+    conn = db.get_connection(db_path)
+    try:
+        outcome = asyncio.run(
+            _run_reconcile(
+                conn,
+                base_url=base_url,
+                app_key=secrets["KIS_APP_KEY"],
+                app_secret=secrets["KIS_APP_SECRET"],
+                account_no=secrets["KIS_ACCOUNT_NO"],
+                halt_path=halt_path,
+                db_path=db_path,
+                market=market,
+            )
+        )
+    finally:
+        conn.close()
+
+    typer.echo(f"정합성 검사: {outcome.state}")
+    if outcome.diff:
+        typer.echo(_json.dumps(outcome.diff, indent=2, ensure_ascii=False))
+    if outcome.error:
+        typer.echo(f"⚠ 브로커 조회 오류: {outcome.error}", err=True)
+    _exit(0 if outcome.state == "OK" else 1)
+
+
 @app.command()
 def version() -> None:
     """Print the auto-invest package version."""

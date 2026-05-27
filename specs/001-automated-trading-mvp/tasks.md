@@ -131,11 +131,11 @@
 
 **Independent Test**: Inject a synthetic mismatch (e.g., add a fake row to `current_positions` that doesn't match the broker fixture); run reconciliation; verify `RECONCILIATION_MISMATCH` is recorded, halt-flag is set, and subsequent order intents are rejected by the halt gate.
 
-- [ ] T048 [P] [US2] Add `tests/integration/test_reconciliation.py` covering: positions match, qty mismatch, cash mismatch outside tolerance, broker error → `INCONCLUSIVE` result, mismatch sets halt and the halt message includes the diff.
-- [ ] T049 [US2] Implement `reconciliation/runner.py`: pull broker positions+balance, compare against `current_positions`, write `reconciliation_runs` row + matching audit event, set halt flag on mismatch with the diff payload, in `src/auto_invest/reconciliation/runner.py` (depends on T032, T028, T012, T021).
-- [ ] T050 [US2] Wire APScheduler in `worker/loop.py` to invoke reconciliation at session close (`worker/schedule.py.next_session_close()`) and to also expose a `reconcile-now` command path for manual runs (depends on T044, T049).
-- [ ] T051 [US2] Extend `cli.py` with `halt --reason "<text>"` and `resume --confirm` subcommands per `contracts/cli.md`, ensuring both write the corresponding audit rows.
-- [ ] T052 [P] [US2] Extend `tests/integration/test_worker_loop.py` to assert: reconciliation runs at scheduled session close, mismatch halts new orders within one tick.
+- [X] T048 [P] [US2] Add `tests/integration/test_reconciliation.py` covering: positions match, qty mismatch, cash mismatch outside tolerance, broker error → `INCONCLUSIVE` result, mismatch sets halt and the halt message includes the diff.
+- [X] T049 [US2] Implement `reconciliation/runner.py`: pull broker positions+balance, compare against `current_positions`, write `reconciliation_runs` row + matching audit event, set halt flag on mismatch with the diff payload, in `src/auto_invest/reconciliation/runner.py` (depends on T032, T028, T012, T021).
+- [X] T050 [US2] Invoke reconciliation at session close from `worker/loop.py` and expose a manual `reconcile` command (depends on T044, T049). **NOTE**: implemented via tick-loop session-close *transition* detection (`Worker._session_was_open` flips open→closed → `_reconcile_at_close`), not APScheduler — the worker is an asyncio tick loop, not APScheduler-based. Manual path is the `auto-invest reconcile` CLI command. Live-only (paper has virtual positions); errors isolated so the tick never breaks.
+- [X] T051 [US2] Extend `cli.py` with `halt --reason "<text>"` and `resume --confirm` subcommands per `contracts/cli.md`, ensuring both write the corresponding audit rows.
+- [X] T052 [P] [US2] Extend worker-loop tests to assert: reconciliation runs at session close, mismatch halts within one tick. **NOTE**: covered by `tests/integration/test_worker_reconcile_at_close.py` (OK/mismatch-halts/paper-skip/fires-once/startup-closed-no-trigger).
 
 **Checkpoint**: User Stories 1 + 2 work together. End-of-session reconciliation is automatic; operator-controlled halt/resume is covered.
 
