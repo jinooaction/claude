@@ -26,6 +26,7 @@ from auto_invest.broker.client import ResilientClient
 from auto_invest.broker.overseas import get_quote
 from auto_invest.config.loader import LoadedConfig
 from auto_invest.config.rules import IndicatorTrigger, TradingRule
+from auto_invest.execution.fill_sync import sync_fills
 from auto_invest.execution.order_router import (
     OrderOutcome,
     OrderRouter,
@@ -69,6 +70,10 @@ _PAPER_STOP_REASONS = {"normal_shutdown", "signal_received", "mutex_conflict", "
 # 로그를 다시 읽지 않도록 평가를 묶는다. 첫 틱은 무조건 평가한다(_last_breaker_eval_at
 # 가 None). 손실 반응 지연이 수 초인 것은 안전상 충분하다.
 _BREAKER_EVAL_GAP_SECONDS = 5.0
+
+# Spec 015: 라이브 체결 동기화 재폴링 최소 간격(초). 1Hz 틱마다 브로커 체결 조회를
+# 날리지 않도록 묶는다. 첫 평가는 무조건 수행(_last_fill_sync_at 가 None).
+_FILL_SYNC_GAP_SECONDS = 5.0
 
 
 def _normalize_paper_stop_reason(reason: str) -> str:
@@ -145,6 +150,8 @@ class Worker:
         self._last_fired: dict[str, datetime] = {}
         # Spec 014: 브레이커 재평가 cadence 추적. None = 아직 평가 안 함(첫 틱에 평가).
         self._last_breaker_eval_at: datetime | None = None
+        # Spec 015: 체결 동기화 cadence 추적. None = 아직 안 함(첫 기회에 동기화).
+        self._last_fill_sync_at: datetime | None = None
         self._paused_rules: set[str] = {
             r.id for r in settings.config.rules if restore_pause_status(self.conn, r.id)
         }
@@ -245,6 +252,14 @@ class Worker:
                 self._trip_circuit_breaker(decision, moment)
                 report.skipped_reason = "circuit_breaker_tripped"
                 return report
+
+        # Spec 015: 라이브 체결 동기화 — 접수된 주문의 실제 체결을 장부에 반영한다.
+        # 라이브 모드 전용(paper 는 orders row 가 없어 호출 안 함). 오류는 격리되어
+        # 거래 루프를 멈추지 않는다. 열린 주문이 0건이면 sync_fills 가 브로커를
+        # 호출하지 않는다(불필요 API 절약).
+        if self._should_sync_fills(moment):
+            self._last_fill_sync_at = moment
+            await self._sync_open_order_fills(moment)
 
         for rule in self.settings.config.rules:
             if not rule.enabled:
@@ -353,6 +368,36 @@ class Worker:
             price = quote_price if pos.symbol == symbol else pos.avg_cost_usd
             total += Decimal(pos.qty) * price
         return total
+
+    # ---------------------------------------------- fill sync (spec 015)
+
+    def _should_sync_fills(self, now: datetime) -> bool:
+        """체결 동기화를 이번 틱에 할지. paper 모드면 안 함, 아니면 cadence 적용."""
+        if self.settings.paper_mode:
+            return False
+        last = self._last_fill_sync_at
+        if last is None:
+            return True
+        return (now - last).total_seconds() >= _FILL_SYNC_GAP_SECONDS
+
+    async def _sync_open_order_fills(self, now: datetime) -> None:
+        """라이브 열린 주문의 체결을 브로커에서 당겨와 장부에 반영(읽기-기반 적재).
+
+        sync_fills 가 모든 예외를 격리하므로 여기서 추가 try 는 불필요하지만,
+        방어적으로 한 번 더 감싸 어떤 경우에도 틱이 깨지지 않게 한다(SC-005)."""
+        try:
+            await sync_fills(
+                self.conn,
+                self.broker,
+                access_token=self.access_token,
+                app_key=self.app_key,
+                app_secret=self.app_secret,
+                account=self.account_no,
+                market=self.settings.market_order,
+                now=now,
+            )
+        except Exception:  # pragma: no cover — 이중 안전망(거래 무중단).
+            logger.warning("fill sync raised unexpectedly", exc_info=True)
 
     # ---------------------------------------------- circuit breaker (spec 014)
 
