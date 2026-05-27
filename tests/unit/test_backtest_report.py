@@ -29,7 +29,12 @@ from auto_invest.backtest.replay import (
     OrderRecord,
     ReplayResult,
 )
-from auto_invest.backtest.report import KernelGuardReport, write_report
+from auto_invest.backtest.report import (
+    KernelGuardReport,
+    build_per_rule_results,
+    build_summary,
+    write_report,
+)
 
 # ---------- helpers ------------------------------------------------------
 
@@ -241,8 +246,12 @@ def test_metrics_csv_columns_and_aggregate_row(tmp_path: Path) -> None:
         "total_return_pct",
         "max_drawdown_pct",
         "sharpe",
+        "sortino",
         "order_count",
         "fill_count",
+        "closed_trades",
+        "win_rate",
+        "profit_factor",
         "total_gate_rejections",
         "notional_usd",
         "commission_usd",
@@ -405,3 +414,105 @@ def test_metrics_csv_aggregate_notional_is_sum_of_rules(tmp_path: Path) -> None:
     *rule_rows, agg = rows[1:]
     rule_notionals = sum(Decimal(r.split(",")[-1]) for r in rule_rows)
     assert Decimal(agg.split(",")[-1]) == rule_notionals
+
+
+# ---------- spec 016 슬라이스 2 — 거래 단위 잣대 (헌법 X.2) ---------------
+
+
+def _round_trip_result() -> ReplayResult:
+    """r1: BUY 2@100, SELL 2@130 → +60 한 청산. r2: 체결 없음."""
+    fills_r1 = [
+        FillRecord(
+            correlation_id="c-b",
+            rule_id="r1",
+            symbol="AAPL",
+            side="BUY",
+            qty=2,
+            fill_price_usd="100.000000",
+            executed_at_utc="2024-01-03T21:00:00.000Z",
+            kis_fill_id="BT-b",
+        ),
+        FillRecord(
+            correlation_id="c-s",
+            rule_id="r1",
+            symbol="AAPL",
+            side="SELL",
+            qty=2,
+            fill_price_usd="130.000000",
+            executed_at_utc="2024-01-04T21:00:00.000Z",
+            kis_fill_id="BT-s",
+        ),
+    ]
+    orders_r1 = [
+        OrderRecord(
+            correlation_id=cid,
+            rule_id="r1",
+            symbol="AAPL",
+            side=side,
+            order_type="LIMIT",
+            qty=2,
+            limit_price_usd="100.000000",
+            state="SUBMITTED",
+            ts_utc=ts,
+            kis_order_id=oid,
+        )
+        for cid, side, ts, oid in (
+            ("c-b", "BUY", "2024-01-03T21:00:00.000Z", "BT-ob"),
+            ("c-s", "SELL", "2024-01-04T21:00:00.000Z", "BT-os"),
+        )
+    ]
+    eq = [
+        (date(2024, 1, 3), Decimal("50000")),
+        (date(2024, 1, 4), Decimal("50060")),
+    ]
+    return ReplayResult(
+        per_rule_orders={"r1": orders_r1, "r2": []},
+        per_rule_fills={"r1": fills_r1, "r2": []},
+        per_rule_gate_rejections={"r1": [], "r2": []},
+        per_rule_equity_curve={"r1": eq, "r2": [(date(2024, 1, 3), Decimal("50000"))]},
+        per_rule_symbol={"r1": "AAPL", "r2": "MSFT"},
+        per_rule_notional_traded_usd={"r1": Decimal("460"), "r2": Decimal("0")},
+        data_quality_warnings=[],
+        total_orders=2,
+        total_fills=2,
+        total_gate_rejections=0,
+    )
+
+
+def test_per_rule_result_carries_trade_metrics() -> None:
+    per_rule = {r.rule_id: r for r in build_per_rule_results(_round_trip_result())}
+    r1 = per_rule["r1"]
+    assert r1.closed_trades == 1
+    assert r1.win_rate == Decimal("1.000000")  # 1 of 1 winning
+    assert r1.profit_factor is None  # no losing trade → no denominator
+    # r2 had no closed trades → N/A.
+    r2 = per_rule["r2"]
+    assert r2.closed_trades == 0
+    assert r2.win_rate is None
+    assert r2.profit_factor is None
+
+
+def test_summary_pools_trade_metrics_across_rules() -> None:
+    result = _round_trip_result()
+    summary = build_summary(result, build_per_rule_results(result))
+    assert summary.total_closed_trades == 1
+    assert summary.aggregate_win_rate == Decimal("1.000000")
+    assert summary.aggregate_profit_factor is None
+
+
+def test_metrics_csv_has_trade_metric_columns(tmp_path: Path) -> None:
+    run_dir = write_report(
+        run=_make_run(),
+        result=_round_trip_result(),
+        kernel_guard_report=_guard_report(),
+        out_root=tmp_path,
+        chmod_readonly=False,
+    )
+    rows = [r.split(",") for r in (run_dir / "metrics.csv").read_text().strip().split("\n")]
+    header = rows[0]
+    r1_row = dict(zip(header, rows[1], strict=True))
+    assert r1_row["rule_id"] == "r1"
+    assert r1_row["closed_trades"] == "1"
+    assert r1_row["win_rate"] == "1.000000"
+    assert r1_row["profit_factor"] == ""  # N/A → empty cell
+    assert "sortino" in header

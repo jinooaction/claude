@@ -197,6 +197,7 @@ class RunOutcome:
     summary_aggregate_return_pct: str | None = None
     summary_aggregate_max_drawdown_pct: str | None = None
     summary_aggregate_sharpe: str | None = None
+    summary_aggregate_sortino: str | None = None  # spec 016 슬라이스 2
     total_orders: int = 0
     total_fills: int = 0
     total_gate_rejections: int = 0
@@ -544,6 +545,7 @@ def run_backtest(options: RunOptions, *, conn: sqlite3.Connection) -> RunOutcome
                 summary.aggregate_max_drawdown_pct
             ),
             summary_aggregate_sharpe=canonicalise_decimal(summary.aggregate_sharpe),
+            summary_aggregate_sortino=canonicalise_decimal(summary.aggregate_sortino),
             total_orders=result.total_orders,
             total_fills=result.total_fills,
             total_gate_rejections=result.total_gate_rejections,

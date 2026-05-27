@@ -14,11 +14,15 @@ import pytest
 from auto_invest.backtest.data_model import RuleBacktestResult, canonicalise_decimal
 from auto_invest.backtest.metrics import (
     TRADING_DAYS_PER_YEAR,
+    TradeFill,
     aggregate_metrics,
     daily_returns_from_equity,
     max_drawdown_pct,
+    realized_closed_trades,
     sharpe_ratio,
+    sortino_ratio,
     total_return_pct,
+    win_loss_stats,
 )
 
 # ---------- total_return_pct ---------------------------------------------
@@ -195,3 +199,98 @@ def test_metrics_are_canonical_six_dp() -> None:
 
     out = sharpe_ratio([0.01, 0.02, -0.01, 0.005])
     assert len(str(out).split(".")[1]) == 6
+
+
+# ---------- sortino_ratio (spec 016 슬라이스 2) ---------------------------
+
+
+def test_sortino_downside_only_hand_computed() -> None:
+    """mean=0.05, downside dev=0.05 → ratio 1 × sqrt(252) = 15.874508 (6dp)."""
+    returns = [0.1, 0.1, 0.1, -0.1]
+    assert sortino_ratio(returns) == Decimal("15.874508")
+
+
+def test_sortino_zero_when_no_downside() -> None:
+    """All-positive returns have no downside risk → 0 (mirrors sharpe zero-risk)."""
+    assert sortino_ratio([0.01, 0.02, 0.03]) == Decimal("0.000000")
+
+
+def test_sortino_fewer_than_two_obs_is_zero() -> None:
+    assert sortino_ratio([0.05]) == Decimal("0.000000")
+    assert sortino_ratio([]) == Decimal("0.000000")
+
+
+def test_sortino_ge_sharpe_when_upside_volatile() -> None:
+    """Sortino ignores upside vol, so it is >= Sharpe on the same series."""
+    returns = [0.1, 0.1, 0.1, -0.1]
+    assert sortino_ratio(returns) > sharpe_ratio(returns)
+
+
+def test_sortino_is_canonical_six_dp() -> None:
+    out = sortino_ratio([0.01, -0.02, 0.03, -0.005])
+    assert len(str(out).split(".")[1]) == 6
+
+
+# ---------- win_loss_stats (spec 016 슬라이스 2) --------------------------
+
+
+def test_win_loss_stats_mixed() -> None:
+    s = win_loss_stats([Decimal("30"), Decimal("-20"), Decimal("10")])
+    assert s.closed_trades == 3
+    assert s.win_rate == Decimal("2") / Decimal("3")
+    assert s.avg_win_usd == Decimal("20")  # (30+10)/2
+    assert s.avg_loss_usd == Decimal("-20")
+    assert s.profit_factor == Decimal("2")  # 40 / 20
+
+
+def test_win_loss_stats_empty_all_none() -> None:
+    s = win_loss_stats([])
+    assert s.closed_trades == 0
+    assert s.win_rate is None
+    assert s.avg_win_usd is None
+    assert s.avg_loss_usd is None
+    assert s.profit_factor is None
+
+
+def test_win_loss_stats_no_losses_profit_factor_none() -> None:
+    s = win_loss_stats([Decimal("10"), Decimal("20")])
+    assert s.win_rate == Decimal("1")
+    assert s.avg_loss_usd is None
+    assert s.profit_factor is None  # no denominator
+
+
+def test_win_loss_stats_no_wins() -> None:
+    s = win_loss_stats([Decimal("-5"), Decimal("-10")])
+    assert s.win_rate == Decimal("0")
+    assert s.avg_win_usd is None
+    assert s.profit_factor == Decimal("0")  # gross win 0 / gross loss 15
+
+
+# ---------- realized_closed_trades (단일 잣대 재구성) --------------------
+
+
+def _tf(symbol: str, side: str, qty: int, price: str) -> TradeFill:
+    return TradeFill(symbol=symbol, side=side, qty=qty, price_usd=Decimal(price))
+
+
+def test_realized_closed_trades_single_round_trip() -> None:
+    trades = realized_closed_trades([_tf("VOO", "BUY", 2, "100"), _tf("VOO", "SELL", 2, "110")])
+    assert [t.pnl_usd for t in trades] == [Decimal("20")]  # (110-100)*2
+
+
+def test_realized_closed_trades_average_cost() -> None:
+    fills = [_tf("X", "BUY", 1, "100"), _tf("X", "BUY", 1, "200"), _tf("X", "SELL", 2, "180")]
+    trades = realized_closed_trades(fills)
+    assert [t.pnl_usd for t in trades] == [Decimal("60")]  # (180-150)*2
+
+
+def test_realized_closed_trades_oversell_clamped() -> None:
+    fills = [_tf("X", "BUY", 1, "100"), _tf("X", "SELL", 3, "120")]
+    trades = realized_closed_trades(fills)
+    assert len(trades) == 1
+    assert trades[0].qty == 1
+    assert trades[0].pnl_usd == Decimal("20")
+
+
+def test_realized_closed_trades_sell_with_no_holding_skipped() -> None:
+    assert realized_closed_trades([_tf("X", "SELL", 1, "120")]) == []

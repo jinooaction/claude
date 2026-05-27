@@ -25,6 +25,7 @@ period returns (Pₜ / Pₜ₋₁ − 1).
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
 from decimal import Decimal
 
 import numpy as np
@@ -90,6 +91,32 @@ def sharpe_ratio(daily_returns: Sequence[Decimal | float | int]) -> Decimal:
     return Decimal(canonicalise_decimal(sharpe))
 
 
+def sortino_ratio(daily_returns: Sequence[Decimal | float | int]) -> Decimal:
+    """Annualised Sortino ratio: mean / downside_deviation × sqrt(252), MAR=RFR=0.
+
+    Sortino is Sharpe's downside-only sibling — it penalises only returns
+    below the minimum acceptable return (MAR=0), so upside volatility is not
+    treated as risk. Downside deviation is the target semideviation about a
+    MAR of 0: sqrt(mean(min(0, r)²)) taken over ALL observations (the standard
+    convention; the count is the full sample, not just the negative tail).
+
+    Returns 0.000000 when fewer than two observations are provided or when
+    there is no downside risk (downside deviation 0 — no negative return to
+    penalise), mirroring sharpe_ratio's zero-risk path. Annualisation matches
+    sharpe_ratio (sqrt(252)) so the two ratios are read on the same time base.
+    """
+    arr = _to_float_array(daily_returns)
+    if arr.size < 2:
+        return Decimal(canonicalise_decimal("0"))
+    downside = np.minimum(arr, 0.0)
+    dd = float(np.sqrt(np.mean(downside**2)))
+    if dd == 0.0:
+        return Decimal(canonicalise_decimal("0"))
+    mean = float(np.mean(arr))
+    sortino = (mean / dd) * float(np.sqrt(TRADING_DAYS_PER_YEAR))
+    return Decimal(canonicalise_decimal(sortino))
+
+
 def daily_returns_from_equity(
     equity_curve: Sequence[Decimal | float | int],
 ) -> list[Decimal]:
@@ -105,6 +132,98 @@ def daily_returns_from_equity(
         raise ValueError("equity_curve cannot contain zeros except possibly at the end")
     rets = arr[1:] / arr[:-1] - 1.0
     return [Decimal(canonicalise_decimal(r)) for r in rets.tolist()]
+
+
+# ----------------------------------------- trade-level metrics (single yardstick)
+#
+# 헌법 X.2 단일 잣대: 승률·손익비·실현거래 재구성은 라이브 성과 엔진(spec 011)과
+# 백테스트(spec 016)가 같은 정의를 써야 한다. 그 정의를 여기 한 곳에 둔다 — 두
+# 잣대가 갈라지지 못하게.
+
+
+@dataclass(frozen=True)
+class TradeFill:
+    """Normalised fill — the single input shape for trade-level metrics shared
+    by the live engine and the backtest. Callers adapt their own fill rows to
+    this so the avg-cost reconstruction below cannot drift between yardsticks."""
+
+    symbol: str
+    side: str  # "BUY" | "SELL"
+    qty: int
+    price_usd: Decimal
+    date: str = ""  # YYYY-MM-DD; lets callers bucket a realised-pnl equity curve
+    rule_id: str | None = None
+
+
+@dataclass(frozen=True)
+class ClosedTrade:
+    """One realised (closed) lot from a SELL, marked against running avg cost."""
+
+    symbol: str
+    qty: int
+    pnl_usd: Decimal
+    date: str
+    rule_id: str | None
+
+
+def realized_closed_trades(fills: Iterable[TradeFill]) -> list[ClosedTrade]:
+    """Reconstruct realised closed trades from a fill sequence (average cost).
+
+    THE single definition shared by live performance (spec 011) and the
+    backtest (spec 016 slice 2). A SELL realises (fill_price − avg_cost) × qty
+    against the running average cost; an oversell is clamped to the held qty
+    (no synthetic short position), matching the live engine's data-quality rule.
+    """
+    avg_cost: dict[str, Decimal] = {}
+    held: dict[str, int] = {}
+    trades: list[ClosedTrade] = []
+    for f in fills:
+        q = held.get(f.symbol, 0)
+        cost = avg_cost.get(f.symbol, Decimal("0"))
+        if f.side == "BUY":
+            new_q = q + f.qty
+            new_total = cost * Decimal(q) + f.price_usd * Decimal(f.qty)
+            avg_cost[f.symbol] = new_total / Decimal(new_q) if new_q else Decimal("0")
+            held[f.symbol] = new_q
+        elif f.side == "SELL":
+            sell_qty = min(f.qty, q)
+            if sell_qty <= 0:
+                continue
+            pnl = (f.price_usd - cost) * Decimal(sell_qty)
+            trades.append(ClosedTrade(f.symbol, sell_qty, pnl, f.date, f.rule_id))
+            held[f.symbol] = q - sell_qty
+    return trades
+
+
+@dataclass(frozen=True)
+class WinLossStats:
+    """Trade-level win/loss aggregation — the shared definition (헌법 X.2)."""
+
+    closed_trades: int
+    win_rate: Decimal | None  # 0..1 (winning closes / closes)
+    avg_win_usd: Decimal | None
+    avg_loss_usd: Decimal | None  # negative
+    profit_factor: Decimal | None  # gross win / |gross loss|
+
+
+def win_loss_stats(pnls: Sequence[Decimal]) -> WinLossStats:
+    """Win rate, average win/loss, and profit factor from realised-trade pnls.
+
+    Empty input → closed_trades 0 and every ratio None. profit_factor is None
+    when there is no losing trade (no denominator). Pure Decimal arithmetic —
+    these are operator-facing yardsticks, so the caller decides canonicalisation.
+    """
+    closed = len(pnls)
+    if closed == 0:
+        return WinLossStats(0, None, None, None, None)
+    wins = [p for p in pnls if p > 0]
+    losses = [p for p in pnls if p < 0]
+    win_rate = Decimal(len(wins)) / Decimal(closed)
+    avg_win = (sum(wins, Decimal("0")) / Decimal(len(wins))) if wins else None
+    avg_loss = (sum(losses, Decimal("0")) / Decimal(len(losses))) if losses else None
+    gross_loss = abs(sum(losses, Decimal("0")))
+    profit_factor = (sum(wins, Decimal("0")) / gross_loss) if gross_loss > 0 else None
+    return WinLossStats(closed, win_rate, avg_win, avg_loss, profit_factor)
 
 
 def aggregate_metrics(
@@ -133,9 +252,15 @@ def aggregate_metrics(
 
 __all__ = [
     "TRADING_DAYS_PER_YEAR",
+    "ClosedTrade",
+    "TradeFill",
+    "WinLossStats",
     "aggregate_metrics",
     "daily_returns_from_equity",
     "max_drawdown_pct",
+    "realized_closed_trades",
     "sharpe_ratio",
+    "sortino_ratio",
     "total_return_pct",
+    "win_loss_stats",
 ]

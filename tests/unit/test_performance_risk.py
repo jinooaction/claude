@@ -17,6 +17,7 @@ from auto_invest.backtest.metrics import (
     daily_returns_from_equity,
     max_drawdown_pct,
     sharpe_ratio,
+    sortino_ratio,
     total_return_pct,
 )
 from auto_invest.performance.engine import (
@@ -66,12 +67,17 @@ def test_win_rate_avg_profit_factor() -> None:
 
 
 def test_risk_metrics_match_backtest_metrics() -> None:
-    """SC-002 — 샤프·낙폭·총수익률이 backtest/metrics.py 와 바이트 동일."""
+    """SC-002 — 샤프·낙폭·총수익률·Sortino 가 backtest/metrics.py 와 바이트 동일.
+
+    spec 016 슬라이스 2(헌법 X.2 단일 잣대): 라이브 위험조정 지표는 전부
+    backtest/metrics.py 공용 정의를 호출해 백테스트와 같은 수치를 낸다.
+    """
     r = compute_risk_metrics(_FILLS, starting_capital=Decimal("250"))
     assert r is not None
     assert r.total_return_pct == total_return_pct(_EQUITY)
     assert r.max_drawdown_pct == max_drawdown_pct(_EQUITY)
     assert r.sharpe_ratio == sharpe_ratio(daily_returns_from_equity(_EQUITY))
+    assert r.sortino_ratio == sortino_ratio(daily_returns_from_equity(_EQUITY))
 
 
 def test_starting_capital_default_is_gross_invested() -> None:
@@ -124,4 +130,5 @@ def test_render_includes_risk_section() -> None:
     text = render_text(rep)
     assert "Risk-adjusted" in text
     assert "Sharpe" in text
+    assert "Sortino" in text
     assert "Win rate" in text
