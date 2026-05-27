@@ -152,6 +152,10 @@ class Worker:
         self._last_breaker_eval_at: datetime | None = None
         # Spec 015: 체결 동기화 cadence 추적. None = 아직 안 함(첫 기회에 동기화).
         self._last_fill_sync_at: datetime | None = None
+        # Spec 001 T050: 장 마감 정합성 트리거 상태. 세션이 열려 있는 틱에서 True 가
+        # 되고, 열림→닫힘으로 바뀌는 첫 틱에 정합성을 1회 실행한다(startup 이 닫힘이면
+        # 트리거 안 함 — 전이가 아니라 초기 상태이므로).
+        self._session_was_open: bool = False
         self._paused_rules: set[str] = {
             r.id for r in settings.config.rules if restore_pause_status(self.conn, r.id)
         }
@@ -238,7 +242,24 @@ class Worker:
         if is_halted(self.settings.halt_path):
             report.skipped_reason = "halt_flag_set"
             return report
-        if self.settings.require_session_open and not is_session_open(moment):
+
+        # Spec 001 T050(완성): 장 마감 정합성. require_session_open 라이브 워커에서
+        # 세션이 열림→닫힘으로 바뀌는 첫 틱에 로컬 보유를 브로커 잔고와 1회 대조한다
+        # (불일치면 halt 로 다음 세션 거래를 차단 — 조용한 상태 드리프트 방지, US2).
+        # 한 번의 닫힘 구간에 정확히 1회만 실행된다: 트리거 직후 _session_was_open 이
+        # False 가 되어 같은 닫힘 구간의 이후 틱은 전이 조건에 걸리지 않는다. paper 는
+        # 가상 보유라 실계좌와 대조하면 오탐이므로 호출 안 함. 오류는 격리(거래 무중단).
+        session_open = is_session_open(moment)
+        if (
+            self.settings.require_session_open
+            and not self.settings.paper_mode
+            and self._session_was_open
+            and not session_open
+        ):
+            await self._reconcile_at_close()
+        self._session_was_open = session_open
+
+        if self.settings.require_session_open and not session_open:
             report.skipped_reason = "session_closed"
             return report
 
@@ -471,10 +492,22 @@ class Worker:
 
     # ---------------------------------------------- reconciliation
 
+    async def _reconcile_at_close(self) -> None:
+        """장 마감 전이에서 1회 정합성 검증(읽기-기반 대조 + 불일치 halt).
+
+        `reconcile_now` → `run_reconciliation` 이 브로커 예외를 INCONCLUSIVE 로
+        격리하므로 정상 경로에서 예외가 올라오지 않지만, DB 오류 등 어떤 경우에도
+        틱이 깨지지 않도록 방어적으로 한 번 더 감싼다(SC: 거래 무중단)."""
+        try:
+            outcome = await self.reconcile_now()
+            logger.info("session-close reconciliation: %s", outcome.state)
+        except Exception:  # pragma: no cover — 이중 안전망(거래 무중단).
+            logger.warning("session-close reconciliation raised", exc_info=True)
+
     async def reconcile_now(self) -> ReconciliationOutcome:
-        """Run reconciliation immediately. Used by tests and the
-        CLI's `reconcile` subcommand; the scheduled session-close
-        path uses the same entrypoint."""
+        """Run reconciliation immediately. Shared entrypoint for the
+        `auto-invest reconcile` CLI (manual runs) and the automatic
+        session-close trigger (`_reconcile_at_close`, spec 001 T050)."""
         return await run_reconciliation(
             self.conn,
             self.broker,
