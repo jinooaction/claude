@@ -2422,6 +2422,176 @@ def backtest_cmd(
         _exit(outcome.exit_code)
 
 
+@app.command("walk-forward")
+def walk_forward_cmd(
+    rules: Path = typer.Option(
+        ..., "--rules", help="Path to rules TOML (same format as the live worker)."
+    ),
+    date_from: str = typer.Option(
+        ..., "--from", help="Inclusive session-date start (YYYY-MM-DD)."
+    ),
+    date_to: str = typer.Option(..., "--to", help="Inclusive session-date end (YYYY-MM-DD)."),
+    in_sample_days: int = typer.Option(
+        ..., "--in-sample-days", help="In-sample (fit) window length in calendar days."
+    ),
+    out_of_sample_days: int = typer.Option(
+        ..., "--out-of-sample-days", help="Out-of-sample (test) window length in calendar days."
+    ),
+    step_days: int = typer.Option(
+        None,
+        "--step-days",
+        help="Advance between windows (default = out-of-sample-days for contiguous OOS).",
+    ),
+    mode: str = typer.Option(
+        "rolling", "--mode", help="rolling (sliding fixed IS) or anchored (expanding IS)."
+    ),
+    wfe_threshold: float = typer.Option(
+        0.5,
+        "--wfe-threshold",
+        help="Mean WFE below this flags overfitting (OOS sharpe / IS sharpe).",
+    ),
+    dataset_version: str = typer.Option(
+        None,
+        "--dataset-version",
+        help="Specific dataset_version; defaults to most recent under history-root.",
+    ),
+    db_path: Path = typer.Option(
+        Path("data/auto_invest.db"), "--db", help="SQLite audit-log path."
+    ),
+    halt_path: Path = typer.Option(
+        Path("data/halt.flag"), "--halt-path", help="Filesystem halt-flag path."
+    ),
+    history_root: Path = typer.Option(
+        Path("data/history"), "--history-root", help="Where ingested datasets live."
+    ),
+    commission_bps: float = typer.Option(
+        None, "--commission-bps", help="Per-side commission bps (default: KIS US-equity)."
+    ),
+    slippage_bps: float = typer.Option(
+        None, "--slippage-bps", help="Adverse slippage per fill bps (default: KIS)."
+    ),
+    min_commission_usd: float = typer.Option(
+        None, "--min-commission-usd", help="Per-fill commission floor USD (default: 0)."
+    ),
+) -> None:
+    """Walk-forward (out-of-sample) validation — overfitting detector (spec 016 슬라이스 3).
+
+    Runs the same ruleset across rolling IS/OOS date windows and reports the
+    honest pooled out-of-sample performance plus Walk-Forward Efficiency. Same
+    single-yardstick metrics as `backtest` (헌법 X.2). Offline, read-only.
+    """
+    from datetime import date as _date
+    from decimal import Decimal as _Decimal
+
+    from auto_invest.backtest.costs import BacktestCostModel
+    from auto_invest.backtest.data_source import CSVDataSource, latest_dataset_dir
+    from auto_invest.backtest.run import EXIT_COVERAGE
+    from auto_invest.backtest.walk_forward import (
+        WalkForwardError,
+        render_walk_forward_report,
+        run_walk_forward,
+    )
+
+    _cost_base = BacktestCostModel.kis_default()
+    cost_model = BacktestCostModel(
+        commission_bps=(
+            _Decimal(str(commission_bps))
+            if commission_bps is not None
+            else _cost_base.commission_bps
+        ),
+        slippage_bps=(
+            _Decimal(str(slippage_bps)) if slippage_bps is not None else _cost_base.slippage_bps
+        ),
+        min_commission_usd=(
+            _Decimal(str(min_commission_usd))
+            if min_commission_usd is not None
+            else _cost_base.min_commission_usd
+        ),
+    )
+
+    if mode not in ("rolling", "anchored"):
+        typer.echo(f"--mode must be 'rolling' or 'anchored', got {mode!r}", err=True)
+        _exit(64)
+
+    # Resolve dataset directory.
+    if dataset_version is not None:
+        dataset_dir = history_root / dataset_version
+        if not (dataset_dir / "manifest.json").exists():
+            typer.echo(
+                f"dataset_version {dataset_version!r} not found under {history_root}", err=True
+            )
+            _exit(64)
+    else:
+        latest = latest_dataset_dir(history_root)
+        if latest is None:
+            typer.echo(
+                f"no ingested datasets under {history_root}; "
+                "run `auto-invest ingest-history` first",
+                err=True,
+            )
+            _exit(64)
+            return
+        dataset_dir = latest
+
+    try:
+        ds_start = _date.fromisoformat(date_from)
+        ds_end = _date.fromisoformat(date_to)
+    except ValueError as exc:
+        typer.echo(f"date parsing failed: {exc}", err=True)
+        _exit(64)
+        return
+    if ds_end < ds_start:
+        typer.echo(f"--to ({ds_end}) is before --from ({ds_start})", err=True)
+        _exit(64)
+
+    try:
+        caps, whitelist, parsed_rules, _ruleset_sha256 = _load_rules_for_backtest(rules)
+    except ConfigError as exc:
+        typer.echo(f"rules validation failed: {exc}", err=True)
+        _exit(65)
+        return
+
+    data_source = CSVDataSource(dataset_dir)
+    holes = data_source.coverage_holes(list(data_source.list_symbols()), ds_start, ds_end)
+    if holes:
+        for sym, d in holes[:20]:
+            typer.echo(f"coverage hole: {sym} {d.isoformat()}", err=True)
+        if len(holes) > 20:
+            typer.echo(f"...and {len(holes) - 20} more", err=True)
+        _exit(EXIT_COVERAGE)
+
+    _require_clean_migrations(db_path, allow_apply=True)
+    conn = db.get_connection(db_path)
+    try:
+        report = run_walk_forward(
+            rules=parsed_rules,
+            data_source=data_source,
+            date_start=ds_start,
+            date_end=ds_end,
+            caps=caps,
+            whitelist=whitelist,
+            halt_path=halt_path,
+            conn=conn,
+            in_sample_days=in_sample_days,
+            out_of_sample_days=out_of_sample_days,
+            step_days=step_days,
+            mode=mode,
+            cost_model=cost_model,
+            wfe_threshold=_Decimal(str(wfe_threshold)),
+        )
+    except WalkForwardError as exc:
+        typer.echo(f"walk-forward window error: {exc}", err=True)
+        _exit(64)
+        return
+    finally:
+        conn.close()
+        data_source.close()
+
+    typer.echo(render_walk_forward_report(report))
+    if report.overfit_suspected:
+        _exit(1)
+
+
 @app.command("deploy")
 def deploy(
     branch: str = typer.Option(
