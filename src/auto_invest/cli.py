@@ -2241,16 +2241,52 @@ def backtest_cmd(
         "--allow-kernel-edits",
         help="Bypass kernel-touched-tree check (R-B8). Logged on use.",
     ),
+    commission_bps: float = typer.Option(
+        None,
+        "--commission-bps",
+        help="Per-side commission in basis points (spec 016). Default: KIS US-equity (~25 bps).",
+    ),
+    slippage_bps: float = typer.Option(
+        None,
+        "--slippage-bps",
+        help="Adverse slippage per fill in basis points (spec 016). Default: KIS (~5 bps).",
+    ),
+    min_commission_usd: float = typer.Option(
+        None,
+        "--min-commission-usd",
+        help="Per-fill commission floor in USD (spec 016). Default: 0.",
+    ),
 ) -> None:
     """Run a backtest against an ingested dataset (T026; contracts/backtest-cli.md)."""
     from datetime import date as _date
+    from decimal import Decimal as _Decimal
 
+    from auto_invest.backtest.costs import BacktestCostModel
     from auto_invest.backtest.data_source import CSVDataSource, latest_dataset_dir
     from auto_invest.backtest.run import (
         EXIT_COVERAGE,
         EXIT_OK,
         RunOptions,
         run_backtest,
+    )
+
+    _cost_base = BacktestCostModel.kis_default()
+    cost_model = BacktestCostModel(
+        commission_bps=(
+            _Decimal(str(commission_bps))
+            if commission_bps is not None
+            else _cost_base.commission_bps
+        ),
+        slippage_bps=(
+            _Decimal(str(slippage_bps))
+            if slippage_bps is not None
+            else _cost_base.slippage_bps
+        ),
+        min_commission_usd=(
+            _Decimal(str(min_commission_usd))
+            if min_commission_usd is not None
+            else _cost_base.min_commission_usd
+        ),
     )
 
     if invoker not in ("cli", "canary"):
@@ -2355,6 +2391,7 @@ def backtest_cmd(
             replay_seed=replay_seed,
             synthetic_shock=synthetic_shock,
             allow_kernel_edits=allow_kernel_edits,
+            cost_model=cost_model,
             shocks=shocks,
             shock_windows=shock_windows,
         )

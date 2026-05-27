@@ -63,6 +63,7 @@ from auto_invest.persistence.audit import (
 
 from .broker_mock import BacktestBroker, BacktestLiveBrokerLeakError
 from .clock import ReplayClock, WallClockLeakError, wall_clock_guard
+from .costs import BacktestCostModel
 from .data_model import BacktestRun, SyntheticShockDay, canonicalise_decimal
 from .data_source import HistoricalDataSource
 from .judgment_stub import BACKTEST_MODE_ENV, BacktestJudgmentLeakError
@@ -119,6 +120,8 @@ def _merge_replay_results(
     merged_equity: dict[str, list[tuple[date, Decimal]]] = {rid: [] for rid in rule_ids}
     merged_symbol: dict[str, str] = {r.id: r.symbol for r in rules}
     merged_notional: dict[str, Decimal] = {rid: Decimal("0") for rid in rule_ids}
+    merged_commission: dict[str, Decimal] = {rid: Decimal("0") for rid in rule_ids}
+    merged_slippage: dict[str, Decimal] = {rid: Decimal("0") for rid in rule_ids}
     warnings: list[DataQualityWarning] = []
 
     for sub in subs:
@@ -128,6 +131,12 @@ def _merge_replay_results(
             merged_rej[rid].extend(sub.per_rule_gate_rejections.get(rid, []))
             merged_equity[rid].extend(sub.per_rule_equity_curve.get(rid, []))
             merged_notional[rid] += sub.per_rule_notional_traded_usd.get(
+                rid, Decimal("0")
+            )
+            merged_commission[rid] += sub.per_rule_commission_usd.get(
+                rid, Decimal("0")
+            )
+            merged_slippage[rid] += sub.per_rule_slippage_cost_usd.get(
                 rid, Decimal("0")
             )
         warnings.extend(sub.data_quality_warnings)
@@ -143,6 +152,10 @@ def _merge_replay_results(
         total_orders=sum(len(v) for v in merged_orders.values()),
         total_fills=sum(len(v) for v in merged_fills.values()),
         total_gate_rejections=sum(len(v) for v in merged_rej.values()),
+        per_rule_commission_usd=merged_commission,
+        per_rule_slippage_cost_usd=merged_slippage,
+        total_commission_usd=sum(merged_commission.values(), start=Decimal("0")),
+        total_slippage_cost_usd=sum(merged_slippage.values(), start=Decimal("0")),
     )
 
 
@@ -165,6 +178,7 @@ class RunOptions:
     synthetic_shock: bool = False
     allow_kernel_edits: bool = False
     total_capital_usd: Decimal = DEFAULT_TOTAL_CAPITAL_USD
+    cost_model: BacktestCostModel = field(default_factory=BacktestCostModel.kis_default)
     chmod_readonly: bool = True
     repo_root: Path | None = None
     pre_flight_result: PreFlightResult | None = None  # injected by tests
@@ -186,6 +200,8 @@ class RunOutcome:
     total_orders: int = 0
     total_fills: int = 0
     total_gate_rejections: int = 0
+    total_commission_usd: str | None = None
+    total_slippage_cost_usd: str | None = None
     kernel_touched_paths: list[str] = field(default_factory=list)
 
 
@@ -259,6 +275,7 @@ def _failure_run(
         start_ts=start_ts,
         end_ts=end_ts,
         status=status,
+        cost_model=options.cost_model.describe(),
     )
 
 
@@ -408,6 +425,7 @@ def run_backtest(options: RunOptions, *, conn: sqlite3.Connection) -> RunOutcome
                         broker=broker,
                         run_id=run_id,
                         total_capital_usd=options.total_capital_usd,
+                        cost_model=options.cost_model,
                     )
                     per_shock_results.append((shock, sub))
                 result = _merge_replay_results(
@@ -434,6 +452,7 @@ def run_backtest(options: RunOptions, *, conn: sqlite3.Connection) -> RunOutcome
                     broker=broker,
                     run_id=run_id,
                     total_capital_usd=options.total_capital_usd,
+                    cost_model=options.cost_model,
                 )
     except WallClockLeakError as exc:
         failure_reason = f"WALL_CLOCK_LEAK: {exc}"
@@ -485,6 +504,7 @@ def run_backtest(options: RunOptions, *, conn: sqlite3.Connection) -> RunOutcome
             start_ts=start_ts,
             end_ts=end_ts,
             status="completed",
+            cost_model=options.cost_model.describe(),
             summary=summary,
         )
         if options.synthetic_shock and per_shock_results:
@@ -527,6 +547,10 @@ def run_backtest(options: RunOptions, *, conn: sqlite3.Connection) -> RunOutcome
             total_orders=result.total_orders,
             total_fills=result.total_fills,
             total_gate_rejections=result.total_gate_rejections,
+            total_commission_usd=canonicalise_decimal(summary.total_commission_usd),
+            total_slippage_cost_usd=canonicalise_decimal(
+                summary.total_slippage_cost_usd
+            ),
         )
 
     # Failure path: still write a backtest-run.json for forensics.

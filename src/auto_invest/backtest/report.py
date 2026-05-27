@@ -105,6 +105,16 @@ def build_per_rule_results(result: ReplayResult) -> list[RuleBacktestResult]:
                         result.per_rule_notional_traded_usd.get(rule_id, Decimal("0"))
                     )
                 ),
+                commission_usd=Decimal(
+                    canonicalise_decimal(
+                        result.per_rule_commission_usd.get(rule_id, Decimal("0"))
+                    )
+                ),
+                slippage_cost_usd=Decimal(
+                    canonicalise_decimal(
+                        result.per_rule_slippage_cost_usd.get(rule_id, Decimal("0"))
+                    )
+                ),
             )
         )
     return per_rule
@@ -123,6 +133,12 @@ def build_summary(
         total_orders=result.total_orders,
         total_fills=result.total_fills,
         total_gate_rejections=result.total_gate_rejections,
+        total_commission_usd=Decimal(
+            canonicalise_decimal(result.total_commission_usd)
+        ),
+        total_slippage_cost_usd=Decimal(
+            canonicalise_decimal(result.total_slippage_cost_usd)
+        ),
         data_quality_warnings=list(result.data_quality_warnings),
     )
 
@@ -248,6 +264,7 @@ def _write_backtest_run_json(
         "date_end": run.date_end.isoformat(),
         "replay_seed": run.replay_seed,
         "fill_model": run.fill_model,
+        "cost_model": run.cost_model,
         "judgment_mode": run.judgment_mode,
         "synthetic_shock": run.synthetic_shock,
         "start_ts": run.start_ts.isoformat(),
@@ -273,6 +290,10 @@ def _summary_to_json(summary: BacktestSummary) -> dict[str, Any]:
         "total_orders": summary.total_orders,
         "total_fills": summary.total_fills,
         "total_gate_rejections": summary.total_gate_rejections,
+        "total_commission_usd": canonicalise_decimal(summary.total_commission_usd),
+        "total_slippage_cost_usd": canonicalise_decimal(
+            summary.total_slippage_cost_usd
+        ),
         "data_quality_warnings": [
             _data_quality_warning_to_json(w) for w in summary.data_quality_warnings
         ],
@@ -291,6 +312,8 @@ def _rule_result_to_json(r: RuleBacktestResult) -> dict[str, Any]:
         "fill_count": r.fill_count,
         "gate_rejection_count_by_gate": dict(r.gate_rejection_count_by_gate),
         "notional_traded_usd": canonicalise_decimal(r.notional_traded_usd),
+        "commission_usd": canonicalise_decimal(r.commission_usd),
+        "slippage_cost_usd": canonicalise_decimal(r.slippage_cost_usd),
         "slippage_assumption": r.slippage_assumption,
     }
 
@@ -314,6 +337,8 @@ _METRICS_CSV_COLUMNS = (
     "fill_count",
     "total_gate_rejections",
     "notional_usd",
+    "commission_usd",
+    "slippage_cost_usd",
 )
 
 
@@ -335,6 +360,8 @@ def _write_metrics_csv(path: Path, summary: BacktestSummary) -> None:
                     r.fill_count,
                     sum(r.gate_rejection_count_by_gate.values()),
                     canonicalise_decimal(r.notional_traded_usd),
+                    canonicalise_decimal(r.commission_usd),
+                    canonicalise_decimal(r.slippage_cost_usd),
                 ]
             )
         writer.writerow(
@@ -353,6 +380,8 @@ def _write_metrics_csv(path: Path, summary: BacktestSummary) -> None:
                         start=Decimal("0"),
                     )
                 ),
+                canonicalise_decimal(summary.total_commission_usd),
+                canonicalise_decimal(summary.total_slippage_cost_usd),
             ]
         )
 
@@ -436,7 +465,7 @@ def render_summary_md(
     lines.append(f"- dataset_version:      {run.dataset_version}")
     lines.append(f"- fill model:           {run.fill_model}")
     lines.append(f"- judgment mode:        {run.judgment_mode}")
-    lines.append("- slippage assumption:  zero (R-B3 pessimistic limit-fill)")
+    lines.append(f"- cost model:           {run.cost_model}")
     lines.append(f"- synthetic_shock:      {str(run.synthetic_shock).lower()}")
     lines.append(f"- replay_seed:          {run.replay_seed}")
     lines.append(f"- invoker:              {run.invoker}")
@@ -456,6 +485,12 @@ def render_summary_md(
     lines.append(f"- total_orders:            {summary.total_orders}")
     lines.append(f"- total_fills:             {summary.total_fills}")
     lines.append(f"- total_gate_rejections:   {summary.total_gate_rejections}")
+    lines.append(
+        f"- total_commission_usd:    {canonicalise_decimal(summary.total_commission_usd)}"
+    )
+    lines.append(
+        f"- total_slippage_cost_usd: {canonicalise_decimal(summary.total_slippage_cost_usd)}"
+    )
     lines.append("")
 
     lines.append("## Per-rule headline metrics")
