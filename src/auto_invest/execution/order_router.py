@@ -40,7 +40,7 @@ from auto_invest.config.whitelist import Whitelist
 from auto_invest.judgment.points.news_screen import should_block_buy
 from auto_invest.judgment.points.volatility import apply_volatility_advisory
 from auto_invest.judgment.schemas import NewsAdvisory, VolatilityAdvisory
-from auto_invest.market_data.store import get_latest_bar
+from auto_invest.market_data.store import get_bars, get_latest_bar
 from auto_invest.persistence import audit
 from auto_invest.persistence.audit import (
     JudgmentAdvisoryAppliedPayload,
@@ -59,6 +59,7 @@ from auto_invest.risk.gates import (
     stage_uniqueness_gate,
     whitelist_gate,
 )
+from auto_invest.strategy.sizing import sized_quantity
 
 
 @dataclass(frozen=True)
@@ -274,12 +275,36 @@ class OrderRouter:
     ) -> OrderOutcome:
         correlation_id = f"ord-{uuid.uuid4().hex[:12]}"
 
+        # Spec 017: deterministic volatility-based sizing BEFORE advisories and
+        # the gate chain. The sizer only shrinks vs the rule's declared qty, so
+        # the K1 caps (risk/gates.py) still bind unchanged below — sizing can
+        # never lift exposure above the safety ceiling. A sized base of < 1 means
+        # the throttle fully suppressed this order (FR-S05); no qty=0 order is
+        # ever built. fixed/None sizing returns the declared qty (v1 behaviour).
+        base_qty = rule.action.qty
+        if rule.sizing is not None and rule.sizing.mode != "fixed":
+            sizing_timeframe = getattr(rule.trigger, "timeframe", "1d")
+            recent_bars = get_bars(
+                self.conn, symbol=rule.symbol, timeframe=sizing_timeframe
+            )
+            base_qty = sized_quantity(
+                base_qty=rule.action.qty,
+                closes=[b.close_usd for b in recent_bars],
+                sizing=rule.sizing,
+            )
+            if base_qty < 1:
+                return OrderOutcome(
+                    state="SKIPPED_BY_SIZING",
+                    correlation_id=correlation_id,
+                    reason="volatility_throttle",
+                )
+
         # Spec 004: consume judgment advisories BEFORE the gate chain. Advisories
         # can only shrink, block, or skip the order — never enlarge it — so K1
         # position caps (risk/gates.py) still bind unchanged below. Only canary-
         # stage rules consume advisories (constitution VI); full-live rules behave
         # as v1 until the judgment point is promoted.
-        effective_qty = rule.action.qty
+        effective_qty = base_qty
         canary_cohort = rule.stage is StrategyStage.CANARY
         _judgment_on = (
             rule.judgment is not None and rule.judgment.enabled and canary_cohort
@@ -315,7 +340,7 @@ class OrderRouter:
         if volatility_advisory is not None and _judgment_on:
             decision = apply_volatility_advisory(
                 volatility_advisory,
-                qty=rule.action.qty,
+                qty=base_qty,
                 halt_min_confidence=rule.judgment.halt_min_confidence,
                 size_down_factor=rule.judgment.size_down_factor,
             )

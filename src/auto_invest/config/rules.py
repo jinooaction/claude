@@ -104,6 +104,22 @@ class JudgmentConfig(BaseModel):
     block_min_confidence: float = Field(default=0.8, ge=0.0, le=1.0)
 
 
+class SizingConfig(BaseModel):
+    """Spec 017 — 변동성 기반 포지션 사이징 설정(선택). 비커널.
+
+    `mode="fixed"`(기본)면 v1 고정 수량 동작과 byte 동일. `mode="target_vol"`이면
+    실현 변동성이 `target_volatility_pct`(분수가 아니라 퍼센트)를 초과할 때 룰의 기준
+    수량을 **줄인다**(슬라이스 1 하향 전용 — 스케일 ≤ 1). 사이저는 K1 캡 게이트 전에
+    수량을 제안만 하며, K1이 그대로 상한으로 바인딩한다(절대 노출을 늘릴 수 없음).
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    mode: Literal["fixed", "target_vol"] = "fixed"
+    target_volatility_pct: Decimal = Field(default=Decimal("2.0"), gt=0)
+    lookback_bars: int = Field(default=20, ge=2)
+    min_scale: Decimal = Field(default=Decimal("0"), ge=0, le=1)
+
+
 class TradingRule(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     id: str = Field(..., min_length=1)
@@ -114,6 +130,7 @@ class TradingRule(BaseModel):
     trigger: Trigger
     action: Action
     judgment: JudgmentConfig | None = None
+    sizing: SizingConfig | None = None
 
     @field_validator("symbol")
     @classmethod
