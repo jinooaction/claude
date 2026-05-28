@@ -380,9 +380,12 @@ def replay(
             last_close = prior_bars[-1].close if prior_bars else None
 
             # (c2) Spec 017: volatility-based sizing BEFORE the gate chain.
-            #      Only ever shrinks vs the declared qty; the K1 caps below still
-            #      bind unchanged. sized_qty < 1 means the throttle suppressed
-            #      this fire (FR-S05); a qty=0 order is never built.
+            #      Scales the declared qty by realized volatility — down by
+            #      default, or up within the rule's max_scale when bidirectional
+            #      targeting is on (slice 2). The K1 caps below run unchanged and
+            #      reject anything over the ceiling, so this is the same single
+            #      yardstick the live router uses. sized_qty < 1 means sizing
+            #      suppressed this fire (FR-S05); a qty=0 order is never built.
             sized_qty = sized_quantity(
                 base_qty=rule.action.qty,
                 closes=[

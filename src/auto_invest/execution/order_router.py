@@ -276,11 +276,14 @@ class OrderRouter:
         correlation_id = f"ord-{uuid.uuid4().hex[:12]}"
 
         # Spec 017: deterministic volatility-based sizing BEFORE advisories and
-        # the gate chain. The sizer only shrinks vs the rule's declared qty, so
-        # the K1 caps (risk/gates.py) still bind unchanged below — sizing can
-        # never lift exposure above the safety ceiling. A sized base of < 1 means
-        # the throttle fully suppressed this order (FR-S05); no qty=0 order is
-        # ever built. fixed/None sizing returns the declared qty (v1 behaviour).
+        # the gate chain. The sizer scales the rule's declared qty by realized
+        # volatility — down by default, or up within the operator's max_scale when
+        # bidirectional targeting is on (slice 2). Either way the K1 caps
+        # (risk/gates.py) run unchanged below and REJECT anything over the
+        # per-trade / per-symbol / global ceiling, so sizing can never lift
+        # exposure above the safety ceiling — K1 is the true cap. A sized base of
+        # < 1 means the throttle fully suppressed this order (FR-S05); no qty=0
+        # order is ever built. fixed/None sizing returns the declared qty (v1).
         base_qty = rule.action.qty
         if rule.sizing is not None and rule.sizing.mode != "fixed":
             sizing_timeframe = getattr(rule.trigger, "timeframe", "1d")
