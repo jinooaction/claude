@@ -108,9 +108,17 @@ class SizingConfig(BaseModel):
     """Spec 017 — 변동성 기반 포지션 사이징 설정(선택). 비커널.
 
     `mode="fixed"`(기본)면 v1 고정 수량 동작과 byte 동일. `mode="target_vol"`이면
-    실현 변동성이 `target_volatility_pct`(분수가 아니라 퍼센트)를 초과할 때 룰의 기준
-    수량을 **줄인다**(슬라이스 1 하향 전용 — 스케일 ≤ 1). 사이저는 K1 캡 게이트 전에
-    수량을 제안만 하며, K1이 그대로 상한으로 바인딩한다(절대 노출을 늘릴 수 없음).
+    실현 변동성이 `target_volatility_pct`(분수가 아니라 퍼센트)와 비교돼 룰의 기준 수량을
+    조절한다.
+
+    - 슬라이스 1(하향 전용): 실현 변동성이 타깃을 초과하면 수량을 **줄인다**. `max_scale`
+      기본값 1이라 절대 늘리지 않는다.
+    - 슬라이스 2(양방향): `max_scale > 1`로 설정하면 잔잔한 구간(실현 < 타깃)에서 수량을
+      타깃 리스크 예산까지 **늘린다**(진짜 변동성 타깃팅). 확대는 `max_scale` 배수로
+      제한되고, 그 위에서도 K1 캡 게이트가 변형 없이 실행돼 초과분을 거부한다.
+
+    어느 경우든 사이저는 K1 캡 게이트 **전에** 수량을 제안만 한다 — K1이 그대로
+    상한으로 바인딩하므로 사이저는 노출을 안전 경계 위로 절대 올릴 수 없다.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -118,6 +126,9 @@ class SizingConfig(BaseModel):
     target_volatility_pct: Decimal = Field(default=Decimal("2.0"), gt=0)
     lookback_bars: int = Field(default=20, ge=2)
     min_scale: Decimal = Field(default=Decimal("0"), ge=0, le=1)
+    # 상향 한도(슬라이스 2). 기본 1 = 하향 전용(슬라이스 1과 byte 동일). > 1이면 잔잔한
+    # 구간에서 확대 허용. K1 캡이 진짜 천장이므로 이 값은 fat-finger 방지용 sanity 한도다.
+    max_scale: Decimal = Field(default=Decimal("1"), ge=1, le=10)
 
 
 class TradingRule(BaseModel):

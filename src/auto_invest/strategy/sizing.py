@@ -2,9 +2,16 @@
 
 NON-KERNEL. This module only ever *proposes* a quantity; the K1 position caps
 (`risk/gates.py`) remain the inviolable ceiling and run unchanged after sizing.
-Slice 1 is volatility *throttling*: scale the rule's declared base quantity DOWN
-when realized volatility exceeds a target, never up (scale clamped to <= 1). So
-this can only reduce exposure relative to v1 fixed-qty — K1 still binds below.
+
+  * Slice 1 — volatility *throttling* (down-only): scale the rule's declared base
+    quantity DOWN when realized volatility exceeds the target, never up. This is
+    the default (``max_scale`` defaults to 1).
+  * Slice 2 — bidirectional volatility *targeting*: when the rule sets
+    ``max_scale > 1`` a calm window (realized < target) scales the position UP
+    toward the target risk budget, capped at ``max_scale``. The K1 caps still run
+    unchanged after sizing and REJECT anything over the per-trade / per-symbol /
+    global ceiling, so even upscaling can never lift exposure above the safety
+    boundary — K1 is the true ceiling.
 
 All math is deterministic Decimal (no float, no LLM) so the backtest replay
 stays byte-equal across machines (FR-B15) and live trading uses the identical
@@ -59,18 +66,25 @@ def volatility_scale(
     target: Decimal,
     *,
     min_scale: Decimal = Decimal(0),
+    max_scale: Decimal = Decimal(1),
 ) -> Decimal:
-    """Throttle factor in ``[min_scale, 1]``.
+    """Volatility-targeting factor in ``[min_scale, max_scale]``.
 
-    ``min(1, target / realized)`` clamped so the position is never sized above
-    the declared base (slice-1 down-only invariant). A non-positive realized
-    volatility means "no measurable risk to throttle", so the factor is 1.
+    ``target / realized`` clamped to ``[min_scale, max_scale]``. With the default
+    ``max_scale=1`` this is the slice-1 down-only throttle — the factor never
+    exceeds 1, so the position is never sized above the declared base. With
+    ``max_scale > 1`` it becomes bidirectional volatility targeting: a calm
+    window (realized < target) scales the position UP toward the target risk
+    budget, still capped at ``max_scale`` (and, at the order layer, by the
+    unchanged K1 caps). A non-positive realized volatility means "no reliable
+    measurement to act on", so the factor is the neutral 1 (neither throttle nor
+    amplify).
     """
     if realized <= 0:
         return Decimal(1)
     raw = target / realized
-    if raw > 1:
-        raw = Decimal(1)
+    if raw > max_scale:
+        raw = max_scale
     if raw < min_scale:
         raw = min_scale
     return _canon(raw)
@@ -82,14 +96,16 @@ def sized_quantity(
     closes: Sequence[Decimal],
     sizing: SizingConfig | None,
 ) -> int:
-    """Final integer quantity after volatility throttling.
+    """Final integer quantity after volatility-based sizing.
 
     When ``sizing`` is None or mode="fixed" the declared ``base_qty`` is returned
     unchanged (v1 behaviour, byte-equal). For mode="target_vol" the most recent
     ``lookback_bars`` returns set the realized volatility; if it cannot be
-    measured the base qty is returned (fail-safe, FR-S04). The result is floored
-    (never rounded up) and may be 0, which callers treat as "skip this fill"
-    (FR-S05).
+    measured the base qty is returned (fail-safe, FR-S04). Otherwise the base is
+    scaled by ``volatility_scale`` — DOWN by default, or UP toward the target
+    risk budget when the rule sets ``max_scale > 1`` (slice 2, capped there and
+    by the unchanged K1 caps at the order layer). The result is floored (never
+    rounded up) and may be 0, which callers treat as "skip this fill" (FR-S05).
     """
     if sizing is None or sizing.mode == "fixed":
         return base_qty
@@ -98,10 +114,12 @@ def sized_quantity(
     window = list(closes)[-(sizing.lookback_bars + 1) :]
     realized = realized_volatility(window)
     if realized is None:
-        return base_qty  # fail-safe: not enough data to throttle
+        return base_qty  # fail-safe: not enough data to size
 
     target = sizing.target_volatility_pct / Decimal(100)
-    scale = volatility_scale(realized, target, min_scale=sizing.min_scale)
+    scale = volatility_scale(
+        realized, target, min_scale=sizing.min_scale, max_scale=sizing.max_scale
+    )
     scaled = (Decimal(base_qty) * scale).to_integral_value(rounding=ROUND_FLOOR)
     result = int(scaled)
     return result if result > 0 else 0
