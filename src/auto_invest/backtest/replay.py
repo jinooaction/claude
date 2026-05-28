@@ -76,6 +76,7 @@ from auto_invest.risk.gates import (
     per_trade_cap_gate,
     whitelist_gate,
 )
+from auto_invest.strategy.sizing import sized_quantity
 from auto_invest.strategy.triggers import TriggerContext, evaluate
 
 _XNYS = ec.get_calendar("XNYS")
@@ -377,6 +378,23 @@ def replay(
                 b for b in bars_by_symbol[rule.symbol] if b.session_date < session_date
             ]
             last_close = prior_bars[-1].close if prior_bars else None
+
+            # (c2) Spec 017: volatility-based sizing BEFORE the gate chain.
+            #      Only ever shrinks vs the declared qty; the K1 caps below still
+            #      bind unchanged. sized_qty < 1 means the throttle suppressed
+            #      this fire (FR-S05); a qty=0 order is never built.
+            sized_qty = sized_quantity(
+                base_qty=rule.action.qty,
+                closes=[
+                    b.close
+                    for b in bars_by_symbol[rule.symbol]
+                    if b.session_date <= session_date
+                ],
+                sizing=rule.sizing,
+            )
+            if sized_qty < 1:
+                continue
+
             try:
                 limit_price = _resolve_limit_price(
                     rule, trigger_price=bar.close, last_close=last_close
@@ -397,7 +415,7 @@ def replay(
                 symbol=rule.symbol,
                 side=rule.action.side,
                 order_type=rule.action.order_type,
-                qty=rule.action.qty,
+                qty=sized_qty,
                 limit_price_usd=limit_price,
             )
             state.order_seq += 1
@@ -411,7 +429,7 @@ def replay(
                     symbol=rule.symbol,
                     side=rule.action.side.value,
                     order_type=rule.action.order_type.value,
-                    qty=rule.action.qty,
+                    qty=sized_qty,
                     limit_price_usd=(
                         str(limit_price) if limit_price is not None else None
                     ),
@@ -478,7 +496,7 @@ def replay(
                     symbol=rule.symbol,
                     side=rule.action.side.value,
                     order_type=rule.action.order_type.value,
-                    qty=rule.action.qty,
+                    qty=sized_qty,
                     limit_price_usd=(
                         str(limit_price) if limit_price is not None else None
                     ),
