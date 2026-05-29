@@ -155,6 +155,13 @@ class TradingRule(BaseModel):
     # 사이징 그룹 이름(슬라이스 2b). 같은 이름의 inverse_vol 룰끼리 역변동성 리스크
     # 패리티 배분을 공유한다. None이면 그룹 없음(기존 동작 byte 동일).
     sizing_group: str | None = None
+    # 스펙 020: 레짐 감지용 인덱스 심볼(예: "SPY", "069500"). 값이 있으면
+    # 해당 심볼의 봉으로 레짐을 판별해 주문 수량에 레짐 배율을 적용한다.
+    # None이면 레짐 적용 안 함(기존 동작 byte 동일).
+    regime_index_symbol: str | None = None
+    # 레짐별 신호 배율 오버라이드. 없으면 DEFAULT_REGIME_SCALE 기본값 사용.
+    # 예: {"trending": "1.0", "ranging": "0.5", "bear": "0.2"}
+    regime_scale: dict[str, Decimal] | None = None
 
     @field_validator("symbol")
     @classmethod
