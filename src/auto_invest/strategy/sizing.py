@@ -19,6 +19,13 @@ NON-KERNEL. This module only ever *proposes* a quantity; the K1 position caps
     (weight <= 1), so K1 still binds below. The weight is computed by the caller
     (worker / replay) via ``build_sizing_groups`` + ``inverse_vol_group_scale``
     and passed in as ``group_scale``, so live and backtest share one yardstick.
+  * Slice 3 — correlation haircut (opt-in ``correlation_haircut`` on an
+    inverse_vol group member): when a member's returns are positively correlated
+    with the rest of its basket (low diversification), its weight is shrunk
+    further by ``1 - strength * avg_corr``. Always down-only, so it can only
+    REDUCE a correlated/concentrated bet — a defensive risk control, not a
+    return optimiser. ``group_scale_for`` composes the inverse-vol weight and the
+    correlation haircut into one factor for both paths.
 
 All math is deterministic Decimal (no float, no LLM) so the backtest replay
 stays byte-equal across machines (FR-B15) and live trading uses the identical
@@ -27,8 +34,9 @@ sizing as the backtest (constitution X.2, single yardstick).
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from datetime import date
 from decimal import ROUND_FLOOR, Decimal
 
 from auto_invest.config.rules import SizingConfig, TradingRule
@@ -169,6 +177,130 @@ def inverse_vol_group_scale(
     return _canon(scale)
 
 
+def _returns(closes: Sequence[Decimal]) -> list[Decimal] | None:
+    """Simple per-bar returns ``cᵢ/cᵢ₋₁ - 1``; None if < 2 closes or any <= 0."""
+    if len(closes) < 2:
+        return None
+    out: list[Decimal] = []
+    prev = closes[0]
+    if prev <= 0:
+        return None
+    for close in closes[1:]:
+        if close <= 0:
+            return None
+        out.append(close / prev - Decimal(1))
+        prev = close
+    return out
+
+
+def pearson_correlation(
+    xs: Sequence[Decimal], ys: Sequence[Decimal]
+) -> Decimal | None:
+    """Pearson correlation of two equal-length return series (Decimal).
+
+    Returns None when there are fewer than two points, the lengths differ, or
+    either series has zero variance (correlation undefined).
+    """
+    n = len(xs)
+    if n < 2 or n != len(ys):
+        return None
+    nn = Decimal(n)
+    mx = sum(xs, Decimal(0)) / nn
+    my = sum(ys, Decimal(0)) / nn
+    cov = sum(((x - mx) * (y - my) for x, y in zip(xs, ys, strict=True)), Decimal(0))
+    vx = sum(((x - mx) ** 2 for x in xs), Decimal(0))
+    vy = sum(((y - my) ** 2 for y in ys), Decimal(0))
+    if vx <= 0 or vy <= 0:
+        return None
+    return _canon(cov / (vx * vy).sqrt())
+
+
+def average_correlations(
+    closes_by_rule: Mapping[str, Mapping[date, Decimal]],
+    *,
+    lookback_bars: int,
+) -> dict[str, Decimal | None]:
+    """For each rule, the mean Pearson correlation of its recent returns with
+    each peer's, over the group's COMMON trading days.
+
+    Aligns members on the intersection of their bar dates (deterministic, the
+    same in live and backtest), takes the most recent ``lookback_bars + 1``
+    common closes, and correlates the resulting returns pairwise. A rule's value
+    is None (no measurable concentration) when there are < 3 common days or no
+    peer pair has a defined correlation.
+    """
+    rule_ids = list(closes_by_rule)
+    if not rule_ids:
+        return {}
+    common: set[date] = set.intersection(
+        *(set(closes_by_rule[r].keys()) for r in rule_ids)
+    )
+    window = sorted(common)[-(lookback_bars + 1) :]
+    returns_by_rule: dict[str, list[Decimal] | None] = {
+        r: _returns([closes_by_rule[r][d] for d in window]) for r in rule_ids
+    }
+    result: dict[str, Decimal | None] = {}
+    for r in rule_ids:
+        own = returns_by_rule[r]
+        if own is None:
+            result[r] = None
+            continue
+        corrs = [
+            c
+            for p in rule_ids
+            if p != r and returns_by_rule[p] is not None
+            for c in (pearson_correlation(own, returns_by_rule[p]),)
+            if c is not None
+        ]
+        result[r] = _canon(sum(corrs, Decimal(0)) / Decimal(len(corrs))) if corrs else None
+    return result
+
+
+def correlation_haircut(avg_corr: Decimal | None, strength: Decimal) -> Decimal:
+    """Down-only haircut ``1 - strength * max(0, avg_corr)`` in ``[0, 1]``.
+
+    No haircut (1) when there is no measurable correlation, the strength is 0,
+    or the basket is diversified / anti-correlated (avg_corr <= 0). A positively
+    correlated (concentrated) member is shrunk toward 0 as correlation and
+    strength rise — never sized up.
+    """
+    if avg_corr is None or strength <= 0:
+        return Decimal(1)
+    positive = avg_corr if avg_corr > 0 else Decimal(0)
+    g = Decimal(1) - strength * positive
+    if g < 0:
+        g = Decimal(0)
+    if g > 1:
+        g = Decimal(1)
+    return _canon(g)
+
+
+def group_scale_for(
+    rule_id: str,
+    *,
+    member_vols: Mapping[str, Decimal | None],
+    closes_by_rule: Mapping[str, Mapping[date, Decimal]] | None,
+    lookback_bars: int,
+    correlation_strength: Decimal = Decimal(0),
+) -> Decimal:
+    """Combined down-only group weight for ``rule_id``: inverse-vol weight
+    (slice 2b) times the correlation haircut (slice 3).
+
+    Both factors are <= 1, so the product is <= 1 — grouping can only reduce
+    exposure vs the declared base. Both the live router and the backtest replay
+    call this with the same gathered inputs, so live and backtest agree
+    (constitution X.2). When ``correlation_strength`` is 0 (or no closes are
+    supplied) only the inverse-vol weight applies (byte-equal to slice 2b).
+    """
+    iv = inverse_vol_group_scale(
+        member_vols.get(rule_id), list(member_vols.values())
+    )
+    if correlation_strength <= 0 or not closes_by_rule:
+        return iv
+    avg = average_correlations(closes_by_rule, lookback_bars=lookback_bars).get(rule_id)
+    return _canon(iv * correlation_haircut(avg, correlation_strength))
+
+
 def sized_quantity(
     *,
     base_qty: int,
@@ -219,8 +351,12 @@ def sized_quantity(
 
 __all__ = [
     "SizingGroupMember",
+    "average_correlations",
     "build_sizing_groups",
+    "correlation_haircut",
+    "group_scale_for",
     "inverse_vol_group_scale",
+    "pearson_correlation",
     "realized_volatility",
     "sized_quantity",
     "volatility_scale",
