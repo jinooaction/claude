@@ -130,7 +130,9 @@ class SizingConfig(BaseModel):
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
-    mode: Literal["fixed", "target_vol", "inverse_vol", "erc", "min_variance"] = "fixed"
+    mode: Literal[
+        "fixed", "target_vol", "inverse_vol", "erc", "min_variance", "max_sharpe"
+    ] = "fixed"
     target_volatility_pct: Decimal = Field(default=Decimal("2.0"), gt=0)
     lookback_bars: int = Field(default=20, ge=2)
     min_scale: Decimal = Field(default=Decimal("0"), ge=0, le=1)
