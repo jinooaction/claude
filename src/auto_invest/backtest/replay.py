@@ -79,7 +79,7 @@ from auto_invest.risk.gates import (
 from auto_invest.strategy.sizing import (
     SizingGroupMember,
     build_sizing_groups,
-    inverse_vol_group_scale,
+    group_scale_for,
     realized_volatility,
     sized_quantity,
 )
@@ -295,19 +295,28 @@ def _replay_group_scale(
     if sizing is None or sizing.mode != "inverse_vol" or rule.sizing_group is None:
         return Decimal(1)
     members = sizing_groups.get(rule.sizing_group, [])
-    member_vols: list[Decimal | None] = []
-    own_vol: Decimal | None = None
+    strength = sizing.correlation_haircut
+    member_vols: dict[str, Decimal | None] = {}
+    closes_by_rule: dict[str, dict[date, Decimal]] = {}
     for member in members:
-        closes = [
-            b.close
+        sym_bars = [
+            b
             for b in bars_by_symbol.get(member.symbol, [])
             if b.session_date <= session_date
         ]
-        vol = realized_volatility(closes[-(member.lookback_bars + 1) :])
-        member_vols.append(vol)
-        if member.rule_id == rule.id:
-            own_vol = vol
-    return inverse_vol_group_scale(own_vol, member_vols)
+        closes = [b.close for b in sym_bars]
+        member_vols[member.rule_id] = realized_volatility(
+            closes[-(member.lookback_bars + 1) :]
+        )
+        if strength > 0:
+            closes_by_rule[member.rule_id] = {b.session_date: b.close for b in sym_bars}
+    return group_scale_for(
+        rule.id,
+        member_vols=member_vols,
+        closes_by_rule=closes_by_rule if strength > 0 else None,
+        lookback_bars=sizing.lookback_bars,
+        correlation_strength=strength,
+    )
 
 
 # ---------- main entry point ----------------------------------------------

@@ -26,7 +26,7 @@ import sqlite3
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
@@ -62,7 +62,7 @@ from auto_invest.risk.gates import (
 )
 from auto_invest.strategy.sizing import (
     SizingGroupMember,
-    inverse_vol_group_scale,
+    group_scale_for,
     realized_volatility,
     sized_quantity,
 )
@@ -280,16 +280,26 @@ class OrderRouter:
         if sizing is None or sizing.mode != "inverse_vol" or rule.sizing_group is None:
             return Decimal(1)
         members = (self.sizing_groups or {}).get(rule.sizing_group, ())
-        member_vols: list[Decimal | None] = []
-        own_vol: Decimal | None = None
+        strength = sizing.correlation_haircut
+        member_vols: dict[str, Decimal | None] = {}
+        closes_by_rule: dict[str, dict[date, Decimal]] = {}
         for member in members:
             bars = get_bars(self.conn, symbol=member.symbol, timeframe=member.timeframe)
             closes = [b.close_usd for b in bars]
-            vol = realized_volatility(closes[-(member.lookback_bars + 1) :])
-            member_vols.append(vol)
-            if member.rule_id == rule.id:
-                own_vol = vol
-        return inverse_vol_group_scale(own_vol, member_vols)
+            member_vols[member.rule_id] = realized_volatility(
+                closes[-(member.lookback_bars + 1) :]
+            )
+            if strength > 0:
+                closes_by_rule[member.rule_id] = {
+                    date.fromisoformat(b.bar_open_utc[:10]): b.close_usd for b in bars
+                }
+        return group_scale_for(
+            rule.id,
+            member_vols=member_vols,
+            closes_by_rule=closes_by_rule if strength > 0 else None,
+            lookback_bars=sizing.lookback_bars,
+            correlation_strength=strength,
+        )
 
     async def submit_order(
         self,

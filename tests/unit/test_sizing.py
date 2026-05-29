@@ -31,8 +31,12 @@ from auto_invest.config.rules import Action, SizingConfig, TimeTrigger, TradingR
 from auto_invest.config.whitelist import Whitelist
 from auto_invest.persistence import db
 from auto_invest.strategy.sizing import (
+    average_correlations,
     build_sizing_groups,
+    correlation_haircut,
+    group_scale_for,
     inverse_vol_group_scale,
+    pearson_correlation,
     realized_volatility,
     sized_quantity,
     volatility_scale,
@@ -471,8 +475,20 @@ def test_sized_quantity_inverse_vol_applies_group_scale() -> None:
     assert sized_quantity(base_qty=30, closes=[], sizing=sizing) == 30
 
 
-def _iv_rule(rule_id: str, symbol: str, *, qty: int, group: str | None, lookback: int = 20):
-    sizing = SizingConfig(mode="inverse_vol", lookback_bars=lookback) if group else None
+def _iv_rule(
+    rule_id: str,
+    symbol: str,
+    *,
+    qty: int,
+    group: str | None,
+    lookback: int = 20,
+    haircut: Decimal = Decimal("0"),
+):
+    sizing = (
+        SizingConfig(mode="inverse_vol", lookback_bars=lookback, correlation_haircut=haircut)
+        if group
+        else None
+    )
     return TradingRule(
         id=rule_id,
         symbol=symbol,
@@ -509,12 +525,13 @@ def test_build_sizing_groups_only_enabled_inverse_vol() -> None:
     assert sorted(m.rule_id for m in members["g"]) == ["r1", "r2"]
 
 
-def _alt_bars(symbol: str, sessions: list[date], hi: str) -> list[OHLCVBar]:
-    """Alternating closes 100/hi → controllable realized volatility. Lows touch
-    the limit so the BUY limit at 200 always fills."""
+def _alt_bars(symbol: str, sessions: list[date], hi: str, *, lo: str = "100") -> list[OHLCVBar]:
+    """Alternating closes lo/hi → controllable realized volatility (and, with two
+    symbols, controllable correlation: same lo/hi phase → +1, swapped → -1).
+    Lows touch the limit so the BUY limit at 200 always fills."""
     bars: list[OHLCVBar] = []
     for i, d in enumerate(sessions):
-        close = Decimal("100") if i % 2 == 0 else Decimal(hi)
+        close = Decimal(lo) if i % 2 == 0 else Decimal(hi)
         bars.append(
             OHLCVBar(
                 symbol=symbol,
@@ -586,5 +603,110 @@ def test_replay_no_group_is_byte_equal(conn, tmp_path) -> None:
         _iv_rule("r_msft", "MSFT", qty=10, group=None),
     ]
     res = _run_group(conn, tmp_path, rules, bars)
+    assert all(o.qty == 10 for o in res.per_rule_orders["r_aapl"])
+    assert all(o.qty == 10 for o in res.per_rule_orders["r_msft"])
+
+
+# --------------------------------------------------------------------------- #
+# Slice 3 — correlation haircut on a sizing group                             #
+# --------------------------------------------------------------------------- #
+
+
+def _rets(values: list[str]) -> list[Decimal]:
+    return [Decimal(v) for v in values]
+
+
+def test_pearson_correlation_extremes_and_undefined() -> None:
+    xs = _rets(["0.01", "-0.02", "0.03", "-0.01"])
+    assert pearson_correlation(xs, xs) == Decimal("1")
+    assert pearson_correlation(xs, [-x for x in xs]) == Decimal("-1")
+    assert pearson_correlation(xs, _rets(["0.5", "0.5", "0.5", "0.5"])) is None  # zero var
+    assert pearson_correlation(xs, xs[:2]) is None  # length mismatch
+
+
+def _closes(dates: list[date], values: list[str]) -> dict[date, Decimal]:
+    return {d: Decimal(v) for d, v in zip(dates, values, strict=True)}
+
+
+def test_average_correlations_in_phase_vs_anti_phase() -> None:
+    d = [date(2024, 1, i) for i in range(1, 8)]
+    a = _closes(d, ["100", "102", "100", "102", "100", "102", "100"])
+    b_same = _closes(d, ["50", "51", "50", "51", "50", "51", "50"])  # in phase → +1
+    b_anti = _closes(d, ["50", "49", "50", "49", "50", "49", "50"])  # anti phase → -1
+    assert average_correlations({"a": a, "b": b_same}, lookback_bars=6)["a"] == Decimal("1")
+    assert average_correlations({"a": a, "b": b_anti}, lookback_bars=6)["a"] == Decimal("-1")
+
+
+def test_average_correlations_failsafe_sparse() -> None:
+    d = [date(2024, 1, 1), date(2024, 1, 2)]  # only 2 common dates → < 3 → None
+    a = _closes(d, ["100", "102"])
+    b = _closes(d, ["50", "51"])
+    assert average_correlations({"a": a, "b": b}, lookback_bars=6)["a"] is None
+
+
+def test_correlation_haircut_cases() -> None:
+    assert correlation_haircut(Decimal("1"), Decimal("0.5")) == Decimal("0.5")
+    assert correlation_haircut(Decimal("-0.3"), Decimal("0.5")) == Decimal("1")  # diversified
+    assert correlation_haircut(None, Decimal("0.5")) == Decimal("1")  # fail-safe
+    assert correlation_haircut(Decimal("1"), Decimal("0")) == Decimal("1")  # strength off
+
+
+def test_group_scale_for_composes_inverse_vol_and_haircut() -> None:
+    d = [date(2024, 1, i) for i in range(1, 8)]
+    a = _closes(d, ["100", "102", "100", "102", "100", "102", "100"])
+    b = _closes(d, ["50", "51", "50", "51", "50", "51", "50"])  # correlated, equal-ish vol
+    member_vols = {"a": Decimal("0.02"), "b": Decimal("0.02")}  # equal vol → iv weight 1
+    # strength 0.5, avg corr 1 → haircut 0.5, iv 1 → 0.5
+    assert group_scale_for(
+        "a", member_vols=member_vols, closes_by_rule={"a": a, "b": b},
+        lookback_bars=6, correlation_strength=Decimal("0.5"),
+    ) == Decimal("0.5")
+    # strength 0 → inverse-vol weight only (no closes needed)
+    assert group_scale_for(
+        "a", member_vols=member_vols, closes_by_rule=None,
+        lookback_bars=6, correlation_strength=Decimal("0"),
+    ) == Decimal("1")
+
+
+def test_replay_correlation_haircut_shrinks_correlated_basket(conn, tmp_path) -> None:
+    """SC-S12 — two equal-vol, perfectly correlated symbols in a group: with a
+    correlation haircut both shrink below base (the concentrated bet is reduced);
+    with no haircut (slice-2b path) both keep full base size."""
+    sessions = _sessions(12)
+    bars = {
+        "AAPL": _alt_bars("AAPL", sessions, "102"),               # in phase
+        "MSFT": _alt_bars("MSFT", sessions, "102"),               # in phase → corr +1
+    }
+    hc_rules = [
+        _iv_rule("r_aapl", "AAPL", qty=10, group="basket", lookback=5, haircut=Decimal("0.5")),
+        _iv_rule("r_msft", "MSFT", qty=10, group="basket", lookback=5, haircut=Decimal("0.5")),
+    ]
+    hc = _run_group(conn, tmp_path, hc_rules, bars)
+    assert any(o.qty < 10 for o in hc.per_rule_orders["r_aapl"])  # correlated → shrunk
+    assert all(o.qty <= 10 for o in hc.per_rule_orders["r_aapl"])  # down-only
+
+    plain_rules = [
+        _iv_rule("r_aapl", "AAPL", qty=10, group="basket", lookback=5),  # no haircut
+        _iv_rule("r_msft", "MSFT", qty=10, group="basket", lookback=5),
+    ]
+    plain = _run_group(conn, tmp_path, plain_rules, bars)
+    # Equal vol + no haircut → inverse-vol weight 1 → full base (byte-equal to 2b).
+    assert all(o.qty == 10 for o in plain.per_rule_orders["r_aapl"])
+
+
+def test_replay_correlation_haircut_skips_anticorrelated(conn, tmp_path) -> None:
+    """SC-S12 — anti-correlated (diversified) members are NOT haircut: a haircut
+    rule on opposite-phase, equal-vol symbols still sizes to full base."""
+    sessions = _sessions(12)
+    bars = {
+        "AAPL": _alt_bars("AAPL", sessions, "102"),                 # 100,102,100,...
+        "MSFT": _alt_bars("MSFT", sessions, "100", lo="102"),       # 102,100,102,... → corr -1
+    }
+    rules = [
+        _iv_rule("r_aapl", "AAPL", qty=10, group="basket", lookback=5, haircut=Decimal("0.5")),
+        _iv_rule("r_msft", "MSFT", qty=10, group="basket", lookback=5, haircut=Decimal("0.5")),
+    ]
+    res = _run_group(conn, tmp_path, rules, bars)
+    # avg corr <= 0 → haircut 1; equal vol → iv weight 1 → full base.
     assert all(o.qty == 10 for o in res.per_rule_orders["r_aapl"])
     assert all(o.qty == 10 for o in res.per_rule_orders["r_msft"])

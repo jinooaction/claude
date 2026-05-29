@@ -120,6 +120,9 @@ class SizingConfig(BaseModel):
       에 속한 룰들의 실현 변동성을 재서, 변동성 가장 낮은 멤버를 기준(가중치 1)으로 높은
       변동성 멤버를 줄여 **리스크 기여도를 균형화**한다(역변동성 = 리스크 패리티). 항상
       하향 전용(가중치 ≤ 1)이라 기준 수량 위로 노출을 올리지 않는다.
+    - 슬라이스 3(`correlation_haircut > 0`, inverse_vol 그룹에서만): 그룹 멤버 간 수익률
+      상관이 높으면(분산 안 됨) 가중치를 `1 - strength × 평균상관`만큼 더 줄인다(상관 ≤ 0
+      이면 헤어컷 없음). 상관 높은(집중된) 베팅을 줄이는 보수적 하향 전용 통제다. 기본 0.
 
     어느 경우든 사이저는 K1 캡 게이트 **전에** 수량을 제안만 한다 — K1이 그대로
     상한으로 바인딩하므로 사이저는 노출을 안전 경계 위로 절대 올릴 수 없다.
@@ -133,6 +136,9 @@ class SizingConfig(BaseModel):
     # 상향 한도(슬라이스 2). 기본 1 = 하향 전용(슬라이스 1과 byte 동일). > 1이면 잔잔한
     # 구간에서 확대 허용. K1 캡이 진짜 천장이므로 이 값은 fat-finger 방지용 sanity 한도다.
     max_scale: Decimal = Field(default=Decimal("1"), ge=1, le=10)
+    # 상관 헤어컷 강도(슬라이스 3, inverse_vol 그룹에서만). 0 = 끔(슬라이스 2b byte 동일).
+    # > 0이면 그룹 멤버 간 양의 상관에 비례해 가중치를 추가로 줄인다(하향 전용).
+    correlation_haircut: Decimal = Field(default=Decimal("0"), ge=0, le=1)
 
 
 class TradingRule(BaseModel):
