@@ -25,7 +25,9 @@ from auto_invest.config.rules import (
 from auto_invest.market_data.store import PriceBar
 from auto_invest.strategy.indicators import (
     IndicatorError,
+    bollinger_band_pct_b,
     ema_cross,
+    momentum,
     rsi_threshold,
 )
 
@@ -88,6 +90,18 @@ def evaluate_indicator_trigger(trigger: IndicatorTrigger, ctx: TriggerContext) -
                 direction=direction,
                 threshold=Decimal(str(trigger.params["threshold"])),
             )
+        if trigger.indicator in ("MOMENTUM_ABOVE", "MOMENTUM_BELOW"):
+            value = momentum(bars, period=int(trigger.params["period"]))
+            threshold = Decimal(str(trigger.params["threshold"]))
+            return value > threshold if trigger.indicator == "MOMENTUM_ABOVE" else value < threshold
+        if trigger.indicator in ("BB_ABOVE", "BB_BELOW"):
+            pct_b = bollinger_band_pct_b(
+                bars,
+                period=int(trigger.params.get("period", 20)),
+                std_dev=float(trigger.params.get("std_dev", 2.0)),
+            )
+            threshold = Decimal(str(trigger.params["threshold"]))
+            return pct_b > threshold if trigger.indicator == "BB_ABOVE" else pct_b < threshold
         raise IndicatorError(f"unsupported indicator: {trigger.indicator!r}")
     except IndicatorError:
         # Insufficient bars / NaN / other quality issue: not armed yet.

@@ -11,6 +11,10 @@ Public surface (v1):
   * rsi(bars, period)
   * ema_cross(bars, fast_period, slow_period, direction)
   * rsi_threshold(bars, period, direction, threshold)
+
+Public surface (v2 — spec 018):
+  * momentum(bars, period)          — N-period % return (time-series momentum)
+  * bollinger_band_pct_b(bars, period, std_dev)  — BB %B mean-reversion signal
 """
 
 from __future__ import annotations
@@ -20,6 +24,7 @@ from decimal import Decimal
 import pandas as pd
 from ta.momentum import RSIIndicator
 from ta.trend import EMAIndicator, SMAIndicator
+from ta.volatility import BollingerBands
 
 from auto_invest.market_data.store import PriceBar
 
@@ -115,3 +120,48 @@ def rsi_threshold(
         raise IndicatorError(f"unknown rsi direction: {direction!r}")
     value = rsi(bars, period)
     return value > threshold if direction == "above" else value < threshold
+
+
+def momentum(bars: list[PriceBar], period: int) -> Decimal:
+    """N-period percentage return: ``(close[-1] / close[-1-period] - 1) * 100``.
+
+    Positive when price has risen over the lookback, negative when fallen.
+    Needs at least ``period + 1`` bars.
+    """
+    if period < 1:
+        raise IndicatorError(f"period must be >= 1, got {period}")
+    _validate_bars(bars, period + 1)
+    past = bars[-(period + 1)].close_usd
+    now = bars[-1].close_usd
+    if past.is_nan() or past <= 0:
+        raise IndicatorError("past close is NaN or non-positive")
+    return Decimal(str(float((now / past - Decimal(1)) * Decimal(100))))
+
+
+def bollinger_band_pct_b(
+    bars: list[PriceBar],
+    period: int = 20,
+    std_dev: float = 2.0,
+) -> Decimal:
+    """Bollinger Band %B: position of the latest close within the band.
+
+    ``%B = (close - lower) / (upper - lower)``. 0 at lower band, 1 at upper,
+    >1 above upper (overbought), <0 below lower (oversold). Raises
+    ``IndicatorError`` when the band width is zero (flat price series).
+    """
+    if period < 2:
+        raise IndicatorError(f"period must be >= 2, got {period}")
+    _validate_bars(bars, period)
+    closes = _closes(bars)
+    bb = BollingerBands(close=closes, window=period, window_dev=std_dev)
+    upper = bb.bollinger_hband().iloc[-1]
+    lower = bb.bollinger_lband().iloc[-1]
+    close = float(bars[-1].close_usd)
+    if pd.isna(upper) or pd.isna(lower):
+        raise IndicatorError(
+            f"BollingerBands returned NaN — likely insufficient warm-up (need {period} bars)"
+        )
+    width = upper - lower
+    if width == 0.0:
+        raise IndicatorError("Bollinger Band width is zero — flat price series")
+    return Decimal(str((close - lower) / width))
