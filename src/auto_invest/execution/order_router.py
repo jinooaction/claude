@@ -24,6 +24,7 @@ from __future__ import annotations
 import re
 import sqlite3
 import uuid
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
@@ -59,7 +60,12 @@ from auto_invest.risk.gates import (
     stage_uniqueness_gate,
     whitelist_gate,
 )
-from auto_invest.strategy.sizing import sized_quantity
+from auto_invest.strategy.sizing import (
+    SizingGroupMember,
+    inverse_vol_group_scale,
+    realized_volatility,
+    sized_quantity,
+)
 
 
 @dataclass(frozen=True)
@@ -257,6 +263,33 @@ class OrderRouter:
     quote_market: str = "NAS"
     paper_mode: bool = False
     paper_session_id: int | None = None
+    # Spec 017 slice 2b: inverse-vol risk-parity group membership, built by the
+    # worker from the static rule set (build_sizing_groups). None/empty -> no
+    # grouping -> sizing is byte-equal to slices 1/2.
+    sizing_groups: Mapping[str, Sequence[SizingGroupMember]] | None = None
+
+    def _inverse_vol_group_scale(self, rule: TradingRule) -> Decimal:
+        """Down-only inverse-vol group weight for ``rule`` (slice 2b).
+
+        Re-measures each group member's realized volatility from its own recent
+        bars (the SAME function and lookback the backtest replay uses) and returns
+        the inverse-vol weight. 1 when the rule is not an inverse_vol group member
+        or no group map was supplied — byte-equal to slices 1/2.
+        """
+        sizing = rule.sizing
+        if sizing is None or sizing.mode != "inverse_vol" or rule.sizing_group is None:
+            return Decimal(1)
+        members = (self.sizing_groups or {}).get(rule.sizing_group, ())
+        member_vols: list[Decimal | None] = []
+        own_vol: Decimal | None = None
+        for member in members:
+            bars = get_bars(self.conn, symbol=member.symbol, timeframe=member.timeframe)
+            closes = [b.close_usd for b in bars]
+            vol = realized_volatility(closes[-(member.lookback_bars + 1) :])
+            member_vols.append(vol)
+            if member.rule_id == rule.id:
+                own_vol = vol
+        return inverse_vol_group_scale(own_vol, member_vols)
 
     async def submit_order(
         self,
@@ -294,6 +327,7 @@ class OrderRouter:
                 base_qty=rule.action.qty,
                 closes=[b.close_usd for b in recent_bars],
                 sizing=rule.sizing,
+                group_scale=self._inverse_vol_group_scale(rule),
             )
             if base_qty < 1:
                 return OrderOutcome(

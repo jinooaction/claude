@@ -11,7 +11,7 @@ import re
 from decimal import Decimal
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from auto_invest.config.enums import OrderType, Side, StrategyStage
 
@@ -116,13 +116,17 @@ class SizingConfig(BaseModel):
     - 슬라이스 2(양방향): `max_scale > 1`로 설정하면 잔잔한 구간(실현 < 타깃)에서 수량을
       타깃 리스크 예산까지 **늘린다**(진짜 변동성 타깃팅). 확대는 `max_scale` 배수로
       제한되고, 그 위에서도 K1 캡 게이트가 변형 없이 실행돼 초과분을 거부한다.
+    - 슬라이스 2b(`mode="inverse_vol"`): 같은 `sizing_group`(아래 `TradingRule.sizing_group`)
+      에 속한 룰들의 실현 변동성을 재서, 변동성 가장 낮은 멤버를 기준(가중치 1)으로 높은
+      변동성 멤버를 줄여 **리스크 기여도를 균형화**한다(역변동성 = 리스크 패리티). 항상
+      하향 전용(가중치 ≤ 1)이라 기준 수량 위로 노출을 올리지 않는다.
 
     어느 경우든 사이저는 K1 캡 게이트 **전에** 수량을 제안만 한다 — K1이 그대로
     상한으로 바인딩하므로 사이저는 노출을 안전 경계 위로 절대 올릴 수 없다.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
-    mode: Literal["fixed", "target_vol"] = "fixed"
+    mode: Literal["fixed", "target_vol", "inverse_vol"] = "fixed"
     target_volatility_pct: Decimal = Field(default=Decimal("2.0"), gt=0)
     lookback_bars: int = Field(default=20, ge=2)
     min_scale: Decimal = Field(default=Decimal("0"), ge=0, le=1)
@@ -142,8 +146,24 @@ class TradingRule(BaseModel):
     action: Action
     judgment: JudgmentConfig | None = None
     sizing: SizingConfig | None = None
+    # 사이징 그룹 이름(슬라이스 2b). 같은 이름의 inverse_vol 룰끼리 역변동성 리스크
+    # 패리티 배분을 공유한다. None이면 그룹 없음(기존 동작 byte 동일).
+    sizing_group: str | None = None
 
     @field_validator("symbol")
     @classmethod
     def _normalize_symbol(cls, v: str) -> str:
         return v.upper()
+
+    @model_validator(mode="after")
+    def _require_group_for_inverse_vol(self) -> TradingRule:
+        # inverse_vol 모드는 그룹 멤버끼리 변동성을 비교하므로 sizing_group 필수.
+        if (
+            self.sizing is not None
+            and self.sizing.mode == "inverse_vol"
+            and self.sizing_group is None
+        ):
+            raise ValueError(
+                "sizing.mode='inverse_vol' requires sizing_group to be set"
+            )
+        return self

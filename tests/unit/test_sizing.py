@@ -18,6 +18,7 @@ from pathlib import Path
 
 import exchange_calendars as ec
 import pytest
+from pydantic import ValidationError
 
 from auto_invest.backtest.broker_mock import BacktestBroker
 from auto_invest.backtest.clock import ReplayClock
@@ -30,6 +31,8 @@ from auto_invest.config.rules import Action, SizingConfig, TimeTrigger, TradingR
 from auto_invest.config.whitelist import Whitelist
 from auto_invest.persistence import db
 from auto_invest.strategy.sizing import (
+    build_sizing_groups,
+    inverse_vol_group_scale,
     realized_volatility,
     sized_quantity,
     volatility_scale,
@@ -434,3 +437,154 @@ def test_walk_forward_runs_with_volatility_sizing(conn, tmp_path) -> None:
     assert report.windows
     md = render_walk_forward_report(report)
     assert "워크포워드" in md
+
+
+# --------------------------------------------------------------------------- #
+# Slice 2b — inverse-vol risk parity across a sizing group                    #
+# --------------------------------------------------------------------------- #
+
+
+def test_inverse_vol_group_scale_lowest_vol_keeps_full_size() -> None:
+    # The lowest-vol member is the reference (weight 1); others shrink.
+    members = [Decimal("0.01"), Decimal("0.02")]
+    assert inverse_vol_group_scale(Decimal("0.01"), members) == Decimal("1")
+    assert inverse_vol_group_scale(Decimal("0.02"), members) == Decimal("0.5")
+
+
+def test_inverse_vol_group_scale_never_exceeds_one() -> None:
+    # Even if own vol is below every measured peer, the weight is clamped to 1
+    # (down-only invariant — grouping never sizes UP).
+    assert inverse_vol_group_scale(Decimal("0.005"), [Decimal("0.01")]) == Decimal("1")
+
+
+def test_inverse_vol_group_scale_failsafe() -> None:
+    assert inverse_vol_group_scale(None, [Decimal("0.01")]) == Decimal("1")
+    assert inverse_vol_group_scale(Decimal("0"), [Decimal("0.01")]) == Decimal("1")
+    assert inverse_vol_group_scale(Decimal("0.02"), [None, None]) == Decimal("1")
+
+
+def test_sized_quantity_inverse_vol_applies_group_scale() -> None:
+    sizing = SizingConfig(mode="inverse_vol", lookback_bars=20)
+    # group_scale is computed by the caller; here it just multiplies + floors.
+    assert sized_quantity(base_qty=30, closes=[], sizing=sizing, group_scale=Decimal("0.5")) == 15
+    # Default group_scale=1 (no group context) is a fail-safe no-op.
+    assert sized_quantity(base_qty=30, closes=[], sizing=sizing) == 30
+
+
+def _iv_rule(rule_id: str, symbol: str, *, qty: int, group: str | None, lookback: int = 20):
+    sizing = SizingConfig(mode="inverse_vol", lookback_bars=lookback) if group else None
+    return TradingRule(
+        id=rule_id,
+        symbol=symbol,
+        stage=StrategyStage.BACKTEST,
+        priority=0,
+        trigger=TimeTrigger(at_time="21:00", cooldown_seconds=0),
+        action=Action(side=Side.BUY, order_type=OrderType.LIMIT, qty=qty, limit_price="200.00"),
+        sizing=sizing,
+        sizing_group=group,
+    )
+
+
+def test_inverse_vol_mode_requires_sizing_group() -> None:
+    with pytest.raises(ValidationError):
+        TradingRule(
+            id="bad",
+            symbol="AAPL",
+            stage=StrategyStage.BACKTEST,
+            priority=0,
+            trigger=TimeTrigger(at_time="21:00", cooldown_seconds=0),
+            action=Action(side=Side.BUY, order_type=OrderType.LIMIT, qty=10, limit_price="200.00"),
+            sizing=SizingConfig(mode="inverse_vol"),  # no sizing_group
+        )
+
+
+def test_build_sizing_groups_only_enabled_inverse_vol() -> None:
+    members = build_sizing_groups([
+        _iv_rule("r1", "AAPL", qty=10, group="g"),
+        _iv_rule("r2", "MSFT", qty=10, group="g"),
+        _time_rule("r_tv", qty=10, sizing=_sizing()),  # target_vol → not grouped
+        _iv_rule("r_off", "TSLA", qty=10, group=None),  # no group → not grouped
+    ])
+    assert set(members.keys()) == {"g"}
+    assert sorted(m.rule_id for m in members["g"]) == ["r1", "r2"]
+
+
+def _alt_bars(symbol: str, sessions: list[date], hi: str) -> list[OHLCVBar]:
+    """Alternating closes 100/hi → controllable realized volatility. Lows touch
+    the limit so the BUY limit at 200 always fills."""
+    bars: list[OHLCVBar] = []
+    for i, d in enumerate(sessions):
+        close = Decimal("100") if i % 2 == 0 else Decimal(hi)
+        bars.append(
+            OHLCVBar(
+                symbol=symbol,
+                session_date=d,
+                open=close,
+                high=close + Decimal("5"),
+                low=Decimal("90"),
+                close=close,
+                volume=1_000_000,
+                session_schedule_tag="regular",
+            )
+        )
+    return bars
+
+
+def _run_group(conn, tmp_path, rules: list[TradingRule], bars: dict[str, list[OHLCVBar]]):
+    sessions = sorted({b.session_date for sym in bars.values() for b in sym})
+    whitelist = Whitelist(
+        symbols=frozenset({"AAPL", "MSFT"}),
+        accounts=frozenset({"BACKTEST"}),
+        order_types=frozenset({OrderType.LIMIT}),
+    )
+    return replay(
+        rules=rules,
+        data_source=_FakeDataSource(bars),
+        date_start=sessions[0],
+        date_end=sessions[-1],
+        caps=_caps(),
+        whitelist=whitelist,
+        halt_path=tmp_path / "HALT",
+        conn=conn,
+        clock=ReplayClock(datetime(2024, 1, 1, tzinfo=UTC)),
+        broker=BacktestBroker(),
+        run_id="bt-sizing-group",
+    )
+
+
+def test_replay_inverse_vol_group_shrinks_higher_vol_member(conn, tmp_path) -> None:
+    """SC-S10 — in a sizing group the higher-volatility symbol (AAPL, ±2% swings)
+    is sized DOWN relative to the lower-volatility symbol (MSFT, ±0.3% swings),
+    which keeps full base size. Risk-parity flows through the replay path."""
+    sessions = _sessions(12)
+    bars = {
+        "AAPL": _alt_bars("AAPL", sessions, "102"),     # moderate vol
+        "MSFT": _alt_bars("MSFT", sessions, "100.3"),   # calm (low vol)
+    }
+    rules = [
+        _iv_rule("r_aapl", "AAPL", qty=10, group="basket", lookback=5),
+        _iv_rule("r_msft", "MSFT", qty=10, group="basket", lookback=5),
+    ]
+    res = _run_group(conn, tmp_path, rules, bars)
+    aapl = res.per_rule_orders["r_aapl"]
+    msft = res.per_rule_orders["r_msft"]
+    assert msft and all(o.qty == 10 for o in msft)  # lowest-vol member = full size
+    assert aapl and all(o.qty <= 10 for o in aapl)  # never above base (down-only)
+    assert any(o.qty < 10 for o in aapl)  # higher-vol member shrunk by risk parity
+
+
+def test_replay_no_group_is_byte_equal(conn, tmp_path) -> None:
+    """SC-S11 — without a sizing_group the same two symbols size to the declared
+    base (grouping is opt-in; no regression)."""
+    sessions = _sessions(12)
+    bars = {
+        "AAPL": _alt_bars("AAPL", sessions, "102"),
+        "MSFT": _alt_bars("MSFT", sessions, "100.3"),
+    }
+    rules = [
+        _iv_rule("r_aapl", "AAPL", qty=10, group=None),  # sizing=None
+        _iv_rule("r_msft", "MSFT", qty=10, group=None),
+    ]
+    res = _run_group(conn, tmp_path, rules, bars)
+    assert all(o.qty == 10 for o in res.per_rule_orders["r_aapl"])
+    assert all(o.qty == 10 for o in res.per_rule_orders["r_msft"])

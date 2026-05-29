@@ -51,6 +51,7 @@ from auto_invest.reconciliation.runner import (
 )
 from auto_invest.risk.circuit_breaker import BreakerDecision, evaluate_from_audit
 from auto_invest.strategy.canary import restore_pause_status
+from auto_invest.strategy.sizing import build_sizing_groups
 from auto_invest.strategy.triggers import TriggerContext, evaluate
 from auto_invest.worker.halt import is_halted, set_halt
 from auto_invest.worker.schedule import is_session_open
@@ -173,6 +174,8 @@ class Worker:
             market=settings.market_order,
             quote_market=settings.market_quote,
             paper_mode=settings.paper_mode,
+            # Spec 017 slice 2b: inverse-vol risk-parity groups from the rule set.
+            sizing_groups=build_sizing_groups(settings.config.rules),
         )
 
     # ---------------------------------------------- lifecycle audit
