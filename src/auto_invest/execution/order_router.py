@@ -72,6 +72,7 @@ from auto_invest.strategy.sizing import (
     SizingGroupMember,
     erc_group_scales,
     group_scale_for,
+    min_variance_group_scales,
     realized_volatility,
     sized_quantity_with_result,
 )
@@ -307,23 +308,28 @@ class OrderRouter:
                 lookback_bars=sizing.lookback_bars,
                 correlation_strength=strength,
             )
-        if sizing.mode == "erc":
+        if sizing.mode in ("erc", "min_variance"):
             members = (self.sizing_groups or {}).get(rule.sizing_group, ())
-            closes_by_rule_erc: dict[str, dict[date, Decimal]] = {}
-            member_vols_erc: dict[str, Decimal | None] = {}
+            closes_by_rule_mv: dict[str, dict[date, Decimal]] = {}
+            member_vols_mv: dict[str, Decimal | None] = {}
             for member in members:
                 bars = get_bars(self.conn, symbol=member.symbol, timeframe=member.timeframe)
                 closes = [b.close_usd for b in bars]
-                closes_by_rule_erc[member.rule_id] = {
+                closes_by_rule_mv[member.rule_id] = {
                     date.fromisoformat(b.bar_open_utc[:10]): b.close_usd for b in bars
                 }
-                member_vols_erc[member.rule_id] = realized_volatility(
+                member_vols_mv[member.rule_id] = realized_volatility(
                     closes[-(member.lookback_bars + 1) :]
                 )
-            weights = erc_group_scales(
-                closes_by_rule_erc,
+            scale_fn = (
+                min_variance_group_scales
+                if sizing.mode == "min_variance"
+                else erc_group_scales
+            )
+            weights = scale_fn(
+                closes_by_rule_mv,
                 lookback_bars=sizing.lookback_bars,
-                member_vols=member_vols_erc,
+                member_vols=member_vols_mv,
             )
             return weights.get(rule.id, Decimal(1))
         return Decimal(1)

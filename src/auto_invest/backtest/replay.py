@@ -89,6 +89,7 @@ from auto_invest.strategy.sizing import (
     build_sizing_groups,
     erc_group_scales,
     group_scale_for,
+    min_variance_group_scales,
     realized_volatility,
     sized_quantity,
 )
@@ -324,9 +325,9 @@ def _replay_group_scale(
             lookback_bars=sizing.lookback_bars,
             correlation_strength=strength,
         )
-    if sizing.mode == "erc":
-        closes_by_rule_erc: dict[str, dict[date, Decimal]] = {}
-        member_vols_erc: dict[str, Decimal | None] = {}
+    if sizing.mode in ("erc", "min_variance"):
+        closes_by_rule_mv: dict[str, dict[date, Decimal]] = {}
+        member_vols_mv: dict[str, Decimal | None] = {}
         for member in members:
             sym_bars = [
                 b
@@ -334,14 +335,19 @@ def _replay_group_scale(
                 if b.session_date <= session_date
             ]
             closes = [b.close for b in sym_bars]
-            closes_by_rule_erc[member.rule_id] = {b.session_date: b.close for b in sym_bars}
-            member_vols_erc[member.rule_id] = realized_volatility(
+            closes_by_rule_mv[member.rule_id] = {b.session_date: b.close for b in sym_bars}
+            member_vols_mv[member.rule_id] = realized_volatility(
                 closes[-(sizing.lookback_bars + 1) :]
             )
-        weights = erc_group_scales(
-            closes_by_rule_erc,
+        scale_fn = (
+            min_variance_group_scales
+            if sizing.mode == "min_variance"
+            else erc_group_scales
+        )
+        weights = scale_fn(
+            closes_by_rule_mv,
             lookback_bars=sizing.lookback_bars,
-            member_vols=member_vols_erc,
+            member_vols=member_vols_mv,
         )
         return weights.get(rule.id, Decimal(1))
     return Decimal(1)
