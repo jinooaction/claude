@@ -642,8 +642,138 @@ def min_variance_group_scales(
     }
 
 
+class MaxSharpeConvergenceError(Exception):
+    """최대 샤프 가중치 계산 실패 시 발생."""
+
+
+def expected_returns_from_closes(
+    closes_by_rule: Mapping[str, Mapping[date, Decimal]],
+    *,
+    lookback_bars: int,
+) -> dict[str, float] | None:
+    """공통 거래일 기준 각 자산의 평균 로그 수익률(연율화).
+
+    ``lookback_bars`` 기간 공통 날짜를 쓴다. 공통일 < 30이면 None.
+    """
+    rule_ids = list(closes_by_rule)
+    if not rule_ids:
+        return None
+    common: set[date] = set.intersection(
+        *(set(closes_by_rule[r].keys()) for r in rule_ids)
+    )
+    window = sorted(common)[-(lookback_bars + 1):]
+    if len(window) < 30:
+        return None
+
+    result: dict[str, float] = {}
+    for r in rule_ids:
+        rets = _returns([closes_by_rule[r][d] for d in window])
+        if rets is None or len(rets) == 0:
+            return None
+        # 연율화: 일별 평균 × 252
+        mean_r = sum(float(x) for x in rets) / len(rets) * 252.0
+        result[r] = mean_r
+    return result
+
+
+def max_sharpe_weights(
+    cov_matrix: list[list[Decimal]],
+    expected_returns: list[float],
+) -> list[Decimal]:
+    """롱-온리 최대 샤프 포트폴리오 가중치 (분석적 해 + 음수 클램핑).
+
+    max (w'μ - r_f) / sqrt(w'Σw)  s.t.  1'w = 1,  w >= 0
+
+    r_f = 0 단순화. 분석적 해: w* ∝ Σ^{-1}·μ, 음수→0 클램핑 후 재정규화.
+    μ 가 전부 비양수이면 균등 가중치 반환(모멘텀 신호 없는 구간).
+    수치 실패 시 ``MaxSharpeConvergenceError``.
+    결과는 max 1 클램핑(하향 전용 보장).
+    """
+    n = len(cov_matrix)
+    if n == 0:
+        raise MaxSharpeConvergenceError("빈 공분산 행렬")
+    if len(expected_returns) != n:
+        raise MaxSharpeConvergenceError(
+            f"기대 수익률 벡터 길이({len(expected_returns)})가 공분산 행렬 크기({n})와 다름"
+        )
+
+    cov_np = np.array(
+        [[float(cov_matrix[i][j]) for j in range(n)] for i in range(n)],
+        dtype=np.float64,
+    )
+    mu = np.array(expected_returns, dtype=np.float64)
+
+    # μ 가 전부 비양수이면 균등 가중치 (모멘텀 신호 없는 구간)
+    if mu.max() <= 0.0:
+        equal_w = Decimal(str(round(1.0 / n, 9)))
+        return [_canon(equal_w)] * n
+
+    diag_max = float(np.diag(cov_np).max())
+    eps = max(diag_max, 1e-12) * 1e-6
+    cov_reg = cov_np + eps * np.eye(n)
+
+    try:
+        w_np = np.linalg.solve(cov_reg, mu)
+    except np.linalg.LinAlgError:
+        try:
+            w_np = np.linalg.lstsq(cov_reg, mu, rcond=None)[0]
+        except Exception as exc:
+            raise MaxSharpeConvergenceError(
+                f"최대 샤프 행렬 역산 실패: {exc}"
+            ) from exc
+
+    w_np = np.maximum(w_np, 0.0)
+    total = float(w_np.sum())
+    if total <= 0:
+        raise MaxSharpeConvergenceError("최대 샤프 가중치 합이 0 이하 (모든 기대 수익률 비양수)")
+    w_np = w_np / total
+
+    raw = [Decimal(str(round(float(wi), 9))) for wi in w_np]
+    clamped = [min(r, Decimal(1)) for r in raw]
+    return [_canon(r) for r in clamped]
+
+
+def max_sharpe_group_scales(
+    closes_by_rule: Mapping[str, Mapping[date, Decimal]],
+    *,
+    lookback_bars: int,
+    member_vols: Mapping[str, Decimal | None],
+) -> dict[str, Decimal]:
+    """최대 샤프 가중치 딕셔너리. 데이터 부족 → min_variance → ERC → 역변동성 순 fallback.
+
+    rule_id → 가중치(Decimal, 0..1).
+    """
+    rule_ids = list(closes_by_rule)
+    cov = covariance_matrix(closes_by_rule, lookback_bars=lookback_bars)
+    if cov is not None:
+        mu_dict = expected_returns_from_closes(closes_by_rule, lookback_bars=lookback_bars)
+        if mu_dict is not None:
+            mu_list = [mu_dict[r] for r in rule_ids]
+            try:
+                weights = max_sharpe_weights(cov, mu_list)
+                return {rule_ids[i]: weights[i] for i in range(len(rule_ids))}
+            except MaxSharpeConvergenceError:
+                pass
+        # max_sharpe 실패 → min_variance fallback
+        try:
+            weights = min_variance_weights(cov)
+            return {rule_ids[i]: weights[i] for i in range(len(rule_ids))}
+        except MinVarianceConvergenceError:
+            pass
+        try:
+            weights = erc_weights(cov)
+            return {rule_ids[i]: weights[i] for i in range(len(rule_ids))}
+        except ERCConvergenceError:
+            pass
+    return {
+        r: inverse_vol_group_scale(member_vols.get(r), list(member_vols.values()))
+        for r in rule_ids
+    }
+
+
 __all__ = [
     "ERCConvergenceError",
+    "MaxSharpeConvergenceError",
     "MinVarianceConvergenceError",
     "SizingGroupMember",
     "SizingResult",
@@ -653,8 +783,11 @@ __all__ = [
     "correlation_haircut",
     "erc_group_scales",
     "erc_weights",
+    "expected_returns_from_closes",
     "group_scale_for",
     "inverse_vol_group_scale",
+    "max_sharpe_group_scales",
+    "max_sharpe_weights",
     "min_variance_group_scales",
     "min_variance_weights",
     "pearson_correlation",
