@@ -60,6 +60,7 @@ from auto_invest.risk.gates import (
     stage_uniqueness_gate,
     whitelist_gate,
 )
+from auto_invest.strategy.quality import quality_ranked
 from auto_invest.strategy.ranking import cross_sectional_momentum
 from auto_invest.strategy.regime import (
     DEFAULT_REGIME_SCALE,
@@ -447,6 +448,23 @@ class OrderRouter:
                     state="SKIPPED_BY_RANKING",
                     correlation_id=correlation_id,
                     reason="not_in_top",
+                )
+
+        # Spec 023: quality factor filter — applied after ranking filter.
+        # Opts-in: quality_filter=None leaves the path byte-identical.
+        if rule.quality_filter is not None:
+            qf = rule.quality_filter
+            sizing_tf = getattr(rule.trigger, "timeframe", "1d")
+            universe_pricebars = {
+                sym: get_bars(self.conn, symbol=sym, timeframe=sizing_tf)
+                for sym in qf.universe
+            }
+            ranked_quality = quality_ranked(universe_pricebars, lookback_bars=qf.lookback_bars)
+            if not qf.qualifies(rule.symbol, ranked_quality):
+                return OrderOutcome(
+                    state="SKIPPED_BY_QUALITY",
+                    correlation_id=correlation_id,
+                    reason="not_in_top_quality",
                 )
 
         # Spec 004: consume judgment advisories BEFORE the gate chain. Advisories

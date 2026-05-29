@@ -76,6 +76,7 @@ from auto_invest.risk.gates import (
     per_trade_cap_gate,
     whitelist_gate,
 )
+from auto_invest.strategy.quality import quality_ranked
 from auto_invest.strategy.ranking import cross_sectional_momentum
 from auto_invest.strategy.regime import (
     DEFAULT_REGIME_SCALE,
@@ -546,6 +547,27 @@ def replay(
                     ]
                 ranked = cross_sectional_momentum(universe_bars, rf.period)
                 if not rf.qualifies(rule.symbol, ranked):
+                    continue
+
+            # Spec 023: quality factor filter — lookahead-free (session_date 이하 바만 사용).
+            if rule.quality_filter is not None:
+                qf = rule.quality_filter
+                timeframe_tf = (
+                    rule.trigger.timeframe
+                    if isinstance(rule.trigger, IndicatorTrigger)
+                    else "1d"
+                )
+                universe_quality: dict[str, list[PriceBar]] = {}
+                for sym in qf.universe:
+                    sym_raw = [
+                        b for b in bars_by_symbol.get(sym, [])
+                        if b.session_date <= session_date
+                    ]
+                    universe_quality[sym] = [
+                        _ohlcv_to_pricebar(b, timeframe=timeframe_tf) for b in sym_raw
+                    ]
+                ranked_quality = quality_ranked(universe_quality, lookback_bars=qf.lookback_bars)
+                if not qf.qualifies(rule.symbol, ranked_quality):
                     continue
 
             try:

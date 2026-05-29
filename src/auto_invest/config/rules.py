@@ -174,6 +174,41 @@ class RankingFilter(BaseModel):
         return symbol in top_symbols
 
 
+_MIN_QUALITY_BARS = 30
+
+
+class QualityFilter(BaseModel):
+    """스펙 023 — 가격 기반 퀄리티 팩터 필터. 비커널.
+
+    유니버스 심볼을 ``lookback_bars`` 기간 퀄리티 점수(롤링 샤프 / (1 + |최대 드로다운|))로
+    내림차순 순위 매겨, 현재 룰의 심볼이 상위 `top_n`개 또는 상위 `top_pct`% 이내일 때만
+    주문을 통과시킨다. 통과 못하면 `SKIPPED_BY_QUALITY` 반환(하향 전용, K1 불변).
+
+    `top_n`과 `top_pct` 중 정확히 하나만 설정 가능.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    universe: tuple[str, ...] = Field(..., min_length=2)
+    lookback_bars: int = Field(default=60, ge=_MIN_QUALITY_BARS)
+    top_n: int | None = Field(default=None, ge=1)
+    top_pct: float | None = Field(default=None, gt=0, le=100)
+
+    @model_validator(mode="after")
+    def _require_exactly_one(self) -> QualityFilter:
+        if (self.top_n is None) == (self.top_pct is None):
+            raise ValueError("QualityFilter: set exactly one of top_n or top_pct")
+        return self
+
+    def qualifies(self, symbol: str, ranked: list[tuple[str, Decimal]]) -> bool:
+        """True if *symbol* passes this filter given a pre-computed ranked list."""
+        if self.top_n is not None:
+            cutoff = min(self.top_n, len(ranked))
+        else:
+            cutoff = max(1, math.ceil(len(ranked) * (self.top_pct or 0) / 100))
+        top_symbols = {s for s, _ in ranked[:cutoff]}
+        return symbol in top_symbols
+
+
 class TradingRule(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     id: str = Field(..., min_length=1)
@@ -197,6 +232,8 @@ class TradingRule(BaseModel):
     regime_scale: dict[str, Decimal] | None = None
     # 스펙 021: 횡단면 모멘텀 순위 필터. None이면 필터 없음(기존 동작 byte 동일).
     ranking_filter: RankingFilter | None = None
+    # 스펙 023: 가격 기반 퀄리티 필터. None이면 필터 없음(기존 동작 byte 동일).
+    quality_filter: QualityFilter | None = None
 
     @field_validator("symbol")
     @classmethod
