@@ -71,6 +71,7 @@ EventType = Literal[
     "AUTO_TUNED_CANARY_CANDIDATE",
     "AUTO_TUNED_CANARY_VALIDATED",
     "CIRCUIT_BREAKER_TRIPPED",
+    "SIZING_DECISION",
 ]
 
 
@@ -755,6 +756,24 @@ class CircuitBreakerTrippedPayload(AuditPayload):
     reason: str
 
 
+class SizingDecisionPayload(AuditPayload):
+    """Spec 018: 사이징 결정 포렌식 기록 (K4 추가-전용).
+
+    사이징 모드가 fixed 가 아닌 모든 주문에서 order_router 가 append 한다.
+    실현 변동성·역변동성 그룹 가중치·상관 헤어컷·최종 수량을 한 row 에 담아
+    사이징 파이프라인 전체를 사후 재현할 수 있게 한다(헌법 X.2 단일 잣대).
+    final_qty=0 도 기록해 사이징으로 스킵된 주문의 원인을 추적할 수 있다.
+    """
+
+    event_type: Literal["SIZING_DECISION"] = "SIZING_DECISION"
+    sizing_mode: str
+    base_qty: int
+    final_qty: int
+    realized_vol_pct: str | None = None
+    vol_scale: str | None = None
+    group_scale: str
+
+
 AnyPayload = (
     WorkerStartedPayload
     | WorkerStoppedPayload
@@ -807,6 +826,7 @@ AnyPayload = (
     | AutoTunedCanaryCandidatePayload
     | AutoTunedCanaryValidatedPayload
     | CircuitBreakerTrippedPayload
+    | SizingDecisionPayload
 )
 
 

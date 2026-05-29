@@ -301,6 +301,76 @@ def group_scale_for(
     return _canon(iv * correlation_haircut(avg, correlation_strength))
 
 
+@dataclass(frozen=True)
+class SizingResult:
+    """Full sizing decision record for audit and observability (spec 018)."""
+
+    base_qty: int
+    final_qty: int
+    sizing_mode: str
+    realized_vol_pct: Decimal | None = None
+    vol_scale: Decimal | None = None
+    group_scale: Decimal = Decimal(1)
+
+
+def sized_quantity_with_result(
+    *,
+    base_qty: int,
+    closes: Sequence[Decimal],
+    sizing: SizingConfig | None,
+    group_scale: Decimal = Decimal(1),
+) -> SizingResult:
+    """Like ``sized_quantity`` but returns a ``SizingResult`` with full context.
+
+    Intended for order_router — the result fields feed the SIZING_DECISION audit
+    row so every sizing decision is forensically reproducible.
+    """
+    mode = "fixed" if sizing is None else sizing.mode
+
+    if sizing is None or sizing.mode == "fixed":
+        return SizingResult(
+            base_qty=base_qty,
+            final_qty=base_qty,
+            sizing_mode=mode,
+            group_scale=Decimal(1),
+        )
+
+    if sizing.mode == "inverse_vol":
+        scaled = (Decimal(base_qty) * group_scale).to_integral_value(rounding=ROUND_FLOOR)
+        final = max(0, int(scaled))
+        return SizingResult(
+            base_qty=base_qty,
+            final_qty=final,
+            sizing_mode=mode,
+            group_scale=group_scale,
+        )
+
+    # target_vol path
+    window = list(closes)[-(sizing.lookback_bars + 1) :]
+    realized = realized_volatility(window)
+    if realized is None:
+        return SizingResult(
+            base_qty=base_qty,
+            final_qty=base_qty,
+            sizing_mode=mode,
+            group_scale=Decimal(1),
+        )
+    target = sizing.target_volatility_pct / Decimal(100)
+    scale = volatility_scale(
+        realized, target, min_scale=sizing.min_scale, max_scale=sizing.max_scale
+    )
+    scaled = (Decimal(base_qty) * scale).to_integral_value(rounding=ROUND_FLOOR)
+    final = max(0, int(scaled))
+    return SizingResult(
+        base_qty=base_qty,
+        final_qty=final,
+        sizing_mode=mode,
+        realized_vol_pct=_canon(realized * Decimal(100)),
+        vol_scale=scale,
+        group_scale=Decimal(1),
+    )
+
+
 def sized_quantity(
     *,
     base_qty: int,
@@ -351,6 +421,7 @@ def sized_quantity(
 
 __all__ = [
     "SizingGroupMember",
+    "SizingResult",
     "average_correlations",
     "build_sizing_groups",
     "correlation_haircut",
@@ -359,5 +430,6 @@ __all__ = [
     "pearson_correlation",
     "realized_volatility",
     "sized_quantity",
+    "sized_quantity_with_result",
     "volatility_scale",
 ]

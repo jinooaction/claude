@@ -64,7 +64,7 @@ from auto_invest.strategy.sizing import (
     SizingGroupMember,
     group_scale_for,
     realized_volatility,
-    sized_quantity,
+    sized_quantity_with_result,
 )
 
 
@@ -333,12 +333,36 @@ class OrderRouter:
             recent_bars = get_bars(
                 self.conn, symbol=rule.symbol, timeframe=sizing_timeframe
             )
-            base_qty = sized_quantity(
+            _group_scale = self._inverse_vol_group_scale(rule)
+            sizing_result = sized_quantity_with_result(
                 base_qty=rule.action.qty,
                 closes=[b.close_usd for b in recent_bars],
                 sizing=rule.sizing,
-                group_scale=self._inverse_vol_group_scale(rule),
+                group_scale=_group_scale,
             )
+            audit.append(
+                self.conn,
+                audit.SizingDecisionPayload(
+                    sizing_mode=sizing_result.sizing_mode,
+                    base_qty=sizing_result.base_qty,
+                    final_qty=sizing_result.final_qty,
+                    realized_vol_pct=(
+                        str(sizing_result.realized_vol_pct)
+                        if sizing_result.realized_vol_pct is not None
+                        else None
+                    ),
+                    vol_scale=(
+                        str(sizing_result.vol_scale)
+                        if sizing_result.vol_scale is not None
+                        else None
+                    ),
+                    group_scale=str(sizing_result.group_scale),
+                ),
+                rule_id=rule.id,
+                symbol=rule.symbol,
+                correlation_id=correlation_id,
+            )
+            base_qty = sizing_result.final_qty
             if base_qty < 1:
                 return OrderOutcome(
                     state="SKIPPED_BY_SIZING",
