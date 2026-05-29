@@ -26,6 +26,11 @@ NON-KERNEL. This module only ever *proposes* a quantity; the K1 position caps
     REDUCE a correlated/concentrated bet — a defensive risk control, not a
     return optimiser. ``group_scale_for`` composes the inverse-vol weight and the
     correlation haircut into one factor for both paths.
+  * Spec 022 — minimum-variance portfolio (``mode="min_variance"``): solves
+    ``min w'Σw  s.t.  1'w = 1, w >= 0`` via projected gradient descent on the
+    simplex.  Produces lower ex-ante portfolio variance than ERC while remaining
+    fully long-only and down-only (max weight 1 clamp).  Convergence failure falls
+    back to ERC, then inverse-vol.
 
 All math is deterministic Decimal (no float, no LLM) so the backtest replay
 stays byte-equal across machines (FR-B15) and live trading uses the identical
@@ -39,6 +44,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 from decimal import ROUND_FLOOR, Decimal
+
+import numpy as np
 
 from auto_invest.config.rules import SizingConfig, TradingRule
 
@@ -423,6 +430,10 @@ class ERCConvergenceError(RuntimeError):
     """ERC 반복 최적화가 수렴하지 않았을 때 발생."""
 
 
+class MinVarianceConvergenceError(RuntimeError):
+    """최소 분산 최적화가 실패했을 때 발생."""
+
+
 def covariance_matrix(
     closes_by_rule: Mapping[str, Mapping[date, Decimal]],
     *,
@@ -557,8 +568,83 @@ def erc_group_scales(
     }
 
 
+def min_variance_weights(
+    cov_matrix: list[list[Decimal]],
+) -> list[Decimal]:
+    """롱-온리 최소 분산 포트폴리오 가중치 (분석적 해 + 음수 클램핑).
+
+    min w'Σw  s.t.  1'w = 1,  w >= 0
+
+    분석적 해: w* ∝ Σ^{-1}1, 음수→0 클램핑 후 재정규화.
+    미세 ridge 정규화(ε = max_diag × 1e-6)로 특이 행렬 방지.
+    수치 실패 시 ``MinVarianceConvergenceError``.
+    결과는 down-only 보장을 위해 max 1 클램핑.
+    """
+    n = len(cov_matrix)
+    if n == 0:
+        raise MinVarianceConvergenceError("빈 공분산 행렬")
+    cov_np = np.array(
+        [[float(cov_matrix[i][j]) for j in range(n)] for i in range(n)],
+        dtype=np.float64,
+    )
+    diag_max = float(np.diag(cov_np).max())
+    eps = max(diag_max, 1e-12) * 1e-6
+    cov_reg = cov_np + eps * np.eye(n)
+
+    ones = np.ones(n)
+    try:
+        w_np = np.linalg.solve(cov_reg, ones)
+    except np.linalg.LinAlgError:
+        try:
+            w_np = np.linalg.lstsq(cov_reg, ones, rcond=None)[0]
+        except Exception as exc:
+            raise MinVarianceConvergenceError(
+                f"최소 분산 행렬 역산 실패: {exc}"
+            ) from exc
+
+    w_np = np.maximum(w_np, 0.0)
+    total = float(w_np.sum())
+    if total <= 0:
+        raise MinVarianceConvergenceError("최소 분산 가중치 합이 0 이하")
+    w_np = w_np / total
+
+    raw = [Decimal(str(round(float(wi), 9))) for wi in w_np]
+    clamped = [min(r, Decimal(1)) for r in raw]
+    return [_canon(r) for r in clamped]
+
+
+def min_variance_group_scales(
+    closes_by_rule: Mapping[str, Mapping[date, Decimal]],
+    *,
+    lookback_bars: int,
+    member_vols: Mapping[str, Decimal | None],
+) -> dict[str, Decimal]:
+    """최소 분산 가중치 딕셔너리. 데이터 부족 → ERC → 역변동성 순 fallback.
+
+    rule_id → 가중치(Decimal, 0..1).
+    """
+    rule_ids = list(closes_by_rule)
+    cov = covariance_matrix(closes_by_rule, lookback_bars=lookback_bars)
+    if cov is not None:
+        try:
+            weights = min_variance_weights(cov)
+            return {rule_ids[i]: weights[i] for i in range(len(rule_ids))}
+        except MinVarianceConvergenceError:
+            pass
+        try:
+            weights = erc_weights(cov)
+            return {rule_ids[i]: weights[i] for i in range(len(rule_ids))}
+        except ERCConvergenceError:
+            pass
+    return {
+        r: inverse_vol_group_scale(member_vols.get(r), list(member_vols.values()))
+        for r in rule_ids
+    }
+
+
 __all__ = [
     "ERCConvergenceError",
+    "MinVarianceConvergenceError",
     "SizingGroupMember",
     "SizingResult",
     "average_correlations",
@@ -569,6 +655,8 @@ __all__ = [
     "erc_weights",
     "group_scale_for",
     "inverse_vol_group_scale",
+    "min_variance_group_scales",
+    "min_variance_weights",
     "pearson_correlation",
     "realized_volatility",
     "sized_quantity",
