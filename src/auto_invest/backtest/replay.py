@@ -76,7 +76,13 @@ from auto_invest.risk.gates import (
     per_trade_cap_gate,
     whitelist_gate,
 )
-from auto_invest.strategy.sizing import sized_quantity
+from auto_invest.strategy.sizing import (
+    SizingGroupMember,
+    build_sizing_groups,
+    inverse_vol_group_scale,
+    realized_volatility,
+    sized_quantity,
+)
 from auto_invest.strategy.triggers import TriggerContext, evaluate
 
 _XNYS = ec.get_calendar("XNYS")
@@ -271,6 +277,39 @@ class _RuleState:
     position: _Position = field(default_factory=_Position)
 
 
+def _replay_group_scale(
+    *,
+    rule: TradingRule,
+    sizing_groups: dict[str, list[SizingGroupMember]],
+    bars_by_symbol: dict[str, list[OHLCVBar]],
+    session_date: date,
+) -> Decimal:
+    """Inverse-vol group weight for ``rule`` at ``session_date`` (slice 2b).
+
+    Measures each group member's realized volatility from its closes up to (and
+    including) ``session_date`` — the same lookback the live router uses — then
+    returns the down-only inverse-vol weight. 1 when the rule is not an
+    inverse_vol group member (no change, byte-equal to pre-2b).
+    """
+    sizing = rule.sizing
+    if sizing is None or sizing.mode != "inverse_vol" or rule.sizing_group is None:
+        return Decimal(1)
+    members = sizing_groups.get(rule.sizing_group, [])
+    member_vols: list[Decimal | None] = []
+    own_vol: Decimal | None = None
+    for member in members:
+        closes = [
+            b.close
+            for b in bars_by_symbol.get(member.symbol, [])
+            if b.session_date <= session_date
+        ]
+        vol = realized_volatility(closes[-(member.lookback_bars + 1) :])
+        member_vols.append(vol)
+        if member.rule_id == rule.id:
+            own_vol = vol
+    return inverse_vol_group_scale(own_vol, member_vols)
+
+
 # ---------- main entry point ----------------------------------------------
 
 
@@ -316,6 +355,10 @@ def replay(
         for sym_bars in bars_by_symbol.values()
         for b in sym_bars
     }
+
+    # Spec 017 slice 2b: inverse-vol risk-parity groups, built from the same
+    # static rule set the live worker uses (single yardstick).
+    sizing_groups = build_sizing_groups(rules)
 
     # Coverage holes → DataQualityWarnings, NOT a hard fail (the CLI
     # contract handles exit-66 separately at the caller level).
@@ -381,11 +424,18 @@ def replay(
 
             # (c2) Spec 017: volatility-based sizing BEFORE the gate chain.
             #      Scales the declared qty by realized volatility — down by
-            #      default, or up within the rule's max_scale when bidirectional
-            #      targeting is on (slice 2). The K1 caps below run unchanged and
-            #      reject anything over the ceiling, so this is the same single
-            #      yardstick the live router uses. sized_qty < 1 means sizing
-            #      suppressed this fire (FR-S05); a qty=0 order is never built.
+            #      default, up within max_scale when bidirectional (slice 2), or
+            #      by the inverse-vol group weight when mode="inverse_vol" (slice
+            #      2b). The K1 caps below run unchanged and reject anything over
+            #      the ceiling, so this is the same single yardstick the live
+            #      router uses. sized_qty < 1 means sizing suppressed this fire
+            #      (FR-S05); a qty=0 order is never built.
+            group_scale = _replay_group_scale(
+                rule=rule,
+                sizing_groups=sizing_groups,
+                bars_by_symbol=bars_by_symbol,
+                session_date=session_date,
+            )
             sized_qty = sized_quantity(
                 base_qty=rule.action.qty,
                 closes=[
@@ -394,6 +444,7 @@ def replay(
                     if b.session_date <= session_date
                 ],
                 sizing=rule.sizing,
+                group_scale=group_scale,
             )
             if sized_qty < 1:
                 continue

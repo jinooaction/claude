@@ -12,6 +12,13 @@ NON-KERNEL. This module only ever *proposes* a quantity; the K1 position caps
     unchanged after sizing and REJECT anything over the per-trade / per-symbol /
     global ceiling, so even upscaling can never lift exposure above the safety
     boundary — K1 is the true ceiling.
+  * Slice 2b — inverse-volatility risk parity ACROSS a sizing group
+    (``mode="inverse_vol"``): members of the same ``sizing_group`` are weighted
+    by ``min(member vols) / own vol`` so the lowest-vol member keeps full size
+    and higher-vol members shrink to balance per-share risk. Always down-only
+    (weight <= 1), so K1 still binds below. The weight is computed by the caller
+    (worker / replay) via ``build_sizing_groups`` + ``inverse_vol_group_scale``
+    and passed in as ``group_scale``, so live and backtest share one yardstick.
 
 All math is deterministic Decimal (no float, no LLM) so the backtest replay
 stays byte-equal across machines (FR-B15) and live trading uses the identical
@@ -21,9 +28,10 @@ sizing as the backtest (constitution X.2, single yardstick).
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from decimal import ROUND_FLOOR, Decimal
 
-from auto_invest.config.rules import SizingConfig
+from auto_invest.config.rules import SizingConfig, TradingRule
 
 # Volatility / scale are normalised to 6 decimals to match the rest of the
 # backtest's byte-equality contract (see backtest/data_model.canonicalise_decimal).
@@ -90,11 +98,83 @@ def volatility_scale(
     return _canon(raw)
 
 
+@dataclass(frozen=True)
+class SizingGroupMember:
+    """One member of a sizing group (slice 2b).
+
+    Carries just enough to re-measure the member's realized volatility
+    identically in both the live router and the backtest replay (constitution
+    X.2 single yardstick): the symbol, its bar timeframe, and the lookback.
+    """
+
+    rule_id: str
+    symbol: str
+    timeframe: str
+    lookback_bars: int
+
+
+def build_sizing_groups(
+    rules: Sequence[TradingRule],
+) -> dict[str, list[SizingGroupMember]]:
+    """Map each ``sizing_group`` name to its enabled ``inverse_vol`` members.
+
+    Only enabled rules whose sizing mode is "inverse_vol" participate. The worker
+    and the replay engine build this from the SAME static rule set, so both
+    derive identical inverse-vol weights (single yardstick).
+    """
+    groups: dict[str, list[SizingGroupMember]] = {}
+    for rule in rules:
+        sizing = rule.sizing
+        if (
+            not rule.enabled
+            or rule.sizing_group is None
+            or sizing is None
+            or sizing.mode != "inverse_vol"
+        ):
+            continue
+        timeframe = getattr(rule.trigger, "timeframe", "1d")
+        groups.setdefault(rule.sizing_group, []).append(
+            SizingGroupMember(
+                rule_id=rule.id,
+                symbol=rule.symbol,
+                timeframe=timeframe,
+                lookback_bars=sizing.lookback_bars,
+            )
+        )
+    return groups
+
+
+def inverse_vol_group_scale(
+    own_vol: Decimal | None,
+    member_vols: Sequence[Decimal | None],
+) -> Decimal:
+    """Down-only inverse-volatility (risk-parity) weight for one group member.
+
+    Returns ``min(measurable member vols) / own_vol`` clamped to ``(0, 1]``.
+    ``member_vols`` is the whole group including this member. The lowest-vol
+    member keeps full size (weight 1); higher-vol members shrink so each
+    contributes balanced per-share risk. Fail-safe: own vol unmeasurable
+    (None / <= 0) or no measurable member -> 1 (no group throttle). The result is
+    always <= 1, so grouping can only REDUCE exposure vs the declared base — K1
+    still binds below and the slice-1 down-only invariant holds.
+    """
+    if own_vol is None or own_vol <= 0:
+        return Decimal(1)
+    measurable = [v for v in member_vols if v is not None and v > 0]
+    if not measurable:
+        return Decimal(1)
+    scale = min(measurable) / own_vol
+    if scale > 1:
+        scale = Decimal(1)
+    return _canon(scale)
+
+
 def sized_quantity(
     *,
     base_qty: int,
     closes: Sequence[Decimal],
     sizing: SizingConfig | None,
+    group_scale: Decimal = Decimal(1),
 ) -> int:
     """Final integer quantity after volatility-based sizing.
 
@@ -103,12 +183,24 @@ def sized_quantity(
     ``lookback_bars`` returns set the realized volatility; if it cannot be
     measured the base qty is returned (fail-safe, FR-S04). Otherwise the base is
     scaled by ``volatility_scale`` — DOWN by default, or UP toward the target
-    risk budget when the rule sets ``max_scale > 1`` (slice 2, capped there and
-    by the unchanged K1 caps at the order layer). The result is floored (never
-    rounded up) and may be 0, which callers treat as "skip this fill" (FR-S05).
+    risk budget when the rule sets ``max_scale > 1`` (slice 2). For
+    mode="inverse_vol" the base is scaled by ``group_scale`` (slice 2b), the
+    inverse-vol group weight the caller computed via ``inverse_vol_group_scale``;
+    ``group_scale`` is always <= 1. The result is floored (never rounded up) and
+    may be 0, which callers treat as "skip this fill" (FR-S05). K1 caps run
+    unchanged after sizing, so they remain the true ceiling.
     """
     if sizing is None or sizing.mode == "fixed":
         return base_qty
+
+    if sizing.mode == "inverse_vol":
+        # Slice 2b: the caller measured the group's vols and passed the down-only
+        # weight as group_scale (default 1 = no group context -> base, fail-safe).
+        scaled = (Decimal(base_qty) * group_scale).to_integral_value(
+            rounding=ROUND_FLOOR
+        )
+        result = int(scaled)
+        return result if result > 0 else 0
 
     # Need lookback returns -> lookback + 1 closes; take the most recent tail.
     window = list(closes)[-(sizing.lookback_bars + 1) :]
@@ -125,4 +217,11 @@ def sized_quantity(
     return result if result > 0 else 0
 
 
-__all__ = ["realized_volatility", "sized_quantity", "volatility_scale"]
+__all__ = [
+    "SizingGroupMember",
+    "build_sizing_groups",
+    "inverse_vol_group_scale",
+    "realized_volatility",
+    "sized_quantity",
+    "volatility_scale",
+]
