@@ -29,7 +29,18 @@ git ls-remote --heads origin 'claude/*' | awk '{print $2}'
 
 상세 규칙은 `CLAUDE.md` 본문 참조.
 
-## 최근 마일스톤 — 2026-05-29 (스펙 021: 횡단면 모멘텀 순위 필터)
+## 최근 마일스톤 — 2026-05-29 (스펙 022: 최소 분산 포트폴리오 최적화)
+
+PR #99 머지 커밋 `204dfc9`. **세계 최고 수준 격차 해소 — ERC(등기여 위험 배분)를 넘어 포트폴리오 분산을 직접 최소화하는 `mode="min_variance"` 사이징 모드를 추가**했습니다.
+ERC는 각 자산의 위험 기여도를 동등하게 배분하지만 포트폴리오 전체 분산을 최소화하지는 않습니다. 최소 분산 최적화는 공분산 행렬의 역행렬(`Σ^{-1}·1`)을 사용해 이론적으로 가장 낮은 포트폴리오 분산을 달성합니다. 자세히는 `specs/022-portfolio-optimization/`. 한 줄 요약:
+
+- **`strategy/sizing.py` 확장(비커널)**: `min_variance_weights(cov_matrix)` — 분석적 해(`w* ∝ Σ^{-1}·1`), numpy `linalg.solve` 사용, 미세 ridge 정규화(ε = max_diag × 1e-6)로 특이 행렬 방지. 음수 클램핑 + 재정규화(롱-온리 보장). `min_variance_group_scales(...)` — ERC와 동일한 인터페이스. 수치 실패 시 ERC → 역변동성 fallback. `MinVarianceConvergenceError`.
+- **`config/rules.py`(비커널)**: `SizingConfig.mode`에 `"min_variance"` 추가. 기존 모드 byte 동일(옵트인).
+- **`execution/order_router.py`·`backtest/replay.py`(비커널)**: `mode="min_variance"` 분기 배선. ERC와 동일한 데이터 수집 경로. 미래 참조 없음.
+- **안전 경계**: Kernel 터치 0건. 하향 전용(max 1 클램핑, K1 위로 노출 증가 불가). 옵트인. Fallback 체인(수치 실패 → ERC → 역변동성). 결정론적 Decimal 출력. dry-run 그대로.
+- **검증**: 신규 테스트 8건(SC-01~SC-08), 전체 1187 통과, 4 스킵.
+
+## 이전 마일스톤 — 2026-05-29 (스펙 021: 횡단면 모멘텀 순위 필터)
 
 PR #97 머지 커밋 `2bd01b1`. **세계 최고 수준과의 가장 큰 격차 해소 — 전체 유니버스를 N-기간 수익률로 순위 매겨 상위 N개 또는 상위 P% 종목에만 매수를 허용하는 횡단면 랭킹 필터(Jegadeesh-Titman 모멘텀 팩터)**를 추가했습니다.
 기존 시스템은 종목별 독립 룰이었으나, 이 스펙은 유니버스 전체를 한 번에 보고 "지금 가장 강한 종목"만 선택합니다. 자세히는 `specs/021-cross-sectional-ranking/spec.md`. 한 줄 요약:
