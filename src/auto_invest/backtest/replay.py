@@ -76,9 +76,17 @@ from auto_invest.risk.gates import (
     per_trade_cap_gate,
     whitelist_gate,
 )
+from auto_invest.strategy.regime import (
+    DEFAULT_REGIME_SCALE,
+    apply_regime_scale,
+)
+from auto_invest.strategy.regime import (
+    detect as detect_regime,
+)
 from auto_invest.strategy.sizing import (
     SizingGroupMember,
     build_sizing_groups,
+    erc_group_scales,
     group_scale_for,
     realized_volatility,
     sized_quantity,
@@ -284,39 +292,58 @@ def _replay_group_scale(
     bars_by_symbol: dict[str, list[OHLCVBar]],
     session_date: date,
 ) -> Decimal:
-    """Inverse-vol group weight for ``rule`` at ``session_date`` (slice 2b).
+    """Group weight for ``rule`` at ``session_date`` — inverse_vol or ERC (spec 020).
 
-    Measures each group member's realized volatility from its closes up to (and
-    including) ``session_date`` — the same lookback the live router uses — then
-    returns the down-only inverse-vol weight. 1 when the rule is not an
-    inverse_vol group member (no change, byte-equal to pre-2b).
+    Returns 1 when the rule is not a group member (byte-equal to pre-2b).
     """
     sizing = rule.sizing
-    if sizing is None or sizing.mode != "inverse_vol" or rule.sizing_group is None:
+    if sizing is None or rule.sizing_group is None:
         return Decimal(1)
     members = sizing_groups.get(rule.sizing_group, [])
-    strength = sizing.correlation_haircut
-    member_vols: dict[str, Decimal | None] = {}
-    closes_by_rule: dict[str, dict[date, Decimal]] = {}
-    for member in members:
-        sym_bars = [
-            b
-            for b in bars_by_symbol.get(member.symbol, [])
-            if b.session_date <= session_date
-        ]
-        closes = [b.close for b in sym_bars]
-        member_vols[member.rule_id] = realized_volatility(
-            closes[-(member.lookback_bars + 1) :]
+    if sizing.mode == "inverse_vol":
+        strength = sizing.correlation_haircut
+        member_vols: dict[str, Decimal | None] = {}
+        closes_by_rule: dict[str, dict[date, Decimal]] = {}
+        for member in members:
+            sym_bars = [
+                b
+                for b in bars_by_symbol.get(member.symbol, [])
+                if b.session_date <= session_date
+            ]
+            closes = [b.close for b in sym_bars]
+            member_vols[member.rule_id] = realized_volatility(
+                closes[-(member.lookback_bars + 1) :]
+            )
+            if strength > 0:
+                closes_by_rule[member.rule_id] = {b.session_date: b.close for b in sym_bars}
+        return group_scale_for(
+            rule.id,
+            member_vols=member_vols,
+            closes_by_rule=closes_by_rule if strength > 0 else None,
+            lookback_bars=sizing.lookback_bars,
+            correlation_strength=strength,
         )
-        if strength > 0:
-            closes_by_rule[member.rule_id] = {b.session_date: b.close for b in sym_bars}
-    return group_scale_for(
-        rule.id,
-        member_vols=member_vols,
-        closes_by_rule=closes_by_rule if strength > 0 else None,
-        lookback_bars=sizing.lookback_bars,
-        correlation_strength=strength,
-    )
+    if sizing.mode == "erc":
+        closes_by_rule_erc: dict[str, dict[date, Decimal]] = {}
+        member_vols_erc: dict[str, Decimal | None] = {}
+        for member in members:
+            sym_bars = [
+                b
+                for b in bars_by_symbol.get(member.symbol, [])
+                if b.session_date <= session_date
+            ]
+            closes = [b.close for b in sym_bars]
+            closes_by_rule_erc[member.rule_id] = {b.session_date: b.close for b in sym_bars}
+            member_vols_erc[member.rule_id] = realized_volatility(
+                closes[-(sizing.lookback_bars + 1) :]
+            )
+        weights = erc_group_scales(
+            closes_by_rule_erc,
+            lookback_bars=sizing.lookback_bars,
+            member_vols=member_vols_erc,
+        )
+        return weights.get(rule.id, Decimal(1))
+    return Decimal(1)
 
 
 # ---------- main entry point ----------------------------------------------
@@ -355,9 +382,19 @@ def replay(
 
     # Preload bars per symbol once — keeps the per-tick loop cheap and
     # gives us O(1) lookups for indicator history (slice up to current date).
-    symbols_in_use = sorted({r.symbol for r in rules})
+    # Regime index symbols (spec 020) need full history for SMA-200 lookback,
+    # so they are loaded from epoch (date.min) rather than date_start.
+    regime_index_symbols = {
+        r.regime_index_symbol for r in rules if r.regime_index_symbol is not None
+    }
+    symbols_in_use = sorted({r.symbol for r in rules} | regime_index_symbols)
     bars_by_symbol: dict[str, list[OHLCVBar]] = {
-        sym: data_source.read_bars(sym, date_start, date_end) for sym in symbols_in_use
+        sym: data_source.read_bars(
+            sym,
+            date.min if sym in regime_index_symbols else date_start,
+            date_end,
+        )
+        for sym in symbols_in_use
     }
     bars_by_symbol_date: dict[tuple[str, date], OHLCVBar] = {
         (b.symbol, b.session_date): b
@@ -457,6 +494,30 @@ def replay(
             )
             if sized_qty < 1:
                 continue
+
+            # Spec 020: regime scale — applied after vol/ERC sizing, mirrors live router.
+            if rule.regime_index_symbol is not None:
+                index_bars_up_to_now = [
+                    b
+                    for b in bars_by_symbol.get(rule.regime_index_symbol, [])
+                    if b.session_date <= session_date
+                ]
+                index_price_bars = [
+                    _ohlcv_to_pricebar(b)
+                    for b in index_bars_up_to_now
+                ]
+                regime = detect_regime(index_price_bars)
+                scale_map = rule.regime_scale or {}
+                regime_scale = (
+                    
+                        Decimal(str(scale_map[regime.value]))
+                        if regime.value in scale_map
+                        else DEFAULT_REGIME_SCALE[regime]
+                    
+                )
+                sized_qty = apply_regime_scale(sized_qty, regime_scale)
+                if sized_qty < 1:
+                    continue
 
             try:
                 limit_price = _resolve_limit_price(

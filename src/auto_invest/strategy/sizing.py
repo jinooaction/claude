@@ -396,9 +396,8 @@ def sized_quantity(
     if sizing is None or sizing.mode == "fixed":
         return base_qty
 
-    if sizing.mode == "inverse_vol":
-        # Slice 2b: the caller measured the group's vols and passed the down-only
-        # weight as group_scale (default 1 = no group context -> base, fail-safe).
+    if sizing.mode in ("inverse_vol", "erc"):
+        # Slice 2b / spec 020 ERC: caller computed group_scale and passed it in.
         scaled = (Decimal(base_qty) * group_scale).to_integral_value(
             rounding=ROUND_FLOOR
         )

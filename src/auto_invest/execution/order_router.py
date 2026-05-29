@@ -60,8 +60,16 @@ from auto_invest.risk.gates import (
     stage_uniqueness_gate,
     whitelist_gate,
 )
+from auto_invest.strategy.regime import (
+    DEFAULT_REGIME_SCALE,
+    apply_regime_scale,
+)
+from auto_invest.strategy.regime import (
+    detect as detect_regime,
+)
 from auto_invest.strategy.sizing import (
     SizingGroupMember,
+    erc_group_scales,
     group_scale_for,
     realized_volatility,
     sized_quantity_with_result,
@@ -268,38 +276,60 @@ class OrderRouter:
     # grouping -> sizing is byte-equal to slices 1/2.
     sizing_groups: Mapping[str, Sequence[SizingGroupMember]] | None = None
 
-    def _inverse_vol_group_scale(self, rule: TradingRule) -> Decimal:
-        """Down-only inverse-vol group weight for ``rule`` (slice 2b).
+    def _group_scale(self, rule: TradingRule) -> Decimal:
+        """Down-only group weight for ``rule`` — inverse_vol (slice 2b) or ERC (spec 020).
 
-        Re-measures each group member's realized volatility from its own recent
-        bars (the SAME function and lookback the backtest replay uses) and returns
-        the inverse-vol weight. 1 when the rule is not an inverse_vol group member
-        or no group map was supplied — byte-equal to slices 1/2.
+        Returns 1 when the rule has no group sizing — byte-equal to slices 1/2.
         """
         sizing = rule.sizing
-        if sizing is None or sizing.mode != "inverse_vol" or rule.sizing_group is None:
+        if sizing is None or rule.sizing_group is None:
             return Decimal(1)
-        members = (self.sizing_groups or {}).get(rule.sizing_group, ())
-        strength = sizing.correlation_haircut
-        member_vols: dict[str, Decimal | None] = {}
-        closes_by_rule: dict[str, dict[date, Decimal]] = {}
-        for member in members:
-            bars = get_bars(self.conn, symbol=member.symbol, timeframe=member.timeframe)
-            closes = [b.close_usd for b in bars]
-            member_vols[member.rule_id] = realized_volatility(
-                closes[-(member.lookback_bars + 1) :]
+        if sizing.mode == "inverse_vol":
+            members = (self.sizing_groups or {}).get(rule.sizing_group, ())
+            strength = sizing.correlation_haircut
+            member_vols: dict[str, Decimal | None] = {}
+            closes_by_rule: dict[str, dict[date, Decimal]] = {}
+            for member in members:
+                bars = get_bars(self.conn, symbol=member.symbol, timeframe=member.timeframe)
+                closes = [b.close_usd for b in bars]
+                member_vols[member.rule_id] = realized_volatility(
+                    closes[-(member.lookback_bars + 1) :]
+                )
+                if strength > 0:
+                    closes_by_rule[member.rule_id] = {
+                        date.fromisoformat(b.bar_open_utc[:10]): b.close_usd for b in bars
+                    }
+            return group_scale_for(
+                rule.id,
+                member_vols=member_vols,
+                closes_by_rule=closes_by_rule if strength > 0 else None,
+                lookback_bars=sizing.lookback_bars,
+                correlation_strength=strength,
             )
-            if strength > 0:
-                closes_by_rule[member.rule_id] = {
+        if sizing.mode == "erc":
+            members = (self.sizing_groups or {}).get(rule.sizing_group, ())
+            closes_by_rule_erc: dict[str, dict[date, Decimal]] = {}
+            member_vols_erc: dict[str, Decimal | None] = {}
+            for member in members:
+                bars = get_bars(self.conn, symbol=member.symbol, timeframe=member.timeframe)
+                closes = [b.close_usd for b in bars]
+                closes_by_rule_erc[member.rule_id] = {
                     date.fromisoformat(b.bar_open_utc[:10]): b.close_usd for b in bars
                 }
-        return group_scale_for(
-            rule.id,
-            member_vols=member_vols,
-            closes_by_rule=closes_by_rule if strength > 0 else None,
-            lookback_bars=sizing.lookback_bars,
-            correlation_strength=strength,
-        )
+                member_vols_erc[member.rule_id] = realized_volatility(
+                    closes[-(member.lookback_bars + 1) :]
+                )
+            weights = erc_group_scales(
+                closes_by_rule_erc,
+                lookback_bars=sizing.lookback_bars,
+                member_vols=member_vols_erc,
+            )
+            return weights.get(rule.id, Decimal(1))
+        return Decimal(1)
+
+    # kept as alias so any external callers (tests) don't break immediately
+    def _inverse_vol_group_scale(self, rule: TradingRule) -> Decimal:
+        return self._group_scale(rule)
 
     async def submit_order(
         self,
@@ -333,7 +363,7 @@ class OrderRouter:
             recent_bars = get_bars(
                 self.conn, symbol=rule.symbol, timeframe=sizing_timeframe
             )
-            _group_scale = self._inverse_vol_group_scale(rule)
+            _group_scale = self._group_scale(rule)
             sizing_result = sized_quantity_with_result(
                 base_qty=rule.action.qty,
                 closes=[b.close_usd for b in recent_bars],
@@ -368,6 +398,29 @@ class OrderRouter:
                     state="SKIPPED_BY_SIZING",
                     correlation_id=correlation_id,
                     reason="volatility_throttle",
+                )
+
+        # Spec 020: regime scale — applied after vol/ERC sizing, before judgment.
+        if rule.regime_index_symbol is not None:
+            sizing_timeframe_for_regime = getattr(rule.trigger, "timeframe", "1d")
+            index_bars = get_bars(
+                self.conn,
+                symbol=rule.regime_index_symbol,
+                timeframe=sizing_timeframe_for_regime,
+            )
+            regime = detect_regime(index_bars)
+            scale_map = rule.regime_scale or {}
+            regime_scale = (
+                Decimal(str(scale_map[regime.value]))
+                if regime.value in scale_map
+                else DEFAULT_REGIME_SCALE[regime]
+            )
+            base_qty = apply_regime_scale(base_qty, regime_scale)
+            if base_qty < 1:
+                return OrderOutcome(
+                    state="SKIPPED_BY_SIZING",
+                    correlation_id=correlation_id,
+                    reason="regime_zero",
                 )
 
         # Spec 004: consume judgment advisories BEFORE the gate chain. Advisories
