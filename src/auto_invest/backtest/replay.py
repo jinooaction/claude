@@ -76,6 +76,7 @@ from auto_invest.risk.gates import (
     per_trade_cap_gate,
     whitelist_gate,
 )
+from auto_invest.strategy.ranking import cross_sectional_momentum
 from auto_invest.strategy.regime import (
     DEFAULT_REGIME_SCALE,
     apply_regime_scale,
@@ -517,6 +518,28 @@ def replay(
                 )
                 sized_qty = apply_regime_scale(sized_qty, regime_scale)
                 if sized_qty < 1:
+                    continue
+
+            # Spec 021: cross-sectional ranking filter — same logic as live router,
+            # but restricted to bars up to session_date to prevent lookahead.
+            if rule.ranking_filter is not None:
+                rf = rule.ranking_filter
+                timeframe_tf = (
+                    rule.trigger.timeframe
+                    if isinstance(rule.trigger, IndicatorTrigger)
+                    else "1d"
+                )
+                universe_bars: dict[str, list[PriceBar]] = {}
+                for sym in rf.universe:
+                    sym_raw = [
+                        b for b in bars_by_symbol.get(sym, [])
+                        if b.session_date <= session_date
+                    ]
+                    universe_bars[sym] = [
+                        _ohlcv_to_pricebar(b, timeframe=timeframe_tf) for b in sym_raw
+                    ]
+                ranked = cross_sectional_momentum(universe_bars, rf.period)
+                if not rf.qualifies(rule.symbol, ranked):
                     continue
 
             try:

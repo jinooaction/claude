@@ -60,6 +60,7 @@ from auto_invest.risk.gates import (
     stage_uniqueness_gate,
     whitelist_gate,
 )
+from auto_invest.strategy.ranking import cross_sectional_momentum
 from auto_invest.strategy.regime import (
     DEFAULT_REGIME_SCALE,
     apply_regime_scale,
@@ -421,6 +422,25 @@ class OrderRouter:
                     state="SKIPPED_BY_SIZING",
                     correlation_id=correlation_id,
                     reason="regime_zero",
+                )
+
+        # Spec 021: cross-sectional ranking filter — applied after regime scale,
+        # before judgment. Fetches bars for the full universe, ranks by N-period
+        # momentum, and skips this symbol when it falls outside the top-N / top-pct
+        # threshold. Opt-in: ranking_filter=None leaves the path byte-identical.
+        if rule.ranking_filter is not None:
+            rf = rule.ranking_filter
+            sizing_tf = getattr(rule.trigger, "timeframe", "1d")
+            universe_bars = {
+                sym: get_bars(self.conn, symbol=sym, timeframe=sizing_tf)
+                for sym in rf.universe
+            }
+            ranked = cross_sectional_momentum(universe_bars, rf.period)
+            if not rf.qualifies(rule.symbol, ranked):
+                return OrderOutcome(
+                    state="SKIPPED_BY_RANKING",
+                    correlation_id=correlation_id,
+                    reason="not_in_top",
                 )
 
         # Spec 004: consume judgment advisories BEFORE the gate chain. Advisories
