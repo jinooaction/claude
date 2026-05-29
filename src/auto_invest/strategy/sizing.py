@@ -34,6 +34,7 @@ sizing as the backtest (constitution X.2, single yardstick).
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
@@ -419,12 +420,154 @@ def sized_quantity(
     return result if result > 0 else 0
 
 
+class ERCConvergenceError(RuntimeError):
+    """ERC 반복 최적화가 수렴하지 않았을 때 발생."""
+
+
+def covariance_matrix(
+    closes_by_rule: Mapping[str, Mapping[date, Decimal]],
+    *,
+    lookback_bars: int,
+) -> list[list[Decimal]] | None:
+    """자산 간 표본 공분산 행렬 (Decimal, 6자리 정규화).
+
+    공통 날짜 교집합의 최근 ``lookback_bars + 1`` 봉을 쓴다.
+    공통일 < 30이면 None 반환(데이터 부족).
+    """
+    rule_ids = list(closes_by_rule)
+    n = len(rule_ids)
+    if n == 0:
+        return None
+    common: set[date] = set.intersection(
+        *(set(closes_by_rule[r].keys()) for r in rule_ids)
+    )
+    window = sorted(common)[-(lookback_bars + 1):]
+    if len(window) < 30:
+        return None
+    # 수익률 행렬 (n × T)
+    ret_matrix: list[list[Decimal]] = []
+    for r in rule_ids:
+        rets = _returns([closes_by_rule[r][d] for d in window])
+        if rets is None:
+            return None
+        ret_matrix.append(rets)
+    t = Decimal(len(ret_matrix[0]))
+    means = [sum(row, Decimal(0)) / t for row in ret_matrix]
+    cov: list[list[Decimal]] = []
+    for i in range(n):
+        row_i = [ret_matrix[i][k] - means[i] for k in range(int(t))]
+        cov_row: list[Decimal] = []
+        for j in range(n):
+            row_j = [ret_matrix[j][k] - means[j] for k in range(int(t))]
+            cij = sum((row_i[k] * row_j[k] for k in range(int(t))), Decimal(0)) / (t - 1)
+            cov_row.append(_canon(cij))
+        cov.append(cov_row)
+    return cov
+
+
+def erc_weights(
+    cov_matrix: list[list[Decimal]],
+    *,
+    tol: float = 1e-8,
+    max_iter: int = 500,
+) -> list[Decimal]:
+    """완전 공분산 ERC 가중치 (Maillard 2010 방법론).
+
+    각 자산의 marginal risk contribution 이 동일하도록 반복 최적화.
+    합산 1.0 으로 정규화. 수렴 실패 시 ``ERCConvergenceError``.
+    결과는 down-only 보장을 위해 max 1 로 클램핑.
+    """
+    n = len(cov_matrix)
+    if n == 0:
+        raise ERCConvergenceError("빈 공분산 행렬")
+    # float 로 반복, 마지막에 Decimal 변환
+    cov_f = [[float(cov_matrix[i][j]) for j in range(n)] for i in range(n)]
+    w = [1.0 / n] * n
+
+    def portfolio_vol(weights: list[float]) -> float:
+        var = sum(
+            weights[i] * weights[j] * cov_f[i][j]
+            for i in range(n)
+            for j in range(n)
+        )
+        return math.sqrt(max(var, 0.0))
+
+    def marginal_risk(weights: list[float], pv: float) -> list[float]:
+        if pv <= 0:
+            return [0.0] * n
+        mrc = [
+            sum(weights[j] * cov_f[i][j] for j in range(n)) / pv
+            for i in range(n)
+        ]
+        return mrc
+
+    for _iter in range(max_iter):
+        pv = portfolio_vol(w)
+        if pv <= 0:
+            break
+        mrc = marginal_risk(w, pv)
+        rc = [w[i] * mrc[i] for i in range(n)]
+        rc_sum = sum(rc)
+        if rc_sum <= 0:
+            break
+        # CCD(순환 좌표 하강) 제곱근 업데이트 — 더 빠른 수렴
+        new_w = w[:]
+        for i in range(n):
+            ri = rc[i]
+            if ri > 0:
+                new_w[i] = w[i] * math.sqrt((rc_sum / n) / ri)
+        total = sum(new_w)
+        if total <= 0:
+            break
+        new_w = [wi / total for wi in new_w]
+        diff = max(abs(new_w[i] - w[i]) for i in range(n))
+        w = new_w
+        if diff < tol:
+            break
+    else:
+        raise ERCConvergenceError(f"ERC 최적화가 {max_iter}회 내에 수렴하지 않았습니다.")
+
+    raw = [Decimal(str(round(wi, 9))) for wi in w]
+    # down-only: max 1 클램핑
+    clamped = [min(r, Decimal(1)) for r in raw]
+    return [_canon(r) for r in clamped]
+
+
+def erc_group_scales(
+    closes_by_rule: Mapping[str, Mapping[date, Decimal]],
+    *,
+    lookback_bars: int,
+    member_vols: Mapping[str, Decimal | None],
+) -> dict[str, Decimal]:
+    """ERC 가중치 딕셔너리 반환. 데이터 부족 시 역변동성 fallback.
+
+    rule_id → 가중치(Decimal, 0..1).
+    """
+    rule_ids = list(closes_by_rule)
+    cov = covariance_matrix(closes_by_rule, lookback_bars=lookback_bars)
+    if cov is not None:
+        try:
+            weights = erc_weights(cov)
+            return {rule_ids[i]: weights[i] for i in range(len(rule_ids))}
+        except ERCConvergenceError:
+            pass
+    # fallback: 역변동성 가중치
+    return {
+        r: inverse_vol_group_scale(member_vols.get(r), list(member_vols.values()))
+        for r in rule_ids
+    }
+
+
 __all__ = [
+    "ERCConvergenceError",
     "SizingGroupMember",
     "SizingResult",
     "average_correlations",
     "build_sizing_groups",
+    "covariance_matrix",
     "correlation_haircut",
+    "erc_group_scales",
+    "erc_weights",
     "group_scale_for",
     "inverse_vol_group_scale",
     "pearson_correlation",
