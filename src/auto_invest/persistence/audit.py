@@ -73,6 +73,7 @@ EventType = Literal[
     "CIRCUIT_BREAKER_TRIPPED",
     "SIZING_DECISION",
     "PORTFOLIO_NAV_SNAPSHOT",
+    "EFFECTIVE_CAPITAL_UPDATED",
 ]
 
 
@@ -811,6 +812,27 @@ class PortfolioNavSnapshotPayload(AuditPayload):
     total_value_drift_usd: str = "0"
 
 
+class EffectiveCapitalUpdatedPayload(AuditPayload):
+    """Spec 029 슬라이스 2 — 워커의 게이트 자본 기준이 라이브 순자산을 따라 바뀐 기록
+    (K4 추가-전용).
+
+    `capital_tracking_enabled` 라이브 워커에서, 라이브 순자산(NAV)으로 계산한 유효 자본이
+    직전 값과 달라질 때만 append 한다(값 불변이면 미기록 — 노이즈 방지). 게이트 캡은
+    `유효자본 × pct` 로 계산되므로 이 값이 바뀌면 per-trade·per-symbol·global 캡이 함께
+    움직인다. 방어(하락)는 항상, 성장(상승)은 옵트인 + 상한 클램프. 기존 이벤트/row 를
+    전혀 건드리지 않는 추가-전용 변경이라 append-only 불변량(헌법 IV)을 깨지 않는다.
+    측정/조정 전용 — 이 이벤트 자체는 주문을 내지 않는다."""
+
+    event_type: Literal["EFFECTIVE_CAPITAL_UPDATED"] = "EFFECTIVE_CAPITAL_UPDATED"
+    starting_capital_usd: str
+    nav_usd: str | None = None
+    effective_capital_usd: str
+    growth_enabled: bool
+    max_growth_factor: str
+    reason: str  # "defense_drawdown" | "growth_applied" | "growth_clamped" | "reset_to_start"
+    updated_at_utc: str
+
+
 AnyPayload = (
     WorkerStartedPayload
     | WorkerStoppedPayload
@@ -865,6 +887,7 @@ AnyPayload = (
     | CircuitBreakerTrippedPayload
     | SizingDecisionPayload
     | PortfolioNavSnapshotPayload
+    | EffectiveCapitalUpdatedPayload
 )
 
 
