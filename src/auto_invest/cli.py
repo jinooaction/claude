@@ -108,6 +108,26 @@ def run(
         "--require-session-open/--ignore-session-window",
         help="Skip ticks outside US regular hours (default) or run anyway.",
     ),
+    capital_tracking: bool = typer.Option(
+        False,
+        "--capital-tracking/--no-capital-tracking",
+        help="스펙 029 슬라이스 2: 게이트 캡 기준을 라이브 순자산(NAV)에 맞춘다. "
+        "끄면(기본) --capital 시작 자본을 상수로 사용. 켜면 하락은 항상 캡을 줄이고"
+        "(방어), 상승은 --capital-growth 일 때만 반영.",
+    ),
+    capital_growth: bool = typer.Option(
+        False,
+        "--capital-growth/--no-capital-growth",
+        help="스펙 029 슬라이스 2: 순자산이 시작 자본보다 커지면 캡 기준을 키운다(복리 "
+        "성장). --capital-max-growth 배수로 상한. --capital-tracking 필요. 끄면 시작 "
+        "자본이 천장(상승 미반영, 하락 방어는 그대로).",
+    ),
+    capital_max_growth: float = typer.Option(
+        2.0,
+        "--capital-max-growth",
+        help="스펙 029 슬라이스 2: 성장 시 유효 자본 상한 = 시작 자본 × 이 배수 "
+        "(기본 2.0). 폭주 방지 하드 클램프.",
+    ),
     prices_path: Path = typer.Option(
         Path("config/llm_prices.toml"),
         "--prices",
@@ -201,6 +221,9 @@ def run(
             base_url=base_url,
             total_capital_usd=Decimal(str(capital)),
             require_session_open=require_session_open,
+            capital_tracking_enabled=capital_tracking,
+            capital_growth_enabled=capital_growth,
+            capital_max_growth_factor=Decimal(str(capital_max_growth)),
         )
     )
 
@@ -2012,6 +2035,9 @@ async def _run_live(
     base_url: str,
     total_capital_usd: Decimal,
     require_session_open: bool,
+    capital_tracking_enabled: bool = False,
+    capital_growth_enabled: bool = False,
+    capital_max_growth_factor: Decimal = Decimal("2"),
 ) -> None:
     settings = WorkerSettings(
         config=cfg,
@@ -2020,6 +2046,9 @@ async def _run_live(
         config_path=config_path,
         total_capital_usd=total_capital_usd,
         require_session_open=require_session_open,
+        capital_tracking_enabled=capital_tracking_enabled,
+        capital_growth_enabled=capital_growth_enabled,
+        capital_max_growth_factor=capital_max_growth_factor,
     )
 
     async with httpx.AsyncClient(base_url=base_url, timeout=30.0) as inner:

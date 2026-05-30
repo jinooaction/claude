@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from auto_invest.broker.client import ResilientClient
-from auto_invest.broker.overseas import get_quote
+from auto_invest.broker.overseas import get_balance, get_quote
 from auto_invest.config.loader import LoadedConfig
 from auto_invest.config.rules import IndicatorTrigger, TradingRule
 from auto_invest.execution.fill_sync import sync_fills
@@ -39,6 +39,7 @@ from auto_invest.persistence import audit, db
 from auto_invest.persistence import positions as positions_mod
 from auto_invest.persistence.audit import (
     CircuitBreakerTrippedPayload,
+    EffectiveCapitalUpdatedPayload,
     PaperRunStartedPayload,
     PaperRunStoppedPayload,
     RuleLoadPayload,
@@ -46,6 +47,7 @@ from auto_invest.persistence.audit import (
     WorkerStartedPayload,
     WorkerStoppedPayload,
 )
+from auto_invest.portfolio.nav import effective_capital
 from auto_invest.reconciliation.runner import (
     ReconciliationOutcome,
     run_reconciliation,
@@ -76,6 +78,11 @@ _BREAKER_EVAL_GAP_SECONDS = 5.0
 # Spec 015: 라이브 체결 동기화 재폴링 최소 간격(초). 1Hz 틱마다 브로커 체결 조회를
 # 날리지 않도록 묶는다. 첫 평가는 무조건 수행(_last_fill_sync_at 가 None).
 _FILL_SYNC_GAP_SECONDS = 5.0
+
+# Spec 029 슬라이스 2: 자산 인식 유효 자본 재계산 최소 간격(초). KIS 잔고 조회를 매 틱
+# 날리지 않도록 묶는다(60초면 캡 추종 지연이 충분히 작다). 첫 평가는 무조건 수행
+# (_last_capital_eval_at 가 None). 자본 추적이 꺼져 있으면 아예 평가 안 함.
+_CAPITAL_EVAL_GAP_SECONDS = 60.0
 
 
 def _normalize_paper_stop_reason(reason: str) -> str:
@@ -109,6 +116,14 @@ class WorkerSettings:
     # paper-run CLI(cli.py)가 룰 파일 바이트의 SHA-256으로 계산해 주입한다.
     # live-mode에서는 사용되지 않음.
     ruleset_sha256: str | None = None
+    # Spec 029 슬라이스 2 — 자산 인식 유효 자본. 기본 False면 워커는 NAV를 조회조차
+    # 안 하고 total_capital_usd를 게이트 자본 기준으로 그대로 쓴다(byte 동일, 회귀 무손상).
+    # True면 라이브 워커가 주기적으로 KIS 순자산(현금+보유 시가평가)을 읽어, 하락은 항상
+    # 캡을 줄이고(방어) 상승은 capital_growth_enabled일 때만 max_growth_factor 안에서 키운다.
+    # paper 모드에서는 가상 계좌라 라이브 NAV가 무의미하므로 강제 비활성된다.
+    capital_tracking_enabled: bool = False
+    capital_growth_enabled: bool = False
+    capital_max_growth_factor: Decimal = Decimal("2")
 
 
 @dataclass
@@ -154,6 +169,11 @@ class Worker:
         self._last_breaker_eval_at: datetime | None = None
         # Spec 015: 체결 동기화 cadence 추적. None = 아직 안 함(첫 기회에 동기화).
         self._last_fill_sync_at: datetime | None = None
+        # Spec 029 슬라이스 2: 자산 인식 유효 자본. 게이트에 넘기는 자본 기준의 현재 값
+        # (시작은 시작 자본). NAV 조회 cadence 추적(None = 첫 기회에 평가). 자본 추적이
+        # 꺼져 있으면 _effective_capital_usd는 시작 자본에서 영원히 안 바뀐다.
+        self._effective_capital_usd: Decimal = settings.total_capital_usd
+        self._last_capital_eval_at: datetime | None = None
         # Spec 001 T050: 장 마감 정합성 트리거 상태. 세션이 열려 있는 틱에서 True 가
         # 되고, 열림→닫힘으로 바뀌는 첫 틱에 정합성을 1회 실행한다(startup 이 닫힘이면
         # 트리거 안 함 — 전이가 아니라 초기 상태이므로).
@@ -294,6 +314,14 @@ class Worker:
             self._last_fill_sync_at = moment
             await self._sync_open_order_fills(moment)
 
+        # Spec 029 슬라이스 2: 자산 인식 유효 자본 갱신 — 게이트에 넘길 자본 기준을 라이브
+        # 순자산에 맞춘다. 룰 평가 전에 갱신해 이번 틱 주문이 최신 캡을 받게 한다. 자본
+        # 추적이 꺼져 있거나 paper면 _should_eval_capital 가 False라 NAV 조회 자체를 안 한다.
+        # 오류는 격리되어 거래 루프를 멈추지 않는다(직전 유효 자본 유지).
+        if self._should_eval_capital(moment):
+            self._last_capital_eval_at = moment
+            await self._refresh_effective_capital(moment)
+
         for rule in self.settings.config.rules:
             if not rule.enabled:
                 continue
@@ -367,7 +395,9 @@ class Worker:
             quote_price_usd=quote.last_price_usd,
             quote_ask_usd=quote.ask_usd,
             quote_bid_usd=quote.bid_usd,
-            total_capital_usd=self.settings.total_capital_usd,
+            # Spec 029 슬라이스 2: 게이트 캡 기준 = 자산 인식 유효 자본. 자본 추적이 꺼져
+            # 있으면 _effective_capital_usd 는 시작 자본 그대로다(byte 동일).
+            total_capital_usd=self._effective_capital_usd,
             current_symbol_exposure_usd=self._symbol_exposure_usd(
                 rule.symbol, quote.last_price_usd
             ),
@@ -401,6 +431,80 @@ class Worker:
             price = quote_price if pos.symbol == symbol else pos.avg_cost_usd
             total += Decimal(pos.qty) * price
         return total
+
+    # ------------------------------------ effective capital (spec 029 slice 2)
+
+    def _should_eval_capital(self, now: datetime) -> bool:
+        """자산 인식 유효 자본을 이번 틱에 다시 계산할지. 자본 추적이 꺼져 있거나 paper면
+        안 함(가상 계좌라 라이브 NAV 무의미), 아니면 cadence 적용. 첫 평가는 무조건 수행."""
+        if not self.settings.capital_tracking_enabled or self.settings.paper_mode:
+            return False
+        last = self._last_capital_eval_at
+        if last is None:
+            return True
+        return (now - last).total_seconds() >= _CAPITAL_EVAL_GAP_SECONDS
+
+    async def _refresh_effective_capital(self, now: datetime) -> None:
+        """라이브 순자산(NAV)을 읽어 게이트에 넘길 유효 자본을 갱신한다(슬라이스 2).
+
+        NAV 권위 값은 KIS 잔고의 total_value_usd(현금 + 보유 시가평가). 조회 실패는
+        격리되어 직전 유효 자본을 유지한다(거래 무중단). 유효 자본은 effective_capital()
+        순수 함수로 계산 — 하락은 항상 반영(방어), 상승은 옵트인 + 상한 클램프. 값이
+        바뀔 때만 EFFECTIVE_CAPITAL_UPDATED 감사 row 를 남긴다(노이즈 방지).
+        """
+        starting = self.settings.total_capital_usd
+        try:
+            balance = await get_balance(
+                self.broker,
+                access_token=self.access_token,
+                app_key=self.app_key,
+                app_secret=self.app_secret,
+                account=self.account_no,
+                market=self.settings.market_order,
+            )
+            nav = balance.total_value_usd
+        except Exception:  # noqa: BLE001 — NAV 조회 실패는 직전 유효 자본 유지(무중단).
+            logger.warning("effective-capital NAV fetch failed", exc_info=True)
+            return
+
+        new_effective = effective_capital(
+            starting,
+            nav,
+            growth_enabled=self.settings.capital_growth_enabled,
+            max_growth_factor=self.settings.capital_max_growth_factor,
+        )
+        if new_effective == self._effective_capital_usd:
+            return  # 변화 없음 — 기록 안 함.
+
+        if nav < starting:
+            reason = "defense_drawdown"
+        elif new_effective >= starting * self.settings.capital_max_growth_factor:
+            reason = "growth_clamped"
+        elif new_effective > starting:
+            reason = "growth_applied"
+        else:
+            reason = "reset_to_start"
+
+        self._effective_capital_usd = new_effective
+        audit.append(
+            self.conn,
+            EffectiveCapitalUpdatedPayload(
+                starting_capital_usd=str(starting),
+                nav_usd=str(nav),
+                effective_capital_usd=str(new_effective),
+                growth_enabled=self.settings.capital_growth_enabled,
+                max_growth_factor=str(self.settings.capital_max_growth_factor),
+                reason=reason,
+                updated_at_utc=_utcnow_iso_ms_for_payload(),
+            ),
+        )
+        logger.info(
+            "effective capital updated: %s -> %s (nav=%s, %s)",
+            starting,
+            new_effective,
+            nav,
+            reason,
+        )
 
     # ---------------------------------------------- fill sync (spec 015)
 

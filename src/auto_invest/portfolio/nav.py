@@ -113,6 +113,41 @@ class NavSnapshot:
         }
 
 
+# 슬라이스 2 — 자산 인식 유효 자본 기본값.
+DEFAULT_MAX_GROWTH_FACTOR = Decimal("2")
+
+
+def effective_capital(
+    starting_capital_usd: Decimal,
+    nav_usd: Decimal | None,
+    *,
+    growth_enabled: bool = False,
+    max_growth_factor: Decimal = DEFAULT_MAX_GROWTH_FACTOR,
+) -> Decimal:
+    """게이트에 넘길 유효 자본을 결정론적으로 계산한다 (슬라이스 2, FR-08~FR-11).
+
+    설계 원칙 — 방어는 항상, 성장은 옵트인:
+      - nav 가 None/0 이하(조회 실패·미측정)면 시작 자본 폴백 (거래 무중단, FR-11).
+      - 하락(nav < starting)은 **항상** nav 를 쓴다 — 손실 구간에서 캡이 자동으로 줄어든다
+        (방어, growth_enabled 무관, FR-09).
+      - 상승(nav > starting)은 growth_enabled=True 일 때만 반영하고, starting ×
+        max_growth_factor 로 하드 클램프해 폭주를 막는다 (FR-10). growth_enabled=False
+        면 시작 자본이 천장(슬라이스 1 이전 동작과 동일).
+
+    유효 자본은 게이트가 캡을 계산하는 "자본 기준"일 뿐이다. K1 게이트의 거부 로직·
+    퍼센트는 무변경 — 캡 = 유효자본 × pct 의 입력만 살아있는 자산을 따라간다.
+    """
+    if nav_usd is None or nav_usd <= 0:
+        return starting_capital_usd
+    if nav_usd < starting_capital_usd:
+        return nav_usd  # 방어: 항상 줄인다.
+    # 여기부터 nav >= starting (상승 또는 동일).
+    if not growth_enabled:
+        return starting_capital_usd
+    ceiling = starting_capital_usd * max_growth_factor
+    return min(nav_usd, ceiling)
+
+
 def _market_value(
     qty: int, avg_cost_usd: Decimal, mark: Decimal | None
 ) -> tuple[Decimal, bool]:

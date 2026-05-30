@@ -10,6 +10,7 @@ from auto_invest.portfolio.nav import (
     SOURCE_BROKER,
     SOURCE_LEDGER,
     compute_nav,
+    effective_capital,
     render_text,
 )
 
@@ -281,3 +282,74 @@ def test_portfolio_nav_payload_in_any_union():
     from auto_invest.persistence.audit import AnyPayload, PortfolioNavSnapshotPayload
 
     assert PortfolioNavSnapshotPayload in AnyPayload.__args__
+
+
+# =================================================== 슬라이스 2 — 유효 자본
+
+
+def test_sc09_defense_drawdown_always():
+    """시작 $10,000, NAV $8,000 → 유효 자본 $8,000 (방어, 옵트인 무관)."""
+    # growth 꺼도 켜도 하락은 항상 반영.
+    assert effective_capital(
+        Decimal("10000"), Decimal("8000"), growth_enabled=False
+    ) == Decimal("8000")
+    assert effective_capital(
+        Decimal("10000"), Decimal("8000"), growth_enabled=True
+    ) == Decimal("8000")
+
+
+def test_sc10_growth_off_starting_is_ceiling():
+    """시작 $10,000, NAV $15,000, growth 끔 → 유효 자본 $10,000 (시작이 천장)."""
+    assert effective_capital(
+        Decimal("10000"), Decimal("15000"), growth_enabled=False
+    ) == Decimal("10000")
+
+
+def test_sc11_growth_on_within_ceiling():
+    """시작 $10,000, NAV $15,000, growth 켬, 상한 2배 → 유효 자본 $15,000."""
+    assert effective_capital(
+        Decimal("10000"),
+        Decimal("15000"),
+        growth_enabled=True,
+        max_growth_factor=Decimal("2"),
+    ) == Decimal("15000")
+
+
+def test_sc12_growth_clamped_at_ceiling():
+    """시작 $10,000, NAV $25,000, growth 켬, 상한 2배 → 유효 자본 $20,000 (클램프)."""
+    assert effective_capital(
+        Decimal("10000"),
+        Decimal("25000"),
+        growth_enabled=True,
+        max_growth_factor=Decimal("2"),
+    ) == Decimal("20000")
+
+
+def test_sc13_nav_none_falls_back_to_start():
+    """NAV None → 유효 자본 = 시작 자본 (폴백)."""
+    assert effective_capital(
+        Decimal("10000"), None, growth_enabled=True
+    ) == Decimal("10000")
+    # 0 이하도 폴백.
+    assert effective_capital(
+        Decimal("10000"), Decimal("0"), growth_enabled=True
+    ) == Decimal("10000")
+    assert effective_capital(
+        Decimal("10000"), Decimal("-5"), growth_enabled=True
+    ) == Decimal("10000")
+
+
+def test_effective_capital_equal_nav_is_noop():
+    """NAV == 시작 → 유효 자본 = 시작 (변화 없음)."""
+    assert effective_capital(
+        Decimal("10000"), Decimal("10000"), growth_enabled=True
+    ) == Decimal("10000")
+
+
+def test_effective_capital_audit_payload_in_union():
+    from auto_invest.persistence.audit import (
+        AnyPayload,
+        EffectiveCapitalUpdatedPayload,
+    )
+
+    assert EffectiveCapitalUpdatedPayload in AnyPayload.__args__

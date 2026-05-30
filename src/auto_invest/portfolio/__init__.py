@@ -6,21 +6,25 @@
 """
 
 from auto_invest.portfolio.nav import (
+    DEFAULT_MAX_GROWTH_FACTOR,
     SOURCE_BROKER,
     SOURCE_LEDGER,
     NavDrift,
     NavHolding,
     NavSnapshot,
     compute_nav,
+    effective_capital,
     render_text,
 )
 
 __all__ = [
+    "DEFAULT_MAX_GROWTH_FACTOR",
     "SOURCE_BROKER",
     "SOURCE_LEDGER",
     "NavDrift",
     "NavHolding",
     "NavSnapshot",
     "compute_nav",
+    "effective_capital",
     "render_text",
 ]
