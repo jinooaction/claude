@@ -13,10 +13,14 @@
 #
 # 단계: 라이브 캐너리 (헌법 VI 2단계). 풀라이브 승격(3단계) 아님.
 # 요청 시각(UTC): 2026-05-30
-# 재실행 #3: 헬스체크 진단 개선(재시작 이후 로그만 + 매칭 라인 출력) 후 재트리거 —
-#   전환 결과를 컨테이너에서 확인 가능하게. 멱등(이미 live면 재시작+헬스체크).
+# 재실행 #4 (운영자 선택 1번: 룰 포지션 축소 + 중간 자본): 실제 캐너리 체결이
+#   나오도록 자본을 ~$12,000 으로, 룰셋을 qty=1 축소판(deploy/canary-live-rules.toml)으로
+#   전환. go-live-canary.sh 가 아래 capital_usd / rules_path 를 서버 .env 에 적용.
+#   여전히 CANARY 스테이지(헌법 VI 2단계) — 풀라이브 아님. 멱등.
 requested_by: mason
 requested_at_utc: 2026-05-30
-run_seq: 3
+run_seq: 4
 stage: live-canary
+capital_usd: 12000
+rules_path: deploy/canary-live-rules.toml
 authority: constitution X.4 (v4.0.0) operator-instructed guarded go-live

@@ -1,0 +1,92 @@
+# 라이브 캐너리 전용 룰셋 (헌법 X.4 v4.0.0 가드형 채널 + 운영자 선택 1번: 포지션 축소).
+#
+# 테스트 픽스처(tests/fixtures/rules/sample-canary.toml)를 건드리지 않기 위한 별도 파일.
+# 포지션을 qty=1 로 축소해, ~$12,000 중간 자본에서 per-trade 5% 캡($600) 안에 우량주
+# 1주가 들도록 했다 — 실제 체결이 나오되 노출은 작게(헌법 VI 2단계 라이브 캐너리).
+# 전부 CANARY 스테이지. 지정가·정규장·화이트리스트(SPY·MSFT·AAPL)만.
+#
+# 자본/룰셋은 deploy/go-live-canary.sh 가 automation/go-live-canary.request 의
+# capital_usd / rules_path 를 읽어 서버 .env 에 적용한다.
+
+[caps]
+per_trade_pct                  = 5.0
+per_symbol_pct                 = 20.0
+global_exposure_pct            = 80.0
+canary_capital_pct             = 5.0
+canary_min_duration_days       = 10
+canary_acceptance_drawdown_pct = 3.0
+
+[whitelist]
+symbols     = ["AAPL", "MSFT", "SPY"]
+accounts    = ["${KIS_ACCOUNT_NO}"]
+order_types = ["LIMIT"]
+sessions    = ["REGULAR"]
+
+# SPY 눌림목 1주 (보수적 진입).
+[[rules]]
+id       = "spy-dip-1"
+symbol   = "SPY"
+stage    = "CANARY"
+priority = 10
+enabled  = true
+
+  [rules.trigger]
+  kind             = "price"
+  direction        = "<="
+  threshold        = 540.00
+  cooldown_seconds = 600
+
+  [rules.action]
+  side        = "BUY"
+  order_type  = "LIMIT"
+  qty         = 1
+  limit_price = "trigger - 0.10"
+
+# MSFT 일봉 골든크로스 1주.
+[[rules]]
+id       = "msft-ema-1"
+symbol   = "MSFT"
+stage    = "CANARY"
+priority = 20
+enabled  = true
+
+  [rules.trigger]
+  kind             = "indicator"
+  indicator        = "EMA_CROSS"
+  timeframe        = "1d"
+  cooldown_seconds = 86400
+
+    [rules.trigger.params]
+    fast_period = 20
+    slow_period = 50
+    direction   = "fast_above_slow"
+
+  [rules.action]
+  side        = "BUY"
+  order_type  = "LIMIT"
+  qty         = 1
+  limit_price = "last_close * 1.001"
+
+# AAPL RSI 과매도 1주 (저가 우량주 — 더 자주 캡 안에 들어 캐너리 체결 데이터 확보).
+[[rules]]
+id       = "aapl-rsi-1"
+symbol   = "AAPL"
+stage    = "CANARY"
+priority = 30
+enabled  = true
+
+  [rules.trigger]
+  kind             = "indicator"
+  indicator        = "RSI_BELOW"
+  timeframe        = "1d"
+  cooldown_seconds = 86400
+
+    [rules.trigger.params]
+    period    = 14
+    threshold = 30
+
+  [rules.action]
+  side        = "BUY"
+  order_type  = "LIMIT"
+  qty         = 1
+  limit_price = "last_close * 1.001"

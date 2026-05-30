@@ -7,8 +7,9 @@
 # live 로 바꾸고 워커를 재시작한 뒤, 헬스체크에 실패하면 dry-run 으로 자동 복구한다.
 #
 # 안전 경계 (헌법 X.4):
-#   - 라이브 캐너리까지만 — 룰셋(캐너리)·자본(.env 기본 소액)·K1 캡은 그대로 둔다.
-#     이 스크립트는 모드만 바꾼다. 풀라이브 승격이 아니다.
+#   - 라이브 캐너리까지만 — 모드를 live 로 바꾸고, 센티넬에 지정된 경우 캐너리
+#     자본(capital_usd)과 축소 룰셋(rules_path, CANARY 스테이지)도 적용한다. K1 캡은
+#     룰셋 caps 가 천장. 풀라이브 승격이 아니다(스테이지는 CANARY 그대로).
 #   - 장중에는 전환 보류 (헌법 VIII.A) — XNYS 정규장이 열려 있으면 .env 를 건드리지
 #     않고 deferred 로 끝낸다(워커 재시작이 장중 주문 관리를 깨지 않도록).
 #   - 실패 시 dry-run 자동 복구 — 워커가 live 로 안 뜨면 즉시 되돌린다.
@@ -27,6 +28,25 @@ if [[ ! -f "$ENV_FILE" ]]; then
     echo "[go-live] $ENV_FILE 없음 — 인스턴스가 프로비저닝되지 않았습니다." >&2
     echo "GO_LIVE_RESULT=no_env_file"
     exit 1
+fi
+
+# 0) 서버 repo 를 origin/main 으로 동기화(새 룰셋·센티넬 파일 반영). kis-smoke 패턴 —
+#    deploy-on-merge 타이밍에 의존하지 않도록 스크립트가 직접 최신 코드를 끌어온다.
+cd "$APP_DIR" 2>/dev/null || { echo "GO_LIVE_RESULT=no_app_dir"; exit 1; }
+git config --global --add safe.directory "$APP_DIR" 2>/dev/null || true
+sudo -u auto-invest git config --global --add safe.directory "$APP_DIR" 2>/dev/null || true
+sudo -u auto-invest git fetch --quiet origin main 2>/dev/null || git fetch --quiet origin main 2>/dev/null || true
+sudo -u auto-invest git reset --hard origin/main 2>/dev/null || git reset --hard origin/main 2>/dev/null || true
+echo "[go-live] server repo @ $(git rev-parse --short HEAD 2>/dev/null || echo '?')"
+
+# 0b) 센티넬에서 원하는 자본/룰셋 읽기(선택 — 운영자 선택 1번 "포지션 축소 + 중간 자본").
+#     없으면 .env 기존값을 유지한다(모드만 바뀜).
+REQ_FILE="$APP_DIR/automation/go-live-canary.request"
+want_capital=""
+want_rules=""
+if [[ -f "$REQ_FILE" ]]; then
+    want_capital="$(grep -E '^capital_usd:' "$REQ_FILE" | head -1 | awk '{print $2}' || true)"
+    want_rules="$(grep -E '^rules_path:' "$REQ_FILE" | head -1 | awk '{print $2}' || true)"
 fi
 
 # 1) 장중 가드 (헌법 VIII.A). XNYS 정규장이 열려 있으면 전환 보류.
@@ -57,11 +77,30 @@ current_mode="$(grep -E '^AUTO_INVEST_MODE=' "$ENV_FILE" | head -1 | cut -d= -f2
 cp -a "$ENV_FILE" "${ENV_FILE}.pre-golive.bak"
 echo "[go-live] 현재 AUTO_INVEST_MODE=${current_mode:-unset} → live 로 전환(캐너리 룰셋·자본 유지)."
 
-# 3) live 로 전환 (모드 한 줄만 — 최소 편집).
+# 3) live 로 전환 (모드 한 줄).
 if grep -qE '^AUTO_INVEST_MODE=' "$ENV_FILE"; then
     sed -i 's/^AUTO_INVEST_MODE=.*/AUTO_INVEST_MODE=live/' "$ENV_FILE"
 else
     echo 'AUTO_INVEST_MODE=live' >> "$ENV_FILE"
+fi
+
+# 3b) 캐너리 자본/룰셋 적용 (센티넬에 지정된 경우만 — 운영자 선택 1번).
+#     per-trade 캡(룰셋 caps)과 자본이 함께 노출 상한을 정한다. 룰셋은 CANARY 스테이지.
+if [[ -n "$want_capital" ]]; then
+    if grep -qE '^AUTO_INVEST_CAPITAL=' "$ENV_FILE"; then
+        sed -i "s/^AUTO_INVEST_CAPITAL=.*/AUTO_INVEST_CAPITAL=${want_capital}/" "$ENV_FILE"
+    else
+        echo "AUTO_INVEST_CAPITAL=${want_capital}" >> "$ENV_FILE"
+    fi
+    echo "[go-live] AUTO_INVEST_CAPITAL=${want_capital} 적용(중간 자본)."
+fi
+if [[ -n "$want_rules" ]]; then
+    if grep -qE '^AUTO_INVEST_RULES=' "$ENV_FILE"; then
+        sed -i "s#^AUTO_INVEST_RULES=.*#AUTO_INVEST_RULES=${want_rules}#" "$ENV_FILE"
+    else
+        echo "AUTO_INVEST_RULES=${want_rules}" >> "$ENV_FILE"
+    fi
+    echo "[go-live] AUTO_INVEST_RULES=${want_rules} 적용(포지션 축소 룰셋)."
 fi
 
 # 4) 워커 재시작 (EnvironmentFile=.env 를 다시 읽어 live 반영).
