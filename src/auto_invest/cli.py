@@ -1376,6 +1376,77 @@ async def _run_reconcile(
         )
 
 
+@app.command(name="promote-check")
+def promote_check(
+    db_path: Path = typer.Option(
+        Path("data/auto_invest.db"), "--db", help="SQLite database path."
+    ),
+    rules_path: Path = typer.Option(
+        Path("deploy/canary-live-rules.toml"),
+        "--rules",
+        help="현재 라이브 캐너리 룰셋(caps = canary_min_duration_days·acceptance_drawdown 출처).",
+    ),
+    capital: float = typer.Option(
+        12000.0,
+        "--capital",
+        help="라이브 캐너리 시작 자본(USD) — 총수익률 계산 기준.",
+    ),
+    mode: str = typer.Option("live", "--mode", help="live 또는 paper."),
+    output_format: str = typer.Option(
+        "text", "--format", help="text 또는 json."
+    ),
+) -> None:
+    """스펙 026 — 라이브 캐너리가 풀라이브 승격 준비가 됐는지 평가(헌법 VI 절반).
+
+    read-only. 라이브 audit_log 에서 라이브 기간·청산 거래·최대 낙폭·총수익률·
+    서킷브레이커/정합성 이력을 측정해 promotion.gate 로 판정한다. ready=True 면
+    종료코드 0, 아니면 1.
+
+    주의(헌법 IX.B-2): 이건 VI(라이브 트랙레코드) 게이트다. **실제 풀라이브 승격**은
+    여기에 더해 스펙 007 하드닝 캐너리(다중 지표·충격·퍼즈, ≥30/45 거래일)도 통과해야
+    한다(production-deploy 게이트). 이 명령은 자동 승격을 수행하지 않는다 — 준비
+    여부만 보고한다.
+    """
+    import json as _json
+    import tomllib
+
+    from auto_invest.config.caps import SizingCaps
+    from auto_invest.promotion.readiness import compute_readiness
+
+    if output_format not in ("text", "json"):
+        typer.echo("--format must be 'text' or 'json'.", err=True)
+        _exit(2)
+
+    # caps 만 필요하므로 [caps] 섹션만 파싱한다 — 전체 load_config 와 달리 KIS 시크릿이
+    # 없어도 동작(읽기 전용 평가).
+    if not rules_path.exists():
+        typer.echo(f"rules file not found: {rules_path}", err=True)
+        _exit(2)
+    caps = SizingCaps(**tomllib.loads(rules_path.read_text(encoding="utf-8"))["caps"])
+    conn = db.get_connection(db_path)
+    try:
+        readiness = compute_readiness(
+            conn,
+            caps=caps,
+            starting_capital=Decimal(str(capital)),
+            mode=mode,
+        )
+    finally:
+        conn.close()
+
+    if output_format == "json":
+        typer.echo(_json.dumps(readiness.to_json_dict(), ensure_ascii=False, indent=2))
+    else:
+        typer.echo(f"승격 준비: {'✅ READY' if readiness.ready else '⏳ NOT READY'}")
+        for reason in readiness.reasons:
+            typer.echo(f"  - {reason}")
+        typer.echo(
+            "주의: 실제 풀라이브 승격은 스펙 007 하드닝 캐너리(IX.B-2)도 통과해야 합니다."
+        )
+
+    _exit(0 if readiness.ready else 1)
+
+
 @app.command()
 def reconcile(
     db_path: Path = typer.Option(

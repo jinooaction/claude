@@ -1,0 +1,108 @@
+name: Promote readiness (canary→full-live gate)
+
+# 스펙 026 — 라이브 캐너리가 풀라이브 승격 준비(헌법 VI 트랙레코드)가 됐는지 매일
+# 자동 평가하고, 결과를 사이드카 브랜치로 발행한다(운영자가 Actions UI 안 봐도
+# 컨테이너에서 readiness 를 확인 가능). read-only — 서버 상태를 바꾸지 않는다.
+#
+# 이건 VI(라이브 트랙레코드) 게이트의 평가일 뿐이다. 실제 풀라이브 승격은 여기에
+# 더해 스펙 007 하드닝 캐너리(IX.B-2, ≥30/45 거래일)도 통과해야 하며, 이 워크플로우는
+# 승격을 수행하지 않는다(평가·보고 전용).
+#
+# 사용법:
+#   git fetch origin automation/promote-readiness-last-run
+#   git show origin/automation/promote-readiness-last-run:LAST_RUN.md
+
+on:
+  schedule:
+    - cron: "30 22 * * *"  # 매일 22:30 UTC (미국 장 마감 후).
+  workflow_dispatch:
+
+permissions:
+  contents: write  # 사이드카 브랜치 force-push 용.
+
+jobs:
+  readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install SSH key
+        env:
+          KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          echo "${KEY}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+      - name: Evaluate promotion readiness on instance
+        id: eval
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              'cd /opt/auto-invest && /usr/local/bin/uv run auto-invest promote-check \
+                 --db data/auto_invest.db \
+                 --rules deploy/canary-live-rules.toml \
+                 --capital 12000 --format json' \
+              > /tmp/readiness.json 2>/tmp/readiness.err
+          ssh_exit=$?
+          echo "ssh_exit=${ssh_exit}" >> "$GITHUB_OUTPUT"
+          echo "--- stdout ---"; cat /tmp/readiness.json
+          echo "--- stderr ---"; cat /tmp/readiness.err
+          # exit 0 = READY, 1 = NOT READY, 그 외 = 셋업/오류.
+          ready="false"
+          if [[ "${ssh_exit}" == "0" ]]; then ready="true"; fi
+          echo "ready=${ready}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish readiness to sidecar branch
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          READY: ${{ steps.eval.outputs.ready }}
+          SSH_EXIT: ${{ steps.eval.outputs.ssh_exit }}
+        run: |
+          set -uo pipefail
+          BRANCH=automation/promote-readiness-last-run
+          tmpdir=$(mktemp -d); cd "${tmpdir}"; git init -q
+          git config user.name "promote-bot"
+          git config user.email "promote-bot@noreply.github.com"
+          {
+            echo "# 풀라이브 승격 준비(헌법 VI 게이트) — 최신 평가"
+            echo ""
+            echo "| 항목 | 값 |"
+            echo "|------|-----|"
+            echo "| run_id | ${GITHUB_RUN_ID} |"
+            echo "| commit | ${GITHUB_SHA} |"
+            echo "| trigger | ${GITHUB_EVENT_NAME} |"
+            echo "| timestamp_utc | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
+            echo "| READY (VI 트랙레코드) | ${READY:-unknown} |"
+            echo "| ssh_exit | ${SSH_EXIT:-?} (0=READY,1=NOT READY,그외=셋업/오류) |"
+            echo ""
+            echo "> 주의: 이건 헌법 VI(라이브 트랙레코드) 게이트다. 실제 풀라이브 승격은"
+            echo "> 스펙 007 하드닝 캐너리(IX.B-2, ≥30/45 거래일)도 통과해야 한다. 이 평가는"
+            echo "> 승격을 수행하지 않는다(보고 전용)."
+            echo ""
+            echo "## promote-check 출력(JSON)"
+            echo ""
+            echo '```json'
+            cat /tmp/readiness.json 2>/dev/null || echo '{}'
+            echo '```'
+            echo ""
+            echo "## stderr"
+            echo ""
+            echo '```'
+            cat /tmp/readiness.err 2>/dev/null || echo '(none)'
+            echo '```'
+          } > LAST_RUN.md
+          git checkout --orphan publish
+          git add LAST_RUN.md
+          git commit -q -m "promote-readiness run ${GITHUB_RUN_ID} (ready=${READY:-?})"
+          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "publish:${BRANCH}"
+          echo "Published to ${BRANCH}."
