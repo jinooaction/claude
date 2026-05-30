@@ -198,3 +198,69 @@ def test_read_live_fill_uses_intent_limit_as_reference(conn) -> None:
     assert fills[0].reference_price_usd == Decimal("100.00")
     stats = compute_slippage(fills)
     assert stats.total_cost_usd == Decimal("6")  # (103-100)*2
+
+
+# ------------------------------------------ spec 028: arrival(decision) 기준가
+
+
+def _intent_submit_fill(
+    conn,
+    *,
+    corr: str,
+    order_type: str,
+    qty: int,
+    fill_price: str,
+    decision_price: str | None,
+    limit_price: str | None,
+) -> None:
+    audit.append(
+        conn,
+        OrderIntentPayload(
+            rule_id="r_dca", symbol="VOO", side="BUY", order_type=order_type,
+            qty=qty, limit_price_usd=limit_price, decision_price_usd=decision_price,
+        ),
+        rule_id="r_dca", symbol="VOO", correlation_id=corr,
+        ts_utc="2026-05-04T13:00:00.000Z",
+    )
+    audit.append(
+        conn,
+        OrderSubmittedPayload(
+            kis_order_id=f"K-{corr}", submitted_at_utc="2026-05-04T13:00:01.000Z"
+        ),
+        rule_id="r_dca", symbol="VOO", correlation_id=corr,
+        ts_utc="2026-05-04T13:00:01.000Z",
+    )
+    audit.append(
+        conn,
+        FillPayload(
+            kis_fill_id=f"F-{corr}", qty=qty, price_usd=fill_price,
+            executed_at_utc="2026-05-04T13:00:02.000Z",
+        ),
+        rule_id="r_dca", symbol="VOO", correlation_id=corr,
+        ts_utc="2026-05-04T13:00:02.000Z",
+    )
+
+
+def test_read_live_fill_prefers_decision_price_over_limit(conn) -> None:
+    # decision_price(arrival)=100 과 limit=95 가 둘 다 있으면 arrival 을 기준가로 쓴다.
+    _intent_submit_fill(
+        conn, corr="o1", order_type="LIMIT", qty=2, fill_price="103",
+        decision_price="100", limit_price="95",
+    )
+    fills = read_fills(conn, mode="live", since=SINCE, until=UNTIL)
+    assert fills[0].reference_price_usd == Decimal("100")  # limit(95) 아님
+    assert compute_slippage(fills).total_cost_usd == Decimal("6")  # (103-100)*2
+
+
+def test_read_live_market_order_measurable_via_decision_price(conn) -> None:
+    # 시장가 주문(limit=None)도 decision_price 가 있으면 측정 가능해진다(기존엔 측정 불가).
+    _intent_submit_fill(
+        conn, corr="o2", order_type="MARKET", qty=1, fill_price="105",
+        decision_price="100", limit_price=None,
+    )
+    fills = read_fills(conn, mode="live", since=SINCE, until=UNTIL)
+    assert fills[0].reference_price_usd == Decimal("100")
+    stats = compute_slippage(fills)
+    assert stats.measurable_fills == 1
+    assert stats.unmeasurable_fills == 0
+    assert stats.total_cost_usd == Decimal("5")  # (105-100)*1

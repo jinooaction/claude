@@ -1085,10 +1085,12 @@ def performance(
     from decimal import Decimal
 
     from auto_invest.performance.engine import (
+        compute_fill_latency,
         compute_performance,
         compute_slippage,
         read_fills,
         reconstruct,
+        render_latency_text,
         render_slippage_text,
         render_text,
         snapshot_fields,
@@ -1171,6 +1173,9 @@ def performance(
     finally:
         conn.close()
 
+    # spec 028: 체결 지연(의사결정→체결) — 라이브에서만 의미가 있다(페이퍼는 동기 체결).
+    latency_stats = compute_fill_latency(fills)
+
     if snapshot:
         # 측정은 위에서 read-only(query_only)로 끝냈다. 스냅샷은 분리된 쓰기
         # 연결에서 추가-전용으로 단 1건만 기록한다(append-only 불변량 보존).
@@ -1181,7 +1186,11 @@ def performance(
             seq = audit.append(
                 write_conn,
                 audit.LivePerformanceSnapshotPayload(
-                    **snapshot_fields(report, computed_at_utc=_d_iso_now())
+                    **snapshot_fields(
+                        report,
+                        computed_at_utc=_d_iso_now(),
+                        latency=latency_stats if mode == "live" else None,
+                    )
                 ),
             )
         finally:
@@ -1196,12 +1205,15 @@ def performance(
         payload = report.to_json_dict()
         if slippage_stats is not None:
             payload["slippage"] = slippage_stats.to_json_dict()
+            payload["fill_latency"] = latency_stats.to_json_dict()
         typer.echo(_json.dumps(payload, indent=2, ensure_ascii=False))
     else:
         typer.echo(render_text(report))
         if slippage_stats is not None:
             typer.echo("")
             typer.echo(render_slippage_text(slippage_stats))
+            typer.echo("")
+            typer.echo(render_latency_text(latency_stats))
 
 
 async def _run_fill_sync(

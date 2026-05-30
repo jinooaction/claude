@@ -211,6 +211,34 @@ async def test_submit_order_happy_path(tmp_path: Path):
 
 
 @pytest.mark.asyncio
+async def test_submit_order_records_decision_price_on_intent(tmp_path: Path):
+    """spec 028 FR-028-02 — ORDER_INTENT 에 결정 순간의 arrival 시세·호가가 기록된다."""
+    import json as _json
+
+    async with _router(tmp_path) as router:
+        with respx.mock(base_url=BASE) as mock:
+            mock.post("/uapi/overseas-stock/v1/trading/order").mock(
+                return_value=httpx.Response(200, json={"output": {"ODNO": "K-009"}})
+            )
+            await router.submit_order(
+                rule=_rule(),
+                quote_price_usd=Decimal("98.50"),
+                quote_ask_usd=Decimal("98.60"),
+                quote_bid_usd=Decimal("98.40"),
+                total_capital_usd=Decimal("10000"),
+                current_symbol_exposure_usd=Decimal("0"),
+                current_global_exposure_usd=Decimal("0"),
+            )
+        intent = next(
+            r for r in audit.read_all(router.conn) if r["event_type"] == "ORDER_INTENT"
+        )
+        p = _json.loads(intent["payload_json"])
+        assert p["decision_price_usd"] == "98.50"
+        assert p["decision_ask_usd"] == "98.60"
+        assert p["decision_bid_usd"] == "98.40"
+
+
+@pytest.mark.asyncio
 async def test_submit_order_rejected_by_per_trade_cap(tmp_path: Path):
     async with _router(tmp_path) as router:
         with respx.mock(base_url=BASE, assert_all_called=False) as mock:
