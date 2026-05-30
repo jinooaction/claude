@@ -60,6 +60,7 @@ from auto_invest.risk.gates import (
     stage_uniqueness_gate,
     whitelist_gate,
 )
+from auto_invest.strategy.factors import composite_scores
 from auto_invest.strategy.quality import quality_ranked
 from auto_invest.strategy.ranking import cross_sectional_momentum
 from auto_invest.strategy.regime import (
@@ -467,6 +468,32 @@ class OrderRouter:
                     state="SKIPPED_BY_QUALITY",
                     correlation_id=correlation_id,
                     reason="not_in_top_quality",
+                )
+
+        # Spec 025: multi-factor composite filter — applied after quality filter.
+        # Ranks the universe by a weighted, cross-sectionally z-scored blend of
+        # factors and skips this symbol when it falls outside the top-N / top-pct
+        # threshold. Opt-in: composite_filter=None leaves the path byte-identical.
+        if rule.composite_filter is not None:
+            cf = rule.composite_filter
+            sizing_tf = getattr(rule.trigger, "timeframe", "1d")
+            universe_composite = {
+                sym: get_bars(self.conn, symbol=sym, timeframe=sizing_tf)
+                for sym in cf.universe
+            }
+            ranked_composite = composite_scores(
+                universe_composite,
+                weights=cf.weights,
+                lookback_bars=cf.lookback_bars,
+                momentum_period=cf.momentum_period,
+                bb_period=cf.bb_period,
+                bb_std=cf.bb_std,
+            )
+            if not cf.qualifies(rule.symbol, ranked_composite):
+                return OrderOutcome(
+                    state="SKIPPED_BY_COMPOSITE",
+                    correlation_id=correlation_id,
+                    reason="not_in_top_composite",
                 )
 
         # Spec 004: consume judgment advisories BEFORE the gate chain. Advisories

@@ -76,6 +76,7 @@ from auto_invest.risk.gates import (
     per_trade_cap_gate,
     whitelist_gate,
 )
+from auto_invest.strategy.factors import composite_scores
 from auto_invest.strategy.quality import quality_ranked
 from auto_invest.strategy.ranking import cross_sectional_momentum
 from auto_invest.strategy.regime import (
@@ -570,6 +571,35 @@ def replay(
                     ]
                 ranked_quality = quality_ranked(universe_quality, lookback_bars=qf.lookback_bars)
                 if not qf.qualifies(rule.symbol, ranked_quality):
+                    continue
+
+            # Spec 025: multi-factor composite filter — same logic as live router,
+            # lookahead-free (session_date 이하 바만 사용).
+            if rule.composite_filter is not None:
+                cf = rule.composite_filter
+                timeframe_tf = (
+                    rule.trigger.timeframe
+                    if isinstance(rule.trigger, IndicatorTrigger)
+                    else "1d"
+                )
+                universe_composite: dict[str, list[PriceBar]] = {}
+                for sym in cf.universe:
+                    sym_raw = [
+                        b for b in bars_by_symbol.get(sym, [])
+                        if b.session_date <= session_date
+                    ]
+                    universe_composite[sym] = [
+                        _ohlcv_to_pricebar(b, timeframe=timeframe_tf) for b in sym_raw
+                    ]
+                ranked_composite = composite_scores(
+                    universe_composite,
+                    weights=cf.weights,
+                    lookback_bars=cf.lookback_bars,
+                    momentum_period=cf.momentum_period,
+                    bb_period=cf.bb_period,
+                    bb_std=cf.bb_std,
+                )
+                if not cf.qualifies(rule.symbol, ranked_composite):
                     continue
 
             try:
