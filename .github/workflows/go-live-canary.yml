@@ -31,7 +31,7 @@ on:
       - 'automation/go-live-canary.request'
 
 permissions:
-  contents: read
+  contents: write  # 사이드카 브랜치 force-push 용 (automation/go-live-last-run).
 
 concurrency:
   # 라이브 전환은 한 번에 하나만.
@@ -125,3 +125,58 @@ jobs:
             echo "</details>"
           } >> "$GITHUB_STEP_SUMMARY"
           exit "${effective_exit}"
+
+      - name: Publish result to sidecar branch
+        # GitHub Actions UI 안 들어가도 외부(claude session 등)에서 전환 결과를
+        # 읽을 수 있게 force-push (kis-smoke 패턴 재사용).
+        #   git fetch origin automation/go-live-last-run
+        #   git show origin/automation/go-live-last-run:LAST_RUN.md
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RESULT: ${{ steps.golive.outputs.result }}
+          SSH_EXIT: ${{ steps.golive.outputs.ssh_exit }}
+        run: |
+          set -uo pipefail
+          BRANCH=automation/go-live-last-run
+          tmpdir=$(mktemp -d)
+          cd "${tmpdir}"
+          git init -q
+          git config user.name "go-live-bot"
+          git config user.email "go-live-bot@noreply.github.com"
+          {
+            echo "# 라이브 캐너리 전환 — 최신 실행 결과"
+            echo ""
+            echo "이 파일은 \`go-live-canary.yml\` 이 매 run 마다 force-push 합니다."
+            echo "외부에서 \`git fetch origin ${BRANCH} && git show origin/${BRANCH}:LAST_RUN.md\` 로 확인."
+            echo ""
+            echo "| 항목 | 값 |"
+            echo "|------|-----|"
+            echo "| run_id | ${GITHUB_RUN_ID} |"
+            echo "| run_url | https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} |"
+            echo "| commit | ${GITHUB_SHA} |"
+            echo "| trigger | ${GITHUB_EVENT_NAME} |"
+            echo "| timestamp_utc | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
+            echo "| GO_LIVE_RESULT | ${RESULT:-(unset)} |"
+            echo "| ssh_exit | ${SSH_EXIT:-(unset)} |"
+            echo ""
+            echo "## 의미"
+            echo ""
+            case "${RESULT:-}" in
+              armed_live_canary) echo "✅ **라이브 캐너리 무장됨** — AUTO_INVEST_MODE=live (캐너리 룰셋·소액·K1 캡). 첫 실주문 기회는 다음 미국 정규장." ;;
+              deferred_market_open) echo "⏸ **장중 보류** (헌법 VIII.A) — .env 무변경. 장 마감 후 재실행 시 전환." ;;
+              reverted_dry_run) echo "❌ **헬스체크 실패 → dry-run 자동 복구** — 워커 안전(실주문 없음). 서버 로그 확인 필요." ;;
+              *) echo "⚠ **결과 불명** (ssh_exit=${SSH_EXIT:-?}) — 서버/워크플로우 로그 수동 점검." ;;
+            esac
+            echo ""
+            echo "## 서버 출력 (go-live-canary.sh)"
+            echo ""
+            echo '```'
+            cat /tmp/golive.txt 2>/dev/null || echo "(출력 없음 — SSH 단계 진입 못함)"
+            echo '```'
+          } > LAST_RUN.md
+          git checkout --orphan publish
+          git add LAST_RUN.md
+          git commit -q -m "go-live run ${GITHUB_RUN_ID} @ ${GITHUB_SHA:0:7} (${RESULT:-unknown})"
+          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "publish:${BRANCH}"
+          echo "Published to ${BRANCH}."
