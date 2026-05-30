@@ -109,17 +109,22 @@ systemctl restart auto-invest.service
 echo "[go-live] 워커 재시작 완료 — 헬스 윈도 95초 대기…"
 sleep 95
 
-# 5) 헬스체크: 재시작 시점 이후 로그만 본다(이전 인스턴스/전환기 노이즈 제외).
+# 5) 헬스체크: 현재(새) 인스턴스 로그만 본다. 재시작은 이전 인스턴스를 종료시키는데,
+#    그 종료 트레이스백이 restart_epoch 와 같은 초에 찍혀 윈도에 섞인다 → 마지막
+#    "Started ... worker" 마커 이후(=새 인스턴스)만 스캔해 전환기 노이즈를 제외한다.
 FATAL_RE='Traceback \(most recent call last\)|CRITICAL|AUTO_INVEST_CAPITAL must be set'
+START_RE='Started auto-invest live trading worker'
 active="$(systemctl is-active auto-invest.service 2>/dev/null || true)"
 post_log="$(journalctl -u auto-invest.service --since "@${restart_epoch}" --no-pager 2>/dev/null || true)"
-fatal="$(printf '%s\n' "$post_log" | grep -ciE "$FATAL_RE" || true)"
-echo "[go-live] is-active=${active} fatal_log_hits=${fatal:-0} (재시작 이후 기준)"
-echo "[go-live] --- 재시작 이후 journal 발췌(마지막 30줄) ---"
-printf '%s\n' "$post_log" | tail -30
+current_log="$(printf '%s\n' "$post_log" | awk -v re="$START_RE" '$0 ~ re {found=1; buf=""} found {buf=buf $0 ORS} END {printf "%s", buf}')"
+if [[ -z "$current_log" ]]; then current_log="$post_log"; fi  # 마커 없으면 폴백.
+fatal="$(printf '%s\n' "$current_log" | grep -ciE "$FATAL_RE" || true)"
+echo "[go-live] is-active=${active} fatal_log_hits=${fatal:-0} (현재 인스턴스 기준)"
+echo "[go-live] --- 현재 인스턴스 journal 발췌(마지막 30줄) ---"
+printf '%s\n' "$current_log" | tail -30
 if [[ "${fatal:-0}" -ne 0 ]]; then
     echo "[go-live] --- 매칭된 치명 패턴 라인 ---"
-    printf '%s\n' "$post_log" | grep -iE "$FATAL_RE" | tail -15
+    printf '%s\n' "$current_log" | grep -iE "$FATAL_RE" | tail -15
 fi
 echo "[go-live] --- 발췌 끝 ---"
 

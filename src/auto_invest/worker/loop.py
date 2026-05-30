@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import sqlite3
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -220,17 +221,25 @@ class Worker:
         )
 
     def record_stop(self, reason: str) -> None:
-        if self.settings.paper_mode:
-            audit.append(
-                self.conn,
-                PaperRunStoppedPayload(
-                    reason=_normalize_paper_stop_reason(reason),
-                    stopped_at_utc=_utcnow_iso_ms_for_payload(),
-                    session_started_event_id=self.router.paper_session_id or 0,
-                ),
-            )
-        else:
-            audit.append(self.conn, WorkerStoppedPayload(reason=reason))
+        # 종료 경로의 best-effort 감사. systemd SIGTERM 순서상 DB 연결이 이미 닫혔을 수
+        # 있는데(예: `systemctl restart`), 그 경우 audit.append 가 sqlite3.ProgrammingError
+        # ("Cannot operate on a closed database")로 시끄러운 트레이스백을 남기고 워커를
+        # 비정상 종료(exit 1)시킨다. WORKER_STOPPED 는 best-effort 이고 다음 시작의
+        # WORKER_STARTED 가 세션 경계를 표시하므로, 닫힌 DB면 조용히 건너뛴다(포렌식 손실 없음).
+        try:
+            if self.settings.paper_mode:
+                audit.append(
+                    self.conn,
+                    PaperRunStoppedPayload(
+                        reason=_normalize_paper_stop_reason(reason),
+                        stopped_at_utc=_utcnow_iso_ms_for_payload(),
+                        session_started_event_id=self.router.paper_session_id or 0,
+                    ),
+                )
+            else:
+                audit.append(self.conn, WorkerStoppedPayload(reason=reason))
+        except sqlite3.Error as exc:
+            logger.warning("record_stop: 종료 감사 생략(DB 닫힘 추정): %s", exc)
 
     def request_stop(self) -> None:
         self._stop_requested.set()
