@@ -1,0 +1,19 @@
+# 라이브 캐너리 전환 요청 (가드형 go-live 채널 트리거)
+#
+# 이 파일이 main 에 머지되면 .github/workflows/go-live-canary.yml 이 push 로
+# 트리거되어, 서버에서 deploy/go-live-canary.sh 를 실행한다:
+#   장중 가드(VIII.A) → .env AUTO_INVEST_MODE=live (캐너리 룰셋·소액 자본 유지)
+#   → 워커 재시작 → 헬스체크 → 실패 시 dry-run 자동 복구.
+#
+# 이 머지 커밋이 헌법 X.4(v4.0.0)가 요구하는 "운영자 지시의 포렌식 기록"이다.
+#
+# 운영자 지시: mason, 2026-05-30 —
+#   "실거래 전환해. 내가 직접 관여하지 않고 자율 수행 해결해."
+#   "자동전환 가능하도록 헌법을 고쳐 … 캐너리 — 소액부터."
+#
+# 단계: 라이브 캐너리 (헌법 VI 2단계). 풀라이브 승격(3단계) 아님.
+# 요청 시각(UTC): 2026-05-30
+requested_by: mason
+requested_at_utc: 2026-05-30
+stage: live-canary
+authority: constitution X.4 (v4.0.0) operator-instructed guarded go-live
