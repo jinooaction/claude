@@ -589,6 +589,8 @@ class OrderRouter:
         )
 
         # Audit ORDER_INTENT and persist the orders row.
+        # spec 028: 결정 순간의 시세(arrival price)와 호가를 함께 기록한다 — 체결 품질
+        # (구현격차) 측정의 기준가. 주문 경로는 그 외 한 바이트도 바뀌지 않는다(측정 전용).
         audit.append(
             self.conn,
             OrderIntentPayload(
@@ -598,6 +600,9 @@ class OrderRouter:
                 order_type=rule.action.order_type.value,
                 qty=effective_qty,
                 limit_price_usd=str(limit_price) if limit_price is not None else None,
+                decision_price_usd=str(quote_price_usd),
+                decision_bid_usd=(str(quote_bid_usd) if quote_bid_usd is not None else None),
+                decision_ask_usd=(str(quote_ask_usd) if quote_ask_usd is not None else None),
             ),
             rule_id=rule.id,
             symbol=rule.symbol,

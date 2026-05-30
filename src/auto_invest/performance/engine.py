@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
 
@@ -52,10 +52,13 @@ class FillRecord:
     price_usd: Decimal
     ts_utc: str
     rule_id: str | None
-    # 슬리피지(US4, FR-009) 기준가. 페이퍼는 ORDER_PAPER_FILLED.reference_price_usd
-    # (결정 시점 last), 라이브는 같은 correlation_id 의 ORDER_INTENT.limit_price_usd.
-    # 없으면 None → "측정 불가"로 분리된다.
+    # 슬리피지 기준가. 페이퍼는 ORDER_PAPER_FILLED.reference_price_usd(결정 시점 last).
+    # 라이브는 spec 028로 ORDER_INTENT.decision_price_usd(arrival, 우선) → limit_price_usd
+    # (과거 row 폴백). 없으면 None → "측정 불가"로 분리된다.
     reference_price_usd: Decimal | None = None
+    # spec 028: 체결 지연 측정용 의사결정 시각. 라이브는 같은 correlation_id 의
+    # ORDER_INTENT.ts_utc. 페이퍼는 동기 체결이라 None(지연 측정 비대상).
+    decision_at_utc: str | None = None
 
 
 @dataclass
@@ -258,21 +261,26 @@ def _read_paper_fills(
 def _read_live_fills(
     conn: sqlite3.Connection, since: str, until: str
 ) -> list[FillRecord]:
-    # side·기준가(limit_price)는 ORDER_INTENT 페이로드에 있다.
-    # correlation_id → (side, limit_price) 매핑을 한 번에. limit_price 는 슬리피지
-    # 기준가 — 시장가 주문이면 None 이라 "측정 불가"로 분리된다.
-    intent_by_corr: dict[str, tuple[str, Decimal | None]] = {}
+    # side·기준가·의사결정 시각은 ORDER_INTENT 페이로드/row 에 있다.
+    # correlation_id → (side, reference, decision_at) 매핑을 한 번에.
+    # spec 028: 기준가 우선순위는 decision_price_usd(arrival, 있으면) → limit_price_usd
+    # (과거 row 폴백). arrival 기준이라 시장가 주문도 측정 가능하고, 페이퍼(결정시 last)와
+    # 같은 잣대가 된다. decision_at 은 ORDER_INTENT.ts_utc(체결 지연 측정 기준).
+    intent_by_corr: dict[str, tuple[str, Decimal | None, str]] = {}
     for row in conn.execute(
-        "SELECT correlation_id, payload_json FROM audit_log "
+        "SELECT correlation_id, ts_utc, payload_json FROM audit_log "
         "WHERE event_type = 'ORDER_INTENT' AND correlation_id IS NOT NULL"
     ):
         p = json.loads(row["payload_json"])
         side = p.get("side")
         if side:
-            limit = p.get("limit_price_usd")
+            ref_raw = p.get("decision_price_usd")
+            if ref_raw is None:
+                ref_raw = p.get("limit_price_usd")
             intent_by_corr[row["correlation_id"]] = (
                 side,
-                Decimal(str(limit)) if limit is not None else None,
+                Decimal(str(ref_raw)) if ref_raw is not None else None,
+                row["ts_utc"],
             )
 
     fills: list[FillRecord] = []
@@ -288,7 +296,7 @@ def _read_live_fills(
         if intent is None or not row["symbol"]:
             # side/symbol 을 확정 못 하면 손익 재구성에서 제외 (데이터 품질).
             continue
-        side, reference = intent
+        side, reference, decision_at = intent
         fills.append(
             FillRecord(
                 symbol=row["symbol"],
@@ -298,6 +306,7 @@ def _read_live_fills(
                 ts_utc=row["ts_utc"],
                 rule_id=row["rule_id"],
                 reference_price_usd=reference,
+                decision_at_utc=decision_at,
             )
         )
     return fills
@@ -565,6 +574,119 @@ def render_slippage_text(stats: SlippageStats) -> str:
     return "\n".join(lines)
 
 
+# ------------------------------------------------- fill latency (spec 028, G2)
+
+
+@dataclass
+class FillLatencyStats:
+    """체결 지연(의사결정→체결, 초) 집계. spec 028 — 실시간성 측정.
+
+    `decision_at_utc` 가 있는 라이브 체결만 측정한다(페이퍼는 동기 체결이라 비대상).
+    체결 시각이 결정 시각보다 이른 비정상 row 는 경고로 분리해 통계에서 뺀다."""
+
+    measurable_fills: int
+    avg_sec: Decimal | None
+    median_sec: Decimal | None
+    p95_sec: Decimal | None
+    max_sec: Decimal | None
+    unmeasurable_fills: int
+    warnings: list[str] = field(default_factory=list)
+
+    def to_json_dict(self) -> dict:
+        def _s(v: Decimal | None) -> str | None:
+            return None if v is None else str(v)
+
+        return {
+            "measurable_fills": self.measurable_fills,
+            "unmeasurable_fills": self.unmeasurable_fills,
+            "avg_sec": _s(self.avg_sec),
+            "median_sec": _s(self.median_sec),
+            "p95_sec": _s(self.p95_sec),
+            "max_sec": _s(self.max_sec),
+        }
+
+
+def _parse_iso_ms(ts: str) -> datetime:
+    """audit_log 의 ISO8601 ms-precision(Z) 문자열을 파싱. 'Z'→'+00:00' 치환."""
+    return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+
+
+def _percentile(sorted_vals: list[Decimal], q: float) -> Decimal | None:
+    """정렬된 값의 q 분위수(0~1)를 nearest-rank 로 반환(결정론). 빈 리스트면 None."""
+    if not sorted_vals:
+        return None
+    n = len(sorted_vals)
+    if n == 1:
+        return sorted_vals[0]
+    return sorted_vals[min(n - 1, int(round(q * (n - 1))))]
+
+
+def compute_fill_latency(fills: list[FillRecord]) -> FillLatencyStats:
+    """체결별 의사결정→체결 지연(초)을 집계한다 (FR-028-05).
+
+    측정 가능 조건: `decision_at_utc` 가 있고 체결 시각이 결정 시각 이후. 페이퍼 체결
+    (decision_at_utc=None)·미기록 과거 라이브 row 는 측정 불가로 분리한다."""
+    secs: list[Decimal] = []
+    warnings: list[str] = []
+    unmeasurable = 0
+
+    for f in fills:
+        if f.decision_at_utc is None:
+            unmeasurable += 1
+            continue
+        try:
+            decided = _parse_iso_ms(f.decision_at_utc)
+            executed = _parse_iso_ms(f.ts_utc)
+        except ValueError:
+            unmeasurable += 1
+            continue
+        delta = Decimal(str((executed - decided).total_seconds()))
+        if delta < 0:
+            warnings.append(
+                f"{f.symbol}: 체결 시각 {f.ts_utc} 가 결정 시각 {f.decision_at_utc} 보다 "
+                "이름 — 측정 제외"
+            )
+            unmeasurable += 1
+            continue
+        secs.append(delta)
+
+    n = len(secs)
+    if n == 0:
+        return FillLatencyStats(0, None, None, None, None, unmeasurable, warnings)
+    ordered = sorted(secs)
+    avg = (sum(ordered, Decimal("0")) / Decimal(n)).quantize(Decimal("0.001"))
+    return FillLatencyStats(
+        measurable_fills=n,
+        avg_sec=avg,
+        median_sec=_median(ordered),
+        p95_sec=_percentile(ordered, 0.95),
+        max_sec=ordered[-1],
+        unmeasurable_fills=unmeasurable,
+        warnings=warnings,
+    )
+
+
+def render_latency_text(stats: FillLatencyStats) -> str:
+    lines: list[str] = []
+    lines.append("체결 지연 (의사결정→체결)")
+    lines.append("-" * 24)
+    lines.append(
+        f"측정 가능 체결: {stats.measurable_fills}  /  측정 불가: {stats.unmeasurable_fills}"
+    )
+    if stats.measurable_fills == 0:
+        lines.append("측정 가능한 체결이 없습니다 (라이브 의사결정 시각 미기록 — N/A).")
+        return "\n".join(lines)
+
+    def _sec(v: Decimal | None) -> str:
+        return "N/A" if v is None else f"{v.quantize(Decimal('0.001'))} s"
+
+    lines.append(f"평균:   {_sec(stats.avg_sec)}")
+    lines.append(f"중앙:   {_sec(stats.median_sec)}")
+    lines.append(f"p95:    {_sec(stats.p95_sec)}")
+    lines.append(f"최대:   {_sec(stats.max_sec)}")
+    return "\n".join(lines)
+
+
 def compute_performance(
     fills: list[FillRecord],
     marks: dict[str, Decimal],
@@ -667,18 +789,24 @@ def build_performance_report(
     )
 
 
-def snapshot_fields(report: PerformanceReport, *, computed_at_utc: str) -> dict:
+def snapshot_fields(
+    report: PerformanceReport,
+    *,
+    computed_at_utc: str,
+    latency: FillLatencyStats | None = None,
+) -> dict:
     """`PerformanceReport` → `LivePerformanceSnapshotPayload` 생성용 평탄화 dict (T014, FR-014).
 
     위험조정 블록은 한 단계 평탄화해 튜너(spec 005)가 시계열로 바로 읽게 한다.
-    청산 0건(risk None)이면 위험조정 필드는 None.
+    청산 0건(risk None)이면 위험조정 필드는 None. spec 028: `latency` 가 주어지면
+    체결 지연 요약(평균·중앙·측정 가능 건수)을 함께 평탄화한다(선택, 라이브 실시간성).
     """
 
     def _s(v: Decimal | None) -> str | None:
         return None if v is None else str(v)
 
     risk = report.risk
-    return {
+    fields = {
         "mode": report.mode,
         "schema_version": report.SCHEMA_VERSION,
         "since_utc": report.period_since_utc,
@@ -696,6 +824,11 @@ def snapshot_fields(report: PerformanceReport, *, computed_at_utc: str) -> dict:
         "total_return_pct": _s(risk.total_return_pct) if risk else None,
         "computed_at_utc": computed_at_utc,
     }
+    if latency is not None:
+        fields["avg_fill_latency_sec"] = _s(latency.avg_sec)
+        fields["median_fill_latency_sec"] = _s(latency.median_sec)
+        fields["measurable_latency_fills"] = latency.measurable_fills
+    return fields
 
 
 # --------------------------------------------------------------- text render

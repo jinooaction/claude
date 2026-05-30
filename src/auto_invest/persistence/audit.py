@@ -112,6 +112,12 @@ class OrderIntentPayload(AuditPayload):
     order_type: str
     qty: int
     limit_price_usd: str | None = None
+    # spec 028: 의사결정(arrival) 시점 시세 — 체결 품질(구현격차) 측정의 기준가.
+    # 결정 순간의 last/bid/ask 를 그대로 담는다. 추가-전용 선택 필드라 과거 row(미기록)는
+    # None → 라이브 기준가가 limit_price_usd 로 자연 폴백되고 측정에서 제외된다.
+    decision_price_usd: str | None = None
+    decision_bid_usd: str | None = None
+    decision_ask_usd: str | None = None
 
 
 class OrderSubmittedPayload(AuditPayload):
@@ -583,6 +589,11 @@ class LivePerformanceSnapshotPayload(AuditPayload):
     sharpe_ratio: str | None = None
     max_drawdown_pct: str | None = None
     total_return_pct: str | None = None
+    # spec 028: 체결 지연(의사결정→체결, 초) 요약 — 라이브 실시간성 추적용(선택).
+    # 자율 튜너(spec 005)가 시계열로 소비한다. 측정 가능 체결 0건이면 None/0.
+    avg_fill_latency_sec: str | None = None
+    median_fill_latency_sec: str | None = None
+    measurable_latency_fills: int = 0
     computed_at_utc: str
 
 
