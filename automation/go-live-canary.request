@@ -13,10 +13,10 @@
 #
 # 단계: 라이브 캐너리 (헌법 VI 2단계). 풀라이브 승격(3단계) 아님.
 # 요청 시각(UTC): 2026-05-30
-# 재실행 #2: 사이드카 결과 발행(automation/go-live-last-run) 추가 후 재트리거 —
+# 재실행 #3: 헬스체크 진단 개선(재시작 이후 로그만 + 매칭 라인 출력) 후 재트리거 —
 #   전환 결과를 컨테이너에서 확인 가능하게. 멱등(이미 live면 재시작+헬스체크).
 requested_by: mason
 requested_at_utc: 2026-05-30
-run_seq: 2
+run_seq: 3
 stage: live-canary
 authority: constitution X.4 (v4.0.0) operator-instructed guarded go-live
