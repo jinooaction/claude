@@ -1,4 +1,16 @@
 <!--
+Sync Impact Report (v3.1.0 -> 4.0.0)
+==================
+Version change: 3.1.0 -> 4.0.0  (MAJOR: principle X.4 backward-incompatibly redefined. The absolute bar "the AUTO_INVEST_MODE=live transition ... is never flipped autonomously" is relaxed to permit an OPERATOR-INSTRUCTED autonomous transition to the LIVE-CANARY stage only, through a guarded, audited go-live channel. Full-live promotion stays operator-gated. All trading-safety invariants I-VII and VIII.A are preserved unchanged. this changes the safety perimeter.)
+Modified principles:
+  X.4 — was "Deploy ≠ live money; the AUTO_INVEST_MODE=live transition remains an explicit operator-gated decision and is never flipped autonomously." Redefined: the live transition is operator-DECIDED; under explicit operator instruction a session MAY arm it autonomously, but ONLY to the live-canary stage (constitution VI step 2 — conservative canary ruleset, small capital, full position caps), ONLY through the guarded go-live channel, and NEVER to full-live (VI step 3 stays a separate explicit operator decision). Absent explicit operator instruction the transition is still never autonomous (the spec 005 tuner cannot flip it).
+Rationale:
+  The operator (mason) instructed on 2026-05-30: "실거래 전환해. 내가 직접 관여하지 않고 자율 수행 해결해" and, when X.4's absolute bar was surfaced, "자동전환 가능하도록 헌법을 고쳐 ... 캐너리 — 소액부터" (= amend the constitution so the live transition can be autonomous; start with the small live canary). Under IX.D (Operator Autonomy Supremacy) the operator's explicit, informed instruction is the supreme decision criterion for procedural matters, and IX.D explicitly contemplates the session amending the constitution under operator instruction (recording a K-meta forensic event). This amendment is deliberately NARROW: it relaxes ONLY the manual-trigger requirement, ONLY for the operator-instructed case, ONLY to the bounded live-canary stage, and keeps every money-safety invariant (I position caps, II whitelist, IV audit, V secrets, VI full-live gate + canary-first, VIII.A market-hours) intact. The bounded loss surface the operator accepted (small canary capital, where the per-trade cap already rejects most blue-chip orders) is the maximum the amendment enables; autonomous full-live remains prohibited. this changes the safety perimeter (K-meta forensic marker: principle redefinition).
+Templates requiring updates:
+  ✅ .specify/memory/constitution.md (this file) — X.4 redefined; Version footer 3.1.0 -> 4.0.0.
+  ✅ deploy/AUTO-DEPLOY.md — "이 파이프라인이 하지 않는 것" updated: the guarded go-live channel (go-live-canary.yml) is the operator-instructed autonomous live-canary path; deploy-on-merge still never flips the mode.
+  ⚠ .specify/memory/kernel.toml — unchanged (no kernel file paths added/removed; X.4 is constitutional text, already K-meta).
+
 Sync Impact Report (v3.0.0 -> 3.1.0)
 ==================
 Version change: 3.0.0 -> 3.1.0  (MINOR: principle X added — Measurement-Driven Autonomous Growth. No principle removed or redefined; trading-safety invariants I-VII and VIII.A unchanged; spec 007 hardened canary remains the production-deploy gate.)
@@ -269,7 +281,11 @@ The system's purpose is not merely to trade safely but to **grow itself toward w
 1. **Measure before you tune.** Any autonomous self-modification that targets trading performance (spec 005's tuner) MUST be justified by live/paper performance measurement (spec 011) — realized/unrealized PnL, risk-adjusted metrics (Sharpe, max drawdown, win rate, profit factor), and per-rule/per-symbol attribution. A tuning action with no upstream measurement signal is not permitted.
 2. **One yardstick.** Live, paper, canary, and backtest performance MUST be computed with the **same metric definitions** (spec 008 `backtest/metrics.py` is the single source). This makes "backtest said X, live did Y" a meaningful comparison and lets the tuner detect strategy decay (e.g., rolling Sharpe 1.2 → 0.8).
 3. **Each completed phase auto-deploys.** A merged change auto-deploys to the running system via the VIII.B-guarded pipeline (`deploy/AUTO-DEPLOY.md`): an immediate on-merge trigger plus the off-hours timer safety net. This keeps the running worker continuously at `main`.
-4. **Deploy ≠ live money.** Auto-deploy lands code and restarts the worker; it does NOT move the system from dry-run to real orders. The `AUTO_INVEST_MODE=live` transition remains an explicit operator-gated decision and is never flipped autonomously.
+4. **Deploy ≠ live money; live transition is operator-decided, canary-first, and bounded (amended v4.0.0).** Auto-deploy lands code and restarts the worker; it does NOT by itself move the system from dry-run to real orders. The `AUTO_INVEST_MODE=live` transition is an **operator-decided** action. Under **explicit operator instruction** (recorded in the session reasoning trace + audit log), a session MAY arm the transition **autonomously**, but ONLY:
+   - to the **live-canary** stage (principle VI step 2): the conservative canary ruleset, small capital, and the full position caps of principle I still binding; and
+   - through the **guarded go-live channel** (`.github/workflows/go-live-canary.yml`), which MUST (a) honour the market-hours guard (VIII.A) for the worker restart, (b) emit the VIII.B deploy audit events, (c) run a post-restart health check and automatically revert to `dry-run` on failure, and (d) leave the position caps, whitelist, append-only audit, and secret isolation (principles I, II, IV, V) unchanged.
+
+   Autonomous promotion to **full live** (principle VI step 3) remains **prohibited** — it stays a separate, explicit operator decision recorded in the audit log. **Absent explicit operator instruction, the live transition is never flipped autonomously** — in particular the spec 005 tuner MUST NOT flip it. This preserves the "deploy ≠ live money" separation for every non-operator-instructed path while honouring IX.D for the operator-instructed canary case.
 
 This DOES NOT relax principles I–VII or VIII.A. The production-money defence remains spec 007's hardened canary (IX.B-2). Measurement-driven growth operates entirely **within** the existing safety perimeter: it adds a *requirement* (evidence before tuning) and a *standing mode* (continuous deploy of merged work to a dry-run worker), neither of which widens the loss surface.
 
@@ -303,4 +319,4 @@ This constitution supersedes all other practices, conventions, and ad-hoc decisi
 
 **Compliance**: every `/speckit-plan` artifact MUST include a Constitution Check section verifying the plan does not violate principles I–X. Violations require explicit, written justification and a sign-off recorded in the audit log.
 
-**Version**: 3.1.0 | **Ratified**: 2026-05-01 | **Last Amended**: 2026-05-23
+**Version**: 4.0.0 | **Ratified**: 2026-05-01 | **Last Amended**: 2026-05-30
