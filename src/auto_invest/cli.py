@@ -2521,6 +2521,26 @@ def walk_forward_cmd(
         "--wfe-threshold",
         help="Mean WFE below this flags overfitting (OOS sharpe / IS sharpe).",
     ),
+    num_trials: int = typer.Option(
+        1,
+        "--num-trials",
+        help="설정을 몇 개 시도했는지(다중검정 디플레이션용, 스펙 027). 기본 1=보정 없음.",
+    ),
+    trial_sharpe_std: float = typer.Option(
+        None,
+        "--trial-sharpe-std",
+        help="시도한 설정들의 (연율) 샤프 표준편차. --num-trials>1 + 이 값이 있어야 DSR 계산.",
+    ),
+    min_psr: float = typer.Option(
+        None,
+        "--min-psr",
+        help="표본 외 PSR 이 이 값 미만이면 과적합 플래그(옵트인 하드 게이트, 종료 1).",
+    ),
+    min_dsr: float = typer.Option(
+        None,
+        "--min-dsr",
+        help="표본 외 DSR 이 이 값 미만이면 과적합 플래그(옵트인 하드 게이트, 종료 1).",
+    ),
     dataset_version: str = typer.Option(
         None,
         "--dataset-version",
@@ -2649,6 +2669,12 @@ def walk_forward_cmd(
             mode=mode,
             cost_model=cost_model,
             wfe_threshold=_Decimal(str(wfe_threshold)),
+            num_trials=num_trials,
+            trial_sharpe_std_annual=(
+                _Decimal(str(trial_sharpe_std)) if trial_sharpe_std is not None else None
+            ),
+            min_psr=_Decimal(str(min_psr)) if min_psr is not None else None,
+            min_dsr=_Decimal(str(min_dsr)) if min_dsr is not None else None,
         )
     except WalkForwardError as exc:
         typer.echo(f"walk-forward window error: {exc}", err=True)
