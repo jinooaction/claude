@@ -17,9 +17,12 @@
 #   나오도록 자본을 ~$12,000 으로, 룰셋을 qty=1 축소판(deploy/canary-live-rules.toml)으로
 #   전환. go-live-canary.sh 가 아래 capital_usd / rules_path 를 서버 .env 에 적용.
 #   여전히 CANARY 스테이지(헌법 VI 2단계) — 풀라이브 아님. 멱등.
+# 재실행 #5: 헬스체크 오탐 2건 수정 — (1) record_stop 종료 경로 best-effort(닫힌 DB
+#   트레이스백 제거), (2) 헬스체크를 현재(새) 인스턴스 로그만 보도록 격리. 같은 파라미터
+#   ($12k + 축소 룰셋)로 재무장. 멱등.
 requested_by: mason
 requested_at_utc: 2026-05-30
-run_seq: 4
+run_seq: 5
 stage: live-canary
 capital_usd: 12000
 rules_path: deploy/canary-live-rules.toml
