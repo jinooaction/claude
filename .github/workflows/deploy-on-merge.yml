@@ -27,6 +27,7 @@ on:
       - 'specs/**'
       - '.verify/**'
       - '.trigger/**'
+      - 'automation/**'
   workflow_dispatch:
 
 permissions:
