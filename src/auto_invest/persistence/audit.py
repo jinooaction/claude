@@ -72,6 +72,7 @@ EventType = Literal[
     "AUTO_TUNED_CANARY_VALIDATED",
     "CIRCUIT_BREAKER_TRIPPED",
     "SIZING_DECISION",
+    "PORTFOLIO_NAV_SNAPSHOT",
 ]
 
 
@@ -785,6 +786,31 @@ class SizingDecisionPayload(AuditPayload):
     group_scale: str
 
 
+class PortfolioNavSnapshotPayload(AuditPayload):
+    """Spec 029 슬라이스 1 — 포트폴리오 순자산(NAV) 스냅샷 (K4 추가-전용).
+
+    `auto-invest portfolio --snapshot` 으로만 기록되며 기본 동작은 순수 계산(미기록).
+    기존 이벤트 타입·row 를 전혀 건드리지 않는 추가-전용 변경이라 append-only 불변량
+    (헌법 IV)을 깨지 않는다. 후속 슬라이스 3(성장 추적)이 이 시계열을 읽어 미실현 포함
+    시가평가 자산곡선을 그린다. 손익·평가는 `NavSnapshot` 과 같은 정의(문자열 Decimal).
+    `source` 는 브로커(권위) 또는 장부(폴백). 드리프트 합계는 브로커 vs 장부 정합성
+    신호다(측정 전용 — 주문/halt 0건)."""
+
+    event_type: Literal["PORTFOLIO_NAV_SNAPSHOT"] = "PORTFOLIO_NAV_SNAPSHOT"
+    mode: Literal["paper", "live"]
+    schema_version: str
+    source: str
+    computed_at_utc: str
+    cash_usd: str
+    total_market_value_usd: str
+    total_nav_usd: str
+    total_unrealized_pnl_usd: str
+    broker_reported_nav_usd: str | None = None
+    holdings_count: int = 0
+    total_qty_drift: int = 0
+    total_value_drift_usd: str = "0"
+
+
 AnyPayload = (
     WorkerStartedPayload
     | WorkerStoppedPayload
@@ -838,6 +864,7 @@ AnyPayload = (
     | AutoTunedCanaryValidatedPayload
     | CircuitBreakerTrippedPayload
     | SizingDecisionPayload
+    | PortfolioNavSnapshotPayload
 )
 
 
