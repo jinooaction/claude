@@ -65,15 +65,24 @@ else
 fi
 
 # 4) 워커 재시작 (EnvironmentFile=.env 를 다시 읽어 live 반영).
+restart_epoch="$(date +%s)"
 systemctl restart auto-invest.service
 echo "[go-live] 워커 재시작 완료 — 헬스 윈도 95초 대기…"
 sleep 95
 
-# 5) 헬스체크: 서비스 active + journal 에 치명 오류 없음.
+# 5) 헬스체크: 재시작 시점 이후 로그만 본다(이전 인스턴스/전환기 노이즈 제외).
+FATAL_RE='Traceback \(most recent call last\)|CRITICAL|AUTO_INVEST_CAPITAL must be set'
 active="$(systemctl is-active auto-invest.service 2>/dev/null || true)"
-fatal="$(journalctl -u auto-invest.service --since '-100s' --no-pager 2>/dev/null \
-         | grep -ciE 'Traceback \(most recent call last\)|CRITICAL|AUTO_INVEST_CAPITAL must be set' || true)"
-echo "[go-live] is-active=${active} fatal_log_hits=${fatal:-0}"
+post_log="$(journalctl -u auto-invest.service --since "@${restart_epoch}" --no-pager 2>/dev/null || true)"
+fatal="$(printf '%s\n' "$post_log" | grep -ciE "$FATAL_RE" || true)"
+echo "[go-live] is-active=${active} fatal_log_hits=${fatal:-0} (재시작 이후 기준)"
+echo "[go-live] --- 재시작 이후 journal 발췌(마지막 30줄) ---"
+printf '%s\n' "$post_log" | tail -30
+if [[ "${fatal:-0}" -ne 0 ]]; then
+    echo "[go-live] --- 매칭된 치명 패턴 라인 ---"
+    printf '%s\n' "$post_log" | grep -iE "$FATAL_RE" | tail -15
+fi
+echo "[go-live] --- 발췌 끝 ---"
 
 if [[ "$active" == "active" && "${fatal:-0}" -eq 0 ]]; then
     echo "[go-live] ✅ LIVE-CANARY 무장 완료(mode=live). K1 캡·화이트리스트·서킷브레이커·정합성 그대로 작동."
