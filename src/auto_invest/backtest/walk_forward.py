@@ -39,8 +39,17 @@ from .costs import BacktestCostModel
 from .data_model import BacktestSummary, canonicalise_decimal
 from .data_source import HistoricalDataSource
 from .judgment_stub import BACKTEST_MODE_ENV
+from .metrics import daily_returns_from_equity, sharpe_ratio
 from .replay import DEFAULT_TOTAL_CAPITAL_USD, replay
 from .report import build_per_rule_results, build_summary
+from .significance import (
+    deflated_sharpe_ratio,
+    expected_max_sharpe,
+    minimum_track_record_length,
+    probabilistic_sharpe_ratio,
+    sample_kurtosis,
+    sample_skewness,
+)
 
 DEFAULT_WFE_THRESHOLD = Decimal("0.5")
 
@@ -101,6 +110,19 @@ class WalkForwardReport:
     windows_oos_profitable: int = 0
     overfit_suspected: bool = False
     overfit_reasons: list[str] = field(default_factory=list)
+
+    # 스펙 027 — 표본 외 풀(pooled OOS) 트랙의 다중검정/유의성 통계. 윈도우별 표본 외
+    # 일별 수익률을 이어 붙인 하나의 연속 트랙에 대해 잰다. num_trials/trial std 가
+    # 기본값이면 DSR·SR_0 은 None(디플레이션 미적용 — 기존 동작 byte 동일).
+    num_trials: int = 1
+    oos_n_obs: int = 0
+    oos_sharpe_annual: Decimal | None = None
+    oos_skew: Decimal | None = None
+    oos_kurtosis: Decimal | None = None
+    oos_psr: Decimal | None = None
+    oos_min_track_record_obs: Decimal | None = None
+    oos_expected_max_sharpe_annual: Decimal | None = None
+    oos_dsr: Decimal | None = None
 
 
 # ---------- window generation ---------------------------------------------
@@ -170,6 +192,26 @@ def generate_windows(
 # ---------- per-segment replay --------------------------------------------
 
 
+def _portfolio_daily_returns(result) -> list[Decimal]:
+    """Sum per-rule mark-to-market equity per session date → portfolio daily returns.
+
+    스펙 027 의 PSR/DSR 입력. 룰별 자산곡선을 같은 세션 날짜에서 합쳐 포트폴리오
+    자산곡선을 만든 뒤 일별 단순 수익률로 변환한다(수익률은 척도 무관이라 윈도우
+    사이를 이어 붙여도 안전). 자산이 2 점 미만이거나 0 을 포함하면 [](fail-safe).
+    """
+    by_date: dict[date, Decimal] = {}
+    for curve in result.per_rule_equity_curve.values():
+        for d, eq in curve:
+            by_date[d] = by_date.get(d, Decimal("0")) + eq
+    if len(by_date) < 2:
+        return []
+    equity = [by_date[d] for d in sorted(by_date)]
+    try:
+        return daily_returns_from_equity(equity)
+    except ValueError:
+        return []
+
+
 def _run_segment(
     seg_start: date,
     seg_end: date,
@@ -183,12 +225,14 @@ def _run_segment(
     run_id: str,
     total_capital_usd: Decimal,
     cost_model: BacktestCostModel,
-) -> BacktestSummary:
-    """Replay one date sub-range and reduce it to the single-yardstick summary.
+) -> tuple[BacktestSummary, list[Decimal]]:
+    """Replay one date sub-range → (single-yardstick summary, portfolio daily returns).
 
     Each segment gets a fresh broker + clock so IS and OOS are independent
     runs (no position bleed across the IS/OOS boundary — OOS must be a clean
-    out-of-sample test, not a continuation of the IS book).
+    out-of-sample test, not a continuation of the IS book). The returns series
+    is the portfolio (all-rules) daily return, used by spec 027's pooled-OOS
+    significance statistics; the IS caller ignores it.
     """
     broker = BacktestBroker()
     clock = ReplayClock(datetime.combine(seg_start, datetime.min.time(), UTC))
@@ -208,7 +252,7 @@ def _run_segment(
         cost_model=cost_model,
     )
     per_rule = build_per_rule_results(result)
-    return build_summary(result, per_rule)
+    return build_summary(result, per_rule), _portfolio_daily_returns(result)
 
 
 # ---------- aggregation helpers -------------------------------------------
@@ -258,6 +302,10 @@ def run_walk_forward(
     total_capital_usd: Decimal = DEFAULT_TOTAL_CAPITAL_USD,
     cost_model: BacktestCostModel | None = None,
     wfe_threshold: Decimal = DEFAULT_WFE_THRESHOLD,
+    num_trials: int = 1,
+    trial_sharpe_std_annual: Decimal | None = None,
+    min_psr: Decimal | None = None,
+    min_dsr: Decimal | None = None,
 ) -> WalkForwardReport:
     """Run rolling/anchored walk-forward validation and return the verdict.
 
@@ -265,6 +313,12 @@ def run_walk_forward(
     same vocabulary as a normal backtest). If ``None``, an in-memory audit DB is
     created — convenient for ad-hoc analysis where the per-segment audit trail
     is not needed. Pass an explicit connection to retain it.
+
+    스펙 027: ``num_trials`` 는 운영자가 시도한 설정 개수(다중검정 디플레이션용),
+    ``trial_sharpe_std_annual`` 은 그 시도들의 (연율) 샤프 표준편차. 둘 다 주어지면
+    표본 외 풀 트랙의 DSR 을 계산한다. ``min_psr``/``min_dsr`` 은 옵트인 하드 게이트 —
+    표본 외 PSR/DSR 이 임계 미만이면 과적합 사유 추가. 기본값(None)이면 기존 동작과
+    byte 동일(새 사유 0 건).
     """
     if cost_model is None:
         cost_model = BacktestCostModel.kis_default()
@@ -285,13 +339,14 @@ def run_walk_forward(
         db.migrate(conn)
 
     window_results: list[WalkForwardWindowResult] = []
+    oos_pooled_returns: list[Decimal] = []
     prior_env = os.environ.get(BACKTEST_MODE_ENV)
     os.environ[BACKTEST_MODE_ENV] = "1"
     try:
         with wall_clock_guard():
             for w in windows:
                 run_id = f"wf-{w.index}"
-                is_summary = _run_segment(
+                is_summary, _is_returns = _run_segment(
                     w.is_start,
                     w.is_end,
                     rules=rules,
@@ -304,7 +359,7 @@ def run_walk_forward(
                     total_capital_usd=total_capital_usd,
                     cost_model=cost_model,
                 )
-                oos_summary = _run_segment(
+                oos_summary, oos_returns = _run_segment(
                     w.oos_start,
                     w.oos_end,
                     rules=rules,
@@ -317,6 +372,7 @@ def run_walk_forward(
                     total_capital_usd=total_capital_usd,
                     cost_model=cost_model,
                 )
+                oos_pooled_returns.extend(oos_returns)
                 window_results.append(
                     WalkForwardWindowResult(
                         window=w,
@@ -349,6 +405,11 @@ def run_walk_forward(
         out_of_sample_days=out_of_sample_days,
         step_days=step,
         wfe_threshold=wfe_threshold,
+        oos_pooled_returns=oos_pooled_returns,
+        num_trials=num_trials,
+        trial_sharpe_std_annual=trial_sharpe_std_annual,
+        min_psr=min_psr,
+        min_dsr=min_dsr,
     )
 
 
@@ -360,6 +421,11 @@ def _build_report(
     out_of_sample_days: int,
     step_days: int,
     wfe_threshold: Decimal,
+    oos_pooled_returns: list[Decimal] | None = None,
+    num_trials: int = 1,
+    trial_sharpe_std_annual: Decimal | None = None,
+    min_psr: Decimal | None = None,
+    min_dsr: Decimal | None = None,
 ) -> WalkForwardReport:
     oos_returns = [r.oos_summary.aggregate_return_pct for r in window_results]
     oos_sharpes = [r.oos_summary.aggregate_sharpe for r in window_results]
@@ -388,6 +454,36 @@ def _build_report(
             f"표본 외 수익 윈도우 {windows_oos_profitable}/{len(window_results)} (과반 미만)"
         )
 
+    # 스펙 027 — 표본 외 풀 트랙의 다중검정/유의성 통계.
+    pooled = oos_pooled_returns or []
+    oos_n_obs = len(pooled)
+    oos_sharpe_annual = sharpe_ratio(pooled) if oos_n_obs >= 2 else None
+    oos_skew = sample_skewness(pooled)
+    oos_kurtosis = sample_kurtosis(pooled)
+    oos_psr = probabilistic_sharpe_ratio(pooled) if oos_n_obs >= 2 else None
+    oos_min_trl = minimum_track_record_length(pooled) if oos_n_obs >= 2 else None
+    oos_sr0: Decimal | None = None
+    oos_dsr: Decimal | None = None
+    if num_trials > 1 and trial_sharpe_std_annual is not None:
+        oos_sr0 = expected_max_sharpe(num_trials, trial_sharpe_std_annual)
+        if oos_n_obs >= 2:
+            oos_dsr = deflated_sharpe_ratio(
+                pooled,
+                num_trials=num_trials,
+                trial_sharpe_std_annual=trial_sharpe_std_annual,
+            )
+
+    if min_psr is not None and oos_psr is not None and oos_psr < min_psr:
+        reasons.append(
+            f"표본 외 PSR {oos_psr} < 임계 {min_psr} "
+            "(표본 외 샤프가 통계적으로 0 과 구별되지 않음)"
+        )
+    if min_dsr is not None and oos_dsr is not None and oos_dsr < min_dsr:
+        reasons.append(
+            f"표본 외 DSR {oos_dsr} < 임계 {min_dsr} "
+            f"({num_trials}개 시도 다중검정 보정 후 우위 소멸)"
+        )
+
     return WalkForwardReport(
         mode=mode,
         in_sample_days=in_sample_days,
@@ -407,6 +503,15 @@ def _build_report(
         windows_oos_profitable=windows_oos_profitable,
         overfit_suspected=bool(reasons),
         overfit_reasons=reasons,
+        num_trials=num_trials,
+        oos_n_obs=oos_n_obs,
+        oos_sharpe_annual=oos_sharpe_annual,
+        oos_skew=oos_skew,
+        oos_kurtosis=oos_kurtosis,
+        oos_psr=oos_psr,
+        oos_min_track_record_obs=oos_min_trl,
+        oos_expected_max_sharpe_annual=oos_sr0,
+        oos_dsr=oos_dsr,
     )
 
 
@@ -439,6 +544,16 @@ def render_walk_forward_report(report: WalkForwardReport) -> str:
         f"- 평균 WFE(샤프): {_fmt(report.mean_wfe_sharpe)}"
         f"  / 중앙값 {_fmt(report.median_wfe_sharpe)}",
         f"- 표본 외 수익 윈도우: {report.windows_oos_profitable}/{len(report.windows)}",
+        "",
+        "## 통계적 유의성 (다중검정 보정, 스펙 027)",
+        "",
+        f"- 표본 외 풀 관측 수: {report.oos_n_obs} (연율 샤프 {_fmt(report.oos_sharpe_annual)})",
+        f"- 왜도: {_fmt(report.oos_skew)} / 첨도: {_fmt(report.oos_kurtosis)} (정규=3)",
+        f"- 확률적 샤프(PSR, 참 샤프>0 확률): {_fmt(report.oos_psr)}",
+        f"- 최소 트랙레코드 길이(95%): {_fmt(report.oos_min_track_record_obs)} 관측",
+        f"- 시도 수(num_trials): {report.num_trials}"
+        f"  / 기대 최대 샤프(SR_0): {_fmt(report.oos_expected_max_sharpe_annual)}",
+        f"- **디플레이티드 샤프(DSR, 다중검정 보정): {_fmt(report.oos_dsr)}**",
         "",
     ]
     if report.overfit_reasons:
