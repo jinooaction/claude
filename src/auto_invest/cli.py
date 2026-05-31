@@ -2742,6 +2742,10 @@ def backtest_portfolio_cmd(
                     "turnover_ratio": str(result.turnover_ratio),
                     "commission_usd": str(result.commission_usd),
                     "final_equity_usd": str(result.final_equity_usd),
+                    "benchmark_total_return_pct": str(result.benchmark_total_return_pct),
+                    "benchmark_max_drawdown_pct": str(result.benchmark_max_drawdown_pct),
+                    "benchmark_sharpe_ratio": str(result.benchmark_sharpe_ratio),
+                    "excess_return_pct": str(result.excess_return_pct),
                 }
             )
         )
@@ -2768,6 +2772,12 @@ def backtest_portfolio_cmd(
     typer.echo(f"turnover ratio:  {result.turnover_ratio}")
     typer.echo(f"commission USD:  {result.commission_usd}")
     typer.echo(f"final equity:    {result.final_equity_usd}")
+    typer.echo("")
+    typer.echo("─ vs 단순 보유(균등가중 매수후보유) 벤치마크 ─")
+    typer.echo(f"benchmark return %: {result.benchmark_total_return_pct}")
+    typer.echo(f"benchmark maxDD %:  {result.benchmark_max_drawdown_pct}")
+    typer.echo(f"benchmark sharpe:   {result.benchmark_sharpe_ratio}")
+    typer.echo(f"EXCESS return %:    {result.excess_return_pct}  (전략 − 벤치마크)")
 
 
 @app.command("rebalance-once")
