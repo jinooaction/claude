@@ -24,7 +24,9 @@ from pathlib import Path
 from typing import Any
 
 from auto_invest.broker.client import ResilientClient
+from auto_invest.broker.models import Quote
 from auto_invest.broker.overseas import cancel_order, get_balance, get_quote
+from auto_invest.broker.realtime import RealtimeQuoteSource
 from auto_invest.config.loader import LoadedConfig
 from auto_invest.config.rules import IndicatorTrigger, OrderLifecycleConfig, TradingRule
 from auto_invest.execution.fill_sync import sync_fills
@@ -138,6 +140,10 @@ class WorkerSettings:
     capital_tracking_enabled: bool = False
     capital_growth_enabled: bool = False
     capital_max_growth_factor: Decimal = Decimal("2")
+    # Spec 031 슬라이스 1 — 실시간 웹소켓 시세 소스(수신 전용). None(기본)이면 워커는 REST
+    # get_quote 만 쓴다(byte 동일). 주입됐고 available 이며 캐시 시세가 있으면 그것을 쓰고,
+    # 아니면 REST 로 자동 폴백한다(외부 API 강건성 — 거래 무중단). 주문 경로는 무변경.
+    realtime_feed: RealtimeQuoteSource | None = None
 
 
 @dataclass
@@ -370,14 +376,8 @@ class Worker:
         now: datetime,
     ) -> OrderOutcome | None:
         # Fetch a fresh quote (also accumulates a synthetic bar for indicators).
-        quote = await get_quote(
-            self.broker,
-            access_token=self.access_token,
-            app_key=self.app_key,
-            app_secret=self.app_secret,
-            symbol=rule.symbol,
-            market=self.settings.market_quote,
-        )
+        # Spec 031: 실시간 웹소켓 시세가 있으면 그것을, 없으면 REST 폴백(_fetch_quote).
+        quote = await self._fetch_quote(rule.symbol)
         timeframe = getattr(rule.trigger, "timeframe", "1d")
         store_synthetic_bar(
             self.conn,
@@ -440,6 +440,27 @@ class Worker:
         )
         self._last_fired[rule.id] = now
         return outcome
+
+    async def _fetch_quote(self, symbol: str) -> Quote:
+        """시세를 가져온다 — 실시간 웹소켓 우선, REST 폴백(스펙 031 FR-031-06).
+
+        realtime_feed 가 주입됐고 `available` 이며 캐시에 해당 종목 시세가 있으면 그것을
+        쓴다(폴링 지연 제거). 없거나 unavailable 이면 기존 REST get_quote 로 폴백한다 —
+        웹소켓이 끊겨도 거래는 한순간도 멈추지 않는다(외부 API 강건성). realtime_feed 가
+        None(기본)이면 항상 REST(byte 동일)."""
+        feed = self.settings.realtime_feed
+        if feed is not None and feed.available:
+            rt_quote = feed.latest_quote(symbol)
+            if rt_quote is not None:
+                return rt_quote
+        return await get_quote(
+            self.broker,
+            access_token=self.access_token,
+            app_key=self.app_key,
+            app_secret=self.app_secret,
+            symbol=symbol,
+            market=self.settings.market_quote,
+        )
 
     # ---------------------------------------------- exposure helpers
 
