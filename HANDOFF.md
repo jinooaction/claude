@@ -29,6 +29,58 @@ git ls-remote --heads origin 'claude/*' | awk '{print $2}'
 
 상세 규칙은 `CLAUDE.md` 본문 참조.
 
+## 다음 작업 큐 (운영자 승인 — 2026-05-31, 순서대로 1→2→3)
+
+운영자가 "다음 작업 1~3번 모두 진행"을 승인했다. 스펙 029(측정→자산 인식 자본→성장 추적)
+완성 위에, 아래 세 작업을 **순서대로** 자율 수행한다. 각 작업은 독립 PR + 자동 머지 채널.
+**작업 1은 돈 움직이는 운용 변경이라 착수 전 운영자에게 한 번 더 확인**(헌법 IX.B-1 / 자율
+수행 예외 2번 "외부 효과/비가역"). 작업 2·3은 코드 변경이라 일반 자율 수행.
+
+### 작업 1 — 자본 추적을 라이브 캐너리에 실제 적용 (운영 변경, 돈 움직임)
+
+- **무엇**: 스펙 029 슬라이스 2가 옵트인(`auto-invest run --capital-tracking [--capital-growth]`)
+  으로 만든 자산 인식 유효 자본을, 실제 라이브 캐너리 워커에 켠다. 지금은 기본 끔이라
+  캐너리가 시작 자본 상수를 쓴다.
+- **착수 지점**: `deploy/systemd/auto-invest.service:14` 의 `ExecStart` 에 `--capital-tracking`
+  플래그 추가(초기엔 `--capital-growth` 는 빼서 **하락 방어만**, 상승 미반영 — 보수적 시작).
+  go-live 채널(`.github/workflows/go-live-canary.yml`)로 재배포.
+- **안전 경계**: 캐너리 자본 $12k·축소 룰셋 그대로. 하락은 항상 방어(캡 축소), 상승은 옵트인이라
+  growth 빼면 시작 자본이 천장. K1 캡·whitelist 무변경. AUTO_INVEST_MODE 무관(이미 라이브).
+- **검증**: 재배포 후 `auto-invest portfolio --env .env` 로 NAV 확인, audit_log 에
+  `EFFECTIVE_CAPITAL_UPDATED` 행 발생 확인(`/deploy-status` 로 라이브 워커 새 코드 반영 확인).
+- **DoD**: systemd 유닛에 플래그 반영 + 재배포 성공 + 라이브 워커가 NAV 추종 시작(감사 행 1건+).
+
+### 작업 2 — 스펙 030: 체결 정교화 P2 (주문 수명 관리)
+
+- **무엇**: 미체결 주문 수명 관리 — 미체결 TTL(시간 초과 시 취소), 취소-재호가
+  (cancel-replace, 가격이 벌어지면 재호가), marketable-limit(시장가 가까운 공격적 지정가).
+  스펙 028이 측정한 슬리피지·체결지연 수치가 정당화 근거.
+- **착수 지점**: `execution/order_router.py`(주문 제출 경로), `execution/fill_sync.py`(미체결
+  추적), `broker/overseas.py`(`cancel_order` 이미 있음·`place_order` 재사용),
+  `worker/loop.py` 틱 루프(미체결 TTL 점검 cadence — `_should_sync_fills` 패턴 모방),
+  K4 추가-전용 audit 이벤트(`ORDER_TTL_CANCELLED`/`ORDER_REQUOTED` 류).
+- **안전 경계**: K1 캡·whitelist 무변경 — 재호가도 게이트 체인 다시 통과. Kernel 터치 0건
+  (커널은 `worker/schedule.py`·`risk/gates.py`·`config/caps.py`). 측정 단일 잣대(헌법 X.2).
+  옵트인(룰 스키마에 TTL/재호가 설정 없으면 byte 동일). dry-run/paper 그대로.
+- **DoD**: 스펙 문서 + 순수 로직 + 워커 배선 + 테스트(미체결 TTL 만료·재호가·marketable
+  케이스) + 전체 그린 + PR 자동 머지 + HANDOFF 갱신.
+
+### 작업 3 — 스펙 031: 체결 정교화 P3 (KIS 실시간 웹소켓)
+
+- **무엇**: 폴링 지연 제거 — KIS 실시간 웹소켓으로 시세·체결통보를 받아 틱 지연/체결 반영
+  지연을 없앤다. 현재는 `get_quote` REST 폴링 + `sync_fills` 폴링.
+- **착수 지점**: `broker/` 에 웹소켓 클라이언트 신규(`broker/realtime.py` 류, KIS 웹소켓
+  approval-key + H0STCNT0 시세/체결통보 구독), `market_data/feed.py`(실시간 바 주입),
+  `worker/loop.py`(웹소켓 수신 → 틱). **웹소켓 실패 시 기존 REST 폴링으로 폴백**(헌법
+  외부 API 강건성).
+- **안전 경계**: dry-run 그대로(웹소켓은 수신만, 주문 경로 무변경). Kernel 터치 0건. 폴백
+  보장(웹소켓 끊겨도 거래 무중단). 시크릿 격리(approval-key 는 `.env`).
+- **DoD**: 스펙 문서 + 웹소켓 클라이언트 + 폴백 + 테스트(연결·구독·폴백) + 전체 그린 +
+  PR 자동 머지 + HANDOFF 갱신.
+
+복붙용 세션 시작 프롬프트(작업별 독립)는 운영자 채팅에 별도 전달됨. 다음 세션은 이 큐의
+작업 1부터(운영자 확인 후) 순서대로 자율 수행하면 된다.
+
 ## 최근 마일스톤 — 2026-05-31 (스펙 029 슬라이스 3: 미실현 포함 시가평가 순자산 성장 추적)
 
 main 머지 커밋 `99f071c` (PR #122). 감사 스키마 무변경(읽기 전용 — K4 터치 없음).
