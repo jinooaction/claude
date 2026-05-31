@@ -74,6 +74,8 @@ EventType = Literal[
     "SIZING_DECISION",
     "PORTFOLIO_NAV_SNAPSHOT",
     "EFFECTIVE_CAPITAL_UPDATED",
+    "ORDER_TTL_CANCELLED",
+    "ORDER_REQUOTED",
 ]
 
 
@@ -833,6 +835,36 @@ class EffectiveCapitalUpdatedPayload(AuditPayload):
     updated_at_utc: str
 
 
+class OrderTtlCancelledPayload(AuditPayload):
+    """Spec 030 — 미체결 주문이 TTL 을 초과해 자동 취소된 기록 (K4 추가-전용).
+
+    `TradingRule.lifecycle.ttl_seconds` 를 초과한 열린 주문을 브로커 취소가 성공한 뒤
+    남긴다. correlation_id 로 해당 주문에 묶인다. 기존 이벤트/row 무변경(추가-전용,
+    헌법 IV append-only 불변)."""
+
+    event_type: Literal["ORDER_TTL_CANCELLED"] = "ORDER_TTL_CANCELLED"
+    kis_order_id: str
+    age_seconds: int
+    ttl_seconds: int
+    cancelled_at_utc: str
+
+
+class OrderRequotedPayload(AuditPayload):
+    """Spec 030 — 지정가 드리프트로 취소-재호가된 기록 (K4 추가-전용).
+
+    지정가가 현재 중간가에서 `requote_drift_pct` 이상 벌어진 미체결 주문을 취소하고
+    게이트 체인을 다시 통과시켜 재제출하기 직전에 남긴다(취소된 옛 주문의 correlation_id
+    에 묶임). 재제출된 새 주문은 별도 correlation_id 로 INTENT→SUBMITTED 정상 경로를
+    탄다. 기존 이벤트/row 무변경(추가-전용)."""
+
+    event_type: Literal["ORDER_REQUOTED"] = "ORDER_REQUOTED"
+    old_kis_order_id: str
+    old_limit_price_usd: str | None = None
+    mid_price_usd: str | None = None
+    drift_pct: str | None = None
+    requoted_at_utc: str
+
+
 AnyPayload = (
     WorkerStartedPayload
     | WorkerStoppedPayload
@@ -888,6 +920,8 @@ AnyPayload = (
     | SizingDecisionPayload
     | PortfolioNavSnapshotPayload
     | EffectiveCapitalUpdatedPayload
+    | OrderTtlCancelledPayload
+    | OrderRequotedPayload
 )
 
 

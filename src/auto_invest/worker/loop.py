@@ -24,13 +24,20 @@ from pathlib import Path
 from typing import Any
 
 from auto_invest.broker.client import ResilientClient
-from auto_invest.broker.overseas import get_balance, get_quote
+from auto_invest.broker.overseas import cancel_order, get_balance, get_quote
 from auto_invest.config.loader import LoadedConfig
-from auto_invest.config.rules import IndicatorTrigger, TradingRule
+from auto_invest.config.rules import IndicatorTrigger, OrderLifecycleConfig, TradingRule
 from auto_invest.execution.fill_sync import sync_fills
+from auto_invest.execution.lifecycle import (
+    LifecycleAction,
+    QuoteSnapshot,
+    load_open_orders_for_lifecycle,
+    plan_order_lifecycle,
+)
 from auto_invest.execution.order_router import (
     OrderOutcome,
     OrderRouter,
+    _record_transition,
     verify_stage_uniqueness,
 )
 from auto_invest.market_data.feed import store_synthetic_bar
@@ -40,6 +47,8 @@ from auto_invest.persistence import positions as positions_mod
 from auto_invest.persistence.audit import (
     CircuitBreakerTrippedPayload,
     EffectiveCapitalUpdatedPayload,
+    OrderRequotedPayload,
+    OrderTtlCancelledPayload,
     PaperRunStartedPayload,
     PaperRunStoppedPayload,
     RuleLoadPayload,
@@ -83,6 +92,11 @@ _FILL_SYNC_GAP_SECONDS = 5.0
 # 날리지 않도록 묶는다(60초면 캡 추종 지연이 충분히 작다). 첫 평가는 무조건 수행
 # (_last_capital_eval_at 가 None). 자본 추적이 꺼져 있으면 아예 평가 안 함.
 _CAPITAL_EVAL_GAP_SECONDS = 60.0
+
+# Spec 030: 미체결 주문 수명 관리(TTL 취소·재호가) 점검 최소 간격(초). 매 틱 열린 주문을
+# 다시 조회·호가하지 않도록 묶는다. 첫 점검은 무조건 수행(_last_lifecycle_at 가 None).
+# lifecycle 설정 있는 룰이 0건이면 아예 점검 안 함.
+_LIFECYCLE_GAP_SECONDS = 10.0
 
 
 def _normalize_paper_stop_reason(reason: str) -> str:
@@ -174,6 +188,15 @@ class Worker:
         # 꺼져 있으면 _effective_capital_usd는 시작 자본에서 영원히 안 바뀐다.
         self._effective_capital_usd: Decimal = settings.total_capital_usd
         self._last_capital_eval_at: datetime | None = None
+        # Spec 030: 미체결 주문 수명 관리 cadence 추적(None = 첫 기회에 점검). lifecycle
+        # 설정이 있는 룰만 rule_id→설정으로 캐시 — 비면 수명 관리를 아예 돌리지 않는다
+        # (옵트인, byte 동일). paper 모드는 orders row 가 없어 어차피 대상이 0건.
+        self._last_lifecycle_at: datetime | None = None
+        self._lifecycle_configs: dict[str, OrderLifecycleConfig] = {
+            r.id: r.lifecycle
+            for r in settings.config.rules
+            if r.lifecycle is not None
+        }
         # Spec 001 T050: 장 마감 정합성 트리거 상태. 세션이 열려 있는 틱에서 True 가
         # 되고, 열림→닫힘으로 바뀌는 첫 틱에 정합성을 1회 실행한다(startup 이 닫힘이면
         # 트리거 안 함 — 전이가 아니라 초기 상태이므로).
@@ -313,6 +336,13 @@ class Worker:
         if self._should_sync_fills(moment):
             self._last_fill_sync_at = moment
             await self._sync_open_order_fills(moment)
+
+        # Spec 030: 미체결 주문 수명 관리 — TTL 만료 취소 + 가격 드리프트 재호가. 체결
+        # 동기화 **뒤에** 둬서 방금 체결된 주문을 취소 대상에서 빼고 최신 미체결만 본다.
+        # lifecycle 설정 룰이 0건이면 점검 자체를 건너뛴다(옵트인). 모든 예외 격리(무중단).
+        if self._should_manage_lifecycle(moment):
+            self._last_lifecycle_at = moment
+            await self._manage_order_lifecycle(moment)
 
         # Spec 029 슬라이스 2: 자산 인식 유효 자본 갱신 — 게이트에 넘길 자본 기준을 라이브
         # 순자산에 맞춘다. 룰 평가 전에 갱신해 이번 틱 주문이 최신 캡을 받게 한다. 자본
@@ -535,6 +565,163 @@ class Worker:
             )
         except Exception:  # pragma: no cover — 이중 안전망(거래 무중단).
             logger.warning("fill sync raised unexpectedly", exc_info=True)
+
+    # ------------------------------------ order lifecycle (spec 030)
+
+    def _should_manage_lifecycle(self, now: datetime) -> bool:
+        """미체결 주문 수명 관리를 이번 틱에 점검할지. lifecycle 설정 룰이 없거나 paper면
+        안 함(paper 는 orders row 가 없음), 아니면 cadence 적용. 첫 점검은 무조건 수행."""
+        if not self._lifecycle_configs or self.settings.paper_mode:
+            return False
+        last = self._last_lifecycle_at
+        if last is None:
+            return True
+        return (now - last).total_seconds() >= _LIFECYCLE_GAP_SECONDS
+
+    async def _manage_order_lifecycle(self, now: datetime) -> None:
+        """미체결 주문 수명 관리(스펙 030) — TTL 만료 취소 + 가격 드리프트 재호가.
+
+        lifecycle 설정 있는 룰의 열린 주문만 대상. 취소는 브로커 cancel_order 가 성공한
+        뒤에만 로컬 상태를 CANCELLED 로 전이한다(취소 실패는 다음 체결 동기화가 정합화).
+        재호가는 추가로 router.submit_order 로 게이트 체인을 다시 통과시켜 재제출한다
+        (K1 캡 무변경). 모든 예외는 격리되어 거래 루프를 멈추지 않는다(거래 무중단)."""
+        try:
+            orders = load_open_orders_for_lifecycle(self.conn)
+        except Exception:  # noqa: BLE001 — 조회 실패는 이번 틱 수명 관리만 건너뜀.
+            logger.warning("lifecycle: open-order load failed", exc_info=True)
+            return
+        orders = [o for o in orders if o.rule_id in self._lifecycle_configs]
+        if not orders:
+            return
+
+        # 재호가 후보(설정에 requote_drift_pct 있는 미체결 LIMIT 주문)의 종목만 신선 호가를
+        # 받는다 — TTL 취소는 호가가 필요 없다. 호가 실패 종목은 재호가만 건너뛴다.
+        requote_symbols = {
+            o.symbol
+            for o in orders
+            if o.order_type == "LIMIT"
+            and o.state == "SUBMITTED"
+            and self._lifecycle_configs[o.rule_id].requote_drift_pct is not None
+        }
+        quotes: dict[str, QuoteSnapshot] = {}
+        for symbol in requote_symbols:
+            try:
+                q = await get_quote(
+                    self.broker,
+                    access_token=self.access_token,
+                    app_key=self.app_key,
+                    app_secret=self.app_secret,
+                    symbol=symbol,
+                    market=self.settings.market_quote,
+                )
+                quotes[symbol] = QuoteSnapshot(
+                    bid_usd=q.bid_usd, ask_usd=q.ask_usd, last_usd=q.last_price_usd
+                )
+            except Exception:  # noqa: BLE001 — 호가 실패 종목은 재호가 건너뜀(TTL 은 무관).
+                logger.warning(
+                    "lifecycle: quote fetch failed for %s", symbol, exc_info=True
+                )
+
+        actions = plan_order_lifecycle(
+            orders, configs=self._lifecycle_configs, quotes=quotes, now=now
+        )
+        rule_by_id = {r.id: r for r in self.settings.config.rules}
+        for action in actions:
+            try:
+                await self._execute_lifecycle_action(action, rule_by_id, quotes, now)
+            except Exception:  # noqa: BLE001 — 한 주문 실패가 나머지를 막지 않음(무중단).
+                logger.warning(
+                    "lifecycle: action %s on %s failed",
+                    action.kind,
+                    action.order.kis_order_id,
+                    exc_info=True,
+                )
+
+    async def _execute_lifecycle_action(
+        self,
+        action: LifecycleAction,
+        rule_by_id: dict[str, TradingRule],
+        quotes: dict[str, QuoteSnapshot],
+        now: datetime,
+    ) -> None:
+        """한 수명 관리 액션의 부수효과: 브로커 취소 → 상태 전이 → 감사 (→ 재호가 재제출).
+
+        브로커 취소가 먼저다 — 성공해야 로컬 상태를 바꾼다(실패 시 예외가 호출자로 올라가
+        격리되고 상태는 안 바뀐다 → 다음 체결 동기화가 실제 체결/종료를 정합화). 부분 체결분은
+        이미 fills 에 기록돼 누락되지 않는다."""
+        o = action.order
+        await cancel_order(
+            self.broker,
+            access_token=self.access_token,
+            app_key=self.app_key,
+            app_secret=self.app_secret,
+            account=self.account_no,
+            kis_order_id=o.kis_order_id,
+            market=self.settings.market_order,
+        )
+        ts = _utcnow_iso_ms_for_payload()
+        if action.kind == "cancel_ttl":
+            _record_transition(
+                self.conn, o.correlation_id, o.state, "CANCELLED", "ttl_expired"
+            )
+            audit.append(
+                self.conn,
+                OrderTtlCancelledPayload(
+                    kis_order_id=o.kis_order_id,
+                    age_seconds=action.age_seconds,
+                    ttl_seconds=action.ttl_seconds or 0,
+                    cancelled_at_utc=ts,
+                ),
+                rule_id=o.rule_id,
+                symbol=o.symbol,
+                correlation_id=o.correlation_id,
+            )
+            return
+
+        # requote — 취소 + 감사 + 게이트 체인 재통과 재제출.
+        _record_transition(
+            self.conn, o.correlation_id, o.state, "CANCELLED", "requote"
+        )
+        audit.append(
+            self.conn,
+            OrderRequotedPayload(
+                old_kis_order_id=o.kis_order_id,
+                old_limit_price_usd=(
+                    str(o.limit_price_usd) if o.limit_price_usd is not None else None
+                ),
+                mid_price_usd=(
+                    str(action.mid_usd) if action.mid_usd is not None else None
+                ),
+                drift_pct=(
+                    str(action.drift_pct) if action.drift_pct is not None else None
+                ),
+                requoted_at_utc=ts,
+            ),
+            rule_id=o.rule_id,
+            symbol=o.symbol,
+            correlation_id=o.correlation_id,
+        )
+        rule = rule_by_id.get(o.rule_id)
+        quote = quotes.get(o.symbol)
+        if rule is None or quote is None:
+            return  # 룰/호가 없으면 재제출 불가(취소까지만 — 다음 틱 자연 재발화 가능).
+        price = quote.last_usd if quote.last_usd is not None else action.mid_usd
+        if price is None or price <= 0:
+            return
+        # 게이트 체인 재통과 — K1 캡(per-trade/per-symbol/global)이 그대로 바인딩되므로
+        # 재호가가 노출을 안전 경계 위로 올릴 수 없다. 새 주문은 별도 correlation_id 로
+        # INTENT→SUBMITTED 정상 경로를 탄다.
+        await self.router.submit_order(
+            rule=rule,
+            quote_price_usd=price,
+            quote_ask_usd=quote.ask_usd,
+            quote_bid_usd=quote.bid_usd,
+            total_capital_usd=self._effective_capital_usd,
+            current_symbol_exposure_usd=self._symbol_exposure_usd(o.symbol, price),
+            current_global_exposure_usd=self._global_exposure_usd(
+                symbol=o.symbol, quote_price=price
+            ),
+        )
 
     # ---------------------------------------------- circuit breaker (spec 014)
 

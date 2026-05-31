@@ -278,6 +278,27 @@ class CompositeFactorFilter(BaseModel):
         return symbol in top_symbols
 
 
+class OrderLifecycleConfig(BaseModel):
+    """스펙 030 — 미체결 주문 수명 관리 설정(선택). 비커널.
+
+    `TradingRule.lifecycle` 가 None(기본)이면 모든 경로가 byte 동일 — 기존 룰은 주문
+    수명 관리를 전혀 받지 않는다(회귀 무손상). 각 필드는 독립 옵트인:
+
+    - `ttl_seconds`: 미체결이 이 초를 넘기면 자동 취소(G1). None 이면 TTL 취소 안 함.
+    - `requote_drift_pct`: 지정가가 현재 중간가에서 이 % 이상 벌어지면 취소-재호가(G2).
+      None 이면 재호가 안 함. 재호가는 K1 캡 게이트 체인을 다시 통과한다(노출 상한 무변경).
+    - `requote_after_seconds`: 재호가를 고려하기 전 최소 경과 시간(폭주 방지). 기본 30초.
+    - `marketable_limit_bps`: 제출 시 시장가 가까운 공격적 지정가의 버퍼(basis point, G3).
+      매수=ask 위 / 매도=bid 아래로 buffer_bps 만큼. None 이면 기존 limit_price 표현식 사용.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    ttl_seconds: int | None = Field(default=None, ge=1)
+    requote_drift_pct: Decimal | None = Field(default=None, gt=0)
+    requote_after_seconds: int = Field(default=30, ge=0)
+    marketable_limit_bps: int | None = Field(default=None, ge=0)
+
+
 class TradingRule(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     id: str = Field(..., min_length=1)
@@ -305,6 +326,9 @@ class TradingRule(BaseModel):
     quality_filter: QualityFilter | None = None
     # 스펙 025: 다요인 합성 알파 점수 필터. None이면 필터 없음(기존 동작 byte 동일).
     composite_filter: CompositeFactorFilter | None = None
+    # 스펙 030: 미체결 주문 수명 관리(TTL 취소·재호가·marketable-limit). None이면
+    # 수명 관리 없음(기존 동작 byte 동일).
+    lifecycle: OrderLifecycleConfig | None = None
 
     @field_validator("symbol")
     @classmethod

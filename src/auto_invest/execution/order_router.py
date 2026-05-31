@@ -38,6 +38,7 @@ from auto_invest.config.caps import SizingCaps
 from auto_invest.config.enums import OrderType, Side, StrategyStage
 from auto_invest.config.rules import TradingRule
 from auto_invest.config.whitelist import Whitelist
+from auto_invest.execution.lifecycle import marketable_limit_price
 from auto_invest.judgment.points.news_screen import should_block_buy
 from auto_invest.judgment.points.volatility import apply_volatility_advisory
 from auto_invest.judgment.schemas import NewsAdvisory, VolatilityAdvisory
@@ -561,23 +562,41 @@ class OrderRouter:
                 )
             effective_qty = decision.effective_qty
 
-        # Resolve the limit-price expression for LIMIT orders.
+        # Resolve the limit price for LIMIT orders.
         limit_price: Decimal | None = None
         if rule.action.order_type is OrderType.LIMIT:
-            timeframe = getattr(rule.trigger, "timeframe", "1d")
-            latest = get_latest_bar(self.conn, symbol=rule.symbol, timeframe=timeframe)
-            try:
-                limit_price = evaluate_limit_price(
-                    rule.action.limit_price,
-                    trigger_price=quote_price_usd,
-                    last_close=(latest.close_usd if latest else None),
+            # Spec 030 G3: marketable-limit — 룰이 marketable_limit_bps 를 켜면 시장가에
+            # 가까운 공격적 지정가(매수=ask 위 / 매도=bid 아래)로 빠른 체결과 슬리피지
+            # 상한을 동시에 얻는다. 필요한 호가가 없으면 None 이라 아래 표현식으로 자연
+            # 폴백한다. marketable_limit_bps 가 None(기본)이면 이 블록을 건너뛰어 기존
+            # limit_price 표현식 경로가 byte 동일하게 실행된다(FR-030-08).
+            if (
+                rule.lifecycle is not None
+                and rule.lifecycle.marketable_limit_bps is not None
+            ):
+                limit_price = marketable_limit_price(
+                    rule.action.side,
+                    bid=quote_bid_usd,
+                    ask=quote_ask_usd,
+                    buffer_bps=rule.lifecycle.marketable_limit_bps,
                 )
-            except LimitPriceExprError as exc:
-                return self._record_router_error(
-                    correlation_id=correlation_id,
-                    rule=rule,
-                    reason=str(exc),
+            if limit_price is None:
+                timeframe = getattr(rule.trigger, "timeframe", "1d")
+                latest = get_latest_bar(
+                    self.conn, symbol=rule.symbol, timeframe=timeframe
                 )
+                try:
+                    limit_price = evaluate_limit_price(
+                        rule.action.limit_price,
+                        trigger_price=quote_price_usd,
+                        last_close=(latest.close_usd if latest else None),
+                    )
+                except LimitPriceExprError as exc:
+                    return self._record_router_error(
+                        correlation_id=correlation_id,
+                        rule=rule,
+                        reason=str(exc),
+                    )
 
         request = OrderRequest(
             account=self.account_no,
