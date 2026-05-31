@@ -2235,6 +2235,45 @@ def _load_rules_for_backtest(rules_path: Path) -> tuple[object, object, list[obj
     return caps, whitelist, rules, ruleset_sha256
 
 
+def _load_portfolio_for_backtest(path: Path) -> tuple[object, object, object]:
+    """Load a portfolio-backtest TOML: `[caps]`, `[whitelist]`, `[portfolio]`.
+
+    Reuses the live SizingCaps / Whitelist parsing (single yardstick) and parses
+    the `[portfolio]` table into a PortfolioRebalanceConfig (spec 032). The
+    universe symbols MUST appear in `[whitelist].symbols` or their buys are
+    rejected by the whitelist gate. Returns `(caps, whitelist, portfolio)`.
+    """
+    import tomllib
+
+    from pydantic import ValidationError as _ValidationError
+
+    from auto_invest.config.caps import SizingCaps
+    from auto_invest.config.rules import PortfolioRebalanceConfig
+    from auto_invest.config.whitelist import Whitelist
+
+    if not path.exists():
+        raise ConfigError(f"portfolio file not found: {path}")
+    try:
+        raw = tomllib.loads(path.read_bytes().decode("utf-8"))
+    except tomllib.TOMLDecodeError as e:
+        raise ConfigError(f"portfolio file is not valid TOML: {e}") from e
+    try:
+        caps = SizingCaps.model_validate(raw.get("caps", {}))
+    except _ValidationError as e:
+        raise ConfigError(f"[caps] section invalid: {e}") from e
+    try:
+        whitelist = Whitelist.model_validate(raw.get("whitelist", {}))
+    except _ValidationError as e:
+        raise ConfigError(f"[whitelist] section invalid: {e}") from e
+    if "portfolio" not in raw:
+        raise ConfigError("missing [portfolio] section")
+    try:
+        portfolio = PortfolioRebalanceConfig.model_validate(raw["portfolio"])
+    except _ValidationError as e:
+        raise ConfigError(f"[portfolio] section invalid: {e}") from e
+    return caps, whitelist, portfolio
+
+
 @app.command("ingest-history")
 def ingest_history_cmd(
     from_dir: Path = typer.Option(
@@ -2532,6 +2571,203 @@ def backtest_cmd(
 
     if outcome.exit_code != EXIT_OK:
         _exit(outcome.exit_code)
+
+
+@app.command("backtest-portfolio")
+def backtest_portfolio_cmd(
+    portfolio: Path = typer.Option(
+        ...,
+        "--portfolio",
+        help="TOML with [caps], [whitelist], [portfolio] sections (spec 032).",
+    ),
+    date_from: str = typer.Option(
+        ..., "--from", help="Inclusive session-date start (YYYY-MM-DD)."
+    ),
+    date_to: str = typer.Option(
+        ..., "--to", help="Inclusive session-date end (YYYY-MM-DD)."
+    ),
+    dataset_version: str = typer.Option(
+        None,
+        "--dataset-version",
+        help="Specific dataset_version; defaults to most recent under data/history/.",
+    ),
+    capital: float = typer.Option(
+        100000.0, "--capital", help="Starting capital in USD."
+    ),
+    db_path: Path = typer.Option(
+        Path("data/auto_invest.db"), "--db", help="SQLite audit-log path."
+    ),
+    halt_path: Path = typer.Option(
+        Path("data/halt.flag"), "--halt-path", help="Filesystem halt-flag path."
+    ),
+    history_root: Path = typer.Option(
+        Path("data/history"),
+        "--history-root",
+        help="Where ingested datasets live (parent of <dataset_version>/).",
+    ),
+    commission_bps: float = typer.Option(
+        None, "--commission-bps", help="Per-side commission bps. Default: KIS (~25)."
+    ),
+    slippage_bps: float = typer.Option(
+        None, "--slippage-bps", help="Adverse slippage bps per fill. Default: KIS (~5)."
+    ),
+    min_commission_usd: float = typer.Option(
+        None, "--min-commission-usd", help="Per-fill commission floor USD. Default: 0."
+    ),
+    as_json: bool = typer.Option(
+        False, "--json", help="Emit a single JSON object instead of text."
+    ),
+) -> None:
+    """Backtest the cross-sectional rebalancing portfolio engine (spec 032).
+
+    Scores the universe each rebalance, builds target weights, and routes the
+    BUY+SELL rebalance through the SAME K1 gate chain as the live router — then
+    reports the single-yardstick metrics (return / drawdown / Sharpe / Sortino)
+    plus turnover, so the rebalancing engine's profile is measurable BEFORE any
+    money moves. Backtest-only: no live broker, no live-worker change.
+    """
+    import json as _json
+    import uuid as _uuid
+    from datetime import UTC
+    from datetime import date as _date
+    from datetime import datetime as _datetime
+    from decimal import Decimal as _Decimal
+
+    from auto_invest.backtest.broker_mock import BacktestBroker
+    from auto_invest.backtest.clock import ReplayClock
+    from auto_invest.backtest.costs import BacktestCostModel
+    from auto_invest.backtest.data_source import CSVDataSource, latest_dataset_dir
+    from auto_invest.backtest.portfolio_replay import replay_portfolio
+
+    _cost_base = BacktestCostModel.kis_default()
+    cost_model = BacktestCostModel(
+        commission_bps=(
+            _Decimal(str(commission_bps))
+            if commission_bps is not None
+            else _cost_base.commission_bps
+        ),
+        slippage_bps=(
+            _Decimal(str(slippage_bps))
+            if slippage_bps is not None
+            else _cost_base.slippage_bps
+        ),
+        min_commission_usd=(
+            _Decimal(str(min_commission_usd))
+            if min_commission_usd is not None
+            else _cost_base.min_commission_usd
+        ),
+    )
+
+    try:
+        ds_start = _date.fromisoformat(date_from)
+        ds_end = _date.fromisoformat(date_to)
+    except ValueError as exc:
+        typer.echo(f"date parsing failed: {exc}", err=True)
+        _exit(64)
+        return
+    if ds_end < ds_start:
+        typer.echo(f"--to ({ds_end}) is before --from ({ds_start})", err=True)
+        _exit(64)
+
+    try:
+        caps, whitelist, port_cfg = _load_portfolio_for_backtest(portfolio)
+    except ConfigError as exc:
+        typer.echo(f"portfolio validation failed: {exc}", err=True)
+        _exit(65)
+        return
+
+    if dataset_version is not None:
+        dataset_dir = history_root / dataset_version
+        if not (dataset_dir / "manifest.json").exists():
+            typer.echo(
+                f"dataset_version {dataset_version!r} not found under {history_root}",
+                err=True,
+            )
+            _exit(64)
+            return
+    else:
+        latest = latest_dataset_dir(history_root)
+        if latest is None:
+            typer.echo(
+                f"no ingested datasets under {history_root}; "
+                "run `auto-invest ingest-history` first",
+                err=True,
+            )
+            _exit(64)
+            return
+        dataset_dir = latest
+
+    data_source = CSVDataSource(dataset_dir)
+    _require_clean_migrations(db_path, allow_apply=True)
+    conn = db.get_connection(db_path)
+    run_id = f"bt-port-{_uuid.uuid4().hex[:12]}"
+    try:
+        result = replay_portfolio(
+            config=port_cfg,  # type: ignore[arg-type]
+            data_source=data_source,
+            date_start=ds_start,
+            date_end=ds_end,
+            caps=caps,  # type: ignore[arg-type]
+            whitelist=whitelist,  # type: ignore[arg-type]
+            halt_path=halt_path,
+            conn=conn,
+            clock=ReplayClock(_datetime(ds_start.year - 1, 1, 1, tzinfo=UTC)),
+            broker=BacktestBroker(),
+            run_id=run_id,
+            total_capital_usd=_Decimal(str(capital)),
+            cost_model=cost_model,
+        )
+    finally:
+        conn.close()
+        data_source.close()
+
+    if as_json:
+        typer.echo(
+            _json.dumps(
+                {
+                    "run_id": run_id,
+                    "dataset_version": data_source.dataset_version,
+                    "date_start": ds_start.isoformat(),
+                    "date_end": ds_end.isoformat(),
+                    "portfolio_id": port_cfg.id,  # type: ignore[attr-defined]
+                    "weight_scheme": port_cfg.weight_scheme,  # type: ignore[attr-defined]
+                    "rebalances": len(result.rebalance_dates),
+                    "orders": len(result.orders),
+                    "fills": len(result.fills),
+                    "gate_rejections": len(result.gate_rejections),
+                    "total_return_pct": str(result.total_return_pct),
+                    "max_drawdown_pct": str(result.max_drawdown_pct),
+                    "sharpe_ratio": str(result.sharpe_ratio),
+                    "sortino_ratio": str(result.sortino_ratio),
+                    "turnover_ratio": str(result.turnover_ratio),
+                    "commission_usd": str(result.commission_usd),
+                    "final_equity_usd": str(result.final_equity_usd),
+                }
+            )
+        )
+        return
+
+    typer.echo(f"portfolio backtest run_id: {run_id}")
+    typer.echo(f"dataset_version: {data_source.dataset_version}")
+    typer.echo(f"date range:      {ds_start} → {ds_end}")
+    typer.echo(
+        f"portfolio:       {port_cfg.id}  scheme={port_cfg.weight_scheme}  "  # type: ignore[attr-defined]
+        f"top_n={port_cfg.top_n} top_pct={port_cfg.top_pct}"  # type: ignore[attr-defined]
+    )
+    typer.echo(f"cost model:      {cost_model.describe()}")
+    typer.echo("")
+    typer.echo(f"rebalances:      {len(result.rebalance_dates)}")
+    typer.echo(
+        f"orders/fills/rej:{len(result.orders)} / {len(result.fills)} / "
+        f"{len(result.gate_rejections)}"
+    )
+    typer.echo(f"total return %:  {result.total_return_pct}")
+    typer.echo(f"max drawdown %:  {result.max_drawdown_pct}")
+    typer.echo(f"sharpe:          {result.sharpe_ratio}")
+    typer.echo(f"sortino:         {result.sortino_ratio}")
+    typer.echo(f"turnover ratio:  {result.turnover_ratio}")
+    typer.echo(f"commission USD:  {result.commission_usd}")
+    typer.echo(f"final equity:    {result.final_equity_usd}")
 
 
 @app.command("walk-forward")

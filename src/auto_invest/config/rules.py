@@ -278,6 +278,90 @@ class CompositeFactorFilter(BaseModel):
         return symbol in top_symbols
 
 
+# 스펙 032: 재조정 목표 비중 산정 방식. equal/score_proportional 는 rebalance 자체
+# 계산, 나머지는 strategy/sizing.py 의 포트폴리오 최적화기를 재사용한다.
+KNOWN_WEIGHT_SCHEMES: tuple[str, ...] = (
+    "equal",
+    "score_proportional",
+    "inverse_vol",
+    "min_variance",
+    "max_sharpe",
+    "erc",
+)
+
+
+class PortfolioRebalanceConfig(BaseModel):
+    """스펙 032 — 횡단면 포트폴리오 재조정 설정. 비커널.
+
+    유니버스 전체를 합성 알파 점수(스펙 025 `composite_scores`)로 매겨 상위 `top_n`개
+    (또는 `top_pct`%)를 `weight_scheme` 으로 가중한 **목표 포트폴리오**를 만들고,
+    `rebalance_every_n_sessions` 마다 현재 보유와의 차이를 매수+매도로 재조정한다.
+    목표에 없는 보유 종목은 전량 매도(청산)된다 — 기존 룰 기반 매수 전용 시스템에
+    빠져 있던 매도 차원이다.
+
+    슬라이스 1 은 백테스트·CLI 전용(라이브 워커 무배선, byte 동일). 라이브 배선·실제
+    재조정 주문은 후속 슬라이스이며 돈 움직이는 운용 변경이라 운영자 게이트다.
+
+    플래너는 수량을 제안만 하고, 모든 매수는 라이브와 동일한 K1 캡 게이트 체인을
+    통과한다 — 캡이 천장이라 노출을 안전 경계 위로 올릴 수 없다(하향 전용 안전망).
+
+    `weights` 키는 `KNOWN_COMPOSITE_FACTORS` 부분집합이어야 하고 최소 하나는 0이
+    아니어야 한다(CompositeFactorFilter 와 동일 규약). `top_n`·`top_pct` 정확히 하나.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    id: str = Field(..., min_length=1)
+    universe: tuple[str, ...] = Field(..., min_length=2)
+    weight_scheme: Literal[
+        "equal", "score_proportional", "inverse_vol", "min_variance", "max_sharpe", "erc"
+    ] = "equal"
+    # 합성 점수 파라미터 (스펙 025 재사용)
+    weights: dict[str, Decimal] = Field(..., min_length=1)
+    lookback_bars: int = Field(default=60, ge=30)
+    momentum_period: int = Field(default=20, ge=1)
+    bb_period: int = Field(default=20, ge=2)
+    bb_std: float = Field(default=2.0, gt=0)
+    # 선택 폭
+    top_n: int | None = Field(default=None, ge=1)
+    top_pct: float | None = Field(default=None, gt=0, le=100)
+    # 투자 비율(현금 버퍼 유지). 목표 금액 = 비중 × 자본 × invested_fraction.
+    invested_fraction: Decimal = Field(default=Decimal("0.95"), gt=0, le=1)
+    # 재조정 주기(거래 세션 수). 21 ≈ 월 1회(영업일 기준).
+    rebalance_every_n_sessions: int = Field(default=21, ge=1)
+    # 무거래 밴드: 목표 비중이 현재 비중에서 이 % 미만으로만 바뀌면 주문 안 함(회전율 통제).
+    rebalance_threshold_pct: Decimal = Field(default=Decimal("0"), ge=0, le=100)
+    # 최소 명목(USD). 이보다 작은 자투리 주문은 거른다(회전율·비용 통제).
+    min_notional_usd: Decimal = Field(default=Decimal("0"), ge=0)
+
+    @field_validator("universe")
+    @classmethod
+    def _normalize_universe(cls, v: tuple[str, ...]) -> tuple[str, ...]:
+        return tuple(s.upper() for s in v)
+
+    @field_validator("weights")
+    @classmethod
+    def _check_weights(cls, v: dict[str, Decimal]) -> dict[str, Decimal]:
+        unknown = set(v) - set(KNOWN_COMPOSITE_FACTORS)
+        if unknown:
+            raise ValueError(
+                f"unknown composite factor(s): {sorted(unknown)}; "
+                f"allowed: {list(KNOWN_COMPOSITE_FACTORS)}"
+            )
+        if all(w == 0 for w in v.values()):
+            raise ValueError(
+                "PortfolioRebalanceConfig: at least one factor weight must be non-zero"
+            )
+        return v
+
+    @model_validator(mode="after")
+    def _require_exactly_one(self) -> PortfolioRebalanceConfig:
+        if (self.top_n is None) == (self.top_pct is None):
+            raise ValueError(
+                "PortfolioRebalanceConfig: set exactly one of top_n or top_pct"
+            )
+        return self
+
+
 class OrderLifecycleConfig(BaseModel):
     """스펙 030 — 미체결 주문 수명 관리 설정(선택). 비커널.
 
