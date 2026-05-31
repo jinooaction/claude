@@ -27,3 +27,18 @@
   매수+매도 라우팅. **돈 경로 변경 → 운영자 확인 필수.**
 - [ ] **T021** (슬라이스 3) 부분 체결·재호가(스펙 030 연계)·캐너리 룰셋 적용
   (운영자 승격 게이트).
+
+## 슬라이스 2 (라이브/페이퍼 실행 경로 — 일회성, paper 기본·돈 무이동) — 완료 ✅
+
+라이브 워커 1Hz 틱 루프에 월 단위 재조정을 끼워 넣는 대신, **일회성 실행기**로
+분리(더 안전·단순). 기존 OrderRouter + K1 게이트 체인 + paper/live 분기를 그대로
+재사용한다(별도 돈 경로·커널 무터치). paper 기본, 실주문은 명시적 `--mode live` 필요.
+
+- [x] **T009** `execution/rebalancer.py` 신규 — `execute_rebalance(...)`:
+  저장 바로 합성 점수 → 목표 비중 → 보유·시세로 재조정 계획 → **필터 없는 합성 룰**로
+  `router.submit_order` 라우팅(게이트·감사·paper/live 그대로). 각 주문 수량을 per-trade
+  캡 한도로 클램프(하향 전용)해 큰 청산도 게이트 통과(반복 호출로 수렴). marketable LIMIT.
+- [x] **T010** `tests/integration/test_spec_032_live_rebalancer.py` — paper 라우터 +
+  주입 시세로 매수+매도 청산·게이트 통과·per-trade 클램프·결정론 검증.
+- [x] **T011** `cli.py` — `rebalance-once` 명령(paper 기본, `--mode live` 명시 필요,
+  text/json). 라이브는 운영자 명시 실행 시에만 실주문(돈 경로 — 운영자 게이트).

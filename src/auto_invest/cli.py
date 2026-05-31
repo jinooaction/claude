@@ -2770,6 +2770,171 @@ def backtest_portfolio_cmd(
     typer.echo(f"final equity:    {result.final_equity_usd}")
 
 
+@app.command("rebalance-once")
+def rebalance_once_cmd(
+    portfolio: Path = typer.Option(
+        ...,
+        "--portfolio",
+        help="TOML with [caps], [whitelist], [portfolio] sections (spec 032).",
+    ),
+    mode: str = typer.Option(
+        "paper",
+        "--mode",
+        help="'paper' (default, simulated fills) or 'live' (REAL orders — money moves).",
+    ),
+    capital: float = typer.Option(
+        ..., "--capital", help="Total capital in USD for weight sizing + caps."
+    ),
+    db_path: Path = typer.Option(
+        Path("data/auto_invest.db"), "--db", help="SQLite path (bars, positions, audit)."
+    ),
+    halt_path: Path = typer.Option(
+        Path("data/halt.flag"), "--halt-path", help="Filesystem halt-flag path."
+    ),
+    env_file: Path | None = typer.Option(
+        None, "--env-file", help="Optional .env with KIS_APP_KEY/SECRET/ACCOUNT_NO."
+    ),
+    base_url: str = typer.Option(
+        "https://openapi.koreainvestment.com:9443", "--base-url", help="KIS REST base URL."
+    ),
+    timeframe: str = typer.Option(
+        "1d", "--timeframe", help="Bar timeframe for scoring (matches stored bars)."
+    ),
+    as_json: bool = typer.Option(False, "--json", help="Emit a single JSON object."),
+) -> None:
+    """Run ONE cross-sectional rebalance against the live/paper account (spec 032 slice 2).
+
+    Scores the universe from stored bars, builds target weights, diffs against
+    current holdings, and routes the BUY+SELL rebalance through the SAME K1 gate
+    chain as the live worker (via filter-free synthetic rules). Defaults to
+    PAPER (simulated fills, no money). `--mode live` places REAL orders — an
+    explicit operator action. Each order is clamped down to the per-trade cap, so
+    a large rebalance converges over repeated runs.
+    """
+    import json as _json
+    from decimal import Decimal as _Decimal
+
+    from auto_invest.broker.overseas import get_quote
+    from auto_invest.config.enums import StrategyStage
+    from auto_invest.execution.order_router import OrderRouter
+    from auto_invest.execution.rebalancer import execute_rebalance
+
+    if mode not in ("paper", "live"):
+        typer.echo(f"--mode must be 'paper' or 'live', got {mode!r}", err=True)
+        _exit(64)
+
+    try:
+        caps, whitelist, port_cfg = _load_portfolio_for_backtest(portfolio)
+    except ConfigError as exc:
+        typer.echo(f"portfolio validation failed: {exc}", err=True)
+        _exit(65)
+        return
+    try:
+        secrets = load_secrets(env_file)
+    except ConfigError as exc:
+        typer.echo(f"secrets error: {exc}", err=True)
+        _exit(2)
+        return
+
+    _require_clean_migrations(db_path, allow_apply=True)
+    total_capital = _Decimal(str(capital))
+
+    async def _go() -> object:
+        conn = db.get_connection(db_path)
+        async with httpx.AsyncClient(base_url=base_url, timeout=30.0) as inner:
+            token = await get_valid_token(
+                inner,
+                base_url=base_url,
+                app_key=secrets["KIS_APP_KEY"],
+                app_secret=secrets["KIS_APP_SECRET"],
+                cache_path=db_path.parent / "kis_token.json",
+            )
+            broker = ResilientClient(
+                inner,
+                rate_limiter=AsyncTokenBucket(rate_per_sec=15.0, capacity=15.0),
+                breaker=CircuitBreaker(failure_threshold=5, cooldown_seconds=30.0),
+                max_retries=4,
+            )
+            router = OrderRouter(
+                conn=conn,
+                broker=broker,
+                access_token=token.access_token,
+                app_key=secrets["KIS_APP_KEY"],
+                app_secret=secrets["KIS_APP_SECRET"],
+                account_no=secrets["KIS_ACCOUNT_NO"],
+                whitelist=whitelist,  # type: ignore[arg-type]
+                caps=caps,  # type: ignore[arg-type]
+                halt_path=halt_path,
+                paper_mode=(mode == "paper"),
+            )
+
+            async def _quote_provider(symbol: str):
+                return await get_quote(
+                    broker,
+                    access_token=token.access_token,
+                    app_key=secrets["KIS_APP_KEY"],
+                    app_secret=secrets["KIS_APP_SECRET"],
+                    symbol=symbol,
+                )
+
+            try:
+                return await execute_rebalance(
+                    config=port_cfg,  # type: ignore[arg-type]
+                    router=router,
+                    conn=conn,
+                    quote_provider=_quote_provider,
+                    total_capital_usd=total_capital,
+                    caps=caps,  # type: ignore[arg-type]
+                    timeframe=timeframe,
+                    stage=StrategyStage.CANARY,
+                )
+            finally:
+                conn.close()
+
+    outcome = asyncio.run(_go())
+
+    if as_json:
+        typer.echo(
+            _json.dumps(
+                {
+                    "portfolio_id": outcome.portfolio_id,  # type: ignore[attr-defined]
+                    "mode": mode,
+                    "target_weights": {
+                        s: str(w) for s, w in outcome.target_weights.items()  # type: ignore[attr-defined]
+                    },
+                    "results": [
+                        {
+                            "symbol": r.symbol,
+                            "side": r.side,
+                            "requested_qty": r.requested_qty,
+                            "routed_qty": r.routed_qty,
+                            "limit_price_usd": str(r.limit_price_usd),
+                            "state": r.state,
+                            "reason": r.reason,
+                        }
+                        for r in outcome.results  # type: ignore[attr-defined]
+                    ],
+                }
+            )
+        )
+        return
+
+    typer.echo(f"rebalance {outcome.portfolio_id}  mode={mode}")  # type: ignore[attr-defined]
+    typer.echo(
+        "target weights: "
+        + ", ".join(
+            f"{s}={w}" for s, w in sorted(outcome.target_weights.items())  # type: ignore[attr-defined]
+        )
+    )
+    typer.echo("")
+    for r in outcome.results:  # type: ignore[attr-defined]
+        typer.echo(
+            f"  {r.side:4} {r.symbol:6} req={r.requested_qty} routed={r.routed_qty} "
+            f"@~{r.limit_price_usd}  -> {r.state}"
+            + (f" ({r.reason})" if r.reason else "")
+        )
+
+
 @app.command("walk-forward")
 def walk_forward_cmd(
     rules: Path = typer.Option(
