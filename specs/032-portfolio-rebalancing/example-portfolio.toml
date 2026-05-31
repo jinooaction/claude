@@ -1,0 +1,45 @@
+# 스펙 032 — 횡단면 재조정 포트폴리오 백테스트 예시 설정.
+#
+# 사용:
+#   auto-invest backtest-portfolio --portfolio specs/032-portfolio-rebalancing/example-portfolio.toml \
+#       --from 2022-01-03 --to 2023-12-29
+#
+# 백테스트·CLI 전용이다. 라이브 워커는 이 파일을 읽지 않는다(슬라이스 1은 무배선).
+# universe 의 모든 종목은 [whitelist].symbols 에 있어야 매수가 게이트를 통과한다.
+# 캡은 포트폴리오 비중을 수용하도록 잡는다: top_n=10·invested 0.95 → 종목당 ~9.5%
+# 이므로 per_trade/per_symbol 를 그 위로(여기 15%) 두고 global 은 invested(95%) 위로.
+
+[caps]
+per_trade_pct                  = 15.0
+per_symbol_pct                 = 15.0
+global_exposure_pct            = 100.0
+canary_capital_pct             = 5.0
+canary_min_duration_days       = 10
+canary_acceptance_drawdown_pct = 30.0
+
+[whitelist]
+symbols = [
+    "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META",
+    "JPM", "JNJ", "XOM", "PG", "HD", "KO",
+    "SPY", "QQQ",
+]
+accounts    = ["BACKTEST"]
+order_types = ["MARKET", "LIMIT"]
+sessions    = ["REGULAR"]
+
+[portfolio]
+id            = "composite-top10"
+universe      = [
+    "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META",
+    "JPM", "JNJ", "XOM", "PG", "HD", "KO",
+]
+# 합성 알파 가중치(스펙 025). 모멘텀+퀄리티+저변동성 블렌드.
+weights       = { momentum = "1.0", quality = "1.0", low_volatility = "0.5" }
+weight_scheme = "inverse_vol"   # equal / score_proportional / inverse_vol / min_variance / max_sharpe / erc
+top_n         = 10
+invested_fraction         = "0.95"
+rebalance_every_n_sessions = 21   # ≈ 월 1회(영업일 기준)
+lookback_bars             = 60
+momentum_period           = 20
+rebalance_threshold_pct   = "1.0"  # 무거래 밴드(회전율 통제)
+min_notional_usd          = "50"
