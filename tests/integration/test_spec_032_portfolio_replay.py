@@ -202,9 +202,10 @@ def test_equity_curve_has_one_point_per_session(tmp_path):
     assert all(days[start_idx] <= d <= days[-1] for d, _ in res.equity_curve)
 
 
-def test_per_trade_cap_rejects_oversized_buy(tmp_path):
-    """A 1% per-trade cap is far below the ~30% target buy → the gate rejects it
-    (SC-07: the planner proposes, K1 binds — caps are the ceiling)."""
+def test_per_trade_cap_clamps_order_size(tmp_path):
+    """SC-07 (clamp form): a 1% per-trade cap does not REJECT the buy — it clamps
+    it DOWN so the order passes and the strategy still trades, matching the live
+    rebalancer (single yardstick). Every fill's notional stays within the cap."""
     days = trading_days_between(date(2023, 1, 3), date(2023, 4, 28))
     bars = {
         "AAA": _bars("AAA", days, lambda i: 100 + i * 0.3),
@@ -228,9 +229,14 @@ def test_per_trade_cap_rejects_oversized_buy(tmp_path):
         tmp_path,
         start_idx=20,
     )
-    assert res.gate_rejections, "an oversized BUY must be rejected by the per-trade cap"
-    assert any(r.gate == "per_trade_cap_gate" for r in res.gate_rejections)
-    assert not res.fills, "nothing should fill when every buy is over the cap"
+    # per-trade cap = 1% of mark-to-market equity; allow a small headroom since
+    # equity drifts intra-window. Every fill must stay within ~1% notional.
+    assert res.fills, "clamped buys should still fill (not be dropped)"
+    assert not any(r.gate == "per_trade_cap_gate" for r in res.gate_rejections)
+    for f in res.fills:
+        notional = Decimal(f.qty) * Decimal(f.fill_price_usd)
+        # 1% of starting $100k = $1,000; equity grows so allow generous headroom.
+        assert notional <= Decimal("2000"), f"fill notional {notional} far over cap"
 
 
 def test_deterministic_orders_and_equity(tmp_path):
@@ -259,3 +265,38 @@ def test_deterministic_orders_and_equity(tmp_path):
     assert sig1 == sig2  # SC-09
     assert r1.equity_curve == r2.equity_curve
     assert r1.total_return_pct == r2.total_return_pct
+
+
+def test_benchmark_comparison_selection_beats_naive_hold(tmp_path):
+    """The naive equal-weight buy-and-hold benchmark holds the WHOLE universe
+    (including the loser). A top-2 momentum strategy avoids the loser, so its
+    excess return over the benchmark is positive (selection added value)."""
+    days = trading_days_between(date(2023, 1, 3), date(2023, 6, 30))
+    bars = {
+        "AAA": _bars("AAA", days, lambda i: 100 * (1.004 ** i)),  # strong up
+        "BBB": _bars("BBB", days, lambda i: 100 * (1.002 ** i)),  # mild up
+        "LOSE": _bars("LOSE", days, lambda i: 100 * (0.996 ** i)),  # down
+    }
+    cfg = PortfolioRebalanceConfig(
+        id="p1",
+        universe=("AAA", "BBB", "LOSE"),
+        weights={"momentum": Decimal("1")},
+        top_n=2,
+        invested_fraction=Decimal("0.9"),
+        rebalance_every_n_sessions=21,
+        lookback_bars=30,
+        momentum_period=20,
+    )
+    res = _run(
+        cfg,
+        _FakeDataSource(bars),
+        days,
+        _caps(),
+        _whitelist(("AAA", "BBB", "LOSE")),
+        tmp_path,
+        start_idx=40,
+    )
+    # excess is exactly strategy − benchmark, and selection (avoiding LOSE) wins.
+    assert res.excess_return_pct == res.total_return_pct - res.benchmark_total_return_pct
+    assert res.benchmark_total_return_pct != Decimal("0")  # benchmark actually ran
+    assert res.excess_return_pct > 0

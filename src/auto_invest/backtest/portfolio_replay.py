@@ -23,12 +23,13 @@ import sqlite3
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import date, timedelta
-from decimal import Decimal
+from decimal import ROUND_FLOOR, Decimal
 from pathlib import Path
 
 from auto_invest.backtest.broker_mock import BacktestBroker, assert_backtest_adapter
 from auto_invest.backtest.clock import ReplayClock
 from auto_invest.backtest.costs import BacktestCostModel
+from auto_invest.backtest.data_model import OHLCVBar
 from auto_invest.backtest.data_source import HistoricalDataSource
 from auto_invest.backtest.metrics import (
     daily_returns_from_equity,
@@ -83,6 +84,12 @@ class PortfolioReplayResult:
     commission_usd: Decimal
     slippage_cost_usd: Decimal
     final_equity_usd: Decimal
+    # Naive equal-weight buy-and-hold of the SAME universe over the SAME window —
+    # the scientific control for "did active rebalancing/selection add value?".
+    benchmark_total_return_pct: Decimal = Decimal("0")
+    benchmark_max_drawdown_pct: Decimal = Decimal("0")
+    benchmark_sharpe_ratio: Decimal = Decimal("0")
+    excess_return_pct: Decimal = Decimal("0")  # strategy − benchmark
 
 
 @dataclass
@@ -219,6 +226,19 @@ def replay_portfolio(
         else Decimal("0")
     )
     daily_rets = daily_returns_from_equity(equities) if len(equities) >= 2 else []
+    strat_return = total_return_pct(equities)
+
+    # Naive equal-weight buy-and-hold benchmark over the same window (the control).
+    bench_curve = _benchmark_equity_curve(
+        list(config.universe),
+        trading_dates,
+        bars_by_symbol_date,
+        total_capital_usd,
+        config.invested_fraction,
+    )
+    bench_eq = [e for _, e in bench_curve]
+    bench_return = total_return_pct(bench_eq)
+    bench_rets = daily_returns_from_equity(bench_eq) if len(bench_eq) >= 2 else []
 
     return PortfolioReplayResult(
         equity_curve=equity_curve,
@@ -226,7 +246,7 @@ def replay_portfolio(
         orders=orders,
         fills=fills,
         gate_rejections=rejections,
-        total_return_pct=total_return_pct(equities),
+        total_return_pct=strat_return,
         max_drawdown_pct=max_drawdown_pct(equities) if equities else Decimal("0"),
         sharpe_ratio=sharpe_ratio(daily_rets),
         sortino_ratio=sortino_ratio(daily_rets),
@@ -234,10 +254,58 @@ def replay_portfolio(
         commission_usd=commission_total,
         slippage_cost_usd=slippage_total,
         final_equity_usd=equities[-1] if equities else total_capital_usd,
+        benchmark_total_return_pct=bench_return,
+        benchmark_max_drawdown_pct=(
+            max_drawdown_pct(bench_eq) if bench_eq else Decimal("0")
+        ),
+        benchmark_sharpe_ratio=sharpe_ratio(bench_rets),
+        excess_return_pct=(strat_return - bench_return),
     )
 
 
 # ----------------------------------------------------------------- internals
+
+
+def _benchmark_equity_curve(
+    universe: list[str],
+    trading_dates: list[date],
+    bars_by_symbol_date: dict[tuple[str, date], OHLCVBar],
+    capital: Decimal,
+    invested_fraction: Decimal,
+) -> list[tuple[date, Decimal]]:
+    """Equal-weight buy-and-hold of the whole universe — the naive control.
+
+    Buys equal-dollar of every symbol priced on the first trading date, holds to
+    the end (no rebalance, no costs), marks to market each session. This is the
+    yardstick for "did active rebalancing/selection beat just holding the basket?".
+    """
+    if not trading_dates:
+        return []
+    first = trading_dates[0]
+    first_prices = {
+        s: bar.close
+        for s in universe
+        if (bar := bars_by_symbol_date.get((s, first))) is not None and bar.close > 0
+    }
+    if not first_prices:
+        return [(d, capital) for d in trading_dates]
+    per_name = (capital * invested_fraction) / Decimal(len(first_prices))
+    qty = {
+        s: int((per_name / p).to_integral_value(rounding=ROUND_FLOOR))
+        for s, p in first_prices.items()
+    }
+    spent = sum((Decimal(q) * first_prices[s] for s, q in qty.items()), Decimal("0"))
+    cash = capital - spent
+    last_price = dict(first_prices)
+    curve: list[tuple[date, Decimal]] = []
+    for d in trading_dates:
+        for s in qty:
+            bar = bars_by_symbol_date.get((s, d))
+            if bar is not None:
+                last_price[s] = bar.close
+        mv = sum((Decimal(qty[s]) * last_price[s] for s in qty), Decimal("0"))
+        curve.append((d, cash + mv))
+    return curve
 
 
 def _carry(
@@ -330,6 +398,19 @@ def _do_rebalance(
         bar = bars_by_symbol_date.get((planned.symbol, session_date))
         if bar is None:
             continue
+        # Clamp DOWN to the per-trade cap so the order passes per_trade_cap_gate,
+        # mirroring the live rebalancer (execution/rebalancer.py): a large rebalance
+        # converges over successive rebalances instead of being dropped whole. This
+        # keeps backtest == live behaviour (single yardstick, constitution X.2).
+        cap_value = equity * caps.per_trade_pct / Decimal(100)
+        max_qty = (
+            int((cap_value / bar.close).to_integral_value(rounding=ROUND_FLOOR))
+            if bar.close > 0
+            else 0
+        )
+        qty = min(planned.qty, max_qty)
+        if qty < 1:
+            continue
         order_seq += 1
         correlation_id = f"bt-port-{config.id}-{order_seq:06d}"
         side = Side.BUY if planned.side == "BUY" else Side.SELL
@@ -338,7 +419,7 @@ def _do_rebalance(
             symbol=planned.symbol,
             side=side,
             order_type=OrderType.MARKET,
-            qty=planned.qty,
+            qty=qty,
             limit_price_usd=None,
         )
 
@@ -349,7 +430,7 @@ def _do_rebalance(
                 symbol=planned.symbol,
                 side=side.value,
                 order_type="MARKET",
-                qty=planned.qty,
+                qty=qty,
                 limit_price_usd=None,
             ),
             rule_id=config.id,
@@ -398,7 +479,7 @@ def _do_rebalance(
                     symbol=planned.symbol,
                     side=side.value,
                     order_type="MARKET",
-                    qty=planned.qty,
+                    qty=qty,
                     limit_price_usd=None,
                     state="REJECTED_BY_GATE",
                     ts_utc=ts_iso,
@@ -429,7 +510,7 @@ def _do_rebalance(
                 symbol=planned.symbol,
                 side=side.value,
                 order_type="MARKET",
-                qty=planned.qty,
+                qty=qty,
                 limit_price_usd=None,
                 state="SUBMITTED",
                 ts_utc=ts_iso,
