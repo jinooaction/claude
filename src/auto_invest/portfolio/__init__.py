@@ -5,6 +5,12 @@
 측정한다. 외부 API 호출·DB 쓰기·주문 0건 — 측정 전용(슬라이스 1).
 """
 
+from auto_invest.portfolio.growth import (
+    GrowthReport,
+    NavPoint,
+    compute_growth,
+    read_nav_points,
+)
 from auto_invest.portfolio.nav import (
     DEFAULT_MAX_GROWTH_FACTOR,
     SOURCE_BROKER,
@@ -21,10 +27,14 @@ __all__ = [
     "DEFAULT_MAX_GROWTH_FACTOR",
     "SOURCE_BROKER",
     "SOURCE_LEDGER",
+    "GrowthReport",
     "NavDrift",
     "NavHolding",
+    "NavPoint",
     "NavSnapshot",
+    "compute_growth",
     "compute_nav",
     "effective_capital",
+    "read_nav_points",
     "render_text",
 ]
