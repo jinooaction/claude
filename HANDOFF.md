@@ -57,6 +57,28 @@ git ls-remote --heads origin 'claude/*' | awk '{print $2}'
   운영자 확인). 부분 체결 재호가(잔량 재계산)는 별도 슬라이스.
 - **L1 적용 표면 확장 / L2·L3 캐너리 승격 큐 / 실거래 자본 상향** — 기존 후보 유지.
 
+## 최근 마일스톤 — 2026-06-01 (스펙 032: 현재 데이터 forward 페이퍼 검증 — "옛 데이터 과의존" 교정)
+
+main 머지 `4a33e3a`(PR #141). Kernel 터치 0건. Python 코드 무변경. 운영자 지적:
+"2026년인데 너무 과거 데이터만 쓰는 것 아닌가? 폭락장(2008·2000)도 결국 과거다."
+
+- **정확한 지적**: 모든 백테스트는 과거이고, 과거 regime(참여자·금리·미시구조)은 2026
+  시장과 다르다. 게다가 이 컨테이너는 라이브 시세(KIS·Yahoo·Stooq) 차단 + github raw
+  데이터는 전부 옛것(2018까지) → **여기서 최신 데이터 백테스트 자체가 불가능.** 현재 데이터
+  검증의 유일한 길은 라이브 인스턴스의 forward 페이퍼 트레이딩.
+- **3계층 검증 교리**(`specs/032-portfolio-rebalancing/FORWARD-VALIDATION.md`): (1) 옛 데이터
+  백테스트 = 값싼 과적합 필터일 뿐(라이브 정당화 금지) → (2) **현재 데이터 forward 페이퍼
+  트랙 = 진짜 판정**(`rebalance-once --mode paper` 주기 실행 → 라이브 시세 가상 체결 누적 →
+  스펙 011 성과 + 스펙 027 디플레이티드 샤프로 "지금 우연 아닌 엣지" 판정) → (3) 라이브
+  캐너리 = 운영자 게이트(헌법 X.4).
+- **인프라(돈 0)**: `deploy/canary-portfolio.toml`(저회전 hold_replace 시드, 화이트리스트
+  AAPL·MSFT·SPY) + `.github/workflows/rebalance-paper-forward.yml`(매월 1일 인스턴스 페이퍼
+  재조정 1회 + forward 성과 스냅샷 → 사이드카 브랜치 `automation/rebalance-paper-forward-last-run`).
+  **PAPER 전용, 실주문 0건.** YAML·CLI 플래그·설정 로더 전부 검증 통과.
+- **다음**: 운영자가 워크플로를 트리거(또는 월간 cron)하면 forward 트랙 누적 시작 →
+  `git show origin/automation/rebalance-paper-forward-last-run:LAST_RUN.md`. 유니버스 확대는
+  1계층 후보 다양화용이고, 채택 판정은 항상 2계층 forward 트랙이 한다.
+
 ## 최근 마일스톤 — 2026-06-01 (스펙 032: 포트폴리오 워크포워드 — 과적합·벤치마크 집착 방어)
 
 main 머지 `df7b41e`(PR #139). Kernel 터치 0건. 운영자 지시: "1번(진짜 단순 보유를
