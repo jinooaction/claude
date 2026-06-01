@@ -224,3 +224,33 @@ async def test_rebalance_deterministic(conn, tmp_path):
         return [(r.symbol, r.side, r.routed_qty, r.state) for r in out.results]
 
     assert await run() == await run()
+
+
+@pytest.mark.asyncio
+async def test_dry_run_computes_plan_but_routes_nothing(conn, tmp_path):
+    """`dry_run=True` previews the full plan (buys top names, sells the dropout)
+    but NEVER calls the router — proven by a router that explodes if touched."""
+    _seed_bars(conn, "WIN", [100 * (1.01 ** i) for i in range(40)])
+    _seed_bars(conn, "MID", [100 * (1.005 ** i) for i in range(40)])
+    _seed_bars(conn, "LOSE", [100 * (0.99 ** i) for i in range(40)])
+    _seed_holding(conn, "LOSE", 10, "100")
+    universe = ("WIN", "MID", "LOSE")
+
+    class _BoomRouter:
+        async def submit_order(self, **kwargs):
+            raise AssertionError("dry_run must not route any order")
+
+    out = await execute_rebalance(
+        config=_cfg(universe),
+        router=_BoomRouter(),
+        conn=conn,
+        quote_provider=_quote_provider({"WIN": "150", "MID": "120", "LOSE": "60"}),
+        total_capital_usd=Decimal("100000"),
+        caps=_caps(),
+        dry_run=True,
+    )
+    assert out.results
+    assert all(r.state == "DRY_RUN" for r in out.results)
+    sides = {(r.symbol, r.side) for r in out.results}
+    assert ("LOSE", "SELL") in sides  # dropout previewed as a sell
+    assert ("WIN", "BUY") in sides  # top name previewed as a buy

@@ -149,6 +149,7 @@ async def execute_rebalance(
     caps: SizingCaps,
     timeframe: str = "1d",
     stage: StrategyStage = StrategyStage.CANARY,
+    dry_run: bool = False,
 ) -> RebalanceOutcome:
     """Compute the target portfolio and route the rebalance via the live/paper router.
 
@@ -156,6 +157,11 @@ async def execute_rebalance(
     or a paper/test stub), and routes each planned order through
     ``router.submit_order``. In paper mode the router simulates the fill; in live
     mode it submits real orders. Returns a full per-order outcome record.
+
+    With ``dry_run=True`` the full plan is computed (scores → weights → diff →
+    per-trade clamp) but NO order is routed: each result carries state
+    ``"DRY_RUN"`` so the operator can preview exactly what a live run would place
+    before committing real money. The router is never called.
     """
     # 1. Score the universe (lookahead-free by construction — only stored bars).
     universe_bars = {
@@ -238,6 +244,22 @@ async def execute_rebalance(
                     state="SKIPPED_PER_TRADE_CAP",
                     correlation_id="",
                     reason="per_trade_cap_below_one_share",
+                )
+            )
+            continue
+
+        if dry_run:
+            # Preview only — compute what WOULD be placed, route nothing.
+            results.append(
+                RebalanceOrderResult(
+                    symbol=planned.symbol,
+                    side=planned.side,
+                    requested_qty=planned.qty,
+                    routed_qty=routed_qty,
+                    limit_price_usd=limit_price,
+                    state="DRY_RUN",
+                    correlation_id="",
+                    reason=None,
                 )
             )
             continue

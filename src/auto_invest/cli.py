@@ -2810,6 +2810,18 @@ def rebalance_once_cmd(
     timeframe: str = typer.Option(
         "1d", "--timeframe", help="Bar timeframe for scoring (matches stored bars)."
     ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Preview the plan (scores → weights → orders) WITHOUT placing or "
+        "contacting KIS — offline, prices from the latest stored bars. Safe anywhere.",
+    ),
+    confirm_live: bool = typer.Option(
+        False,
+        "--confirm-live",
+        help="Required acknowledgement for '--mode live': without it a live run is "
+        "refused. A safety interlock against accidental real orders.",
+    ),
     as_json: bool = typer.Option(False, "--json", help="Emit a single JSON object."),
 ) -> None:
     """Run ONE cross-sectional rebalance against the live/paper account (spec 032 slice 2).
@@ -2817,17 +2829,22 @@ def rebalance_once_cmd(
     Scores the universe from stored bars, builds target weights, diffs against
     current holdings, and routes the BUY+SELL rebalance through the SAME K1 gate
     chain as the live worker (via filter-free synthetic rules). Defaults to
-    PAPER (simulated fills, no money). `--mode live` places REAL orders — an
-    explicit operator action. Each order is clamped down to the per-trade cap, so
+    PAPER (simulated fills, no money). `--mode live` places REAL orders and
+    REQUIRES `--confirm-live`. `--dry-run` previews the plan offline with no
+    orders and no KIS contact. Each order is clamped down to the per-trade cap, so
     a large rebalance converges over repeated runs.
     """
     import json as _json
+    from datetime import UTC
+    from datetime import datetime as _datetime
     from decimal import Decimal as _Decimal
 
+    from auto_invest.broker.models import Quote
     from auto_invest.broker.overseas import get_quote
     from auto_invest.config.enums import StrategyStage
     from auto_invest.execution.order_router import OrderRouter
     from auto_invest.execution.rebalancer import execute_rebalance
+    from auto_invest.market_data.store import get_latest_bar
 
     if mode not in ("paper", "live"):
         typer.echo(f"--mode must be 'paper' or 'live', got {mode!r}", err=True)
@@ -2839,17 +2856,87 @@ def rebalance_once_cmd(
         typer.echo(f"portfolio validation failed: {exc}", err=True)
         _exit(65)
         return
-    try:
-        secrets = load_secrets(env_file)
-    except ConfigError as exc:
-        typer.echo(f"secrets error: {exc}", err=True)
-        _exit(2)
-        return
+
+    # Safety: every universe symbol MUST be on the whitelist, else its buys would
+    # be rejected at the gate — surface that BEFORE contacting the broker.
+    missing = [s for s in port_cfg.universe if s not in whitelist.symbols]
+    if missing:
+        typer.echo(
+            f"universe symbols not on the whitelist: {missing} — add them to "
+            "[whitelist].symbols or they will be gate-rejected.",
+            err=True,
+        )
+        _exit(65)
+
+    # Live safety interlock: real orders require an explicit acknowledgement.
+    if mode == "live" and not dry_run and not confirm_live:
+        typer.echo(
+            "REFUSED: --mode live places REAL orders (money moves). Re-run with "
+            "--confirm-live to acknowledge, or use --dry-run to preview safely.",
+            err=True,
+        )
+        _exit(64)
 
     _require_clean_migrations(db_path, allow_apply=True)
     total_capital = _Decimal(str(capital))
 
+    async def _go_dry() -> object:
+        # Offline preview: no secrets, no KIS. Prices from the latest stored bars;
+        # a throwaway paper router is built but NEVER called (dry_run routes nothing).
+        conn = db.get_connection(db_path)
+        async with httpx.AsyncClient(base_url="http://dry-run") as inner:
+            broker = ResilientClient(
+                inner,
+                rate_limiter=AsyncTokenBucket(rate_per_sec=100.0, capacity=10.0),
+                breaker=CircuitBreaker(failure_threshold=3, cooldown_seconds=10.0),
+                max_retries=1,
+            )
+            router = OrderRouter(
+                conn=conn,
+                broker=broker,
+                access_token="dry-run",
+                app_key="dry-run",
+                app_secret="dry-run",
+                account_no="DRY-RUN",
+                whitelist=whitelist,  # type: ignore[arg-type]
+                caps=caps,  # type: ignore[arg-type]
+                halt_path=halt_path,
+                paper_mode=True,
+            )
+
+            async def _bar_quote(symbol: str) -> Quote:
+                bar = get_latest_bar(conn, symbol=symbol, timeframe=timeframe)
+                if bar is None:
+                    raise ValueError(f"no stored bar for {symbol}")
+                return Quote(
+                    symbol=symbol,
+                    last_price_usd=bar.close_usd,
+                    bid_usd=bar.close_usd,
+                    ask_usd=bar.close_usd,
+                    quoted_at_utc=_datetime.now(UTC),
+                )
+
+            try:
+                return await execute_rebalance(
+                    config=port_cfg,  # type: ignore[arg-type]
+                    router=router,
+                    conn=conn,
+                    quote_provider=_bar_quote,
+                    total_capital_usd=total_capital,
+                    caps=caps,  # type: ignore[arg-type]
+                    timeframe=timeframe,
+                    stage=StrategyStage.CANARY,
+                    dry_run=True,
+                )
+            finally:
+                conn.close()
+
     async def _go() -> object:
+        try:
+            secrets = load_secrets(env_file)
+        except ConfigError as exc:
+            typer.echo(f"secrets error: {exc}", err=True)
+            raise
         conn = db.get_connection(db_path)
         async with httpx.AsyncClient(base_url=base_url, timeout=30.0) as inner:
             token = await get_valid_token(
@@ -2901,14 +2988,15 @@ def rebalance_once_cmd(
             finally:
                 conn.close()
 
-    outcome = asyncio.run(_go())
+    outcome = asyncio.run(_go_dry() if dry_run else _go())
+    mode_label = "dry-run" if dry_run else mode
 
     if as_json:
         typer.echo(
             _json.dumps(
                 {
                     "portfolio_id": outcome.portfolio_id,  # type: ignore[attr-defined]
-                    "mode": mode,
+                    "mode": mode_label,
                     "target_weights": {
                         s: str(w) for s, w in outcome.target_weights.items()  # type: ignore[attr-defined]
                     },
@@ -2929,7 +3017,7 @@ def rebalance_once_cmd(
         )
         return
 
-    typer.echo(f"rebalance {outcome.portfolio_id}  mode={mode}")  # type: ignore[attr-defined]
+    typer.echo(f"rebalance {outcome.portfolio_id}  mode={mode_label}")  # type: ignore[attr-defined]
     typer.echo(
         "target weights: "
         + ", ".join(
