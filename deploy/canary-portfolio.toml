@@ -1,0 +1,44 @@
+# 스펙 032 — forward 페이퍼 검증용 포트폴리오 설정 (현재 데이터, 돈 안 움직임).
+#
+# 왜 이 파일이 있나: 옛 과거 데이터 백테스트는 2026년 시장 구조(참여자·금리·미시구조)와
+# 다른 regime 을 측정한다. "과거에 맞았다"가 "지금 통한다"를 보장하지 않는다. 유일한
+# 진짜 검증은 *현재 데이터로 앞으로(forward) 페이퍼 트레이딩한 트랙레코드*다.
+# `auto-invest rebalance-once --mode paper` 가 라이브 KIS 시세로 가상 체결을 기록
+# (ORDER_PAPER_FILLED)하고, 그걸 성과 엔진(스펙 011) + 디플레이티드 샤프(스펙 027)로
+# 측정한다. 이 설정은 그 forward 페이퍼 검증의 시드다.
+#
+# 안전: accounts 는 ${KIS_ACCOUNT_NO} 로 치환되지만 --mode paper 는 가상 체결만 한다
+# (실주문 0건). 라이브 전환은 별도 운영자 게이트(헌법 X.4) + --mode live --confirm-live.
+#
+# 인스턴스 전제: 워커가 universe 심볼의 일봉을 적재하고 있어야 점수화가 된다(deploy 동기화).
+# 유니버스는 인스턴스의 검증된 캐너리 화이트리스트(AAPL·MSFT·SPY)에 맞췄다 — 운영자가
+# 넓혀도 된다(넓을수록 횡단면 분산↑, REAL-DATA-FINDINGS 의 교훈).
+
+[caps]
+per_trade_pct                  = 5.0
+per_symbol_pct                 = 40.0
+global_exposure_pct            = 80.0
+canary_capital_pct             = 5.0
+canary_min_duration_days       = 10
+canary_acceptance_drawdown_pct = 3.0
+
+[whitelist]
+symbols     = ["AAPL", "MSFT", "SPY"]
+accounts    = ["${KIS_ACCOUNT_NO}"]
+order_types = ["LIMIT"]
+sessions    = ["REGULAR"]
+
+[portfolio]
+id            = "forward-paper-canary"
+universe      = ["AAPL", "MSFT", "SPY"]
+weights       = { momentum = "1.0", quality = "1.0", low_volatility = "0.5" }
+weight_scheme = "equal"
+top_n         = 3
+# 증거 기반 기본값(REAL-DATA-FINDINGS): 저회전 + 승자 유지. 분기 재조정으로 회전·비용 최소.
+rebalance_mode             = "hold_replace"
+invested_fraction          = "0.95"
+rebalance_every_n_sessions = 63
+lookback_bars              = 90
+momentum_period            = 60
+rebalance_threshold_pct    = "2.0"
+min_notional_usd           = "50"
