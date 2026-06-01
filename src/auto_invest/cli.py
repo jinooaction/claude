@@ -2573,6 +2573,175 @@ def backtest_cmd(
         _exit(outcome.exit_code)
 
 
+@app.command("portfolio-walk-forward")
+def portfolio_walk_forward_cmd(
+    portfolio: Path = typer.Option(
+        ..., "--portfolio", help="TOML with [caps], [whitelist], [portfolio] (spec 032)."
+    ),
+    date_from: str = typer.Option(..., "--from", help="Inclusive start (YYYY-MM-DD)."),
+    date_to: str = typer.Option(..., "--to", help="Inclusive end (YYYY-MM-DD)."),
+    segment_days: int = typer.Option(
+        365, "--segment-days", help="Length of each out-of-sample segment (calendar days)."
+    ),
+    lookback_buffer_days: int = typer.Option(
+        160,
+        "--lookback-buffer-days",
+        help="Calendar days reserved before the first segment for signal lookback "
+        "(no parameter is fit on it — a fixed rebalancing config has none).",
+    ),
+    mode: str = typer.Option("rolling", "--mode", help="'rolling' or 'anchored'."),
+    num_trials: int = typer.Option(
+        1,
+        "--num-trials",
+        help="How many DISTINCT configs were tried in the whole search. The "
+        "deflated-Sharpe base: the more you tried, the more the selected config's "
+        "Sharpe is discounted (multiple-testing correction). Be honest here.",
+    ),
+    dataset_version: str = typer.Option(
+        None, "--dataset-version", help="Specific dataset; default = most recent."
+    ),
+    capital: float = typer.Option(100000.0, "--capital", help="Starting capital USD."),
+    db_path: Path = typer.Option(
+        Path("data/auto_invest.db"), "--db", help="SQLite audit-log path."
+    ),
+    halt_path: Path = typer.Option(
+        Path("data/halt.flag"), "--halt-path", help="Halt-flag path."
+    ),
+    history_root: Path = typer.Option(
+        Path("data/history"), "--history-root", help="Parent of <dataset_version>/."
+    ),
+    as_json: bool = typer.Option(False, "--json", help="Emit JSON instead of text."),
+) -> None:
+    """Out-of-sample, risk-adjusted, multiple-testing-corrected portfolio evaluation.
+
+    The anti-overfitting counterpart to `backtest-portfolio`. Instead of one
+    in-sample total-return-vs-buy-and-hold number (which a strong bull market makes
+    misleading), this tiles the period into contiguous out-of-sample segments,
+    compares the strategy to the naive buy-and-hold benchmark on Sharpe / drawdown
+    per segment, and applies the deflated Sharpe ratio (spec 027) — discounting the
+    selected config's Sharpe by how many configs were tried. The verdict only calls
+    an edge "robust" if it wins a majority of segments AND beats the benchmark mean
+    Sharpe AND survives the multiple-testing deflation. Offline, read-only.
+    """
+    import json as _json
+    from datetime import date as _date
+    from decimal import Decimal as _Decimal
+
+    from auto_invest.backtest.data_source import CSVDataSource, latest_dataset_dir
+    from auto_invest.backtest.portfolio_walk_forward import run_portfolio_walk_forward
+
+    try:
+        ds_start = _date.fromisoformat(date_from)
+        ds_end = _date.fromisoformat(date_to)
+    except ValueError as exc:
+        typer.echo(f"date parsing failed: {exc}", err=True)
+        _exit(64)
+        return
+    if ds_end < ds_start:
+        typer.echo(f"--to ({ds_end}) is before --from ({ds_start})", err=True)
+        _exit(64)
+        return
+    if mode not in ("rolling", "anchored"):
+        typer.echo(f"--mode must be 'rolling' or 'anchored', got {mode!r}", err=True)
+        _exit(64)
+        return
+
+    try:
+        caps, whitelist, port_cfg = _load_portfolio_for_backtest(portfolio)
+    except ConfigError as exc:
+        typer.echo(f"portfolio validation failed: {exc}", err=True)
+        _exit(65)
+        return
+
+    if dataset_version is not None:
+        dataset_dir = history_root / dataset_version
+        if not (dataset_dir / "manifest.json").exists():
+            typer.echo(f"dataset_version {dataset_version!r} not found", err=True)
+            _exit(64)
+            return
+    else:
+        latest = latest_dataset_dir(history_root)
+        if latest is None:
+            typer.echo("no ingested datasets; run `auto-invest ingest-history`", err=True)
+            _exit(64)
+            return
+        dataset_dir = latest
+
+    data_source = CSVDataSource(dataset_dir)
+    _require_clean_migrations(db_path, allow_apply=True)
+    conn = db.get_connection(db_path)
+    try:
+        report = run_portfolio_walk_forward(
+            config=port_cfg,  # type: ignore[arg-type]
+            data_source=data_source,
+            date_start=ds_start,
+            date_end=ds_end,
+            caps=caps,  # type: ignore[arg-type]
+            whitelist=whitelist,  # type: ignore[arg-type]
+            halt_path=halt_path,
+            conn=conn,
+            lookback_buffer_days=lookback_buffer_days,
+            segment_days=segment_days,
+            mode=mode,
+            total_capital_usd=_Decimal(str(capital)),
+            num_trials=num_trials,
+        )
+    except Exception as exc:  # WalkForwardError etc — surface as usage error
+        typer.echo(f"walk-forward failed: {exc}", err=True)
+        conn.close()
+        data_source.close()
+        _exit(64)
+        return
+    conn.close()
+    data_source.close()
+
+    if as_json:
+        typer.echo(
+            _json.dumps(
+                {
+                    "dataset_version": data_source.dataset_version,
+                    "n_segments": report.n_segments,
+                    "segments_strategy_wins": report.segments_strategy_wins,
+                    "mean_strategy_sharpe": str(report.mean_strategy_sharpe),
+                    "mean_benchmark_sharpe": str(report.mean_benchmark_sharpe),
+                    "pooled_strategy_sharpe_annual": str(report.pooled_strategy_sharpe_annual),
+                    "num_trials": report.num_trials,
+                    "strategy_psr": str(report.strategy_psr),
+                    "strategy_dsr": str(report.strategy_dsr),
+                    "verdict": report.verdict,
+                }
+            )
+        )
+        return
+
+    typer.echo(f"dataset_version: {data_source.dataset_version}")
+    typer.echo(
+        f"out-of-sample segments: {report.n_segments}  "
+        f"risk-adjusted wins vs buy-and-hold: {report.segments_strategy_wins}/{report.n_segments}"
+    )
+    for s in report.segments:
+        mark = "win " if s.strategy_beats_benchmark else "LOSE"
+        typer.echo(
+            f"  seg{s.index} {s.start}→{s.end} ({s.n_sessions}d) [{mark}] "
+            f"sharpe {s.strategy_sharpe} vs {s.benchmark_sharpe}  "
+            f"ret {s.strategy_return_pct}% vs {s.benchmark_return_pct}%  "
+            f"maxDD {s.strategy_maxdd_pct}% vs {s.benchmark_maxdd_pct}%"
+        )
+    typer.echo(
+        f"mean Sharpe: strategy {report.mean_strategy_sharpe} vs "
+        f"buy-and-hold {report.mean_benchmark_sharpe}"
+    )
+    typer.echo(
+        f"pooled OOS: {report.pooled_obs} sessions, annual Sharpe "
+        f"{report.pooled_strategy_sharpe_annual}"
+    )
+    typer.echo(
+        f"PSR (1 trial): {report.strategy_psr}   "
+        f"DSR (deflated for {report.num_trials} trials): {report.strategy_dsr}"
+    )
+    typer.echo(f"verdict: {report.verdict}")
+
+
 @app.command("backtest-portfolio")
 def backtest_portfolio_cmd(
     portfolio: Path = typer.Option(
