@@ -248,16 +248,23 @@ def rebalance_plan(
     invested_fraction: Decimal = _ONE,
     rebalance_threshold_pct: Decimal = Decimal("0"),
     min_notional_usd: Decimal = Decimal("0"),
+    mode: str = "rebalance",
 ) -> list[PlannedOrder]:
     """Diff a target-weight vector against holdings into BUY/SELL orders.
 
     * A name held but NOT in ``target_weights`` is fully exited (SELL all) —
       regardless of the no-trade band — so a name that drops out of the top
       ranks is always cut (SC-05). This is the missing sell dimension.
-    * For a name in the target, the no-trade band (``rebalance_threshold_pct``,
-      in percentage points of total capital) suppresses orders whose weight
-      change is below the band, and ``min_notional_usd`` drops sub-threshold
-      odd-lot trades — both turnover controls so churn does not eat the alpha.
+    * ``mode="rebalance"`` (default): for a name in the target, the no-trade band
+      (``rebalance_threshold_pct``, in percentage points of total capital)
+      suppresses orders whose weight change is below the band, and
+      ``min_notional_usd`` drops sub-threshold odd-lot trades — turnover controls
+      so churn does not eat the alpha.
+    * ``mode="hold_replace"``: low-turnover "let winners run" — only EXIT dropouts
+      and BUY *new* entrants (names in the target not currently held); existing
+      holdings are left untouched (no trim back to target weight). On real
+      mega-cap data this avoided the winner-trimming + churn that made the default
+      mode lose to buy-and-hold (see REAL-DATA-FINDINGS.md).
 
     Quantities are proposed only; the caller routes every BUY through the K1
     gate chain, which rejects anything over the caps. Deterministic: symbols are
@@ -280,6 +287,19 @@ def rebalance_plan(
 
         if price is None or price <= 0:
             continue  # cannot price a target buy/rebalance without a quote
+
+        if mode == "hold_replace":
+            # Let existing winners run: only buy *new* entrants, never trim/add to
+            # a name already held. Exits above already handle rank dropouts.
+            if current_qty > 0:
+                continue
+            target_qty = _target_qty(weight * investable, price)
+            if target_qty < 1:
+                continue
+            if min_notional_usd > 0 and Decimal(target_qty) * price < min_notional_usd:
+                continue
+            orders.append(PlannedOrder(symbol, "BUY", target_qty))
+            continue
 
         target_dollar = weight * investable
         target_qty = _target_qty(target_dollar, price)

@@ -211,6 +211,7 @@ async def execute_rebalance(
         invested_fraction=config.invested_fraction,
         rebalance_threshold_pct=config.rebalance_threshold_pct,
         min_notional_usd=config.min_notional_usd,
+        mode=config.rebalance_mode,
     )
 
     # 5. Exposure snapshot (consistent for the whole rebalance; sells reduce later).

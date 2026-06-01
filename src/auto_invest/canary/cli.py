@@ -142,6 +142,19 @@ def run_cmd(
         typer.echo(f"--to ({ds_end}) is before --from ({ds_start})", err=True)
         _exit(EXIT_USAGE)
 
+    # Validate --run-id here (a cheap argument check) BEFORE the expensive
+    # coverage build below — otherwise a malformed run-id on a window with no
+    # data exits with the coverage code instead of the usage code (SC: an
+    # invalid run-id is a usage error regardless of data availability).
+    run_id_uuid: uuid.UUID | None = None
+    if canary_run_id is not None:
+        try:
+            run_id_uuid = uuid.UUID(canary_run_id)
+        except ValueError as exc:
+            typer.echo(f"--run-id must be a UUID: {exc}", err=True)
+            _exit(EXIT_USAGE)
+            return  # pragma: no cover
+
     # Build ReplayWindowInputs — same shape as spec-008's backtest CLI uses.
     try:
         replay_inputs = _build_replay_inputs(
@@ -178,14 +191,6 @@ def run_cmd(
             today=ds_end,
             shocks_toml=shocks_toml,
         )
-
-    run_id_uuid: uuid.UUID | None = None
-    if canary_run_id is not None:
-        try:
-            run_id_uuid = uuid.UUID(canary_run_id)
-        except ValueError as exc:
-            typer.echo(f"--run-id must be a UUID: {exc}", err=True)
-            _exit(EXIT_USAGE)
 
     options = CanaryOptions(
         tier=tier,  # type: ignore[arg-type]

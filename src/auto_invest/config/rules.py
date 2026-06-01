@@ -315,6 +315,13 @@ class PortfolioRebalanceConfig(BaseModel):
     weight_scheme: Literal[
         "equal", "score_proportional", "inverse_vol", "min_variance", "max_sharpe", "erc"
     ] = "equal"
+    # 스펙 032 — 재조정 동작 방식.
+    #   "rebalance"(기본): 매 주기 목표 비중으로 되돌린다(승자도 덜어냄). 강세장에서
+    #     승자 트리밍 + 높은 회전율로 단순 보유에 뒤질 수 있다(REAL-DATA-FINDINGS 참고).
+    #   "hold_replace": 저회전 "승자 유지" — 순위에서 이탈한 보유만 매도(청산)하고, 새
+    #     진입 종목만 매수한다. 기존 보유는 비중을 되돌리지 않고 그대로 둔다(승자가 계속
+    #     달리게). 회전율이 크게 낮아져 비용을 아끼고 강세장 트리밍 손실을 없앤다.
+    rebalance_mode: Literal["rebalance", "hold_replace"] = "rebalance"
     # 합성 점수 파라미터 (스펙 025 재사용)
     weights: dict[str, Decimal] = Field(..., min_length=1)
     lookback_bars: int = Field(default=60, ge=30)

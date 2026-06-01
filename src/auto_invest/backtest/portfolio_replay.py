@@ -389,6 +389,7 @@ def _do_rebalance(
         invested_fraction=config.invested_fraction,
         rebalance_threshold_pct=config.rebalance_threshold_pct,
         min_notional_usd=config.min_notional_usd,
+        mode=config.rebalance_mode,
     )
 
     # Sells first (free cash), then buys; each already symbol-sorted.

@@ -253,6 +253,32 @@ def test_invested_fraction_keeps_cash_buffer():
     assert orders == [PlannedOrder("AAA", "BUY", 95)]
 
 
+def test_hold_replace_lets_winners_run_and_only_buys_new_entrants():
+    # Held: AAA (grew, in target), CCC (dropped out). Target: AAA, BBB(new).
+    # hold_replace must: NOT trim AAA (let it run), SELL CCC (exit), BUY BBB (new).
+    orders = rebalance_plan(
+        target_weights={"AAA": Decimal("0.5"), "BBB": Decimal("0.5")},
+        holdings={"AAA": 100, "CCC": 10},
+        prices={"AAA": Decimal("100"), "BBB": Decimal("100"), "CCC": Decimal("50")},
+        capital_usd=Decimal("10000"),
+        invested_fraction=Decimal("1"),
+        mode="hold_replace",
+    )
+    syms = {(o.symbol, o.side) for o in orders}
+    assert ("AAA", "SELL") not in syms and ("AAA", "BUY") not in syms  # winner runs
+    assert ("CCC", "SELL") in syms  # dropout exited
+    assert ("BBB", "BUY") in syms  # new entrant bought
+    # default mode WOULD trim AAA (100 held vs 50 target) — contrast:
+    default = rebalance_plan(
+        target_weights={"AAA": Decimal("0.5"), "BBB": Decimal("0.5")},
+        holdings={"AAA": 100, "CCC": 10},
+        prices={"AAA": Decimal("100"), "BBB": Decimal("100"), "CCC": Decimal("50")},
+        capital_usd=Decimal("10000"),
+        invested_fraction=Decimal("1"),
+    )
+    assert PlannedOrder("AAA", "SELL", 50) in default  # default trims the winner
+
+
 def test_rebalance_plan_is_sorted_and_deterministic():
     kw = dict(
         target_weights={"ZZZ": Decimal("0.5"), "AAA": Decimal("0.5")},
