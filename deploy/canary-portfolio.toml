@@ -35,10 +35,13 @@ weights       = { momentum = "1.0", quality = "1.0", low_volatility = "0.5" }
 weight_scheme = "equal"
 top_n         = 3
 # 증거 기반 기본값(REAL-DATA-FINDINGS): 저회전 + 승자 유지. 분기 재조정으로 회전·비용 최소.
+# 룩백/모멘텀은 짧게 둔다 — 인스턴스가 아직 긴 일봉 히스토리를 쌓지 못했을 수 있으므로,
+# forward 트랙이 무거래(no-op) 대신 실제 마크를 쌓기 시작하도록(시드 목적). 히스토리가
+# 충분히 쌓이면 이후 길게 조정한다(전략 정련은 forward 트랙 위에서).
 rebalance_mode             = "hold_replace"
 invested_fraction          = "0.95"
 rebalance_every_n_sessions = 63
-lookback_bars              = 90
-momentum_period            = 60
+lookback_bars              = 30
+momentum_period            = 20
 rebalance_threshold_pct    = "2.0"
 min_notional_usd           = "50"
