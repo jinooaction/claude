@@ -114,3 +114,24 @@ def get_latest_bar(
         (symbol, timeframe),
     ).fetchone()
     return _row_to_bar(row) if row else None
+
+
+def bar_summary(
+    conn: sqlite3.Connection,
+    *,
+    symbol: str,
+    timeframe: str,
+) -> tuple[int, str | None, str | None]:
+    """(count, earliest bar_open_utc, latest bar_open_utc) for (symbol, timeframe).
+
+    Read-only diagnostic — answers "does the instance hold enough stored bars to
+    score this symbol?". Returns (0, None, None) when no bars exist.
+    """
+    row = conn.execute(
+        "SELECT COUNT(*) AS n, MIN(bar_open_utc) AS lo, MAX(bar_open_utc) AS hi "
+        "FROM price_bars WHERE symbol = ? AND timeframe = ?",
+        (symbol, timeframe),
+    ).fetchone()
+    if row is None or int(row["n"]) == 0:
+        return 0, None, None
+    return int(row["n"]), row["lo"], row["hi"]
