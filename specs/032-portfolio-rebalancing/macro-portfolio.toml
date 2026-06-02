@@ -1,0 +1,37 @@
+# 스펙 032 — 최근 다자산 월봉 모멘텀 로테이션 (recency 게이트 "fresh" 통과용).
+#
+# 재현:
+#   python scripts/fetch_recent_macro.py --out data/history_csv_macro
+#   auto-invest ingest-history --from-dir data/history_csv_macro
+#   auto-invest portfolio-walk-forward --portfolio specs/032-portfolio-rebalancing/macro-portfolio.toml \
+#       --trailing-years 5 --segment-days 365 --num-trials 1
+#
+# 데이터: 공개 GitHub datasets 조직(S&P500·금·WTI, 2026년까지). 월봉. 자산군 모멘텀.
+
+[caps]
+per_trade_pct                  = 50.0
+per_symbol_pct                 = 70.0
+global_exposure_pct            = 100.0
+canary_capital_pct             = 5.0
+canary_min_duration_days       = 10
+canary_acceptance_drawdown_pct = 40.0
+
+[whitelist]
+symbols     = ["SP500", "GOLD", "WTI"]
+accounts    = ["BACKTEST"]
+order_types = ["MARKET", "LIMIT"]
+sessions    = ["REGULAR"]
+
+[portfolio]
+id            = "macro-rotation-recent"
+universe      = ["SP500", "GOLD", "WTI"]
+weights       = { momentum = "1.0" }
+weight_scheme = "equal"
+top_n         = 2
+rebalance_mode             = "rebalance"
+invested_fraction          = "0.95"
+rebalance_every_n_sessions = 3
+lookback_bars              = 30
+momentum_period            = 12
+rebalance_threshold_pct    = "2.0"
+min_notional_usd           = "50"
