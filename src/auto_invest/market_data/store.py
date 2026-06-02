@@ -135,3 +135,34 @@ def bar_summary(
     if row is None or int(row["n"]) == 0:
         return 0, None, None
     return int(row["n"]), row["lo"], row["hi"]
+
+
+def available_timeframes(conn: sqlite3.Connection) -> list[tuple[str, int]]:
+    """All (timeframe, total bar count) present in price_bars, busiest first.
+
+    Diagnostic: when the requested timeframe has 0 bars, this reveals whether the
+    instance stores bars under a DIFFERENT timeframe label (config mismatch) or
+    stores no bars at all (empty table)."""
+    rows = conn.execute(
+        "SELECT timeframe, COUNT(*) AS n FROM price_bars GROUP BY timeframe ORDER BY n DESC"
+    ).fetchall()
+    return [(r["timeframe"], int(r["n"])) for r in rows]
+
+
+def distinct_symbols(
+    conn: sqlite3.Connection,
+    *,
+    timeframe: str | None = None,
+    limit: int = 20,
+) -> list[str]:
+    """A sample of distinct symbols held (optionally for one timeframe)."""
+    if timeframe is not None:
+        rows = conn.execute(
+            "SELECT DISTINCT symbol FROM price_bars WHERE timeframe = ? ORDER BY symbol LIMIT ?",
+            (timeframe, limit),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT DISTINCT symbol FROM price_bars ORDER BY symbol LIMIT ?", (limit,)
+        ).fetchall()
+    return [r["symbol"] for r in rows]
