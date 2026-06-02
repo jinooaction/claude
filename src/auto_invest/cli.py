@@ -2578,8 +2578,19 @@ def portfolio_walk_forward_cmd(
     portfolio: Path = typer.Option(
         ..., "--portfolio", help="TOML with [caps], [whitelist], [portfolio] (spec 032)."
     ),
-    date_from: str = typer.Option(..., "--from", help="Inclusive start (YYYY-MM-DD)."),
-    date_to: str = typer.Option(..., "--to", help="Inclusive end (YYYY-MM-DD)."),
+    date_from: str = typer.Option(
+        None, "--from", help="Inclusive start (YYYY-MM-DD). Omit to use --trailing-years."
+    ),
+    date_to: str = typer.Option(
+        None, "--to", help="Inclusive end (YYYY-MM-DD). Omit to use the newest available bar."
+    ),
+    trailing_years: int = typer.Option(
+        None,
+        "--trailing-years",
+        help="Evaluate only the most recent N years of available data (clear recency "
+        "criterion: window = newest bar back N years). Overrides --from. Default: if "
+        "neither --from nor this is given, uses the full dataset.",
+    ),
     segment_days: int = typer.Option(
         365, "--segment-days", help="Length of each out-of-sample segment (calendar days)."
     ),
@@ -2629,18 +2640,8 @@ def portfolio_walk_forward_cmd(
 
     from auto_invest.backtest.data_source import CSVDataSource, latest_dataset_dir
     from auto_invest.backtest.portfolio_walk_forward import run_portfolio_walk_forward
+    from auto_invest.backtest.recency import assess_recency, trailing_window
 
-    try:
-        ds_start = _date.fromisoformat(date_from)
-        ds_end = _date.fromisoformat(date_to)
-    except ValueError as exc:
-        typer.echo(f"date parsing failed: {exc}", err=True)
-        _exit(64)
-        return
-    if ds_end < ds_start:
-        typer.echo(f"--to ({ds_end}) is before --from ({ds_start})", err=True)
-        _exit(64)
-        return
     if mode not in ("rolling", "anchored"):
         typer.echo(f"--mode must be 'rolling' or 'anchored', got {mode!r}", err=True)
         _exit(64)
@@ -2668,6 +2669,47 @@ def portfolio_walk_forward_cmd(
         dataset_dir = latest
 
     data_source = CSVDataSource(dataset_dir)
+
+    # Resolve the evaluation window. Recency criterion (operator principle): prefer a
+    # clear trailing window over an arbitrary range, and ALWAYS surface data freshness.
+    recency = assess_recency(data_source, port_cfg.universe)  # type: ignore[union-attr]
+    try:
+        if trailing_years is not None:
+            window = trailing_window(
+                data_source, port_cfg.universe, trailing_years=trailing_years  # type: ignore[union-attr]
+            )
+            if window is None:
+                typer.echo("dataset has no sessions for the portfolio universe", err=True)
+                data_source.close()
+                _exit(64)
+                return
+            ds_start, ds_end = window
+        else:
+            if date_from is None or date_to is None:
+                typer.echo(
+                    "provide --from and --to, or --trailing-years N (clear recency window)",
+                    err=True,
+                )
+                data_source.close()
+                _exit(64)
+                return
+            ds_start = _date.fromisoformat(date_from)
+            ds_end = _date.fromisoformat(date_to)
+    except ValueError as exc:
+        typer.echo(f"date parsing failed: {exc}", err=True)
+        data_source.close()
+        _exit(64)
+        return
+    if ds_end < ds_start:
+        typer.echo(f"--to ({ds_end}) is before --from ({ds_start})", err=True)
+        data_source.close()
+        _exit(64)
+        return
+
+    if recency is not None and not as_json:
+        typer.echo(recency.banner())
+        typer.echo(f"evaluation window: {ds_start} → {ds_end}")
+
     _require_clean_migrations(db_path, allow_apply=True)
     conn = db.get_connection(db_path)
     try:
@@ -2700,6 +2742,12 @@ def portfolio_walk_forward_cmd(
             _json.dumps(
                 {
                     "dataset_version": data_source.dataset_version,
+                    "data_newest_session": (
+                        recency.newest_session.isoformat() if recency else None
+                    ),
+                    "data_age_days": recency.age_days if recency else None,
+                    "data_staleness": recency.staleness if recency else None,
+                    "eval_window": [ds_start.isoformat(), ds_end.isoformat()],
                     "n_segments": report.n_segments,
                     "segments_strategy_wins": report.segments_strategy_wins,
                     "mean_strategy_sharpe": str(report.mean_strategy_sharpe),
