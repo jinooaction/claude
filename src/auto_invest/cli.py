@@ -2235,19 +2235,26 @@ def _load_rules_for_backtest(rules_path: Path) -> tuple[object, object, list[obj
     return caps, whitelist, rules, ruleset_sha256
 
 
-def _load_portfolio_for_backtest(path: Path) -> tuple[object, object, object]:
+def _load_portfolio_for_backtest(
+    path: Path, env: dict[str, str] | None = None
+) -> tuple[object, object, object]:
     """Load a portfolio-backtest TOML: `[caps]`, `[whitelist]`, `[portfolio]`.
 
     Reuses the live SizingCaps / Whitelist parsing (single yardstick) and parses
     the `[portfolio]` table into a PortfolioRebalanceConfig (spec 032). The
     universe symbols MUST appear in `[whitelist].symbols` or their buys are
     rejected by the whitelist gate. Returns `(caps, whitelist, portfolio)`.
+
+    When ``env`` is provided, ``${VAR}`` placeholders are expanded (same rule the
+    live rules loader uses) — e.g. ``accounts = ["${KIS_ACCOUNT_NO}"]`` resolves to
+    the real account so the router's order account matches the whitelist gate.
     """
     import tomllib
 
     from pydantic import ValidationError as _ValidationError
 
     from auto_invest.config.caps import SizingCaps
+    from auto_invest.config.loader import _expand_env
     from auto_invest.config.rules import PortfolioRebalanceConfig
     from auto_invest.config.whitelist import Whitelist
 
@@ -2257,6 +2264,8 @@ def _load_portfolio_for_backtest(path: Path) -> tuple[object, object, object]:
         raw = tomllib.loads(path.read_bytes().decode("utf-8"))
     except tomllib.TOMLDecodeError as e:
         raise ConfigError(f"portfolio file is not valid TOML: {e}") from e
+    if env is not None:
+        raw = _expand_env(raw, env)
     try:
         caps = SizingCaps.model_validate(raw.get("caps", {}))
     except _ValidationError as e:
@@ -3293,8 +3302,16 @@ def rebalance_once_cmd(
         typer.echo(f"--mode must be 'paper' or 'live', got {mode!r}", err=True)
         _exit(64)
 
+    # Expand ${KIS_ACCOUNT_NO} (and any ${VAR}) in the portfolio whitelist using the
+    # real secrets, so the router's order account matches the whitelist gate. Offline
+    # dry-run may have no secrets — expansion is skipped then (dry-run routes nothing).
+    _pf_env: dict[str, str] | None = None
     try:
-        caps, whitelist, port_cfg = _load_portfolio_for_backtest(portfolio)
+        _pf_env = load_secrets(env_file)
+    except ConfigError:
+        _pf_env = None
+    try:
+        caps, whitelist, port_cfg = _load_portfolio_for_backtest(portfolio, env=_pf_env)
     except ConfigError as exc:
         typer.echo(f"portfolio validation failed: {exc}", err=True)
         _exit(65)
