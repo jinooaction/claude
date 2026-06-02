@@ -25,6 +25,14 @@ on:
         description: "페이퍼 사이징 자본 USD (실계좌 잔고 아님, 가중치/캡 기준)."
         required: false
         default: "12000"
+  # 자율 트리거: automation/rebalance-paper.request 센티넬이 main 에 머지되면 push 로
+  # 발화한다(go-live-canary 와 동일 패턴). MCP 토큰은 workflow_dispatch 권한이 없어
+  # (actions:write 부재) 세션이 직접 디스패치할 수 없으므로, request 파일 머지가 자율
+  # 시작 경로다. PAPER 전용이라 돈은 움직이지 않는다.
+  push:
+    branches: [main]
+    paths:
+      - 'automation/rebalance-paper.request'
 
 permissions:
   contents: write  # 사이드카 브랜치 force-push 용.
