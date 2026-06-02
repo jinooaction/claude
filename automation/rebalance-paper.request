@@ -18,3 +18,5 @@ run: 2026-06-02e — KIS 일봉 백필(스펙 033) 배선 후 재발화. 재조�
   유니버스 일봉을 price_bars 에 채움 → 실제 페이퍼 거래가 시작되는지 확인.
 run: 2026-06-02f — 직전 재발화는 deploy-on-merge 경합으로 인스턴스에 backfill-bars 가
   아직 없어 실패(No such command). deploy 완료 후 재발화해 백필→실거래 확인.
+run: 2026-06-02g — 백필 성공·재조정 목표비중 산출됐으나 주문이 "account not on whitelist"
+  로 거부됨(${KIS_ACCOUNT_NO} 미치환). 로더 env 치환 추가 후 재발화 → 실제 페이퍼 체결 확인.
