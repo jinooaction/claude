@@ -53,6 +53,27 @@ jobs:
           echo "${KEY}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
 
+      - name: Backfill universe daily bars from KIS (read-only quotes, no orders)
+        id: backfill
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          # 재조정 스코어러는 저장된 일봉을 읽는다. 신선한 인스턴스는 price_bars 가 비어
+          # 무거래가 되므로, 먼저 KIS 기간별시세(시세 조회 — 주문 0건)로 일봉을 채운다.
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest backfill-bars \
+                 --portfolio deploy/canary-portfolio.toml \
+                 --db data/auto_invest.db --env-file .env --json" \
+              > /tmp/backfill.json 2>/tmp/backfill.err
+          echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
+          echo "--- stdout ---"; cat /tmp/backfill.json
+          echo "--- stderr ---"; cat /tmp/backfill.err
+
       - name: Run ONE paper rebalance on instance (current KIS data, no money)
         id: rebal
         env:
@@ -125,6 +146,7 @@ jobs:
           REBAL_EXIT: ${{ steps.rebal.outputs.ssh_exit }}
           PERF_EXIT: ${{ steps.perf.outputs.ssh_exit }}
           BARS_EXIT: ${{ steps.bars.outputs.ssh_exit }}
+          BACKFILL_EXIT: ${{ steps.backfill.outputs.ssh_exit }}
         run: |
           set -uo pipefail
           BRANCH=automation/rebalance-paper-forward-last-run
@@ -140,9 +162,16 @@ jobs:
             echo "| commit | ${GITHUB_SHA} |"
             echo "| trigger | ${GITHUB_EVENT_NAME} |"
             echo "| timestamp_utc | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
+            echo "| backfill ssh_exit | ${BACKFILL_EXIT:-?} |"
             echo "| rebalance ssh_exit | ${REBAL_EXIT:-?} |"
             echo "| performance ssh_exit | ${PERF_EXIT:-?} |"
             echo "| bars-status ssh_exit | ${BARS_EXIT:-?} |"
+            echo ""
+            echo "## KIS 일봉 백필 결과(JSON)"
+            echo ""
+            echo '```json'
+            cat /tmp/backfill.json 2>/dev/null || echo '{}'
+            echo '```'
             echo ""
             echo "> PAPER 전용 — 실주문 0건. 이 forward 트랙이 옛 백테스트보다 '지금 통하는가'를"
             echo "> 더 정직하게 답한다. 관측이 충분히 쌓이면 디플레이티드 샤프로 유의성을 판정하라."
@@ -171,7 +200,7 @@ jobs:
             echo "## stderr"
             echo ""
             echo '```'
-            cat /tmp/rebal.err /tmp/perf.err /tmp/bars.err 2>/dev/null || echo '(none)'
+            cat /tmp/backfill.err /tmp/rebal.err /tmp/perf.err /tmp/bars.err 2>/dev/null || echo '(none)'
             echo '```'
           } > LAST_RUN.md
           git checkout --orphan publish

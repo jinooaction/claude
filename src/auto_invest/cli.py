@@ -2658,6 +2658,147 @@ def bars_status_cmd(
     typer.echo(f"DB symbols (sample): {sample_syms or '(none)'}")
 
 
+@app.command("backfill-bars")
+def backfill_bars_cmd(
+    portfolio: Path = typer.Option(
+        None, "--portfolio", help="TOML; backfills its [portfolio].universe symbols."
+    ),
+    symbols: str = typer.Option(
+        None, "--symbols", help="Comma-separated symbols (overrides --portfolio)."
+    ),
+    exchanges: str = typer.Option(
+        "NAS,NYS,AMS",
+        "--exchanges",
+        help="KIS EXCD codes tried per symbol in order until one returns bars.",
+    ),
+    db_path: Path = typer.Option(
+        Path("data/auto_invest.db"), "--db", help="SQLite path; bars go to price_bars."
+    ),
+    env_file: Path = typer.Option(
+        None, "--env-file", help=".env with KIS_APP_KEY/KIS_APP_SECRET."
+    ),
+    base_url: str = typer.Option(
+        "https://openapi.koreainvestment.com:9443", "--base-url", help="KIS REST base URL."
+    ),
+    as_json: bool = typer.Option(False, "--json", help="Emit JSON instead of text."),
+) -> None:
+    """Fetch recent daily OHLCV bars from KIS into price_bars (read-only; no orders).
+
+    The forward paper rebalancer scores from stored daily bars; a fresh instance has
+    an empty price_bars table, so it can't trade. This backfills the universe's daily
+    history via KIS 기간별시세 (a quotations endpoint — no order is ever placed, no
+    money moves). Idempotent: existing (symbol, 1d, date) rows are kept (insert-or-skip).
+    """
+    import asyncio
+    import json as _json
+
+    from auto_invest.broker.overseas import get_daily_bars
+    from auto_invest.market_data.store import PriceBar, insert_bar
+
+    syms: list[str] = []
+    if symbols:
+        syms = [s.strip().upper() for s in symbols.split(",") if s.strip()]
+    elif portfolio is not None:
+        try:
+            _caps, _wl, port_cfg = _load_portfolio_for_backtest(portfolio)
+        except ConfigError as exc:
+            typer.echo(f"portfolio validation failed: {exc}", err=True)
+            _exit(65)
+            return
+        syms = list(port_cfg.universe)  # type: ignore[union-attr]
+    else:
+        typer.echo("provide --portfolio or --symbols", err=True)
+        _exit(64)
+        return
+
+    try:
+        secrets = load_secrets(env_file)
+    except ConfigError as exc:
+        typer.echo(f"secrets error: {exc}", err=True)
+        _exit(2)
+        return
+    app_key = secrets.get("KIS_APP_KEY")
+    app_secret = secrets.get("KIS_APP_SECRET")
+    if not app_key or not app_secret:
+        typer.echo("KIS_APP_KEY/KIS_APP_SECRET required for backfill", err=True)
+        _exit(2)
+        return
+
+    excds = [e.strip().upper() for e in exchanges.split(",") if e.strip()]
+    _require_clean_migrations(db_path, allow_apply=True)
+
+    async def _run() -> list[dict]:
+        out: list[dict] = []
+        async with httpx.AsyncClient(base_url=base_url, timeout=30.0) as inner:
+            token = await get_valid_token(
+                inner,
+                base_url=base_url,
+                app_key=app_key,
+                app_secret=app_secret,
+                cache_path=db_path.parent / "kis_token.json",
+            )
+            client = ResilientClient(
+                inner,
+                rate_limiter=AsyncTokenBucket(rate_per_sec=15.0, capacity=15.0),
+                breaker=CircuitBreaker(failure_threshold=5, cooldown_seconds=30.0),
+                max_retries=4,
+            )
+            conn = db.get_connection(db_path)
+            try:
+                for sym in syms:
+                    bars: list = []
+                    used = None
+                    for excd in excds:
+                        bars = await get_daily_bars(
+                            client,
+                            access_token=token.access_token,
+                            app_key=app_key,
+                            app_secret=app_secret,
+                            symbol=sym,
+                            market=excd,
+                        )
+                        if bars:
+                            used = excd
+                            break
+                    inserted = 0
+                    for b in bars:
+                        pb = PriceBar(
+                            symbol=b.symbol,
+                            timeframe="1d",
+                            bar_open_utc=f"{b.session_date.isoformat()}T00:00:00.000Z",
+                            open_usd=b.open,
+                            high_usd=b.high,
+                            low_usd=b.low,
+                            close_usd=b.close,
+                            volume=b.volume,
+                        )
+                        if insert_bar(conn, pb):
+                            inserted += 1
+                    out.append(
+                        {
+                            "symbol": sym,
+                            "exchange": used,
+                            "fetched": len(bars),
+                            "inserted": inserted,
+                        }
+                    )
+            finally:
+                conn.close()
+        return out
+
+    results = asyncio.run(_run())
+
+    if as_json:
+        typer.echo(_json.dumps({"results": results}))
+        return
+    typer.echo("backfill daily bars -> price_bars:")
+    for r in results:
+        typer.echo(
+            f"  {r['symbol']:8} exchange={r['exchange'] or '-':4} "
+            f"fetched={r['fetched']:<5} inserted={r['inserted']}"
+        )
+
+
 @app.command("portfolio-walk-forward")
 def portfolio_walk_forward_cmd(
     portfolio: Path = typer.Option(
