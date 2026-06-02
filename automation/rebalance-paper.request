@@ -1,0 +1,10 @@
+# 재조정 forward 페이퍼 검증 트리거 센티넬.
+#
+# 이 파일이 main 에 머지되면(push, paths 매치) rebalance-paper-forward.yml 워크플로가
+# 발화해 인스턴스에서 `rebalance-once --mode paper` 1회 + forward 성과 스냅샷을 돌리고
+# 결과를 automation/rebalance-paper-forward-last-run 사이드카 브랜치로 발행한다.
+#
+# PAPER 전용 — 실주문 0건, 돈 안 움직임. 새 forward 페이퍼 마크를 원할 때마다 아래
+# 줄을 갱신(타임스탬프/사유)해 머지하면 된다.
+
+run: 2026-06-02 — 운영자 지시(A안: forward 페이퍼 트랙 시작) 자율 수행. 초기 마크.
