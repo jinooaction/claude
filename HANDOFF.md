@@ -57,6 +57,29 @@ git ls-remote --heads origin 'claude/*' | awk '{print $2}'
   운영자 확인). 부분 체결 재호가(잔량 재계산)는 별도 슬라이스.
 - **L1 적용 표면 확장 / L2·L3 캐너리 승격 큐 / 실거래 자본 상향** — 기존 후보 유지.
 
+## 최근 마일스톤 — 2026-06-02 (스펙 033: KIS 해외 일봉 백필 — forward 페이퍼 트랙 실거래 가동 ✅)
+
+main 머지 `32ab1e1`(PR #153 백필 + #155 계좌 치환 수정). Kernel 터치 0건. 운영자 지시
+"1번 방향"(KIS 일봉 조회 구현). **forward 페이퍼 트랙이 현재 데이터로 실제 페이퍼 체결을
+시작 — 엔드투엔드 검증 완료.**
+
+- **스펙 033 구현**: `broker/overseas.py` `get_daily_bars`(tr_id HHDFS76240000 기간별시세,
+  읽기 전용 시세) + `_parse_daily_bars`. CLI `backfill-bars`(EXCD NAS→NYS→AMS 순차 시도 →
+  `price_bars` 1d 저장, 멱등). `rebalance-paper-forward.yml` 재조정 앞에 백필 단계 배선.
+- **계좌 게이트 수정(PR #155)**: 백필 후 재조정이 목표비중을 냈으나 주문이 "account not on
+  whitelist"로 거부 — `_load_portfolio_for_backtest` 가 `${KIS_ACCOUNT_NO}` 미치환이 원인.
+  로더에 `env` 치환 추가(라이브 룰 로더와 동일), rebalance-once 가 secrets 전달.
+- **검증(사이드카 실측, 인스턴스)**: 백필 AAPL·MSFT(NAS)·SPY(AMS) 각 100일 실데이터
+  (2026-01-08~06-02) → `price_bars` 300개 → 재조정 목표비중 각 33% → **AAPL·MSFT BUY
+  PAPER_FILLED** → 성과 엔진 `fills_count: 2`, 투자금 $751.71. 모든 SSH 단계 ssh_exit=0.
+  돈 안 움직임(PAPER). `git show origin/automation/rebalance-paper-forward-last-run:LAST_RUN.md`.
+- **이제 트랙이 살아 거래**: 매월 cron + 센티넬로 백필+재조정 반복. 페이퍼 체결이 쌓이면
+  디플레이티드 샤프로 forward 유의성 판정(스펙 027 재사용) — 이게 "지금 통하는가"의 진짜 답.
+- **검증**: 신규 테스트 7건(일봉 파서 4 + env 치환 3), 전체 1408 통과·4 스킵, 린트 깨끗.
+- **주의(경합)**: 센티넬-머지가 deploy-on-merge 와 동시 발화하면 인스턴스 코드 갱신 전에
+  워크플로가 돌아 첫 실행이 실패할 수 있음(No such command 등) → 같은 센티넬 한 번 더
+  갱신 머지로 해소(검증됨).
+
 ## 최근 마일스톤 — 2026-06-02 (스펙 032: A방향 — bars-status 진단으로 무거래 근본원인 확정)
 
 main 머지 `e088aab`(PR #150 진단 배선 + #151 타임프레임 요약). Kernel 터치 0건. 운영자
