@@ -57,6 +57,27 @@ git ls-remote --heads origin 'claude/*' | awk '{print $2}'
   운영자 확인). 부분 체결 재호가(잔량 재계산)는 별도 슬라이스.
 - **L1 적용 표면 확장 / L2·L3 캐너리 승격 큐 / 실거래 자본 상향** — 기존 후보 유지.
 
+## 최근 마일스톤 — 2026-06-02 (스펙 032: 최근 데이터 자율 백테스트 — 다자산 월봉 + DSR 단일시도 보정)
+
+main 머지 `9a9239f`(PR #145). Kernel 터치 0건. 운영자 지시: "1번 자율 수행, 불가능한
+거 아니지?" (최근 데이터로 백테스트).
+
+- **최근 데이터를 찾아냄**: 403 메시지가 "Host not in allowlist" = 네트워크 정책이 라이브
+  시세 API(KIS·Yahoo·Stooq)는 막지만 **GitHub raw 는 허용**. `datasets` 조직 FRED 기반
+  시계열이 **2026년까지** 갱신(S&P500 월·금 월·WTI 일). 이걸로 최근 다자산 월봉(주식·금·
+  유가) 데이터셋(`scripts/fetch_recent_macro.py`)을 만들어 `portfolio-walk-forward
+  --trailing-years 5` 평가 → recency 게이트 **fresh**, 창 2021-03~2026-03.
+- **결과(정직)**: 자산군 모멘텀 로테이션이 4구간 중 3승, PSR 0.987 — *겉보기엔* 단순 보유
+  우위. **그러나 현실적 검색 횟수(num_trials=14)로 보정하면 DSR=0.294 로 붕괴 → "강건한
+  엣지 없음".** 게다가 월봉이라 표본 작음(구간당 12)으로 샤프 과장(10·16). 즉 최근 데이터
+  파이프라인은 자율 완성됐고, *결정적 신뢰*는 일봉·다종목(라이브 인스턴스/forward 페이퍼)
+  필요. recency 가드 + DSR 이 한계를 설계대로 드러냄.
+- **보정**: `portfolio_walk_forward` 에서 num_trials=1 일 때 DSR 이 None→PSR 로 복원
+  (N=1 은 디플레이션 없음 = PSR). 잘못된 "DSR 미달" 표시 방지. 신규 산출물:
+  `scripts/fetch_recent_macro.py`, `specs/032/macro-portfolio.toml`. 전체 1397 통과.
+- **다음**: 일봉·다종목 최근 데이터는 라이브 인스턴스에서만 → forward 페이퍼 워크플로
+  (`rebalance-paper-forward.yml`)가 현재 데이터로 그 트랙을 누적하는 정공법.
+
 ## 최근 마일스톤 — 2026-06-02 (스펙 032: 데이터 최근성 기준 — 백테스트 복권 + 최근 N년 트레일링 창)
 
 main 머지 `3e47cce`(PR #143). Kernel 터치 0건. 운영자 교정: "옛 데이터로 전략을 찾는
