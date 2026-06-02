@@ -9,7 +9,9 @@ import pytest
 
 from auto_invest.market_data.store import (
     PriceBar,
+    available_timeframes,
     bar_summary,
+    distinct_symbols,
     get_bars,
     get_latest_bar,
     insert_bar,
@@ -130,3 +132,18 @@ def test_bar_summary_counts_and_span(conn):
 
 def test_bar_summary_empty_returns_zero_none(conn):
     assert bar_summary(conn, symbol="NONE", timeframe="1d") == (0, None, None)
+
+
+def test_available_timeframes_and_distinct_symbols(conn):
+    insert_bar(conn, _bar(symbol="AAPL", timeframe="1d"))
+    insert_bar(conn, _bar(symbol="MSFT", timeframe="1d", bar_open="2026-05-03T00:00:00.000Z"))
+    insert_bar(conn, _bar(symbol="AAPL", timeframe="1m", bar_open="2026-05-04T00:00:00.000Z"))
+    tfs = dict(available_timeframes(conn))
+    assert tfs == {"1d": 2, "1m": 1}
+    assert distinct_symbols(conn) == ["AAPL", "MSFT"]
+    assert distinct_symbols(conn, timeframe="1m") == ["AAPL"]
+
+
+def test_available_timeframes_empty(conn):
+    assert available_timeframes(conn) == []
+    assert distinct_symbols(conn) == []

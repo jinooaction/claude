@@ -2596,7 +2596,11 @@ def bars_status_cmd(
     """
     import json as _json
 
-    from auto_invest.market_data.store import bar_summary
+    from auto_invest.market_data.store import (
+        available_timeframes,
+        bar_summary,
+        distinct_symbols,
+    )
 
     syms: list[str] = []
     if symbols:
@@ -2625,11 +2629,24 @@ def bars_status_cmd(
         for sym in syms:
             n, lo, hi = bar_summary(conn, symbol=sym, timeframe=timeframe)
             rows.append({"symbol": sym, "count": n, "earliest": lo, "latest": hi})
+        # DB-wide availability — distinguishes "wrong timeframe/symbols" from
+        # "empty table" when the requested universe has 0 bars.
+        tfs = [{"timeframe": tf, "count": n} for tf, n in available_timeframes(conn)]
+        sample_syms = distinct_symbols(conn, limit=20)
     finally:
         conn.close()
 
     if as_json:
-        typer.echo(_json.dumps({"timeframe": timeframe, "symbols": rows}))
+        typer.echo(
+            _json.dumps(
+                {
+                    "timeframe": timeframe,
+                    "symbols": rows,
+                    "db_timeframes": tfs,
+                    "db_symbols_sample": sample_syms,
+                }
+            )
+        )
         return
     typer.echo(f"stored bars (timeframe={timeframe}):")
     for r in rows:
@@ -2637,6 +2654,8 @@ def bars_status_cmd(
             f"  {r['symbol']:8} count={r['count']:<6} "
             f"earliest={r['earliest'] or '-'}  latest={r['latest'] or '-'}"
         )
+    typer.echo(f"DB timeframes present: {tfs or '(none)'}")
+    typer.echo(f"DB symbols (sample): {sample_syms or '(none)'}")
 
 
 @app.command("portfolio-walk-forward")
