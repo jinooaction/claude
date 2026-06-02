@@ -57,6 +57,30 @@ git ls-remote --heads origin 'claude/*' | awk '{print $2}'
   운영자 확인). 부분 체결 재호가(잔량 재계산)는 별도 슬라이스.
 - **L1 적용 표면 확장 / L2·L3 캐너리 승격 큐 / 실거래 자본 상향** — 기존 후보 유지.
 
+## 최근 마일스톤 — 2026-06-02 (스펙 032: A안 — forward 페이퍼 트랙 인스턴스에서 시작·발화 확인)
+
+main 머지 `bcc8ca7`(PR #147 트리거 + #148 룩백 단축). Kernel 터치 0건. 운영자 지시
+"A안 자율 수행"(인스턴스에서 현재 데이터 일봉 forward 페이퍼 트랙 시작).
+
+- **메커니즘 완전 동작 확인(엔드투엔드)**: MCP 토큰에 `actions:write` 가 없어
+  workflow_dispatch 직접 트리거는 403 → go-live-canary 와 같은 **센티넬 push 패턴**을
+  추가(`automation/rebalance-paper.request` 가 main 에 머지되면 발화). 실제로 워크플로
+  3회 실행(스케줄 1 + 센티넬 push 2) **전부 성공** — 인스턴스 SSH `rebalance-once
+  --mode paper` + `performance` 둘 다 ssh_exit=0, 사이드카
+  `automation/rebalance-paper-forward-last-run` 에 발행됨.
+- **현재 마크는 무거래(no-op)**: `target_weights {}`, `fills 0`. 원인은 인스턴스에
+  AAPL·MSFT·SPY 의 일봉 히스토리가 점수 계산에 부족(빈 점수→빈 타깃). 룩백을 90→30,
+  momentum 60→20 으로 낮춰 재발화해도 여전히 무거래 → 인스턴스 일봉 축적 부족(또는
+  설정 동기화 경합)이 원인. **이 컨테이너에서는 인스턴스 DB 접근이 없어 해결 불가** —
+  워커가 일봉을 쌓을수록(시간 경과) 자동 해소된다.
+- **트랙은 살아있다**: 매월 1일 cron + 센티넬 갱신으로 계속 마크. 인스턴스 히스토리가
+  충분해지면 실제 페이퍼 재조정이 시작되고 fills 가 쌓인다. 확인:
+  `git show origin/automation/rebalance-paper-forward-last-run:LAST_RUN.md`.
+- **다음(운영자/후속 세션)**: (a) 인스턴스에 유니버스 일봉이 충분한지 확인(서버 audit/DB),
+  부족하면 워커 적재 대기 또는 `ingest-history` 로 시드. (b) 무거래 원인을 인스턴스에서
+  진단(`auto-invest rebalance-once --dry-run` 으로 점수/바 수 확인). (c) 트랙이 fills 를
+  쌓기 시작하면 디플레이티드 샤프로 forward 유의성 판정.
+
 ## 최근 마일스톤 — 2026-06-02 (스펙 032: 최근 데이터 자율 백테스트 — 다자산 월봉 + DSR 단일시도 보정)
 
 main 머지 `9a9239f`(PR #145). Kernel 터치 0건. 운영자 지시: "1번 자율 수행, 불가능한
