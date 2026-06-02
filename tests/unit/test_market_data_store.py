@@ -9,6 +9,7 @@ import pytest
 
 from auto_invest.market_data.store import (
     PriceBar,
+    bar_summary,
     get_bars,
     get_latest_bar,
     insert_bar,
@@ -116,3 +117,16 @@ def test_get_latest_bar_returns_most_recent(conn):
 
 def test_get_latest_bar_returns_none_when_empty(conn):
     assert get_latest_bar(conn, symbol="AAPL", timeframe="1d") is None
+
+
+def test_bar_summary_counts_and_span(conn):
+    for day in ("01", "02", "03"):
+        insert_bar(conn, _bar(bar_open=f"2026-05-{day}T00:00:00.000Z", close=f"18{day}"))
+    n, lo, hi = bar_summary(conn, symbol="AAPL", timeframe="1d")
+    assert n == 3
+    assert lo == "2026-05-01T00:00:00.000Z"
+    assert hi == "2026-05-03T00:00:00.000Z"
+
+
+def test_bar_summary_empty_returns_zero_none(conn):
+    assert bar_summary(conn, symbol="NONE", timeframe="1d") == (0, None, None)

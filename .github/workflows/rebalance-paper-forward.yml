@@ -96,12 +96,35 @@ jobs:
           echo "--- stdout ---"; cat /tmp/perf.json
           echo "--- stderr ---"; cat /tmp/perf.err
 
+      - name: Diagnose stored bars on instance (why no-op?)
+        id: bars
+        if: always()
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          # 무거래(빈 target_weights)의 원인을 못 박는다: 유니버스 심볼별 저장 바 수.
+          # 룩백/모멘텀 윈도우보다 적으면 스코어가 비어 아무것도 거래되지 않는다.
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest bars-status \
+                 --portfolio deploy/canary-portfolio.toml \
+                 --timeframe 1d --db data/auto_invest.db --json" \
+              > /tmp/bars.json 2>/tmp/bars.err
+          echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
+          echo "--- stdout ---"; cat /tmp/bars.json
+          echo "--- stderr ---"; cat /tmp/bars.err
+
       - name: Publish forward track to sidecar branch
         if: always()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REBAL_EXIT: ${{ steps.rebal.outputs.ssh_exit }}
           PERF_EXIT: ${{ steps.perf.outputs.ssh_exit }}
+          BARS_EXIT: ${{ steps.bars.outputs.ssh_exit }}
         run: |
           set -uo pipefail
           BRANCH=automation/rebalance-paper-forward-last-run
@@ -119,9 +142,19 @@ jobs:
             echo "| timestamp_utc | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
             echo "| rebalance ssh_exit | ${REBAL_EXIT:-?} |"
             echo "| performance ssh_exit | ${PERF_EXIT:-?} |"
+            echo "| bars-status ssh_exit | ${BARS_EXIT:-?} |"
             echo ""
             echo "> PAPER 전용 — 실주문 0건. 이 forward 트랙이 옛 백테스트보다 '지금 통하는가'를"
             echo "> 더 정직하게 답한다. 관측이 충분히 쌓이면 디플레이티드 샤프로 유의성을 판정하라."
+            echo ""
+            echo "## 인스턴스 저장 바 수 (무거래 원인 진단)"
+            echo ""
+            echo "> 유니버스 심볼의 일봉 저장량. 룩백/모멘텀 윈도우보다 적으면 스코어가 비어"
+            echo "> 무거래가 된다. count=0 이면 워커가 그 심볼의 1d 바를 아직 안 쌓은 것."
+            echo ""
+            echo '```json'
+            cat /tmp/bars.json 2>/dev/null || echo '{}'
+            echo '```'
             echo ""
             echo "## 페이퍼 재조정 출력(JSON)"
             echo ""
@@ -138,7 +171,7 @@ jobs:
             echo "## stderr"
             echo ""
             echo '```'
-            cat /tmp/rebal.err /tmp/perf.err 2>/dev/null || echo '(none)'
+            cat /tmp/rebal.err /tmp/perf.err /tmp/bars.err 2>/dev/null || echo '(none)'
             echo '```'
           } > LAST_RUN.md
           git checkout --orphan publish

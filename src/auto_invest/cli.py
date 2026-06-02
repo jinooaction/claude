@@ -2573,6 +2573,72 @@ def backtest_cmd(
         _exit(outcome.exit_code)
 
 
+@app.command("bars-status")
+def bars_status_cmd(
+    portfolio: Path = typer.Option(
+        None, "--portfolio", help="TOML; reports its [portfolio].universe symbols."
+    ),
+    symbols: str = typer.Option(
+        None, "--symbols", help="Comma-separated symbols (overrides --portfolio)."
+    ),
+    timeframe: str = typer.Option("1d", "--timeframe", help="Bar timeframe to inspect."),
+    db_path: Path = typer.Option(
+        Path("data/auto_invest.db"), "--db", help="SQLite path with price_bars."
+    ),
+    as_json: bool = typer.Option(False, "--json", help="Emit JSON instead of text."),
+) -> None:
+    """Read-only diagnostic: how many stored bars exist per symbol (+ date span).
+
+    Answers "why did the paper rebalance place no trades?" — if a universe symbol
+    holds fewer bars than the strategy's lookback/momentum window, the scorer
+    returns no target weight for it and nothing trades. Pure read; no money, no
+    writes, no migrations applied.
+    """
+    import json as _json
+
+    from auto_invest.market_data.store import bar_summary
+
+    syms: list[str] = []
+    if symbols:
+        syms = [s.strip().upper() for s in symbols.split(",") if s.strip()]
+    elif portfolio is not None:
+        try:
+            _caps, _wl, port_cfg = _load_portfolio_for_backtest(portfolio)
+        except ConfigError as exc:
+            typer.echo(f"portfolio validation failed: {exc}", err=True)
+            _exit(65)
+            return
+        syms = list(port_cfg.universe)  # type: ignore[union-attr]
+    else:
+        typer.echo("provide --portfolio or --symbols", err=True)
+        _exit(64)
+        return
+
+    if not db_path.exists():
+        typer.echo(f"db not found: {db_path}", err=True)
+        _exit(64)
+        return
+
+    conn = db.get_connection(db_path)
+    rows = []
+    try:
+        for sym in syms:
+            n, lo, hi = bar_summary(conn, symbol=sym, timeframe=timeframe)
+            rows.append({"symbol": sym, "count": n, "earliest": lo, "latest": hi})
+    finally:
+        conn.close()
+
+    if as_json:
+        typer.echo(_json.dumps({"timeframe": timeframe, "symbols": rows}))
+        return
+    typer.echo(f"stored bars (timeframe={timeframe}):")
+    for r in rows:
+        typer.echo(
+            f"  {r['symbol']:8} count={r['count']:<6} "
+            f"earliest={r['earliest'] or '-'}  latest={r['latest'] or '-'}"
+        )
+
+
 @app.command("portfolio-walk-forward")
 def portfolio_walk_forward_cmd(
     portfolio: Path = typer.Option(
