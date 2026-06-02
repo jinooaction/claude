@@ -57,6 +57,28 @@ git ls-remote --heads origin 'claude/*' | awk '{print $2}'
   운영자 확인). 부분 체결 재호가(잔량 재계산)는 별도 슬라이스.
 - **L1 적용 표면 확장 / L2·L3 캐너리 승격 큐 / 실거래 자본 상향** — 기존 후보 유지.
 
+## 최근 마일스톤 — 2026-06-02 (스펙 032: A방향 — bars-status 진단으로 무거래 근본원인 확정)
+
+main 머지 `e088aab`(PR #150 진단 배선 + #151 타임프레임 요약). Kernel 터치 0건. 운영자
+지시 "A방향"(왜 무거래인지 인스턴스 진단을 사이드카에 기록).
+
+- **결정적 근본원인**: forward 페이퍼가 무거래(빈 target_weights)였던 이유는
+  **인스턴스의 `price_bars` 테이블이 완전히 비어 있기 때문**. 사이드카 진단 결과:
+  AAPL/MSFT/SPY 1d 바 0개, **`db_timeframes: []`, `db_symbols_sample: []`** (어떤
+  타임프레임·심볼도 0). 워커가 일봉을 전혀 저장하지 않아 재조정 스코어러가 빈 데이터를
+  읽음. `git show origin/automation/rebalance-paper-forward-last-run:LAST_RUN.md` 로 확인.
+- **새 도구**(읽기 전용): `market_data/store.bar_summary`·`available_timeframes`·
+  `distinct_symbols` + CLI `auto-invest bars-status`(--portfolio/--symbols, text/JSON).
+  워크플로 `rebalance-paper-forward.yml` 에 인스턴스 bars-status 단계 배선 → 매 실행
+  사이드카에 "인스턴스 저장 바 수" 섹션이 찍힘(앞으로 항상 가시).
+- **수정 경로(별도·큰 작업, 자율 빠른 배선 아님)**: 트랙이 실제 거래하려면 인스턴스
+  `price_bars` 를 채워야 한다. 현재 코드엔 KIS 과거 일봉 백필 CLI가 없다(`ingest-history`
+  는 CSV→백테스트 데이터셋 전용, `overseas.py` 에 일봉 조회 함수 없음, 워커는
+  `store_synthetic_bar` 만). 선택지: (a) **KIS 해외 일봉(period/itemchartprice) 조회를
+  새 스펙으로 구현** → 워커/워크플로가 백필, (b) 인스턴스에서 일봉 CSV 를 만들어
+  `price_bars` 시드(인스턴스 측 작업), (c) 워커가 합성 바를 충분히 쌓을 때까지 대기(느림).
+- **검증**: 신규 테스트 4건, 전체 1401 통과·4 스킵, 린트 깨끗. 읽기 전용 — 돈 안 움직임.
+
 ## 최근 마일스톤 — 2026-06-02 (스펙 032: A안 — forward 페이퍼 트랙 인스턴스에서 시작·발화 확인)
 
 main 머지 `bcc8ca7`(PR #147 트리거 + #148 룩백 단축). Kernel 터치 0건. 운영자 지시
