@@ -40,6 +40,7 @@ from .data_source import HistoricalDataSource
 from .metrics import daily_returns_from_equity
 from .portfolio_replay import replay_portfolio
 from .significance import (
+    deflated_sharpe_ratio,
     deflated_sharpe_ratio_from_trial_sharpes,
     significance_summary,
 )
@@ -195,6 +196,13 @@ def run_portfolio_walk_forward(
             # explicit cross-config list was supplied (conservative fallback).
             dsr = deflated_sharpe_ratio_from_trial_sharpes(
                 pooled_returns, strat_sharpes + bench_sharpes
+            )
+        else:
+            # Genuinely a single trial (num_trials==1): DSR reduces to PSR — no
+            # multiple-testing deflation to apply. Report it rather than None so the
+            # verdict isn't falsely flagged as "DSR missing".
+            dsr = deflated_sharpe_ratio(
+                pooled_returns, num_trials=1, trial_sharpe_std_annual=Decimal("0")
             )
 
     mean_strat = _mean(strat_sharpes)
