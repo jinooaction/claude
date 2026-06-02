@@ -91,3 +91,50 @@ def test_parse_skips_rows_without_order_id() -> None:
 def test_parse_unknown_side_is_none() -> None:
     rows = [{"odno": "X", "pdno": "AAPL", "ft_ccld_qty": "1", "ft_ccld_unpr3": "1"}]
     assert _parse_executions(rows)[0].side is None
+
+
+# --- 해외 일봉 파서 (스펙 033: KIS 기간별시세) ---
+
+from datetime import date  # noqa: E402
+
+from auto_invest.broker.overseas import _parse_daily_bars  # noqa: E402
+
+
+def _row(xymd: str, o: str, h: str, lo: str, c: str, v: str = "1000000") -> dict:
+    return {"xymd": xymd, "open": o, "high": h, "low": lo, "clos": c, "tvol": v}
+
+
+def test_parse_daily_bars_basic_and_ascending() -> None:
+    rows = [
+        _row("20260529", "180", "182", "179", "181"),
+        _row("20260528", "178", "181", "177", "180"),
+    ]
+    bars = _parse_daily_bars(rows, "AAPL")
+    assert [b.session_date for b in bars] == [date(2026, 5, 28), date(2026, 5, 29)]
+    assert bars[0].symbol == "AAPL"
+    assert bars[1].close == Decimal("181")
+    assert bars[1].volume == 1_000_000
+
+
+def test_parse_daily_bars_clamps_low_high() -> None:
+    # low > close 인 깨진 행 → low/high 를 open/close 에 맞게 클램프(검증 통과 보장).
+    bars = _parse_daily_bars([_row("20260529", "180", "180.5", "181", "182")], "X")
+    b = bars[0]
+    assert b.low <= min(b.open, b.close)
+    assert b.high >= max(b.open, b.close)
+
+
+def test_parse_daily_bars_skips_bad_and_duplicate() -> None:
+    rows = [
+        _row("2026052", "1", "1", "1", "1"),       # 날짜 길이 오류
+        _row("20260529", "0", "1", "1", "1"),      # 비양수 가격
+        _row("20260530", "1", "1", "1", "x"),      # 파싱 불가
+        _row("20260531", "10", "11", "9", "10"),   # 정상
+        _row("20260531", "10", "11", "9", "10"),   # 중복 날짜
+    ]
+    bars = _parse_daily_bars(rows, "X")
+    assert [b.session_date for b in bars] == [date(2026, 5, 31)]
+
+
+def test_parse_daily_bars_empty() -> None:
+    assert _parse_daily_bars([], "X") == []

@@ -16,8 +16,9 @@ surfaces explicitly.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-from decimal import Decimal
+from dataclasses import dataclass
+from datetime import UTC, date, datetime
+from decimal import Decimal, InvalidOperation
 
 from auto_invest.broker.client import ResilientClient
 from auto_invest.broker.models import (
@@ -38,6 +39,20 @@ TR_ID_BUY = "TTTT1002U"
 TR_ID_SELL = "TTTT1006U"
 TR_ID_CANCEL = "TTTT1004U"
 TR_ID_EXECUTIONS = "TTTS3035R"  # 해외주식 주문체결내역 (inquire-ccnl)
+TR_ID_DAILY_PRICE = "HHDFS76240000"  # 해외주식 기간별시세 (daily/weekly/monthly OHLCV)
+
+
+@dataclass(frozen=True)
+class OverseasDailyBar:
+    """One daily OHLCV bar parsed from KIS 해외주식 기간별시세 (read-only market data)."""
+
+    symbol: str
+    session_date: date
+    open: Decimal
+    high: Decimal
+    low: Decimal
+    close: Decimal
+    volume: int
 
 
 def _split_account(combined: str) -> tuple[str, str]:
@@ -98,6 +113,78 @@ async def get_quote(
         ask_usd=Decimal(str(body["askp"])) if body.get("askp") else None,
         quoted_at_utc=datetime.now(UTC),
     )
+
+
+def _parse_daily_bars(rows: list[dict], symbol: str) -> list[OverseasDailyBar]:
+    """Parse KIS 기간별시세 output2 rows into ascending-date OHLCV bars.
+
+    KIS field names (verbatim): ``xymd`` (YYYYMMDD), ``open``/``high``/``low``,
+    ``clos`` (close), ``tvol`` (volume). Rows that are unparseable, non-positive,
+    or duplicate-dated are skipped; low/high are clamped to stay consistent with
+    open/close so downstream OHLCV validation never rejects a real bar.
+    """
+    bars: list[OverseasDailyBar] = []
+    seen: set[date] = set()
+    for r in rows:
+        xymd = str(r.get("xymd", "")).strip()
+        if len(xymd) != 8 or not xymd.isdigit():
+            continue
+        try:
+            d = date(int(xymd[:4]), int(xymd[4:6]), int(xymd[6:8]))
+            o = Decimal(str(r["open"]))
+            h = Decimal(str(r["high"]))
+            lo = Decimal(str(r["low"]))
+            c = Decimal(str(r["clos"]))
+            v = int(float(str(r.get("tvol", "0")).strip() or "0"))
+        except (KeyError, ValueError, InvalidOperation):
+            continue
+        if min(o, h, lo, c) <= 0 or v < 0 or d in seen:
+            continue
+        seen.add(d)
+        lo_adj = min(lo, o, c)
+        hi_adj = max(h, o, c)
+        bars.append(OverseasDailyBar(symbol, d, o, hi_adj, lo_adj, c, v))
+    bars.sort(key=lambda b: b.session_date)
+    return bars
+
+
+async def get_daily_bars(
+    client: ResilientClient,
+    *,
+    access_token: str,
+    app_key: str,
+    app_secret: str,
+    symbol: str,
+    market: str = "NAS",
+    adjusted: bool = True,
+) -> list[OverseasDailyBar]:
+    """Fetch recent daily OHLCV bars for an overseas symbol (read-only; no orders).
+
+    Returns the most recent window KIS provides (~100 sessions) in ascending date
+    order. ``market`` is the KIS EXCD (NAS/NYS/AMS); an empty result usually means
+    the symbol is listed on a different exchange (try another EXCD).
+    """
+    response = await client.request(
+        "GET",
+        "/uapi/overseas-price/v1/quotations/dailyprice",
+        headers=_kis_headers(
+            access_token=access_token,
+            app_key=app_key,
+            app_secret=app_secret,
+            tr_id=TR_ID_DAILY_PRICE,
+        ),
+        params={
+            "AUTH": "",
+            "EXCD": market,
+            "SYMB": symbol,
+            "GUBN": "0",  # 0=daily, 1=weekly, 2=monthly
+            "BYMD": "",  # base date; empty = most recent
+            "MODP": "1" if adjusted else "0",  # split/dividend-adjusted close
+        },
+    )
+    body = response.json()
+    rows = body.get("output2") or []
+    return _parse_daily_bars(rows, symbol)
 
 
 async def place_order(
