@@ -76,7 +76,13 @@ main 머지 `7425151`(PR #159) + 정정. Kernel 터치 0건. 운영자 지시 "�
   적용해 forward 페이퍼/캐너리 유니버스를 유동성으로 구성(현재 `canary-portfolio.toml` 은 손으로
   고른 10종목). forward 페이퍼가 디플레이티드 샤프로 판정. 이 컨테이너는 현재 데이터 다종목
   일봉 백테스트 불가 — 옛 데이터 우회가 애초에 잘못된 선택이었다.
-- **안전**: Kernel 터치 0건. 돈 안 움직임. 결정론·LLM 미사용. 전체 1427 통과·4 스킵, 린트 깨끗.
+- **재발 차단(운영자 "둘 다 순서대로", PR #162·#163)**: 운영자가 stale 데이터 백테스트 재발을
+  지적 → ① **가드를 코드로 강제**(`recency.stale_guard` + `portfolio-walk-forward`·
+  `backtest-portfolio` 가 stale 이면 `--allow-stale` 없이 종료코드 70 거부 — 경고를 각주로
+  무시 못 하게). ② **역량을 현재 데이터 경로에 배선**(`rebalance-once --construct-universe-top-n`
+  으로 *현재* 저장 바 유동성 상위로 유니버스 구성, `canary-portfolio.toml` 후보 10→28 확대 +
+  `rebalance-paper-forward.yml` 에 `--construct-universe-top-n 15` 배선). 신규 테스트 7건.
+- **안전**: Kernel 터치 0건. 돈 안 움직임. 결정론·LLM 미사용. 전체 1434 통과·4 스킵, 린트 깨끗.
 
 ## 최근 마일스톤 — 2026-06-03 (스펙 033 슬라이스 2·3: 일일 백필 + 유니버스 3→10, B·C 완료 ✅)
 
@@ -1219,10 +1225,10 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 |------|-------|
 | 헌법 | **v4.0.0** (IX.D 운영자 자율 수행 + 원칙 X 측정 기반 자율 성장; **X.4 개정 — 운영자 지시 시 라이브 캐너리까지 가드형 자동 전환 허용**, 풀라이브·장중가드·K1 캡·화이트리스트·감사·시크릿 보존; 머지 커밋 `d52b048`) |
 | 운영자 응대 정책 | CLAUDE.md v3.3.0 (한글 응답 / 쉬운 한글 / 자동 머지 / 세션 수명주기) |
-| 마지막 main 커밋 | `7425151 Merge pull request #159 — feat(034) 체계적 유니버스 구성(유동성 기반) + 넓은 횡단면 정직한 검증` |
+| 마지막 main 커밋 | `316977a Merge pull request #163 — feat(034) build-universe 를 forward 페이퍼 현재 데이터 경로에 배선 (재발 차단 2/2)` |
 | 활성 작업 | **🟢 라이브 캐너리 무장 + 자본 $12k·축소 룰셋 + 자동 승격 게이트(2026-05-30).** ① 라이브 캐너리 무장(AUTO_INVEST_MODE=live, 헌법 X.4 v4.0.0). ② 운영자 선택 1번: 자본 $12,000 + 축소 룰셋(`deploy/canary-live-rules.toml`, qty=1 SPY·MSFT·AAPL) 적용 → 우량주 1주가 per-trade 5% 캡($600) 안 → **실제 체결 가능**(첫 기회 다음 정규장). ③ 운영자 선택 2번: 스펙 026 승격 게이트(`promotion/gate.py`·`readiness.py`·CLI `promote-check`·매일 `promote-readiness.yml`) — 헌법 VI 트랙레코드 게이트를 매일 자율 평가. **실제 풀라이브 승격은 이 VI 게이트 AND 스펙 007 하드닝 캐너리(IX.B-2, ≥30/45거래일) 둘 다 통과해야 발화 — 최소 30거래일 후. 미구현(의도적 게이트).** 노출 상한: per-symbol $2,400 / global $9,600. **스펙 029 전체(슬라이스 1·2·3) 출시 완료 — "현재 자산 수준 기준 운용·성장 관리" 구조적 빈칸 3개 메움. ① NAV 측정(`auto-invest portfolio`), ② 자산 인식 유효 자본(`run --capital-tracking [--capital-growth]`, 기본 끔 — 켜면 캡이 라이브 순자산 추종, 하락은 항상 방어/상승은 옵트인+상한), ③ 미실현 포함 시가평가 성장 추적(`auto-invest growth`, NAV 스냅샷 시계열 → 총수익률·최대낙폭·CAGR). 🟢 스펙 032 슬라이스 1·2 + 단계 ② 출시(2026-05-31): 횡단면 포트폴리오 재조정 엔진 — 알파가 거래 루프에 미배선이고 매도/재조정이 없던 세계 최고 수준 격차를 메움. ① 슬라이스 1: 순수 플래너(`strategy/rebalance.py`) + 백테스트(`backtest/portfolio_replay.py`) + `auto-invest backtest-portfolio`. ② 슬라이스 2: 라이브/페이퍼 실행기(`execution/rebalancer.py`) + `auto-invest rebalance-once`(**paper 기본·돈 무이동**, 실주문은 `--mode live` 명시 필요) — 기존 OrderRouter+K1 게이트 재사용(별도 돈 경로 0). ③ 단계 ②: 단순 보유(균등가중) 벤치마크 비교 + per-trade 캡 클램프로 백테스트=라이브 단일 잣대 정합. 시연(합성 데이터): 모든 스킴이 단순 보유 초과(예 equal top4 +42.5% vs 벤치 +17.1%) — **합성이라 방향성 시연, 실수치는 운영자 `ingest-history` 후 산출.** 다음 후보: **실데이터 적재 후 실제 비교 측정**(운영자/네트워크), **슬라이스 3(라이브 재조정 주기 스케줄·캐너리 룰셋 적용 — 돈 경로·운영자 게이트)**, 유니버스 확대(횡단면 폭), 워크포워드로 재조정 파라미터 표본외 검증, 체결 정교화 후속(031 슬라이스 2 실전송)** |
 | 출시 완료 스펙 | 001(P2 정합성 배선 포함), 002, 003, 004, 005, 006, 007, 008, 009, 010, 011, 012, 013, 014, 015, 016(슬라이스 1·2·3 전부), 017(슬라이스 1·2·2b·3 전부), 018(슬라이스 1 다요인 신호 + 슬라이스 2 사이징 감사 기록), 019(레짐 인식 + 공분산 ERC), 020(레짐·ERC 거래 루프 실배선), 021(횡단면 모멘텀 순위 필터), 022(최소 분산 포트폴리오 최적화), 023(가격 기반 퀄리티 팩터 필터), 024(최대 샤프 포트폴리오 최적화), 025(다요인 합성 알파 점수 필터), 026(캐너리→풀라이브 자동 승격 게이트), 027(디플레이티드 샤프 비율), 028(체결 품질 정밀 측정 — arrival 기준 구현격차 + 체결 지연), 029(전체 슬라이스 1·2·3 — NAV 측정·자산 인식 유효 자본·미실현 포함 성장 추적), 030(미체결 주문 수명 관리 — TTL 취소·취소-재호가·marketable-limit), 031 슬라이스 1(KIS 실시간 웹소켓 수신 토대), 032(횡단면 포트폴리오 재조정 엔진 — 플래너 + 백테스트 + 라이브/페이퍼 실행기 + 워크포워드/DSR 검증 + forward 페이퍼 트랙), 033(KIS 해외 일봉 백필 + 일일 상시 백필 + 유니버스 3→10), **034(체계적 유니버스 구성 — 유동성 기반 `strategy/universe.py` + CLI `build-universe` + 넓은 횡단면 정직한 검증)** |
-| 진행 중 스펙 | 없음. 스펙 034 = **유니버스 구성 역량만 유효**(`build-universe`, 데이터 무관). ⚠ 스펙 034의 백테스트는 stale(2013-2018) 데이터라 **판정 아님** — "폭이 도움 되는가"는 닫히지 않았다(과장 정정 완료). 다음 레버: `build-universe` 를 인스턴스 *현재* `price_bars` 에 적용해 forward 페이퍼 유니버스를 구성하고, **현재 데이터 forward 페이퍼 트랙**(스펙 032/033)이 디플레이티드 샤프로 판정. |
+| 진행 중 스펙 | 없음. 스펙 034 = **유니버스 구성 역량 + 현재 데이터 경로 배선 + 재발 차단 가드** 완료. ⚠ 스펙 034의 옛 데이터(2013-2018) 백테스트는 **판정 아님**(stale). 이제 도구가 stale 백테스트를 거부(`--allow-stale` 필요)하고, `rebalance-once --construct-universe-top-n` 이 forward 페이퍼 유니버스를 *현재* 바로 구성한다. **다음(인스턴스 검증)**: `rebalance-paper-forward.yml` 실행 → 사이드카 LAST_RUN.md 의 construct-universe 줄 + 페이퍼 체결 누적 → 디플레이티드 샤프로 "지금 통하는가" 판정. |
 | 골격 스펙 (즉시 착수 가능) | **실거래 캐너리 — ✅ 완료(2026-05-30)**: 라이브 캐너리 무장됨. 다음 골격: 캐너리 자본 상향(체결 나오게·운영자 결정) 또는 풀라이브 승격(헌법 VI 3단계·운영자 전용) 또는 알파 계속(베타 헤지·회전율·워크포워드). |
 | 자율 수행 최우선 진입점 (권장) | `docs/OPERATOR_GITHUB_ACTIONS_KR.md` + `.github/workflows/provision-vultr.yml` |
 | Vultr 콘솔 직접 진입점 | `docs/OPERATOR_VULTR_ONE_STEP_KR.md` + `deploy/vultr-userdata.sh` |
@@ -1231,7 +1237,7 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 | KIS 키 입력 도구 (인스턴스 콘솔에서 실행) | `scripts/set_secrets.sh` |
 | 개발자용 자동 검증 스크립트 | `scripts/operator_install.sh` (5단계 preflight) |
 | 운영 호스트 진입점 | `deploy/README.md` (systemd 설치 절차) |
-| main 테스트 | 1427 통과, 4 스킵 (라이브 KIS smoke 4건, `KIS_LIVE_TEST=1` 가드) |
+| main 테스트 | 1434 통과, 4 스킵 (라이브 KIS smoke 4건, `KIS_LIVE_TEST=1` 가드) |
 | 세션 수명주기 도구 | git ground-truth 훅 + `/sync` `/handoff` `/deploy-status` 스킬 (v3.3.0, "세션 수명주기 도구" 절 참조) |
 | main 린트 | 깨끗 |
 | 열린 PR | `mcp__github__list_pull_requests`로 확인 |
