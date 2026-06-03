@@ -23,12 +23,15 @@ capital="${AUTO_INVEST_CAPITAL:?AUTO_INVEST_CAPITAL must be set (USD integer)}"
 #   (보수적 시작). K1 캡·화이트리스트는 그대로 — 입력 자본만 살아있는 NAV 를
 #   추종한다. NAV 조회 실패는 격리되어 직전 유효 자본을 유지한다(거래 무중단).
 if [[ "$mode" == "live" ]]; then
-    echo "[run-worker.sh] starting in LIVE mode (capital=$capital, rules=$rules, capital-tracking=on/defense-only)" >&2
+    echo "[run-worker.sh] starting in LIVE mode (capital=$capital, rules=$rules, capital-tracking=on/defense-only, backfill=on)" >&2
+    # 스펙 033: --backfill 로 워커가 세션당 1회 유니버스 일봉을 KIS 에서 받아 price_bars
+    # 를 최신 유지한다(읽기 전용 시세, 주문 0건). 재조정 스코어러·지표 룰이 신선한 일봉을 봄.
     exec uv run auto-invest run \
         --config "$rules" \
         --db "$db" \
         --capital "$capital" \
-        --capital-tracking
+        --capital-tracking \
+        --backfill
 else
     echo "[run-worker.sh] starting in DRY-RUN mode (no real orders) (capital=$capital, rules=$rules)" >&2
     exec uv run auto-invest run --dry-run \

@@ -128,6 +128,13 @@ def run(
         help="스펙 029 슬라이스 2: 성장 시 유효 자본 상한 = 시작 자본 × 이 배수 "
         "(기본 2.0). 폭주 방지 하드 클램프.",
     ),
+    backfill: bool = typer.Option(
+        False,
+        "--backfill/--no-backfill",
+        help="스펙 033: 세션당 1회 유니버스(whitelist) 일봉을 KIS 기간별시세로 받아 "
+        "price_bars 를 최신 유지(읽기 전용 시세, 주문 0건). 켜면 재조정 스코어러·지표 "
+        "룰이 신선한 일봉을 본다. 기본 끔(옵트인).",
+    ),
     prices_path: Path = typer.Option(
         Path("config/llm_prices.toml"),
         "--prices",
@@ -224,6 +231,7 @@ def run(
             capital_tracking_enabled=capital_tracking,
             capital_growth_enabled=capital_growth,
             capital_max_growth_factor=Decimal(str(capital_max_growth)),
+            backfill_enabled=backfill,
         )
     )
 
@@ -2038,6 +2046,7 @@ async def _run_live(
     capital_tracking_enabled: bool = False,
     capital_growth_enabled: bool = False,
     capital_max_growth_factor: Decimal = Decimal("2"),
+    backfill_enabled: bool = False,
 ) -> None:
     settings = WorkerSettings(
         config=cfg,
@@ -2049,6 +2058,7 @@ async def _run_live(
         capital_tracking_enabled=capital_tracking_enabled,
         capital_growth_enabled=capital_growth_enabled,
         capital_max_growth_factor=capital_max_growth_factor,
+        backfill_enabled=backfill_enabled,
     )
 
     async with httpx.AsyncClient(base_url=base_url, timeout=30.0) as inner:
@@ -2701,8 +2711,7 @@ def backfill_bars_cmd(
     import asyncio
     import json as _json
 
-    from auto_invest.broker.overseas import get_daily_bars
-    from auto_invest.market_data.store import PriceBar, insert_bar
+    from auto_invest.market_data.feed import backfill_daily_bars
 
     syms: list[str] = []
     if symbols:
@@ -2754,43 +2763,15 @@ def backfill_bars_cmd(
             )
             conn = db.get_connection(db_path)
             try:
-                for sym in syms:
-                    bars: list = []
-                    used = None
-                    for excd in excds:
-                        bars = await get_daily_bars(
-                            client,
-                            access_token=token.access_token,
-                            app_key=app_key,
-                            app_secret=app_secret,
-                            symbol=sym,
-                            market=excd,
-                        )
-                        if bars:
-                            used = excd
-                            break
-                    inserted = 0
-                    for b in bars:
-                        pb = PriceBar(
-                            symbol=b.symbol,
-                            timeframe="1d",
-                            bar_open_utc=f"{b.session_date.isoformat()}T00:00:00.000Z",
-                            open_usd=b.open,
-                            high_usd=b.high,
-                            low_usd=b.low,
-                            close_usd=b.close,
-                            volume=b.volume,
-                        )
-                        if insert_bar(conn, pb):
-                            inserted += 1
-                    out.append(
-                        {
-                            "symbol": sym,
-                            "exchange": used,
-                            "fetched": len(bars),
-                            "inserted": inserted,
-                        }
-                    )
+                out = await backfill_daily_bars(
+                    conn,
+                    client,
+                    access_token=token.access_token,
+                    app_key=app_key,
+                    app_secret=app_secret,
+                    symbols=syms,
+                    exchanges=tuple(excds),
+                )
             finally:
                 conn.close()
         return out

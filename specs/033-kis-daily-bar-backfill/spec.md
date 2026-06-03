@@ -26,9 +26,28 @@
    (symbol·date·OHLCV). low/high 클램프로 OHLCV 검증 호환. 단위 테스트 4건.
 2. **CLI** (`backfill-bars`): `--portfolio`(유니버스) 또는 `--symbols` 의 심볼별로 EXCD
    목록(NAS→NYS→AMS)을 순서대로 시도해 일봉을 받아 `price_bars`에 저장(timeframe=1d).
-   시크릿 없으면 안전 거부. 멱등.
+   시크릿 없으면 안전 거부. 멱등. 공유 헬퍼 `market_data/feed.backfill_daily_bars` 사용.
 3. **워크플로 배선**: `rebalance-paper-forward.yml` 재조정 단계 **앞**에 backfill-bars 단계
    추가 → 매 실행 유니버스 일봉을 먼저 채운 뒤 재조정. 결과를 사이드카에 발행.
+
+## 슬라이스 2 (백필 주기 — 운영자 질문 "매월은 너무 드물지 않나")
+
+일봉은 장 마감 1회만 갱신되므로 백필은 **매 거래일 1회면 충분**하다(실시간 인트라데이
+바는 일봉 전략 점수에 불필요 — 실시간 시세는 체결 시점 `get_quote` 가 이미 사용). 매월
+1회는 너무 드물어 29일간 묵은 가격으로 점수를 매기게 된다. 그래서 두 경로로 *매일* 만든다:
+
+- **워커 틱 백필**(상시): `WorkerSettings.backfill_enabled`(옵트인). 켜면 워커가 세션당
+  1회(`_BACKFILL_GAP_SECONDS`=6h) whitelist 일봉을 KIS 에서 받아 price_bars 갱신. 읽기
+  전용·오류 격리(거래 무중단). `deploy/run-worker.sh` 라이브 분기에 `--backfill` 추가.
+  공유 헬퍼 재사용. 통합 테스트 3건.
+- **워크플로 cron 매일화**: `rebalance-paper-forward.yml` cron 을 `30 22 1 * *`(월간) →
+  `30 22 * * 1-5`(매 거래일 마감 후)로 변경. 워커 모드와 무관한 안전망 + 매일 페이퍼 마크.
+
+## 슬라이스 3 (유니버스 확대 — 횡단면 분산)
+
+`deploy/canary-portfolio.toml` universe 3→10 종목(거래소 혼합: NAS 기술주 6 + NYS 금융·
+헬스·에너지 3 + AMS SPY). top_n 5. 백필이 심볼당 ~100 일봉을 채우므로 lookback 60·
+momentum 40. REAL-DATA-FINDINGS 교훈상 넓고 저회전(hold_replace)이 유리.
 
 ## 재현 / 확인
 
