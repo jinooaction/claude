@@ -57,6 +57,25 @@ git ls-remote --heads origin 'claude/*' | awk '{print $2}'
   운영자 확인). 부분 체결 재호가(잔량 재계산)는 별도 슬라이스.
 - **L1 적용 표면 확장 / L2·L3 캐너리 승격 큐 / 실거래 자본 상향** — 기존 후보 유지.
 
+## 최근 마일스톤 — 2026-06-03 (스펙 033 슬라이스 2·3: 일일 백필 + 유니버스 3→10, B·C 완료 ✅)
+
+main 머지 `f5a095e`(PR #157). Kernel 터치 0건. 운영자 질문("매월 백필 너무 드물지 않나,
+매일/실시간이 낫지 않나") → 답 + B·C 자율 수행. **사이드카 실측 검증 완료.**
+
+- **답(주기)**: 일봉은 마감 1회만 갱신 → 매 거래일 1회면 충분(실시간 인트라데이 바는 일봉
+  점수에 불필요, 체결은 이미 실시간 get_quote 사용). 매월은 29일간 묵은 가격 → 매일로 전환.
+- **C(매일/상시 백필)**: ① 공유 헬퍼 `market_data/feed.backfill_daily_bars`(CLI·워커 공용,
+  EXCD 순차 시도→price_bars 멱등). ② 워커 틱 백필 `WorkerSettings.backfill_enabled`(옵트인,
+  6h cadence, 세션당 1회 whitelist 일봉 갱신, 읽기 전용·오류 격리). `run --backfill` +
+  `deploy/run-worker.sh` 라이브 분기 `--backfill`. ③ 워크플로 cron 월간→매일
+  (`30 22 * * 1-5`). 워커 모드 무관 안전망 + 매일 마크.
+- **B(유니버스 확대)**: `canary-portfolio.toml` 3→10종목(NAS 6/NYS 3/AMS 1), top_n 5,
+  lookback 60·momentum 40. 라이브 트레이딩 whitelist(canary-live-rules)는 좁게 유지(안전).
+- **검증(사이드카 실측)**: 백필 10종목 각 100일(거래소 자동 분류 NAS/NYS/AMS), 재조정이
+  10중 상위 5(AAPL·SPY·AMZN·NVDA·GOOGL 각 20%) 선택 → **4건 PAPER_FILLED**, 성과 누적
+  fills_count=6, 투자금 $2,387. 모든 SSH ssh_exit=0. 돈 안 움직임.
+- **검증(코드)**: 신규 테스트 6건(헬퍼 3 + 워커 3), 전체 1414 통과·4 스킵, 린트 깨끗.
+
 ## 최근 마일스톤 — 2026-06-02 (스펙 033: KIS 해외 일봉 백필 — forward 페이퍼 트랙 실거래 가동 ✅)
 
 main 머지 `32ab1e1`(PR #153 백필 + #155 계좌 치환 수정). Kernel 터치 0건. 운영자 지시
