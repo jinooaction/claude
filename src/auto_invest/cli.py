@@ -4149,3 +4149,242 @@ def tune(
                 f"캐너리 후보 {n} / 합격 {passed} / 불합격 {failed} / 건너뜀 {sk}"
                 " — 라이브 미승격(운영자/스펙 006 게이트)"
             )
+
+
+@app.command("nav-snapshot")
+def nav_snapshot_cmd(
+    mode: str = typer.Option("paper", "--mode", help="paper | live — 어느 장부의 NAV."),
+    db_path: Path = typer.Option(
+        Path("data/auto_invest.db"), "--db", help="SQLite path (fills·audit_log)."
+    ),
+    env_file: Path = typer.Option(
+        None, "--env-file", "--env", help="KIS 시세 조회용 .env (미실현 mark-to-market)."
+    ),
+    base_url: str = typer.Option(
+        "https://openapi.koreainvestment.com:9443", "--base-url"
+    ),
+    no_marks: bool = typer.Option(
+        False, "--no-marks", help="시세 조회 생략 — 평균단가로 보수 평가."
+    ),
+    snapshot: bool = typer.Option(
+        False,
+        "--snapshot",
+        help="결과를 audit_log 에 추가-전용 PORTFOLIO_NAV_SNAPSHOT 1건으로 기록"
+        " (스펙 029·035 시계열 생산자). 기본은 미기록(순수 계산).",
+    ),
+    output_format: str = typer.Option("text", "--format", help="text | json."),
+) -> None:
+    """Spec 029/035 — 현재 시가평가 순자산(NAV)을 계산하고 (옵션) 시계열에 1점 기록한다.
+
+    스펙 029 의 `compute_nav` 는 만들어졌으나 어떤 실행 경로에도 안 꽂혀 있어 NAV 시계열이
+    기록되지 않았다. 이 명령이 그 생산자다 — 장부 보유(fills 재구성)를 현재 KIS 시세로
+    평가해 순자산을 내고, `--snapshot` 이면 PORTFOLIO_NAV_SNAPSHOT 으로 append 한다.
+    그 시계열을 `forward-verdict` 가 읽어 엣지를 판정한다.
+
+    측정 전용 — 주문 0건, 돈 0 이동. 기본 동작은 순수 계산(미기록), read-only.
+    """
+    import json as _json
+    from datetime import UTC, datetime
+
+    from auto_invest.performance.engine import read_fills, reconstruct
+    from auto_invest.portfolio import compute_nav
+    from auto_invest.portfolio.nav import render_text as nav_render_text
+
+    if mode not in ("paper", "live"):
+        typer.echo("--mode must be 'paper' or 'live'.", err=True)
+        _exit(2)
+    if output_format not in ("text", "json"):
+        typer.echo("--format must be 'text' or 'json'.", err=True)
+        _exit(2)
+    if not db_path.exists():
+        typer.echo(f"DB 파일을 찾을 수 없습니다: {db_path}", err=True)
+        _exit(1)
+
+    # 보유는 전체 누적 체결로 재구성한다 — 넓은 기간으로 모든 fills 를 읽는다.
+    since_dt = datetime(1970, 1, 1, tzinfo=UTC)
+    until_dt = datetime.now(UTC)
+    conn = db.get_connection(db_path)
+    try:
+        conn.execute("PRAGMA query_only = ON")
+        fills = read_fills(conn, mode=mode, since=since_dt, until=until_dt)
+        positions, _, _, _ = reconstruct(fills)
+    finally:
+        conn.close()
+
+    open_symbols = sorted(s for s, p in positions.items() if p.qty != 0)
+    marks: dict = {}
+    if open_symbols and not no_marks and env_file is not None:
+        try:
+            secrets = load_secrets(env_file)
+            marks = asyncio.run(
+                _fetch_marks(
+                    open_symbols,
+                    base_url=base_url,
+                    app_key=secrets["KIS_APP_KEY"],
+                    app_secret=secrets["KIS_APP_SECRET"],
+                    db_path=db_path,
+                )
+            )
+        except Exception as exc:  # noqa: BLE001 — 시세 실패는 평균단가 폴백
+            typer.echo(f"(시세 조회 실패 — 평균단가 평가: {exc})", err=True)
+
+    snap = compute_nav(
+        broker_cash_usd=None,
+        broker_positions=None,
+        broker_reported_total_value_usd=None,
+        ledger_positions=positions,
+        marks=marks,
+    )
+
+    if snapshot:
+        from auto_invest.persistence import audit
+
+        write_conn = db.get_connection(db_path)
+        try:
+            seq = audit.append(
+                write_conn,
+                audit.PortfolioNavSnapshotPayload(
+                    mode=mode,  # type: ignore[arg-type]
+                    schema_version=snap.SCHEMA_VERSION,
+                    source=snap.source,
+                    computed_at_utc=_d_iso_now(),
+                    cash_usd=str(snap.cash_usd),
+                    total_market_value_usd=str(snap.total_market_value_usd),
+                    total_nav_usd=str(snap.total_nav_usd),
+                    total_unrealized_pnl_usd=str(snap.total_unrealized_pnl_usd),
+                    broker_reported_nav_usd=(
+                        None
+                        if snap.broker_reported_nav_usd is None
+                        else str(snap.broker_reported_nav_usd)
+                    ),
+                    holdings_count=len([h for h in snap.holdings if h.qty != 0]),
+                    total_qty_drift=snap.total_qty_drift,
+                    total_value_drift_usd=str(snap.total_value_drift_usd),
+                ),
+            )
+        finally:
+            write_conn.close()
+        typer.echo(f"(스냅샷 기록됨: PORTFOLIO_NAV_SNAPSHOT seq={seq})", err=True)
+
+    if output_format == "json":
+        out = snap.to_json_dict()
+        out["mode"] = mode
+        typer.echo(_json.dumps(out))
+    else:
+        typer.echo(nav_render_text(snap))
+
+
+@app.command("forward-verdict")
+def forward_verdict_cmd(
+    portfolio: Path = typer.Option(
+        None,
+        "--portfolio",
+        help="TOML; [portfolio].universe 로 단순 보유 벤치마크를 구성한다.",
+    ),
+    mode: str = typer.Option("paper", "--mode", help="paper | live — 어느 트랙을 판정."),
+    db_path: Path = typer.Option(
+        Path("data/auto_invest.db"), "--db", help="SQLite path (audit_log·price_bars)."
+    ),
+    timeframe: str = typer.Option("1d", "--timeframe", help="벤치마크 가격 바 타임프레임."),
+    num_trials: int = typer.Option(
+        1,
+        "--num-trials",
+        help="시도한 전략 설정 개수 — 디플레이티드 샤프(과적합 보정)용. 정직히 세라.",
+    ),
+    trial_sharpe_std: float = typer.Option(
+        None,
+        "--trial-sharpe-std",
+        help="시도한 설정들의 연율 샤프 표준편차 — num_trials>1 일 때 DSR 계산에 필요.",
+    ),
+    min_obs: int = typer.Option(
+        20, "--min-obs", help="이보다 적은 관측이면 판정 보류(INSUFFICIENT_DATA)."
+    ),
+    dsr_threshold: float = typer.Option(
+        0.95, "--dsr-threshold", help="PSR/DSR 합격선 (0..1)."
+    ),
+    output_format: str = typer.Option("text", "--format", help="text | json."),
+) -> None:
+    """Spec 035 — forward 페이퍼 트랙이 '실제로 돈을 버는가'를 자동 판정한다.
+
+    쌓인 PORTFOLIO_NAV_SNAPSHOT 시계열(생산자: `nav-snapshot --snapshot`)을 읽어 위험조정
+    성과를 단순 보유 벤치마크와 비교하고, 디플레이티드/확률적 샤프(스펙 027)로 우연·과적합을
+    처벌한 뒤 EDGE_CONFIRMED / NO_EDGE / INSUFFICIENT_DATA 를 낸다. 관측이 적으면 보수적으로
+    INSUFFICIENT_DATA — 모르면 엣지 선언 금지(돈을 잃지 않게 막는다).
+
+    측정/분석 전용 — 주문 0건, 돈 0 이동. EDGE_CONFIRMED 는 운영자 라이브 게이트(헌법 X.4)에
+    올릴 증거이지 자동 배포가 아니다.
+    """
+    import json as _json
+    from datetime import datetime as _dt
+
+    from auto_invest.market_data.store import get_bars
+    from auto_invest.portfolio import forward_edge_verdict, read_nav_points
+    from auto_invest.portfolio.edge_verdict import equal_weight_buy_hold_curve
+    from auto_invest.portfolio.edge_verdict import render_text as verdict_render_text
+
+    if mode not in ("paper", "live"):
+        typer.echo("--mode must be 'paper' or 'live'.", err=True)
+        _exit(2)
+    if output_format not in ("text", "json"):
+        typer.echo("--format must be 'text' or 'json'.", err=True)
+        _exit(2)
+    if not db_path.exists():
+        typer.echo(f"DB 파일을 찾을 수 없습니다: {db_path}", err=True)
+        _exit(1)
+
+    universe: list[str] = []
+    if portfolio is not None:
+        try:
+            _caps, _wl, port_cfg = _load_portfolio_for_backtest(portfolio)
+        except ConfigError as exc:
+            typer.echo(f"portfolio validation failed: {exc}", err=True)
+            _exit(65)
+            return
+        universe = list(port_cfg.universe)  # type: ignore[union-attr]
+
+    def _to_date(ts: str):
+        return _dt.fromisoformat(ts.replace("Z", "+00:00")).date()
+
+    conn = db.get_connection(db_path)
+    try:
+        conn.execute("PRAGMA query_only = ON")
+        points = read_nav_points(conn, mode=mode)
+        nav_curve = [p.nav_usd for p in points]
+        nav_dates = [_to_date(p.at_utc) for p in points]
+        bars_by_symbol: dict[str, list] = {}
+        if universe and len(nav_dates) >= 2:
+            for sym in universe:
+                bars = get_bars(conn, symbol=sym, timeframe=timeframe)
+                bars_by_symbol[sym] = [
+                    (_to_date(b.bar_open_utc), b.close_usd)
+                    for b in bars
+                    if b.close_usd > 0
+                ]
+    finally:
+        conn.close()
+
+    benchmark_curve = (
+        equal_weight_buy_hold_curve(nav_dates, bars_by_symbol)
+        if bars_by_symbol
+        else None
+    )
+
+    verdict = forward_edge_verdict(
+        nav_curve,
+        benchmark_curve,
+        num_trials=num_trials,
+        trial_sharpe_std_annual=(
+            None if trial_sharpe_std is None else Decimal(str(trial_sharpe_std))
+        ),
+        min_obs=min_obs,
+        dsr_threshold=Decimal(str(dsr_threshold)),
+    )
+
+    if output_format == "json":
+        out = verdict.to_json_dict()
+        out["mode"] = mode
+        out["snapshot_count"] = len(points)
+        out["universe"] = universe
+        typer.echo(_json.dumps(out))
+    else:
+        typer.echo(verdict_render_text(verdict))

@@ -5,6 +5,12 @@
 측정한다. 외부 API 호출·DB 쓰기·주문 0건 — 측정 전용(슬라이스 1).
 """
 
+from auto_invest.portfolio.edge_verdict import (
+    EdgeVerdict,
+    daily_returns_from_curve,
+    equal_weight_buy_hold_curve,
+    forward_edge_verdict,
+)
 from auto_invest.portfolio.growth import (
     GrowthReport,
     NavPoint,
@@ -27,6 +33,7 @@ __all__ = [
     "DEFAULT_MAX_GROWTH_FACTOR",
     "SOURCE_BROKER",
     "SOURCE_LEDGER",
+    "EdgeVerdict",
     "GrowthReport",
     "NavDrift",
     "NavHolding",
@@ -34,7 +41,10 @@ __all__ = [
     "NavSnapshot",
     "compute_growth",
     "compute_nav",
+    "daily_returns_from_curve",
     "effective_capital",
+    "equal_weight_buy_hold_curve",
+    "forward_edge_verdict",
     "read_nav_points",
     "render_text",
 ]
