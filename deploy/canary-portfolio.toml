@@ -10,38 +10,40 @@
 # 안전: accounts 는 ${KIS_ACCOUNT_NO} 로 치환되지만 --mode paper 는 가상 체결만 한다
 # (실주문 0건). 라이브 전환은 별도 운영자 게이트(헌법 X.4) + --mode live --confirm-live.
 #
-# 인스턴스 전제: 워커가 universe 심볼의 일봉을 적재하고 있어야 점수화가 된다(deploy 동기화).
-# 유니버스는 인스턴스의 검증된 캐너리 화이트리스트(AAPL·MSFT·SPY)에 맞췄다 — 운영자가
-# 넓혀도 된다(넓을수록 횡단면 분산↑, REAL-DATA-FINDINGS 의 교훈).
+# 인스턴스 전제: universe 심볼의 일봉이 price_bars 에 있어야 점수화가 된다. 워크플로
+# rebalance-paper-forward.yml 의 backfill-bars 단계(스펙 033)가 매 거래일 --portfolio 의
+# universe 일봉을 KIS 에서 채운다(거래소 NAS→NYS→AMS 자동 시도). 라이브 워커가 떠 있으면
+# 워커 틱(--backfill)이 whitelist 일봉도 상시 갱신한다.
+#
+# 스펙 033 후속(유니버스 확대): 횡단면 분산을 위해 3→10 종목으로 넓혔다. REAL-DATA-FINDINGS
+# 교훈상 넓고 저회전이 유리. 거래소 혼합(NAS: 기술주, NYS: 금융·헬스·에너지, AMS: SPY).
 
 [caps]
 per_trade_pct                  = 5.0
-per_symbol_pct                 = 40.0
+per_symbol_pct                 = 25.0
 global_exposure_pct            = 80.0
 canary_capital_pct             = 5.0
 canary_min_duration_days       = 10
 canary_acceptance_drawdown_pct = 3.0
 
 [whitelist]
-symbols     = ["AAPL", "MSFT", "SPY"]
+symbols     = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "JPM", "JNJ", "XOM", "SPY"]
 accounts    = ["${KIS_ACCOUNT_NO}"]
 order_types = ["LIMIT"]
 sessions    = ["REGULAR"]
 
 [portfolio]
 id            = "forward-paper-canary"
-universe      = ["AAPL", "MSFT", "SPY"]
+universe      = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "JPM", "JNJ", "XOM", "SPY"]
 weights       = { momentum = "1.0", quality = "1.0", low_volatility = "0.5" }
 weight_scheme = "equal"
-top_n         = 3
-# 증거 기반 기본값(REAL-DATA-FINDINGS): 저회전 + 승자 유지. 분기 재조정으로 회전·비용 최소.
-# 룩백/모멘텀은 짧게 둔다 — 인스턴스가 아직 긴 일봉 히스토리를 쌓지 못했을 수 있으므로,
-# forward 트랙이 무거래(no-op) 대신 실제 마크를 쌓기 시작하도록(시드 목적). 히스토리가
-# 충분히 쌓이면 이후 길게 조정한다(전략 정련은 forward 트랙 위에서).
+top_n         = 5
+# 증거 기반(REAL-DATA-FINDINGS): 저회전 + 승자 유지(hold_replace). 10종목 중 상위 5종목 보유.
+# 백필이 심볼당 ~100 일봉을 채우므로 룩백 60·모멘텀 40 으로 신호 품질↑(가용 범위 내).
 rebalance_mode             = "hold_replace"
 invested_fraction          = "0.95"
-rebalance_every_n_sessions = 63
-lookback_bars              = 30
-momentum_period            = 20
+rebalance_every_n_sessions = 21
+lookback_bars              = 60
+momentum_period            = 40
 rebalance_threshold_pct    = "2.0"
 min_notional_usd           = "50"

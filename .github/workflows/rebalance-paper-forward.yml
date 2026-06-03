@@ -18,7 +18,10 @@ name: Rebalance forward paper validation (current-data track)
 
 on:
   schedule:
-    - cron: "30 22 1 * *"  # 매월 1일 22:30 UTC (미국 장 마감 후) — 분기 캐던스의 페이퍼 마크.
+    # 매 거래일(월~금) 22:30 UTC, 미국 장 마감 후 — 일봉 백필 + 페이퍼 마크를 매일 수행한다.
+    # 일봉은 마감 1회만 갱신되므로 일 1회면 충분(실시간 불필요). 라이브 워커가 떠 있으면
+    # 워커 틱(스펙 033)이 상시 백필하므로 이 워크플로는 워커 모드와 무관한 안전망 + 마크다.
+    - cron: "30 22 * * 1-5"
   workflow_dispatch:
     inputs:
       capital:

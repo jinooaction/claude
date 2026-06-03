@@ -42,7 +42,7 @@ from auto_invest.execution.order_router import (
     _record_transition,
     verify_stage_uniqueness,
 )
-from auto_invest.market_data.feed import store_synthetic_bar
+from auto_invest.market_data.feed import backfill_daily_bars, store_synthetic_bar
 from auto_invest.market_data.store import get_bars, get_latest_bar
 from auto_invest.persistence import audit, db
 from auto_invest.persistence import positions as positions_mod
@@ -100,6 +100,12 @@ _CAPITAL_EVAL_GAP_SECONDS = 60.0
 # lifecycle 설정 있는 룰이 0건이면 아예 점검 안 함.
 _LIFECYCLE_GAP_SECONDS = 10.0
 
+# Spec 033: KIS 일봉 백필 점검 최소 간격(초). 일봉은 장 마감 1회만 갱신되므로 자주 부를
+# 필요 없다(insert-or-skip 멱등). 6시간 간격이면 세션 중 1~2회 호출되어 완료된 일봉을
+# 확보한다. 첫 백필은 무조건 수행(_last_backfill_at 가 None). backfill_enabled 가 꺼져
+# 있으면 아예 호출 안 함(옵트인, byte 동일).
+_BACKFILL_GAP_SECONDS = 6 * 3600.0
+
 
 def _normalize_paper_stop_reason(reason: str) -> str:
     """live record_stop은 임의 문자열을 받지만 paper 페이로드는 enum-only.
@@ -144,6 +150,12 @@ class WorkerSettings:
     # get_quote 만 쓴다(byte 동일). 주입됐고 available 이며 캐시 시세가 있으면 그것을 쓰고,
     # 아니면 REST 로 자동 폴백한다(외부 API 강건성 — 거래 무중단). 주문 경로는 무변경.
     realtime_feed: RealtimeQuoteSource | None = None
+    # Spec 033 — 워커가 세션당 1회 유니버스(whitelist) 일봉을 KIS 기간별시세로 받아
+    # price_bars 를 최신으로 유지한다(읽기 전용 시세, 주문 0건). 기본 False(옵트인, byte
+    # 동일). 켜면 재조정 스코어러·지표 룰 모두 신선한 일봉을 본다. 매월 워크플로 백필 대신
+    # 상시 갱신 — 운영자 요청(일 1회 ≫ 월 1회).
+    backfill_enabled: bool = False
+    backfill_exchanges: tuple[str, ...] = ("NAS", "NYS", "AMS")
 
 
 @dataclass
@@ -198,6 +210,8 @@ class Worker:
         # 설정이 있는 룰만 rule_id→설정으로 캐시 — 비면 수명 관리를 아예 돌리지 않는다
         # (옵트인, byte 동일). paper 모드는 orders row 가 없어 어차피 대상이 0건.
         self._last_lifecycle_at: datetime | None = None
+        # Spec 033: 일봉 백필 cadence 추적(None = 첫 기회에 1회). backfill_enabled 옵트인.
+        self._last_backfill_at: datetime | None = None
         self._lifecycle_configs: dict[str, OrderLifecycleConfig] = {
             r.id: r.lifecycle
             for r in settings.config.rules
@@ -357,6 +371,13 @@ class Worker:
         if self._should_eval_capital(moment):
             self._last_capital_eval_at = moment
             await self._refresh_effective_capital(moment)
+
+        # Spec 033: 세션당 1회 유니버스 일봉 백필 — price_bars 를 신선하게 유지(읽기 전용
+        # 시세, 주문 0건). 룰 평가 전에 둬서 이번 틱의 지표 룰이 최신 일봉을 본다. 꺼져
+        # 있으면 호출 자체를 안 함(옵트인). 모든 예외 격리(거래 무중단).
+        if self._should_backfill_bars(moment):
+            self._last_backfill_at = moment
+            await self._run_backfill_bars()
 
         for rule in self.settings.config.rules:
             if not rule.enabled:
@@ -586,6 +607,41 @@ class Worker:
             )
         except Exception:  # pragma: no cover — 이중 안전망(거래 무중단).
             logger.warning("fill sync raised unexpectedly", exc_info=True)
+
+    # ------------------------------------ daily bar backfill (spec 033)
+
+    def _should_backfill_bars(self, now: datetime) -> bool:
+        """이번 틱에 일봉 백필을 할지. 옵트인(꺼져 있으면 False), 아니면 cadence 적용."""
+        if not self.settings.backfill_enabled:
+            return False
+        last = self._last_backfill_at
+        if last is None:
+            return True
+        return (now - last).total_seconds() >= _BACKFILL_GAP_SECONDS
+
+    async def _run_backfill_bars(self) -> None:
+        """유니버스(whitelist) 일봉을 KIS 에서 받아 price_bars 갱신(읽기 전용, 멱등).
+
+        모든 예외를 격리해 백필 실패가 거래 루프를 멈추지 않게 한다(SC-005). 시세 조회
+        엔드포인트만 호출 — 주문·취소 0건, 돈 안 움직임."""
+        try:
+            symbols = sorted(self.settings.config.whitelist.symbols)
+            if not symbols:
+                return
+            results = await backfill_daily_bars(
+                self.conn,
+                self.broker,
+                access_token=self.access_token,
+                app_key=self.app_key,
+                app_secret=self.app_secret,
+                symbols=symbols,
+                exchanges=self.settings.backfill_exchanges,
+            )
+            total = sum(r["inserted"] for r in results)
+            logger.info("daily bar backfill: %d new bar(s) across %d symbol(s)",
+                        total, len(symbols))
+        except Exception:  # pragma: no cover — 이중 안전망(거래 무중단).
+            logger.warning("daily bar backfill raised unexpectedly", exc_info=True)
 
     # ------------------------------------ order lifecycle (spec 030)
 
