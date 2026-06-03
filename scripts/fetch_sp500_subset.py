@@ -64,6 +64,13 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="data/history_csv_sp500", help="Output dir.")
     ap.add_argument("--universe", nargs="*", default=DEFAULT_UNIVERSE)
+    ap.add_argument(
+        "--all",
+        action="store_true",
+        help="Extract EVERY ticker present in the dataset (the full ~500-name "
+        "cross-section), ignoring --universe. World-class cross-sectional factor "
+        "investing needs breadth, not a hand-picked handful (spec 034).",
+    )
     args = ap.parse_args()
     universe = {s.upper() for s in args.universe}
 
@@ -74,15 +81,22 @@ def main() -> int:
     req = urllib.request.Request(SOURCE_URL, headers={"User-Agent": "Mozilla/5.0"})
     raw = urllib.request.urlopen(req, timeout=120).read().decode("utf-8", "replace")
 
-    by_symbol: dict[str, list] = {s: [] for s in universe}
+    by_symbol: dict[str, list] = {} if args.all else {s: [] for s in universe}
     reader = csv.reader(io.StringIO(raw))
     next(reader, None)  # header: date,open,high,low,close,volume,Name
     for row in reader:
         if len(row) != 7:
             continue
         name = row[6].strip().upper()
-        if name in by_symbol:
+        if args.all:
+            by_symbol.setdefault(name, []).append(
+                (row[0], row[1], row[2], row[3], row[4], row[5])
+            )
+        elif name in by_symbol:
             by_symbol[name].append((row[0], row[1], row[2], row[3], row[4], row[5]))
+
+    if args.all:
+        universe = set(by_symbol)
 
     written = 0
     for sym in sorted(universe):
