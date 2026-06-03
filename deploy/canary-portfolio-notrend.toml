@@ -1,0 +1,64 @@
+# 스펙 037 — forward A/B 토너먼트의 **대조군(추세 필터 OFF)** 설정.
+#
+# 이 파일은 canary-portfolio.toml(추세 필터 ON)과 **유니버스·가중치·top_n·재조정 주기까지
+# 전부 동일**하고 오직 [portfolio.trend_filter] 절만 없다(추세 필터 미적용). 워크플로
+# rebalance-paper-forward.yml 이 두 설정을 *각자 전용 DB*(forward_trend.db / forward_notrend.db)
+# 에서 병렬로 페이퍼 돌려, 스펙 035 forward-verdict 가 양쪽을 판정한다. 두 판정을 나란히
+# 비교하면 "추세 필터가 실제로 도움이 되는가"의 격리된 답이 나온다. PAPER 전용 — 돈 0 이동.
+#
+# 스펙 032 — forward 페이퍼 검증용 포트폴리오 설정 (현재 데이터, 돈 안 움직임).
+#
+# 왜 이 파일이 있나: 옛 과거 데이터 백테스트는 2026년 시장 구조(참여자·금리·미시구조)와
+# 다른 regime 을 측정한다. "과거에 맞았다"가 "지금 통한다"를 보장하지 않는다. 유일한
+# 진짜 검증은 *현재 데이터로 앞으로(forward) 페이퍼 트레이딩한 트랙레코드*다.
+# `auto-invest rebalance-once --mode paper` 가 라이브 KIS 시세로 가상 체결을 기록
+# (ORDER_PAPER_FILLED)하고, 그걸 성과 엔진(스펙 011) + 디플레이티드 샤프(스펙 027)로
+# 측정한다. 이 설정은 그 forward 페이퍼 검증의 시드다.
+#
+# 안전: accounts 는 ${KIS_ACCOUNT_NO} 로 치환되지만 --mode paper 는 가상 체결만 한다
+# (실주문 0건). 라이브 전환은 별도 운영자 게이트(헌법 X.4) + --mode live --confirm-live.
+#
+# 인스턴스 전제: universe 심볼의 일봉이 price_bars 에 있어야 점수화가 된다. 워크플로
+# rebalance-paper-forward.yml 의 backfill-bars 단계(스펙 033)가 매 거래일 --portfolio 의
+# universe 일봉을 KIS 에서 채운다(거래소 NAS→NYS→AMS 자동 시도). 라이브 워커가 떠 있으면
+# 워커 틱(--backfill)이 whitelist 일봉도 상시 갱신한다.
+#
+# 스펙 033 후속(유니버스 확대): 횡단면 분산을 위해 3→10 종목으로 넓혔다. REAL-DATA-FINDINGS
+# 교훈상 넓고 저회전이 유리. 거래소 혼합(NAS: 기술주, NYS: 금융·헬스·에너지, AMS: SPY).
+#
+# 스펙 034(유동성 기반 유니버스 구성): 후보 유니버스를 28종목 유동성 대형주로 넓혔다.
+# 워크플로 rebalance-paper-forward.yml 이 매 실행 `rebalance-once --construct-universe-top-n`
+# 으로 *현재* 저장 바(스펙 033 백필) 기준 유동성 상위 N개만 골라 재조정한다(손으로 고른
+# 유니버스가 아니라 현재 데이터로 *구성*). 구성 결과는 항상 이 화이트리스트의 부분집합이라
+# 라이브 거래 집합을 넓힐 수 없다(헌법 II). PAPER 전용 — 실주문 0건.
+
+[caps]
+per_trade_pct                  = 5.0
+per_symbol_pct                 = 25.0
+global_exposure_pct            = 80.0
+canary_capital_pct             = 5.0
+canary_min_duration_days       = 10
+canary_acceptance_drawdown_pct = 3.0
+
+[whitelist]
+symbols     = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "AVGO", "TSLA", "JPM", "V", "MA", "HD", "COST", "WMT", "PG", "KO", "JNJ", "UNH", "LLY", "MRK", "ABBV", "XOM", "CVX", "BAC", "DIS", "NFLX", "ORCL", "SPY"]
+accounts    = ["${KIS_ACCOUNT_NO}"]
+order_types = ["LIMIT"]
+sessions    = ["REGULAR"]
+
+[portfolio]
+id            = "forward-paper-canary-notrend"
+universe      = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "AVGO", "TSLA", "JPM", "V", "MA", "HD", "COST", "WMT", "PG", "KO", "JNJ", "UNH", "LLY", "MRK", "ABBV", "XOM", "CVX", "BAC", "DIS", "NFLX", "ORCL", "SPY"]
+weights       = { momentum = "1.0", quality = "1.0", low_volatility = "0.5" }
+weight_scheme = "equal"
+top_n         = 5
+# 증거 기반(REAL-DATA-FINDINGS): 저회전 + 승자 유지(hold_replace). 워크플로가 28후보 →
+# 유동성 상위(--construct-universe-top-n) → 합성 점수 상위 5종목 보유의 2단 선택.
+# 백필이 심볼당 ~100 일봉을 채우므로 룩백 60·모멘텀 40 으로 신호 품질↑(가용 범위 내).
+rebalance_mode             = "hold_replace"
+invested_fraction          = "0.95"
+rebalance_every_n_sessions = 21
+lookback_bars              = 60
+momentum_period            = 40
+rebalance_threshold_pct    = "2.0"
+min_notional_usd           = "50"

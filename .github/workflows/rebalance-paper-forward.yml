@@ -1,16 +1,16 @@
 name: Rebalance forward paper validation (current-data track)
 
-# 스펙 032 — 옛 과거 데이터 백테스트가 아니라 *현재 데이터로 앞으로(forward)* 재조정
-# 전략을 페이퍼 트레이딩해 트랙레코드를 누적한다. 2026년 시장은 2013-2018(또는 2008)과
-# regime 이 다르므로, "지금 통하는가"의 유일한 정직한 답은 현재 시세로 forward 검증이다.
+# 스펙 032/035/037 — 옛 과거 데이터 백테스트가 아니라 *현재 데이터로 앞으로(forward)*
+# 재조정 전략을 페이퍼 트레이딩해 트랙레코드를 누적하고, 스펙 035 forward-verdict 로
+# "단순 보유를 우연 아니게 이기는가"를 자동 판정한다.
 #
-# 매월 1일 미국 장 마감 후, 인스턴스에서 `rebalance-once --mode paper` 를 돌린다
-# (라이브 KIS 시세로 가상 체결만 — 실주문 0건, 돈 안 움직임). 이어서 페이퍼 트랙의
-# 성과(스펙 011)를 스냅샷해 사이드카 브랜치로 발행한다. 충분한 forward 관측이 쌓이면
-# 디플레이티드 샤프(스펙 027)로 "현재 데이터에서 우연이 아닌 엣지"인지 판정한다.
+# 스펙 037 — A/B 토너먼트: 추세 필터 ON(canary-portfolio.toml) vs OFF
+# (canary-portfolio-notrend.toml)를 *각자 전용 DB*(forward_trend.db / forward_notrend.db)
+# 에서 병렬로 돌린다. DB 파일이 격리 경계라 두 트랙의 체결·NAV 가 섞이지 않는다(코드 변경 0).
+# 두 판정을 나란히 비교하면 "추세 필터(드로다운 방어)가 실제로 도움이 되는가"의 격리된 답.
 #
-# 안전 경계: PAPER 전용. 이 워크플로우는 절대 --mode live 를 쓰지 않는다(실주문 없음).
-# 라이브 전환은 별도 운영자 게이트(헌법 X.4) + go-live-canary 채널이다.
+# 안전 경계: PAPER 전용. 이 워크플로우는 절대 --mode live 를 쓰지 않는다(실주문 0건, 돈
+# 안 움직임). 라이브 전환은 별도 운영자 게이트(헌법 X.4) + go-live-canary 채널이다.
 #
 # 사용법(컨테이너에서 최신 forward 트랙 확인):
 #   git fetch origin automation/rebalance-paper-forward-last-run
@@ -19,8 +19,6 @@ name: Rebalance forward paper validation (current-data track)
 on:
   schedule:
     # 매 거래일(월~금) 22:30 UTC, 미국 장 마감 후 — 일봉 백필 + 페이퍼 마크를 매일 수행한다.
-    # 일봉은 마감 1회만 갱신되므로 일 1회면 충분(실시간 불필요). 라이브 워커가 떠 있으면
-    # 워커 틱(스펙 033)이 상시 백필하므로 이 워크플로는 워커 모드와 무관한 안전망 + 마크다.
     - cron: "30 22 * * 1-5"
   workflow_dispatch:
     inputs:
@@ -28,10 +26,7 @@ on:
         description: "페이퍼 사이징 자본 USD (실계좌 잔고 아님, 가중치/캡 기준)."
         required: false
         default: "12000"
-  # 자율 트리거: automation/rebalance-paper.request 센티넬이 main 에 머지되면 push 로
-  # 발화한다(go-live-canary 와 동일 패턴). MCP 토큰은 workflow_dispatch 권한이 없어
-  # (actions:write 부재) 세션이 직접 디스패치할 수 없으므로, request 파일 머지가 자율
-  # 시작 경로다. PAPER 전용이라 돈은 움직이지 않는다.
+  # 자율 트리거: automation/rebalance-paper.request 센티넬이 main 에 머지되면 push 로 발화.
   push:
     branches: [main]
     paths:
@@ -43,7 +38,7 @@ permissions:
 jobs:
   forward-paper:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -56,29 +51,9 @@ jobs:
           echo "${KEY}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
 
-      - name: Backfill universe daily bars from KIS (read-only quotes, no orders)
-        id: backfill
-        env:
-          HOST: ${{ secrets.VULTR_SSH_HOST }}
-          USER: ${{ secrets.VULTR_SSH_USER }}
-          PORT: ${{ secrets.VULTR_SSH_PORT }}
-        run: |
-          set +e
-          port="${PORT:-22}"
-          # 재조정 스코어러는 저장된 일봉을 읽는다. 신선한 인스턴스는 price_bars 가 비어
-          # 무거래가 되므로, 먼저 KIS 기간별시세(시세 조회 — 주문 0건)로 일봉을 채운다.
-          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
-              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
-              "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest backfill-bars \
-                 --portfolio deploy/canary-portfolio.toml \
-                 --db data/auto_invest.db --env-file .env --json" \
-              > /tmp/backfill.json 2>/tmp/backfill.err
-          echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
-          echo "--- stdout ---"; cat /tmp/backfill.json
-          echo "--- stderr ---"; cat /tmp/backfill.err
-
-      - name: Run ONE paper rebalance on instance (current KIS data, no money)
-        id: rebal
+      # ---- ARM A: 추세 필터 ON ---------------------------------------------
+      - name: "Arm TREND-ON — backfill + paper rebalance + NAV snapshot"
+        id: prep_trend
         env:
           HOST: ${{ secrets.VULTR_SSH_HOST }}
           USER: ${{ secrets.VULTR_SSH_USER }}
@@ -87,23 +62,22 @@ jobs:
         run: |
           set +e
           port="${PORT:-22}"
+          cfg="deploy/canary-portfolio.toml"; dbf="data/forward_trend.db"
+          # 전용 DB(첫 실행이면 backfill-bars 가 자동 마이그레이션 후 생성). 백필→재조정
+          # (현재 저장 바 유동성 상위 15 구성→상위 5 보유, 추세 게이트 적용)→NAV 스냅샷.
+          # 측정/페이퍼 전용 — 주문 0건, 돈 0 이동.
           ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
               -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
-              "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest rebalance-once \
-                 --portfolio deploy/canary-portfolio.toml \
-                 --mode paper \
-                 --capital ${CAPITAL} \
-                 --construct-universe-top-n 15 \
-                 --db data/auto_invest.db \
-                 --env-file .env \
-                 --json" \
-              > /tmp/rebal.json 2>/tmp/rebal.err
+              "cd /opt/auto-invest && \
+                 /usr/local/bin/uv run auto-invest backfill-bars --portfolio ${cfg} --db ${dbf} --env-file .env --json && \
+                 /usr/local/bin/uv run auto-invest rebalance-once --portfolio ${cfg} --mode paper --capital ${CAPITAL} --construct-universe-top-n 15 --db ${dbf} --env-file .env --json && \
+                 /usr/local/bin/uv run auto-invest nav-snapshot --mode paper --db ${dbf} --env-file .env --snapshot --format json" \
+              > /tmp/prep_trend.log 2>&1
           echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
-          echo "--- stdout ---"; cat /tmp/rebal.json
-          echo "--- stderr ---"; cat /tmp/rebal.err
+          cat /tmp/prep_trend.log
 
-      - name: Record mark-to-market NAV snapshot (spec 029/035 — verdict time series)
-        id: nav
+      - name: "Arm TREND-ON — forward edge verdict (spec 035)"
+        id: verdict_trend
         if: always()
         env:
           HOST: ${{ secrets.VULTR_SSH_HOST }}
@@ -112,94 +86,67 @@ jobs:
         run: |
           set +e
           port="${PORT:-22}"
-          # forward 엣지 판정(forward-verdict)이 읽는 NAV 시계열의 생산자다. 매 실행 1점.
-          # 장부 보유를 현재 KIS 시세로 시가평가해 PORTFOLIO_NAV_SNAPSHOT 으로 append.
-          # 측정 전용 — 주문 0건, 돈 0 이동. 시세 실패는 평균단가로 폴백(거래 무중단).
-          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
-              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
-              "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest nav-snapshot \
-                 --mode paper --db data/auto_invest.db --env-file .env --snapshot \
-                 --format json" \
-              > /tmp/nav.json 2>/tmp/nav.err
-          echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
-          echo "--- stdout ---"; cat /tmp/nav.json
-          echo "--- stderr ---"; cat /tmp/nav.err
-
-      - name: Snapshot forward paper performance (spec 011)
-        id: perf
-        if: always()
-        env:
-          HOST: ${{ secrets.VULTR_SSH_HOST }}
-          USER: ${{ secrets.VULTR_SSH_USER }}
-          PORT: ${{ secrets.VULTR_SSH_PORT }}
-        run: |
-          set +e
-          port="${PORT:-22}"
-          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
-              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
-              "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest performance \
-                 --mode paper --window 365d --db data/auto_invest.db --format json" \
-              > /tmp/perf.json 2>/tmp/perf.err
-          echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
-          echo "--- stdout ---"; cat /tmp/perf.json
-          echo "--- stderr ---"; cat /tmp/perf.err
-
-      - name: Diagnose stored bars on instance (why no-op?)
-        id: bars
-        if: always()
-        env:
-          HOST: ${{ secrets.VULTR_SSH_HOST }}
-          USER: ${{ secrets.VULTR_SSH_USER }}
-          PORT: ${{ secrets.VULTR_SSH_PORT }}
-        run: |
-          set +e
-          port="${PORT:-22}"
-          # 무거래(빈 target_weights)의 원인을 못 박는다: 유니버스 심볼별 저장 바 수.
-          # 룩백/모멘텀 윈도우보다 적으면 스코어가 비어 아무것도 거래되지 않는다.
-          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
-              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
-              "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest bars-status \
-                 --portfolio deploy/canary-portfolio.toml \
-                 --timeframe 1d --db data/auto_invest.db --json" \
-              > /tmp/bars.json 2>/tmp/bars.err
-          echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
-          echo "--- stdout ---"; cat /tmp/bars.json
-          echo "--- stderr ---"; cat /tmp/bars.err
-
-      - name: Forward edge verdict (spec 035 — does it actually beat buy-and-hold?)
-        id: verdict
-        if: always()
-        env:
-          HOST: ${{ secrets.VULTR_SSH_HOST }}
-          USER: ${{ secrets.VULTR_SSH_USER }}
-          PORT: ${{ secrets.VULTR_SSH_PORT }}
-        run: |
-          set +e
-          port="${PORT:-22}"
-          # 쌓인 NAV 시계열을 단순 보유 벤치마크와 비교하고 디플레이티드/확률적 샤프로
-          # 우연·과적합을 처벌해 EDGE_CONFIRMED / NO_EDGE / INSUFFICIENT_DATA 를 낸다.
-          # 관측이 적으면 보수적으로 INSUFFICIENT_DATA — 트랙이 쌓이면 자동으로 진짜 판정.
-          # 측정/분석 전용 — 주문 0건, 돈 0 이동.
           ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
               -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
               "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest forward-verdict \
                  --mode paper --portfolio deploy/canary-portfolio.toml \
-                 --db data/auto_invest.db --format json" \
-              > /tmp/verdict.json 2>/tmp/verdict.err
+                 --db data/forward_trend.db --format json" \
+              > /tmp/verdict_trend.json 2>/tmp/verdict_trend.err
           echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
-          echo "--- stdout ---"; cat /tmp/verdict.json
-          echo "--- stderr ---"; cat /tmp/verdict.err
+          echo "--- verdict ---"; cat /tmp/verdict_trend.json
+          echo "--- stderr ---"; cat /tmp/verdict_trend.err
 
-      - name: Publish forward track to sidecar branch
+      # ---- ARM B: 추세 필터 OFF (대조군) -----------------------------------
+      - name: "Arm TREND-OFF — backfill + paper rebalance + NAV snapshot"
+        id: prep_notrend
+        if: always()
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+          CAPITAL: ${{ github.event.inputs.capital || '12000' }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          cfg="deploy/canary-portfolio-notrend.toml"; dbf="data/forward_notrend.db"
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "cd /opt/auto-invest && \
+                 /usr/local/bin/uv run auto-invest backfill-bars --portfolio ${cfg} --db ${dbf} --env-file .env --json && \
+                 /usr/local/bin/uv run auto-invest rebalance-once --portfolio ${cfg} --mode paper --capital ${CAPITAL} --construct-universe-top-n 15 --db ${dbf} --env-file .env --json && \
+                 /usr/local/bin/uv run auto-invest nav-snapshot --mode paper --db ${dbf} --env-file .env --snapshot --format json" \
+              > /tmp/prep_notrend.log 2>&1
+          echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
+          cat /tmp/prep_notrend.log
+
+      - name: "Arm TREND-OFF — forward edge verdict (spec 035)"
+        id: verdict_notrend
+        if: always()
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest forward-verdict \
+                 --mode paper --portfolio deploy/canary-portfolio-notrend.toml \
+                 --db data/forward_notrend.db --format json" \
+              > /tmp/verdict_notrend.json 2>/tmp/verdict_notrend.err
+          echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
+          echo "--- verdict ---"; cat /tmp/verdict_notrend.json
+          echo "--- stderr ---"; cat /tmp/verdict_notrend.err
+
+      - name: Publish A/B tournament to sidecar branch
         if: always()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REBAL_EXIT: ${{ steps.rebal.outputs.ssh_exit }}
-          PERF_EXIT: ${{ steps.perf.outputs.ssh_exit }}
-          BARS_EXIT: ${{ steps.bars.outputs.ssh_exit }}
-          BACKFILL_EXIT: ${{ steps.backfill.outputs.ssh_exit }}
-          NAV_EXIT: ${{ steps.nav.outputs.ssh_exit }}
-          VERDICT_EXIT: ${{ steps.verdict.outputs.ssh_exit }}
+          PREP_TREND_EXIT: ${{ steps.prep_trend.outputs.ssh_exit }}
+          VERDICT_TREND_EXIT: ${{ steps.verdict_trend.outputs.ssh_exit }}
+          PREP_NOTREND_EXIT: ${{ steps.prep_notrend.outputs.ssh_exit }}
+          VERDICT_NOTREND_EXIT: ${{ steps.verdict_notrend.outputs.ssh_exit }}
         run: |
           set -uo pipefail
           BRANCH=automation/rebalance-paper-forward-last-run
@@ -207,7 +154,11 @@ jobs:
           git config user.name "rebalance-paper-bot"
           git config user.email "rebalance-paper-bot@noreply.github.com"
           {
-            echo "# 재조정 forward 페이퍼 검증 — 최신 실행 (현재 데이터, 돈 안 움직임)"
+            echo "# forward 페이퍼 A/B 토너먼트 — 최신 실행 (현재 데이터, 돈 안 움직임)"
+            echo ""
+            echo "추세 필터 **ON**(canary-portfolio.toml / forward_trend.db) vs **OFF**"
+            echo "(canary-portfolio-notrend.toml / forward_notrend.db). 전용 DB 로 격리된"
+            echo "두 페이퍼 트랙을 스펙 035 forward-verdict 로 각각 판정한다. PAPER 전용 — 실주문 0건."
             echo ""
             echo "| 항목 | 값 |"
             echo "|------|-----|"
@@ -215,68 +166,43 @@ jobs:
             echo "| commit | ${GITHUB_SHA} |"
             echo "| trigger | ${GITHUB_EVENT_NAME} |"
             echo "| timestamp_utc | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
-            echo "| backfill ssh_exit | ${BACKFILL_EXIT:-?} |"
-            echo "| rebalance ssh_exit | ${REBAL_EXIT:-?} |"
-            echo "| nav-snapshot ssh_exit | ${NAV_EXIT:-?} |"
-            echo "| performance ssh_exit | ${PERF_EXIT:-?} |"
-            echo "| bars-status ssh_exit | ${BARS_EXIT:-?} |"
-            echo "| forward-verdict ssh_exit | ${VERDICT_EXIT:-?} |"
+            echo "| TREND-ON prep ssh_exit | ${PREP_TREND_EXIT:-?} |"
+            echo "| TREND-ON verdict ssh_exit | ${VERDICT_TREND_EXIT:-?} |"
+            echo "| TREND-OFF prep ssh_exit | ${PREP_NOTREND_EXIT:-?} |"
+            echo "| TREND-OFF verdict ssh_exit | ${VERDICT_NOTREND_EXIT:-?} |"
             echo ""
-            echo "## 🧭 forward 엣지 판정 (스펙 035 — 단순 보유를 정말 이기는가?)"
+            echo "## 🧭 판정 — 추세 필터 ON (drawdown 방어 오버레이)"
             echo ""
-            echo "> NAV 시계열을 단순 보유와 비교하고 디플레이티드/확률적 샤프로 우연·과적합을"
-            echo "> 처벌한 판정. EDGE_CONFIRMED 만이 운영자 라이브 게이트(헌법 X.4)에 올릴 증거다"
-            echo "> (자동 배포 아님). INSUFFICIENT_DATA 면 관측이 더 쌓여야 한다 — 정상."
+            echo "> EDGE_CONFIRMED 만이 운영자 라이브 게이트(헌법 X.4)에 올릴 증거(자동 배포 아님)."
+            echo "> INSUFFICIENT_DATA 면 NAV 관측이 더 쌓여야 한다(≈20 거래일) — 정상."
             echo ""
             echo '```json'
-            cat /tmp/verdict.json 2>/dev/null || echo '{}'
+            cat /tmp/verdict_trend.json 2>/dev/null || echo '{}'
             echo '```'
             echo ""
-            echo "## 시가평가 NAV 스냅샷 (이번 실행 1점, 판정 시계열 생산자)"
+            echo "## 🧭 판정 — 추세 필터 OFF (대조군)"
             echo ""
             echo '```json'
-            cat /tmp/nav.json 2>/dev/null || echo '{}'
+            cat /tmp/verdict_notrend.json 2>/dev/null || echo '{}'
             echo '```'
             echo ""
-            echo "## KIS 일봉 백필 결과(JSON)"
+            echo "> 두 판정을 나란히 비교: ON 의 max_drawdown_pct·sharpe·excess 가 OFF 보다"
+            echo "> 나으면 추세 필터가 *실제로* 도움이 된다는 격리된 증거다."
             echo ""
-            echo '```json'
-            cat /tmp/backfill.json 2>/dev/null || echo '{}'
-            echo '```'
-            echo ""
-            echo "> PAPER 전용 — 실주문 0건. 이 forward 트랙이 옛 백테스트보다 '지금 통하는가'를"
-            echo "> 더 정직하게 답한다. 관측이 충분히 쌓이면 디플레이티드 샤프로 유의성을 판정하라."
-            echo ""
-            echo "## 인스턴스 저장 바 수 (무거래 원인 진단)"
-            echo ""
-            echo "> 유니버스 심볼의 일봉 저장량. 룩백/모멘텀 윈도우보다 적으면 스코어가 비어"
-            echo "> 무거래가 된다. count=0 이면 워커가 그 심볼의 1d 바를 아직 안 쌓은 것."
-            echo ""
-            echo '```json'
-            cat /tmp/bars.json 2>/dev/null || echo '{}'
-            echo '```'
-            echo ""
-            echo "## 페이퍼 재조정 출력(JSON)"
-            echo ""
-            echo '```json'
-            cat /tmp/rebal.json 2>/dev/null || echo '{}'
-            echo '```'
-            echo ""
-            echo "## forward 페이퍼 성과(JSON)"
-            echo ""
-            echo '```json'
-            cat /tmp/perf.json 2>/dev/null || echo '{}'
-            echo '```'
-            echo ""
-            echo "## stderr"
+            echo "## TREND-ON 준비 로그 (backfill → rebalance → nav-snapshot)"
             echo ""
             echo '```'
-            cat /tmp/backfill.err /tmp/rebal.err /tmp/nav.err /tmp/perf.err \
-                /tmp/bars.err /tmp/verdict.err 2>/dev/null || echo '(none)'
+            cat /tmp/prep_trend.log 2>/dev/null || echo '(none)'
+            echo '```'
+            echo ""
+            echo "## TREND-OFF 준비 로그 (backfill → rebalance → nav-snapshot)"
+            echo ""
+            echo '```'
+            cat /tmp/prep_notrend.log 2>/dev/null || echo '(none)'
             echo '```'
           } > LAST_RUN.md
           git checkout --orphan publish
           git add LAST_RUN.md
-          git commit -q -m "rebalance-paper-forward run ${GITHUB_RUN_ID}"
+          git commit -q -m "rebalance-paper-forward A/B run ${GITHUB_RUN_ID}"
           git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "publish:${BRANCH}"
           echo "Published to ${BRANCH}."

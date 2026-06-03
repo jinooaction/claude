@@ -13,6 +13,7 @@ from auto_invest.cli import _load_portfolio_for_backtest
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _CANARY = _REPO_ROOT / "deploy" / "canary-portfolio.toml"
+_CANARY_NOTREND = _REPO_ROOT / "deploy" / "canary-portfolio-notrend.toml"
 
 
 def test_canary_portfolio_parses_and_has_trend_filter():
@@ -34,3 +35,30 @@ def test_canary_portfolio_universe_all_whitelisted():
     )
     for sym in cfg.universe:
         assert sym in wl.symbols, f"{sym} not in whitelist"
+
+
+def test_notrend_control_config_is_identical_minus_trend_filter():
+    """스펙 037 A/B 토너먼트 대조군: 추세 필터만 빠지고 나머지는 ON 과 동일해야 한다.
+
+    유니버스·가중치·top_n·재조정 주기가 달라지면 A/B 가 추세 필터의 효과를 격리하지
+    못한다(교란변수). 두 설정이 trend_filter 외 모든 운용 파라미터가 같음을 못박는다.
+    """
+    _c1, _w1, on = _load_portfolio_for_backtest(
+        _CANARY, env={"KIS_ACCOUNT_NO": "ACC-TEST"}
+    )
+    _c2, _w2, off = _load_portfolio_for_backtest(
+        _CANARY_NOTREND, env={"KIS_ACCOUNT_NO": "ACC-TEST"}
+    )
+    # 대조군은 추세 필터가 없다.
+    assert on.trend_filter is not None
+    assert off.trend_filter is None
+    # trend_filter 를 뺀 나머지 운용 파라미터는 전부 동일(교란변수 없음).
+    assert off.universe == on.universe
+    assert off.weights == on.weights
+    assert off.weight_scheme == on.weight_scheme
+    assert off.top_n == on.top_n
+    assert off.rebalance_mode == on.rebalance_mode
+    assert off.invested_fraction == on.invested_fraction
+    assert off.rebalance_every_n_sessions == on.rebalance_every_n_sessions
+    assert off.lookback_bars == on.lookback_bars
+    assert off.momentum_period == on.momentum_period
