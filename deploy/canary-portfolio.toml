@@ -17,6 +17,12 @@
 #
 # 스펙 033 후속(유니버스 확대): 횡단면 분산을 위해 3→10 종목으로 넓혔다. REAL-DATA-FINDINGS
 # 교훈상 넓고 저회전이 유리. 거래소 혼합(NAS: 기술주, NYS: 금융·헬스·에너지, AMS: SPY).
+#
+# 스펙 034(유동성 기반 유니버스 구성): 후보 유니버스를 28종목 유동성 대형주로 넓혔다.
+# 워크플로 rebalance-paper-forward.yml 이 매 실행 `rebalance-once --construct-universe-top-n`
+# 으로 *현재* 저장 바(스펙 033 백필) 기준 유동성 상위 N개만 골라 재조정한다(손으로 고른
+# 유니버스가 아니라 현재 데이터로 *구성*). 구성 결과는 항상 이 화이트리스트의 부분집합이라
+# 라이브 거래 집합을 넓힐 수 없다(헌법 II). PAPER 전용 — 실주문 0건.
 
 [caps]
 per_trade_pct                  = 5.0
@@ -27,18 +33,19 @@ canary_min_duration_days       = 10
 canary_acceptance_drawdown_pct = 3.0
 
 [whitelist]
-symbols     = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "JPM", "JNJ", "XOM", "SPY"]
+symbols     = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "AVGO", "TSLA", "JPM", "V", "MA", "HD", "COST", "WMT", "PG", "KO", "JNJ", "UNH", "LLY", "MRK", "ABBV", "XOM", "CVX", "BAC", "DIS", "NFLX", "ORCL", "SPY"]
 accounts    = ["${KIS_ACCOUNT_NO}"]
 order_types = ["LIMIT"]
 sessions    = ["REGULAR"]
 
 [portfolio]
 id            = "forward-paper-canary"
-universe      = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "JPM", "JNJ", "XOM", "SPY"]
+universe      = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "AVGO", "TSLA", "JPM", "V", "MA", "HD", "COST", "WMT", "PG", "KO", "JNJ", "UNH", "LLY", "MRK", "ABBV", "XOM", "CVX", "BAC", "DIS", "NFLX", "ORCL", "SPY"]
 weights       = { momentum = "1.0", quality = "1.0", low_volatility = "0.5" }
 weight_scheme = "equal"
 top_n         = 5
-# 증거 기반(REAL-DATA-FINDINGS): 저회전 + 승자 유지(hold_replace). 10종목 중 상위 5종목 보유.
+# 증거 기반(REAL-DATA-FINDINGS): 저회전 + 승자 유지(hold_replace). 워크플로가 28후보 →
+# 유동성 상위(--construct-universe-top-n) → 합성 점수 상위 5종목 보유의 2단 선택.
 # 백필이 심볼당 ~100 일봉을 채우므로 룩백 60·모멘텀 40 으로 신호 품질↑(가용 범위 내).
 rebalance_mode             = "hold_replace"
 invested_fraction          = "0.95"
