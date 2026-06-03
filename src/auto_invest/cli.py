@@ -2789,6 +2789,131 @@ def backfill_bars_cmd(
         )
 
 
+@app.command("build-universe")
+def build_universe_cmd(
+    top_n: int = typer.Option(
+        100, "--top-n", help="Universe size: the N most liquid eligible symbols."
+    ),
+    min_history_bars: int = typer.Option(
+        250,
+        "--min-history-bars",
+        help="Minimum bars a symbol must have to be eligible (so the alpha "
+        "lookbacks can be computed).",
+    ),
+    min_dollar_volume: float = typer.Option(
+        0.0,
+        "--min-dollar-volume",
+        help="Liquidity floor: median daily dollar volume (close × volume).",
+    ),
+    lookback_bars: int = typer.Option(
+        60, "--lookback-bars", help="Window for the liquidity median."
+    ),
+    dataset_version: str = typer.Option(
+        None, "--dataset-version", help="Specific dataset; default = most recent."
+    ),
+    history_root: Path = typer.Option(
+        Path("data/history"), "--history-root", help="Parent of <dataset_version>/."
+    ),
+    as_json: bool = typer.Option(False, "--json", help="Emit JSON instead of text."),
+    emit_toml: bool = typer.Option(
+        False,
+        "--emit-toml",
+        help="Print a ready-to-paste [portfolio] universe = [...] snippet.",
+    ),
+) -> None:
+    """Construct a tradeable universe systematically (spec 034).
+
+    World-class systematic equity does not hand-pick tickers; it *constructs* a
+    universe from the investable cross-section, ranked by liquidity (median
+    dollar volume) and filtered by sufficient price history. This reads an
+    ingested dataset, ranks every symbol by liquidity, and prints the top-N
+    eligible names — the breadth the cross-sectional alpha stack (spec 021/025/
+    032) needs to actually express an edge. Offline, read-only, selection-only.
+    """
+    import json as _json
+    from decimal import Decimal as _Decimal
+
+    from auto_invest.backtest.data_source import CSVDataSource, latest_dataset_dir
+    from auto_invest.market_data.store import PriceBar
+    from auto_invest.strategy.universe import liquidity_rank, select_universe
+
+    if dataset_version is not None:
+        dataset_dir = history_root / dataset_version
+        if not (dataset_dir / "manifest.json").exists():
+            typer.echo(f"dataset_version {dataset_version!r} not found", err=True)
+            _exit(64)
+            return
+    else:
+        latest = latest_dataset_dir(history_root)
+        if latest is None:
+            typer.echo("no ingested datasets; run `auto-invest ingest-history`", err=True)
+            _exit(64)
+            return
+        dataset_dir = latest
+
+    data_source = CSVDataSource(dataset_dir)
+    try:
+        symbols = data_source.list_symbols()
+        symbol_bars: dict[str, list[PriceBar]] = {}
+        for sym in symbols:
+            sessions = data_source.session_dates(sym)
+            if not sessions:
+                symbol_bars[sym] = []
+                continue
+            ohlcv = data_source.read_bars(sym, sessions[0], sessions[-1])
+            symbol_bars[sym] = [
+                PriceBar(
+                    symbol=b.symbol,
+                    timeframe="1d",
+                    bar_open_utc=b.session_date.isoformat(),
+                    open_usd=b.open,
+                    high_usd=b.high,
+                    low_usd=b.low,
+                    close_usd=b.close,
+                    volume=b.volume,
+                )
+                for b in ohlcv
+            ]
+        selected = select_universe(
+            symbol_bars,
+            top_n=top_n,
+            min_dollar_volume=_Decimal(str(min_dollar_volume)),
+            min_history_bars=min_history_bars,
+            lookback_bars=lookback_bars,
+        )
+        ranked = liquidity_rank(symbol_bars, lookback_bars=lookback_bars)
+        liq = {s: v for s, v in ranked}
+        dataset_hex = data_source.dataset_version
+    finally:
+        data_source.close()
+
+    if as_json:
+        typer.echo(
+            _json.dumps(
+                {
+                    "dataset_version": dataset_hex,
+                    "candidates": len(symbol_bars),
+                    "selected": selected,
+                    "liquidity": {s: str(liq[s]) for s in selected},
+                }
+            )
+        )
+        return
+
+    if emit_toml:
+        names = ", ".join(f'"{s}"' for s in selected)
+        typer.echo(f"universe = [{names}]")
+        return
+
+    typer.echo(
+        f"constructed universe: {len(selected)} of {len(symbol_bars)} candidates "
+        f"(top-{top_n} by median dollar volume, min_history={min_history_bars}, "
+        f"min_dollar_volume={min_dollar_volume:g})"
+    )
+    for s in selected:
+        typer.echo(f"  {s:8} median_dollar_volume={liq[s]}")
+
+
 @app.command("portfolio-walk-forward")
 def portfolio_walk_forward_cmd(
     portfolio: Path = typer.Option(

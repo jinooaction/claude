@@ -1,0 +1,46 @@
+# 스펙 034 — 넓은 횡단면(S&P500 유동성 상위 120종목) 워크포워드 검증 설정.
+#
+# 왜: 지금까지 모든 검증은 상관 높은 15개 대형주로만 돌았다. 횡단면 팩터 엣지는 폭(breadth)
+# 현상이라 — 수백 종목을 가로질러 순위를 매겨야 표현된다. 이 설정은 유동성으로 *구성*한
+# 120종목 횡단면에서 상위 20종목을 합성 팩터(모멘텀·퀄리티·저변동성)로 고르고, 저회전 월간
+# 재조정한다. portfolio-walk-forward 가 이걸 표본 외 구간으로 잘라 디플레이티드 샤프로
+# 정직하게 판정한다(우연 vs 진짜 엣지).
+#
+# 재현:
+#   python scripts/fetch_sp500_subset.py --all --out data/history_csv_sp500_broad
+#   auto-invest ingest-history --from-dir data/history_csv_sp500_broad
+#   auto-invest build-universe --top-n 120 --min-history-bars 250 --emit-toml   # 아래 universe 생성
+#   auto-invest portfolio-walk-forward --portfolio specs/034-universe-construction/sp500-broad-portfolio.toml \
+#       --segment-days 365 --num-trials <정직한 시도 횟수>
+#
+# 데이터는 공개 GitHub raw(plotly/datasets/all_stocks_5yr.csv) — 실제 일봉 OHLCV(2013-2018).
+# 돈 안 움직임 — 백테스트 전용. account=BACKTEST.
+
+[caps]
+per_trade_pct                  = 10.0
+per_symbol_pct                 = 12.0
+global_exposure_pct            = 100.0
+canary_capital_pct             = 5.0
+canary_min_duration_days       = 10
+canary_acceptance_drawdown_pct = 40.0
+
+[whitelist]
+symbols = ["AAPL", "ABBV", "ABT", "ACN", "ADBE", "AET", "AGN", "AIG", "AMAT", "AMD", "AMGN", "AMT", "AMZN", "ANTM", "APC", "ATVI", "AVGO", "AXP", "AZO", "BA", "BAC", "BDX", "BIIB", "BMY", "C", "CAT", "CELG", "CHTR", "CMCSA", "CMG", "COP", "COST", "CRM", "CSCO", "CSX", "CVS", "CVX", "DAL", "DE", "DIS", "EA", "EBAY", "F", "FB", "FCX", "FDX", "FOXA", "GE", "GILD", "GM", "GOOG", "GOOGL", "GS", "HAL", "HD", "HON", "HUM", "IBM", "INTC", "ISRG", "JNJ", "JPM", "KO", "KR", "LLY", "LMT", "LOW", "LRCX", "MA", "MAR", "MCD", "MCK", "MDLZ", "MDT", "MMM", "MO", "MON", "MRK", "MS", "MSFT", "MU", "NFLX", "NKE", "NVDA", "ORCL", "PCLN", "PEP", "PFE", "PG", "PM", "PNC", "PX", "PYPL", "QCOM", "REGN", "SBUX", "SCHW", "SLB", "SO", "SPG", "STZ", "T", "TGT", "TJX", "TMO", "TWX", "TXN", "UNH", "UNP", "UPS", "USB", "UTX", "V", "VZ", "WBA", "WDC", "WFC", "WMT", "XOM"]
+accounts    = ["BACKTEST"]
+order_types = ["MARKET", "LIMIT"]
+sessions    = ["REGULAR"]
+
+[portfolio]
+id            = "sp500-broad-composite-top20"
+universe      = ["AAPL", "ABBV", "ABT", "ACN", "ADBE", "AET", "AGN", "AIG", "AMAT", "AMD", "AMGN", "AMT", "AMZN", "ANTM", "APC", "ATVI", "AVGO", "AXP", "AZO", "BA", "BAC", "BDX", "BIIB", "BMY", "C", "CAT", "CELG", "CHTR", "CMCSA", "CMG", "COP", "COST", "CRM", "CSCO", "CSX", "CVS", "CVX", "DAL", "DE", "DIS", "EA", "EBAY", "F", "FB", "FCX", "FDX", "FOXA", "GE", "GILD", "GM", "GOOG", "GOOGL", "GS", "HAL", "HD", "HON", "HUM", "IBM", "INTC", "ISRG", "JNJ", "JPM", "KO", "KR", "LLY", "LMT", "LOW", "LRCX", "MA", "MAR", "MCD", "MCK", "MDLZ", "MDT", "MMM", "MO", "MON", "MRK", "MS", "MSFT", "MU", "NFLX", "NKE", "NVDA", "ORCL", "PCLN", "PEP", "PFE", "PG", "PM", "PNC", "PX", "PYPL", "QCOM", "REGN", "SBUX", "SCHW", "SLB", "SO", "SPG", "STZ", "T", "TGT", "TJX", "TMO", "TWX", "TXN", "UNH", "UNP", "UPS", "USB", "UTX", "V", "VZ", "WBA", "WDC", "WFC", "WMT", "XOM"]
+weights       = { momentum = "1.0", quality = "1.0", low_volatility = "0.5" }
+weight_scheme = "equal"
+top_n         = 20
+# 증거 기반(REAL-DATA-FINDINGS): 넓은 횡단면 + 저회전 + 승자 유지(hold_replace).
+rebalance_mode             = "hold_replace"
+invested_fraction          = "0.95"
+rebalance_every_n_sessions = 21
+lookback_bars              = 90
+momentum_period            = 60
+rebalance_threshold_pct    = "2.0"
+min_notional_usd           = "50"
