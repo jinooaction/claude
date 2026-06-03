@@ -52,10 +52,21 @@ from auto_invest.market_data.store import get_bars
 from auto_invest.persistence import positions as positions_mod
 from auto_invest.strategy.factors import composite_scores
 from auto_invest.strategy.rebalance import PlannedOrder, rebalance_plan, target_weights
+from auto_invest.strategy.trend import TrendSpec
 
 logger = logging.getLogger(__name__)
 
 QuoteProvider = Callable[[str], Awaitable[Quote]]
+
+
+def _trend_spec(config: PortfolioRebalanceConfig) -> TrendSpec | None:
+    """스펙 036 — config 의 옵트인 추세 필터를 TrendSpec 으로(없으면 None)."""
+    tf = config.trend_filter
+    if tf is None:
+        return None
+    return TrendSpec(
+        method=tf.method, lookback=tf.lookback, on_insufficient=tf.on_insufficient
+    )
 
 _CENT = Decimal("0.01")
 # Marketable-limit buffer when bid/ask is unavailable: cross by 20 bps so the
@@ -182,6 +193,7 @@ async def execute_rebalance(
         top_n=config.top_n,
         top_pct=config.top_pct,
         lookback_bars=config.lookback_bars,
+        trend=_trend_spec(config),
     )
 
     # 2. Current holdings (long-only; ignore zero rows).

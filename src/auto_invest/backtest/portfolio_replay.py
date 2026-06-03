@@ -63,6 +63,7 @@ from auto_invest.persistence.audit import (
 )
 from auto_invest.strategy.factors import composite_scores
 from auto_invest.strategy.rebalance import rebalance_plan, target_weights
+from auto_invest.strategy.trend import TrendSpec
 
 _ZERO_COST_MODEL = BacktestCostModel.zero()
 
@@ -378,6 +379,15 @@ def _do_rebalance(
         top_n=config.top_n,
         top_pct=config.top_pct,
         lookback_bars=config.lookback_bars,
+        trend=(
+            TrendSpec(
+                method=config.trend_filter.method,
+                lookback=config.trend_filter.lookback,
+                on_insufficient=config.trend_filter.on_insufficient,
+            )
+            if config.trend_filter is not None
+            else None
+        ),
     )
 
     equity = portfolio.equity(prices_today)

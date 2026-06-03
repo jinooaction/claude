@@ -290,6 +290,25 @@ KNOWN_WEIGHT_SCHEMES: tuple[str, ...] = (
 )
 
 
+class TrendFilterConfig(BaseModel):
+    """스펙 036 — 절대 모멘텀 추세 필터(드로다운 방어 오버레이) 설정. 비커널·옵트인.
+
+    `[portfolio.trend_filter]` 로 켜면 목표 가중치 산출 마지막에 종목별 추세 게이트가
+    적용된다 — 자기 추세 아래로 내려간 종목은 가중치 0(현금)으로 빠진다. 재정규화하지
+    않으므로 합이 1 미만이 되고 그 차이는 현금 버퍼(방어)다. 설정을 생략하면(None)
+    가중치는 손도 안 댄다(기존 동작 byte 동일).
+
+    method: "sma"(마지막 종가 > lookback SMA) | "absolute_momentum"(lookback 후행수익률>0).
+    lookback: 추세 판정 기간(일봉 수). 200 ≈ 약 10개월(고전 추세추종 기본).
+    on_insufficient: 데이터 부족 시 "hold"(유지) | "cash"(보수적 현금 이탈).
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    method: Literal["sma", "absolute_momentum"] = "sma"
+    lookback: int = Field(default=200, ge=2)
+    on_insufficient: Literal["hold", "cash"] = "hold"
+
+
 class PortfolioRebalanceConfig(BaseModel):
     """스펙 032 — 횡단면 포트폴리오 재조정 설정. 비커널.
 
@@ -339,6 +358,8 @@ class PortfolioRebalanceConfig(BaseModel):
     rebalance_threshold_pct: Decimal = Field(default=Decimal("0"), ge=0, le=100)
     # 최소 명목(USD). 이보다 작은 자투리 주문은 거른다(회전율·비용 통제).
     min_notional_usd: Decimal = Field(default=Decimal("0"), ge=0)
+    # 스펙 036 — 절대 모멘텀 추세 필터(드로다운 방어). 생략 시 미적용(기존 동작 byte 동일).
+    trend_filter: TrendFilterConfig | None = None
 
     @field_validator("universe")
     @classmethod
