@@ -49,6 +49,7 @@ from auto_invest.strategy.sizing import (
     min_variance_group_scales,
     realized_volatility,
 )
+from auto_invest.strategy.trend import TrendSpec, apply_trend_filter
 
 _QUANT = Decimal("0.000001")
 _SENTINEL = Decimal("-Inf")
@@ -182,20 +183,43 @@ def target_weights(
     top_n: int | None = None,
     top_pct: float | None = None,
     lookback_bars: int = 60,
+    trend: TrendSpec | None = None,
 ) -> dict[str, Decimal]:
-    """Long-only target weights (sum 1.0) over the selected top names.
+    """Long-only target weights over the selected top names.
 
     ``ranked_scores`` come from ``factors.composite_scores``. The risk-model
     schemes (inverse_vol / min_variance / max_sharpe / erc) reuse the spec
     022/024 optimizers and their fail-safe fallback chains, so a data-poor or
     non-converging window still yields a valid vector (SC-04). Returns an empty
     dict when no symbol is eligible.
+
+    When ``trend`` is given (spec 036, opt-in), an absolute-momentum trend gate
+    is applied LAST: a selected name below its own trend is dropped to weight 0
+    (its share becomes cash — a drawdown-defense overlay). The result then sums
+    to ≤ 1.0; it is intentionally NOT renormalized (the cash is the defense).
+    With ``trend=None`` the behaviour is byte-identical to before (weights sum 1).
     """
     selected = select_symbols(ranked_scores, top_n=top_n, top_pct=top_pct)
     if not selected:
         return {}
     score_by_symbol = dict(ranked_scores)
 
+    weights = _base_weights(
+        selected, score_by_symbol, closes_by_symbol, weight_scheme, lookback_bars
+    )
+    if trend is not None:
+        weights, _ = apply_trend_filter(weights, closes_by_symbol, trend)
+    return weights
+
+
+def _base_weights(
+    selected: list[str],
+    score_by_symbol: dict[str, Decimal],
+    closes_by_symbol: Mapping[str, Mapping[date, Decimal]],
+    weight_scheme: str,
+    lookback_bars: int,
+) -> dict[str, Decimal]:
+    """Weight vector (sum 1.0) for the selected names by ``weight_scheme``."""
     if weight_scheme == "equal":
         return _equal_weights(selected)
     if weight_scheme == "score_proportional":

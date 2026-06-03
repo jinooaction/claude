@@ -1,0 +1,52 @@
+# 스펙 036 — 추세 필터(드로다운 방어 오버레이) 예시 설정.
+#
+# 사용:
+#   auto-invest backtest-portfolio --portfolio specs/036-trend-filter/example-trend-portfolio.toml \
+#       --from 2022-01-03 --to 2023-12-29 --allow-stale   # 옛 데이터면 메커니즘 검증만
+#   # forward 페이퍼(현재 데이터, 진짜 판정):
+#   auto-invest rebalance-once --portfolio <this> --mode paper ...
+#   auto-invest forward-verdict --portfolio <this> --mode paper ...   # 스펙 035 엣지 판정
+#
+# [portfolio.trend_filter] 를 켜면 목표 가중치 산출 마지막에 종목별 절대 모멘텀 게이트가
+# 적용된다 — 자기 추세 아래로 내려간 종목은 가중치 0(현금)으로 빠진다. 재정규화하지 않아
+# 합이 1 미만이 되고 그 차이는 현금 버퍼(방어)다. 이 절을 지우면 기존 동작과 byte 동일.
+
+[caps]
+per_trade_pct                  = 15.0
+per_symbol_pct                 = 15.0
+global_exposure_pct            = 100.0
+canary_capital_pct             = 5.0
+canary_min_duration_days       = 10
+canary_acceptance_drawdown_pct = 30.0
+
+[whitelist]
+symbols = [
+    "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META",
+    "JPM", "JNJ", "XOM", "PG", "HD", "KO",
+    "SPY", "QQQ",
+]
+accounts    = ["BACKTEST"]
+order_types = ["MARKET", "LIMIT"]
+sessions    = ["REGULAR"]
+
+[portfolio]
+id            = "trend-defended-top10"
+universe      = [
+    "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META",
+    "JPM", "JNJ", "XOM", "PG", "HD", "KO",
+]
+weights       = { momentum = "1.0", quality = "1.0", low_volatility = "0.5" }
+weight_scheme = "inverse_vol"
+top_n         = 10
+invested_fraction         = "0.95"
+rebalance_every_n_sessions = 21   # ≈ 월 1회(영업일)
+lookback_bars             = 60
+momentum_period           = 20
+rebalance_threshold_pct   = "1.0"
+min_notional_usd          = "50"
+
+# 드로다운 방어 오버레이 — 추세 아래 종목은 현금으로.
+[portfolio.trend_filter]
+method          = "sma"            # "sma"(종가 > lookback SMA) | "absolute_momentum"(후행수익률>0)
+lookback        = 200             # ≈ 약 10개월(고전 추세추종 기본)
+on_insufficient = "hold"         # 데이터 부족 시 "hold"(유지) | "cash"(보수적 현금 이탈)
