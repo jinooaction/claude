@@ -57,6 +57,23 @@ git ls-remote --heads origin 'claude/*' | awk '{print $2}'
   운영자 확인). 부분 체결 재호가(잔량 재계산)는 별도 슬라이스.
 - **L1 적용 표면 확장 / L2·L3 캐너리 승격 큐 / 실거래 자본 상향** — 기존 후보 유지.
 
+## 최근 마일스톤 — 2026-06-03 (스펙 036 후속: forward 페이퍼 트랙에 추세 필터 켜기 ✅)
+
+운영자 지시 "계속해"(앞서 제안한 1번 = 기존 forward 트랙에 추세 필터 켜기) 자율 수행.
+`deploy/canary-portfolio.toml`(PAPER 전용 forward 트랙, 라이브 무관)에 `[portfolio.trend_filter]`
+추가: method=sma, lookback=50(인스턴스 ~100 일봉에서 활성), on_insufficient=hold.
+
+- **이제 폐회로가 실제로 돈다**: 워크플로 `rebalance-paper-forward.yml` 이 매 거래일 28후보 →
+  유동성 상위 15(`--construct-universe-top-n`) → 합성점수 상위 5 → **추세 게이트(SMA-50 아래면
+  현금, hold_replace 로 청산)** → 페이퍼 체결 → `nav-snapshot`(스펙 035) → `forward-verdict`
+  (스펙 035) 가 단순 보유 대비 위험조정 우위를 자동 판정. `model_copy` 가 trend_filter 를
+  construct-universe 경로에서도 보존함을 확인.
+- **돈 0 이동**: PAPER 전용. 라이브 캐너리(`canary-live-rules.toml`)는 무관·무변경.
+- **검증 누적은 시간이 걸린다**: forward-verdict 는 NAV 관측 ≥20(≈20 거래일) 전엔
+  INSUFFICIENT_DATA. 그 전까진 코드/설정 변경 없이 매일 쌓인다. 사이드카
+  `git show origin/automation/rebalance-paper-forward-last-run:LAST_RUN.md` 에서 판정 확인.
+- 운영 설정 회귀 테스트 2건(`test_canary_portfolio_config.py`). 전체 1477 통과·4 스킵, 린트 깨끗.
+
 ## 최근 마일스톤 — 2026-06-03 (스펙 036: 절대 모멘텀 추세 필터 — 드로다운 방어 오버레이 ✅)
 
 main 머지 `8bee9c8`(PR #167). Kernel 터치 0건, 돈 0 이동. 운영자 지시 "다시 이어서 진행해"
@@ -1294,7 +1311,7 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 | KIS 키 입력 도구 (인스턴스 콘솔에서 실행) | `scripts/set_secrets.sh` |
 | 개발자용 자동 검증 스크립트 | `scripts/operator_install.sh` (5단계 preflight) |
 | 운영 호스트 진입점 | `deploy/README.md` (systemd 설치 절차) |
-| main 테스트 | 1475 통과, 4 스킵 (라이브 KIS smoke 4건, `KIS_LIVE_TEST=1` 가드) |
+| main 테스트 | 1477 통과, 4 스킵 (라이브 KIS smoke 4건, `KIS_LIVE_TEST=1` 가드) |
 | 세션 수명주기 도구 | git ground-truth 훅 + `/sync` `/handoff` `/deploy-status` 스킬 (v3.3.0, "세션 수명주기 도구" 절 참조) |
 | main 린트 | 깨끗 |
 | 열린 PR | `mcp__github__list_pull_requests`로 확인 |
