@@ -102,6 +102,29 @@ jobs:
           echo "--- stdout ---"; cat /tmp/rebal.json
           echo "--- stderr ---"; cat /tmp/rebal.err
 
+      - name: Record mark-to-market NAV snapshot (spec 029/035 — verdict time series)
+        id: nav
+        if: always()
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          # forward 엣지 판정(forward-verdict)이 읽는 NAV 시계열의 생산자다. 매 실행 1점.
+          # 장부 보유를 현재 KIS 시세로 시가평가해 PORTFOLIO_NAV_SNAPSHOT 으로 append.
+          # 측정 전용 — 주문 0건, 돈 0 이동. 시세 실패는 평균단가로 폴백(거래 무중단).
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest nav-snapshot \
+                 --mode paper --db data/auto_invest.db --env-file .env --snapshot \
+                 --format json" \
+              > /tmp/nav.json 2>/tmp/nav.err
+          echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
+          echo "--- stdout ---"; cat /tmp/nav.json
+          echo "--- stderr ---"; cat /tmp/nav.err
+
       - name: Snapshot forward paper performance (spec 011)
         id: perf
         if: always()
@@ -143,6 +166,30 @@ jobs:
           echo "--- stdout ---"; cat /tmp/bars.json
           echo "--- stderr ---"; cat /tmp/bars.err
 
+      - name: Forward edge verdict (spec 035 — does it actually beat buy-and-hold?)
+        id: verdict
+        if: always()
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          # 쌓인 NAV 시계열을 단순 보유 벤치마크와 비교하고 디플레이티드/확률적 샤프로
+          # 우연·과적합을 처벌해 EDGE_CONFIRMED / NO_EDGE / INSUFFICIENT_DATA 를 낸다.
+          # 관측이 적으면 보수적으로 INSUFFICIENT_DATA — 트랙이 쌓이면 자동으로 진짜 판정.
+          # 측정/분석 전용 — 주문 0건, 돈 0 이동.
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest forward-verdict \
+                 --mode paper --portfolio deploy/canary-portfolio.toml \
+                 --db data/auto_invest.db --format json" \
+              > /tmp/verdict.json 2>/tmp/verdict.err
+          echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
+          echo "--- stdout ---"; cat /tmp/verdict.json
+          echo "--- stderr ---"; cat /tmp/verdict.err
+
       - name: Publish forward track to sidecar branch
         if: always()
         env:
@@ -151,6 +198,8 @@ jobs:
           PERF_EXIT: ${{ steps.perf.outputs.ssh_exit }}
           BARS_EXIT: ${{ steps.bars.outputs.ssh_exit }}
           BACKFILL_EXIT: ${{ steps.backfill.outputs.ssh_exit }}
+          NAV_EXIT: ${{ steps.nav.outputs.ssh_exit }}
+          VERDICT_EXIT: ${{ steps.verdict.outputs.ssh_exit }}
         run: |
           set -uo pipefail
           BRANCH=automation/rebalance-paper-forward-last-run
@@ -168,8 +217,26 @@ jobs:
             echo "| timestamp_utc | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
             echo "| backfill ssh_exit | ${BACKFILL_EXIT:-?} |"
             echo "| rebalance ssh_exit | ${REBAL_EXIT:-?} |"
+            echo "| nav-snapshot ssh_exit | ${NAV_EXIT:-?} |"
             echo "| performance ssh_exit | ${PERF_EXIT:-?} |"
             echo "| bars-status ssh_exit | ${BARS_EXIT:-?} |"
+            echo "| forward-verdict ssh_exit | ${VERDICT_EXIT:-?} |"
+            echo ""
+            echo "## 🧭 forward 엣지 판정 (스펙 035 — 단순 보유를 정말 이기는가?)"
+            echo ""
+            echo "> NAV 시계열을 단순 보유와 비교하고 디플레이티드/확률적 샤프로 우연·과적합을"
+            echo "> 처벌한 판정. EDGE_CONFIRMED 만이 운영자 라이브 게이트(헌법 X.4)에 올릴 증거다"
+            echo "> (자동 배포 아님). INSUFFICIENT_DATA 면 관측이 더 쌓여야 한다 — 정상."
+            echo ""
+            echo '```json'
+            cat /tmp/verdict.json 2>/dev/null || echo '{}'
+            echo '```'
+            echo ""
+            echo "## 시가평가 NAV 스냅샷 (이번 실행 1점, 판정 시계열 생산자)"
+            echo ""
+            echo '```json'
+            cat /tmp/nav.json 2>/dev/null || echo '{}'
+            echo '```'
             echo ""
             echo "## KIS 일봉 백필 결과(JSON)"
             echo ""
@@ -204,7 +271,8 @@ jobs:
             echo "## stderr"
             echo ""
             echo '```'
-            cat /tmp/backfill.err /tmp/rebal.err /tmp/perf.err /tmp/bars.err 2>/dev/null || echo '(none)'
+            cat /tmp/backfill.err /tmp/rebal.err /tmp/nav.err /tmp/perf.err \
+                /tmp/bars.err /tmp/verdict.err 2>/dev/null || echo '(none)'
             echo '```'
           } > LAST_RUN.md
           git checkout --orphan publish
