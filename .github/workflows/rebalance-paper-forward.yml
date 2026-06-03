@@ -93,6 +93,7 @@ jobs:
                  --portfolio deploy/canary-portfolio.toml \
                  --mode paper \
                  --capital ${CAPITAL} \
+                 --construct-universe-top-n 15 \
                  --db data/auto_invest.db \
                  --env-file .env \
                  --json" \

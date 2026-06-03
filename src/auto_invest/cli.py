@@ -3406,6 +3406,16 @@ def rebalance_once_cmd(
     timeframe: str = typer.Option(
         "1d", "--timeframe", help="Bar timeframe for scoring (matches stored bars)."
     ),
+    construct_universe_top_n: int = typer.Option(
+        0,
+        "--construct-universe-top-n",
+        help="Spec 034: instead of trading the hand-listed [portfolio].universe, "
+        "CONSTRUCT the universe from the CURRENT stored bars — keep the N most "
+        "liquid (median dollar volume) eligible names. 0 (default) = off, use the "
+        "configured universe unchanged. The constructed set is always a subset of "
+        "the configured universe (so it stays within the whitelist). Pair with a "
+        "broad backfilled candidate universe to get real cross-sectional breadth.",
+    ),
     dry_run: bool = typer.Option(
         False,
         "--dry-run",
@@ -3482,6 +3492,44 @@ def rebalance_once_cmd(
         _exit(64)
 
     _require_clean_migrations(db_path, allow_apply=True)
+
+    # Spec 034: optionally CONSTRUCT the universe from the current stored bars by
+    # liquidity, instead of trading the hand-listed universe. The constructed set is
+    # always a subset of the configured (whitelist-checked) universe, so this can
+    # only NARROW the trading set — never widen it past the whitelist (principle II).
+    if construct_universe_top_n > 0:
+        from auto_invest.market_data.store import get_bars as _get_bars
+        from auto_invest.strategy.universe import select_universe as _select_universe
+
+        _conn_u = db.get_connection(db_path)
+        try:
+            _cand_bars = {
+                s: _get_bars(_conn_u, symbol=s, timeframe=timeframe)
+                for s in port_cfg.universe
+            }
+        finally:
+            _conn_u.close()
+        _constructed = _select_universe(
+            _cand_bars,
+            top_n=construct_universe_top_n,
+            min_history_bars=port_cfg.lookback_bars,
+            lookback_bars=port_cfg.lookback_bars,
+        )
+        if len(_constructed) < 2:
+            typer.echo(
+                "construct-universe: 현재 저장 바로 적격 종목이 2개 미만 "
+                f"({len(_constructed)}) — 백필이 충분한지 확인하세요. 설정된 유니버스 "
+                "무변경으로 진행합니다.",
+                err=True,
+            )
+        else:
+            port_cfg = port_cfg.model_copy(update={"universe": tuple(_constructed)})
+            if not as_json:
+                typer.echo(
+                    f"construct-universe: {len(_constructed)}/{len(_cand_bars)} 종목을 "
+                    f"유동성 상위로 구성 → {list(_constructed)}"
+                )
+
     total_capital = _Decimal(str(capital))
 
     async def _go_dry() -> object:
