@@ -2963,6 +2963,14 @@ def portfolio_walk_forward_cmd(
         Path("data/history"), "--history-root", help="Parent of <dataset_version>/."
     ),
     as_json: bool = typer.Option(False, "--json", help="Emit JSON instead of text."),
+    allow_stale: bool = typer.Option(
+        False,
+        "--allow-stale",
+        help="Proceed even when the recency guard rates the data 'stale' (>2y old). "
+        "Without this flag, stale data is REFUSED — old-data backtests must not be "
+        "read as a verdict (doctrine: FORWARD-VALIDATION.md). Use only for an "
+        "explicit limitation demo, never to justify a strategy.",
+    ),
 ) -> None:
     """Out-of-sample, risk-adjusted, multiple-testing-corrected portfolio evaluation.
 
@@ -2981,7 +2989,11 @@ def portfolio_walk_forward_cmd(
 
     from auto_invest.backtest.data_source import CSVDataSource, latest_dataset_dir
     from auto_invest.backtest.portfolio_walk_forward import run_portfolio_walk_forward
-    from auto_invest.backtest.recency import assess_recency, trailing_window
+    from auto_invest.backtest.recency import (
+        assess_recency,
+        stale_guard,
+        trailing_window,
+    )
 
     if mode not in ("rolling", "anchored"):
         typer.echo(f"--mode must be 'rolling' or 'anchored', got {mode!r}", err=True)
@@ -3014,6 +3026,12 @@ def portfolio_walk_forward_cmd(
     # Resolve the evaluation window. Recency criterion (operator principle): prefer a
     # clear trailing window over an arbitrary range, and ALWAYS surface data freshness.
     recency = assess_recency(data_source, port_cfg.universe)  # type: ignore[union-attr]
+    _refusal = stale_guard(recency, allow_stale=allow_stale)
+    if _refusal is not None:
+        typer.echo(_refusal, err=True)
+        data_source.close()
+        _exit(70)
+        return
     try:
         if trailing_years is not None:
             window = trailing_window(
@@ -3175,6 +3193,14 @@ def backtest_portfolio_cmd(
     as_json: bool = typer.Option(
         False, "--json", help="Emit a single JSON object instead of text."
     ),
+    allow_stale: bool = typer.Option(
+        False,
+        "--allow-stale",
+        help="Proceed even when the recency guard rates the data 'stale' (>2y old). "
+        "Without this flag, stale data is REFUSED — old-data backtests must not be "
+        "read as a verdict (doctrine: FORWARD-VALIDATION.md). Use only for an "
+        "explicit limitation demo, never to justify a strategy.",
+    ),
 ) -> None:
     """Backtest the cross-sectional rebalancing portfolio engine (spec 032).
 
@@ -3196,6 +3222,7 @@ def backtest_portfolio_cmd(
     from auto_invest.backtest.costs import BacktestCostModel
     from auto_invest.backtest.data_source import CSVDataSource, latest_dataset_dir
     from auto_invest.backtest.portfolio_replay import replay_portfolio
+    from auto_invest.backtest.recency import assess_recency, stale_guard
 
     _cost_base = BacktestCostModel.kis_default()
     cost_model = BacktestCostModel(
@@ -3256,6 +3283,17 @@ def backtest_portfolio_cmd(
         dataset_dir = latest
 
     data_source = CSVDataSource(dataset_dir)
+
+    # Recency guard (doctrine: FORWARD-VALIDATION.md). Stale data must not be read
+    # as a verdict; refuse unless the caller explicitly opts into a limitation demo.
+    recency = assess_recency(data_source, port_cfg.universe)  # type: ignore[union-attr]
+    _refusal = stale_guard(recency, allow_stale=allow_stale)
+    if _refusal is not None:
+        typer.echo(_refusal, err=True)
+        data_source.close()
+        _exit(70)
+        return
+
     _require_clean_migrations(db_path, allow_apply=True)
     conn = db.get_connection(db_path)
     run_id = f"bt-port-{_uuid.uuid4().hex[:12]}"

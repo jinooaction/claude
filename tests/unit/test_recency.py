@@ -11,7 +11,9 @@ from datetime import date
 from auto_invest.backtest.recency import (
     AGING_MAX_AGE_DAYS,
     FRESH_MAX_AGE_DAYS,
+    DataRecency,
     assess_recency,
+    stale_guard,
     trailing_window,
 )
 
@@ -77,3 +79,40 @@ def test_assess_recency_fresh_and_aging_boundaries():
 def test_assess_recency_none_when_no_sessions():
     assert assess_recency(_Src({}), ["A"], today=date(2026, 1, 1)) is None
     assert trailing_window(_Src({}), ["A"], trailing_years=5) is None
+
+
+# --------------------------------------------------------- stale_guard (stop-sign)
+
+
+def _recency(staleness: str) -> DataRecency:
+    return DataRecency(
+        oldest_session=date(2013, 1, 1),
+        newest_session=date(2018, 1, 1),
+        span_days=1826,
+        age_days=3000,
+        staleness=staleness,
+        today=date(2026, 1, 1),
+    )
+
+
+def test_stale_guard_refuses_stale_without_allow():
+    # 재발 방지의 핵심: stale 데이터는 명시적 옵트인 없이는 거부 텍스트를 돌려준다.
+    msg = stale_guard(_recency("stale"), allow_stale=False)
+    assert msg is not None
+    assert "REFUSED" in msg
+    assert "FORWARD-VALIDATION" in msg
+    assert "--allow-stale" in msg
+
+
+def test_stale_guard_allows_stale_with_explicit_optin():
+    assert stale_guard(_recency("stale"), allow_stale=True) is None
+
+
+def test_stale_guard_proceeds_for_fresh_and_aging():
+    assert stale_guard(_recency("fresh"), allow_stale=False) is None
+    assert stale_guard(_recency("aging"), allow_stale=False) is None
+
+
+def test_stale_guard_none_recency_proceeds():
+    # 데이터가 없으면(평가 불가) 가드는 진행을 막지 않는다(다른 곳에서 처리).
+    assert stale_guard(None, allow_stale=False) is None

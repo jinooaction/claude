@@ -59,6 +59,27 @@ class DataRecency:
         return msg
 
 
+# FORWARD-VALIDATION.md 교리를 도구 수준 stop-sign 으로 강제하는 메시지.
+STALE_REFUSAL_HINT = (
+    "REFUSED: 데이터가 stale 입니다(>2년 묵음). 옛 데이터 백테스트로 전략 결론을 "
+    "내리지 마세요 — 교리 specs/032-portfolio-rebalancing/FORWARD-VALIDATION.md "
+    "(현재 데이터 forward 페이퍼만 판정). 한계 시연용이면 --allow-stale 를 명시하세요."
+)
+
+
+def stale_guard(recency: DataRecency | None, *, allow_stale: bool) -> str | None:
+    """FORWARD-VALIDATION 교리의 stop-sign.
+
+    데이터가 stale 인데 호출자가 명시적으로 한계 시연을 옵트인하지 않았으면, CLI 가
+    stderr 로 찍고 거부(exit 70)해야 할 텍스트를 돌려준다. 진행해도 안전하면
+    (fresh/aging, 또는 ``allow_stale=True``) ``None`` 을 돌려준다. 옛 데이터 백테스트로
+    전략 결론을 내리는 재발을 *도구 수준에서* 막는다 — 경고를 각주로 무시할 수 없게.
+    """
+    if recency is not None and recency.is_stale and not allow_stale:
+        return recency.banner() + "\n" + STALE_REFUSAL_HINT
+    return None
+
+
 def _union_sessions(data_source, universe) -> list[date]:  # noqa: ANN001
     """유니버스 전 심볼의 세션 날짜 합집합(오름차순)."""
     seen: set[date] = set()
