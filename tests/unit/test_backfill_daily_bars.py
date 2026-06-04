@@ -78,3 +78,56 @@ def test_backfill_idempotent_second_run_inserts_zero(tmp_path: Path):
     res2 = asyncio.run(backfill_daily_bars(conn, client, **kw))
     assert res2[0]["inserted"] == 0 and res2[0]["fetched"] == 1
     conn.close()
+
+
+class _PaginatingClient:
+    """스펙 041 — KIS BYMD(기준일) 기준 ~page_size 세션을 준다(과거 페이지네이션 시뮬)."""
+
+    def __init__(self, dates: list[str], page_size: int = 4) -> None:
+        self.dates = sorted(dates)  # 오름차순 YYYYMMDD
+        self.page_size = page_size
+        self.bymds: list[str] = []
+
+    async def request(self, method, path, *, headers=None, params=None):  # noqa: ANN001
+        bymd = params["BYMD"]
+        self.bymds.append(bymd)
+        pool = self.dates if bymd == "" else [d for d in self.dates if d <= bymd]
+        window = pool[-self.page_size :]  # bymd 이하 중 가장 최근 page_size
+        return _Resp({"output2": [_row(d, "100") for d in window]})
+
+
+def test_backfill_paginates_deep_to_min_bars(tmp_path: Path):
+    conn = db.get_connection(tmp_path / "a.db")
+    db.migrate(conn)
+    # 2026-06-01 … 06-12 (연속 12일), 페이지당 4 → min_bars=10 이면 깊게 채워야 한다.
+    dates = [f"202606{d:02d}" for d in range(1, 13)]
+    client = _PaginatingClient(dates, page_size=4)
+    res = asyncio.run(
+        backfill_daily_bars(
+            conn, client, access_token="t", app_key="k", app_secret="s",
+            symbols=["AAPL"], exchanges=("NAS",), min_bars=10,
+        )
+    )
+    n, lo, hi = bar_summary(conn, symbol="AAPL", timeframe="1d")
+    assert n == 12  # 12일 전체 누적(중복 제거)
+    assert res[0]["inserted"] == 12
+    assert len(client.bymds) >= 3  # 여러 페이지(기준일 이동)로 페이지네이션 발생
+    assert client.bymds[0] == "" and client.bymds[1] != ""  # 첫 최근 → 이후 과거 기준일
+    conn.close()
+
+
+def test_backfill_pagination_stops_when_no_older_data(tmp_path: Path):
+    conn = db.get_connection(tmp_path / "a.db")
+    db.migrate(conn)
+    # 5일치만 존재하는데 min_bars=50 → 무한루프 없이 5개에서 멈춰야 한다.
+    dates = [f"202606{d:02d}" for d in range(1, 6)]
+    client = _PaginatingClient(dates, page_size=4)
+    res = asyncio.run(
+        backfill_daily_bars(
+            conn, client, access_token="t", app_key="k", app_secret="s",
+            symbols=["AAPL"], exchanges=("NAS",), min_bars=50,
+        )
+    )
+    n, _, _ = bar_summary(conn, symbol="AAPL", timeframe="1d")
+    assert n == 5 and res[0]["inserted"] == 5  # 더 과거 없음 → 종료
+    conn.close()

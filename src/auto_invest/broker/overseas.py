@@ -157,12 +157,15 @@ async def get_daily_bars(
     symbol: str,
     market: str = "NAS",
     adjusted: bool = True,
+    base_date: str = "",
 ) -> list[OverseasDailyBar]:
     """Fetch recent daily OHLCV bars for an overseas symbol (read-only; no orders).
 
-    Returns the most recent window KIS provides (~100 sessions) in ascending date
-    order. ``market`` is the KIS EXCD (NAS/NYS/AMS); an empty result usually means
-    the symbol is listed on a different exchange (try another EXCD).
+    Returns the window KIS provides (~100 sessions) ending at/before ``base_date``
+    in ascending date order. ``base_date`` is the KIS BYMD (YYYYMMDD); empty = most
+    recent. Paginate deeper history by re-calling with an earlier ``base_date`` (스펙
+    041 — `backfill_daily_bars(min_bars=…)` does this). ``market`` is the KIS EXCD
+    (NAS/NYS/AMS); an empty result usually means the symbol is on a different EXCD.
     """
     response = await client.request(
         "GET",
@@ -178,7 +181,7 @@ async def get_daily_bars(
             "EXCD": market,
             "SYMB": symbol,
             "GUBN": "0",  # 0=daily, 1=weekly, 2=monthly
-            "BYMD": "",  # base date; empty = most recent
+            "BYMD": base_date,  # base date (YYYYMMDD); empty = most recent
             "MODP": "1" if adjusted else "0",  # split/dividend-adjusted close
         },
     )

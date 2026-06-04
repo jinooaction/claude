@@ -2706,6 +2706,12 @@ def backfill_bars_cmd(
         " 에서 워크플로 타임아웃을 피하려고 바가 가장 적은(needy-first) N개만 채운다. 여러"
         " 실행에 걸쳐 유니버스 전체가 고르게 채워진다.",
     ),
+    min_bars: int = typer.Option(
+        0,
+        "--min-bars",
+        help="스펙 041 — 종목당 확보할 최소 *최신* 일봉 수(0=한 페이지 ~100). KIS 기준일을"
+        " 과거로 돌려 페이지네이션해 깊게 채운다. 6~12개월 모멘텀엔 ≥252 필요(예: 300).",
+    ),
     as_json: bool = typer.Option(False, "--json", help="Emit JSON instead of text."),
 ) -> None:
     """Fetch recent daily OHLCV bars from KIS into price_bars (read-only; no orders).
@@ -2791,6 +2797,7 @@ def backfill_bars_cmd(
                     app_secret=app_secret,
                     symbols=syms,
                     exchanges=tuple(excds),
+                    min_bars=min_bars,
                 )
             finally:
                 conn.close()
