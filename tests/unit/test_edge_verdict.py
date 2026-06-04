@@ -14,6 +14,7 @@ from auto_invest.portfolio.edge_verdict import (
     EDGE_CONFIRMED,
     INSUFFICIENT_DATA,
     NO_EDGE,
+    calmar_ratio,
     daily_returns_from_curve,
     equal_weight_buy_hold_curve,
     forward_edge_verdict,
@@ -186,6 +187,58 @@ def test_determinism_same_input_same_verdict():
     a = forward_edge_verdict(strat, bench, min_obs=20)
     b = forward_edge_verdict(strat, bench, min_obs=20)
     assert a == b  # frozen dataclass 동치
+
+
+# ------------------------------------------------------------- calmar (038)
+
+
+def test_calmar_basic_one_year():
+    # 총수익 20%·기간 252봉(1년)·최대낙폭 10% → CAGR 20% / 10% = 2.0.
+    c = calmar_ratio(Decimal("20"), Decimal("10"), n_obs=252)
+    assert c is not None
+    assert abs(c - Decimal("2.0")) < Decimal("0.01")
+
+
+def test_calmar_higher_when_drawdown_smaller():
+    # 같은 수익이라도 낙폭이 작으면 칼마가 크다(자본 방어 보상).
+    deep = calmar_ratio(Decimal("20"), Decimal("20"), n_obs=252)
+    shallow = calmar_ratio(Decimal("20"), Decimal("5"), n_obs=252)
+    assert shallow > deep
+
+
+def test_calmar_zero_drawdown_is_none():
+    assert calmar_ratio(Decimal("20"), Decimal("0"), n_obs=252) is None
+
+
+def test_calmar_total_loss_is_none():
+    assert calmar_ratio(Decimal("-100"), Decimal("50"), n_obs=252) is None
+
+
+def test_calmar_none_inputs():
+    assert calmar_ratio(None, Decimal("10"), n_obs=252) is None
+    assert calmar_ratio(Decimal("10"), None, n_obs=252) is None
+
+
+def test_verdict_reports_calmar_fields():
+    # 낙폭이 있는(진동 폭>평균) 곡선이라야 칼마가 정의된다(단조 상승은 낙폭 0 → None).
+    strat = _curve_from_returns(Decimal("10000"), _alternating("0.003", "0.006", 40))
+    bench = _curve_from_returns(Decimal("10000"), _alternating("0.001", "0.004", 40))
+    v = forward_edge_verdict(strat, bench, min_obs=20)
+    d = v.to_json_dict()
+    assert "strategy_calmar" in d
+    assert "benchmark_calmar" in d
+    assert "beats_benchmark_calmar" in d
+    assert d["schema_version"] == "1.1"
+    # 낙폭이 있는 전략·벤치 모두 칼마가 산출된다.
+    assert v.strategy_calmar is not None
+    assert v.benchmark_calmar is not None
+
+
+def test_verdict_monotonic_strategy_calmar_none():
+    # 단조 상승(낙폭 0)이면 칼마는 정의 불가(None) — 정직한 처리.
+    strat = _curve_from_returns(Decimal("10000"), _alternating("0.006", "0.001", 40))
+    v = forward_edge_verdict(strat, None, min_obs=20)
+    assert v.strategy_calmar is None  # 낙폭 0 → 칼마 None
 
 
 def test_to_json_dict_roundtrip_keys():

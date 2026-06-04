@@ -56,6 +56,37 @@ def daily_returns_from_curve(curve: list[Decimal]) -> list[Decimal]:
     return rets
 
 
+_TRADING_DAYS_PER_YEAR = 252
+
+
+def calmar_ratio(
+    total_return_pct: Decimal | None,
+    max_drawdown_pct: Decimal | None,
+    *,
+    n_obs: int,
+    periods_per_year: int = _TRADING_DAYS_PER_YEAR,
+) -> Decimal | None:
+    """칼마 비율 = 연환산수익률(CAGR%) / 최대낙폭(%). 추세추종의 *자본 방어*를 포착한다.
+
+    샤프는 변동성 대비 수익을 재지만, 추세추종의 핵심 가치는 *낙폭을 줄이는 것*이다. 같은
+    샤프라도 낙폭이 작으면(현금으로 빠져 폭락 회피) 칼마가 높다 — "돈을 잃지 않는" 능력을
+    직접 잰다(헌법 X). 낙폭 0(방어 완벽/무거래)·전손·기간 0 이면 None(정의 불가).
+    """
+    if total_return_pct is None or max_drawdown_pct is None or n_obs < 1:
+        return None
+    dd = abs(float(max_drawdown_pct))
+    if dd <= 0.0:
+        return None  # 낙폭 0 → 칼마 무한대(정의 불가). None 으로 정직히.
+    tr = float(total_return_pct) / 100.0
+    if tr <= -1.0:
+        return None  # 전손(자본 ≤ 0) → CAGR 정의 불가.
+    years = n_obs / periods_per_year
+    if years <= 0.0:
+        return None
+    cagr = (1.0 + tr) ** (1.0 / years) - 1.0  # 비율
+    return Decimal(str(round(cagr * 100.0 / dd, 6)))
+
+
 def _bar_close_on_or_before(
     bars: list[tuple[date, Decimal]], target: date
 ) -> Decimal | None:
@@ -136,8 +167,12 @@ class EdgeVerdict:
     min_track_record_obs: Decimal | None
     dsr_threshold: Decimal
     has_benchmark: bool
+    # 스펙 038 — 칼마(연수익/최대낙폭): 추세추종의 자본 방어를 포착하는 지표.
+    strategy_calmar: Decimal | None = None
+    benchmark_calmar: Decimal | None = None
+    beats_benchmark_calmar: bool = False
 
-    SCHEMA_VERSION = "1.0"
+    SCHEMA_VERSION = "1.1"
 
     def to_json_dict(self) -> dict:
         def _s(v: Decimal | None) -> str | None:
@@ -152,10 +187,13 @@ class EdgeVerdict:
             "strategy_sharpe_annual": _s(self.strategy_sharpe_annual),
             "strategy_total_return_pct": _s(self.strategy_total_return_pct),
             "strategy_max_drawdown_pct": _s(self.strategy_max_drawdown_pct),
+            "strategy_calmar": _s(self.strategy_calmar),
             "benchmark_sharpe_annual": _s(self.benchmark_sharpe_annual),
             "benchmark_total_return_pct": _s(self.benchmark_total_return_pct),
             "benchmark_max_drawdown_pct": _s(self.benchmark_max_drawdown_pct),
+            "benchmark_calmar": _s(self.benchmark_calmar),
             "excess_return_pct": _s(self.excess_return_pct),
+            "beats_benchmark_calmar": self.beats_benchmark_calmar,
             "psr_vs_benchmark": _s(self.psr_vs_benchmark),
             "dsr": _s(self.dsr),
             "num_trials": self.num_trials,
@@ -293,6 +331,19 @@ def forward_edge_verdict(
     psr_ok = psr is not None and psr >= dsr_threshold
     dsr_ok = num_trials <= 1 or (dsr is not None and dsr >= dsr_threshold)
 
+    # 스펙 038 — 칼마(자본 방어). 추세추종은 낙폭을 줄여 가치를 더하므로, 샤프가
+    # 비등해도 칼마가 높을 수 있다. 게이트는 통계적으로 엄격한 샤프 기준을 유지하되,
+    # 칼마 우위는 *보고*해 운영자가 드로다운 방어를 직접 보게 한다(게이트 약화 없음).
+    strat_calmar = calmar_ratio(strat_return, strat_dd, n_obs=n_obs)
+    bench_calmar = (
+        calmar_ratio(bench_return, bench_dd, n_obs=n_obs) if has_benchmark else None
+    )
+    beats_calmar = (
+        strat_calmar is not None
+        and bench_calmar is not None
+        and strat_calmar > bench_calmar
+    )
+
     if has_benchmark:
         if beats_benchmark and psr_ok and dsr_ok:
             verdict = EDGE_CONFIRMED
@@ -313,6 +364,12 @@ def forward_edge_verdict(
             if not dsr_ok:
                 bits.append(f"DSR {dsr} < {dsr_threshold}(과적합 보정 후 붕괴)")
             reason = "; ".join(bits) or "우위 없음"
+        # 칼마(자본 방어) 정보 — 게이트와 별개로 운영자에게 가시화.
+        if beats_calmar:
+            reason += (
+                f" [단, 칼마 우위: 전략 {strat_calmar} > 벤치 {bench_calmar}"
+                " — 드로다운 방어는 더 나음]"
+            )
     else:
         # 벤치마크 없음 — PSR(0 기준)으로 "양의 위험조정 수익"만 약하게 판정.
         if psr_ok and dsr_ok and strat_sharpe > 0:
@@ -346,6 +403,9 @@ def forward_edge_verdict(
         min_track_record_obs=sig.min_track_record_obs,
         dsr_threshold=dsr_threshold,
         has_benchmark=has_benchmark,
+        strategy_calmar=strat_calmar,
+        benchmark_calmar=bench_calmar,
+        beats_benchmark_calmar=beats_calmar,
     )
 
 
@@ -367,12 +427,15 @@ def render_text(v: EdgeVerdict) -> str:
         f"전략 샤프(연) : {_p(v.strategy_sharpe_annual)}",
         f"전략 총수익%  : {_p(v.strategy_total_return_pct)}",
         f"전략 최대낙폭%: {_p(v.strategy_max_drawdown_pct)}",
+        f"전략 칼마     : {_p(v.strategy_calmar)} (연수익/최대낙폭 — 자본 방어)",
     ]
     if v.has_benchmark:
         lines += [
             f"벤치 샤프(연) : {_p(v.benchmark_sharpe_annual)}",
             f"벤치 총수익%  : {_p(v.benchmark_total_return_pct)}",
+            f"벤치 칼마     : {_p(v.benchmark_calmar)}",
             f"초과수익%     : {_p(v.excess_return_pct)}",
+            f"칼마 우위     : {'예 ✅' if v.beats_benchmark_calmar else '아니오'}",
         ]
     else:
         lines.append("벤치마크      : (가격 바 부족 — 비교 없음)")
