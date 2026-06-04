@@ -165,7 +165,8 @@ jobs:
           CAP: ${{ steps.gate.outputs.capital }}
           BLOCKED: ${{ steps.gate.outputs.blocked }}
         run: |
-          set -uo pipefail
+          set -o pipefail  # 의도적으로 -u 제외: 발행은 문자열 포맷팅뿐 — 사소한 미설정
+          # 변수가 사이드카 기록(특히 무장 시 주문 기록)을 막지 않게 한다.
           BRANCH=automation/rebalance-live-canary-last-run
           tmpdir=$(mktemp -d); cd "${tmpdir}"; git init -q
           git config user.name "rebalance-live-bot"
@@ -179,7 +180,7 @@ jobs:
             echo "| timestamp_utc | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
             echo "| armed (실주문 여부) | ${ARMED:-?} |"
             echo "| capital_usd | ${CAP:-?} |"
-            echo "| blocked (자본>$1,000 거부) | ${BLOCKED:-?} |"
+            echo "| blocked (자본 1000불 초과 거부) | ${BLOCKED:-?} |"
             echo ""
             if [[ "${ARMED:-false}" != "true" ]]; then
               echo "> 🛡 **드라이런 미리보기만** (armed=false) — 실주문 0건. 아래는 *무장 시* 실거래가"
