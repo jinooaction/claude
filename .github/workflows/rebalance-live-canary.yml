@@ -1,0 +1,211 @@
+name: Live canary portfolio rebalance (guarded, real money)
+
+# 스펙 040 — 고도화(추세 방어 포트폴리오)를 *소액 실거래*로 운용하는 가드형 채널.
+#
+# ⚠ 이 워크플로는 실제 돈을 움직일 수 있다. 그래서 다중 안전장치를 둔다:
+#   1. 기본은 **드라이런 미리보기**(rebalance-once --dry-run, 주문 0건) — "실거래로 무엇을
+#      살지"만 보여준다. 실주문은 센티넬 automation/rebalance-live.request 의 armed: true
+#      일 때만 나간다.
+#   2. **자본 상한 $1,000**: canary-live-portfolio.toml 의 캡은 소액($500)에 맞춰 큼(%)이라,
+#      capital_usd > 1000 이면 무장을 거부한다(footgun 차단). 큰 자본은 캡을 먼저 낮춰야 한다.
+#   3. `--mode live` 는 `--confirm-live` 인터록 필요(CLI 가 강제). K1 캡이 천장. 스펙 014
+#      손실 서킷 브레이커(halt_gate)가 일손실·총낙폭 한도 초과 시 주문 거부(킬스위치).
+#   4. 추세 필터(스펙 036)가 추세 아래면 현금으로 빠진다(드로다운 방어).
+#   5. 라이브 거래 집합 무확대: SPY·MSFT·AAPL 만(헌법 II).
+#
+# ⚠ 무장(armed: true) 전 운영자가 룰 워커 충돌을 해소해야 한다(한 실계좌 전략 하나):
+#   같은 계좌에 canary-live-rules.toml 워커가 돌면 포트폴리오 재조정과 충돌한다. 무장 시
+#   룰 워커를 비활성(disabled 룰셋)으로 먼저 전환한다 — 별도 단계(go-live 채널).
+#
+# 헌법 X.4: 라이브 전환은 운영자 결정. 이 채널은 운영자 지시 하 소액 캐너리 무장 전용,
+# 풀라이브 아님. 결과는 사이드카 automation/rebalance-live-canary-last-run 로 발행.
+
+on:
+  workflow_dispatch:
+    inputs:
+      capital:
+        description: "라이브 캐너리 자본 USD (소액 — $1,000 이하)."
+        required: false
+        default: "500"
+  push:
+    branches: [main]
+    paths:
+      - 'automation/rebalance-live.request'
+
+permissions:
+  contents: write  # 사이드카 브랜치 force-push 용.
+
+jobs:
+  live-portfolio-canary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read arming sentinel (armed flag + capital, with $1,000 hard cap)
+        id: gate
+        run: |
+          set -uo pipefail
+          REQ=automation/rebalance-live.request
+          armed=false; capital="${{ github.event.inputs.capital || '500' }}"
+          if [[ -f "$REQ" ]]; then
+            a="$(grep -E '^armed:' "$REQ" | head -1 | awk '{print $2}' || true)"
+            c="$(grep -E '^capital_usd:' "$REQ" | head -1 | awk '{print $2}' || true)"
+            [[ -n "$a" ]] && armed="$a"
+            [[ -n "$c" ]] && capital="$c"
+          fi
+          # footgun 차단: 이 설정의 캡은 소액에 맞춰 큼 → 자본 $1,000 초과 무장 거부.
+          if (( $(printf '%.0f' "$capital") > 1000 )); then
+            echo "❌ capital_usd=$capital > 1000 — 이 소액 캐너리 설정의 캡(95%)은 큰 자본에 위험. 거부." >&2
+            echo "armed=false" >> "$GITHUB_OUTPUT"
+            echo "capital=$capital" >> "$GITHUB_OUTPUT"
+            echo "blocked=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "armed=$armed" >> "$GITHUB_OUTPUT"
+          echo "capital=$capital" >> "$GITHUB_OUTPUT"
+          echo "blocked=false" >> "$GITHUB_OUTPUT"
+          echo "armed=$armed capital=$capital"
+
+      - name: Install SSH key
+        if: steps.gate.outputs.blocked != 'true'
+        env:
+          KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          echo "${KEY}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+      - name: Backfill live universe daily bars (read-only quotes, no orders)
+        if: steps.gate.outputs.blocked != 'true'
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest backfill-bars \
+                 --portfolio deploy/canary-live-portfolio.toml \
+                 --db data/auto_invest.db --env-file .env --json" \
+              > /tmp/live_backfill.log 2>&1
+          echo "exit=$?"; cat /tmp/live_backfill.log
+
+      - name: DRY-RUN preview — what would the live strategy trade? (no orders)
+        id: preview
+        if: steps.gate.outputs.blocked != 'true'
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+          CAP: ${{ steps.gate.outputs.capital }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          # --dry-run: 계획만 산출, 라우터 미호출(주문 0건). 현재 보유 대비 무엇을 사고팔지.
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest rebalance-once \
+                 --portfolio deploy/canary-live-portfolio.toml --dry-run \
+                 --capital ${CAP} --db data/auto_invest.db --env-file .env --json" \
+              > /tmp/live_preview.json 2>/tmp/live_preview.err
+          echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
+          echo "--- preview ---"; cat /tmp/live_preview.json
+          echo "--- stderr ---"; cat /tmp/live_preview.err
+
+      - name: LIVE rebalance — REAL ORDERS (only when sentinel armed=true)
+        id: live
+        if: steps.gate.outputs.armed == 'true' && steps.gate.outputs.blocked != 'true'
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+          CAP: ${{ steps.gate.outputs.capital }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          echo "⚠ ARMED — placing REAL orders (capital=${CAP})."
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest rebalance-once \
+                 --portfolio deploy/canary-live-portfolio.toml \
+                 --mode live --confirm-live \
+                 --capital ${CAP} --db data/auto_invest.db --env-file .env --json" \
+              > /tmp/live_rebal.json 2>/tmp/live_rebal.err
+          echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
+          echo "--- live rebalance ---"; cat /tmp/live_rebal.json
+          echo "--- stderr ---"; cat /tmp/live_rebal.err
+
+      - name: Measure live track (NAV snapshot + forward-verdict --mode live)
+        id: measure
+        if: steps.gate.outputs.blocked != 'true'
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "cd /opt/auto-invest && \
+                 /usr/local/bin/uv run auto-invest nav-snapshot --mode live --db data/auto_invest.db --env-file .env --snapshot --format json; \
+                 /usr/local/bin/uv run auto-invest forward-verdict --mode live --portfolio deploy/canary-live-portfolio.toml --db data/auto_invest.db --format json" \
+              > /tmp/live_measure.log 2>&1
+          echo "exit=$?"; cat /tmp/live_measure.log
+
+      - name: Publish live canary result to sidecar branch
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ARMED: ${{ steps.gate.outputs.armed }}
+          CAP: ${{ steps.gate.outputs.capital }}
+          BLOCKED: ${{ steps.gate.outputs.blocked }}
+        run: |
+          set -uo pipefail
+          BRANCH=automation/rebalance-live-canary-last-run
+          tmpdir=$(mktemp -d); cd "${tmpdir}"; git init -q
+          git config user.name "rebalance-live-bot"
+          git config user.email "rebalance-live-bot@noreply.github.com"
+          {
+            echo "# 라이브 캐너리 포트폴리오 — 최신 실행 (가드형 실거래 채널)"
+            echo ""
+            echo "| 항목 | 값 |"
+            echo "|------|-----|"
+            echo "| run_id | ${GITHUB_RUN_ID} |"
+            echo "| timestamp_utc | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
+            echo "| armed (실주문 여부) | ${ARMED:-?} |"
+            echo "| capital_usd | ${CAP:-?} |"
+            echo "| blocked (자본>$1,000 거부) | ${BLOCKED:-?} |"
+            echo ""
+            if [[ "${ARMED:-false}" != "true" ]]; then
+              echo "> 🛡 **드라이런 미리보기만** (armed=false) — 실주문 0건. 아래는 *무장 시* 실거래가"
+              echo "> 무엇을 사고팔지 보여준다. 무장하려면 automation/rebalance-live.request 의"
+              echo "> armed: true 로 머지(룰 워커 충돌 먼저 해소)."
+            else
+              echo "> ⚠ **무장됨 (armed=true)** — 실주문이 나갔다. 아래 라이브 재조정 결과 확인."
+            fi
+            echo ""
+            echo "## 드라이런 미리보기 — 무장 시 거래할 내역 (주문 0건)"
+            echo '```json'
+            cat /tmp/live_preview.json 2>/dev/null || echo '{}'
+            echo '```'
+            echo ""
+            echo "## 라이브 재조정 결과 (armed=true 일 때만)"
+            echo '```json'
+            cat /tmp/live_rebal.json 2>/dev/null || echo '(미무장 — 실행 안 함)'
+            echo '```'
+            echo ""
+            echo "## 라이브 트랙 측정 (NAV 스냅샷 + forward-verdict --mode live + 칼마)"
+            echo '```'
+            cat /tmp/live_measure.log 2>/dev/null || echo '(none)'
+            echo '```'
+          } > LAST_RUN.md
+          git checkout --orphan publish
+          git add LAST_RUN.md
+          git commit -q -m "rebalance-live-canary run ${GITHUB_RUN_ID} (armed=${ARMED:-?})"
+          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "publish:${BRANCH}"
+          echo "Published to ${BRANCH}."

@@ -1,0 +1,20 @@
+# 라이브 캐너리 포트폴리오 무장 센티넬 (스펙 040).
+#
+# 이 파일이 main 에 머지되면 rebalance-live-canary.yml 워크플로가 발화한다.
+#   - armed: false → **드라이런 미리보기만**(실주문 0건). "실거래로 무엇을 살지"만 보여준다.
+#   - armed: true  → **실주문**(rebalance-once --mode live --confirm-live). 실제 돈 이동.
+#
+# ⚠ 무장(armed: true) 전 체크리스트 (운영자):
+#   1. 사이드카 automation/rebalance-live-canary-last-run 의 드라이런 미리보기를 확인 —
+#      무장 시 무엇을 사고팔지 납득되는가?
+#   2. 룰 워커 충돌 해소 — 같은 실계좌에 canary-live-rules.toml 워커가 돌면 충돌한다.
+#      무장 전 룰 워커를 비활성(disabled 룰셋)으로 전환할 것(별도 go-live 채널).
+#   3. capital_usd 는 $1,000 이하(이 설정의 캡은 소액에 맞춰 큼 — 워크플로가 초과 시 거부).
+#
+# 헌법 X.4: 라이브 전환은 운영자 결정. 소액 캐너리 무장 전용, 풀라이브 아님.
+
+armed: false
+capital_usd: 500
+requested_by: mason
+stage: live-canary-portfolio
+note: "초기 — 드라이런 미리보기. 미리보기 확인 + 룰 워커 충돌 해소 후 armed: true 로 무장."
