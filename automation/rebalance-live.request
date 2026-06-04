@@ -17,4 +17,5 @@ armed: false
 capital_usd: 500
 requested_by: mason
 stage: live-canary-portfolio
-note: "초기 — 드라이런 미리보기. 미리보기 확인 + 룰 워커 충돌 해소 후 armed: true 로 무장."
+run_seq: 2
+note: "재발화(run_seq 2) — 발행 스텝 셸 인용 버그 수정 후 깨끗한 드라이런 미리보기. armed 여전히 false(실주문 0건). 미리보기 확인 + 룰 워커 충돌 해소 후 armed: true 로 무장."
