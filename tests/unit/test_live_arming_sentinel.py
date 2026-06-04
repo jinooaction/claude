@@ -20,16 +20,19 @@ def _field(text: str, key: str) -> str | None:
     return None
 
 
-def test_live_arming_sentinel_is_disarmed_by_default():
+def test_live_arming_sentinel_armed_value_is_valid():
+    # armed 는 운영자가 통제하는 명시 상태(true/false). 2026-06-04 운영자 (A) 승인으로
+    # true(무장). 값이 명확한 불리언 문자열인지만 못박는다(오타 방지).
     text = _SENTINEL.read_text(encoding="utf-8")
-    assert _field(text, "armed") == "false", (
-        "라이브 무장 센티넬은 기본 armed: false 여야 한다 — 실수 무장 방지."
-    )
+    assert _field(text, "armed") in ("true", "false")
 
 
 def test_live_arming_sentinel_capital_is_small():
+    """무장 여부와 무관하게 자본은 항상 소액(≤ $1,000) — 워크플로 하드 가드와 정합.
+
+    이게 핵심 안전 불변식이다: 무장돼도 자본이 소액이면 절대 손실이 작다(AAPL ~1주).
+    """
     text = _SENTINEL.read_text(encoding="utf-8")
     cap = _field(text, "capital_usd")
     assert cap is not None
-    # 소액 캐너리 — 워크플로 하드 가드($1,000)와 정합.
     assert int(cap) <= 1000

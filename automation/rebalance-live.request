@@ -13,9 +13,9 @@
 #
 # 헌법 X.4: 라이브 전환은 운영자 결정. 소액 캐너리 무장 전용, 풀라이브 아님.
 
-armed: false
+armed: true
 capital_usd: 500
 requested_by: mason
 stage: live-canary-portfolio
-run_seq: 2
-note: "재발화(run_seq 2) — 발행 스텝 셸 인용 버그 수정 후 깨끗한 드라이런 미리보기. armed 여전히 false(실주문 0건). 미리보기 확인 + 룰 워커 충돌 해소 후 armed: true 로 무장."
+run_seq: 3
+note: "🟢 무장(run_seq 3, 2026-06-04) — 운영자 (A) 승인. 드라이런 미리보기 확인됨(AAPL 1주 @ $312, 매도 0건) + 돈 단위 검증 완료(USD·정수주) + 룰 워커 비활성(go-live #6). 실주문은 *시장시간 스케줄*(15:00 UTC 평일)에서만 — 이 무장 머지(push)는 미리보기만. 자본 $500(AAPL 1주). 킬스위치: 스펙 014 서킷 브레이커 + 추세 필터."
