@@ -7,6 +7,7 @@ canary-live-rules.toml 별도). 운영 설정의 오타·스키마 깨짐을 CI 
 
 from __future__ import annotations
 
+from decimal import Decimal
 from pathlib import Path
 
 from auto_invest.cli import _load_portfolio_for_backtest
@@ -14,6 +15,7 @@ from auto_invest.cli import _load_portfolio_for_backtest
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _CANARY = _REPO_ROOT / "deploy" / "canary-portfolio.toml"
 _CANARY_NOTREND = _REPO_ROOT / "deploy" / "canary-portfolio-notrend.toml"
+_CANARY_LIVE = _REPO_ROOT / "deploy" / "canary-live-portfolio.toml"
 
 
 def test_canary_portfolio_parses_and_has_trend_filter():
@@ -35,6 +37,30 @@ def test_canary_portfolio_universe_all_whitelisted():
     )
     for sym in cfg.universe:
         assert sym in wl.symbols, f"{sym} not in whitelist"
+
+
+def test_live_portfolio_config_is_conservative_and_no_whitelist_broadening():
+    """스펙 039 — 라이브 캐너리 포트폴리오 설정의 안전 불변식.
+
+    실거래용이므로 보수적이어야 한다: ① 유니버스 ⊆ 화이트리스트이고 기존 실거래 종목
+    (SPY·MSFT·AAPL)만 — 라이브 거래 집합 무확대(헌법 II), ② 추세 필터 ON(드로다운 방어),
+    ③ global_exposure ≤ 60%·invested_fraction ≤ 0.6(현금 버퍼), ④ 저회전(hold_replace).
+    """
+    caps, wl, cfg = _load_portfolio_for_backtest(
+        _CANARY_LIVE, env={"KIS_ACCOUNT_NO": "ACC-TEST"}
+    )
+    # 라이브 거래 집합 무확대: 기존 실거래 캐너리(SPY·MSFT·AAPL)와 동일.
+    assert set(cfg.universe) == {"SPY", "MSFT", "AAPL"}
+    assert set(wl.symbols) == {"SPY", "MSFT", "AAPL"}
+    assert set(cfg.universe) <= set(wl.symbols)
+    # 드로다운 방어 필수.
+    assert cfg.trend_filter is not None
+    assert cfg.trend_filter.method == "sma"
+    # 보수적 노출: 미검증 전략에 전액 투입 금지.
+    assert caps.global_exposure_pct <= Decimal("60")
+    assert cfg.invested_fraction <= Decimal("0.6")
+    # 저회전.
+    assert cfg.rebalance_mode == "hold_replace"
 
 
 def test_notrend_control_config_is_identical_minus_trend_filter():
