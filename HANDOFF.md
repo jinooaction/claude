@@ -57,6 +57,22 @@ git ls-remote --heads origin 'claude/*' | awk '{print $2}'
   운영자 확인). 부분 체결 재호가(잔량 재계산)는 별도 슬라이스.
 - **L1 적용 표면 확장 / L2·L3 캐너리 승격 큐 / 실거래 자본 상향** — 기존 후보 유지.
 
+## 최근 마일스톤 — 2026-06-04 (스펙 038: 칼마 비율 — 자본 방어 측정 ✅)
+
+main 머지 `9ae4238`(PR #172). Kernel 터치 0건, 돈 0 이동. 운영자 지시 "계속해(옵션 2 Calmar)
++ 실거래 기반 고도화, 돈 못 벌면 의미 없다".
+
+- **왜**: forward-verdict 가 샤프(변동성 대비 수익)로만 판정했는데, 추세 필터(스펙 036)의
+  핵심 가치는 *드로다운 방어*다. 샤프만 보면 자본 방어가 안 드러난다. **칼마(연수익/최대낙폭)**
+  를 추가해 "돈을 잃지 않는 능력"을 직접 측정.
+- **무엇을**: `calmar_ratio` + `EdgeVerdict.strategy_calmar/benchmark_calmar/beats_benchmark_calmar`
+  (schema 1.1). 게이트는 불변(샤프+PSR+DSR 유지), 칼마는 *보고* 전용 — 운영자가 드로다운
+  방어를 직접 보게. 페이퍼·**라이브(`--mode live`)** 양쪽 트랙 공통.
+- **안전**: Kernel 터치 0건, 돈 0 이동(측정 전용). 전체 1485 통과·4 스킵, 린트 깨끗. 신규 7건.
+- **다음(실거래 격차)**: 운영자가 "실거래 기반 고도화"를 거듭 강조. 고도화는 페이퍼 전용,
+  실거래는 단순 3룰 캐너리. 다음 큰 작업 = **고도화(포트폴리오/추세 전략)를 라이브 캐너리에
+  올리기**(소액 실거래). 돈 움직이는 결정이라 자본·킬스위치는 운영자 확정 필요.
+
 ## 최근 마일스톤 — 2026-06-03 (스펙 037: forward A/B 토너먼트 — 추세 ON vs OFF ✅)
 
 main 머지 `e1cae73`(PR #170). Kernel 터치 0건, 코드 변경 0(설정+워크플로+테스트), 돈 0 이동.
@@ -1272,6 +1288,8 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 
 ## 과거 인수인계 파일 (참고용)
 
+- `HANDOFF-043-SPEC-038-CALMAR.md` — 스펙 038: 칼마 비율(자본 방어 측정) forward-verdict 추가 (2026-06-04, PR #172 `9ae4238`). 샤프가 못 잡는 드로다운 방어를 칼마(연수익/최대낙폭)로 측정. 게이트 불변, 보고 전용. 페이퍼·라이브 공통. Kernel 터치 0건. 신규 7건.
+
 - `HANDOFF-042-SPEC-037-AB-TOURNAMENT.md` — 스펙 037: forward A/B 토너먼트(추세 ON vs OFF, 전용 DB 격리) (2026-06-03, PR #170 `e1cae73`). 대조군 `canary-portfolio-notrend.toml`(trend_filter 외 동일) + 워크플로 2팔(forward_trend.db / forward_notrend.db). 코드 변경 0(DB 파일이 격리), 돈 0 이동.
 
 - `HANDOFF-041-SPEC-036-TREND-FILTER.md` — 스펙 036: 절대 모멘텀 추세 필터(드로다운 방어 오버레이) (2026-06-03, PR #167 `8bee9c8`). `strategy/trend.py` — 종목별 추세 아래면 현금으로 빠짐(Faber/Antonacci식), `target_weights` 옵트인, `[portfolio.trend_filter]`. 끄면 byte 동일. 라이브 캐너리 미적용(운영자 결정). Kernel 터치 0건. 신규 테스트 22건.
@@ -1323,10 +1341,10 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 |------|-------|
 | 헌법 | **v4.0.0** (IX.D 운영자 자율 수행 + 원칙 X 측정 기반 자율 성장; **X.4 개정 — 운영자 지시 시 라이브 캐너리까지 가드형 자동 전환 허용**, 풀라이브·장중가드·K1 캡·화이트리스트·감사·시크릿 보존; 머지 커밋 `d52b048`) |
 | 운영자 응대 정책 | CLAUDE.md v3.3.0 (한글 응답 / 쉬운 한글 / 자동 머지 / 세션 수명주기) |
-| 마지막 main 커밋 | `e1cae73 Merge pull request #170 — feat(037) forward A/B 토너먼트 (추세 ON vs OFF)` |
+| 마지막 main 커밋 | `9ae4238 Merge pull request #172 — feat(038) 칼마 비율 (자본 방어 측정)` |
 | 활성 작업 | **🟢 스펙 035 출시(2026-06-03): forward 엣지 자동 판정 폐회로 — "실제로 돈을 버는가"를 자동으로 답하는 마지막 조각.** 끊겨 있던 폐회로를 연결: ① 스펙 029 `compute_nav`(시가평가 순자산)가 만들어졌는데 **어떤 실행 경로에도 안 꽂혀 NAV 시계열이 기록 안 되던 것**을 생산자 CLI `nav-snapshot --snapshot`(`PORTFOLIO_NAV_SNAPSHOT` append, 읽기 전용 측정)로 배선. ② 소비자 CLI `forward-verdict` 가 쌓인 NAV 시계열을 **균등가중 단순 보유 벤치마크**(스펙 032 잣대, `price_bars`)와 비교하고 **디플레이티드/확률적 샤프**(스펙 027)로 우연·과적합을 처벌해 `EDGE_CONFIRMED / NO_EDGE / INSUFFICIENT_DATA` 한 줄 판정. ③ `rebalance-paper-forward.yml` 에 두 단계 + 사이드카 `LAST_RUN.md` 판정 섹션 배선 — 매 forward 실행마다 라이브 판정이 찍힘. **보수적 fail-safe: 모르면(데이터 부족·분산 0) 절대 EDGE 선언 안 함 = 돈 잃지 않게 막는 헌법 X 직접 구현.** Kernel 터치 0건, 돈 0 이동, 라이브 자동 승격 0건(EDGE_CONFIRMED 는 운영자 게이트에 올릴 증거이지 자동 배포 아님). 상세 `HANDOFF-040-SPEC-035-FORWARD-VERDICT.md`. **다음(인스턴스 검증)**: `rebalance-paper-forward.yml` 가 돌수록 NAV 점이 쌓임 → 사이드카 LAST_RUN.md 의 "forward 엣지 판정" JSON 이 INSUFFICIENT_DATA → 충분히 쌓이면 코드 수정 없이 진짜 판정으로 자동 전환. ─── (이전) 라이브 캐너리 무장 + 자본 $12k·축소 룰셋 + 자동 승격 게이트(2026-05-30).** ① 라이브 캐너리 무장(AUTO_INVEST_MODE=live, 헌법 X.4 v4.0.0). ② 운영자 선택 1번: 자본 $12,000 + 축소 룰셋(`deploy/canary-live-rules.toml`, qty=1 SPY·MSFT·AAPL) 적용 → 우량주 1주가 per-trade 5% 캡($600) 안 → **실제 체결 가능**(첫 기회 다음 정규장). ③ 운영자 선택 2번: 스펙 026 승격 게이트(`promotion/gate.py`·`readiness.py`·CLI `promote-check`·매일 `promote-readiness.yml`) — 헌법 VI 트랙레코드 게이트를 매일 자율 평가. **실제 풀라이브 승격은 이 VI 게이트 AND 스펙 007 하드닝 캐너리(IX.B-2, ≥30/45거래일) 둘 다 통과해야 발화 — 최소 30거래일 후. 미구현(의도적 게이트).** 노출 상한: per-symbol $2,400 / global $9,600. **스펙 029 전체(슬라이스 1·2·3) 출시 완료 — "현재 자산 수준 기준 운용·성장 관리" 구조적 빈칸 3개 메움. ① NAV 측정(`auto-invest portfolio`), ② 자산 인식 유효 자본(`run --capital-tracking [--capital-growth]`, 기본 끔 — 켜면 캡이 라이브 순자산 추종, 하락은 항상 방어/상승은 옵트인+상한), ③ 미실현 포함 시가평가 성장 추적(`auto-invest growth`, NAV 스냅샷 시계열 → 총수익률·최대낙폭·CAGR). 🟢 스펙 032 슬라이스 1·2 + 단계 ② 출시(2026-05-31): 횡단면 포트폴리오 재조정 엔진 — 알파가 거래 루프에 미배선이고 매도/재조정이 없던 세계 최고 수준 격차를 메움. ① 슬라이스 1: 순수 플래너(`strategy/rebalance.py`) + 백테스트(`backtest/portfolio_replay.py`) + `auto-invest backtest-portfolio`. ② 슬라이스 2: 라이브/페이퍼 실행기(`execution/rebalancer.py`) + `auto-invest rebalance-once`(**paper 기본·돈 무이동**, 실주문은 `--mode live` 명시 필요) — 기존 OrderRouter+K1 게이트 재사용(별도 돈 경로 0). ③ 단계 ②: 단순 보유(균등가중) 벤치마크 비교 + per-trade 캡 클램프로 백테스트=라이브 단일 잣대 정합. 시연(합성 데이터): 모든 스킴이 단순 보유 초과(예 equal top4 +42.5% vs 벤치 +17.1%) — **합성이라 방향성 시연, 실수치는 운영자 `ingest-history` 후 산출.** 다음 후보: **실데이터 적재 후 실제 비교 측정**(운영자/네트워크), **슬라이스 3(라이브 재조정 주기 스케줄·캐너리 룰셋 적용 — 돈 경로·운영자 게이트)**, 유니버스 확대(횡단면 폭), 워크포워드로 재조정 파라미터 표본외 검증, 체결 정교화 후속(031 슬라이스 2 실전송)** |
-| 출시 완료 스펙 | 001(P2 정합성 배선 포함), 002, 003, 004, 005, 006, 007, 008, 009, 010, 011, 012, 013, 014, 015, 016(슬라이스 1·2·3 전부), 017(슬라이스 1·2·2b·3 전부), 018(슬라이스 1 다요인 신호 + 슬라이스 2 사이징 감사 기록), 019(레짐 인식 + 공분산 ERC), 020(레짐·ERC 거래 루프 실배선), 021(횡단면 모멘텀 순위 필터), 022(최소 분산 포트폴리오 최적화), 023(가격 기반 퀄리티 팩터 필터), 024(최대 샤프 포트폴리오 최적화), 025(다요인 합성 알파 점수 필터), 026(캐너리→풀라이브 자동 승격 게이트), 027(디플레이티드 샤프 비율), 028(체결 품질 정밀 측정 — arrival 기준 구현격차 + 체결 지연), 029(전체 슬라이스 1·2·3 — NAV 측정·자산 인식 유효 자본·미실현 포함 성장 추적), 030(미체결 주문 수명 관리 — TTL 취소·취소-재호가·marketable-limit), 031 슬라이스 1(KIS 실시간 웹소켓 수신 토대), 032(횡단면 포트폴리오 재조정 엔진 — 플래너 + 백테스트 + 라이브/페이퍼 실행기 + 워크포워드/DSR 검증 + forward 페이퍼 트랙), 033(KIS 해외 일봉 백필 + 일일 상시 백필 + 유니버스 3→10), 034(체계적 유니버스 구성 — 유동성 기반 `strategy/universe.py` + CLI `build-universe` + 넓은 횡단면 정직한 검증), 035(forward 엣지 자동 판정 — `nav-snapshot` 생산자 + `forward-verdict` 소비자, NAV 시계열 → 디플레이티드 샤프 vs 단순 보유 → EDGE/NO_EDGE/INSUFFICIENT 판정, 폐회로 완성), 036(절대 모멘텀 추세 필터 — `strategy/trend.py`, 종목별 추세 아래면 현금으로 빠지는 드로다운 방어 오버레이, `[portfolio.trend_filter]` 옵트인, 끄면 byte 동일), **037(forward A/B 토너먼트 — 추세 ON vs OFF 를 전용 DB 로 격리해 병렬 페이퍼 + forward-verdict 양쪽 판정, 코드 변경 0)** |
-| 진행 중 스펙 | 없음. 스펙 037 = **forward A/B 토너먼트**(추세 필터 ON vs OFF, 전용 DB 격리, PAPER) 완료 — 추세 필터의 격리된 효과를 forward-verdict 가 판정. 스펙 036 = **절대 모멘텀 추세 필터(드로다운 방어 오버레이)** 완료(forward 페이퍼 트랙에 켬, 라이브 캐너리엔 미적용). 스펙 035 = **forward 엣지 자동 판정 폐회로** 완료(돈 버는지 자동 판정). 스펙 034 = **유니버스 구성 역량 + 현재 데이터 경로 배선 + 재발 차단 가드** 완료. ⚠ 옛 데이터(2013-2018) 백테스트는 **판정 아님**(stale, `--allow-stale` 필요). "지금 통하는가"는 `rebalance-paper-forward.yml` forward 트랙 + `forward-verdict`(스펙 035)가 판정. ⚠ 스펙 034의 옛 데이터(2013-2018) 백테스트는 **판정 아님**(stale). 이제 도구가 stale 백테스트를 거부(`--allow-stale` 필요)하고, `rebalance-once --construct-universe-top-n` 이 forward 페이퍼 유니버스를 *현재* 바로 구성한다. **다음(인스턴스 검증)**: `rebalance-paper-forward.yml` 실행 → 사이드카 LAST_RUN.md 의 construct-universe 줄 + 페이퍼 체결 누적 → 디플레이티드 샤프로 "지금 통하는가" 판정. |
+| 출시 완료 스펙 | 001(P2 정합성 배선 포함), 002, 003, 004, 005, 006, 007, 008, 009, 010, 011, 012, 013, 014, 015, 016(슬라이스 1·2·3 전부), 017(슬라이스 1·2·2b·3 전부), 018(슬라이스 1 다요인 신호 + 슬라이스 2 사이징 감사 기록), 019(레짐 인식 + 공분산 ERC), 020(레짐·ERC 거래 루프 실배선), 021(횡단면 모멘텀 순위 필터), 022(최소 분산 포트폴리오 최적화), 023(가격 기반 퀄리티 팩터 필터), 024(최대 샤프 포트폴리오 최적화), 025(다요인 합성 알파 점수 필터), 026(캐너리→풀라이브 자동 승격 게이트), 027(디플레이티드 샤프 비율), 028(체결 품질 정밀 측정 — arrival 기준 구현격차 + 체결 지연), 029(전체 슬라이스 1·2·3 — NAV 측정·자산 인식 유효 자본·미실현 포함 성장 추적), 030(미체결 주문 수명 관리 — TTL 취소·취소-재호가·marketable-limit), 031 슬라이스 1(KIS 실시간 웹소켓 수신 토대), 032(횡단면 포트폴리오 재조정 엔진 — 플래너 + 백테스트 + 라이브/페이퍼 실행기 + 워크포워드/DSR 검증 + forward 페이퍼 트랙), 033(KIS 해외 일봉 백필 + 일일 상시 백필 + 유니버스 3→10), 034(체계적 유니버스 구성 — 유동성 기반 `strategy/universe.py` + CLI `build-universe` + 넓은 횡단면 정직한 검증), 035(forward 엣지 자동 판정 — `nav-snapshot` 생산자 + `forward-verdict` 소비자, NAV 시계열 → 디플레이티드 샤프 vs 단순 보유 → EDGE/NO_EDGE/INSUFFICIENT 판정, 폐회로 완성), 036(절대 모멘텀 추세 필터 — `strategy/trend.py`, 종목별 추세 아래면 현금으로 빠지는 드로다운 방어 오버레이, `[portfolio.trend_filter]` 옵트인, 끄면 byte 동일), 037(forward A/B 토너먼트 — 추세 ON vs OFF 를 전용 DB 로 격리해 병렬 페이퍼 + forward-verdict 양쪽 판정, 코드 변경 0), **038(칼마 비율 — 자본 방어(연수익/최대낙폭) 측정을 forward-verdict 에 추가, 페이퍼·라이브 공통, 게이트 불변·보고 전용)** |
+| 진행 중 스펙 | 없음. 스펙 038 = **칼마 비율(자본 방어 측정)** forward-verdict 에 추가 완료(페이퍼·라이브 공통). 스펙 037 = **forward A/B 토너먼트**(추세 필터 ON vs OFF, 전용 DB 격리, PAPER) 완료 — 추세 필터의 격리된 효과를 forward-verdict 가 판정. ⚠ **실거래 격차(운영자 핵심 지적)**: 고도화(스펙 032~038)는 전부 **페이퍼**. 실거래(라이브 캐너리)는 `canary-live-rules.toml` = 단순 3룰 qty=1(SPY 눌림목·MSFT 골든크로스 등), $12k, AUTO_INVEST_MODE=live(2026-05-30 무장). 즉 정교한 전략이 실제 돈을 안 만짐. 운영자 지시: "앞으로 항상 실거래 기반 고도화, 돈 못 벌면 의미 없다." 스펙 036 = **절대 모멘텀 추세 필터(드로다운 방어 오버레이)** 완료(forward 페이퍼 트랙에 켬, 라이브 캐너리엔 미적용). 스펙 035 = **forward 엣지 자동 판정 폐회로** 완료(돈 버는지 자동 판정). 스펙 034 = **유니버스 구성 역량 + 현재 데이터 경로 배선 + 재발 차단 가드** 완료. ⚠ 옛 데이터(2013-2018) 백테스트는 **판정 아님**(stale, `--allow-stale` 필요). "지금 통하는가"는 `rebalance-paper-forward.yml` forward 트랙 + `forward-verdict`(스펙 035)가 판정. ⚠ 스펙 034의 옛 데이터(2013-2018) 백테스트는 **판정 아님**(stale). 이제 도구가 stale 백테스트를 거부(`--allow-stale` 필요)하고, `rebalance-once --construct-universe-top-n` 이 forward 페이퍼 유니버스를 *현재* 바로 구성한다. **다음(인스턴스 검증)**: `rebalance-paper-forward.yml` 실행 → 사이드카 LAST_RUN.md 의 construct-universe 줄 + 페이퍼 체결 누적 → 디플레이티드 샤프로 "지금 통하는가" 판정. |
 | 골격 스펙 (즉시 착수 가능) | **실거래 캐너리 — ✅ 완료(2026-05-30)**: 라이브 캐너리 무장됨. 다음 골격: 캐너리 자본 상향(체결 나오게·운영자 결정) 또는 풀라이브 승격(헌법 VI 3단계·운영자 전용) 또는 알파 계속(베타 헤지·회전율·워크포워드). |
 | 자율 수행 최우선 진입점 (권장) | `docs/OPERATOR_GITHUB_ACTIONS_KR.md` + `.github/workflows/provision-vultr.yml` |
 | Vultr 콘솔 직접 진입점 | `docs/OPERATOR_VULTR_ONE_STEP_KR.md` + `deploy/vultr-userdata.sh` |
@@ -1335,7 +1353,7 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 | KIS 키 입력 도구 (인스턴스 콘솔에서 실행) | `scripts/set_secrets.sh` |
 | 개발자용 자동 검증 스크립트 | `scripts/operator_install.sh` (5단계 preflight) |
 | 운영 호스트 진입점 | `deploy/README.md` (systemd 설치 절차) |
-| main 테스트 | 1478 통과, 4 스킵 (라이브 KIS smoke 4건, `KIS_LIVE_TEST=1` 가드) |
+| main 테스트 | 1485 통과, 4 스킵 (라이브 KIS smoke 4건, `KIS_LIVE_TEST=1` 가드) |
 | 세션 수명주기 도구 | git ground-truth 훅 + `/sync` `/handoff` `/deploy-status` 스킬 (v3.3.0, "세션 수명주기 도구" 절 참조) |
 | main 린트 | 깨끗 |
 | 열린 PR | `mcp__github__list_pull_requests`로 확인 |
