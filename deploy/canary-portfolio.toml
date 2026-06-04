@@ -33,14 +33,14 @@ canary_min_duration_days       = 10
 canary_acceptance_drawdown_pct = 3.0
 
 [whitelist]
-symbols     = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "AVGO", "TSLA", "JPM", "V", "MA", "HD", "COST", "WMT", "PG", "KO", "JNJ", "UNH", "LLY", "MRK", "ABBV", "XOM", "CVX", "BAC", "DIS", "NFLX", "ORCL", "SPY"]
+symbols     = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "AVGO", "TSLA", "ORCL", "CRM", "ADBE", "AMD", "QCOM", "TXN", "IBM", "CSCO", "INTU", "AMAT", "MU", "NOW", "INTC", "ADI", "LRCX", "KLAC", "PANW", "NFLX", "DIS", "CMCSA", "TMUS", "VZ", "T", "WMT", "COST", "HD", "MCD", "NKE", "SBUX", "LOW", "PG", "KO", "PEP", "PM", "MDLZ", "CL", "TGT", "JPM", "BAC", "WFC", "GS", "MS", "C", "V", "MA", "AXP", "BLK", "SPGI", "SCHW", "UNH", "LLY", "JNJ", "ABBV", "MRK", "PFE", "TMO", "ABT", "DHR", "BMY", "AMGN", "GILD", "ELV", "ISRG", "MDT", "CVS", "XOM", "CVX", "COP", "CAT", "BA", "HON", "GE", "UPS", "RTX", "LMT", "DE", "UNP", "SPY", "QQQ", "LIN", "AMT"]
 accounts    = ["${KIS_ACCOUNT_NO}"]
 order_types = ["LIMIT"]
 sessions    = ["REGULAR"]
 
 [portfolio]
 id            = "forward-paper-canary"
-universe      = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "AVGO", "TSLA", "JPM", "V", "MA", "HD", "COST", "WMT", "PG", "KO", "JNJ", "UNH", "LLY", "MRK", "ABBV", "XOM", "CVX", "BAC", "DIS", "NFLX", "ORCL", "SPY"]
+universe      = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "AVGO", "TSLA", "ORCL", "CRM", "ADBE", "AMD", "QCOM", "TXN", "IBM", "CSCO", "INTU", "AMAT", "MU", "NOW", "INTC", "ADI", "LRCX", "KLAC", "PANW", "NFLX", "DIS", "CMCSA", "TMUS", "VZ", "T", "WMT", "COST", "HD", "MCD", "NKE", "SBUX", "LOW", "PG", "KO", "PEP", "PM", "MDLZ", "CL", "TGT", "JPM", "BAC", "WFC", "GS", "MS", "C", "V", "MA", "AXP", "BLK", "SPGI", "SCHW", "UNH", "LLY", "JNJ", "ABBV", "MRK", "PFE", "TMO", "ABT", "DHR", "BMY", "AMGN", "GILD", "ELV", "ISRG", "MDT", "CVS", "XOM", "CVX", "COP", "CAT", "BA", "HON", "GE", "UPS", "RTX", "LMT", "DE", "UNP", "SPY", "QQQ", "LIN", "AMT"]
 weights       = { momentum = "1.0", quality = "1.0", low_volatility = "0.5" }
 weight_scheme = "equal"
 top_n         = 5
@@ -55,18 +55,20 @@ momentum_period            = 40
 rebalance_threshold_pct    = "2.0"
 min_notional_usd           = "50"
 
-# 스펙 036 — 절대 모멘텀 추세 필터(드로다운 방어 오버레이). PAPER 전용(이 파일은 forward
-# 페이퍼 트랙이고 --mode paper 로만 쓰인다 — 라이브는 canary-live-rules.toml 별도, 무관).
-# 자기 추세 아래로 내려간 종목은 가중치 0(현금)으로 빠진다 — hold_replace 와 결합돼 추세
-# 이탈 보유는 매도(청산)된다. 합이 1 미만이 되고 그 차이는 현금 버퍼(방어)다.
-#   method=sma: 마지막 종가 > lookback 종가 단순이동평균.
-#   lookback=50: 인스턴스가 심볼당 ~100 일봉을 보유하므로 50 은 *지금 활성*이다(200 이면
-#     데이터 부족으로 무효). 스코어러 lookback(60)과 정합되는 중기 추세. 데이터가 쌓이면
-#     운영자가 늘릴 수 있다.
-#   on_insufficient=hold: 50봉 미만 종목은 현금으로 강제 이탈하지 않고 유지(보수적 — 이력
-#     부족만으로 빼지 않는다; 진짜 하락추세는 신호가 직접 처리).
-# 이 오버레이가 단순 보유를 위험조정으로 이기는지는 스펙 035 forward-verdict 가 판정한다.
+# 스펙 041 — 절대 모멘텀(기대수익 바닥) 게이트 = 듀얼 모멘텀(Antonacci). PAPER 전용.
+# 운영자 지적("점수 1위에 투자하는 건 허접한 전략 — 1위가 수익이 기대 안 되는데도 투자.
+# 기대 수익율 기준으로 판단해야"): 합성 점수는 *상대 순위*만 본다. 절대 게이트가 없으면
+# 후보가 전부 나빠도 "그나마 1위"를 산다. 이 게이트가 그걸 막는다 —
+#   method=absolute_momentum: 종목의 *자기* 후행수익률(lookback 기간)이 min_return 바닥을
+#     넘어야 보유. 못 넘으면 1위라도 가중치 0(현금). "기대 안 되면 투자 안 함."
+#   lookback=60: ≈3개월 모멘텀(스코어러 lookback 60과 정합, 인스턴스 ~100 일봉에서 활성).
+#   min_return_pct=0.0: 자기 수익이 양수여야 보유(고전 듀얼 모멘텀). 양수로 올리면 더 엄격.
+#   on_insufficient=cash: 60봉+ 이력이 없어 *기대수익을 확인 못 하면* 보유하지 않는다
+#     (보수적 — "확인 못 하면 투자 안 함"이 절대 게이트 철학에 맞다).
+# 효과는 스펙 035 forward-verdict 가 판정 + 대조군(canary-portfolio-notrend.toml = 게이트
+# 없이 1위 항상 매수)과 A/B 비교로 "절대 게이트가 정말 도움 되는가"를 격리 측정한다.
 [portfolio.trend_filter]
-method          = "sma"
-lookback        = 50
-on_insufficient = "hold"
+method          = "absolute_momentum"
+lookback        = 60
+min_return_pct  = 0.0
+on_insufficient = "cash"

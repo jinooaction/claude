@@ -384,6 +384,7 @@ def _do_rebalance(
                 method=config.trend_filter.method,
                 lookback=config.trend_filter.lookback,
                 on_insufficient=config.trend_filter.on_insufficient,
+                min_return=config.trend_filter.min_return_pct / Decimal("100"),
             )
             if config.trend_filter is not None
             else None

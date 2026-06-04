@@ -65,7 +65,10 @@ def _trend_spec(config: PortfolioRebalanceConfig) -> TrendSpec | None:
     if tf is None:
         return None
     return TrendSpec(
-        method=tf.method, lookback=tf.lookback, on_insufficient=tf.on_insufficient
+        method=tf.method,
+        lookback=tf.lookback,
+        on_insufficient=tf.on_insufficient,
+        min_return=tf.min_return_pct / Decimal("100"),
     )
 
 _CENT = Decimal("0.01")

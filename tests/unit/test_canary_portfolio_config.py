@@ -17,15 +17,19 @@ _CANARY_NOTREND = _REPO_ROOT / "deploy" / "canary-portfolio-notrend.toml"
 _CANARY_LIVE = _REPO_ROOT / "deploy" / "canary-live-portfolio.toml"
 
 
-def test_canary_portfolio_parses_and_has_trend_filter():
+def test_canary_portfolio_parses_and_has_absolute_momentum_gate():
     caps, wl, cfg = _load_portfolio_for_backtest(
         _CANARY, env={"KIS_ACCOUNT_NO": "ACC-TEST"}
     )
-    # 추세 필터가 켜져 있고(스펙 036), 인스턴스 ~100 일봉에서 활성인 lookback 이어야 한다.
+    # 스펙 041 — 절대 기대수익 게이트(듀얼 모멘텀): 상대 순위 1위라도 자기 후행수익이
+    # 바닥(min_return) 미달이면 현금. "기대 안 되면 투자 안 함."
     assert cfg.trend_filter is not None
-    assert cfg.trend_filter.method == "sma"
-    assert cfg.trend_filter.lookback <= 100  # 가용 일봉보다 작아야 '데이터 부족' 무효화 회피
+    assert cfg.trend_filter.method == "absolute_momentum"
+    assert cfg.trend_filter.lookback <= 100  # 인스턴스 ~100 일봉에서 활성
     assert cfg.trend_filter.on_insufficient in ("hold", "cash")
+    assert cfg.trend_filter.min_return_pct >= 0  # 기대수익 바닥(0 = 양수 모멘텀 요구)
+    # 유니버스 대폭 확대(스펙 041 — 좁은 3~28종목 → 넓은 횡단면).
+    assert len(cfg.universe) >= 50
     # 구성 유니버스 ⊆ 화이트리스트(헌법 II — 거래 집합 못 넓힘).
     assert set(cfg.universe) <= set(wl.symbols)
 

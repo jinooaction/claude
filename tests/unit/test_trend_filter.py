@@ -77,6 +77,28 @@ def test_above_trend_absolute_momentum_nonpositive_past():
     assert above_trend(closes, spec) is None  # 과거가 0 이하 → 측정 불가
 
 
+def test_above_trend_absolute_momentum_min_return_threshold():
+    # 스펙 041 — 기대수익 바닥(min_return): 후행수익률이 바닥보다 커야 True.
+    # 10 → 10.5 = +5% 후행수익(lookback 2). 바닥 0% 면 통과, 바닥 10% 면 미달(=현금).
+    closes = [Decimal("10"), Decimal("10.2"), Decimal("10.5")]
+    assert above_trend(
+        closes, TrendSpec(method=METHOD_ABSOLUTE_MOMENTUM, lookback=2)
+    ) is True  # +5% > 0
+    assert above_trend(
+        closes,
+        TrendSpec(
+            method=METHOD_ABSOLUTE_MOMENTUM, lookback=2, min_return=Decimal("0.10")
+        ),
+    ) is False  # +5% < 10% 바닥 → 미달(1위라도 안 산다)
+
+
+def test_above_trend_sma_ignores_min_return():
+    # sma 방식은 min_return 무시(가격 vs 이동평균만).
+    closes = [Decimal("10"), Decimal("11"), Decimal("12")]
+    spec = TrendSpec(method=METHOD_SMA, lookback=3, min_return=Decimal("0.99"))
+    assert above_trend(closes, spec) is True  # min_return 무시
+
+
 # --------------------------------------------------------- spec validation
 
 
