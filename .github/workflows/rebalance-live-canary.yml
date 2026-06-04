@@ -174,6 +174,8 @@ jobs:
           ARMED: ${{ steps.gate.outputs.armed }}
           CAP: ${{ steps.gate.outputs.capital }}
           BLOCKED: ${{ steps.gate.outputs.blocked }}
+          LIVE_OUTCOME: ${{ steps.live.outcome }}  # success=주문 실행 / skipped=미실행
+          EVENT: ${{ github.event_name }}
         run: |
           set -o pipefail  # 의도적으로 -u 제외: 발행은 문자열 포맷팅뿐 — 사소한 미설정
           # 변수가 사이드카 기록(특히 무장 시 주문 기록)을 막지 않게 한다.
@@ -188,16 +190,23 @@ jobs:
             echo "|------|-----|"
             echo "| run_id | ${GITHUB_RUN_ID} |"
             echo "| timestamp_utc | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
-            echo "| armed (실주문 여부) | ${ARMED:-?} |"
+            echo "| armed (무장 여부) | ${ARMED:-?} |"
             echo "| capital_usd | ${CAP:-?} |"
             echo "| blocked (자본 1000불 초과 거부) | ${BLOCKED:-?} |"
+            echo "| event | ${EVENT:-?} |"
+            echo "| LIVE 스텝 | ${LIVE_OUTCOME:-skipped} (success=실주문 실행 / skipped=미실행) |"
             echo ""
             if [[ "${ARMED:-false}" != "true" ]]; then
               echo "> 🛡 **드라이런 미리보기만** (armed=false) — 실주문 0건. 아래는 *무장 시* 실거래가"
               echo "> 무엇을 사고팔지 보여준다. 무장하려면 automation/rebalance-live.request 의"
               echo "> armed: true 로 머지(룰 워커 충돌 먼저 해소)."
+            elif [[ "${LIVE_OUTCOME:-skipped}" == "success" ]]; then
+              echo "> ⚠ **무장 + 실주문 실행** (armed=true, 시장시간 스케줄) — 실주문이 나갔다."
+              echo "> 아래 라이브 재조정 결과를 확인하라."
             else
-              echo "> ⚠ **무장됨 (armed=true)** — 실주문이 나갔다. 아래 라이브 재조정 결과 확인."
+              echo "> 🟡 **무장됨이나 이번 실행은 미리보기만** (armed=true, event=${EVENT:-?})."
+              echo "> 실주문은 *시장시간 스케줄*(15:00 UTC 평일)에서만 나간다 — 무장 머지(push)는"
+              echo "> 미리보기뿐, **실주문 0건**. 다음 스케줄에서 실거래된다."
             fi
             echo ""
             echo "## 드라이런 미리보기 — 무장 시 거래할 내역 (주문 0건)"
