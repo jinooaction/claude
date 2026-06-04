@@ -10,6 +10,7 @@ import pytest
 from auto_invest.market_data.store import (
     PriceBar,
     available_timeframes,
+    bar_counts,
     bar_summary,
     distinct_symbols,
     get_bars,
@@ -147,3 +148,19 @@ def test_available_timeframes_and_distinct_symbols(conn):
 def test_available_timeframes_empty(conn):
     assert available_timeframes(conn) == []
     assert distinct_symbols(conn) == []
+
+
+def test_bar_counts_needy_first(conn):
+    # 스펙 041 — 종목별 바 수(없으면 0). needy-first 백필 바운딩에 쓰인다.
+    insert_bar(conn, _bar(symbol="AAPL", bar_open="2026-05-02T00:00:00.000Z"))
+    insert_bar(conn, _bar(symbol="AAPL", bar_open="2026-05-03T00:00:00.000Z"))
+    insert_bar(conn, _bar(symbol="MSFT", bar_open="2026-05-02T00:00:00.000Z"))
+    counts = bar_counts(conn, symbols=["AAPL", "MSFT", "TSLA"], timeframe="1d")
+    assert counts == {"AAPL": 2, "MSFT": 1, "TSLA": 0}  # 없는 종목은 0
+    # needy-first 정렬: 바 적은 종목 먼저(동률은 심볼명).
+    order = sorted(counts, key=lambda s: (counts[s], s))
+    assert order == ["TSLA", "MSFT", "AAPL"]
+
+
+def test_bar_counts_empty_symbols(conn):
+    assert bar_counts(conn, symbols=[], timeframe="1d") == {}

@@ -11,6 +11,7 @@ indicator inputs stable and reproducible.
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -135,6 +136,32 @@ def bar_summary(
     if row is None or int(row["n"]) == 0:
         return 0, None, None
     return int(row["n"]), row["lo"], row["hi"]
+
+
+def bar_counts(
+    conn: sqlite3.Connection,
+    *,
+    symbols: Sequence[str],
+    timeframe: str,
+) -> dict[str, int]:
+    """{symbol: stored bar count} for the given symbols/timeframe (0 if absent).
+
+    스펙 041 — 대형 유니버스(예: S&P 500) 백필을 needy-first 로 바운딩하기 위한 진단.
+    바가 적은(또는 0인) 종목을 먼저 채우면, 매 실행을 제한해도 여러 실행에 걸쳐 유니버스
+    전체가 고르게 채워진다. 단일 GROUP BY 쿼리(종목당 질의 N번이 아니라 1번).
+    """
+    counts = {s: 0 for s in symbols}
+    if not symbols:
+        return counts
+    placeholders = ",".join("?" for _ in symbols)
+    rows = conn.execute(
+        f"SELECT symbol, COUNT(*) AS n FROM price_bars "
+        f"WHERE timeframe = ? AND symbol IN ({placeholders}) GROUP BY symbol",
+        (timeframe, *symbols),
+    ).fetchall()
+    for row in rows:
+        counts[row["symbol"]] = int(row["n"])
+    return counts
 
 
 def available_timeframes(conn: sqlite3.Connection) -> list[tuple[str, int]]:

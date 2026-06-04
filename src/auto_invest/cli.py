@@ -2699,6 +2699,13 @@ def backfill_bars_cmd(
     base_url: str = typer.Option(
         "https://openapi.koreainvestment.com:9443", "--base-url", help="KIS REST base URL."
     ),
+    max_symbols: int = typer.Option(
+        0,
+        "--max-symbols",
+        help="스펙 041 — 매 실행 백필할 종목 수 상한(0=무제한). 대형 유니버스(S&P 500 등)"
+        " 에서 워크플로 타임아웃을 피하려고 바가 가장 적은(needy-first) N개만 채운다. 여러"
+        " 실행에 걸쳐 유니버스 전체가 고르게 채워진다.",
+    ),
     as_json: bool = typer.Option(False, "--json", help="Emit JSON instead of text."),
 ) -> None:
     """Fetch recent daily OHLCV bars from KIS into price_bars (read-only; no orders).
@@ -2745,6 +2752,19 @@ def backfill_bars_cmd(
     excds = [e.strip().upper() for e in exchanges.split(",") if e.strip()]
     _require_clean_migrations(db_path, allow_apply=True)
 
+    # 스펙 041 — needy-first 바운딩: 대형 유니버스에서 매 실행 종목 수를 제한할 때, 바가
+    # 가장 적은(또는 0인) 종목을 우선 채운다. 그러면 여러 실행에 걸쳐 유니버스 전체가
+    # 고르게 채워진다(맨 앞 N개만 영원히 채우는 게 아니라). 동률은 심볼명으로 결정적 정렬.
+    if max_symbols and max_symbols > 0 and len(syms) > max_symbols:
+        from auto_invest.market_data import store as _store
+
+        _cnt_conn = db.get_connection(db_path)
+        try:
+            counts = _store.bar_counts(_cnt_conn, symbols=syms, timeframe="1d")
+        finally:
+            _cnt_conn.close()
+        syms = sorted(syms, key=lambda s: (counts.get(s, 0), s))[:max_symbols]
+
     async def _run() -> list[dict]:
         out: list[dict] = []
         async with httpx.AsyncClient(base_url=base_url, timeout=30.0) as inner:
@@ -2787,6 +2807,79 @@ def backfill_bars_cmd(
             f"  {r['symbol']:8} exchange={r['exchange'] or '-':4} "
             f"fetched={r['fetched']:<5} inserted={r['inserted']}"
         )
+
+
+@app.command("signal-ic")
+def signal_ic_cmd(
+    portfolio: Path = typer.Option(
+        ..., "--portfolio", help="TOML; [portfolio].universe/weights/lookback 로 점수 재계산."
+    ),
+    db_path: Path = typer.Option(
+        Path("data/auto_invest.db"), "--db", help="SQLite; price_bars 에서 바를 읽는다."
+    ),
+    forward_horizon: int = typer.Option(
+        21, "--forward-horizon", help="실현 수익률을 재는 앞쪽 거래일 수(21 ≈ 한 달)."
+    ),
+    step: int = typer.Option(
+        0, "--step", help="평가 시점 간격(0=forward_horizon, 비겹침 → t-통계 과대평가 방지)."
+    ),
+    min_symbols: int = typer.Option(
+        5, "--min-symbols", help="한 시점에서 IC를 재기 위한 최소 횡단면 종목 수."
+    ),
+    timeframe: str = typer.Option("1d", "--timeframe", help="바 타임프레임."),
+    as_json: bool = typer.Option(False, "--json", help="JSON 출력."),
+) -> None:
+    """합성 점수의 예측 성공률(정보계수 IC)을 저장 바로 측정한다 (스펙 041, 주문 0건).
+
+    운영자 지적("예측 성공률 기준으로 판단해야"): 점수로 순위를 매겨 사는데 그 점수가 *실제로*
+    미래 수익을 예측하는지를 IC(점수 순위 vs 다음 기간 실현 수익률 순위의 스피어만 상관)로
+    잰다. 평균 IC 가 양수+유의(t≥2)면 예측력 있음, 0 근처면 그 점수로 줄 세워 사는 건 엣지
+    아님. 미래 누출 없음(t 시점 점수는 t까지의 바만 사용). 읽기 전용 — 돈 0 이동.
+    """
+    import json as _json
+
+    from auto_invest.analytics.signal_ic import cross_sectional_ic
+    from auto_invest.market_data.store import get_bars
+
+    try:
+        _caps, _wl, cfg = _load_portfolio_for_backtest(portfolio)
+    except ConfigError as exc:
+        typer.echo(f"portfolio validation failed: {exc}", err=True)
+        _exit(65)
+        return
+
+    _require_clean_migrations(db_path, allow_apply=True)
+    conn = db.get_connection(db_path)
+    try:
+        symbol_bars = {
+            s: get_bars(conn, symbol=s, timeframe=timeframe)
+            for s in cfg.universe  # type: ignore[union-attr]
+        }
+    finally:
+        conn.close()
+
+    result = cross_sectional_ic(
+        symbol_bars,
+        weights=cfg.weights,  # type: ignore[union-attr]
+        lookback_bars=cfg.lookback_bars,  # type: ignore[union-attr]
+        momentum_period=cfg.momentum_period,  # type: ignore[union-attr]
+        forward_horizon=forward_horizon,
+        step=(step or None),
+        min_symbols=min_symbols,
+    )
+
+    if as_json:
+        typer.echo(_json.dumps(result.as_dict()))
+        return
+    typer.echo("합성 점수 예측 성공률 (정보계수 IC):")
+    typer.echo(f"  평균 IC          : {result.mean_ic:+.4f}")
+    typer.echo(f"  IC 표준편차      : {result.ic_std:.4f}")
+    typer.echo(f"  t-통계량         : {result.t_stat:+.2f}")
+    typer.echo(f"  방향 적중률      : {result.hit_rate:.1%}")
+    typer.echo(f"  측정 시점 수     : {result.n_dates}")
+    typer.echo(f"  시점당 평균 종목 : {result.avg_symbols:.1f}")
+    typer.echo(f"  forward 수평선   : {result.forward_horizon} 거래일")
+    typer.echo(f"  판정             : {result.verdict}")
 
 
 @app.command("build-universe")
