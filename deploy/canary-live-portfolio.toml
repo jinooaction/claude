@@ -1,0 +1,61 @@
+# 스펙 039 — 라이브 캐너리 **포트폴리오** 설정 (고도화를 실거래에 올리는 보수적 시드).
+#
+# 운영자 원칙: "앞으로 항상 실거래 기반으로 고도화. 돈 못 벌면 의미 없다."
+#
+# 현재 실거래(라이브 캐너리)는 canary-live-rules.toml = 단순 3룰 qty=1(SPY 눌림목·MSFT
+# 골든크로스 등)이다. 스펙 032~038 의 고도화(포트폴리오 재조정·다요인·추세 필터·forward
+# 판정·칼마)는 전부 페이퍼였다. 이 파일은 그 고도화를 **소액 실거래**로 올리기 위한 보수적
+# 포트폴리오 설정이다 — `rebalance-once --mode live --confirm-live --portfolio <this>` 로
+# 실행된다.
+#
+# ⚠ 안전 설계 (왜 이렇게 보수적인가):
+#   - 라이브 거래 집합을 넓히지 않는다(헌법 II): 화이트리스트·유니버스를 기존 실거래 캐너리와
+#     동일한 SPY·MSFT·AAPL 로 유지. 새 종목에 실거래를 열지 않는다.
+#   - 단순 3룰 대신 **추세 필터로 방어되는 top-2 모멘텀 포트폴리오**: 추세 아래면 현금으로
+#     빠진다(드로다운 방어). 저회전(hold_replace).
+#   - global_exposure 60%·invested_fraction 0.6 으로 자본의 상당부를 현금 버퍼로 남긴다
+#     (미검증 전략에 전액 투입 금지). 추세 필터가 추가로 현금 비중을 키운다.
+#   - 자본(--capital)은 이 파일이 정하지 않는다. go-live 채널이 운영자가 지정한 소액을
+#     적용한다(헌법 X.4: 라이브 전환은 운영자 결정, 소액 캐너리).
+#   - 킬스위치: 스펙 014 손실 서킷 브레이커가 일손실·총낙폭 한도 초과 시 거래를 멈춘다.
+#   - K1 캡이 천장: 어떤 주문도 per-trade/per-symbol/global 캡을 못 넘는다(하향 전용 안전망).
+#
+# ⚠ 미검증 경고: 이 전략은 아직 forward 페이퍼로 충분히 검증되지 않았다(verdict=
+# INSUFFICIENT_DATA, ≈20 거래일 필요). 그래서 *소액* 라이브 캐너리(헌법 VI 2단계 = 소액
+# 실거래 검증 단계)로만 운용한다. forward-verdict + 칼마(스펙 035/038)가 `--mode live` 로
+# 이 실거래 트랙을 같은 잣대로 판정한다.
+
+[caps]
+per_trade_pct                  = 5.0
+per_symbol_pct                 = 25.0
+global_exposure_pct            = 60.0
+canary_capital_pct             = 5.0
+canary_min_duration_days       = 10
+canary_acceptance_drawdown_pct = 3.0
+
+[whitelist]
+# 기존 실거래 캐너리와 동일 — 라이브 거래 집합 무확대(헌법 II).
+symbols     = ["SPY", "MSFT", "AAPL"]
+accounts    = ["${KIS_ACCOUNT_NO}"]
+order_types = ["LIMIT"]
+sessions    = ["REGULAR"]
+
+[portfolio]
+id            = "live-canary-portfolio"
+universe      = ["SPY", "MSFT", "AAPL"]
+weights       = { momentum = "1.0", quality = "1.0", low_volatility = "0.5" }
+weight_scheme = "equal"             # "스마트" 최적화기가 단순 균등을 못 이겼음(REAL-DATA-FINDINGS)
+top_n         = 2
+rebalance_mode             = "hold_replace"   # 저회전: 순위 이탈만 청산, 승자 유지
+invested_fraction          = "0.6"            # 미검증 전략 — 현금 버퍼 크게
+rebalance_every_n_sessions = 21               # ≈ 월 1회
+lookback_bars              = 50
+momentum_period            = 30
+rebalance_threshold_pct    = "2.0"
+min_notional_usd           = "50"
+
+# 드로다운 방어 오버레이(스펙 036) — 추세 아래면 현금. 실거래 캐너리의 핵심 안전장치.
+[portfolio.trend_filter]
+method          = "sma"
+lookback        = 50
+on_insufficient = "hold"
