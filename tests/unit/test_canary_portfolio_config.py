@@ -25,7 +25,8 @@ def test_canary_portfolio_parses_and_has_absolute_momentum_gate():
     # 바닥(min_return) 미달이면 현금. "기대 안 되면 투자 안 함."
     assert cfg.trend_filter is not None
     assert cfg.trend_filter.method == "absolute_momentum"
-    assert cfg.trend_filter.lookback <= 100  # 인스턴스 ~100 일봉에서 활성
+    # 스펙 041 — 깊은 백필(--min-bars 300)로 6개월(120일) 절대 모멘텀 게이트가 활성.
+    assert cfg.trend_filter.lookback <= 252
     assert cfg.trend_filter.on_insufficient in ("hold", "cash")
     assert cfg.trend_filter.min_return_pct >= 0  # 기대수익 바닥(0 = 양수 모멘텀 요구)
     # 유니버스 대폭 확대(스펙 041 — 좁은 3~28종목 → 넓은 횡단면).

@@ -63,13 +63,13 @@ jobs:
           set +e
           port="${PORT:-22}"
           cfg="deploy/canary-portfolio.toml"; dbf="data/forward_trend.db"
-          # 전용 DB(첫 실행이면 backfill-bars 가 자동 마이그레이션 후 생성). 백필→재조정
-          # (현재 저장 바 유동성 상위 15 구성→상위 5 보유, 추세 게이트 적용)→NAV 스냅샷.
-          # 측정/페이퍼 전용 — 주문 0건, 돈 0 이동.
+          # 전용 DB(첫 실행이면 backfill-bars 가 자동 마이그레이션 후 생성). 깊은 백필
+          # (--min-bars 300, needy-first 120종목/실행)→재조정(유동성 상위 50 구성→모멘텀
+          # 120 + 절대 게이트로 상위 10 보유)→NAV 스냅샷. 측정/페이퍼 전용 — 주문 0건, 돈 0 이동.
           ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
               -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
               "cd /opt/auto-invest && \
-                 /usr/local/bin/uv run auto-invest backfill-bars --portfolio ${cfg} --max-symbols 250 --db ${dbf} --env-file .env --json && \
+                 /usr/local/bin/uv run auto-invest backfill-bars --portfolio ${cfg} --max-symbols 120 --min-bars 300 --db ${dbf} --env-file .env --json && \
                  /usr/local/bin/uv run auto-invest rebalance-once --portfolio ${cfg} --mode paper --capital ${CAPITAL} --construct-universe-top-n 50 --db ${dbf} --env-file .env --json && \
                  /usr/local/bin/uv run auto-invest nav-snapshot --mode paper --db ${dbf} --env-file .env --snapshot --format json" \
               > /tmp/prep_trend.log 2>&1
@@ -96,6 +96,31 @@ jobs:
           echo "--- verdict ---"; cat /tmp/verdict_trend.json
           echo "--- stderr ---"; cat /tmp/verdict_trend.err
 
+      - name: "예측 성공률(IC) — 최신 인스턴스 데이터로 실측 (스펙 041)"
+        id: ic_recent
+        if: always()
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          # 깊은 백필(min-bars 300)이 채운 *최신* 일봉으로 합성(모멘텀120) 점수의 IC 측정.
+          # 1달·분기 수평선. 오래된 데이터가 아니라 인스턴스의 현재 데이터 — 운영자 요구.
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "cd /opt/auto-invest && \
+                 echo '--- H=21 ---' && /usr/local/bin/uv run auto-invest signal-ic \
+                   --portfolio deploy/canary-portfolio.toml --db data/forward_trend.db \
+                   --forward-horizon 21 2>/dev/null; \
+                 echo '--- H=63 ---' && /usr/local/bin/uv run auto-invest signal-ic \
+                   --portfolio deploy/canary-portfolio.toml --db data/forward_trend.db \
+                   --forward-horizon 63 2>/dev/null" \
+              > /tmp/ic_recent.txt 2>&1
+          echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
+          cat /tmp/ic_recent.txt
+
       # ---- ARM B: 추세 필터 OFF (대조군) -----------------------------------
       - name: "Arm TREND-OFF — backfill + paper rebalance + NAV snapshot"
         id: prep_notrend
@@ -112,7 +137,7 @@ jobs:
           ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
               -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
               "cd /opt/auto-invest && \
-                 /usr/local/bin/uv run auto-invest backfill-bars --portfolio ${cfg} --max-symbols 250 --db ${dbf} --env-file .env --json && \
+                 /usr/local/bin/uv run auto-invest backfill-bars --portfolio ${cfg} --max-symbols 120 --min-bars 300 --db ${dbf} --env-file .env --json && \
                  /usr/local/bin/uv run auto-invest rebalance-once --portfolio ${cfg} --mode paper --capital ${CAPITAL} --construct-universe-top-n 50 --db ${dbf} --env-file .env --json && \
                  /usr/local/bin/uv run auto-invest nav-snapshot --mode paper --db ${dbf} --env-file .env --snapshot --format json" \
               > /tmp/prep_notrend.log 2>&1
