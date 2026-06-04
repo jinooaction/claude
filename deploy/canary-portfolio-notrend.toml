@@ -41,14 +41,14 @@ canary_min_duration_days       = 10
 canary_acceptance_drawdown_pct = 3.0
 
 [whitelist]
-symbols     = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "AVGO", "TSLA", "JPM", "V", "MA", "HD", "COST", "WMT", "PG", "KO", "JNJ", "UNH", "LLY", "MRK", "ABBV", "XOM", "CVX", "BAC", "DIS", "NFLX", "ORCL", "SPY"]
+symbols     = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "AVGO", "TSLA", "ORCL", "CRM", "ADBE", "AMD", "QCOM", "TXN", "IBM", "CSCO", "INTU", "AMAT", "MU", "NOW", "INTC", "ADI", "LRCX", "KLAC", "PANW", "NFLX", "DIS", "CMCSA", "TMUS", "VZ", "T", "WMT", "COST", "HD", "MCD", "NKE", "SBUX", "LOW", "PG", "KO", "PEP", "PM", "MDLZ", "CL", "TGT", "JPM", "BAC", "WFC", "GS", "MS", "C", "V", "MA", "AXP", "BLK", "SPGI", "SCHW", "UNH", "LLY", "JNJ", "ABBV", "MRK", "PFE", "TMO", "ABT", "DHR", "BMY", "AMGN", "GILD", "ELV", "ISRG", "MDT", "CVS", "XOM", "CVX", "COP", "CAT", "BA", "HON", "GE", "UPS", "RTX", "LMT", "DE", "UNP", "SPY", "QQQ", "LIN", "AMT"]
 accounts    = ["${KIS_ACCOUNT_NO}"]
 order_types = ["LIMIT"]
 sessions    = ["REGULAR"]
 
 [portfolio]
 id            = "forward-paper-canary-notrend"
-universe      = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "AVGO", "TSLA", "JPM", "V", "MA", "HD", "COST", "WMT", "PG", "KO", "JNJ", "UNH", "LLY", "MRK", "ABBV", "XOM", "CVX", "BAC", "DIS", "NFLX", "ORCL", "SPY"]
+universe      = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "AVGO", "TSLA", "ORCL", "CRM", "ADBE", "AMD", "QCOM", "TXN", "IBM", "CSCO", "INTU", "AMAT", "MU", "NOW", "INTC", "ADI", "LRCX", "KLAC", "PANW", "NFLX", "DIS", "CMCSA", "TMUS", "VZ", "T", "WMT", "COST", "HD", "MCD", "NKE", "SBUX", "LOW", "PG", "KO", "PEP", "PM", "MDLZ", "CL", "TGT", "JPM", "BAC", "WFC", "GS", "MS", "C", "V", "MA", "AXP", "BLK", "SPGI", "SCHW", "UNH", "LLY", "JNJ", "ABBV", "MRK", "PFE", "TMO", "ABT", "DHR", "BMY", "AMGN", "GILD", "ELV", "ISRG", "MDT", "CVS", "XOM", "CVX", "COP", "CAT", "BA", "HON", "GE", "UPS", "RTX", "LMT", "DE", "UNP", "SPY", "QQQ", "LIN", "AMT"]
 weights       = { momentum = "1.0", quality = "1.0", low_volatility = "0.5" }
 weight_scheme = "equal"
 top_n         = 5

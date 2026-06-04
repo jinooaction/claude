@@ -53,6 +53,11 @@ class TrendSpec:
     method: str = METHOD_SMA
     lookback: int = 200
     on_insufficient: str = ON_INSUFFICIENT_HOLD
+    # 절대 모멘텀(METHOD_ABSOLUTE_MOMENTUM)의 기대수익 바닥: lookback 후행수익률이 이
+    # 값보다 커야 보유한다(아니면 현금). 0 = "자기 수익이 양수여야 함"(고전 듀얼 모멘텀,
+    # Antonacci). 양수로 두면 더 엄격(예: 무위험 수익 위만). 상대 순위 1위라도 이 절대
+    # 바닥을 못 넘으면 사지 않는다 — "기대 안 되면 투자 안 함". sma 방식에선 무시.
+    min_return: Decimal = Decimal("0")
 
     def __post_init__(self) -> None:
         if self.method not in VALID_METHODS:
@@ -66,10 +71,11 @@ class TrendSpec:
 
 
 def above_trend(closes: Sequence[Decimal], spec: TrendSpec) -> bool | None:
-    """종가 시계열(오름차순)이 추세 위에 있는가. 데이터 부족이면 None (fail-safe).
+    """종가 시계열(오름차순)이 추세/절대 기대수익 바닥 위에 있는가. 부족이면 None.
 
     - sma: 마지막 종가 > 최근 lookback 종가 단순이동평균. lookback 개 미만이면 None.
-    - absolute_momentum: 마지막 종가 / lookback 전 종가 − 1 > 0. lookback+1 개 미만이면 None.
+    - absolute_momentum: (마지막 종가 / lookback 전 종가 − 1) > min_return. 즉 자기
+      후행수익률이 절대 바닥을 넘어야 True. lookback+1 개 미만이면 None.
     """
     n = len(closes)
     if spec.method == METHOD_SMA:
@@ -78,13 +84,13 @@ def above_trend(closes: Sequence[Decimal], spec: TrendSpec) -> bool | None:
         window = closes[-spec.lookback :]
         avg = sum(window, Decimal("0")) / Decimal(len(window))
         return closes[-1] > avg
-    # absolute_momentum
+    # absolute_momentum — 절대 기대수익 바닥(min_return) 위라야 보유.
     if n < spec.lookback + 1:
         return None
     past = closes[-1 - spec.lookback]
     if past <= 0:
         return None
-    return (closes[-1] / past - Decimal("1")) > 0
+    return (closes[-1] / past - Decimal("1")) > spec.min_return
 
 
 def _ordered_closes(by_date: Mapping[date, Decimal]) -> list[Decimal]:

@@ -298,15 +298,20 @@ class TrendFilterConfig(BaseModel):
     않으므로 합이 1 미만이 되고 그 차이는 현금 버퍼(방어)다. 설정을 생략하면(None)
     가중치는 손도 안 댄다(기존 동작 byte 동일).
 
-    method: "sma"(마지막 종가 > lookback SMA) | "absolute_momentum"(lookback 후행수익률>0).
+    method: "sma"(마지막 종가 > lookback SMA) | "absolute_momentum"(lookback 후행수익률>min_return).
     lookback: 추세 판정 기간(일봉 수). 200 ≈ 약 10개월(고전 추세추종 기본).
     on_insufficient: 데이터 부족 시 "hold"(유지) | "cash"(보수적 현금 이탈).
+    min_return_pct: absolute_momentum 의 기대수익 바닥(%). 후행수익률이 이 값보다 커야
+      보유한다(아니면 현금). 0 = 자기 수익 양수여야 함(듀얼 모멘텀). 양수면 더 엄격
+      (예: 무위험 위만). **상대 순위 1위라도 이 절대 바닥 미달이면 안 산다** — 후보가
+      전부 나쁠 때 "그나마 1위"를 사는 결함을 막는다.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
     method: Literal["sma", "absolute_momentum"] = "sma"
     lookback: int = Field(default=200, ge=2)
     on_insufficient: Literal["hold", "cash"] = "hold"
+    min_return_pct: Decimal = Field(default=Decimal("0"))
 
 
 class PortfolioRebalanceConfig(BaseModel):
