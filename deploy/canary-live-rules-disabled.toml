@@ -1,0 +1,91 @@
+# 라이브 캐너리 룰셋 — **전체 비활성** (스펙 040: 룰 워커 → 포트폴리오 전략 교체용).
+#
+# 운영자 결정(2026-06-04, (A) 룰 워커 끄고 포트폴리오 전략으로 교체): 같은 실계좌에 룰
+# 워커와 포트폴리오 재조정을 동시에 돌리면 충돌한다(포트폴리오가 워커 포지션을 청산). 그래서
+# 룰 워커를 비활성한다 — 워커는 계속 돌지만(백필·체결동기화·헬스) **룰 주문은 0건**이고,
+# 실거래는 rebalance-live-canary.yml(추세 방어 포트폴리오)이 담당한다. 한 실계좌 전략 하나.
+#
+# go-live-canary.sh 가 automation/go-live-canary.request 의 rules_path 를 이 파일로 바꿔
+# 서버 .env(AUTO_INVEST_RULES)에 적용한다. 캡·화이트리스트는 원본과 동일(안전 경계 유지),
+# 모든 [[rules]] 는 enabled = false.
+
+[caps]
+per_trade_pct                  = 5.0
+per_symbol_pct                 = 20.0
+global_exposure_pct            = 80.0
+canary_capital_pct             = 5.0
+canary_min_duration_days       = 10
+canary_acceptance_drawdown_pct = 3.0
+
+[whitelist]
+symbols     = ["AAPL", "MSFT", "SPY"]
+accounts    = ["${KIS_ACCOUNT_NO}"]
+order_types = ["LIMIT"]
+sessions    = ["REGULAR"]
+
+# 전부 비활성 — 룰 워커는 주문을 내지 않는다(포트폴리오 전략이 거래).
+[[rules]]
+id       = "spy-dip-1"
+symbol   = "SPY"
+stage    = "CANARY"
+priority = 10
+enabled  = false
+
+  [rules.trigger]
+  kind             = "price"
+  direction        = "<="
+  threshold        = 540.00
+  cooldown_seconds = 600
+
+  [rules.action]
+  side        = "BUY"
+  order_type  = "LIMIT"
+  qty         = 1
+  limit_price = "trigger - 0.10"
+
+[[rules]]
+id       = "msft-ema-1"
+symbol   = "MSFT"
+stage    = "CANARY"
+priority = 20
+enabled  = false
+
+  [rules.trigger]
+  kind             = "indicator"
+  indicator        = "EMA_CROSS"
+  timeframe        = "1d"
+  cooldown_seconds = 86400
+
+    [rules.trigger.params]
+    fast_period = 20
+    slow_period = 50
+    direction   = "fast_above_slow"
+
+  [rules.action]
+  side        = "BUY"
+  order_type  = "LIMIT"
+  qty         = 1
+  limit_price = "last_close * 1.001"
+
+[[rules]]
+id       = "aapl-rsi-1"
+symbol   = "AAPL"
+stage    = "CANARY"
+priority = 30
+enabled  = false
+
+  [rules.trigger]
+  kind             = "indicator"
+  indicator        = "RSI_BELOW"
+  timeframe        = "1d"
+  cooldown_seconds = 86400
+
+    [rules.trigger.params]
+    period    = 14
+    threshold = 30
+
+  [rules.action]
+  side        = "BUY"
+  order_type  = "LIMIT"
+  qty         = 1
+  limit_price = "last_close * 1.001"

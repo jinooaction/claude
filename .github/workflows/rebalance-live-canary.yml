@@ -21,6 +21,10 @@ name: Live canary portfolio rebalance (guarded, real money)
 # 풀라이브 아님. 결과는 사이드카 automation/rebalance-live-canary-last-run 로 발행.
 
 on:
+  schedule:
+    # 미국 정규장 중(평일 15:00 UTC ≈ 10:00 ET 오전 유동성) 실거래 재조정. 실주문은 *스케줄*
+    # 실행 + 센티넬 armed:true 일 때만 — 무장 머지(push)는 미리보기만(아래 LIVE 스텝 게이트).
+    - cron: "0 15 * * 1-5"
   workflow_dispatch:
     inputs:
       capital:
@@ -116,9 +120,15 @@ jobs:
           echo "--- preview ---"; cat /tmp/live_preview.json
           echo "--- stderr ---"; cat /tmp/live_preview.err
 
-      - name: LIVE rebalance — REAL ORDERS (only when sentinel armed=true)
+      - name: LIVE rebalance — REAL ORDERS (armed + schedule/dispatch only, never on arm-push)
         id: live
-        if: steps.gate.outputs.armed == 'true' && steps.gate.outputs.blocked != 'true'
+        # 실주문 조건: 센티넬 armed=true + 자본 한도 통과 + **push 이벤트 아님**.
+        # 무장 머지(push)는 미리보기만 — 실주문은 시장시간 스케줄(또는 수동 dispatch)에서만
+        # 나가, 장 마감 시간대 무장 머지가 실주문을 내는 일을 막는다.
+        if: >-
+          steps.gate.outputs.armed == 'true' &&
+          steps.gate.outputs.blocked != 'true' &&
+          github.event_name != 'push'
         env:
           HOST: ${{ secrets.VULTR_SSH_HOST }}
           USER: ${{ secrets.VULTR_SSH_USER }}

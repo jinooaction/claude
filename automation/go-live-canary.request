@@ -22,8 +22,12 @@
 #   ($12k + 축소 룰셋)로 재무장. 멱등.
 requested_by: mason
 requested_at_utc: 2026-05-30
-run_seq: 5
+run_seq: 6
 stage: live-canary
 capital_usd: 12000
-rules_path: deploy/canary-live-rules.toml
+rules_path: deploy/canary-live-rules-disabled.toml
 authority: constitution X.4 (v4.0.0) operator-instructed guarded go-live
+# 재실행 #6 (2026-06-04, 운영자 (A) 룰 워커 끄고 포트폴리오 전략으로 교체):
+#   rules_path 를 canary-live-rules-disabled.toml(전체 enabled=false)로 바꿔 룰 워커가
+#   주문을 내지 않게 한다. 실거래는 rebalance-live-canary.yml(추세 방어 포트폴리오)이 담당.
+#   한 실계좌 전략 하나 — 룰 워커/포트폴리오 충돌 해소. 여전히 CANARY, 풀라이브 아님. 멱등.
