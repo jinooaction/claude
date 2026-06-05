@@ -31,6 +31,7 @@ from auto_invest.analytics.growth_optimal import (
 from auto_invest.analytics.multi_asset_trend import (
     diversified_trend_factors,
     equity_trend_factors,
+    risk_parity_diversified_factors,
 )
 from auto_invest.analytics.risk_managed_beta import parse_shiller
 
@@ -40,15 +41,20 @@ _PERIODS = [("전체 1871~현재", 1871), ("현대 1950~현재", 1950), ("최근
 _LEVERAGES = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0]
 
 
-def _run(all_rows, window: int, ew: float, bw: float, dd_budget: float) -> list[dict]:
+def _run(all_rows, window: int, ew: float, bw: float, dd_budget: float,
+         risk_parity: bool = False) -> list[dict]:
     records = []
     for label, start_year in _PERIODS:
         rows = [r for r in all_rows if int(r.date[:4]) >= start_year]
         if len(rows) < 24:
             continue
         rf = risk_free_monthly(rows)
-        div = diversified_trend_factors(
-            rows, window=window, equity_weight=ew, bond_weight=bw
+        div = (
+            risk_parity_diversified_factors(rows, window=window)
+            if risk_parity
+            else diversified_trend_factors(
+                rows, window=window, equity_weight=ew, bond_weight=bw
+            )
         )
         curve = growth_curve(div, rf, leverages=_LEVERAGES)
         opt = growth_optimal(curve)
@@ -128,6 +134,8 @@ def main() -> int:
     ap.add_argument("--bond-weight", type=float, default=0.5)
     ap.add_argument("--dd-budget", type=float, default=30.0, help="감내 최대낙폭(%) 예산.")
     ap.add_argument("--compare", action="store_true", help="단일 주식 vs 분산 레버리지 비교.")
+    ap.add_argument("--risk-parity", action="store_true",
+                    help="고정 50/50 대신 역변동성(리스크 패리티) 가중 분산.")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args()
 
@@ -141,7 +149,7 @@ def main() -> int:
                               args.dd_budget)
     else:
         result = _run(all_rows, args.window, args.equity_weight, args.bond_weight,
-                      args.dd_budget)
+                      args.dd_budget, risk_parity=args.risk_parity)
 
     if args.json:
         print(json.dumps(result, ensure_ascii=False))
