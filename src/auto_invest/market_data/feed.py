@@ -26,6 +26,42 @@ from auto_invest.market_data.store import PriceBar, get_bars, insert_bar
 DEFAULT_BACKFILL_EXCHANGES: tuple[str, ...] = ("NAS", "NYS", "AMS")
 
 
+def select_backfill_symbols(
+    symbols: list[str],
+    counts: dict[str, int],
+    *,
+    max_symbols: int = 0,
+    min_bars: int = 0,
+    order: str = "needy",
+) -> list[str]:
+    """스펙 041 — 매 실행 백필할 종목을 *순서대로* 고른다(대형 유니버스 타임아웃 회피용).
+
+    ``order``:
+      - ``"needy"`` (기본, breadth): 바가 가장 적은(0 포함) 종목 먼저 → 여러 실행에 걸쳐
+        유니버스 전체가 *고르게* 채워진다. 처음 커버리지를 넓힐 때.
+      - ``"deepen"`` (depth, 유의성↑): 이미 바가 있고(>0) 아직 ``min_bars`` 미만인 종목을
+        *바 많은 것 먼저* 깊게 채운다. IC 측정의 비겹침 시점 수(시간축)는 핵심 종목의 *바
+        깊이*가 좌우하므로, 0바 신규를 늘리는 것보다 *시드된 핵심을 깊게* 파야 t-통계가
+        단단해진다. 깊일 종목이 없으면(전부 이미 깊음) needy 로 자연 폴백해 신규를 시드한다.
+
+    동률은 심볼명으로 결정적 정렬. ``max_symbols`` 0/음수면 전부(재정렬만).
+    """
+    if order == "deepen":
+        if min_bars > 0:
+            seeded = [s for s in symbols if 0 < counts.get(s, 0) < min_bars]
+        else:
+            seeded = [s for s in symbols if counts.get(s, 0) > 0]
+        if seeded:
+            ordered = sorted(seeded, key=lambda s: (-counts.get(s, 0), s))
+        else:  # 핵심이 전부 이미 깊음 → 신규 시드(needy)로 폴백.
+            ordered = sorted(symbols, key=lambda s: (counts.get(s, 0), s))
+    else:
+        ordered = sorted(symbols, key=lambda s: (counts.get(s, 0), s))
+    if max_symbols and max_symbols > 0:
+        return ordered[:max_symbols]
+    return ordered
+
+
 async def _paginate_deep(
     client: ResilientClient,
     *,

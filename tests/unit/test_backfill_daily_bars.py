@@ -5,9 +5,32 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from auto_invest.market_data.feed import backfill_daily_bars
+from auto_invest.market_data.feed import backfill_daily_bars, select_backfill_symbols
 from auto_invest.market_data.store import bar_summary
 from auto_invest.persistence import db
+
+
+def test_select_needy_first_fewest_bars():
+    counts = {"AAPL": 300, "MSFT": 0, "NVDA": 50}
+    syms = ["AAPL", "MSFT", "NVDA", "TSLA"]  # TSLA 미존재 → 0
+    got = select_backfill_symbols(syms, counts, max_symbols=2, order="needy")
+    assert got == ["MSFT", "TSLA"]  # 0바 둘(이름순 타이브레이크)
+
+
+def test_select_deepen_prefers_seeded_below_min():
+    counts = {"AAPL": 300, "MSFT": 0, "NVDA": 900, "AMD": 300}
+    syms = ["AAPL", "MSFT", "NVDA", "AMD"]
+    got = select_backfill_symbols(syms, counts, max_symbols=3, min_bars=1000, order="deepen")
+    # 0바(MSFT) 제외, 바 많은 것 먼저: NVDA(900) > AAPL(300)=AMD(300) → 이름순
+    assert got == ["NVDA", "AAPL", "AMD"]
+
+
+def test_select_deepen_falls_back_to_needy_when_all_deep():
+    counts = {"AAPL": 1000, "MSFT": 0, "NVDA": 1200}
+    syms = ["AAPL", "MSFT", "NVDA"]
+    # 시드된 핵심이 전부 min_bars 이상 → needy 폴백(0바 신규 시드)
+    got = select_backfill_symbols(syms, counts, max_symbols=1, min_bars=1000, order="deepen")
+    assert got == ["MSFT"]
 
 
 class _Resp:
