@@ -2712,6 +2712,12 @@ def backfill_bars_cmd(
         help="스펙 041 — 종목당 확보할 최소 *최신* 일봉 수(0=한 페이지 ~100). KIS 기준일을"
         " 과거로 돌려 페이지네이션해 깊게 채운다. 6~12개월 모멘텀엔 ≥252 필요(예: 300).",
     ),
+    order: str = typer.Option(
+        "needy",
+        "--order",
+        help="스펙 041 — 백필 순서. needy=바 적은 것 먼저(breadth, 커버리지 확대). "
+        "deepen=이미 바 있는 핵심 종목을 먼저 깊게(depth, IC 비겹침 시점↑ → 유의성↑).",
+    ),
     as_json: bool = typer.Option(False, "--json", help="Emit JSON instead of text."),
 ) -> None:
     """Fetch recent daily OHLCV bars from KIS into price_bars (read-only; no orders).
@@ -2758,18 +2764,20 @@ def backfill_bars_cmd(
     excds = [e.strip().upper() for e in exchanges.split(",") if e.strip()]
     _require_clean_migrations(db_path, allow_apply=True)
 
-    # 스펙 041 — needy-first 바운딩: 대형 유니버스에서 매 실행 종목 수를 제한할 때, 바가
-    # 가장 적은(또는 0인) 종목을 우선 채운다. 그러면 여러 실행에 걸쳐 유니버스 전체가
-    # 고르게 채워진다(맨 앞 N개만 영원히 채우는 게 아니라). 동률은 심볼명으로 결정적 정렬.
-    if max_symbols and max_symbols > 0 and len(syms) > max_symbols:
+    # 스펙 041 — 백필 종목 선택/순서(needy=breadth, deepen=depth). 대형 유니버스에서 매 실행
+    # 종목 수를 제한(타임아웃 회피)하고, deepen 은 이미 시드된 핵심을 깊게 파 IC 유의성을 올린다.
+    if (max_symbols and max_symbols > 0 and len(syms) > max_symbols) or order == "deepen":
         from auto_invest.market_data import store as _store
+        from auto_invest.market_data.feed import select_backfill_symbols
 
         _cnt_conn = db.get_connection(db_path)
         try:
             counts = _store.bar_counts(_cnt_conn, symbols=syms, timeframe="1d")
         finally:
             _cnt_conn.close()
-        syms = sorted(syms, key=lambda s: (counts.get(s, 0), s))[:max_symbols]
+        syms = select_backfill_symbols(
+            syms, counts, max_symbols=max_symbols, min_bars=min_bars, order=order
+        )
 
     async def _run() -> list[dict]:
         out: list[dict] = []
