@@ -25,6 +25,7 @@ from decimal import Decimal
 from auto_invest.backtest.metrics import max_drawdown_pct
 from auto_invest.backtest.significance import probabilistic_sharpe_ratio
 from auto_invest.portfolio.edge_verdict import calmar_ratio
+from auto_invest.strategy.sizing import realized_volatility, volatility_scale
 from auto_invest.strategy.trend import METHOD_SMA, TrendSpec, above_trend
 
 MONTHS_PER_YEAR = 12
@@ -437,6 +438,154 @@ def compare_with_costs(
     )
 
 
+def vol_target_exposure(
+    rows: list[MonthlyRow],
+    in_market: list[bool],
+    *,
+    window: int = 12,
+    target_annual_vol: float = 0.12,
+    max_scale: float = 1.0,
+) -> list[float]:
+    """슬라이스 4 — 유효 노출 e_t ∈ [0, max_scale]: 추세 아래면 0, 위면 변동성 타깃 스케일.
+
+    고변동 구간에서 노출을 줄여(하향 전용, max_scale=1 = 무레버리지) 위험을 매끈하게 한다.
+    운영 코드 `sizing.realized_volatility`·`volatility_scale` 재사용(같은 잣대). 미래 누출 0:
+    period i 의 노출은 `prices[:i+1]`(직전 월까지)의 후행 변동성으로만 정한다. 이력 부족이면
+    노출 1(타깃 불가 → 추세 신호만 따름).
+    """
+    prices = [Decimal(str(r.price)) for r in rows]
+    target_m = Decimal(str(target_annual_vol)) / Decimal(MONTHS_PER_YEAR).sqrt()
+    max_s = Decimal(str(max_scale))
+    exposure: list[float] = []
+    for i in range(len(in_market)):
+        if not in_market[i]:
+            exposure.append(0.0)
+            continue
+        recent = prices[max(0, i + 1 - window) : i + 1]
+        rv = realized_volatility(recent)
+        if rv is None:
+            exposure.append(float(max_s))  # 이력 부족 → 기본 노출(추세만 따름)
+        else:
+            exposure.append(float(volatility_scale(rv, target_m, max_scale=max_s)))
+    return exposure
+
+
+def combined_factors(
+    market: list[float], cash: list[float], exposure: list[float]
+) -> list[float]:
+    """유효 노출 e 로 자산/현금 혼합한 월간 팩터: e*시장 + (1-e)*현금."""
+    if not (len(market) == len(cash) == len(exposure)):
+        raise ValueError("length mismatch")
+    return [e * m + (1.0 - e) * c for m, c, e in zip(market, cash, exposure, strict=True)]
+
+
+def apply_exposure_costs(
+    market: list[float], cash: list[float], exposure: list[float], cost_bps: float
+) -> list[float]:
+    """노출 변화량 |Δe| 에 거래비용을 매긴 순 팩터(연속 리밸런싱 회전 반영).
+
+    이진 추세(0↔1)의 전환 비용을 일반화한다 — 변동성 타깃은 매월 노출을 조금씩 바꾸므로
+    회전이 늘고, 그 비용을 정직히 |e_t − e_{t-1}| × cost 로 문다(추세만일 때와 동일 한도).
+    """
+    cost_rate = cost_bps / 10_000.0
+    net: list[float] = []
+    prev_e = 0.0
+    for m, c, e in zip(market, cash, exposure, strict=True):
+        f = e * m + (1.0 - e) * c
+        f *= 1.0 - cost_rate * abs(e - prev_e)
+        net.append(f)
+        prev_e = e
+    return net
+
+
+@dataclass(frozen=True)
+class VolTargetComparison:
+    """슬라이스 4 — 추세 위에 변동성 타깃을 얹으면 위험조정 수익이 더 오르는가."""
+
+    buy_hold_net: LegStats
+    trend_net: LegStats  # 추세만(이진 노출)
+    trend_vol_net: LegStats  # 추세 + 변동성 타깃
+    avg_exposure: float  # 추세+변동성 타깃의 평균 노출
+    window: int
+    target_annual_vol: float
+    cost_bps: float
+    verdict: str
+    reason: str
+
+    def as_dict(self) -> dict:
+        return {
+            "window": self.window,
+            "target_annual_vol": self.target_annual_vol,
+            "cost_bps": self.cost_bps,
+            "avg_exposure": round(self.avg_exposure, 3),
+            "verdict": self.verdict,
+            "reason": self.reason,
+            "buy_hold_net": self.buy_hold_net.as_dict(),
+            "trend_net": self.trend_net.as_dict(),
+            "trend_vol_net": self.trend_vol_net.as_dict(),
+        }
+
+
+def _classify_vol(trend: LegStats, trend_vol: LegStats) -> tuple[str, str]:
+    """변동성 타깃이 추세 위에 *위험조정* 가치를 더하는가: 샤프↑ 그리고 칼마↑ 면 추가 가치."""
+    sharpe_up = trend_vol.sharpe > trend.sharpe
+    calmar_up = (
+        trend.calmar is not None
+        and trend_vol.calmar is not None
+        and trend_vol.calmar > trend.calmar
+    )
+    if sharpe_up and calmar_up:
+        return (
+            "VOL_TARGET_ADDS",
+            f"샤프 {trend.sharpe:.2f}→{trend_vol.sharpe:.2f}, "
+            f"칼마 {(trend.calmar or 0):.2f}→{(trend_vol.calmar or 0):.2f}",
+        )
+    return (
+        "NO_ADDITIONAL_BENEFIT",
+        f"샤프 {trend.sharpe:.2f}→{trend_vol.sharpe:.2f}, "
+        f"칼마 {(trend.calmar or 0):.2f}→{(trend_vol.calmar or 0):.2f}(추가 가치 미미)",
+    )
+
+
+def compare_with_vol_target(
+    rows: list[MonthlyRow],
+    *,
+    window: int = 10,
+    vol_window: int = 12,
+    target_annual_vol: float = 0.12,
+    cost_bps: float = 10.0,
+) -> VolTargetComparison:
+    """추세만 vs 추세+변동성 타깃 — 변동성 타깃이 위험조정 수익을 더 올리는지(슬라이스 4)."""
+    market = market_total_return_factors(rows)
+    cash = cash_factors(rows)
+    in_mkt = trend_in_market(rows, window)
+    all_in = [True] * len(in_mkt)
+    exposure = vol_target_exposure(
+        rows, in_mkt, window=vol_window, target_annual_vol=target_annual_vol
+    )
+
+    bh_net = summarize(apply_cost_model(market, cash, all_in, CostModel(cost_bps, 0.0)))
+    tr_net = summarize(
+        apply_cost_model(market, cash, in_mkt, CostModel(cost_bps, 0.0)), in_market=in_mkt
+    )
+    tv_net_factors = apply_exposure_costs(market, cash, exposure, cost_bps)
+    tv_net = summarize(tv_net_factors, in_market=[e > 0 for e in exposure])
+    avg_exp = sum(exposure) / len(exposure) if exposure else 0.0
+
+    verdict, reason = _classify_vol(tr_net, tv_net)
+    return VolTargetComparison(
+        buy_hold_net=bh_net,
+        trend_net=tr_net,
+        trend_vol_net=tv_net,
+        avg_exposure=avg_exp,
+        window=window,
+        target_annual_vol=target_annual_vol,
+        cost_bps=cost_bps,
+        verdict=verdict,
+        reason=reason,
+    )
+
+
 __all__ = [
     "Comparison",
     "CostModel",
@@ -444,8 +593,13 @@ __all__ = [
     "LegStats",
     "MonthlyRow",
     "TurnoverStats",
+    "VolTargetComparison",
     "apply_cost_model",
+    "apply_exposure_costs",
+    "combined_factors",
     "compare_with_costs",
+    "compare_with_vol_target",
+    "vol_target_exposure",
     "count_switches",
     "turnover_stats",
     "cash_factors",
