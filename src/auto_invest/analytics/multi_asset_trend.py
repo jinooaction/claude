@@ -277,6 +277,38 @@ def compare_diversified_trend(
     )
 
 
+def diversified_trend_factors(
+    rows: list[MonthlyRow],
+    *,
+    window: int = 10,
+    equity_weight: float = 0.5,
+    bond_weight: float = 0.5,
+    bond_maturity_years: int = DEFAULT_BOND_MATURITY_YEARS,
+) -> list[float]:
+    """분산 추세(주식추세+채권추세) 월간 그로스 팩터 스트림(길이 N-1).
+
+    `compare_diversified_trend` 와 같은 계산이지만 LegStats 요약이 아니라 *원시 팩터 스트림*을
+    돌려준다 — 스펙 044 성장 최적 레버리지가 이 스트림에 레버리지를 얹어 복리 성장률을 잰다.
+    """
+    eq_market = market_total_return_factors(rows)
+    cash = cash_factors(rows)
+    bond = bond_total_return_factors(rows, maturity_years=bond_maturity_years)
+    bond_index = equity_curve(bond)
+    eq_in = trend_in_market(rows, window)
+    bond_in = sma_in_market(bond_index, window)
+    eq_sleeve = sleeve_factors(eq_market, cash, eq_in)
+    bond_sleeve = sleeve_factors(bond, cash, bond_in)
+    return blend([(equity_weight, eq_sleeve), (bond_weight, bond_sleeve)])
+
+
+def equity_trend_factors(rows: list[MonthlyRow], *, window: int = 10) -> list[float]:
+    """단일 주식 추세(스펙 042) 월간 그로스 팩터 스트림(길이 N-1) — 레버리지 비교용."""
+    eq_market = market_total_return_factors(rows)
+    cash = cash_factors(rows)
+    eq_in = trend_in_market(rows, window)
+    return sleeve_factors(eq_market, cash, eq_in)
+
+
 def correlation(a: list[float], b: list[float]) -> float | None:
     """두 팩터(또는 수익) 시계열의 피어슨 상관 — 분산 효과의 근거를 정직히 드러낸다.
 
@@ -305,6 +337,8 @@ __all__ = [
     "carry_forward_rates",
     "compare_diversified_trend",
     "correlation",
+    "diversified_trend_factors",
+    "equity_trend_factors",
     "sleeve_factors",
     "sma_in_market",
 ]
