@@ -86,13 +86,19 @@
 
 1. **forward 페이퍼 트랙 실적**: 추세 베타 arm(`deploy/risk-managed-beta-portfolio.toml`)을
    forward 페이퍼로 굴려 우리 KIS 체결로 N개월 누적 → 인덱스 검증과 일치하는지 확인.
+   **(2026-06-05 배선 완료) `rebalance-paper-forward.yml` 에 ARM C(위험관리 베타, 전용 DB
+   `forward_rmbeta.db`)로 추가됨 — 다음 예약 실행(평일 22:30 UTC)부터 자동 누적.** 격리(전용
+   DB + `set +e` + `if: always()`)라 기존 ARM A/B 를 못 깨뜨린다. ⚠ 워커측 실행은 컨테이너에서
+   검증 불가 — 첫 실행 후 사이드카 `automation/rebalance-paper-forward-last-run:LAST_RUN.md`
+   의 RISK-MANAGED-BETA 판정으로 확인.
 2. **forward-verdict + 칼마(스펙 035/038)**: 그 트랙이 단순 보유 대비 위험조정 우위를 자동 판정
-   (보수적 fail-safe — 모르면 EDGE 선언 안 함).
+   (보수적 fail-safe — 모르면 EDGE 선언 안 함). NAV 가 충분히(≈20+ 거래일) 쌓일 때까지는
+   INSUFFICIENT_DATA 가 정상.
 3. **운영자 명시 지시**: 위 둘이 충족돼도 라이브 전환은 운영자 결정(자동 아님).
 4. **소액·풀캡**: 첫 라이브는 소액 캐너리 + 포지션 캡 전부 적용(헌법 VI 2단계).
 
-**현재 상태: 1번 미시작(운영자 인프라 단계). 그래서 라이브 무장 해제 유지가 옳다.** 다음 즉시
-액션은 1번을 까는 것 — 단, 그것도 돈 0(페이퍼)이며, 실제 돈은 2·3 충족 후 운영자 게이트.
+**현재 상태: 1번 배선됨(첫 실행 대기), 2~4 미충족. 그래서 라이브 무장 해제 유지가 옳다.**
+확신은 forward 실적이 쌓이며 *벌어야* 한다 — 이제 그 트랙이 돌기 시작한다(돈 0, 페이퍼).
 
 ---
 

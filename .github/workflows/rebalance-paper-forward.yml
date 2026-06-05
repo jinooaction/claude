@@ -166,6 +166,54 @@ jobs:
           echo "--- verdict ---"; cat /tmp/verdict_notrend.json
           echo "--- stderr ---"; cat /tmp/verdict_notrend.err
 
+      # ---- ARM C: 위험관리 베타 (추세 게이트한 광범위 베타, 스펙 042) ---------
+      # 종목 선택(ARM A/B)이 아니라 *베타의 자본 방어* — SPY·QQQ 를 각자 10개월(≈200일) 추세
+      # 위일 때만 보유, 아래면 현금. 스펙 042 에서 1871~현재(대공황 포함) 검증된 엣지를 우리 KIS
+      # 체결로 forward 페이퍼 누적해 "확신을 벌기" 위함(운영자 2026-06-05). 전용 DB 로 격리되고
+      # 각 스텝이 set +e + if:always() 라 ARM A/B 를 절대 못 깨뜨린다. QQQ 백필이 실패해도 SPY
+      # 만으로 추세 게이트가 동작한다(graceful degrade). PAPER 전용 — 실주문 0건, 돈 0 이동.
+      - name: "Arm RISK-MANAGED-BETA — backfill + paper rebalance + NAV snapshot"
+        id: prep_rmbeta
+        if: always()
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+          CAPITAL: ${{ github.event.inputs.capital || '12000' }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          cfg="deploy/risk-managed-beta-portfolio.toml"; dbf="data/forward_rmbeta.db"
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "cd /opt/auto-invest && \
+                 /usr/local/bin/uv run auto-invest backfill-bars --portfolio ${cfg} --max-symbols 120 --min-bars 1000 --order deepen --db ${dbf} --env-file .env --json && \
+                 /usr/local/bin/uv run auto-invest rebalance-once --portfolio ${cfg} --mode paper --capital ${CAPITAL} --db ${dbf} --env-file .env --json && \
+                 /usr/local/bin/uv run auto-invest nav-snapshot --mode paper --db ${dbf} --env-file .env --snapshot --format json" \
+              > /tmp/prep_rmbeta.log 2>&1
+          echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
+          cat /tmp/prep_rmbeta.log
+
+      - name: "Arm RISK-MANAGED-BETA — forward edge verdict (spec 035)"
+        id: verdict_rmbeta
+        if: always()
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest forward-verdict \
+                 --mode paper --portfolio deploy/risk-managed-beta-portfolio.toml \
+                 --db data/forward_rmbeta.db --format json" \
+              > /tmp/verdict_rmbeta.json 2>/tmp/verdict_rmbeta.err
+          echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
+          echo "--- verdict ---"; cat /tmp/verdict_rmbeta.json
+          echo "--- stderr ---"; cat /tmp/verdict_rmbeta.err
+
       - name: Publish A/B tournament to sidecar branch
         if: always()
         env:
@@ -174,6 +222,8 @@ jobs:
           VERDICT_TREND_EXIT: ${{ steps.verdict_trend.outputs.ssh_exit }}
           PREP_NOTREND_EXIT: ${{ steps.prep_notrend.outputs.ssh_exit }}
           VERDICT_NOTREND_EXIT: ${{ steps.verdict_notrend.outputs.ssh_exit }}
+          PREP_RMBETA_EXIT: ${{ steps.prep_rmbeta.outputs.ssh_exit }}
+          VERDICT_RMBETA_EXIT: ${{ steps.verdict_rmbeta.outputs.ssh_exit }}
         run: |
           set -uo pipefail
           BRANCH=automation/rebalance-paper-forward-last-run
@@ -197,6 +247,8 @@ jobs:
             echo "| TREND-ON verdict ssh_exit | ${VERDICT_TREND_EXIT:-?} |"
             echo "| TREND-OFF prep ssh_exit | ${PREP_NOTREND_EXIT:-?} |"
             echo "| TREND-OFF verdict ssh_exit | ${VERDICT_NOTREND_EXIT:-?} |"
+            echo "| RISK-MANAGED-BETA prep ssh_exit | ${PREP_RMBETA_EXIT:-?} |"
+            echo "| RISK-MANAGED-BETA verdict ssh_exit | ${VERDICT_RMBETA_EXIT:-?} |"
             echo ""
             echo "## 🧭 판정 — 추세 필터 ON (drawdown 방어 오버레이)"
             echo ""
@@ -216,6 +268,17 @@ jobs:
             echo "> 두 판정을 나란히 비교: ON 의 max_drawdown_pct·sharpe·excess 가 OFF 보다"
             echo "> 나으면 추세 필터가 *실제로* 도움이 된다는 격리된 증거다."
             echo ""
+            echo "## 🛡️ 판정 — 위험관리 베타 (추세 게이트 광범위 베타, 스펙 042)"
+            echo ""
+            echo "> SPY·QQQ 를 10개월 추세 위일 때만 보유(아래면 현금). 종목 선택이 아니라 베타의"
+            echo "> 자본 방어. 우리 KIS 체결로 forward 실적을 쌓아 *확신을 번다*(운영자 2026-06-05)."
+            echo "> INSUFFICIENT_DATA 면 NAV 관측이 더 쌓여야 함(정상). 200일 미만이면 추세 미확정 →"
+            echo "> on_insufficient=cash 라 현금 보유(보수적). 라이브 전환은 운영자 게이트(헌법 X.4)."
+            echo ""
+            echo '```json'
+            cat /tmp/verdict_rmbeta.json 2>/dev/null || echo '{}'
+            echo '```'
+            echo ""
             echo "## TREND-ON 준비 로그 (backfill → rebalance → nav-snapshot)"
             echo ""
             echo '```'
@@ -226,6 +289,12 @@ jobs:
             echo ""
             echo '```'
             cat /tmp/prep_notrend.log 2>/dev/null || echo '(none)'
+            echo '```'
+            echo ""
+            echo "## RISK-MANAGED-BETA 준비 로그 (backfill → rebalance → nav-snapshot)"
+            echo ""
+            echo '```'
+            cat /tmp/prep_rmbeta.log 2>/dev/null || echo '(none)'
             echo '```'
           } > LAST_RUN.md
           git checkout --orphan publish

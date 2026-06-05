@@ -28,7 +28,12 @@
   `strategy.trend.above_trend`(sma)로 신호를 만들어 **연구 신호와 100% 일치 + 같은 방어 재현**
   (검증된 엣지가 라이브 경로에 그대로 실림을 테스트로 보증). ② 거래수단 배선 아티팩트
   `deploy/risk-managed-beta-portfolio.toml`(추세 게이트 광범위 베타 SPY·QQQ, 운영 로더 파싱
-  검증). ⚠ 크론 배선(forward A/B arm 추가)은 운영자 인프라 단계 — 그 전까진 돈 0·주문 0.
+  검증). **(2026-06-05) forward 크론 배선 완료** — `rebalance-paper-forward.yml` 에 ARM C
+  (전용 DB `forward_rmbeta.db`, 격리)로 추가, 다음 예약 실행부터 자동 누적(돈 0·페이퍼).
+- **확신 리포트 (완료)** — 운영자 "라이브 확신 없음 → 확신 들 액션" 답: `CONFIDENCE.md` + 프로브
+  `--confidence`. 기억나는 사건 실측(닷컴·GFC·2022 방어, **코로나 방어 실패 정직 노출**) + 오늘
+  신호(S&P > 10개월 SMA → 투자) + 실패 부검 + 라이브 게이트. `event_window_defense`/
+  `signal_timeline`/`current_signal` + 단위 테스트.
 - **슬라이스 4 (완료)** — 변동성 타깃팅 오버레이(스펙 017 `sizing` 재사용)를 추세 위에 결합.
   **결과: regime 의존적** — 극단 변동성 전체 기간(1871~)엔 가치 추가(샤프 1.17→1.28, 낙폭
   41%→26%)지만 현대·최근엔 추가 가치 없음(추세 필터가 이미 방어 완료). 1/3 VOL_TARGET_ADDS.
