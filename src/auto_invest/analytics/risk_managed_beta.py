@@ -586,14 +586,171 @@ def compare_with_vol_target(
     )
 
 
+# ───────────────────────── 운영자 확신용 — 기억나는 사건·오늘 신호 ──────────────────────
+#
+# 운영자 결정(2026-06-05): "수차례 실패했고 라이브 확신이 없다. 확신이 들 액션을 자율 수행하라."
+# 155년 집계 통계는 (과거에도 백테스트가 좋아 보였다 실패했으니) 그 자체로 확신을 못 준다.
+# 확신은 운영자가 *직접 눈으로 검증할 수 있는 것*에서 온다 — 기억나는 실제 사건(2008·2020·
+# 2022)에서 이 전략이 실제로 어떻게 행동했나(좋은 것도 나쁜 것도), 그리고 오늘 당장 무슨 신호를
+# 내는가. 아래 함수는 그걸 정직하게(방어 성공뿐 아니라 코로나 같은 실패도) 드러낸다.
+
+
+def _index_at_or_after(rows: list[MonthlyRow], year_month: str) -> int:
+    """`YYYY-MM` 이상인 첫 행 인덱스. 없으면 마지막."""
+    for i, r in enumerate(rows):
+        if r.date[:7] >= year_month:
+            return i
+    return len(rows) - 1
+
+
+def _window_max_drawdown_pct(curve: list[float]) -> float:
+    """곡선 구간 내부의 최대 낙폭(%) — 구간 시작을 기준으로 재산정."""
+    if not curve:
+        return 0.0
+    peak = curve[0]
+    mdd = 0.0
+    for v in curve:
+        peak = max(peak, v)
+        if peak > 0:
+            mdd = max(mdd, (peak - v) / peak * 100.0)
+    return mdd
+
+
+@dataclass(frozen=True)
+class EventDefense:
+    """한 기억나는 사건에서 단순 보유 vs 추세 전략의 실제 낙폭 — 운영자 검증용."""
+
+    label: str
+    start: str  # YYYY-MM
+    end: str
+    buy_hold_drawdown_pct: float
+    strategy_drawdown_pct: float
+    months_in_cash: int
+    total_months: int
+    defended: bool  # 추세 낙폭이 단순 보유의 0.7배 이하면 방어 성공
+
+    def as_dict(self) -> dict:
+        return {
+            "label": self.label,
+            "start": self.start,
+            "end": self.end,
+            "buy_hold_drawdown_pct": round(self.buy_hold_drawdown_pct, 1),
+            "strategy_drawdown_pct": round(self.strategy_drawdown_pct, 1),
+            "months_in_cash": self.months_in_cash,
+            "total_months": self.total_months,
+            "defended": self.defended,
+        }
+
+
+def event_window_defense(
+    rows: list[MonthlyRow],
+    label: str,
+    start_ym: str,
+    end_ym: str,
+    *,
+    window: int = 10,
+) -> EventDefense:
+    """기억나는 사건 구간 [start_ym, end_ym] 에서 단순 보유 vs 추세 전략의 실제 낙폭.
+
+    신호는 사건 *이전* 이력으로 정해지므로(미래 누출 0) 전체 시계열로 곡선을 만든 뒤 구간만
+    잘라 낙폭을 잰다. 방어 성공 = 추세 낙폭 ≤ 단순 보유 낙폭의 0.7배. 코로나처럼 너무 빠른
+    V자 폭락은 월간 추세가 못 따라가 방어 실패가 나오며, 그 정직한 한계를 그대로 보고한다.
+    """
+    market = market_total_return_factors(rows)
+    cash = cash_factors(rows)
+    in_mkt = trend_in_market(rows, window)
+    strat = overlay_factors(market, cash, in_mkt)
+    bh_curve = equity_curve(market)
+    st_curve = equity_curve(strat)
+    i = _index_at_or_after(rows, start_ym)
+    j = _index_at_or_after(rows, end_ym)
+    bh_dd = _window_max_drawdown_pct(bh_curve[i : j + 1])
+    st_dd = _window_max_drawdown_pct(st_curve[i : j + 1])
+    seg = in_mkt[max(0, i - 1) : j]
+    cash_months = sum(1 for x in seg if not x)
+    return EventDefense(
+        label=label,
+        start=start_ym,
+        end=end_ym,
+        buy_hold_drawdown_pct=bh_dd,
+        strategy_drawdown_pct=st_dd,
+        months_in_cash=cash_months,
+        total_months=len(seg),
+        defended=st_dd <= 0.7 * bh_dd,
+    )
+
+
+def signal_timeline(
+    rows: list[MonthlyRow], start_ym: str, end_ym: str, *, window: int = 10
+) -> list[tuple[str, str]]:
+    """구간 내 투자↔현금 *전환* 타임라인 [(YYYY-MM, "투자"|"현금"), ...]."""
+    in_mkt = trend_in_market(rows, window)
+    i = _index_at_or_after(rows, start_ym)
+    j = _index_at_or_after(rows, end_ym)
+    out: list[tuple[str, str]] = []
+    prev: str | None = None
+    for k in range(i, j + 1):
+        sig = in_mkt[k - 1] if 0 <= k - 1 < len(in_mkt) else True
+        state = "투자" if sig else "현금"
+        if state != prev:
+            out.append((rows[k].date[:7], state))
+            prev = state
+    return out
+
+
+@dataclass(frozen=True)
+class CurrentSignal:
+    """오늘 시점 추세 신호 — 운영자가 현실과 대조해 검증할 수 있는 즉시 확인 값."""
+
+    as_of: str  # YYYY-MM
+    price: float
+    sma: float
+    gap_pct: float  # (price/sma - 1)*100
+    in_market: bool
+    window: int
+
+    def as_dict(self) -> dict:
+        return {
+            "as_of": self.as_of,
+            "price": round(self.price, 2),
+            "sma": round(self.sma, 2),
+            "gap_pct": round(self.gap_pct, 2),
+            "in_market": self.in_market,
+            "window": self.window,
+        }
+
+
+def current_signal(rows: list[MonthlyRow], *, window: int = 10) -> CurrentSignal | None:
+    """가장 최근 행 기준 신호: 현재가 vs 최근 window 개월 SMA. 이력 부족이면 None."""
+    if len(rows) < window:
+        return None
+    prices = [r.price for r in rows]
+    sma = sum(prices[-window:]) / window
+    last = rows[-1]
+    gap = (prices[-1] / sma - 1.0) * 100.0 if sma > 0 else 0.0
+    return CurrentSignal(
+        as_of=last.date[:7],
+        price=prices[-1],
+        sma=sma,
+        gap_pct=gap,
+        in_market=prices[-1] > sma,
+        window=window,
+    )
+
+
 __all__ = [
     "Comparison",
     "CostModel",
     "CostedComparison",
+    "CurrentSignal",
+    "EventDefense",
     "LegStats",
     "MonthlyRow",
     "TurnoverStats",
     "VolTargetComparison",
+    "current_signal",
+    "event_window_defense",
+    "signal_timeline",
     "apply_cost_model",
     "apply_exposure_costs",
     "combined_factors",
