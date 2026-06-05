@@ -12,6 +12,7 @@ from auto_invest.strategy.indicators import (
     IndicatorError,
     bollinger_band_pct_b,
     momentum,
+    momentum_gap,
 )
 
 
@@ -63,6 +64,36 @@ class TestMomentum:
     def test_period_zero_raises(self):
         with pytest.raises(IndicatorError):
             momentum(_bars([100.0, 110.0]), period=0)
+
+
+class TestMomentumGap:
+    def test_gap_zero_equals_momentum(self):
+        # gap=0 reduces to plain momentum.
+        bars = _bars([100.0, 110.0, 120.0, 130.0])
+        assert momentum_gap(bars, period=2, gap=0) == momentum(bars, period=2)
+
+    def test_skips_recent_bars(self):
+        # closes: 100,110,120,130,140. With period=2, gap=1 the window ends at the
+        # second-to-last bar (130) and spans 2 bars back to 110 → (130/110-1)*100.
+        bars = _bars([100.0, 110.0, 120.0, 130.0, 140.0])
+        val = momentum_gap(bars, period=2, gap=1)
+        expected = (Decimal("130") / Decimal("110") - Decimal(1)) * Decimal("100")
+        assert abs(val - expected) < Decimal("0.001")
+        # The most recent bar (140) is excluded, so it differs from plain momentum.
+        assert val != momentum(bars, period=2)
+
+    def test_insufficient_bars_raises(self):
+        # period+gap+1 = 4 bars needed; only 3 provided.
+        with pytest.raises(IndicatorError):
+            momentum_gap(_bars([100.0, 110.0, 120.0]), period=2, gap=1)
+
+    def test_negative_gap_raises(self):
+        with pytest.raises(IndicatorError):
+            momentum_gap(_bars([100.0, 110.0, 120.0]), period=1, gap=-1)
+
+    def test_period_zero_raises(self):
+        with pytest.raises(IndicatorError):
+            momentum_gap(_bars([100.0, 110.0, 120.0]), period=0, gap=1)
 
 
 class TestBollingerBandPctB:

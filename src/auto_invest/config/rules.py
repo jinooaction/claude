@@ -217,6 +217,8 @@ class QualityFilter(BaseModel):
 # 생기므로 리터럴로 둔다; test_spec_025_composite_factor.py가 동기화를 검증).
 KNOWN_COMPOSITE_FACTORS: tuple[str, ...] = (
     "momentum",
+    "momentum_gap",
+    "short_reversal",
     "quality",
     "low_volatility",
     "mean_reversion",
