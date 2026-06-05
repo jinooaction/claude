@@ -17,6 +17,12 @@ live == backtest (constitution X.2).
 
 Supported factors (price-only — no external fundamentals needed):
   * ``"momentum"``       — N-period % return (time-series momentum; higher better)
+  * ``"momentum_gap"``   — 12-1 lagged momentum: % return over ``momentum_period``
+                           bars ending ``momentum_gap_lag`` bars ago (skips the
+                           recent month's reversal; Jegadeesh-Titman). spec 041.
+  * ``"short_reversal"`` — negative ``momentum_period`` % return (1-week reversal:
+                           recent losers expected to bounce; higher = fell more).
+                           spec 041.
   * ``"quality"``        — rolling Sharpe / (1 + |maxDD|) (spec 023; higher better)
   * ``"low_volatility"`` — negative realized volatility (low-vol anomaly; a lower
                            vol yields a higher score)
@@ -32,6 +38,7 @@ from auto_invest.strategy.indicators import (
     IndicatorError,
     bollinger_band_pct_b,
     momentum,
+    momentum_gap,
 )
 from auto_invest.strategy.quality import price_quality_score
 from auto_invest.strategy.sizing import realized_volatility
@@ -42,6 +49,8 @@ from auto_invest.strategy.sizing import realized_volatility
 # two stay in sync (FR-C05 / SC-08).
 KNOWN_FACTORS: tuple[str, ...] = (
     "momentum",
+    "momentum_gap",
+    "short_reversal",
     "quality",
     "low_volatility",
     "mean_reversion",
@@ -61,6 +70,22 @@ _QUANT = Decimal("0.000001")
 def _raw_momentum(bars: list[PriceBar], *, period: int) -> Decimal | None:
     try:
         return momentum(bars, period)
+    except IndicatorError:
+        return None
+
+
+def _raw_momentum_gap(bars: list[PriceBar], *, period: int, gap: int) -> Decimal | None:
+    try:
+        return momentum_gap(bars, period, gap)
+    except IndicatorError:
+        return None
+
+
+def _raw_short_reversal(bars: list[PriceBar], *, period: int) -> Decimal | None:
+    # Short-term reversal: recent losers tend to bounce, so a more-negative
+    # recent return scores higher. The signal is simply -momentum(period).
+    try:
+        return -momentum(bars, period)
     except IndicatorError:
         return None
 
@@ -97,11 +122,16 @@ def _factor_raw(
     *,
     lookback_bars: int,
     momentum_period: int,
+    momentum_gap_lag: int,
     bb_period: int,
     bb_std: float,
 ) -> Decimal | None:
     if factor == "momentum":
         return _raw_momentum(bars, period=momentum_period)
+    if factor == "momentum_gap":
+        return _raw_momentum_gap(bars, period=momentum_period, gap=momentum_gap_lag)
+    if factor == "short_reversal":
+        return _raw_short_reversal(bars, period=momentum_period)
     if factor == "quality":
         return _raw_quality(bars, lookback_bars=lookback_bars)
     if factor == "low_volatility":
@@ -142,6 +172,7 @@ def composite_scores(
     weights: dict[str, Decimal],
     lookback_bars: int = 60,
     momentum_period: int = 20,
+    momentum_gap_lag: int = 21,
     bb_period: int = 20,
     bb_std: float = 2.0,
 ) -> list[tuple[str, Decimal]]:
@@ -158,7 +189,10 @@ def composite_scores(
         symbol_bars: mapping of symbol → ascending bar list.
         weights: factor name → weight (only KNOWN_FACTORS keys are honoured).
         lookback_bars: window for the quality and low-volatility factors.
-        momentum_period: lookback bars for the momentum factor.
+        momentum_period: lookback bars for the momentum / momentum_gap /
+            short_reversal factors.
+        momentum_gap_lag: bars skipped at the recent end for the momentum_gap
+            factor (the "1" in 12-1; ~21 ≈ one month). Ignored by other factors.
         bb_period, bb_std: Bollinger params for the mean-reversion factor.
 
     Returns:
@@ -178,6 +212,7 @@ def composite_scores(
                 bars,
                 lookback_bars=lookback_bars,
                 momentum_period=momentum_period,
+                momentum_gap_lag=momentum_gap_lag,
                 bb_period=bb_period,
                 bb_std=bb_std,
             )

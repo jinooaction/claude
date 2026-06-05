@@ -175,6 +175,42 @@ def test_sc01_momentum_only_ranks_by_momentum():
 
 
 # =========================================================================== #
+# 스펙 041 — 12-1 모멘텀 / 단기 반전 팩터 (1순위 신호 탐색)                     #
+# =========================================================================== #
+
+
+def test_momentum_gap_skips_recent_window():
+    # 5바 종가. momentum_gap(period=2, gap=1)은 최근 1바를 빼고 그 이전 2바 수익률.
+    # AAA: ...,100,200(최근). gap=1 이면 최근(200)을 무시 → 이전 구간만 본다.
+    # BBB 는 옛 구간이 강하고 최근에 폭락, AAA 는 옛 구간 약하고 최근 폭등.
+    # 일반 모멘텀이면 AAA 가 위지만, 12-1(최근 제외)이면 BBB 가 위여야 한다.
+    universe = {
+        "AAA": _make_bars("AAA", [100, 100, 100, 50, 200]),   # 옛 구간 -50%, 최근 +300%
+        "BBB": _make_bars("BBB", [100, 100, 200, 220, 90]),   # 옛 구간 +120%, 최근 폭락
+    }
+    plain = composite_scores(universe, weights={"momentum": Decimal(1)}, momentum_period=2)
+    assert plain[0][0] == "AAA"  # 최근 포함 모멘텀은 AAA 가 위
+    gapped = composite_scores(
+        universe, weights={"momentum_gap": Decimal(1)}, momentum_period=2, momentum_gap_lag=1
+    )
+    assert gapped[0][0] == "BBB"  # 최근 1바 제외하면 BBB 가 위 (12-1 의 핵심)
+
+
+def test_short_reversal_prefers_recent_loser():
+    # 단기 반전: 최근 가장 많이 *떨어진* 종목이 1위(되튐 기대).
+    universe = {
+        "UP": _make_bars("UP", [100, 130]),     # +30%
+        "DOWN": _make_bars("DOWN", [100, 70]),  # -30% → 반전 점수 최고
+        "FLAT": _make_bars("FLAT", [100, 101]), # +1%
+    }
+    ranked = composite_scores(
+        universe, weights={"short_reversal": Decimal(1)}, momentum_period=1
+    )
+    assert ranked[0][0] == "DOWN"
+    assert ranked[-1][0] == "UP"
+
+
+# =========================================================================== #
 # SC-02: 합성이 단일 팩터 순위를 바꾼다 (핵심 동작)                             #
 # =========================================================================== #
 

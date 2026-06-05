@@ -2835,6 +2835,9 @@ def signal_ic_cmd(
     forward_horizon: int = typer.Option(
         21, "--forward-horizon", help="실현 수익률을 재는 앞쪽 거래일 수(21 ≈ 한 달)."
     ),
+    momentum_gap_lag: int = typer.Option(
+        21, "--momentum-gap-lag", help="momentum_gap 팩터의 최근 제외 바 수(12-1 의 '1', ~21≈한달)."
+    ),
     step: int = typer.Option(
         0, "--step", help="평가 시점 간격(0=forward_horizon, 비겹침 → t-통계 과대평가 방지)."
     ),
@@ -2878,6 +2881,7 @@ def signal_ic_cmd(
         weights=cfg.weights,  # type: ignore[union-attr]
         lookback_bars=cfg.lookback_bars,  # type: ignore[union-attr]
         momentum_period=cfg.momentum_period,  # type: ignore[union-attr]
+        momentum_gap_lag=momentum_gap_lag,
         forward_horizon=forward_horizon,
         step=(step or None),
         min_symbols=min_symbols,

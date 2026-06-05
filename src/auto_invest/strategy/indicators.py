@@ -15,6 +15,9 @@ Public surface (v1):
 Public surface (v2 — spec 018):
   * momentum(bars, period)          — N-period % return (time-series momentum)
   * bollinger_band_pct_b(bars, period, std_dev)  — BB %B mean-reversion signal
+
+Public surface (v3 — spec 041 signal probe):
+  * momentum_gap(bars, period, gap) — lagged momentum (12-1: skip recent month)
 """
 
 from __future__ import annotations
@@ -135,6 +138,30 @@ def momentum(bars: list[PriceBar], period: int) -> Decimal:
     now = bars[-1].close_usd
     if past.is_nan() or past <= 0:
         raise IndicatorError("past close is NaN or non-positive")
+    return Decimal(str(float((now / past - Decimal(1)) * Decimal(100))))
+
+
+def momentum_gap(bars: list[PriceBar], period: int, gap: int) -> Decimal:
+    """Gapped (lagged) momentum: % return over ``period`` bars ending ``gap`` bars
+    before the latest close.
+
+    The classic 12-1 momentum (Jegadeesh-Titman) skips the most recent month to
+    drop the well-documented short-term reversal that contaminates raw momentum:
+    ``period≈231`` (~11 months) with ``gap≈21`` (~1 month) measures the return
+    from ~12 months ago up to ~1 month ago. ``gap=0`` reduces to
+    :func:`momentum`. Needs at least ``period + gap + 1`` bars.
+    """
+    if period < 1:
+        raise IndicatorError(f"period must be >= 1, got {period}")
+    if gap < 0:
+        raise IndicatorError(f"gap must be >= 0, got {gap}")
+    _validate_bars(bars, period + gap + 1)
+    now = bars[-(1 + gap)].close_usd
+    past = bars[-(1 + gap + period)].close_usd
+    if past.is_nan() or past <= 0:
+        raise IndicatorError("past close is NaN or non-positive")
+    if now.is_nan() or now <= 0:
+        raise IndicatorError("recent close is NaN or non-positive")
     return Decimal(str(float((now / past - Decimal(1)) * Decimal(100))))
 
 

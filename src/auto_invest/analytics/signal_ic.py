@@ -105,6 +105,7 @@ def cross_sectional_ic(
     weights: dict[str, Decimal],
     lookback_bars: int = 60,
     momentum_period: int = 20,
+    momentum_gap_lag: int = 21,
     forward_horizon: int = 21,
     step: int | None = None,
     min_symbols: int = 5,
@@ -119,6 +120,8 @@ def cross_sectional_ic(
         symbol_bars: 종목→오름차순 바 리스트.
         weights: 팩터 가중치(``composite_scores`` 와 동일).
         lookback_bars, momentum_period: 점수 계산 파라미터(전략과 동일하게).
+        momentum_gap_lag: ``momentum_gap`` 팩터에서 최근 끝에서 건너뛸 바 수
+            (12-1 의 "1"; ~21 ≈ 한 달). 다른 팩터는 무시.
         forward_horizon: 실현 수익률을 재는 앞쪽 거래일 수(21 ≈ 한 달).
         step: 평가 시점 간격. None 이면 forward_horizon(겹치지 않는 창 → 시점 간 독립성↑,
             t-통계량 과대평가 방지).
@@ -165,6 +168,7 @@ def cross_sectional_ic(
             weights=weights,
             lookback_bars=lookback_bars,
             momentum_period=momentum_period,
+            momentum_gap_lag=momentum_gap_lag,
         )
         score_map = {s: float(v) for s, v in scored if v != _NEG_INF}
         common = [s for s in score_map if s in fwd]
