@@ -214,6 +214,54 @@ jobs:
           echo "--- verdict ---"; cat /tmp/verdict_rmbeta.json
           echo "--- stderr ---"; cat /tmp/verdict_rmbeta.err
 
+      # ---- ARM D: 멀티에셋 분산 추세추종 (비상관 자산 합성, 스펙 043) --------
+      # ARM C(SPY·QQQ=둘 다 주식)와 달리 *비상관 자산*을 합친다 — 주식(SPY) + 채권(IEF, 7~10년
+      # 국채). 각자 추세 위일 때만 보유. 스펙 043 에서 Shiller 1871~현재로 검증한 분산 엣지(단일
+      # 주식 추세 샤프 1.18~1.43 → 분산 추세 1.58~1.81, 낙폭 절반)를 우리 KIS 체결로 forward
+      # 누적해 *확신을 번다*. 전용 DB 격리 + set +e + if:always() 라 ARM A/B/C 를 못 깨뜨린다.
+      # IEF 백필이 실패해도 SPY 만으로 동작(graceful degrade). PAPER 전용 — 실주문 0건, 돈 0 이동.
+      - name: "Arm MULTI-ASSET-TREND — backfill + paper rebalance + NAV snapshot"
+        id: prep_multiasset
+        if: always()
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+          CAPITAL: ${{ github.event.inputs.capital || '12000' }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          cfg="deploy/multi-asset-trend-portfolio.toml"; dbf="data/forward_multiasset.db"
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "cd /opt/auto-invest && \
+                 /usr/local/bin/uv run auto-invest backfill-bars --portfolio ${cfg} --max-symbols 120 --min-bars 1000 --order deepen --db ${dbf} --env-file .env --json && \
+                 /usr/local/bin/uv run auto-invest rebalance-once --portfolio ${cfg} --mode paper --capital ${CAPITAL} --db ${dbf} --env-file .env --json && \
+                 /usr/local/bin/uv run auto-invest nav-snapshot --mode paper --db ${dbf} --env-file .env --snapshot --format json" \
+              > /tmp/prep_multiasset.log 2>&1
+          echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
+          cat /tmp/prep_multiasset.log
+
+      - name: "Arm MULTI-ASSET-TREND — forward edge verdict (spec 035)"
+        id: verdict_multiasset
+        if: always()
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest forward-verdict \
+                 --mode paper --portfolio deploy/multi-asset-trend-portfolio.toml \
+                 --db data/forward_multiasset.db --format json" \
+              > /tmp/verdict_multiasset.json 2>/tmp/verdict_multiasset.err
+          echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
+          echo "--- verdict ---"; cat /tmp/verdict_multiasset.json
+          echo "--- stderr ---"; cat /tmp/verdict_multiasset.err
+
       - name: Publish A/B tournament to sidecar branch
         if: always()
         env:
@@ -224,6 +272,8 @@ jobs:
           VERDICT_NOTREND_EXIT: ${{ steps.verdict_notrend.outputs.ssh_exit }}
           PREP_RMBETA_EXIT: ${{ steps.prep_rmbeta.outputs.ssh_exit }}
           VERDICT_RMBETA_EXIT: ${{ steps.verdict_rmbeta.outputs.ssh_exit }}
+          PREP_MULTIASSET_EXIT: ${{ steps.prep_multiasset.outputs.ssh_exit }}
+          VERDICT_MULTIASSET_EXIT: ${{ steps.verdict_multiasset.outputs.ssh_exit }}
         run: |
           set -uo pipefail
           BRANCH=automation/rebalance-paper-forward-last-run
@@ -249,6 +299,8 @@ jobs:
             echo "| TREND-OFF verdict ssh_exit | ${VERDICT_NOTREND_EXIT:-?} |"
             echo "| RISK-MANAGED-BETA prep ssh_exit | ${PREP_RMBETA_EXIT:-?} |"
             echo "| RISK-MANAGED-BETA verdict ssh_exit | ${VERDICT_RMBETA_EXIT:-?} |"
+            echo "| MULTI-ASSET-TREND prep ssh_exit | ${PREP_MULTIASSET_EXIT:-?} |"
+            echo "| MULTI-ASSET-TREND verdict ssh_exit | ${VERDICT_MULTIASSET_EXIT:-?} |"
             echo ""
             echo "## 🧭 판정 — 추세 필터 ON (drawdown 방어 오버레이)"
             echo ""
@@ -279,6 +331,17 @@ jobs:
             cat /tmp/verdict_rmbeta.json 2>/dev/null || echo '{}'
             echo '```'
             echo ""
+            echo "## 🌐 판정 — 멀티에셋 분산 추세 (비상관 자산 합성, 스펙 043)"
+            echo ""
+            echo "> 주식(SPY) + 채권(IEF) 을 각자 추세 위일 때만 보유. ARM C(둘 다 주식)와 달리"
+            echo "> *비상관 자산*을 합쳐 분산 이득을 노린다(스펙 043: 단일 주식 추세 샤프 1.18~1.43"
+            echo "> → 분산 추세 1.58~1.81, 낙폭 절반, Shiller 1871~ 검증). INSUFFICIENT_DATA 면"
+            echo "> NAV 관측이 더 쌓여야 함(정상). 라이브 전환은 운영자 게이트(헌법 X.4)."
+            echo ""
+            echo '```json'
+            cat /tmp/verdict_multiasset.json 2>/dev/null || echo '{}'
+            echo '```'
+            echo ""
             echo "## TREND-ON 준비 로그 (backfill → rebalance → nav-snapshot)"
             echo ""
             echo '```'
@@ -295,6 +358,12 @@ jobs:
             echo ""
             echo '```'
             cat /tmp/prep_rmbeta.log 2>/dev/null || echo '(none)'
+            echo '```'
+            echo ""
+            echo "## MULTI-ASSET-TREND 준비 로그 (backfill → rebalance → nav-snapshot)"
+            echo ""
+            echo '```'
+            cat /tmp/prep_multiasset.log 2>/dev/null || echo '(none)'
             echo '```'
           } > LAST_RUN.md
           git checkout --orphan publish

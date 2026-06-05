@@ -15,6 +15,8 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 _CANARY = _REPO_ROOT / "deploy" / "canary-portfolio.toml"
 _CANARY_NOTREND = _REPO_ROOT / "deploy" / "canary-portfolio-notrend.toml"
 _CANARY_LIVE = _REPO_ROOT / "deploy" / "canary-live-portfolio.toml"
+_RMBETA = _REPO_ROOT / "deploy" / "risk-managed-beta-portfolio.toml"
+_MULTIASSET = _REPO_ROOT / "deploy" / "multi-asset-trend-portfolio.toml"
 
 
 def test_canary_portfolio_parses_and_has_absolute_momentum_gate():
@@ -92,3 +94,32 @@ def test_notrend_control_config_is_identical_minus_trend_filter():
     assert off.rebalance_every_n_sessions == on.rebalance_every_n_sessions
     assert off.lookback_bars == on.lookback_bars
     assert off.momentum_period == on.momentum_period
+
+
+def test_multi_asset_trend_config_is_uncorrelated_two_asset_trend():
+    """스펙 043 — 멀티에셋 분산 추세추종 forward 설정(ARM D) 불변식.
+
+    핵심: ARM C(risk-managed-beta, SPY·QQQ=둘 다 주식)와 달리 *비상관 자산*(주식 SPY +
+    채권 IEF)을 합친다 — 그게 분산 이득의 근거. 각 자산을 자기 추세 게이트(sma 200)로 보유/
+    현금. PAPER 전용이라 절대 위험 0(라이브는 별도 운영자 게이트, 헌법 X.4).
+    """
+    _caps, wl, cfg = _load_portfolio_for_backtest(
+        _MULTIASSET, env={"KIS_ACCOUNT_NO": "ACC-TEST"}
+    )
+    # 비상관 2자산: 주식(SPY) + 채권(IEF). 둘 다 보유(top_n=2, 선택 아님).
+    assert set(cfg.universe) == {"SPY", "IEF"}
+    assert cfg.top_n == 2
+    # 유니버스 ⊆ 화이트리스트(헌법 II — 거래 집합 무확대).
+    assert set(cfg.universe) <= set(wl.symbols)
+    # 분산 추세의 핵심 = 각 자산 추세 게이트(스펙 042/043 검증 파라미터: sma 200≈10개월).
+    assert cfg.trend_filter is not None
+    assert cfg.trend_filter.method == "sma"
+    assert cfg.trend_filter.lookback == 200
+    assert cfg.trend_filter.on_insufficient == "cash"  # "확인 못 하면 투자 안 함"
+    # 저회전(검증된 비용 강건성).
+    assert cfg.rebalance_mode == "hold_replace"
+    # ARM C(risk-managed-beta)와의 차이를 못박는다: 둘 다 주식이 아니라 채권이 들어가야 한다.
+    _c2, _w2, rm = _load_portfolio_for_backtest(
+        _RMBETA, env={"KIS_ACCOUNT_NO": "ACC-TEST"}
+    )
+    assert "IEF" in cfg.universe and "IEF" not in rm.universe  # 채권 = 분산의 원천
