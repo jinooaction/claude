@@ -277,6 +277,85 @@ def compare_diversified_trend(
     )
 
 
+def diversified_trend_factors(
+    rows: list[MonthlyRow],
+    *,
+    window: int = 10,
+    equity_weight: float = 0.5,
+    bond_weight: float = 0.5,
+    bond_maturity_years: int = DEFAULT_BOND_MATURITY_YEARS,
+) -> list[float]:
+    """분산 추세(주식추세+채권추세) 월간 그로스 팩터 스트림(길이 N-1).
+
+    `compare_diversified_trend` 와 같은 계산이지만 LegStats 요약이 아니라 *원시 팩터 스트림*을
+    돌려준다 — 스펙 044 성장 최적 레버리지가 이 스트림에 레버리지를 얹어 복리 성장률을 잰다.
+    """
+    eq_market = market_total_return_factors(rows)
+    cash = cash_factors(rows)
+    bond = bond_total_return_factors(rows, maturity_years=bond_maturity_years)
+    bond_index = equity_curve(bond)
+    eq_in = trend_in_market(rows, window)
+    bond_in = sma_in_market(bond_index, window)
+    eq_sleeve = sleeve_factors(eq_market, cash, eq_in)
+    bond_sleeve = sleeve_factors(bond, cash, bond_in)
+    return blend([(equity_weight, eq_sleeve), (bond_weight, bond_sleeve)])
+
+
+def equity_trend_factors(rows: list[MonthlyRow], *, window: int = 10) -> list[float]:
+    """단일 주식 추세(스펙 042) 월간 그로스 팩터 스트림(길이 N-1) — 레버리지 비교용."""
+    eq_market = market_total_return_factors(rows)
+    cash = cash_factors(rows)
+    eq_in = trend_in_market(rows, window)
+    return sleeve_factors(eq_market, cash, eq_in)
+
+
+def _trailing_vol(returns: list[float], end_idx: int, window: int) -> float | None:
+    """returns[:end_idx] 의 마지막 window 개 표준편차(미래 누출 0). 표본<2면 None."""
+    seg = returns[max(0, end_idx - window):end_idx]
+    if len(seg) < 2:
+        return None
+    m = sum(seg) / len(seg)
+    var = sum((x - m) ** 2 for x in seg) / (len(seg) - 1)
+    return var ** 0.5
+
+
+def risk_parity_diversified_factors(
+    rows: list[MonthlyRow],
+    *,
+    window: int = 10,
+    vol_window: int = 12,
+    bond_maturity_years: int = DEFAULT_BOND_MATURITY_YEARS,
+) -> list[float]:
+    """리스크 패리티(역변동성) 가중 분산 추세 월간 팩터 스트림(길이 N-1).
+
+    고정 50/50 대신 *각 슬리브가 위험에 동등 기여*하도록 매월 트레일링 역변동성으로 가중한다
+    (변동성 낮은 채권에 더, 높은 주식에 덜) — 또 하나의 수익 극대화 전략(샤프를 더 올려 복리
+    성장 천장을 높임). 미래 누출 0: period t 가중치는 t 이전(<=t-1) 수익의 트레일링 변동성만
+    쓴다. 이력 부족이면 50/50(중립).
+    """
+    eq_market = market_total_return_factors(rows)
+    cash = cash_factors(rows)
+    bond = bond_total_return_factors(rows, maturity_years=bond_maturity_years)
+    bond_index = equity_curve(bond)
+    eq_in = trend_in_market(rows, window)
+    bond_in = sma_in_market(bond_index, window)
+    eq_sleeve = sleeve_factors(eq_market, cash, eq_in)
+    bond_sleeve = sleeve_factors(bond, cash, bond_in)
+    eq_ret = [f - 1.0 for f in eq_sleeve]
+    bond_ret = [f - 1.0 for f in bond_sleeve]
+    out: list[float] = []
+    for t in range(len(eq_sleeve)):
+        ve = _trailing_vol(eq_ret, t, vol_window)
+        vb = _trailing_vol(bond_ret, t, vol_window)
+        if ve is None or vb is None or ve <= 0 or vb <= 0:
+            we = wb = 0.5
+        else:
+            ie, ib = 1.0 / ve, 1.0 / vb
+            we, wb = ie / (ie + ib), ib / (ie + ib)
+        out.append(we * eq_sleeve[t] + wb * bond_sleeve[t])
+    return out
+
+
 def correlation(a: list[float], b: list[float]) -> float | None:
     """두 팩터(또는 수익) 시계열의 피어슨 상관 — 분산 효과의 근거를 정직히 드러낸다.
 
@@ -305,6 +384,9 @@ __all__ = [
     "carry_forward_rates",
     "compare_diversified_trend",
     "correlation",
+    "diversified_trend_factors",
+    "equity_trend_factors",
+    "risk_parity_diversified_factors",
     "sleeve_factors",
     "sma_in_market",
 ]

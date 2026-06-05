@@ -11,6 +11,9 @@ from auto_invest.analytics.multi_asset_trend import (
     carry_forward_rates,
     compare_diversified_trend,
     correlation,
+    diversified_trend_factors,
+    equity_trend_factors,
+    risk_parity_diversified_factors,
     sleeve_factors,
     sma_in_market,
 )
@@ -190,6 +193,26 @@ def test_compare_diversified_trend_structure():
     # 모든 다리의 샤프가 유한.
     for leg in (cmp.bh_equity, cmp.diversified_trend, cmp.trend_bond):
         assert math.isfinite(leg.sharpe)
+
+
+def test_factor_stream_helpers_length_and_finite():
+    n = 60
+    rows = _rows_with_rates([100 * (1.01 ** i) for i in range(n)], [5.0] * n)
+    div = diversified_trend_factors(rows, window=10)
+    eq = equity_trend_factors(rows, window=10)
+    rp = risk_parity_diversified_factors(rows, window=10)
+    assert len(div) == len(eq) == len(rp) == n - 1
+    for f in div + eq + rp:
+        assert math.isfinite(f) and f > 0
+
+
+def test_risk_parity_no_lookahead_first_period_neutral():
+    # 이력 부족(첫 기간)이면 50/50 중립 → diversified(50/50) 첫 값과 같아야 한다.
+    n = 40
+    rows = _rows_with_rates([100 * (1.005 ** i) for i in range(n)], [4.0] * n)
+    rp = risk_parity_diversified_factors(rows, window=10, vol_window=12)
+    div = diversified_trend_factors(rows, window=10, equity_weight=0.5, bond_weight=0.5)
+    assert abs(rp[0] - div[0]) < 1e-12
 
 
 def test_diversified_lower_vol_than_pure_equity_buyhold():
