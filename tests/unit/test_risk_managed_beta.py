@@ -6,9 +6,12 @@ from auto_invest.analytics.risk_managed_beta import (
     CostModel,
     MonthlyRow,
     apply_cost_model,
+    apply_exposure_costs,
     cash_factors,
+    combined_factors,
     compare_trend_overlay,
     compare_with_costs,
+    compare_with_vol_target,
     count_switches,
     equity_curve,
     market_total_return_factors,
@@ -18,6 +21,7 @@ from auto_invest.analytics.risk_managed_beta import (
     summarize,
     trend_in_market,
     turnover_stats,
+    vol_target_exposure,
 )
 
 
@@ -199,6 +203,61 @@ def test_production_signal_reproduces_drawdown_defense():
     prod = production_in_market(rows, lookback=10)
     cmp = compare_with_costs(rows, window=10, in_market=prod)
     assert cmp.trend_net.max_dd_pct < cmp.buy_hold_net.max_dd_pct
+
+
+def test_vol_target_zero_exposure_when_trend_below():
+    prices = [100.0 + i for i in range(30)]
+    rows = _rows(prices)
+    in_mkt = [False] * (len(rows) - 1)  # 전부 추세 아래
+    exp = vol_target_exposure(rows, in_mkt, window=12, target_annual_vol=0.12)
+    assert all(e == 0.0 for e in exp)  # 추세 아래 → 노출 0(현금)
+
+
+def test_vol_target_throttles_in_high_vol_never_levers():
+    # 저변동 상승 후 고변동 구간 → 노출이 1 아래로 줄어야(하향 전용, 절대 1 초과 없음).
+    calm = [100.0 * (1.002**i) for i in range(24)]
+    wild = []
+    base = calm[-1]
+    for i in range(24):
+        base *= 1.10 if i % 2 == 0 else 0.93  # 큰 등락(고변동)
+        wild.append(base)
+    rows = _rows(calm + wild)
+    in_mkt = [True] * (len(rows) - 1)
+    exp = vol_target_exposure(rows, in_mkt, window=12, target_annual_vol=0.12, max_scale=1.0)
+    assert all(e <= 1.0 for e in exp)  # 무레버리지
+    # 고변동 구간(뒤쪽)의 평균 노출 < 저변동 구간(앞쪽) 평균 노출.
+    head = [e for e in exp[:20]]
+    tail = [e for e in exp[-20:]]
+    assert sum(tail) / len(tail) < sum(head) / len(head)
+
+
+def test_combined_factors_blend_and_bounds():
+    market = [1.1, 1.1]
+    cash = [1.0, 1.0]
+    # 노출 0.5 → 0.5*1.1 + 0.5*1.0 = 1.05
+    assert combined_factors(market, cash, [0.5, 0.5]) == [1.05, 1.05]
+    # 노출 1 → 시장, 0 → 현금
+    assert combined_factors(market, cash, [1.0, 0.0]) == [1.1, 1.0]
+
+
+def test_exposure_costs_charge_on_change():
+    market = [1.1, 1.1]
+    cash = [1.0, 1.0]
+    # 0→1 변화(첫 기간) = 1.0 거래, 100bp → 1% 비용. 1→1(둘째) = 변화 0 → 비용 없음.
+    net = apply_exposure_costs(market, cash, [1.0, 1.0], cost_bps=100.0)
+    assert abs(net[0] - 1.1 * 0.99) < 1e-9
+    assert abs(net[1] - 1.1) < 1e-9
+
+
+def test_compare_with_vol_target_smoke():
+    prices = [100.0 * (1.007**i) for i in range(120)]
+    prices += [prices[-1] * (0.94**i) for i in range(1, 14)]
+    prices += [prices[-1] * (1.01**i) for i in range(1, 60)]
+    rows = _rows(prices)
+    cmp = compare_with_vol_target(rows, window=10, target_annual_vol=0.12)
+    assert cmp.verdict in {"VOL_TARGET_ADDS", "NO_ADDITIONAL_BENEFIT"}
+    assert 0.0 <= cmp.avg_exposure <= 1.0
+    assert cmp.trend_vol_net.vol_pct <= cmp.trend_net.vol_pct + 1e-6  # 변동성은 안 늘어야
 
 
 def test_compare_smoke_on_synthetic_crash():

@@ -23,6 +23,7 @@ import urllib.request
 from auto_invest.analytics.risk_managed_beta import (
     compare_trend_overlay,
     compare_with_costs,
+    compare_with_vol_target,
     parse_shiller,
     production_in_market,
     trend_in_market,
@@ -145,6 +146,38 @@ def _run_production_bridge(all_rows, window: int) -> list[dict]:
     return records
 
 
+def _run_vol_target(all_rows, window: int, target_vol: float) -> list[dict]:
+    """슬라이스 4 — 추세만 vs 추세+변동성 타깃(고변동 시 노출 축소, 무레버리지)."""
+    print(
+        f"변동성 타깃 결합 — 추세({window}개월) 위에 연 {target_vol * 100:.0f}% 변동성 타깃"
+        f"(하향 전용·무레버리지), 10bp 비용\n"
+    )
+    head = _header()
+    records = []
+    for label, start_year in _PERIODS:
+        rows = [r for r in all_rows if int(r.date[:4]) >= start_year]
+        if len(rows) < 24:
+            continue
+        cmp = compare_with_vol_target(
+            rows, window=window, target_annual_vol=target_vol, cost_bps=10.0
+        )
+        records.append({"period": label, **cmp.as_dict()})
+        print("-" * len(head))
+        print(head)
+        print(_leg_line(label, "단순보유(순)", cmp.buy_hold_net))
+        print(_leg_line("", "추세만(순)", cmp.trend_net))
+        print(_leg_line("", "추세+변동성", cmp.trend_vol_net))
+        print(
+            f"  → 평균 노출 {cmp.avg_exposure * 100:.0f}% | 판정: {cmp.verdict} ({cmp.reason})"
+        )
+    print("-" * len(head))
+    adds = [r for r in records if r["verdict"] == "VOL_TARGET_ADDS"]
+    print(
+        f"\n요약: {len(adds)}/{len(records)} 구간에서 변동성 타깃이 추세 위에 추가 위험조정 가치."
+    )
+    return records
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--window", type=int, default=10, help="추세 SMA 개월(고전 10).")
@@ -156,6 +189,12 @@ def main() -> int:
         action="store_true",
         help="운영 코드(strategy.trend) 신호로 같은 엣지가 재현되는지(슬라이스 3 브리지).",
     )
+    ap.add_argument(
+        "--vol-target",
+        action="store_true",
+        help="추세 위에 변동성 타깃 결합 효과(슬라이스 4).",
+    )
+    ap.add_argument("--target-vol", type=float, default=0.12, help="연 변동성 타깃(0..1).")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args()
 
@@ -169,6 +208,8 @@ def main() -> int:
 
     if args.production_trend:
         records = _run_production_bridge(all_rows, args.window)
+    elif args.vol_target:
+        records = _run_vol_target(all_rows, args.window, args.target_vol)
     elif args.costs:
         records = _run_costed(all_rows, args.window, args.cost_bps, args.tax)
     else:
