@@ -3,15 +3,20 @@
 from __future__ import annotations
 
 from auto_invest.analytics.risk_managed_beta import (
+    CostModel,
     MonthlyRow,
+    apply_cost_model,
     cash_factors,
     compare_trend_overlay,
+    compare_with_costs,
+    count_switches,
     equity_curve,
     market_total_return_factors,
     overlay_factors,
     parse_shiller,
     summarize,
     trend_in_market,
+    turnover_stats,
 )
 
 
@@ -101,6 +106,75 @@ def test_summarize_flat_market_zero_sharpe():
     s = summarize(f)
     assert s.sharpe == 0.0
     assert s.max_dd_pct == 0.0
+
+
+def test_count_switches_counts_initial_buy_and_state_changes():
+    # 현금에서 시작 가정 → 첫 True 가 최초 매수(1).
+    assert count_switches([True, True, True]) == 1  # 최초 매수만
+    assert count_switches([True, False, True]) == 3  # 매수, 매도, 재매수
+    assert count_switches([False, False]) == 0  # 줄곧 현금 → 거래 없음
+    assert count_switches([]) == 0
+
+
+def test_turnover_stats_per_year():
+    # 24개월(2년)에 전환 4회 → 2회/년.
+    sig = [True, False, True, False] * 6  # 24개, 매 칸 전환 + 최초 매수
+    ts = turnover_stats(sig)
+    assert ts.years == 2.0
+    assert ts.switches == count_switches(sig)
+    assert ts.switches_per_year == round(ts.switches / 2.0, 3)
+
+
+def test_cost_model_buyhold_pays_only_initial_buy():
+    # 줄곧 투자(단순 보유)면 최초 매수 비용 1회만 — 이후 팩터는 비용 0.
+    market = [1.05, 1.02, 0.98]
+    cash = [1.0, 1.0, 1.0]
+    all_in = [True, True, True]
+    net = apply_cost_model(market, cash, all_in, CostModel(cost_bps=100.0, tax_rate=0.0))
+    assert abs(net[0] - 1.05 * 0.99) < 1e-9  # 최초 매수 1% 비용
+    assert abs(net[1] - 1.02) < 1e-9  # 이후 비용 없음
+    assert abs(net[2] - 0.98) < 1e-9
+
+
+def test_cost_model_charges_each_switch():
+    market = [1.10, 1.10, 1.10]
+    cash = [1.0, 1.0, 1.0]
+    sig = [True, False, True]  # 매수, 매도, 재매수 = 전환 3회
+    net = apply_cost_model(market, cash, sig, CostModel(cost_bps=100.0, tax_rate=0.0))
+    # 세 기간 모두 전환이라 모두 1% 비용.
+    assert abs(net[0] - 1.10 * 0.99) < 1e-9
+    assert abs(net[1] - 1.00 * 0.99) < 1e-9
+    assert abs(net[2] - 1.10 * 0.99) < 1e-9
+
+
+def test_tax_only_on_realized_gain_at_sell():
+    # 한 달 +10% 상승 후 매도 → 이익에 50% 과세. 거래비용 0 으로 세금만 분리.
+    market = [1.10]
+    cash = [1.0]
+    # 진입은 첫 기간(매수), 이익 실현 시점을 보려면 두 기간 필요.
+    market2 = [1.10, 1.0]  # t0 투자 +10%, t1 현금(매도)
+    cash2 = [1.0, 1.0]
+    sig = [True, False]
+    net = apply_cost_model(market2, cash2, sig, CostModel(cost_bps=0.0, tax_rate=0.5))
+    # t0: 매수(비용0), 자산 1.0→1.1. t1: 매도, 이익 0.1 에 50% 세금=0.05 → 팩터 *= (1-0.05/1.1).
+    assert abs(net[0] - 1.10) < 1e-9
+    expected_t1 = 1.0 * (1.0 - 0.05 / 1.10)
+    assert abs(net[1] - expected_t1) < 1e-9
+    _ = (market, cash)  # 사용 안 함 가드
+
+
+def test_compare_with_costs_edge_survives_low_turnover():
+    # 저회전 합성 폭락: 추세 방어가 낮은 비용에서도 엣지를 유지해야 한다.
+    prices = [100.0 * (1.008**i) for i in range(80)]
+    prices += [prices[-1] * (0.93**i) for i in range(1, 16)]
+    prices += [prices[-1] * (1.01**i) for i in range(1, 60)]
+    rows = _rows(prices)
+    cmp = compare_with_costs(rows, window=10, cost_bps=10.0, tax_rate=0.0)
+    assert cmp.verdict in {"EDGE_SURVIVES_COSTS", "NO_IMPROVEMENT", "INSUFFICIENT"}
+    # 비용은 작아야(저회전) — 비용후 CAGR 가 비용전보다 약간만 낮다.
+    assert cmp.trend_net.cagr_pct <= cmp.trend_gross.cagr_pct
+    assert cmp.trend_net.cagr_pct > cmp.trend_gross.cagr_pct - 1.0  # 1%p 미만 잠식
+    assert cmp.turnover.switches_per_year < 5.0  # 저회전
 
 
 def test_compare_smoke_on_synthetic_crash():

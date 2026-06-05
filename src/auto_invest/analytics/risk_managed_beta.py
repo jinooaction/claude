@@ -119,6 +119,73 @@ def overlay_factors(
     return [m if inm else c for m, c, inm in zip(market, cash, in_market, strict=True)]
 
 
+@dataclass(frozen=True)
+class CostModel:
+    """거래비용·세금 가정 — 엣지가 *비용을 견디는지* 정직히 재기 위한 모델.
+
+    - cost_bps: 전환(매수/매도) 1회당 *일방* 거래비용(거래 명목의 bp). SPY 같은 초유동
+      ETF는 현실적으로 1~5bp이나 보수적으로 10bp 기본(비용을 과대평가해 정직히).
+    - tax_rate: 현금으로 빠질 때(매도) 실현이익에 매기는 자본이득세율(0..1). **0 = 세금
+      이연 계좌**(자동매매·IRA류 — 우리 시스템의 기본 가정). 과세 계좌를 보려면 >0.
+      단순화: 매도 시점 이익에만 과세(장·단기 구분·손실이월·워시세일 무시 — 보수적 근사).
+    """
+
+    cost_bps: float = 10.0
+    tax_rate: float = 0.0
+
+
+def count_switches(in_market: list[bool]) -> int:
+    """포지션 상태가 바뀌는 횟수(거래 횟수). 시작이 투자면 최초 매수도 1회로 센다."""
+    if not in_market:
+        return 0
+    switches = 1 if in_market[0] else 0  # 현금에서 시작 → 첫 진입이 매수
+    for a, b in zip(in_market[:-1], in_market[1:], strict=True):
+        if a != b:
+            switches += 1
+    return switches
+
+
+def apply_cost_model(
+    market: list[float],
+    cash: list[float],
+    in_market: list[bool],
+    model: CostModel,
+) -> list[float]:
+    """전환마다 일방 거래비용 + (과세 계좌면) 매도 시 실현이익 세금을 반영한 *순* 팩터.
+
+    경로 의존(세금은 직전 진입가 대비 이익에 매김)이라 자산을 따라가며 계산한다. 단순
+    보유(in_market 전부 True)면 최초 매수 비용 1회만 — 이연 이점은 그대로(말기 미실현
+    이익엔 과세 안 함, 그게 단순 보유의 진짜 세금 이점이자 타이밍의 세금 불리다).
+    """
+    if not (len(market) == len(cash) == len(in_market)):
+        raise ValueError("length mismatch")
+    cost_mult = 1.0 - model.cost_bps / 10_000.0
+    net: list[float] = []
+    equity = 1.0
+    entry_value: float | None = None  # 마지막 진입 시 자산(세금 기준가)
+    prev_in = False  # 첫 기간 전엔 현금이라고 본다
+    for t, inm in enumerate(in_market):
+        f = market[t] if inm else cash[t]
+        if inm != prev_in:  # 전환(매수 또는 매도) 발생
+            f *= cost_mult
+            selling = prev_in and not inm  # 매도(현금으로) → 실현이익 과세
+            if (
+                selling
+                and model.tax_rate > 0
+                and entry_value is not None
+                and equity > entry_value
+            ):
+                tax = model.tax_rate * (equity - entry_value)
+                f *= 1.0 - tax / equity
+            if not prev_in and inm:  # 매수(진입) → 기준가 갱신
+                entry_value = equity
+        net.append(f)
+        equity *= f
+        prev_in = inm
+    return net
+
+
+
 def equity_curve(factors: list[float], start: float = 1.0) -> list[float]:
     """그로스 팩터 누적 자산곡선(시작값 포함, 길이 N)."""
     curve = [start]
@@ -249,10 +316,114 @@ def compare_trend_overlay(rows: list[MonthlyRow], *, window: int = 10) -> Compar
     return Comparison(buy_hold=bh, trend=tr, window=window, verdict=verdict, reason=reason)
 
 
+@dataclass(frozen=True)
+class TurnoverStats:
+    """추세 타이밍의 회전(거래 빈도) — 거래비용이 무는 표면."""
+
+    switches: int
+    years: float
+    switches_per_year: float
+
+
+def turnover_stats(in_market: list[bool]) -> TurnoverStats:
+    """전환 횟수 + 연 환산 전환 빈도(월간 가정)."""
+    n = len(in_market)
+    sw = count_switches(in_market)
+    years = n / MONTHS_PER_YEAR if n else 0.0
+    return TurnoverStats(
+        switches=sw,
+        years=round(years, 2),
+        switches_per_year=round(sw / years, 3) if years > 0 else 0.0,
+    )
+
+
+@dataclass(frozen=True)
+class CostedComparison:
+    """슬라이스 2 — 비용·세금 반영 후에도 위험관리 엣지가 남는가."""
+
+    buy_hold_net: LegStats  # 단순 보유(최초 매수 비용만, 세금 이연)
+    trend_gross: LegStats  # 비용 0(슬라이스 1과 동일)
+    trend_net: LegStats  # 거래비용 반영(세금 0 = 이연 계좌)
+    trend_net_tax: LegStats | None  # 거래비용 + 세금(과세 계좌, tax_rate>0 일 때만)
+    turnover: TurnoverStats
+    window: int
+    cost_bps: float
+    tax_rate: float
+    verdict: str
+    reason: str
+
+    def as_dict(self) -> dict:
+        return {
+            "window": self.window,
+            "cost_bps": self.cost_bps,
+            "tax_rate": self.tax_rate,
+            "verdict": self.verdict,
+            "reason": self.reason,
+            "switches_per_year": self.turnover.switches_per_year,
+            "buy_hold_net": self.buy_hold_net.as_dict(),
+            "trend_gross": self.trend_gross.as_dict(),
+            "trend_net": self.trend_net.as_dict(),
+            "trend_net_tax": self.trend_net_tax.as_dict() if self.trend_net_tax else None,
+        }
+
+
+def compare_with_costs(
+    rows: list[MonthlyRow],
+    *,
+    window: int = 10,
+    cost_bps: float = 10.0,
+    tax_rate: float = 0.0,
+) -> CostedComparison:
+    """비용·세금 반영 비교 — 엣지가 거래비용을 견디는지(슬라이스 2의 핵심 질문).
+
+    단순 보유도 최초 매수 비용을 동등하게 문다(공정 비교). 판정은 *비용 반영 추세*(세금 0,
+    이연 계좌)를 *비용 반영 단순 보유*와 같은 기준(낙폭↓·칼마↑·샤프 유지)으로 비교 →
+    통과면 EDGE_SURVIVES_COSTS. 세금 계좌(tax_rate>0)는 별도 다리로 함께 보고.
+    """
+    market = market_total_return_factors(rows)
+    cash = cash_factors(rows)
+    in_mkt = trend_in_market(rows, window)
+    all_in = [True] * len(in_mkt)
+
+    bh_net_factors = apply_cost_model(market, cash, all_in, CostModel(cost_bps, 0.0))
+    tr_gross_factors = overlay_factors(market, cash, in_mkt)
+    tr_net_factors = apply_cost_model(market, cash, in_mkt, CostModel(cost_bps, 0.0))
+
+    bh_net = summarize(bh_net_factors, in_market=None)
+    tr_gross = summarize(tr_gross_factors, in_market=in_mkt)
+    tr_net = summarize(tr_net_factors, in_market=in_mkt)
+    tr_net_tax = None
+    if tax_rate > 0:
+        tax_factors = apply_cost_model(market, cash, in_mkt, CostModel(cost_bps, tax_rate))
+        tr_net_tax = summarize(tax_factors, in_market=in_mkt)
+
+    base_verdict, base_reason = _classify(bh_net, tr_net)
+    verdict = "EDGE_SURVIVES_COSTS" if base_verdict == "RISK_MANAGED_EDGE" else base_verdict
+    return CostedComparison(
+        buy_hold_net=bh_net,
+        trend_gross=tr_gross,
+        trend_net=tr_net,
+        trend_net_tax=tr_net_tax,
+        turnover=turnover_stats(in_mkt),
+        window=window,
+        cost_bps=cost_bps,
+        tax_rate=tax_rate,
+        verdict=verdict,
+        reason=base_reason,
+    )
+
+
 __all__ = [
     "Comparison",
+    "CostModel",
+    "CostedComparison",
     "LegStats",
     "MonthlyRow",
+    "TurnoverStats",
+    "apply_cost_model",
+    "compare_with_costs",
+    "count_switches",
+    "turnover_stats",
     "cash_factors",
     "compare_trend_overlay",
     "equity_curve",
