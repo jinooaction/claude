@@ -21,7 +21,9 @@
   `analytics/risk_managed_beta.py` + `scripts/risk_managed_beta_probe.py` + 단위 테스트.
   결과·판정·한계는 `FINDINGS.md`. **9/9 구간·파라미터에서 위험관리 엣지**(낙폭 절반, 샤프
   0.7→1.2, 칼마 2~3배), 과적합 아님(SMA 7/10/12 견고).
-- **슬라이스 2 (다음)** — 거래비용·슬리피지·세금 모델 추가 후 재측정(엣지가 비용을 견디는지).
+- **슬라이스 2 (완료)** — 거래비용·세금 모델(`CostModel`·`apply_cost_model`·`compare_with_costs`)
+  추가 후 재측정. **결과: 엣지가 비용을 쉽게 견딤** — 회전 연 ~1.3회(저회전), 10bp에서 샤프
+  1.18→1.17, 3/3 EDGE_SURVIVES_COSTS. 세금(15%)은 수익 우위를 깎지만 위험조정/낙폭 우위는 유지.
 - **슬라이스 3 (다음)** — 우리 거래수단(SPY 등)에 *월간* 추세 필터 배선(`strategy/trend.py`
   재사용) + forward 페이퍼 트랙(스펙 035 `forward-verdict` + 스펙 038 칼마)으로 위험조정 우위
   누적 검증.
