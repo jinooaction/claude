@@ -20,10 +20,12 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from decimal import Decimal
 
 from auto_invest.backtest.metrics import max_drawdown_pct
 from auto_invest.backtest.significance import probabilistic_sharpe_ratio
 from auto_invest.portfolio.edge_verdict import calmar_ratio
+from auto_invest.strategy.trend import METHOD_SMA, TrendSpec, above_trend
 
 MONTHS_PER_YEAR = 12
 
@@ -117,6 +119,24 @@ def overlay_factors(
     if not (len(market) == len(cash) == len(in_market)):
         raise ValueError("length mismatch")
     return [m if inm else c for m, c, inm in zip(market, cash, in_market, strict=True)]
+
+
+def production_in_market(rows: list[MonthlyRow], *, lookback: int = 10) -> list[bool]:
+    """**운영 코드** `strategy.trend.above_trend`(SMA, lookback)로 in_market 신호를 만든다.
+
+    슬라이스 3 브리지 — 슬라이스 1·2의 결론(독립 연구 모듈 `trend_in_market`)이 *실제 라이브
+    재조정에서 도는 바로 그 함수*(`above_trend`, `apply_trend_filter` 가 호출)에서도 똑같이
+    나오는지 검증하기 위함이다. period t(=월 t) 결정은 `prices[0..t-1]` 만 본다(미래 누출 0).
+    above_trend 가 부족(None)이면 연구 모듈과 동일하게 투자(True)로 둔다. 두 신호가 같으면
+    "검증된 엣지가 라이브 코드 경로에 그대로 실린다"는 뜻이다(테스트로 보증).
+    """
+    spec = TrendSpec(method=METHOD_SMA, lookback=lookback)
+    prices = [Decimal(str(r.price)) for r in rows]
+    out: list[bool] = []
+    for t in range(1, len(rows)):
+        verdict = above_trend(prices[:t], spec)
+        out.append(True if verdict is None else bool(verdict))
+    return out
 
 
 @dataclass(frozen=True)
@@ -373,16 +393,20 @@ def compare_with_costs(
     window: int = 10,
     cost_bps: float = 10.0,
     tax_rate: float = 0.0,
+    in_market: list[bool] | None = None,
 ) -> CostedComparison:
     """비용·세금 반영 비교 — 엣지가 거래비용을 견디는지(슬라이스 2의 핵심 질문).
 
     단순 보유도 최초 매수 비용을 동등하게 문다(공정 비교). 판정은 *비용 반영 추세*(세금 0,
     이연 계좌)를 *비용 반영 단순 보유*와 같은 기준(낙폭↓·칼마↑·샤프 유지)으로 비교 →
     통과면 EDGE_SURVIVES_COSTS. 세금 계좌(tax_rate>0)는 별도 다리로 함께 보고.
+
+    `in_market` 를 주면 그 신호를 쓴다(슬라이스 3: 운영 코드 신호 `production_in_market`
+    주입 → 라이브 경로가 같은 결과를 내는지). 없으면 연구 신호(`trend_in_market`).
     """
     market = market_total_return_factors(rows)
     cash = cash_factors(rows)
-    in_mkt = trend_in_market(rows, window)
+    in_mkt = in_market if in_market is not None else trend_in_market(rows, window)
     all_in = [True] * len(in_mkt)
 
     bh_net_factors = apply_cost_model(market, cash, all_in, CostModel(cost_bps, 0.0))
@@ -430,6 +454,7 @@ __all__ = [
     "market_total_return_factors",
     "overlay_factors",
     "parse_shiller",
+    "production_in_market",
     "summarize",
     "trend_in_market",
 ]

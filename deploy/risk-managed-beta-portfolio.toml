@@ -1,0 +1,78 @@
+# 스펙 042 — 위험관리된 베타(추세 게이트한 광범위 베타) forward 페이퍼 설정. 돈 0 이동.
+#
+# 무엇이 다른가(중요): 기존 forward 페이퍼(canary-portfolio.toml)는 **종목 선택** 전략이다
+# (S&P 500 ~501종목을 모멘텀으로 매겨 상위 보유). 스펙 041 6차에서 그 가격 종목선택 알파는
+# *측정상 엣지 없음*으로 확정됐다(IC≈0). 이 파일은 근본적으로 다른 전략 — **추세로 게이트한
+# 광범위 베타**다. 종목을 고르지 않는다. 광범위 인덱스 ETF를 들되, 자기 ~10개월 추세 위일
+# 때만 보유하고 아래로 내려가면 현금으로 빠진다(Faber GTAA).
+#
+# 왜 이게 검증된 길인가(스펙 042 슬라이스 1·2·3, specs/042-risk-managed-beta/FINDINGS.md):
+# Shiller 월간 S&P(1871~현재, 대공황·2008 포함)에서 단순 보유 vs 10개월 SMA 추세 타이밍을
+# 비교한 결과 — 추세 게이트가 **낙폭을 절반으로(82%→41%), 샤프를 0.71→1.18** 로 올렸고,
+# SMA 7/10/12 × 3구간 = 9/9 견고(과적합 아님). 전환은 연 ~1.3회(저회전)라 10bp 거래비용에서
+# 샤프 1.18→1.17 로 거의 안 깎인다(EDGE_SURVIVES_COSTS). **그리고 이 설정이 켜는 바로 그
+# 운영 함수(strategy.trend.above_trend, sma)가 그 결과를 100% 재현함을 테스트로 보증했다**
+# (analytics/risk_managed_beta.py production_in_market, tests/unit/test_risk_managed_beta.py).
+#
+# ⚠ 이건 종목선택 알파가 아니라 *베타의 자본 방어*다. 강세장 raw 수익을 매년 이기지 않는다
+# (횡보장 휩쏘). 가치는 폭락에서 현금으로 빠져 위험조정 수익(샤프·칼마)을 한 사이클에 걸쳐
+# 올리는 데 있다.
+#
+# ── 아직 라이브 아님 (정직) ──────────────────────────────────────────────────
+# 이 파일은 **검증된 전략의 드롭인 아티팩트**다. forward 페이퍼 트랙(rebalance-paper-forward.yml)에
+# 아직 *배선돼 있지 않다* — 크론이 읽는 설정은 canary-portfolio.toml 이다. 이 GTAA arm 을
+# forward 트랙에 추가(A/B: 종목선택 vs 추세 베타)하는 것은 운영자의 다음 인프라 단계다
+# (워크플로 한 줄 추가 + 백필 대상에 universe 심볼 포함). 그 전까진 이 파일은 아무것도
+# 움직이지 않는다(크론 미참조 = 돈 0, 주문 0). 실거래 전환은 별도 운영자 게이트(헌법 X.4).
+#
+# 인스턴스 전제: universe(SPY·QQQ) 일봉이 price_bars 에 ≥lookback(200) 있어야 추세 판정이
+# 활성화된다. 백필이 부족하면 on_insufficient=cash 라 보유하지 않는다(보수적 — "확인 못 하면
+# 투자 안 함"). 이력이 쌓이면 코드 변경 없이 자동으로 추세 게이트가 작동한다.
+
+[caps]
+# 페이퍼라 절대 위험 0. 캡은 라이브 전환 시 자본에 맞춰 반드시 재조정할 것.
+per_trade_pct                  = 50.0
+per_symbol_pct                 = 60.0
+global_exposure_pct            = 100.0
+canary_capital_pct             = 5.0
+canary_min_duration_days       = 10
+canary_acceptance_drawdown_pct = 3.0
+
+[whitelist]
+# 광범위 인덱스 ETF만 — 종목 선택이 아니라 베타. 라이브 거래 집합 무확대(헌법 II)는 라이브
+# 전환 시 운영자가 결정. SPY(미국 대형주), QQQ(나스닥100) — 둘 다 초유동.
+symbols     = ["SPY", "QQQ"]
+accounts    = ["${KIS_ACCOUNT_NO}"]
+order_types = ["LIMIT"]
+sessions    = ["REGULAR"]
+
+[portfolio]
+id            = "risk-managed-beta"
+# 광범위 베타 2종(미국 대형주 + 나스닥100). top_n=2 = 둘 다 보유(선택 아님). 각자 추세
+# 게이트로 자기 추세 아래면 현금. 재정규화 안 함 → 둘 다 추세 아래면 100% 현금(폭락 방어).
+universe      = ["SPY", "QQQ"]
+weights       = { momentum = "1.0" }   # top_n=2 라 점수는 순위에 무영향(둘 다 보유)
+weight_scheme = "equal"
+top_n         = 2
+# 저회전 — 승자 유지(hold_replace), 월 1회(≈21영업일) 재조정. 슬라이스 2에서 전환 연 ~1.3회
+# 로 비용에 강함을 확인. 무거래 밴드 2%·최소 명목 $50 으로 자투리 거래 억제.
+rebalance_mode             = "hold_replace"
+invested_fraction          = "0.99"
+rebalance_every_n_sessions = 21
+lookback_bars              = 200
+momentum_period            = 120
+rebalance_threshold_pct    = "2.0"
+min_notional_usd           = "50"
+
+# 스펙 036 추세 필터 = 위험관리 베타의 핵심. 스펙 042 에서 검증된 파라미터:
+#   method=sma: 마지막 종가 > 최근 200일(≈10개월) SMA 일 때만 보유(고전 추세추종 기본).
+#     스펙 042 실측에서 10개월 SMA 가 낙폭 절반·샤프 0.71→1.18 을 냈고, 이 sma 경로가 바로
+#     그 결과를 100% 재현함을 테스트로 보증(production_in_market).
+#   lookback=200: 200영업일 ≈ 10개월(검증된 horizon). SMA 7/10/12개월 모두 9/9 견고라 한
+#     파라미터에 민감하지 않음.
+#   on_insufficient=cash: 200봉 이력이 없어 추세를 확정 못 하면 보유하지 않는다(보수적 방어
+#     — "확인 못 하면 투자 안 함"이 자본 방어 철학에 맞다).
+[portfolio.trend_filter]
+method          = "sma"
+lookback        = 200
+on_insufficient = "cash"

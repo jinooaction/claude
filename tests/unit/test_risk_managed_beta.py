@@ -14,6 +14,7 @@ from auto_invest.analytics.risk_managed_beta import (
     market_total_return_factors,
     overlay_factors,
     parse_shiller,
+    production_in_market,
     summarize,
     trend_in_market,
     turnover_stats,
@@ -175,6 +176,29 @@ def test_compare_with_costs_edge_survives_low_turnover():
     assert cmp.trend_net.cagr_pct <= cmp.trend_gross.cagr_pct
     assert cmp.trend_net.cagr_pct > cmp.trend_gross.cagr_pct - 1.0  # 1%p 미만 잠식
     assert cmp.turnover.switches_per_year < 5.0  # 저회전
+
+
+def test_production_signal_matches_research_signal():
+    # 슬라이스 3 브리지: 운영 코드(strategy.trend.above_trend) 신호가 연구 신호와 같아야
+    # 한다 — 같아야 "검증된 엣지가 라이브 코드 경로에 그대로 실린다"가 성립.
+    prices = [100.0 * (1.007**i) for i in range(50)]
+    prices += [prices[-1] * (0.95**i) for i in range(1, 14)]
+    prices += [prices[-1] * (1.012**i) for i in range(1, 30)]
+    rows = _rows(prices)
+    research = trend_in_market(rows, window=10)
+    prod = production_in_market(rows, lookback=10)
+    assert prod == research
+
+
+def test_production_signal_reproduces_drawdown_defense():
+    # 운영 신호로도 추세 방어(낙폭 축소)가 나와야 한다.
+    prices = [100.0 * (1.008**i) for i in range(80)]
+    prices += [prices[-1] * (0.93**i) for i in range(1, 16)]
+    prices += [prices[-1] * (1.01**i) for i in range(1, 50)]
+    rows = _rows(prices)
+    prod = production_in_market(rows, lookback=10)
+    cmp = compare_with_costs(rows, window=10, in_market=prod)
+    assert cmp.trend_net.max_dd_pct < cmp.buy_hold_net.max_dd_pct
 
 
 def test_compare_smoke_on_synthetic_crash():
