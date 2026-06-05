@@ -13,11 +13,14 @@ from auto_invest.analytics.risk_managed_beta import (
     compare_with_costs,
     compare_with_vol_target,
     count_switches,
+    current_signal,
     equity_curve,
+    event_window_defense,
     market_total_return_factors,
     overlay_factors,
     parse_shiller,
     production_in_market,
+    signal_timeline,
     summarize,
     trend_in_market,
     turnover_stats,
@@ -258,6 +261,72 @@ def test_compare_with_vol_target_smoke():
     assert cmp.verdict in {"VOL_TARGET_ADDS", "NO_ADDITIONAL_BENEFIT"}
     assert 0.0 <= cmp.avg_exposure <= 1.0
     assert cmp.trend_vol_net.vol_pct <= cmp.trend_net.vol_pct + 1e-6  # 변동성은 안 늘어야
+
+
+def _dated_rows(start_year: int, prices: list[float]) -> list[MonthlyRow]:
+    rows = []
+    for i, p in enumerate(prices):
+        y = start_year + i // 12
+        m = 1 + i % 12
+        rows.append(MonthlyRow(date=f"{y:04d}-{m:02d}-01", price=p, dividend=0.0, long_rate=0.0))
+    return rows
+
+
+def test_event_window_defense_detects_slow_bear_defense():
+    # 느린 약세장: 24개월 상승 → 18개월 천천히 -40% 하락. 추세가 방어해야 한다.
+    prices = [100.0 * (1.01**i) for i in range(24)]
+    top = prices[-1]
+    prices += [top * (0.97**i) for i in range(1, 19)]
+    rows = _dated_rows(2000, prices)
+    ev = event_window_defense(rows, "느린약세", "2002-01", "2003-06", window=10)
+    assert ev.strategy_drawdown_pct < ev.buy_hold_drawdown_pct
+    assert ev.defended is True
+    assert ev.months_in_cash > 0
+
+
+def test_event_window_defense_reports_failure_on_fast_vcrash():
+    # 빠른 V자: 한 달 -35% 폭락 후 즉시 회복. 월간 추세는 못 막아 방어 실패가 나야 정직.
+    prices = [100.0 * (1.005**i) for i in range(30)]
+    crash = prices[-1]
+    prices.append(crash * 0.65)  # 한 달 -35%
+    prices += [crash * (0.99 + 0.01 * i) for i in range(1, 10)]  # 빠른 회복
+    rows = _dated_rows(2018, prices)
+    ev = event_window_defense(rows, "V자", "2020-01", "2020-12", window=10)
+    # 빠른 폭락은 추세가 못 막는다 — 방어 실패(또는 미미)가 정직한 결과.
+    assert ev.strategy_drawdown_pct > 0
+    assert ev.defended is False
+
+
+def test_signal_timeline_records_transitions():
+    prices = [100.0 + i for i in range(20)] + [120.0 - 3 * i for i in range(1, 15)]
+    rows = _dated_rows(2010, prices)
+    tl = signal_timeline(rows, "2010-01", "2012-12", window=10)
+    assert tl[0][1] == "투자"  # 상승 구간 시작
+    assert any(state == "현금" for _, state in tl)  # 하락 후 현금 전환 존재
+
+
+def test_current_signal_in_market_when_above_sma():
+    prices = [100.0 + i for i in range(20)]  # 꾸준한 상승 → 현재가 > SMA
+    rows = _dated_rows(2024, prices)
+    cur = current_signal(rows, window=10)
+    assert cur is not None
+    assert cur.in_market is True
+    assert cur.gap_pct > 0
+    assert cur.as_of == rows[-1].date[:7]
+
+
+def test_current_signal_cash_when_below_sma():
+    prices = [100.0 + i for i in range(15)] + [114.0 - 4 * i for i in range(1, 6)]
+    rows = _dated_rows(2024, prices)
+    cur = current_signal(rows, window=10)
+    assert cur is not None
+    assert cur.in_market is False  # 최근 급락 → 현재가 < SMA
+    assert cur.gap_pct < 0
+
+
+def test_current_signal_none_when_insufficient():
+    rows = _dated_rows(2024, [100.0, 101.0, 102.0])
+    assert current_signal(rows, window=10) is None
 
 
 def test_compare_smoke_on_synthetic_crash():

@@ -24,8 +24,11 @@ from auto_invest.analytics.risk_managed_beta import (
     compare_trend_overlay,
     compare_with_costs,
     compare_with_vol_target,
+    current_signal,
+    event_window_defense,
     parse_shiller,
     production_in_market,
+    signal_timeline,
     trend_in_market,
 )
 
@@ -178,6 +181,58 @@ def _run_vol_target(all_rows, window: int, target_vol: float) -> list[dict]:
     return records
 
 
+# 운영자가 기억하는 실제 사건 — 검증 가능한 기준점.
+_MEMORABLE_EVENTS = [
+    ("닷컴 버블 붕괴", "2000-03", "2003-03"),
+    ("글로벌 금융위기(2008)", "2007-10", "2009-06"),
+    ("코로나 폭락(2020)", "2020-01", "2020-12"),
+    ("2022 약세장", "2022-01", "2023-01"),
+]
+
+
+def _run_confidence(all_rows, window: int) -> dict:
+    """운영자 확신용 리포트 — 기억나는 사건의 실제 방어(좋은 것·나쁜 것) + 오늘 신호."""
+    print("운영자 확신 리포트 — 기억나는 실제 사건에서 추세 전략이 실제로 어떻게 행동했나\n")
+    print(
+        f"{'사건':<24}{'단순보유 낙폭':>13}{'추세 낙폭':>11}{'현금개월':>9}{'판정':>8}"
+    )
+    print("-" * 66)
+    events = []
+    for label, s, e in _MEMORABLE_EVENTS:
+        ev = event_window_defense(all_rows, label, s, e, window=window)
+        events.append(ev.as_dict())
+        mark = "방어✅" if ev.defended else "실패❌"
+        print(
+            f"{label:<24}{ev.buy_hold_drawdown_pct:>12.1f}%{ev.strategy_drawdown_pct:>10.1f}%"
+            f"{ev.months_in_cash:>6}/{ev.total_months:<2}{mark:>8}"
+        )
+    print("-" * 66)
+
+    print("\n현금 이탈/재진입 타임라인 (검증 가능):")
+    for label, s, e in [
+        ("  글로벌 금융위기", "2007-06", "2009-12"),
+        ("  코로나(실패 사례)", "2019-12", "2020-12"),
+    ]:
+        tl = signal_timeline(all_rows, s, e, window=window)
+        print(f"{label}: " + " → ".join(f"{d} {st}" for d, st in tl))
+
+    cur = current_signal(all_rows, window=window)
+    if cur is not None:
+        state = "투자(추세 위)" if cur.in_market else "현금(추세 아래)"
+        print(
+            f"\n오늘({cur.as_of}) 신호: S&P {cur.price:.0f} vs {window}개월 SMA {cur.sma:.0f}"
+            f" ({cur.gap_pct:+.1f}%) → {state}"
+        )
+        print("  → 운영자님이 현재 시장 위치와 직접 대조해 검증하실 수 있습니다.")
+
+    defended = sum(1 for e in events if e["defended"])
+    print(
+        f"\n정직한 요약: {defended}/{len(events)} 사건에서 방어 성공. "
+        "느린 약세장(닷컴·GFC·2022)엔 강하지만, 빠른 V자 폭락(코로나)엔 월간 추세가 못 따라간다."
+    )
+    return {"events": events, "current_signal": cur.as_dict() if cur else None}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--window", type=int, default=10, help="추세 SMA 개월(고전 10).")
@@ -195,6 +250,11 @@ def main() -> int:
         help="추세 위에 변동성 타깃 결합 효과(슬라이스 4).",
     )
     ap.add_argument("--target-vol", type=float, default=0.12, help="연 변동성 타깃(0..1).")
+    ap.add_argument(
+        "--confidence",
+        action="store_true",
+        help="운영자 확신 리포트(기억나는 사건 방어 + 오늘 신호).",
+    )
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args()
 
@@ -206,7 +266,9 @@ def main() -> int:
         file=sys.stderr,
     )
 
-    if args.production_trend:
+    if args.confidence:
+        records = _run_confidence(all_rows, args.window)
+    elif args.production_trend:
         records = _run_production_bridge(all_rows, args.window)
     elif args.vol_target:
         records = _run_vol_target(all_rows, args.window, args.target_vol)
