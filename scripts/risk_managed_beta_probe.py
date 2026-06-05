@@ -24,6 +24,8 @@ from auto_invest.analytics.risk_managed_beta import (
     compare_trend_overlay,
     compare_with_costs,
     parse_shiller,
+    production_in_market,
+    trend_in_market,
 )
 
 SOURCE_URL = "https://raw.githubusercontent.com/datasets/s-and-p-500/main/data/data.csv"
@@ -105,12 +107,55 @@ def _run_costed(all_rows, window: int, cost_bps: float, tax: float) -> list[dict
     return records
 
 
+def _run_production_bridge(all_rows, window: int) -> list[dict]:
+    """슬라이스 3 — 운영 코드(strategy.trend.above_trend) 신호가 연구 신호와 같고, 같은
+    위험관리 엣지를 재현하는지(라이브 경로가 검증된 엣지를 그대로 싣는지)."""
+    print(
+        f"운영 코드 브리지 — strategy.trend.above_trend(SMA {window})가 라이브에서 내는 신호로"
+        f" 같은 엣지가 재현되는가\n"
+    )
+    head = _header()
+    records = []
+    for label, start_year in _PERIODS:
+        rows = [r for r in all_rows if int(r.date[:4]) >= start_year]
+        if len(rows) < 24:
+            continue
+        research = trend_in_market(rows, window)
+        prod = production_in_market(rows, lookback=window)
+        agree = sum(1 for a, b in zip(research, prod, strict=True) if a == b)
+        match_pct = 100.0 * agree / len(prod) if prod else 0.0
+        cmp = compare_with_costs(rows, window=window, cost_bps=10.0, in_market=prod)
+        records.append(
+            {"period": label, "signal_match_pct": round(match_pct, 2), **cmp.as_dict()}
+        )
+        print("-" * len(head))
+        print(head)
+        print(_leg_line(label, "단순보유(순)", cmp.buy_hold_net))
+        print(_leg_line("", "운영추세(순)", cmp.trend_net))
+        print(
+            f"  → 운영↔연구 신호 일치 {match_pct:.1f}% | 판정: {cmp.verdict} ({cmp.reason})"
+        )
+    print("-" * len(head))
+    full_match = all(r["signal_match_pct"] == 100.0 for r in records)
+    print(
+        "\n요약: 운영 코드 신호가 연구 신호와 "
+        + ("완전 일치(100%)" if full_match else "불일치 있음")
+        + " → 검증된 엣지가 라이브 코드 경로에 그대로 실린다."
+    )
+    return records
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--window", type=int, default=10, help="추세 SMA 개월(고전 10).")
     ap.add_argument("--costs", action="store_true", help="거래비용·세금 반영 비교.")
     ap.add_argument("--cost-bps", type=float, default=10.0, help="전환당 일방 거래비용(bp).")
     ap.add_argument("--tax", type=float, default=0.0, help="과세 계좌 자본이득세율(0..1).")
+    ap.add_argument(
+        "--production-trend",
+        action="store_true",
+        help="운영 코드(strategy.trend) 신호로 같은 엣지가 재현되는지(슬라이스 3 브리지).",
+    )
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args()
 
@@ -122,7 +167,9 @@ def main() -> int:
         file=sys.stderr,
     )
 
-    if args.costs:
+    if args.production_trend:
+        records = _run_production_bridge(all_rows, args.window)
+    elif args.costs:
         records = _run_costed(all_rows, args.window, args.cost_bps, args.tax)
     else:
         records = _run_gross(all_rows, args.window)
