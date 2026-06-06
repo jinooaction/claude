@@ -72,9 +72,20 @@ class DirtyTreeDecision:
 
 
 def dirty_tree_check(repo: Path) -> DirtyTreeDecision:
-    """Return whether the working tree has uncommitted changes."""
+    """Return whether the working tree has uncommitted changes to *tracked* files.
+
+    The deploy step runs ``git reset --hard origin/<branch>``, which only
+    clobbers tracked files; untracked files survive the reset untouched. So
+    untracked generated artifacts (the tuner's rule snapshots
+    ``config/rules_auto_*.toml``, the ``reports/`` directory, etc.) must NOT
+    block a deploy — historically they accumulated on the server and froze the
+    deploy state machine with "working tree dirty", silently stranding the
+    worker on an old SHA. We therefore pass ``--untracked-files=no`` and treat
+    only uncommitted changes to tracked files (which reset --hard WOULD destroy)
+    as dirty.
+    """
     result = subprocess.run(
-        ["git", "-C", str(repo), "status", "--porcelain"],
+        ["git", "-C", str(repo), "status", "--porcelain", "--untracked-files=no"],
         capture_output=True,
         text=True,
         check=True,

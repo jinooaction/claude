@@ -68,13 +68,34 @@ def test_clean_tree(tmp_path):
     assert decision.allowed is True
 
 
-def test_dirty_tree(tmp_path):
+def test_untracked_file_does_not_block_deploy(tmp_path):
+    # Untracked generated artifacts (tuner rule snapshots, reports/) survive
+    # `git reset --hard`, so they must NOT be reported as dirty — otherwise they
+    # accumulate on the server and freeze the deploy state machine.
     _init_git_repo(tmp_path)
-    (tmp_path / "f.txt").write_text("hi")
+    (tmp_path / "rules_auto_20260523T103616.toml").write_text("x = 1")
+    (tmp_path / "reports").mkdir()
+    (tmp_path / "reports" / "r.txt").write_text("hi")
+    decision = dirty_tree_check(tmp_path)
+    assert decision.is_dirty is False
+    assert decision.allowed is True
+
+
+def test_modified_tracked_file_is_dirty(tmp_path):
+    # A committed (tracked) file with uncommitted edits WOULD be clobbered by
+    # `git reset --hard`, so it must block the deploy.
+    _init_git_repo(tmp_path)
+    tracked = tmp_path / "tracked.txt"
+    tracked.write_text("v1")
+    subprocess.run(["git", "-C", str(tmp_path), "add", "tracked.txt"], check=True)
+    subprocess.run(
+        ["git", "-C", str(tmp_path), "commit", "-q", "-m", "init"], check=True,
+    )
+    tracked.write_text("v2")  # uncommitted modification to a tracked file
     decision = dirty_tree_check(tmp_path)
     assert decision.is_dirty is True
     assert decision.allowed is False
-    assert "f.txt" in decision.porcelain
+    assert "tracked.txt" in decision.porcelain
 
 
 # ---------------- secrets_present ----------------
