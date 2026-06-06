@@ -76,6 +76,24 @@ def test_correlation_regime_structure():
     assert d["window_months"] == 36
     assert d["current"] is None or -1.0 <= d["current"] <= 1.0
     assert d["recent_5y_pos_fraction"] is None or 0.0 <= d["recent_5y_pos_fraction"] <= 1.0
+    assert d["verdict"] in {
+        "DIVERSIFICATION_RELIABLE", "DIVERSIFICATION_WEAKENED", "INSUFFICIENT",
+    }
+
+
+def test_correlation_regime_verdict_logic():
+    from auto_invest.analytics.regime_audit import CorrelationRegime
+    # 최근 5년 상관 양수 → 약화 판정.
+    weak = CorrelationRegime(36, current=0.3, recent_5y_avg=0.2,
+                             recent_5y_pos_fraction=0.7, full_avg=0.1)
+    assert weak.verdict == "DIVERSIFICATION_WEAKENED"
+    # 음수·과반 미만 → 신뢰 판정.
+    ok = CorrelationRegime(36, current=-0.3, recent_5y_avg=-0.2,
+                           recent_5y_pos_fraction=0.2, full_avg=-0.1)
+    assert ok.verdict == "DIVERSIFICATION_RELIABLE"
+    # 데이터 부족 → INSUFFICIENT.
+    none = CorrelationRegime(36, None, None, None, None)
+    assert none.verdict == "INSUFFICIENT"
 
 
 def test_window_stats_structure_and_months():

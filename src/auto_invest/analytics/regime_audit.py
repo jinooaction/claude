@@ -117,6 +117,19 @@ class CorrelationRegime:
     recent_5y_pos_fraction: float | None  # 최근 5년 중 상관>0(분산 실패) 비중
     full_avg: float | None
 
+    @property
+    def verdict(self) -> str:
+        """실행 가능한 판정 — *정적* 분산을 지금 믿어도 되는가.
+
+        최근 5년 상관이 양수(평균>0 또는 양수 달 과반)면 정적 분산(60/40·리스크 패리티)이
+        약해진 regime → DIVERSIFICATION_WEAKENED(추세 게이트 의존). 음수면 RELIABLE. 어느
+        쪽이든 추세 오버레이는 방어선이지만, 이 판정은 *정적 분산 의존도*를 운영자에게 알린다.
+        """
+        if self.recent_5y_avg is None or self.recent_5y_pos_fraction is None:
+            return "INSUFFICIENT"
+        weakened = self.recent_5y_avg > 0.0 or self.recent_5y_pos_fraction > 0.5
+        return "DIVERSIFICATION_WEAKENED" if weakened else "DIVERSIFICATION_RELIABLE"
+
     def as_dict(self) -> dict:
         def _r(x):
             return round(x, 4) if x is not None else None
@@ -126,6 +139,7 @@ class CorrelationRegime:
             "recent_5y_avg": _r(self.recent_5y_avg),
             "recent_5y_pos_fraction": _r(self.recent_5y_pos_fraction),
             "full_avg": _r(self.full_avg),
+            "verdict": self.verdict,
         }
 
 
