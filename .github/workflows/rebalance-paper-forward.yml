@@ -43,6 +43,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # ---- 일일 전략 모니터 (스펙 046, 러너 로컬 — Shiller 데이터만, 워커 불필요) --------
+      # 검증된 스펙(042~045)을 합친 지속 감시 대시보드: ① 엣지 최근 유효성 ② 분산 가정 신뢰도
+      # ③ 낙폭 예산별 레버리지 복리 권고(최근 25년) ④ 오늘 추세 신호. 읽기 전용 — 돈 0 이동,
+      # 거래 변경 0. 완전 격리(continue-on-error + || true)라 ARM A/B/C/D 를 절대 못 깨뜨린다.
+      - name: Install uv (for strategy monitor)
+        uses: astral-sh/setup-uv@v3
+        continue-on-error: true
+
+      - name: "일일 전략 모니터 — regime/엣지/레버리지/오늘 신호 (스펙 046)"
+        id: monitor
+        continue-on-error: true
+        run: |
+          set +e
+          {
+            echo "=== 낙폭 예산 15% ==="
+            uv run python scripts/strategy_monitor_probe.py --dd-budget 15 2>/dev/null
+            echo ""
+            echo "=== 낙폭 예산 20% (레버리지 권고 비교) ==="
+            uv run python scripts/strategy_monitor_probe.py --dd-budget 20 --json 2>/dev/null
+          } > /tmp/monitor.txt 2>&1 || echo "(monitor unavailable)" > /tmp/monitor.txt
+          cat /tmp/monitor.txt
+
       - name: Install SSH key
         env:
           KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
@@ -301,6 +323,16 @@ jobs:
             echo "| RISK-MANAGED-BETA verdict ssh_exit | ${VERDICT_RMBETA_EXIT:-?} |"
             echo "| MULTI-ASSET-TREND prep ssh_exit | ${PREP_MULTIASSET_EXIT:-?} |"
             echo "| MULTI-ASSET-TREND verdict ssh_exit | ${VERDICT_MULTIASSET_EXIT:-?} |"
+            echo ""
+            echo "## 🔭 일일 전략 모니터 (스펙 046 — 지속 감시, 돈 0 이동)"
+            echo ""
+            echo "> 검증된 스펙(042~045)을 합친 대시보드: ① 엣지 최근 유효성 ② 분산 가정 신뢰도"
+            echo "> ③ 낙폭 예산별 레버리지 복리 권고(최근 25년) ④ 오늘 추세 신호. 라이브 레버리지/"
+            echo "> 무장은 여전히 운영자 게이트(헌법 X.4) — 이건 감시 보고이지 거래 변경이 아니다."
+            echo ""
+            echo '```'
+            cat /tmp/monitor.txt 2>/dev/null || echo '(monitor unavailable)'
+            echo '```'
             echo ""
             echo "## 🧭 판정 — 추세 필터 ON (drawdown 방어 오버레이)"
             echo ""
