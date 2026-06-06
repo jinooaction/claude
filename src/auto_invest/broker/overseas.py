@@ -84,6 +84,32 @@ def _kis_headers(
     return headers
 
 
+class QuoteUnavailable(RuntimeError):
+    """KIS returned no usable last price for a symbol (blank/garbage field).
+
+    Raised by `get_quote` so callers can skip the symbol with an actionable,
+    symbol-tagged message instead of an opaque `decimal.InvalidOperation`.
+    """
+
+
+def _opt_price(raw: object) -> Decimal | None:
+    """Parse an optional KIS price field; blank or non-numeric → None.
+
+    KIS intermittently returns empty strings (e.g. ``"bidp": ""``) or, rarely,
+    non-numeric junk for price fields when there is no recent trade or a data
+    gap. Mirror the tolerant parsing already used by `_parse_daily_bars`.
+    """
+    if raw is None:
+        return None
+    s = str(raw).strip()
+    if not s:
+        return None
+    try:
+        return Decimal(s)
+    except InvalidOperation:
+        return None
+
+
 async def get_quote(
     client: ResilientClient,
     *,
@@ -106,11 +132,16 @@ async def get_quote(
         params={"AUTH": "", "EXCD": market, "SYMB": symbol},
     )
     body = response.json()["output"]
+    last = _opt_price(body.get("last"))
+    if last is None or last <= 0:
+        raise QuoteUnavailable(
+            f"{symbol}: KIS returned no usable last price (got {body.get('last')!r})"
+        )
     return Quote(
         symbol=symbol,
-        last_price_usd=Decimal(str(body["last"])),
-        bid_usd=Decimal(str(body["bidp"])) if body.get("bidp") else None,
-        ask_usd=Decimal(str(body["askp"])) if body.get("askp") else None,
+        last_price_usd=last,
+        bid_usd=_opt_price(body.get("bidp")),
+        ask_usd=_opt_price(body.get("askp")),
         quoted_at_utc=datetime.now(UTC),
     )
 
