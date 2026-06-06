@@ -75,10 +75,13 @@ main 머지 `be112e0`(PR #213) + `dbd88dc`(PR #214). 운영자 "세계 최고 �
   격리(추적 변경 있으면 건너뜀)해 옛 서버 코드의 닭-달걀을 푼다.
 - **고침 2 (`fix(broker)`)**: KIS 가 빈 `last` 가격을 줄 때 `decimal.InvalidOperation` 으로
   다수 종목 견적이 터지던 버그 → `_opt_price` 헬퍼 + 심볼 적힌 `QuoteUnavailable`(헌법 VII).
-- **검증(끝까지)**: 머지 후 deploy-on-merge 가 **성공**(직전 두 번은 실패). 서버 저널
+- **검증(끝까지 — 확정)**: 머지 후 deploy-on-merge 가 **성공**(직전 두 번은 실패). 서버 저널
   `no changes to deploy (HEAD == origin/main @ be112e0)` + `START_EXIT 0` = **서버가 최신
-  main 으로 복구**. 이어 forward 페이퍼 재발화(PR #214)로 ARM C/D 가 데이터를 쌓기 시작하는지
-  확인 중.
+  main 으로 복구**. 이어 forward 페이퍼 재발화(PR #214, run 27077225525) 결과 **네 ARM 전부
+  `prep ssh_exit 0` + `verdict ssh_exit 0`** — ARM C(위험관리 베타 SPY·QQQ)·D(멀티에셋 추세
+  SPY·IEF)가 65/1 → 0/0 으로 살아나 **첫 NAV 스냅샷 생성**(verdict JSON 빈칸→`INSUFFICIENT_DATA`,
+  snapshot_count 1). `portfolio file not found` 완전 소멸 = **검증된 전략이 우리 체결 경로에서
+  데이터를 쌓기 시작**.
 - **안전**: Kernel 터치 0건, 돈 0 이동, 라이브 무장 변경 없음(배포 자동화 버그 수정이지 거래
   변경 아님). 전체 1596 통과·4 스킵, 린트 깨끗, YAML 유효. 신규/수정 테스트 8건.
 - **다음(돈으로 가는 길)**: ① forward 사이드카에서 ARM C/D 의 `prep ssh_exit` 0 + verdict
