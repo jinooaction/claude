@@ -43,6 +43,11 @@ data/
 
 # operator-specific TOML rules (the example fixture under tests/fixtures/rules/ is committed).
 config/rules.toml
+# Tuner-generated rule snapshots + generated reports. Produced on the server at
+# runtime; NOT deploy inputs. Ignoring them keeps `git status` from marking the
+# working tree "dirty" and freezing the deploy state machine.
+config/rules_auto_*.toml
+reports/
 
 # Automation result/trigger files written by .github/workflows/ (verify-operator-setup.yml,
 # trigger-design.yml). 결과 파일이라 main 누적 X. workflow가 실행된 branch 에만 남음.
