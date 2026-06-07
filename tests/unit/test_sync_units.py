@@ -91,3 +91,42 @@ def test_workflow_pipes_script_and_checks_out():
     assert "'sudo bash -s' < deploy/sync-units.sh" in wf
     # Unit-sync result is surfaced but independent of the code-deploy exit.
     assert "units_exit" in wf
+
+
+# ───────────────────────── polkit rule sync (deploy stop_worker fix) ─────────
+
+
+POLKIT_RULE = REPO_ROOT / "deploy" / "50-auto-invest.rules"
+
+
+def test_polkit_rule_exists_and_is_narrowly_scoped():
+    """The rule must authorise ONLY the auto-invest user + auto-invest.service +
+    manage-units action — never a broader grant."""
+    assert POLKIT_RULE.is_file(), "deploy/50-auto-invest.rules must exist"
+    body = POLKIT_RULE.read_text(encoding="utf-8")
+    assert "org.freedesktop.systemd1.manage-units" in body
+    assert 'subject.user == "auto-invest"' in body
+    assert 'action.lookup("unit") == "auto-invest.service"' in body
+    assert "polkit.Result.YES" in body
+
+
+def test_sync_units_installs_polkit_rule():
+    """sync-units.sh must (re)install the polkit rule on every deploy so a running
+    server that lost it (cloud-init runs only once) regains worker-manage rights —
+    otherwise deploy fails at phase=stop_worker (Interactive authentication)."""
+    code = _code()
+    assert "50-auto-invest.rules" in code
+    assert "/etc/polkit-1/rules.d" in code
+    # reload (never restart) so the worker is untouched but the rule takes effect.
+    assert "reload polkit" in code
+
+
+def test_deploy_workflow_syncs_units_before_deploy():
+    """The unit/polkit sync step MUST run before the deploy step: the deploy state
+    machine's stop_worker needs the polkit rule already installed to succeed."""
+    wf = (REPO_ROOT / ".github" / "workflows" / "deploy-on-merge.yml").read_text(
+        encoding="utf-8"
+    )
+    units_idx = wf.index("id: units")
+    deploy_idx = wf.index("id: deploy")
+    assert units_idx < deploy_idx, "units/polkit sync must precede the deploy step"
