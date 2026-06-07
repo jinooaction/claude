@@ -1,0 +1,80 @@
+# 스펙 047 — 글로벌 분산 추세추종(주식+채권+금) forward 페이퍼 설정. 돈 0 이동.
+#
+# 무엇이 다른가(중요): ARM D(multi-asset-trend-portfolio.toml)는 주식(SPY)+채권(IEF) *2자산*
+# 분산이다. 이 파일은 **세 번째 비상관 자산(금, GLD)을 더한 3자산** GTAA 다. 금은 주식·채권
+# *둘 다와* 비상관이고(스펙 047 실측 상관 주식 −0.07~+0.01 / 채권 +0.03~+0.17), 특히 주식·
+# 채권 상관이 양수로 가는 인플레 regime(일일 모니터가 지금 DIVERSIFICATION_WEAKENED 로
+# 경고하는 바로 그 구간)에서 방어한다. 세계 최고 수준 managed futures(AQR/Man-AHL/Winton)가
+# 하는 진짜 GTAA — 비상관 추세 다발 — 의 한 걸음.
+#
+# 왜 이게 검증된 길인가(스펙 047, specs/047-global-trend/FINDINGS.md):
+# Shiller 월간 S&P + 10년 국채(1871~) + 런던 금 월간(1833~, 둘 다 GitHub)에서 2자산 vs
+# 3자산(+금) 분산 추세를 비교한 결과 —
+#   금은 변동성이 큰 자산(≈15%)이라 **균등가중(1/3씩)은 금에 위험을 과배분해 일부 구간서
+#   낙폭을 악화**시켰다(NO_GOLD_BENEFIT). 그러나 **위험으로 사이징(역변동성)하면** 금이
+#   자동으로 작은 비중(≈10~15%)을 받아 분산 이득(비상관·인플레 헤지)만 취하고 변동성은 안
+#   들여온다 — 그 결과 **모든 구간(전체/현대/1971~자유변동/최근)에서 낙폭이 ~5% 로 떨어지고
+#   칼마가 크게 올랐다**(전체 칼마 0.45→1.10, 1971~ 1.49→1.77). 샤프는 2자산과 비등~소폭↑.
+#   고정 위험가중(금 ≈14%)으로는 4/4 구간 샤프·칼마·낙폭 모두 개선(엄격 엣지).
+#   핵심 교훈(스펙 044 의 직접 적용): 변동성 차이 큰 자산은 *균등이 아니라 위험으로* 사이징.
+#
+# 그래서 이 설정은 **weight_scheme = "inverse_vol"**(역변동성 = 리스크 패리티)을 쓴다 —
+# "마법의 상수" 없이 금이 변동성에 비례해 자동으로 작은 비중을 받는다(원칙적 사이징, 스펙
+# 017/020/024 에서 검증된 운영 경로). 각 자산은 자기 ~10개월(200일) 추세 위일 때만 보유하고
+# 아래면 현금(추세 게이트가 역변동성 가중 *뒤에* 적용 = 자본 방어 오버레이).
+#
+# ⚠ 정직한 한계: 금 보관비용(GLD 경비 ≈0.40%/년)·세금은 장기 *상대* 비교엔 무시 수준이나
+# 명시한다. 채권 프록시·"현금" 한계는 스펙 042/043 과 동일(세 다리 동일 적용이라 상대 비교
+# 공정). 분산은 raw CAGR 이 더 낮다(절반 이상이 저변동 채권/현금) — 가치는 위험조정 수익↑ 과
+# 그 뒤 (운영자 결정으로) 자본·레버리지로 목표 수익을 *훨씬 낮은 낙폭에서* 달성하는 데 있다.
+#
+# ── 아직 라이브 아님 (정직) ──────────────────────────────────────────────────
+# PAPER 전용(rebalance-paper-forward.yml ARM E, --mode paper). 실주문 0건, 돈 0 이동. 실거래
+# 전환은 별도 운영자 게이트(헌법 X.4). 인스턴스 전제: universe(SPY·IEF·GLD) 일봉이
+# ≥lookback(200) 쌓여야 추세·변동성 판정 활성. 부족하면 on_insufficient=cash 라 보유 안 함
+# (보수적 — "확인 못 하면 투자 안 함"). GLD/IEF 백필이 실패해도 나머지로 동작(graceful degrade).
+
+[caps]
+# 페이퍼라 절대 위험 0. 캡은 라이브 전환 시 자본에 맞춰 반드시 재조정할 것.
+per_trade_pct                  = 50.0
+per_symbol_pct                 = 60.0
+global_exposure_pct            = 100.0
+canary_capital_pct             = 5.0
+canary_min_duration_days       = 10
+canary_acceptance_drawdown_pct = 3.0
+
+[whitelist]
+# 비상관 자산 3종 — 주식(SPY) + 채권(IEF) + 금(GLD). 셋 다 초유동 미국 상장 ETF(KIS 해외주식
+# 경로). 라이브 거래 집합 무확대(헌법 II)는 라이브 전환 시 운영자 결정.
+symbols     = ["SPY", "IEF", "GLD"]
+accounts    = ["${KIS_ACCOUNT_NO}"]
+order_types = ["LIMIT"]
+sessions    = ["REGULAR"]
+
+[portfolio]
+id            = "global-trend"
+# 주식(SPY) + 채권(IEF) + 금(GLD). top_n=3 = 셋 다 보유(선택 아님). 각자 추세 게이트로 자기
+# 추세 아래면 현금. 재정규화 안 함 → 셋 다 추세 아래면 100% 현금(폭락 방어).
+universe      = ["SPY", "IEF", "GLD"]
+weights       = { momentum = "1.0" }   # top_n=3 라 점수는 순위에 무영향(셋 다 보유)
+# 역변동성(리스크 패리티): 변동성 큰 금이 자동으로 작은 비중을 받는다(스펙 047 핵심). 균등이
+# 아니라 위험으로 사이징해야 금 분산 이득만 취하고 변동성은 안 들여온다.
+weight_scheme = "inverse_vol"
+top_n         = 3
+# 저회전 — 승자 유지(hold_replace), 월 1회(≈21영업일) 재조정. 무거래 밴드 2%·최소 명목 $50.
+rebalance_mode             = "hold_replace"
+invested_fraction          = "0.99"
+rebalance_every_n_sessions = 21
+lookback_bars              = 200   # 역변동성 추정 창(≈10개월, 안정적·저회전)
+momentum_period            = 120
+rebalance_threshold_pct    = "2.0"
+min_notional_usd           = "50"
+
+# 스펙 036 추세 필터 = 분산 추세의 핵심. 스펙 042/043/047 에서 검증된 파라미터(method=sma,
+# lookback=200≈10개월). 각 자산이 *자기* 추세 위일 때만 보유 → 세 비상관 흐름의 분산.
+# 역변동성 가중 *뒤에* 적용된다(자본 방어 오버레이). on_insufficient=cash: 200봉 이력 없으면
+# 보유 안 함(보수적 방어).
+[portfolio.trend_filter]
+method          = "sma"
+lookback        = 200
+on_insufficient = "cash"
