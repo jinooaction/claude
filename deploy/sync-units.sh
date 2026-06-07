@@ -2,8 +2,10 @@
 # auto-invest — systemd 유닛 동기화 (deploy-on-merge.yml 이 SSH 로 'sudo bash -s' 에 파이프).
 #
 # 목적: deploy/ 의 systemd 유닛(.service/.timer)을 서버 /etc/systemd/system 에 설치하고
-# 타이머를 활성화한다. 스펙 006 배포 상태기계(`auto-invest deploy`)는 코드 git pull +
-# 워커 재시작만 하고 '새 유닛 설치'는 하지 않으므로, 그 빈틈을 이 스크립트가 채운다.
+# 타이머를 활성화한다. 또 polkit 규칙(deploy/50-auto-invest.rules)을 동기화한다. 스펙 006
+# 배포 상태기계(`auto-invest deploy`)는 코드 git pull + 워커 재시작만 하고 '새 유닛/ polkit
+# 규칙 설치'는 하지 않으므로, 그 빈틈을 이 스크립트가 채운다(cloud-init 은 서버 생성 때
+# 한 번만 도므로 돌고 있는 서버엔 둘 다 유실될 수 있다).
 #
 # 안전:
 #   - 워커(auto-invest.service)를 절대 재시작/시작하지 않는다 — 유닛 파일 설치 +
@@ -46,6 +48,25 @@ done
 
 systemctl daemon-reload
 echo "[sync-units] daemon-reload done (${installed} unit file(s) installed)"
+
+# polkit 규칙 동기화: 비권한 `auto-invest` 사용자가 `auto-invest.service` 를 비대화식으로
+# 관리(stop/start)하게 허용한다. 이게 없으면 배포 상태기계가 phase=stop_worker 에서
+# "Interactive authentication required" 로 막혀 롤백한다. cloud-init(vultr-userdata.sh)은
+# 서버 생성 때 한 번만 설치하므로, 규칙이 유실/미설치된 *돌고 있는* 서버를 매 배포마다
+# 되살린다(systemd 유닛과 같은 빈틈 메우기). 멱등.
+if sudo -u auto-invest git -C "$REPO" show "${REF}:deploy/50-auto-invest.rules" \
+        > /tmp/50-auto-invest.rules.new 2>/dev/null; then
+    install -d -m 0755 /etc/polkit-1/rules.d
+    install -m 0644 /tmp/50-auto-invest.rules.new /etc/polkit-1/rules.d/50-auto-invest.rules
+    rm -f /tmp/50-auto-invest.rules.new
+    # polkit 은 rules.d 변경을 inotify 로 자동 감지해 반영하지만, 배포 상태기계가 곧바로
+    # stop_worker 를 호출하므로 방어적으로 reload 해 즉시 반영한다(워커는 절대 안 건드림 —
+    # polkit 만 reload). 실패해도 자동 감지로 결국 반영되고, 유닛 동기화 결과도 안 가린다.
+    systemctl reload polkit 2>/dev/null || true
+    echo "[sync-units] installed polkit rule 50-auto-invest.rules (+ reloaded polkit)"
+else
+    echo "[sync-units] skip (not in ${REF}): deploy/50-auto-invest.rules"
+fi
 
 # 타이머만 즉시 활성. 워커는 enable 만(운영자가 키 입력 후 start) — 절대 재시작하지 않음.
 if [ -f /etc/systemd/system/auto-invest-deploy.timer ]; then

@@ -1,0 +1,25 @@
+// auto-invest — polkit 규칙: 비권한 사용자 `auto-invest` 가 *자기 워커 유닛*
+// (auto-invest.service)을 비대화식으로 관리(stop/start/restart)할 수 있게 한다.
+//
+// 왜 필요한가: 스펙 006 배포 상태기계(`auto-invest deploy`)는 `auto-invest-deploy.service`
+// 로 도는데, 그 서비스는 최소권한을 위해 `User=auto-invest` + `NoNewPrivileges=true` 로
+// 돈다. 그 상태에서 supervisor.stop_worker()/start_worker() 가 `systemctl stop/start
+// auto-invest.service` 를 호출하면 polkit 이 "Interactive authentication required" 로
+// 막아 배포가 phase=stop_worker 에서 실패하고 롤백한다. sudo 는 NoNewPrivileges 때문에
+// 못 쓴다(setuid 불가) — polkit 인가가 정답이다(dbus 중재라 NoNewPrivileges 무관).
+//
+// 범위는 의도적으로 좁다: 이 규칙은 오직 `auto-invest` 사용자 + `auto-invest.service`
+// 유닛 + manage-units 액션만 허용한다. 다른 사용자·다른 유닛·다른 액션은 기본 polkit
+// 정책 그대로다.
+//
+// 단일 소스: deploy/vultr-userdata.sh(서버 생성 시 cloud-init)와 deploy/sync-units.sh
+// (매 배포 sudo 동기화)가 둘 다 이 파일을 /etc/polkit-1/rules.d/50-auto-invest.rules 로
+// 설치한다. cloud-init 은 한 번만 돌므로, 이 규칙이 유실/미설치된 *돌고 있는* 서버는
+// sync-units.sh 가 매 배포마다 되살린다(systemd 유닛과 같은 패턴).
+polkit.addRule(function(action, subject) {
+    if ((action.id == "org.freedesktop.systemd1.manage-units") &&
+        subject.user == "auto-invest" &&
+        action.lookup("unit") == "auto-invest.service") {
+        return polkit.Result.YES;
+    }
+});

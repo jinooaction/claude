@@ -107,17 +107,10 @@ echo "[8/9] install polkit rule so auto-invest user can manage its own unit"
 # rule only authorises the auto-invest user + the auto-invest.service
 # unit + the manage-units action. Other users, other units, and other
 # actions remain governed by default polkit policy.
+# 단일 소스: deploy/50-auto-invest.rules (sync-units.sh 도 같은 파일을 매 배포 동기화하므로
+# 돌고 있는 서버에서 규칙이 유실돼도 되살아난다). cloud-init 시점엔 repo 가 이미 클론돼 있다.
 install -d -m 0755 /etc/polkit-1/rules.d
-cat > /etc/polkit-1/rules.d/50-auto-invest.rules <<'POLKIT_EOF'
-polkit.addRule(function(action, subject) {
-    if ((action.id == "org.freedesktop.systemd1.manage-units") &&
-        subject.user == "auto-invest" &&
-        action.lookup("unit") == "auto-invest.service") {
-        return polkit.Result.YES;
-    }
-});
-POLKIT_EOF
-chmod 0644 /etc/polkit-1/rules.d/50-auto-invest.rules
+install -m 0644 /opt/auto-invest/deploy/50-auto-invest.rules /etc/polkit-1/rules.d/50-auto-invest.rules
 # polkit picks up new rules without a restart on most distros, but reload
 # defensively so the very first auto-invest-deploy.timer firing sees it.
 systemctl reload polkit 2>/dev/null || systemctl restart polkit 2>/dev/null || true
