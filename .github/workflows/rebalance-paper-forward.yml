@@ -284,6 +284,56 @@ jobs:
           echo "--- verdict ---"; cat /tmp/verdict_multiasset.json
           echo "--- stderr ---"; cat /tmp/verdict_multiasset.err
 
+      # ---- ARM E: 글로벌 분산 추세추종 (주식+채권+금, 역변동성, 스펙 047) --------
+      # ARM D(SPY·IEF=2자산)에 *세 번째 비상관 자산(금, GLD)* 을 더한 3자산 GTAA. 금은 주식·채권
+      # 둘 다와 비상관이라(특히 주식·채권 상관이 양수로 가는 인플레 regime 의 구조적 헤지) 분산
+      # 이득을 더한다. 핵심: 금은 변동성 큰 자산이라 *균등이 아니라 역변동성(리스크 패리티)으로*
+      # 사이징해야 분산 이득만 취하고 변동성은 안 들여온다(스펙 047 실측 — weight_scheme=inverse_vol).
+      # Shiller 1871~ + 런던 금 1833~ 으로 검증한 결과를 우리 KIS 체결로 forward 누적해 *확신을
+      # 번다*. 전용 DB 격리 + set +e + if:always() 라 ARM A/B/C/D 를 못 깨뜨린다. GLD/IEF 백필이
+      # 실패해도 나머지로 동작(graceful degrade). PAPER 전용 — 실주문 0건, 돈 0 이동.
+      - name: "Arm GLOBAL-TREND — backfill + paper rebalance + NAV snapshot"
+        id: prep_global
+        if: always()
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+          CAPITAL: ${{ github.event.inputs.capital || '12000' }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          cfg="deploy/global-trend-portfolio.toml"; dbf="data/forward_global.db"
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "cd /opt/auto-invest && \
+                 /usr/local/bin/uv run auto-invest backfill-bars --portfolio ${cfg} --max-symbols 120 --min-bars 1000 --order deepen --db ${dbf} --env-file .env --json && \
+                 /usr/local/bin/uv run auto-invest rebalance-once --portfolio ${cfg} --mode paper --capital ${CAPITAL} --db ${dbf} --env-file .env --json && \
+                 /usr/local/bin/uv run auto-invest nav-snapshot --mode paper --db ${dbf} --env-file .env --snapshot --format json" \
+              > /tmp/prep_global.log 2>&1
+          echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
+          cat /tmp/prep_global.log
+
+      - name: "Arm GLOBAL-TREND — forward edge verdict (spec 035)"
+        id: verdict_global
+        if: always()
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest forward-verdict \
+                 --mode paper --portfolio deploy/global-trend-portfolio.toml \
+                 --db data/forward_global.db --format json" \
+              > /tmp/verdict_global.json 2>/tmp/verdict_global.err
+          echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
+          echo "--- verdict ---"; cat /tmp/verdict_global.json
+          echo "--- stderr ---"; cat /tmp/verdict_global.err
+
       - name: Publish A/B tournament to sidecar branch
         if: always()
         env:
@@ -296,6 +346,8 @@ jobs:
           VERDICT_RMBETA_EXIT: ${{ steps.verdict_rmbeta.outputs.ssh_exit }}
           PREP_MULTIASSET_EXIT: ${{ steps.prep_multiasset.outputs.ssh_exit }}
           VERDICT_MULTIASSET_EXIT: ${{ steps.verdict_multiasset.outputs.ssh_exit }}
+          PREP_GLOBAL_EXIT: ${{ steps.prep_global.outputs.ssh_exit }}
+          VERDICT_GLOBAL_EXIT: ${{ steps.verdict_global.outputs.ssh_exit }}
         run: |
           set -uo pipefail
           BRANCH=automation/rebalance-paper-forward-last-run
@@ -323,6 +375,8 @@ jobs:
             echo "| RISK-MANAGED-BETA verdict ssh_exit | ${VERDICT_RMBETA_EXIT:-?} |"
             echo "| MULTI-ASSET-TREND prep ssh_exit | ${PREP_MULTIASSET_EXIT:-?} |"
             echo "| MULTI-ASSET-TREND verdict ssh_exit | ${VERDICT_MULTIASSET_EXIT:-?} |"
+            echo "| GLOBAL-TREND prep ssh_exit | ${PREP_GLOBAL_EXIT:-?} |"
+            echo "| GLOBAL-TREND verdict ssh_exit | ${VERDICT_GLOBAL_EXIT:-?} |"
             echo ""
             echo "## 🔭 일일 전략 모니터 (스펙 046 — 지속 감시, 돈 0 이동)"
             echo ""
@@ -374,6 +428,21 @@ jobs:
             cat /tmp/verdict_multiasset.json 2>/dev/null || echo '{}'
             echo '```'
             echo ""
+            echo "## 🪙 판정 — 글로벌 분산 추세 (주식+채권+금, 역변동성, 스펙 047)"
+            echo ""
+            echo "> ARM D(주식+채권 2자산)에 *세 번째 비상관 자산(금, GLD)* 을 더한 3자산 GTAA."
+            echo "> 금은 주식·채권 둘 다와 비상관 — 특히 주식·채권 상관이 양수로 가는 인플레"
+            echo "> regime(일일 모니터의 DIVERSIFICATION_WEAKENED 경고)의 구조적 헤지다. 금은"
+            echo "> 변동성 큰 자산이라 *역변동성(리스크 패리티)* 으로 사이징해 분산 이득만 취하고"
+            echo "> 변동성은 안 들여온다(스펙 047: 균등가중은 낙폭 악화, 역변동성은 모든 구간 낙폭"
+            echo "> ~5%·칼마↑). INSUFFICIENT_DATA 면 NAV 가 더 쌓여야 함(정상). ARM D 와 나란히"
+            echo "> 비교하면 '금이 우리 체결 기준 forward 로도 분산을 더하는가'의 격리된 답."
+            echo "> 라이브 전환은 운영자 게이트(헌법 X.4)."
+            echo ""
+            echo '```json'
+            cat /tmp/verdict_global.json 2>/dev/null || echo '{}'
+            echo '```'
+            echo ""
             echo "## TREND-ON 준비 로그 (backfill → rebalance → nav-snapshot)"
             echo ""
             echo '```'
@@ -396,6 +465,12 @@ jobs:
             echo ""
             echo '```'
             cat /tmp/prep_multiasset.log 2>/dev/null || echo '(none)'
+            echo '```'
+            echo ""
+            echo "## GLOBAL-TREND 준비 로그 (backfill → rebalance → nav-snapshot)"
+            echo ""
+            echo '```'
+            cat /tmp/prep_global.log 2>/dev/null || echo '(none)'
             echo '```'
           } > LAST_RUN.md
           git checkout --orphan publish
