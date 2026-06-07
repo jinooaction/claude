@@ -59,11 +59,14 @@ if sudo -u auto-invest git -C "$REPO" show "${REF}:deploy/50-auto-invest.rules" 
     install -d -m 0755 /etc/polkit-1/rules.d
     install -m 0644 /tmp/50-auto-invest.rules.new /etc/polkit-1/rules.d/50-auto-invest.rules
     rm -f /tmp/50-auto-invest.rules.new
-    # polkit 은 rules.d 변경을 inotify 로 자동 감지해 반영하지만, 배포 상태기계가 곧바로
-    # stop_worker 를 호출하므로 방어적으로 reload 해 즉시 반영한다(워커는 절대 안 건드림 —
-    # polkit 만 reload). 실패해도 자동 감지로 결국 반영되고, 유닛 동기화 결과도 안 가린다.
-    systemctl reload polkit 2>/dev/null || true
-    echo "[sync-units] installed polkit rule 50-auto-invest.rules (+ reloaded polkit)"
+    # 새 규칙을 실행 중인 polkitd 에 즉시 반영한다. 많은 배포판의 polkit.service 는
+    # ExecReload 가 없어 `reload` 가 실패하므로(그러면 규칙이 안 올라가 stop_worker 가 계속
+    # 막힌다 — 실제로 그랬다), cloud-init 과 동일하게 `reload` 실패 시 `restart` 로 떨어진다.
+    # *polkit 만* 재시작한다 — 워커(auto-invest.service)는 절대 안 건드린다(polkit 재시작은
+    # 잠깐 인가만 재질의시킬 뿐 워커 프로세스와 무관). 배포 상태기계가 곧바로 stop_worker 를
+    # 호출하므로 즉시 반영이 중요하다.
+    systemctl reload polkit 2>/dev/null || systemctl restart polkit 2>/dev/null || true
+    echo "[sync-units] installed polkit rule 50-auto-invest.rules (+ reloaded/restarted polkit)"
 else
     echo "[sync-units] skip (not in ${REF}): deploy/50-auto-invest.rules"
 fi

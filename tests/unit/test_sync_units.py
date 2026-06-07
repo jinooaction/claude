@@ -57,11 +57,13 @@ def test_enables_both_timers_now():
 
 
 def test_never_restarts_or_starts_the_worker():
-    """The worker may be enabled, but NEVER restarted/started here — that is
-    the deploy state machine's job, with its own market-hours + health gates."""
+    """The WORKER (auto-invest.service) may be enabled, but NEVER restarted/started
+    here — that is the deploy state machine's job, with its own market-hours +
+    health gates. Restarting *polkit* (to load the rules file) is fine: it never
+    touches the worker process, only re-reads authorization rules."""
     code = _code()
-    assert "restart" not in code, "sync-units.sh must not restart anything"
-    # No `systemctl start`/`--now` applied to the worker service.
+    # The worker service must never be restarted/started here.
+    assert not re.search(r"restart\s+auto-invest", code), "must not restart the worker"
     assert not re.search(r"start\s+auto-invest\.service", code)
     assert not re.search(r"enable\s+--now\s+auto-invest\.service", code)
 
