@@ -2,10 +2,11 @@
 # auto-invest — systemd 유닛 동기화 (deploy-on-merge.yml 이 SSH 로 'sudo bash -s' 에 파이프).
 #
 # 목적: deploy/ 의 systemd 유닛(.service/.timer)을 서버 /etc/systemd/system 에 설치하고
-# 타이머를 활성화한다. 또 polkit 규칙(deploy/50-auto-invest.rules)을 동기화한다. 스펙 006
-# 배포 상태기계(`auto-invest deploy`)는 코드 git pull + 워커 재시작만 하고 '새 유닛/ polkit
-# 규칙 설치'는 하지 않으므로, 그 빈틈을 이 스크립트가 채운다(cloud-init 은 서버 생성 때
-# 한 번만 도므로 돌고 있는 서버엔 둘 다 유실될 수 있다).
+# 타이머를 활성화한다. 또 sudoers 드롭인(deploy/auto-invest-deploy.sudoers)을 동기화한다
+# (배포 상태기계가 워커를 `sudo -n systemctl` 로 제어하는 인가 경로). 스펙 006 배포 상태기계
+# (`auto-invest deploy`)는 코드 git pull + 워커 재시작만 하고 '새 유닛/sudoers 설치'는 하지
+# 않으므로, 그 빈틈을 이 스크립트가 채운다(cloud-init 은 서버 생성 때 한 번만 도므로 돌고
+# 있는 서버엔 유실될 수 있다).
 #
 # 안전:
 #   - 워커(auto-invest.service)를 절대 재시작/시작하지 않는다 — 유닛 파일 설치 +
@@ -67,27 +68,8 @@ else
     echo "[sync-units] skip (not in ${REF}): deploy/auto-invest-deploy.sudoers"
 fi
 
-# polkit 규칙 동기화: 비권한 `auto-invest` 사용자가 `auto-invest.service` 를 비대화식으로
-# 관리(stop/start)하게 허용한다. 이게 없으면 배포 상태기계가 phase=stop_worker 에서
-# "Interactive authentication required" 로 막혀 롤백한다. cloud-init(vultr-userdata.sh)은
-# 서버 생성 때 한 번만 설치하므로, 규칙이 유실/미설치된 *돌고 있는* 서버를 매 배포마다
-# 되살린다(systemd 유닛과 같은 빈틈 메우기). 멱등.
-if sudo -u auto-invest git -C "$REPO" show "${REF}:deploy/50-auto-invest.rules" \
-        > /tmp/50-auto-invest.rules.new 2>/dev/null; then
-    install -d -m 0755 /etc/polkit-1/rules.d
-    install -m 0644 /tmp/50-auto-invest.rules.new /etc/polkit-1/rules.d/50-auto-invest.rules
-    rm -f /tmp/50-auto-invest.rules.new
-    # 새 규칙을 실행 중인 polkitd 에 즉시 반영한다. 많은 배포판의 polkit.service 는
-    # ExecReload 가 없어 `reload` 가 실패하므로(그러면 규칙이 안 올라가 stop_worker 가 계속
-    # 막힌다 — 실제로 그랬다), cloud-init 과 동일하게 `reload` 실패 시 `restart` 로 떨어진다.
-    # *polkit 만* 재시작한다 — 워커(auto-invest.service)는 절대 안 건드린다(polkit 재시작은
-    # 잠깐 인가만 재질의시킬 뿐 워커 프로세스와 무관). 배포 상태기계가 곧바로 stop_worker 를
-    # 호출하므로 즉시 반영이 중요하다.
-    systemctl reload polkit 2>/dev/null || systemctl restart polkit 2>/dev/null || true
-    echo "[sync-units] installed polkit rule 50-auto-invest.rules (+ reloaded/restarted polkit)"
-else
-    echo "[sync-units] skip (not in ${REF}): deploy/50-auto-invest.rules"
-fi
+# (polkit 규칙은 제거됐다 — 워커 인가는 위 sudoers 가 결정론적으로 처리한다. polkit JS 규칙은
+# 프로덕션 호스트에서 로드돼도 manage-units 를 인가하지 못했다. sudo 가 그 불확실성을 없앤다.)
 
 # 타이머만 즉시 활성. 워커는 enable 만(운영자가 키 입력 후 start) — 절대 재시작하지 않음.
 if [ -f /etc/systemd/system/auto-invest-deploy.timer ]; then

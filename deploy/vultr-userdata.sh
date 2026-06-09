@@ -99,22 +99,11 @@ echo "[7/9] apply SQLite audit-log migrations"
 cd /opt/auto-invest
 sudo -u auto-invest UV_CACHE_DIR=/opt/auto-invest/.cache/uv /usr/local/bin/uv run auto-invest db migrate --db /opt/auto-invest/data/auto_invest.db
 
-echo "[8/9] install polkit rule so auto-invest user can manage its own unit"
-# Without this, deploy's supervisor.start_worker() (a child of
-# `auto-invest deploy` running as the auto-invest user) hits a polkit
-# password prompt on `systemctl start auto-invest.service` and the
-# deploy's rollback path stalls. Scope is intentionally narrow: this
-# rule only authorises the auto-invest user + the auto-invest.service
-# unit + the manage-units action. Other users, other units, and other
-# actions remain governed by default polkit policy.
-# 단일 소스: deploy/50-auto-invest.rules (sync-units.sh 도 같은 파일을 매 배포 동기화하므로
-# 돌고 있는 서버에서 규칙이 유실돼도 되살아난다). cloud-init 시점엔 repo 가 이미 클론돼 있다.
-install -d -m 0755 /etc/polkit-1/rules.d
-install -m 0644 /opt/auto-invest/deploy/50-auto-invest.rules /etc/polkit-1/rules.d/50-auto-invest.rules
-# polkit picks up new rules without a restart on most distros, but reload
-# defensively so the very first auto-invest-deploy.timer firing sees it.
-systemctl reload polkit 2>/dev/null || systemctl restart polkit 2>/dev/null || true
-
+echo "[8/9] install sudoers so auto-invest user can control the worker unit"
+# 배포 상태기계(`auto-invest deploy`, auto-invest 사용자)의 supervisor.stop_worker()/
+# start_worker() 가 워커 유닛을 `sudo -n systemctl …` 로 제어한다. polkit 은 프로덕션
+# 호스트에서 규칙이 로드돼도 manage-units 를 인가하지 못해(Interactive authentication
+# required) 버렸다 — sudo 가 결정론적 대체다.
 # sudoers 드롭인: 배포 상태기계가 워커 유닛만 `sudo -n systemctl …` 로 제어하는 결정론적
 # 인가 경로(polkit 대체). 반드시 visudo 검증 후 설치(잘못된 sudoers.d 는 모든 sudo 를 깨뜨림).
 # sync-units.sh 도 매 배포 동기화하므로 돌고 있는 서버에서 유실돼도 되살아난다.

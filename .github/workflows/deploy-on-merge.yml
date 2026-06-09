@@ -7,12 +7,12 @@ name: Deploy on merge to main
 # 이 워크플로우가 실패하거나 머지가 장중에 일어나도 타이머가 안전망으로 받는다.
 #
 # 배포 *전에* deploy/sync-units.sh 를 서버 sudo bash 에 파이프해 systemd 유닛
-# (.service/.timer) + polkit 규칙(50-auto-invest.rules)을 설치한다. 배포 상태기계는
-# '새 유닛/polkit 규칙 설치'를 하지 않으므로 그 빈틈을 메운다 — 특히 polkit 규칙이 없으면
-# 배포가 phase=stop_worker 에서 "Interactive authentication required" 로 막혀 롤백하므로,
-# 반드시 배포 *앞*에서 동기화해야 같은 실행에서 워커 교체가 성공한다. 유닛 동기화는 워커를
-# 재시작하지 않고(주문 라우팅 무관) git show 로 작업트리도 안 건드리므로 장중에도 안전 —
-# 배포가 "장중 연기"여도 유닛/타이머/polkit 규칙은 이번 실행에서 갱신된다.
+# (.service/.timer) + sudoers 드롭인(auto-invest-deploy.sudoers)을 설치한다. 배포 상태기계는
+# '새 유닛/sudoers 설치'를 하지 않으므로 그 빈틈을 메운다 — 특히 sudoers 가 없으면 배포가
+# phase=stop_worker 에서 워커를 `sudo` 로 못 멈춰 롤백하므로, 반드시 배포 *앞*에서 동기화해야
+# 같은 실행에서 워커 교체가 성공한다. 유닛 동기화는 워커를 재시작하지 않고(주문 라우팅 무관)
+# git show 로 작업트리도 안 건드리므로 장중에도 안전 — 배포가 "장중 연기"여도 유닛/타이머/
+# sudoers 는 이번 실행에서 갱신된다.
 #
 # 안전 속성 (자세한 설계는 deploy/AUTO-DEPLOY.md):
 #   - 워커는 dry-run 모드 — 배포는 코드 교체+재시작이며 실주문을 내지 않는다.
@@ -94,7 +94,7 @@ jobs:
           echo "unblock_exit=$?" >> "$GITHUB_OUTPUT"
           cat /tmp/unblock.txt
 
-      - name: Sync systemd units + polkit rule (install/refresh + enable timers)
+      - name: Sync systemd units + sudoers (install/refresh + enable timers)
         id: units
         env:
           HOST: ${{ secrets.VULTR_SSH_HOST }}
@@ -103,11 +103,10 @@ jobs:
         run: |
           set +e
           port="${PORT:-22}"
-          # 배포 *앞*에서 실행한다(중요): 배포 상태기계는 새 systemd 유닛/polkit 규칙을 설치
-          # 하지 않으므로 그 빈틈을 메운다. 특히 polkit 규칙(50-auto-invest.rules)이 없으면
-          # 배포가 stop_worker 에서 "Interactive authentication required" 로 막힌다 → 이걸
-          # 먼저 깔아야 같은 실행의 배포가 워커를 교체할 수 있다. 워커는 재시작하지 않고
-          # git show 로 작업트리도 안 건드리므로 장중에도 안전.
+          # 배포 *앞*에서 실행한다(중요): 배포 상태기계는 새 systemd 유닛/sudoers 를 설치하지
+          # 않으므로 그 빈틈을 메운다. 특히 sudoers(auto-invest-deploy.sudoers)가 없으면 배포가
+          # stop_worker 에서 `sudo` 인가를 못 받는다 → 먼저 깔아야 같은 실행의 배포가 워커를
+          # 교체할 수 있다. 워커는 재시작하지 않고 git show 로 작업트리도 안 건드리므로 장중에도 안전.
           ssh -o StrictHostKeyChecking=accept-new \
               -o ConnectTimeout=15 \
               -p "${port}" \
@@ -130,8 +129,8 @@ jobs:
           set +e
           port="${PORT:-22}"
           # oneshot 서비스라 systemctl start 는 완료까지 블록하고 배포 결과 코드를
-          # 그대로 돌려준다. 이어 journal 마지막 120줄을 수집한다. (polkit 규칙은 위
-          # units 스텝에서 이미 설치됐으므로 stop_worker/start_worker 가 인가된다.)
+          # 그대로 돌려준다. 이어 journal 마지막 120줄을 수집한다. (sudoers 는 위 units
+          # 스텝에서 이미 설치됐으므로 stop_worker/start_worker 가 sudo 로 인가된다.)
           ssh -o StrictHostKeyChecking=accept-new \
               -o ConnectTimeout=15 \
               -p "${port}" \

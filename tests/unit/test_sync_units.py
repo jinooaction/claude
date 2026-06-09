@@ -59,8 +59,7 @@ def test_enables_both_timers_now():
 def test_never_restarts_or_starts_the_worker():
     """The WORKER (auto-invest.service) may be enabled, but NEVER restarted/started
     here — that is the deploy state machine's job, with its own market-hours +
-    health gates. Restarting *polkit* (to load the rules file) is fine: it never
-    touches the worker process, only re-reads authorization rules."""
+    health gates."""
     code = _code()
     # The worker service must never be restarted/started here.
     assert not re.search(r"restart\s+auto-invest", code), "must not restart the worker"
@@ -95,32 +94,7 @@ def test_workflow_pipes_script_and_checks_out():
     assert "units_exit" in wf
 
 
-# ───────────────────────── polkit rule sync (deploy stop_worker fix) ─────────
-
-
-POLKIT_RULE = REPO_ROOT / "deploy" / "50-auto-invest.rules"
-
-
-def test_polkit_rule_exists_and_is_narrowly_scoped():
-    """The rule must authorise ONLY the auto-invest user + auto-invest.service +
-    manage-units action — never a broader grant."""
-    assert POLKIT_RULE.is_file(), "deploy/50-auto-invest.rules must exist"
-    body = POLKIT_RULE.read_text(encoding="utf-8")
-    assert "org.freedesktop.systemd1.manage-units" in body
-    assert 'subject.user == "auto-invest"' in body
-    assert 'action.lookup("unit") == "auto-invest.service"' in body
-    assert "polkit.Result.YES" in body
-
-
-def test_sync_units_installs_polkit_rule():
-    """sync-units.sh must (re)install the polkit rule on every deploy so a running
-    server that lost it (cloud-init runs only once) regains worker-manage rights —
-    otherwise deploy fails at phase=stop_worker (Interactive authentication)."""
-    code = _code()
-    assert "50-auto-invest.rules" in code
-    assert "/etc/polkit-1/rules.d" in code
-    # reload (never restart) so the worker is untouched but the rule takes effect.
-    assert "reload polkit" in code
+# ───────────────────────── worker-control authorization (sudo) ─────────
 
 
 SUDOERS = REPO_ROOT / "deploy" / "auto-invest-deploy.sudoers"
@@ -163,11 +137,11 @@ def test_deploy_service_has_no_new_privileges_disabled():
 
 
 def test_deploy_workflow_syncs_units_before_deploy():
-    """The unit/polkit sync step MUST run before the deploy step: the deploy state
-    machine's stop_worker needs the polkit rule already installed to succeed."""
+    """The unit/sudoers sync step MUST run before the deploy step: the deploy state
+    machine's stop_worker needs the sudoers drop-in already installed to succeed."""
     wf = (REPO_ROOT / ".github" / "workflows" / "deploy-on-merge.yml").read_text(
         encoding="utf-8"
     )
     units_idx = wf.index("id: units")
     deploy_idx = wf.index("id: deploy")
-    assert units_idx < deploy_idx, "units/polkit sync must precede the deploy step"
+    assert units_idx < deploy_idx, "units/sudoers sync must precede the deploy step"
