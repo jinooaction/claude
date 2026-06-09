@@ -57,6 +57,26 @@ git ls-remote --heads origin 'claude/*' | awk '{print $2}'
   운영자 확인). 부분 체결 재호가(잔량 재계산)는 별도 슬라이스.
 - **L1 적용 표면 확장 / L2·L3 캐너리 승격 큐 / 실거래 자본 상향** — 기존 후보 유지.
 
+## 최근 마일스톤 — 2026-06-07 (✅ 끊긴 배포 진짜 복구 — 워커 sudo 제어, 검증 완료)
+
+main 머지 `03e4fa0`(PR #223, C1) + `31da635`(PR #224, C2). 운영자 "권장 방향대로 끝까지 자율
+수행, 직접 개입 안 함." **세 번 실패하던 `stop_worker` polkit 병목을 sudo 로 우회해 끝냈다.**
+
+- **문제**: deploy-on-merge 가 `stop_worker` 에서 polkit "Interactive authentication required"
+  로 계속 실패(워커가 새 코드로 안 바뀜). polkit 규칙을 설치·재시작해도 안 됐다(프로덕션 호스트
+  polkit 환경 문제, 컨테이너 SSH 진단 불가).
+- **수정**: 워커 제어를 `sudo -n systemctl` 로 전환(결정론적). 좁은 sudoers 드롭인
+  (`deploy/auto-invest-deploy.sudoers`)이 `auto-invest` 사용자에게 *워커 유닛의 stop/start/
+  restart/is-active 만* NOPASSWD 허용. `auto-invest-deploy.service` 에서 NoNewPrivileges 제거
+  (sudo=setuid 허용). sync-units 가 visudo 검증 후 설치. polkit 일체 제거(죽은 코드).
+- **2단계 수렴(검증됨)**: 배포는 시작 시점 supervisor 를 임포트하므로 C1 배포는 옛 코드로 또
+  실패(체크아웃만 전진), **C2 배포가 새 sudo supervisor 로 돌아 성공**. C2 deploy-on-merge run
+  27241688178 = `START_EXIT 0` = "✅ 배포 성공 (워커 최신 main 으로 교체)". **확정.**
+- **의미**: 이제 모든 새 코드 배포가 워커를 실제로 교체한다 — 운영자의 라이브 무장 커밋도 정상
+  배포된다. forward 검증은 원래 영향 없었고(체크아웃 경로), 이제 워커 프로세스도 최신.
+- **안전**: Kernel 터치 0건, 돈 0 이동. 권한 확대는 워커 제어 4개 명령만(폭넓은 root 아님).
+  워커 재시작은 여전히 배포 상태기계 전용(market_hours_guard·health_check). 1627 통과, 린트 깨끗.
+
 ## 최근 마일스톤 — 2026-06-07 (스펙 048: 다중 추세 속도 앙상블 — 샤프 2+ / 낙폭 3.7% 📈)
 
 main 머지 `0fa9037`(PR #221). 스펙 047(금)에 이어 *신호 속도 분산*을 더했다. 상세
