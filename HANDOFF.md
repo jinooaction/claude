@@ -57,6 +57,27 @@ git ls-remote --heads origin 'claude/*' | awk '{print $2}'
   운영자 확인). 부분 체결 재호가(잔량 재계산)는 별도 슬라이스.
 - **L1 적용 표면 확장 / L2·L3 캐너리 승격 큐 / 실거래 자본 상향** — 기존 후보 유지.
 
+## 최근 마일스톤 — 2026-06-07 (스펙 047: 글로벌 분산 추세추종 +금 🪙 + 배포 polkit 진단)
+
+main 머지 `a53a63f`(PR #217, 스펙 047) + `340f482`(#218)·`5b36bc2`(#219, 배포 polkit). 운영자
+"세계 최고 수준이 되기 위한 작업 분석·우선순위 판단 뒤 자율 수행 — 실제로 많은 돈을 벌어야."
+상세 `HANDOFF-050-SPEC-047-GLOBAL-TREND.md`.
+
+- **스펙 047(검증된 엣지를 세계 최고 수준 차원으로)**: 스펙 043의 2자산(주식+채권) 분산 추세에
+  **세 번째 비상관 자산(금)** 추가. 일일 모니터가 지금 경고하는 `DIVERSIFICATION_WEAKENED`(주식·
+  채권 상관 양수 전환, 인플레 regime)의 구조적 헤지. **핵심: 금은 변동성 큰 자산이라 균등이 아니라
+  위험으로 사이징**(역변동성=리스크 패리티)해야 분산 이득만 취한다 — 역변동성 3자산이 **모든
+  구간(전체/현대/1971~/최근) 낙폭을 ~5%로** 낮추고 칼마 대폭↑(전체 0.45→1.10, 1971~ 1.49→1.77).
+  데이터 추가 0(Shiller 1871~ + 런던 금 1833~, 둘 다 GitHub).
+- **배선(ARM E)**: `deploy/global-trend-portfolio.toml`(SPY+IEF+GLD, weight_scheme=inverse_vol,
+  sma 200) + forward 페이퍼 ARM E. ARM D(2자산) vs ARM E(3자산) 격리 비교로 금 분산을 우리 체결로 검증.
+- **배포 polkit 진단**: deploy-on-merge가 `stop_worker`에서 polkit "Interactive authentication
+  required"로 실패(워커 프로세스 restart 막힘). 규칙 동기화+restart로 완화 시도했으나 서버측 미해결.
+  **★ 단, 이 실패는 forward 검증을 막지 않는다** — 깃 체크아웃은 stop_worker 전에 전진(rollback=False)
+  하므로 forward 페이퍼는 최신 코드(ARM E 포함)로 동작. 묵히는 건 유휴 dry-run 워커뿐. 라이브 거래
+  전엔 운영자가 polkit 서버 진단 또는 deploy 서비스 권한 전환을 결정해야(보안 자세 = 운영자 게이트).
+- **안전**: Kernel 터치 0건, 돈 0 이동, PAPER 전용, 라이브 무장 변경 없음. 전체 1613 통과, 린트 깨끗.
+
 ## 최근 마일스톤 — 2026-06-06 (🔧 멈춘 배포 복구 + 견적 강건성 — 검증 파이프라인 재가동)
 
 main 머지 `be112e0`(PR #213) + `dbd88dc`(PR #214). 운영자 "세계 최고 수준이 되기 위한 작업
