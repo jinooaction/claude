@@ -60,7 +60,18 @@ class DryRunSupervisor:
 
 @dataclass
 class SystemdSupervisor:
-    """Production supervisor — invokes `systemctl` over subprocess."""
+    """Production supervisor — invokes `systemctl` over subprocess.
+
+    The deploy automation (`auto-invest-deploy.service`) runs as the unprivileged
+    `auto-invest` user, so managing the worker unit needs an authorization path.
+    polkit proved unreliable on the production host (the JS rule loads but the
+    `manage-units` action still returns "Interactive authentication required"),
+    so we use `sudo -n systemctl …` instead, scoped by a tight sudoers drop-in
+    (`deploy/auto-invest-deploy.sudoers`) to ONLY the worker unit's stop/start/
+    restart/is-active. `sudo -n` is deterministic (no JS evaluation) and works
+    as long as the service does not set `NoNewPrivileges=true` (which blocks
+    setuid). Running as root also works (sudo is a no-op for root).
+    """
 
     unit: str = "auto-invest.service"
     name: str = "systemd"
@@ -68,7 +79,7 @@ class SystemdSupervisor:
     def _systemctl(self, *args: str) -> SupervisorResult:
         try:
             proc = subprocess.run(
-                ["systemctl", *args],
+                ["sudo", "-n", "systemctl", *args],
                 capture_output=True,
                 text=True,
                 check=False,

@@ -123,6 +123,45 @@ def test_sync_units_installs_polkit_rule():
     assert "reload polkit" in code
 
 
+SUDOERS = REPO_ROOT / "deploy" / "auto-invest-deploy.sudoers"
+
+
+def test_sudoers_exists_and_is_narrowly_scoped():
+    """The sudoers drop-in must authorise ONLY the worker unit's systemctl verbs
+    for the auto-invest user — never a broad NOPASSWD grant."""
+    assert SUDOERS.is_file(), "deploy/auto-invest-deploy.sudoers must exist"
+    body = SUDOERS.read_text(encoding="utf-8")
+    assert "auto-invest ALL=(root) NOPASSWD:" in body
+    assert "/usr/bin/systemctl stop auto-invest.service" in body
+    assert "/usr/bin/systemctl start auto-invest.service" in body
+    # No blanket grant (must not authorise ALL commands).
+    assert "NOPASSWD: ALL" not in body
+    assert "NOPASSWD:ALL" not in body
+
+
+def test_sync_units_installs_sudoers_with_visudo_validation():
+    """sync-units.sh must (re)install the sudoers drop-in, validating with visudo
+    FIRST (a malformed /etc/sudoers.d file breaks all sudo on the host)."""
+    code = _code()
+    assert "auto-invest-deploy.sudoers" in code
+    assert "/etc/sudoers.d/auto-invest-deploy" in code
+    assert "visudo -cf" in code        # validate before install
+    assert "install -m 0440" in code   # sudoers must be 0440
+
+
+def test_deploy_service_has_no_new_privileges_disabled():
+    """The deploy oneshot must NOT set NoNewPrivileges=true — it blocks sudo
+    (setuid), which the worker-control path now relies on."""
+    unit = (REPO_ROOT / "deploy" / "auto-invest-deploy.service").read_text(
+        encoding="utf-8"
+    )
+    # strip comment lines, then assert the directive is absent
+    active = "\n".join(
+        ln for ln in unit.splitlines() if not ln.lstrip().startswith("#")
+    )
+    assert "NoNewPrivileges=true" not in active
+
+
 def test_deploy_workflow_syncs_units_before_deploy():
     """The unit/polkit sync step MUST run before the deploy step: the deploy state
     machine's stop_worker needs the polkit rule already installed to succeed."""
