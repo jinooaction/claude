@@ -115,6 +115,15 @@ install -m 0644 /opt/auto-invest/deploy/50-auto-invest.rules /etc/polkit-1/rules
 # defensively so the very first auto-invest-deploy.timer firing sees it.
 systemctl reload polkit 2>/dev/null || systemctl restart polkit 2>/dev/null || true
 
+# sudoers 드롭인: 배포 상태기계가 워커 유닛만 `sudo -n systemctl …` 로 제어하는 결정론적
+# 인가 경로(polkit 대체). 반드시 visudo 검증 후 설치(잘못된 sudoers.d 는 모든 sudo 를 깨뜨림).
+# sync-units.sh 도 매 배포 동기화하므로 돌고 있는 서버에서 유실돼도 되살아난다.
+if visudo -cf /opt/auto-invest/deploy/auto-invest-deploy.sudoers >/dev/null 2>&1; then
+    install -m 0440 -o root -g root /opt/auto-invest/deploy/auto-invest-deploy.sudoers /etc/sudoers.d/auto-invest-deploy
+else
+    echo "WARN: auto-invest-deploy.sudoers failed visudo — not installing" >&2
+fi
+
 echo "[9/9] install systemd units + timers (worker is fail-safe until KIS keys set)"
 install -m 0644 /opt/auto-invest/deploy/auto-invest.service        /etc/systemd/system/auto-invest.service
 install -m 0644 /opt/auto-invest/deploy/auto-invest-deploy.service /etc/systemd/system/auto-invest-deploy.service

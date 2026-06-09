@@ -29,8 +29,10 @@ def test_systemd_invokes_systemctl_via_subprocess():
         run.return_value.stdout = ""
         run.return_value.stderr = ""
         result = s.stop_worker()
+        # sudo -n: deploy runs as the unprivileged auto-invest user; a tight
+        # sudoers drop-in authorises ONLY the worker unit's systemctl verbs.
         run.assert_called_once_with(
-            ["systemctl", "stop", "test.service"],
+            ["sudo", "-n", "systemctl", "stop", "test.service"],
             capture_output=True, text=True, check=False,
         )
         assert result.ok

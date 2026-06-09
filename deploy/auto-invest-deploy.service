@@ -14,5 +14,8 @@ Environment=UV_CACHE_DIR=/opt/auto-invest/.cache/uv
 ExecStart=/usr/local/bin/uv run auto-invest deploy --branch main
 StandardOutput=journal
 StandardError=journal
-NoNewPrivileges=true
+# NoNewPrivileges 는 두지 않는다(중요): 배포 상태기계가 워커 유닛을 제어하려면
+# `sudo -n systemctl …`(setuid)이 필요한데, NoNewPrivileges=true 는 sudo 를 막는다.
+# 권한 확대는 sudoers 드롭인(deploy/auto-invest-deploy.sudoers)으로 *워커 유닛의
+# stop/start/restart/is-active 만* 으로 좁게 제한된다(polkit 보다 결정론적).
 PrivateTmp=true

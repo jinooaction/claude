@@ -1,0 +1,13 @@
+# auto-invest — sudoers drop-in: 비권한 `auto-invest` 사용자가 *워커 유닛만* 비대화식으로
+# 제어하도록 허용한다(/etc/sudoers.d/auto-invest-deploy, 모드 0440).
+#
+# 왜: 배포 상태기계(`auto-invest deploy`)는 최소권한으로 `auto-invest` 사용자로 돌며
+# supervisor.stop_worker()/start_worker() 가 `systemctl stop/start auto-invest.service` 를
+# 호출한다. 그 호출의 인가 경로가 필요하다. polkit 은 프로덕션 호스트에서 불안정했다(JS 규칙은
+# 로드되나 manage-units 가 "Interactive authentication required" 로 계속 거부). sudo 는
+# 결정론적(JS 평가 없음)이라 이를 대체한다. 범위는 의도적으로 좁다 — 오직 auto-invest.service
+# 유닛의 stop/start/restart/is-active 만. 다른 명령·다른 유닛은 일절 허용하지 않는다.
+#
+# 전제: auto-invest-deploy.service 가 NoNewPrivileges=true 를 두지 않아야 sudo(setuid)가 된다.
+# 설치는 sync-units.sh(매 배포 sudo) + vultr-userdata.sh(cloud-init)가 visudo 검증 후 수행한다.
+auto-invest ALL=(root) NOPASSWD: /usr/bin/systemctl stop auto-invest.service, /usr/bin/systemctl start auto-invest.service, /usr/bin/systemctl restart auto-invest.service, /usr/bin/systemctl is-active auto-invest.service

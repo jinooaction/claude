@@ -49,6 +49,24 @@ done
 systemctl daemon-reload
 echo "[sync-units] daemon-reload done (${installed} unit file(s) installed)"
 
+# sudoers 동기화: 비권한 `auto-invest` 사용자가 워커 유닛만 비대화식 제어(stop/start)하게
+# 허용한다 — 배포 상태기계가 `sudo -n systemctl …` 로 워커를 교체하는 결정론적 인가 경로
+# (polkit 대체). **반드시 visudo 로 검증 후 설치** — 잘못된 /etc/sudoers.d 파일은 서버의 모든
+# sudo(이 스크립트의 sudo 포함)를 깨뜨린다. 검증 실패 시 설치하지 않는다(안전). 멱등.
+if sudo -u auto-invest git -C "$REPO" show "${REF}:deploy/auto-invest-deploy.sudoers" \
+        > /tmp/ai-deploy.sudoers.new 2>/dev/null; then
+    if visudo -cf /tmp/ai-deploy.sudoers.new >/dev/null 2>&1; then
+        install -m 0440 -o root -g root /tmp/ai-deploy.sudoers.new \
+            /etc/sudoers.d/auto-invest-deploy
+        echo "[sync-units] installed sudoers auto-invest-deploy (visudo-validated)"
+    else
+        echo "[sync-units] WARN: sudoers validation failed — NOT installing (sudo safety)" >&2
+    fi
+    rm -f /tmp/ai-deploy.sudoers.new
+else
+    echo "[sync-units] skip (not in ${REF}): deploy/auto-invest-deploy.sudoers"
+fi
+
 # polkit 규칙 동기화: 비권한 `auto-invest` 사용자가 `auto-invest.service` 를 비대화식으로
 # 관리(stop/start)하게 허용한다. 이게 없으면 배포 상태기계가 phase=stop_worker 에서
 # "Interactive authentication required" 로 막혀 롤백한다. cloud-init(vultr-userdata.sh)은
