@@ -146,6 +146,49 @@ async def get_quote(
     )
 
 
+# KIS 시세(EXCD)는 거래소별로 분리돼 있다. 같은 미국 ETF 라도 SPY·GLD 는 나스닥이 아니라
+# NYSE Arca/AMEX("AMS")에 상장돼 있어, 고정 EXCD 하나로는 일부 심볼이 조용히 빈 값(QuoteUnavailable)
+# 으로 실패한다. backfill_daily_bars 가 일봉에서 쓰는 것과 동일한 순서로 거래소를 시도한다.
+QUOTE_EXCHANGES: tuple[str, ...] = ("NAS", "NYS", "AMS")
+
+
+async def get_quote_resolving_market(
+    client: ResilientClient,
+    *,
+    access_token: str,
+    app_key: str,
+    app_secret: str,
+    symbol: str,
+    markets: tuple[str, ...] = QUOTE_EXCHANGES,
+) -> Quote:
+    """Fetch a quote, trying each KIS EXCD until one returns a usable last price.
+
+    KIS 시세는 거래소(EXCD) 범위로 조회된다 — 심볼이 상장되지 않은 거래소로 물으면 ``last``
+    가 빈 값으로 와 `get_quote` 가 `QuoteUnavailable` 을 던진다. SPY·GLD 같은 미국 ETF 는
+    나스닥이 아니라 NYSE Arca/AMEX("AMS")에 상장돼 있어 고정 ``market="NAS"`` 로는 조용히
+    실패한다(검증된 글로벌 분산 추세 포트폴리오가 forward 페이퍼에서 NAV 를 못 쌓던 실제
+    원인). 이 함수는 `backfill_daily_bars` 의 거래소 순차 탐색과 같은 방식으로 거래소를 자동
+    해석해 심볼별 거래소를 하드코딩할 필요를 없앤다. 모든 거래소에서 빈 값이면 마지막
+    `QuoteUnavailable` 을 그대로 전파한다(호출자가 그 종목을 건너뛸 수 있게).
+    """
+    last_exc: QuoteUnavailable | None = None
+    for excd in markets:
+        try:
+            return await get_quote(
+                client,
+                access_token=access_token,
+                app_key=app_key,
+                app_secret=app_secret,
+                symbol=symbol,
+                market=excd,
+            )
+        except QuoteUnavailable as exc:
+            last_exc = exc
+    raise last_exc or QuoteUnavailable(
+        f"{symbol}: KIS returned no usable last price on any of {markets}"
+    )
+
+
 def _parse_daily_bars(rows: list[dict], symbol: str) -> list[OverseasDailyBar]:
     """Parse KIS 기간별시세 output2 rows into ascending-date OHLCV bars.
 
