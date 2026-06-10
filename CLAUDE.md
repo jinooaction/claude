@@ -41,8 +41,9 @@ This project's working agreement is **autonomous progression**, not "wait for th
 3. **머지 방법은 `merge` 고정** (squash/rebase 금지). Kernel 터치 커밋이 main 히스토리에 그대로 남아야 `git log`로 추적 가능.
 4. `mcp__github__merge_pull_request` 호출.
 5. 머지 성공 시 main의 머지 커밋 해시를 운영자에게 한글로 보고.
-6. 필요하면 `HANDOFF.md` 업데이트 (별도 PR, 후속 자동 머지).
-7. 운영자가 "삭제해"라고 명시한 경우에만 feature 브랜치 삭제.
+6. **머지 후 feature 브랜치 원격을 머지 커밋까지 올린다** — `git fetch origin` → `git merge --ff-only origin/main` (로컬을 새 main 에 맞춤) → `git push origin HEAD:<feature-branch>`. 이래야 Stop 훅(`~/.claude/stop-hook-git-check.sh`)의 `origin/<branch>..HEAD` 미검증 커밋 검사가 **비어** 통과한다. GitHub 자동 머지 채널이 만드는 머지 커밋은 committer 가 `noreply@github.com`(서버 생성, 자동 머지의 정상 산출물)이라, 브랜치 ref 를 안 올리면 그 머지 커밋이 `upstream..HEAD` 에 남아 거짓 "Unverified" 경고를 낸다. 이 푸시는 **안전 검사를 끄는 게 아니라 브랜치 ref 를 동기화하는 것** — 훅은 여전히 *내가 작성한* 잘못 서명된 커밋(committer ≠ `noreply@anthropic.com`)을 잡는다. main 강제 푸시 아님(브랜치를 이미 머지된 커밋으로 맞출 뿐).
+7. 필요하면 `HANDOFF.md` 업데이트 (별도 PR, 후속 자동 머지).
+8. 운영자가 "삭제해"라고 명시한 경우에만 feature 브랜치 삭제.
 
 **자동 머지 중단 조건** (드물지만 존재):
 
