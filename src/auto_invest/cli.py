@@ -4500,3 +4500,104 @@ def forward_verdict_cmd(
         typer.echo(_json.dumps(out))
     else:
         typer.echo(verdict_render_text(verdict))
+
+
+@app.command("autoarm-decide")
+def autoarm_decide_cmd(
+    verdict_json: Path = typer.Option(
+        ...,
+        "--verdict-json",
+        help="forward-verdict --format json 출력 파일(검증된 앙상블 ARM E 트랙).",
+    ),
+    live_portfolio: Path = typer.Option(
+        Path("deploy/canary-live-portfolio.toml"),
+        "--live-portfolio",
+        help="라이브 캐너리가 *실제로 거래할* 설정(무장 대상).",
+    ),
+    validated_portfolio: Path = typer.Option(
+        Path("deploy/global-trend-portfolio.toml"),
+        "--validated-portfolio",
+        help="forward 페이퍼에서 검증한 설정(ARM E).",
+    ),
+    sentinel: Path = typer.Option(
+        Path("automation/rebalance-live.request"),
+        "--sentinel",
+        help="현재 무장 센티넬(armed/capital_usd/run_seq).",
+    ),
+    kill_switch: Path = typer.Option(
+        Path("automation/AUTOARM_DISABLED"),
+        "--kill-switch",
+        help="존재하면 자동 무장 정지(운영자 킬스위치).",
+    ),
+    write_sentinel: bool = typer.Option(
+        False,
+        "--write-sentinel",
+        help="결정이 ARM 이면 새 무장 센티넬 본문을 --sentinel 경로에 쓴다(기본: 안 씀).",
+    ),
+    output_format: str = typer.Option("json", "--format", help="json | text."),
+) -> None:
+    """스펙 049 — forward 엣지 자동 무장 게이트 결정(읽기 전용 판정, 주문 0건).
+
+    검증된 앙상블(ARM E)의 forward 판정이 EDGE_CONFIRMED 이고, 라이브 캐너리 설정의 전략
+    지문이 그 검증한 앙상블과 일치하며(검증=무장 정합성), 아직 미무장이고 킬스위치가 없으면
+    **ARM**(새 armed:true 센티넬 제안)을 낸다. 그 외에는 보수적으로 WAIT/BLOCKED/
+    ALREADY_ARMED/DISABLED — 절대 무모하게 무장하지 않는다.
+
+    `--write-sentinel` 을 주면 ARM 일 때만 새 센티넬 본문을 파일에 쓴다(워크플로가 그 변경을
+    PR 로 올려 운영자 X.4 검토 후 머지 → 라이브 캐너리 채널 발화). 머지 자체는 미리보기만
+    이고 첫 실주문은 다음 미국 정규장 스케줄 — 운영자가 검토·disarm 할 시간이 있다.
+    """
+    import json as _json
+
+    from auto_invest.portfolio.autoarm import decide_autoarm
+
+    try:
+        verdict = _json.loads(verdict_json.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        # 판정 파일을 못 읽으면 보수적으로 WAIT — 절대 무장하지 않는다.
+        out = {
+            "schema_version": "1.0",
+            "action": "WAIT",
+            "reason": f"forward 판정 JSON 을 못 읽음({e}) — 보수적으로 무장 보류.",
+            "verdict": None,
+            "n_obs": None,
+            "proposed_capital_usd": None,
+            "new_run_seq": None,
+        }
+        typer.echo(_json.dumps(out))
+        raise typer.Exit(0) from None
+
+    # 정합성 지문은 [portfolio] 전략 블록만 쓴다([whitelist].accounts 의 ${VAR} 미사용) →
+    # env 확장 불필요. env=None 으로 로드.
+    try:
+        _, _, live_cfg = _load_portfolio_for_backtest(live_portfolio, env=None)
+        _, _, validated_cfg = _load_portfolio_for_backtest(validated_portfolio, env=None)
+    except ConfigError as e:
+        out = {
+            "schema_version": "1.0",
+            "action": "BLOCKED",
+            "reason": f"포트폴리오 설정 로드 실패({e}) — 정합성 확인 불가, 무장 차단.",
+            "verdict": verdict.get("verdict") if isinstance(verdict, dict) else None,
+            "n_obs": None,
+            "proposed_capital_usd": None,
+            "new_run_seq": None,
+        }
+        typer.echo(_json.dumps(out))
+        raise typer.Exit(0) from None
+
+    sentinel_text = sentinel.read_text(encoding="utf-8") if sentinel.exists() else ""
+    decision = decide_autoarm(
+        verdict=verdict,
+        live_config=live_cfg,
+        validated_config=validated_cfg,
+        sentinel_text=sentinel_text,
+        kill_switch_present=kill_switch.exists(),
+    )
+
+    if decision.should_arm and write_sentinel and decision.new_sentinel_text:
+        sentinel.write_text(decision.new_sentinel_text, encoding="utf-8")
+
+    if output_format == "json":
+        typer.echo(_json.dumps(decision.to_json_dict()))
+    else:
+        typer.echo(f"[{decision.action}] {decision.reason}")

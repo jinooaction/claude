@@ -45,28 +45,48 @@ def test_canary_portfolio_universe_all_whitelisted():
         assert sym in wl.symbols, f"{sym} not in whitelist"
 
 
-def test_live_portfolio_config_500_canary_invariants():
-    """스펙 039 — $500 라이브 캐너리 무장본의 안전 불변식.
+def test_live_portfolio_config_ensemble_canary_invariants():
+    """스펙 049 — 라이브 캐너리가 *검증된 글로벌 분산 추세 앙상블*인지 안전 불변식.
 
-    ① 유니버스 ⊆ 화이트리스트 = 기존 실거래 종목(SPY·MSFT·AAPL)만 — 라이브 거래 집합
-    무확대(헌법 II). ② 추세 필터 ON(드로다운 방어). ③ top_n=1 — $500 는 1종목 1주만
-    들어감(주당 $316~540). ④ 저회전(hold_replace). 캡은 자본($500)에 맞춰 크지만 절대
-    위험은 자본이 천장(워크플로가 capital>$1,000 무장 거부로 footgun 차단).
+    옛 3종목 top_n=1(SPY·MSFT·AAPL)은 운영자가 "세계 최고 수준 아님"으로 거부(2026-06-04).
+    재지정된 라이브 캐너리는 검증된 3자산 GTAA 앙상블이어야 한다:
+    ① 유니버스 ⊆ 화이트리스트 = SPY·IEF·GLD(검증한 앙상블과 동일 집합). ② 역변동성(리스크
+    패리티) 가중. ③ top_n=3(셋 다 보유). ④ 다중 속도 추세 앙상블 ON(드로다운 방어).
+    ⑤ 저회전(hold_replace). 라이브 거래 집합 변경은 운영자 게이트(헌법 II) — 무장 전엔 돈 0.
     """
     _caps, wl, cfg = _load_portfolio_for_backtest(
         _CANARY_LIVE, env={"KIS_ACCOUNT_NO": "ACC-TEST"}
     )
-    # 라이브 거래 집합 무확대: 기존 실거래 캐너리(SPY·MSFT·AAPL)와 동일.
-    assert set(cfg.universe) == {"SPY", "MSFT", "AAPL"}
-    assert set(wl.symbols) == {"SPY", "MSFT", "AAPL"}
+    assert set(cfg.universe) == {"SPY", "IEF", "GLD"}
+    assert set(wl.symbols) == {"SPY", "IEF", "GLD"}
     assert set(cfg.universe) <= set(wl.symbols)
-    # 드로다운 방어 필수.
+    assert cfg.weight_scheme == "inverse_vol"
+    assert cfg.top_n == 3
+    assert cfg.rebalance_mode == "hold_replace"
+    # 다중 속도 추세 앙상블(드로다운 방어) 필수.
     assert cfg.trend_filter is not None
     assert cfg.trend_filter.method == "sma"
-    # $500 현실: 1종목만.
-    assert cfg.top_n == 1
-    # 저회전.
-    assert cfg.rebalance_mode == "hold_replace"
+    assert cfg.trend_filter.on_insufficient == "cash"
+    assert cfg.trend_filter.ensemble_windows == (63, 126, 189, 252)
+
+
+def test_live_canary_strategy_matches_validated_ensemble():
+    """스펙 049 — 검증=무장 정합성: 라이브 캐너리 설정의 전략 지문이 forward 페이퍼에서
+    검증 중인 앙상블(global-trend-portfolio.toml)과 *정확히 일치*해야 한다.
+
+    이게 깨지면 자동 무장 게이트가 BLOCKED 로 무장을 거부한다(검증 안 한 전략 무장 금지).
+    한쪽 설정만 바꾸고 다른 쪽을 안 바꾸는 드리프트를 CI 에서 잡는다(돈을 잃지 않게).
+    """
+    from auto_invest.portfolio.autoarm import strategy_fingerprint
+
+    _c1, _w1, live = _load_portfolio_for_backtest(
+        _CANARY_LIVE, env={"KIS_ACCOUNT_NO": "ACC-TEST"}
+    )
+    validated_path = _REPO_ROOT / "deploy" / "global-trend-portfolio.toml"
+    _c2, _w2, validated = _load_portfolio_for_backtest(
+        validated_path, env={"KIS_ACCOUNT_NO": "ACC-TEST"}
+    )
+    assert strategy_fingerprint(live) == strategy_fingerprint(validated)
 
 
 def test_notrend_control_config_is_identical_minus_trend_filter():
