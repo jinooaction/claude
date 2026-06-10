@@ -25,7 +25,11 @@ from typing import Any
 
 from auto_invest.broker.client import ResilientClient
 from auto_invest.broker.models import Quote
-from auto_invest.broker.overseas import cancel_order, get_balance, get_quote
+from auto_invest.broker.overseas import (
+    cancel_order,
+    get_balance_resolving_market,
+    get_quote,
+)
 from auto_invest.broker.realtime import RealtimeQuoteSource
 from auto_invest.config.loader import LoadedConfig
 from auto_invest.config.rules import IndicatorTrigger, OrderLifecycleConfig, TradingRule
@@ -526,13 +530,15 @@ class Worker:
         """
         starting = self.settings.total_capital_usd
         try:
-            balance = await get_balance(
+            # NAV 는 모든 미국 거래소(NASD·NYSE·AMEX) 보유를 합쳐 평가한다 — 멀티에셋
+            # 유니버스(SPY·GLD=AMEX, IEF=NASD)에서 다른 거래소 종목 평가금액이 빠지면 NAV 가
+            # 저평가돼 유효 자본이 허위로 줄고(잘못된 하락 방어) 라이브 트랙 NAV 가 틀어진다.
+            balance = await get_balance_resolving_market(
                 self.broker,
                 access_token=self.access_token,
                 app_key=self.app_key,
                 app_secret=self.app_secret,
                 account=self.account_no,
-                market=self.settings.market_order,
             )
             nav = balance.total_value_usd
         except Exception:  # noqa: BLE001 — NAV 조회 실패는 직전 유효 자본 유지(무중단).
@@ -602,7 +608,9 @@ class Worker:
                 app_key=self.app_key,
                 app_secret=self.app_secret,
                 account=self.account_no,
-                market=self.settings.market_order,
+                # 체결 조회는 모든 미국 거래소(NASD·NYSE·AMEX)를 훑어 합친다 — 멀티에셋
+                # 유니버스(SPY·GLD=AMEX, IEF=NASD)의 체결이 단일 거래소 조회에서 누락되지
+                # 않게(sync_fills 기본 markets=US_ORDER_EXCHANGES).
                 now=now,
             )
         except Exception:  # pragma: no cover — 이중 안전망(거래 무중단).
@@ -896,7 +904,9 @@ class Worker:
             app_secret=self.app_secret,
             account=self.account_no,
             halt_path=self.settings.halt_path,
-            market=self.settings.market_order,
+            # 보유·잔고 정합성은 모든 미국 거래소(NASD·NYSE·AMEX)를 훑어 합친다(기본
+            # markets=US_ORDER_EXCHANGES) — 멀티에셋 유니버스에서 다른 거래소 종목이 빠져
+            # 'ledger_only' 로 오인돼 허위 halt 나는 일을 막는다.
         )
 
     # ---------------------------------------------- forever loop

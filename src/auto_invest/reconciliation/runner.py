@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -28,7 +29,11 @@ from pathlib import Path
 from typing import Any
 
 from auto_invest.broker.client import ResilientClient
-from auto_invest.broker.overseas import get_balance, get_positions
+from auto_invest.broker.overseas import (
+    US_ORDER_EXCHANGES,
+    get_balance_resolving_market,
+    get_positions_resolving_market,
+)
 from auto_invest.persistence import audit
 from auto_invest.persistence import positions as positions_mod
 from auto_invest.persistence.audit import (
@@ -123,27 +128,31 @@ async def run_reconciliation(
     app_secret: str,
     account: str,
     halt_path: Path,
-    market: str = "NASD",
+    markets: Sequence[str] = US_ORDER_EXCHANGES,
     cash_tolerance_usd: Decimal = Decimal("1.00"),
 ) -> ReconciliationOutcome:
+    # 브로커 보유·잔고는 모든 미국 거래소(NASD·NYSE·AMEX)를 훑어 합쳐 조회한다 — 멀티에셋
+    # 유니버스(SPY·GLD=AMEX, IEF=NASD)에서 다른 거래소 종목이 단일 거래소 조회에서 빠지면
+    # 장부엔 있는데 브로커엔 없는 것처럼 보여(ledger_only) 허위 drift/halt 가 난다. 종목별
+    # 중복 제거로 KIS 동작과 무관하게 정확. 거래소별 조회 오류는 아래 except 가 INCONCLUSIVE 로.
     started_at = _utcnow_iso_ms()
 
     try:
-        broker_positions = await get_positions(
+        broker_positions = await get_positions_resolving_market(
             broker,
             access_token=access_token,
             app_key=app_key,
             app_secret=app_secret,
             account=account,
-            market=market,
+            markets=markets,
         )
-        broker_balance = await get_balance(
+        broker_balance = await get_balance_resolving_market(
             broker,
             access_token=access_token,
             app_key=app_key,
             app_secret=app_secret,
             account=account,
-            market=market,
+            markets=markets,
         )
     except Exception as exc:  # noqa: BLE001
         finished_at = _utcnow_iso_ms()
