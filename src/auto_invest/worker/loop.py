@@ -735,6 +735,9 @@ class Worker:
         격리되고 상태는 안 바뀐다 → 다음 체결 동기화가 실제 체결/종료를 정합화). 부분 체결분은
         이미 fills 에 기록돼 누락되지 않는다."""
         o = action.order
+        # KIS 정정취소는 OVRS_EXCG_CD 가 원주문 거래소와 일치해야 한다. 제출 시점에
+        # 기록된 거래소(order_routing)를 쓰고, 기록 없는 과거 주문만 기본값 폴백 —
+        # SPY·GLD(AMEX) 같은 비기본 거래소 주문의 취소가 오라우팅되지 않게 한다.
         await cancel_order(
             self.broker,
             access_token=self.access_token,
@@ -742,7 +745,7 @@ class Worker:
             app_secret=self.app_secret,
             account=self.account_no,
             kis_order_id=o.kis_order_id,
-            market=self.settings.market_order,
+            market=o.order_exchange or self.settings.market_order,
         )
         ts = _utcnow_iso_ms_for_payload()
         if action.kind == "cancel_ttl":
@@ -806,6 +809,9 @@ class Worker:
             current_global_exposure_usd=self._global_exposure_usd(
                 symbol=o.symbol, quote_price=price
             ),
+            # 재제출은 원주문이 나갔던 거래소로 — None(기록 없음)이면 라우터가 기본
+            # 거래소 폴백(단일 거래소 룰 워커는 byte 동일, 회귀 0).
+            order_exchange=o.order_exchange,
         )
 
     # ---------------------------------------------- circuit breaker (spec 014)
