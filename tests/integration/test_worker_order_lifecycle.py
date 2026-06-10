@@ -357,6 +357,134 @@ async def test_marketable_limit_used_on_submit(tmp_path: Path) -> None:
         assert p["limit_price_usd"] == "100.20"
 
 
+# --------------------------------- 취소·재호가 거래소 자동 해석 (order_routing 사이드카)
+
+
+def _seed_routing(worker: Worker, corr: str, exchange: str) -> None:
+    worker.conn.execute(
+        "INSERT INTO order_routing (correlation_id, order_exchange) VALUES (?, ?)",
+        (corr, exchange),
+    )
+
+
+def _request_body(call) -> dict:
+    return _json.loads(call.request.content.decode())
+
+
+@pytest.mark.asyncio
+async def test_ttl_cancel_uses_recorded_order_exchange(tmp_path: Path) -> None:
+    """제출 거래소가 기록된 주문(SPY·GLD=AMEX 류)의 TTL 취소는 그 거래소로 나간다.
+
+    KIS 정정취소는 OVRS_EXCG_CD 가 원주문과 일치해야 한다 — 고정 기본값(NASD)으로
+    나가면 비기본 거래소 주문이 산 채로 남는 잠복 버그(2026-06-10 거래소 자동 해석의
+    취소측 대칭)."""
+    rule = _rule(lifecycle=OrderLifecycleConfig(ttl_seconds=60))
+    async with _worker(tmp_path, (rule,)) as worker:
+        _seed_order(worker, corr="ord-amex", kis="K1", age_seconds=120)
+        _seed_routing(worker, "ord-amex", "AMEX")
+        with respx.mock(base_url=BASE) as mock:
+            mock.get(CCNL).mock(return_value=_empty_ccnl())
+            cancel_route = mock.post(CANCEL).mock(
+                return_value=httpx.Response(200, json={"output": {}})
+            )
+            await worker.tick(NOW)
+        assert cancel_route.called
+        assert _request_body(cancel_route.calls[0])["OVRS_EXCG_CD"] == "AMEX"
+        assert _state(worker, "ord-amex") == "CANCELLED"
+
+
+@pytest.mark.asyncio
+async def test_ttl_cancel_falls_back_to_default_exchange(tmp_path: Path) -> None:
+    """라우팅 기록 없는 주문(과거 주문·단일 거래소 룰 워커)의 취소는 설정 기본 거래소로
+    — 종전 동작 그대로(회귀 0)."""
+    rule = _rule(lifecycle=OrderLifecycleConfig(ttl_seconds=60))
+    async with _worker(tmp_path, (rule,)) as worker:
+        _seed_order(worker, corr="ord-legacy", kis="K1", age_seconds=120)
+        with respx.mock(base_url=BASE) as mock:
+            mock.get(CCNL).mock(return_value=_empty_ccnl())
+            cancel_route = mock.post(CANCEL).mock(
+                return_value=httpx.Response(200, json={"output": {}})
+            )
+            await worker.tick(NOW)
+        assert cancel_route.called
+        assert _request_body(cancel_route.calls[0])["OVRS_EXCG_CD"] == "NASD"
+        assert _state(worker, "ord-legacy") == "CANCELLED"
+
+
+@pytest.mark.asyncio
+async def test_requote_resubmits_on_recorded_exchange(tmp_path: Path) -> None:
+    """재호가는 취소와 재제출 둘 다 원주문이 나갔던 거래소(AMEX)로 가고, 재제출된
+    새 주문의 라우팅도 같은 거래소로 기록된다(다음 취소도 올바른 거래소)."""
+    rule = _rule(
+        lifecycle=OrderLifecycleConfig(
+            requote_drift_pct=Decimal("2"), requote_after_seconds=30
+        )
+    )
+    async with _worker(tmp_path, (rule,)) as worker:
+        _seed_order(worker, corr="ord-rq", kis="K1", age_seconds=60, limit="100.00")
+        _seed_routing(worker, "ord-rq", "AMEX")
+        with respx.mock(base_url=BASE) as mock:
+            mock.get(CCNL).mock(return_value=_empty_ccnl())
+            mock.get(QUOTE).mock(
+                return_value=httpx.Response(
+                    200,
+                    json={"output": {"last": "103", "bidp": "102.9", "askp": "103.1"}},
+                )
+            )
+            cancel_route = mock.post(CANCEL).mock(
+                return_value=httpx.Response(200, json={"output": {}})
+            )
+            place_route = mock.post(PLACE).mock(
+                return_value=httpx.Response(200, json={"output": {"ODNO": "K2"}})
+            )
+            await worker.tick(NOW)
+        assert _request_body(cancel_route.calls[0])["OVRS_EXCG_CD"] == "AMEX"
+        assert _request_body(place_route.calls[0])["OVRS_EXCG_CD"] == "AMEX"
+        rows = worker.conn.execute(
+            "SELECT order_exchange FROM order_routing WHERE correlation_id != 'ord-rq'"
+        ).fetchall()
+        assert [r["order_exchange"] for r in rows] == ["AMEX"]
+
+
+@pytest.mark.asyncio
+async def test_submit_records_order_routing(tmp_path: Path) -> None:
+    """라우터가 제출 성공 시 실제로 쓴 거래소를 order_routing 에 기록한다 —
+    order_exchange 명시 시 그 값, 미지정 시 설정 기본 거래소."""
+    rule = _rule(rule_id="rt", enabled=True)
+    async with _router(tmp_path) as router:
+        with respx.mock(base_url=BASE) as mock:
+            mock.post(PLACE).mock(
+                return_value=httpx.Response(200, json={"output": {"ODNO": "K1"}})
+            )
+            resolved = await router.submit_order(
+                rule=rule,
+                quote_price_usd=Decimal("100"),
+                quote_ask_usd=Decimal("100"),
+                quote_bid_usd=Decimal("99.9"),
+                total_capital_usd=Decimal("100000"),
+                current_symbol_exposure_usd=Decimal("0"),
+                current_global_exposure_usd=Decimal("0"),
+                order_exchange="AMEX",
+            )
+            fallback = await router.submit_order(
+                rule=rule,
+                quote_price_usd=Decimal("100"),
+                quote_ask_usd=Decimal("100"),
+                quote_bid_usd=Decimal("99.9"),
+                total_capital_usd=Decimal("100000"),
+                current_symbol_exposure_usd=Decimal("0"),
+                current_global_exposure_usd=Decimal("0"),
+            )
+        routing = {
+            r["correlation_id"]: r["order_exchange"]
+            for r in router.conn.execute(
+                "SELECT correlation_id, order_exchange FROM order_routing"
+            ).fetchall()
+        }
+        assert routing[resolved.correlation_id] == "AMEX"
+        assert routing[fallback.correlation_id] == "NASD"
+
+
 @pytest.mark.asyncio
 async def test_marketable_limit_falls_back_without_quote(tmp_path: Path) -> None:
     """호가가 없으면 marketable 계산 불가 → 기존 limit_price 표현식("100.00")으로 폴백."""

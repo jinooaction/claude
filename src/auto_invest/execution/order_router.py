@@ -225,6 +225,23 @@ def _set_kis_order_id(
     )
 
 
+def _set_order_routing(
+    conn: sqlite3.Connection,
+    correlation_id: str,
+    order_exchange: str,
+) -> None:
+    # KIS 정정취소(order-rvsecncl)는 OVRS_EXCG_CD 가 원주문과 일치해야 한다. 제출에
+    # 실제로 쓴 거래소를 기록해 수명 관리(스펙 030)의 취소·재호가가 같은 거래소로
+    # 가게 한다 — 시세→주문 거래소 자동 해석(2026-06-10)의 취소측 대칭.
+    conn.execute(
+        """
+        INSERT OR REPLACE INTO order_routing (correlation_id, order_exchange)
+        VALUES (?, ?)
+        """,
+        (correlation_id, order_exchange),
+    )
+
+
 # ----------------------------------------------------------- stage uniqueness
 
 
@@ -785,6 +802,7 @@ class OrderRouter:
         )
         _record_transition(self.conn, correlation_id, "INTENT", "SUBMITTED", None)
         _set_kis_order_id(self.conn, correlation_id, result.kis_order_id, submitted_at)
+        _set_order_routing(self.conn, correlation_id, order_exchange or self.market)
         return OrderOutcome(
             state="SUBMITTED",
             correlation_id=correlation_id,

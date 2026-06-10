@@ -153,6 +153,9 @@ class OpenLifecycleOrder:
     limit_price_usd: Decimal | None
     submitted_at: datetime | None
     state: str
+    # 제출에 실제로 쓴 거래소(OVRS_EXCG_CD, order_routing 사이드카). KIS 정정취소는
+    # 원주문 거래소와 일치해야 한다. None(과거 주문)이면 호출자가 기본 거래소로 폴백.
+    order_exchange: str | None = None
 
 
 @dataclass(frozen=True)
@@ -254,10 +257,12 @@ def load_open_orders_for_lifecycle(
     placeholders = ",".join("?" for _ in _OPEN_STATES)
     rows = conn.execute(
         f"""
-        SELECT correlation_id, kis_order_id, symbol, side, rule_id, order_type,
-               limit_price_usd, submitted_at_utc, state
-        FROM orders
-        WHERE state IN ({placeholders}) AND kis_order_id IS NOT NULL
+        SELECT o.correlation_id, o.kis_order_id, o.symbol, o.side, o.rule_id,
+               o.order_type, o.limit_price_usd, o.submitted_at_utc, o.state,
+               r.order_exchange
+        FROM orders o
+        LEFT JOIN order_routing r ON r.correlation_id = o.correlation_id
+        WHERE o.state IN ({placeholders}) AND o.kis_order_id IS NOT NULL
         """,
         _OPEN_STATES,
     ).fetchall()
@@ -276,6 +281,7 @@ def load_open_orders_for_lifecycle(
             ),
             submitted_at=_parse_iso(r["submitted_at_utc"]),
             state=r["state"],
+            order_exchange=r["order_exchange"],
         )
         for r in rows
     ]
