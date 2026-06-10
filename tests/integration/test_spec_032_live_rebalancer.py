@@ -25,7 +25,7 @@ from auto_invest.config.caps import SizingCaps
 from auto_invest.config.enums import OrderType, Side
 from auto_invest.config.rules import PortfolioRebalanceConfig
 from auto_invest.config.whitelist import Whitelist
-from auto_invest.execution.order_router import OrderRouter
+from auto_invest.execution.order_router import OrderOutcome, OrderRouter
 from auto_invest.execution.rebalancer import execute_rebalance
 from auto_invest.market_data.store import PriceBar, insert_bar
 from auto_invest.persistence import db
@@ -224,6 +224,57 @@ async def test_rebalance_deterministic(conn, tmp_path):
         return [(r.symbol, r.side, r.routed_qty, r.state) for r in out.results]
 
     assert await run() == await run()
+
+
+@pytest.mark.asyncio
+async def test_rebalance_threads_per_symbol_order_exchange(conn, tmp_path):
+    """리밸런서는 각 종목의 시세 거래소(quote.resolved_market)를 주문 거래소로 옮긴다.
+
+    검증된 멀티에셋 유니버스(SPY=AMS→AMEX, IEF=NAS→NASD)가 라이브로 갈 때 각 주문이
+    *종목별 올바른 거래소*로 라우팅돼야 한다 — 단일 고정 거래소면 SPY 가 거부된다. 여기서는
+    submit_order 가 받은 order_exchange 를 캡처해 SPY→AMEX, IEF→NASD 임을 직접 검증한다.
+    """
+    # 둘 다 추세 위(상승)라 보유 대상. top_n=2 = 둘 다 매수.
+    _seed_bars(conn, "SPY", [100 * (1.01**i) for i in range(40)])
+    _seed_bars(conn, "IEF", [100 * (1.002**i) for i in range(40)])
+    universe = ("SPY", "IEF")
+
+    resolved = {"SPY": "AMS", "IEF": "NAS"}  # 시세 해석기가 알아낸 상장 거래소
+
+    def _provider_with_market(prices: dict[str, str]):
+        async def provider(symbol: str) -> Quote:
+            p = Decimal(prices[symbol])
+            return Quote(
+                symbol=symbol,
+                last_price_usd=p,
+                bid_usd=(p * Decimal("0.999")).quantize(Decimal("0.01")),
+                ask_usd=(p * Decimal("1.001")).quantize(Decimal("0.01")),
+                quoted_at_utc=datetime(2023, 6, 1, tzinfo=UTC),
+                resolved_market=resolved[symbol],
+            )
+
+        return provider
+
+    class _CapturingRouter:
+        def __init__(self) -> None:
+            self.seen: dict[str, str | None] = {}
+
+        async def submit_order(self, *, rule, order_exchange=None, **kwargs):  # noqa: ANN001
+            self.seen[rule.symbol] = order_exchange
+            return OrderOutcome(state="PAPER_FILLED", correlation_id="c")
+
+    router = _CapturingRouter()
+    await execute_rebalance(
+        config=_cfg(universe, top_n=2),
+        router=router,
+        conn=conn,
+        quote_provider=_provider_with_market({"SPY": "540", "IEF": "95"}),
+        total_capital_usd=Decimal("100000"),
+        caps=_caps(),
+    )
+    # 각 종목이 시세 거래소에 맞는 주문 거래소로 라우팅됐는지: SPY(AMS)→AMEX, IEF(NAS)→NASD.
+    assert router.seen["SPY"] == "AMEX"
+    assert router.seen["IEF"] == "NASD"
 
 
 @pytest.mark.asyncio

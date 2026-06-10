@@ -13,6 +13,7 @@ from auto_invest.broker.overseas import (
     _opt_price,
     get_quote,
     get_quote_resolving_market,
+    order_exchange_for_quote_market,
 )
 
 
@@ -133,3 +134,39 @@ def test_resolving_market_all_blank_raises_quote_unavailable() -> None:
             )
         )
     assert client.calls == list(QUOTE_EXCHANGES)
+
+
+# ── resolved_market 전파 + 주문 거래소 매핑 (라이브 주문이 종목별 올바른 거래소로 가도록) ──
+
+
+def test_get_quote_records_resolved_market() -> None:
+    # get_quote 는 시세를 받은 거래소(기본 NAS)를 Quote.resolved_market 에 기록한다.
+    q = _quote({"last": "290.55"})
+    assert q.resolved_market == "NAS"
+
+
+def test_resolving_market_records_exchange_that_succeeded() -> None:
+    # SPY 가 AMS 에서 잡히면 resolved_market 은 "AMS" 여야 한다 — 주문 거래소(AMEX) 도출의 근거.
+    client = _ExchangeAwareClient({"AMS": {"last": "540.12"}})
+    q = asyncio.run(
+        get_quote_resolving_market(
+            client, access_token="t", app_key="k", app_secret="s", symbol="SPY"
+        )
+    )
+    assert q.resolved_market == "AMS"
+
+
+def test_order_exchange_mapping_for_each_quote_market() -> None:
+    # 시세 EXCD → 주문 OVRS_EXCG_CD: SPY·GLD(AMS→AMEX), IEF·AAPL(NAS→NASD), NYSE 상장(NYS→NYSE).
+    assert order_exchange_for_quote_market("NAS") == "NASD"
+    assert order_exchange_for_quote_market("NYS") == "NYSE"
+    assert order_exchange_for_quote_market("AMS") == "AMEX"
+    # 소문자·공백도 견고하게 해석.
+    assert order_exchange_for_quote_market(" ams ") == "AMEX"
+
+
+def test_order_exchange_mapping_unknown_or_none_is_none() -> None:
+    # 매핑에 없거나 None 이면 None → 라우터가 설정된 기본 거래소로 폴백(단일 거래소 회귀 0).
+    assert order_exchange_for_quote_market(None) is None
+    assert order_exchange_for_quote_market("XYZ") is None
+    assert order_exchange_for_quote_market("") is None

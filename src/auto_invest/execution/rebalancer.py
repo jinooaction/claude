@@ -39,6 +39,7 @@ from datetime import date
 from decimal import ROUND_FLOOR, Decimal
 
 from auto_invest.broker.models import Quote
+from auto_invest.broker.overseas import order_exchange_for_quote_market
 from auto_invest.config.caps import SizingCaps
 from auto_invest.config.enums import OrderType, Side, StrategyStage
 from auto_invest.config.rules import (
@@ -299,6 +300,11 @@ async def execute_rebalance(
         rule = rule.model_copy(
             update={"action": rule.action.model_copy(update={"limit_price": str(limit_price)})}
         )
+        # 시세 해석기가 알아낸 *실제 상장 거래소*(quote.resolved_market)를 주문 거래소
+        # (OVRS_EXCG_CD)로 옮긴다 — SPY·GLD(AMS→AMEX)·IEF(NAS→NASD). 매핑에 없으면 None →
+        # 라우터가 설정된 기본 거래소로 폴백(회귀 0). 검증된 멀티에셋 유니버스의 라이브 주문이
+        # 종목별로 올바른 거래소로 가게 하는 마지막 고리.
+        order_exchange = order_exchange_for_quote_market(quote.resolved_market)
         outcome: OrderOutcome = await router.submit_order(
             rule=rule,
             quote_price_usd=quote.last_price_usd,
@@ -307,6 +313,7 @@ async def execute_rebalance(
             total_capital_usd=total_capital_usd,
             current_symbol_exposure_usd=symbol_exposure.get(planned.symbol, Decimal("0")),
             current_global_exposure_usd=global_exposure,
+            order_exchange=order_exchange,
         )
         results.append(
             RebalanceOrderResult(

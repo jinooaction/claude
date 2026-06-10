@@ -211,6 +211,57 @@ async def test_submit_order_happy_path(tmp_path: Path):
 
 
 @pytest.mark.asyncio
+async def test_submit_order_routes_to_per_symbol_exchange(tmp_path: Path):
+    """order_exchange 가 주어지면 그 거래소(OVRS_EXCG_CD)로 주문이 나간다.
+
+    검증된 멀티에셋 유니버스(SPY·GLD=AMEX)는 라우터 기본 거래소(NASD)가 아니라 시세
+    해석기가 알아낸 종목별 거래소로 라우팅돼야 한다 — 그래야 라이브 첫 실주문이 거부 안 됨.
+    """
+    import json as _json
+
+    async with _router(tmp_path) as router:
+        with respx.mock(base_url=BASE) as mock:
+            route = mock.post("/uapi/overseas-stock/v1/trading/order").mock(
+                return_value=httpx.Response(200, json={"output": {"ODNO": "K-AMEX"}})
+            )
+            outcome = await router.submit_order(
+                rule=_rule(),
+                quote_price_usd=Decimal("99"),
+                total_capital_usd=Decimal("10000"),
+                current_symbol_exposure_usd=Decimal("0"),
+                current_global_exposure_usd=Decimal("0"),
+                order_exchange="AMEX",
+            )
+        assert outcome.state == "SUBMITTED"
+        sent = _json.loads(route.calls.last.request.content)
+        assert sent["OVRS_EXCG_CD"] == "AMEX"
+
+
+@pytest.mark.asyncio
+async def test_submit_order_falls_back_to_router_market_exchange(tmp_path: Path):
+    """order_exchange 가 None 이면 라우터에 설정된 기본 거래소(self.market)로 폴백한다.
+
+    단일 거래소 룰 워커는 항상 None 을 넘기므로 종전 동작과 byte 동일(회귀 0).
+    """
+    import json as _json
+
+    async with _router(tmp_path) as router:  # router.market == "NASD"
+        with respx.mock(base_url=BASE) as mock:
+            route = mock.post("/uapi/overseas-stock/v1/trading/order").mock(
+                return_value=httpx.Response(200, json={"output": {"ODNO": "K-DFLT"}})
+            )
+            await router.submit_order(
+                rule=_rule(),
+                quote_price_usd=Decimal("99"),
+                total_capital_usd=Decimal("10000"),
+                current_symbol_exposure_usd=Decimal("0"),
+                current_global_exposure_usd=Decimal("0"),
+            )
+        sent = _json.loads(route.calls.last.request.content)
+        assert sent["OVRS_EXCG_CD"] == "NASD"
+
+
+@pytest.mark.asyncio
 async def test_submit_order_records_decision_price_on_intent(tmp_path: Path):
     """spec 028 FR-028-02 — ORDER_INTENT 에 결정 순간의 arrival 시세·호가가 기록된다."""
     import json as _json

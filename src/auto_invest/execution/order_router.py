@@ -357,7 +357,12 @@ class OrderRouter:
         news_advisory: NewsAdvisory | None = None,
         judgment_correlation_id: str | None = None,
         news_correlation_id: str | None = None,
+        order_exchange: str | None = None,
     ) -> OrderOutcome:
+        # ``order_exchange`` (OVRS_EXCG_CD): 시세 해석기가 알아낸 종목별 주문 거래소.
+        # None 이면 설정된 기본 거래소(self.market)로 폴백한다 — 단일 거래소 룰 워커는
+        # 항상 None 을 넘기므로 byte 동일(회귀 0). SPY·GLD(AMEX)·IEF(NASD) 처럼 섞인
+        # 유니버스는 리밸런서가 종목별 거래소를 넘겨 올바르게 라우팅한다.
         correlation_id = f"ord-{uuid.uuid4().hex[:12]}"
 
         # Spec 017: deterministic volatility-based sizing BEFORE advisories and
@@ -740,7 +745,7 @@ class OrderRouter:
                 app_key=self.app_key,
                 app_secret=self.app_secret,
                 request=request,
-                market=self.market,
+                market=order_exchange or self.market,
             )
         except Exception as exc:  # noqa: BLE001 — translate to audit row
             audit.append(

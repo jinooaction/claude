@@ -41,6 +41,11 @@ class Quote(BaseModel):
     bid_usd: Decimal | None = None
     ask_usd: Decimal | None = None
     quoted_at_utc: datetime
+    # KIS 시세 거래소(EXCD: NAS/NYS/AMS) — 어느 거래소에서 이 시세를 받았는가.
+    # get_quote_resolving_market 가 거래소를 자동 탐색하면 *실제로 체결된* 거래소가 여기 담긴다.
+    # 주문 경로(OVRS_EXCG_CD)는 시세와 별개 코드 체계라, 이 값으로 주문 거래소를 정확히 옮긴다
+    # (SPY·GLD=AMS→AMEX, IEF=NAS→NASD). None 이면 호출자가 주문 시 설정된 기본 거래소로 폴백.
+    resolved_market: str | None = None
 
 
 class PositionSnapshot(BaseModel):
