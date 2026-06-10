@@ -826,7 +826,7 @@ async def _fetch_marks(
     종목별로 독립 조회하며, 실패한 종목은 결과 dict 에서 빠진다(우아한 강등,
     FR-005). 반환: {symbol: 현재가 Decimal}.
     """
-    from auto_invest.broker.overseas import get_quote
+    from auto_invest.broker.overseas import get_quote_resolving_market
 
     marks: dict = {}
     if not symbols:
@@ -847,7 +847,9 @@ async def _fetch_marks(
         )
         for sym in symbols:
             try:
-                quote = await get_quote(
+                # 거래소 자동 해석(NAS→NYS→AMS): SPY·GLD(AMS) 마크가 고정 NAS 로 누락돼
+                # NAV 가 과소 계상되던 문제 수정.
+                quote = await get_quote_resolving_market(
                     client,
                     access_token=token.access_token,
                     app_key=app_key,
@@ -3558,7 +3560,7 @@ def rebalance_once_cmd(
     from decimal import Decimal as _Decimal
 
     from auto_invest.broker.models import Quote
-    from auto_invest.broker.overseas import get_quote
+    from auto_invest.broker.overseas import get_quote_resolving_market
     from auto_invest.config.enums import StrategyStage
     from auto_invest.execution.order_router import OrderRouter
     from auto_invest.execution.rebalancer import execute_rebalance
@@ -3730,7 +3732,9 @@ def rebalance_once_cmd(
             )
 
             async def _quote_provider(symbol: str):
-                return await get_quote(
+                # 거래소 자동 해석(NAS→NYS→AMS): SPY·GLD 는 AMS 상장이라 고정 NAS 로는 빈
+                # 값으로 실패한다. 이게 글로벌 분산 추세 포트폴리오가 forward NAV 를 못 쌓던 원인.
+                return await get_quote_resolving_market(
                     broker,
                     access_token=token.access_token,
                     app_key=secrets["KIS_APP_KEY"],
