@@ -57,6 +57,31 @@ git ls-remote --heads origin 'claude/*' | awk '{print $2}'
   운영자 확인). 부분 체결 재호가(잔량 재계산)는 별도 슬라이스.
 - **L1 적용 표면 확장 / L2·L3 캐너리 승격 큐 / 실거래 자본 상향** — 기존 후보 유지.
 
+## 최근 마일스톤 — 2026-06-10 (🟢 forward 검증 후 자동 무장 게이트 — 스펙 049)
+
+main 머지 `a72a00e`(PR #227). 운영자 지시 **"forward 검증 후 자동 무장"** + 무장 해제 노트
+(2026-06-04)의 계획 *"넓은 forward 페이퍼로 검증 후 재무장"* 의 자동화. **이 머지 자체는 무장
+0건** — 센티넬은 `armed:false` 유지. 자동 무장은 forward 가 실제로 EDGE_CONFIRMED 될 때
+(≈20 거래일 누적 후) 게이트가 별도 PR 로 수행한다.
+
+- **무엇(두 가지)**: ① forward 가 *배선된 앙상블*(스펙 048 다중 속도 분수 노출, 이미 운영
+  리밸런서 경로에 배선 — `strategy/rebalance.py`·`execution/rebalancer.py`)을 검증하도록 보장
+  (ARM E = `global-trend-portfolio.toml`/`forward_global.db`). ② EDGE_CONFIRMED → 자동 무장 경로.
+- **자동 무장 게이트**: `src/auto_invest/portfolio/autoarm.py`(순수·테스트된 결정) + CLI
+  `auto-invest autoarm-decide` + 워크플로 `.github/workflows/forward-edge-autoarm.yml`(매 평일
+  23:50 UTC). EDGE_CONFIRMED + **검증=무장 정합**(라이브 설정 전략 지문 == 검증한 앙상블) +
+  미무장 + 킬스위치 없음 일 때만 ARM → 무장 PR open + best-effort 자동 머지 → 사이드카
+  `automation/edge-autoarm-last-run` 발행. 그 외 보수적으로 WAIT/BLOCKED/ALREADY_ARMED/DISABLED.
+- **라이브 캐너리 재지정**: `deploy/canary-live-portfolio.toml` 을 옛 3종목 top_n=1(운영자가
+  "세계 최고 수준 아님"으로 거부) → 검증된 3자산 GTAA 앙상블(SPY·IEF·GLD, 역변동성, 다중 속도
+  앙상블)로. `global-trend-portfolio.toml` 과 전략 지문 동일(CI 회귀로 못박음).
+- **안전**: 무장 머지조차 미리보기만(첫 실주문은 다음 미국 정규장 스케줄) · 자본 소액(캡 $1,000) ·
+  킬스위치 `automation/AUTOARM_DISABLED`(사용법 `automation/AUTOARM.md`) · 라이브 집합 SPY·IEF·GLD
+  (헌법 II) · 풀라이브 아님(헌법 X.4). Kernel 터치 0건. 전체 **1671 통과**, 린트 깨끗.
+- **다음 세션 확인 지점**: forward 가 EDGE_CONFIRMED 됐는지 →
+  `git show origin/automation/edge-autoarm-last-run:LAST_RUN.md`(게이트 결정) +
+  `git show origin/automation/rebalance-paper-forward-last-run:LAST_RUN.md`(ARM E 판정).
+
 ## 최근 마일스톤 — 2026-06-07 (✅ 끊긴 배포 진짜 복구 — 워커 sudo 제어, 검증 완료)
 
 main 머지 `03e4fa0`(PR #223, C1) + `31da635`(PR #224, C2). 운영자 "권장 방향대로 끝까지 자율
