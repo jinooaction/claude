@@ -136,13 +136,92 @@ def apply_trend_filter(
     return filtered, decisions
 
 
+# ───────────────────────── 스펙 048 — 다중 속도 앙상블 (분수 노출) ─────────────────────────
+
+
+_ENS_QUANT = Decimal("0.000001")
+
+
+@dataclass(frozen=True)
+class TrendEnsembleSpec:
+    """스펙 048 — 다중 추세 속도 앙상블 게이트(이진 게이트의 분수 노출 일반화).
+
+    단일 속도(`TrendSpec`)는 이진(투자 1 / 현금 0)이라 한 임계 근처에서 휩쏘에 취약하다.
+    앙상블은 N개 속도(`windows`, 일봉 SMA 창) 중 *추세 위인 비율*(0, 1/N, …, 1)만큼 자산에
+    노출하고 나머지는 현금이다 — "추세가 강하게 합의될수록 더 노출"하는 점진 게이트라 단일
+    속도의 절벽(0↔1)을 부드럽게 한다. 백테스트(Shiller 1871~)에서 3자산 역변동성에 얹어
+    샤프 ~1.8→~2.0+·낙폭 ~5%→3.7%(스펙 048 FINDINGS, 4/4 구간 엣지). method 는 SMA 고정
+    (검증된 형태). 미래 누출 없음: 각 창은 자기 lookback 까지만 본다.
+
+    windows: 추세 속도 다발(일봉 SMA 창). 예: (63,126,189,252) ≈ 3/6/9/12개월. 각 ≥ 2.
+    on_insufficient: 한 창의 SMA 가 데이터 부족이면 "hold"(그 창은 투자 1로 셈) |
+      "cash"(그 창은 현금 0 으로 셈 — 보수적). 종목 전체가 아니라 *창별* 적용.
+    """
+
+    windows: tuple[int, ...]
+    on_insufficient: str = ON_INSUFFICIENT_HOLD
+
+    def __post_init__(self) -> None:
+        if not self.windows:
+            raise ValueError("TrendEnsembleSpec needs at least one window")
+        if any(w < 2 for w in self.windows):
+            raise ValueError(f"ensemble windows must each be >= 2, got {self.windows}")
+        if self.on_insufficient not in VALID_ON_INSUFFICIENT:
+            raise ValueError(f"unknown on_insufficient: {self.on_insufficient!r}")
+
+
+def ensemble_fraction(closes: Sequence[Decimal], spec: TrendEnsembleSpec) -> Decimal:
+    """추세 위인 속도의 비율(0..1) — 분수 노출. 각 창 w 의 SMA 게이트를 평균낸다.
+
+    창 w: 마지막 종가 > 최근 w SMA 이면 1, 아래면 0, 부족(n<w)이면 on_insufficient
+    ("hold"→1, "cash"→0). 데이터 풍부 구간에서는 스펙 048 측정 모듈과 동일(부족 구간에서만
+    cash 정책이 더 보수적 — 운영 안전). 결정론: 6dp 양자화.
+    """
+    hold_on_insufficient = spec.on_insufficient == ON_INSUFFICIENT_HOLD
+    hits = Decimal("0")
+    for w in spec.windows:
+        verdict = above_trend(closes, TrendSpec(method=METHOD_SMA, lookback=w))
+        # 창이 추세 위(True)면 1, 부족(None)인데 정책이 hold 면 1, 그 외(False/cash)는 0.
+        if verdict is True or (verdict is None and hold_on_insufficient):
+            hits += Decimal("1")
+    return (hits / Decimal(len(spec.windows))).quantize(_ENS_QUANT)
+
+
+def apply_trend_ensemble_filter(
+    weights: Mapping[str, Decimal],
+    closes_by_symbol: Mapping[str, Mapping[date, Decimal]],
+    spec: TrendEnsembleSpec,
+) -> tuple[dict[str, Decimal], list[TrendDecision]]:
+    """각 종목 가중치를 앙상블 분수(0..1)로 스케일한다 — 나머지는 현금(재정규화 안 함).
+
+    `apply_trend_filter`(이진)의 분수 노출 일반화. filtered[sym] = w * fraction(6dp).
+    fraction==0 인 종목은 빠진다(완전 현금). 키 순서 보존(결정론). 합 ≤ 1(차이는 현금 방어).
+    """
+    filtered: dict[str, Decimal] = {}
+    decisions: list[TrendDecision] = []
+    for symbol, w in weights.items():
+        closes = _ordered_closes(closes_by_symbol.get(symbol, {}))
+        frac = ensemble_fraction(closes, spec)
+        scaled = (w * frac).quantize(_ENS_QUANT)
+        if scaled > 0:
+            filtered[symbol] = scaled
+            state = "above" if frac == Decimal("1") else "partial"
+            decisions.append(TrendDecision(symbol, state, True))
+        else:
+            decisions.append(TrendDecision(symbol, "below", False))
+    return filtered, decisions
+
+
 __all__ = [
     "METHOD_ABSOLUTE_MOMENTUM",
     "METHOD_SMA",
     "ON_INSUFFICIENT_CASH",
     "ON_INSUFFICIENT_HOLD",
     "TrendDecision",
+    "TrendEnsembleSpec",
     "TrendSpec",
     "above_trend",
+    "apply_trend_ensemble_filter",
     "apply_trend_filter",
+    "ensemble_fraction",
 ]

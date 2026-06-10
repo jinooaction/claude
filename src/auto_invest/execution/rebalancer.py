@@ -52,18 +52,29 @@ from auto_invest.market_data.store import get_bars
 from auto_invest.persistence import positions as positions_mod
 from auto_invest.strategy.factors import composite_scores
 from auto_invest.strategy.rebalance import PlannedOrder, rebalance_plan, target_weights
-from auto_invest.strategy.trend import TrendSpec
+from auto_invest.strategy.trend import TrendEnsembleSpec, TrendSpec
 
 logger = logging.getLogger(__name__)
 
 QuoteProvider = Callable[[str], Awaitable[Quote]]
 
 
-def _trend_spec(config: PortfolioRebalanceConfig) -> TrendSpec | None:
-    """스펙 036 — config 의 옵트인 추세 필터를 TrendSpec 으로(없으면 None)."""
+def _trend_spec(
+    config: PortfolioRebalanceConfig,
+) -> TrendSpec | TrendEnsembleSpec | None:
+    """config 의 옵트인 추세 필터를 스펙으로(없으면 None).
+
+    스펙 048: trend_filter.ensemble_windows 가 있으면 다중 속도 앙상블(분수 노출)을,
+    없으면 스펙 036 단일 속도(이진)를 만든다.
+    """
     tf = config.trend_filter
     if tf is None:
         return None
+    if tf.ensemble_windows:
+        return TrendEnsembleSpec(
+            windows=tf.ensemble_windows,
+            on_insufficient=tf.on_insufficient,
+        )
     return TrendSpec(
         method=tf.method,
         lookback=tf.lookback,
