@@ -143,6 +143,7 @@ async def get_quote(
         bid_usd=_opt_price(body.get("bidp")),
         ask_usd=_opt_price(body.get("askp")),
         quoted_at_utc=datetime.now(UTC),
+        resolved_market=market,
     )
 
 
@@ -187,6 +188,28 @@ async def get_quote_resolving_market(
     raise last_exc or QuoteUnavailable(
         f"{symbol}: KIS returned no usable last price on any of {markets}"
     )
+
+
+# KIS 시세(EXCD)와 주문(OVRS_EXCG_CD)은 *별개의 거래소 코드 체계*다.
+#   시세 조회 EXCD : NAS(나스닥) / NYS(뉴욕증권거래소) / AMS(NYSE Arca·AMEX)
+#   주문 OVRS_EXCG_CD: NASD       / NYSE              / AMEX
+# 시세 해석기(get_quote_resolving_market)가 *실제로* 어느 거래소에서 시세를 받았는지
+# (Quote.resolved_market) 알아내므로, 그 값을 그대로 주문 거래소로 옮기면 SPY·GLD(AMS→AMEX)·
+# IEF(NAS→NASD) 처럼 거래소가 섞인 유니버스도 종목별로 올바르게 라우팅된다 — 심볼별 거래소
+# 하드코딩이 필요 없다(시세 자동 해석과 동일 원칙). 시세 버그(2026-06-10)의 주문측 대칭 수정.
+QUOTE_TO_ORDER_EXCHANGE: dict[str, str] = {"NAS": "NASD", "NYS": "NYSE", "AMS": "AMEX"}
+
+
+def order_exchange_for_quote_market(excd: str | None) -> str | None:
+    """KIS 시세 거래소(EXCD) → 해외주식 주문 거래소(OVRS_EXCG_CD) 변환.
+
+    `Quote.resolved_market`(시세를 실제로 받은 거래소)을 주문 경로의 `OVRS_EXCG_CD` 로
+    옮긴다. 매핑에 없거나 ``None`` 이면 ``None`` 을 돌려 호출자가 설정된 기본 주문 거래소로
+    폴백하게 한다(단일 거래소 룰 워커는 영향 없음 — 회귀 0).
+    """
+    if excd is None:
+        return None
+    return QUOTE_TO_ORDER_EXCHANGE.get(excd.strip().upper())
 
 
 def _parse_daily_bars(rows: list[dict], symbol: str) -> list[OverseasDailyBar]:
