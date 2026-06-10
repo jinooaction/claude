@@ -70,11 +70,18 @@ momentum_period            = 120
 rebalance_threshold_pct    = "2.0"
 min_notional_usd           = "50"
 
-# 스펙 036 추세 필터 = 분산 추세의 핵심. 스펙 042/043/047 에서 검증된 파라미터(method=sma,
-# lookback=200≈10개월). 각 자산이 *자기* 추세 위일 때만 보유 → 세 비상관 흐름의 분산.
-# 역변동성 가중 *뒤에* 적용된다(자본 방어 오버레이). on_insufficient=cash: 200봉 이력 없으면
-# 보유 안 함(보수적 방어).
+# 추세 필터 = 분산 추세의 핵심. 각 자산이 *자기* 추세 위일 때만 보유 → 세 비상관 흐름의 분산.
+# 역변동성 가중 *뒤에* 적용된다(자본 방어 오버레이). on_insufficient=cash: 이력 없으면 보유 안
+# 함(보수적 방어).
+#
+# 스펙 048 — 단일 속도(10개월 SMA) → **다중 속도 앙상블(분수 노출)**. ensemble_windows 가
+# 설정되면 단일 lookback 이진 게이트 대신 이 여러 속도(일봉 SMA 창) 다발의 *추세 위 비율*
+# (0..1)만큼 노출하고 나머지는 현금이다. [63,126,189,252] ≈ 3/6/9/12개월(빠른 3개월이 급반전을
+# 일찍 잡아 휩쏘·낙폭을 줄이는 핵심). 백테스트(Shiller 1871~ 3자산 역변동성): 단일 속도 대비
+# 샤프 ~1.8→~2.0+·낙폭 ~5%→3.7%, 4/4 구간 엣지(specs/048-trend-ensemble/FINDINGS.md).
+# method/lookback 은 앙상블이 켜지면 무시된다(앙상블은 SMA 고정, 창이 곧 lookback 다).
 [portfolio.trend_filter]
 method          = "sma"
 lookback        = 200
 on_insufficient = "cash"
+ensemble_windows = [63, 126, 189, 252]

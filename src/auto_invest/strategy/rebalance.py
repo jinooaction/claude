@@ -49,7 +49,12 @@ from auto_invest.strategy.sizing import (
     min_variance_group_scales,
     realized_volatility,
 )
-from auto_invest.strategy.trend import TrendSpec, apply_trend_filter
+from auto_invest.strategy.trend import (
+    TrendEnsembleSpec,
+    TrendSpec,
+    apply_trend_ensemble_filter,
+    apply_trend_filter,
+)
 
 _QUANT = Decimal("0.000001")
 _SENTINEL = Decimal("-Inf")
@@ -183,7 +188,7 @@ def target_weights(
     top_n: int | None = None,
     top_pct: float | None = None,
     lookback_bars: int = 60,
-    trend: TrendSpec | None = None,
+    trend: TrendSpec | TrendEnsembleSpec | None = None,
 ) -> dict[str, Decimal]:
     """Long-only target weights over the selected top names.
 
@@ -193,11 +198,15 @@ def target_weights(
     non-converging window still yields a valid vector (SC-04). Returns an empty
     dict when no symbol is eligible.
 
-    When ``trend`` is given (spec 036, opt-in), an absolute-momentum trend gate
-    is applied LAST: a selected name below its own trend is dropped to weight 0
-    (its share becomes cash — a drawdown-defense overlay). The result then sums
-    to ≤ 1.0; it is intentionally NOT renormalized (the cash is the defense).
-    With ``trend=None`` the behaviour is byte-identical to before (weights sum 1).
+    When ``trend`` is given it is applied LAST, as a drawdown-defense overlay:
+    * ``TrendSpec`` (spec 036, binary) — a selected name below its own trend is
+      dropped to weight 0 (its share becomes cash).
+    * ``TrendEnsembleSpec`` (spec 048, fractional) — a selected name is scaled by
+      the *fraction of trend speeds it is above* (0, 1/N, …, 1); the rest is cash.
+      The multi-speed consensus smooths the single-speed 0↔1 cliff (Sharpe ↑,
+      drawdown ↓ in backtest).
+    The result then sums to ≤ 1.0; it is intentionally NOT renormalized (the cash
+    is the defense). With ``trend=None`` the behaviour is byte-identical (sum 1).
     """
     selected = select_symbols(ranked_scores, top_n=top_n, top_pct=top_pct)
     if not selected:
@@ -207,7 +216,9 @@ def target_weights(
     weights = _base_weights(
         selected, score_by_symbol, closes_by_symbol, weight_scheme, lookback_bars
     )
-    if trend is not None:
+    if isinstance(trend, TrendEnsembleSpec):
+        weights, _ = apply_trend_ensemble_filter(weights, closes_by_symbol, trend)
+    elif trend is not None:
         weights, _ = apply_trend_filter(weights, closes_by_symbol, trend)
     return weights
 

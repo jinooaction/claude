@@ -314,6 +314,20 @@ class TrendFilterConfig(BaseModel):
     lookback: int = Field(default=200, ge=2)
     on_insufficient: Literal["hold", "cash"] = "hold"
     min_return_pct: Decimal = Field(default=Decimal("0"))
+    # 스펙 048 — 다중 속도 앙상블(분수 노출). 설정하면 단일 lookback 이진 게이트 대신 이 여러
+    # 속도(일봉 SMA 창) 다발의 *추세 위 비율*(0..1)만큼 노출하고 나머지는 현금이다 — 단일 속도의
+    # 절벽(0↔1)을 부드럽게(샤프↑·낙폭↓, 스펙 048). 예: [63,126,189,252] ≈ 3/6/9/12개월. method
+    # 는 SMA 고정(검증된 형태). on_insufficient 는 창별 적용. None 이면 기존 단일 속도(byte 동일).
+    ensemble_windows: tuple[int, ...] | None = None
+
+    @field_validator("ensemble_windows")
+    @classmethod
+    def _check_ensemble_windows(
+        cls, v: tuple[int, ...] | None
+    ) -> tuple[int, ...] | None:
+        if v is not None and (len(v) == 0 or any(w < 2 for w in v)):
+            raise ValueError("ensemble_windows must be non-empty with each >= 2")
+        return v
 
 
 class PortfolioRebalanceConfig(BaseModel):
