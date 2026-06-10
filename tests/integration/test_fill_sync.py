@@ -187,6 +187,39 @@ async def test_broker_error_is_isolated(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_multi_exchange_fills_all_synced(tmp_path: Path) -> None:
+    """검증된 멀티에셋 유니버스: SPY(AMEX)·IEF(NASD) 주문 체결이 거래소 스윕으로 모두 동기화.
+
+    단일 거래소(기본 NASD)만 조회하던 옛 동작이면 SPY(AMEX) 체결이 누락돼 SUBMITTED 에
+    갇히고 로컬 보유가 0 으로 남는다(→ 리밸런서 과매수, 손실 서킷 브레이커가 노출 못 봄).
+    스윕이 두 거래소 체결을 모두 가져와 동기화함을 확인한다."""
+    async with _broker(tmp_path) as (client, conn):
+        _seed_order(conn, corr="ord-spy", kis="K-SPY", symbol="SPY", qty=1)
+        _seed_order(conn, corr="ord-ief", kis="K-IEF", symbol="IEF", qty=5)
+
+        def _se(request) -> httpx.Response:
+            excd = request.url.params.get("OVRS_EXCG_CD", "")
+            rows = {
+                "AMEX": [{"odno": "K-SPY", "pdno": "SPY",
+                          "ft_ccld_qty": "1", "ft_ccld_unpr3": "540"}],
+                "NASD": [{"odno": "K-IEF", "pdno": "IEF",
+                          "ft_ccld_qty": "5", "ft_ccld_unpr3": "95"}],
+            }.get(excd, [])
+            return httpx.Response(200, json={"output": rows})
+
+        with respx.mock(base_url=BASE) as mock:
+            mock.get(CCNL).mock(side_effect=_se)
+            res = await _sync(client, conn)
+        assert res.fills_applied == 2
+        assert _state(conn, "ord-spy") == "FILLED"
+        assert _state(conn, "ord-ief") == "FILLED"
+        spy = positions_mod.get_position(conn, "SPY")
+        ief = positions_mod.get_position(conn, "IEF")
+        assert spy is not None and spy.qty == 1
+        assert ief is not None and ief.qty == 5
+
+
+@pytest.mark.asyncio
 async def test_terminal_partial_expires_with_cancel(tmp_path: Path) -> None:
     async with _broker(tmp_path) as (client, conn):
         _seed_order(conn, qty=100)

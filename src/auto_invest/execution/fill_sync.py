@@ -21,13 +21,17 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from decimal import Decimal
 
 from auto_invest.broker.client import ResilientClient
 from auto_invest.broker.models import BrokerExecution
-from auto_invest.broker.overseas import get_order_executions
+from auto_invest.broker.overseas import (
+    US_ORDER_EXCHANGES,
+    get_order_executions_resolving_market,
+)
 from auto_invest.config.enums import Side
 from auto_invest.execution.order_router import _record_transition, _utcnow_iso_ms
 from auto_invest.persistence import audit
@@ -287,14 +291,19 @@ async def sync_fills(
     app_key: str,
     app_secret: str,
     account: str,
-    market: str = "NASD",
+    markets: Sequence[str] = US_ORDER_EXCHANGES,
     now: datetime | None = None,
 ) -> FillSyncResult:
     """라이브 열린 주문의 체결을 브로커에서 당겨와 장부에 반영한다(읽기-기반 적재).
 
     열린 주문이 0건이면 브로커를 호출하지 않는다(불필요 API 절약). 브로커 호출
     실패 등 어떤 예외도 ERROR 감사를 남기고 삼켜서 호출자(워커 틱)의 거래 루프를
-    멈추지 않는다(FR-009, SC-005)."""
+    멈추지 않는다(FR-009, SC-005).
+
+    체결 조회는 `markets`(기본 NASD·NYSE·AMEX 전부)를 훑어 합친다 — 검증된 멀티에셋
+    유니버스는 거래소가 섞여(SPY·GLD=AMEX, IEF=NASD) 단일 거래소만 조회하면 다른 거래소
+    종목의 체결이 누락되기 때문이다(주문이 거래소별로 나가는데 체결 조회는 한 거래소만 보던
+    대칭 버그). 주문번호로 중복 제거하므로 KIS 동작과 무관하게 정확·멱등."""
     moment = now or datetime.now(UTC)
     open_orders = _load_open_orders(conn)
     if not open_orders:
@@ -303,14 +312,14 @@ async def sync_fills(
         )
 
     try:
-        executions = await get_order_executions(
+        executions = await get_order_executions_resolving_market(
             broker,
             access_token=access_token,
             app_key=app_key,
             app_secret=app_secret,
             account=account,
             order_date_yyyymmdd=moment.strftime("%Y%m%d"),
-            market=market,
+            markets=markets,
         )
     except Exception as exc:  # noqa: BLE001 — 거래 무중단: 격리해 ERROR 로 기록.
         audit.append(

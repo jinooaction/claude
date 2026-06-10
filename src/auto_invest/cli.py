@@ -772,7 +772,13 @@ async def _fetch_kis_account_state(
     잔고는 외화예수금(주문가능액) + 보유 종목 평가금액의 합. 보유 종목은
     Claude 프롬프트와 audit 페이로드 모두에서 활용된다.
     """
-    from auto_invest.broker.overseas import get_balance, get_positions
+    # 보유·잔고는 모든 미국 거래소(NASD·NYSE·AMEX)를 훑어 합쳐 조회한다 — 멀티에셋 유니버스
+    # (SPY·GLD=AMEX, IEF=NASD)에서 다른 거래소 종목이 Claude 프롬프트·감사 계좌상태에서
+    # 누락되지 않게(체결·정합성 경로와 동일한 거래소 자동 해석).
+    from auto_invest.broker.overseas import (
+        get_balance_resolving_market,
+        get_positions_resolving_market,
+    )
 
     async with httpx.AsyncClient(base_url=base_url, timeout=30.0) as inner:
         token = await get_valid_token(
@@ -788,14 +794,14 @@ async def _fetch_kis_account_state(
             breaker=CircuitBreaker(failure_threshold=5, cooldown_seconds=30.0),
             max_retries=4,
         )
-        balance = await get_balance(
+        balance = await get_balance_resolving_market(
             client,
             access_token=token.access_token,
             app_key=app_key,
             app_secret=app_secret,
             account=account_no,
         )
-        positions = await get_positions(
+        positions = await get_positions_resolving_market(
             client,
             access_token=token.access_token,
             app_key=app_key,
@@ -1257,9 +1263,12 @@ async def _run_fill_sync(
     app_secret: str,
     account_no: str,
     db_path: Path,
-    market: str,
 ):
-    """Spec 015 — 라이브 열린 주문의 체결을 브로커에서 당겨 장부에 반영."""
+    """Spec 015 — 라이브 열린 주문의 체결을 브로커에서 당겨 장부에 반영.
+
+    체결 조회는 모든 미국 거래소(NASD·NYSE·AMEX)를 훑어 합친다(sync_fills 기본
+    markets=US_ORDER_EXCHANGES) — 멀티에셋 유니버스의 체결이 단일 거래소 조회에서
+    누락되지 않게."""
     from auto_invest.execution.fill_sync import sync_fills
 
     async with httpx.AsyncClient(base_url=base_url, timeout=30.0) as inner:
@@ -1283,7 +1292,6 @@ async def _run_fill_sync(
             app_key=app_key,
             app_secret=app_secret,
             account=account_no,
-            market=market,
         )
 
 
@@ -1306,7 +1314,12 @@ def fills(
         "--base-url",
         help="KIS REST base URL (--sync 체결 조회용).",
     ),
-    market: str = typer.Option("NASD", "--market", help="해외거래소 코드."),
+    market: str = typer.Option(
+        "NASD",
+        "--market",
+        help="(하위 호환) 해외거래소 코드. --sync 는 이제 모든 미국 거래소"
+        "(NASD·NYSE·AMEX)를 훑어 합치므로 이 값과 무관하게 멀티에셋 체결을 모두 동기화한다.",
+    ),
 ) -> None:
     """Spec 015 — 라이브 체결 동기화/조회.
 
@@ -1340,7 +1353,6 @@ def fills(
                     app_secret=secrets["KIS_APP_SECRET"],
                     account_no=secrets["KIS_ACCOUNT_NO"],
                     db_path=db_path,
-                    market=market,
                 )
             )
             if not result.polled:
@@ -1417,7 +1429,8 @@ async def _run_reconcile(
             app_secret=app_secret,
             account=account_no,
             halt_path=halt_path,
-            market=market,
+            # 보유·잔고 정합성은 모든 미국 거래소를 훑어 합친다(기본 markets=US_ORDER_EXCHANGES)
+            # — 멀티에셋 유니버스의 다른 거래소 종목이 빠져 허위 halt 나지 않게.
         )
 
 

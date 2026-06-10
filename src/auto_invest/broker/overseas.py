@@ -16,6 +16,7 @@ surfaces explicitly.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
@@ -212,6 +213,18 @@ def order_exchange_for_quote_market(excd: str | None) -> str | None:
     return QUOTE_TO_ORDER_EXCHANGE.get(excd.strip().upper())
 
 
+# 되돌림 읽기 경로(체결·보유·잔고)용 미국 해외주식 거래소 집합 — 주문 OVRS_EXCG_CD 와 같은
+# 코드 체계(NASD/NYSE/AMEX). 검증된 멀티에셋 유니버스는 거래소가 섞인다(SPY·GLD=AMEX,
+# IEF=NASD). 주문은 종목별 거래소로 나가는데(시세→주문 거래소 자동 해석, 2026-06-10) 체결·
+# 보유 *조회* 는 단일 거래소(OVRS_EXCG_CD=NASD)만 보던 대칭 잠복 버그가 있었다 — 그러면 다른
+# 거래소 종목(SPY·GLD)의 체결이 동기화 안 되고(→ 로컬 보유 0 → 리밸런서 과매수, 손실 서킷
+# 브레이커가 노출을 못 봄) 잔고 정합성이 그 종목을 'ledger_only' 로 오인(→ 허위 drift/halt)했다.
+# 이 집합을 전부 훑어 합치되 종목/주문번호로 중복 제거하면, KIS 가 OVRS_EXCG_CD 로 거래소를
+# 엄격히 필터하든(각 거래소 자기 것만 반환) 단일값에 전부 반환하든 *양쪽에서* 정확하다 —
+# 중복 제거가 멱등성·이중계상 방지를 보장한다(되돌림 경로의 거래소 자동 해석).
+US_ORDER_EXCHANGES: tuple[str, ...] = tuple(dict.fromkeys(QUOTE_TO_ORDER_EXCHANGE.values()))
+
+
 def _parse_daily_bars(rows: list[dict], symbol: str) -> list[OverseasDailyBar]:
     """Parse KIS 기간별시세 output2 rows into ascending-date OHLCV bars.
 
@@ -363,16 +376,19 @@ async def cancel_order(
     )
 
 
-async def get_positions(
+async def _inquire_balance_output1(
     client: ResilientClient,
     *,
     access_token: str,
     app_key: str,
     app_secret: str,
     account: str,
-    market: str = "NASD",
-) -> tuple[PositionSnapshot, ...]:
-    """Fetch current overseas-equity holdings for the account."""
+    market: str,
+) -> list[dict]:
+    """해외주식 잔고조회(inquire-balance, TTTS3012R) output1(보유 종목 row) 을 반환.
+
+    `get_positions`/`get_balance` 와 그 거래소 스윕 변형이 공유하는 저수준 조회(읽기 전용,
+    주문/취소 안 함)."""
     cano, acnt_prdt = _split_account(account)
     response = await client.request(
         "GET",
@@ -392,7 +408,11 @@ async def get_positions(
             "CTX_AREA_NK200": "",
         },
     )
-    rows = response.json().get("output1", [])
+    return response.json().get("output1", []) or []
+
+
+def _parse_positions(rows: list[dict]) -> tuple[PositionSnapshot, ...]:
+    """잔고조회 output1 row → PositionSnapshot(보유수량>0 만)."""
     return tuple(
         PositionSnapshot(
             symbol=row["ovrs_pdno"],
@@ -402,6 +422,83 @@ async def get_positions(
         for row in rows
         if int(row.get("ovrs_cblc_qty", 0)) > 0
     )
+
+
+def _dedup_balance_rows(rows: list[dict]) -> list[dict]:
+    """여러 거래소에서 모은 잔고 row 를 종목(ovrs_pdno)별로 중복 제거(첫 등장 유지).
+
+    한 종목은 한 거래소에 상장돼 거래소별 조회는 자기 것만 반환한다(중복 없음). 그러나 KIS 가
+    단일 OVRS_EXCG_CD 값에 계좌의 전 거래소 보유를 반환하는 구현이라면 같은 종목이 여러 번
+    들어올 수 있다 — 그대로 합치면 보유·평가금액이 이중계상되므로 종목별 한 row 만 남긴다
+    (스윕이 어느 KIS 동작에서도 정확하도록)."""
+    seen: set[str] = set()
+    out: list[dict] = []
+    for row in rows:
+        sym = str(row.get("ovrs_pdno", "")).strip()
+        if not sym or sym in seen:
+            continue
+        seen.add(sym)
+        out.append(row)
+    return out
+
+
+def _holdings_value_usd(rows: list[dict]) -> Decimal:
+    """보유 종목 row 들의 외화 평가금액(USD) 합(보유수량>0 만)."""
+    return sum(
+        (_row_eval_amount_usd(row) for row in rows if int(row.get("ovrs_cblc_qty", 0) or 0) > 0),
+        Decimal("0"),
+    )
+
+
+async def get_positions(
+    client: ResilientClient,
+    *,
+    access_token: str,
+    app_key: str,
+    app_secret: str,
+    account: str,
+    market: str = "NASD",
+) -> tuple[PositionSnapshot, ...]:
+    """Fetch current overseas-equity holdings for the account (single exchange)."""
+    rows = await _inquire_balance_output1(
+        client,
+        access_token=access_token,
+        app_key=app_key,
+        app_secret=app_secret,
+        account=account,
+        market=market,
+    )
+    return _parse_positions(rows)
+
+
+async def get_positions_resolving_market(
+    client: ResilientClient,
+    *,
+    access_token: str,
+    app_key: str,
+    app_secret: str,
+    account: str,
+    markets: Sequence[str] = US_ORDER_EXCHANGES,
+) -> tuple[PositionSnapshot, ...]:
+    """계좌의 해외주식 보유를 *여러 거래소* 에 걸쳐 합쳐 조회(종목별 중복 제거).
+
+    멀티에셋 유니버스(SPY·GLD=AMEX, IEF=NASD)는 거래소가 섞여, 단일 거래소 조회로는 다른
+    거래소 종목의 보유가 통째로 빠진다(→ 정합성에서 'ledger_only' 오인 → 허위 halt). 각
+    거래소를 조회해 row 를 모으고 종목별 중복 제거 후 파싱한다. 거래소별 조회 오류는 전파한다
+    (fail-closed — 불완전한 보유로 정합성/NAV 를 판단하지 않고 호출자가 다음 라운드에 재시도)."""
+    rows: list[dict] = []
+    for market in markets:
+        rows.extend(
+            await _inquire_balance_output1(
+                client,
+                access_token=access_token,
+                app_key=app_key,
+                app_secret=app_secret,
+                account=account,
+                market=market,
+            )
+        )
+    return _parse_positions(_dedup_balance_rows(rows))
 
 
 async def get_purchasable_cash_usd(
@@ -491,33 +588,17 @@ async def get_balance(
     KIS 해외주식 잔고조회(TTTS3012R)는 보유 종목별 평가금액(output1)을
     반환하지만 외화예수금(cash) 필드는 포함하지 않으므로, 별도
     `get_purchasable_cash_usd`를 호출해 cash를 얻고 inquire-balance에서
-    보유 종목 평가금액을 합산해 총 평가금액을 계산한다.
+    보유 종목 평가금액을 합산해 총 평가금액을 계산한다(single exchange).
     """
-    cano, acnt_prdt = _split_account(account)
-    response = await client.request(
-        "GET",
-        "/uapi/overseas-stock/v1/trading/inquire-balance",
-        headers=_kis_headers(
-            access_token=access_token,
-            app_key=app_key,
-            app_secret=app_secret,
-            tr_id=TR_ID_BALANCE,
-        ),
-        params={
-            "CANO": cano,
-            "ACNT_PRDT_CD": acnt_prdt,
-            "OVRS_EXCG_CD": market,
-            "TR_CRCY_CD": "USD",
-            "CTX_AREA_FK200": "",
-            "CTX_AREA_NK200": "",
-        },
+    rows = await _inquire_balance_output1(
+        client,
+        access_token=access_token,
+        app_key=app_key,
+        app_secret=app_secret,
+        account=account,
+        market=market,
     )
-    body = response.json()
-    rows = body.get("output1", []) or []
-    holdings_value = sum(
-        (_row_eval_amount_usd(row) for row in rows if int(row.get("ovrs_cblc_qty", 0) or 0) > 0),
-        Decimal("0"),
-    )
+    holdings_value = _holdings_value_usd(rows)
 
     cash = await get_purchasable_cash_usd(
         client,
@@ -526,6 +607,52 @@ async def get_balance(
         app_secret=app_secret,
         account=account,
         market=market,
+    )
+
+    return BalanceSnapshot(
+        account=account,
+        cash_usd=cash,
+        total_value_usd=cash + holdings_value,
+        fetched_at_utc=datetime.now(UTC),
+    )
+
+
+async def get_balance_resolving_market(
+    client: ResilientClient,
+    *,
+    access_token: str,
+    app_key: str,
+    app_secret: str,
+    account: str,
+    markets: Sequence[str] = US_ORDER_EXCHANGES,
+) -> BalanceSnapshot:
+    """USD 예수금 + 총 평가금액을 *여러 거래소* 보유를 합쳐 조회(종목별 중복 제거).
+
+    `get_balance` 의 거래소 스윕 변형 — 멀티에셋 유니버스에서 다른 거래소 종목(SPY·GLD=AMEX)의
+    평가금액이 NAV·정합성에서 누락되지 않게 한다. 보유 평가금액은 거래소별 row 를 모아 종목별
+    중복 제거 후 합산하고, 외화예수금(cash)은 거래소와 무관하므로 한 번만 조회한다. 거래소별
+    조회 오류는 전파한다(fail-closed)."""
+    rows: list[dict] = []
+    for market in markets:
+        rows.extend(
+            await _inquire_balance_output1(
+                client,
+                access_token=access_token,
+                app_key=app_key,
+                app_secret=app_secret,
+                account=account,
+                market=market,
+            )
+        )
+    holdings_value = _holdings_value_usd(_dedup_balance_rows(rows))
+
+    cash = await get_purchasable_cash_usd(
+        client,
+        access_token=access_token,
+        app_key=app_key,
+        app_secret=app_secret,
+        account=account,
+        market=markets[0],  # 외화예수금은 거래소 무관(더미 종목으로 계좌 USD 예수금만 추출)
     )
 
     return BalanceSnapshot(
@@ -689,3 +816,53 @@ async def get_order_executions(
     if isinstance(rows, dict):
         rows = [rows]
     return _parse_executions(rows)
+
+
+def _merge_executions(
+    per_market: list[list[BrokerExecution]],
+) -> list[BrokerExecution]:
+    """여러 거래소에서 모은 체결 내역을 주문번호(kis_order_id)별로 중복 제거해 합친다.
+
+    한 주문은 한 거래소에서만 체결되므로 거래소별 조회는 자기 주문만 반환한다(중복 없음).
+    KIS 가 단일 OVRS_EXCG_CD 값에 전 거래소 체결을 반환하는 구현이면 같은 주문이 여러 번
+    들어올 수 있어 — 그 경우 누적 체결량이 가장 큰(가장 완전한) row 를 채택한다(중복 제거가
+    이중 FILL 계상을 막는다; 멱등 키 `kis_fill_id=odno:누적체결량` 와 함께 이중 안전)."""
+    best: dict[str, BrokerExecution] = {}
+    for executions in per_market:
+        for ex in executions:
+            prev = best.get(ex.kis_order_id)
+            if prev is None or ex.filled_qty > prev.filled_qty:
+                best[ex.kis_order_id] = ex
+    return list(best.values())
+
+
+async def get_order_executions_resolving_market(
+    client: ResilientClient,
+    *,
+    access_token: str,
+    app_key: str,
+    app_secret: str,
+    account: str,
+    order_date_yyyymmdd: str,
+    markets: Sequence[str] = US_ORDER_EXCHANGES,
+) -> list[BrokerExecution]:
+    """주문체결내역을 *여러 거래소* 에 걸쳐 합쳐 조회(주문번호별 중복 제거).
+
+    멀티에셋 유니버스(SPY·GLD=AMEX, IEF=NASD)는 거래소가 섞여, 단일 거래소 조회로는 다른
+    거래소 종목의 체결이 통째로 빠진다 — 그러면 그 주문이 SUBMITTED 에 영영 갇히고(체결
+    동기화 누락) 로컬 보유가 0 으로 남아 리밸런서가 과매수하며 손실 서킷 브레이커가 실제 노출을
+    못 본다. 각 거래소를 조회해 합치고 주문번호로 중복 제거한다. 거래소별 조회 오류는 전파한다
+    (fail-closed — `sync_fills` 가 ERROR 감사로 격리하고 다음 라운드에 재시도)."""
+    per_market = [
+        await get_order_executions(
+            client,
+            access_token=access_token,
+            app_key=app_key,
+            app_secret=app_secret,
+            account=account,
+            order_date_yyyymmdd=order_date_yyyymmdd,
+            market=market,
+        )
+        for market in markets
+    ]
+    return _merge_executions(per_market)
