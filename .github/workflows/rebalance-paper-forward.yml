@@ -362,6 +362,54 @@ jobs:
           echo "--- verdict ---"; cat /tmp/verdict_global.json
           echo "--- stderr ---"; cat /tmp/verdict_global.err
 
+      # ---- ARM F: 글로벌 분산 추세추종 확대 유니버스 (11 슬리브, 계획 ③) ----------
+      # 검증된 메커니즘(역변동성 + 다중 속도 추세 앙상블) 그대로, 베팅의 폭만 3 → 11 슬리브
+      # (주식 4 · 채권 3 · 실물 3 · 통화 1). 성과 ≈ 질 × √N — 제약 안에서 가장 큰 지렛대.
+      # 규율: forward 페이퍼로 먼저 검증 — 라이브 캐너리는 검증 완료된 3자산 유지(검증 안 한
+      # 폭 확장은 라이브에 안 꽂는다). 전용 DB·halt 격리 + set +e + if:always() 라 다른 트랙을
+      # 못 깨뜨린다. PAPER 전용 — 실주문 0건, 돈 0 이동.
+      - name: "Arm GLOBAL-TREND-WIDE — backfill + paper rebalance + NAV snapshot"
+        id: prep_wide
+        if: always()
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+          CAPITAL: ${{ github.event.inputs.capital || '12000' }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          cfg="deploy/global-trend-wide-portfolio.toml"; dbf="data/forward_wide.db"; hlt="data/forward_wide.halt.flag"
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "cd /opt/auto-invest && \
+                 /usr/local/bin/uv run auto-invest backfill-bars --portfolio ${cfg} --max-symbols 120 --min-bars 1000 --order deepen --db ${dbf} --env-file .env --json && \
+                 /usr/local/bin/uv run auto-invest rebalance-once --portfolio ${cfg} --mode paper --capital ${CAPITAL} --halt-path ${hlt} --db ${dbf} --env-file .env --json && \
+                 /usr/local/bin/uv run auto-invest nav-snapshot --mode paper --capital ${CAPITAL} --db ${dbf} --env-file .env --snapshot --format json" \
+              > /tmp/prep_wide.log 2>&1
+          echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
+          cat /tmp/prep_wide.log
+
+      - name: "Arm GLOBAL-TREND-WIDE — forward edge verdict (spec 035)"
+        id: verdict_wide
+        if: always()
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest forward-verdict \
+                 --mode paper --portfolio deploy/global-trend-wide-portfolio.toml \
+                 --db data/forward_wide.db --format json" \
+              > /tmp/verdict_wide.json 2>/tmp/verdict_wide.err
+          echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
+          echo "--- verdict ---"; cat /tmp/verdict_wide.json
+          echo "--- stderr ---"; cat /tmp/verdict_wide.err
+
       - name: Publish A/B tournament to sidecar branch
         if: always()
         env:
@@ -376,6 +424,8 @@ jobs:
           VERDICT_MULTIASSET_EXIT: ${{ steps.verdict_multiasset.outputs.ssh_exit }}
           PREP_GLOBAL_EXIT: ${{ steps.prep_global.outputs.ssh_exit }}
           VERDICT_GLOBAL_EXIT: ${{ steps.verdict_global.outputs.ssh_exit }}
+          PREP_WIDE_EXIT: ${{ steps.prep_wide.outputs.ssh_exit }}
+          VERDICT_WIDE_EXIT: ${{ steps.verdict_wide.outputs.ssh_exit }}
         run: |
           set -uo pipefail
           BRANCH=automation/rebalance-paper-forward-last-run
@@ -405,6 +455,8 @@ jobs:
             echo "| MULTI-ASSET-TREND verdict ssh_exit | ${VERDICT_MULTIASSET_EXIT:-?} |"
             echo "| GLOBAL-TREND prep ssh_exit | ${PREP_GLOBAL_EXIT:-?} |"
             echo "| GLOBAL-TREND verdict ssh_exit | ${VERDICT_GLOBAL_EXIT:-?} |"
+            echo "| GLOBAL-TREND-WIDE prep ssh_exit | ${PREP_WIDE_EXIT:-?} |"
+            echo "| GLOBAL-TREND-WIDE verdict ssh_exit | ${VERDICT_WIDE_EXIT:-?} |"
             echo ""
             echo "## 🚦 Halt 깃발 상태 (읽기 전용 진단)"
             echo ""
@@ -483,6 +535,19 @@ jobs:
             cat /tmp/verdict_global.json 2>/dev/null || echo '{}'
             echo '```'
             echo ""
+            echo "## 🌍 판정 — 글로벌 분산 추세 확대 유니버스 (11 슬리브, 계획 ③)"
+            echo ""
+            echo "> 검증된 메커니즘(역변동성 + 다중 속도 추세 앙상블) 그대로, 베팅의 폭만"
+            echo "> 3 → 11 슬리브(주식 SPY·QQQ·EFA·EEM / 채권 IEF·TLT·LQD / 실물 GLD·DBC·VNQ"
+            echo "> / 통화 UUP). 성과 ≈ 질 × √N — 제약 안에서 가장 큰 지렛대. ARM E(3자산)와"
+            echo "> 나란히 비교하면 '폭 확장이 우리 체결 기준 forward 로도 이득인가'의 격리된"
+            echo "> 답. 라이브는 검증된 3자산 유지 — 이 트랙이 EDGE_CONFIRMED 를 벌어야 재지정"
+            echo "> 후보가 된다(검증=배치 정합, 헌법 X.4 v5.0.0 사다리)."
+            echo ""
+            echo '```json'
+            cat /tmp/verdict_wide.json 2>/dev/null || echo '{}'
+            echo '```'
+            echo ""
             echo "## TREND-ON 준비 로그 (backfill → rebalance → nav-snapshot)"
             echo ""
             echo '```'
@@ -511,6 +576,12 @@ jobs:
             echo ""
             echo '```'
             cat /tmp/prep_global.log 2>/dev/null || echo '(none)'
+            echo '```'
+            echo ""
+            echo "## GLOBAL-TREND-WIDE 준비 로그 (backfill → rebalance → nav-snapshot)"
+            echo ""
+            echo '```'
+            cat /tmp/prep_wide.log 2>/dev/null || echo '(none)'
             echo '```'
           } > LAST_RUN.md
           git checkout --orphan publish

@@ -19,7 +19,7 @@ _FORWARD = _REPO_ROOT / ".github" / "workflows" / "rebalance-paper-forward.yml"
 _LIVE = _REPO_ROOT / ".github" / "workflows" / "rebalance-live-canary.yml"
 
 # forward 워크플로의 다섯 페이퍼 트랙(halt 격리 테스트와 동일 목록).
-_FORWARD_TRACKS = 5
+_FORWARD_TRACKS = 6
 
 
 def _calls(path: Path) -> list[str]:

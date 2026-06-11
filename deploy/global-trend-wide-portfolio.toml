@@ -1,0 +1,61 @@
+# 계획 ③ (2026-06-11) — 글로벌 분산 추세추종 **확대 유니버스**(11개 비상관 슬리브) forward
+# 페이퍼 설정. 돈 0 이동.
+#
+# 왜: 성과의 기본 법칙은 "한 베팅의 질 × √(독립 베팅 수)" 다. 검증된 메커니즘(역변동성 +
+# 다중 속도 추세 앙상블, 스펙 043/047/048 — 자산군 횡단으로 검증된 가족)은 그대로 두고
+# **베팅의 폭**만 3 → 11 슬리브로 키운다. 제약(KIS 해외주식 현물 롱온리) 안에서 가장 큰
+# 지렛대다.
+#
+# 유니버스(전부 초유동 미국 상장 ETF, KIS 해외주식 경로):
+#   주식  : SPY(미국 대형) · QQQ(미국 성장) · EFA(선진국) · EEM(신흥국)
+#   채권  : IEF(미국 중기국채) · TLT(미국 장기국채) · LQD(투자등급 회사채)
+#   실물  : GLD(금) · DBC(원자재 광역) · VNQ(미국 리츠)
+#   통화  : UUP(달러 인덱스)
+# 역변동성이 변동성 큰 슬리브(EEM·DBC 등)에 자동으로 작은 비중을 주고, 각 슬리브는 자기
+# 다중 속도 추세 앙상블의 추세 위 비율만큼만 노출(나머지 현금) — 검증된 두 원칙의 적용 확장.
+#
+# ── 규율 (측정한 것만 라이브로) ────────────────────────────────────────────────
+# 이 설정은 **forward 페이퍼 검증 트랙(ARM F) 전용**이다. 라이브 캐너리는 검증 완료된
+# 3자산(SPY·IEF·GLD)을 그대로 쓴다 — 확대 유니버스가 라이브로 가려면 ① 이 트랙이
+# forward EDGE_CONFIRMED 를 벌고 ② canary-live-portfolio.toml 재지정(전략 지문 정합을
+# 자동 무장 게이트가 강제) 절차를 거쳐야 한다. 검증하지 않은 폭 확장은 라이브에 안 꽂는다.
+#
+# ⚠ 정직한 한계: 3자산 구성과 달리 이 확대 구성의 *초장기* 백테스트는 컨테이너에서 불가
+# (Shiller 는 미국 주식·금리·금만). 근거는 ① 메커니즘 검증(자산군 횡단, 스펙 043/047/048)
+# ② 분산 일반 원리(√N) ③ 이 트랙이 벌어줄 forward 실측이다. 그래서 더더욱 forward 먼저다.
+
+[caps]
+# 페이퍼라 절대 위험 0. 11슬리브 분산이라 종목당 노출은 자연히 작다(역변동성).
+per_trade_pct                  = 50.0
+per_symbol_pct                 = 60.0
+global_exposure_pct            = 100.0
+canary_capital_pct             = 5.0
+canary_min_duration_days       = 10
+canary_acceptance_drawdown_pct = 3.0
+
+[whitelist]
+symbols     = ["SPY", "QQQ", "EFA", "EEM", "IEF", "TLT", "LQD", "GLD", "DBC", "VNQ", "UUP"]
+accounts    = ["${KIS_ACCOUNT_NO}"]
+order_types = ["LIMIT"]
+sessions    = ["REGULAR"]
+
+[portfolio]
+id            = "global-trend-wide"
+universe      = ["SPY", "QQQ", "EFA", "EEM", "IEF", "TLT", "LQD", "GLD", "DBC", "VNQ", "UUP"]
+weights       = { momentum = "1.0" }   # top_n=11 이라 점수는 순위에 무영향(전부 보유 후보)
+weight_scheme = "inverse_vol"          # 역변동성 — 변동성 큰 슬리브가 자동 작은 비중
+top_n         = 11
+rebalance_mode             = "hold_replace"
+invested_fraction          = "0.99"
+rebalance_every_n_sessions = 21
+lookback_bars              = 200
+momentum_period            = 120
+rebalance_threshold_pct    = "2.0"
+min_notional_usd           = "50"
+
+# 다중 속도 추세 앙상블(스펙 048) — 슬리브별 추세 위 비율(0..1)만큼 노출, 나머지 현금.
+[portfolio.trend_filter]
+method          = "sma"
+lookback        = 200
+on_insufficient = "cash"
+ensemble_windows = [63, 126, 189, 252]
