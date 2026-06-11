@@ -1,0 +1,141 @@
+name: Release halt flag (guarded, audited)
+
+# 운영자 지시로 라이브 halt 깃발(data/halt.flag)을 해제하는 가드형 채널.
+#
+# halt 는 스펙 014 손실 서킷 브레이커·정합성 불일치가 자동 설정하는 킬스위치다.
+# 해제는 운영자 결정이므로 두 가지 가드형 트리거만 허용한다:
+#   1) 운영자 원클릭: Actions → 이 워크플로 → Run workflow → confirm 에
+#      "RELEASE-HALT" 입력.
+#   2) 자율(운영자 지시 기록): automation/halt-release.request 센티넬이 main 에
+#      머지되면 push 로 발화. 머지 자체가 운영자 지시의 포렌식 기록이다.
+#
+# 안전 경계:
+#   - rm 금지 — `auto-invest resume --confirm` 으로만 해제해 K4 감사 로그에
+#     HALT_CLEARED 행을 남긴다(헌법 IV 추가 전용 감사).
+#   - 해제는 주문 *게이트* 를 여는 것뿐 — 돈이 움직이려면 별도로 라이브 무장
+#     (armed:true 센티넬, 헌법 X.4)과 시장시간 스케줄이 필요하다.
+#   - 서킷 브레이커·정합성 안전망은 그대로 — 조건이 다시 발화하면 깃발이 다시
+#     선다(이 채널은 안전망을 끄지 않는다).
+#   - 해제 전/후 깃발 상태를 사이드카에 기록해 무엇이 왜 풀렸는지 남긴다.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: '라이브 halt 깃발을 해제하려면 정확히 "RELEASE-HALT" 입력'
+        required: true
+        default: ""
+        type: string
+  push:
+    branches: [main]
+    paths:
+      - 'automation/halt-release.request'
+
+permissions:
+  contents: write  # 사이드카 브랜치 force-push 용 (automation/halt-release-last-run).
+
+concurrency:
+  # 해제는 한 번에 하나만.
+  group: release-halt
+  cancel-in-progress: false
+
+jobs:
+  release-halt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Validate confirmation (workflow_dispatch only)
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          CONFIRM: ${{ github.event.inputs.confirm }}
+        run: |
+          if [[ "${CONFIRM}" != "RELEASE-HALT" ]]; then
+            echo "::error::confirm 입력이 'RELEASE-HALT' 가 아닙니다. 해제 중단."
+            exit 1
+          fi
+          echo "확인어 일치 — halt 깃발 해제 진행."
+
+      - name: Install SSH key
+        env:
+          KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          echo "${KEY}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+      - name: "Release halt — auto-invest resume --confirm (감사 행 HALT_CLEARED)"
+        id: release
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "cd /opt/auto-invest && \
+                 echo '--- 해제 전 깃발 상태 ---' && \
+                 (cat data/halt.flag 2>/dev/null || echo '(없음 — 정지 아님)') && \
+                 echo '' && echo '--- resume (감사 행 HALT_CLEARED) ---' && \
+                 /usr/local/bin/uv run auto-invest resume --confirm --halt-path data/halt.flag --db data/auto_invest.db && \
+                 echo '--- 해제 후 깃발 상태 ---' && \
+                 (cat data/halt.flag 2>/dev/null || echo '(없음 — 해제 확인)')" \
+              > /tmp/release.txt 2>&1
+          echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
+          cat /tmp/release.txt
+
+      - name: Summarise
+        if: always()
+        env:
+          SSH_EXIT: ${{ steps.release.outputs.ssh_exit }}
+        run: |
+          {
+            echo "## 라이브 halt 깃발 해제 — 결과 (ssh_exit=${SSH_EXIT:-?})"
+            echo ""
+            echo '```'
+            cat /tmp/release.txt 2>/dev/null || echo '(출력 없음 — SSH 단계 진입 못함)'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish result to sidecar branch
+        # 외부(claude 세션 등)에서 해제 결과를 읽을 수 있게 force-push.
+        #   git fetch origin automation/halt-release-last-run
+        #   git show origin/automation/halt-release-last-run:LAST_RUN.md
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SSH_EXIT: ${{ steps.release.outputs.ssh_exit }}
+        run: |
+          set -uo pipefail
+          BRANCH=automation/halt-release-last-run
+          tmpdir=$(mktemp -d); cd "${tmpdir}"; git init -q
+          git config user.name "release-halt-bot"
+          git config user.email "release-halt-bot@noreply.github.com"
+          {
+            echo "# 라이브 halt 깃발 해제 — 최신 실행 결과"
+            echo ""
+            echo "| 항목 | 값 |"
+            echo "|------|-----|"
+            echo "| run_id | ${GITHUB_RUN_ID} |"
+            echo "| run_url | https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} |"
+            echo "| commit | ${GITHUB_SHA} |"
+            echo "| trigger | ${GITHUB_EVENT_NAME} |"
+            echo "| timestamp_utc | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
+            echo "| ssh_exit | ${SSH_EXIT:-(unset)} |"
+            echo ""
+            echo "## 해제 전/후 깃발 상태 + resume 출력"
+            echo ""
+            echo '```'
+            cat /tmp/release.txt 2>/dev/null || echo '(출력 없음 — SSH 단계 진입 못함)'
+            echo '```'
+            echo ""
+            echo "> 해제는 주문 게이트를 여는 것뿐 — 돈이 움직이려면 별도 라이브 무장"
+            echo "> (armed:true, 헌법 X.4)과 시장시간 스케줄이 필요하다. 서킷 브레이커·"
+            echo "> 정합성 안전망은 그대로(조건 재발화 시 깃발이 다시 선다)."
+          } > LAST_RUN.md
+          git checkout --orphan publish
+          git add LAST_RUN.md
+          git commit -q -m "release-halt run ${GITHUB_RUN_ID} @ ${GITHUB_SHA:0:7}"
+          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "publish:${BRANCH}"
+          echo "Published to ${BRANCH}."
