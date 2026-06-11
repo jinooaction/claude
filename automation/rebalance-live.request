@@ -18,4 +18,5 @@ capital_usd: 500
 requested_by: mason
 stage: live-canary-portfolio
 run_seq: 5
+run: 2026-06-11 — 백필 깊이화(PR #245, --min-bars 1000) 검증 재발화. armed:false 그대로 — push 이벤트는 미리보기만(실주문 0건). 기대: 백필 fetched ≈1000 + 드라이런 target_weights 비어있지 않음.
 note: "🔴 무장 해제(run_seq 5, 2026-06-04) — 운영자 지시 'AAPL 1주 실거래 검증은 의미없어 중단해'. 좁은 3종목 1위 매수는 세계 최고 수준 아님(상대 순위만, 절대 기대수익 바닥 없음). 라이브 거래 중단(룰 워커도 disabled). 우선순위: 유니버스 최대 확대 + 절대 기대수익 게이트(듀얼 모멘텀) → 넓은 forward 페이퍼로 검증 후 재무장."
