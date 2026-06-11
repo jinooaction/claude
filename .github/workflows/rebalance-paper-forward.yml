@@ -73,7 +73,35 @@ jobs:
           echo "${KEY}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
 
+      # ---- Halt 깃발 진단 (읽기 전용) ----------------------------------------
+      # 2026-06-10 관측: 다섯 페이퍼 트랙이 --halt-path 를 안 넘겨 모두 기본값
+      # data/halt.flag(라이브 워커의 킬스위치)를 공유 → 라이브 쪽에서 자동 설정된 묵은
+      # 깃발에 전 트랙 주문이 REJECTED_BY_GATE → NAV 영원히 0 → EDGE_CONFIRMED 불가.
+      # 아래 각 트랙은 전용 깃발(data/forward_*.halt.flag)로 격리했지만, 라이브 깃발이
+      # 서 있으면 (무장 시) 실주문이 거부되므로 운영자가 사유를 보고 해제를 결정할 수
+      # 있게 매 런 보고한다. 읽기 전용 — 깃발을 절대 만들거나 지우지 않는다.
+      - name: "Halt 깃발 상태 — 라이브 + 트랙별 (읽기 전용 진단)"
+        id: halt_status
+        continue-on-error: true
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "cd /opt/auto-invest && \
+                 for f in data/halt.flag data/forward_trend.halt.flag data/forward_notrend.halt.flag data/forward_rmbeta.halt.flag data/forward_multiasset.halt.flag data/forward_global.halt.flag; do \
+                   echo \"-- \${f}\"; cat \"\${f}\" 2>/dev/null || echo '(없음 — 정지 아님)'; \
+                 done" \
+              > /tmp/halt_status.txt 2>&1
+          cat /tmp/halt_status.txt
+
       # ---- ARM A: 추세 필터 ON ---------------------------------------------
+      # 트랙별 전용 halt 깃발(--halt-path): 전용 DB 와 같은 격리 원칙. 라이브 워커의
+      # data/halt.flag 와 절대 공유하지 않는다(위 진단 스텝의 사고 참조).
       - name: "Arm TREND-ON — backfill + paper rebalance + NAV snapshot"
         id: prep_trend
         env:
@@ -84,7 +112,7 @@ jobs:
         run: |
           set +e
           port="${PORT:-22}"
-          cfg="deploy/canary-portfolio.toml"; dbf="data/forward_trend.db"
+          cfg="deploy/canary-portfolio.toml"; dbf="data/forward_trend.db"; hlt="data/forward_trend.halt.flag"
           # 전용 DB(첫 실행이면 backfill-bars 가 자동 마이그레이션 후 생성). 깊이 우선 백필
           # (--order deepen --min-bars 1000 ≈4년: 시드된 핵심 종목을 KIS 한계까지 깊게 → IC
           # 비겹침 시점↑ → t-통계↑)→재조정(유동성 상위 50 구성→모멘텀 120 + 절대 게이트로 상위
@@ -93,7 +121,7 @@ jobs:
               -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
               "cd /opt/auto-invest && \
                  /usr/local/bin/uv run auto-invest backfill-bars --portfolio ${cfg} --max-symbols 120 --min-bars 1000 --order deepen --db ${dbf} --env-file .env --json && \
-                 /usr/local/bin/uv run auto-invest rebalance-once --portfolio ${cfg} --mode paper --capital ${CAPITAL} --construct-universe-top-n 50 --db ${dbf} --env-file .env --json && \
+                 /usr/local/bin/uv run auto-invest rebalance-once --portfolio ${cfg} --mode paper --capital ${CAPITAL} --construct-universe-top-n 50 --halt-path ${hlt} --db ${dbf} --env-file .env --json && \
                  /usr/local/bin/uv run auto-invest nav-snapshot --mode paper --db ${dbf} --env-file .env --snapshot --format json" \
               > /tmp/prep_trend.log 2>&1
           echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
@@ -157,12 +185,12 @@ jobs:
         run: |
           set +e
           port="${PORT:-22}"
-          cfg="deploy/canary-portfolio-notrend.toml"; dbf="data/forward_notrend.db"
+          cfg="deploy/canary-portfolio-notrend.toml"; dbf="data/forward_notrend.db"; hlt="data/forward_notrend.halt.flag"
           ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
               -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
               "cd /opt/auto-invest && \
                  /usr/local/bin/uv run auto-invest backfill-bars --portfolio ${cfg} --max-symbols 120 --min-bars 1000 --order deepen --db ${dbf} --env-file .env --json && \
-                 /usr/local/bin/uv run auto-invest rebalance-once --portfolio ${cfg} --mode paper --capital ${CAPITAL} --construct-universe-top-n 50 --db ${dbf} --env-file .env --json && \
+                 /usr/local/bin/uv run auto-invest rebalance-once --portfolio ${cfg} --mode paper --capital ${CAPITAL} --construct-universe-top-n 50 --halt-path ${hlt} --db ${dbf} --env-file .env --json && \
                  /usr/local/bin/uv run auto-invest nav-snapshot --mode paper --db ${dbf} --env-file .env --snapshot --format json" \
               > /tmp/prep_notrend.log 2>&1
           echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
@@ -205,12 +233,12 @@ jobs:
         run: |
           set +e
           port="${PORT:-22}"
-          cfg="deploy/risk-managed-beta-portfolio.toml"; dbf="data/forward_rmbeta.db"
+          cfg="deploy/risk-managed-beta-portfolio.toml"; dbf="data/forward_rmbeta.db"; hlt="data/forward_rmbeta.halt.flag"
           ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
               -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
               "cd /opt/auto-invest && \
                  /usr/local/bin/uv run auto-invest backfill-bars --portfolio ${cfg} --max-symbols 120 --min-bars 1000 --order deepen --db ${dbf} --env-file .env --json && \
-                 /usr/local/bin/uv run auto-invest rebalance-once --portfolio ${cfg} --mode paper --capital ${CAPITAL} --db ${dbf} --env-file .env --json && \
+                 /usr/local/bin/uv run auto-invest rebalance-once --portfolio ${cfg} --mode paper --capital ${CAPITAL} --halt-path ${hlt} --db ${dbf} --env-file .env --json && \
                  /usr/local/bin/uv run auto-invest nav-snapshot --mode paper --db ${dbf} --env-file .env --snapshot --format json" \
               > /tmp/prep_rmbeta.log 2>&1
           echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
@@ -253,12 +281,12 @@ jobs:
         run: |
           set +e
           port="${PORT:-22}"
-          cfg="deploy/multi-asset-trend-portfolio.toml"; dbf="data/forward_multiasset.db"
+          cfg="deploy/multi-asset-trend-portfolio.toml"; dbf="data/forward_multiasset.db"; hlt="data/forward_multiasset.halt.flag"
           ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
               -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
               "cd /opt/auto-invest && \
                  /usr/local/bin/uv run auto-invest backfill-bars --portfolio ${cfg} --max-symbols 120 --min-bars 1000 --order deepen --db ${dbf} --env-file .env --json && \
-                 /usr/local/bin/uv run auto-invest rebalance-once --portfolio ${cfg} --mode paper --capital ${CAPITAL} --db ${dbf} --env-file .env --json && \
+                 /usr/local/bin/uv run auto-invest rebalance-once --portfolio ${cfg} --mode paper --capital ${CAPITAL} --halt-path ${hlt} --db ${dbf} --env-file .env --json && \
                  /usr/local/bin/uv run auto-invest nav-snapshot --mode paper --db ${dbf} --env-file .env --snapshot --format json" \
               > /tmp/prep_multiasset.log 2>&1
           echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
@@ -303,12 +331,12 @@ jobs:
         run: |
           set +e
           port="${PORT:-22}"
-          cfg="deploy/global-trend-portfolio.toml"; dbf="data/forward_global.db"
+          cfg="deploy/global-trend-portfolio.toml"; dbf="data/forward_global.db"; hlt="data/forward_global.halt.flag"
           ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
               -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
               "cd /opt/auto-invest && \
                  /usr/local/bin/uv run auto-invest backfill-bars --portfolio ${cfg} --max-symbols 120 --min-bars 1000 --order deepen --db ${dbf} --env-file .env --json && \
-                 /usr/local/bin/uv run auto-invest rebalance-once --portfolio ${cfg} --mode paper --capital ${CAPITAL} --db ${dbf} --env-file .env --json && \
+                 /usr/local/bin/uv run auto-invest rebalance-once --portfolio ${cfg} --mode paper --capital ${CAPITAL} --halt-path ${hlt} --db ${dbf} --env-file .env --json && \
                  /usr/local/bin/uv run auto-invest nav-snapshot --mode paper --db ${dbf} --env-file .env --snapshot --format json" \
               > /tmp/prep_global.log 2>&1
           echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
@@ -377,6 +405,18 @@ jobs:
             echo "| MULTI-ASSET-TREND verdict ssh_exit | ${VERDICT_MULTIASSET_EXIT:-?} |"
             echo "| GLOBAL-TREND prep ssh_exit | ${PREP_GLOBAL_EXIT:-?} |"
             echo "| GLOBAL-TREND verdict ssh_exit | ${VERDICT_GLOBAL_EXIT:-?} |"
+            echo ""
+            echo "## 🚦 Halt 깃발 상태 (읽기 전용 진단)"
+            echo ""
+            echo "> data/halt.flag 는 라이브 워커·라이브 캐너리의 킬스위치(스펙 014 서킷 브레이커"
+            echo "> ·정합성 불일치가 자동 설정). 페이퍼 forward 트랙은 트랙별 전용 깃발"
+            echo "> (data/forward_*.halt.flag)로 격리되어 라이브 깃발에 막히지 않는다. 라이브"
+            echo "> 깃발이 서 있으면 무장 후 실주문이 거부되므로, 운영자는 아래 사유를 확인하고"
+            echo "> 서버에서 'auto-invest resume' 으로 해제를 결정한다(자동 해제 안 함 — 안전 자세)."
+            echo ""
+            echo '```'
+            cat /tmp/halt_status.txt 2>/dev/null || echo '(halt status unavailable)'
+            echo '```'
             echo ""
             echo "## 🔭 일일 전략 모니터 (스펙 046 — 지속 감시, 돈 0 이동)"
             echo ""
