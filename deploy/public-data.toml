@@ -17,10 +17,18 @@ time_budget_seconds = 480
 # 소스 경로 탐침 — 매 런이 측정 장비가 된다. 각 주소를 채널 UA / httpx 기본 UA
 # 두 가지로 두드려 상태·지연·첫 바이트를 summary 에 기록(수 KB 만 읽고 끊음).
 # 무엇이 통하는지 증거가 쌓이면 수집 경로를 그 증거로 갈아탄다.
+# 2차 실측(run 후속, 2026-06-11 22:5x): Stooq 벌크=401(로그인 전용), Stooq
+# CSV=JS 장벽/404, FRED 그래프=UA 무관 타르핏 — 승인된 두 소스 모두 실행기
+# IP 에서 네트워크 수준 차단 확정. 3차: 자동화를 공식 허용하는 정부·공식
+# 소스 후보를 두드려 증거를 모은다(채택은 운영자 확인 후 — 공급망 결정).
 urls = [
-    "https://static.stooq.com/db/h/d_us_txt.zip",                # Stooq 벌크 DB (문서화된 공개 다운로드 — JS 장벽 밖 가능성)
-    "https://stooq.com/q/d/l/?s=spy.us&i=d",                     # Stooq 직접 CSV (첫 실측: JS 봇 장벽)
-    "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS10",  # FRED 그래프 CSV (첫 실측: 타르핏)
+    "https://stooq.com/q/d/l/?s=spy.us&i=d",                     # Stooq 직접 CSV (실측: JS 봇 장벽 — 변화 추적용 유지)
+    "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS10",  # FRED 그래프 CSV (실측: 타르핏 — 변화 추적용 유지)
+    "https://api.stlouisfed.org/fred/series/observations?series_id=DGS10&file_type=json",  # FRED 공식 API (키 없이 → 400 즉답이면 타르핏 아님 = 키만 있으면 열림)
+    "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/2026/all?type=daily_treasury_yield_curve&field_tdr_date_value=2026&page&_format=csv",  # 미 재무부 일일 금리 CSV (공식 다운로드 경로)
+    "https://cdn.cboe.com/api/global/us_indices/daily_prices/VIX_History.csv",  # Cboe VIX 공식 이력 CSV
+    "https://api.db.nomics.world/v22/series/BLS/cu/CUUR0000SA0?observations=1&format=json",  # DBnomics (공개 데이터 집계 API — CPI 미러)
+    "https://api.bls.gov/publicAPI/v1/timeseries/data/LNS14000000",  # BLS 공공 API v1 (실업률, 키 불필요)
 ]
 
 [stooq]
