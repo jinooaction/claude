@@ -4649,3 +4649,275 @@ def autoarm_decide_cmd(
         typer.echo(_json.dumps(decision.to_json_dict()))
     else:
         typer.echo(f"[{decision.action}] {decision.reason}")
+
+
+@app.command("account-nav")
+def account_nav_cmd(
+    env_file: Path = typer.Option(
+        None, "--env-file", help=".env with KIS_APP_KEY/KIS_APP_SECRET/KIS_ACCOUNT_NO."
+    ),
+    db_path: Path = typer.Option(
+        Path("data/auto_invest.db"), "--db", help="토큰 캐시 위치 산출용 SQLite 경로."
+    ),
+    base_url: str = typer.Option(
+        "https://openapi.koreainvestment.com:9443", "--base-url", help="KIS REST base URL."
+    ),
+    as_json: bool = typer.Option(False, "--json", help="JSON 출력."),
+) -> None:
+    """실계좌 순자산(NAV = USD 예수금 + 보유 평가금액)을 멀티 거래소 스윕으로 조회.
+
+    스펙 050 자본 사다리의 사이징 기준(운영자 위임 2026-06-11: "기준은 계좌 잔고와
+    포트폴리오"). 읽기 전용 — 주문 0건, 돈 0 이동. 조회 실패는 비0 종료(게이트가
+    보수적으로 BLOCKED 처리하도록 fail-closed).
+    """
+    import json as _json
+
+    from auto_invest.broker.overseas import get_balance_resolving_market
+
+    try:
+        secrets = load_secrets(env_file)
+    except ConfigError as exc:
+        typer.echo(f"secrets error: {exc}", err=True)
+        _exit(2)
+        return
+    app_key = secrets.get("KIS_APP_KEY")
+    app_secret = secrets.get("KIS_APP_SECRET")
+    account = secrets.get("KIS_ACCOUNT_NO")
+    if not app_key or not app_secret or not account:
+        typer.echo("KIS_APP_KEY/KIS_APP_SECRET/KIS_ACCOUNT_NO required", err=True)
+        _exit(2)
+        return
+
+    async def _run():
+        async with httpx.AsyncClient(base_url=base_url, timeout=30.0) as inner:
+            token = await get_valid_token(
+                inner,
+                base_url=base_url,
+                app_key=app_key,
+                app_secret=app_secret,
+                cache_path=db_path.parent / "kis_token.json",
+            )
+            client = ResilientClient(
+                inner,
+                rate_limiter=AsyncTokenBucket(rate_per_sec=15.0, capacity=15.0),
+                breaker=CircuitBreaker(failure_threshold=5, cooldown_seconds=30.0),
+                max_retries=4,
+            )
+            return await get_balance_resolving_market(
+                client,
+                access_token=token.access_token,
+                app_key=app_key,
+                app_secret=app_secret,
+                account=account,
+            )
+
+    try:
+        snap = asyncio.run(_run())
+    except Exception as exc:  # noqa: BLE001 — 조회 실패는 fail-closed 비0 종료.
+        typer.echo(f"account NAV fetch failed: {exc}", err=True)
+        _exit(1)
+        return
+
+    if as_json:
+        typer.echo(
+            _json.dumps(
+                {
+                    "schema_version": "1.0",
+                    "cash_usd": str(snap.cash_usd),
+                    "total_value_usd": str(snap.total_value_usd),
+                    "fetched_at_utc": snap.fetched_at_utc.isoformat(),
+                }
+            )
+        )
+        return
+    typer.echo(f"cash_usd        : {snap.cash_usd}")
+    typer.echo(f"total_value_usd : {snap.total_value_usd}")
+
+
+@app.command("growth")
+def growth_cmd(
+    mode: str = typer.Option("paper", "--mode", help="paper | live."),
+    db_path: Path = typer.Option(
+        Path("data/auto_invest.db"), "--db", help="SQLite database path."
+    ),
+    since: str = typer.Option(
+        None,
+        "--since",
+        help="이 날짜(YYYY-MM-DD, UTC 자정) 이후 스냅샷만 — 스펙 050 단(rung) 진입 후"
+        " 실적 측정용. 생략 시 전체.",
+    ),
+    consistent_basis: bool = typer.Option(
+        True,
+        "--consistent-basis/--all-points",
+        help="같은 측정 기준(자본 베이시스)의 최신 연속 구간만(기본) / 전체 점.",
+    ),
+    output_format: str = typer.Option("json", "--format", help="json | text."),
+) -> None:
+    """NAV 스냅샷 시계열 → 성장 지표(총수익률·최대낙폭·CAGR). 읽기 전용(스펙 029/050).
+
+    스펙 050 자본 사다리의 라이브 실적 증거 산출기: `--mode live --since <단 진입일>`
+    로 현재 단에서의 관측 수·낙폭을 계산한다. 측정 기준이 섞인 점은 기본으로 걸러
+    자금 흐름이 수익률로 오인되는 오염(PR #243에서 수정한 클래스)을 차단한다.
+    """
+    import json as _json
+    from datetime import UTC
+    from datetime import datetime as _dt
+
+    from auto_invest.portfolio.growth import (
+        compute_growth,
+        consistent_basis_suffix,
+        read_nav_points,
+    )
+
+    if mode not in ("paper", "live"):
+        typer.echo("mode must be 'paper' or 'live'", err=True)
+        _exit(2)
+        return
+    since_dt = None
+    if since:
+        try:
+            d = _dt.fromisoformat(since)
+            since_dt = d if d.tzinfo else d.replace(tzinfo=UTC)
+        except ValueError:
+            typer.echo(f"invalid --since date: {since!r}", err=True)
+            _exit(2)
+            return
+    if not db_path.exists():
+        typer.echo(f"DB not found: {db_path}", err=True)
+        _exit(2)
+        return
+
+    conn = db.get_connection(db_path)
+    try:
+        points = read_nav_points(conn, mode=mode, since=since_dt)
+    finally:
+        conn.close()
+    if consistent_basis:
+        points = consistent_basis_suffix(points)
+    report = compute_growth(points, mode=mode)
+
+    if output_format == "json":
+        typer.echo(_json.dumps(report.to_json_dict()))
+        return
+    from auto_invest.portfolio.growth import render_text
+
+    typer.echo(render_text(report))
+
+
+@app.command("ladder-decide")
+def ladder_decide_cmd(
+    verdict_json: Path = typer.Option(
+        ...,
+        "--verdict-json",
+        help="forward-verdict --format json 출력 파일(검증 앙상블 ARM E, 단 0→1 게이트).",
+    ),
+    live_growth_json: Path = typer.Option(
+        None,
+        "--live-growth-json",
+        help="growth --mode live --since <단 진입일> --format json 출력 파일(단 ≥1 증거)."
+        " 없거나 못 읽으면 증거 없음으로 처리(승격 불가, fail-safe).",
+    ),
+    account_nav_json: Path = typer.Option(
+        None,
+        "--account-nav-json",
+        help="account-nav --json 출력 파일(실계좌 NAV — 사이징 기준). 없으면 BLOCKED.",
+    ),
+    live_portfolio: Path = typer.Option(
+        Path("deploy/canary-live-portfolio.toml"),
+        "--live-portfolio",
+        help="라이브 캐너리가 실제로 거래할 설정.",
+    ),
+    validated_portfolio: Path = typer.Option(
+        Path("deploy/global-trend-portfolio.toml"),
+        "--validated-portfolio",
+        help="forward 페이퍼에서 검증한 설정(ARM E).",
+    ),
+    sentinel: Path = typer.Option(
+        Path("automation/rebalance-live.request"),
+        "--sentinel",
+        help="현재 무장 센티넬(armed/capital/ladder_rung/rung_entered).",
+    ),
+    kill_switch: Path = typer.Option(
+        Path("automation/AUTOARM_DISABLED"),
+        "--kill-switch",
+        help="존재하면 사다리 정지(운영자 킬스위치).",
+    ),
+    dd_budget_pct: float = typer.Option(
+        20.0,
+        "--dd-budget-pct",
+        help="운영자 낙폭 예산 %(2026-06-11 위임 계약 기본 20). 변경은 운영자 결정.",
+    ),
+    write_sentinel: bool = typer.Option(
+        False,
+        "--write-sentinel",
+        help="센티넬 변경이 필요한 결정(PROMOTE/DEMOTE/HALT/RESIZE)이면 새 본문을 쓴다.",
+    ),
+    output_format: str = typer.Option("json", "--format", help="json | text."),
+) -> None:
+    """스펙 050 — 자본 사다리 결정(읽기 전용 판정, 주문 0건).
+
+    운영자 위임(2026-06-11) 하 자본 배치 규모를 증거 게이트 공식으로 결정한다:
+    단0=0% → 단1=25% → 단2=50% → 단3=100% (실계좌 NAV 대비). 내려가는 건 낙폭
+    하나로 즉시(예산/2 강등·예산 정지), 올라가는 건 세 증거(관측·경과일·낙폭) 전부.
+    헌법 X.4 v5.0.0. 비위임 불변(캡·화이트리스트·감사·서킷 브레이커)은 그대로다.
+    """
+    import json as _json
+    from datetime import UTC
+    from datetime import datetime as _dt
+    from decimal import Decimal as _Dec
+
+    from auto_invest.portfolio.capital_ladder import decide_ladder
+
+    def _read_json(path: Path | None) -> dict | None:
+        if path is None:
+            return None
+        try:
+            return _json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+
+    verdict = _read_json(verdict_json) or {}
+    growth = _read_json(live_growth_json)
+    nav_doc = _read_json(account_nav_json)
+    account_nav = None
+    if isinstance(nav_doc, dict) and nav_doc.get("total_value_usd") is not None:
+        try:
+            account_nav = _Dec(str(nav_doc["total_value_usd"]))
+        except ArithmeticError:
+            account_nav = None
+
+    try:
+        _, _, live_cfg = _load_portfolio_for_backtest(live_portfolio, env=None)
+        _, _, validated_cfg = _load_portfolio_for_backtest(validated_portfolio, env=None)
+    except ConfigError as e:
+        out = {
+            "schema_version": "1.0",
+            "action": "BLOCKED",
+            "reason": f"포트폴리오 설정 로드 실패({e}) — 정합성 확인 불가, 차단.",
+        }
+        typer.echo(_json.dumps(out))
+        raise typer.Exit(0) from None
+
+    sentinel_text = sentinel.read_text(encoding="utf-8") if sentinel.exists() else ""
+    decision = decide_ladder(
+        sentinel_text=sentinel_text,
+        forward_verdict=verdict,
+        live_growth=growth,
+        account_nav_usd=account_nav,
+        live_config=live_cfg,
+        validated_config=validated_cfg,
+        kill_switch_present=kill_switch.exists(),
+        today=_dt.now(UTC).date(),
+        dd_budget_pct=_Dec(str(dd_budget_pct)),
+    )
+
+    if decision.sentinel_changes and write_sentinel:
+        sentinel.write_text(decision.new_sentinel_text, encoding="utf-8")
+
+    if output_format == "json":
+        typer.echo(_json.dumps(decision.to_json_dict()))
+    else:
+        typer.echo(
+            f"[{decision.action}] rung {decision.current_rung}"
+            f"→{decision.target_rung}: {decision.reason}"
+        )
