@@ -330,13 +330,28 @@ def cross_check_daily_returns(
     )
 
 
-def fetch_text(client: httpx.Client, url: str, *, max_retries: int = 3) -> str:
-    """공개 CSV 한 건을 받아온다. 5xx/네트워크 오류는 지수 백오프로 재시도."""
+def fetch_text(
+    client: httpx.Client,
+    url: str,
+    *,
+    max_retries: int = 3,
+    timeout: float | None = None,
+) -> str:
+    """공개 CSV 한 건을 받아온다. 5xx/네트워크 오류는 지수 백오프로 재시도.
+
+    ``timeout`` 이 주어지면 요청 단위로 클라이언트 기본값을 덮어쓴다 —
+    배치 수집에서는 짧게(15초) 잡아 타르핏(연결 후 무응답)이 전체 시간
+    예산을 잡아먹지 못하게 한다(2026-06-11 첫 실측: FRED 가 실행기 IP 에
+    30초 무응답 × 재시도 4회 × 7시리즈 ≈ 15분 → 작업 제한 초과).
+    """
     delay = 1.0
     last_exc: Exception | None = None
     for attempt in range(max_retries + 1):
         try:
-            resp = client.get(url, headers={"User-Agent": USER_AGENT})
+            kwargs: dict[str, Any] = {"headers": {"User-Agent": USER_AGENT}}
+            if timeout is not None:
+                kwargs["timeout"] = timeout
+            resp = client.get(url, **kwargs)
             if resp.status_code >= 500:
                 raise httpx.HTTPStatusError(
                     f"server error {resp.status_code}", request=resp.request, response=resp
@@ -352,6 +367,52 @@ def fetch_text(client: httpx.Client, url: str, *, max_retries: int = 3) -> str:
                 time.sleep(delay)
                 delay *= 2
     raise last_exc if last_exc else RuntimeError("unreachable")
+
+
+def probe_url(
+    client: httpx.Client,
+    url: str,
+    *,
+    user_agent: str | None,
+    timeout: float = 10.0,
+    max_bytes: int = 240,
+) -> dict[str, Any]:
+    """소스 경로 탐침 — 상태 코드·지연·첫 바이트만 기록하고 끊는다.
+
+    2026-06-11 첫 실측이 두 소스 모두 실행기에서 막힘(Stooq=JS 봇 장벽,
+    FRED=타르핏)을 드러냈다. 매 런이 측정 장비가 되도록 후보 경로를 가볍게
+    두드려 summary 에 남긴다 — 어떤 경로/UA 가 통하는지의 증거가 쌓인다.
+    수 KB 만 읽고 스트림을 닫으므로 대용량(벌크 zip)도 안전하다.
+    """
+    headers = {"User-Agent": user_agent} if user_agent else {}
+    start = time.monotonic()
+    out: dict[str, Any] = {
+        "url": url,
+        "user_agent": "channel" if user_agent else "httpx-default",
+    }
+    try:
+        with client.stream("GET", url, headers=headers, timeout=timeout) as resp:
+            head = b""
+            for chunk in resp.iter_bytes():
+                head += chunk
+                if len(head) >= max_bytes:
+                    break
+            printable = head[:max_bytes].decode("utf-8", errors="replace")
+            printable = "".join(ch if ch.isprintable() else "·" for ch in printable)
+            out.update(
+                status=resp.status_code,
+                ok=resp.status_code == 200,
+                elapsed_ms=int((time.monotonic() - start) * 1000),
+                content_head=printable[:200],
+            )
+    except Exception as exc:  # noqa: BLE001 — 탐침은 절대 수집을 깨지 않는다
+        out.update(
+            status=None,
+            ok=False,
+            elapsed_ms=int((time.monotonic() - start) * 1000),
+            error=f"{type(exc).__name__}: {exc}",
+        )
+    return out
 
 
 def _bars_to_csv(bars: list[PublicBar]) -> str:
@@ -390,6 +451,28 @@ def collect_public_data(
     stooq_cfg = config.get("stooq", {})
     fred_cfg = config.get("fred", {})
     cross_cfg = config.get("cross_check", {})
+    coll_cfg = config.get("collection", {})
+
+    # 시간 예산 — 타르핏(연결 후 무응답)이 워크플로 작업 제한(15분)을 잡아먹어
+    # 발행 스텝까지 죽는 일이 없게, 수집 전체에 벽시계 상한을 둔다. 예산 초과
+    # 시점 이후의 항목은 "미시도"로 기록하고 즉시 요약 발행으로 넘어간다.
+    request_timeout = float(coll_cfg.get("request_timeout_seconds", 15))
+    max_retries = int(coll_cfg.get("max_retries", 1))
+    time_budget = float(coll_cfg.get("time_budget_seconds", 480))
+    started = time.monotonic()
+
+    def _over_budget() -> bool:
+        return time.monotonic() - started > time_budget
+
+    # 탐침은 수집보다 먼저 — 소스가 전멸한 날에도 진단 증거는 반드시 남는다.
+    probes: list[dict[str, Any]] = []
+    for url in config.get("probes", {}).get("urls", []):
+        for ua in (USER_AGENT, None):
+            if _over_budget():
+                break
+            probes.append(
+                probe_url(client, url, user_agent=ua, timeout=min(request_timeout, 10.0))
+            )
 
     items: list[dict[str, Any]] = []
     closes_by_symbol: dict[str, dict[str, Decimal]] = {}
@@ -397,8 +480,17 @@ def collect_public_data(
 
     for symbol in stooq_cfg.get("symbols", []):
         item: dict[str, Any] = {"kind": "stooq", "id": symbol}
+        if _over_budget():
+            item.update(ok=False, issues=[f"시간 예산({int(time_budget)}초) 초과 — 미시도"])
+            items.append(item)
+            continue
         try:
-            text = fetch_text(client, stooq_daily_csv_url(symbol))
+            text = fetch_text(
+                client,
+                stooq_daily_csv_url(symbol),
+                max_retries=max_retries,
+                timeout=request_timeout,
+            )
             bars = parse_stooq_daily_csv(text)
             v = validate_daily_bars(
                 bars,
@@ -422,8 +514,17 @@ def collect_public_data(
 
     for series_id in fred_cfg.get("series", []):
         item = {"kind": "fred", "id": series_id}
+        if _over_budget():
+            item.update(ok=False, issues=[f"시간 예산({int(time_budget)}초) 초과 — 미시도"])
+            items.append(item)
+            continue
         try:
-            text = fetch_text(client, fred_csv_url(series_id))
+            text = fetch_text(
+                client,
+                fred_csv_url(series_id),
+                max_retries=max_retries,
+                timeout=request_timeout,
+            )
             points = parse_fred_csv(text)
             v = validate_series(
                 points,
@@ -485,12 +586,14 @@ def collect_public_data(
         and (cross is None or cross["status"] == "PASS")
     )
     summary: dict[str, Any] = {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "as_of": as_of.isoformat(),
         "overall_ok": overall_ok,
         "published": published,
         "total_items": len(items),
+        "elapsed_seconds": round(time.monotonic() - started, 1),
         "cross_check": cross,
+        "probes": probes,
         "items": items,
         "isolation_note": "연구 전용 — 라이브 매매 신호는 KIS 데이터만 사용",
     }

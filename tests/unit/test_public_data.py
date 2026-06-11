@@ -352,6 +352,62 @@ def test_collect_network_error_is_failsoft_per_item(tmp_path: Path) -> None:
     assert all(not i["ok"] for i in summary["items"] if i["kind"] == "stooq")
 
 
+def test_collect_time_budget_exhausted_skips_items_but_publishes_summary(
+    tmp_path: Path,
+) -> None:
+    """타르핏 방어 — 예산 0 이면 전 항목 미시도로 기록하되 summary 는 반드시 발행."""
+
+    def handler(request: httpx.Request) -> httpx.Response:  # pragma: no cover - 미호출
+        raise AssertionError("예산 0 에서는 어떤 수집 요청도 나가면 안 된다")
+
+    cfg = _config()
+    cfg["collection"] = {"time_budget_seconds": 0}
+    out_dir = tmp_path / "out"
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        summary = collect_public_data(client, cfg, out_dir=out_dir, as_of=AS_OF)
+    assert summary["published"] == 0 and summary["overall_ok"] is False
+    assert all(any("시간 예산" in s for s in i["issues"]) for i in summary["items"])
+    assert (out_dir / "summary.json").exists()
+
+
+def test_collect_records_probes_with_both_user_agents(tmp_path: Path) -> None:
+    seen_uas: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "probe.example.com":
+            seen_uas.append(request.headers.get("user-agent", ""))
+            return httpx.Response(200, content=b"PK\x03\x04binary-zip-head")
+        if request.url.host == "stooq.com":
+            return httpx.Response(200, text=_stooq_body(100))
+        return httpx.Response(200, text=_fred_body(request.url.params["id"], 100))
+
+    cfg = _config()
+    cfg["probes"] = {"urls": ["https://probe.example.com/bulk.zip"]}
+    out_dir = tmp_path / "out"
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        summary = collect_public_data(client, cfg, out_dir=out_dir, as_of=AS_OF)
+    probes = summary["probes"]
+    assert len(probes) == 2
+    assert {p["user_agent"] for p in probes} == {"channel", "httpx-default"}
+    assert all(p["status"] == 200 and p["ok"] for p in probes)
+    assert all("elapsed_ms" in p and "content_head" in p for p in probes)
+    # 바이너리 머리도 JSON 안전하게 기록(비인쇄 문자는 치환).
+    assert "PK" in probes[0]["content_head"]
+    # 탐침이 수집을 오염시키지 않는다 — 항목 발행은 그대로.
+    assert summary["published"] == 4 and summary["overall_ok"] is True
+
+
+def test_probe_url_failure_never_raises() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("refused")
+
+    from auto_invest.market_data.public_data import probe_url
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        out = probe_url(client, "https://x.example.com/", user_agent=None)
+    assert out["ok"] is False and "ConnectError" in out["error"]
+
+
 def test_collect_cross_check_divergence_fails_overall(tmp_path: Path) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.host == "stooq.com":
