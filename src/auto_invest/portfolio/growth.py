@@ -26,10 +26,16 @@ from auto_invest.backtest.metrics import max_drawdown_pct, total_return_pct
 
 @dataclass(frozen=True)
 class NavPoint:
-    """자산곡선의 한 점 — 한 NAV 스냅샷의 (시각, 순자산)."""
+    """자산곡선의 한 점 — 한 NAV 스냅샷의 (시각, 순자산).
+
+    `capital_basis_usd` 는 스냅샷이 찍힐 때 쓴 측정 기준 자본(현금 = 자본 + 순현금
+    흐름). None 이면 현금 미포함 레거시 측정 — 기준이 다른 점을 한 곡선에 섞으면
+    자금 흐름이 수익률로 오인되므로, 판정은 `consistent_basis_suffix` 로 거른다.
+    """
 
     at_utc: str
     nav_usd: Decimal
+    capital_basis_usd: str | None = None
 
 
 @dataclass(frozen=True)
@@ -103,8 +109,38 @@ def read_nav_points(
             continue
         if until is not None and _parse_iso(at) >= until:
             continue
-        points.append(NavPoint(at_utc=at, nav_usd=Decimal(str(p["total_nav_usd"]))))
+        points.append(
+            NavPoint(
+                at_utc=at,
+                nav_usd=Decimal(str(p["total_nav_usd"])),
+                capital_basis_usd=p.get("capital_basis_usd"),
+            )
+        )
     return points
+
+
+def consistent_basis_suffix(points: list[NavPoint]) -> list[NavPoint]:
+    """측정 기준(자본 베이시스)이 같은 최신 연속 구간(꼬리)만 남긴다.
+
+    NAV 측정 기준이 바뀌면(현금 미포함 레거시 → 자본 베이시스 포함, 또는 자본 변경)
+    곡선에 손익이 아닌 가짜 점프(자금 흐름)가 생겨 수익률·샤프·낙폭이 전부 오염된다.
+    forward 판정은 가장 최근 기준으로 찍힌 연속 구간만 봐야 한다.
+
+    규칙 (결정론):
+      - 마지막 점에 베이시스가 없으면(레거시 페이퍼 / 브로커 NAV 라이브) 전체를 그대로
+        반환 — 과거 동작 보존(라이브 트랙은 브로커 현금이 이미 포함돼 오염이 없다).
+      - 있으면 같은 베이시스가 연속되는 최장 꼬리만 반환. 그 앞의 레거시/다른 자본
+        구간은 제외된다(append-only 감사 행 자체는 그대로 — 읽기 필터일 뿐).
+    """
+    if not points or points[-1].capital_basis_usd is None:
+        return points
+    basis = points[-1].capital_basis_usd
+    start = len(points)
+    for i in range(len(points) - 1, -1, -1):
+        if points[i].capital_basis_usd != basis:
+            break
+        start = i
+    return points[start:]
 
 
 def compute_growth(points: list[NavPoint], *, mode: str) -> GrowthReport:

@@ -40,10 +40,17 @@ def _compound(start: Decimal, mean: str, amp: str, n: int) -> list[Decimal]:
 
 
 def _seed_nav_series(
-    conn, *, n: int, start: Decimal, mean: str = "0.0", amp: str = "0.005"
+    conn,
+    *,
+    n: int,
+    start: Decimal,
+    mean: str = "0.0",
+    amp: str = "0.005",
+    basis: str | None = None,
+    start_day: int = 0,
 ) -> None:
     """상승(또는 평평) NAV 스냅샷 n개(paper) — 진동 수익률 복리."""
-    d0 = date(2026, 1, 1)
+    d0 = date(2026, 1, 1) + timedelta(days=start_day)
     curve = _compound(start, mean, amp, n)
     for i, nav in enumerate(curve):
         audit.append(
@@ -58,6 +65,7 @@ def _seed_nav_series(
                 total_nav_usd=str(nav),
                 total_unrealized_pnl_usd="0",
                 holdings_count=1,
+                capital_basis_usd=basis,
             ),
         )
 
@@ -156,6 +164,88 @@ def test_nav_snapshot_producer_writes_row(tmp_path: Path) -> None:
     ).fetchone()
     conn.close()
     assert rows["c"] == 1
+
+
+def test_nav_snapshot_capital_includes_ledger_cash(tmp_path: Path) -> None:
+    """--capital: NAV = (자본 − 순투입) + 평가 — 매수가 수익률로 오인되지 않는 측정.
+
+    자본 $12,000 에서 $1,000 매수 → 현금 $11,000 + 평가 $1,000 = NAV $12,000.
+    페이로드에 capital_basis_usd 가 남아 판정이 측정 기준 연속 구간을 식별한다.
+    """
+    db_path = tmp_path / "auto_invest.db"
+    conn = db.get_connection(db_path)
+    db.migrate(conn)
+    audit.append(
+        conn,
+        OrderPaperFilledPayload(
+            rule_id="r1",
+            symbol="AAA",
+            side="BUY",
+            qty=10,
+            simulated_fill_price_usd="100.00",
+            quote_source="last",
+            correlation_id="c1",
+            paper_session_id=1,
+        ),
+    )
+    conn.close()
+
+    result = runner.invoke(
+        app,
+        [
+            "nav-snapshot",
+            "--mode", "paper",
+            "--db", str(db_path),
+            "--no-marks",
+            "--snapshot",
+            "--capital", "12000",
+            "--format", "json",
+        ],
+    )
+    assert result.exit_code == 0, result.stdout + result.stderr
+    out = json.loads(result.stdout)
+    assert Decimal(out["cash_usd"]) == Decimal("11000")
+    assert Decimal(out["total_nav_usd"]) == Decimal("12000")
+
+    conn = db.get_connection(db_path)
+    row = conn.execute(
+        "SELECT payload_json FROM audit_log "
+        "WHERE event_type='PORTFOLIO_NAV_SNAPSHOT'"
+    ).fetchone()
+    conn.close()
+    payload = json.loads(row["payload_json"])
+    assert Decimal(payload["capital_basis_usd"]) == Decimal("12000")
+    assert Decimal(payload["total_nav_usd"]) == Decimal("12000")
+
+
+def test_forward_verdict_excludes_legacy_basis_points(tmp_path: Path) -> None:
+    """소비자: 측정 기준이 다른 레거시 구간(현금 미포함)은 판정에서 제외된다.
+
+    실사고 재현: NAV [0대 시절·포지션만] → 자본 포함 측정 전환. 섞으면 전환 점프가
+    가짜 수익률이 된다 — 자본 베이시스 꼬리만 세는지 검증.
+    """
+    db_path = tmp_path / "auto_invest.db"
+    conn = db.get_connection(db_path)
+    db.migrate(conn)
+    # 레거시(베이시스 없음) 3점 — 포지션만 찍히던 시절.
+    _seed_nav_series(conn, n=3, start=Decimal("2176"), mean="0.0", amp="0.001")
+    # 자본 포함 측정 전환 후 5점(같은 베이시스).
+    _seed_nav_series(
+        conn, n=5, start=Decimal("12000"), mean="0.002", amp="0.001",
+        basis="12000", start_day=3,
+    )
+    conn.close()
+
+    result = runner.invoke(
+        app,
+        ["forward-verdict", "--mode", "paper", "--db", str(db_path), "--format", "json"],
+    )
+    assert result.exit_code == 0, result.stdout + result.stderr
+    out = json.loads(result.stdout)
+    assert out["snapshot_count"] == 5  # 자본 베이시스 꼬리만
+    assert out["legacy_snapshots_excluded"] == 3
+    assert out["n_obs"] == 4  # 5점 − 1 (레거시→전환 점프 미포함)
+    assert out["verdict"] == "INSUFFICIENT_DATA"  # 4 < 20 — 보수적
 
 
 def test_forward_verdict_insufficient_data(tmp_path: Path) -> None:

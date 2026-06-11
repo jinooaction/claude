@@ -164,12 +164,17 @@ def compute_nav(
     broker_reported_total_value_usd: Decimal | None,
     ledger_positions: dict[str, PositionState],
     marks: dict[str, Decimal],
+    ledger_cash_usd: Decimal | None = None,
 ) -> NavSnapshot:
     """포트폴리오 순자산 스냅샷을 결정론적으로 계산한다 (FR-01~FR-05, FR-08).
 
     권위 출처는 브로커다. `broker_cash_usd` 가 주어지면 (None 아님) 브로커 보유를 NAV
     기준으로 쓰고 source="broker", 아니면 내부 장부 + 시세로 폴백해 source="ledger".
     어느 경우든 드리프트(브로커 vs 장부)는 둘 다 있으면 계산한다.
+
+    `ledger_cash_usd` 는 장부 폴백일 때의 현금(예: 페이퍼 트랙의 자본 − 순투입액).
+    없으면 0 — 그 경우 NAV 는 포지션 평가액만이라 매수/매도(자금 흐름)가 NAV 를
+    출렁이게 해 수익률 시계열이 오염된다. forward 판정에 쓰는 트랙은 반드시 줄 것.
 
     marks 는 {symbol: 현재가}. 없는 종목은 평균단가로 보수 평가하고 unmarked 로 분리.
     """
@@ -189,7 +194,12 @@ def compute_nav(
             if st.qty != 0
         }
 
-    cash_usd = broker_cash_usd if broker_cash_usd is not None else Decimal("0")
+    if broker_cash_usd is not None:
+        cash_usd = broker_cash_usd
+    elif ledger_cash_usd is not None:
+        cash_usd = ledger_cash_usd
+    else:
+        cash_usd = Decimal("0")
 
     # 1차 패스: 평가금액·미실현 계산 (비중은 NAV 확정 후 2차 패스).
     unmarked: list[str] = []

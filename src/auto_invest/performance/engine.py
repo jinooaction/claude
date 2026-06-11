@@ -370,6 +370,24 @@ def reconstruct(
     return positions, rules, gross_invested, warnings
 
 
+def net_cash_flow_usd(fills: list[FillRecord]) -> Decimal:
+    """체결 시퀀스의 순현금 흐름: Σ(SELL 체결액) − Σ(BUY 체결액).
+
+    시작 자본에 더하면 현재 장부 현금이 된다 (cash = capital + net). 매수는 현금을
+    포지션으로 옮기고(음수), 매도는 현금으로 되돌린다(양수) — 이 보존 관계 덕분에
+    NAV(현금+평가금액)가 자금 흐름에 출렁이지 않고 손익만 반영한다. 알 수 없는
+    side 는 무시한다(`reconstruct` 의 경고 대상이지 현금 흐름이 아니다).
+    """
+    net = Decimal("0")
+    for f in fills:
+        notional = f.price_usd * Decimal(f.qty)
+        if f.side == "BUY":
+            net -= notional
+        elif f.side == "SELL":
+            net += notional
+    return net
+
+
 # --------------------------------------------------- risk-adjusted (US2, P2)
 
 

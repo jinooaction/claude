@@ -122,7 +122,7 @@ jobs:
               "cd /opt/auto-invest && \
                  /usr/local/bin/uv run auto-invest backfill-bars --portfolio ${cfg} --max-symbols 120 --min-bars 1000 --order deepen --db ${dbf} --env-file .env --json && \
                  /usr/local/bin/uv run auto-invest rebalance-once --portfolio ${cfg} --mode paper --capital ${CAPITAL} --construct-universe-top-n 50 --halt-path ${hlt} --db ${dbf} --env-file .env --json && \
-                 /usr/local/bin/uv run auto-invest nav-snapshot --mode paper --db ${dbf} --env-file .env --snapshot --format json" \
+                 /usr/local/bin/uv run auto-invest nav-snapshot --mode paper --capital ${CAPITAL} --db ${dbf} --env-file .env --snapshot --format json" \
               > /tmp/prep_trend.log 2>&1
           echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
           cat /tmp/prep_trend.log
@@ -191,7 +191,7 @@ jobs:
               "cd /opt/auto-invest && \
                  /usr/local/bin/uv run auto-invest backfill-bars --portfolio ${cfg} --max-symbols 120 --min-bars 1000 --order deepen --db ${dbf} --env-file .env --json && \
                  /usr/local/bin/uv run auto-invest rebalance-once --portfolio ${cfg} --mode paper --capital ${CAPITAL} --construct-universe-top-n 50 --halt-path ${hlt} --db ${dbf} --env-file .env --json && \
-                 /usr/local/bin/uv run auto-invest nav-snapshot --mode paper --db ${dbf} --env-file .env --snapshot --format json" \
+                 /usr/local/bin/uv run auto-invest nav-snapshot --mode paper --capital ${CAPITAL} --db ${dbf} --env-file .env --snapshot --format json" \
               > /tmp/prep_notrend.log 2>&1
           echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
           cat /tmp/prep_notrend.log
@@ -239,7 +239,7 @@ jobs:
               "cd /opt/auto-invest && \
                  /usr/local/bin/uv run auto-invest backfill-bars --portfolio ${cfg} --max-symbols 120 --min-bars 1000 --order deepen --db ${dbf} --env-file .env --json && \
                  /usr/local/bin/uv run auto-invest rebalance-once --portfolio ${cfg} --mode paper --capital ${CAPITAL} --halt-path ${hlt} --db ${dbf} --env-file .env --json && \
-                 /usr/local/bin/uv run auto-invest nav-snapshot --mode paper --db ${dbf} --env-file .env --snapshot --format json" \
+                 /usr/local/bin/uv run auto-invest nav-snapshot --mode paper --capital ${CAPITAL} --db ${dbf} --env-file .env --snapshot --format json" \
               > /tmp/prep_rmbeta.log 2>&1
           echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
           cat /tmp/prep_rmbeta.log
@@ -287,7 +287,7 @@ jobs:
               "cd /opt/auto-invest && \
                  /usr/local/bin/uv run auto-invest backfill-bars --portfolio ${cfg} --max-symbols 120 --min-bars 1000 --order deepen --db ${dbf} --env-file .env --json && \
                  /usr/local/bin/uv run auto-invest rebalance-once --portfolio ${cfg} --mode paper --capital ${CAPITAL} --halt-path ${hlt} --db ${dbf} --env-file .env --json && \
-                 /usr/local/bin/uv run auto-invest nav-snapshot --mode paper --db ${dbf} --env-file .env --snapshot --format json" \
+                 /usr/local/bin/uv run auto-invest nav-snapshot --mode paper --capital ${CAPITAL} --db ${dbf} --env-file .env --snapshot --format json" \
               > /tmp/prep_multiasset.log 2>&1
           echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
           cat /tmp/prep_multiasset.log
@@ -337,7 +337,7 @@ jobs:
               "cd /opt/auto-invest && \
                  /usr/local/bin/uv run auto-invest backfill-bars --portfolio ${cfg} --max-symbols 120 --min-bars 1000 --order deepen --db ${dbf} --env-file .env --json && \
                  /usr/local/bin/uv run auto-invest rebalance-once --portfolio ${cfg} --mode paper --capital ${CAPITAL} --halt-path ${hlt} --db ${dbf} --env-file .env --json && \
-                 /usr/local/bin/uv run auto-invest nav-snapshot --mode paper --db ${dbf} --env-file .env --snapshot --format json" \
+                 /usr/local/bin/uv run auto-invest nav-snapshot --mode paper --capital ${CAPITAL} --db ${dbf} --env-file .env --snapshot --format json" \
               > /tmp/prep_global.log 2>&1
           echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
           cat /tmp/prep_global.log

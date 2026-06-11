@@ -156,13 +156,16 @@ jobs:
           HOST: ${{ secrets.VULTR_SSH_HOST }}
           USER: ${{ secrets.VULTR_SSH_USER }}
           PORT: ${{ secrets.VULTR_SSH_PORT }}
+          CAP: ${{ steps.gate.outputs.capital }}
         run: |
           set +e
           port="${PORT:-22}"
+          # --capital: NAV 에 장부 현금(자본 + 순현금흐름)을 포함 — 매수/매도 자금 흐름이
+          # 수익률로 오인되는 오염을 막는다(페이퍼 forward 트랙과 같은 측정 기준).
           ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
               -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
               "cd /opt/auto-invest && \
-                 /usr/local/bin/uv run auto-invest nav-snapshot --mode live --db data/auto_invest.db --env-file .env --snapshot --format json; \
+                 /usr/local/bin/uv run auto-invest nav-snapshot --mode live --capital ${CAP} --db data/auto_invest.db --env-file .env --snapshot --format json; \
                  /usr/local/bin/uv run auto-invest forward-verdict --mode live --portfolio deploy/canary-live-portfolio.toml --db data/auto_invest.db --format json" \
               > /tmp/live_measure.log 2>&1
           echo "exit=$?"; cat /tmp/live_measure.log

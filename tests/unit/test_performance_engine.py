@@ -21,6 +21,7 @@ from auto_invest.performance.engine import (
     FillRecord,
     build_performance_report,
     compute_performance,
+    net_cash_flow_usd,
     read_fills,
     reconstruct,
     render_text,
@@ -48,6 +49,22 @@ def conn(tmp_path):
 
 def _fill(symbol, side, qty, price, rule_id="R", ts="2026-05-20T00:00:00.000Z"):
     return FillRecord(symbol, side, qty, Decimal(price), ts, rule_id)
+
+
+# --------------------------------------------------------------- net cash flow
+
+
+def test_net_cash_flow_buy_then_sell() -> None:
+    """매수 −(100×2) → 매도 +(110×1) = 순현금흐름 −90. cash = capital − 90."""
+    fills = [_fill("SPY", "BUY", 2, "100"), _fill("SPY", "SELL", 1, "110")]
+    assert net_cash_flow_usd(fills) == Decimal("-90")
+
+
+def test_net_cash_flow_empty_and_unknown_side() -> None:
+    """체결 없음 = 0. 알 수 없는 side 는 현금 흐름에서 무시(reconstruct 경고 대상)."""
+    assert net_cash_flow_usd([]) == Decimal("0")
+    fills = [_fill("SPY", "WAT", 3, "100"), _fill("SPY", "BUY", 1, "50")]
+    assert net_cash_flow_usd(fills) == Decimal("-50")
 
 
 # --------------------------------------------------------------- reconstruct

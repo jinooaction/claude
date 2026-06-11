@@ -4301,6 +4301,13 @@ def nav_snapshot_cmd(
         help="결과를 audit_log 에 추가-전용 PORTFOLIO_NAV_SNAPSHOT 1건으로 기록"
         " (스펙 029·035 시계열 생산자). 기본은 미기록(순수 계산).",
     ),
+    capital: float = typer.Option(
+        None,
+        "--capital",
+        help="트랙 시작 자본 USD — 장부 현금 = 자본 + 순현금흐름(매도 − 매수)으로"
+        " NAV 에 현금을 포함한다. 없으면 현금 0(레거시) — 매수/매도가 NAV 를 출렁여"
+        " forward 수익률이 오염되므로, 판정용 페이퍼 트랙은 반드시 줄 것.",
+    ),
     output_format: str = typer.Option("text", "--format", help="text | json."),
 ) -> None:
     """Spec 029/035 — 현재 시가평가 순자산(NAV)을 계산하고 (옵션) 시계열에 1점 기록한다.
@@ -4315,7 +4322,7 @@ def nav_snapshot_cmd(
     import json as _json
     from datetime import UTC, datetime
 
-    from auto_invest.performance.engine import read_fills, reconstruct
+    from auto_invest.performance.engine import net_cash_flow_usd, read_fills, reconstruct
     from auto_invest.portfolio import compute_nav
     from auto_invest.portfolio.nav import render_text as nav_render_text
 
@@ -4357,12 +4364,25 @@ def nav_snapshot_cmd(
         except Exception as exc:  # noqa: BLE001 — 시세 실패는 평균단가 폴백
             typer.echo(f"(시세 조회 실패 — 평균단가 평가: {exc})", err=True)
 
+    capital_dec: Decimal | None = None
+    ledger_cash: Decimal | None = None
+    if capital is not None:
+        capital_dec = Decimal(str(capital))
+        ledger_cash = capital_dec + net_cash_flow_usd(fills)
+        if ledger_cash < 0:
+            typer.echo(
+                f"(경고: 장부 현금 음수 ${ledger_cash} — 자본 기준이 누적 순투입보다"
+                " 작음. NAV 는 그래도 자본+손익으로 일관되게 계산됨)",
+                err=True,
+            )
+
     snap = compute_nav(
         broker_cash_usd=None,
         broker_positions=None,
         broker_reported_total_value_usd=None,
         ledger_positions=positions,
         marks=marks,
+        ledger_cash_usd=ledger_cash,
     )
 
     if snapshot:
@@ -4389,6 +4409,9 @@ def nav_snapshot_cmd(
                     holdings_count=len([h for h in snap.holdings if h.qty != 0]),
                     total_qty_drift=snap.total_qty_drift,
                     total_value_drift_usd=str(snap.total_value_drift_usd),
+                    capital_basis_usd=(
+                        None if capital_dec is None else str(capital_dec)
+                    ),
                 ),
             )
         finally:
@@ -4447,7 +4470,11 @@ def forward_verdict_cmd(
     from datetime import datetime as _dt
 
     from auto_invest.market_data.store import get_bars
-    from auto_invest.portfolio import forward_edge_verdict, read_nav_points
+    from auto_invest.portfolio import (
+        consistent_basis_suffix,
+        forward_edge_verdict,
+        read_nav_points,
+    )
     from auto_invest.portfolio.edge_verdict import equal_weight_buy_hold_curve
     from auto_invest.portfolio.edge_verdict import render_text as verdict_render_text
 
@@ -4477,7 +4504,10 @@ def forward_verdict_cmd(
     conn = db.get_connection(db_path)
     try:
         conn.execute("PRAGMA query_only = ON")
-        points = read_nav_points(conn, mode=mode)
+        all_points = read_nav_points(conn, mode=mode)
+        # 측정 기준(자본 베이시스)이 같은 최신 연속 구간만 판정에 쓴다 — 기준이 다른
+        # 점을 섞으면 자금 흐름이 수익률로 오인돼 샤프·낙폭이 전부 오염된다.
+        points = consistent_basis_suffix(all_points)
         nav_curve = [p.nav_usd for p in points]
         nav_dates = [_to_date(p.at_utc) for p in points]
         bars_by_symbol: dict[str, list] = {}
@@ -4513,6 +4543,7 @@ def forward_verdict_cmd(
         out = verdict.to_json_dict()
         out["mode"] = mode
         out["snapshot_count"] = len(points)
+        out["legacy_snapshots_excluded"] = len(all_points) - len(points)
         out["universe"] = universe
         typer.echo(_json.dumps(out))
     else:
