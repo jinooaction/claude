@@ -5,6 +5,24 @@
 # 계속 KIS 데이터(price_bars)만 사용한다. 수집은 collect-public-data.yml 이
 # GitHub Actions 실행기에서 돌리고 automation/public-data 사이드카로 발행한다.
 
+[collection]
+# 첫 실측(2026-06-11, run 27380895825) 교훈: FRED 타르핏(연결 후 30초 무응답)
+# × 재시도 4회 × 7시리즈 ≈ 15분 → 작업 제한 초과. 요청 타임아웃을 짧게,
+# 재시도 1회, 전체 벽시계 예산으로 발행 스텝 도달을 보장한다.
+request_timeout_seconds = 15
+max_retries = 1
+time_budget_seconds = 480
+
+[probes]
+# 소스 경로 탐침 — 매 런이 측정 장비가 된다. 각 주소를 채널 UA / httpx 기본 UA
+# 두 가지로 두드려 상태·지연·첫 바이트를 summary 에 기록(수 KB 만 읽고 끊음).
+# 무엇이 통하는지 증거가 쌓이면 수집 경로를 그 증거로 갈아탄다.
+urls = [
+    "https://static.stooq.com/db/h/d_us_txt.zip",                # Stooq 벌크 DB (문서화된 공개 다운로드 — JS 장벽 밖 가능성)
+    "https://stooq.com/q/d/l/?s=spy.us&i=d",                     # Stooq 직접 CSV (첫 실측: JS 봇 장벽)
+    "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS10",  # FRED 그래프 CSV (첫 실측: 타르핏)
+]
+
 [stooq]
 # ARM F(유니버스 확대 forward 트랙)의 11개 비상관 슬리브와 동일 — 연구 데이터가
 # 검증 트랙과 같은 우주를 보게 한다(검증=연구 정합). Stooq 는 SPY 1993년~ 등

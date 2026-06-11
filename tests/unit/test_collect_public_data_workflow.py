@@ -89,6 +89,22 @@ def test_config_parses_and_cross_check_pair_is_collected() -> None:
         assert sleeve in symbols, f"ARM F 슬리브 {sleeve} 가 public-data 수집 목록에 없음"
 
 
+def test_collect_step_has_own_timeout_below_job_limit() -> None:
+    """수집이 늘어져도 발행 스텝이 항상 실행되게 — 첫 실측(2026-06-11)에서
+    FRED 타르핏이 작업 제한을 잡아먹어 collect_exit 가 미기록됐던 회귀 방지."""
+    text = _wf_text()
+    assert "timeout-minutes: 12" in text
+    assert "timeout-minutes: 15" in text  # 작업 제한이 스텝 제한보다 크다
+
+
+def test_config_has_time_budget_and_probes() -> None:
+    cfg = tomllib.loads(_CONFIG.read_text(encoding="utf-8"))
+    coll = cfg["collection"]
+    assert float(coll["time_budget_seconds"]) <= 600  # 스텝 제한(12분) 아래
+    assert float(coll["request_timeout_seconds"]) <= 30
+    assert len(cfg["probes"]["urls"]) >= 1
+
+
 def test_workflow_push_paths_cover_channel_files() -> None:
     """채널 파일이 바뀐 머지에서 즉시 실전 검증(같은 날 검증 패턴)."""
     text = _wf_text()
