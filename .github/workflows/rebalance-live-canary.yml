@@ -90,10 +90,14 @@ jobs:
         run: |
           set +e
           port="${PORT:-22}"
+          # --min-bars 1000: forward 트랙과 같은 깊은 백필(검증=무장 정합 — 같은 이력
+          # 깊이 → 같은 신호). 기본(한 페이지 ≈100봉)은 전략이 요구하는 이력(추세 앙상블
+          # 최대 252봉·역변동성 200봉·모멘텀 120봉)에 못 미쳐 on_insufficient=cash 로
+          # target_weights={} 가 된다 — 무장돼도 현금만 들고 거래 0건(2026-06-10 실측).
           ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
               -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
               "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest backfill-bars \
-                 --portfolio deploy/canary-live-portfolio.toml \
+                 --portfolio deploy/canary-live-portfolio.toml --min-bars 1000 \
                  --db data/auto_invest.db --env-file .env --json" \
               > /tmp/live_backfill.log 2>&1
           echo "exit=$?"; cat /tmp/live_backfill.log
