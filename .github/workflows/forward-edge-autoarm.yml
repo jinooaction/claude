@@ -1,26 +1,28 @@
-name: Forward edge auto-arm (EDGE_CONFIRMED → live-canary arming)
+name: Capital ladder gate (forward edge -> rung promotions/demotions)
 
-# 스펙 049 — 운영자 지시 "forward 검증 후 자동 무장"(2026-06-10)의 자동화.
+# 스펙 050 — 자본 사다리 게이트. 스펙 049(EDGE_CONFIRMED → 무장)를 승계·확장한다.
 #
-# 검증된 글로벌 분산 추세 앙상블(ARM E, deploy/global-trend-portfolio.toml /
-# data/forward_global.db)의 스펙 035 forward 판정이 EDGE_CONFIRMED 가 되면, 라이브 캐너리
-# 무장 센티넬(automation/rebalance-live.request)을 armed:true 로 뒤집는 PR 을 자동으로 연다.
+# 운영자 위임(2026-06-11): "자본·수단도 자동과 자율에 맡긴다. 기준은 계좌 잔고와
+# 포트폴리오." (헌법 X.4 v5.0.0). 자본 배치 규모를 증거 게이트 공식으로 결정한다:
+#
+#   단0=0%(무장 해제) → 단1=25% → 단2=50% → 단3=100%  (실계좌 NAV 대비)
+#   - 단 0→1: forward 페이퍼 EDGE_CONFIRMED + 전략 지문 정합 (스펙 049 조건 승계).
+#   - 승격(단 n→n+1): 그 단에서 라이브 관측 ≥20 + ≥27일 경과 + 낙폭 < 예산/2(10%).
+#   - 강등: 낙폭 ≥ 예산/2(10%) → 한 단 아래(즉시). 정지: 낙폭 ≥ 예산(20%) → 단 0.
+#   - 재사이징: 계좌 NAV ±10% 드리프트(입금/성장) → 자본만 재계산.
 #
 # 안전 (돈을 잃지 않게):
-#   - 결정은 *테스트된* src 모듈(autoarm.py)이 한다 — 이 YAML 은 얇다(판정 계산 + PR open).
-#   - EDGE_CONFIRMED + 검증=무장 정합(라이브 설정 전략 지문 == 검증한 앙상블) + 미무장 +
-#     킬스위치 없음 일 때만 ARM. 그 외 보수적으로 아무것도 안 함(WAIT/BLOCKED/ALREADY_ARMED).
-#   - 무장 머지 자체는 미리보기만 — 첫 실주문은 다음 미국 정규장 스케줄(rebalance-live-canary.yml
-#     은 push 가 아니라 schedule 에서만 실주문). 운영자가 사이드카/PR 로 검토하고 첫 실주문 전에
-#     disarm 할 시간이 있다.
-#   - 자본은 소액(센티넬 capital_usd, 캡 $1,000 이하로 클램프). 게이트가 노출을 못 키운다.
+#   - 결정은 *테스트된* src 모듈(capital_ladder.py)이 한다 — 이 YAML 은 얇다.
+#   - 내려가는 건 낙폭 하나로 즉시, 올라가는 건 세 증거 전부(없으면 STAY, 절대 승격 아님).
+#   - 계좌 NAV 조회 실패 = BLOCKED(상태 무변경, fail-closed). 검증=배치 정합 불일치 = BLOCKED.
+#   - 센티넬 머지 자체는 미리보기만 — 실주문은 rebalance-live-canary.yml 의 시장시간
+#     스케줄에서만. 빠른 장중 방어선은 스펙 014 서킷 브레이커(이 게이트는 느린 거버너).
 #   - 즉시 정지: automation/AUTOARM_DISABLED 파일을 main 에 두면 게이트가 DISABLED no-op.
-#   - 결과는 사이드카 automation/edge-autoarm-last-run 으로 발행(컨테이너서 확인 가능):
-#       git fetch origin automation/edge-autoarm-last-run
+#   - 결과는 사이드카 automation/edge-autoarm-last-run 으로 발행:
 #       git show origin/automation/edge-autoarm-last-run:LAST_RUN.md
 #
-# 헌법 X.4: 라이브 전환은 운영자 결정. 운영자 명시 지시 하 *라이브 캐너리* 무장 준비 전용,
-# 풀라이브 아님(헌법 VI 3단계는 별도 운영자 결정). 판정 계산은 read-only(서버 상태 무변경).
+# 헌법 X.4 v5.0.0: 자본 사다리는 운영자의 상시 위임에 따른 자율 운영. 비위임 불변
+# (K1 캡 체계·화이트리스트·감사·서킷 브레이커·낙폭 예산 소유권)은 그대로다.
 
 on:
   schedule:
@@ -28,15 +30,15 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write       # 사이드카 force-push + 무장 브랜치 push.
-  pull-requests: write  # 무장 PR open/merge.
+  contents: write       # 사이드카 force-push + 사다리 브랜치 push.
+  pull-requests: write  # 사다리 PR open/merge.
 
 concurrency:
   group: forward-edge-autoarm
   cancel-in-progress: false
 
 jobs:
-  autoarm:
+  ladder:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
@@ -56,6 +58,17 @@ jobs:
           echo "${KEY}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
 
+      - name: Read ladder state from sentinel (for the live evidence query)
+        id: state
+        run: |
+          set -uo pipefail
+          REQ=automation/rebalance-live.request
+          armed="$(grep -E '^armed:' "$REQ" 2>/dev/null | head -1 | awk '{print $2}' || true)"
+          entered="$(grep -E '^rung_entered:' "$REQ" 2>/dev/null | head -1 | awk '{print $2}' || true)"
+          echo "armed=${armed:-false}" >> "$GITHUB_OUTPUT"
+          echo "entered=${entered:-}" >> "$GITHUB_OUTPUT"
+          echo "armed=${armed:-false} rung_entered=${entered:-(none)}"
+
       - name: Compute forward verdict on instance (read-only, ensemble paper track)
         id: verdict
         env:
@@ -74,97 +87,122 @@ jobs:
           echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
           echo "--- verdict ---"; cat /tmp/verdict_global.json
           echo "--- stderr ---"; cat /tmp/verdict_global.err
-          # 판정 JSON 이 비었으면 빈 객체로 — autoarm-decide 가 보수적으로 WAIT 처리.
+          # 판정 JSON 이 비었으면 빈 객체로 — ladder-decide 가 보수적으로 WAIT_EDGE 처리.
           if [[ ! -s /tmp/verdict_global.json ]]; then echo '{}' > /tmp/verdict_global.json; fi
 
-      - name: Decide auto-arm (tested src module; writes sentinel only on ARM)
+      - name: Measure live evidence on instance (account NAV + growth since rung entry)
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+          ENTERED: ${{ steps.state.outputs.entered }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          # 실계좌 NAV (사이징 기준 — 운영자 위임 "기준은 계좌 잔고"). 실패 = 빈 파일 =
+          # ladder-decide 가 BLOCKED(상태 무변경, fail-closed).
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest account-nav \
+                 --env-file .env --db data/auto_invest.db --json" \
+              > /tmp/account_nav.json 2>/tmp/account_nav.err
+          echo "--- account NAV ---"; cat /tmp/account_nav.json; cat /tmp/account_nav.err
+          # 라이브 트랙 실적(현재 단 진입 이후) — 승격/강등 증거. since 가 없으면 전체.
+          since_arg=""
+          if [[ -n "${ENTERED}" ]]; then since_arg="--since ${ENTERED}"; fi
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest growth \
+                 --mode live ${since_arg} --db data/auto_invest.db --format json" \
+              > /tmp/live_growth.json 2>/tmp/live_growth.err
+          echo "--- live growth ---"; cat /tmp/live_growth.json; cat /tmp/live_growth.err
+
+      - name: Decide capital ladder (tested src module; writes sentinel on change)
         id: decide
         run: |
           set -uo pipefail
-          uv run auto-invest autoarm-decide \
+          uv run auto-invest ladder-decide \
             --verdict-json /tmp/verdict_global.json \
+            --live-growth-json /tmp/live_growth.json \
+            --account-nav-json /tmp/account_nav.json \
             --live-portfolio deploy/canary-live-portfolio.toml \
             --validated-portfolio deploy/global-trend-portfolio.toml \
             --sentinel automation/rebalance-live.request \
             --kill-switch automation/AUTOARM_DISABLED \
+            --dd-budget-pct 20 \
             --write-sentinel --format json \
             | tee /tmp/decision.json
           action="$(jq -r '.action' /tmp/decision.json)"
           echo "action=${action}" >> "$GITHUB_OUTPUT"
+          if git diff --quiet -- automation/rebalance-live.request; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
           echo "decision action: ${action}"
 
-      - name: Open arming PR (only when decision is ARM and sentinel changed)
+      - name: Open ladder PR (only when the sentinel changed)
         id: pr
-        if: steps.decide.outputs.action == 'ARM'
+        if: steps.decide.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTION: ${{ steps.decide.outputs.action }}
         run: |
           set -uo pipefail
-          if git diff --quiet -- automation/rebalance-live.request; then
-            echo "센티넬 무변경 — PR 생략(이미 무장 상태였을 수 있음)."
-            echo "pr_url=" >> "$GITHUB_OUTPUT"
-            echo "merged=skipped" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          BRANCH="automation/edge-autoarm/arm-${GITHUB_RUN_ID}"
-          git config user.name "edge-autoarm-bot"
-          git config user.email "edge-autoarm-bot@noreply.github.com"
+          cur="$(jq -r '.current_rung' /tmp/decision.json)"
+          tgt="$(jq -r '.target_rung' /tmp/decision.json)"
+          cap="$(jq -r '.target_capital_usd // "?"' /tmp/decision.json)"
+          nav="$(jq -r '.account_nav_usd // "?"' /tmp/decision.json)"
+          reason="$(jq -r '.reason' /tmp/decision.json)"
+          BRANCH="automation/capital-ladder/${ACTION,,}-${GITHUB_RUN_ID}"
+          git config user.name "capital-ladder-bot"
+          git config user.email "capital-ladder-bot@noreply.github.com"
           git checkout -b "${BRANCH}"
           git add automation/rebalance-live.request
-          # 커밋 메시지는 파일로(YAML 블록 스칼라 안에서 멀티라인 -m 가 들여쓰기를 깨므로).
           {
-            echo "feat(049): 자동 무장 — 검증된 글로벌 분산 추세 앙상블 EDGE_CONFIRMED"
+            echo "feat(050): 자본 사다리 ${ACTION} — 단 ${cur}→${tgt} (자본 \$${cap}, NAV \$${nav})"
             echo ""
-            echo "운영자 지시 'forward 검증 후 자동 무장'(2026-06-10) + 헌법 X.4. 라이브 캐너리"
-            echo "무장 센티넬을 armed:true 로 전환(소액, 캡 1,000불 이하). 무장 머지는 미리보기만"
-            echo "— 첫 실주문은 다음 미국 정규장 스케줄. 검토 후 disarm 가능. 즉시 정지:"
+            echo "운영자 위임(2026-06-11) + 헌법 X.4 v5.0.0 자본 사다리의 증거 게이트 결정."
+            echo "결정: ${reason}"
+            echo "실주문은 시장시간 스케줄에서만(이 머지는 미리보기). 즉시 정지:"
             echo "automation/AUTOARM_DISABLED."
           } > /tmp/commit_msg.txt
           git commit -q -F /tmp/commit_msg.txt
           git push -u origin "${BRANCH}"
-          reason="$(jq -r '.reason' /tmp/decision.json)"
-          # PR 본문도 파일로(들여쓰기 안전 — 사이드카 발행과 같은 패턴).
           {
-            echo "## 🟢 자동 무장 — 검증된 글로벌 분산 추세 앙상블 EDGE_CONFIRMED"
+            echo "## 🪜 자본 사다리 ${ACTION} — 단 ${cur}→${tgt}"
             echo ""
-            echo "스펙 049 forward 엣지 자동 무장 게이트가 연 PR. 운영자 지시 \"forward 검증 후"
-            echo "자동 무장\"(2026-06-10) + 무장 해제 노트(2026-06-04)의 계획 \"넓은 forward"
-            echo "페이퍼로 검증 후 재무장\" 의 실현."
+            echo "스펙 050 자본 사다리 게이트의 증거 기반 결정 (운영자 위임 2026-06-11,"
+            echo "헌법 X.4 v5.0.0). 운영자가 정한 낙폭 예산 20% 아래에서 실계좌 NAV 의"
+            echo "단계적 배치를 자율 운영한다."
             echo ""
             echo "- 결정: ${reason}"
-            echo "- 무장 대상: 라이브 캐너리(deploy/canary-live-portfolio.toml) — 전략 지문이"
-            echo "  검증한 앙상블(deploy/global-trend-portfolio.toml, ARM E)과 동일함을 게이트가"
-            echo "  확인(검증=무장 정합성)."
-            echo "- 변경: automation/rebalance-live.request → armed: true (소액, 캡 1,000불 이하)."
+            echo "- 자본: \$${cap} (실계좌 NAV \$${nav} 기준 단 ${tgt} 비율)"
             echo ""
-            echo "### 검증 증거 (ARM E forward 페이퍼, 스펙 035 판정)"
+            echo "### 증거 (결정 JSON)"
             echo '```json'
-            cat /tmp/verdict_global.json 2>/dev/null || echo '{}'
+            cat /tmp/decision.json 2>/dev/null || echo '{}'
             echo '```'
             echo ""
-            echo "### ⚠ 안전 (정직)"
-            echo "- 이 머지 자체는 **미리보기만** — 첫 실주문은 다음 미국 정규장 스케줄"
-            echo "  (rebalance-live-canary.yml). 운영자가 사이드카(automation/rebalance-live-canary-last-run)로"
-            echo "  무엇을 살지 검토하고 첫 실주문 전에 disarm 할 시간이 있다."
-            echo "- 자본은 소액(센티넬 capital_usd). 스펙 014 손실 서킷 브레이커·K1 캡·추세 앙상블 방어가 천장."
-            echo "- 라이브 거래 집합 SPY·IEF·GLD(헌법 II). 풀라이브 아님(헌법 X.4 — VI 3단계는 별도 운영자 결정)."
-            echo "- 즉시 정지: automation/AUTOARM_DISABLED 파일을 main 에 두면 게이트가 멈춘다."
-            echo ""
-            echo "헌법 X.4(v4.0.0): 라이브 전환은 운영자 결정. 운영자 명시 지시 하 소액 캐너리 무장."
+            echo "### 안전"
+            echo "- 실주문은 rebalance-live-canary.yml 의 시장시간 스케줄에서만(이 머지는 미리보기)."
+            echo "- 장중 방어선: 스펙 014 손실 서킷 브레이커 + K1 캡 + 추세 앙상블 + 화이트리스트(SPY·IEF·GLD)."
+            echo "- 강등·정지는 낙폭 하나로 즉시, 승격은 세 증거 전부 — 내려가긴 쉽고 올라가긴 어렵다."
+            echo "- 즉시 정지: automation/AUTOARM_DISABLED 파일을 main 에 두면 사다리가 멈춘다."
           } > /tmp/pr_body.md
           pr_url="$(gh pr create --base main --head "${BRANCH}" \
-            --title "feat(049): 자동 무장 — 글로벌 분산 추세 앙상블 EDGE_CONFIRMED (라이브 캐너리)" \
+            --title "feat(050): 자본 사다리 ${ACTION} — 단 ${cur}→${tgt} (\$${cap})" \
             --body-file /tmp/pr_body.md)"
           echo "pr_url=${pr_url}" >> "$GITHUB_OUTPUT"
           echo "PR: ${pr_url}"
-          # best-effort 자동 머지(운영자 지시 자율 채널). 브랜치 보호로 막히면 PR 을 ready 로 남긴다.
+          # best-effort 자동 머지(운영자 위임 자율 채널). 막히면 PR 을 ready 로 남긴다.
           if gh pr merge "${pr_url}" --merge --delete-branch 2>/tmp/merge.err; then
             echo "merged=merged" >> "$GITHUB_OUTPUT"
           elif gh pr merge "${pr_url}" --auto --merge 2>>/tmp/merge.err; then
             echo "merged=auto-merge-enabled" >> "$GITHUB_OUTPUT"
           else
             echo "merged=ready-for-session-or-operator" >> "$GITHUB_OUTPUT"
-            echo "직접 머지 불가(브랜치 보호 등) — PR 을 ready 로 남김. 세션/운영자가 자율 채널로 머지."
+            echo "직접 머지 불가(브랜치 보호 등) — PR 을 ready 로 남김."
             cat /tmp/merge.err || true
           fi
 
@@ -173,22 +211,26 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ACTION: ${{ steps.decide.outputs.action }}
+          CHANGED: ${{ steps.decide.outputs.changed }}
           PR_URL: ${{ steps.pr.outputs.pr_url }}
           MERGED: ${{ steps.pr.outputs.merged }}
         run: |
           set -uo pipefail
           BRANCH=automation/edge-autoarm-last-run
           reason="$(jq -r '.reason // "(no decision)"' /tmp/decision.json 2>/dev/null || echo '(no decision)')"
-          verdict_label="$(jq -r '.verdict // "?"' /tmp/decision.json 2>/dev/null || echo '?')"
+          cur="$(jq -r '.current_rung // "?"' /tmp/decision.json 2>/dev/null || echo '?')"
+          tgt="$(jq -r '.target_rung // "?"' /tmp/decision.json 2>/dev/null || echo '?')"
+          cap="$(jq -r '.target_capital_usd // "?"' /tmp/decision.json 2>/dev/null || echo '?')"
+          nav="$(jq -r '.account_nav_usd // "?"' /tmp/decision.json 2>/dev/null || echo '?')"
           tmpdir=$(mktemp -d); cd "${tmpdir}"; git init -q
-          git config user.name "edge-autoarm-bot"
-          git config user.email "edge-autoarm-bot@noreply.github.com"
+          git config user.name "capital-ladder-bot"
+          git config user.email "capital-ladder-bot@noreply.github.com"
           {
-            echo "# forward 엣지 자동 무장 게이트 — 최신 실행 (스펙 049)"
+            echo "# 자본 사다리 게이트 — 최신 실행 (스펙 050; 스펙 049 승계)"
             echo ""
-            echo "운영자 지시 'forward 검증 후 자동 무장'(2026-06-10)의 자동화. 검증된 글로벌 분산"
-            echo "추세 앙상블(ARM E)이 EDGE_CONFIRMED 면 라이브 캐너리 무장 센티넬을 armed:true 로"
-            echo "뒤집는 PR 을 연다. 판정 계산은 read-only — 서버 상태 무변경, 주문 0건."
+            echo "운영자 위임(2026-06-11) 헌법 X.4 v5.0.0. 단0=0% → 단1=25% → 단2=50% → 단3=100%"
+            echo "(실계좌 NAV 대비). 내려가는 건 낙폭 하나로 즉시, 올라가는 건 세 증거 전부."
+            echo "판정 계산은 read-only — 서버 상태 무변경, 주문 0건."
             echo ""
             echo "| 항목 | 값 |"
             echo "|------|-----|"
@@ -197,18 +239,23 @@ jobs:
             echo "| timestamp_utc | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
             echo "| trigger | ${GITHUB_EVENT_NAME} |"
             echo "| **결정(action)** | **${ACTION:-?}** |"
-            echo "| 판정(verdict) | ${verdict_label} |"
-            echo "| PR | ${PR_URL:-(없음 — ARM 아님)} |"
+            echo "| 단(rung) | ${cur} → ${tgt} |"
+            echo "| 자본 | \$${cap} (실계좌 NAV \$${nav}) |"
+            echo "| 센티넬 변경 | ${CHANGED:-false} |"
+            echo "| PR | ${PR_URL:-(없음 — 변경 없음)} |"
             echo "| 머지 | ${MERGED:-n/a} |"
             echo ""
             echo "## 의미"
             echo ""
             case "${ACTION:-}" in
-              ARM) echo "🟢 **EDGE_CONFIRMED → 자동 무장 PR 생성.** 무장 머지는 미리보기만 — 첫 실주문은 다음 미국 정규장. 사이드카 automation/rebalance-live-canary-last-run 로 검토하고 필요시 disarm." ;;
-              WAIT) echo "⏳ **무장 보류.** 아직 EDGE_CONFIRMED 아님(관측 더 쌓여야 함, 정상). 돈 0 이동." ;;
-              BLOCKED) echo "🛑 **무장 차단(안전).** 검증=무장 정합성 불일치 또는 자본 위반 — 검증 안 한 전략은 무장 안 함. 설정 점검 필요." ;;
-              ALREADY_ARMED) echo "✅ **이미 무장됨**(멱등 no-op)." ;;
-              DISABLED) echo "⛔ **킬스위치(AUTOARM_DISABLED) 활성** — 게이트 정지." ;;
+              PROMOTE) echo "🟢 **승격** — 증거 충족, 단 ${cur}→${tgt}. 실주문은 다음 시장시간 스케줄부터 새 자본으로." ;;
+              STAY) echo "⏳ **유지** — 승격 증거 미충족·강등 사유 없음(정상)." ;;
+              DEMOTE) echo "🟠 **강등** — 낙폭 ≥ 예산/2. 단 ${cur}→${tgt}. 자본 즉시 축소." ;;
+              HALT) echo "🔴 **정지** — 낙폭 ≥ 예산. 무장 해제(단 0). 재진입은 forward 재검증부터." ;;
+              RESIZE) echo "🔄 **재사이징** — 계좌 NAV 드리프트(입금/성장) 반영, 단 유지." ;;
+              WAIT_EDGE) echo "⏳ **배치 보류** — 아직 forward EDGE_CONFIRMED 아님(더 쌓여야 함, 정상). 돈 0 이동." ;;
+              BLOCKED) echo "🛑 **차단(안전)** — 정합성 불일치 또는 계좌 NAV 조회 불능. 상태 무변경. 점검 필요." ;;
+              DISABLED) echo "⛔ **킬스위치(AUTOARM_DISABLED) 활성** — 사다리 정지." ;;
               *) echo "⚠ 결정 불명 — 아래 사유/로그 확인." ;;
             esac
             echo ""
@@ -223,9 +270,14 @@ jobs:
             echo '```json'
             cat /tmp/verdict_global.json 2>/dev/null || echo '{}'
             echo '```'
+            echo ""
+            echo "## 라이브 실적 JSON (현재 단 진입 이후, read-only)"
+            echo '```json'
+            cat /tmp/live_growth.json 2>/dev/null || echo '{}'
+            echo '```'
           } > LAST_RUN.md
           git checkout --orphan publish
           git add LAST_RUN.md
-          git commit -q -m "edge-autoarm run ${GITHUB_RUN_ID} (${ACTION:-unknown})"
+          git commit -q -m "capital-ladder run ${GITHUB_RUN_ID} (${ACTION:-unknown})"
           git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "publish:${BRANCH}"
           echo "Published to ${BRANCH}."

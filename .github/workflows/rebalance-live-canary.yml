@@ -6,8 +6,9 @@ name: Live canary portfolio rebalance (guarded, real money)
 #   1. 기본은 **드라이런 미리보기**(rebalance-once --dry-run, 주문 0건) — "실거래로 무엇을
 #      살지"만 보여준다. 실주문은 센티넬 automation/rebalance-live.request 의 armed: true
 #      일 때만 나간다.
-#   2. **자본 상한 $1,000**: canary-live-portfolio.toml 의 캡은 소액($500)에 맞춰 큼(%)이라,
-#      capital_usd > 1000 이면 무장을 거부한다(footgun 차단). 큰 자본은 캡을 먼저 낮춰야 한다.
+#   2. **자본 권위 가드(스펙 050)**: 자본은 자본 사다리(증거 게이트 공식, 헌법 X.4 v5.0.0)가
+#      기록한 실계좌 NAV 이하여야 한다 — 위임 상한은 계좌 잔고(운영자 2026-06-11). 사다리
+#      필드가 없는 레거시/수동 센티넬은 종전 소액 가드($1,000)가 그대로 적용된다.
 #   3. `--mode live` 는 `--confirm-live` 인터록 필요(CLI 가 강제). K1 캡이 천장. 스펙 014
 #      손실 서킷 브레이커(halt_gate)가 일손실·총낙폭 한도 초과 시 주문 거부(킬스위치).
 #   4. 추세 필터(스펙 036)가 추세 아래면 현금으로 빠진다(드로다운 방어).
@@ -47,7 +48,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Read arming sentinel (armed flag + capital, with $1,000 hard cap)
+      - name: Read arming sentinel (armed flag + capital, ladder-authority guard)
         id: gate
         run: |
           set -uo pipefail
@@ -59,18 +60,30 @@ jobs:
             [[ -n "$a" ]] && armed="$a"
             [[ -n "$c" ]] && capital="$c"
           fi
-          # footgun 차단: 이 설정의 캡은 소액에 맞춰 큼 → 자본 $1,000 초과 무장 거부.
-          if (( $(printf '%.0f' "$capital") > 1000 )); then
-            echo "❌ capital_usd=$capital > 1000 — 이 소액 캐너리 설정의 캡(95%)은 큰 자본에 위험. 거부." >&2
-            echo "armed=false" >> "$GITHUB_OUTPUT"
-            echo "capital=$capital" >> "$GITHUB_OUTPUT"
-            echo "blocked=true" >> "$GITHUB_OUTPUT"
-            exit 0
+          # 자본 권위 가드 (스펙 050):
+          #   - 사다리 센티넬(ladder_rung + account_nav_usd 보유): 자본은 사다리가 기록한
+          #     실계좌 NAV 이하 — 위임 상한은 계좌 잔고(운영자 2026-06-11). CI 회귀
+          #     (test_live_arming_sentinel)가 자본 = 단 공식까지 검증한다.
+          #   - 레거시/수동 센티넬(사다리 필드 없음): 종전 소액 가드($1,000) 유지 —
+          #     손 편집으로는 소액 이상을 무장할 수 없다.
+          rung="$(grep -E '^ladder_rung:' "$REQ" 2>/dev/null | head -1 | awk '{print $2}' || true)"
+          nav="$(grep -E '^account_nav_usd:' "$REQ" 2>/dev/null | head -1 | awk '{print $2}' || true)"
+          blocked=false
+          if [[ -n "$rung" && -n "$nav" ]]; then
+            if (( $(printf '%.0f' "$capital") > $(printf '%.0f' "$nav") )); then
+              echo "❌ capital_usd=$capital > account_nav_usd=$nav — 사다리 기록 실계좌 NAV 초과. 거부." >&2
+              armed=false; blocked=true
+            fi
+          else
+            if (( $(printf '%.0f' "$capital") > 1000 )); then
+              echo "❌ capital_usd=$capital > 1000 — 사다리 필드 없는 수동 센티넬은 소액만. 거부." >&2
+              armed=false; blocked=true
+            fi
           fi
           echo "armed=$armed" >> "$GITHUB_OUTPUT"
           echo "capital=$capital" >> "$GITHUB_OUTPUT"
-          echo "blocked=false" >> "$GITHUB_OUTPUT"
-          echo "armed=$armed capital=$capital"
+          echo "blocked=$blocked" >> "$GITHUB_OUTPUT"
+          echo "armed=$armed capital=$capital blocked=$blocked (rung=${rung:-none} nav=${nav:-none})"
 
       - name: Install SSH key
         if: steps.gate.outputs.blocked != 'true'
