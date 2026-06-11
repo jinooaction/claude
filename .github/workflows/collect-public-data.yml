@@ -1,0 +1,140 @@
+name: Collect public data (research)
+
+# 공개 데이터 수집 채널 (세계 최고 수준 4단계 계획 ④ — 연구 전용).
+#
+# 운영자 승인(2026-06-11): Stooq(일봉 OHLCV) + FRED(거시 CSV) 두 소스.
+# 컨테이너는 GitHub 만 닿지만 이 실행기는 인터넷 전체에 닿으므로, 여기서
+# 수집·검증해 automation/public-data 사이드카 브랜치로 발행한다 — 이후의
+# 연구 세션(컨테이너)은 git 으로 깊은 이력에 닿는다(데이터 천장 자율 해제).
+#
+# 격리 원칙 (데이터 신뢰 경계):
+#   * 라이브 매매 신호는 계속 KIS 데이터(price_bars)만 — 이 채널의 산출물은
+#     연구·백테스트·검증 전용이며 라이브 DB/서버에 절대 쓰지 않는다.
+#   * 시크릿 0개, SSH 0회, 주문 0건 — 돈 경로 완전 무접촉.
+#   * 검증(행 수·OHLC 정합·연속성·신선도·이상치)을 통과한 항목만 발행하고,
+#     두 소스 교차 검증(SPY vs FRED SP500 일일 수익률)으로 단일 소스 오염을
+#     잡는다. 전부는 summary.json 에 기록.
+#
+# 읽기: git fetch origin automation/public-data &&
+#       git show origin/automation/public-data:LAST_RUN.md
+#       git show origin/automation/public-data:stooq/SPY.csv
+
+on:
+  schedule:
+    # 화–토 01:30 UTC — 직전 미국 정규장 마감(20:00/21:00 UTC) 이후 EOD 확정분.
+    - cron: "30 1 * * 2-6"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    # 채널 자체가 바뀐 머지에서 즉시 실전 검증(같은 날 검증 패턴).
+    paths:
+      - 'src/auto_invest/market_data/public_data.py'
+      - 'deploy/public-data.toml'
+      - '.github/workflows/collect-public-data.yml'
+
+permissions:
+  contents: write  # 사이드카 브랜치 force-push 용 (automation/public-data).
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Collect + validate (Stooq + FRED)
+        id: collect
+        run: |
+          set -uo pipefail
+          uv run auto-invest collect-public-data \
+              --config deploy/public-data.toml \
+              --out-dir /tmp/public-data \
+              --json > /tmp/collect_summary.json
+          collect_exit=$?
+          echo "collect_exit=${collect_exit}" >> "$GITHUB_OUTPUT"
+          if [[ -f /tmp/public-data/summary.json ]]; then
+              echo "--- summary ---"
+              cat /tmp/public-data/summary.json
+              overall_ok=$(uv run python -c "import json;print(json.load(open('/tmp/public-data/summary.json'))['overall_ok'])")
+              published=$(uv run python -c "import json;print(json.load(open('/tmp/public-data/summary.json'))['published'])")
+          else
+              overall_ok=False
+              published=0
+          fi
+          echo "overall_ok=${overall_ok}" >> "$GITHUB_OUTPUT"
+          echo "published=${published}" >> "$GITHUB_OUTPUT"
+          # 전 항목 실패(exit 1)만 빨간 X — 일부 항목 실패는 fail-soft 로
+          # LAST_RUN.md 에 드러난다(ARM F 슬리브별 현금 폴백과 같은 원칙).
+          exit "${collect_exit}"
+
+      - name: Publish data + diagnostic to sidecar branch
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COLLECT_EXIT: ${{ steps.collect.outputs.collect_exit }}
+          OVERALL_OK: ${{ steps.collect.outputs.overall_ok }}
+          PUBLISHED: ${{ steps.collect.outputs.published }}
+        run: |
+          set -uo pipefail
+          BRANCH=automation/public-data
+
+          tmpdir=$(mktemp -d)
+          # 검증 통과분만 /tmp/public-data 에 존재 — 그대로 사이드카에 싣는다.
+          if [[ -d /tmp/public-data ]]; then
+              cp -r /tmp/public-data/. "${tmpdir}/"
+          fi
+          cd "${tmpdir}"
+
+          {
+              echo "# 공개 데이터 수집 채널 — 최신 실행 (계획 ④, 연구 전용)"
+              echo ""
+              echo "라이브 매매 신호는 계속 KIS 데이터만 사용 — 이 브랜치의 데이터는"
+              echo "연구·백테스트·검증 전용이다. 검증 통과분만 발행되며, 전 항목의"
+              echo "합격/불합격은 summary.json 에 있다."
+              echo ""
+              echo "| 항목 | 값 |"
+              echo "|------|-----|"
+              echo "| run_id | ${GITHUB_RUN_ID} |"
+              echo "| run_url | https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} |"
+              echo "| commit | ${GITHUB_SHA} |"
+              echo "| trigger | ${GITHUB_EVENT_NAME} |"
+              echo "| timestamp_utc | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
+              echo "| collect_exit | ${COLLECT_EXIT:-(unset)} |"
+              echo "| overall_ok | ${OVERALL_OK:-(unset)} |"
+              echo "| published (발행 항목 수) | ${PUBLISHED:-0} |"
+              echo ""
+              echo "## summary.json"
+              echo ""
+              echo '```json'
+              if [[ -f summary.json ]]; then
+                  cat summary.json
+              else
+                  echo "(summary.json 없음 — collect 스텝 진입 실패)"
+              fi
+              echo '```'
+              echo ""
+              echo "## 읽는 법"
+              echo ""
+              echo '```bash'
+              echo "git fetch origin ${BRANCH}"
+              echo "git show origin/${BRANCH}:stooq/SPY.csv   # 일봉 (date,open,high,low,close,volume)"
+              echo "git show origin/${BRANCH}:fred/DGS10.csv  # 거시 (date,value)"
+              echo "git show origin/${BRANCH}:summary.json    # 검증 보고"
+              echo '```'
+          } > LAST_RUN.md
+
+          git init -q
+          git config user.name "public-data-bot"
+          git config user.email "public-data-bot@noreply.github.com"
+          git checkout -q --orphan publish
+          git add -A
+          git commit -q -m "public-data run ${GITHUB_RUN_ID} @ ${GITHUB_SHA:0:7}"
+
+          # force-push: 사이드카는 항상 단일 커밋 스냅샷 (히스토리 누적 방지).
+          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "publish:${BRANCH}"
+
+          echo "Published to branch ${BRANCH}."

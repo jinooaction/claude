@@ -1,0 +1,43 @@
+# 공개 데이터 수집 채널 설정 (4단계 계획 ④ — 연구 전용)
+#
+# 운영자 승인(2026-06-11): Stooq + FRED 둘 다.
+# 격리 원칙: 이 채널의 산출물은 연구·백테스트·검증 전용 — 라이브 매매 신호는
+# 계속 KIS 데이터(price_bars)만 사용한다. 수집은 collect-public-data.yml 이
+# GitHub Actions 실행기에서 돌리고 automation/public-data 사이드카로 발행한다.
+
+[stooq]
+# ARM F(유니버스 확대 forward 트랙)의 11개 비상관 슬리브와 동일 — 연구 데이터가
+# 검증 트랙과 같은 우주를 보게 한다(검증=연구 정합). Stooq 는 SPY 1993년~ 등
+# KIS 페이지네이션(약 1000봉)보다 훨씬 깊은 이력을 준다.
+symbols = [
+    "SPY", "QQQ", "EFA", "EEM",   # 주식 (미국 대형·기술·선진국·신흥국)
+    "IEF", "TLT", "LQD",          # 채권 (중기·장기 국채, 투자등급 회사채)
+    "GLD", "DBC", "VNQ",          # 실물 (금, 원자재, 부동산)
+    "UUP",                        # 통화 (달러)
+]
+min_rows = 250            # 최소 1년치 — 이보다 얕으면 연구 가치 없음 → 미발행
+max_staleness_days = 7    # 마지막 봉이 7일 이상 묵으면 피드 죽은 것 → 미발행
+
+[fred]
+# 거시 지표 — 레짐 분석(금리·물가·고용·변동성)용. SP500 은 교차 검증 짝.
+series = [
+    "SP500",     # S&P 500 지수 (Stooq SPY 와 교차 검증 짝)
+    "DGS10",     # 미국 10년 국채 금리
+    "DGS2",      # 미국 2년 국채 금리
+    "T10Y2Y",    # 10년-2년 금리차 (경기침체 선행 지표)
+    "CPIAUCSL",  # 소비자물가지수 (월간)
+    "UNRATE",    # 실업률 (월간)
+    "VIXCLS",    # VIX 변동성 지수
+]
+min_rows = 24
+max_staleness_days = 70   # 월간 시리즈(CPI 등)는 발표가 ~45일 늦음 — 느슨하게
+
+[cross_check]
+# 두 소스 일일 수익률 대조 — 단일 소스의 조용한 데이터 변질을 잡는 게이트.
+# 수준이 아니라 수익률 비교(소스별 배당/분할 조정 차이에 면역). SPY 배당락일
+# 등 정당한 어긋남은 합격선 95% 가 흡수한다.
+stooq_symbol = "SPY"
+fred_series = "SP500"
+tolerance_pct = "0.5"     # 일일 수익률 차이 허용 ±0.5%p
+min_overlap_returns = 60
+min_agree_pct = "95"

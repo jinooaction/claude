@@ -2839,6 +2839,60 @@ def backfill_bars_cmd(
         )
 
 
+@app.command("collect-public-data")
+def collect_public_data_cmd(
+    config: Path = typer.Option(
+        Path("deploy/public-data.toml"),
+        "--config",
+        help="수집 대상(stooq 심볼·fred 시리즈·교차 검증 짝) TOML.",
+    ),
+    out_dir: Path = typer.Option(
+        Path("public-data"),
+        "--out-dir",
+        help="검증 통과분 CSV + summary.json 발행 디렉터리.",
+    ),
+    as_json: bool = typer.Option(False, "--json", help="요약 JSON 만 출력."),
+) -> None:
+    """공개 소스(Stooq 일봉·FRED 거시) 수집 → 검증 → 통과분만 발행 (계획 ④).
+
+    연구 전용 채널 — 라이브 매매 신호는 계속 KIS 데이터만 쓴다. 주문 0건,
+    라이브 DB 무접촉. 항목 단위 fail-soft: 한 심볼의 실패는 그 심볼만 미발행.
+    전 항목 실패(네트워크 전체 차단 등)일 때만 exit 1.
+    """
+    import json as _json
+    import tomllib
+    from datetime import date as _date
+
+    from auto_invest.market_data.public_data import collect_public_data
+
+    try:
+        cfg = tomllib.loads(config.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError) as exc:
+        typer.echo(f"config error: {exc}", err=True)
+        _exit(2)
+        return
+
+    with httpx.Client(timeout=30.0, follow_redirects=True) as client:
+        summary = collect_public_data(client, cfg, out_dir=out_dir, as_of=_date.today())
+
+    if as_json:
+        typer.echo(_json.dumps(summary, ensure_ascii=False))
+    else:
+        typer.echo(
+            f"public data collect: published={summary['published']}/"
+            f"{summary['total_items']} overall_ok={summary['overall_ok']}"
+        )
+        for item in summary["items"]:
+            mark = "✓" if item.get("ok") else "✗"
+            detail = item.get("published") or "; ".join(item.get("issues", []))[:120]
+            typer.echo(f"  {mark} {item['kind']}:{item['id']:10} {detail}")
+        cross = summary.get("cross_check")
+        if cross:
+            typer.echo(f"  교차 검증: {cross['status']} — {cross.get('detail', '')}")
+    if summary["published"] == 0:
+        _exit(1)
+
+
 @app.command("signal-ic")
 def signal_ic_cmd(
     portfolio: Path = typer.Option(
