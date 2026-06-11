@@ -812,6 +812,10 @@ class PortfolioNavSnapshotPayload(AuditPayload):
     holdings_count: int = 0
     total_qty_drift: int = 0
     total_value_drift_usd: str = "0"
+    # 측정 기준 자본(페이퍼 트랙의 cash = capital + 순현금흐름 베이시스). None 이면
+    # 현금 미포함 레거시 측정 — forward 판정은 같은 베이시스의 최신 연속 구간만 쓴다
+    # (자금 흐름이 수익률로 오인되는 오염 방지). 추가-전용 필드(헌법 IV 불변).
+    capital_basis_usd: str | None = None
 
 
 class EffectiveCapitalUpdatedPayload(AuditPayload):

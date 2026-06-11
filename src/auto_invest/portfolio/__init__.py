@@ -15,6 +15,7 @@ from auto_invest.portfolio.growth import (
     GrowthReport,
     NavPoint,
     compute_growth,
+    consistent_basis_suffix,
     read_nav_points,
 )
 from auto_invest.portfolio.nav import (
@@ -41,6 +42,7 @@ __all__ = [
     "NavSnapshot",
     "compute_growth",
     "compute_nav",
+    "consistent_basis_suffix",
     "daily_returns_from_curve",
     "effective_capital",
     "equal_weight_buy_hold_curve",

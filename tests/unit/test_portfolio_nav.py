@@ -191,6 +191,42 @@ def test_sc08_ledger_fallback_when_no_broker():
     assert snap.total_qty_drift == 0
 
 
+def test_ledger_cash_included_in_nav():
+    """장부 폴백 + ledger_cash_usd → NAV = 현금 + 평가 (자금 흐름 불변 측정의 핵심).
+
+    페이퍼 트랙: 자본 $12,000 에서 SPY $2,176 매수 → 현금 $9,824 + 평가 $2,176 =
+    NAV $12,000. 현금 없이는 NAV 가 $2,176 로 찍혀 매수 자체가 가짜 수익률이 된다.
+    """
+    snap = compute_nav(
+        broker_cash_usd=None,
+        broker_positions=None,
+        broker_reported_total_value_usd=None,
+        ledger_positions={"SPY": _ledger("SPY", 3, "725.43")},
+        marks={"SPY": Decimal("725.43")},
+        ledger_cash_usd=Decimal("9823.71"),
+    )
+    assert snap.source == SOURCE_LEDGER  # 출처는 여전히 장부(브로커 권위 아님)
+    assert snap.cash_usd == Decimal("9823.71")
+    assert snap.total_nav_usd == Decimal("9823.71") + Decimal("725.43") * 3
+    # 비중은 현금 포함 NAV 기준으로 계산된다.
+    assert snap.holdings[0].weight_pct is not None
+    assert snap.holdings[0].weight_pct < Decimal("20")
+
+
+def test_broker_cash_takes_precedence_over_ledger_cash():
+    """브로커 현금이 있으면(권위 출처) ledger_cash_usd 는 무시된다."""
+    snap = compute_nav(
+        broker_cash_usd=Decimal("1000"),
+        broker_positions=[_broker("AAPL", 1, "100")],
+        broker_reported_total_value_usd=None,
+        ledger_positions={},
+        marks={"AAPL": Decimal("100")},
+        ledger_cash_usd=Decimal("99999"),
+    )
+    assert snap.source == SOURCE_BROKER
+    assert snap.cash_usd == Decimal("1000")
+
+
 # --------------------------------------------------------------- 부가: 데이터 품질 경고
 
 
@@ -265,6 +301,7 @@ def test_sc06_audit_snapshot_roundtrip():
             holdings_count=1,
             total_qty_drift=2,
             total_value_drift_usd="200",
+            capital_basis_usd="12000",
         ),
     )
     rows = audit.read_all(conn)
@@ -275,6 +312,7 @@ def test_sc06_audit_snapshot_roundtrip():
     assert payload["total_nav_usd"] == "2200"
     assert payload["source"] == "broker"
     assert payload["total_qty_drift"] == 2
+    assert payload["capital_basis_usd"] == "12000"
 
 
 def test_portfolio_nav_payload_in_any_union():

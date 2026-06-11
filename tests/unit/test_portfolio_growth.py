@@ -10,13 +10,14 @@ from auto_invest.persistence.audit import PortfolioNavSnapshotPayload
 from auto_invest.portfolio.growth import (
     NavPoint,
     compute_growth,
+    consistent_basis_suffix,
     read_nav_points,
     render_text,
 )
 
 
-def _pt(at: str, nav: str) -> NavPoint:
-    return NavPoint(at_utc=at, nav_usd=Decimal(nav))
+def _pt(at: str, nav: str, basis: str | None = None) -> NavPoint:
+    return NavPoint(at_utc=at, nav_usd=Decimal(nav), capital_basis_usd=basis)
 
 
 # --------------------------------------------------------------- SC-17 총수익률
@@ -132,13 +133,21 @@ def test_nonpositive_nav_degrades_drawdown():
 # --------------------------------------------------------------- read_nav_points
 
 
-def _seed_snapshot(conn: sqlite3.Connection, *, mode: str, nav: str, at: str) -> None:
+def _seed_snapshot(
+    conn: sqlite3.Connection,
+    *,
+    mode: str,
+    nav: str,
+    at: str,
+    basis: str | None = None,
+) -> None:
     audit.append(
         conn,
         PortfolioNavSnapshotPayload(
             mode=mode, schema_version="1.0", source="broker", computed_at_utc=at,
             cash_usd="0", total_market_value_usd=nav, total_nav_usd=nav,
             total_unrealized_pnl_usd="0", holdings_count=1,
+            capital_basis_usd=basis,
         ),
     )
 
@@ -169,6 +178,64 @@ def test_read_nav_points_end_to_end_growth():
     assert r.current_nav_usd == Decimal("12000")
     assert r.total_return_pct is not None
     assert Decimal("19.9") < r.total_return_pct < Decimal("20.1")
+
+
+def test_read_nav_points_parses_capital_basis():
+    """capital_basis_usd 가 페이로드에 있으면 점에 실리고, 없으면(레거시) None."""
+    conn = db.get_connection(":memory:")
+    db.migrate(conn)
+    _seed_snapshot(conn, mode="paper", nav="2176", at="2026-01-01T00:00:00.000Z")
+    _seed_snapshot(
+        conn, mode="paper", nav="12000", at="2026-01-02T00:00:00.000Z", basis="12000"
+    )
+    pts = read_nav_points(conn, mode="paper")
+    assert pts[0].capital_basis_usd is None
+    assert pts[1].capital_basis_usd == "12000"
+
+
+# --------------------------------------------------- consistent_basis_suffix
+
+
+def test_basis_suffix_empty_and_legacy_unchanged():
+    """빈 목록·마지막 점이 레거시(베이시스 없음)면 그대로 — 과거 동작 보존."""
+    assert consistent_basis_suffix([]) == []
+    legacy = [_pt("2026-01-01T00:00:00.000Z", "100"), _pt("2026-01-02T00:00:00.000Z", "110")]
+    assert consistent_basis_suffix(legacy) == legacy
+
+
+def test_basis_suffix_excludes_legacy_prefix():
+    """레거시(현금 미포함) 구간 뒤에 자본 베이시스 구간이 시작되면 꼬리만 남는다.
+
+    실제 사고 사례: GLOBAL-TREND 트랙 — NAV 0(halt 시절) → $2,176(포지션만) →
+    $12,000(자본 포함). 앞 두 점을 섞으면 +451% 가짜 수익이 샤프를 오염시킨다.
+    """
+    pts = [
+        _pt("2026-01-01T00:00:00.000Z", "0"),
+        _pt("2026-01-02T00:00:00.000Z", "2176"),
+        _pt("2026-01-03T00:00:00.000Z", "12000", basis="12000"),
+        _pt("2026-01-04T00:00:00.000Z", "12100", basis="12000"),
+    ]
+    out = consistent_basis_suffix(pts)
+    assert [p.nav_usd for p in out] == [Decimal("12000"), Decimal("12100")]
+
+
+def test_basis_suffix_restarts_on_capital_change():
+    """운영자가 트랙 자본을 바꾸면(베이시스 변경) 그 시점부터만 — 자금 흐름 점프 배제."""
+    pts = [
+        _pt("2026-01-01T00:00:00.000Z", "12000", basis="12000"),
+        _pt("2026-01-02T00:00:00.000Z", "24100", basis="24000"),
+        _pt("2026-01-03T00:00:00.000Z", "24200", basis="24000"),
+    ]
+    out = consistent_basis_suffix(pts)
+    assert [p.nav_usd for p in out] == [Decimal("24100"), Decimal("24200")]
+
+
+def test_basis_suffix_all_same_basis_keeps_all():
+    pts = [
+        _pt("2026-01-01T00:00:00.000Z", "12000", basis="12000"),
+        _pt("2026-01-02T00:00:00.000Z", "12050", basis="12000"),
+    ]
+    assert consistent_basis_suffix(pts) == pts
 
 
 def test_render_text_smoke():
