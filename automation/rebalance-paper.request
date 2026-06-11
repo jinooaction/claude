@@ -33,3 +33,7 @@ run: 2026-06-06 — 배포 복구(PR #213, main be112e0) 후 재발화. 2026-06-
   더티 작업트리로 멈춰 ARM C(위험관리 베타)·D(멀티에셋 추세) 설정 파일이 서버에 없어
   'portfolio file not found' 로 전멸했었다. 서버 복구됐으니 검증된 두 전략이 드디어 NAV 트랙을
   쌓기 시작하는지(prep ssh_exit 0, verdict JSON 채워짐) 즉시 확인. PAPER 전용·돈 0 이동.
+run: 2026-06-11 — halt 깃발 격리(PR #238, main bc5db56) 후 재발화. 다섯 페이퍼 트랙이
+  라이브 킬스위치(data/halt.flag)를 공유해 묵은 깃발에 전 트랙 주문이 REJECTED_BY_GATE
+  → NAV 영원히 0 이던 병목을 트랙별 전용 깃발로 격리. 이번 런에서 ① halt 거부 소멸
+  ② GLOBAL-TREND NAV 비0 ③ 🚦 진단 섹션에 라이브 깃발 사유 보고를 확인. PAPER 전용·돈 0 이동.
