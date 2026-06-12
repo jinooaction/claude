@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -87,20 +87,28 @@ def _compute_diff(
     *,
     broker_cash_usd: Decimal,
     cash_tolerance_usd: Decimal,
+    external_holdings: Mapping[str, int] | None = None,
 ) -> dict[str, Any] | None:
     """Return a structured diff payload, or None when everything matches."""
     local_by_symbol = {p.symbol: p for p in local}
     broker_by_symbol = {p.symbol: p for p in broker}
+    # 시스템 비관리 외부 보유 기준선 (deploy/external-holdings.toml) — 운영자가
+    # 시스템 밖에서 취득해 원장(fills)에 영원히 없는 보유. 예상 계좌 수량 =
+    # 원장 + 기준선. 기준선 수량과 다르면(운영자 매도 포함) 여전히 MISMATCH →
+    # halt — 시스템 모델 밖의 계좌 활동은 멈추고 드러낸다(fail-safe 유지).
+    external = dict(external_holdings or {})
 
     position_diffs: list[dict[str, Any]] = []
-    for symbol in sorted(set(local_by_symbol) | set(broker_by_symbol)):
+    for symbol in sorted(set(local_by_symbol) | set(broker_by_symbol) | set(external)):
         local_qty = local_by_symbol[symbol].qty if symbol in local_by_symbol else 0
         broker_qty = broker_by_symbol[symbol].qty if symbol in broker_by_symbol else 0
-        if local_qty != broker_qty:
+        external_qty = external.get(symbol, 0)
+        if local_qty + external_qty != broker_qty:
             position_diffs.append(
                 {
                     "symbol": symbol,
                     "local_qty": local_qty,
+                    "external_qty": external_qty,
                     "broker_qty": broker_qty,
                 }
             )
@@ -130,6 +138,7 @@ async def run_reconciliation(
     halt_path: Path,
     markets: Sequence[str] = US_ORDER_EXCHANGES,
     cash_tolerance_usd: Decimal = Decimal("1.00"),
+    external_holdings: Mapping[str, int] | None = None,
 ) -> ReconciliationOutcome:
     # 브로커 보유·잔고는 모든 미국 거래소(NASD·NYSE·AMEX)를 훑어 합쳐 조회한다 — 멀티에셋
     # 유니버스(SPY·GLD=AMEX, IEF=NASD)에서 다른 거래소 종목이 단일 거래소 조회에서 빠지면
@@ -184,6 +193,7 @@ async def run_reconciliation(
         list(broker_positions),
         broker_cash_usd=broker_balance.cash_usd,
         cash_tolerance_usd=cash_tolerance_usd,
+        external_holdings=external_holdings,
     )
     finished_at = _utcnow_iso_ms()
 
