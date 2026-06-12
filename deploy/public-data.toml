@@ -49,12 +49,12 @@ long = "10 Yr"
 short = "2 Yr"
 
 [cboe]
-# Cboe VIX 공식 일봉 이력 (1990년~, 단일 CSV, 거래량 없음 → 0).
-# VIX 는 하루 +115%(2018-02-05)도 정상 — 가격용 일일 변동 한도와 분리.
+# Cboe VIX 공식 이력 (1990년~, 단일 CSV) — 종가 시계열로 발행.
+# 첫 실측(2026-06-12): 1990년대 초 원본에 OHLC 정합 깨진 행 존재(원본 특성).
+# 연구가 쓰는 건 종가뿐이라 종가만 발행한다.
 vix = true
 min_rows = 1000
 max_staleness_days = 7
-max_day_move_pct = "150"
 
 [bls]
 # BLS 공공 API v1 — 키 불필요, 대신 최근 약 3년만 준다(정직한 한계).
@@ -69,11 +69,14 @@ max_staleness_days = 70   # 월간 발표는 ~45일 늦음 — 느슨하게
 [dbnomics]
 # DBnomics 공개 집계 API — 공식 통계 미러. CPI 를 BLS 직접 수집과 대조해
 # 전송 경로의 조용한 변질(절단·인코딩·단위 오류)을 잡는 교차 검증 짝.
+# 첫 실측(2026-06-12): 이 미러는 마지막 관측이 2025-01 로 ~17개월 지연.
+# 미러의 역할은 신선도가 아니라 **겹치는 과거 구간의 일치** — 신선도 한도를
+# 분리해 느슨하게 둔다(최신 데이터는 BLS 직접 수집이 담당).
 series = [
     "BLS/cu/CUUR0000SA0",   # CPI-U 미러 (bls:CUUR0000SA0 의 짝)
 ]
 min_rows = 12
-max_staleness_days = 70
+max_staleness_days = 700
 
 [[cross_checks]]
 # 같은 통계의 원본(BLS 직접) vs 미러(DBnomics) 수준 대조 — 같은 값이어야

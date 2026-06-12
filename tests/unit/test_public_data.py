@@ -506,6 +506,7 @@ def test_parse_bls_v1_json_skips_annual_and_sorts() -> None:
                         {"year": "2026", "period": "M05", "value": "4.1"},
                         {"year": "2026", "period": "M13", "value": "9.9"},  # 연간 집계
                         {"year": "2026", "period": "M04", "value": "4.2"},
+                        {"year": "2025", "period": "M10", "value": "-"},  # 미발표 결측
                     ]
                 }
             ]
@@ -513,6 +514,7 @@ def test_parse_bls_v1_json_skips_annual_and_sorts() -> None:
     }
     points = parse_bls_v1_json(json.dumps(payload))
     assert [(p.date, p.value) for p in points] == [
+        ("2025-10-01", None),  # "-" 는 결측 보존 (2025-10 정부 셧다운 실측)
         ("2026-04-01", Decimal("4.2")),
         ("2026-05-01", Decimal("4.1")),
     ]
@@ -646,7 +648,9 @@ def test_collect_official_sources_happy_path(tmp_path: Path) -> None:
     assert summary["cross_checks"][0]["status"] == "PASS"
     spread = (out_dir / "treasury" / "UST10Y2Y.csv").read_text(encoding="utf-8")
     assert ",0.50" in spread  # 4.40 - 3.90
-    assert (out_dir / "cboe" / "VIX.csv").exists()
+    # VIX 는 종가 시계열로 발행 (1990년대 초 원본 OHLC 정합 깨짐 실측 대응)
+    vix = (out_dir / "cboe" / "VIX.csv").read_text(encoding="utf-8")
+    assert vix.splitlines()[0] == "date,value"
     assert (out_dir / "bls" / "CUUR0000SA0.csv").exists()
     assert (out_dir / "dbnomics" / "BLS_CU_CUUR0000SA0.csv").exists()
 
