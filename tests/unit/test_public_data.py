@@ -534,6 +534,16 @@ def test_parse_dbnomics_json_normalizes_monthly_and_na() -> None:
         parse_dbnomics_json(json.dumps({"series": {"docs": []}}))
 
 
+def test_parse_dbnomics_json_daily_periods_kept_verbatim() -> None:
+    """H.15 같은 일간 시리즈의 'YYYY-MM-DD' 는 그대로 보존된다 (월간만 정규화)."""
+    payload = {
+        "series": {"docs": [{"period": ["2026-06-10", "2026-06-11"], "value": [4.40, "NA"]}]}
+    }
+    points = parse_dbnomics_json(json.dumps(payload))
+    assert points[0] == SeriesPoint(date="2026-06-10", value=Decimal("4.4"))
+    assert points[1] == SeriesPoint(date="2026-06-11", value=None)
+
+
 def test_cross_check_levels_pass_fail_and_overlap() -> None:
     a = {f"2026-{m:02d}-01": Decimal("100") + m for m in range(1, 13)}
     assert cross_check_levels(a, dict(a)).status == "PASS"
@@ -599,6 +609,23 @@ def _dbnomics_body() -> str:
     )
 
 
+def _dbnomics_h15_body(value: str, *, end: date, days: int = 80) -> str:
+    """연준 H.15 일간 금리 미러 — 재무부 모의 응답(_treasury_body)과 같은 값."""
+    ds = [end - timedelta(days=i) for i in range(days)]
+    return json.dumps(
+        {
+            "series": {
+                "docs": [
+                    {
+                        "period": [d.isoformat() for d in sorted(ds)],
+                        "value": [float(value)] * days,
+                    }
+                ]
+            }
+        }
+    )
+
+
 def _official_config() -> dict:
     return {
         "treasury": {
@@ -610,7 +637,14 @@ def _official_config() -> dict:
         },
         "cboe": {"vix": True, "min_rows": 50, "max_staleness_days": 7},
         "bls": {"series": ["LNS14000000", "CUUR0000SA0"], "min_rows": 12},
-        "dbnomics": {"series": ["BLS/cu/CUUR0000SA0"], "min_rows": 12},
+        "dbnomics": {
+            "series": [
+                "BLS/cu/CUUR0000SA0",
+                "FED/H15/RIFLGFCY02_N.B",
+                "FED/H15/RIFLGFCY10_N.B",
+            ],
+            "min_rows": 12,
+        },
         "cross_checks": [
             {
                 "kind": "levels",
@@ -618,7 +652,23 @@ def _official_config() -> dict:
                 "b": "dbnomics:BLS/cu/CUUR0000SA0",
                 "tolerance": "0.001",
                 "min_overlap": 12,
-            }
+            },
+            {
+                "kind": "levels",
+                "a": "treasury:UST2Y",
+                "b": "dbnomics:FED/H15/RIFLGFCY02_N.B",
+                "tolerance": "0.001",
+                "min_overlap": 60,
+                "min_agree_pct": "99.5",
+            },
+            {
+                "kind": "levels",
+                "a": "treasury:UST10Y",
+                "b": "dbnomics:FED/H15/RIFLGFCY10_N.B",
+                "tolerance": "0.001",
+                "min_overlap": 60,
+                "min_agree_pct": "99.5",
+            },
         ],
     }
 
@@ -632,6 +682,11 @@ def _official_handler(request: httpx.Request) -> httpx.Response:
     if host == "api.bls.gov":
         return httpx.Response(200, text=_bls_body(request.url.path.rsplit("/", 1)[-1]))
     if host == "api.db.nomics.world":
+        path = request.url.path
+        if "RIFLGFCY02_N.B" in path:
+            return httpx.Response(200, text=_dbnomics_h15_body("3.90", end=AS_OF))
+        if "RIFLGFCY10_N.B" in path:
+            return httpx.Response(200, text=_dbnomics_h15_body("4.40", end=AS_OF))
         return httpx.Response(200, text=_dbnomics_body())
     raise AssertionError(f"예상 밖 호출: {request.url}")
 
@@ -643,9 +698,10 @@ def test_collect_official_sources_happy_path(tmp_path: Path) -> None:
             client, _official_config(), out_dir=out_dir, as_of=AS_OF
         )
     assert summary["overall_ok"] is True
-    # UST2Y + UST10Y + 파생 스프레드 + VIX + BLS 2종 + DBnomics 미러 = 7
-    assert summary["published"] == 7
-    assert summary["cross_checks"][0]["status"] == "PASS"
+    # UST2Y + UST10Y + 파생 스프레드 + VIX + BLS 2종 + DBnomics 미러 3종 = 9
+    assert summary["published"] == 9
+    # CPI 미러 + 금리 두-기관 대조 2건(재무부 vs 연준 H.15) — 전부 PASS
+    assert [c["status"] for c in summary["cross_checks"]] == ["PASS", "PASS", "PASS"]
     spread = (out_dir / "treasury" / "UST10Y2Y.csv").read_text(encoding="utf-8")
     assert ",0.50" in spread  # 4.40 - 3.90
     # VIX 는 종가 시계열로 발행 (1990년대 초 원본 OHLC 정합 깨짐 실측 대응)
@@ -653,6 +709,7 @@ def test_collect_official_sources_happy_path(tmp_path: Path) -> None:
     assert vix.splitlines()[0] == "date,value"
     assert (out_dir / "bls" / "CUUR0000SA0.csv").exists()
     assert (out_dir / "dbnomics" / "BLS_CU_CUUR0000SA0.csv").exists()
+    assert (out_dir / "dbnomics" / "FED_H15_RIFLGFCY10_N.B.csv").exists()
 
 
 def test_collect_official_sources_failsoft_and_spread_needs_both_legs(
@@ -669,8 +726,9 @@ def test_collect_official_sources_failsoft_and_spread_needs_both_legs(
             client, _official_config(), out_dir=out_dir, as_of=AS_OF
         )
     assert summary["overall_ok"] is False
-    assert summary["published"] == 4  # VIX + BLS 2종 + DBnomics 는 계속 발행
+    assert summary["published"] == 6  # VIX + BLS 2종 + DBnomics 3종은 계속 발행
     by_id = {i["id"]: i for i in summary["items"]}
     assert not by_id["UST10Y"]["ok"] and not by_id["UST2Y"]["ok"]
     assert not by_id["UST10Y2Y"]["ok"]  # 한 다리만 죽어도 스프레드는 미발행
-    assert summary["cross_checks"][0]["status"] == "PASS"  # CPI 짝은 영향 없음
+    # CPI 짝은 영향 없음 — 금리 두-기관 대조는 재무부 다리가 죽어 SKIPPED 로 정직 표기
+    assert [c["status"] for c in summary["cross_checks"]] == ["PASS", "SKIPPED", "SKIPPED"]

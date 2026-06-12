@@ -105,6 +105,22 @@ def test_config_parses_and_cross_checks_reference_collected_ids() -> None:
         assert cc["b"] in collected, f"교차 검증 입력 {cc['b']} 이 수집 목록에 없음"
 
 
+def test_treasury_yields_have_two_source_cross_check() -> None:
+    """금리 두-기관 대조 — 재무부 직접 수집의 각 만기는 연준 H.15(DBnomics 미러)
+    수준 대조 짝을 가져야 한다. 레짐 분석(금리차)의 핵심 입력이 단일 전송 경로에
+    매달리지 않게 하는 불변식 (2026-06-12, 탐침 증거 수집 완료 후 채택)."""
+    cfg = tomllib.loads(_CONFIG.read_text(encoding="utf-8"))
+    checks = cfg.get("cross_checks", [])
+    for item_id in cfg["treasury"]["maturities"].values():
+        paired = [
+            cc for cc in checks
+            if cc["a"] == f"treasury:{item_id}" and cc["b"].startswith("dbnomics:FED/H15/")
+        ]
+        assert paired, f"treasury:{item_id} 에 연준 H.15 대조 짝이 없음"
+        for cc in paired:
+            assert cc["kind"] == "levels"
+
+
 def test_collect_step_has_own_timeout_below_job_limit() -> None:
     """수집이 늘어져도 발행 스텝이 항상 실행되게 — 첫 실측(2026-06-11)에서
     FRED 타르핏이 작업 제한을 잡아먹어 collect_exit 가 미기록됐던 회귀 방지."""

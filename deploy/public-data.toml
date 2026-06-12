@@ -27,8 +27,9 @@ urls = [
     "https://stooq.com/q/d/l/?s=spy.us&i=d",                     # Stooq 직접 CSV (실측: JS 봇 장벽 — 해제되면 가격 이력 확장 재논의)
     "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS10",  # FRED 그래프 CSV (실측: 타르핏 — 변화 추적용 유지)
     "https://api.stlouisfed.org/fred/series/observations?series_id=DGS10&file_type=json",  # FRED 공식 API (키 등록 시 열림 — 보류 중)
-    "https://api.db.nomics.world/v22/series/FED/H15/RIFLGFCY10_N.B?observations=1&format=json",  # DBnomics 연준 H.15 10년 금리 미러 (재무부 교차 검증 짝 후보 — 증거 수집)
 ]
+# DBnomics 연준 H.15 10년 금리 탐침은 증거 수집을 마치고(2026-06-12 실측 200/0.4~0.7초)
+# 아래 [dbnomics] 수집 + [[cross_checks]] 짝으로 채택 — 수집 자체가 매일의 측정이다.
 
 [treasury]
 # 미 재무부 일일 금리 곡선 — 공식 다운로드 경로, 연 단위 CSV 를 합쳐 만기별
@@ -73,7 +74,9 @@ max_staleness_days = 70   # 월간 발표는 ~45일 늦음 — 느슨하게
 # 미러의 역할은 신선도가 아니라 **겹치는 과거 구간의 일치** — 신선도 한도를
 # 분리해 느슨하게 둔다(최신 데이터는 BLS 직접 수집이 담당).
 series = [
-    "BLS/cu/CUUR0000SA0",   # CPI-U 미러 (bls:CUUR0000SA0 의 짝)
+    "BLS/cu/CUUR0000SA0",         # CPI-U 미러 (bls:CUUR0000SA0 의 짝)
+    "FED/H15/RIFLGFCY02_N.B",     # 연준 H.15 2년 국채 금리 (treasury:UST2Y 의 짝)
+    "FED/H15/RIFLGFCY10_N.B",     # 연준 H.15 10년 국채 금리 (treasury:UST10Y 의 짝)
 ]
 min_rows = 12
 max_staleness_days = 700
@@ -87,3 +90,25 @@ b = "dbnomics:BLS/cu/CUUR0000SA0"
 tolerance = "0.001"
 min_overlap = 12
 min_agree_pct = "100"
+
+[[cross_checks]]
+# 재무부 직접 수집 vs 연준 H.15(DBnomics 미러) — 금리의 진짜 두-기관 대조.
+# H.15 의 국채 항목은 재무부 일일 금리 곡선을 그대로 싣는 같은 통계(둘 다
+# 소수 2자리)라 수준이 일치해야 정상. CPI 미러(100%)와 달리 합격선을 99.5%
+# 로 두는 이유: 일간 시계열 ~10년 ≈ 2,500 관측에서 재무부의 사후 정정이
+# 미러에 반영되기 전의 시차로 며칠은 정당하게 어긋날 수 있다 — 체계적
+# 오염(단위·절단·인코딩)은 대량 불일치로 나타나므로 99.5% 로도 충분히 잡힌다.
+kind = "levels"
+a = "treasury:UST2Y"
+b = "dbnomics:FED/H15/RIFLGFCY02_N.B"
+tolerance = "0.001"
+min_overlap = 60
+min_agree_pct = "99.5"
+
+[[cross_checks]]
+kind = "levels"
+a = "treasury:UST10Y"
+b = "dbnomics:FED/H15/RIFLGFCY10_N.B"
+tolerance = "0.001"
+min_overlap = 60
+min_agree_pct = "99.5"
