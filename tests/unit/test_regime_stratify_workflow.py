@@ -117,3 +117,15 @@ def test_stratify_publishes_own_sidecar():
     text = _workflow_text()
     assert "automation/regime-stratify-last-run" in text
     assert "rebalance-paper-forward-last-run" not in text
+
+
+def test_stratify_push_paths_cover_chain_files():
+    """체인 파일이 바뀐 머지에서 즉시 실전 검증(같은 날 검증 패턴 —
+    collect-public-data 의 push paths 와 동일 접근, 2026-06-12)."""
+    text = _workflow_text()
+    for path in (
+        ".github/workflows/regime-stratify.yml",
+        "src/auto_invest/analytics/regime_stratified.py",
+        "src/auto_invest/backtest/portfolio_replay.py",
+    ):
+        assert path in text, f"같은 날 검증 push 경로 누락: {path}"

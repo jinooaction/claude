@@ -24,6 +24,15 @@ on:
     # 사다리 게이트(23:50)와 겹치지 않게.
     - cron: "30 23 * * 1-5"
   workflow_dispatch: {}
+  push:
+    # 같은 날 검증 패턴(collect-public-data 와 동일): 층화 체인을 바꾼 머지가
+    # 즉시 실전 런을 발화시켜 "다음 세션 관찰 지점"이 아니라 같은 세션에서
+    # 확인한다. 읽기 전용 연구 체인(/tmp 격리)이라 추가 실행의 위험이 없다.
+    branches: [main]
+    paths:
+      - ".github/workflows/regime-stratify.yml"
+      - "src/auto_invest/analytics/regime_stratified.py"
+      - "src/auto_invest/backtest/portfolio_replay.py"
 
 permissions:
   contents: write  # 사이드카 브랜치 force-push 용.
