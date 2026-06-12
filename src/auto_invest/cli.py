@@ -2903,6 +2903,11 @@ def macro_regime_cmd(
     out: Path | None = typer.Option(
         None, "--out", help="보고서 JSON 저장 경로 (생략 시 stdout 만)."
     ),
+    timeline_out: Path | None = typer.Option(
+        None,
+        "--timeline-out",
+        help="시점 기준 일별 레짐 이력 CSV 저장 경로 (층화 분석 입력).",
+    ),
     as_json: bool = typer.Option(False, "--json", help="JSON 만 출력."),
 ) -> None:
     """거시 레짐 보고서 — 채널이 발행한 금리차·VIX·CPI·실업률 소비 (연구 전용).
@@ -2915,13 +2920,20 @@ def macro_regime_cmd(
 
     from auto_invest.market_data.macro_regime import (
         build_macro_regime_report,
+        build_regime_timeline,
         report_to_json,
+        timeline_to_csv,
     )
 
     report = build_macro_regime_report(data_dir, as_of=_date.today())
     if out is not None:
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(report_to_json(report), encoding="utf-8")
+    if timeline_out is not None:
+        rows = build_regime_timeline(data_dir)
+        timeline_out.parent.mkdir(parents=True, exist_ok=True)
+        timeline_out.write_text(timeline_to_csv(rows), encoding="utf-8")
+        typer.echo(f"timeline: {len(rows)}일 → {timeline_out}")
 
     if as_json:
         typer.echo(_json.dumps(report, ensure_ascii=False))
@@ -2939,6 +2951,74 @@ def macro_regime_cmd(
             else:
                 typer.echo(f"  ? {key}: {ind['reason']}")
     if report["overall"]["available_indicators"] == 0:
+        _exit(1)
+
+
+@app.command("regime-stratify")
+def regime_stratify_cmd(
+    returns_csv: Path = typer.Option(
+        ...,
+        "--returns-csv",
+        help="성과 시계열 CSV (date,value — NAV 또는 일일 수익률).",
+    ),
+    timeline_csv: Path = typer.Option(
+        ...,
+        "--timeline-csv",
+        help="거시 레짐 타임라인 CSV (macro-regime --timeline-out 산출물).",
+    ),
+    kind: str = typer.Option(
+        "nav", "--kind", help="returns-csv 해석: 'nav'(기본) 또는 'returns'(소수)."
+    ),
+    out: Path | None = typer.Option(None, "--out", help="결과 JSON 저장 경로."),
+    as_json: bool = typer.Option(False, "--json", help="JSON 만 출력."),
+) -> None:
+    """레짐별 성과 층화 — d일 레짐 라벨에 d+1 거래일 수익률을 붙여 잰다 (연구 전용).
+
+    "이 전략은 어떤 거시 레짐에서 벌고 어디서 잃는가"의 측정. 전망적 결합이라
+    미래 누출이 없다. 라이브 매매 신호 아님.
+    """
+    import json as _json
+
+    from auto_invest.analytics.regime_stratified import (
+        load_timeline_csv,
+        load_value_series_csv,
+        nav_to_returns,
+        stratify_returns,
+    )
+
+    try:
+        series = load_value_series_csv(returns_csv.read_text(encoding="utf-8"))
+        timeline = load_timeline_csv(timeline_csv.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        typer.echo(f"input error: {exc}", err=True)
+        _exit(2)
+        return
+    if kind not in ("nav", "returns"):
+        typer.echo(f"--kind 는 nav|returns (받음: {kind!r})", err=True)
+        _exit(2)
+        return
+    returns = nav_to_returns(series) if kind == "nav" else series
+    result = stratify_returns(returns, timeline)
+
+    if out is not None:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(
+            _json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+    if as_json:
+        typer.echo(_json.dumps(result, ensure_ascii=False))
+    else:
+        typer.echo(
+            f"regime stratify: 수익률 {result['total_return_days']}일 — {result['join_rule']}"
+        )
+        for label, st in result["by_label"].items():
+            line = (
+                f"  {label:12} n={st['n_days']:5}  누적 {st.get('total_return_pct', '-'):>8}%"
+            )
+            if "sharpe" in st:
+                line += f"  샤프 {st['sharpe']:>6}  최대낙폭 {st['max_drawdown_pct']}%"
+            typer.echo(line)
+    if result["total_return_days"] == 0:
         _exit(1)
 
 
