@@ -226,7 +226,7 @@ def test_workflow_wires_regime_report_into_sidecar() -> None:
     assert "auto-invest macro-regime" in wf
     assert "regime.json" in wf
     # 보고 실패가 데이터 발행을 막지 않는다 (fail-soft)
-    assert "--out /tmp/public-data/regime.json || true" in wf
+    assert "--timeline-out /tmp/public-data/regime_timeline.csv || true" in wf
     # 모듈 변경 시 같은 날 실전 검증 (push 경로 포함)
     assert "src/auto_invest/market_data/macro_regime.py" in wf
 
@@ -244,3 +244,87 @@ def test_report_source_paths_match_channel_config() -> None:
     bls = set(cfg["bls"]["series"])
     assert CPI_CSV.split("/")[1].removesuffix(".csv") in bls
     assert UNEMPLOYMENT_CSV.split("/")[1].removesuffix(".csv") in bls
+
+
+# ---------- 이력 시계열 (시점 기준 타임라인) ----------
+
+
+def _days(n: int, start_day: int = 1) -> list[str]:
+    return [f"2026-06-{start_day + i:02d}" for i in range(n)]
+
+
+def test_timeline_point_in_time_cpi_switch_no_lookahead() -> None:
+    """월간 CPI 는 발표 지연 이후에만 라벨에 반영 — 미래 누출 차단의 핵심."""
+    from auto_invest.market_data.macro_regime import daily_regime_timeline
+
+    days = _days(8)
+    spread = [(d, Decimal("0.6")) for d in days]  # NORMAL — 깃발 없음
+    vix = [(d, Decimal("10")) for d in days]  # CALM — 깃발 없음
+    cpi = [
+        ("2025-05-01", Decimal("300")),
+        ("2025-06-01", Decimal("300")),
+        ("2026-05-01", Decimal("308")),  # YoY 2.67% MODERATE — 발효 06-05(지연 4일... 5월)
+        ("2026-06-01", Decimal("312")),  # YoY 4.00% HIGH — 발효 2026-06-05
+    ]
+    rows = daily_regime_timeline(spread, vix, cpi, [], publication_lag_days=4)
+    by_date = {r["date"]: r for r in rows}
+    # 06-04 까지는 5월분(MODERATE, 깃발 없음) → RISK_ON
+    assert by_date["2026-06-04"]["label"] == "RISK_ON"
+    assert by_date["2026-06-04"]["inflation_yoy"] == "2.67"
+    # 06-05 부터 6월분(HIGH, 깃발) 발효 → CAUTION
+    assert by_date["2026-06-05"]["label"] == "CAUTION"
+    assert by_date["2026-06-05"]["flags"] == "inflation"
+    assert by_date["2026-06-05"]["inflation_yoy"] == "4.00"
+    # 삼 룰 미가용 → 가용 지표 3 (일간 2 + 물가)
+    assert by_date["2026-06-05"]["available"] == 3
+
+
+def test_timeline_risk_off_with_two_flags_and_sahm() -> None:
+    from auto_invest.market_data.macro_regime import daily_regime_timeline
+
+    days = _days(3)
+    spread = [(d, Decimal("0.6")) for d in days]
+    vix = [(d, Decimal("30")) for d in days]  # ELEVATED — 깃발 1
+    # 16개월(2025-02~2026-05) — 지연 1일이면 마지막 달도 06-01 이전 발효
+    une = _points(["4.0"] * 13 + ["4.6", "4.8", "5.0"], start_month=(2025, 2))
+    rows = daily_regime_timeline(
+        spread, vix, [], [(d, v) for d, v in une], publication_lag_days=1
+    )
+    assert all(r["label"] == "RISK_OFF" for r in rows)  # vix + sahm = 깃발 2
+    assert all("sahm" in r["flags"] and "vix" in r["flags"] for r in rows)
+
+
+def test_timeline_axis_is_daily_intersection() -> None:
+    from auto_invest.market_data.macro_regime import daily_regime_timeline
+
+    spread = [(d, Decimal("0.6")) for d in _days(3)]
+    vix = [(d, Decimal("10")) for d in _days(3) if d != "2026-06-02"]
+    rows = daily_regime_timeline(spread, vix, [], [])
+    assert [r["date"] for r in rows] == ["2026-06-01", "2026-06-03"]
+    assert all(r["available"] == 2 and r["label"] == "RISK_ON" for r in rows)
+
+
+def test_build_regime_timeline_from_dir_and_csv_roundtrip(tmp_path: Path) -> None:
+    from auto_invest.market_data.macro_regime import (
+        build_regime_timeline,
+        timeline_to_csv,
+    )
+
+    days = _days(3)
+    _write(tmp_path, SPREAD_CSV, _series_csv([(d, "-0.1") for d in days]))
+    _write(tmp_path, VIX_CSV, _series_csv([(d, "40") for d in days]))
+    rows = build_regime_timeline(tmp_path)
+    assert len(rows) == 3 and rows[0]["label"] == "RISK_OFF"  # 역전 + 위기 VIX
+    text = timeline_to_csv(rows)
+    assert text.splitlines()[0] == (
+        "date,label,flags,available,spread,vix,inflation_yoy,sahm_pp"
+    )
+    assert "2026-06-01,RISK_OFF,yield_curve;vix,2,-0.1,40,," in text
+
+
+def test_workflow_wires_timeline_into_sidecar() -> None:
+    wf = (
+        _REPO_ROOT / ".github" / "workflows" / "collect-public-data.yml"
+    ).read_text(encoding="utf-8")
+    assert "--timeline-out /tmp/public-data/regime_timeline.csv" in wf
+    assert "regime_timeline.csv    # 일별 레짐 이력" in wf

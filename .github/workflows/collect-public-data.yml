@@ -90,8 +90,15 @@ jobs:
           if [[ -d /tmp/public-data ]]; then
               uv run auto-invest macro-regime \
                   --data-dir /tmp/public-data \
-                  --out /tmp/public-data/regime.json || true
+                  --out /tmp/public-data/regime.json \
+                  --timeline-out /tmp/public-data/regime_timeline.csv || true
               [[ -f /tmp/public-data/regime.json ]] && cat /tmp/public-data/regime.json
+              # 타임라인은 시점 기준(발표 지연 반영) 일별 라벨 — 층화 분석 입력.
+              if [[ -f /tmp/public-data/regime_timeline.csv ]]; then
+                  echo "timeline rows: $(($(wc -l < /tmp/public-data/regime_timeline.csv) - 1))"
+                  echo "label distribution:"
+                  tail -n +2 /tmp/public-data/regime_timeline.csv | cut -d, -f2 | sort | uniq -c
+              fi
           fi
 
       - name: Publish data + diagnostic to sidecar branch
@@ -158,6 +165,7 @@ jobs:
               echo "git show origin/${BRANCH}:cboe/VIX.csv           # VIX 종가 1990~ (date,value)"
               echo "git show origin/${BRANCH}:bls/CUUR0000SA0.csv    # CPI 월간 (date,value)"
               echo "git show origin/${BRANCH}:regime.json            # 거시 레짐 보고 (연구 전용)"
+              echo "git show origin/${BRANCH}:regime_timeline.csv    # 일별 레짐 이력 (층화 분석 입력)"
               echo "git show origin/${BRANCH}:summary.json           # 검증 보고"
               echo '```'
           } > LAST_RUN.md
