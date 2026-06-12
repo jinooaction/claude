@@ -17,13 +17,22 @@ import pytest
 from auto_invest.market_data.public_data import (
     PublicBar,
     SeriesPoint,
+    bls_v1_url,
+    cboe_vix_history_url,
     collect_public_data,
     cross_check_daily_returns,
+    cross_check_levels,
+    dbnomics_series_url,
     fetch_text,
     fred_csv_url,
+    parse_bls_v1_json,
+    parse_cboe_daily_csv,
+    parse_dbnomics_json,
     parse_fred_csv,
     parse_stooq_daily_csv,
+    parse_treasury_csv,
     stooq_daily_csv_url,
+    treasury_csv_url,
     validate_daily_bars,
     validate_series,
 )
@@ -284,13 +293,16 @@ def _config() -> dict:
     return {
         "stooq": {"symbols": ["SPY", "IEF"], "min_rows": 50, "max_staleness_days": 7},
         "fred": {"series": ["SP500", "DGS10"], "min_rows": 24, "max_staleness_days": 70},
-        "cross_check": {
-            "stooq_symbol": "SPY",
-            "fred_series": "SP500",
-            "tolerance_pct": "0.5",
-            "min_overlap_returns": 60,
-            "min_agree_pct": "95",
-        },
+        "cross_checks": [
+            {
+                "kind": "returns",
+                "a": "stooq:SPY",
+                "b": "fred:SP500",
+                "tolerance_pct": "0.5",
+                "min_overlap": 60,
+                "min_agree_pct": "95",
+            }
+        ],
     }
 
 
@@ -310,7 +322,7 @@ def test_collect_happy_path_publishes_all_and_cross_check_passes(tmp_path: Path)
     summary = _run_collect(handler, tmp_path)
     assert summary["overall_ok"] is True
     assert summary["published"] == 4
-    assert summary["cross_check"]["status"] == "PASS"
+    assert summary["cross_checks"][0]["status"] == "PASS"
     out_dir = tmp_path / "out"
     spy = (out_dir / "stooq" / "SPY.csv").read_text(encoding="utf-8")
     assert spy.splitlines()[0] == "date,open,high,low,close,volume"
@@ -348,7 +360,7 @@ def test_collect_network_error_is_failsoft_per_item(tmp_path: Path) -> None:
 
     summary = _run_collect(handler, tmp_path)
     assert summary["published"] == 2  # FRED 두 시리즈만
-    assert summary["cross_check"]["status"] == "SKIPPED"  # SPY 미발행 → 짝 없음
+    assert summary["cross_checks"][0]["status"] == "SKIPPED"  # SPY 미발행 → 짝 없음
     assert all(not i["ok"] for i in summary["items"] if i["kind"] == "stooq")
 
 
@@ -425,7 +437,236 @@ def test_collect_cross_check_divergence_fails_overall(tmp_path: Path) -> None:
         return httpx.Response(200, text=_fred_body(series, 100))
 
     summary = _run_collect(handler, tmp_path)
-    assert summary["cross_check"]["status"] == "FAIL"
+    assert summary["cross_checks"][0]["status"] == "FAIL"
     assert summary["overall_ok"] is False
     # 데이터 자체는 발행됨(귀속 불가) — 소비자는 summary 의 FAIL 을 보고 거른다.
     assert summary["published"] == 4
+
+
+# ---------- 4차: 공식 키리스 소스 (재무부·Cboe·BLS·DBnomics) ----------
+
+
+def test_official_source_urls() -> None:
+    assert treasury_csv_url(2026) == (
+        "https://home.treasury.gov/resource-center/data-chart-center/"
+        "interest-rates/daily-treasury-rates.csv/2026/all"
+        "?type=daily_treasury_yield_curve&field_tdr_date_value=2026&page&_format=csv"
+    )
+    assert cboe_vix_history_url().endswith("/VIX_History.csv")
+    assert bls_v1_url("LNS14000000").endswith("/timeseries/data/LNS14000000")
+    assert dbnomics_series_url("BLS/cu/CUUR0000SA0") == (
+        "https://api.db.nomics.world/v22/series/BLS/cu/CUUR0000SA0"
+        "?observations=1&format=json"
+    )
+    with pytest.raises(ValueError):
+        bls_v1_url("  ")
+    with pytest.raises(ValueError):
+        dbnomics_series_url("")
+
+
+def test_parse_treasury_csv_wide_to_series() -> None:
+    text = (
+        'Date,"1 Mo","2 Yr","10 Yr"\n'
+        "06/11/2026,4.30,3.90,4.40\n"
+        "06/10/2026,4.31,,4.39\n"
+    )
+    out = parse_treasury_csv(text)
+    assert set(out) == {"1 Mo", "2 Yr", "10 Yr"}
+    ten = out["10 Yr"]
+    assert [p.date for p in ten] == ["2026-06-10", "2026-06-11"]  # 오름차순 정렬
+    assert ten[1].value == Decimal("4.40")
+    assert out["2 Yr"][0].value is None  # 빈 칸 → 결측 보존
+
+
+def test_parse_treasury_csv_bad_header_raises() -> None:
+    with pytest.raises(ValueError):
+        parse_treasury_csv("<html>blocked</html>")
+
+
+def test_parse_cboe_daily_csv_sorts_and_zero_volume() -> None:
+    text = (
+        "DATE,OPEN,HIGH,LOW,CLOSE\n"
+        "01/02/2026,17.6,18.2,17.0,17.2\n"
+        "01/01/2026,17.0,17.5,16.8,17.1\n"
+    )
+    bars = parse_cboe_daily_csv(text)
+    assert [b.date for b in bars] == ["2026-01-01", "2026-01-02"]
+    assert bars[0].volume == 0 and bars[1].close_usd == Decimal("17.2")
+    with pytest.raises(ValueError):
+        parse_cboe_daily_csv("not,a,vix,file\n1,2,3,4")
+
+
+def test_parse_bls_v1_json_skips_annual_and_sorts() -> None:
+    payload = {
+        "status": "REQUEST_SUCCEEDED",
+        "Results": {
+            "series": [
+                {
+                    "data": [
+                        {"year": "2026", "period": "M05", "value": "4.1"},
+                        {"year": "2026", "period": "M13", "value": "9.9"},  # 연간 집계
+                        {"year": "2026", "period": "M04", "value": "4.2"},
+                    ]
+                }
+            ]
+        },
+    }
+    points = parse_bls_v1_json(json.dumps(payload))
+    assert [(p.date, p.value) for p in points] == [
+        ("2026-04-01", Decimal("4.2")),
+        ("2026-05-01", Decimal("4.1")),
+    ]
+
+
+def test_parse_bls_v1_json_failure_status_raises() -> None:
+    with pytest.raises(ValueError):
+        parse_bls_v1_json(json.dumps({"status": "REQUEST_NOT_PROCESSED"}))
+
+
+def test_parse_dbnomics_json_normalizes_monthly_and_na() -> None:
+    payload = {"series": {"docs": [{"period": ["2026-04", "2026-05"], "value": [320.5, "NA"]}]}}
+    points = parse_dbnomics_json(json.dumps(payload))
+    assert points[0] == SeriesPoint(date="2026-04-01", value=Decimal("320.5"))
+    assert points[1].value is None
+    with pytest.raises(ValueError):
+        parse_dbnomics_json(json.dumps({"series": {"docs": []}}))
+
+
+def test_cross_check_levels_pass_fail_and_overlap() -> None:
+    a = {f"2026-{m:02d}-01": Decimal("100") + m for m in range(1, 13)}
+    assert cross_check_levels(a, dict(a)).status == "PASS"
+    b = dict(a)
+    b["2026-06-01"] += Decimal("5")  # 미러 대조는 한 점만 어긋나도 FAIL (합격선 100%)
+    assert cross_check_levels(a, b).status == "FAIL"
+    assert cross_check_levels(a, {}, min_overlap=1).status == "INSUFFICIENT_OVERLAP"
+
+
+def _treasury_body(*, end: date, days: int = 80) -> str:
+    rows = []
+    for i in range(days):
+        d = end - timedelta(days=i)  # 원본은 최신 먼저
+        rows.append(f"{d.month:02d}/{d.day:02d}/{d.year},3.90,4.40")
+    return 'Date,"2 Yr","10 Yr"\n' + "\n".join(rows)
+
+
+def _cboe_body(*, end: date, days: int = 80) -> str:
+    rows = []
+    for i in range(days):
+        d = end - timedelta(days=days - 1 - i)
+        rows.append(f"{d.month:02d}/{d.day:02d}/{d.year},17.0,18.0,16.5,17.5")
+    return "DATE,OPEN,HIGH,LOW,CLOSE\n" + "\n".join(rows)
+
+
+def _cpi_value(y: int, m: int) -> Decimal:
+    return Decimal(y * 12 + m) / 10
+
+
+def _last_months(n: int, *, end_y: int = 2026, end_m: int = 5) -> list[tuple[int, int]]:
+    out, y, m = [], end_y, end_m
+    for _ in range(n):
+        out.append((y, m))
+        m -= 1
+        if m == 0:
+            y, m = y - 1, 12
+    return list(reversed(out))
+
+
+def _bls_body(series_id: str) -> str:
+    data = [
+        {"year": str(y), "period": f"M{m:02d}", "value": str(_cpi_value(y, m))}
+        for (y, m) in _last_months(24)
+    ]
+    return json.dumps(
+        {"status": "REQUEST_SUCCEEDED", "Results": {"series": [{"data": data}]}}
+    )
+
+
+def _dbnomics_body() -> str:
+    months = _last_months(24)
+    return json.dumps(
+        {
+            "series": {
+                "docs": [
+                    {
+                        "period": [f"{y:04d}-{m:02d}" for (y, m) in months],
+                        "value": [float(_cpi_value(y, m)) for (y, m) in months],
+                    }
+                ]
+            }
+        }
+    )
+
+
+def _official_config() -> dict:
+    return {
+        "treasury": {
+            "years_back": 1,
+            "min_rows": 50,
+            "max_staleness_days": 7,
+            "maturities": {"2 Yr": "UST2Y", "10 Yr": "UST10Y"},
+            "spread": {"id": "UST10Y2Y", "long": "10 Yr", "short": "2 Yr"},
+        },
+        "cboe": {"vix": True, "min_rows": 50, "max_staleness_days": 7},
+        "bls": {"series": ["LNS14000000", "CUUR0000SA0"], "min_rows": 12},
+        "dbnomics": {"series": ["BLS/cu/CUUR0000SA0"], "min_rows": 12},
+        "cross_checks": [
+            {
+                "kind": "levels",
+                "a": "bls:CUUR0000SA0",
+                "b": "dbnomics:BLS/cu/CUUR0000SA0",
+                "tolerance": "0.001",
+                "min_overlap": 12,
+            }
+        ],
+    }
+
+
+def _official_handler(request: httpx.Request) -> httpx.Response:
+    host = request.url.host
+    if host == "home.treasury.gov":
+        return httpx.Response(200, text=_treasury_body(end=AS_OF))
+    if host == "cdn.cboe.com":
+        return httpx.Response(200, text=_cboe_body(end=AS_OF))
+    if host == "api.bls.gov":
+        return httpx.Response(200, text=_bls_body(request.url.path.rsplit("/", 1)[-1]))
+    if host == "api.db.nomics.world":
+        return httpx.Response(200, text=_dbnomics_body())
+    raise AssertionError(f"예상 밖 호출: {request.url}")
+
+
+def test_collect_official_sources_happy_path(tmp_path: Path) -> None:
+    out_dir = tmp_path / "out"
+    with httpx.Client(transport=httpx.MockTransport(_official_handler)) as client:
+        summary = collect_public_data(
+            client, _official_config(), out_dir=out_dir, as_of=AS_OF
+        )
+    assert summary["overall_ok"] is True
+    # UST2Y + UST10Y + 파생 스프레드 + VIX + BLS 2종 + DBnomics 미러 = 7
+    assert summary["published"] == 7
+    assert summary["cross_checks"][0]["status"] == "PASS"
+    spread = (out_dir / "treasury" / "UST10Y2Y.csv").read_text(encoding="utf-8")
+    assert ",0.50" in spread  # 4.40 - 3.90
+    assert (out_dir / "cboe" / "VIX.csv").exists()
+    assert (out_dir / "bls" / "CUUR0000SA0.csv").exists()
+    assert (out_dir / "dbnomics" / "BLS_CU_CUUR0000SA0.csv").exists()
+
+
+def test_collect_official_sources_failsoft_and_spread_needs_both_legs(
+    tmp_path: Path,
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "home.treasury.gov":
+            return httpx.Response(403, text="forbidden")  # 재무부만 죽은 날
+        return _official_handler(request)
+
+    out_dir = tmp_path / "out"
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        summary = collect_public_data(
+            client, _official_config(), out_dir=out_dir, as_of=AS_OF
+        )
+    assert summary["overall_ok"] is False
+    assert summary["published"] == 4  # VIX + BLS 2종 + DBnomics 는 계속 발행
+    by_id = {i["id"]: i for i in summary["items"]}
+    assert not by_id["UST10Y"]["ok"] and not by_id["UST2Y"]["ok"]
+    assert not by_id["UST10Y2Y"]["ok"]  # 한 다리만 죽어도 스프레드는 미발행
+    assert summary["cross_checks"][0]["status"] == "PASS"  # CPI 짝은 영향 없음
