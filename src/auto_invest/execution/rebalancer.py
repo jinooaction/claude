@@ -53,7 +53,11 @@ from auto_invest.market_data.store import get_bars
 from auto_invest.persistence import positions as positions_mod
 from auto_invest.strategy.factors import composite_scores
 from auto_invest.strategy.rebalance import PlannedOrder, rebalance_plan, target_weights
-from auto_invest.strategy.trend import TrendEnsembleSpec, TrendSpec
+from auto_invest.strategy.trend import (
+    TrendEnsembleSpec,
+    TrendSpec,
+    spec_from_filter_config,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -66,22 +70,10 @@ def _trend_spec(
     """config 의 옵트인 추세 필터를 스펙으로(없으면 None).
 
     스펙 048: trend_filter.ensemble_windows 가 있으면 다중 속도 앙상블(분수 노출)을,
-    없으면 스펙 036 단일 속도(이진)를 만든다.
+    없으면 스펙 036 단일 속도(이진)를 만든다. 변환 자체는 strategy.trend 의 공유
+    헬퍼 — 백테스트 리플레이와 *같은* 변환(단일 잣대, 헌법 X.2).
     """
-    tf = config.trend_filter
-    if tf is None:
-        return None
-    if tf.ensemble_windows:
-        return TrendEnsembleSpec(
-            windows=tf.ensemble_windows,
-            on_insufficient=tf.on_insufficient,
-        )
-    return TrendSpec(
-        method=tf.method,
-        lookback=tf.lookback,
-        on_insufficient=tf.on_insufficient,
-        min_return=tf.min_return_pct / Decimal("100"),
-    )
+    return spec_from_filter_config(config.trend_filter)
 
 _CENT = Decimal("0.01")
 # Marketable-limit buffer when bid/ask is unavailable: cross by 20 bps so the

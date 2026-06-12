@@ -212,6 +212,30 @@ def apply_trend_ensemble_filter(
     return filtered, decisions
 
 
+def spec_from_filter_config(tf) -> TrendSpec | TrendEnsembleSpec | None:
+    """config 의 옵트인 추세 필터(`TrendFilterConfig` | None)를 전략 스펙으로.
+
+    스펙 048: `ensemble_windows` 가 있으면 다중 속도 앙상블(분수 노출)을, 없으면
+    스펙 036 단일 속도(이진)를 만든다. 라이브 리밸런서와 백테스트 리플레이가 *같은*
+    변환을 쓰게 하는 단일 잣대(헌법 X.2) — 한쪽만 앙상블을 알면 백테스트가 배포된
+    전략과 다른 전략을 재생한다. 덕 타이핑(런타임 import 무추가): tf 는
+    `auto_invest.config.rules.TrendFilterConfig` 형상이면 된다.
+    """
+    if tf is None:
+        return None
+    if tf.ensemble_windows:
+        return TrendEnsembleSpec(
+            windows=tf.ensemble_windows,
+            on_insufficient=tf.on_insufficient,
+        )
+    return TrendSpec(
+        method=tf.method,
+        lookback=tf.lookback,
+        on_insufficient=tf.on_insufficient,
+        min_return=tf.min_return_pct / Decimal("100"),
+    )
+
+
 __all__ = [
     "METHOD_ABSOLUTE_MOMENTUM",
     "METHOD_SMA",
@@ -224,4 +248,5 @@ __all__ = [
     "apply_trend_ensemble_filter",
     "apply_trend_filter",
     "ensemble_fraction",
+    "spec_from_filter_config",
 ]

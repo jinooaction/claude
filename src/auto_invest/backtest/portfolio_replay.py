@@ -63,7 +63,7 @@ from auto_invest.persistence.audit import (
 )
 from auto_invest.strategy.factors import composite_scores
 from auto_invest.strategy.rebalance import rebalance_plan, target_weights
-from auto_invest.strategy.trend import TrendSpec
+from auto_invest.strategy.trend import spec_from_filter_config
 
 _ZERO_COST_MODEL = BacktestCostModel.zero()
 
@@ -379,16 +379,10 @@ def _do_rebalance(
         top_n=config.top_n,
         top_pct=config.top_pct,
         lookback_bars=config.lookback_bars,
-        trend=(
-            TrendSpec(
-                method=config.trend_filter.method,
-                lookback=config.trend_filter.lookback,
-                on_insufficient=config.trend_filter.on_insufficient,
-                min_return=config.trend_filter.min_return_pct / Decimal("100"),
-            )
-            if config.trend_filter is not None
-            else None
-        ),
+        # 라이브 리밸런서와 같은 공유 변환(단일 잣대, 헌법 X.2). 과거 이 자리가
+        # 단일 속도 TrendSpec 만 만들어 ensemble_windows(스펙 048)를 조용히
+        # 무시했다 — 백테스트가 배포된 전략과 다른 전략을 재생하는 버그.
+        trend=spec_from_filter_config(config.trend_filter),
     )
 
     equity = portfolio.equity(prices_today)
@@ -402,6 +396,13 @@ def _do_rebalance(
         min_notional_usd=config.min_notional_usd,
         mode=config.rebalance_mode,
     )
+
+    # 주문 유형: MARKET 이 화이트리스트에 있으면 종전대로 MARKET(byte 동일). 배포
+    # 설정(LIMIT 전용 화이트리스트, 라이브는 marketable-limit)에서는 종가 지정가
+    # LIMIT 로 낸다 — 과거엔 MARKET 하드코딩이라 whitelist_gate 가 전 주문을 거부해
+    # "배포된 TOML 은 백테스트 불가(전부 현금 곡선)"였다(단일 잣대 구멍).
+    use_market = OrderType.MARKET in whitelist.order_types
+    order_type = OrderType.MARKET if use_market else OrderType.LIMIT
 
     # Sells first (free cash), then buys; each already symbol-sorted.
     sells = [o for o in plan if o.side == "SELL"]
@@ -426,13 +427,17 @@ def _do_rebalance(
         order_seq += 1
         correlation_id = f"bt-port-{config.id}-{order_seq:06d}"
         side = Side.BUY if planned.side == "BUY" else Side.SELL
+        # LIMIT 는 계획 가격(그날 종가) 지정가 — 라이브 marketable-limit 채널의
+        # 일봉 수준 근사. MARKET 이면 종전대로 가격 미지정(보수적 체결 모델).
+        limit_price = None if use_market else bar.close
+        limit_price_str = str(limit_price) if limit_price is not None else None
         request = OrderRequest(
             account=account,
             symbol=planned.symbol,
             side=side,
-            order_type=OrderType.MARKET,
+            order_type=order_type,
             qty=qty,
-            limit_price_usd=None,
+            limit_price_usd=limit_price,
         )
 
         audit.append(
@@ -441,9 +446,9 @@ def _do_rebalance(
                 rule_id=config.id,
                 symbol=planned.symbol,
                 side=side.value,
-                order_type="MARKET",
+                order_type=order_type.value,
                 qty=qty,
-                limit_price_usd=None,
+                limit_price_usd=limit_price_str,
             ),
             rule_id=config.id,
             symbol=planned.symbol,
@@ -490,9 +495,9 @@ def _do_rebalance(
                     rule_id=config.id,
                     symbol=planned.symbol,
                     side=side.value,
-                    order_type="MARKET",
+                    order_type=order_type.value,
                     qty=qty,
-                    limit_price_usd=None,
+                    limit_price_usd=limit_price_str,
                     state="REJECTED_BY_GATE",
                     ts_utc=ts_iso,
                     kis_order_id=None,
@@ -521,9 +526,9 @@ def _do_rebalance(
                 rule_id=config.id,
                 symbol=planned.symbol,
                 side=side.value,
-                order_type="MARKET",
+                order_type=order_type.value,
                 qty=qty,
-                limit_price_usd=None,
+                limit_price_usd=limit_price_str,
                 state="SUBMITTED",
                 ts_utc=ts_iso,
                 kis_order_id=outcome.result.kis_order_id,

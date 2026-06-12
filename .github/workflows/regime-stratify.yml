@@ -1,0 +1,168 @@
+name: Regime-stratified strategy performance (research only)
+
+# 레짐 층화 — "배포된 전략은 어떤 거시 레짐에서 벌고 잃는가"의 일일 자동 측정.
+#
+# 공개 데이터 채널(automation/public-data)의 거시 레짐 타임라인 d일 라벨에 *배포된
+# 전략*의 d+1 거래일 수익률을 붙이는 전망적 층화(미래 누출 차단). 수익률은 인스턴스의
+# 현재 KIS 일봉을 라이브와 같은 신호·게이트 경로로 리플레이한 일별 자본 곡선(최근
+# ~3년)이다 — 단일 잣대(헌법 X.2): bars-export(forward DB 읽기 전용) → ingest-history
+# → backtest-portfolio(--equity-out) → regime-stratify.
+#
+# 격리(중요): 이 워크플로는 *연구 전용 별도 채널*이다. 거래 워크플로(rebalance-*,
+# go-live-canary, forward-edge-autoarm)는 public-data 산출물을 절대 읽지 않는다는
+# CI 불변식(test_collect_public_data_workflow.py)이 있고, 그래서 층화는 거래
+# 워크플로에 넣지 않고 여기 따로 산다. 서버 쓰기는 /tmp 아래뿐 — forward 트랙
+# DB·라이브 상태 무접촉. 주문 0건, 돈 0 이동, 라이브 매매 신호 아님.
+#
+# 사용법(컨테이너에서 최신 층화 확인):
+#   git fetch origin automation/regime-stratify-last-run
+#   git show origin/automation/regime-stratify-last-run:LAST_RUN.md
+
+on:
+  schedule:
+    # 매 거래일(화~토 UTC) 23:30 — forward 런(22:30)의 일봉 백필이 끝난 뒤,
+    # 사다리 게이트(23:50)와 겹치지 않게.
+    - cron: "30 23 * * 1-5"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write  # 사이드카 브랜치 force-push 용.
+
+jobs:
+  stratify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install SSH key
+        env:
+          KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          echo "${KEY}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+      - name: "레짐 타임라인 가져와 서버로 (공개 데이터 채널 → /tmp)"
+        id: stratify_prep
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          git fetch --depth 1 origin automation/public-data 2>/dev/null \
+            && git show FETCH_HEAD:regime_timeline.csv > /tmp/regime_timeline.csv 2>/dev/null
+          if [ ! -s /tmp/regime_timeline.csv ]; then
+            echo "(레짐 타임라인 없음 — 층화 불가. collect-public-data 사이드카 확인)"
+            echo "prep_exit=1" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          wc -l /tmp/regime_timeline.csv
+          scp -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+              -P "${port}" -i ~/.ssh/id_ed25519 \
+              /tmp/regime_timeline.csv "${USER}@${HOST}:/tmp/regime_timeline.csv"
+          echo "prep_exit=$?" >> "$GITHUB_OUTPUT"
+
+      # 트랙별 체인 — 서버 쓰기는 전부 ${wrk}(/tmp) 아래. forward DB 는 bars-export 가
+      # 읽기만 한다(쓰기·마이그레이션 0). set +e + if:always() 라 한 트랙이 실패해도
+      # 다른 트랙·발행이 산다.
+      - name: "레짐 층화 — GLOBAL-TREND (3자산, 라이브 지정 전략)"
+        id: stratify_global
+        if: always()
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          cfg="deploy/global-trend-portfolio.toml"; dbf="data/forward_global.db"; wrk="/tmp/stratify_global"
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "cd /opt/auto-invest && \
+                 rm -rf ${wrk} && mkdir -p ${wrk} && \
+                 /usr/local/bin/uv run auto-invest bars-export --portfolio ${cfg} --db ${dbf} --out-dir ${wrk}/bars --json && \
+                 /usr/local/bin/uv run auto-invest ingest-history --from-dir ${wrk}/bars --out-dir ${wrk}/hist && \
+                 /usr/local/bin/uv run auto-invest backtest-portfolio --portfolio ${cfg} --from $(date -u -d '3 years ago' +%Y-%m-%d) --to $(date -u +%Y-%m-%d) --history-root ${wrk}/hist --db ${wrk}/audit.db --halt-path ${wrk}/halt.flag --capital 12000 --equity-out ${wrk}/equity.csv --json && \
+                 /usr/local/bin/uv run auto-invest regime-stratify --returns-csv ${wrk}/equity.csv --timeline-csv /tmp/regime_timeline.csv --out ${wrk}/stratified.json && \
+                 echo '--- stratified json ---' && cat ${wrk}/stratified.json" \
+              > /tmp/stratify_global.log 2>&1
+          echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
+          cat /tmp/stratify_global.log
+
+      - name: "레짐 층화 — GLOBAL-TREND-WIDE (11 슬리브, 계획 ③ 후보)"
+        id: stratify_wide
+        if: always()
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          cfg="deploy/global-trend-wide-portfolio.toml"; dbf="data/forward_wide.db"; wrk="/tmp/stratify_wide"
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "cd /opt/auto-invest && \
+                 rm -rf ${wrk} && mkdir -p ${wrk} && \
+                 /usr/local/bin/uv run auto-invest bars-export --portfolio ${cfg} --db ${dbf} --out-dir ${wrk}/bars --json && \
+                 /usr/local/bin/uv run auto-invest ingest-history --from-dir ${wrk}/bars --out-dir ${wrk}/hist && \
+                 /usr/local/bin/uv run auto-invest backtest-portfolio --portfolio ${cfg} --from $(date -u -d '3 years ago' +%Y-%m-%d) --to $(date -u +%Y-%m-%d) --history-root ${wrk}/hist --db ${wrk}/audit.db --halt-path ${wrk}/halt.flag --capital 12000 --equity-out ${wrk}/equity.csv --json && \
+                 /usr/local/bin/uv run auto-invest regime-stratify --returns-csv ${wrk}/equity.csv --timeline-csv /tmp/regime_timeline.csv --out ${wrk}/stratified.json && \
+                 echo '--- stratified json ---' && cat ${wrk}/stratified.json" \
+              > /tmp/stratify_wide.log 2>&1
+          echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
+          cat /tmp/stratify_wide.log
+
+      - name: Publish to sidecar branch
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PREP_EXIT: ${{ steps.stratify_prep.outputs.prep_exit }}
+          GLOBAL_EXIT: ${{ steps.stratify_global.outputs.ssh_exit }}
+          WIDE_EXIT: ${{ steps.stratify_wide.outputs.ssh_exit }}
+        run: |
+          set -uo pipefail
+          BRANCH=automation/regime-stratify-last-run
+          tmpdir=$(mktemp -d); cd "${tmpdir}"; git init -q
+          git config user.name "regime-stratify-bot"
+          git config user.email "regime-stratify-bot@noreply.github.com"
+          {
+            echo "# 레짐 층화 — 배포 전략은 어떤 거시 레짐에서 벌고 잃는가 (최신 실행)"
+            echo ""
+            echo "> 거시 레짐 타임라인(공개 데이터 채널)의 d일 라벨에 *배포된 전략*의 d+1"
+            echo "> 거래일 수익률을 붙인 전망적 층화(미래 누출 차단). 수익률은 인스턴스의"
+            echo "> 현재 KIS 일봉을 라이브와 같은 신호·게이트 경로로 리플레이한 일별 자본"
+            echo "> 곡선(최근 ~3년) — 단일 잣대(헌법 X.2). RISK_OFF/CAUTION 의 낙폭·샤프가"
+            echo "> 전체 대비 크게 나쁘면 그 레짐이 전략의 구조적 약점이다(예: 인플레"
+            echo "> regime 의 채권 분산 약화). 연구 전용 — 라이브 신호 아님, 돈 0 이동."
+            echo ""
+            echo "| 항목 | 값 |"
+            echo "|------|-----|"
+            echo "| run_id | ${GITHUB_RUN_ID} |"
+            echo "| commit | ${GITHUB_SHA} |"
+            echo "| trigger | ${GITHUB_EVENT_NAME} |"
+            echo "| timestamp_utc | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
+            echo "| 타임라인 prep exit | ${PREP_EXIT:-?} |"
+            echo "| GLOBAL-TREND ssh_exit | ${GLOBAL_EXIT:-?} |"
+            echo "| GLOBAL-TREND-WIDE ssh_exit | ${WIDE_EXIT:-?} |"
+            echo ""
+            echo "## GLOBAL-TREND (3자산 SPY·IEF·GLD — 라이브 지정 전략)"
+            echo ""
+            echo '```'
+            cat /tmp/stratify_global.log 2>/dev/null || echo '(unavailable)'
+            echo '```'
+            echo ""
+            echo "## GLOBAL-TREND-WIDE (11 슬리브 — 계획 ③ 후보)"
+            echo ""
+            echo '```'
+            cat /tmp/stratify_wide.log 2>/dev/null || echo '(unavailable)'
+            echo '```'
+          } > LAST_RUN.md
+          git checkout --orphan publish
+          git add LAST_RUN.md
+          git commit -q -m "regime-stratify run ${GITHUB_RUN_ID}"
+          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "publish:${BRANCH}"

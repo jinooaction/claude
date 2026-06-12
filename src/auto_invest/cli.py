@@ -2715,6 +2715,115 @@ def bars_status_cmd(
     typer.echo(f"DB symbols (sample): {sample_syms or '(none)'}")
 
 
+@app.command("bars-export")
+def bars_export_cmd(
+    out_dir: Path = typer.Option(
+        ...,
+        "--out-dir",
+        help="<SYMBOL>.csv 들을 쓸 디렉터리 (ingest-history --from-dir 입력 형식).",
+    ),
+    portfolio: Path = typer.Option(
+        None, "--portfolio", help="TOML; exports its [portfolio].universe symbols."
+    ),
+    symbols: str = typer.Option(
+        None, "--symbols", help="Comma-separated symbols (overrides --portfolio)."
+    ),
+    timeframe: str = typer.Option("1d", "--timeframe", help="Bar timeframe to export."),
+    db_path: Path = typer.Option(
+        Path("data/auto_invest.db"), "--db", help="SQLite path with price_bars."
+    ),
+    as_json: bool = typer.Option(False, "--json", help="Emit JSON instead of text."),
+) -> None:
+    """저장된 일봉을 백테스트 데이터셋 CSV(ohlcv-csv.md 계약)로 내보낸다 — 읽기 전용.
+
+    KIS 백필이 채운 인스턴스의 일봉(DB)을 ingest-history → backtest-portfolio 가
+    소비할 수 있는 계약 형식으로 잇는 다리다. 그래야 *배포된 전략의* 일별 자본
+    곡선을 인스턴스의 현재 데이터로 재생하고(단일 잣대), regime-stratify 로 "어떤
+    거시 레짐에서 벌고 잃는가"를 잴 수 있다. DB 는 읽기만 한다(쓰기·마이그레이션
+    0) — forward 전용 DB 에 안전. 값은 저장된 그대로 내보낸다(조용한 보정 없음;
+    품질 검증은 ingest 가 한다). 일봉의 session_date 는 bar_open_utc 의 날짜다.
+
+    Exit codes: 0 = 한 종목 이상 내보냄, 1 = 내보낸 종목 0, 64 = usage 오류.
+    """
+    import json as _json
+
+    from auto_invest.market_data.store import get_bars
+
+    syms: list[str] = []
+    if symbols:
+        syms = [s.strip().upper() for s in symbols.split(",") if s.strip()]
+    elif portfolio is not None:
+        try:
+            _caps, _wl, port_cfg = _load_portfolio_for_backtest(portfolio)
+        except ConfigError as exc:
+            typer.echo(f"portfolio validation failed: {exc}", err=True)
+            _exit(65)
+            return
+        syms = list(port_cfg.universe)  # type: ignore[union-attr]
+    else:
+        typer.echo("provide --portfolio or --symbols", err=True)
+        _exit(64)
+        return
+
+    if not db_path.exists():
+        typer.echo(f"db not found: {db_path}", err=True)
+        _exit(64)
+        return
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    conn = db.get_connection(db_path)
+    exported: list[dict[str, object]] = []
+    skipped: list[str] = []
+    try:
+        for sym in syms:
+            bars = get_bars(conn, symbol=sym, timeframe=timeframe)
+            if not bars:
+                skipped.append(sym)
+                continue
+            lines = ["session_date,open,high,low,close,volume,session_schedule_tag\n"]
+            for b in bars:
+                session_date = b.bar_open_utc[:10]
+                lines.append(
+                    f"{session_date},{b.open_usd},{b.high_usd},{b.low_usd},"
+                    f"{b.close_usd},{b.volume},regular\n"
+                )
+            (out_dir / f"{sym}.csv").write_text("".join(lines), encoding="utf-8")
+            exported.append(
+                {
+                    "symbol": sym,
+                    "rows": len(bars),
+                    "first_date": bars[0].bar_open_utc[:10],
+                    "last_date": bars[-1].bar_open_utc[:10],
+                }
+            )
+    finally:
+        conn.close()
+
+    if as_json:
+        typer.echo(
+            _json.dumps(
+                {
+                    "timeframe": timeframe,
+                    "out_dir": str(out_dir),
+                    "exported": exported,
+                    "skipped": skipped,
+                }
+            )
+        )
+    else:
+        typer.echo(f"exported (timeframe={timeframe}) → {out_dir}:")
+        for r in exported:
+            typer.echo(
+                f"  {r['symbol']:8} rows={r['rows']:<6} "
+                f"{r['first_date']} → {r['last_date']}"
+            )
+        if skipped:
+            typer.echo(f"skipped (0 bars): {', '.join(skipped)}")
+    if not exported:
+        typer.echo("no symbol had stored bars — nothing exported", err=True)
+        _exit(1)
+
+
 @app.command("backfill-bars")
 def backfill_bars_cmd(
     portfolio: Path = typer.Option(
@@ -3526,6 +3635,12 @@ def backtest_portfolio_cmd(
     as_json: bool = typer.Option(
         False, "--json", help="Emit a single JSON object instead of text."
     ),
+    equity_out: Path = typer.Option(
+        None,
+        "--equity-out",
+        help="일별 시가평가 자본 곡선을 date,value CSV 로 저장 — regime-stratify 의 "
+        "--returns-csv 입력 형식 그대로 (레짐 층화의 소비처). 미지정 시 미저장.",
+    ),
     allow_stale: bool = typer.Option(
         False,
         "--allow-stale",
@@ -3649,6 +3764,14 @@ def backtest_portfolio_cmd(
     finally:
         conn.close()
         data_source.close()
+
+    if equity_out is not None:
+        equity_out.parent.mkdir(parents=True, exist_ok=True)
+        equity_out.write_text(
+            "date,value\n"
+            + "".join(f"{d.isoformat()},{eq}\n" for d, eq in result.equity_curve),
+            encoding="utf-8",
+        )
 
     if as_json:
         typer.echo(
