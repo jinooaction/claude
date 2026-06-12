@@ -2893,6 +2893,55 @@ def collect_public_data_cmd(
         _exit(1)
 
 
+@app.command("macro-regime")
+def macro_regime_cmd(
+    data_dir: Path = typer.Option(
+        Path("public-data"),
+        "--data-dir",
+        help="공개 데이터 채널 발행 디렉터리 (treasury/·cboe/·bls/ CSV).",
+    ),
+    out: Path | None = typer.Option(
+        None, "--out", help="보고서 JSON 저장 경로 (생략 시 stdout 만)."
+    ),
+    as_json: bool = typer.Option(False, "--json", help="JSON 만 출력."),
+) -> None:
+    """거시 레짐 보고서 — 채널이 발행한 금리차·VIX·CPI·실업률 소비 (연구 전용).
+
+    라이브 매매 신호 아님: 가격 레짐(strategy/regime.py, KIS 데이터)과 분리된
+    연구 산출물. 지표 단위 fail-soft — 계산 가능 지표 0개일 때만 exit 1.
+    """
+    import json as _json
+    from datetime import date as _date
+
+    from auto_invest.market_data.macro_regime import (
+        build_macro_regime_report,
+        report_to_json,
+    )
+
+    report = build_macro_regime_report(data_dir, as_of=_date.today())
+    if out is not None:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(report_to_json(report), encoding="utf-8")
+
+    if as_json:
+        typer.echo(_json.dumps(report, ensure_ascii=False))
+    else:
+        overall = report["overall"]
+        typer.echo(
+            f"macro regime: {overall['label']} "
+            f"(지표 {overall['available_indicators']}/{overall['total_indicators']}, "
+            f"스트레스 깃발 {len(overall['stress_flags'])}개)"
+        )
+        for key, ind in report["indicators"].items():
+            if ind["status"] == "OK":
+                mark = "⚠" if ind.get("stress") else "✓"
+                typer.echo(f"  {mark} {key}: {ind['state']}")
+            else:
+                typer.echo(f"  ? {key}: {ind['reason']}")
+    if report["overall"]["available_indicators"] == 0:
+        _exit(1)
+
+
 @app.command("signal-ic")
 def signal_ic_cmd(
     portfolio: Path = typer.Option(

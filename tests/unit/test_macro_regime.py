@@ -1,0 +1,246 @@
+"""거시 레짐 보고서 (계획 ④ 후속) — 지표·합성·fail-soft·격리 불변식.
+
+네트워크 0, 라이브 DB 0 — 입력은 채널 표준 CSV 텍스트뿐.
+"""
+
+from __future__ import annotations
+
+from datetime import date
+from decimal import Decimal
+from pathlib import Path
+
+import pytest
+
+from auto_invest.market_data.macro_regime import (
+    CPI_CSV,
+    SPREAD_CSV,
+    UNEMPLOYMENT_CSV,
+    VIX_CSV,
+    build_macro_regime_report,
+    compose_overall,
+    inflation_state,
+    load_series_csv,
+    sahm_rule_state,
+    vix_state,
+    yield_curve_state,
+)
+
+AS_OF = date(2026, 6, 12)
+
+
+def _series_csv(rows: list[tuple[str, str]]) -> str:
+    return "date,value\n" + "\n".join(f"{d},{v}" for d, v in rows)
+
+
+def _points(values: list[str], *, start_month: tuple[int, int] = (2024, 1)) -> list:
+    """월간 시계열 생성 (YYYY-MM-01)."""
+    y, m = start_month
+    out = []
+    for v in values:
+        out.append((f"{y:04d}-{m:02d}-01", Decimal(v) if v else None))
+        m += 1
+        if m == 13:
+            y, m = y + 1, 1
+    return out
+
+
+# ---------- CSV 로더 ----------
+
+
+def test_load_series_csv_preserves_missing_and_sorts() -> None:
+    pts = load_series_csv("date,value\n2026-06-02,1.5\n2026-06-01,\n")
+    assert pts == [("2026-06-01", None), ("2026-06-02", Decimal("1.5"))]
+    with pytest.raises(ValueError, match="헤더"):
+        load_series_csv("a,b\n1,2\n")
+    with pytest.raises(ValueError, match="숫자"):
+        load_series_csv("date,value\n2026-06-01,abc\n")
+
+
+# ---------- 금리 곡선 ----------
+
+
+def test_yield_curve_states() -> None:
+    inv = yield_curve_state([("2026-06-10", Decimal("-0.3"))])
+    assert inv["state"] == "INVERTED" and inv["stress"] is True
+    flat = yield_curve_state([("2026-06-10", Decimal("0.4"))])
+    assert flat["state"] == "FLAT" and flat["stress"] is False
+    norm = yield_curve_state([("2026-06-10", Decimal("0.8"))])
+    assert norm["state"] == "NORMAL"
+    assert yield_curve_state([])["status"] == "UNAVAILABLE"
+
+
+def test_yield_curve_counts_inverted_days_in_window() -> None:
+    pts = [(f"2026-01-{i:02d}", Decimal("-0.1")) for i in range(1, 11)]
+    pts += [(f"2026-02-{i:02d}", Decimal("0.6")) for i in range(1, 6)]
+    out = yield_curve_state(pts)
+    assert out["inverted_days_252"] == 10 and out["state"] == "NORMAL"
+
+
+# ---------- VIX ----------
+
+
+def test_vix_bands_and_percentile() -> None:
+    base = [(f"2026-01-{i:02d}", Decimal("12")) for i in range(1, 10)]
+    calm = vix_state(base + [("2026-06-11", Decimal("14.9"))])
+    assert calm["state"] == "CALM" and calm["stress"] is False
+    crisis = vix_state(base + [("2026-06-11", Decimal("45"))])
+    assert crisis["state"] == "CRISIS" and crisis["stress"] is True
+    assert crisis["history_percentile"] == "100.0"  # 이력 최고치
+    elevated = vix_state(base + [("2026-06-11", Decimal("30"))])
+    assert elevated["state"] == "ELEVATED" and elevated["stress"] is True
+
+
+# ---------- 물가 (CPI 전년동월비) ----------
+
+
+def test_inflation_yoy_exact_and_bands() -> None:
+    # 2025-06 = 300 → 2026-06 = 309 → YoY 3.00% (HIGH 경계)
+    pts = _points(["300"] + [""] * 11 + ["309"], start_month=(2025, 6))
+    out = inflation_state(pts)
+    assert out["state"] == "HIGH" and out["yoy_pct"] == "3.00" and out["stress"] is True
+    # 2% 미만 LOW, 음수 DEFLATION
+    low = inflation_state(_points(["300"] + [""] * 11 + ["304.5"], start_month=(2025, 6)))
+    assert low["state"] == "LOW" and low["stress"] is False
+    defl = inflation_state(_points(["300"] + [""] * 11 + ["297"], start_month=(2025, 6)))
+    assert defl["state"] == "DEFLATION" and defl["stress"] is True
+
+
+def test_inflation_unavailable_when_base_month_missing() -> None:
+    # 12개월 전 달이 결측("-" 미발표) → 정직하게 UNAVAILABLE
+    pts = _points([""] + ["301"] * 11 + ["309"], start_month=(2025, 6))
+    out = inflation_state(pts)
+    assert out["status"] == "UNAVAILABLE" and "12개월 전" in out["reason"]
+
+
+# ---------- 고용 (삼 룰) ----------
+
+
+def test_sahm_rule_quiet_and_triggered() -> None:
+    quiet = sahm_rule_state(_points(["4.0"] * 16))
+    assert quiet["state"] == "QUIET" and quiet["sahm_value_pp"] == "0.00"
+    # 마지막 3개월 실업률 급등 → 3개월 이동평균이 최솟값보다 0.5%p 이상 위
+    rising = _points(["4.0"] * 13 + ["4.6", "4.8", "5.0"])
+    out = sahm_rule_state(rising)
+    assert out["state"] == "TRIGGERED" and out["stress"] is True
+    assert Decimal(out["sahm_value_pp"]) >= Decimal("0.5")
+
+
+def test_sahm_rule_insufficient_observations() -> None:
+    out = sahm_rule_state(_points(["4.0"] * 14))
+    assert out["status"] == "UNAVAILABLE" and "15개" in out["reason"]
+
+
+# ---------- 합성 ----------
+
+
+def _ok(stress: bool) -> dict:
+    return {"status": "OK", "stress": stress}
+
+
+def test_compose_overall_labels() -> None:
+    assert compose_overall({"a": _ok(False), "b": _ok(False)})["label"] == "RISK_ON"
+    assert compose_overall({"a": _ok(True), "b": _ok(False)})["label"] == "CAUTION"
+    assert compose_overall({"a": _ok(True), "b": _ok(True)})["label"] == "RISK_OFF"
+    # 계산 가능 지표 < 2 → 깃발 0개를 안전으로 오독하지 않는다
+    out = compose_overall({"a": _ok(False), "b": {"status": "UNAVAILABLE"}})
+    assert out["label"] == "INSUFFICIENT" and out["available_indicators"] == 1
+
+
+# ---------- 보고서 생성 (fail-soft) ----------
+
+
+def _write(data_dir: Path, rel: str, text: str) -> None:
+    p = data_dir / rel
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(text, encoding="utf-8")
+
+
+def test_build_report_full_inputs(tmp_path: Path) -> None:
+    _write(tmp_path, SPREAD_CSV, _series_csv([("2026-06-11", "-0.2")]))
+    _write(tmp_path, VIX_CSV, _series_csv([("2026-06-11", "18")]))
+    cpi = _points(["300"] + [""] * 11 + ["307.5"], start_month=(2025, 6))
+    _write(tmp_path, CPI_CSV, _series_csv([(d, str(v) if v else "") for d, v in cpi]))
+    une = _points(["4.0"] * 16)
+    _write(tmp_path, UNEMPLOYMENT_CSV, _series_csv([(d, str(v)) for d, v in une]))
+
+    report = build_macro_regime_report(tmp_path, as_of=AS_OF)
+    assert report["schema_version"] == "1.0" and report["as_of"] == "2026-06-12"
+    ind = report["indicators"]
+    assert ind["yield_curve"]["state"] == "INVERTED"
+    assert ind["vix"]["state"] == "NORMAL"
+    assert ind["inflation"]["state"] == "MODERATE"  # 2.50%
+    assert ind["sahm"]["state"] == "QUIET"
+    # 역전 깃발 1개 → CAUTION
+    assert report["overall"]["label"] == "CAUTION"
+    assert report["overall"]["stress_flags"] == ["yield_curve"]
+
+
+def test_build_report_failsoft_missing_files(tmp_path: Path) -> None:
+    _write(tmp_path, SPREAD_CSV, _series_csv([("2026-06-11", "0.9")]))
+    _write(tmp_path, VIX_CSV, _series_csv([("2026-06-11", "13")]))
+    report = build_macro_regime_report(tmp_path, as_of=AS_OF)
+    assert report["indicators"]["inflation"]["status"] == "UNAVAILABLE"
+    assert report["indicators"]["sahm"]["status"] == "UNAVAILABLE"
+    assert report["overall"]["label"] == "RISK_ON"  # 가용 2개, 깃발 0개
+    assert report["overall"]["available_indicators"] == 2
+
+
+def test_build_report_empty_dir_is_insufficient(tmp_path: Path) -> None:
+    report = build_macro_regime_report(tmp_path, as_of=AS_OF)
+    assert report["overall"]["label"] == "INSUFFICIENT"
+    assert report["overall"]["available_indicators"] == 0
+
+
+# ---------- 격리·배선 불변식 ----------
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def test_module_is_research_only_no_live_imports() -> None:
+    """라이브 DB/주문 경로 무접촉 — public_data.py 와 같은 격리 계약."""
+    text = (
+        _REPO_ROOT / "src" / "auto_invest" / "market_data" / "macro_regime.py"
+    ).read_text(encoding="utf-8")
+    for forbidden in (
+        "insert_bar",
+        "auto_invest.db",
+        "from auto_invest.persistence",
+        "from auto_invest.broker",
+        "from auto_invest.strategy",  # 라이브 가격 레짐과 섞이지 않는다
+    ):
+        assert forbidden not in text, forbidden
+
+
+def test_live_trading_paths_do_not_import_macro_regime() -> None:
+    """역방향 격리 — 라이브 경로(strategy/·broker/·worker)가 거시 레짐을 안 읽는다."""
+    src = _REPO_ROOT / "src" / "auto_invest"
+    for sub in ("strategy", "broker"):
+        for py in (src / sub).rglob("*.py"):
+            assert "macro_regime" not in py.read_text(encoding="utf-8"), py
+
+
+def test_workflow_wires_regime_report_into_sidecar() -> None:
+    wf = (
+        _REPO_ROOT / ".github" / "workflows" / "collect-public-data.yml"
+    ).read_text(encoding="utf-8")
+    assert "auto-invest macro-regime" in wf
+    assert "regime.json" in wf
+    # 보고 실패가 데이터 발행을 막지 않는다 (fail-soft)
+    assert "--out /tmp/public-data/regime.json || true" in wf
+    # 모듈 변경 시 같은 날 실전 검증 (push 경로 포함)
+    assert "src/auto_invest/market_data/macro_regime.py" in wf
+
+
+def test_report_source_paths_match_channel_config() -> None:
+    """보고서가 읽는 파일명이 채널 설정의 발행 식별자와 정합."""
+    import tomllib
+
+    cfg = tomllib.loads(
+        (_REPO_ROOT / "deploy" / "public-data.toml").read_text(encoding="utf-8")
+    )
+    spread_id = cfg["treasury"]["spread"]["id"]
+    assert f"treasury/{spread_id}.csv" == SPREAD_CSV
+    assert cfg["cboe"]["vix"] is True and VIX_CSV == "cboe/VIX.csv"
+    bls = set(cfg["bls"]["series"])
+    assert CPI_CSV.split("/")[1].removesuffix(".csv") in bls
+    assert UNEMPLOYMENT_CSV.split("/")[1].removesuffix(".csv") in bls
