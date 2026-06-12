@@ -160,6 +160,10 @@ class WorkerSettings:
     # 상시 갱신 — 운영자 요청(일 1회 ≫ 월 1회).
     backfill_enabled: bool = False
     backfill_exchanges: tuple[str, ...] = ("NAS", "NYS", "AMS")
+    # 시스템 비관리 외부 보유 기준선(deploy/external-holdings.toml) — 운영자가
+    # 시스템 밖에서 취득해 원장(fills)에 없는 보유의 symbol→qty. 장 마감 정합성이
+    # (원장 + 기준선) == 브로커 로 대조한다. 빈 매핑(기본)이면 종전과 byte 동일.
+    external_holdings: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass
@@ -913,6 +917,7 @@ class Worker:
             # 보유·잔고 정합성은 모든 미국 거래소(NASD·NYSE·AMEX)를 훑어 합친다(기본
             # markets=US_ORDER_EXCHANGES) — 멀티에셋 유니버스에서 다른 거래소 종목이 빠져
             # 'ledger_only' 로 오인돼 허위 halt 나는 일을 막는다.
+            external_holdings=self.settings.external_holdings,
         )
 
     # ---------------------------------------------- forever loop

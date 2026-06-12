@@ -140,16 +140,24 @@ def run(
         "--prices",
         help="Anthropic price table (TOML); validated at startup per spec 002.",
     ),
+    external_holdings_path: Path = typer.Option(
+        Path("deploy/external-holdings.toml"),
+        "--external-holdings",
+        help="시스템 비관리 외부 보유 기준선 TOML — 장 마감 정합성이 (원장+기준선)을 "
+        "브로커 잔고와 대조한다. 파일이 없으면 기준선 없음(종전 동작).",
+    ),
 ) -> None:
     configure_logging()
 
     # 1. Secrets + config (refuses on missing required values).
+    from auto_invest.reconciliation.external_holdings import load_external_holdings
     from auto_invest.telemetry.prices import PriceTableError, load_prices
 
     try:
         secrets = load_secrets(env_file)
         cfg = load_config(config, env_path=env_file)
         prices = load_prices(prices_path)
+        external_holdings = load_external_holdings(external_holdings_path)
     except (ConfigError, PriceTableError) as exc:
         typer.echo(f"Configuration error: {exc}", err=True)
         _exit(2)
@@ -232,6 +240,7 @@ def run(
             capital_growth_enabled=capital_growth,
             capital_max_growth_factor=Decimal(str(capital_max_growth)),
             backfill_enabled=backfill,
+            external_holdings=external_holdings,
         )
     )
 
@@ -1403,6 +1412,7 @@ async def _run_reconcile(
     halt_path: Path,
     db_path: Path,
     market: str,
+    external_holdings: dict[str, int] | None = None,
 ):
     """스펙 001 T050 — 로컬 보유를 브로커 잔고와 1회 대조(읽기-기반)."""
     from auto_invest.reconciliation.runner import run_reconciliation
@@ -1431,6 +1441,7 @@ async def _run_reconcile(
             halt_path=halt_path,
             # 보유·잔고 정합성은 모든 미국 거래소를 훑어 합친다(기본 markets=US_ORDER_EXCHANGES)
             # — 멀티에셋 유니버스의 다른 거래소 종목이 빠져 허위 halt 나지 않게.
+            external_holdings=external_holdings,
         )
 
 
@@ -1522,6 +1533,12 @@ def reconcile(
         help="KIS REST base URL.",
     ),
     market: str = typer.Option("NASD", "--market", help="해외거래소 코드."),
+    external_holdings_path: Path = typer.Option(
+        Path("deploy/external-holdings.toml"),
+        "--external-holdings",
+        help="시스템 비관리 외부 보유 기준선 TOML — (원장+기준선)을 브로커와 대조. "
+        "파일이 없으면 기준선 없음(종전 동작).",
+    ),
 ) -> None:
     """스펙 001 P2 — 로컬 보유를 브로커 잔고와 대조(수동/모니터링용).
 
@@ -1538,8 +1555,11 @@ def reconcile(
     if not db_path.exists():
         typer.echo(f"DB 파일이 없습니다: {db_path}", err=True)
         _exit(2)
+    from auto_invest.reconciliation.external_holdings import load_external_holdings
+
     try:
         secrets = load_secrets(env_file)
+        external_holdings = load_external_holdings(external_holdings_path)
     except ConfigError as exc:
         typer.echo(f"환경 파일 오류: {exc}", err=True)
         _exit(2)
@@ -1556,6 +1576,7 @@ def reconcile(
                 halt_path=halt_path,
                 db_path=db_path,
                 market=market,
+                external_holdings=external_holdings,
             )
         )
     finally:
@@ -2062,6 +2083,7 @@ async def _run_live(
     capital_growth_enabled: bool = False,
     capital_max_growth_factor: Decimal = Decimal("2"),
     backfill_enabled: bool = False,
+    external_holdings: dict[str, int] | None = None,
 ) -> None:
     settings = WorkerSettings(
         config=cfg,
@@ -2074,6 +2096,7 @@ async def _run_live(
         capital_growth_enabled=capital_growth_enabled,
         capital_max_growth_factor=capital_max_growth_factor,
         backfill_enabled=backfill_enabled,
+        external_holdings=external_holdings or {},
     )
 
     async with httpx.AsyncClient(base_url=base_url, timeout=30.0) as inner:

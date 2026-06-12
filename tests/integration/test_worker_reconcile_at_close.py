@@ -47,7 +47,12 @@ def _caps() -> SizingCaps:
 
 
 @asynccontextmanager
-async def _worker(tmp_path: Path, *, paper_mode: bool) -> AsyncIterator[Worker]:
+async def _worker(
+    tmp_path: Path,
+    *,
+    paper_mode: bool,
+    external_holdings: dict[str, int] | None = None,
+) -> AsyncIterator[Worker]:
     settings = WorkerSettings(
         config=LoadedConfig(
             caps=_caps(),
@@ -60,6 +65,7 @@ async def _worker(tmp_path: Path, *, paper_mode: bool) -> AsyncIterator[Worker]:
         total_capital_usd=Decimal("100"),
         require_session_open=True,
         paper_mode=paper_mode,
+        external_holdings=external_holdings or {},
     )
     async with httpx.AsyncClient(base_url=BASE) as inner:
         broker = ResilientClient(
@@ -164,6 +170,25 @@ async def test_reconcile_fires_once_per_close(tmp_path: Path) -> None:
             await worker.tick(CLOSED)  # 이미 닫힘 — 전이 아님 → 재실행 안 함.
         # 정합성 실행 행이 정확히 1건 — 두 번째 닫힘 틱은 재실행하지 않았다.
         assert _run_results(worker) == ["OK"]
+
+
+@pytest.mark.asyncio
+async def test_external_baseline_wired_into_close_reconcile(tmp_path: Path) -> None:
+    """설정의 외부 보유 기준선이 마감 정합성까지 실제로 전달된다(배선 검증).
+
+    원장엔 없는 AAPL 10주가 계좌에 있어도 기준선이 10주를 선언하면 OK —
+    운영자 외부 보유로 인한 허위 halt 반복(2026-06-04/06-11 실측)의 종결 경로.
+    """
+    async with _worker(
+        tmp_path, paper_mode=False, external_holdings={"AAPL": 10}
+    ) as worker:
+        # 원장 비움(시스템 체결 0건) — 브로커만 10주 보유.
+        with respx.mock(base_url=BASE, assert_all_called=False) as mock:
+            _mock_balance(mock, broker_qty=10)
+            await worker.tick(OPEN)
+            await worker.tick(CLOSED)
+        assert _run_results(worker) == ["OK"]
+        assert is_halted(worker.settings.halt_path) is False
 
 
 @pytest.mark.asyncio

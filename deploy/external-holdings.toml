@@ -1,0 +1,33 @@
+# 시스템 비관리 외부 보유 기준선 (external holdings baseline)
+#
+# 실계좌에 있지만 시스템이 사고팔지 않는 운영자 소유 종목. 원장(fills →
+# current_positions)은 시스템이 직접 체결한 것만 추적하므로, 이 종목들은
+# 원장에 영원히 없고 매 장 마감 정합성 검사가 "reconciliation mismatch:
+# 4 position(s)" → halt 를 반복했다 (2026-06-04 / 2026-06-11 실측).
+#
+# 정합성 검사는 (원장 수량 + 이 기준선 수량) == 브로커 수량 으로 대조한다.
+#   * 아래와 정확히 일치 → OK (깃발 안 섬).
+#   * 1주라도 달라지면(운영자 매도 포함) 여전히 MISMATCH → halt — 안전망
+#     약화가 아니다. 시스템 모델 밖에서 무언가 움직였다는 신호이므로 멈추고
+#     드러낸다. 보유가 진짜로 바뀌었으면 이 파일을 갱신해 머지하라(변경
+#     자체가 git 이력 = 포렌식 기록).
+#
+# 출처: KIS smoke run 27405479242 (2026-06-12T08:54Z) 실계좌 조회 —
+#   BHP 1주(평단 $47.97) / MRK 3주($79.09) / ORANY 28주($11.195) /
+#   RELX 6주($54.155). HANDOFF-013(2026-05-22) 시점에도 동일 4종목.
+
+[[holdings]]
+symbol = "BHP"
+qty = 1
+
+[[holdings]]
+symbol = "MRK"
+qty = 3
+
+[[holdings]]
+symbol = "ORANY"
+qty = 28
+
+[[holdings]]
+symbol = "RELX"
+qty = 6
