@@ -70,23 +70,39 @@ def test_module_cannot_write_live_price_bars() -> None:
     assert "from auto_invest.broker" not in text
 
 
-def test_config_parses_and_cross_check_pair_is_collected() -> None:
+def test_config_parses_and_cross_checks_reference_collected_ids() -> None:
+    """설정 정합 — 모든 교차 검증 짝이 실제 수집되는 레지스트리 키를 가리킨다.
+
+    4차(2026-06-11, 운영자 선택): 수집은 공식 키리스 조합(재무부·Cboe·BLS·
+    DBnomics)만. Stooq·FRED 는 실행기 IP 차단 실측으로 수집에서 빠지고 탐침으로
+    만 추적한다. 가격 이력 확장은 보류 — 가격 소스는 KIS 백필 유지(ARM F
+    유니버스 정합 단언이 사라진 이유).
+    """
     cfg = tomllib.loads(_CONFIG.read_text(encoding="utf-8"))
-    symbols = cfg["stooq"]["symbols"]
-    series = cfg["fred"]["series"]
-    assert len(symbols) >= 1 and len(series) >= 1
-    cc = cfg["cross_check"]
-    assert cc["stooq_symbol"] in symbols
-    assert cc["fred_series"] in series
-    # ARM F(유니버스 확대 forward 트랙)의 11개 슬리브가 전부 연구 대상에 있어야
-    # 검증 트랙과 연구 데이터가 같은 우주를 본다(검증=연구 정합).
-    wide = tomllib.loads(
-        (_REPO_ROOT / "deploy" / "global-trend-wide-portfolio.toml").read_text(
-            encoding="utf-8"
-        )
-    )
-    for sleeve in wide["portfolio"]["universe"]:
-        assert sleeve in symbols, f"ARM F 슬리브 {sleeve} 가 public-data 수집 목록에 없음"
+    # 차단된 옛 소스가 수집 목록에 되살아나지 않게 — 탐침([probes])으로만 추적.
+    assert "stooq" not in cfg and "fred" not in cfg
+    # 수집 시 레지스트리에 올라갈 "provider:id" 키를 설정에서 재구성한다.
+    collected: set[str] = set()
+    tre = cfg.get("treasury", {})
+    for item_id in tre.get("maturities", {}).values():
+        collected.add(f"treasury:{item_id}")
+    if "spread" in tre:
+        collected.add(f"treasury:{tre['spread']['id']}")
+        # 스프레드 다리가 수집 만기에 있어야 계산 가능.
+        for leg in ("long", "short"):
+            assert tre["spread"][leg] in tre["maturities"], leg
+    if cfg.get("cboe", {}).get("vix"):
+        collected.add("cboe:VIX")
+    for sid in cfg.get("bls", {}).get("series", []):
+        collected.add(f"bls:{sid}")
+    for code in cfg.get("dbnomics", {}).get("series", []):
+        collected.add(f"dbnomics:{code}")
+    assert len(collected) >= 4, "공식 키리스 조합이 통째로 사라짐"
+    checks = cfg.get("cross_checks", [])
+    assert len(checks) >= 1, "교차 검증 0개 — 단일 전송 경로 오염을 못 잡는다"
+    for cc in checks:
+        assert cc["a"] in collected, f"교차 검증 입력 {cc['a']} 이 수집 목록에 없음"
+        assert cc["b"] in collected, f"교차 검증 입력 {cc['b']} 이 수집 목록에 없음"
 
 
 def test_collect_step_has_own_timeout_below_job_limit() -> None:
