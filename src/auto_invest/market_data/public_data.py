@@ -313,9 +313,11 @@ def parse_bls_v1_json(text: str) -> list[SeriesPoint]:
         if not period.startswith("M") or period == "M13":
             continue
         d = f"{int(entry['year']):04d}-{int(period[1:]):02d}-01"
-        points.append(
-            SeriesPoint(date=d, value=_parse_decimal(str(entry["value"]), what=d))
-        )
+        # 첫 실측(2026-06-12): 미발표 기간은 값이 "-" 로 온다(예: 2025-10 정부
+        # 셧다운 결측) — 형식 오류가 아니라 결측으로 보존한다.
+        raw = str(entry["value"]).strip()
+        value = None if raw in ("-", "", "NA", ".") else _parse_decimal(raw, what=d)
+        points.append(SeriesPoint(date=d, value=value))
     points.sort(key=lambda p: p.date)
     return points
 
@@ -816,7 +818,10 @@ def collect_public_data(
                 _publish_series("treasury", item["id"], points, v, item)
             items.append(item)
 
-    # ---- Cboe VIX 공식 이력 (1990년~ OHLC, 거래량 없음) ---------------------------
+    # ---- Cboe VIX 공식 이력 (1990년~, 종가 시계열로 발행) -------------------------
+    # 첫 실측(2026-06-12): 1990년대 초 원본에 OHLC 정합이 깨진 행이 있다(원본
+    # 아카이브의 알려진 특성). 연구(레짐 분석)가 쓰는 건 종가뿐 — 종가 시계열로
+    # 좁혀 발행한다. OHLC 가 필요해지면 그때 행 단위 격리를 설계한다.
     cboe_cfg = config.get("cboe", {})
     if cboe_cfg.get("vix", False):
         item = {"kind": "cboe", "id": "VIX"}
@@ -825,24 +830,14 @@ def collect_public_data(
         else:
             try:
                 bars = parse_cboe_daily_csv(_fetch(cboe_vix_history_url()))
-                v = validate_daily_bars(
-                    bars,
+                points = [SeriesPoint(date=b.date, value=b.close_usd) for b in bars]
+                v = validate_series(
+                    points,
                     as_of=as_of,
                     min_rows=int(cboe_cfg.get("min_rows", 1000)),
                     max_staleness_days=int(cboe_cfg.get("max_staleness_days", 7)),
-                    # VIX 는 하루 +100% 도 정상(2018-02 +115%) — 가격과 다른 한도.
-                    max_day_move_pct=Decimal(str(cboe_cfg.get("max_day_move_pct", "150"))),
                 )
-                item.update(
-                    ok=v.ok, rows=v.rows, first_date=v.first_date, last_date=v.last_date,
-                    issues=v.issues,
-                )
-                if v.ok:
-                    path = out_dir / "cboe" / "VIX.csv"
-                    path.parent.mkdir(parents=True, exist_ok=True)
-                    path.write_text(_bars_to_csv(bars), encoding="utf-8")
-                    item["published"] = str(path.relative_to(out_dir))
-                    registry["cboe:VIX"] = {b.date: b.close_usd for b in bars}
+                _publish_series("cboe", "VIX", points, v, item)
             except Exception as exc:  # noqa: BLE001 — 항목 단위 fail-soft
                 item.update(ok=False, issues=[f"{type(exc).__name__}: {exc}"])
             items.append(item)
