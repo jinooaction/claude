@@ -320,6 +320,14 @@ def default_specs() -> list[SidecarSpec]:
             critical=False,
             description="풀라이브 승격 준비 평가(보고 전용)",
         ),
+        SidecarSpec(
+            key="money-path",
+            branch="automation/money-path-last-run",
+            filename="LAST_RUN.md",
+            max_age_hours=30.0,  # 매일 08:00 — 첫-자본까지의 길 종합(보고 전용)
+            critical=False,
+            description="첫-자본까지의 길 종합·ETA(스펙 052, 보고 전용)",
+        ),
     ]
 
 

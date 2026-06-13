@@ -197,6 +197,8 @@ def test_default_specs_registry_sane():
     # 연구/보고 트랙은 비핵심(저하로만).
     assert by_key["regime-stratify"].critical is False
     assert by_key["collect-public-data"].critical is False
+    # 스펙 052 — 첫-자본까지의 길 보고자도 감시 대상(감시자가 보고자를 감시, 비핵심).
+    assert by_key["money-path"].critical is False
     # 모든 명세는 양수 한계와 automation 브랜치를 가진다.
     for s in specs:
         assert s.max_age_hours > 0

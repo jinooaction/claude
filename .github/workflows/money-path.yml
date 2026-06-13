@@ -1,0 +1,136 @@
+name: Money-path readiness (첫-자본까지의 길 종합)
+
+# 스펙 052 — 첫-자본까지의 길(money-path) 준비도 종합 + 첫-자본 추정 시점(ETA).
+#
+# 운영자 상시 지시(2026-06-13): "세계 최고 수준으로 진짜 돈을 벌어보자 + 사람 개입 없는
+# 완벽한 자동 시스템 + 세계 최고 수준의 안정성." 이 워크플로가 그 첫 문장을 한눈에
+# 읽히게 만든다.
+#
+# 문제: "진짜 돈"으로 가는 길이 여러 사이드카(전진 페이퍼·자본 사다리 게이트·라이브
+# 캐너리·승격 준비)에 흩어져 있어, "지금 어디까지 왔나, 다음 한 발을 막는 게 정확히
+# 무엇인가, 첫 자본은 언제 들어가나"에 답하려면 사람이 일일이 받아 짜맞춰야 했다 —
+# 이 프로젝트가 반복적으로 물렸던 "상태 혼동"의 한 형태.
+#
+# 동작: 자본 사다리 결정 사이드카(edge-autoarm)·라이브 캐너리·승격 준비 사이드카를
+# git show 로 읽어 라벨된 JSON 을 뽑고, 순수 코어(analytics.money_path)로 단계(stage)·
+# 막는 게이트·첫-자본 ETA 를 종합해 사이드카로 발행한다.
+#
+# 안전: 읽기 전용·돈 0 이동. 새 측정·재계산 없음 — 발행된 숫자를 합칠 뿐이다. 실제
+# 자본 배치는 자본 사다리 게이트(forward-edge-autoarm.yml)가, 라이브 전환은 운영자
+# 게이트(헌법 X.4)가 한다. 이건 *보고*라 빨갛게 실패시키지 않는다(거짓 경보 0). 누적
+# 정지(엣지 동결)는 스펙 051 생존 감시가 빨갛게 잡는다 — 이 둘은 결을 같이한다.
+#
+# 결과는 사이드카로 발행:
+#   git fetch origin automation/money-path-last-run
+#   git show origin/automation/money-path-last-run:LAST_RUN.md
+
+on:
+  schedule:
+    # 매일 08:00 UTC — 생존 감시(07:30)·전날 밤 자본 사다리 게이트(평일 23:50) 이후.
+    - cron: "0 8 * * *"
+  workflow_dispatch:
+  push:
+    # 코드/워크플로가 main 에 들어오면 즉시 1회 자가검증(스케줄은 하루 1회뿐).
+    # pipeline-liveness 와 같은 패턴 — 자기 파일만 매칭해 일반 머지엔 노이즈 0.
+    branches: [main]
+    paths:
+      - 'src/auto_invest/analytics/money_path.py'
+      - 'scripts/money_path_probe.py'
+      - '.github/workflows/money-path.yml'
+
+permissions:
+  contents: write  # 사이드카 force-push 용 (automation/money-path-last-run).
+
+concurrency:
+  group: money-path
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Collect source sidecars (read-only)
+        run: |
+          set -uo pipefail
+          mkdir -p /tmp/sidecars
+          git fetch --depth=1 origin \
+            '+refs/heads/automation/*:refs/remotes/origin/automation/*' || true
+          # 레지스트리(단일 출처)는 프로브의 --manifest 가 내놓는다.
+          uv run python scripts/money_path_probe.py --manifest > /tmp/manifest.tsv
+          while IFS=$'\t' read -r key branch filename; do
+            [[ -z "${key}" ]] && continue
+            if git show "origin/${branch}:${filename}" \
+                 > "/tmp/sidecars/${key}.md" 2>/dev/null; then
+              echo "✓ ${key}: 사이드카 수집 (${branch}:${filename})"
+            else
+              rm -f "/tmp/sidecars/${key}.md"
+              echo "✗ ${key}: 사이드카 없음 (${branch}) — 해당 입력은 None 처리"
+            fi
+          done < /tmp/manifest.tsv
+
+      - name: Assess money-path readiness
+        run: |
+          set -uo pipefail
+          uv run python scripts/money_path_probe.py \
+            --sidecar-dir /tmp/sidecars --json > /tmp/money_path.json
+          uv run python scripts/money_path_probe.py \
+            --sidecar-dir /tmp/sidecars > /tmp/money_path.txt
+          cat /tmp/money_path.txt
+
+      - name: Publish sidecar (always — diagnostic survives errors)
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -uo pipefail
+          BRANCH=automation/money-path-last-run
+          tmpdir=$(mktemp -d)
+
+          {
+            if [[ -f /tmp/money_path.txt ]]; then
+              cat /tmp/money_path.txt
+            else
+              echo "# 첫-자본까지의 길 — 보고 생성 실패"
+              echo ""
+              echo "Assess 스텝 진입 전에 실패. 위 워크플로 로그 확인."
+            fi
+            echo ""
+            echo "## 메타데이터"
+            echo ""
+            echo "| 항목 | 값 |"
+            echo "|------|-----|"
+            echo "| run_id | ${GITHUB_RUN_ID} |"
+            echo "| run_url | https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} |"
+            echo "| commit | ${GITHUB_SHA} |"
+            echo "| trigger | ${GITHUB_EVENT_NAME} |"
+            echo "| timestamp_utc | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
+            echo ""
+            echo "## 결정 JSON"
+            echo ""
+            echo '```json'
+            cat /tmp/money_path.json 2>/dev/null || echo "{}"
+            echo '```'
+          } > "${tmpdir}/LAST_RUN.md"
+
+          cd "${tmpdir}"
+          git init -q
+          git config user.name "money-path-bot"
+          git config user.email "money-path-bot@noreply.github.com"
+          git checkout --orphan publish -q
+          git add LAST_RUN.md
+          git commit -q -m "money-path run ${GITHUB_RUN_ID} @ ${GITHUB_SHA:0:7}"
+          # force-push: 사이드카는 항상 단일 커밋만 유지.
+          git push --force \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "publish:${BRANCH}"
+          echo "Published to ${BRANCH}."
+          echo "Read: git fetch origin ${BRANCH} && git show origin/${BRANCH}:LAST_RUN.md"
