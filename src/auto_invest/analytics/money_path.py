@@ -80,6 +80,16 @@ ETA_MEASURED = "measured"  # 직전 사이드카 대비 실측 누적 속도
 ETA_NOMINAL = "nominal"  # 전진 스케줄 가정(거래일당 ~1 관측)
 ETA_NONE = "n/a"  # 추정 불가/불필요
 
+# 전진 시계 수렴 상태 — "살아있지만 수렴 못 하는" 정체/리셋을 드러낸다.
+# 생존 감시(스펙 051)는 워크플로가 *멈췄나*(사이드카 나이)만 잡는다. 워크플로가
+# *돌면서도* 전진 관측이 안 늘면(시장 휴장·중복 스냅샷) 또는 줄면(자본 베이시스
+# 변경으로 consistent_basis_suffix 가 과거 점을 떨굼), 사이드카는 신선하니 생존
+# 감시는 🟢 OK 로 본다 — 이 사각지대를 직전 money-path 사이드카 대비 관측 증감으로 잡는다.
+CONV_CONVERGING = "converging"  # 직전 대비 관측 증가 — 정상 누적
+CONV_STALLED = "stalled"  # 거래일 지났는데 관측 그대로 — 전진 시계 정체
+CONV_REGRESSED = "regressed"  # 관측이 줄어듦 — 전진 시계 리셋(베이시스 변경 추정), 누적 재시작
+CONV_UNKNOWN = "unknown"  # 직전 사이드카 없음/같은 거래일 — 아직 측정 불가
+
 # 전진 페이퍼 스케줄(rebalance-paper-forward.yml: 평일 22:30 UTC) — 거래일당 ~1 관측.
 NOMINAL_OBS_PER_TRADING_DAY = 1.0
 
@@ -133,6 +143,7 @@ class EtaProjection:
     trading_days_remaining: int | None
     projected_date: str | None  # ISO date (YYYY-MM-DD)
     assumption: str
+    convergence: str = CONV_UNKNOWN  # converging | stalled | regressed | unknown
 
     def to_dict(self) -> dict:
         return {
@@ -146,6 +157,7 @@ class EtaProjection:
             "trading_days_remaining": self.trading_days_remaining,
             "projected_date": self.projected_date,
             "assumption": self.assumption,
+            "convergence": self.convergence,
         }
 
 
@@ -225,7 +237,14 @@ class MoneyPathReport:
         if self.eta.basis == ETA_NONE:
             lines.append(f"- {self.eta.assumption}")
         else:
+            conv_label = {
+                CONV_CONVERGING: "🟢 수렴 중(직전 사이드카 대비 관측 증가)",
+                CONV_STALLED: "🟡 정체(거래일 지났는데 관측 그대로) — 아래 날짜 신뢰 낮음",
+                CONV_REGRESSED: "🔴 리셋(관측 줄어듦, 자본 베이시스 변경 추정) — 누적 재시작",
+                CONV_UNKNOWN: "⚪ 측정 전(직전 사이드카 없음 또는 같은 거래일)",
+            }.get(self.eta.convergence, self.eta.convergence)
             lines += [
+                f"- 전진 시계 수렴: {conv_label}",
                 f"- 남은 관측: **{self.eta.obs_remaining}** 개 "
                 f"(속도 ~{self.eta.obs_per_trading_day} 관측/거래일, 근거={self.eta.basis})",
                 f"- 추정: 약 **{self.eta.trading_days_remaining} 거래일** 후 "
@@ -321,20 +340,42 @@ def _accumulation_eta(
     as_of_date = as_of.date()
     rate = NOMINAL_OBS_PER_TRADING_DAY
     basis = ETA_NOMINAL
+    convergence = CONV_UNKNOWN
     assumption = "전진 페이퍼는 평일 22:30 UTC 1회 → 거래일당 ~1 관측 가정(실측 누적 전 기본값)."
 
     prior_dt = _parse_iso(prior_ts)
-    if prior_dt is not None and prior_n_obs is not None and n_obs > prior_n_obs:
+    if prior_dt is not None and prior_n_obs is not None:
         td = _trading_days_between(prior_dt.date(), as_of_date)
-        if td > 0:
+        if n_obs < prior_n_obs:
+            # 관측이 줄었다 = 전진 시계 리셋(consistent_basis_suffix 가 자본 베이시스
+            # 변경으로 과거 스냅샷을 떨굼). 누적이 처음부터 다시 시작 → ETA 가 뒤로 밀린다.
+            # 거래일 경과와 무관하게 항상 드러낸다(관측은 절대 줄면 안 되는 값).
+            convergence = CONV_REGRESSED
+            assumption = (
+                f"⚠ 전진 관측이 직전({prior_dt.date().isoformat()}) {prior_n_obs}개에서 "
+                f"{n_obs}개로 줄었다 — 전진 시계 리셋(자본 베이시스 변경 추정). 누적이 처음부터 "
+                "다시 시작돼 첫-자본 ETA 가 뒤로 밀렸다. 전략 지문이 자주 바뀌면 영영 최소 "
+                "관측을 못 채운다(전략 변경은 전진 토너먼트에 *추가* 검증으로 — 갈아엎지 말 것)."
+            )
+        elif n_obs > prior_n_obs and td > 0:
             measured = (n_obs - prior_n_obs) / td
             if measured > 0:
                 rate = measured
                 basis = ETA_MEASURED
+                convergence = CONV_CONVERGING
                 assumption = (
                     f"직전 사이드카({prior_dt.date().isoformat()}, 관측 {prior_n_obs}) "
                     f"대비 실측 누적 속도 {measured:.2f} 관측/거래일."
                 )
+        elif n_obs == prior_n_obs and td > 0:
+            # 거래일이 지났는데 관측이 그대로 = 전진 시계 정체(시장 휴장·중복 스냅샷·전진
+            # 페이퍼 정지 가능). nominal 날짜는 누적이 *재개된다는 가정*의 낙관 최선치일 뿐.
+            convergence = CONV_STALLED
+            assumption = (
+                f"⚠ 직전 사이드카({prior_dt.date().isoformat()}, 관측 {prior_n_obs}) 대비 "
+                f"거래일 {td}일 지났는데 관측이 그대로({n_obs}) — 전진 시계 정체(시장 휴장·중복 "
+                "스냅샷·전진 페이퍼 정지 가능). 아래 날짜는 누적이 재개된다는 가정의 최선치다."
+            )
 
     calendar_days, projected = _project_trading_date(as_of_date, obs_remaining, rate)
     return EtaProjection(
@@ -344,6 +385,7 @@ def _accumulation_eta(
         trading_days_remaining=_trading_days_between(as_of_date, projected),
         projected_date=projected.isoformat(),
         assumption=assumption,
+        convergence=convergence,
     )
 
 
@@ -465,10 +507,21 @@ def assess_money_path(
             prior_n_obs=prior_n_obs,
             prior_ts=prior_ts,
         )
-        headline = (
-            f"⏳ 단0(자본 0%) — 전진 엣지 누적 중({n_obs}/{min_obs} 관측). "
-            f"추정 첫-자본 ≈ {eta.projected_date or '미정'}. 정상(시간 게이트)."
-        )
+        if eta.convergence == CONV_REGRESSED:
+            headline = (
+                f"⚠ 단0(자본 0%) — 전진 시계 리셋(관측 줄어듦, 자본 베이시스 변경 추정). "
+                f"누적 재시작 — 첫-자본 ETA 가 뒤로 밀림({n_obs}/{min_obs} 관측)."
+            )
+        elif eta.convergence == CONV_STALLED:
+            headline = (
+                f"⚠ 단0(자본 0%) — 전진 엣지 누적 정체({n_obs}/{min_obs} 관측, 직전 대비 "
+                "안 늘어남). 지속되면 첫-자본 ETA 가 뒤로 밀린다(전진 페이퍼 점검)."
+            )
+        else:
+            headline = (
+                f"⏳ 단0(자본 0%) — 전진 엣지 누적 중({n_obs}/{min_obs} 관측). "
+                f"추정 첫-자본 ≈ {eta.projected_date or '미정'}. 정상(시간 게이트)."
+            )
         blocking = f"전진 관측 부족: {n_obs}/{min_obs} (통계적 유의까지 더 쌓여야 함)."
         gates.append(
             GateCondition(
@@ -476,7 +529,23 @@ def assess_money_path(
                 GATE_PENDING,
                 f"{n_obs}",
                 f"≥ {min_obs}",
-                "전진 페이퍼가 매 거래일 1개씩 쌓는다. 동결되면 ETA 가 무한대로 벌어진다.",
+                "전진 페이퍼가 매 거래일 1개씩 쌓는다. 정체/리셋이면 '전진 시계 수렴'이 잡는다.",
+            )
+        )
+        conv_status = {
+            CONV_CONVERGING: GATE_PASS,
+            CONV_UNKNOWN: GATE_PENDING,
+            CONV_STALLED: GATE_PENDING,
+            CONV_REGRESSED: GATE_FAIL,
+        }.get(eta.convergence, GATE_PENDING)
+        gates.append(
+            GateCondition(
+                "전진 시계 수렴",
+                conv_status,
+                eta.convergence,
+                "converging(매 거래일 +1)",
+                "직전 money-path 사이드카 대비 관측 증감. 정체(stalled)/리셋(regressed)이면 "
+                "살아있어도 수렴 못 하는 것 — 생존 감시(스펙 051)가 못 잡는 사각지대를 메운다.",
             )
         )
         gates.append(
@@ -633,6 +702,10 @@ def assess_money_path(
 
 
 __all__ = [
+    "CONV_CONVERGING",
+    "CONV_REGRESSED",
+    "CONV_STALLED",
+    "CONV_UNKNOWN",
     "ETA_MEASURED",
     "ETA_NOMINAL",
     "ETA_NONE",
