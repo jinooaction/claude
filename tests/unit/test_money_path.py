@@ -6,6 +6,10 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 
 from auto_invest.analytics.money_path import (
+    CONV_CONVERGING,
+    CONV_REGRESSED,
+    CONV_STALLED,
+    CONV_UNKNOWN,
     ETA_MEASURED,
     ETA_NOMINAL,
     ETA_NONE,
@@ -117,6 +121,71 @@ def test_accumulating_obs_already_met_projects_today():
     assert r.eta.obs_remaining == 0
     assert r.eta.projected_date == "2026-06-13"
     assert r.eta.basis == ETA_NONE
+
+
+# ── 전진 시계 수렴(정체/리셋/수렴) — "살아있지만 수렴 못 하는" 사각지대 ──
+
+
+def test_convergence_converging_when_obs_grows():
+    # 직전 6/8(월) 관측 1 → now 6/12(금) 관측 5 = 매 거래일 증가 → CONVERGING.
+    now = datetime(2026, 6, 12, 8, 0, 0, tzinfo=UTC)
+    prior = {"as_of_utc": "2026-06-08T08:00:00Z", "n_obs": 1}
+    r = assess_money_path(
+        ladder=_ladder(), forward_verdict=_verdict(n_obs=5), prior=prior, now=now
+    )
+    assert r.eta.convergence == CONV_CONVERGING
+    assert r.eta.basis == ETA_MEASURED
+    names = {g.name: g.status for g in r.gates}
+    assert names["전진 시계 수렴"] == GATE_PASS
+
+
+def test_convergence_stalled_when_obs_flat_over_trading_days():
+    # 직전 6/11(목) 관측 3 → now 6/13(토) 관측 3, 거래일 2 경과했는데 그대로 = STALLED.
+    prior = {"as_of_utc": "2026-06-11T08:00:00Z", "n_obs": 3}
+    r = assess_money_path(
+        ladder=_ladder(), forward_verdict=_verdict(n_obs=3), prior=prior, now=NOW
+    )
+    assert r.eta.convergence == CONV_STALLED
+    assert r.eta.basis == ETA_NOMINAL  # 정체는 측정 불가 → nominal 최선치
+    assert "정체" in r.headline and "⚠" in r.headline
+    names = {g.name: g.status for g in r.gates}
+    assert names["전진 시계 수렴"] == GATE_PENDING  # 정체는 일시적 가능(주말 등)
+
+
+def test_convergence_stalled_not_flagged_same_trading_day():
+    # 같은 거래일에 두 번 돌면(거래일 0 경과) 관측이 같아도 정체 아님 → UNKNOWN.
+    prior = {"as_of_utc": "2026-06-13T02:00:00Z", "n_obs": 3}
+    r = assess_money_path(
+        ladder=_ladder(), forward_verdict=_verdict(n_obs=3), prior=prior, now=NOW
+    )
+    assert r.eta.convergence == CONV_UNKNOWN
+
+
+def test_convergence_regressed_when_obs_drops():
+    # 직전 관측 5 → now 관측 1 = 전진 시계 리셋(베이시스 변경) → REGRESSED, 게이트 FAIL.
+    prior = {"as_of_utc": "2026-06-11T08:00:00Z", "n_obs": 5}
+    r = assess_money_path(
+        ladder=_ladder(), forward_verdict=_verdict(n_obs=1), prior=prior, now=NOW
+    )
+    assert r.eta.convergence == CONV_REGRESSED
+    assert r.eta.obs_remaining == 19  # 관측 줄어 남은 관측이 다시 늘어남
+    assert "리셋" in r.headline and "⚠" in r.headline
+    names = {g.name: g.status for g in r.gates}
+    assert names["전진 시계 수렴"] == GATE_FAIL
+
+
+def test_convergence_unknown_without_prior():
+    r = assess_money_path(ladder=_ladder(), forward_verdict=_verdict(n_obs=1), now=NOW)
+    assert r.eta.convergence == CONV_UNKNOWN
+    names = {g.name: g.status for g in r.gates}
+    assert names["전진 시계 수렴"] == GATE_PENDING
+    # 정상 누적 헤드라인은 ⚠ 가 없어야 한다(거짓 경보 0).
+    assert "정상" in r.headline
+
+
+def test_convergence_present_in_eta_dict():
+    r = assess_money_path(ladder=_ladder(), forward_verdict=_verdict(n_obs=1), now=NOW)
+    assert r.to_dict()["eta"]["convergence"] == CONV_UNKNOWN
 
 
 def test_no_edge_yet_stage():
