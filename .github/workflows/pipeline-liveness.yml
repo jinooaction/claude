@@ -32,6 +32,15 @@ on:
     # 매일 07:30 UTC — 전날 밤 배치(22:30~23:50)·KIS smoke(03:00)·수집(01:30) 이후.
     - cron: "30 7 * * *"
   workflow_dispatch:
+  push:
+    # 감시자 코드/워크플로가 바뀌어 main 에 들어오면 즉시 1회 자가검증 실행
+    # (스케줄은 하루 1회뿐이라, 변경 직후 실제 CI 동작을 확인하려면 필요). kis-smoke
+    # 와 같은 패턴 — 자기 파일만 매칭해 일반 머지에는 노이즈를 안 낸다.
+    branches: [main]
+    paths:
+      - 'src/auto_invest/analytics/pipeline_liveness.py'
+      - 'scripts/pipeline_liveness_probe.py'
+      - '.github/workflows/pipeline-liveness.yml'
 
 permissions:
   contents: write  # 사이드카 force-push 용 (automation/pipeline-liveness-last-run).
