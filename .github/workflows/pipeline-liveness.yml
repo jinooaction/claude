@@ -1,0 +1,148 @@
+name: Pipeline liveness watchdog (사이드카 정지 감시)
+
+# 스펙 051 — 자율 파이프라인 생존 감시(staleness watchdog).
+#
+# 운영자 상시 지시(2026-06-13): "세계 최고 수준의 사람 개입 없는 완벽한 자동 시스템 +
+# 세계 최고 수준의 안정성." 이 워크플로가 그 빈칸을 메운다.
+#
+# 문제: 자율 시스템은 여러 스케줄 워크플로(전진 페이퍼·자본 사다리 게이트·KIS smoke·
+# 라이브 캐너리·수집·층화·승격)로 굴러가는데, "전체 파이프라인이 살아있나"를 보는
+# 단일 감시자가 없었다. 전진 페이퍼가 조용히 멈추면 전진 엣지가 *얼어붙고*, 자본
+# 사다리는 계속 WAIT_EDGE 만 보고해 "정상 누적"과 "죽어서 정지"가 구분 안 된다 —
+# 이 프로젝트가 반복적으로 물렸던 "침묵 실패" 부류.
+#
+# 동작: 각 핵심 사이드카(automation/*-last-run)의 timestamp_utc 를 git show 로 읽어
+# 나이를 재고, 사이드카별 기대 주기에 비춰 OK/LATE/STALE/MISSING 등급을 매긴다.
+# *핵심* 사이드카가 STALE/MISSING 이면 종합 CRITICAL → 이 워크플로가 빨갛게 실패한다
+# (loud). 연구/보고 트랙은 저하(DEGRADED)로만 잡아 거짓 경보를 줄인다.
+#
+# 안전: 읽기 전용·돈 0 이동. 거래·자본 변경 없음(라이브는 운영자 게이트, 헌법 X.4).
+# 얼어붙은 엣지는 자본 측면에서 이미 fail-safe(EDGE_CONFIRMED 를 못 만들어 절대 승격
+# 안 함) — 이 감시자의 가치는 정지를 *드러내는 것*이다.
+#
+# 결과는 사이드카로 발행:
+#   git fetch origin automation/pipeline-liveness-last-run
+#   git show origin/automation/pipeline-liveness-last-run:LAST_RUN.md
+#
+# 감시자 자신의 backstop: 이 사이드카의 신선도를 /sync 또는 컨테이너 세션이 확인한다
+# (감시자가 죽으면 빨간 실행이 안 뜨므로, 이 사이드카가 오래되면 그게 신호).
+
+on:
+  schedule:
+    # 매일 07:30 UTC — 전날 밤 배치(22:30~23:50)·KIS smoke(03:00)·수집(01:30) 이후.
+    - cron: "30 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write  # 사이드카 force-push 용 (automation/pipeline-liveness-last-run).
+
+concurrency:
+  group: pipeline-liveness
+  cancel-in-progress: false
+
+jobs:
+  watchdog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Collect sidecar timestamps (read-only)
+        run: |
+          set -uo pipefail
+          mkdir -p /tmp/sidecars
+          # 감시 대상 automation/* 사이드카 ref 만 가볍게 가져온다.
+          git fetch --depth=1 origin \
+            '+refs/heads/automation/*:refs/remotes/origin/automation/*' || true
+          # 레지스트리(단일 출처)는 프로브의 --manifest 가 내놓는다.
+          uv run python scripts/pipeline_liveness_probe.py --manifest > /tmp/manifest.tsv
+          while IFS=$'\t' read -r key branch filename; do
+            [[ -z "${key}" ]] && continue
+            if git show "origin/${branch}:${filename}" \
+                 > "/tmp/sidecars/${key}.md" 2>/dev/null; then
+              echo "✓ ${key}: 사이드카 수집 (${branch}:${filename})"
+            else
+              rm -f "/tmp/sidecars/${key}.md"
+              echo "✗ ${key}: 사이드카 없음 → MISSING 처리 (${branch})"
+            fi
+          done < /tmp/manifest.tsv
+
+      - name: Assess pipeline liveness
+        id: assess
+        run: |
+          set -uo pipefail
+          uv run python scripts/pipeline_liveness_probe.py \
+            --sidecar-dir /tmp/sidecars --json > /tmp/liveness.json
+          uv run python scripts/pipeline_liveness_probe.py \
+            --sidecar-dir /tmp/sidecars > /tmp/liveness.txt
+          cat /tmp/liveness.txt
+          overall=$(python3 -c \
+            "import json;print(json.load(open('/tmp/liveness.json'))['overall'])")
+          echo "overall=${overall}"
+          echo "overall=${overall}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish sidecar (always — diagnostic survives even on CRITICAL)
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -uo pipefail
+          BRANCH=automation/pipeline-liveness-last-run
+          tmpdir=$(mktemp -d)
+
+          {
+            if [[ -f /tmp/liveness.txt ]]; then
+              cat /tmp/liveness.txt
+            else
+              echo "# 파이프라인 생존 감시 — 보고 생성 실패"
+              echo ""
+              echo "Assess 스텝 진입 전에 실패. 위 워크플로 로그 확인."
+            fi
+            echo ""
+            echo "## 메타데이터"
+            echo ""
+            echo "| 항목 | 값 |"
+            echo "|------|-----|"
+            echo "| run_id | ${GITHUB_RUN_ID} |"
+            echo "| run_url | https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} |"
+            echo "| commit | ${GITHUB_SHA} |"
+            echo "| trigger | ${GITHUB_EVENT_NAME} |"
+            echo "| timestamp_utc | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
+            echo ""
+            echo "## 결정 JSON"
+            echo ""
+            echo '```json'
+            cat /tmp/liveness.json 2>/dev/null || echo "{}"
+            echo '```'
+          } > "${tmpdir}/LAST_RUN.md"
+
+          cd "${tmpdir}"
+          git init -q
+          git config user.name "pipeline-liveness-bot"
+          git config user.email "pipeline-liveness-bot@noreply.github.com"
+          git checkout --orphan publish -q
+          git add LAST_RUN.md
+          git commit -q -m "pipeline-liveness run ${GITHUB_RUN_ID} @ ${GITHUB_SHA:0:7}"
+          # force-push: 사이드카는 항상 단일 커밋만 유지.
+          git push --force \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "publish:${BRANCH}"
+          echo "Published to ${BRANCH}."
+          echo "Read: git fetch origin ${BRANCH} && git show origin/${BRANCH}:LAST_RUN.md"
+
+      - name: Fail loud on CRITICAL
+        if: always()
+        run: |
+          set -uo pipefail
+          overall="${{ steps.assess.outputs.overall }}"
+          if [[ "${overall}" == "CRITICAL" ]]; then
+            echo "::error::파이프라인 생존 감시 CRITICAL — 핵심 사이드카(자율 머니루프)가 정지했다. automation/pipeline-liveness-last-run 사이드카에서 어느 워크플로가 멈췄는지 확인."
+            exit 1
+          fi
+          echo "종합 판정: ${overall:-(unknown)} — 핵심 사이드카 정상."
