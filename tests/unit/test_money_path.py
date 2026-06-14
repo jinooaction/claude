@@ -16,6 +16,10 @@ from auto_invest.analytics.money_path import (
     GATE_FAIL,
     GATE_PASS,
     GATE_PENDING,
+    SAMPLE_CHURNING,
+    SAMPLE_SETTLED,
+    SAMPLE_STABLE,
+    SAMPLE_UNKNOWN,
     SCHEMA_VERSION,
     STAGE_ACCUMULATING,
     STAGE_BLOCKED,
@@ -46,8 +50,16 @@ def _ladder(action="WAIT_EDGE", cur=0, tgt=0, nav="1518.21", cap=None, dd="0", o
     }
 
 
-def _verdict(verdict="INSUFFICIENT_DATA", n_obs=1, min_obs=20, beats=False, dsr=None):
-    return {
+def _verdict(
+    verdict="INSUFFICIENT_DATA",
+    n_obs=1,
+    min_obs=20,
+    beats=False,
+    dsr=None,
+    legacy=None,
+    snapshots=None,
+):
+    d = {
         "schema_version": "1.1",
         "verdict": verdict,
         "n_obs": n_obs,
@@ -57,6 +69,13 @@ def _verdict(verdict="INSUFFICIENT_DATA", n_obs=1, min_obs=20, beats=False, dsr=
         "dsr_threshold": "0.95",
         "universe": ["SPY", "IEF", "GLD"],
     }
+    # 자본 베이시스 정합 결과(cli.py forward-verdict 발행) — 표본 안정성 입력. 옛
+    # 사이드카엔 없을 수 있어 기본 미포함(None) → 기존 동작/거짓 경보 0 보존.
+    if legacy is not None:
+        d["legacy_snapshots_excluded"] = legacy
+    if snapshots is not None:
+        d["snapshot_count"] = snapshots
+    return d
 
 
 # ── 헬퍼: 거래일 계산 / 추정 도달일 ──
@@ -186,6 +205,101 @@ def test_convergence_unknown_without_prior():
 def test_convergence_present_in_eta_dict():
     r = assess_money_path(ladder=_ladder(), forward_verdict=_verdict(n_obs=1), now=NOW)
     assert r.to_dict()["eta"]["convergence"] == CONV_UNKNOWN
+
+
+# ── 전진 표본 안정성(자본 베이시스 흔들림) — 수렴과 직교한 '왜 안 쌓이나'의 원인 ──
+
+
+def test_sample_stable_when_no_legacy_excluded():
+    # 제외 0 → 모든 스냅샷 같은 베이시스 → STABLE, 게이트 PASS.
+    r = assess_money_path(
+        ladder=_ladder(),
+        forward_verdict=_verdict(n_obs=3, legacy=0, snapshots=4),
+        now=NOW,
+    )
+    assert r.eta.sample_stability == SAMPLE_STABLE
+    names = {g.name: g.status for g in r.gates}
+    assert names["전진 표본 안정성(베이시스)"] == GATE_PASS
+
+
+def test_sample_settled_when_legacy_flat_vs_prior():
+    # 직전 제외 4 == 이번 제외 4, 관측 증가 → 과거 1회 정리(SETTLED), 게이트 PASS.
+    prior = {"as_of_utc": "2026-06-11T08:00:00Z", "n_obs": 1, "legacy_excluded": 4}
+    r = assess_money_path(
+        ladder=_ladder(),
+        forward_verdict=_verdict(n_obs=2, legacy=4, snapshots=3),
+        prior=prior,
+        now=NOW,
+    )
+    assert r.eta.sample_stability == SAMPLE_SETTLED
+    names = {g.name: g.status for g in r.gates}
+    assert names["전진 표본 안정성(베이시스)"] == GATE_PASS
+
+
+def test_sample_settled_without_prior_is_conservative():
+    # 제외 4 이지만 직전 비교 불가 → 보수적 SETTLED(거짓 흔들림 경보 0), 게이트 PASS.
+    r = assess_money_path(
+        ladder=_ladder(),
+        forward_verdict=_verdict(n_obs=1, legacy=4, snapshots=2),
+        now=NOW,
+    )
+    assert r.eta.sample_stability == SAMPLE_SETTLED
+    names = {g.name: g.status for g in r.gates}
+    assert names["전진 표본 안정성(베이시스)"] == GATE_PASS
+    assert "정상" in r.headline  # 정상 누적 헤드라인(흔들림 경보 아님)
+
+
+def test_sample_churning_masquerading_as_stalled():
+    # 핵심 빈칸: 관측은 그대로(STALLED 로 보임)인데 제외가 직전보다 늘어남 → 진짜 원인은
+    # 베이시스 흔들림. headline 이 '표본 흔들림' 을 짚고, 표본 게이트 FAIL.
+    prior = {"as_of_utc": "2026-06-11T08:00:00Z", "n_obs": 1, "legacy_excluded": 2}
+    r = assess_money_path(
+        ladder=_ladder(),
+        forward_verdict=_verdict(n_obs=1, legacy=4, snapshots=2),
+        prior=prior,
+        now=NOW,
+    )
+    assert r.eta.sample_stability == SAMPLE_CHURNING
+    assert r.eta.convergence == CONV_STALLED  # 관측만 보면 정체
+    assert "흔들림" in r.headline and "측정 기준 고정" in r.headline
+    names = {g.name: g.status for g in r.gates}
+    assert names["전진 표본 안정성(베이시스)"] == GATE_FAIL
+    assert names["전진 시계 수렴"] == GATE_PENDING  # 수렴은 여전히 정체로 본다(직교)
+
+
+def test_sample_churning_with_regressed_obs_names_count():
+    # 관측도 줄고(REGRESSED) 제외도 늘어남(CHURNING) — 리셋 headline 에 제외 개수 명시.
+    prior = {"as_of_utc": "2026-06-11T08:00:00Z", "n_obs": 5, "legacy_excluded": 1}
+    r = assess_money_path(
+        ladder=_ladder(),
+        forward_verdict=_verdict(n_obs=1, legacy=4, snapshots=2),
+        prior=prior,
+        now=NOW,
+    )
+    assert r.eta.convergence == CONV_REGRESSED
+    assert r.eta.sample_stability == SAMPLE_CHURNING
+    assert "리셋" in r.headline and "4개 스냅샷 제외" in r.headline
+    names = {g.name: g.status for g in r.gates}
+    assert names["전진 표본 안정성(베이시스)"] == GATE_FAIL
+
+
+def test_sample_no_gate_without_legacy_info():
+    # legacy 정보 없는 옛 사이드카 → 표본 게이트 미추가(기존 동작/거짓 경보 0).
+    r = assess_money_path(ladder=_ladder(), forward_verdict=_verdict(n_obs=1), now=NOW)
+    assert "전진 표본 안정성(베이시스)" not in {g.name for g in r.gates}
+    assert r.eta.sample_stability == SAMPLE_UNKNOWN
+
+
+def test_sample_fields_present_in_eta_dict():
+    r = assess_money_path(
+        ladder=_ladder(),
+        forward_verdict=_verdict(n_obs=1, legacy=4, snapshots=2),
+        now=NOW,
+    )
+    d = r.to_dict()["eta"]
+    assert d["sample_stability"] == SAMPLE_SETTLED
+    assert d["legacy_excluded"] == 4
+    assert d["snapshot_count"] == 2
 
 
 # ── 전략 지문 정합(검증=배포) — '엣지를 쌓아도 배포가 막히는' 분기 진단 ──

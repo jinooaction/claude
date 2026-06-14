@@ -155,7 +155,11 @@ def parse_canary_armed(text: str | None) -> bool | None:
 
 
 def parse_prior(text: str | None) -> dict | None:
-    """직전 money-path 사이드카에서 ETA 실측용 {as_of_utc, n_obs} 를 읽는다."""
+    """직전 money-path 사이드카에서 ETA 실측·표본 churn 비교용 prior 힌트를 읽는다.
+
+    반환 {as_of_utc, n_obs, [legacy_excluded]}. legacy_excluded 는 옛 사이드카엔 없을 수
+    있어 선택(없으면 키 생략 → 표본 churn 은 직전 비교 없이 보수적으로 SETTLED 처리).
+    """
     if not text:
         return None
     decision = extract_json_after_header(text, "결정 JSON") or extract_json_after_header(
@@ -170,7 +174,11 @@ def parse_prior(text: str | None) -> dict | None:
     as_of = decision.get("as_of_utc")
     if n_obs is None or as_of is None:
         return None
-    return {"as_of_utc": as_of, "n_obs": n_obs}
+    prior = {"as_of_utc": as_of, "n_obs": n_obs}
+    legacy = decision.get("forward_legacy_excluded")
+    if legacy is not None:
+        prior["legacy_excluded"] = legacy
+    return prior
 
 
 def build_report(
@@ -207,9 +215,11 @@ def build_report(
         fingerprint=fingerprint,
         now=now,
     )
-    # 다음 실행의 ETA 실측을 위해, 이번 forward n_obs 를 결정 JSON 에 prior 힌트로 싣는다.
+    # 다음 실행의 ETA 실측 + 표본 churn 비교를 위해, 이번 forward 관측 수와 베이시스 제외
+    # 개수를 결정 JSON 에 prior 힌트로 싣는다(다음 실행이 직전 대비 증감을 본다).
     forward_n_obs = (forward_verdict or {}).get("n_obs")
-    return report, forward_n_obs
+    forward_legacy = (forward_verdict or {}).get("legacy_snapshots_excluded")
+    return report, forward_n_obs, forward_legacy
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -252,14 +262,16 @@ def main(argv: list[str] | None = None) -> int:
 
     live_pf = Path(args.live_portfolio) if args.live_portfolio else None
     val_pf = Path(args.validated_portfolio) if args.validated_portfolio else None
-    report, forward_n_obs = build_report(
+    report, forward_n_obs, forward_legacy = build_report(
         Path(args.sidecar_dir), now, live_portfolio=live_pf, validated_portfolio=val_pf
     )
 
     if args.json:
         out = report.to_dict()
-        # 다음 실행 ETA 실측용 prior 힌트(이 보고의 forward 관측 수 + 시각).
+        # 다음 실행 ETA 실측·표본 churn 비교용 prior 힌트(이 보고의 forward 관측 수,
+        # 베이시스 제외 개수, 시각).
         out["forward_n_obs"] = forward_n_obs
+        out["forward_legacy_excluded"] = forward_legacy
         out["as_of_utc"] = report.as_of_utc
         print(json.dumps(out, ensure_ascii=False))
     else:

@@ -25,7 +25,7 @@ def _block(header: str, obj: dict) -> str:
     return f"## {header}\n```json\n{json.dumps(obj, ensure_ascii=False)}\n```\n"
 
 
-def _edge_sidecar(n_obs: int = 1) -> str:
+def _edge_sidecar(n_obs: int = 1, legacy=None, snapshots=None) -> str:
     ladder = {
         "schema_version": "1.0",
         "action": "WAIT_EDGE",
@@ -47,6 +47,10 @@ def _edge_sidecar(n_obs: int = 1) -> str:
         "dsr_threshold": "0.95",
         "universe": ["SPY", "IEF", "GLD"],
     }
+    if legacy is not None:
+        verdict["legacy_snapshots_excluded"] = legacy
+    if snapshots is not None:
+        verdict["snapshot_count"] = snapshots
     growth = {
         "schema_version": "1.0",
         "mode": "live",
@@ -122,6 +126,42 @@ def test_probe_measured_eta_from_prior_sidecar(tmp_path, capsys):
     out = json.loads(capsys.readouterr().out)
     assert out["eta"]["basis"] == "measured"
     assert out["eta"]["obs_remaining"] == 15
+
+
+def test_probe_emits_legacy_hint_and_eta_fields(tmp_path, capsys):
+    # forward 판정의 legacy/snapshot 이 ETA 와 prior 힌트(forward_legacy_excluded)로 실린다.
+    _write(tmp_path, "edge-autoarm", _edge_sidecar(n_obs=1, legacy=4, snapshots=2))
+    _write(tmp_path, "rebalance-live-canary", _CANARY_SIDECAR)
+    rc = probe_main(
+        ["--sidecar-dir", str(tmp_path), "--json", "--now", "2026-06-13T08:00:00Z"]
+    )
+    assert rc == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["forward_legacy_excluded"] == 4  # 다음 실행 비교용 prior 힌트
+    assert out["eta"]["legacy_excluded"] == 4
+    assert out["eta"]["snapshot_count"] == 2
+
+
+def test_probe_churning_detected_from_prior_sidecar(tmp_path, capsys):
+    # 직전 사이드카 제외 2 → 이번 4 로 늘어남 + 관측 정체 → 표본 흔들림(churning) 게이트
+    # FAIL, end-to-end(드라이버가 직전 힌트를 읽어 비교).
+    prior_hint = {
+        "as_of_utc": "2026-06-11T08:00:00Z",
+        "forward_n_obs": 1,
+        "forward_legacy_excluded": 2,
+    }
+    prior = "# 첫-자본까지의 길\n\n" + _block("결정 JSON", prior_hint)
+    _write(tmp_path, "edge-autoarm", _edge_sidecar(n_obs=1, legacy=4, snapshots=2))
+    _write(tmp_path, "rebalance-live-canary", _CANARY_SIDECAR)
+    _write(tmp_path, "money-path", prior)
+    rc = probe_main(
+        ["--sidecar-dir", str(tmp_path), "--json", "--now", "2026-06-13T08:00:00Z"]
+    )
+    assert rc == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["eta"]["sample_stability"] == "churning"
+    gate = next(g for g in out["gates"] if g["name"] == "전진 표본 안정성(베이시스)")
+    assert gate["status"] == "FAIL"
 
 
 def test_probe_missing_all_sidecars_is_blocked(tmp_path, capsys):
