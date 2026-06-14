@@ -118,7 +118,9 @@ def test_accumulating_stage_nominal_eta():
     # 게이트: 전진 관측 수(PENDING) + 전진 판정(PENDING).
     names = {g.name: g.status for g in r.gates}
     assert names["전진 관측 수"] == GATE_PENDING
-    assert "운영자 게이트" in r.next_action
+    # 헌법 X.4 v5.0.0: 무장은 자율(상시 위임), 운영자 전용은 입금·킬스위치뿐.
+    assert "자율 무장" in r.next_action
+    assert "운영자 전용" in r.next_action
 
 
 def test_accumulating_measured_eta_from_prior():
@@ -402,7 +404,9 @@ def test_edge_confirmed_pending_deploy_canary_not_armed():
     names = {g.name: g.status for g in r.gates}
     assert names["전진 판정"] == GATE_PASS
     assert names["캐너리 무장"] == GATE_PENDING
-    assert "운영자 게이트" in r.blocking_gate or "운영자 게이트" in r.next_action
+    # 헌법 X.4 v5.0.0: 무장 자체가 자율 — '운영자 게이트' 가 아니라 입금·킬스위치만 운영자 몫.
+    assert "자율 무장" in r.blocking_gate or "자율 무장" in r.next_action
+    assert "운영자 전용" in r.next_action
 
 
 def test_deployed_stage_next_rung_gates():
