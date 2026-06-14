@@ -20,6 +20,8 @@
   준비)을 받아, "첫-자본까지의 길"을 단일 단계(stage)로 종합하고, 지금 한 발을 막는
   게이트(blocking gate)를 한 문장으로 지목하며, 누적 속도로 첫-자본 추정 시점(ETA)을
   낸다. **새 측정·재계산을 하지 않는다** — 사이드카가 발행한 숫자를 합칠 뿐이다.
+  또한 "내려가는 길"(자본 방어선)도 표면화한다 — 배치된(또는 첫 자본 배치 예정) 자본의
+  강등/정지 임계까지 남은 여유와 그때의 달러 손실을, 돈이 움직이기 전에도 한눈에 보인다.
 
 안전 경계(중요):
   순수·결정론·비커널·읽기 전용. 주문 0건, 돈 0 이동. 이건 *보고/가시성*이지 거래나
@@ -33,7 +35,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal, InvalidOperation
 
 from auto_invest.portfolio.capital_ladder import (
     DEFAULT_DD_BUDGET_PCT,
@@ -180,6 +182,47 @@ class EtaProjection:
 
 
 @dataclass(frozen=True)
+class SafetyBudget:
+    """자본 방어선 예산 — 배치된(또는 배치 예정) 자본의 다운사이드 한계와 여유.
+
+    money-path 가 "올라가는 길"(엣지 누적→첫 자본→다음 단 승격)은 촘촘히 계측하지만,
+    "내려가는 방어선"(낙폭에 따른 강등/정지)은 DEPLOYED 단계의 *이진* 게이트(예산/2 미만?)
+    뿐이라 방어선에 *얼마나 가까운지*가 안 보였다. 이 구조체는 그 방어선을 연속 값으로
+    표면화한다:
+      · 강등 임계(예산/2)·정지 임계(예산)까지 남은 %포인트(margin)와 그때의 달러 손실,
+      · 단0(미배치)에서도 "첫 자본이 들어가면 다운사이드 예산이 달러로 얼마인가"(prospective).
+    낙폭은 배치 NAV 대비 peak-to-trough 이므로 달러 손실은 배치 자본 기준 *근사*(올림 —
+    위험을 과소평가하지 않는다)다. 읽기 전용·결정론 — 강제하지 않고 보이게만 한다(실제
+    강등/정지는 자본 사다리가 한다).
+    """
+
+    reference_rung: int  # 기준 단(배치 중이면 현재/목표 단, 미배치면 첫 자본 단=1)
+    capital_usd: int | None  # 기준 단의 배치(예정) 자본
+    demote_dd_pct: str  # 강등 임계 낙폭(예산/2)
+    halt_dd_pct: str  # 정지 임계 낙폭(예산)
+    loss_at_demote_usd: int | None  # 강등 발동 시점 누적 손실(근사, 배치 자본 기준)
+    loss_at_halt_usd: int | None  # 정지 발동 시점 누적 손실(근사)
+    current_dd_pct: str | None  # 현재 라이브 낙폭(배치 후에만; 미배치면 None)
+    margin_to_demote_pct: str | None  # 강등까지 남은 %포인트(음수=이미 초과)
+    margin_to_halt_pct: str | None  # 정지까지 남은 %포인트(음수=이미 초과)
+    prospective: bool  # True=아직 미배치(첫 자본 예상 예산), False=배치 중 실측
+
+    def to_dict(self) -> dict:
+        return {
+            "reference_rung": self.reference_rung,
+            "capital_usd": self.capital_usd,
+            "demote_dd_pct": self.demote_dd_pct,
+            "halt_dd_pct": self.halt_dd_pct,
+            "loss_at_demote_usd": self.loss_at_demote_usd,
+            "loss_at_halt_usd": self.loss_at_halt_usd,
+            "current_dd_pct": self.current_dd_pct,
+            "margin_to_demote_pct": self.margin_to_demote_pct,
+            "margin_to_halt_pct": self.margin_to_halt_pct,
+            "prospective": self.prospective,
+        }
+
+
+@dataclass(frozen=True)
 class MoneyPathReport:
     """첫-자본까지의 길 종합 보고 — 읽기 전용 결정 표면."""
 
@@ -195,6 +238,7 @@ class MoneyPathReport:
     canary_armed: bool | None
     gates: list[GateCondition]
     eta: EtaProjection
+    safety: SafetyBudget | None  # 자본 방어선 예산(내려가는 길) — BLOCKED 면 None
     next_action: str  # 시스템이 자율로 할 다음 일 + 운영자 게이트가 무엇인지
 
     def to_dict(self) -> dict:
@@ -211,6 +255,7 @@ class MoneyPathReport:
             "canary_armed": self.canary_armed,
             "gates": [g.to_dict() for g in self.gates],
             "eta": self.eta.to_dict(),
+            "safety_budget": None if self.safety is None else self.safety.to_dict(),
             "next_action": self.next_action,
         }
 
@@ -285,6 +330,7 @@ class MoneyPathReport:
                 f"→ **{self.eta.projected_date}** 경",
                 f"- 가정: {self.eta.assumption}",
             ]
+        lines += self._safety_lines()
         lines += [
             "",
             "## 다음 행동",
@@ -300,6 +346,49 @@ class MoneyPathReport:
         if self.canary_armed is None:
             return "(불명)"
         return "예(armed)" if self.canary_armed else "아니오(드라이런)"
+
+    def _safety_lines(self) -> list[str]:
+        """자본 방어선 예산 섹션(as_text 보조) — '내려가는 길'을 사람이 읽게."""
+        s = self.safety
+        if s is None:
+            return []
+        cap = "(측정 불가)" if s.capital_usd is None else f"${s.capital_usd}"
+        ld = "(측정 불가)" if s.loss_at_demote_usd is None else f"-${s.loss_at_demote_usd}"
+        lh = "(측정 불가)" if s.loss_at_halt_usd is None else f"-${s.loss_at_halt_usd}"
+        out = ["", "## 자본 방어선 예산 (다운사이드 한계 — 내려가는 길)", ""]
+        if s.prospective:
+            out += [
+                f"- 첫 자본은 단{s.reference_rung}(NAV 의 {_capital_pct(s.reference_rung)}%) "
+                f"≈ **{cap}** 로 들어간다.",
+                f"- 자동 강등(→단0, 무장 해제): 낙폭 ≥ **{s.demote_dd_pct}%** → 약 {ld} 손실.",
+                f"- 절대 정지: 낙폭 ≥ **{s.halt_dd_pct}%** → 약 {lh} 손실.",
+                f"- 즉 첫 자본의 다운사이드는 약 {ld}(강등) 안에서 시스템이 스스로 자본을 "
+                "회수한다 — 사람 개입 없이 작동하는 방어선.",
+            ]
+            return out
+        cur = "(측정 불가)" if s.current_dd_pct is None else f"{s.current_dd_pct}%"
+        out.append(f"- 배치 자본: 단{s.reference_rung} ≈ **{cap}**, 현재 낙폭 **{cur}**.")
+        if s.current_dd_pct is None:
+            out += [
+                "- ⚠ 현재 낙폭 측정 불가 — 방어선까지의 여유를 계산할 수 없다. 라이브 실적 "
+                "피드(live_growth)가 비면 자동 강등/정지가 늦어질 수 있으니 점검 필요.",
+                f"- 강등 임계 {s.demote_dd_pct}% ≈ {ld}, 정지 임계 {s.halt_dd_pct}% ≈ {lh}.",
+            ]
+            return out
+        md = s.margin_to_demote_pct
+        mh = s.margin_to_halt_pct
+        breached = md is not None and Decimal(md) <= 0
+        if breached:
+            out.append(
+                f"- ⚠ 방어선 초과 — 낙폭이 강등 임계 {s.demote_dd_pct}% 를 넘었다"
+                f"(여유 {md}%포인트). 자본 사다리가 자본을 회수한다."
+            )
+        else:
+            out.append(
+                f"- 강등까지 여유: **{md}%포인트** (강등 임계 {s.demote_dd_pct}% ≈ {ld})."
+            )
+        out.append(f"- 정지까지 여유: **{mh}%포인트** (정지 임계 {s.halt_dd_pct}% ≈ {lh}).")
+        return out
 
 
 def _trading_days_between(d0: date, d1: date) -> int:
@@ -492,6 +581,64 @@ def _capital_pct(rung: int) -> str:
     return str((frac * 100).normalize())
 
 
+def _safety_budget(
+    *,
+    reference_rung: int,
+    account_nav: Decimal | None,
+    deployed_capital: int | None,
+    current_dd_pct: Decimal | None,
+    dd_budget_pct: Decimal,
+    prospective: bool,
+) -> SafetyBudget:
+    """기준 단의 배치(예정) 자본에 대한 방어선 예산을 계산(순수·결정론).
+
+    강등 임계 = 예산/2, 정지 임계 = 예산. 낙폭은 배치 NAV 대비라 강등/정지 발동 시점의
+    달러 손실 ≈ 임계% × 배치 자본(올림 — 위험을 과소평가하지 않는다). 배치 자본은 (배치
+    중이면) deployed_capital, 아니면 단 비율 × 실계좌 NAV(자본 사다리와 같은 내림). NAV 도
+    자본도 모르면 달러는 None(임계 % 만 의미 있음). current_dd_pct 가 있으면(배치 후) 임계
+    까지 남은 %포인트(여유)를 낸다 — 음수면 이미 방어선 초과.
+    """
+    demote = dd_budget_pct / 2
+    halt = dd_budget_pct
+    frac = RUNG_FRACTIONS.get(reference_rung)
+
+    capital: int | None
+    if deployed_capital is not None and deployed_capital > 0:
+        capital = deployed_capital
+    elif account_nav is not None and account_nav > 0 and frac is not None:
+        capital = int((account_nav * frac).to_integral_value(rounding=ROUND_FLOOR))
+    else:
+        capital = None
+
+    if capital is None or capital <= 0:
+        loss_demote = loss_halt = None
+    else:
+        cap_d = Decimal(capital)
+        loss_demote = int(
+            (cap_d * demote / 100).to_integral_value(rounding=ROUND_CEILING)
+        )
+        loss_halt = int((cap_d * halt / 100).to_integral_value(rounding=ROUND_CEILING))
+
+    if current_dd_pct is None:
+        margin_demote = margin_halt = None
+    else:
+        margin_demote = str(demote - current_dd_pct)
+        margin_halt = str(halt - current_dd_pct)
+
+    return SafetyBudget(
+        reference_rung=reference_rung,
+        capital_usd=capital,
+        demote_dd_pct=str(demote),
+        halt_dd_pct=str(halt),
+        loss_at_demote_usd=loss_demote,
+        loss_at_halt_usd=loss_halt,
+        current_dd_pct=None if current_dd_pct is None else str(current_dd_pct),
+        margin_to_demote_pct=margin_demote,
+        margin_to_halt_pct=margin_halt,
+        prospective=prospective,
+    )
+
+
 def assess_money_path(
     *,
     ladder: dict | None,
@@ -576,6 +723,40 @@ def assess_money_path(
 
     # PROMOTE 면 보고 기준 단은 target.
     report_rung = target_rung if (action == ACTION_PROMOTE and target_rung) else current_rung
+
+    # ── 자본 방어선 예산('내려가는 길'을 연속 값으로) ──
+    # 미배치(단0)면 첫 자본 단(1) 기준 예상 예산, 배치 중이면 현재/목표 단 실측, 방어
+    # 중이면 초과한 그 단 기준. BLOCKED(길을 못 읽음)면 방어선도 None(거짓 숫자 0).
+    safety: SafetyBudget | None
+    if stage == STAGE_BLOCKED:
+        safety = None
+    elif current_rung < 1:  # 단0 — 첫 자본이 들어가면 어떤 다운사이드 예산인지 미리.
+        safety = _safety_budget(
+            reference_rung=1,
+            account_nav=account_nav,
+            deployed_capital=None,
+            current_dd_pct=None,
+            dd_budget_pct=dd_budget_pct,
+            prospective=True,
+        )
+    elif stage == STAGE_DEFENDED:  # 방어 발동 — 초과한 '그 단'(current_rung) 기준으로 본다.
+        safety = _safety_budget(
+            reference_rung=current_rung,
+            account_nav=account_nav,
+            deployed_capital=None,
+            current_dd_pct=live_dd,
+            dd_budget_pct=dd_budget_pct,
+            prospective=False,
+        )
+    else:  # DEPLOYED — 배치 중 실측(목표 단 자본·현재 낙폭).
+        safety = _safety_budget(
+            reference_rung=report_rung,
+            account_nav=account_nav,
+            deployed_capital=deployed_capital,
+            current_dd_pct=live_dd,
+            dd_budget_pct=dd_budget_pct,
+            prospective=False,
+        )
 
     gates: list[GateCondition] = []
     eta = EtaProjection(ETA_NONE, None, None, None, None, "해당 없음.")
@@ -875,6 +1056,7 @@ def assess_money_path(
         canary_armed=canary_armed,
         gates=gates,
         eta=eta,
+        safety=safety,
         next_action=next_action,
     )
 
@@ -905,5 +1087,6 @@ __all__ = [
     "EtaProjection",
     "GateCondition",
     "MoneyPathReport",
+    "SafetyBudget",
     "assess_money_path",
 ]
