@@ -90,6 +90,18 @@ CONV_STALLED = "stalled"  # 거래일 지났는데 관측 그대로 — 전진 �
 CONV_REGRESSED = "regressed"  # 관측이 줄어듦 — 전진 시계 리셋(베이시스 변경 추정), 누적 재시작
 CONV_UNKNOWN = "unknown"  # 직전 사이드카 없음/같은 거래일 — 아직 측정 불가
 
+# 전진 표본 안정성 — 자본 베이시스 churn 진단. 수렴(관측 시계)과 *직교*하는 별개 차원.
+# 출처: forward 판정의 legacy_snapshots_excluded(자본 베이시스가 바뀌어
+# consistent_basis_suffix 가 떨군 과거 스냅샷 수, cli.py 가 발행). 매 거래일 새 스냅샷이
+# 쌓여도 매번 같은 수가 베이시스 변경으로 제외되면 유효 관측은 정체/감소해 첫 자본이 영영
+# 안 들어간다 — 생존 감시(스펙 051: 워크플로 정지)도, 수렴 감시(스펙 052: 관측 증감)도
+# "정체(stalled)"로만 보고 그 *원인*(베이시스 churn)을 못 짚는 사각지대다. 직전 사이드카의
+# 제외 개수와 비교해 '과거 1회 정리'와 '지금도 흔들리는 중'을 가른다.
+SAMPLE_STABLE = "stable"  # 제외 0 — 모든 스냅샷 같은 베이시스(완전 안정)
+SAMPLE_SETTLED = "settled"  # 제외 > 0 이나 직전 대비 안 늘어남 — 과거 1회 정리, 새 churn 없음
+SAMPLE_CHURNING = "churning"  # 제외가 직전보다 늘어남 — 베이시스가 또 바뀜(누적 잠식 진행 중)
+SAMPLE_UNKNOWN = "unknown"  # legacy 정보 없음 — 측정 불가(기존 사이드카/거짓 경보 0)
+
 # 전진 페이퍼 스케줄(rebalance-paper-forward.yml: 평일 22:30 UTC) — 거래일당 ~1 관측.
 NOMINAL_OBS_PER_TRADING_DAY = 1.0
 
@@ -144,6 +156,9 @@ class EtaProjection:
     projected_date: str | None  # ISO date (YYYY-MM-DD)
     assumption: str
     convergence: str = CONV_UNKNOWN  # converging | stalled | regressed | unknown
+    sample_stability: str = SAMPLE_UNKNOWN  # stable | settled | churning | unknown
+    legacy_excluded: int | None = None  # 이번 판정에서 베이시스 변경으로 제외된 스냅샷 수
+    snapshot_count: int | None = None  # 베이시스 일치 유효 스냅샷 수(관측 = 이 값 − 1)
 
     def to_dict(self) -> dict:
         return {
@@ -158,6 +173,9 @@ class EtaProjection:
             "projected_date": self.projected_date,
             "assumption": self.assumption,
             "convergence": self.convergence,
+            "sample_stability": self.sample_stability,
+            "legacy_excluded": self.legacy_excluded,
+            "snapshot_count": self.snapshot_count,
         }
 
 
@@ -243,8 +261,24 @@ class MoneyPathReport:
                 CONV_REGRESSED: "🔴 리셋(관측 줄어듦, 자본 베이시스 변경 추정) — 누적 재시작",
                 CONV_UNKNOWN: "⚪ 측정 전(직전 사이드카 없음 또는 같은 거래일)",
             }.get(self.eta.convergence, self.eta.convergence)
+            lines.append(f"- 전진 시계 수렴: {conv_label}")
+            if (
+                self.eta.legacy_excluded is not None
+                and self.eta.sample_stability != SAMPLE_UNKNOWN
+            ):
+                sample_label = {
+                    SAMPLE_STABLE: "🟢 안정(모든 스냅샷 같은 자본 베이시스)",
+                    SAMPLE_SETTLED: (
+                        f"🟡 정리됨(과거 {self.eta.legacy_excluded}개 베이시스 제외, "
+                        f"유효 {self.eta.snapshot_count}, 추가 없음)"
+                    ),
+                    SAMPLE_CHURNING: (
+                        f"🔴 흔들림({self.eta.legacy_excluded}개 제외 직전↑, 유효 "
+                        f"{self.eta.snapshot_count}) — 새 스냅샷이 계속 떨궈짐"
+                    ),
+                }.get(self.eta.sample_stability, self.eta.sample_stability)
+                lines.append(f"- 전진 표본 안정성: {sample_label}")
             lines += [
-                f"- 전진 시계 수렴: {conv_label}",
                 f"- 남은 관측: **{self.eta.obs_remaining}** 개 "
                 f"(속도 ~{self.eta.obs_per_trading_day} 관측/거래일, 근거={self.eta.basis})",
                 f"- 추정: 약 **{self.eta.trading_days_remaining} 거래일** 후 "
@@ -304,6 +338,23 @@ def _project_trading_date(
     return calendar_days, cur
 
 
+def _sample_stability(legacy_excluded: int | None, prior_legacy: int | None) -> str:
+    """자본 베이시스 churn 등급 — 직전 사이드카의 제외 개수와 비교(수렴과 직교).
+
+    legacy_excluded 가 직전보다 *늘어났으면* 이번에도 베이시스가 또 바뀌어 새 스냅샷이
+    제외된 것(CHURNING). 0 이면 모든 스냅샷 같은 베이시스(STABLE). 0 보다 크지만 직전
+    대비 안 늘었으면 과거 1회 정리이고 지금은 안정(SETTLED). 직전 비교 불가 시에도
+    보수적으로 SETTLED(거짓 churn 경보 0).
+    """
+    if legacy_excluded is None:
+        return SAMPLE_UNKNOWN
+    if legacy_excluded == 0:
+        return SAMPLE_STABLE
+    if prior_legacy is not None and legacy_excluded > prior_legacy:
+        return SAMPLE_CHURNING
+    return SAMPLE_SETTLED
+
+
 def _accumulation_eta(
     *,
     n_obs: int | None,
@@ -311,12 +362,20 @@ def _accumulation_eta(
     as_of: datetime,
     prior_n_obs: int | None,
     prior_ts: str | None,
+    legacy_excluded: int | None = None,
+    snapshot_count: int | None = None,
+    prior_legacy: int | None = None,
 ) -> EtaProjection:
     """전진 관측 누적 속도로 최소 관측 수 도달 시점을 추정.
 
     measured: 직전 사이드카(prior_n_obs, prior_ts) 대비 실측 속도(거래일당 관측).
     nominal: 직전이 없거나 속도가 비양수면 전진 스케줄 가정(거래일당 ~1 관측).
+
+    legacy_excluded/snapshot_count(forward 판정의 자본 베이시스 정합 결과)와
+    prior_legacy(직전 사이드카의 제외 개수)로 표본 안정성(베이시스 churn)을 함께 진단해
+    수렴 위에 덧입힌다 — 정체/리셋의 *원인*이 베이시스 churn 인지 짚기 위함.
     """
+    sample = _sample_stability(legacy_excluded, prior_legacy)
     if n_obs is None or min_obs is None:
         return EtaProjection(
             basis=ETA_NONE,
@@ -325,6 +384,9 @@ def _accumulation_eta(
             trading_days_remaining=None,
             projected_date=None,
             assumption="전진 판정 JSON 에 관측 수가 없어 추정 불가.",
+            sample_stability=sample,
+            legacy_excluded=legacy_excluded,
+            snapshot_count=snapshot_count,
         )
     obs_remaining = max(0, min_obs - n_obs)
     if obs_remaining == 0:
@@ -335,6 +397,9 @@ def _accumulation_eta(
             trading_days_remaining=0,
             projected_date=as_of.date().isoformat(),
             assumption="최소 관측 수 이미 충족 — 판정 단계로 진행.",
+            sample_stability=sample,
+            legacy_excluded=legacy_excluded,
+            snapshot_count=snapshot_count,
         )
 
     as_of_date = as_of.date()
@@ -377,6 +442,22 @@ def _accumulation_eta(
                 "스냅샷·전진 페이퍼 정지 가능). 아래 날짜는 누적이 재개된다는 가정의 최선치다."
             )
 
+    # 표본 안정성(베이시스 churn)을 수렴 위에 덧입힌다 — 정체/리셋의 *원인*을 짚는다.
+    # CHURNING 이면 (관측이 정체로 보여도) 진짜 원인은 베이시스가 또 바뀌어 새 스냅샷이
+    # 제외되는 것 — 자본/측정 기준을 고정하지 않으면 누적이 영영 진척되지 않는다.
+    if sample == SAMPLE_CHURNING:
+        assumption += (
+            f" ⚠ 또한 이번 판정은 유효 스냅샷 {snapshot_count}개뿐이고 "
+            f"{legacy_excluded}개가 자본 베이시스 변경으로 제외됐다(직전보다 늘어남) — "
+            "베이시스가 또 바뀌는 중이라 새 스냅샷이 계속 떨궈진다. 측정 기준을 고정해야 "
+            "관측이 진척된다."
+        )
+    elif sample == SAMPLE_SETTLED and legacy_excluded:
+        assumption += (
+            f" (참고: 과거 {legacy_excluded}개 스냅샷이 베이시스 변경으로 제외됐으나 직전 "
+            "대비 추가 제외 없음 — 현재 베이시스는 안정.)"
+        )
+
     calendar_days, projected = _project_trading_date(as_of_date, obs_remaining, rate)
     return EtaProjection(
         basis=basis,
@@ -386,6 +467,9 @@ def _accumulation_eta(
         projected_date=projected.isoformat(),
         assumption=assumption,
         convergence=convergence,
+        sample_stability=sample,
+        legacy_excluded=legacy_excluded,
+        snapshot_count=snapshot_count,
     )
 
 
@@ -454,9 +538,14 @@ def assess_money_path(
     beats_calmar = bool(forward_verdict.get("beats_benchmark_calmar"))
     dsr = _dec(forward_verdict.get("dsr"))
     dsr_threshold = _dec(forward_verdict.get("dsr_threshold"))
+    # 자본 베이시스 정합 결과(cli.py forward-verdict 가 발행): 유효 스냅샷 수와 베이시스
+    # 변경으로 제외된 스냅샷 수. 표본 안정성(churn) 진단 입력.
+    legacy_excluded = _int(forward_verdict.get("legacy_snapshots_excluded"))
+    snapshot_count = _int(forward_verdict.get("snapshot_count"))
 
     prior_n_obs = _int((prior or {}).get("n_obs"))
     prior_ts = (prior or {}).get("as_of_utc")
+    prior_legacy = _int((prior or {}).get("legacy_excluded"))
 
     # 전략 지문 정합(검증 forward 설정 == 라이브 배포 설정). match: True/False/None(측정 불가).
     fp = fingerprint or {}
@@ -531,11 +620,24 @@ def assess_money_path(
             as_of=now,
             prior_n_obs=prior_n_obs,
             prior_ts=prior_ts,
+            legacy_excluded=legacy_excluded,
+            snapshot_count=snapshot_count,
+            prior_legacy=prior_legacy,
         )
+        churning = eta.sample_stability == SAMPLE_CHURNING
         if eta.convergence == CONV_REGRESSED:
             headline = (
-                f"⚠ 단0(자본 0%) — 전진 시계 리셋(관측 줄어듦, 자본 베이시스 변경 추정). "
-                f"누적 재시작 — 첫-자본 ETA 가 뒤로 밀림({n_obs}/{min_obs} 관측)."
+                "⚠ 단0(자본 0%) — 전진 시계 리셋(관측 줄어듦, 자본 베이시스 변경"
+                + (f": {eta.legacy_excluded}개 스냅샷 제외" if churning else " 추정")
+                + f"). 누적 재시작 — 첫-자본 ETA 가 뒤로 밀림({n_obs}/{min_obs} 관측)."
+            )
+        elif churning:
+            # 관측이 정체로 보여도 진짜 원인은 자본 베이시스가 자꾸 바뀌는 것 — 새 스냅샷이
+            # 계속 제외돼 유효 표본이 안 늘어난다. 생존·수렴 감시가 못 짚는 사각지대의 핵심.
+            headline = (
+                f"⚠ 단0(자본 0%) — 전진 표본 흔들림: 유효 스냅샷 {eta.snapshot_count}개뿐"
+                f"({eta.legacy_excluded}개 베이시스 변경 제외, 직전보다 늘어남). 새 스냅샷이 "
+                f"계속 떨궈져 관측이 안 쌓인다({n_obs}/{min_obs}) — 측정 기준 고정 필요."
             )
         elif eta.convergence == CONV_STALLED:
             headline = (
@@ -573,6 +675,36 @@ def assess_money_path(
                 "살아있어도 수렴 못 하는 것 — 생존 감시(스펙 051)가 못 잡는 사각지대를 메운다.",
             )
         )
+        # 전진 표본 안정성(자본 베이시스 churn) — 수렴과 직교. legacy 정보가 있을 때만
+        # 추가(없으면 게이트 무변경, 거짓 경보 0 + 기존 사이드카 호환).
+        if legacy_excluded is not None:
+            sample_status = {
+                SAMPLE_STABLE: GATE_PASS,
+                SAMPLE_SETTLED: GATE_PASS,
+                SAMPLE_CHURNING: GATE_FAIL,
+            }.get(eta.sample_stability, GATE_PENDING)
+            if eta.sample_stability == SAMPLE_STABLE:
+                sample_current = "안정(제외 0)"
+            elif eta.sample_stability == SAMPLE_CHURNING:
+                sample_current = (
+                    f"흔들림: {eta.legacy_excluded}개 제외(직전↑), 유효 {eta.snapshot_count}"
+                )
+            else:  # SETTLED
+                sample_current = (
+                    f"정리됨: {eta.legacy_excluded}개 제외(추가 없음), 유효 "
+                    f"{eta.snapshot_count}"
+                )
+            gates.append(
+                GateCondition(
+                    "전진 표본 안정성(베이시스)",
+                    sample_status,
+                    sample_current,
+                    "같은 자본 베이시스로 연속 누적(제외 증가 없음)",
+                    "forward 판정의 legacy_snapshots_excluded(자본 베이시스가 바뀌어 떨궈진 "
+                    "과거 스냅샷). 직전보다 늘면 베이시스가 또 바뀌어 새 스냅샷이 제외되는 중 — "
+                    "관측이 안 쌓이는 진짜 원인(수렴 감시가 '정체'로만 보는 사각지대).",
+                )
+            )
         gates.append(
             GateCondition(
                 "전진 판정",
@@ -752,6 +884,10 @@ __all__ = [
     "CONV_REGRESSED",
     "CONV_STALLED",
     "CONV_UNKNOWN",
+    "SAMPLE_CHURNING",
+    "SAMPLE_SETTLED",
+    "SAMPLE_STABLE",
+    "SAMPLE_UNKNOWN",
     "ETA_MEASURED",
     "ETA_NOMINAL",
     "ETA_NONE",
