@@ -507,3 +507,135 @@ def test_custom_dd_budget_changes_demote_threshold():
     )
     names = {g.name: g.status for g in r.gates}
     assert names["낙폭 < 예산/2"] == GATE_PASS
+
+
+# ── 자본 방어선 예산 (다운사이드 한계 — 내려가는 길) ──
+
+
+def test_safety_budget_prospective_at_rung0():
+    # 단0(자본 0%) — 첫 자본이 들어가면 어떤 다운사이드인지 미리(돈 움직이기 전).
+    r = assess_money_path(ladder=_ladder(), forward_verdict=_verdict(), now=NOW)
+    s = r.safety
+    assert s is not None
+    assert s.prospective is True
+    assert s.reference_rung == 1  # 첫 자본 단
+    assert s.capital_usd == 379  # floor(1518.21 * 0.25)
+    assert s.demote_dd_pct == "10"  # 예산 20% / 2
+    assert s.halt_dd_pct == "20"
+    assert s.loss_at_demote_usd == 38  # ceil(379 * 0.10)
+    assert s.loss_at_halt_usd == 76  # ceil(379 * 0.20)
+    assert s.current_dd_pct is None  # 아직 배치 안 됨 → 현재 낙폭 없음
+    assert s.margin_to_demote_pct is None
+
+
+def test_safety_budget_prospective_at_edge_confirmed():
+    # 엣지 확정(첫 자본 임박)에도 예상 예산이 보인다.
+    r = assess_money_path(
+        ladder=_ladder(action="WAIT_EDGE"),
+        forward_verdict=_verdict(verdict="EDGE_CONFIRMED", n_obs=22),
+        now=NOW,
+    )
+    assert r.stage == STAGE_EDGE_CONFIRMED
+    assert r.safety is not None
+    assert r.safety.prospective is True
+    assert r.safety.reference_rung == 1
+
+
+def test_safety_budget_deployed_shows_margins():
+    # 배치 중 — 방어선까지 남은 여유(%포인트)를 연속 값으로 표면화.
+    r = assess_money_path(
+        ladder=_ladder(action="STAY", cur=1, tgt=1, cap=379, dd="3.0", obs=12),
+        forward_verdict=_verdict(verdict="EDGE_CONFIRMED", n_obs=22),
+        live_growth={"period_days": "15.0"},
+        now=NOW,
+    )
+    s = r.safety
+    assert s is not None
+    assert s.prospective is False
+    assert s.reference_rung == 1
+    assert s.capital_usd == 379  # 결정 JSON 의 배치 자본 사용
+    assert s.current_dd_pct == "3.0"
+    assert s.margin_to_demote_pct == "7.0"  # 10 - 3.0
+    assert s.margin_to_halt_pct == "17.0"  # 20 - 3.0
+    assert s.loss_at_demote_usd == 38
+
+
+def test_safety_budget_defended_negative_margin():
+    # 방어 발동(낙폭 초과) — 강등까지 여유가 음수로 드러난다.
+    r = assess_money_path(
+        ladder=_ladder(action="DEMOTE", cur=2, tgt=1, dd="11.0"),
+        forward_verdict=_verdict(verdict="EDGE_CONFIRMED", n_obs=30),
+        now=NOW,
+    )
+    assert r.stage == STAGE_DEFENDED
+    s = r.safety
+    assert s is not None
+    assert s.reference_rung == 2  # 초과한 그 단 기준
+    assert s.capital_usd == 759  # floor(1518.21 * 0.50)
+    assert s.current_dd_pct == "11.0"
+    assert Decimal(s.margin_to_demote_pct) < 0  # 10 - 11.0 = -1.0
+
+
+def test_safety_budget_none_when_blocked():
+    r = assess_money_path(
+        ladder=_ladder(action="BLOCKED"), forward_verdict=_verdict(), now=NOW
+    )
+    assert r.safety is None
+    assert r.to_dict()["safety_budget"] is None
+
+
+def test_safety_budget_na_when_nav_unknown():
+    # NAV 측정 불가면 달러는 None 이지만 % 임계는 여전히 의미 있다.
+    r = assess_money_path(ladder=_ladder(nav=""), forward_verdict=_verdict(), now=NOW)
+    s = r.safety
+    assert s is not None
+    assert s.capital_usd is None
+    assert s.loss_at_demote_usd is None
+    assert s.demote_dd_pct == "10"
+
+
+def test_safety_budget_deployed_dd_missing_flags_feed():
+    # 배치됐는데 라이브 낙폭이 없으면 방어선 입력 결손을 경고(자동 강등 지연 위험).
+    r = assess_money_path(
+        ladder=_ladder(action="STAY", cur=1, tgt=1, cap=379, dd=None, obs=25),
+        forward_verdict=_verdict(verdict="EDGE_CONFIRMED", n_obs=22),
+        live_growth={"period_days": "30.0"},
+        now=NOW,
+    )
+    s = r.safety
+    assert s is not None
+    assert s.capital_usd == 379
+    assert s.current_dd_pct is None
+    assert s.margin_to_demote_pct is None
+    assert "측정 불가" in r.as_text()
+
+
+def test_safety_budget_custom_budget_scales_thresholds():
+    r = assess_money_path(
+        ladder=_ladder(action="STAY", cur=1, tgt=1, cap=379, dd="9.0", obs=25),
+        forward_verdict=_verdict(verdict="EDGE_CONFIRMED", n_obs=22),
+        live_growth={"period_days": "30.0"},
+        dd_budget_pct=Decimal("30"),
+        now=NOW,
+    )
+    s = r.safety
+    assert s is not None
+    assert s.demote_dd_pct == "15"  # 30 / 2
+    assert s.halt_dd_pct == "30"
+    assert s.margin_to_demote_pct == "6.0"  # 15 - 9.0
+
+
+def test_safety_budget_in_to_dict():
+    r = assess_money_path(ladder=_ladder(), forward_verdict=_verdict(), now=NOW)
+    sb = r.to_dict()["safety_budget"]
+    assert sb["reference_rung"] == 1
+    assert sb["prospective"] is True
+    assert sb["loss_at_demote_usd"] == 38
+    assert sb["demote_dd_pct"] == "10"
+
+
+def test_as_text_includes_safety_section():
+    r = assess_money_path(ladder=_ladder(), forward_verdict=_verdict(), now=NOW)
+    text = r.as_text()
+    assert "자본 방어선 예산" in text
+    assert "첫 자본" in text
