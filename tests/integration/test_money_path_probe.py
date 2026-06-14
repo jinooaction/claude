@@ -144,3 +144,84 @@ def test_probe_manifest_lists_consumed_sidecars(capsys):
     out = capsys.readouterr().out
     assert "edge-autoarm\tautomation/edge-autoarm-last-run\tLAST_RUN.md" in out
     assert "money-path\tautomation/money-path-last-run\tLAST_RUN.md" in out
+
+
+# ── 전략 지문 정합(compute_fingerprint_status) — 사다리 게이트와 동일 비교 ──
+
+_PF_MINI = """
+[portfolio]
+id = "t"
+universe = {universe}
+weights = {{ momentum = "1.0" }}
+weight_scheme = "equal"
+top_n = {top_n}
+"""
+
+
+def _write_pf(p: Path, universe: str, top_n: int = 2) -> Path:
+    p.write_text(_PF_MINI.format(universe=universe, top_n=top_n), encoding="utf-8")
+    return p
+
+
+def test_fingerprint_status_match(tmp_path):
+    a = _write_pf(tmp_path / "a.toml", '["SPY", "IEF"]')
+    b = _write_pf(tmp_path / "b.toml", '["SPY", "IEF"]')
+    out = _probe.compute_fingerprint_status(a, b)
+    assert out["match"] is True
+    assert out["diverged"] == []
+
+
+def test_fingerprint_status_mismatch_lists_universe(tmp_path):
+    a = _write_pf(tmp_path / "a.toml", '["SPY", "QQQ"]')
+    b = _write_pf(tmp_path / "b.toml", '["SPY", "IEF"]')
+    out = _probe.compute_fingerprint_status(a, b)
+    assert out["match"] is False
+    assert "universe" in out["diverged"]
+
+
+def test_fingerprint_status_mismatch_top_n(tmp_path):
+    a = _write_pf(tmp_path / "a.toml", '["SPY", "IEF"]', top_n=1)
+    b = _write_pf(tmp_path / "b.toml", '["SPY", "IEF"]', top_n=2)
+    out = _probe.compute_fingerprint_status(a, b)
+    assert out["match"] is False
+    assert "top_n" in out["diverged"]
+
+
+def test_fingerprint_status_missing_file_is_none(tmp_path):
+    b = _write_pf(tmp_path / "b.toml", '["SPY", "IEF"]')
+    out = _probe.compute_fingerprint_status(tmp_path / "nope.toml", b)
+    assert out["match"] is None
+    assert out["live_path"].endswith("nope.toml")
+
+
+def test_fingerprint_status_bad_toml_is_none(tmp_path):
+    bad = tmp_path / "bad.toml"
+    bad.write_text("this is not valid toml {{{", encoding="utf-8")
+    b = _write_pf(tmp_path / "b.toml", '["SPY", "IEF"]')
+    out = _probe.compute_fingerprint_status(bad, b)
+    assert out["match"] is None
+
+
+def test_fingerprint_status_missing_portfolio_section_is_none(tmp_path):
+    nopf = tmp_path / "nopf.toml"
+    nopf.write_text('[caps]\nmax = "1"\n', encoding="utf-8")
+    b = _write_pf(tmp_path / "b.toml", '["SPY", "IEF"]')
+    out = _probe.compute_fingerprint_status(nopf, b)
+    assert out["match"] is None
+
+
+def test_probe_emits_fingerprint_gate_when_configs_given(tmp_path, capsys):
+    # 실제 배포/검증 설정을 넘기면 전략 지문 게이트가 보고 JSON 의 gates 에 나온다.
+    _write(tmp_path, "edge-autoarm", _edge_sidecar(n_obs=1))
+    a = _write_pf(tmp_path / "live.toml", '["SPY", "IEF"]')
+    b = _write_pf(tmp_path / "val.toml", '["SPY", "IEF"]')
+    rc = probe_main(
+        [
+            "--sidecar-dir", str(tmp_path), "--json", "--now", "2026-06-13T08:00:00Z",
+            "--live-portfolio", str(a), "--validated-portfolio", str(b),
+        ]
+    )
+    assert rc == 0
+    out = json.loads(capsys.readouterr().out)
+    gate = next(g for g in out["gates"] if g["name"] == "전략 지문 정합(검증=배포)")
+    assert gate["status"] == "PASS"

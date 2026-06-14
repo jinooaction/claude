@@ -30,7 +30,75 @@ CONSUMED_SIDECARS: list[tuple[str, str, str]] = [
     ("money-path", "automation/money-path-last-run", "LAST_RUN.md"),
 ]
 
+# 전략 지문 비교 대상(스펙 050/049) — forward-edge-autoarm.yml 의 autoarm-decide 가
+# 비교하는 바로 그 두 설정(--live-portfolio / --validated-portfolio 기본값과 동일).
+# 사다리 게이트와 같은 두 파일을 읽어야 비교가 정확하다.
+DEFAULT_LIVE_PORTFOLIO = "deploy/canary-live-portfolio.toml"
+DEFAULT_VALIDATED_PORTFOLIO = "deploy/global-trend-portfolio.toml"
+
+# strategy_fingerprint(autoarm) 튜플 위치 ↔ 사람이 읽는 항목 이름(같은 순서 유지 필수).
+_FP_FIELDS = (
+    "universe",
+    "weight_scheme",
+    "rebalance_mode",
+    "top_n",
+    "top_pct",
+    "lookback_bars",
+    "momentum_period",
+    "weights",
+    "trend_filter",
+)
+
 _ARMED_RE = re.compile(r"armed\s*\(무장 여부\)\s*\|\s*(true|false)", re.IGNORECASE)
+
+
+def _load_portfolio_cfg(path: Path):
+    """TOML 의 `[portfolio]` 테이블을 PortfolioRebalanceConfig 로 — 지문 계산용(읽기 전용).
+
+    지문은 caps/whitelist/env 와 무관하므로 `[portfolio]` 만 검증한다(cli 의
+    _load_portfolio_for_backtest 와 지문 관련 동작 동일).
+    """
+    import tomllib
+
+    from auto_invest.config.rules import PortfolioRebalanceConfig
+
+    raw = tomllib.loads(path.read_bytes().decode("utf-8"))
+    if "portfolio" not in raw:
+        raise ValueError(f"{path}: [portfolio] 섹션 없음")
+    return PortfolioRebalanceConfig.model_validate(raw["portfolio"])
+
+
+def compute_fingerprint_status(live_path: Path, validated_path: Path) -> dict:
+    """라이브 배포 설정 vs 전진 검증 설정의 전략 지문 정합(사다리 게이트와 동일 비교).
+
+    반환 {'match': bool|None, 'diverged': [field...], 'live_path', 'validated_path'}.
+    둘 중 하나라도 못 읽으면 match=None(N/A — 거짓 경보 안 냄).
+    """
+    from pydantic import ValidationError
+
+    from auto_invest.portfolio.autoarm import strategy_fingerprint
+
+    out = {
+        "match": None,
+        "diverged": [],
+        "live_path": str(live_path),
+        "validated_path": str(validated_path),
+    }
+    try:
+        live_fp = strategy_fingerprint(_load_portfolio_cfg(live_path))
+        val_fp = strategy_fingerprint(_load_portfolio_cfg(validated_path))
+    except (OSError, ValueError, ValidationError) as exc:
+        out["error"] = str(exc)
+        return out
+    # match 는 튜플 전체 비교(정확). diverged 항목 이름은 보조 표시 — 길이 불일치가
+    # 프로브를 죽이지 않게 strict=False(미래 지문 변경에도 안전).
+    out["match"] = live_fp == val_fp
+    out["diverged"] = [
+        name
+        for name, lv, vv in zip(_FP_FIELDS, live_fp, val_fp, strict=False)
+        if lv != vv
+    ]
+    return out
 
 
 def _read(sidecar_dir: Path, key: str) -> str | None:
@@ -105,7 +173,12 @@ def parse_prior(text: str | None) -> dict | None:
     return {"as_of_utc": as_of, "n_obs": n_obs}
 
 
-def build_report(sidecar_dir: Path, now: datetime):
+def build_report(
+    sidecar_dir: Path,
+    now: datetime,
+    live_portfolio: Path | None = None,
+    validated_portfolio: Path | None = None,
+):
     edge = _read(sidecar_dir, "edge-autoarm")
     canary = _read(sidecar_dir, "rebalance-live-canary")
     promote = _read(sidecar_dir, "promote-readiness")
@@ -120,6 +193,10 @@ def build_report(sidecar_dir: Path, now: datetime):
     canary_armed = parse_canary_armed(canary)
     prior = parse_prior(prior_raw)
 
+    fingerprint = None
+    if live_portfolio is not None and validated_portfolio is not None:
+        fingerprint = compute_fingerprint_status(live_portfolio, validated_portfolio)
+
     report = assess_money_path(
         ladder=ladder,
         forward_verdict=forward_verdict,
@@ -127,6 +204,7 @@ def build_report(sidecar_dir: Path, now: datetime):
         canary_armed=canary_armed,
         promote_ready=promote_ready,
         prior=prior,
+        fingerprint=fingerprint,
         now=now,
     )
     # 다음 실행의 ETA 실측을 위해, 이번 forward n_obs 를 결정 JSON 에 prior 힌트로 싣는다.
@@ -141,6 +219,16 @@ def main(argv: list[str] | None = None) -> int:
     )
     ap.add_argument("--json", action="store_true", help="JSON 출력(기본은 text).")
     ap.add_argument("--now", default=None, help="기준 시각 ISO-8601(테스트/재현용).")
+    ap.add_argument(
+        "--live-portfolio",
+        default=DEFAULT_LIVE_PORTFOLIO,
+        help="라이브 캐너리가 실제 거래할 설정(전략 지문 비교 대상). 사다리 게이트와 동일.",
+    )
+    ap.add_argument(
+        "--validated-portfolio",
+        default=DEFAULT_VALIDATED_PORTFOLIO,
+        help="전진 페이퍼에서 검증한 설정(전략 지문 비교 대상). 사다리 게이트와 동일.",
+    )
     ap.add_argument(
         "--manifest",
         action="store_true",
@@ -162,7 +250,11 @@ def main(argv: list[str] | None = None) -> int:
         else datetime.now(UTC)
     )
 
-    report, forward_n_obs = build_report(Path(args.sidecar_dir), now)
+    live_pf = Path(args.live_portfolio) if args.live_portfolio else None
+    val_pf = Path(args.validated_portfolio) if args.validated_portfolio else None
+    report, forward_n_obs = build_report(
+        Path(args.sidecar_dir), now, live_portfolio=live_pf, validated_portfolio=val_pf
+    )
 
     if args.json:
         out = report.to_dict()

@@ -188,6 +188,71 @@ def test_convergence_present_in_eta_dict():
     assert r.to_dict()["eta"]["convergence"] == CONV_UNKNOWN
 
 
+# ── 전략 지문 정합(검증=배포) — '엣지를 쌓아도 배포가 막히는' 분기 진단 ──
+
+
+def _fp(match=True, diverged=None, live="deploy/canary-live-portfolio.toml",
+        validated="deploy/global-trend-portfolio.toml"):
+    return {
+        "match": match,
+        "diverged": diverged or [],
+        "live_path": live,
+        "validated_path": validated,
+    }
+
+
+def test_fingerprint_match_adds_pass_gate():
+    r = assess_money_path(
+        ladder=_ladder(), forward_verdict=_verdict(n_obs=1), fingerprint=_fp(True), now=NOW
+    )
+    names = {g.name: g.status for g in r.gates}
+    assert names["전략 지문 정합(검증=배포)"] == GATE_PASS
+
+
+def test_fingerprint_none_adds_no_gate():
+    # 입력 없으면 게이트 무변경(거짓 경보 0) — 기존 동작 보존.
+    r = assess_money_path(ladder=_ladder(), forward_verdict=_verdict(n_obs=1), now=NOW)
+    assert "전략 지문 정합(검증=배포)" not in {g.name for g in r.gates}
+
+
+def test_fingerprint_mismatch_gate_fail_lists_fields():
+    r = assess_money_path(
+        ladder=_ladder(),
+        forward_verdict=_verdict(n_obs=1),
+        fingerprint=_fp(False, diverged=["universe", "trend_filter"]),
+        now=NOW,
+    )
+    g = next(g for g in r.gates if g.name == "전략 지문 정합(검증=배포)")
+    assert g.status == GATE_FAIL
+    assert "universe" in g.current and "trend_filter" in g.current
+
+
+def test_fingerprint_mismatch_blocked_gives_specific_diagnosis():
+    # 사다리 BLOCKED + 지문 불일치 → 일반 '점검 필요' 대신 구체 진단.
+    r = assess_money_path(
+        ladder=_ladder(action="BLOCKED"),
+        forward_verdict=_verdict(),
+        fingerprint=_fp(False, diverged=["universe"]),
+        now=NOW,
+    )
+    assert r.stage == STAGE_BLOCKED
+    assert "지문 불일치" in r.headline and "universe" in r.headline
+    assert "일치시켜야" in r.blocking_gate
+    names = {g.name: g.status for g in r.gates}
+    assert names["전략 지문 정합(검증=배포)"] == GATE_FAIL
+
+
+def test_fingerprint_blocked_other_cause_stays_generic():
+    # BLOCKED 이지만 지문은 일치 → NAV/킬스위치 등 일반 진단 유지.
+    r = assess_money_path(
+        ladder=_ladder(action="BLOCKED"),
+        forward_verdict=_verdict(),
+        fingerprint=_fp(True),
+        now=NOW,
+    )
+    assert "점검 필요" in r.headline
+
+
 def test_no_edge_yet_stage():
     r = assess_money_path(
         ladder=_ladder(),
