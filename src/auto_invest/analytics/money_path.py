@@ -653,6 +653,42 @@ def _safety_budget(
     )
 
 
+def _confidence_gates(
+    psr: Decimal | None,
+    dsr: Decimal | None,
+    dsr_threshold: Decimal | None,
+) -> list[GateCondition]:
+    """엣지 신뢰도 게이트(PSR·DSR) — 값이 있을 때만(거짓 표시 0).
+
+    이진 EDGE_CONFIRMED 만으로는 "겨우 넘었나(0.951) 강하게 넘었나(0.99)"를 알 수 없다.
+    실제 돈이 들어가기 직전, 엣지가 *얼마나* 강한지를 확률로 보인다:
+      · PSR = 참 샤프가 벤치마크보다 클 확률(스큐·첨도 보정).
+      · DSR = 여러 설정을 시도한 다중검정까지 보정한 PSR(과적합 처벌, num_trials>1 일 때만).
+    """
+    gates: list[GateCondition] = []
+    if psr is not None and dsr_threshold is not None:
+        gates.append(
+            GateCondition(
+                "엣지 신뢰도(PSR)",
+                GATE_PASS if psr >= dsr_threshold else GATE_FAIL,
+                f"{psr}",
+                f"≥ {dsr_threshold}",
+                "참 샤프가 벤치마크보다 클 확률(스큐·첨도 보정). 높을수록 우연이 아닐 확신이 큼.",
+            )
+        )
+    if dsr is not None and dsr_threshold is not None:
+        gates.append(
+            GateCondition(
+                "디플레이티드 샤프(DSR)",
+                GATE_PASS if dsr >= dsr_threshold else GATE_FAIL,
+                f"{dsr}",
+                f"≥ {dsr_threshold}",
+                "여러 설정을 시도한 다중검정 보정 후에도 샤프가 0보다 유의해야 한다(과적합 배제).",
+            )
+        )
+    return gates
+
+
 def assess_money_path(
     *,
     ladder: dict | None,
@@ -699,6 +735,7 @@ def assess_money_path(
     beats_calmar = bool(forward_verdict.get("beats_benchmark_calmar"))
     dsr = _dec(forward_verdict.get("dsr"))
     dsr_threshold = _dec(forward_verdict.get("dsr_threshold"))
+    psr = _dec(forward_verdict.get("psr_vs_benchmark"))  # 참 샤프>벤치마크 확률(신뢰도)
     # 자본 베이시스 정합 결과(cli.py forward-verdict 가 발행): 유효 스냅샷 수와 베이시스
     # 변경으로 제외된 스냅샷 수. 표본 안정성(churn) 진단 입력.
     legacy_excluded = _int(forward_verdict.get("legacy_snapshots_excluded"))
@@ -929,23 +966,15 @@ def assess_money_path(
                 "자본 방어(낙폭 대비 수익)가 벤치마크보다 나아야 한다.",
             )
         )
-        if dsr is not None and dsr_threshold is not None:
-            gates.append(
-                GateCondition(
-                    "디플레이티드 샤프(DSR)",
-                    GATE_PASS if dsr >= dsr_threshold else GATE_FAIL,
-                    f"{dsr}",
-                    f"≥ {dsr_threshold}",
-                    "다중검정 보정 후에도 샤프가 0보다 유의해야 한다(우연 배제).",
-                )
-            )
+        gates.extend(_confidence_gates(psr, dsr, dsr_threshold))
         next_action = (
             "자율 시스템은 계속 전진 관측을 쌓으며 엣지를 재평가한다. 전략 자체를 갈아엎으면 "
             "지문이 바뀌어 누적이 리셋되므로, 후보 전략은 전진 토너먼트에 *추가*로 검증한다."
         )
     elif stage == STAGE_EDGE_CONFIRMED:
+        conf = f", 신뢰도 PSR {psr}" if psr is not None else ""
         headline = (
-            "🟢 전진 엣지 확정(EDGE_CONFIRMED) — 첫 자본(단0→단1, NAV 25%) 배치 임박."
+            f"🟢 전진 엣지 확정(EDGE_CONFIRMED{conf}) — 첫 자본(단0→단1, NAV 25%) 배치 임박."
         )
         blocking = (
             "막는 것 없음 — 자본 사다리가 다음 게이트 실행에서 단1을 자율 무장한다"
@@ -956,6 +985,8 @@ def assess_money_path(
                 "전진 판정", GATE_PASS, f"{verdict}", f"{EDGE_CONFIRMED}", "엣지 확정."
             )
         )
+        # 실제 돈이 들어가기 직전 — 엣지가 *얼마나* 강한지 신뢰도(PSR/DSR)로 보인다.
+        gates.extend(_confidence_gates(psr, dsr, dsr_threshold))
         gates.append(
             GateCondition(
                 "캐너리 무장",

@@ -57,6 +57,7 @@ def _verdict(
     min_obs=20,
     beats=False,
     dsr=None,
+    psr=None,
     legacy=None,
     snapshots=None,
 ):
@@ -67,6 +68,7 @@ def _verdict(
         "min_obs_required": min_obs,
         "beats_benchmark_calmar": beats,
         "dsr": dsr,
+        "psr_vs_benchmark": psr,
         "dsr_threshold": "0.95",
         "universe": ["SPY", "IEF", "GLD"],
     }
@@ -407,6 +409,45 @@ def test_edge_confirmed_pending_deploy_canary_not_armed():
     # 헌법 X.4 v5.0.0: 무장 자체가 자율 — '운영자 게이트' 가 아니라 입금·킬스위치만 운영자 몫.
     assert "자율 무장" in r.blocking_gate or "자율 무장" in r.next_action
     assert "운영자 전용" in r.next_action
+
+
+def test_edge_confirmed_shows_psr_confidence():
+    # 실제 돈 직전 — 엣지 신뢰도(PSR)를 게이트·헤드라인에 수치로 보인다.
+    r = assess_money_path(
+        ladder=_ladder(action="WAIT_EDGE"),
+        forward_verdict=_verdict(verdict="EDGE_CONFIRMED", n_obs=22, psr="0.97"),
+        canary_armed=False,
+        now=NOW,
+    )
+    assert r.stage == STAGE_EDGE_CONFIRMED
+    names = {g.name: g.status for g in r.gates}
+    assert names["엣지 신뢰도(PSR)"] == GATE_PASS  # 0.97 ≥ 0.95
+    assert "신뢰도 PSR 0.97" in r.headline
+
+
+def test_edge_confirmed_no_psr_no_confidence_gate():
+    # PSR 없으면 신뢰도 게이트·헤드라인 표식 없음(거짓 표시 0, 하위호환).
+    r = assess_money_path(
+        ladder=_ladder(action="WAIT_EDGE"),
+        forward_verdict=_verdict(verdict="EDGE_CONFIRMED", n_obs=22),
+        now=NOW,
+    )
+    names = {g.name for g in r.gates}
+    assert "엣지 신뢰도(PSR)" not in names
+    assert "신뢰도 PSR" not in r.headline
+
+
+def test_no_edge_yet_shows_psr_when_present():
+    r = assess_money_path(
+        ladder=_ladder(),
+        forward_verdict=_verdict(
+            verdict="NO_EDGE", n_obs=25, beats=False, dsr="0.40", psr="0.50"
+        ),
+        now=NOW,
+    )
+    names = {g.name: g.status for g in r.gates}
+    assert names["엣지 신뢰도(PSR)"] == GATE_FAIL  # 0.50 < 0.95
+    assert names["디플레이티드 샤프(DSR)"] == GATE_FAIL
 
 
 def test_deployed_stage_next_rung_gates():
