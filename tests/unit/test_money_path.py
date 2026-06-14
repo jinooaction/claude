@@ -28,6 +28,7 @@ from auto_invest.analytics.money_path import (
     STAGE_EDGE_CONFIRMED,
     STAGE_NO_EDGE_YET,
     MoneyPathReport,
+    _capital_pct,
     _project_trading_date,
     _trading_days_between,
     assess_money_path,
@@ -639,3 +640,27 @@ def test_as_text_includes_safety_section():
     text = r.as_text()
     assert "자본 방어선 예산" in text
     assert "첫 자본" in text
+
+
+# ── 배치 비율 표기 (과학적 표기 회귀) ──
+
+
+def test_capital_pct_no_scientific_notation():
+    # Decimal.normalize() 회귀: 단2=50%·단3=100% 가 '5E+1'/'1E+2' 로 깨지면 안 됨.
+    assert _capital_pct(0) == "0"
+    assert _capital_pct(1) == "25"
+    assert _capital_pct(2) == "50"
+    assert _capital_pct(3) == "100"
+
+
+def test_capital_pct_in_report_at_rung2():
+    # 실제 돈이 NAV 50%(단2)로 커진 보고서에 '5E+1%' 가 새어나오면 안 됨.
+    r = assess_money_path(
+        ladder=_ladder(action="STAY", cur=2, tgt=2, cap=759, dd="2.0", obs=25),
+        forward_verdict=_verdict(verdict="EDGE_CONFIRMED", n_obs=30),
+        live_growth={"period_days": "30.0"},
+        now=NOW,
+    )
+    assert r.capital_pct == "50"
+    assert "5E+1" not in r.as_text()
+    assert "1E+2" not in r.as_text()

@@ -574,11 +574,24 @@ def _parse_iso(ts: str | None) -> datetime | None:
     return dt
 
 
+def _pct_str(value: Decimal) -> str:
+    """Decimal 퍼센트를 과학적 표기 없이 사람이 읽는 문자열로.
+
+    Decimal.normalize() 는 50.00→'5E+1', 100.00→'1E+2' 처럼 지수 형태를 낼 수 있어
+    운영자 보고서(단2=50%·단3=100%)에 깨져 보였다. 고정소수점(format f)으로 펼친 뒤
+    의미 없는 0 만 떼어 '50'·'100'·'12.5' 처럼 항상 정상 표기한다.
+    """
+    s = format(value, "f")  # 고정소수점 — 지수 표기 절대 안 나옴
+    if "." in s:
+        s = s.rstrip("0").rstrip(".")
+    return s or "0"
+
+
 def _capital_pct(rung: int) -> str:
     frac = RUNG_FRACTIONS.get(rung)
     if frac is None:
         return "?"
-    return str((frac * 100).normalize())
+    return _pct_str(frac * 100)
 
 
 def _safety_budget(
