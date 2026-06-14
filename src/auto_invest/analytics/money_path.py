@@ -416,6 +416,7 @@ def assess_money_path(
     canary_armed: bool | None = None,
     promote_ready: dict | None = None,
     prior: dict | None = None,
+    fingerprint: dict | None = None,
     dd_budget_pct: Decimal = DEFAULT_DD_BUDGET_PCT,
     now: datetime,
 ) -> MoneyPathReport:
@@ -427,6 +428,10 @@ def assess_money_path(
     canary_armed: 라이브 캐너리 무장 여부(rebalance-live-canary 사이드카, 선택).
     promote_ready: 승격 준비 JSON(헌법 VI 게이트, 선택).
     prior: 직전 money-path 사이드카에서 읽은 {'as_of_utc','n_obs'}(ETA 실측용, 선택).
+    fingerprint: 검증 forward 설정 vs 라이브 배포 설정의 전략 지문 정합
+        {'match': bool|None, 'diverged': [field...], 'live_path', 'validated_path'}(선택).
+        자본 사다리가 지문 불일치면 어떤 단에서도 자본을 배치하지 않으므로(BLOCKED),
+        이 입력으로 '엣지를 쌓아도 배포가 막히는' 분기를 미리 진단한다.
     """
     if now.tzinfo is None:
         now = now.replace(tzinfo=UTC)
@@ -452,6 +457,13 @@ def assess_money_path(
 
     prior_n_obs = _int((prior or {}).get("n_obs"))
     prior_ts = (prior or {}).get("as_of_utc")
+
+    # 전략 지문 정합(검증 forward 설정 == 라이브 배포 설정). match: True/False/None(측정 불가).
+    fp = fingerprint or {}
+    fp_match = fp.get("match")  # True | False | None
+    fp_diverged = [str(x) for x in (fp.get("diverged") or [])]
+    fp_live = fp.get("live_path") or "라이브 배포 설정"
+    fp_validated = fp.get("validated_path") or "검증 forward 설정"
 
     # 배치 자본(USD): 결정 JSON 에 있으면 그걸, 없으면 단 비율 × NAV.
     if deployed_capital is None and account_nav is not None:
@@ -480,12 +492,25 @@ def assess_money_path(
     eta = EtaProjection(ETA_NONE, None, None, None, None, "해당 없음.")
 
     if stage == STAGE_BLOCKED:
-        headline = "🛑 자본 사다리 게이트가 차단/정지 상태 — 길을 읽을 수 없다(점검 필요)."
-        blocking = (
-            f"자본 사다리 결정={action!r}"
-            + (f", 전진 판정={verdict!r}" if verdict else " (전진 판정 JSON 없음)")
-            + " — 정합성 불일치·NAV 조회 불능·킬스위치 가능."
-        )
+        if fp_match is False:
+            # 차단 원인을 지문 불일치로 특정 — 운영자가 정확히 무엇을 고칠지 안다.
+            diff_txt = ", ".join(fp_diverged) or "항목 불명"
+            headline = (
+                f"🛑 자본 사다리 차단 — 배포 전략이 전진 검증 전략과 다르다(지문 불일치: "
+                f"{diff_txt}). 엣지를 아무리 쌓아도 자본이 들어가지 않는다."
+            )
+            blocking = (
+                f"전략 지문 불일치({diff_txt}) — 라이브 배포({fp_live})와 "
+                f"전진 검증({fp_validated})의 해당 항목을 일치시켜야 사다리가 자본을 배치한다. "
+                "검증하지 않은 전략엔 어떤 단에서도 배치 안 함(헌법 안전 자세)."
+            )
+        else:
+            headline = "🛑 자본 사다리 게이트가 차단/정지 상태 — 길을 읽을 수 없다(점검 필요)."
+            blocking = (
+                f"자본 사다리 결정={action!r}"
+                + (f", 전진 판정={verdict!r}" if verdict else " (전진 판정 JSON 없음)")
+                + " — 정합성 불일치·NAV 조회 불능·킬스위치 가능."
+            )
         gates.append(
             GateCondition(
                 "자본 사다리 게이트",
@@ -682,6 +707,27 @@ def assess_money_path(
         next_action = (
             "자율 시스템이 자본을 한 단(또는 무장 해제)으로 즉시 회수했다(증거 불필요한 하향). "
             "재배치는 전진 엣지 재검증 → 사다리 재승격 경로로만."
+        )
+
+    # 전략 지문 게이트 — 입력이 있을 때만 추가(없으면 게이트 무변경, 거짓 경보 0).
+    # 사다리(capital_ladder.decide_ladder)가 매 단에서 검사하는 바로 그 정합을, 운영자가
+    # '엣지를 쌓아도 배포가 막히는지'를 미리 볼 수 있게 표면화한다(자본 임박 전 진단).
+    if fp_match is not None:
+        if fp_match:
+            fp_status, fp_current = GATE_PASS, "일치"
+        else:
+            fp_status = GATE_FAIL
+            fp_current = "불일치: " + (", ".join(fp_diverged) or "항목 불명")
+        gates.append(
+            GateCondition(
+                "전략 지문 정합(검증=배포)",
+                fp_status,
+                fp_current,
+                "라이브 배포 설정 == 전진 검증 설정",
+                "지문(유니버스·가중·추세 게이트 등, 캡/자본 제외)이 다르면 자본 사다리가 "
+                "어떤 단에서도 자본을 배치하지 않는다(BLOCKED). 두 TOML 을 일치시켜야 "
+                "첫 자본이 들어간다.",
+            )
         )
 
     return MoneyPathReport(
