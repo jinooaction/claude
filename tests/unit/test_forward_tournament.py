@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 from auto_invest.analytics.forward_tournament import (
     COMPARABLE,
     EDGE_CONFIRMED,
@@ -23,6 +25,9 @@ def _verdict(
     sharpe=None,
     excess=None,
     dd="0.0",
+    psr=None,
+    dsr=None,
+    dsr_threshold="0.95",
     universe=("SPY", "IEF", "GLD"),
 ):
     return {
@@ -34,7 +39,9 @@ def _verdict(
         "strategy_max_drawdown_pct": dd,
         "excess_return_pct": excess,
         "strategy_total_return_pct": "1.0",
-        "dsr": None,
+        "psr_vs_benchmark": psr,
+        "dsr": dsr,
+        "dsr_threshold": dsr_threshold,
         "universe": list(universe),
     }
 
@@ -269,3 +276,113 @@ def test_deterministic():
     a = rank_tournament(tracks, as_of_utc="2026-06-14T00:00:00Z").to_json_dict()
     b = rank_tournament(tracks, as_of_utc="2026-06-14T00:00:00Z").to_json_dict()
     assert a == b
+
+
+# ---- 교차-트랙 다중비교(본페로니) 보정 ----------------------------------------------
+
+
+def _confirmed(key, *, calmar, psr=None, dsr=None, inc=False, n_obs=25):
+    return _track(
+        key,
+        incumbent=inc,
+        vj=_verdict(verdict=EDGE_CONFIRMED, n_obs=n_obs, calmar=calmar, psr=psr, dsr=dsr),
+    )
+
+
+def test_multiplicity_adjusted_threshold_k2():
+    # K=2 비교 가능 → 보정 기준 = 1 − 0.05/2 = 0.975.
+    tracks = [
+        _confirmed("global", calmar="2.0", psr="0.99", inc=True),
+        _track("wide", vj=_verdict(verdict=NO_EDGE, n_obs=25, calmar="0.5", psr="0.5")),
+    ]
+    board = rank_tournament(tracks)
+    assert board.comparable_count == 2
+    assert board.adjusted_dsr_threshold == Decimal("0.975")
+
+
+def test_multiplicity_robust_champion_passes_bar():
+    # 6 비교 가능, 챔피언 PSR 0.999 ≥ 보정 기준(0.991667) → robust True.
+    tracks = [_confirmed("global", calmar="2.0", psr="0.999", inc=True)]
+    tracks += [
+        _track(f"t{i}", vj=_verdict(verdict=NO_EDGE, n_obs=25, calmar="0.4", psr="0.5"))
+        for i in range(5)
+    ]
+    board = rank_tournament(tracks)
+    assert board.comparable_count == 6
+    assert board.adjusted_dsr_threshold == Decimal("0.991667")
+    assert board.champion_multiplicity_robust is True
+    assert "보정 통과" in board.headline or "보정도 통과" in board.headline
+
+
+def test_multiplicity_lucky_winner_fails_bar():
+    # 6 비교 가능, 챔피언 PSR 0.96 < 보정 기준(0.991667) → 운 좋은 우승 의심(robust False).
+    tracks = [_confirmed("global", calmar="2.0", psr="0.96", inc=True)]
+    tracks += [
+        _track(f"t{i}", vj=_verdict(verdict=NO_EDGE, n_obs=25, calmar="0.4", psr="0.5"))
+        for i in range(5)
+    ]
+    board = rank_tournament(tracks)
+    assert board.champion_multiplicity_robust is False
+    assert "미통과" in board.headline
+
+
+def test_multiplicity_unassessed_without_significance():
+    # PSR·DSR 둘 다 없으면 평가 불가(robust None) — 보수적, 거짓 자신만만 0.
+    tracks = [
+        _confirmed("global", calmar="2.0", inc=True),  # psr/dsr 없음
+        _track("wide", vj=_verdict(verdict=NO_EDGE, n_obs=25, calmar="0.5")),
+    ]
+    board = rank_tournament(tracks)
+    assert board.champion_multiplicity_robust is None
+    assert board.champion_key == "global"  # 챔피언 선정 자체는 그대로
+
+
+def test_multiplicity_uses_lower_of_psr_dsr():
+    # 보수적: PSR·DSR 중 낮은 값을 유의확률로. DSR 0.96 < 보정 0.975(K=2) → 미통과.
+    tracks = [
+        _confirmed("global", calmar="0.4", psr="0.99", inc=True),
+        _confirmed("wide", calmar="1.9", psr="0.999", dsr="0.96"),
+    ]
+    board = rank_tournament(tracks)
+    assert board.champion_key == "wide"
+    assert board.challenger_key == "wide"
+    # wide 의 유의확률 = min(0.999, 0.96) = 0.96 < 0.975 → 도전자 정직 강등.
+    assert board.champion_multiplicity_robust is False
+    assert "재지정 보류" in board.headline
+
+
+def test_multiplicity_challenger_robust_keeps_alert():
+    # 도전자가 보정도 통과하면 정상 도전자 경보 유지.
+    tracks = [
+        _confirmed("global", calmar="0.4", psr="0.99", inc=True),
+        _confirmed("wide", calmar="1.9", psr="0.999"),
+    ]
+    board = rank_tournament(tracks)
+    assert board.challenger_key == "wide"
+    assert board.champion_multiplicity_robust is True
+    assert "도전자" in board.headline
+    assert "운영자 게이트" in board.headline or "X.4" in board.headline
+
+
+def test_multiplicity_in_to_json_dict():
+    tracks = [_confirmed("global", calmar="2.0", psr="0.96", inc=True)]
+    tracks += [
+        _track(f"t{i}", vj=_verdict(verdict=NO_EDGE, n_obs=25, calmar="0.4", psr="0.5"))
+        for i in range(5)
+    ]
+    d = rank_tournament(tracks).to_json_dict()
+    assert d["comparable_count"] == 6
+    assert d["adjusted_dsr_threshold"] == "0.991667"
+    assert d["champion_multiplicity_robust"] is False
+    assert d["rows"][0]["psr_vs_benchmark"] == "0.96"
+
+
+def test_as_text_shows_multiplicity_line():
+    tracks = [_confirmed("global", calmar="2.0", psr="0.96", inc=True)]
+    tracks += [
+        _track(f"t{i}", vj=_verdict(verdict=NO_EDGE, n_obs=25, calmar="0.4", psr="0.5"))
+        for i in range(5)
+    ]
+    txt = rank_tournament(tracks).as_text()
+    assert "교차-트랙 다중비교" in txt
+    assert "본페로니" in txt
