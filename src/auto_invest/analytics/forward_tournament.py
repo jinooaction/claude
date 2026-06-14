@@ -52,6 +52,9 @@ SCHEMA_VERSION = "1.0"
 # 스펙 035 기본 최소 관측(판정 JSON 에 min_obs_required 가 없을 때 폴백).
 DEFAULT_MIN_OBS = 20
 
+# 유의 기준(판정 JSON 에 dsr_threshold 가 없을 때 폴백, 스펙 035 와 동일 0.95).
+DEFAULT_DSR_THRESHOLD = Decimal("0.95")
+
 
 def _dec(value: object) -> Decimal | None:
     """문자열/숫자를 Decimal 로 — 실패하면 None(보수적)."""
@@ -91,6 +94,8 @@ class TrackResult:
     universe: tuple[str, ...]
     comparability: str  # COMPARABLE | PREMATURE | UNKNOWN
     rank: int | None = None  # 1-기반 등수(정렬 후 채워짐)
+    psr_vs_benchmark: Decimal | None = None  # 참 샤프>벤치마크 확률(PSR) — 교차-트랙 보정용
+    dsr_threshold: Decimal | None = None  # 유의 기준(기본 0.95) — 보정 기준 계산용
 
     def with_rank(self, rank: int) -> TrackResult:
         return replace(self, rank=rank)
@@ -117,6 +122,12 @@ class TrackResult:
                 None if self.excess_return_pct is None else str(self.excess_return_pct)
             ),
             "dsr": None if self.dsr is None else str(self.dsr),
+            "psr_vs_benchmark": (
+                None if self.psr_vs_benchmark is None else str(self.psr_vs_benchmark)
+            ),
+            "dsr_threshold": (
+                None if self.dsr_threshold is None else str(self.dsr_threshold)
+            ),
             "universe_size": len(self.universe),
             "universe": list(self.universe[:8]),
         }
@@ -171,6 +182,8 @@ def build_track_result(
         calmar=_dec(verdict_json.get("strategy_calmar")),
         excess_return_pct=_dec(verdict_json.get("excess_return_pct")),
         dsr=_dec(verdict_json.get("dsr")),
+        psr_vs_benchmark=_dec(verdict_json.get("psr_vs_benchmark")),
+        dsr_threshold=_dec(verdict_json.get("dsr_threshold")),
         universe=universe,
         comparability=comparability,
     )
@@ -240,6 +253,10 @@ class TournamentLeaderboard:
     challenger_key: str | None  # incumbent 를 앞선 비교 가능 EDGE_CONFIRMED 도전자(없으면 None)
     headline: str
     note: str = ""
+    # 교차-트랙 다중비교(본페로니) 보정 — 6트랙 동시 검정에서 '운 좋은 우승' 처벌.
+    comparable_count: int = 0  # 비교 가능 트랙 수 K(챔피언을 뽑은 가족 크기)
+    adjusted_dsr_threshold: Decimal | None = None  # 1 − (1−기준)/K (없으면 평가 불가)
+    champion_multiplicity_robust: bool | None = None  # 챔피언 유의확률 ≥ 보정 기준?(None=미평가)
 
     def to_json_dict(self) -> dict:
         return {
@@ -248,6 +265,13 @@ class TournamentLeaderboard:
             "champion_key": self.champion_key,
             "incumbent_key": self.incumbent_key,
             "challenger_key": self.challenger_key,
+            "comparable_count": self.comparable_count,
+            "adjusted_dsr_threshold": (
+                None
+                if self.adjusted_dsr_threshold is None
+                else str(self.adjusted_dsr_threshold)
+            ),
+            "champion_multiplicity_robust": self.champion_multiplicity_robust,
             "headline": self.headline,
             "note": self.note,
             "rows": [r.to_json_dict() for r in self.rows],
@@ -300,6 +324,22 @@ class TournamentLeaderboard:
             "🏠 라이브 검증 트랙 · 👑 챔피언(비교 가능 EDGE_CONFIRMED 1위) · 🚀 도전자"
             "(검증 트랙을 앞섬). 잠정(⏳)은 관측이 더 쌓여야 비교 가능 — 지표는 잠정치."
         )
+        if self.champion_key is not None:
+            bar = _fmt_p(self.adjusted_dsr_threshold)
+            if self.champion_multiplicity_robust is True:
+                mtag = (
+                    f"✅ 챔피언이 {self.comparable_count}개 트랙 동시 검정 보정 통과"
+                    f"(보정 기준 {bar})."
+                )
+            elif self.champion_multiplicity_robust is False:
+                mtag = (
+                    f"⚠ 챔피언이 {self.comparable_count}개 트랙 동시 검정 보정 미통과"
+                    f"(보정 기준 {bar}) — 여러 트랙 동시 운영에서 온 우연 우승 가능, 재지정 신중."
+                )
+            else:
+                mtag = "교차-트랙 다중비교 보정 미평가(유의확률 PSR/DSR 없음)."
+            lines.append("")
+            lines.append(f"🔬 교차-트랙 다중비교(본페로니): {mtag}")
         lines.append("")
         lines.append(
             "⚠ 이건 종합 보고다(읽기 전용). 라이브 전략은 자동으로 안 바뀐다 — 재지정은 "
@@ -315,6 +355,71 @@ def _fmt(value: Decimal | None) -> str:
     # 소수 둘째 자리까지(노이즈 자릿수 줄임), 정수면 정수로.
     q = value.quantize(Decimal("0.01"))
     return str(q)
+
+
+def _fmt_p(value: Decimal | None) -> str:
+    """확률(PSR/DSR/보정 기준)을 소수 넷째 자리까지 — 0.95 vs 0.9917 을 가른다."""
+    if value is None:
+        return "—"
+    return str(value.quantize(Decimal("0.0001")))
+
+
+def _sig_prob(t: TrackResult | None) -> Decimal | None:
+    """트랙의 유의확률 — PSR 와 (있으면) DSR 중 가장 보수적인(낮은) 값.
+
+    EDGE_CONFIRMED 는 PSR ≥ 기준(+num_trials>1 이면 DSR ≥ 기준)을 모두 통과한 것이므로,
+    둘 중 낮은 쪽이 그 트랙 '엣지가 진짜일' 신뢰의 하한이다. 둘 다 없으면 None(미평가).
+    """
+    if t is None:
+        return None
+    probs = [p for p in (t.psr_vs_benchmark, t.dsr) if p is not None]
+    return min(probs) if probs else None
+
+
+def _multiplicity(
+    champion: TrackResult | None, comparable_count: int
+) -> tuple[Decimal | None, bool | None]:
+    """교차-트랙 본페로니 보정 — K개 비교 가능 트랙 중 챔피언을 뽑은 선택 다중성을 처벌.
+
+    가족 신뢰도(트랙 기준, 기본 0.95)를 K 트랙에 유지하려면 챔피언 유의확률이
+    1 − (1−기준)/K 이상이어야 한다(=가족 단위 거짓 양성 α 를 K 로 나눔). K≤1 이면 보정
+    없음(단독 선택). 챔피언/유의확률/기준이 없으면 (기준, None) 또는 (None, None) — 미평가.
+
+    반환: (보정 기준, robust?). robust=None 은 '유의확률이 없어 평가 불가'(보수적).
+    """
+    if champion is None:
+        return None, None
+    base = champion.dsr_threshold or DEFAULT_DSR_THRESHOLD
+    k = max(1, comparable_count)
+    adjusted = (Decimal(1) - (Decimal(1) - base) / k).quantize(Decimal("0.000001"))
+    sig = _sig_prob(champion)
+    if sig is None:
+        return adjusted, None
+    return adjusted, sig >= adjusted
+
+
+def _mult_clause(
+    robust: bool | None,
+    sig_prob: Decimal | None,
+    adjusted: Decimal | None,
+    comparable_count: int,
+) -> str:
+    """다중비교 보정 결과를 사람이 읽는 한 구절로(헤드라인/노트에 덧붙임)."""
+    if robust is None:
+        return (
+            "교차-트랙 다중비교 보정 미평가(유의확률 PSR/DSR 없음 — 보수적으로 신뢰 보류)."
+        )
+    bar = _fmt_p(adjusted)
+    sp = _fmt_p(sig_prob)
+    if robust:
+        return (
+            f"{comparable_count}개 비교 가능 트랙 동시 검정 보정 통과"
+            f"(유의확률 {sp} ≥ 보정 기준 {bar})."
+        )
+    return (
+        f"⚠ {comparable_count}개 트랙 동시 검정 보정 미통과(유의확률 {sp} < 보정 기준 "
+        f"{bar}) — 여러 트랙을 동시에 돌린 데서 온 우연 우승 가능."
+    )
 
 
 def rank_tournament(
@@ -354,7 +459,20 @@ def rank_tournament(
     ):
         challenger_key = champion.key
 
-    headline, note = _summarize(ranked, champion, incumbent, challenger_key)
+    # 교차-트랙 다중비교(본페로니) 보정 — K=비교 가능 트랙 중 챔피언을 뽑은 선택 다중성.
+    comparable_count = sum(1 for t in ranked if t.comparability == COMPARABLE)
+    adjusted_threshold, champion_robust = _multiplicity(champion, comparable_count)
+
+    headline, note = _summarize(
+        ranked,
+        champion,
+        incumbent,
+        challenger_key,
+        robust=champion_robust,
+        adjusted=adjusted_threshold,
+        comparable_count=comparable_count,
+        sig_prob=_sig_prob(champion),
+    )
     return TournamentLeaderboard(
         schema_version=SCHEMA_VERSION,
         as_of_utc=as_of_utc,
@@ -364,6 +482,9 @@ def rank_tournament(
         challenger_key=challenger_key,
         headline=headline,
         note=note,
+        comparable_count=comparable_count,
+        adjusted_dsr_threshold=adjusted_threshold,
+        champion_multiplicity_robust=champion_robust,
     )
 
 
@@ -372,8 +493,17 @@ def _summarize(
     champion: TrackResult | None,
     incumbent: TrackResult | None,
     challenger_key: str | None,
+    *,
+    robust: bool | None = None,
+    adjusted: Decimal | None = None,
+    comparable_count: int = 0,
+    sig_prob: Decimal | None = None,
 ) -> tuple[str, str]:
-    """헤드라인 + 보조 노트(정직 — 관측 부족이면 챔피언 선언 안 함)."""
+    """헤드라인 + 보조 노트(정직 — 관측 부족이면 챔피언 선언 안 함).
+
+    robust/adjusted/comparable_count/sig_prob 는 교차-트랙 다중비교 보정 결과 — 챔피언/
+    도전자 헤드라인에 '운 좋은 우승'인지 정직하게 덧입힌다(재지정은 여전히 운영자 게이트).
+    """
     parseable = [t for t in ranked if t.comparability != UNKNOWN]
     if not parseable:
         return ("🛑 토너먼트 판정 불가 — 어떤 트랙 판정도 읽을 수 없음.", "")
@@ -406,19 +536,35 @@ def _summarize(
         )
 
     champ_label = champion.label
+    clause = _mult_clause(robust, sig_prob, adjusted, comparable_count)
     if challenger_key is not None:
         # 도전자가 라이브 검증 트랙을 앞섬(둘 다 비교 가능).
+        if robust is False:
+            # 운 좋은 우승 가능 — 도전자 경보를 정직하게 강등(재지정 보류).
+            head = (
+                f"⚠ 도전자 '{champ_label}'가 라이브 검증 트랙을 앞서나 교차-트랙 다중비교 "
+                "보정 미통과 — 재지정 보류(운영자 게이트 X.4)."
+            )
+        else:
+            head = (
+                f"🚀 도전자 '{champ_label}'가 라이브 검증 트랙을 앞선다 — 둘 다 엣지 확정, "
+                "재지정 후보. 단 자동 전환 아님(운영자 게이트 X.4)."
+            )
         return (
-            f"🚀 도전자 '{champ_label}'가 라이브 검증 트랙을 앞선다 — 둘 다 엣지 확정, "
-            "재지정 후보. 단 자동 전환 아님(운영자 게이트 X.4).",
+            head,
             "라이브가 되려면 검증=배치 정합상 라이브 설정 지문을 이 트랙으로 맞춰야 한다"
-            "(운영자/세션 결정). 그 전까지 라이브는 현 검증 트랙 유지 — 전진 시계 보존.",
+            f"(운영자/세션 결정). 그 전까지 라이브는 현 검증 트랙 유지 — 전진 시계 보존. {clause}",
         )
     if champion.is_incumbent:
+        robust_tag = ""
+        if robust is True:
+            robust_tag = " 교차-트랙 다중비교 보정도 통과."
+        elif robust is False:
+            robust_tag = " 단, 교차-트랙 다중비교 보정은 미통과(아래 노트)."
         return (
-            f"🏆 라이브 검증 트랙 '{champ_label}'이 선두 — 도전자 없음, 현 전략 유지.",
+            f"🏆 라이브 검증 트랙 '{champ_label}'이 선두 — 도전자 없음, 현 전략 유지.{robust_tag}",
             "검증 트랙이 토너먼트 챔피언(엣지 확정 1위)이다. 재지정 불필요 — 현 전략으로 "
-            "자본 사다리 진행.",
+            f"자본 사다리 진행. {clause}",
         )
     # 챔피언이 비-incumbent 인데 incumbent 가 아직 비교 불가(관측 부족) → 직접 비교 전.
     inc_note = ""
@@ -430,12 +576,13 @@ def _summarize(
     return (
         f"🟢 '{champ_label}'가 먼저 엣지 확정(EDGE_CONFIRMED) — 비교 가능 1위.{inc_note}",
         "도전자가 먼저 확정했으나 검증 트랙이 비교 가능해질 때까지 사과 대 사과 비교는 보류"
-        "(거짓 경보 0). 라이브 변경은 운영자 게이트(헌법 X.4).",
+        f"(거짓 경보 0). 라이브 변경은 운영자 게이트(헌법 X.4). {clause}",
     )
 
 
 __all__ = [
     "COMPARABLE",
+    "DEFAULT_DSR_THRESHOLD",
     "DEFAULT_MIN_OBS",
     "EDGE_CONFIRMED",
     "INSUFFICIENT_DATA",
