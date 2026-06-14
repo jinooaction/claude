@@ -413,3 +413,84 @@ def test_ladder_waits_until_forward_edge_confirmed():
     )
     assert d.action == ACTION_WAIT_EDGE
     assert not d.sentinel_changes
+
+
+def test_money_path_report_surfaces_downside_with_real_config():
+    """돈 경로 보고서(운영자 대시보드)가 실제 사다리 결정(실제 설정·NAV)으로 방어선
+    예산·엣지 신뢰도를 끝단까지 표면화하는지 — 회귀 보호. 돈 0 이동(순수 판정·보고).
+
+    실제 EDGE_CONFIRMED + 검증=배치 지문 정합이면 사다리는 단0→단1 PROMOTE 를 내고,
+    보고서는 첫 자본(NAV 25%)의 다운사이드를 달러로(강등 10% / 정지 20%) 보여야 한다.
+    """
+    from auto_invest.analytics.money_path import assess_money_path
+
+    _, _, cfg = _load_live_config()
+    _, _, validated_cfg = _load_portfolio_for_backtest(
+        _VALIDATED_TOML, env={"KIS_ACCOUNT_NO": ACCOUNT}
+    )
+    d = decide_ladder(
+        sentinel_text=_SENTINEL.read_text(encoding="utf-8"),
+        forward_verdict={"verdict": "EDGE_CONFIRMED", "n_obs": 25},
+        live_growth=None,
+        account_nav_usd=ACCOUNT_NAV,
+        live_config=cfg,
+        validated_config=validated_cfg,
+        kill_switch_present=False,
+        today=date(2026, 6, 12),
+    )
+    assert d.action == ACTION_PROMOTE  # 단0 → 단1 (지문 정합 + EDGE_CONFIRMED)
+
+    report = assess_money_path(
+        ladder=d.to_json_dict(),
+        forward_verdict={
+            "verdict": "EDGE_CONFIRMED",
+            "n_obs": 25,
+            "min_obs_required": 20,
+            "psr_vs_benchmark": "0.97",
+            "dsr_threshold": "0.95",
+        },
+        now=datetime(2026, 6, 12, 8, tzinfo=UTC),
+    )
+    # 방어선 예산: 첫 자본 = NAV($12,000) 25% = $3,000, 강등 -$300(10%) / 정지 -$600(20%).
+    # (PROMOTE → DEPLOYED 단계: 엣지 신뢰도는 EDGE_CONFIRMED 단계 전용 — 아래 별도 테스트.)
+    assert report.safety is not None
+    assert report.safety.capital_usd == int(RUNG1_CAPITAL)  # 3000
+    assert report.safety.loss_at_demote_usd == 300
+    assert report.safety.loss_at_halt_usd == 600
+    assert "$3000" in report.as_text()  # 다운사이드가 달러로 끝단까지 표면화됨
+
+
+def test_money_path_edge_confidence_stage_real_config():
+    """판정만 EDGE_CONFIRMED 이고 사다리가 아직 단0 보류(WAIT_EDGE 동치)면 보고서는
+    EDGE_CONFIRMED 단계 — 엣지 신뢰도(PSR) 게이트가 뜬다(돈 직전 강도 표시)."""
+    from auto_invest.analytics.money_path import (
+        GATE_PASS,
+        STAGE_EDGE_CONFIRMED,
+        assess_money_path,
+    )
+
+    # 사다리는 WAIT_EDGE(아직 단0 보류) 로 두고 판정만 EDGE_CONFIRMED → EDGE_CONFIRMED 단계.
+    ladder = {
+        "action": "WAIT_EDGE",
+        "current_rung": 0,
+        "target_rung": 0,
+        "account_nav_usd": str(ACCOUNT_NAV),
+        "target_capital_usd": None,
+        "live_dd_pct": "0",
+        "live_obs": None,
+    }
+    report = assess_money_path(
+        ladder=ladder,
+        forward_verdict={
+            "verdict": "EDGE_CONFIRMED",
+            "n_obs": 25,
+            "min_obs_required": 20,
+            "psr_vs_benchmark": "0.97",
+            "dsr_threshold": "0.95",
+        },
+        now=datetime(2026, 6, 12, 8, tzinfo=UTC),
+    )
+    assert report.stage == STAGE_EDGE_CONFIRMED
+    names = {g.name: g.status for g in report.gates}
+    assert names["엣지 신뢰도(PSR)"] == GATE_PASS
+    assert "신뢰도 PSR 0.97" in report.headline
