@@ -1,0 +1,118 @@
+name: Forward anchored verdict (backtest-anchored edge, research/observe only)
+
+# 백테스트 앵커드 엣지 판정 — "깊은 표본외(OOS) + 짧은 forward 지속성"을 인스턴스에서
+# 실측 발행(읽기 전용). 운영자 지적(2026-06-15)의 해법: 전략 규칙은 이미 깊은 walk-forward
+# OOS 로 검증됐으니 일별 20일 재발견 없이, 라이브 forward 가 그 검증된 엣지를 *지속*하는지만
+# 5~10일에 확인한다.
+#
+# 체인(regime-stratify 와 동일한 /tmp 격리 패턴): bars-export(forward DB 읽기 전용) →
+# ingest-history(/tmp 데이터셋) → forward-verdict-anchored(walk-forward OOS + 라이브
+# forward NAV 스티치 → 앵커드 판정 JSON). 서버 쓰기는 /tmp 아래뿐 — forward 트랙 DB·라이브
+# 상태 무접촉. **주문 0건·돈 0 이동·무장 0·게이트 변경 0** (판정 발행만).
+#
+# 이건 단계 (a): 실데이터에서 앵커드 판정을 *눈으로 검증*하는 읽기 전용 사이드카다. 무장
+# 게이트(forward-edge-autoarm)가 이 판정을 소비하는 단계 (b)는 별도 — 실제 돈 게이트 변경이라
+# 이 사이드카로 충분히 검증한 뒤에 잇는다.
+#
+# 사용법(컨테이너에서 최신 판정 확인):
+#   git fetch origin automation/forward-anchored-verdict-last-run
+#   git show origin/automation/forward-anchored-verdict-last-run:LAST_RUN.md
+
+on:
+  schedule:
+    # 평일 23:40 UTC — forward 런(22:30)의 일봉 백필 뒤, regime-stratify(23:30)와
+    # autoarm 게이트(23:50) 사이. 읽기 전용이라 겹쳐도 라이브 무영향.
+    - cron: "40 23 * * 1-5"
+  workflow_dispatch: {}
+  push:
+    # 같은 세션 검증: 앵커드 체인을 바꾼 머지가 즉시 실전 런을 발화(읽기 전용 /tmp 격리라 안전).
+    branches: [main]
+    paths:
+      - ".github/workflows/forward-anchored-verdict.yml"
+      - "src/auto_invest/portfolio/backtest_anchored.py"
+      - "src/auto_invest/backtest/portfolio_walk_forward.py"
+
+permissions:
+  contents: write  # 사이드카 브랜치 force-push 용.
+
+jobs:
+  anchored:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install SSH key
+        env:
+          KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          echo "${KEY}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+      # 라이브 지정(incumbent) 트랙 — GLOBAL-TREND. 서버 쓰기는 전부 ${wrk}(/tmp) 아래.
+      # bars-export 는 forward DB 를 읽기만(쓰기·마이그레이션 0). forward-verdict-anchored 는
+      # 그 DB 의 NAV 스냅샷(라이브 forward)도 읽기 전용으로 본다.
+      - name: "앵커드 판정 — GLOBAL-TREND (라이브 지정 전략)"
+        id: anchored_global
+        if: always()
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          cfg="deploy/global-trend-portfolio.toml"; dbf="data/forward_global.db"; wrk="/tmp/anchored_global"
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "cd /opt/auto-invest && \
+                 rm -rf ${wrk} && mkdir -p ${wrk} && \
+                 /usr/local/bin/uv run auto-invest bars-export --portfolio ${cfg} --db ${dbf} --out-dir ${wrk}/bars --json && \
+                 /usr/local/bin/uv run auto-invest ingest-history --from-dir ${wrk}/bars --out-dir ${wrk}/hist && \
+                 /usr/local/bin/uv run auto-invest forward-verdict-anchored --portfolio ${cfg} --db ${dbf} --history-root ${wrk}/hist --trailing-years 5 --mode paper --min-forward-obs 5 --format json && \
+                 echo '--- anchored verdict (text) ---' && \
+                 /usr/local/bin/uv run auto-invest forward-verdict-anchored --portfolio ${cfg} --db ${dbf} --history-root ${wrk}/hist --trailing-years 5 --mode paper --min-forward-obs 5 --format text" \
+              > /tmp/anchored_global.log 2>&1
+          echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
+          cat /tmp/anchored_global.log
+
+      - name: Publish to sidecar branch
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GLOBAL_EXIT: ${{ steps.anchored_global.outputs.ssh_exit }}
+        run: |
+          set -uo pipefail
+          BRANCH=automation/forward-anchored-verdict-last-run
+          tmpdir=$(mktemp -d); cd "${tmpdir}"; git init -q
+          git config user.name "forward-anchored-bot"
+          git config user.email "forward-anchored-bot@noreply.github.com"
+          {
+            echo "# 백테스트 앵커드 엣지 판정 — 깊은 OOS + 짧은 forward 지속성 (최신 실행)"
+            echo ""
+            echo "> 전략 규칙은 깊은 walk-forward 표본외(OOS)로 이미 검증됐다. 이 판정은 그"
+            echo "> 검증된 엣지가 라이브 forward 페이퍼에서 *지속*하는지만 5~10일로 확인한다"
+            echo "> (일별 20일 재발견 불필요 — 운영자 지적 해법). bars-export→ingest-history"
+            echo "> →forward-verdict-anchored 체인, /tmp 격리, 읽기 전용. **주문 0·돈 0·무장 0·"
+            echo "> 게이트 변경 0**(판정 발행만). 게이트 소비는 별도 단계(실제 돈 게이트)."
+            echo ""
+            echo "| 항목 | 값 |"
+            echo "|------|-----|"
+            echo "| run_id | ${GITHUB_RUN_ID} |"
+            echo "| commit | ${GITHUB_SHA} |"
+            echo "| trigger | ${GITHUB_EVENT_NAME} |"
+            echo "| timestamp_utc | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
+            echo "| GLOBAL-TREND ssh_exit | ${GLOBAL_EXIT:-?} |"
+            echo ""
+            echo "## GLOBAL-TREND (3자산 SPY·IEF·GLD — 라이브 지정 전략)"
+            echo ""
+            echo '```'
+            cat /tmp/anchored_global.log 2>/dev/null || echo '(unavailable)'
+            echo '```'
+          } > LAST_RUN.md
+          git checkout --orphan publish
+          git add LAST_RUN.md
+          git commit -q -m "forward-anchored-verdict run ${GITHUB_RUN_ID}"
+          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "publish:${BRANCH}"
