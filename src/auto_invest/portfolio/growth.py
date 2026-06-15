@@ -143,6 +143,60 @@ def consistent_basis_suffix(points: list[NavPoint]) -> list[NavPoint]:
     return points[start:]
 
 
+def stitch_basis_segments(points: list[NavPoint]) -> list[NavPoint]:
+    """자본 베이시스 경계(자금 흐름)를 건너뛰고 같은 전략의 일별 수익률을 사슬로 이어
+    연속 합성 자산곡선을 만든다 — 시간가중수익률(TWR, GIPS 표준)의 결정론 구현.
+
+    `consistent_basis_suffix` 는 베이시스가 바뀌면 그 앞을 통째로 버려(최신 구간만) 같은
+    전략인데도 forward 관측이 리셋된다. 그러나 수익률은 자본 규모와 무관하다(1% 는 $500
+    이든 $5,000 이든 1%) — 구간 *내부* 수익률만 사슬로 이으면 자금 흐름은 빠지고 전략의
+    전체 track record 가 보존된다. 깨끗한 1일 수익률(같은 베이시스 + 양수 NAV)만 복리하고,
+    베이시스 경계의 단일 전이(자금 흐름으로 오염)만 버린다.
+
+    한 forward 트랙의 스냅샷은 전략이 고정(그 트랙 설정)이므로, 베이시스 변경은 자본 조정
+    이지 전략 변경이 아니다 → 구간을 가로질러 수익률을 잇는 것이 정당하다(전문 성과측정의
+    표준). 마지막 점의 베이시스가 None(레거시/라이브 브로커 NAV)이면 오염이 없으므로 원본을
+    그대로 반환(과거 동작·라이브 트랙 보존). 깨끗한 수익률이 하나도 없으면 마지막 점 1개만.
+
+    반환: 합성 NAV 점열 — 날짜는 보존된 실제 점의 날짜, nav 는 첫 유효 점에서 출발해 구간
+    내부 수익률만 복리한 연속값. suffix 와 달리 같은 전략의 자본 변경이 시계를 리셋하지 않는다.
+    """
+    if not points or points[-1].capital_basis_usd is None:
+        return points
+    out: list[NavPoint] = []
+    synth: Decimal | None = None
+    for i in range(1, len(points)):
+        prev, cur = points[i - 1], points[i]
+        # 깨끗한 1일 수익률: 같은 *알려진* 베이시스 + 양수 NAV. None(레거시 현금 미포함
+        # 포지션-only)은 측정 정의가 달라 그들끼리도 잇지 않는다(자기들 수익률도 왜곡).
+        # 베이시스가 바뀌거나(자금 흐름 경계) 비양수 NAV 면 그 전이를 폐기한다.
+        if (
+            prev.capital_basis_usd is None
+            or cur.capital_basis_usd != prev.capital_basis_usd
+            or prev.nav_usd <= 0
+            or cur.nav_usd <= 0
+        ):
+            continue
+        if synth is None:
+            synth = prev.nav_usd
+            out.append(
+                NavPoint(
+                    at_utc=prev.at_utc,
+                    nav_usd=synth,
+                    capital_basis_usd=prev.capital_basis_usd,
+                )
+            )
+        synth = synth * (cur.nav_usd / prev.nav_usd)
+        out.append(
+            NavPoint(
+                at_utc=cur.at_utc,
+                nav_usd=synth,
+                capital_basis_usd=cur.capital_basis_usd,
+            )
+        )
+    return out if out else [points[-1]]
+
+
 def compute_growth(points: list[NavPoint], *, mode: str) -> GrowthReport:
     """점열에서 시가평가 자산곡선 성장 지표를 결정론적으로 계산한다 (FR-15, FR-16).
 

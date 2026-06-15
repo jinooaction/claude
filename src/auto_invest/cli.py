@@ -4800,9 +4800,9 @@ def forward_verdict_cmd(
 
     from auto_invest.market_data.store import get_bars
     from auto_invest.portfolio import (
-        consistent_basis_suffix,
         forward_edge_verdict,
         read_nav_points,
+        stitch_basis_segments,
     )
     from auto_invest.portfolio.edge_verdict import equal_weight_buy_hold_curve
     from auto_invest.portfolio.edge_verdict import render_text as verdict_render_text
@@ -4834,9 +4834,11 @@ def forward_verdict_cmd(
     try:
         conn.execute("PRAGMA query_only = ON")
         all_points = read_nav_points(conn, mode=mode)
-        # 측정 기준(자본 베이시스)이 같은 최신 연속 구간만 판정에 쓴다 — 기준이 다른
-        # 점을 섞으면 자금 흐름이 수익률로 오인돼 샤프·낙폭이 전부 오염된다.
-        points = consistent_basis_suffix(all_points)
+        # 시간가중수익률(TWR): 자본 베이시스 경계(자금 흐름)만 건너뛰고 같은 전략의 구간
+        # 내부 수익률을 사슬로 이어 전체 track record 를 보존한다. 옛 방식(최신 베이시스
+        # 구간만)은 같은 전략인데 자본이 바뀌면 forward 관측을 통째로 리셋해 낭비했다 —
+        # 수익률은 자본 규모와 무관하므로 과거를 버릴 이유가 없다(GIPS 표준).
+        points = stitch_basis_segments(all_points)
         nav_curve = [p.nav_usd for p in points]
         nav_dates = [_to_date(p.at_utc) for p in points]
         bars_by_symbol: dict[str, list] = {}
