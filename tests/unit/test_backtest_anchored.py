@@ -9,6 +9,7 @@ from auto_invest.portfolio.backtest_anchored import (
     INSUFFICIENT_DATA,
     NO_EDGE,
     backtest_anchored_verdict,
+    combine_edge_verdicts,
 )
 
 
@@ -119,3 +120,61 @@ def test_deterministic():
         oos_returns=_strong_oos(n=120), forward_returns=_strong_oos(n=6)
     )
     assert a.to_json_dict() == b.to_json_dict()
+
+
+# ── combine_edge_verdicts: 표준 20일 + 앵커드 결합(가속 게이트 표면) ──
+
+
+def _sv(verdict, n_obs=22):
+    return {"verdict": verdict, "n_obs": n_obs}
+
+
+def _av(verdict, oos=120, fwd=6):
+    return {"verdict": verdict, "oos_n_obs": oos, "forward_n_obs": fwd}
+
+
+def test_combine_anchored_confirms_accelerates():
+    # 표준은 아직 미확정인데 앵커드가 확정 → 유효 EDGE_CONFIRMED(출처 anchored) = 가속.
+    c = combine_edge_verdicts(_sv(INSUFFICIENT_DATA, n_obs=6), _av(EDGE_CONFIRMED, fwd=6))
+    assert c["verdict"] == EDGE_CONFIRMED
+    assert c["source"] == "anchored"
+    assert c["n_obs"] == 6  # 앵커드 forward 지속 관측
+
+
+def test_combine_standard_confirms_still_works():
+    # 앵커드 미확정(OOS 얕음)이라도 표준 20일이 확정하면 유효 EDGE_CONFIRMED.
+    c = combine_edge_verdicts(_sv(EDGE_CONFIRMED, n_obs=22), _av(INSUFFICIENT_DATA))
+    assert c["verdict"] == EDGE_CONFIRMED
+    assert c["source"] == "standard"
+    assert c["n_obs"] == 22
+
+
+def test_combine_both_confirm():
+    c = combine_edge_verdicts(_sv(EDGE_CONFIRMED), _av(EDGE_CONFIRMED))
+    assert c["verdict"] == EDGE_CONFIRMED
+    assert c["source"] == "both"
+
+
+def test_combine_no_edge_when_one_says_no_and_none_confirm():
+    c = combine_edge_verdicts(_sv(INSUFFICIENT_DATA), _av(NO_EDGE))
+    assert c["verdict"] == NO_EDGE
+    assert c["source"] == "none"
+
+
+def test_combine_insufficient_when_both_insufficient():
+    c = combine_edge_verdicts(_sv(INSUFFICIENT_DATA), _av(INSUFFICIENT_DATA))
+    assert c["verdict"] == INSUFFICIENT_DATA
+
+
+def test_combine_none_inputs_failsafe_insufficient():
+    # 입력이 없거나 파싱 불가여도 안전하게 미확정(게이트 무장 안 함).
+    c = combine_edge_verdicts(None, None)
+    assert c["verdict"] == INSUFFICIENT_DATA
+    assert c["source"] == "none"
+
+
+def test_combine_carries_anchored_evidence():
+    c = combine_edge_verdicts(_sv(NO_EDGE), _av(EDGE_CONFIRMED, oos=250, fwd=8))
+    assert c["verdict"] == EDGE_CONFIRMED  # 앵커드 확정이 우선(가속)
+    assert c["source"] == "anchored"
+    assert c["anchored_oos_n_obs"] == 250
