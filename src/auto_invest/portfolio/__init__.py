@@ -17,6 +17,7 @@ from auto_invest.portfolio.growth import (
     compute_growth,
     consistent_basis_suffix,
     read_nav_points,
+    stitch_basis_segments,
 )
 from auto_invest.portfolio.nav import (
     DEFAULT_MAX_GROWTH_FACTOR,
@@ -49,4 +50,5 @@ __all__ = [
     "forward_edge_verdict",
     "read_nav_points",
     "render_text",
+    "stitch_basis_segments",
 ]

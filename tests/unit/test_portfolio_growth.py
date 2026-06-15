@@ -13,6 +13,7 @@ from auto_invest.portfolio.growth import (
     consistent_basis_suffix,
     read_nav_points,
     render_text,
+    stitch_basis_segments,
 )
 
 
@@ -236,6 +237,84 @@ def test_basis_suffix_all_same_basis_keeps_all():
         _pt("2026-01-02T00:00:00.000Z", "12050", basis="12000"),
     ]
     assert consistent_basis_suffix(pts) == pts
+
+
+# --------------------------------------------- stitch_basis_segments (TWR)
+
+
+def test_stitch_empty_and_legacy_unchanged():
+    """빈 목록·마지막 점 레거시(베이시스 None)면 그대로 — 라이브/과거 동작 보존."""
+    assert stitch_basis_segments([]) == []
+    legacy = [_pt("2026-01-01T00:00:00.000Z", "100"), _pt("2026-01-02T00:00:00.000Z", "110")]
+    assert stitch_basis_segments(legacy) == legacy
+
+
+def test_stitch_all_same_basis_preserves_count():
+    pts = [
+        _pt("2026-01-01T00:00:00.000Z", "100", basis="A"),
+        _pt("2026-01-02T00:00:00.000Z", "110", basis="A"),
+        _pt("2026-01-03T00:00:00.000Z", "121", basis="A"),
+    ]
+    out = stitch_basis_segments(pts)
+    assert [p.nav_usd for p in out] == [Decimal("100"), Decimal("110"), Decimal("121")]
+
+
+def test_stitch_recovers_history_across_capital_change():
+    """핵심: 같은 전략의 자본 변경(베이시스 경계)이 forward 시계를 리셋하지 않는다.
+
+    suffix 는 최신 구간만(관측 1개) → stitch 는 구간 내부 수익률을 사슬로 이어 전체
+    track record 보존(관측 3개). 운영자 지적("같은 전략인데 왜 4주 또 기다려")의 핵심 수정.
+    """
+    pts = [
+        _pt("2026-01-01T00:00:00.000Z", "100", basis="A"),
+        _pt("2026-01-02T00:00:00.000Z", "110", basis="A"),  # +10%
+        _pt("2026-01-03T00:00:00.000Z", "121", basis="A"),  # +10%
+        _pt("2026-01-04T00:00:00.000Z", "200", basis="B"),  # 자본 입금(경계) — 폐기
+        _pt("2026-01-05T00:00:00.000Z", "220", basis="B"),  # +10%
+    ]
+    # 옛 방식: 최신 베이시스 구간만 → 관측 1개(판정 불가).
+    assert len(consistent_basis_suffix(pts)) == 2
+    # TWR: 경계만 건너뛰고 내부 수익률 사슬 → 관측 3개(A 의 2 + B 의 1).
+    out = stitch_basis_segments(pts)
+    assert [p.nav_usd for p in out] == [
+        Decimal("100"),
+        Decimal("110"),
+        Decimal("121"),
+        Decimal("133.1"),  # 121 × (220/200) = 121 × 1.1 — 자본 점프 제거, 수익률만 이음
+    ]
+
+
+def test_stitch_excludes_legacy_zero_prefix():
+    """레거시(0·포지션만) 프리픽스는 깨끗한 수익률이 아니라 제외 — suffix 와 동일 결과."""
+    pts = [
+        _pt("2026-01-01T00:00:00.000Z", "0"),
+        _pt("2026-01-02T00:00:00.000Z", "2176"),
+        _pt("2026-01-03T00:00:00.000Z", "12000", basis="12000"),
+        _pt("2026-01-04T00:00:00.000Z", "12100", basis="12000"),
+    ]
+    out = stitch_basis_segments(pts)
+    assert [p.nav_usd for p in out] == [Decimal("12000"), Decimal("12100")]
+
+
+def test_stitch_single_clean_run_no_basis_change():
+    pts = [
+        _pt("2026-01-01T00:00:00.000Z", "500", basis="500"),
+        _pt("2026-01-02T00:00:00.000Z", "505", basis="500"),
+        _pt("2026-01-03T00:00:00.000Z", "510", basis="500"),
+    ]
+    out = stitch_basis_segments(pts)
+    assert len(out) == 3  # 경계 없음 → 전부 보존
+
+
+def test_stitch_no_clean_returns_returns_last_point():
+    """깨끗한 수익률이 하나도 없으면(매 점 베이시스 다름) 마지막 점 1개 — 관측 부족."""
+    pts = [
+        _pt("2026-01-01T00:00:00.000Z", "100", basis="A"),
+        _pt("2026-01-02T00:00:00.000Z", "200", basis="B"),
+        _pt("2026-01-03T00:00:00.000Z", "300", basis="C"),
+    ]
+    out = stitch_basis_segments(pts)
+    assert [p.nav_usd for p in out] == [Decimal("300")]
 
 
 def test_render_text_smoke():
