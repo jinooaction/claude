@@ -4881,6 +4881,192 @@ def forward_verdict_cmd(
         typer.echo(verdict_render_text(verdict))
 
 
+@app.command("forward-verdict-anchored")
+def forward_verdict_anchored_cmd(
+    portfolio: Path = typer.Option(
+        ..., "--portfolio", help="TOML [caps]/[whitelist]/[portfolio] (OOS 평가 대상)."
+    ),
+    db_path: Path = typer.Option(
+        Path("data/auto_invest.db"), "--db", help="라이브 forward NAV 스냅샷 SQLite."
+    ),
+    mode: str = typer.Option("paper", "--mode", help="forward NAV 장부: paper | live."),
+    timeframe: str = typer.Option("1d", "--timeframe", help="바 타임프레임."),
+    history_root: Path = typer.Option(
+        Path("data/history"), "--history-root", help="인제스트 데이터셋 부모 디렉터리."
+    ),
+    dataset_version: str = typer.Option(
+        None, "--dataset-version", help="특정 데이터셋; 기본 = 최신."
+    ),
+    trailing_years: int = typer.Option(
+        None, "--trailing-years", help="최근 N년만 OOS 평가(명확 recency 창)."
+    ),
+    date_from: str = typer.Option(None, "--from", help="OOS 시작(YYYY-MM-DD)."),
+    date_to: str = typer.Option(None, "--to", help="OOS 끝(YYYY-MM-DD)."),
+    segment_days: int = typer.Option(365, "--segment-days", help="OOS 구간 길이(일)."),
+    lookback_buffer_days: int = typer.Option(
+        160, "--lookback-buffer-days", help="첫 구간 앞 신호 lookback 버퍼(일)."
+    ),
+    wf_mode: str = typer.Option("rolling", "--wf-mode", help="walk-forward: rolling|anchored."),
+    num_trials: int = typer.Option(
+        1, "--num-trials", help="시도한 설정 수 — DSR 다중검정 보정(정직히)."
+    ),
+    capital: float = typer.Option(100000.0, "--capital", help="OOS 시작 자본 USD."),
+    halt_path: Path = typer.Option(
+        Path("data/halt.flag"), "--halt-path", help="Halt 깃발 경로."
+    ),
+    min_oos_obs: int = typer.Option(60, "--min-oos-obs", help="앵커 최소 OOS 관측(일)."),
+    min_forward_obs: int = typer.Option(
+        5, "--min-forward-obs", help="지속 확인 최소 forward 관측(일)."
+    ),
+    consistency_z: float = typer.Option(
+        2.0, "--consistency-z", help="forward 가 OOS 보다 이 z 이상 나쁘면 NO_EDGE."
+    ),
+    dsr_threshold: float = typer.Option(0.95, "--dsr-threshold", help="OOS PSR/DSR 합격선."),
+    allow_stale: bool = typer.Option(
+        False, "--allow-stale", help="recency 가드가 stale 로 봐도 진행(주의)."
+    ),
+    output_format: str = typer.Option("json", "--format", help="json | text."),
+) -> None:
+    """스펙 035 후속 — 백테스트 앵커드 엣지 판정(읽기 전용 진단, 주문 0건).
+
+    깊은 표본외(OOS) walk-forward(인제스트 데이터셋)가 엣지를 세우고, 라이브 forward 페이퍼
+    스냅샷이 그 엣지가 *지속* 하는지만 확인한다 → 일별 20일 재발견 불필요(운영자 지적 해법).
+    이 명령은 **판정 JSON 을 발행만** 한다(게이트 변경·무장·주문 0). 게이트 소비는 별도.
+    """
+    import json as _json
+    from datetime import date as _date
+    from decimal import Decimal as _Decimal
+
+    from auto_invest.backtest.data_source import CSVDataSource, latest_dataset_dir
+    from auto_invest.backtest.portfolio_walk_forward import run_portfolio_walk_forward
+    from auto_invest.backtest.recency import assess_recency, stale_guard, trailing_window
+    from auto_invest.portfolio import (
+        daily_returns_from_curve,
+        read_nav_points,
+        stitch_basis_segments,
+    )
+    from auto_invest.portfolio.backtest_anchored import backtest_anchored_verdict
+
+    if mode not in ("paper", "live"):
+        typer.echo("--mode must be 'paper' or 'live'.", err=True)
+        _exit(2)
+    if output_format not in ("text", "json"):
+        typer.echo("--format must be 'text' or 'json'.", err=True)
+        _exit(2)
+    if not db_path.exists():
+        typer.echo(f"DB 파일을 찾을 수 없습니다: {db_path}", err=True)
+        _exit(1)
+
+    try:
+        caps, whitelist, port_cfg = _load_portfolio_for_backtest(portfolio)
+    except ConfigError as exc:
+        typer.echo(f"portfolio validation failed: {exc}", err=True)
+        _exit(65)
+        return
+
+    # 1) 깊은 OOS — 인제스트 데이터셋에서 walk-forward.
+    if dataset_version is not None:
+        dataset_dir = history_root / dataset_version
+        if not (dataset_dir / "manifest.json").exists():
+            typer.echo(f"dataset_version {dataset_version!r} not found", err=True)
+            _exit(64)
+            return
+    else:
+        dataset_dir = latest_dataset_dir(history_root)
+        if dataset_dir is None:
+            typer.echo("no ingested datasets; run `auto-invest ingest-history`", err=True)
+            _exit(64)
+            return
+    data_source = CSVDataSource(dataset_dir)
+    recency = assess_recency(data_source, port_cfg.universe)  # type: ignore[union-attr]
+    refusal = stale_guard(recency, allow_stale=allow_stale)
+    if refusal is not None:
+        typer.echo(refusal, err=True)
+        data_source.close()
+        _exit(70)
+        return
+    try:
+        if trailing_years is not None:
+            window = trailing_window(
+                data_source, port_cfg.universe, trailing_years=trailing_years  # type: ignore[union-attr]
+            )
+            if window is None:
+                typer.echo("dataset has no sessions for the universe", err=True)
+                data_source.close()
+                _exit(64)
+                return
+            ds_start, ds_end = window
+        elif date_from is not None and date_to is not None:
+            ds_start = _date.fromisoformat(date_from)
+            ds_end = _date.fromisoformat(date_to)
+        else:
+            typer.echo("provide --from/--to or --trailing-years", err=True)
+            data_source.close()
+            _exit(64)
+            return
+    except ValueError as exc:
+        typer.echo(f"date parsing failed: {exc}", err=True)
+        data_source.close()
+        _exit(64)
+        return
+
+    _require_clean_migrations(db_path, allow_apply=True)
+    conn = db.get_connection(db_path)
+    try:
+        report = run_portfolio_walk_forward(
+            config=port_cfg,  # type: ignore[arg-type]
+            data_source=data_source,
+            date_start=ds_start,
+            date_end=ds_end,
+            caps=caps,  # type: ignore[arg-type]
+            whitelist=whitelist,  # type: ignore[arg-type]
+            halt_path=halt_path,
+            conn=conn,
+            lookback_buffer_days=lookback_buffer_days,
+            segment_days=segment_days,
+            mode=wf_mode,
+            total_capital_usd=_Decimal(str(capital)),
+            num_trials=num_trials,
+        )
+        oos_returns = report.pooled_returns
+        # 2) 짧은 forward — 라이브 페이퍼 NAV(시간가중수익률 스티치)에서 일수익률.
+        conn.execute("PRAGMA query_only = ON")
+        fwd_points = stitch_basis_segments(read_nav_points(conn, mode=mode))
+        forward_returns = daily_returns_from_curve([p.nav_usd for p in fwd_points])
+    except Exception as exc:  # 데이터 부족·창 불가 등 — 사용 오류로 표면화
+        typer.echo(f"anchored verdict failed: {exc}", err=True)
+        conn.close()
+        data_source.close()
+        _exit(64)
+        return
+    conn.close()
+    data_source.close()
+
+    # 3) 앵커드 판정 — 깊은 OOS 증거 + 짧은 forward 지속성.
+    verdict = backtest_anchored_verdict(
+        oos_returns=oos_returns,
+        forward_returns=forward_returns,
+        num_trials=num_trials,
+        dsr_threshold=_Decimal(str(dsr_threshold)),
+        min_oos_obs=min_oos_obs,
+        min_forward_obs=min_forward_obs,
+        consistency_z=_Decimal(str(consistency_z)),
+    )
+    out = verdict.to_json_dict()
+    out["mode"] = mode
+    out["dataset_version"] = report.segments[0].start.isoformat() if report.segments else None
+    out["wf_segments"] = report.n_segments
+    out["wf_verdict"] = report.verdict
+    if output_format == "json":
+        typer.echo(_json.dumps(out))
+    else:
+        typer.echo(
+            f"[{verdict.verdict}] {verdict.reason}\n"
+            f"OOS 관측 {verdict.oos_n_obs} · forward 관측 {verdict.forward_n_obs} · "
+            f"walk-forward 구간 {report.n_segments}"
+        )
+
+
 @app.command("autoarm-decide")
 def autoarm_decide_cmd(
     verdict_json: Path = typer.Option(
