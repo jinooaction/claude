@@ -239,6 +239,79 @@ def backtest_anchored_verdict(
     )
 
 
+def combine_edge_verdicts(
+    standard: dict | None, anchored: dict | None
+) -> dict:
+    """표준 forward 판정(20일)과 백테스트 앵커드 판정을 하나의 *유효* 판정으로 결합.
+
+    가속의 핵심: 둘 중 하나라도 EDGE_CONFIRMED 면 EDGE_CONFIRMED 다. 앵커드는 깊은 OOS 가
+    엣지를 세우고 짧은 forward 가 지속만 확인하므로(다중검정·지속성 검정 통과) 표준 20일을
+    기다리지 않고 확정할 수 있다 — 운영자 지적("4주 비효율") 해법의 게이트 표면.
+
+    결합 규칙(순수·결정론·보수적 fail-safe):
+      1. 앵커드 또는 표준이 EDGE_CONFIRMED → EDGE_CONFIRMED(source 로 어느 쪽인지 기록).
+      2. 아니면 둘 중 하나라도 NO_EDGE → NO_EDGE(엣지 없음 증거 있음).
+      3. 그 외(둘 다 미확정/입력 없음) → INSUFFICIENT_DATA(게이트는 무장 안 함 — 안전).
+    입력이 None/파싱 불가여도 안전하게 흡수한다(누락 = 미확정으로 취급).
+
+    반환: 자본 사다리/autoarm 이 읽는 형태({"verdict", "n_obs", ...})에 source·근거를 덧붙인 dict.
+    앵커드가 확정원이면 n_obs 는 forward 지속 관측 수(앵커드는 깊은 OOS 가 증거라 작아도 정당).
+    """
+    s = standard if isinstance(standard, dict) else {}
+    a = anchored if isinstance(anchored, dict) else {}
+    s_v = s.get("verdict")
+    a_v = a.get("verdict")
+
+    if a_v == EDGE_CONFIRMED or s_v == EDGE_CONFIRMED:
+        verdict = EDGE_CONFIRMED
+        if a_v == EDGE_CONFIRMED and s_v == EDGE_CONFIRMED:
+            source = "both"
+        elif a_v == EDGE_CONFIRMED:
+            source = "anchored"
+        else:
+            source = "standard"
+    elif a_v == NO_EDGE or s_v == NO_EDGE:
+        verdict = NO_EDGE
+        source = "none"
+    else:
+        verdict = INSUFFICIENT_DATA
+        source = "none"
+
+    # 게이트가 읽는 n_obs: 확정원의 forward 관측(앵커드는 forward_n_obs, 표준은 n_obs).
+    if source in ("anchored", "both"):
+        n_obs = _int_or_none(a.get("forward_n_obs"))
+    elif source == "standard":
+        n_obs = _int_or_none(s.get("n_obs"))
+    else:
+        n_obs = _int_or_none(s.get("n_obs")) or _int_or_none(a.get("forward_n_obs"))
+
+    return {
+        "schema_version": "1.0",
+        "method": "combined_edge",
+        "verdict": verdict,
+        "source": source,  # anchored | standard | both | none
+        "n_obs": n_obs,
+        "standard_verdict": s_v,
+        "anchored_verdict": a_v,
+        "anchored_oos_n_obs": _int_or_none(a.get("oos_n_obs")),
+        "anchored_significance": a.get("oos_significance"),
+        "reason": (
+            f"유효 판정 {verdict} (출처={source}; 표준={s_v}, 앵커드={a_v}). "
+            "둘 중 하나라도 EDGE_CONFIRMED 면 확정 — 앵커드(깊은 OOS+짧은 forward 지속)가 "
+            "표준 20일을 기다리지 않고 검증된 엣지를 인정한다."
+        ),
+    }
+
+
+def _int_or_none(v: object) -> int | None:
+    if v is None:
+        return None
+    try:
+        return int(v)
+    except (ValueError, TypeError):
+        return None
+
+
 __all__ = [
     "DEFAULT_CONSISTENCY_Z",
     "DEFAULT_DSR_THRESHOLD",
@@ -249,4 +322,5 @@ __all__ = [
     "NO_EDGE",
     "AnchoredVerdict",
     "backtest_anchored_verdict",
+    "combine_edge_verdicts",
 ]
