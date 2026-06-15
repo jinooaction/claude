@@ -5328,6 +5328,13 @@ def ladder_decide_cmd(
         "--verdict-json",
         help="forward-verdict --format json 출력 파일(검증 앙상블 ARM E, 단 0→1 게이트).",
     ),
+    anchored_verdict_json: Path = typer.Option(
+        None,
+        "--anchored-verdict-json",
+        help="forward-verdict-anchored --format json 출력 파일(선택). 주면 표준 판정과 "
+        "결합 — 둘 중 하나라도 EDGE_CONFIRMED 면 확정(앵커드가 깊은 OOS+짧은 forward "
+        "지속으로 20일을 기다리지 않고 가속). 없으면 기존 표준 판정만(하위 호환).",
+    ),
     live_growth_json: Path = typer.Option(
         None,
         "--live-growth-json",
@@ -5394,6 +5401,16 @@ def ladder_decide_cmd(
             return None
 
     verdict = _read_json(verdict_json) or {}
+    anchored = _read_json(anchored_verdict_json)
+    edge_source = "standard"
+    if anchored is not None:
+        # 앵커드 판정이 있으면 표준과 결합 — 둘 중 하나라도 EDGE_CONFIRMED 면 확정(가속).
+        # 없으면 이 블록을 건너뛰어 기존 표준 판정만 쓴다(하위 호환·동작 무변경).
+        from auto_invest.portfolio.backtest_anchored import combine_edge_verdicts
+
+        combined = combine_edge_verdicts(verdict, anchored)
+        edge_source = combined.get("source", "standard")
+        verdict = combined  # decide_ladder 는 verdict["verdict"]/["n_obs"] 만 읽음 — 호환.
     growth = _read_json(live_growth_json)
     nav_doc = _read_json(account_nav_json)
     account_nav = None
@@ -5432,9 +5449,11 @@ def ladder_decide_cmd(
         sentinel.write_text(decision.new_sentinel_text, encoding="utf-8")
 
     if output_format == "json":
-        typer.echo(_json.dumps(decision.to_json_dict()))
+        out = decision.to_json_dict()
+        out["edge_source"] = edge_source  # standard | anchored | both | none (포렌식)
+        typer.echo(_json.dumps(out))
     else:
         typer.echo(
             f"[{decision.action}] rung {decision.current_rung}"
-            f"→{decision.target_rung}: {decision.reason}"
+            f"→{decision.target_rung}: {decision.reason} (edge={edge_source})"
         )
