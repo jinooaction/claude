@@ -243,15 +243,104 @@ def compare_leverage(
     )
 
 
+@dataclass(frozen=True)
+class LeverageHeadroom:
+    """한 전략의 낙폭 예산 내 레버리지 여유 — 무레버리지 대비 복리 성장 상승.
+
+    무레버리지(L=1) 대비, 운영자 낙폭 예산 안에서 복리 성장(CAGR)을 최대화하는 레버리지와
+    그때의 CAGR 을 보고한다. 무레버리지 낙폭이 낮을수록 더 큰 레버리지를 안전하게 얹어 더 높은
+    복리를 낸다 = 레버리지 여유가 크다(스펙 047 발견 — 라이브 전략 낙폭 5.3% — 의 '진짜 돈'
+    귀결: 같은 위험 예산에서 복리 천장을 올리는 것).
+    """
+
+    label: str
+    max_dd_budget_pct: float
+    unlevered: GrowthPoint
+    dd_optimal: GrowthPoint | None  # 예산 내 최적(없으면 L=1 도 예산 초과 = 드묾)
+
+    @property
+    def leverage_multiple(self) -> float | None:
+        return self.dd_optimal.leverage if self.dd_optimal else None
+
+    @property
+    def cagr_uplift_pct(self) -> float | None:
+        """예산 내 최적 CAGR − 무레버리지 CAGR(레버리지가 더해준 복리 성장)."""
+        if self.dd_optimal is None:
+            return None
+        return self.dd_optimal.cagr_pct - self.unlevered.cagr_pct
+
+    def as_dict(self) -> dict:
+        return {
+            "label": self.label,
+            "max_dd_budget_pct": self.max_dd_budget_pct,
+            "unlevered": self.unlevered.as_dict(),
+            "dd_optimal": self.dd_optimal.as_dict() if self.dd_optimal else None,
+            "leverage_multiple": (
+                round(self.leverage_multiple, 3)
+                if self.leverage_multiple is not None
+                else None
+            ),
+            "cagr_uplift_pct": (
+                round(self.cagr_uplift_pct, 2)
+                if self.cagr_uplift_pct is not None
+                else None
+            ),
+        }
+
+
+def leverage_headroom(
+    label: str,
+    strat_factors: list[float],
+    rf_monthly: list[float],
+    *,
+    leverages: list[float],
+    max_dd_budget_pct: float,
+    borrow_spread_annual: float = DEFAULT_BORROW_SPREAD_ANNUAL,
+) -> LeverageHeadroom:
+    """한 전략의 낙폭 예산 내 성장 최적 레버리지 여유를 잰다(스펙 044 엔진 재사용).
+
+    `leverages` 격자에 1.0 이 없어도 무레버리지 점은 별도로 정확히 계산해 비교 기준으로 쓴다.
+    """
+    curve = growth_curve(
+        strat_factors, rf_monthly, leverages=leverages,
+        borrow_spread_annual=borrow_spread_annual,
+    )
+    unlev = growth_point(
+        strat_factors, rf_monthly, leverage=1.0,
+        borrow_spread_annual=borrow_spread_annual,
+    )
+    dd_opt = drawdown_constrained_optimal(curve, max_dd_pct=max_dd_budget_pct)
+    return LeverageHeadroom(
+        label=label,
+        max_dd_budget_pct=max_dd_budget_pct,
+        unlevered=unlev,
+        dd_optimal=dd_opt,
+    )
+
+
+def rank_leverage_headroom(items: list[LeverageHeadroom]) -> list[LeverageHeadroom]:
+    """예산 내 최적 CAGR 내림차순 정렬(최적 없는 항목은 뒤로) — 같은 낙폭 예산 비교용."""
+
+    def _key(h: LeverageHeadroom) -> tuple[int, float]:
+        if h.dd_optimal is None:
+            return (1, 0.0)
+        return (0, -h.dd_optimal.cagr_pct)
+
+    return sorted(items, key=_key)
+
+
 __all__ = [
     "DEFAULT_BORROW_SPREAD_ANNUAL",
     "GrowthPoint",
     "LeverageComparison",
+    "LeverageHeadroom",
     "compare_leverage",
     "drawdown_constrained_optimal",
     "growth_curve",
     "growth_optimal",
     "growth_point",
     "lever_factors",
+    "leverage_headroom",
+    "rank_leverage_headroom",
     "risk_free_monthly",
 ]
