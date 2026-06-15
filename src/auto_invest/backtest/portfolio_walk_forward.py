@@ -81,6 +81,10 @@ class PortfolioWalkForwardReport:
     # Pooled out-of-sample track (concatenated daily returns across segments).
     pooled_strategy_sharpe_annual: Decimal | None = None
     pooled_obs: int = 0
+    # The pooled OOS daily return series itself (concatenated across segments) —
+    # exposed so backtest-anchored 판정(깊은 OOS + 짧은 forward 지속성)이 이 표본외
+    # 수익률 사슬을 직접 쓸 수 있다. 비어 있으면 OOS 가 부족했던 것.
+    pooled_returns: list[Decimal] = field(default_factory=list)
     # Multiple-testing-corrected significance on the pooled strategy track.
     num_trials: int = 1
     strategy_psr: Decimal | None = None
@@ -224,6 +228,7 @@ def run_portfolio_walk_forward(
         mean_benchmark_sharpe=mean_bench,
         pooled_strategy_sharpe_annual=pooled_sharpe_annual,
         pooled_obs=len(pooled_returns),
+        pooled_returns=list(pooled_returns),
         num_trials=(
             len(trial_sharpes_annual) if trial_sharpes_annual is not None else num_trials
         ),
