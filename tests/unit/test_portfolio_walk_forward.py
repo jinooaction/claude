@@ -25,6 +25,7 @@ from auto_invest.config.enums import OrderType
 from auto_invest.config.rules import PortfolioRebalanceConfig
 from auto_invest.config.whitelist import Whitelist
 from auto_invest.persistence import db
+from auto_invest.portfolio.backtest_anchored import backtest_anchored_verdict
 
 # ----------------------------------------------------------- _verdict 단위
 
@@ -229,3 +230,84 @@ def test_run_portfolio_walk_forward_raises_when_period_too_short(tmp_path: Path)
             lookback_buffer_days=200, segment_days=200, num_trials=1,
         )
     conn.close()
+
+
+def test_pooled_returns_feed_backtest_anchored(tmp_path: Path):
+    """배선 검증: walk-forward 가 OOS 일수익률(pooled_returns)을 내고, 그게
+    backtest_anchored_verdict 에 그대로 들어가 판정을 만든다 — 가속기 파이프라인.
+
+    이게 운영자 지적의 실제 해법: 깊은 OOS(여기선 합성 walk-forward)가 엣지 증거를
+    제공하고, 짧은 forward 는 지속성만 확인 → 일별 20일 재발견 불필요.
+    """
+    start = date(2015, 1, 2)
+    end = date(2017, 6, 30)
+    sessions = trading_days_between(start, end)
+    uni = ("AAA", "BBB", "CCC")
+    src = _FakeSource(
+        bars={
+            "AAA": _series("AAA", sessions, 100.0, 0.0009),
+            "BBB": _series("BBB", sessions, 100.0, 0.0004),
+            "CCC": _series("CCC", sessions, 100.0, -0.0001),
+        }
+    )
+    caps = SizingCaps(
+        per_trade_pct=Decimal("20"),
+        per_symbol_pct=Decimal("50"),
+        global_exposure_pct=Decimal("100"),
+        canary_capital_pct=Decimal("5"),
+        canary_min_duration_days=10,
+        canary_acceptance_drawdown_pct=Decimal("40"),
+    )
+    wl = Whitelist(
+        symbols=frozenset(uni),
+        accounts=frozenset({"BACKTEST"}),
+        order_types=frozenset({OrderType.MARKET}),
+    )
+    cfg = PortfolioRebalanceConfig(
+        id="t",
+        universe=uni,
+        weights={"momentum": Decimal("1")},
+        weight_scheme="equal",
+        top_n=2,
+        invested_fraction=Decimal("0.95"),
+        rebalance_every_n_sessions=21,
+        lookback_bars=40,
+        momentum_period=30,
+        rebalance_threshold_pct=Decimal("1.0"),
+        min_notional_usd=Decimal("50"),
+    )
+    conn = db.get_connection(tmp_path / "a.db")
+    db.migrate(conn)
+    report = run_portfolio_walk_forward(
+        config=cfg,
+        data_source=src,
+        date_start=start,
+        date_end=end,
+        caps=caps,
+        whitelist=wl,
+        halt_path=tmp_path / "halt.flag",
+        conn=conn,
+        lookback_buffer_days=120,
+        segment_days=180,
+        mode="rolling",
+        total_capital_usd=Decimal("100000"),
+        num_trials=1,
+    )
+    conn.close()
+
+    # walk-forward 가 OOS 일수익률 사슬을 노출한다.
+    assert len(report.pooled_returns) == report.pooled_obs
+    assert len(report.pooled_returns) >= 20
+
+    # 그 OOS 가 앵커드 판정 엔진에 그대로 들어간다(짧은 forward 는 OOS 꼬리로 일관 가정).
+    forward = report.pooled_returns[-6:]
+    v = backtest_anchored_verdict(
+        oos_returns=report.pooled_returns,
+        forward_returns=forward,
+        min_oos_obs=20,
+        min_forward_obs=5,
+    )
+    # 파이프라인이 일관된 판정을 만든다(OOS 관측이 그대로 전달됨).
+    assert v.verdict in ("EDGE_CONFIRMED", "NO_EDGE", "INSUFFICIENT_DATA")
+    assert v.oos_n_obs == len(report.pooled_returns)
+    assert v.forward_n_obs == 6
