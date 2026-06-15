@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 from auto_invest.analytics.growth_optimal import (
+    GrowthPoint,
+    LeverageHeadroom,
     compare_leverage,
     drawdown_constrained_optimal,
     growth_curve,
     growth_optimal,
     growth_point,
     lever_factors,
+    leverage_headroom,
+    rank_leverage_headroom,
     risk_free_monthly,
 )
 from auto_invest.analytics.risk_managed_beta import MonthlyRow, summarize
@@ -139,3 +143,98 @@ def test_compare_leverage_structure():
     assert d["max_dd_budget_pct"] == 25.0
     assert "A" in d["unlevered"] and "B" in d["unlevered"]
     assert "drawdown_constrained_optimal" in d
+
+
+# ─────────────────── 레버리지 여유 (스펙 044×047 — 라이브 전략 적용) ───────────────────
+
+
+def test_leverage_headroom_unlevered_is_leverage_one():
+    # 무레버리지 점은 격자에 1.0 이 없어도 별도로 정확히 L=1 로 계산된다.
+    factors = [1.01, 0.995, 1.008, 1.002, 0.997, 1.012] * 6  # 36 개월
+    rf = [0.0] * len(factors)
+    h = leverage_headroom(
+        "x", factors, rf, leverages=[0.5, 2.0, 3.0], max_dd_budget_pct=30.0
+    )
+    assert h.unlevered.leverage == 1.0
+    expected = growth_point(factors, rf, leverage=1.0)
+    assert abs(h.unlevered.cagr_pct - expected.cagr_pct) < 1e-9
+
+
+def test_leverage_headroom_optimal_respects_budget():
+    factors = [1.01, 0.99, 1.008, 0.995, 1.012, 0.985] * 6
+    rf = [0.0] * len(factors)
+    budget = 15.0
+    h = leverage_headroom(
+        "x", factors, rf,
+        leverages=[round(0.5 + 0.25 * i, 2) for i in range(20)],
+        max_dd_budget_pct=budget,
+    )
+    assert h.dd_optimal is not None
+    assert h.dd_optimal.max_dd_pct <= budget
+    # 복리 상승 = 예산 내 최적 CAGR − 무레버리지 CAGR.
+    assert abs(h.cagr_uplift_pct - (h.dd_optimal.cagr_pct - h.unlevered.cagr_pct)) < 1e-9
+    assert h.leverage_multiple == h.dd_optimal.leverage
+
+
+def test_leverage_headroom_none_when_budget_below_grid_minimum():
+    # 큰 폭락이 있는 전략 + 1배 미만 격자 없음 + 아주 빡빡한 예산 → 예산 내 점 없음.
+    factors = [1.02, 1.02, 0.60, 1.02, 1.02, 1.02] * 4  # 한 번 -40% 폭락
+    rf = [0.0] * len(factors)
+    h = leverage_headroom("x", factors, rf, leverages=[1.0, 2.0], max_dd_budget_pct=5.0)
+    assert h.dd_optimal is None
+    assert h.cagr_uplift_pct is None
+    assert h.leverage_multiple is None
+    assert h.as_dict()["dd_optimal"] is None
+
+
+def test_lower_drawdown_strategy_gets_more_leverage_headroom():
+    # 스펙 047→044 핵심: 낮은 낙폭 전략이 같은 예산에서 레버리지를 더 얹을 수 있다.
+    volatile = [1.05, 0.96, 1.04, 0.95, 1.06, 0.97] * 8  # 큰 변동·큰 낙폭
+    calm = [1.008, 1.003, 1.006, 1.002, 1.007, 1.004] * 8  # 작은 변동·작은 낙폭
+    rf = [0.0] * len(volatile)
+    grid = [round(0.5 + 0.25 * i, 2) for i in range(23)]
+    hv = leverage_headroom("변동", volatile, rf, leverages=grid, max_dd_budget_pct=12.0)
+    hc = leverage_headroom("안정", calm, rf, leverages=grid, max_dd_budget_pct=12.0)
+    assert hc.unlevered.max_dd_pct < hv.unlevered.max_dd_pct
+    assert hc.leverage_multiple is not None and hv.leverage_multiple is not None
+    assert hc.leverage_multiple >= hv.leverage_multiple
+
+
+def _hp(label: str, cagr: float, dd_opt_cagr: float | None) -> LeverageHeadroom:
+    unlev = GrowthPoint(
+        leverage=1.0, cagr_pct=cagr, vol_pct=10.0, sharpe=1.0, max_dd_pct=10.0, calmar=1.0
+    )
+    dd_opt = (
+        None
+        if dd_opt_cagr is None
+        else GrowthPoint(
+            leverage=2.0, cagr_pct=dd_opt_cagr, vol_pct=20.0, sharpe=1.0,
+            max_dd_pct=18.0, calmar=0.9,
+        )
+    )
+    return LeverageHeadroom(
+        label=label, max_dd_budget_pct=20.0, unlevered=unlev, dd_optimal=dd_opt
+    )
+
+
+def test_rank_leverage_headroom_orders_by_optimal_cagr_desc_none_last():
+    items = [
+        _hp("low", 8.0, 12.0),
+        _hp("none", 9.0, None),
+        _hp("high", 8.0, 17.0),
+    ]
+    ranked = rank_leverage_headroom(items)
+    assert [h.label for h in ranked] == ["high", "low", "none"]
+
+
+def test_leverage_headroom_as_dict_shape():
+    factors = [1.01, 0.995, 1.008, 1.002, 0.997, 1.012] * 6
+    rf = [0.0] * len(factors)
+    h = leverage_headroom("라이브", factors, rf, leverages=[1.0, 2.0, 3.0], max_dd_budget_pct=20.0)
+    d = h.as_dict()
+    assert set(d) >= {
+        "label", "max_dd_budget_pct", "unlevered", "dd_optimal",
+        "leverage_multiple", "cagr_uplift_pct",
+    }
+    assert d["label"] == "라이브"
+    assert d["max_dd_budget_pct"] == 20.0
