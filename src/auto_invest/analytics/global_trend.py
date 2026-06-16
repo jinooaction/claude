@@ -41,12 +41,13 @@ from auto_invest.analytics.multi_asset_trend import (
     blend,
     bond_total_return_factors,
     correlation,
-    sleeve_factors,
     sma_in_market,
 )
 from auto_invest.analytics.risk_managed_beta import (
+    CostModel,
     LegStats,
     MonthlyRow,
+    apply_cost_model,
     cash_factors,
     market_total_return_factors,
     summarize,
@@ -292,9 +293,17 @@ def _trailing_vol(returns: list[float], end_idx: int, window: int) -> float | No
 
 
 def _build_sleeves(
-    rows: list[MonthlyRow], gold_levels: list[float], window: int, bond_maturity_years: int
+    rows: list[MonthlyRow],
+    gold_levels: list[float],
+    window: int,
+    bond_maturity_years: int,
+    cost_bps: float = 0.0,
 ) -> tuple[list[float], list[float], list[float]]:
-    """주식·채권·금 추세 슬리브 팩터(각 길이 N-1)를 만든다(내부 공용)."""
+    """주식·채권·금 추세 슬리브 팩터(각 길이 N-1)를 만든다(내부 공용).
+
+    `cost_bps`>0 이면 각 슬리브 전환마다 일방 거래비용 반영. cost_bps=0 에서 `apply_cost_model`
+    은 `sleeve_factors` 와 수학적으로 동일(비용계수 1.0) → 기본값은 기존 동작과 완전히 같다.
+    """
     eq_market = market_total_return_factors(rows)
     cash = cash_factors(rows)
     bond = bond_total_return_factors(rows, maturity_years=bond_maturity_years)
@@ -302,10 +311,11 @@ def _build_sleeves(
     eq_in = trend_in_market(rows, window)
     bond_in = sma_in_market(_cum_levels(bond), window)
     gold_in = sma_in_market(gold_levels, window)
+    model = CostModel(cost_bps=cost_bps)
     return (
-        sleeve_factors(eq_market, cash, eq_in),
-        sleeve_factors(bond, cash, bond_in),
-        sleeve_factors(gold, cash, gold_in),
+        apply_cost_model(eq_market, cash, eq_in, model),
+        apply_cost_model(bond, cash, bond_in, model),
+        apply_cost_model(gold, cash, gold_in, model),
     )
 
 
@@ -316,6 +326,7 @@ def risk_parity_global_factors(
     window: int = 10,
     vol_window: int = 12,
     bond_maturity_years: int = DEFAULT_BOND_MATURITY_YEARS,
+    cost_bps: float = 0.0,
 ) -> list[float]:
     """역변동성(리스크 패리티) 가중 글로벌 3자산 추세 월간 팩터 스트림(길이 N-1).
 
@@ -323,11 +334,14 @@ def risk_parity_global_factors(
     금처럼 변동성 큰 자산은 자동으로 작은 비중을 받아(위험 과배분 방지), "마법의 상수" 없이
     원칙적으로 사이징된다(세계 최고 수준 managed futures 의 표준). 미래 누출 0: period t
     가중치는 t 이전(<=t-1) 수익의 트레일링 변동성만 쓴다. 이력 부족이면 1/3 균등(중립).
+    `cost_bps`>0 이면 슬리브 추세 전환 거래비용 반영(기본 0 = 역호환). 단 역변동성의 매월
+    가중 재조정 회전율(슬리브 비중 변화)은 여기 반영 안 됨 → 이 비용은 *보수적*(역변동성에
+    유리, 실제 비용 과소평가).
     """
     if len(gold_levels) != len(rows):
         raise ValueError("gold_levels must align 1:1 with rows")
     eq_s, bond_s, gold_s = _build_sleeves(
-        rows, gold_levels, window, bond_maturity_years
+        rows, gold_levels, window, bond_maturity_years, cost_bps
     )
     rets = [[f - 1.0 for f in s] for s in (eq_s, bond_s, gold_s)]
     out: list[float] = []
@@ -354,17 +368,20 @@ def global_trend_factors(
     bond_weight: float = 1.0,
     gold_weight: float = 1.0,
     bond_maturity_years: int = DEFAULT_BOND_MATURITY_YEARS,
+    cost_bps: float = 0.0,
 ) -> list[float]:
     """글로벌 3자산(주식추세+채권추세+금추세) 월간 그로스 팩터 스트림(길이 N-1).
 
     `compare_global_trend` 와 같은 계산이지만 LegStats 요약이 아니라 *원시 팩터 스트림*을
     돌려준다 — 스펙 044 성장 최적 레버리지가 이 스트림에 레버리지를 얹어 복리 성장을 잰다.
+    고정 가중이라 회전율은 슬리브 추세 전환뿐 → `cost_bps` 비용이 회전율을 온전히 반영한다
+    (역변동성과 달리 매월 비중 재조정 추가 회전 없음, 기본 0 = 역호환).
     """
     if len(gold_levels) != len(rows):
         raise ValueError("gold_levels must align 1:1 with rows")
     ew, bw, gw = _normalized_weights(equity_weight, bond_weight, gold_weight)
     eq_sleeve, bond_sleeve, gold_sleeve = _build_sleeves(
-        rows, gold_levels, window, bond_maturity_years
+        rows, gold_levels, window, bond_maturity_years, cost_bps
     )
     return blend([(ew, eq_sleeve), (bw, bond_sleeve), (gw, gold_sleeve)])
 
