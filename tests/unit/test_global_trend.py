@@ -220,3 +220,52 @@ def test_classify_gold_insufficient_when_calmar_none():
 
 def test_gold_float_year_is_bretton_woods():
     assert GOLD_FLOAT_YEAR == 1971
+
+
+# ─────────────────── 거래비용 반영 (cost_bps — 스펙 044×047 후속) ───────────────────
+
+
+def _switchy_3asset(n: int = 48):
+    prices: list[float] = []
+    p = 100.0
+    for i in range(n):
+        phase = (i // 8) % 2
+        p *= 1.04 if phase == 0 else 0.97
+        prices.append(p)
+    rows = _rows(prices, div=0.0, rate=4.0)
+    gold_prices = [50.0 * (1.0 + 0.003 * i + 0.04 * ((i % 6) - 3)) for i in range(n)]
+    gold = align_gold_levels(rows, _gold_for_rows(rows, gold_prices))
+    return rows, gold
+
+
+def _terminal(factors: list[float]) -> float:
+    out = 1.0
+    for f in factors:
+        out *= f
+    return out
+
+
+def test_cost_bps_zero_matches_no_cost_default_global() -> None:
+    rows, gold = _switchy_3asset()
+    assert global_trend_factors(rows, gold, window=10) == global_trend_factors(
+        rows, gold, window=10, cost_bps=0.0
+    )
+    assert risk_parity_global_factors(rows, gold, window=10) == risk_parity_global_factors(
+        rows, gold, window=10, cost_bps=0.0
+    )
+
+
+def test_cost_bps_positive_reduces_terminal_growth_global() -> None:
+    # 고정가중 3자산은 가중 되먹임이 없어 비용>0 이 최종 복리를 직접 낮춘다.
+    rows, gold = _switchy_3asset()
+    free = _terminal(global_trend_factors(rows, gold, window=10, cost_bps=0.0))
+    costed = _terminal(global_trend_factors(rows, gold, window=10, cost_bps=20.0))
+    assert costed < free
+
+
+def test_cost_bps_affects_risk_parity_global_output() -> None:
+    # 역변동성 3자산은 비용이 가중치로 되먹임 → 합성에선 방향 불확정, *효과 있음*만 확정.
+    rows, gold = _switchy_3asset()
+    free = risk_parity_global_factors(rows, gold, window=10, cost_bps=0.0)
+    costed = risk_parity_global_factors(rows, gold, window=10, cost_bps=20.0)
+    assert costed != free

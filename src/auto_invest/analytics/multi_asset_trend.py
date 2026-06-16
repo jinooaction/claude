@@ -32,8 +32,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from auto_invest.analytics.risk_managed_beta import (
+    CostModel,
     LegStats,
     MonthlyRow,
+    apply_cost_model,
     cash_factors,
     equity_curve,
     market_total_return_factors,
@@ -277,6 +279,17 @@ def compare_diversified_trend(
     )
 
 
+def _trend_sleeve(
+    asset: list[float], cash: list[float], in_market: list[bool], cost_bps: float
+) -> list[float]:
+    """추세 슬리브 팩터 — cost_bps>0 이면 전환마다 일방 거래비용 반영(0 이면 비용 없는 슬리브).
+
+    cost_bps=0 일 때 `apply_cost_model` 은 `sleeve_factors` 와 수학적으로 동일하다(전환 시
+    곱하는 비용계수가 1.0). 따라서 기본값(0)은 기존 동작과 완전히 같다(역호환).
+    """
+    return apply_cost_model(asset, cash, in_market, CostModel(cost_bps=cost_bps))
+
+
 def diversified_trend_factors(
     rows: list[MonthlyRow],
     *,
@@ -284,11 +297,13 @@ def diversified_trend_factors(
     equity_weight: float = 0.5,
     bond_weight: float = 0.5,
     bond_maturity_years: int = DEFAULT_BOND_MATURITY_YEARS,
+    cost_bps: float = 0.0,
 ) -> list[float]:
     """분산 추세(주식추세+채권추세) 월간 그로스 팩터 스트림(길이 N-1).
 
     `compare_diversified_trend` 와 같은 계산이지만 LegStats 요약이 아니라 *원시 팩터 스트림*을
     돌려준다 — 스펙 044 성장 최적 레버리지가 이 스트림에 레버리지를 얹어 복리 성장률을 잰다.
+    `cost_bps`>0 이면 각 슬리브 전환마다 일방 거래비용을 반영(기본 0 = 비용 없음, 역호환).
     """
     eq_market = market_total_return_factors(rows)
     cash = cash_factors(rows)
@@ -296,17 +311,22 @@ def diversified_trend_factors(
     bond_index = equity_curve(bond)
     eq_in = trend_in_market(rows, window)
     bond_in = sma_in_market(bond_index, window)
-    eq_sleeve = sleeve_factors(eq_market, cash, eq_in)
-    bond_sleeve = sleeve_factors(bond, cash, bond_in)
+    eq_sleeve = _trend_sleeve(eq_market, cash, eq_in, cost_bps)
+    bond_sleeve = _trend_sleeve(bond, cash, bond_in, cost_bps)
     return blend([(equity_weight, eq_sleeve), (bond_weight, bond_sleeve)])
 
 
-def equity_trend_factors(rows: list[MonthlyRow], *, window: int = 10) -> list[float]:
-    """단일 주식 추세(스펙 042) 월간 그로스 팩터 스트림(길이 N-1) — 레버리지 비교용."""
+def equity_trend_factors(
+    rows: list[MonthlyRow], *, window: int = 10, cost_bps: float = 0.0
+) -> list[float]:
+    """단일 주식 추세(스펙 042) 월간 그로스 팩터 스트림(길이 N-1) — 레버리지 비교용.
+
+    `cost_bps`>0 이면 추세 전환마다 일방 거래비용 반영(기본 0 = 역호환).
+    """
     eq_market = market_total_return_factors(rows)
     cash = cash_factors(rows)
     eq_in = trend_in_market(rows, window)
-    return sleeve_factors(eq_market, cash, eq_in)
+    return _trend_sleeve(eq_market, cash, eq_in, cost_bps)
 
 
 def _trailing_vol(returns: list[float], end_idx: int, window: int) -> float | None:
@@ -325,13 +345,14 @@ def risk_parity_diversified_factors(
     window: int = 10,
     vol_window: int = 12,
     bond_maturity_years: int = DEFAULT_BOND_MATURITY_YEARS,
+    cost_bps: float = 0.0,
 ) -> list[float]:
     """리스크 패리티(역변동성) 가중 분산 추세 월간 팩터 스트림(길이 N-1).
 
     고정 50/50 대신 *각 슬리브가 위험에 동등 기여*하도록 매월 트레일링 역변동성으로 가중한다
     (변동성 낮은 채권에 더, 높은 주식에 덜) — 또 하나의 수익 극대화 전략(샤프를 더 올려 복리
     성장 천장을 높임). 미래 누출 0: period t 가중치는 t 이전(<=t-1) 수익의 트레일링 변동성만
-    쓴다. 이력 부족이면 50/50(중립).
+    쓴다. 이력 부족이면 50/50(중립). `cost_bps`>0 이면 슬리브 전환 거래비용 반영(기본 0).
     """
     eq_market = market_total_return_factors(rows)
     cash = cash_factors(rows)
@@ -339,8 +360,8 @@ def risk_parity_diversified_factors(
     bond_index = equity_curve(bond)
     eq_in = trend_in_market(rows, window)
     bond_in = sma_in_market(bond_index, window)
-    eq_sleeve = sleeve_factors(eq_market, cash, eq_in)
-    bond_sleeve = sleeve_factors(bond, cash, bond_in)
+    eq_sleeve = _trend_sleeve(eq_market, cash, eq_in, cost_bps)
+    bond_sleeve = _trend_sleeve(bond, cash, bond_in, cost_bps)
     eq_ret = [f - 1.0 for f in eq_sleeve]
     bond_ret = [f - 1.0 for f in bond_sleeve]
     out: list[float] = []

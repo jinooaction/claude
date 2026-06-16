@@ -227,3 +227,56 @@ def test_diversified_lower_vol_than_pure_equity_buyhold():
     rows = _rows_with_rates(prices, [4.0] * n)
     cmp = compare_diversified_trend(rows, window=10)
     assert cmp.diversified_trend.vol_pct < cmp.bh_equity.vol_pct
+
+
+# ─────────────────── 거래비용 반영 (cost_bps — 스펙 044×047 후속) ───────────────────
+
+
+def _switchy_rows(n: int = 48) -> list[MonthlyRow]:
+    # 10개월 SMA 를 여러 번 가로지르도록 오르내리는 가격(추세 전환 다발 → 비용 발생).
+    prices: list[float] = []
+    p = 100.0
+    for i in range(n):
+        phase = (i // 8) % 2  # 8개월마다 상승/하락 전환
+        p *= 1.04 if phase == 0 else 0.97
+        prices.append(p)
+    return _rows(prices, div=0.0, rate=4.0)
+
+
+def _terminal(factors: list[float]) -> float:
+    out = 1.0
+    for f in factors:
+        out *= f
+    return out
+
+
+def test_cost_bps_zero_matches_no_cost_default() -> None:
+    rows = _switchy_rows()
+    for fn in (equity_trend_factors, diversified_trend_factors, risk_parity_diversified_factors):
+        assert fn(rows, window=10) == fn(rows, window=10, cost_bps=0.0)
+
+
+def test_cost_bps_positive_reduces_terminal_growth() -> None:
+    rows = _switchy_rows()
+    # 가중 되먹임이 없는 전략(단일·고정 50/50)은 비용>0 이 최종 복리를 *직접* 낮춘다.
+    for fn in (equity_trend_factors, diversified_trend_factors):
+        free = _terminal(fn(rows, window=10, cost_bps=0.0))
+        costed = _terminal(fn(rows, window=10, cost_bps=20.0))
+        assert costed < free
+
+
+def test_cost_bps_affects_risk_parity_output() -> None:
+    # 역변동성은 비용이 슬리브→트레일링 변동성→가중치로 되먹임된다. 합성 데이터에선 방향이
+    # 뒤집힐 수 있어(실데이터에선 직접 드래그 지배) *효과가 있음*만 확정한다.
+    rows = _switchy_rows()
+    free = risk_parity_diversified_factors(rows, window=10, cost_bps=0.0)
+    costed = risk_parity_diversified_factors(rows, window=10, cost_bps=20.0)
+    assert costed != free
+
+
+def test_cost_bps_monotonic_in_cost() -> None:
+    rows = _switchy_rows()
+    t0 = _terminal(diversified_trend_factors(rows, window=10, cost_bps=0.0))
+    t10 = _terminal(diversified_trend_factors(rows, window=10, cost_bps=10.0))
+    t30 = _terminal(diversified_trend_factors(rows, window=10, cost_bps=30.0))
+    assert t0 >= t10 >= t30

@@ -55,16 +55,28 @@ _LEVERAGES = [round(0.5 + 0.25 * i, 2) for i in range(23)]  # 0.5 … 6.0
 _LIVE_KEY = "3자산 역변동성 +금 (라이브)"
 
 
-def _strategies(rows, gold_levels, window: int) -> list[tuple[str, list[float]]]:
-    """레버리지 비교 대상 전략들의 월간 팩터 스트림(낮은 낙폭 순으로 의미 부여)."""
+def _strategies(
+    rows, gold_levels, window: int, cost_bps: float = 0.0
+) -> list[tuple[str, list[float]]]:
+    """레버리지 비교 대상 전략들의 월간 팩터 스트림(낮은 낙폭 순으로 의미 부여).
+
+    `cost_bps`>0 이면 슬리브 추세 전환 거래비용 반영. 단 역변동성의 매월 비중 재조정 회전율은
+    반영 안 됨 → 비용 비교는 *역변동성에 보수적*(실제론 역변동성 비용이 더 큼).
+    """
     return [
-        ("단일 주식 추세 (042)", equity_trend_factors(rows, window=window)),
-        ("2자산 분산 추세 (043)", diversified_trend_factors(rows, window=window)),
+        ("단일 주식 추세 (042)", equity_trend_factors(rows, window=window, cost_bps=cost_bps)),
+        (
+            "2자산 분산 추세 (043)",
+            diversified_trend_factors(rows, window=window, cost_bps=cost_bps),
+        ),
         (
             "3자산 고정가중 +금 (047)",
-            global_trend_factors(rows, gold_levels, window=window),
+            global_trend_factors(rows, gold_levels, window=window, cost_bps=cost_bps),
         ),
-        (_LIVE_KEY, risk_parity_global_factors(rows, gold_levels, window=window)),
+        (
+            _LIVE_KEY,
+            risk_parity_global_factors(rows, gold_levels, window=window, cost_bps=cost_bps),
+        ),
     ]
 
 
@@ -91,12 +103,15 @@ def _print_live_curve(label: str, curve, dd_budget: float) -> None:
             )
 
 
-def _run(all_rows, gold_by_month, *, from_year: int, window: int, dd_budget: float) -> dict:
+def _run(
+    all_rows, gold_by_month, *, from_year: int, window: int, dd_budget: float,
+    cost_bps: float = 0.0,
+) -> dict:
     rows = [r for r in all_rows if int(r.date[:4]) >= from_year]
     gold_levels = align_gold_levels(rows, gold_by_month)
     rf = risk_free_monthly(rows)
 
-    strategies = _strategies(rows, gold_levels, window)
+    strategies = _strategies(rows, gold_levels, window, cost_bps)
     headrooms = [
         leverage_headroom(
             label, factors, rf, leverages=_LEVERAGES, max_dd_budget_pct=dd_budget
@@ -163,6 +178,7 @@ def _run(all_rows, gold_by_month, *, from_year: int, window: int, dd_budget: flo
         "n_months": len(rows),
         "window": window,
         "max_dd_budget_pct": dd_budget,
+        "cost_bps": cost_bps,
         "best_label": best.label,
         "ranked": [h.as_dict() for h in ranked],
     }
@@ -178,6 +194,10 @@ def main() -> int:
     ap.add_argument(
         "--dd-budget", type=float, default=20.0,
         help="감내 최대낙폭(%) 예산(기본 20=헌법 X.4 운영자 소유).",
+    )
+    ap.add_argument(
+        "--cost-bps", type=float, default=0.0,
+        help="전환 1회당 일방 거래비용(bp). 0=비용 없음. ETF 현실 ~5bp, 보수적 10bp.",
     )
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args()
@@ -198,6 +218,7 @@ def main() -> int:
     result = _run(
         all_rows, gold_by_month,
         from_year=args.from_year, window=args.window, dd_budget=args.dd_budget,
+        cost_bps=args.cost_bps,
     )
     if args.json:
         print(json.dumps(result, ensure_ascii=False))
