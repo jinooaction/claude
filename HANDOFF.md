@@ -96,7 +96,8 @@ git ls-remote --heads origin 'claude/*' | awk '{print $2}'
      `git show origin/automation/reassign-last-run:LAST_RUN.md` 로 결정/캐너리 verdict 확인.
      현재 6트랙 전부 잠정(관측 부족)이라 도전자 없음(HOLD)이 정상 — 강세장 창에서 추세 엣지가
      안 보이는 구조적 이유(역사 섹션 참조). globalfixed 가 EDGE_CONFIRMED 를 벌면 첫 자율 재지정 후보.
-     (이제 첫 실행이 실패하면 생존 감시가 잡으므로 침묵 실패 위험 없음.)
+     (생존 감시가 이제 첫 실행 전엔 PENDING, 첫 실행 실패 시 +80h 후 MISSING 으로 구분 —
+     거짓 DEGRADED 해소하면서 침묵 실패는 여전히 잡힘. PR #328, main `cba93a0`.)
   2. **L1 적용 표면 확장**(모델 라우팅·max_tokens 즉시 자동 적용) 등 기존 후속 후보(아래).
 
 ---
@@ -195,6 +196,24 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
 **세션 운영 메모**: 이번 세션에 도구 호출 형식 오류(`antml:` 접두사 누락)가 반복돼 운영자
 시간을 낭비함. 다음 세션은 모든 도구 호출에 `antml:invoke`/`antml:parameter` 접두사를 반드시
 정확히 쓸 것.
+
+## 최근 마일스톤 — 2026-06-16 (🩺 스펙 051 후속: 생존 감시 신규 루프 PENDING — 첫 실행 전 거짓 DEGRADED 제거)
+
+main 머지 `cba93a0`(#328). 스펙 055 재지정 폐회로 워크플로(`reassign-on-tournament.yml`)가
+오늘 main 에 들어왔지만(15:26 UTC) 첫 cron 은 6/17 00:20 UTC — 그 사이 생존 감시(스펙 051)가
+reassign 사이드카 없음을 MISSING 으로 보고 종합 판정을 DEGRADED 로 떨궜다. '아직 첫 실행
+전인 신규 루프'와 '죽은 루프'를 구분 못 한 거짓경보(모듈 자신이 "거짓경보가 최악 — 운영자가
+경보를 무시하게 된다"고 밝힌 설계 철학 위반).
+
+- **수정**: `SidecarSpec.first_expected_utc`(첫 사이드카 예상 시각) 추가. 사이드카 없음이 그
+  시각+max_age 전이면 `PENDING`(정상, 첫 실행 대기), 후면 `MISSING`(첫 실행 실패 의심)으로
+  승격. None(기본)이면 기존 즉시 MISSING(확립 루프 회귀 0). reassign 에 첫 cron 시각
+  `2026-06-17T00:20:00Z` 설정.
+- **효과**: 첫 cron 전 reassign=PENDING → 종합 OK(거짓 DEGRADED 사라짐). 첫 실행이 실패하면
+  +80h 후 MISSING 으로 승격 → 침묵 실패를 *오히려 새로* 잡음(PR #326 의도 약화 아니라 정밀화).
+- **안전 경계**: Kernel 0·감시/보고 모듈(비커널)·읽기 전용·주문 0·돈 0·라이브 무변경.
+- **검증**: 신규 단위 테스트 6건(PENDING/MISSING 구분·핵심 신규 루프 승격·확립 루프 회귀),
+  전체 2133 통과·ruff 통과. 실증: 실제 사이드카로 probe 현재 시각 → 종합 🟢 OK, reassign ⏳ PENDING.
 
 ## 최근 마일스톤 — 2026-06-16 (🪜 스펙 050×044: 자본 사다리 순 복리 + 거래비용 + 레버리지 캡 경계 — 운영자 방향 "레버리지 후 복리 극대화" 실행 분석)
 
