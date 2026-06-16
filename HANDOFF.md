@@ -82,11 +82,14 @@ git ls-remote --heads origin 'claude/*' | awk '{print $2}'
 - **다음 세션 최우선(순서대로)**:
   1. **헌법 PR #320 머지** — 운영자 확인 후(K-meta 규칙). 운영자는 정책 승인 완료("완전 자율+5중"),
      문구 머지 승인만 남음.
-  2. **재지정 실행** — ⚠ **핵심 미해결**: `challenger_key`(트랙 문자열) ↔ `PortfolioRebalanceConfig`
-     매핑 위치 파악. `TrackResult`(forward_tournament.py:79)는 `key`+`universe`+지표만 담고 config는
-     안 담음 — 매핑은 `cli.py` 토너먼트 호출부(트랙을 만들 때 각 config로 forward 계산)에 있을 것.
-     찾으면: challenger config → 라이브 설정 기록 + `capital_ladder.render_ladder_sentinel(rung=0)`
-     로 사다리 리셋(⑤). `autoarm` 센티넬 메커니즘(`automation/...`) 결합. deploy config 구조도 파악.
+  2. **재지정 실행** — ✓ **매핑 구조 발견**(이 세션): 트랙 정의는 `scripts/forward_tournament_probe.py:37`
+     `TRACKS = (key, label, header, is_incumbent)`. **incumbent="global" → `deploy/global-trend-portfolio.toml`**
+     (autoarm/사다리가 검증·배치하는 바로 그 라이브 설정 파일, probe.py:35-36 주석). `"globalfixed"`는 이미
+     "재지정 후보"로 표시됨. 즉 **트랙 key → `deploy/*.toml` 매핑이 존재**(TrackResult 가 아니라 deploy 파일에).
+     재지정 = challenger 트랙의 toml → 라이브 설정 파일로 교체 + `capital_ladder.render_ladder_sentinel(rung=0)`
+     로 사다리 리셋(⑤). **다음 세션 할 일**: ① `deploy/` 디렉토리에서 각 트랙 key→toml 경로 확정(global 외
+     globalfixed/multiasset/wide 등), ② `rebalance-live-canary.yml`이 읽는 라이브 설정 파일 경로 확인,
+     ③ 재지정 실행 순수 함수(challenger key + deploy 매핑 → 새 라이브 toml 내용 + rung0 센티넬) + 테스트.
   3. **워크플로 배선** — `forward_tournament` 리더보드 + 하드닝 캐너리 결과 → `decide_reassignment`
      → REASSIGN 시 센티넬 PR. `forward-edge-autoarm.yml` 패턴(읽기 전용 판정 → 변경 시 PR).
 
