@@ -1,0 +1,62 @@
+# 스펙 047/050 후속 — 글로벌 3자산 추세 **고정(등가중)** forward 페이퍼 후보. 돈 0 이동.
+#
+# 무엇이 다른가: 라이브 검증 트랙(global-trend-portfolio.toml)은 weight_scheme="inverse_vol"
+# (역변동성). 이 파일은 **weight_scheme="equal"**(등가중 1/3 씩)만 바꾸고 나머지(유니버스·캡·
+# 추세 앙상블)는 동일하다 — 두 가중 방식을 *사과 대 사과*로 forward 비교하기 위해서다.
+#
+# 왜 이 후보를 forward 로 올리나(2026-06-16 운영자 결정 "레버리지 후 복리 극대화 → 둘 다,
+# 고정가중 먼저"):
+#   깊은 150년 분석(specs/044-growth-optimal-leverage/LIVE-STRATEGY-LEVERAGE-FINDINGS.md,
+#   specs/050-capital-ladder/LADDER-NET-GROWTH-FINDINGS.md)에서, 등가중 3자산은 역변동성보다
+#   **무레버리지 복리가 +1.3~2.3%p 높았다**(거래비용 10bp·자본 사다리 월간 시뮬 둘 다 반영해도
+#   견고). 레버리지는 K1 노출 캡(≤100%)에 막혀(LEVERAGE-CAP-BOUNDARY.md) 자율 적용 불가지만,
+#   *캡 안에서* 등가중 재지정만으로 더 버는 길이라 운영자가 "고정가중 먼저"를 선택했다.
+#
+# ⚠ 미해소 질문(이 트랙이 푸는 것): 등가중은 변동성 큰 금에 위험을 더 배분해 **낙폭이 더
+#   크다**(역변동성 ≈5.5% vs 등가중 ≈9.6% 월간). 자본 사다리는 *전략 낙폭* ≥ 예산/2(10%)면
+#   강등한다 → 등가중 9.6% 가 강등선(10%)에 바짝 붙어, *일별*(실제 시스템)에선 더 자주 강등될
+#   수 있다(월간 데이터론 확정 불가). **이 forward 페이퍼 트랙이 일별 낙폭/강등 빈도를 실측**
+#   해 재지정 안전성을 확인한다. 스펙 048 추세 앙상블이 낙폭을 ~5%→3.7% 로 줄이므로(역변동성
+#   기준) 등가중에서도 강등선 아래로 내려갈 여지 — forward 가 답한다.
+#
+# 안전: PAPER 전용(rebalance-paper-forward.yml, --mode paper). 실주문 0·돈 0. 이 후보가
+# forward EDGE_CONFIRMED + 전략 지문 정합을 벌면 *그때* 운영자가 라이브 재지정 결정(헌법 X.4).
+# 재지정·레버리지·캡 변경은 모두 운영자 게이트 — 이 파일은 후보를 *검증 대기열*에 올릴 뿐이다.
+
+[caps]
+# 페이퍼라 절대 위험 0. 캡은 라이브 전환 시 자본에 맞춰 반드시 재조정할 것.
+per_trade_pct                  = 50.0
+per_symbol_pct                 = 60.0
+global_exposure_pct            = 100.0
+canary_capital_pct             = 5.0
+canary_min_duration_days       = 10
+canary_acceptance_drawdown_pct = 3.0
+
+[whitelist]
+symbols     = ["SPY", "IEF", "GLD"]
+accounts    = ["${KIS_ACCOUNT_NO}"]
+order_types = ["LIMIT"]
+sessions    = ["REGULAR"]
+
+[portfolio]
+id            = "global-trend-fixed"
+universe      = ["SPY", "IEF", "GLD"]
+weights       = { momentum = "1.0" }   # top_n=3 라 점수는 순위에 무영향(셋 다 보유)
+# 등가중(1/3 씩) — 역변동성과 달리 변동성으로 사이징 안 함. 금에 위험을 더 배분 → raw 복리↑·
+# 낙폭↑. 이 트랙이 그 낙폭이 사다리 강등선(10%)을 일별로 넘는지 실측한다.
+weight_scheme = "equal"
+top_n         = 3
+rebalance_mode             = "hold_replace"
+invested_fraction          = "0.99"
+rebalance_every_n_sessions = 21
+lookback_bars              = 200
+momentum_period            = 120
+rebalance_threshold_pct    = "2.0"
+min_notional_usd           = "50"
+
+# 추세 앙상블은 라이브와 동일(사과 대 사과). 각 자산이 자기 다중속도 추세 위 비율만큼 노출.
+[portfolio.trend_filter]
+method          = "sma"
+lookback        = 200
+on_insufficient = "cash"
+ensemble_windows = [63, 126, 189, 252]

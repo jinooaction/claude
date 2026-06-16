@@ -42,11 +42,11 @@ def _verdict(verdict="INSUFFICIENT_DATA", n_obs=1, calmar=None, universe=("SPY",
 # ---- --manifest -------------------------------------------------------------------
 
 
-def test_manifest_lists_six_tracks(capsys):
+def test_manifest_lists_all_tracks(capsys):
     rc = probe_main(["--manifest"])
     assert rc == 0
     out = capsys.readouterr().out.strip().splitlines()
-    assert len(out) == 6
+    assert len(out) == 7  # 6 트랙 + globalfixed(재지정 후보)
     # global 이 incumbent(True)로 표시되는 유일한 트랙.
     incumbents = [ln for ln in out if ln.endswith("True")]
     assert len(incumbents) == 1
@@ -78,7 +78,7 @@ def test_verdict_dir_all_premature(tmp_path, capsys):
     obj = json.loads(capsys.readouterr().out)
     assert obj["champion_key"] is None
     assert obj["incumbent_key"] == "global"
-    assert len(obj["rows"]) == 6
+    assert len(obj["rows"]) == 7
     assert "아직 비교 불가" in obj["headline"]
 
 
@@ -119,6 +119,7 @@ def _sidecar(verdicts_by_key: dict[str, dict]) -> str:
         "rmbeta": "## 🛡️ 판정 — 위험관리 베타 (스펙 042)",
         "multiasset": "## 🌐 판정 — 멀티에셋 분산 추세 (스펙 043)",
         "global": "## 🪙 판정 — 글로벌 분산 추세 (주식+채권+금, 스펙 047)",
+        "globalfixed": "## ⚖ 판정 — 글로벌 3자산 추세 고정(등가중) 재지정 후보",
         "wide": "## 🌍 판정 — 글로벌 분산 추세 확대 유니버스 (11 슬리브)",
     }
     parts = ["# forward 페이퍼 A/B 토너먼트\n"]
@@ -145,7 +146,7 @@ def test_from_sidecar_parses_all_tracks(tmp_path, capsys):
     rc = probe_main(["--from-sidecar", str(p), "--json", "--now", "2026-06-14T00:00:00Z"])
     assert rc == 0
     obj = json.loads(capsys.readouterr().out)
-    assert len(obj["rows"]) == 6
+    assert len(obj["rows"]) == 7
     # global 이 EDGE_CONFIRMED 로 정확히 파싱되어 챔피언(= incumbent).
     assert obj["champion_key"] == "global"
     g = next(r for r in obj["rows"] if r["key"] == "global")

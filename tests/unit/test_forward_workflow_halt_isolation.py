@@ -17,8 +17,8 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _WORKFLOW = _REPO_ROOT / ".github" / "workflows" / "rebalance-paper-forward.yml"
 
-# 다섯 페이퍼 트랙 — 전용 DB 와 전용 halt 깃발이 짝으로 선언되어야 한다.
-_TRACKS = ("trend", "notrend", "rmbeta", "multiasset", "global", "wide")
+# 페이퍼 트랙 — 전용 DB 와 전용 halt 깃발이 짝으로 선언되어야 한다(globalfixed=재지정 후보).
+_TRACKS = ("trend", "notrend", "rmbeta", "multiasset", "global", "globalfixed", "wide")
 
 
 def _workflow_text() -> str:

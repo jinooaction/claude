@@ -18,8 +18,8 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 _FORWARD = _REPO_ROOT / ".github" / "workflows" / "rebalance-paper-forward.yml"
 _LIVE = _REPO_ROOT / ".github" / "workflows" / "rebalance-live-canary.yml"
 
-# forward 워크플로의 다섯 페이퍼 트랙(halt 격리 테스트와 동일 목록).
-_FORWARD_TRACKS = 6
+# forward 워크플로의 페이퍼 트랙 수(6 트랙 + globalfixed 재지정 후보 = 7).
+_FORWARD_TRACKS = 7
 
 
 def _calls(path: Path) -> list[str]:

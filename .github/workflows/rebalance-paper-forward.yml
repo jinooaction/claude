@@ -93,7 +93,7 @@ jobs:
           ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
               -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
               "cd /opt/auto-invest && \
-                 for f in data/halt.flag data/forward_trend.halt.flag data/forward_notrend.halt.flag data/forward_rmbeta.halt.flag data/forward_multiasset.halt.flag data/forward_global.halt.flag; do \
+                 for f in data/halt.flag data/forward_trend.halt.flag data/forward_notrend.halt.flag data/forward_rmbeta.halt.flag data/forward_multiasset.halt.flag data/forward_global.halt.flag data/forward_globalfixed.halt.flag; do \
                    echo \"-- \${f}\"; cat \"\${f}\" 2>/dev/null || echo '(없음 — 정지 아님)'; \
                  done" \
               > /tmp/halt_status.txt 2>&1
@@ -362,6 +362,54 @@ jobs:
           echo "--- verdict ---"; cat /tmp/verdict_global.json
           echo "--- stderr ---"; cat /tmp/verdict_global.err
 
+      # ---- ARM G: 글로벌 3자산 추세 고정(등가중) 재지정 후보 (스펙 047/050 후속) -------
+      # 라이브 검증 트랙(global-trend-portfolio.toml, inverse_vol)과 weight_scheme 만 다른
+      # 등가중 변형(deploy/global-trend-fixed-portfolio.toml). 깊은 분석에서 등가중이 캡 안
+      # 무레버 복리 +1.3~2.3%p 높았으나(LIVE-STRATEGY-LEVERAGE-FINDINGS.md) 낙폭이 사다리
+      # 강등선(10%)에 더 가깝다 — 이 트랙이 *일별* 낙폭/강등 빈도를 실측해 재지정 안전성을 답한다.
+      # 전용 DB·halt 격리 + set +e + if:always() 라 다른 트랙을 못 깨뜨린다. PAPER 전용·돈 0.
+      - name: "Arm GLOBAL-TREND-FIXED — backfill + paper rebalance + NAV snapshot"
+        id: prep_globalfixed
+        if: always()
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+          CAPITAL: ${{ github.event.inputs.capital || '12000' }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          cfg="deploy/global-trend-fixed-portfolio.toml"; dbf="data/forward_globalfixed.db"; hlt="data/forward_globalfixed.halt.flag"
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "cd /opt/auto-invest && \
+                 /usr/local/bin/uv run auto-invest backfill-bars --portfolio ${cfg} --max-symbols 120 --min-bars 1000 --order deepen --db ${dbf} --env-file .env --json && \
+                 /usr/local/bin/uv run auto-invest rebalance-once --portfolio ${cfg} --mode paper --capital ${CAPITAL} --halt-path ${hlt} --db ${dbf} --env-file .env --json && \
+                 /usr/local/bin/uv run auto-invest nav-snapshot --mode paper --capital ${CAPITAL} --db ${dbf} --env-file .env --snapshot --format json" \
+              > /tmp/prep_globalfixed.log 2>&1
+          echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
+          cat /tmp/prep_globalfixed.log
+
+      - name: "Arm GLOBAL-TREND-FIXED — forward edge verdict (spec 035)"
+        id: verdict_globalfixed
+        if: always()
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest forward-verdict \
+                 --mode paper --portfolio deploy/global-trend-fixed-portfolio.toml \
+                 --db data/forward_globalfixed.db --format json" \
+              > /tmp/verdict_globalfixed.json 2>/tmp/verdict_globalfixed.err
+          echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
+          echo "--- verdict ---"; cat /tmp/verdict_globalfixed.json
+          echo "--- stderr ---"; cat /tmp/verdict_globalfixed.err
+
       # ---- ARM F: 글로벌 분산 추세추종 확대 유니버스 (11 슬리브, 계획 ③) ----------
       # 검증된 메커니즘(역변동성 + 다중 속도 추세 앙상블) 그대로, 베팅의 폭만 3 → 11 슬리브
       # (주식 4 · 채권 3 · 실물 3 · 통화 1). 성과 ≈ 질 × √N — 제약 안에서 가장 큰 지렛대.
@@ -443,6 +491,8 @@ jobs:
           VERDICT_MULTIASSET_EXIT: ${{ steps.verdict_multiasset.outputs.ssh_exit }}
           PREP_GLOBAL_EXIT: ${{ steps.prep_global.outputs.ssh_exit }}
           VERDICT_GLOBAL_EXIT: ${{ steps.verdict_global.outputs.ssh_exit }}
+          PREP_GLOBALFIXED_EXIT: ${{ steps.prep_globalfixed.outputs.ssh_exit }}
+          VERDICT_GLOBALFIXED_EXIT: ${{ steps.verdict_globalfixed.outputs.ssh_exit }}
           PREP_WIDE_EXIT: ${{ steps.prep_wide.outputs.ssh_exit }}
           VERDICT_WIDE_EXIT: ${{ steps.verdict_wide.outputs.ssh_exit }}
         run: |
@@ -474,6 +524,8 @@ jobs:
             echo "| MULTI-ASSET-TREND verdict ssh_exit | ${VERDICT_MULTIASSET_EXIT:-?} |"
             echo "| GLOBAL-TREND prep ssh_exit | ${PREP_GLOBAL_EXIT:-?} |"
             echo "| GLOBAL-TREND verdict ssh_exit | ${VERDICT_GLOBAL_EXIT:-?} |"
+            echo "| GLOBAL-TREND-FIXED prep ssh_exit | ${PREP_GLOBALFIXED_EXIT:-?} |"
+            echo "| GLOBAL-TREND-FIXED verdict ssh_exit | ${VERDICT_GLOBALFIXED_EXIT:-?} |"
             echo "| GLOBAL-TREND-WIDE prep ssh_exit | ${PREP_WIDE_EXIT:-?} |"
             echo "| GLOBAL-TREND-WIDE verdict ssh_exit | ${VERDICT_WIDE_EXIT:-?} |"
             echo ""
@@ -556,6 +608,17 @@ jobs:
             cat /tmp/verdict_global.json 2>/dev/null || echo '{}'
             echo '```'
             echo ""
+            echo "## ⚖ 판정 — 글로벌 3자산 추세 고정(등가중) 재지정 후보 (스펙 047/050 후속)"
+            echo ""
+            echo "> 라이브 검증 트랙과 weight_scheme 만 다른 등가중 변형. 깊은 분석은 등가중이"
+            echo "> 캡 안 무레버 복리 +1.3~2.3%p 높다고 봤으나 낙폭이 사다리 강등선(10%)에 더"
+            echo "> 가깝다 — 이 트랙이 *일별* 낙폭/강등 빈도를 실측해 재지정 안전성을 답한다."
+            echo "> EDGE_CONFIRMED + 지문 정합을 벌면 운영자가 재지정 결정(헌법 X.4). 돈 0·페이퍼."
+            echo ""
+            echo '```json'
+            cat /tmp/verdict_globalfixed.json 2>/dev/null || echo '{}'
+            echo '```'
+            echo ""
             echo "## 🌍 판정 — 글로벌 분산 추세 확대 유니버스 (11 슬리브, 계획 ③)"
             echo ""
             echo "> 검증된 메커니즘(역변동성 + 다중 속도 추세 앙상블) 그대로, 베팅의 폭만"
@@ -597,6 +660,12 @@ jobs:
             echo ""
             echo '```'
             cat /tmp/prep_global.log 2>/dev/null || echo '(none)'
+            echo '```'
+            echo ""
+            echo "## GLOBAL-TREND-FIXED 준비 로그 (backfill → rebalance → nav-snapshot)"
+            echo ""
+            echo '```'
+            cat /tmp/prep_globalfixed.log 2>/dev/null || echo '(none)'
             echo '```'
             echo ""
             echo "## GLOBAL-TREND-WIDE 준비 로그 (backfill → rebalance → nav-snapshot)"

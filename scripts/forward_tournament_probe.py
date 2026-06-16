@@ -40,6 +40,7 @@ TRACKS: list[tuple[str, str, str, bool]] = [
     ("rmbeta", "위험관리 베타 (스펙 042)", "위험관리 베타", False),
     ("multiasset", "멀티에셋 분산 추세 (스펙 043)", "멀티에셋 분산 추세", False),
     ("global", "글로벌 분산 추세 (라이브 검증, SPY·IEF·GLD)", "글로벌 분산 추세 (주식", True),
+    ("globalfixed", "글로벌 3자산 추세 고정등가중 (재지정 후보)", "글로벌 3자산 추세 고정", False),
     ("wide", "글로벌 분산 추세 확대 (11 슬리브)", "글로벌 분산 추세 확대", False),
 ]
 
