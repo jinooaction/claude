@@ -40,7 +40,8 @@ SCHEMA_VERSION = "1.0"
 OK = "OK"  # 신선 — 기대 주기 안
 LATE = "LATE"  # 1주기~2주기 지연 — 일시적일 수 있음
 STALE = "STALE"  # 2주기 초과 — 명백한 정지
-MISSING = "MISSING"  # 사이드카/타임스탬프 없음
+MISSING = "MISSING"  # 사이드카/타임스탬프 없음(첫 실행 예정 지남 또는 확립 후 소실)
+PENDING = "PENDING"  # 신규 루프 — 첫 실행 예정 시각 전이라 아직 사이드카 없음(정상, 거짓경보 아님)
 
 # 종합 판정 (overall)
 HEALTHY = "OK"
@@ -66,6 +67,10 @@ class SidecarSpec:
     max_age_hours: float  # 정상 최대 나이(주말/연휴 갭 + 여유 포함)
     critical: bool  # True 면 STALE/MISSING 시 종합 CRITICAL(워크플로 빨강)
     description: str
+    # 신규 루프의 첫 사이드카 예상 시각(ISO-8601 UTC). 설정 시: 사이드카 없음이 이
+    # 시각+max_age 전이면 PENDING(정상, 첫 실행 대기), 후면 MISSING(첫 실행 실패 의심).
+    # None(기본) = 확립된 루프 — 사이드카 없으면 즉시 MISSING(기존 동작).
+    first_expected_utc: str | None = None
 
 
 @dataclass(frozen=True)
@@ -119,7 +124,7 @@ class LivenessReport:
         }
 
     def as_text(self) -> str:
-        icon = {OK: "🟢", LATE: "🟡", STALE: "🔴", MISSING: "⬛"}
+        icon = {OK: "🟢", LATE: "🟡", STALE: "🔴", MISSING: "⬛", PENDING: "⏳"}
         overall_icon = {HEALTHY: "🟢", DEGRADED: "🟡", CRITICAL: "🔴"}[self.overall]
         lines = [
             f"# 파이프라인 생존 감시 (as of {self.as_of_utc}) — 읽기 전용, 돈 0 이동",
@@ -184,8 +189,8 @@ def _classify(age_hours: float, max_age_hours: float) -> str:
 
 def _contribution(status: str, critical: bool) -> str:
     """이 판정이 종합 판정에 기여하는 심각도."""
-    if status == OK:
-        return HEALTHY
+    if status in (OK, PENDING):
+        return HEALTHY  # PENDING = 첫 실행 전 신규 루프 — 정상(경보 아님)
     if status == LATE:
         return DEGRADED if critical else HEALTHY
     # STALE 또는 MISSING
@@ -209,12 +214,33 @@ def assess_liveness(
         raw = observations.get(spec.key)
         ts = parse_timestamp_utc(raw)
         if ts is None:
-            status = MISSING
             age = None
-            detail = (
-                f"{spec.description} — 사이드카/타임스탬프 없음("
-                f"{spec.branch} 미발행 또는 비정상)."
-            )
+            # 사이드카 없음 — "첫 실행 전 신규 루프(정상)"인지 "침묵 정지(이상)"인지
+            # 구분해 거짓경보를 막는다. first_expected_utc 가 있으면 그 시각+한계로 판단.
+            if spec.first_expected_utc is not None and (
+                _age_hours(spec.first_expected_utc, now) < spec.max_age_hours
+            ):
+                # 첫 실행 예정 시각 + 한계 전 — 아직 안 태어남(정상, 거짓경보 아님).
+                status = PENDING
+                detail = (
+                    f"{spec.description} — 신규 루프, 첫 실행 예정("
+                    f"{spec.first_expected_utc}) 전이라 사이드카 미발행(정상)."
+                )
+            elif spec.first_expected_utc is not None:
+                # 첫 실행 예정 + 한계 지났는데도 없음 — 첫 실행 자체가 실패했을 가능성.
+                status = MISSING
+                detail = (
+                    f"{spec.description} — 첫 실행 예정({spec.first_expected_utc})"
+                    f"+한계 {spec.max_age_hours:.0f}h 지났는데 미발행({spec.branch}). "
+                    f"첫 실행 실패 의심."
+                )
+            else:
+                # 확립된 루프 — 사이드카 없으면 비정상(기존 동작).
+                status = MISSING
+                detail = (
+                    f"{spec.description} — 사이드카/타임스탬프 없음("
+                    f"{spec.branch} 미발행 또는 비정상)."
+                )
         else:
             age = _age_hours(ts, now)
             status = _classify(age, spec.max_age_hours)
@@ -335,6 +361,10 @@ def default_specs() -> list[SidecarSpec]:
             max_age_hours=80.0,  # 평일 00:20(cron 20 0 * * 2-6) — 주말 갭 견딤
             critical=False,
             description="자율 전략 재지정 폐회로(스펙 055, 챔피언→라이브 5중 게이트)",
+            # 워크플로가 main 에 든 시각(2026-06-16 15:26 UTC) 다음 첫 cron(수~토 00:20).
+            # 그 전엔 사이드카 없음이 정상(PENDING). 첫 실행이 실패하면 +80h 후 MISSING 으로
+            # 승격해 침묵 실패를 드러낸다(거짓경보 없이 진짜 정지만 잡는다).
+            first_expected_utc="2026-06-17T00:20:00Z",
         ),
     ]
 
@@ -346,6 +376,7 @@ __all__ = [
     "LATE",
     "MISSING",
     "OK",
+    "PENDING",
     "SCHEMA_VERSION",
     "STALE",
     "LivenessCheck",

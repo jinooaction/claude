@@ -11,6 +11,7 @@ from auto_invest.analytics.pipeline_liveness import (
     LATE,
     MISSING,
     OK,
+    PENDING,
     SCHEMA_VERSION,
     STALE,
     SidecarSpec,
@@ -206,25 +207,112 @@ def test_default_specs_registry_sane():
     assert by_key["reassign"].critical is False
     assert by_key["reassign"].branch == "automation/reassign-last-run"
     assert by_key["reassign"].max_age_hours >= 72.0  # 주말 갭(Sat→Tue 72h) 견딤
+    # 첫 cron(2026-06-17) 전엔 사이드카 없음이 정상(PENDING) — 거짓 DEGRADED 방지.
+    assert by_key["reassign"].first_expected_utc is not None
     # 모든 명세는 양수 한계와 automation 브랜치를 가진다.
     for s in specs:
         assert s.max_age_hours > 0
         assert s.branch.startswith("automation/")
 
 
-def test_reassign_loop_silent_stall_is_degraded_not_red():
-    """스펙 055 재지정 루프가 조용히 멈추면(MISSING/STALE) 감시자가 *드러내되*
-    거짓 빨강(CRITICAL)은 내지 않아야 한다 — 정지 시 검증된 incumbent 가 라이브로
-    남는 fail-safe 이므로. 가장 최신 자율 루프의 침묵 정지를 잡는 회귀 가드."""
+def test_reassign_loop_pending_before_first_run_is_not_alarm():
+    """스펙 055 재지정 루프는 첫 cron(2026-06-17T00:20Z) 전까지 사이드카가 없는 게
+    정상이다. 감시자는 이를 PENDING(첫 실행 대기)으로 보고 거짓 DEGRADED 를 내지
+    않아야 한다 — '아직 안 태어난' 루프와 '죽은' 루프를 구분하는 거짓경보 방지 가드."""
     specs = default_specs()
-    fresh = _md("2026-06-13T11:00:00Z")  # 1h 전 — 모든 한계(30·80h) 안
-    # reassign 만 빼고 전부 신선하게.
+    # NOW(2026-06-13)는 reassign 첫 실행 예정(2026-06-17T00:20Z) 전.
+    fresh = _md("2026-06-13T11:00:00Z")  # 1h 전 — 모든 한계 안
     obs: dict[str, str | None] = {s.key: fresh for s in specs}
-    obs["reassign"] = None  # 사이드카 미발행(한 번도 안 돎 또는 정지)
+    obs["reassign"] = None  # 첫 실행 전 — 아직 안 태어남(정상)
     rep = assess_liveness(specs, obs, NOW)
+    by_key = {c.key: c for c in rep.checks}
+    assert by_key["reassign"].status == PENDING
+    assert rep.overall == HEALTHY  # 첫 실행 전은 거짓경보 아님 — 종합 정상
+    assert rep.exit_code == 0
+
+
+def test_reassign_loop_silent_stall_after_first_run_is_degraded_not_red():
+    """재지정 루프가 첫 실행 예정 시각 + 한계(80h)를 지나도 사이드카가 없으면(첫 실행
+    실패 또는 이후 침묵 정지) 감시자가 MISSING 으로 *드러내되* 거짓 빨강(CRITICAL)은
+    내지 않아야 한다 — 정지 시 검증된 incumbent 가 라이브로 남는 fail-safe 이므로."""
+    specs = default_specs()
+    # reassign 첫 실행 예정(2026-06-17T00:20Z) + 한계 80h(=2026-06-20T08:20Z) 후.
+    now_after = datetime(2026, 6, 21, 12, 0, 0, tzinfo=UTC)
+    fresh = _md("2026-06-21T11:00:00Z")  # 1h 전 — 모든 한계 안
+    obs: dict[str, str | None] = {s.key: fresh for s in specs}
+    obs["reassign"] = None  # 첫 실행 예정+한계 지났는데도 미발행 — 침묵 정지
+    rep = assess_liveness(specs, obs, now_after)
     by_key = {c.key: c for c in rep.checks}
     assert by_key["reassign"].status == MISSING
     assert rep.overall == DEGRADED  # 빨강(CRITICAL) 아님 — 핵심 루프는 전부 신선
-    assert rep.exit_code == 0  # 워크플로를 빨갛게 실패시키지 않는다(거짓 경보 방지)
-    # 그래도 종합이 OK 는 아니다 — 정지가 *드러난다*.
-    assert rep.overall != HEALTHY
+    assert rep.exit_code == 0  # 워크플로를 빨갛게 실패시키지 않는다(거짓경보 방지)
+    assert rep.overall != HEALTHY  # 그래도 정지가 *드러난다*
+
+
+# ── 신규 루프 PENDING/MISSING 구분(first_expected_utc) ──
+
+
+def test_pending_before_first_expected_is_healthy_contribution():
+    """first_expected_utc 가 미래면 사이드카 없음은 PENDING(정상) — 경보 기여 안 함."""
+    spec = SidecarSpec(
+        key="newloop",
+        branch="automation/newloop-last-run",
+        filename="LAST_RUN.md",
+        max_age_hours=80.0,
+        critical=False,
+        description="갓 등록된 루프",
+        first_expected_utc="2026-06-20T00:00:00Z",  # NOW(6/13) 보다 미래
+    )
+    rep = assess_liveness([spec], {"newloop": None}, NOW)
+    assert rep.checks[0].status == PENDING
+    assert rep.checks[0].age_hours is None
+    assert rep.overall == HEALTHY
+    assert rep.exit_code == 0
+
+
+def test_missing_after_first_expected_plus_limit_is_flagged():
+    """first_expected_utc + max_age 를 지나도 사이드카 없으면 MISSING(첫 실행 실패 의심)."""
+    spec = SidecarSpec(
+        key="newloop",
+        branch="automation/newloop-last-run",
+        filename="LAST_RUN.md",
+        max_age_hours=24.0,
+        critical=False,
+        description="갓 등록된 루프",
+        first_expected_utc="2026-06-10T00:00:00Z",  # NOW(6/13 12:00)와 ≈84h 차 > 24h
+    )
+    rep = assess_liveness([spec], {"newloop": None}, NOW)
+    assert rep.checks[0].status == MISSING
+    assert "첫 실행 실패 의심" in rep.checks[0].detail
+
+
+def test_critical_new_loop_missing_after_first_expected_is_critical():
+    """핵심 신규 루프가 첫 실행 예정+한계 후에도 없으면 MISSING→CRITICAL(빨강)."""
+    spec = SidecarSpec(
+        key="newloop",
+        branch="automation/newloop-last-run",
+        filename="LAST_RUN.md",
+        max_age_hours=24.0,
+        critical=True,
+        description="갓 등록된 핵심 루프",
+        first_expected_utc="2026-06-10T00:00:00Z",
+    )
+    rep = assess_liveness([spec], {"newloop": None}, NOW)
+    assert rep.checks[0].status == MISSING
+    assert rep.overall == CRITICAL
+    assert rep.exit_code == 1
+
+
+def test_established_loop_missing_is_immediately_flagged():
+    """first_expected_utc=None(확립된 루프)면 사이드카 없음은 즉시 MISSING(기존 동작 회귀)."""
+    spec = SidecarSpec(
+        key="oldloop",
+        branch="automation/oldloop-last-run",
+        filename="LAST_RUN.md",
+        max_age_hours=24.0,
+        critical=False,
+        description="확립된 루프",
+    )
+    rep = assess_liveness([spec], {"oldloop": None}, NOW)
+    assert rep.checks[0].status == MISSING
+    assert "미발행 또는 비정상" in rep.checks[0].detail
