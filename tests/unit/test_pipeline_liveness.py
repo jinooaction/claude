@@ -199,7 +199,32 @@ def test_default_specs_registry_sane():
     assert by_key["collect-public-data"].critical is False
     # 스펙 052 — 첫-자본까지의 길 보고자도 감시 대상(감시자가 보고자를 감시, 비핵심).
     assert by_key["money-path"].critical is False
+    # 스펙 055 — 자율 전략 재지정 폐회로(평일 스케줄)도 감시 대상이어야 한다.
+    # 정지 시 검증된 incumbent 가 그대로 라이브로 남는 fail-safe 라 비핵심(저하만,
+    # 빨강 아님) — 단 가장 최신 자율 루프의 침묵 정지는 반드시 드러나야 한다.
+    assert "reassign" in keys
+    assert by_key["reassign"].critical is False
+    assert by_key["reassign"].branch == "automation/reassign-last-run"
+    assert by_key["reassign"].max_age_hours >= 72.0  # 주말 갭(Sat→Tue 72h) 견딤
     # 모든 명세는 양수 한계와 automation 브랜치를 가진다.
     for s in specs:
         assert s.max_age_hours > 0
         assert s.branch.startswith("automation/")
+
+
+def test_reassign_loop_silent_stall_is_degraded_not_red():
+    """스펙 055 재지정 루프가 조용히 멈추면(MISSING/STALE) 감시자가 *드러내되*
+    거짓 빨강(CRITICAL)은 내지 않아야 한다 — 정지 시 검증된 incumbent 가 라이브로
+    남는 fail-safe 이므로. 가장 최신 자율 루프의 침묵 정지를 잡는 회귀 가드."""
+    specs = default_specs()
+    fresh = _md("2026-06-13T11:00:00Z")  # 1h 전 — 모든 한계(30·80h) 안
+    # reassign 만 빼고 전부 신선하게.
+    obs: dict[str, str | None] = {s.key: fresh for s in specs}
+    obs["reassign"] = None  # 사이드카 미발행(한 번도 안 돎 또는 정지)
+    rep = assess_liveness(specs, obs, NOW)
+    by_key = {c.key: c for c in rep.checks}
+    assert by_key["reassign"].status == MISSING
+    assert rep.overall == DEGRADED  # 빨강(CRITICAL) 아님 — 핵심 루프는 전부 신선
+    assert rep.exit_code == 0  # 워크플로를 빨갛게 실패시키지 않는다(거짓 경보 방지)
+    # 그래도 종합이 OK 는 아니다 — 정지가 *드러난다*.
+    assert rep.overall != HEALTHY
