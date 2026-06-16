@@ -85,11 +85,18 @@ git ls-remote --heads origin 'claude/*' | awk '{print $2}'
 - **손실면 불변(헌법 X.5)**: 재지정은 '무엇을(전략)'만, '얼마나(자본)'는 여전히 자본 사다리
   (X.4)+예산. 재지정 직후 rung 0(무장 해제)→실주문 0, 실제 돈은 새 전략이 forward 재검증을
   *다시* 통과해야(스펙 050). 캐너리는 사전 선별, 실제 돈 게이트는 하류 사다리(심층 방어).
+- **재지정 루프 생존 감시 편입 완료(2026-06-16, main `0533585`, PR #326)** — 스펙 051
+  파이프라인 생존 감시 레지스트리(`default_specs`)에 `reassign`(스펙 055 재지정 폐회로,
+  평일 00:20 UTC)이 빠져 있던 **침묵 정지 사각지대를 메웠다.** 비핵심(저하 티어, 정지 시
+  검증된 incumbent 가 라이브로 남는 fail-safe). 이제 재지정 루프가 조용히 죽으면 생존 감시가
+  DEGRADED 로 드러낸다(거짓 빨강은 아님). 스케줄 루프 감사 결과 다른 사각지대 없음(go-live·
+  forward-anchored-verdict·release-halt 는 수동/이벤트라 일부러 제외). Kernel·헌법 무터치.
 - **다음 세션(선택 — 폐회로는 이미 완성)**:
   1. **실제 가동 1회 관측** — `reassign-on-tournament.yml` 첫 스케줄 실행 후
      `git show origin/automation/reassign-last-run:LAST_RUN.md` 로 결정/캐너리 verdict 확인.
      현재 6트랙 전부 잠정(관측 부족)이라 도전자 없음(HOLD)이 정상 — 강세장 창에서 추세 엣지가
      안 보이는 구조적 이유(역사 섹션 참조). globalfixed 가 EDGE_CONFIRMED 를 벌면 첫 자율 재지정 후보.
+     (이제 첫 실행이 실패하면 생존 감시가 잡으므로 침묵 실패 위험 없음.)
   2. **L1 적용 표면 확장**(모델 라우팅·max_tokens 즉시 자동 적용) 등 기존 후속 후보(아래).
 
 ---
