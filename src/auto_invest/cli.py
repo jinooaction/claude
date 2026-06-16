@@ -5457,3 +5457,175 @@ def ladder_decide_cmd(
             f"[{decision.action}] rung {decision.current_rung}"
             f"→{decision.target_rung}: {decision.reason} (edge={edge_source})"
         )
+
+
+@app.command("reassign-decide")
+def reassign_decide_cmd(
+    leaderboard_json: Path = typer.Option(
+        ...,
+        "--leaderboard-json",
+        help="forward_tournament_probe --json 출력 파일(challenger_key/incumbent_key/"
+        "champion_multiplicity_robust 포함). 없거나 못 읽으면 도전자 없음으로 처리(HOLD).",
+    ),
+    canary_verdict: str = typer.Option(
+        "",
+        "--canary-verdict",
+        help="챔피언에 대한 하드닝 캐너리(스펙 007) 결과: PASS | FAIL | (빈값=미실행). "
+        "PASS 가 아니면 ④ 게이트 미통과 → WAIT_CANARY(라이브 무변경).",
+    ),
+    kill_switch: Path = typer.Option(
+        Path("automation/AUTOARM_DISABLED"),
+        "--kill-switch",
+        help="존재하면 자동 재지정 정지(운영자 킬스위치) → DISABLED.",
+    ),
+    live_portfolio: Path = typer.Option(
+        Path("deploy/canary-live-portfolio.toml"),
+        "--live-portfolio",
+        help="재지정이 교체하는 라이브 설정(rebalance-live-canary.yml 이 읽음).",
+    ),
+    challenger_portfolio: Path = typer.Option(
+        None,
+        "--challenger-portfolio",
+        help="챔피언 전략 설정. 생략하면 challenger_key → TRACK_DEPLOY_CONFIGS 로 유도.",
+    ),
+    account_nav_json: Path = typer.Option(
+        None,
+        "--account-nav-json",
+        help="account-nav --json 출력(rung 0 센티넬에 기록할 실계좌 NAV). 없으면 0.",
+    ),
+    sentinel: Path = typer.Option(
+        Path("automation/rebalance-live.request"),
+        "--sentinel",
+        help="무장 센티넬 — REASSIGN + --write-config 시 rung 0(무장 해제)으로 덮어쓴다.",
+    ),
+    run_seq: int = typer.Option(
+        None,
+        "--run-seq",
+        help="rung 0 센티넬 run_seq. 생략하면 현재 센티넬 run_seq+1(없으면 1).",
+    ),
+    dd_budget_pct: float = typer.Option(
+        20.0,
+        "--dd-budget-pct",
+        help="운영자 낙폭 예산 %(센티넬 기록용, 2026-06-11 위임 기본 20).",
+    ),
+    write_config: bool = typer.Option(
+        False,
+        "--write-config",
+        help="REASSIGN 이고 안전 가드 통과 시 새 라이브 설정 + rung 0 센티넬을 디스크에 쓴다.",
+    ),
+    output_format: str = typer.Option("json", "--format", help="json | text."),
+) -> None:
+    """스펙 055 — 자율 전략 재지정 결정+실행(읽기 전용 판정; --write-config 시에만 파일 기록).
+
+    forward 토너먼트 리더보드 + 하드닝 캐너리 결과 → 5중 게이트(decide_reassignment).
+    REASSIGN 이면 챔피언 전략을 라이브 설정에 이식 + 자본 사다리 rung 0 리셋(build_reassignment).
+    안전 가드(헌법 II): 챔피언 유니버스가 라이브 화이트리스트 밖이면 실행 차단(운영자 게이트).
+    주문 0건·돈 0 이동 — 실주문은 재무장(사다리) 후 시장시간 스케줄에서만.
+    """
+    import json as _json
+    from datetime import UTC
+    from datetime import datetime as _dt
+    from decimal import Decimal as _Dec
+
+    from auto_invest.analytics.forward_tournament import TournamentLeaderboard
+    from auto_invest.portfolio.auto_reassign import ACTION_REASSIGN, decide_reassignment
+    from auto_invest.portfolio.reassign_exec import (
+        TRACK_DEPLOY_CONFIGS,
+        ReassignExecError,
+        build_reassignment,
+    )
+
+    def _read_json(path: Path | None) -> dict | None:
+        if path is None:
+            return None
+        try:
+            return _json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+
+    board = _read_json(leaderboard_json) or {}
+    leaderboard = TournamentLeaderboard(
+        schema_version=str(board.get("schema_version", "1.0")),
+        as_of_utc=board.get("as_of_utc"),
+        rows=[],  # 결정은 challenger/incumbent/multiplicity 만 읽음(순위 행 불필요).
+        champion_key=board.get("champion_key"),
+        incumbent_key=board.get("incumbent_key"),
+        challenger_key=board.get("challenger_key"),
+        headline=str(board.get("headline", "")),
+        note=str(board.get("note", "")),
+        comparable_count=int(board.get("comparable_count", 0) or 0),
+        adjusted_dsr_threshold=None,
+        champion_multiplicity_robust=board.get("champion_multiplicity_robust"),
+    )
+
+    decision = decide_reassignment(
+        leaderboard=leaderboard,
+        canary_verdict=(canary_verdict.strip() or None),
+        kill_switch_present=kill_switch.exists(),
+    )
+    out: dict = decision.to_json_dict()
+    out["wrote_files"] = False
+
+    if decision.action == ACTION_REASSIGN:
+        ck = decision.challenger_key or ""
+        chal_path = challenger_portfolio or (
+            Path(TRACK_DEPLOY_CONFIGS[ck]) if ck in TRACK_DEPLOY_CONFIGS else None
+        )
+        # 실계좌 NAV(센티넬 기록용 — rung 0 자본은 NAV 무관하게 0).
+        nav_doc = _read_json(account_nav_json)
+        nav = _Dec("0")
+        if isinstance(nav_doc, dict) and nav_doc.get("total_value_usd") is not None:
+            try:
+                nav = _Dec(str(nav_doc["total_value_usd"]))
+            except ArithmeticError:
+                nav = _Dec("0")
+        # run_seq: 명시값 우선, 없으면 현 센티넬 +1(없으면 1).
+        seq = run_seq
+        if seq is None:
+            cur_seq = None
+            if sentinel.exists():
+                import re as _re
+
+                m = _re.search(
+                    r"^run_seq:\s*(\d+)\s*$",
+                    sentinel.read_text(encoding="utf-8"),
+                    _re.MULTILINE,
+                )
+                cur_seq = int(m.group(1)) if m else None
+            seq = (cur_seq + 1) if cur_seq is not None else 1
+        try:
+            if chal_path is None:
+                raise ReassignExecError(
+                    f"challenger_key '{ck}' 의 deploy 설정 경로를 찾을 수 없음 — 거부."
+                )
+            execution = build_reassignment(
+                decision=decision,
+                live_text=live_portfolio.read_text(encoding="utf-8"),
+                challenger_text=chal_path.read_text(encoding="utf-8"),
+                account_nav_usd=nav,
+                run_seq=seq,
+                dd_budget_pct=_Dec(str(dd_budget_pct)),
+                rung_entered=_dt.now(UTC).date(),
+                now=_dt.now(UTC),
+            )
+            out["execution"] = execution.to_json_dict()
+            if write_config:
+                live_portfolio.write_text(
+                    execution.new_live_config_text, encoding="utf-8"
+                )
+                sentinel.write_text(execution.rung0_sentinel_text, encoding="utf-8")
+                out["wrote_files"] = True
+        except (ReassignExecError, OSError) as e:
+            # 5중 게이트는 통과했으나 실행 안전 가드(거래집합 확대 등)·I/O 가 막음 →
+            # 라이브 무변경(파일 미기록). 운영자 게이트 필요할 수 있음.
+            out["execution_blocked"] = str(e)
+
+    if output_format == "json":
+        typer.echo(_json.dumps(out, ensure_ascii=False))
+    else:
+        extra = ""
+        if out.get("execution_blocked"):
+            extra = f" [실행 차단: {out['execution_blocked']}]"
+        elif decision.action == ACTION_REASSIGN:
+            extra = f" [wrote_files={out['wrote_files']}]"
+        typer.echo(f"[{decision.action}] {decision.reason}{extra}")
