@@ -207,6 +207,20 @@ def test_universe_outside_whitelist_execution_blocked(tmp_path: Path) -> None:
     assert "inverse_vol" in live.read_text(encoding="utf-8")  # 라이브 무변경
 
 
+def test_challenger_path_maps_key_to_deploy_toml(tmp_path: Path) -> None:
+    lb = _leaderboard(tmp_path, challenger_key="globalfixed")
+    res = runner.invoke(app, ["reassign-challenger-path", "--leaderboard-json", str(lb)])
+    assert res.exit_code == 0
+    assert res.output.strip() == "deploy/global-trend-fixed-portfolio.toml"
+
+
+def test_challenger_path_empty_when_no_challenger(tmp_path: Path) -> None:
+    lb = _leaderboard(tmp_path, challenger_key=None)
+    res = runner.invoke(app, ["reassign-challenger-path", "--leaderboard-json", str(lb)])
+    assert res.exit_code == 0
+    assert res.output.strip() == ""
+
+
 def test_missing_leaderboard_holds(tmp_path: Path) -> None:
     # 리더보드 파일이 없으면 도전자 없음으로 보수 처리(HOLD) — fail-safe.
     res = _invoke(
