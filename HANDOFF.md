@@ -57,7 +57,38 @@ git ls-remote --heads origin 'claude/*' | awk '{print $2}'
   운영자 확인). 부분 체결 재호가(잔량 재계산)는 별도 슬라이스.
 - **L1 적용 표면 확장 / L2·L3 캐너리 승격 큐 / 실거래 자본 상향** — 기존 후보 유지.
 
-## ⭐ 다음 세션 최우선 (2026-06-15 갱신 — 직전 "엣지 부재" 경보는 **해결됨**, 먼저 읽을 것)
+## ⭐ 다음 세션 최우선 (2026-06-16 갱신 — 작업 1 완료/작업 2 진행, 먼저 읽을 것)
+
+운영자 방향(2026-06-16): "자율 전략 진화 폐회로 + 비상관 수익원 다변화, 둘 다 세계 최고
+수준으로 마이크로까지 완벽하게."
+
+### 작업 1 — 비상관 수익원 다변화: ✅ 완료(정직한 부정). PR #317 머지(main `f2db5e0`)
+
+- 밸류(CAPE)·캐리(E/P vs 금리)를 152년 Shiller 로 측정 → 세 결합 형태(50/50·로테이션·조건부)
+  **전부** 추세와 상관 0.46~0.63(비상관 아님), 조건부는 낙폭 41%→70% 악화.
+- 근본 원인: long-only 라 모든 전략이 같은 베타 공유 + 밸류는 약세장에 주식↑(역추세 상충).
+  진짜 비상관 = 롱숏/다른 자산군 필요(현 제약 밖). 측정 도구 `analytics/value_carry.py` 는
+  공매도 자산군 열리면 재사용. 전체 결론: `specs/054-uncorrelated-alpha/FINDINGS.md`.
+
+### 작업 2 — 자율 전략 진화 폐회로: 🔄 진행 중. 운영자 정책 "완전 자율 + 5중 안전장치" 확정
+
+- **결정 두뇌 머지**: PR #318(main `57e91d0`). `portfolio/auto_reassign.py` `decide_reassignment`.
+- **5중 게이트**(전부 통과해야 REASSIGN, 아니면 HOLD/WAIT — 보수적 fail-safe):
+  ①엣지확정 ②다중검정보정 ③사과대사과(①③=`forward_tournament.challenger_key`)
+  ④하드닝 캐너리 PASS ⑤교체 후 자본 사다리 rung0 리셋(`capital_ladder`).
+- **다음 세션 최우선(순서대로)**:
+  1. **헌법 X.4 개정** — 전략 재지정을 운영자 단건 게이트 → 5중 게이트 자율 위임. 커밋 메시지에
+     "this changes the safety perimeter" + **운영자 확인 후 머지**(K-meta, `.specify/memory/
+     constitution.md`). 운영자는 정책은 이미 승인("완전 자율+5중"), 개정 PR 머지만 확인 남음.
+  2. **재지정 실행** — REASSIGN 시 라이브 설정 지문을 챔피언 트랙으로 교체 + 자본 사다리 센티넬
+     rung0 리셋. `autoarm.strategy_fingerprint`/`render_ladder_sentinel` 결합. deploy/*.toml 의
+     어느 트랙이 챔피언인지 매핑.
+  3. **워크플로 배선** — `forward_tournament` 리더보드 + 하드닝 캐너리 결과 → `decide_reassignment`
+     → REASSIGN 시 센티넬 PR. `forward-edge-autoarm.yml` 패턴(읽기 전용 판정 → 변경 시 PR).
+
+---
+
+## (역사) 다음 세션 최우선 (2026-06-15 갱신 — "엣지 부재" 경보는 **해결됨**)
 
 ### ✅ 해결됨 (PR #307, main `4a7b78c`) — "엣지 부재"는 강세장 창의 착시였다
 
