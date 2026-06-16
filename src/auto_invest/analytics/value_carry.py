@@ -23,7 +23,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from auto_invest.analytics.multi_asset_trend import correlation
+from auto_invest.analytics.multi_asset_trend import (
+    DEFAULT_BOND_MATURITY_YEARS,
+    bond_total_return_factors,
+    correlation,
+)
 from auto_invest.analytics.risk_managed_beta import (
     LegStats,
     MonthlyRow,
@@ -136,24 +140,65 @@ def value_timing_factors(
     return combined_factors(market, cash, exposure)
 
 
-# ──────────────────────── 추세 × 밸류 분산 이득 측정 ────────────────────────
+# ─────────────────────────── 캐리(자산 선택) ───────────────────────────
+
+
+def earnings_yield(rows: list[MonthlyRow]) -> list[float | None]:
+    """주식 수익수익률 E/P(명목), 길이 N. P<=0 또는 E<=0 이면 None(캐리 판단 불가)."""
+    return [
+        r.earnings / r.price if r.price > 0 and r.earnings > 0 else None for r in rows
+    ]
+
+
+def carry_rotation_factors(
+    rows: list[MonthlyRow],
+    *,
+    bond_maturity_years: int = DEFAULT_BOND_MATURITY_YEARS,
+) -> list[float]:
+    """주식 캐리(E/P) vs 채권 캐리(장기금리) 로테이션 월간 그로스 팩터(길이 N-1).
+
+    period t 의 보유 자산은 t-1 의 *캐리 우위*로 정한다 — 주식 수익수익률 E/P 가 채권 만기
+    수익률(장기금리)보다 높으면 주식, 낮으면 채권(Fed-model 스타일 자산 로테이션). 추세추종은
+    "주식을 *언제* 들지"(절대 타이밍)인데 캐리 로테이션은 "주식이냐 *채권이냐*"(자산 선택)라
+    구조적으로 더 직교한다 — 그게 진짜 비상관 수익원의 후보 근거다. E/P 또는 금리 결측이면
+    주식 보유(베타 중립). 미래 누출 0: t 결정은 t-1 까지의 수익수익률·금리만 쓴다.
+    """
+    eq = market_total_return_factors(rows)
+    bond = bond_total_return_factors(rows, maturity_years=bond_maturity_years)
+    ey = earnings_yield(rows)
+    out: list[float] = []
+    for t in range(1, len(rows)):
+        eyp = ey[t - 1]
+        bond_yield = rows[t - 1].long_rate / 100.0
+        if eyp is None or rows[t - 1].long_rate <= 0:
+            out.append(eq[t - 1])  # 정보 부족 → 주식(베타 중립)
+        elif eyp >= bond_yield:
+            out.append(eq[t - 1])  # 주식 캐리 우위
+        else:
+            out.append(bond[t - 1])  # 채권 캐리 우위
+    return out
+
+
+# ──────────────────── 추세 × (밸류·캐리) 분산 이득 측정 ────────────────────
 
 
 @dataclass(frozen=True)
 class DiversificationStats:
-    """두 비상관 수익원(추세 vs 밸류)의 결합 분산 이득 — 같은 베타(S&P)에 대한 두 타이밍."""
+    """추세 vs 후보(밸류·캐리) 결합 분산 이득 — 어느 후보든 같은 잣대로 정직히 비교."""
 
+    candidate_label: str  # "밸류(CAPE)" / "캐리(E/P vs 금리)"
     trend: LegStats  # S&P 추세 타이밍(스펙 042)
-    value: LegStats  # S&P 밸류(CAPE) 타이밍
-    combined: LegStats  # blend_weight*추세 + (1-blend_weight)*밸류
+    candidate: LegStats  # 후보 수익원(밸류 또는 캐리)
+    combined: LegStats  # blend_weight*추세 + (1-blend_weight)*후보
     buy_hold: LegStats  # 단순 보유(맥락)
-    correlation: float | None  # 추세 수익 ↔ 밸류 수익 상관(낮을수록 분산 이득 큼)
+    correlation: float | None  # 추세 수익 ↔ 후보 수익 상관(낮을수록 분산 이득 큼)
     blend_weight: float
     verdict: str
     reason: str
 
     def as_dict(self) -> dict:
         return {
+            "candidate_label": self.candidate_label,
             "verdict": self.verdict,
             "reason": self.reason,
             "blend_weight": self.blend_weight,
@@ -161,7 +206,7 @@ class DiversificationStats:
                 round(self.correlation, 3) if self.correlation is not None else None
             ),
             "trend": self.trend.as_dict(),
-            "value": self.value.as_dict(),
+            "candidate": self.candidate.as_dict(),
             "combined": self.combined.as_dict(),
             "buy_hold": self.buy_hold.as_dict(),
         }
@@ -173,27 +218,27 @@ def _fmt_corr(corr: float | None) -> str:
 
 def _classify_diversification(
     trend: LegStats,
-    value: LegStats,
+    candidate: LegStats,
     combined: LegStats,
     corr: float | None,
     *,
     corr_max: float = DEFAULT_CORR_MAX,
 ) -> tuple[str, str]:
-    """밸류가 추세에 *분산 이득*을 더하는가(사전 등록 기준).
+    """후보가 추세에 *분산 이득*을 더하는가(사전 등록 기준).
 
-    결합(50/50)이 ① 두 단독 전략 각각의 샤프보다 높고(위험조정 우위) ② 추세↔밸류 상관이 낮으면
+    결합(50/50)이 ① 두 단독 전략 각각의 샤프보다 높고(위험조정 우위) ② 추세↔후보 상관이 낮으면
     (corr < corr_max — 진짜 비상관 수익원) DIVERSIFICATION_EDGE. 분산의 본질은 *낮은 상관의 두
     수익원을 합쳐 샤프를 올림*이라 이 둘을 함께 본다(높은 샤프가 단지 한쪽 우연이 아님을 상관이
     보증). 샤프 정의 불가(데이터 부족)면 INSUFFICIENT.
     """
     if combined.n_months < 2:
         return VERDICT_INSUFFICIENT, "결합 표본 부족(샤프 정의 불가)"
-    best_solo = max(trend.sharpe, value.sharpe)
+    best_solo = max(trend.sharpe, candidate.sharpe)
     sharpe_up = combined.sharpe > best_solo
     corr_low = corr is not None and corr < corr_max
     detail = (
-        f"추세샤프 {trend.sharpe:.2f}·밸류샤프 {value.sharpe:.2f}→결합 {combined.sharpe:.2f}"
-        f"(최고단독 {best_solo:.2f}), 상관 {_fmt_corr(corr)}"
+        f"추세샤프 {trend.sharpe:.2f}·후보샤프 {candidate.sharpe:.2f}→결합 "
+        f"{combined.sharpe:.2f}(최고단독 {best_solo:.2f}), 상관 {_fmt_corr(corr)}"
     )
     if sharpe_up and corr_low:
         return VERDICT_EDGE, detail
@@ -205,6 +250,52 @@ def _classify_diversification(
     return VERDICT_NONE, "; ".join(fails) + f"; {detail}"
 
 
+def _measure_against_trend(
+    rows: list[MonthlyRow],
+    candidate_f: list[float],
+    candidate_label: str,
+    *,
+    window: int,
+    blend_weight: float,
+    corr_max: float,
+) -> DiversificationStats:
+    """공용: S&P 추세 타이밍 vs 후보 vs 결합을 같은 기간 비교(밸류·캐리 공통 잣대).
+
+    같은 베타(S&P)에 추세 신호와 후보 신호를 얹어 *사과 대 사과*로 상관·결합 샤프를 잰다.
+    `candidate_f` 는 추세 스트림(길이 N-1)과 정렬돼야 한다. 미래 누출 0(각 스트림이 보장).
+    """
+    if not 0.0 <= blend_weight <= 1.0:
+        raise ValueError("blend_weight must be in [0, 1]")
+    market = market_total_return_factors(rows)
+    cash = cash_factors(rows)
+    trend_f = overlay_factors(market, cash, trend_in_market(rows, window))
+    if len(candidate_f) != len(trend_f):
+        raise ValueError("candidate stream must align with the trend stream")
+    combined_f = [
+        blend_weight * t + (1.0 - blend_weight) * c
+        for t, c in zip(trend_f, candidate_f, strict=True)
+    ]
+    leg_trend = summarize(trend_f)
+    leg_candidate = summarize(candidate_f)
+    leg_combined = summarize(combined_f)
+    leg_bh = summarize(market)
+    corr = correlation(trend_f, candidate_f)
+    verdict, reason = _classify_diversification(
+        leg_trend, leg_candidate, leg_combined, corr, corr_max=corr_max
+    )
+    return DiversificationStats(
+        candidate_label=candidate_label,
+        trend=leg_trend,
+        candidate=leg_candidate,
+        combined=leg_combined,
+        buy_hold=leg_bh,
+        correlation=corr,
+        blend_weight=blend_weight,
+        verdict=verdict,
+        reason=reason,
+    )
+
+
 def measure_value_diversification(
     rows: list[MonthlyRow],
     *,
@@ -214,40 +305,29 @@ def measure_value_diversification(
     blend_weight: float = 0.5,
     corr_max: float = DEFAULT_CORR_MAX,
 ) -> DiversificationStats:
-    """S&P 추세 타이밍 vs 밸류 타이밍 vs 둘의 결합을 같은 기간 비교(분산 이득 실측).
-
-    같은 베타(S&P)에 두 직교 타이밍 신호(추세=가격 방향, 밸류=가격 수준)를 얹어 *사과 대 사과*로
-    상관과 결합 샤프를 잰다. `blend_weight` 는 결합 시 추세 비중(기본 0.5=50/50). 미래 누출 0.
-    """
-    if not 0.0 <= blend_weight <= 1.0:
-        raise ValueError("blend_weight must be in [0, 1]")
-    market = market_total_return_factors(rows)
-    cash = cash_factors(rows)
-    trend_f = overlay_factors(market, cash, trend_in_market(rows, window))
+    """추세 타이밍 vs 밸류(CAPE) 타이밍 vs 결합 — 밸류가 비상관 수익원인지 실측."""
     value_f = value_timing_factors(
         rows, smooth_months=smooth_months, min_history_months=min_history_months
     )
-    combined_f = [
-        blend_weight * t + (1.0 - blend_weight) * v
-        for t, v in zip(trend_f, value_f, strict=True)
-    ]
-    leg_trend = summarize(trend_f)
-    leg_value = summarize(value_f)
-    leg_combined = summarize(combined_f)
-    leg_bh = summarize(market)
-    corr = correlation(trend_f, value_f)
-    verdict, reason = _classify_diversification(
-        leg_trend, leg_value, leg_combined, corr, corr_max=corr_max
+    return _measure_against_trend(
+        rows, value_f, "밸류(CAPE)", window=window, blend_weight=blend_weight,
+        corr_max=corr_max,
     )
-    return DiversificationStats(
-        trend=leg_trend,
-        value=leg_value,
-        combined=leg_combined,
-        buy_hold=leg_bh,
-        correlation=corr,
-        blend_weight=blend_weight,
-        verdict=verdict,
-        reason=reason,
+
+
+def measure_carry_diversification(
+    rows: list[MonthlyRow],
+    *,
+    window: int = 10,
+    bond_maturity_years: int = DEFAULT_BOND_MATURITY_YEARS,
+    blend_weight: float = 0.5,
+    corr_max: float = DEFAULT_CORR_MAX,
+) -> DiversificationStats:
+    """추세 타이밍 vs 캐리(E/P vs 금리 로테이션) vs 결합 — 캐리가 비상관 수익원인지 실측."""
+    carry_f = carry_rotation_factors(rows, bond_maturity_years=bond_maturity_years)
+    return _measure_against_trend(
+        rows, carry_f, "캐리(E/P vs 금리)", window=window, blend_weight=blend_weight,
+        corr_max=corr_max,
     )
 
 
@@ -260,6 +340,9 @@ __all__ = [
     "VERDICT_NONE",
     "DiversificationStats",
     "cape",
+    "carry_rotation_factors",
+    "earnings_yield",
+    "measure_carry_diversification",
     "measure_value_diversification",
     "real_earnings_deflated",
     "value_exposure",

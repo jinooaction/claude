@@ -10,6 +10,9 @@ from auto_invest.analytics.risk_managed_beta import MonthlyRow
 from auto_invest.analytics.value_carry import (
     VERDICT_INSUFFICIENT,
     cape,
+    carry_rotation_factors,
+    earnings_yield,
+    measure_carry_diversification,
     measure_value_diversification,
     real_earnings_deflated,
     value_exposure,
@@ -148,8 +151,17 @@ def test_measure_diversification_shape() -> None:
         rows, window=10, smooth_months=24, min_history_months=12
     )
     d = stats.as_dict()
-    assert {"verdict", "trend", "value", "combined", "buy_hold", "correlation"} <= d.keys()
+    assert {
+        "verdict",
+        "candidate_label",
+        "trend",
+        "candidate",
+        "combined",
+        "buy_hold",
+        "correlation",
+    } <= d.keys()
     assert stats.combined.n_months == len(rows) - 1
+    assert stats.candidate_label == "밸류(CAPE)"
 
 
 def test_measure_diversification_deterministic() -> None:
@@ -171,3 +183,52 @@ def test_blend_weight_validation() -> None:
     rows = _series([100 + i for i in range(40)])
     with pytest.raises(ValueError, match="blend_weight"):
         measure_value_diversification(rows, blend_weight=1.5)
+
+
+# ─────────────────────────────── 캐리(자산 선택) ───────────────────────────────
+
+
+def test_earnings_yield_basic_and_missing() -> None:
+    rows = [
+        _row("1970-01-01", 100, earnings=5.0),  # E/P = 0.05
+        _row("1970-02-01", 100, earnings=0.0),  # E=0 → None
+    ]
+    assert earnings_yield(rows) == [0.05, None]
+
+
+def test_carry_rotation_holds_equity_when_ep_beats_rate() -> None:
+    # E/P 0.05 > 금리 0.03 → 주식 보유 → 주식 총수익(110/100=1.1) 그대로.
+    rows = [
+        _row("1970-01-01", 100, earnings=5.0, long_rate=3.0),
+        _row("1970-02-01", 110, earnings=5.0, long_rate=3.0),
+    ]
+    f = carry_rotation_factors(rows)
+    assert len(f) == 1
+    assert abs(f[0] - 1.1) < 1e-9
+
+
+def test_carry_rotation_holds_bond_when_rate_beats_ep() -> None:
+    # E/P 0.02 < 금리 0.08 → 채권 보유 → 주식 급등(1.3) 안 따라간다.
+    rows = [
+        _row("1970-01-01", 100, earnings=2.0, long_rate=8.0),
+        _row("1970-02-01", 130, earnings=2.0, long_rate=8.0),
+    ]
+    f = carry_rotation_factors(rows)
+    assert len(f) == 1
+    assert 0.0 < f[0] < 1.3  # 채권이라 주식 급등 미반영
+
+
+def test_measure_carry_shape() -> None:
+    rows = [
+        _row(
+            f"19{70 + i // 12:02d}-{i % 12 + 1:02d}-01",
+            100 + i + (i % 6) * 4,
+            earnings=4.0 + (i % 3),
+            long_rate=2.0 + (i % 5),
+        )
+        for i in range(160)
+    ]
+    stats = measure_carry_diversification(rows, window=10)
+    assert stats.candidate_label == "캐리(E/P vs 금리)"
+    assert stats.combined.n_months == len(rows) - 1
+    assert {"candidate", "candidate_label"} <= stats.as_dict().keys()
