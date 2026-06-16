@@ -33,20 +33,28 @@ MONTHS_PER_YEAR = 12
 
 @dataclass(frozen=True)
 class MonthlyRow:
-    """Shiller 월간 한 행 — 우리가 쓰는 필드만."""
+    """Shiller 월간 한 행 — 우리가 쓰는 필드만.
+
+    `earnings`·`cpi` 는 스펙 054(비상관 수익원: 밸류·캐리) 토대 — CAPE(경기조정 PER) 와
+    수익수익률·실질 캐리를 만든다. 기본값 0 이라 이 필드를 안 쓰는 기존 호출은 완전히
+    역호환(추세추종 경로는 price·dividend·long_rate 만 본다).
+    """
 
     date: str  # YYYY-MM-DD
     price: float
     dividend: float  # 연환산 $/주 (없으면 0)
     long_rate: float  # 연 % (없으면 0)
+    earnings: float = 0.0  # 연환산 명목 수익 $/주 (없으면 0) — 밸류(CAPE)·수익수익률용
+    cpi: float = 0.0  # 소비자물가지수(없으면 0) — 실질 환산(CAPE 분모·실질 캐리)용
 
 
 def parse_shiller(csv_text: str) -> list[MonthlyRow]:
     """Shiller datahub CSV → MonthlyRow 오름차순.
 
     헤더: Date,SP500,Dividend,Earnings,Consumer Price Index,Long Interest Rate,...
-    가격<=0 행은 제외(데이터 불량). 최근 달은 Dividend/Long Interest Rate 가 0(미기재)일 수
-    있고 그건 호출부에서 '없음'으로 안전 처리한다(배당 0 기여, 현금 수익 0).
+    가격<=0 행은 제외(데이터 불량). 최근 달은 Dividend/Earnings/CPI/Long Interest Rate 가
+    0(미기재)일 수 있고 그건 호출부에서 '없음'으로 안전 처리한다(배당 0 기여, 현금 수익 0,
+    CAPE 정의 불가 → 밸류 노출 중립). Earnings(parts[3])·CPI(parts[4]) 는 스펙 054 밸류·캐리용.
     """
     rows: list[MonthlyRow] = []
     lines = csv_text.splitlines()
@@ -57,12 +65,23 @@ def parse_shiller(csv_text: str) -> list[MonthlyRow]:
         try:
             price = float(parts[1])
             dividend = float(parts[2]) if parts[2] else 0.0
+            earnings = float(parts[3]) if parts[3] else 0.0
+            cpi = float(parts[4]) if parts[4] else 0.0
             long_rate = float(parts[5]) if parts[5] else 0.0
         except ValueError:
             continue
         if price <= 0:
             continue
-        rows.append(MonthlyRow(parts[0], price, max(dividend, 0.0), max(long_rate, 0.0)))
+        rows.append(
+            MonthlyRow(
+                parts[0],
+                price,
+                max(dividend, 0.0),
+                max(long_rate, 0.0),
+                earnings=max(earnings, 0.0),
+                cpi=max(cpi, 0.0),
+            )
+        )
     return rows
 
 
