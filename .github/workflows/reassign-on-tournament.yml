@@ -95,11 +95,14 @@ jobs:
           # 챔피언 전략을 과거 윈도우 + 실제 과거 급락 윈도우(합성 충격) + K1 퍼즈로 검증(스펙 007
           # 5지표). 전용 DB·halt 로 격리(라이브 감사/킬스위치 무오염). 데이터 없으면 coverage 종료
           # (exit 2) → verdict 빈값 → 아래 결정이 WAIT_CANARY(재지정 안 함, fail-closed).
+          # --bars-db: 라이브/페이퍼 워커가 backfill-bars 로 채운 price_bars(SPY·IEF·GLD 일봉)를
+          # 그대로 읽는다 — 토너먼트·라이브와 같은 바. 별도 CSV ingest 불필요(폐회로가 인스턴스
+          # 데이터로 실제로 닫힌다). 감사는 격리 DB(canary_reassign.db)로 라이브 audit 무오염.
           ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
               -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
               "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest canary-portfolio \
                  --portfolio ${CHALLENGER} \
-                 --history-root data/history \
+                 --bars-db data/auto_invest.db \
                  --bands-toml config/canary_bands_reassign.toml \
                  --db data/canary_reassign.db \
                  --halt-path data/canary_reassign.halt.flag \

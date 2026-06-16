@@ -177,11 +177,82 @@ class CSVDataSource:
         self._db.close()
 
 
+def _session_date_of(bar_open_utc: str) -> date:
+    """price_bars.bar_open_utc(ISO 타임스탬프) → 세션 날짜."""
+    return date.fromisoformat(bar_open_utc[:10])
+
+
+class SqliteBarDataSource:
+    """라이브/페이퍼 워커의 ``price_bars`` 테이블을 HistoricalDataSource 로 노출.
+
+    스펙 008 백테스트 엔진(``CSVDataSource``)은 ingest-history 가 만든 CSV 데이터셋을 읽지만,
+    라이브 인스턴스가 backfill-bars 로 채우는 일봉은 SQLite ``price_bars`` 에 있다. 이 어댑터로
+    재지정 캐너리(스펙 055 ④ 게이트)가 *토너먼트·라이브 워커와 같은 바*로 챔피언을 검증한다 —
+    별도 CSV ingest 없이 폐회로가 인스턴스 데이터로 실제로 닫힌다. 읽기 전용(바를 쓰지 않음).
+    """
+
+    def __init__(self, conn: sqlite3.Connection, *, timeframe: str = "1d") -> None:
+        self._conn = conn
+        self._timeframe = timeframe
+
+    @property
+    def dataset_version(self) -> str:
+        return f"sqlite-price_bars-{self._timeframe}"
+
+    def list_symbols(self) -> list[str]:
+        rows = self._conn.execute(
+            "SELECT DISTINCT symbol FROM price_bars WHERE timeframe = ? ORDER BY symbol",
+            (self._timeframe,),
+        ).fetchall()
+        return [r[0] for r in rows]
+
+    def _bars_for(self, symbol: str) -> list:
+        from auto_invest.market_data.store import get_bars
+
+        return get_bars(self._conn, symbol=symbol, timeframe=self._timeframe)
+
+    def session_dates(self, symbol: str) -> list[date]:
+        return [_session_date_of(b.bar_open_utc) for b in self._bars_for(symbol)]
+
+    def coverage_holes(
+        self, symbols: list[str], date_start: date, date_end: date
+    ) -> list[tuple[str, date]]:
+        """기대 거래일(XNYS) 중 저장된 바가 없는 (심볼, 날짜) — CSVDataSource 와 같은 의미."""
+        expected = set(trading_days_between(date_start, date_end))
+        holes: list[tuple[str, date]] = []
+        for s in symbols:
+            present = {_session_date_of(b.bar_open_utc) for b in self._bars_for(s)}
+            holes.extend((s, d) for d in sorted(expected - present))
+        return holes
+
+    def read_bars(
+        self, symbol: str, date_start: date, date_end: date
+    ) -> list[OHLCVBar]:
+        out: list[OHLCVBar] = []
+        for b in self._bars_for(symbol):
+            d = _session_date_of(b.bar_open_utc)
+            if date_start <= d <= date_end:
+                out.append(
+                    OHLCVBar(
+                        symbol=b.symbol,
+                        session_date=d,
+                        open=b.open_usd,
+                        high=b.high_usd,
+                        low=b.low_usd,
+                        close=b.close_usd,
+                        volume=max(0, int(b.volume)),
+                        session_schedule_tag="regular",
+                    )
+                )
+        return out
+
+
 __all__ = [
     "CSVDataSource",
     "HistoricalDataSource",
     "Manifest",
     "ManifestFileEntry",
+    "SqliteBarDataSource",
     "latest_dataset_dir",
     "load_manifest",
 ]

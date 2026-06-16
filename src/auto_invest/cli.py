@@ -5665,6 +5665,15 @@ def canary_portfolio_cmd(
         "--history-root",
         help="스펙 008 ingest-history 가 만든 CSV 데이터셋 루트.",
     ),
+    bars_db: Path = typer.Option(
+        None,
+        "--bars-db",
+        help="라이브/페이퍼 워커의 price_bars SQLite DB. 주면 CSV 대신 인스턴스 바로 검증 "
+        "(토너먼트·라이브와 같은 바 — 폐회로가 인스턴스 데이터로 실제로 닫힌다).",
+    ),
+    bars_timeframe: str = typer.Option(
+        "1d", "--bars-timeframe", help="--bars-db 의 timeframe(일봉 기본 1d)."
+    ),
     window_days: int = typer.Option(
         45, "--window-days", help="낙폭 측정 정상 윈도우 거래일 수(L3 최소 45)."
     ),
@@ -5700,7 +5709,11 @@ def canary_portfolio_cmd(
     from datetime import date as _date
     from decimal import Decimal as _Dec
 
-    from auto_invest.backtest.data_source import CSVDataSource, latest_dataset_dir
+    from auto_invest.backtest.data_source import (
+        CSVDataSource,
+        SqliteBarDataSource,
+        latest_dataset_dir,
+    )
     from auto_invest.canary.portfolio_harness import (
         DEFAULT_REASSIGN_BANDS_PATH,
         PortfolioCanaryInputs,
@@ -5715,13 +5728,19 @@ def canary_portfolio_cmd(
         typer.echo(f"포트폴리오 설정 로드 실패: {e}", err=True)
         raise typer.Exit(EXIT_USAGE) from None
 
-    latest = latest_dataset_dir(history_root)
-    if latest is None:
-        typer.echo(
-            f"{history_root} 아래 데이터셋 없음 — 먼저 ingest-history 실행", err=True
-        )
-        raise typer.Exit(EXIT_COVERAGE)
-    data_source = CSVDataSource(latest)
+    # 바 출처: --bars-db(인스턴스 price_bars) 우선, 없으면 CSV 데이터셋.
+    bars_conn = None
+    if bars_db is not None:
+        bars_conn = _db.get_connection(bars_db)
+        data_source = SqliteBarDataSource(bars_conn, timeframe=bars_timeframe)
+    else:
+        latest = latest_dataset_dir(history_root)
+        if latest is None:
+            typer.echo(
+                f"{history_root} 아래 데이터셋 없음 — 먼저 ingest-history 실행", err=True
+            )
+            raise typer.Exit(EXIT_COVERAGE)
+        data_source = CSVDataSource(latest)
 
     # 윈도우: 유니버스 심볼의 가용 세션 합집합에서 최근 window_days 거래일.
     sessions: set[_date] = set()
@@ -5731,6 +5750,8 @@ def canary_portfolio_cmd(
         typer.echo(
             f"데이터셋에 유니버스 {list(port_cfg.universe)} 세션 없음 — 백필 필요", err=True
         )
+        if bars_conn is not None:
+            bars_conn.close()
         raise typer.Exit(EXIT_COVERAGE)
     ordered = sorted(sessions)
     window = ordered[-window_days:] if len(ordered) >= window_days else ordered
@@ -5763,6 +5784,8 @@ def canary_portfolio_cmd(
         )
     finally:
         conn.close()
+        if bars_conn is not None:
+            bars_conn.close()
 
     if output_format == "json":
         out = outcome.to_json_dict()

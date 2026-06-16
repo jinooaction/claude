@@ -102,6 +102,56 @@ def test_canary_portfolio_passes_on_calm_history(tmp_path: Path) -> None:
     assert out["audit_integrity_count"] == 0
 
 
+def test_canary_portfolio_reads_from_bars_db(tmp_path: Path) -> None:
+    # 인스턴스 price_bars DB 경로(--bars-db)로 검증 — CSV ingest 없이 폐회로가 닫히는 경로.
+    from decimal import Decimal
+
+    from auto_invest.market_data.store import PriceBar, insert_bar
+    from auto_invest.persistence import db
+
+    bars_db = tmp_path / "instance.db"
+    conn = db.get_connection(bars_db)
+    db.migrate(conn)
+    for sym, base in (("SPY", 400.0), ("IEF", 95.0)):
+        for i, d in enumerate(_SESSIONS):
+            c = Decimal(str(base + i * (1.0 if sym == "SPY" else 0.1)))
+            insert_bar(
+                conn,
+                PriceBar(
+                    symbol=sym,
+                    timeframe="1d",
+                    bar_open_utc=f"{d.isoformat()}T00:00:00.000Z",
+                    open_usd=c,
+                    high_usd=(c * Decimal("1.01")).quantize(Decimal("0.0001")),
+                    low_usd=(c * Decimal("0.99")).quantize(Decimal("0.0001")),
+                    close_usd=c,
+                    volume=1_000_000,
+                ),
+            )
+    conn.close()
+
+    portfolio = tmp_path / "challenger.toml"
+    portfolio.write_text(_PORTFOLIO)
+    res = runner.invoke(
+        app,
+        [
+            "canary-portfolio",
+            "--portfolio", str(portfolio),
+            "--bars-db", str(bars_db),
+            "--bands-toml", _BANDS,
+            "--db", str(tmp_path / "canary_audit.db"),
+            "--halt-path", str(tmp_path / "HALT"),
+            "--skip-fuzz",
+            "--skip-shock",
+            "--format", "json",
+        ],
+    )
+    assert res.exit_code == 0, res.output
+    out = json.loads(res.output.strip().splitlines()[-1])
+    assert out["verdict"] == "PASS"
+    assert out["portfolio_id"] == "canary-cli-test"
+
+
 def test_canary_portfolio_coverage_exit_when_no_dataset(tmp_path: Path) -> None:
     portfolio = tmp_path / "challenger.toml"
     portfolio.write_text(_PORTFOLIO)
