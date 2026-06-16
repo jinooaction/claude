@@ -76,13 +76,17 @@ git ls-remote --heads origin 'claude/*' | awk '{print $2}'
 - **5중 게이트**(전부 통과해야 REASSIGN, 아니면 HOLD/WAIT — 보수적 fail-safe):
   ①엣지확정 ②다중검정보정 ③사과대사과(①③=`forward_tournament.challenger_key`)
   ④하드닝 캐너리 PASS ⑤교체 후 자본 사다리 rung0 리셋(`capital_ladder`).
+- **헌법 X.5 개정 완료**: PR #320(⚠ **운영자 K-meta 확인 대기** — 머지 승인 필요). v6.0.0,
+  커밋 `a24d2d7`에 "this changes the safety perimeter". X.4=얼마나(자본 사다리), X.5=무엇을
+  (전략 재지정). 손실면은 v5.0.0과 동일(재지정은 '무엇을'만, '얼마나'는 여전히 사다리+예산).
 - **다음 세션 최우선(순서대로)**:
-  1. **헌법 X.4 개정** — 전략 재지정을 운영자 단건 게이트 → 5중 게이트 자율 위임. 커밋 메시지에
-     "this changes the safety perimeter" + **운영자 확인 후 머지**(K-meta, `.specify/memory/
-     constitution.md`). 운영자는 정책은 이미 승인("완전 자율+5중"), 개정 PR 머지만 확인 남음.
-  2. **재지정 실행** — REASSIGN 시 라이브 설정 지문을 챔피언 트랙으로 교체 + 자본 사다리 센티넬
-     rung0 리셋. `autoarm.strategy_fingerprint`/`render_ladder_sentinel` 결합. deploy/*.toml 의
-     어느 트랙이 챔피언인지 매핑.
+  1. **헌법 PR #320 머지** — 운영자 확인 후(K-meta 규칙). 운영자는 정책 승인 완료("완전 자율+5중"),
+     문구 머지 승인만 남음.
+  2. **재지정 실행** — ⚠ **핵심 미해결**: `challenger_key`(트랙 문자열) ↔ `PortfolioRebalanceConfig`
+     매핑 위치 파악. `TrackResult`(forward_tournament.py:79)는 `key`+`universe`+지표만 담고 config는
+     안 담음 — 매핑은 `cli.py` 토너먼트 호출부(트랙을 만들 때 각 config로 forward 계산)에 있을 것.
+     찾으면: challenger config → 라이브 설정 기록 + `capital_ladder.render_ladder_sentinel(rung=0)`
+     로 사다리 리셋(⑤). `autoarm` 센티넬 메커니즘(`automation/...`) 결합. deploy config 구조도 파악.
   3. **워크플로 배선** — `forward_tournament` 리더보드 + 하드닝 캐너리 결과 → `decide_reassignment`
      → REASSIGN 시 센티넬 PR. `forward-edge-autoarm.yml` 패턴(읽기 전용 판정 → 변경 시 PR).
 
