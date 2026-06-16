@@ -5629,3 +5629,127 @@ def reassign_decide_cmd(
         elif decision.action == ACTION_REASSIGN:
             extra = f" [wrote_files={out['wrote_files']}]"
         typer.echo(f"[{decision.action}] {decision.reason}{extra}")
+
+
+@app.command("canary-portfolio")
+def canary_portfolio_cmd(
+    portfolio: Path = typer.Option(
+        ..., "--portfolio", help="검증할 챔피언 포트폴리오 설정([portfolio] TOML)."
+    ),
+    history_root: Path = typer.Option(
+        Path("data/history"),
+        "--history-root",
+        help="스펙 008 ingest-history 가 만든 CSV 데이터셋 루트.",
+    ),
+    window_days: int = typer.Option(
+        45, "--window-days", help="낙폭 측정 정상 윈도우 거래일 수(L3 최소 45)."
+    ),
+    tier: str = typer.Option("L3", "--tier", help="밴드 tier(L2/L3/L4). 재지정 기본 L3."),
+    bands_toml: Path = typer.Option(
+        None,
+        "--bands-toml",
+        help="합격 밴드 TOML. 기본은 재지정 전용(config/canary_bands_reassign.toml).",
+    ),
+    db_path: Path = typer.Option(Path("data/auto_invest.db"), "--db", help="감사 로그 DB."),
+    halt_path: Path = typer.Option(Path("data/halt.flag"), "--halt-path", help="halt 깃발."),
+    shocks_toml: Path = typer.Option(
+        None, "--shocks-toml", help="합성 충격 설정(기본 config/synthetic_shocks.toml)."
+    ),
+    capital: float = typer.Option(
+        12000.0, "--capital", help="백테스트 사이징 자본 USD(페이퍼 — 돈 0 이동)."
+    ),
+    skip_fuzz: bool = typer.Option(
+        False, "--skip-fuzz", help="퍼즈 패스 생략(테스트 전용 — 프로덕션 캐너리는 퍼즈 필수)."
+    ),
+    skip_shock: bool = typer.Option(
+        False, "--skip-shock", help="충격 패스 생략(테스트 전용 — 프로덕션은 충격 필수)."
+    ),
+    output_format: str = typer.Option("json", "--format", help="json | text."),
+) -> None:
+    """스펙 055 ④ 게이트 — 포트폴리오 챔피언을 하드닝 캐너리로 검증(PASS=exit 0, FAIL=exit 1).
+
+    검증된 포트폴리오 백테스트 엔진으로 챔피언 전략을 최근 윈도우 + 실제 과거 급락 윈도우(합성
+    충격) + K1 게이트 퍼즈로 돌려, 스펙 007 의 같은 5지표로 PASS/FAIL 을 낸다. 주문 0건·돈 0.
+    이 verdict 가 reassign-decide --canary-verdict 입력(재지정 ④ 게이트)이 된다.
+    """
+    import json as _json
+    from datetime import date as _date
+    from decimal import Decimal as _Dec
+
+    from auto_invest.backtest.data_source import CSVDataSource, latest_dataset_dir
+    from auto_invest.canary.portfolio_harness import (
+        DEFAULT_REASSIGN_BANDS_PATH,
+        PortfolioCanaryInputs,
+        run_portfolio_canary,
+    )
+    from auto_invest.canary.run import EXIT_COVERAGE, EXIT_FAILED, EXIT_OK, EXIT_USAGE
+    from auto_invest.persistence import db as _db
+
+    try:
+        caps, whitelist, port_cfg = _load_portfolio_for_backtest(portfolio, env=None)
+    except ConfigError as e:
+        typer.echo(f"포트폴리오 설정 로드 실패: {e}", err=True)
+        raise typer.Exit(EXIT_USAGE) from None
+
+    latest = latest_dataset_dir(history_root)
+    if latest is None:
+        typer.echo(
+            f"{history_root} 아래 데이터셋 없음 — 먼저 ingest-history 실행", err=True
+        )
+        raise typer.Exit(EXIT_COVERAGE)
+    data_source = CSVDataSource(latest)
+
+    # 윈도우: 유니버스 심볼의 가용 세션 합집합에서 최근 window_days 거래일.
+    sessions: set[_date] = set()
+    for sym in port_cfg.universe:
+        sessions.update(data_source.session_dates(sym))
+    if not sessions:
+        typer.echo(
+            f"데이터셋에 유니버스 {list(port_cfg.universe)} 세션 없음 — 백필 필요", err=True
+        )
+        raise typer.Exit(EXIT_COVERAGE)
+    ordered = sorted(sessions)
+    window = ordered[-window_days:] if len(ordered) >= window_days else ordered
+    date_start, date_end = window[0], window[-1]
+
+    inputs = PortfolioCanaryInputs(
+        config=port_cfg,
+        caps=caps,
+        whitelist=whitelist,
+        data_source=data_source,
+        date_start=date_start,
+        date_end=date_end,
+        halt_path=halt_path,
+        total_capital_usd=_Dec(str(capital)),
+        shocks_toml=shocks_toml,
+        today=date_end,
+    )
+
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = _db.get_connection(db_path)
+    _db.migrate(conn)
+    try:
+        outcome = run_portfolio_canary(
+            inputs,
+            audit_conn=conn,
+            tier=tier,
+            bands_path=bands_toml or DEFAULT_REASSIGN_BANDS_PATH,
+            skip_fuzz=skip_fuzz,
+            skip_shock=skip_shock,
+        )
+    finally:
+        conn.close()
+
+    if output_format == "json":
+        out = outcome.to_json_dict()
+        out["portfolio_id"] = port_cfg.id
+        out["window_start"] = date_start.isoformat()
+        out["window_end"] = date_end.isoformat()
+        typer.echo(_json.dumps(out, ensure_ascii=False))
+    else:
+        typer.echo(
+            f"[{outcome.verdict}] {port_cfg.id} 낙폭={outcome.candidate_drawdown_pct:.2f}% "
+            f"충격위반={outcome.shock_violations} 무결성={outcome.audit_integrity_count} "
+            f"실패지표={outcome.failing_metrics}"
+        )
+    raise typer.Exit(EXIT_OK if outcome.passed else EXIT_FAILED)
