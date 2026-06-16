@@ -328,6 +328,14 @@ def default_specs() -> list[SidecarSpec]:
             critical=False,
             description="첫-자본까지의 길 종합·ETA(스펙 052, 보고 전용)",
         ),
+        SidecarSpec(
+            key="reassign",
+            branch="automation/reassign-last-run",
+            filename="LAST_RUN.md",
+            max_age_hours=80.0,  # 평일 00:20(cron 20 0 * * 2-6) — 주말 갭 견딤
+            critical=False,
+            description="자율 전략 재지정 폐회로(스펙 055, 챔피언→라이브 5중 게이트)",
+        ),
     ]
 
 

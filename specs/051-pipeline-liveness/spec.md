@@ -50,8 +50,19 @@
   `rebalance-paper-forward`(전진 엣지 관측 생산), `edge-autoarm`(자본 사다리 게이트),
   `kis-smoke`(브로커 생존), `rebalance-live-canary`(라이브 NAV 스냅샷 = 무장 시 드로다운
   감지의 눈).
-- **비핵심(critical=False, STALE→DEGRADED, 빨강 아님)**: 연구/보고 —
-  `collect-public-data`, `regime-stratify`, `promote-readiness`. 멈춰도 돈 경로 무관.
+- **비핵심(critical=False, STALE→DEGRADED, 빨강 아님)**: 연구/보고 + fail-safe 결정 루프 —
+  `collect-public-data`, `regime-stratify`, `promote-readiness`, `money-path`, `reassign`.
+  멈춰도 돈 경로 무관. 특히 `reassign`(스펙 055 자율 전략 재지정, 평일 00:20 UTC)은
+  정지하면 검증된 incumbent 전략이 그대로 라이브로 남는 fail-safe 라 비핵심이지만,
+  *가장 최신 자율 루프이므로* 침묵 정지가 반드시 드러나야 해서 감시 대상에는 넣는다
+  (저하로만 — 거짓 빨강 금지).
+
+### 레지스트리 감사 (스케줄 루프 vs 감시 대상)
+
+생존 감시는 *스케줄(cron)* 루프만 본다 — 멈춤=비정상이 의미를 갖는 건 정기 실행 루프뿐이기
+때문이다. `go-live-canary`·`forward-anchored-verdict`·`release-halt` 는 수동/이벤트 트리거라
+평소 idle 이 정상이므로 일부러 제외한다(넣으면 거짓 경보). 스펙 055 머지 시점 기준, 스케줄
+루프 중 감시 사각지대는 `reassign` 하나였고 위에서 메웠다.
 
 ## 비목표 (안전 경계)
 
