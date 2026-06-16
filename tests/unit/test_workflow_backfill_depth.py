@@ -31,6 +31,7 @@ _FORWARD_PORTFOLIOS = [
     _REPO_ROOT / "deploy" / "risk-managed-beta-portfolio.toml",
     _REPO_ROOT / "deploy" / "multi-asset-trend-portfolio.toml",
     _REPO_ROOT / "deploy" / "global-trend-portfolio.toml",
+    _REPO_ROOT / "deploy" / "global-trend-fixed-portfolio.toml",
     _REPO_ROOT / "deploy" / "global-trend-wide-portfolio.toml",
 ]
 
