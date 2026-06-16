@@ -5631,6 +5631,30 @@ def reassign_decide_cmd(
         typer.echo(f"[{decision.action}] {decision.reason}{extra}")
 
 
+@app.command("reassign-challenger-path")
+def reassign_challenger_path_cmd(
+    leaderboard_json: Path = typer.Option(
+        ..., "--leaderboard-json", help="forward_tournament_probe --json 출력 파일."
+    ),
+) -> None:
+    """리더보드의 challenger_key → 챔피언 deploy 설정 경로를 출력(없으면 빈 줄).
+
+    워크플로가 캐너리를 돌릴 *챔피언 설정 파일*을 알아내는 단일 출처 — 트랙 key → deploy toml
+    매핑(TRACK_DEPLOY_CONFIGS)이 YAML 에 중복되지 않게 한다. 도전자 없으면 빈 출력(재지정 없음).
+    """
+    import json as _json
+
+    from auto_invest.portfolio.reassign_exec import TRACK_DEPLOY_CONFIGS
+
+    try:
+        board = _json.loads(leaderboard_json.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        typer.echo("")
+        return
+    ck = (board or {}).get("challenger_key")
+    typer.echo(TRACK_DEPLOY_CONFIGS.get(ck, "") if ck else "")
+
+
 @app.command("canary-portfolio")
 def canary_portfolio_cmd(
     portfolio: Path = typer.Option(
