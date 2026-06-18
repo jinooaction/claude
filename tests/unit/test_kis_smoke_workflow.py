@@ -13,8 +13,11 @@ def test_kis_smoke_uses_isolated_checkout_instead_of_live_repo() -> None:
     assert "LIVE_REPO=/opt/auto-invest" in body
     assert 'SMOKE_REPO="$(sudo -u auto-invest mktemp -d "${smoke_parent}/repo.XXXXXX"' in body
     assert 'clone_url="${FALLBACK_REMOTE_URL}"' in body
+    assert 'git config --global --add safe.directory "${SMOKE_REPO}"' in body
+    assert 'sudo -u auto-invest git config --global --add safe.directory "${SMOKE_REPO}"' in body
     assert 'git -C "${SMOKE_REPO}" fetch --quiet origin main' in body
     assert 'git -C "${SMOKE_REPO}" checkout --quiet --detach "${TARGET_SHA}"' in body
+    assert 'cd "${SMOKE_REPO}"' in body
     assert '/usr/local/bin/uv run --project "${SMOKE_REPO}" pytest' in body
     assert 'source "${LIVE_REPO}/.env"' in body
 
