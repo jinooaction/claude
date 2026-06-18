@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/mason/Documents/codex/claude/.codex/hooks/git_ground_truth.py'"
+          }
+        ]
+      }
+    ]
+  }
+}
