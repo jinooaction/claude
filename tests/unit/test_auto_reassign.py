@@ -6,7 +6,12 @@
 
 from __future__ import annotations
 
-from auto_invest.analytics.forward_tournament import TournamentLeaderboard
+from auto_invest.analytics.forward_tournament import (
+    OBS_HEALTH_BLOCKED,
+    OBS_HEALTH_DEGRADED,
+    OBS_HEALTH_OK,
+    TournamentLeaderboard,
+)
 from auto_invest.portfolio.auto_reassign import (
     ACTION_DISABLED,
     ACTION_HOLD,
@@ -21,6 +26,8 @@ def _lb(
     challenger_key: str | None = None,
     champion_multiplicity_robust: bool | None = None,
     incumbent_key: str | None = "global-trend",
+    observation_health: str = OBS_HEALTH_OK,
+    observation_note: str = "",
 ) -> TournamentLeaderboard:
     """테스트용 최소 리더보드 — 재지정 결정에 쓰는 필드만 채운다."""
     return TournamentLeaderboard(
@@ -35,6 +42,8 @@ def _lb(
         comparable_count=2,
         adjusted_dsr_threshold=None,
         champion_multiplicity_robust=champion_multiplicity_robust,
+        observation_health=observation_health,
+        observation_note=observation_note,
     )
 
 
@@ -50,6 +59,34 @@ def test_no_challenger_holds() -> None:
     d = decide_reassignment(leaderboard=lb, canary_verdict="PASS", kill_switch_present=False)
     assert d.action == ACTION_HOLD
     assert d.gate_challenger is False
+
+
+def test_blocked_observation_quality_forbids_reassignment() -> None:
+    lb = _lb(
+        challenger_key="multi-asset-trend",
+        champion_multiplicity_robust=True,
+        observation_health=OBS_HEALTH_BLOCKED,
+        observation_note="라이브 검증 트랙 판정 없음",
+    )
+    d = decide_reassignment(leaderboard=lb, canary_verdict="PASS", kill_switch_present=False)
+    assert d.action == ACTION_HOLD
+    assert d.gate_observation_quality is False
+    assert "BLOCKED" in d.reason
+    assert "재지정 금지" in d.reason
+
+
+def test_degraded_observation_quality_holds_before_canary() -> None:
+    lb = _lb(
+        challenger_key="multi-asset-trend",
+        champion_multiplicity_robust=True,
+        observation_health=OBS_HEALTH_DEGRADED,
+        observation_note="관측 뒤처짐: globalfixed",
+    )
+    d = decide_reassignment(leaderboard=lb, canary_verdict="PASS", kill_switch_present=False)
+    assert d.action == ACTION_HOLD
+    assert d.gate_observation_quality is False
+    assert "DEGRADED" in d.reason
+    assert "보류" in d.reason
 
 
 def test_multiplicity_none_holds() -> None:
@@ -100,6 +137,7 @@ def test_all_gates_pass_reassigns() -> None:
     # 포렌식 JSON 에 다섯 관문 중 코드 평가분(①③②④)이 다 담긴다.
     gates = d.to_json_dict()["gates"]
     assert gates == {
+        "observation_quality_ok": True,
         "challenger_confirmed": True,
         "multiplicity_robust": True,
         "canary_pass": True,

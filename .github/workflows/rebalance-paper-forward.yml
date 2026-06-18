@@ -689,8 +689,9 @@ jobs:
             cat /tmp/prep_wide.log 2>/dev/null || echo '(none)'
             echo '```'
           } > LAST_RUN.md
+          cp /tmp/leaderboard.json leaderboard.json
           git checkout --orphan publish
-          git add LAST_RUN.md
+          git add LAST_RUN.md leaderboard.json
           git commit -q -m "rebalance-paper-forward A/B run ${GITHUB_RUN_ID}"
           git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "publish:${BRANCH}"
           echo "Published to ${BRANCH}."
