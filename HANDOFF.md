@@ -201,7 +201,9 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
 
 ## 최근 관찰 — 2026-06-19 (A6 guard 이후 운영 상태 점검, 읽기 전용)
 
-현재 `main` 최신은 `fb89820`(#352, forward 토너먼트 관측 품질 루프 보강)이다. `/sync` 기준 열린 PR은 없고,
+현재 `main` 최신은 `1c60360`(#356, 로컬 다중 세션 guard 인계 갱신)이다. 바로 앞에는
+`f12e56d`(#354, loop 품질 머지 후 인계 갱신), `09f99e2`(#353, 로컬 다중 세션 guard),
+`fb89820`(#352, forward 토너먼트 관측 품질 루프 보강)가 있다. `/sync` 기준 열린 PR은 없고,
 원격에는 과거 `Codex/*` 작업 브랜치들이 남아 있지만 활성 PR로 이어진 것은 없다.
 
 - **배포 상태**: `258be63`은 `HANDOFF.md`만 바꾼 문서 커밋이라 `deploy-on-merge.yml`의
@@ -3077,7 +3079,7 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 |------|-------|
 | 헌법 | **v6.0.0** (X.5 자율 전략 재지정 위임 포함, 안전 경계 기록 완료) |
 | 운영자 응대 정책 | `AGENTS.md` Codex 작업 운영 규칙 + `CLAUDE.md` 기존 Claude 정책. Codex는 `AGENTS.md` 우선 |
-| 마지막 main 커밋 | `f12e56d Merge pull request #354 — refresh handoff after loop quality merge` |
+| 마지막 main 커밋 | `1c60360 Merge pull request #356 from jinooaction/Codex/handoff-local-concurrency-guard` |
 | 활성 작업 | 이 인계 갱신 PR 외 열린 작업 없음. 새 작업 전 `/sync`와 `git status`를 먼저 보고, local concurrency guard가 `WARN`/`BLOCK`을 내면 `--mode isolate`로 별도 `worktree`를 만든다 |
 | 최근 완료 | PR #353: 로컬 다중 세션 guard 도입(SessionStart 감지, pre-commit/pre-push 차단, 복구 스냅샷, 격리 worktree, launchd watchdog). 직전 PR #352: forward 토너먼트 후보 관측 품질 JSON화 |
 | 안전 경계 | #353은 등급 2 운영 체계 변경. 헌법·커널·KIS·서버 SSH·SQLite 감사 로그·주문 경로·비밀값·돈 경로 변경 없음 |
