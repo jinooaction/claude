@@ -25,6 +25,14 @@ from auto_invest.persistence.audit import (
     AutoTunerRunPayload,
     append,
 )
+from auto_invest.safety.autonomy import AutonomyLevel
+from auto_invest.safety.boundary import (
+    ProposedChange as BoundaryProposedChange,
+)
+from auto_invest.safety.boundary import (
+    assert_autonomous_boundary_allowed,
+    decide_boundary,
+)
 from auto_invest.telemetry.thresholds import load_thresholds
 from auto_invest.tuner import gates
 from auto_invest.tuner.canary_submit import submit_to_canary
@@ -128,6 +136,18 @@ def run_tuner(
 
         for c in classifications:
             cand = c.candidate
+            boundary_change = BoundaryProposedChange(
+                summary=(
+                    f"autonomous tuner candidate {cand.candidate_id}: "
+                    f"{cand.proposed.kind} {cand.proposed.config_key or cand.kpi_name}"
+                ),
+                paths=cand.proposed.target_paths,
+                requested_level=AutonomyLevel.PROPOSAL,
+            )
+            boundary_decision = decide_boundary(boundary_change)
+            if boundary_decision.blocks_autonomous_execution:
+                skipped.append((cand.candidate_id, "safety_boundary"))
+                continue
             if c.tier == "L4":
                 awaiting_human_merge.append(c)
                 if mode == "apply":
@@ -234,6 +254,16 @@ def run_tuner(
 
             entry = tiers.entries[cand.kpi_name]
             tier_before = entry.tier_b
+            assert_autonomous_boundary_allowed(
+                BoundaryProposedChange(
+                    summary=(
+                        f"autonomous tuner apply {cand.candidate_id}: "
+                        f"{cand.proposed.kind} {cand.proposed.config_key or cand.kpi_name}"
+                    ),
+                    paths=cand.proposed.target_paths,
+                    requested_level=AutonomyLevel.PROPOSAL,
+                )
+            )
             old_value, new_value = apply_threshold(
                 thresholds_path,
                 cand.kpi_name,

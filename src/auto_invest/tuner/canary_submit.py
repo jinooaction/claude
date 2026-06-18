@@ -28,6 +28,12 @@ from auto_invest.canary.run import (
     CanaryOptions,
     run_canary,
 )
+from auto_invest.safety.autonomy import AutonomyLevel
+from auto_invest.safety.boundary import (
+    ProposedChange,
+    SafetyBoundaryError,
+    assert_autonomous_boundary_allowed,
+)
 from auto_invest.tuner.knobs import render_max_tokens
 from auto_invest.tuner.models import CanaryCandidate, CanaryValidationResult
 
@@ -133,6 +139,8 @@ def submit_to_canary(
     factory = replay_factory or _default_replay_factory
     try:
         replay_inputs = factory(candidate, repo_root, history_root, rules_path)
+    except SafetyBoundaryError:
+        return _result(candidate, outcome="skipped", skip_reason="safety_boundary")
     except Exception:
         return _result(candidate, outcome="internal_error")
 
@@ -142,6 +150,16 @@ def submit_to_canary(
 
     try:
         target_abs = repo_root / candidate.target_path
+        assert_autonomous_boundary_allowed(
+            ProposedChange(
+                summary=(
+                    f"autonomous tuner canary candidate {candidate.candidate_id}: "
+                    f"{candidate.config_key}"
+                ),
+                paths=(candidate.target_path,),
+                requested_level=AutonomyLevel.PROPOSAL,
+            )
+        )
         decision_class = candidate.config_key.split(".", 1)[0]
         _, new_content = render_max_tokens(
             target_abs.read_text(encoding="utf-8"),
@@ -164,6 +182,8 @@ def submit_to_canary(
             ),
             audit_conn=audit_conn,
         )
+    except SafetyBoundaryError:
+        return _result(candidate, outcome="skipped", skip_reason="safety_boundary")
     except Exception:
         return _result(candidate, outcome="internal_error")
 

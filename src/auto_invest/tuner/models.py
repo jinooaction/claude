@@ -19,6 +19,7 @@ SkipReason = Literal[
     "non_l1_tier",
     "no_replay_data",
     "already_validated_this_session",
+    "safety_boundary",
 ]
 
 ChangeKind = Literal["threshold_tighten", "proposal_only", "max_tokens_reduce"]

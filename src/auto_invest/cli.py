@@ -35,6 +35,12 @@ from auto_invest.config.loader import ConfigError, load_config, load_secrets
 from auto_invest.execution.order_router import verify_stage_uniqueness
 from auto_invest.logging_config import configure_logging
 from auto_invest.persistence import db
+from auto_invest.safety.autonomy import AutonomyLevel
+from auto_invest.safety.boundary import (
+    BoundarySurface,
+    ProposedChange,
+    assert_autonomous_boundary_allowed,
+)
 from auto_invest.worker.loop import Worker, WorkerSettings
 
 app = typer.Typer(no_args_is_help=True, add_completion=False)
@@ -47,6 +53,23 @@ logger = logging.getLogger(__name__)
 
 def _exit(code: int) -> None:
     raise typer.Exit(code)
+
+
+def _assert_autonomous_write_allowed(
+    *,
+    summary: str,
+    paths: tuple[Path | str, ...],
+    requested_level: AutonomyLevel,
+    declared_surfaces: frozenset[BoundarySurface] = frozenset(),
+) -> None:
+    assert_autonomous_boundary_allowed(
+        ProposedChange(
+            summary=summary,
+            paths=tuple(str(path) for path in paths),
+            declared_surfaces=declared_surfaces,
+            requested_level=requested_level,
+        )
+    )
 
 
 def _require_clean_migrations(db_path: Path, *, allow_apply: bool) -> None:
@@ -5197,6 +5220,11 @@ def autoarm_decide_cmd(
     )
 
     if decision.should_arm and write_sentinel and decision.new_sentinel_text:
+        _assert_autonomous_write_allowed(
+            summary="autoarm write live-canary arming sentinel",
+            paths=(sentinel,),
+            requested_level=AutonomyLevel.CAPITAL_SCALING,
+        )
         sentinel.write_text(decision.new_sentinel_text, encoding="utf-8")
 
     if output_format == "json":
@@ -5483,6 +5511,17 @@ def ladder_decide_cmd(
     )
 
     if decision.sentinel_changes and write_sentinel:
+        declared = (
+            frozenset({BoundarySurface.LOSS_BUDGET})
+            if _Dec(str(dd_budget_pct)) != _Dec("20.0")
+            else frozenset()
+        )
+        _assert_autonomous_write_allowed(
+            summary=f"capital ladder write sentinel action={decision.action}",
+            paths=(sentinel,),
+            requested_level=AutonomyLevel.CAPITAL_SCALING,
+            declared_surfaces=declared,
+        )
         sentinel.write_text(decision.new_sentinel_text, encoding="utf-8")
 
     if output_format == "json":
@@ -5647,6 +5686,20 @@ def reassign_decide_cmd(
             )
             out["execution"] = execution.to_json_dict()
             if write_config:
+                declared = (
+                    frozenset({BoundarySurface.LOSS_BUDGET})
+                    if _Dec(str(dd_budget_pct)) != _Dec("20.0")
+                    else frozenset()
+                )
+                _assert_autonomous_write_allowed(
+                    summary=(
+                        "strategy reassignment write live config and rung0 sentinel "
+                        f"challenger={execution.challenger_key}"
+                    ),
+                    paths=(live_portfolio, sentinel),
+                    requested_level=AutonomyLevel.STRATEGY_REASSIGNMENT,
+                    declared_surfaces=declared,
+                )
                 live_portfolio.write_text(
                     execution.new_live_config_text, encoding="utf-8"
                 )
