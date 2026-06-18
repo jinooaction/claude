@@ -165,6 +165,8 @@ jobs:
               sudo -u auto-invest git clone --quiet --no-checkout "${clone_url}" "${SMOKE_REPO}" 2>/dev/null || git clone --quiet --no-checkout "${clone_url}" "${SMOKE_REPO}"
               chown -R auto-invest:auto-invest "${SMOKE_REPO}" 2>/dev/null || true
           fi
+          git config --global --add safe.directory "${SMOKE_REPO}" 2>/dev/null || true
+          sudo -u auto-invest git config --global --add safe.directory "${SMOKE_REPO}" 2>/dev/null || true
           sudo -u auto-invest git -C "${SMOKE_REPO}" fetch --quiet origin main
           sudo -u auto-invest git -C "${SMOKE_REPO}" checkout --quiet --detach "${TARGET_SHA}"
           echo "smoke HEAD: $(git -C "${SMOKE_REPO}" rev-parse --short HEAD) ($(git -C "${SMOKE_REPO}" log -1 --pretty=%s))"
@@ -201,6 +203,7 @@ jobs:
           # PytestCacheWarning 2 건. 4 테스트짜리 smoke 는 lastfailed/lf 가
           # 의미 없으니 cache provider 자체를 끄는 게 chown 보다 깔끔.
           AUTO_INVEST_HOME=$(getent passwd auto-invest 2>/dev/null | cut -d: -f6 || echo /tmp)
+          cd "${SMOKE_REPO}"
           KIS_LIVE_TEST=1 sudo -E -u auto-invest \
               env "PATH=$PATH" \
                   "HOME=${AUTO_INVEST_HOME}" \
