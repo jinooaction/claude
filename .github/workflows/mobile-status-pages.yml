@@ -1,0 +1,94 @@
+name: Mobile status page (GitHub Pages)
+
+# 모바일 운영자 상태판.
+#
+# 안전: 읽기 전용. automation/* 사이드카와 현재 GitHub 실행 메타데이터만 읽어
+# 정적 HTML을 만든다. KIS, 서버 SSH, 비밀값, SQLite audit_log, 주문 경로에는 접근하지 않는다.
+
+on:
+  schedule:
+    # 생존 감시(07:30 UTC)와 money-path(08:00 UTC) 이후 최신 요약을 Pages에 반영.
+    - cron: "20 8 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/generate_mobile_status.py'
+      - '.github/workflows/mobile-status-pages.yml'
+      - 'src/auto_invest/analytics/pipeline_liveness.py'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: mobile-status-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Collect sidecars (read-only)
+        run: |
+          set -uo pipefail
+          mkdir -p /tmp/mobile-status-sidecars
+          git fetch --depth=1 origin \
+            '+refs/heads/automation/*:refs/remotes/origin/automation/*' || true
+          uv run python scripts/generate_mobile_status.py \
+            --sidecar-dir /tmp/mobile-status-sidecars \
+            --manifest > /tmp/mobile-status-manifest.tsv
+          while IFS=$'\t' read -r key branch filename; do
+            [[ -z "${key}" ]] && continue
+            if git show "origin/${branch}:${filename}" \
+                 > "/tmp/mobile-status-sidecars/${key}.md" 2>/dev/null; then
+              echo "✓ ${key}: ${branch}:${filename}"
+            else
+              rm -f "/tmp/mobile-status-sidecars/${key}.md"
+              echo "✗ ${key}: sidecar missing (${branch})"
+            fi
+          done < /tmp/mobile-status-manifest.tsv
+
+      - name: Generate status.html
+        run: |
+          set -uo pipefail
+          mkdir -p /tmp/mobile-status-site
+          uv run python scripts/generate_mobile_status.py \
+            --sidecar-dir /tmp/mobile-status-sidecars \
+            --output /tmp/mobile-status-site/status.html \
+            --repository "${GITHUB_REPOSITORY}" \
+            --commit "${GITHUB_SHA}" \
+            --run-url "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            --source "automation sidecars"
+          cp /tmp/mobile-status-site/status.html /tmp/mobile-status-site/index.html
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: /tmp/mobile-status-site
+
+  deploy:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
