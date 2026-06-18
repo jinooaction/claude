@@ -201,7 +201,7 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
 
 ## 최근 관찰 — 2026-06-19 (A6 guard 이후 운영 상태 점검, 읽기 전용)
 
-현재 `main` 최신은 `258be63`(#348, `HANDOFF.md` 갱신)이다. `/sync` 기준 열린 PR은 없고,
+현재 `main` 최신은 `53530cc`(#350, SDD 운영 기준 문서화)이다. `/sync` 기준 열린 PR은 없고,
 원격에는 과거 `Codex/*` 작업 브랜치들이 남아 있지만 활성 PR로 이어진 것은 없다.
 
 - **배포 상태**: `258be63`은 `HANDOFF.md`만 바꾼 문서 커밋이라 `deploy-on-merge.yml`의
@@ -228,6 +228,26 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
   `ProposedChange` + `assert_autonomous_boundary_allowed()` 또는 `decide_boundary()`를 지난다.
   나머지 `contents: write` 워크플로는 사이드카 force-push, 운영자 확인형 go-live/halt, 검증 결과
   파일 작성으로 분류되어 이번 A6 guard 누락으로 보지 않았다.
+
+## 최근 마일스톤 — 2026-06-19 (SDD 운영 기준 — 풀코스와 가벼운 기록의 판정표)
+
+main 머지 `53530cc`(#350). 운영자가 "SDD가 필요한가"를 물은 뒤, 결론을 말로만 남기지 않고
+Codex가 실제로 따르는 운영 규칙으로 고정했다.
+
+- **핵심 판단**: SDD는 제거하지 않는다. 새 기능, 새 자동화, 새 운영 경로, 안전 경계·돈 경로·
+  배포 경로 변경은 계속 `/speckit-specify` → `/speckit-plan` → `/speckit-tasks` →
+  `/speckit-implement`가 기본이다.
+- **두께 조절**: 이미 출시된 기능의 작은 보정, 등급 0 문서 보정, 순수 버그 수정은 새 스펙을
+  매번 만들지 않아도 된다. 대신 기존 스펙·테스트·PR 본문 중 하나에 문제 정의, 위험 등급,
+  검증, 되돌림 가능성을 재현 가능하게 남겨야 한다.
+- **품질 관문 반영**: `.codex/quality-gate.md`의 문제 정의와 탐색 단계에 SDD 적용 판단을 추가했다.
+  이제 SDD 산출물을 생략하거나 줄이면 위험 등급과 새 동작 여부 기준으로 이유를 설명해야 한다.
+- **Codex 이식 현실 반영**: Claude 시절처럼 긴 스펙 문맥이 Codex 세션 시작 때 크게 자동 주입되지
+  않을 수 있으므로, 새 기능이나 이어받기 작업은 `.specify/feature.json`, 관련 `specs/*/spec.md`,
+  최신 `HANDOFF.md`, 현재 git 상태를 직접 확인하도록 명시했다.
+- **안전 경계**: 등급 2 운영 문서 변경만. 헌법·커널·훅 실행 경로·주문 경로·비밀값·돈 경로 변경 없음.
+- **검증**: `uv run pytest` 2170 통과·4 스킵, `uv run ruff check src tests` 통과.
+  `git diff --check`, PR 품질 관문 본문 검증, 원격 PR 품질 관문 통과.
 
 ## 최근 마일스톤 — 2026-06-18 (🧭 다중 기기 Codex 운영 규칙 — 모바일·SSH·Cloud 역할 분리)
 
@@ -3000,13 +3020,13 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 |------|-------|
 | 헌법 | **v6.0.0** (X.5 자율 전략 재지정 위임 포함, 안전 경계 기록 완료) |
 | 운영자 응대 정책 | `AGENTS.md` Codex 작업 운영 규칙 + `CLAUDE.md` 기존 Claude 정책. Codex는 `AGENTS.md` 우선 |
-| 마지막 main 커밋 | `258be63 Merge pull request #348 — refresh handoff after multi-device rules` |
-| 활성 작업 | 열린 PR 없음. 현재 작업은 A6 guard 이후 운영 사이드카 관찰과 `HANDOFF.md` 최신화 |
-| 최근 완료 | PR #348: 다중 기기 Codex 운영 규칙 반영 후 `HANDOFF.md` 갱신. 그 직전 코드 완료는 PR #340 `e2cf6b3` A6 safety-boundary guard 실제 자율 쓰기 경로 배선 |
-| 안전 경계 | 이번 관찰/인수인계 갱신은 등급 2 운영 문서 변경. 헌법·커널·KIS·서버 SSH·SQLite 감사 로그·주문 경로·비밀값·돈 경로 변경 없음 |
+| 마지막 main 커밋 | `53530cc Merge pull request #350 — codify SDD operating policy` |
+| 활성 작업 | 열린 PR 없음. 현재 작업트리에는 다른 세션의 `Codex/loop-quality-control` 변경이 있을 수 있으므로 새 작업 전 `/sync`와 `git status`를 먼저 본다 |
+| 최근 완료 | PR #350: SDD 운영 기준을 `AGENTS.md`와 `.codex/quality-gate.md`에 고정. 새 기능은 풀 `/speckit-*`, 작은 보정은 위험 등급 기반 기록으로 두께 조절 |
+| 안전 경계 | 이번 SDD 운영 기준과 인수인계 갱신은 등급 2 운영 문서 변경. 헌법·커널·KIS·서버 SSH·SQLite 감사 로그·주문 경로·비밀값·돈 경로 변경 없음 |
 | main 테스트 | 2170 통과, 4 스킵 (라이브 KIS smoke 4건, `KIS_LIVE_TEST=1` 가드) |
 | main 린트 | `uv run ruff check src tests` 깨끗 |
-| 열린 PR | 없음 (`mcp__codex_apps__github._search_prs` 기준) |
+| 열린 PR | 없음 (`mcp__codex_apps__github._get_users_recent_prs_in_repo` 기준) |
 | 다음 세션 핵심 | A6 guard 배포 후 첫 `edge-autoarm`/`rebalance-paper-forward`/`reassign` 스케줄 결과를 다시 확인한다. 현재 최신 실행들은 대부분 guard 배포 전 실행이라 확정 증거가 아니다. 전진 페이퍼의 KIS 시세 500 오류와 `CircuitBreakerOpen` 재발 여부도 함께 본다. PR·머지·배포·원격 브랜치 판단 전에는 `/sync`로 네트워크 상태를 갱신 |
 
 ## 과거 상세 요약표 (역사 보존 — 일부 행은 위 현재 요약표보다 낡을 수 있음)
