@@ -199,6 +199,36 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
 시간을 낭비함. 다음 세션은 모든 도구 호출에 `antml:invoke`/`antml:parameter` 접두사를 반드시
 정확히 쓸 것.
 
+## 최근 관찰 — 2026-06-19 (A6 guard 이후 운영 상태 점검, 읽기 전용)
+
+현재 `main` 최신은 `258be63`(#348, `HANDOFF.md` 갱신)이다. `/sync` 기준 열린 PR은 없고,
+원격에는 과거 `Codex/*` 작업 브랜치들이 남아 있지만 활성 PR로 이어진 것은 없다.
+
+- **배포 상태**: `258be63`은 `HANDOFF.md`만 바꾼 문서 커밋이라 `deploy-on-merge.yml`의
+  `paths-ignore`에 걸려 배포 트리거가 없다. A6 guard 실제 코드 머지 `e2cf6b3` 기준
+  `Deploy on merge to main` 성공과 KIS smoke 성공(`key_valid=true`, `smoke_state=success`)이
+  최신 코드 배포 증거다. 서버 `audit_log`의 `DEPLOY_*` 행은 이 컨테이너에서 직접 확인 불가.
+- **A6 guard 이후 첫 cron 여부**: 현재 확인 시각은 `2026-06-18T16:50:33Z`였다. 최신
+  `edge-autoarm-last-run`(02:04Z), `rebalance-paper-forward-last-run`(00:01Z),
+  `reassign-last-run`(05:08Z)은 `e2cf6b3` 배포(10:29Z KIS smoke 기준)보다 앞선 실행이라
+  guard 이후 첫 실행 증거로 보기는 이르다. 다음 22:30/23:50/00:20 UTC 스케줄 후 다시 관찰.
+- **현재 자본 사다리/재지정 상태**: `edge-autoarm`은 `WAIT_EDGE`, 센티넬 변경 없음.
+  `reassign`은 `HOLD`, 라이브 설정 변경 없음. `money-path`는 `ACCUMULATING_EDGE`, 전진 관측
+  4/20, 전진 시계 `converging`, 표본 안정성 `settled`, 전략 지문 정합 `PASS`, 첫 자본 예상
+  `2026-07-10` 부근. 돈 이동 0.
+- **globalfixed 관찰**: `rebalance-paper-forward-last-run`에서 `globalfixed`는 1/20 관측,
+  `INSUFFICIENT_DATA`, 최대낙폭 0.000625%로 아직 판단 불가. 기존 글로벌 역변동성 트랙은
+  4/20 관측, 최대낙폭 1.437534%.
+- **주의할 후속 이슈**: 전진 페이퍼 준비 로그에 KIS 해외시세 500 오류와
+  `CircuitBreakerOpen`이 다수 남았다. 모든 트랙의 `ssh_exit`은 0이고 판정 JSON은 발행됐지만,
+  넓은 유니버스/고정가중 트랙의 시세 수집 안정성은 다음 실행에서 다시 확인할 가치가 있다.
+- **A6 guard 누락 검색**: 자율 쓰기 경로를 추가 검색했다. 실제 안전 경계 변경 가능 경로는
+  튜너 L1 적용, 튜너 L2/L3 캐너리 임시 커밋, `autoarm-decide --write-sentinel`,
+  `ladder-decide --write-sentinel`, `reassign-decide --write-config`로 확인됐고, 모두
+  `ProposedChange` + `assert_autonomous_boundary_allowed()` 또는 `decide_boundary()`를 지난다.
+  나머지 `contents: write` 워크플로는 사이드카 force-push, 운영자 확인형 go-live/halt, 검증 결과
+  파일 작성으로 분류되어 이번 A6 guard 누락으로 보지 않았다.
+
 ## 최근 마일스톤 — 2026-06-18 (🧭 다중 기기 Codex 운영 규칙 — 모바일·SSH·Cloud 역할 분리)
 
 main 머지 `99fc160`(#347). 운영자가 좋은 MacBook, 오래된 MacBook SSH 호스트, 모바일 앱,
@@ -2964,20 +2994,20 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 - KIS 자격 증명을 어디에도 푸시하지 **마세요**. `.env`는 gitignore되어 있고, 라이브 테스트는 `KIS_LIVE_TEST=1`로 게이트됨.
 - `main`에 직접 푸시하지 **마세요** (직접 푸시 금지; 모든 변경은 PR을 통해 머지).
 
-## 한눈 요약표 (현재 진실 — 2026-06-18)
+## 한눈 요약표 (현재 진실 — 2026-06-19)
 
 | 항목 | 상태 |
 |------|-------|
 | 헌법 | **v6.0.0** (X.5 자율 전략 재지정 위임 포함, 안전 경계 기록 완료) |
 | 운영자 응대 정책 | `AGENTS.md` Codex 작업 운영 규칙 + `CLAUDE.md` 기존 Claude 정책. Codex는 `AGENTS.md` 우선 |
-| 마지막 main 커밋 | `99fc160 Merge pull request #347 — add multi-device Codex workflow rules` |
-| 활성 작업 | 열린 PR 없음. 다중 기기 Codex 운영 규칙이 `AGENTS.md`에 반영됨. 다음 작업은 운영자 새 지시 또는 기존 후속 후보에서 선택 |
-| 최근 완료 | PR #347: 모바일 앱·오래된 MacBook SSH 호스트·좋은 MacBook·Codex Cloud 역할을 분리하고, 병렬 작업을 브랜치/worktree/PR 단위로 나누는 규칙을 `AGENTS.md`에 추가 |
-| 안전 경계 | 이번 변경은 등급 2 운영 문서 변경. 헌법·커널·KIS·서버 SSH·SQLite 감사 로그·주문 경로·비밀값·돈 경로 변경 없음 |
+| 마지막 main 커밋 | `258be63 Merge pull request #348 — refresh handoff after multi-device rules` |
+| 활성 작업 | 열린 PR 없음. 현재 작업은 A6 guard 이후 운영 사이드카 관찰과 `HANDOFF.md` 최신화 |
+| 최근 완료 | PR #348: 다중 기기 Codex 운영 규칙 반영 후 `HANDOFF.md` 갱신. 그 직전 코드 완료는 PR #340 `e2cf6b3` A6 safety-boundary guard 실제 자율 쓰기 경로 배선 |
+| 안전 경계 | 이번 관찰/인수인계 갱신은 등급 2 운영 문서 변경. 헌법·커널·KIS·서버 SSH·SQLite 감사 로그·주문 경로·비밀값·돈 경로 변경 없음 |
 | main 테스트 | 2170 통과, 4 스킵 (라이브 KIS smoke 4건, `KIS_LIVE_TEST=1` 가드) |
 | main 린트 | `uv run ruff check src tests` 깨끗 |
-| 열린 PR | 없음 (`gh pr list --state open` 결과 빈 목록) |
-| 다음 세션 핵심 | 다중 기기 작업은 먼저 실행 위치를 판단한다. 오래된 MacBook SSH 호스트는 가벼운 작업, 좋은 MacBook은 로컬 상태·큰 검증, Codex Cloud는 노트북이 꺼져도 되는 병렬 작업에 우선 사용. PR·머지·배포·원격 브랜치 판단 전에는 `/sync`로 네트워크 상태를 갱신 |
+| 열린 PR | 없음 (`mcp__codex_apps__github._search_prs` 기준) |
+| 다음 세션 핵심 | A6 guard 배포 후 첫 `edge-autoarm`/`rebalance-paper-forward`/`reassign` 스케줄 결과를 다시 확인한다. 현재 최신 실행들은 대부분 guard 배포 전 실행이라 확정 증거가 아니다. 전진 페이퍼의 KIS 시세 500 오류와 `CircuitBreakerOpen` 재발 여부도 함께 본다. PR·머지·배포·원격 브랜치 판단 전에는 `/sync`로 네트워크 상태를 갱신 |
 
 ## 과거 상세 요약표 (역사 보존 — 일부 행은 위 현재 요약표보다 낡을 수 있음)
 
