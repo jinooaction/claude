@@ -29,6 +29,18 @@ git ls-remote --heads origin 'claude/*' | awk '{print $2}'
 
 상세 규칙은 Codex 세션에서는 `AGENTS.md`, Claude 세션에서는 `CLAUDE.md` 본문 참조.
 
+## 한눈 요약표 — 2026-06-19 최신 main 기준
+
+| 항목 | 상태 |
+|------|------|
+| 마지막 main 커밋 | `82bd9d8` — Merge pull request #358 from jinooaction/Codex/leaderboard-observation-gate |
+| main 테스트 | `uv run pytest -q` → 2191 passed, 4 skipped |
+| main 린트 | `uv run ruff check src tests` → All checks passed |
+| 열린 PR | 없음(`gh pr list --state open` 결과 `[]`) |
+| 최근 출시 작업 | #358 forward `leaderboard.json` 관측 품질을 재지정 루프 입력 게이트로 연결 |
+| 활성 작업 | 없음. 다음 세션은 새 작업 전 `/sync`와 최신 사이드카 상태를 먼저 확인 |
+| 안전 경계 | 헌법·커널·주문 제한·비밀값·실제 주문·돈 경로 변경 없음 |
+
 ## 완료된 작업 큐 (운영자 승인 — 2026-05-31, 1→2→3 전부 완료)
 
 운영자가 "작업 1·2·3 전부 순서대로" 승인 → 세 작업 모두 자율 수행·자동 머지 완료(PR #126·#127·#128).
@@ -76,7 +88,9 @@ git ls-remote --heads origin 'claude/*' | awk '{print $2}'
 
 스펙 055 폐회로가 end-to-end 로 닫혔다. 설계·안전·운영 전체 문서: `specs/055-autonomous-reassignment/spec.md`.
 
-- **5중 게이트**(전부 통과해야 REASSIGN, 아니면 HOLD/WAIT — 보수적 fail-safe):
+- **입력 품질 + 5중 게이트**(전부 통과해야 REASSIGN, 아니면 HOLD/WAIT — 보수적 fail-safe):
+  ⓪후보 관측 품질(`leaderboard.json`의 `observation_health=OK`)을 먼저 확인한다.
+  `BLOCKED`는 재지정 금지, `DEGRADED`는 보수 보류다.
   ①엣지확정 ②다중검정보정 ③사과대사과(①③=`forward_tournament.challenger_key`)
   ④하드닝 캐너리 PASS(`canary/portfolio_harness.py`) ⑤교체 후 자본 사다리 rung0 리셋.
 - **구성요소(전부 머지·테스트됨)**: 결정 `portfolio/auto_reassign.py`(#318) · 실행
@@ -84,6 +98,8 @@ git ls-remote --heads origin 'claude/*' | awk '{print $2}'
   `config/canary_bands_reassign.toml`(#324) · 인스턴스 바 어댑터
   `backtest/data_source.SqliteBarDataSource`(#324) · CLI `reassign-decide`·`canary-portfolio`·
   `reassign-challenger-path` · 워크플로 `.github/workflows/reassign-on-tournament.yml`(평일 00:20 UTC).
+  #358에서 재지정 입력은 사람용 `LAST_RUN.md` 재파싱이 아니라 발행된 `leaderboard.json`을 직접
+  소비하도록 닫혔다.
 - **손실면 불변(헌법 X.5)**: 재지정은 '무엇을(전략)'만, '얼마나(자본)'는 여전히 자본 사다리
   (X.4)+예산. 재지정 직후 rung 0(무장 해제)→실주문 0, 실제 돈은 새 전략이 forward 재검증을
   *다시* 통과해야(스펙 050). 캐너리는 사전 선별, 실제 돈 게이트는 하류 사다리(심층 방어).
@@ -201,10 +217,10 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
 
 ## 최근 관찰 — 2026-06-19 (A6 guard 이후 운영 상태 점검, 읽기 전용)
 
-현재 `main` 최신은 `1c60360`(#356, 로컬 다중 세션 guard 인계 갱신)이다. 바로 앞에는
-`f12e56d`(#354, loop 품질 머지 후 인계 갱신), `09f99e2`(#353, 로컬 다중 세션 guard),
-`fb89820`(#352, forward 토너먼트 관측 품질 루프 보강)가 있다. `/sync` 기준 열린 PR은 없고,
-원격에는 과거 `Codex/*` 작업 브랜치들이 남아 있지만 활성 PR로 이어진 것은 없다.
+현재 `main` 최신은 `82bd9d8`(#358, forward `leaderboard.json` 관측 품질을 재지정 루프 입력
+게이트로 연결)이다. 바로 앞에는 `28bd306`(#357, 앵커드 엣지 자본 사다리 배선),
+`d3d98a3`(#355, handoff main tip 보정), `1c60360`(#356, 로컬 다중 세션 guard 인계 갱신)이
+있다. `/sync`와 `gh pr list --state open` 기준 열린 PR은 없다.
 
 - **배포 상태**: `258be63`은 `HANDOFF.md`만 바꾼 문서 커밋이라 `deploy-on-merge.yml`의
   `paths-ignore`에 걸려 배포 트리거가 없다. A6 guard 실제 코드 머지 `e2cf6b3` 기준
@@ -218,6 +234,10 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
   `reassign`은 `HOLD`, 라이브 설정 변경 없음. `money-path`는 `ACCUMULATING_EDGE`, 전진 관측
   4/20, 전진 시계 `converging`, 표본 안정성 `settled`, 전략 지문 정합 `PASS`, 첫 자본 예상
   `2026-07-10` 부근. 돈 이동 0.
+- **재지정 입력 게이트 상태**: #358 머지 후 다음 forward 실행부터
+  `automation/rebalance-paper-forward-last-run` 사이드카가 루트 `leaderboard.json` 파일을 발행한다.
+  그 전에는 해당 파일이 없으므로 `reassign-on-tournament`가 `observation_health=BLOCKED`로
+  보수 차단한다(라이브 무변경).
 - **globalfixed 관찰**: `rebalance-paper-forward-last-run`에서 `globalfixed`는 1/20 관측,
   `INSUFFICIENT_DATA`, 최대낙폭 0.000625%로 아직 판단 불가. 기존 글로벌 역변동성 트랙은
   4/20 관측, 최대낙폭 1.437534%.
@@ -230,6 +250,32 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
   `ProposedChange` + `assert_autonomous_boundary_allowed()` 또는 `decide_boundary()`를 지난다.
   나머지 `contents: write` 워크플로는 사이드카 force-push, 운영자 확인형 go-live/halt, 검증 결과
   파일 작성으로 분류되어 이번 A6 guard 누락으로 보지 않았다.
+
+## 최근 마일스톤 — 2026-06-19 (forward `leaderboard.json` 관측 품질을 재지정 입력 게이트로 연결)
+
+main 머지 `82bd9d8`(#358). 운영자 목표는 "후보 관측 품질 루프"를 실제 재지정 루프의 입력
+게이트로 닫는 것이었다. 빠른 변경보다 다음 세션이 같은 결론을 재현할 수 있게, 사람용
+마크다운 재파싱을 제거하고 기계 판독 JSON을 단일 입력으로 삼았다.
+
+- **발행 경로**: `.github/workflows/rebalance-paper-forward.yml`이 사이드카 브랜치에
+  `LAST_RUN.md`와 함께 루트 `leaderboard.json` 파일을 커밋한다. 사람용 보고서는 유지한다.
+- **소비 경로**: `.github/workflows/reassign-on-tournament.yml`은
+  `origin/automation/rebalance-paper-forward-last-run:leaderboard.json`만 직접 읽는다.
+  더 이상 `LAST_RUN.md`를 `forward_tournament_probe.py --from-sidecar`로 재파싱하지 않는다.
+- **결정 게이트**: `portfolio.auto_reassign.decide_reassignment`가
+  `observation_health`를 먼저 본다. `BLOCKED`면 재지정 금지, `DEGRADED`면 보수 보류,
+  `OK`일 때만 기존 도전자·다중검정·캐너리 판단을 계속한다.
+- **캐너리 절약**: `reassign-challenger-path`도 `observation_health=OK`가 아니면 빈 값을
+  반환해 하드닝 캐너리를 실행하지 않는다.
+- **현재 sidecar 실측**: 최신 `LAST_RUN.md` 자체에는 아직 루트 `leaderboard.json` 파일이 없다.
+  현재 코드로 재생성한 값은 `known_count=7`, `unknown_count=0`,
+  `observation_health=DEGRADED`, `lagging_keys=["globalfixed"]`, `max_n_obs=4`,
+  `min_n_obs=1`, `challenger_key=null`, `incumbent_key="global"`이다.
+- **안전 경계**: 등급 2 workflow/운영 루프 변경. 헌법·커널·주문 제한·비밀값·실제 주문·돈 경로
+  변경 없음. 파일이 없거나 무효면 `BLOCKED`로 fail-closed 한다.
+- **검증**: PR #358 머지 전 `uv run pytest` 2191 통과·4 스킵,
+  `uv run ruff check src tests` 통과, 원격 PR 품질 관문 통과. 머지 후 `main` 기준
+  `uv run pytest -q` 2191 통과·4 스킵, `uv run ruff check src tests` 통과.
 
 ## 최근 마일스톤 — 2026-06-19 (로컬 다중 세션 충돌 방어 — 감지·차단·복구·격리)
 
@@ -285,8 +331,8 @@ main 머지 `fb89820`(#352). 운영자 지시 "루프 설계를 세계 최고 �
 - **검증**: PR 머지 전 `uv run pytest` 2179 통과·4 스킵, `uv run ruff check src tests` 통과.
   main 인계 worktree에서 재확인: `uv run pytest -q` 2176 통과·4 스킵,
   `uv run ruff check src tests` 통과.
-- **남은 후속**: 이번은 후보 관측 품질 루프 슬라이스다. 자본 사다리 사후 검증 루프,
-  정지 후 복구 루프, 새 `leaderboard.json`을 재지정 workflow가 직접 소비하는 단계는 후속이다.
+- **남은 후속**: 후보 관측 품질 루프는 #358에서 재지정 입력 게이트까지 닫혔다. 남은 후속은
+  자본 사다리 사후 검증 루프와 정지 후 복구 루프다.
 
 ## 최근 마일스톤 — 2026-06-19 (SDD 운영 기준 — 풀코스와 가벼운 기록의 판정표)
 
