@@ -63,18 +63,26 @@ jobs:
           echo "${KEY}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
 
-      - name: Build tournament leaderboard from published forward sidecar (read-only)
+      - name: Read published tournament leaderboard JSON (read-only)
         id: board
         run: |
           set -uo pipefail
-          # 발행된 forward A/B 토너먼트 사이드카를 가져와 정직성 게이트 순위(챔피언/도전자)를 낸다.
+          # 발행된 forward A/B 토너먼트의 기계 판독 JSON 을 단일 증거로 쓴다.
+          # LAST_RUN.md 는 사람이 읽는 보고서라 재지정 입력으로 재파싱하지 않는다.
           git fetch origin automation/rebalance-paper-forward-last-run || true
-          if git show origin/automation/rebalance-paper-forward-last-run:LAST_RUN.md > /tmp/forward.md 2>/dev/null; then
-            uv run python scripts/forward_tournament_probe.py --from-sidecar /tmp/forward.md --json \
-              > /tmp/leaderboard.json 2>/tmp/leaderboard.err || echo '{}' > /tmp/leaderboard.json
+          if git show origin/automation/rebalance-paper-forward-last-run:leaderboard.json > /tmp/leaderboard.json 2>/tmp/leaderboard.err; then
+            :
           else
-            echo '{}' > /tmp/leaderboard.json
-            echo "(forward 사이드카 없음 — 빈 리더보드)"
+            cat > /tmp/leaderboard.json <<'JSON'
+          {"schema_version":"1.1","champion_key":null,"incumbent_key":null,"challenger_key":null,"champion_multiplicity_robust":null,"track_count":0,"known_count":0,"unknown_count":0,"lagging_keys":[],"observation_health":"BLOCKED","observation_note":"published forward sidecar leaderboard.json unavailable"}
+          JSON
+            echo "(forward leaderboard.json 없음 — 관측 품질 BLOCKED)"
+          fi
+          if ! jq -e 'type == "object" and has("observation_health")' /tmp/leaderboard.json >/dev/null 2>/tmp/leaderboard.err; then
+            cat > /tmp/leaderboard.json <<'JSON'
+          {"schema_version":"1.1","champion_key":null,"incumbent_key":null,"challenger_key":null,"champion_multiplicity_robust":null,"track_count":0,"known_count":0,"unknown_count":0,"lagging_keys":[],"observation_health":"BLOCKED","observation_note":"published forward sidecar leaderboard.json invalid or missing observation_health"}
+          JSON
+            echo "(forward leaderboard.json 무효 — 관측 품질 BLOCKED)"
           fi
           echo "--- leaderboard ---"; cat /tmp/leaderboard.json
           challenger="$(uv run auto-invest reassign-challenger-path --leaderboard-json /tmp/leaderboard.json 2>/dev/null || true)"

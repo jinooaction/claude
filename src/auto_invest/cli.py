@@ -5605,7 +5605,10 @@ def reassign_decide_cmd(
     from datetime import datetime as _dt
     from decimal import Decimal as _Dec
 
-    from auto_invest.analytics.forward_tournament import TournamentLeaderboard
+    from auto_invest.analytics.forward_tournament import (
+        OBS_HEALTH_BLOCKED,
+        TournamentLeaderboard,
+    )
     from auto_invest.portfolio.auto_reassign import ACTION_REASSIGN, decide_reassignment
     from auto_invest.portfolio.reassign_exec import (
         TRACK_DEPLOY_CONFIGS,
@@ -5621,7 +5624,15 @@ def reassign_decide_cmd(
         except (OSError, ValueError):
             return None
 
-    board = _read_json(leaderboard_json) or {}
+    board = _read_json(leaderboard_json)
+    if board is None:
+        board = {
+            "observation_health": OBS_HEALTH_BLOCKED,
+            "observation_note": (
+                f"leaderboard_json '{leaderboard_json}' 를 읽지 못함 — 재지정 입력 품질 차단."
+            ),
+        }
+    observation_health = str(board.get("observation_health") or OBS_HEALTH_BLOCKED)
     leaderboard = TournamentLeaderboard(
         schema_version=str(board.get("schema_version", "1.0")),
         as_of_utc=board.get("as_of_utc"),
@@ -5634,6 +5645,14 @@ def reassign_decide_cmd(
         comparable_count=int(board.get("comparable_count", 0) or 0),
         adjusted_dsr_threshold=None,
         champion_multiplicity_robust=board.get("champion_multiplicity_robust"),
+        track_count=int(board.get("track_count", 0) or 0),
+        known_count=int(board.get("known_count", 0) or 0),
+        unknown_count=int(board.get("unknown_count", 0) or 0),
+        max_n_obs=board.get("max_n_obs"),
+        min_n_obs=board.get("min_n_obs"),
+        lagging_keys=tuple(board.get("lagging_keys") or ()),
+        observation_health=observation_health,
+        observation_note=str(board.get("observation_note", "")),
     )
 
     decision = decide_reassignment(
@@ -5736,11 +5755,15 @@ def reassign_challenger_path_cmd(
     """
     import json as _json
 
+    from auto_invest.analytics.forward_tournament import OBS_HEALTH_OK
     from auto_invest.portfolio.reassign_exec import TRACK_DEPLOY_CONFIGS
 
     try:
         board = _json.loads(leaderboard_json.read_text(encoding="utf-8"))
     except (OSError, ValueError):
+        typer.echo("")
+        return
+    if (board or {}).get("observation_health") != OBS_HEALTH_OK:
         typer.echo("")
         return
     ck = (board or {}).get("challenger_key")

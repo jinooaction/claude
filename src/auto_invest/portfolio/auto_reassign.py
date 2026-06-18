@@ -6,8 +6,11 @@
 통과할 때만. 헌법 X.4 개정으로 전략 재지정을 운영자 단건 결정에서 이 증거 게이트 공식으로
 위임한다(자본 사다리 050 과 같은 자세).
 
-5중 안전 게이트 (전부 통과해야 REASSIGN — 하나라도 불충족이면 HOLD/WAIT, 절대 재지정 아님):
+입력 품질 게이트 + 5중 안전 게이트(전부 통과해야 REASSIGN — 하나라도 불충족이면 HOLD/WAIT,
+절대 재지정 아님):
 
+  ⓪ 후보 관측 품질: forward 토너먼트 leaderboard.json 의 observation_health 가 OK.
+     BLOCKED/DEGRADED/알 수 없는 값이면 재지정 판단을 진행하지 않는다.
   ① 엣지 확정: 도전자가 forward EDGE_CONFIRMED.
   ② 다중검정 보정: 여러 트랙 동시검정의 '운 좋은 우승' 배제(본페로니, champion_multiplicity_
      robust). 6트랙을 동시에 돌린 데서 우연히 1등 한 트랙으로는 재지정하지 않는다.
@@ -31,7 +34,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from auto_invest.analytics.forward_tournament import TournamentLeaderboard
+from auto_invest.analytics.forward_tournament import (
+    OBS_HEALTH_BLOCKED,
+    OBS_HEALTH_DEGRADED,
+    OBS_HEALTH_OK,
+    TournamentLeaderboard,
+)
 
 # 하드닝 캐너리(스펙 007) 합격 라벨 — 이 값일 때만 ④ 게이트 통과.
 CANARY_PASS = "PASS"
@@ -56,11 +64,20 @@ class ReassignDecision:
     gate_multiplicity: bool  # ② 다중검정 보정 통과
     gate_canary: bool  # ④ 하드닝 캐너리 PASS
 
-    SCHEMA_VERSION = "1.0"
+    observation_health: str = OBS_HEALTH_OK  # OK 일 때만 기존 재지정 판단 진행
+    observation_note: str = ""
+    gate_observation_quality: bool = True  # 후보 관측 품질 입력 게이트
+
+    SCHEMA_VERSION = "1.1"
 
     @property
     def all_gates_pass(self) -> bool:
-        return self.gate_challenger and self.gate_multiplicity and self.gate_canary
+        return (
+            self.gate_observation_quality
+            and self.gate_challenger
+            and self.gate_multiplicity
+            and self.gate_canary
+        )
 
     def to_json_dict(self) -> dict:
         return {
@@ -69,8 +86,11 @@ class ReassignDecision:
             "incumbent_key": self.incumbent_key,
             "challenger_key": self.challenger_key,
             "canary_verdict": self.canary_verdict,
+            "observation_health": self.observation_health,
+            "observation_note": self.observation_note,
             "reason": self.reason,
             "gates": {
+                "observation_quality_ok": self.gate_observation_quality,
                 "challenger_confirmed": self.gate_challenger,
                 "multiplicity_robust": self.gate_multiplicity,
                 "canary_pass": self.gate_canary,
@@ -99,6 +119,9 @@ def decide_reassignment(
     """
     challenger = leaderboard.challenger_key
     incumbent = leaderboard.incumbent_key
+    observation_health = leaderboard.observation_health or OBS_HEALTH_OK
+    observation_note = leaderboard.observation_note or ""
+    g_observation = observation_health == OBS_HEALTH_OK
     g_challenger = challenger is not None
     g_mult = leaderboard.champion_multiplicity_robust is True
     g_canary = canary_verdict == CANARY_PASS
@@ -109,7 +132,10 @@ def decide_reassignment(
             incumbent_key=incumbent,
             challenger_key=challenger,
             canary_verdict=canary_verdict,
+            observation_health=observation_health,
+            observation_note=observation_note,
             reason=reason,
+            gate_observation_quality=g_observation,
             gate_challenger=g_challenger,
             gate_multiplicity=g_mult,
             gate_canary=g_canary,
@@ -120,6 +146,22 @@ def decide_reassignment(
             ACTION_DISABLED,
             "automation/AUTOARM_DISABLED 존재 — 자동 재지정 정지(운영자 킬스위치).",
         )
+    if not g_observation:
+        if observation_health == OBS_HEALTH_BLOCKED:
+            reason = (
+                "후보 관측 품질 BLOCKED — 리더보드 판정 입력을 신뢰할 수 없어 재지정 금지."
+            )
+        elif observation_health == OBS_HEALTH_DEGRADED:
+            reason = (
+                "후보 관측 품질 DEGRADED — 후보군 비교가 불완전하므로 보수적으로 재지정 보류."
+            )
+        else:
+            reason = (
+                f"후보 관측 품질 {observation_health!r} — OK 가 아니므로 재지정 보류."
+            )
+        if observation_note:
+            reason = f"{reason} ({observation_note})"
+        return _d(ACTION_HOLD, reason)
     if not g_challenger:
         return _d(
             ACTION_HOLD,

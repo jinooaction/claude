@@ -77,10 +77,12 @@ def _write(tmp: Path, name: str, content: str) -> Path:
 
 def _leaderboard(tmp: Path, **fields: object) -> Path:
     base = {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "incumbent_key": "global",
         "challenger_key": None,
         "champion_multiplicity_robust": None,
+        "observation_health": "OK",
+        "observation_note": "테스트 입력 정상",
     }
     base.update(fields)
     return _write(tmp, "lb.json", json.dumps(base))
@@ -108,6 +110,39 @@ def test_challenger_without_canary_waits(tmp_path: Path) -> None:
     out = json.loads(res.stdout)
     assert out["action"] == "WAIT_CANARY"
     assert "execution" not in out
+
+
+def test_blocked_observation_health_holds(tmp_path: Path) -> None:
+    lb = _leaderboard(
+        tmp_path,
+        challenger_key="globalfixed",
+        champion_multiplicity_robust=True,
+        observation_health="BLOCKED",
+        observation_note="라이브 검증 트랙 판정 없음",
+    )
+    res = _invoke(tmp_path, ["--leaderboard-json", str(lb), "--canary-verdict", "PASS"])
+    assert res.exit_code == 0
+    out = json.loads(res.stdout)
+    assert out["action"] == "HOLD"
+    assert out["gates"]["observation_quality_ok"] is False
+    assert out["observation_health"] == "BLOCKED"
+    assert out["wrote_files"] is False
+
+
+def test_degraded_observation_health_holds(tmp_path: Path) -> None:
+    lb = _leaderboard(
+        tmp_path,
+        challenger_key="globalfixed",
+        champion_multiplicity_robust=True,
+        observation_health="DEGRADED",
+        observation_note="관측 뒤처짐: globalfixed",
+    )
+    res = _invoke(tmp_path, ["--leaderboard-json", str(lb), "--canary-verdict", "PASS"])
+    assert res.exit_code == 0
+    out = json.loads(res.stdout)
+    assert out["action"] == "HOLD"
+    assert "DEGRADED" in out["reason"]
+    assert out["wrote_files"] is False
 
 
 def test_kill_switch_disables(tmp_path: Path) -> None:
@@ -221,11 +256,25 @@ def test_challenger_path_empty_when_no_challenger(tmp_path: Path) -> None:
     assert res.output.strip() == ""
 
 
+def test_challenger_path_empty_when_observation_not_ok(tmp_path: Path) -> None:
+    lb = _leaderboard(
+        tmp_path,
+        challenger_key="globalfixed",
+        champion_multiplicity_robust=True,
+        observation_health="DEGRADED",
+    )
+    res = runner.invoke(app, ["reassign-challenger-path", "--leaderboard-json", str(lb)])
+    assert res.exit_code == 0
+    assert res.output.strip() == ""
+
+
 def test_missing_leaderboard_holds(tmp_path: Path) -> None:
-    # 리더보드 파일이 없으면 도전자 없음으로 보수 처리(HOLD) — fail-safe.
+    # 리더보드 파일이 없으면 관측 품질 BLOCKED 로 보수 처리(HOLD) — fail-safe.
     res = _invoke(
         tmp_path,
         ["--leaderboard-json", str(tmp_path / "nope.json"), "--canary-verdict", "PASS"],
     )
     assert res.exit_code == 0
-    assert json.loads(res.stdout)["action"] == "HOLD"
+    out = json.loads(res.stdout)
+    assert out["action"] == "HOLD"
+    assert out["observation_health"] == "BLOCKED"

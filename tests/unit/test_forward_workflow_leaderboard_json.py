@@ -28,5 +28,7 @@ def test_forward_sidecar_publishes_machine_readable_leaderboard_json():
     text = _workflow_text()
     assert "리더보드 결정 JSON" in text
     assert "cat /tmp/leaderboard.json" in text
+    assert "cp /tmp/leaderboard.json leaderboard.json" in text
+    assert "git add LAST_RUN.md leaderboard.json" in text
     assert "observation_health" in text
     assert "unknown_count" in text
