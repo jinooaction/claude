@@ -199,6 +199,24 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
 시간을 낭비함. 다음 세션은 모든 도구 호출에 `antml:invoke`/`antml:parameter` 접두사를 반드시
 정확히 쓸 것.
 
+## 최근 마일스톤 — 2026-06-18 (🧰 저장소 소유 agent 스킬 추적 — 다중 디바이스 운영 지식 동기화)
+
+main 머지 `988c7a6`(#338). 기존 미추적 `.agents/`를 저장소 정식 항목으로 포함했다. 운영자가
+다중 디바이스 환경을 고려하면 로컬에만 두는 것보다 정식 추적이 맞다고 판단했고, 저장소 소유
+스킬 문서로 고정했다.
+
+- **포함한 것**: `.agents/skills/sync`, `.agents/skills/handoff`, `.agents/skills/deploy-status`,
+  `.agents/skills/speckit-*` 문서와 `.agents/README.md`.
+- **목적**: `/sync`, `/handoff`, `/deploy-status`, Spec Kit 계열 스킬이 특정 기기에만 남지 않고
+  프로젝트와 함께 이동하게 한다. `.agents/README.md`는 이 디렉터리가 캐시가 아니라 저장소 소유
+  운영 지식임을 명시한다.
+- **포함하지 않은 것**: `.codex/hooks/session_context.py`는 현재 `.codex/hooks.json`에서 호출되지
+  않는 긴 정적 문맥 훅이라 이번 추적 대상에서 제외했다. 세션 시작 실행 경로는 계속
+  `.codex/hooks/git_ground_truth.py` 하나다.
+- **안전 경계**: Kernel 0·헌법 0·돈 경로 0·주문 로직 0. 운영 체계(등급 2) 변경만.
+- **검증**: 머지 직전 `uv run pytest -q` 2164 통과·4 스킵, `uv run ruff check src tests` 통과.
+  PR 품질 관문 통과. `.agents` 비밀값·로컬 절대경로 검색에서 실제 비밀값 없음 확인.
+
 ## 최근 마일스톤 — 2026-06-18 (🧭 세션 시작 git 사실 훅 경량화 + 테스트 고정)
 
 main 머지 `ae4faf8`(#336). 운영자가 "세션 시작 훅이 정말 필요한가"를 확인한 뒤, 필요한 기능은
@@ -2890,14 +2908,14 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 |------|-------|
 | 헌법 | **v6.0.0** (X.5 자율 전략 재지정 위임 포함, 안전 경계 기록 완료) |
 | 운영자 응대 정책 | `AGENTS.md` Codex 작업 운영 규칙 + `CLAUDE.md` 기존 Claude 정책. Codex는 `AGENTS.md` 우선 |
-| 마지막 main 커밋 | `ae4faf8 Merge pull request #336 — improve session start git ground truth hook` |
-| 활성 작업 | 열린 PR 없음. 세션 시작 git 사실 훅 경량화는 PR #336으로 머지·배포 확인 완료. 다음 작업은 운영자 새 지시 또는 기존 후속 후보에서 선택 |
-| 최근 완료 | PR #336: `.codex/hooks/git_ground_truth.py`가 핵심 로컬 git 사실과 HANDOFF 진입점만 짧게 출력하도록 경량화. dirty 샘플·HANDOFF 목록 상한을 추가하고 `tests/unit/test_git_ground_truth_hook.py`로 출력 계약 고정 |
+| 마지막 main 커밋 | `988c7a6 Merge pull request #338 — track repository agent skills` |
+| 활성 작업 | 열린 PR 없음. `.agents/` 저장소 정식 추적은 PR #338로 머지 완료. 다음 작업은 운영자 새 지시 또는 기존 후속 후보에서 선택 |
+| 최근 완료 | PR #338: `.agents/` 아래 저장소 소유 스킬 문서를 정식 추적 대상으로 추가. `/sync`, `/handoff`, `/deploy-status`, Spec Kit 계열 스킬이 다중 디바이스에서 프로젝트와 함께 이동 |
 | 안전 경계 | 이번 변경은 운영 체계(등급 2)만 변경. Kernel 등재 파일·헌법·돈 경로·주문 경로·비밀값·감사 로그 영향 없음 |
 | main 테스트 | 2164 통과, 4 스킵 (라이브 KIS smoke 4건, `KIS_LIVE_TEST=1` 가드) |
 | main 린트 | `uv run ruff check src tests` 깨끗 |
 | 열린 PR | 없음 (`gh pr list --state open` 결과 빈 목록) |
-| 다음 세션 핵심 | 세션 시작 훅은 로컬 사실만 짧게 보여준다. PR·머지·배포·원격 브랜치 판단 전에는 `/sync`로 네트워크 상태를 갱신하고, 새 작업 전 `AGENTS.md`의 문제 정의·위험 등급·품질 관문을 실제로 적용 |
+| 다음 세션 핵심 | `.agents/`는 이제 저장소 소유 스킬 디렉터리다. 스킬 수정은 운영 체계 변경(등급 2)으로 보고, PR·머지·배포·원격 브랜치 판단 전에는 `/sync`로 네트워크 상태를 갱신 |
 
 ## 과거 상세 요약표 (역사 보존 — 일부 행은 위 현재 요약표보다 낡을 수 있음)
 
