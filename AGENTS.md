@@ -36,6 +36,9 @@
 운영자는 좋은 MacBook, 오래된 MacBook SSH 호스트, 모바일 앱, Codex Cloud를 함께 사용할 수 있다. Codex는 작업을 시작할 때 실행 위치를 먼저 판단하고, 운영자가 장치별 제약을 매번 기억해야 하는 방식으로 진행하지 않는다.
 
 - 병렬 작업은 기본적으로 브랜치, worktree, 또는 풀 리퀘스트 단위로 분리한다. 같은 브랜치나 같은 파일 묶음을 여러 기기에서 동시에 수정하지 않는다.
+- 로컬 다중 세션 방어 훅이 `WARN` 또는 `BLOCK`을 보고하면 그 작업 디렉터리에서는 쓰기 작업을 시작하지 않는다. 즉시 `python3 scripts/local_concurrency_guard.py --mode isolate`로 별도 `worktree`를 만들거나, 해당 세션을 읽기 전용으로 전환한다.
+- `.githooks/pre-commit`과 `.githooks/pre-push`가 같은 `worktree`·같은 브랜치·같은 수정 파일 충돌을 막는다. `CODEX_CONCURRENCY_GUARD_ALLOW=1` 우회는 실제 비상 복구처럼 이유가 분명할 때만 쓴다.
+- `.codex/state/concurrency/` 아래의 로컬 세션 기록과 복구 스냅샷은 커밋하지 않는다. 충돌 의심 시 최신 `metadata.json`, `worktree.diff`, `index.diff`, `untracked/`를 먼저 확인해 작업을 복구한다.
 - 모바일 앱이나 SSH 호스트에서 시작한 작업도 `main`에서 직접 수정하지 않는다. 읽기 전용 확인을 넘어서면 먼저 새 브랜치나 worktree를 만든다.
 - 오래된 MacBook SSH 호스트는 가벼운 코드 읽기, 문서 수정, 작은 패치, 상태 확인에 우선 사용한다. 전체 테스트, 큰 빌드, 대규모 의존성 설치처럼 오래 걸리거나 자원을 많이 쓰는 작업은 기본 실행하지 않는다.
 - 좋은 MacBook은 로컬 앱, 브라우저 로그인 세션, 시뮬레이터, 큰 테스트, 최종 검증처럼 로컬 성능이나 화면 상태가 필요한 작업에 우선 사용한다.

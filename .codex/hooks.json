@@ -5,6 +5,10 @@
         "hooks": [
           {
             "type": "command",
+            "command": "'/Users/mason/Documents/codex/claude/scripts/local_concurrency_guard.py' --mode session-start"
+          },
+          {
+            "type": "command",
             "command": "'/Users/mason/Documents/codex/claude/.codex/hooks/git_ground_truth.py'"
           }
         ]
