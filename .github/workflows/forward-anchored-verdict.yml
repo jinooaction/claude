@@ -10,9 +10,9 @@ name: Forward anchored verdict (backtest-anchored edge, research/observe only)
 # forward NAV 스티치 → 앵커드 판정 JSON). 서버 쓰기는 /tmp 아래뿐 — forward 트랙 DB·라이브
 # 상태 무접촉. **주문 0건·돈 0 이동·무장 0·게이트 변경 0** (판정 발행만).
 #
-# 이건 단계 (a): 실데이터에서 앵커드 판정을 *눈으로 검증*하는 읽기 전용 사이드카다. 무장
-# 게이트(forward-edge-autoarm)가 이 판정을 소비하는 단계 (b)는 별도 — 실제 돈 게이트 변경이라
-# 이 사이드카로 충분히 검증한 뒤에 잇는다.
+# 이건 실데이터에서 앵커드 판정을 *눈으로 검증*하는 읽기 전용 사이드카다. 실제 자본 사다리
+# 게이트(forward-edge-autoarm)는 같은 앵커드 판정을 워크플로 안에서 다시 계산해
+# ladder-decide --anchored-verdict-json 으로 넘긴다. 이 사이드카 자체는 계속 관찰용이다.
 #
 # 사용법(컨테이너에서 최신 판정 확인):
 #   git fetch origin automation/forward-anchored-verdict-last-run

@@ -53,6 +53,19 @@ def test_strong_oos_short_forward_consistent_confirms():
     assert v.consistency_z is not None
 
 
+def test_oos_walk_forward_must_confirm_edge():
+    # 절대 수익률이 좋아도 OOS walk-forward 가 벤치마크 대비 강건한 엣지를 못 세우면 거부.
+    v = backtest_anchored_verdict(
+        oos_returns=_strong_oos(n=120),
+        forward_returns=_strong_oos(n=6),
+        oos_edge_confirmed=False,
+        oos_rejection_reason="강건한 엣지 없음: 평균 샤프가 단순 보유 이하.",
+    )
+    assert v.verdict == NO_EDGE
+    assert "OOS walk-forward 엣지 미확정" in v.reason
+    assert v.oos_significance is not None
+
+
 def test_strong_oos_but_forward_too_short_insufficient():
     v = backtest_anchored_verdict(
         oos_returns=_strong_oos(n=120),
