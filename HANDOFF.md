@@ -1,12 +1,12 @@
 # auto-invest — 다음 세션 인수인계 (main 베이스라인)
 
-이 파일은 이 저장소의 **`main` 브랜치에서 시작하는 모든 Claude 세션**의 진입점입니다. "지금 무슨 일이 일어나고 있는지"를 토큰 낭비 없이 빠르게 파악할 수 있도록 정리했습니다.
+이 파일은 이 저장소의 **`main` 브랜치에서 시작하는 모든 Codex/Claude 세션**의 진입점입니다. "지금 무슨 일이 일어나고 있는지"를 토큰 낭비 없이 빠르게 파악할 수 있도록 정리했습니다.
 
 ## 세션 시작 절차 (필수)
 
-`CLAUDE.md`의 "운영자 응대 3대 규칙" + "Session lifecycle" 정책에 따라, 모든 새 세션은 계획을 세우거나 운영자에게 무엇을 할지 물어보기 **전에** 현재 상태를 사실로 맞춥니다. v3.3.0부터 이 절차의 대부분이 자동화됐습니다:
+`AGENTS.md`(Codex) 또는 `CLAUDE.md`(Claude)의 운영 규칙과 세션 수명주기 정책에 따라, 모든 새 세션은 계획을 세우거나 운영자에게 무엇을 할지 물어보기 **전에** 현재 상태를 사실로 맞춥니다. Codex 기준 핵심 규칙은 `AGENTS.md`입니다.
 
-1. **자동(로컬)** — `.claude/hooks/git_ground_truth.py` 세션 시작 훅이 매 세션 라이브 git 상태를 출력합니다: 현재 브랜치·HEAD·작업트리 청결도·`origin/main` 대비 앞뒤·최근 `origin/main` 커밋·HANDOFF 파일 최신순. **산문으로 적힌 "active feature" 줄보다 이 블록을 더 신뢰하세요.**
+1. **자동(로컬)** — Codex는 `.codex/hooks/git_ground_truth.py`, Claude는 `.claude/hooks/git_ground_truth.py` 세션 시작 훅이 매 세션 라이브 git 상태를 출력합니다: 현재 브랜치·HEAD·작업트리 청결도·`origin/main` 대비 앞뒤·최근 `origin/main` 커밋·HANDOFF 파일 최신순. **산문으로 적힌 "active feature" 줄보다 이 블록을 더 신뢰하세요.**
 2. **`/sync` 실행(네트워크)** — 훅은 절대 멈추면 안 되므로 로컬 정보만 냅니다. 네트워크 발견은 `/sync` 스킬이 담당합니다: `git fetch`, 원격 `claude/*` 브랜치 목록, 열린 PR 목록(`mcp__github__list_pull_requests`), 각 브랜치의 살아있는 HANDOFF 읽기, `main` 실제 최신과 대조. 무엇이 머지됐고 무엇이 진행 중인지 불확실하면 세션 시작에 한 번 돌리세요.
 
 `/sync`가 자동화하는 옛 수동 절차(참고):
@@ -21,13 +21,13 @@ git ls-remote --heads origin 'claude/*' | awk '{print $2}'
 
 열린 PR이 진행 중인 브랜치를 가리키면 main에서 새 브랜치를 만들지 말고 그 브랜치를 `git checkout` 후 `git pull --ff-only` 하세요.
 
-## 운영자 응대 3대 규칙 (CLAUDE.md v3.2.0 — 절대 어기지 마세요)
+## 운영자 응대 핵심 규칙 (Codex는 AGENTS.md 우선 — 절대 어기지 마세요)
 
 1. **응답은 무조건 한글**. 새 세션 시작, 상태 보고, 작업 요약, 사과, 질문 — 예외 없음. 영어 응답은 운영자가 이해 못합니다.
 2. **약어와 영어 비즈니스 용어 금지, 쉬운 한글로 풀어 써라**. 코드/식별자/파일 경로 같은 고유명은 그대로 두되 반드시 한글 설명을 옆에 붙입니다. 한 문장에 영어 단어 3개 이상이면 다시 씁니다.
 3. **자동 머지** — 작업 완료 + 테스트 통과 + 린트 깨끗 + PR `mergeable_state=clean` 만족 시 운영자가 "머지해"라고 말하지 않아도 즉시 자동 머지. 매번 머지 명령 요청하는 것 자체가 헌법 IX.D가 제거하려던 동기 핸드오프 비용입니다.
 
-상세 규칙은 `CLAUDE.md` 본문 참조.
+상세 규칙은 Codex 세션에서는 `AGENTS.md`, Claude 세션에서는 `CLAUDE.md` 본문 참조.
 
 ## 완료된 작업 큐 (운영자 승인 — 2026-05-31, 1→2→3 전부 완료)
 
@@ -198,6 +198,24 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
 **세션 운영 메모**: 이번 세션에 도구 호출 형식 오류(`antml:` 접두사 누락)가 반복돼 운영자
 시간을 낭비함. 다음 세션은 모든 도구 호출에 `antml:invoke`/`antml:parameter` 접두사를 반드시
 정확히 쓸 것.
+
+## 최근 마일스톤 — 2026-06-18 (🧭 Codex 작업 품질 관문 — AGENTS.md + PR 강제 검사)
+
+main 머지 `ef16b60`(#332). 운영자가 요구한 "두 번 일하지 않는 세계 최고 수준 작업 체질"을
+말뿐인 원칙 문서가 아니라 실제 작업 표면에서 반복되는 관문으로 만들었다.
+
+- **Codex 운영 규칙**: `AGENTS.md`를 Codex용 작업 운영 문서로 추가. 문제 정의 → 위험 등급 →
+  탐색 → 내부 역할 점검(구현자·검토자·안전 담당자·인계 담당자) → 검증 → 완료 관문을 명시.
+- **세션 시작 훅 정리**: `.codex/hooks.json`은 긴 정적 문맥 주입(`session_context.py`)을 호출하지
+  않고, 짧은 git 사실 훅(`git_ground_truth.py`)만 실행한다. 현재 상태 판단은 실제 git 상태와
+  최신 `HANDOFF.md`, 필요 시 `/sync`로 한다.
+- **강제 표면**: `.github/pull_request_template.md`로 모든 PR 본문에 위험 등급·문제 정의·탐색
+  근거·검증·안전 경계·인계를 남기게 하고, `.github/workflows/pr-quality-gate.yml`이
+  `scripts/check_pr_quality_gate.py`로 빈 본문/위험 등급 누락/문제 정의 누락/안전 경계 미선택을
+  실패시킨다. `.codex/quality-gate.md`는 로컬 작업 중 점검표.
+- **안전 경계**: Kernel 0·헌법 0·돈 경로 0·주문 로직 0. 운영 체계(등급 2) 변경만.
+- **검증**: `uv run pytest` 2142 통과·4 스킵, `uv run ruff check src tests scripts/check_pr_quality_gate.py`
+  통과, PR 품질 관문 원격 실행 통과, 빈 PR 양식 실패·채운 예시 통과 확인.
 
 ## 최근 마일스톤 — 2026-06-18 (🌱 캐너리 합격 후보 운영자 승격 큐 + 세 방향 결정 로드맵)
 
@@ -2824,7 +2842,22 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 - KIS 자격 증명을 어디에도 푸시하지 **마세요**. `.env`는 gitignore되어 있고, 라이브 테스트는 `KIS_LIVE_TEST=1`로 게이트됨.
 - `main`에 직접 푸시하지 **마세요** (직접 푸시 금지; 모든 변경은 PR을 통해 머지).
 
-## 한눈 요약표
+## 한눈 요약표 (현재 진실 — 2026-06-18)
+
+| 항목 | 상태 |
+|------|-------|
+| 헌법 | **v6.0.0** (X.5 자율 전략 재지정 위임 포함, 안전 경계 기록 완료) |
+| 운영자 응대 정책 | `AGENTS.md` Codex 작업 운영 규칙 + `CLAUDE.md` 기존 Claude 정책. Codex는 `AGENTS.md` 우선 |
+| 마지막 main 커밋 | `ef16b60 docs(codex): add agent quality gates` |
+| 활성 작업 | 열린 PR 없음. Codex 품질 관문 구축은 PR #332로 머지 완료. 다음 작업은 운영자 새 지시 또는 기존 후속 후보에서 선택 |
+| 최근 완료 | PR #332: Codex용 `AGENTS.md`, `.codex/quality-gate.md`, PR 양식, PR 품질 검사 워크플로, 검사 스크립트 추가. 긴 Codex 정적 문맥 훅 호출 제거, 짧은 git 상태 훅 유지 |
+| 안전 경계 | Kernel 0·헌법 0·돈 경로 0·주문 로직 0. 운영 체계(등급 2) 변경만 |
+| main 테스트 | 2142 통과, 4 스킵 (라이브 KIS smoke 4건, `KIS_LIVE_TEST=1` 가드) |
+| main 린트 | `uv run ruff check src tests scripts/check_pr_quality_gate.py` 깨끗 |
+| 열린 PR | 없음 (`gh pr list --state open` 결과 빈 목록) |
+| 다음 세션 핵심 | 새 작업 전 `AGENTS.md`의 문제 정의·위험 등급·품질 관문을 실제로 적용. PR 본문은 `.github/pull_request_template.md`를 채우고 품질 검사 통과 필요 |
+
+## 과거 상세 요약표 (역사 보존 — 일부 행은 위 현재 요약표보다 낡을 수 있음)
 
 | 항목 | 상태 |
 |------|-------|
