@@ -458,12 +458,12 @@ jobs:
           echo "--- verdict ---"; cat /tmp/verdict_wide.json
           echo "--- stderr ---"; cat /tmp/verdict_wide.err
 
-      # ---- forward 토너먼트 리더보드 (스펙 053, 러너 로컬 — 판정 JSON 6개를 순위화) ----
-      # 6개 트랙 판정(/tmp/verdict_*.json)을 정직성 게이트로 순위 매겨 리더보드 마크다운을
+      # ---- forward 토너먼트 리더보드 (스펙 053, 러너 로컬 — 판정 JSON 7개를 순위화) ----
+      # 7개 트랙 판정(/tmp/verdict_*.json)을 정직성 게이트로 순위 매겨 리더보드 마크다운을
       # 만든다(읽기 전용 — 돈 0 이동, 거래 변경 0). 완전 격리(continue-on-error + 폴백)라
       # A/B 트랙을 절대 못 깨뜨린다(스펙 046 전략 모니터와 동일 자세). 산출물
       # /tmp/leaderboard.md 는 아래 사이드카 발행 스텝이 상단에 주입한다.
-      - name: "forward 토너먼트 리더보드 — 6 트랙 순위 (스펙 053)"
+      - name: "forward 토너먼트 리더보드 — 7 트랙 순위 (스펙 053)"
         id: leaderboard
         if: always()
         continue-on-error: true
@@ -471,9 +471,14 @@ jobs:
           set +e
           uv run python scripts/forward_tournament_probe.py --verdict-dir /tmp \
             > /tmp/leaderboard.md 2>/tmp/leaderboard.err
+          uv run python scripts/forward_tournament_probe.py --verdict-dir /tmp --json \
+            > /tmp/leaderboard.json 2>>/tmp/leaderboard.err
           if [ ! -s /tmp/leaderboard.md ]; then
             echo "(리더보드 생성 실패 — 아래 트랙별 원시 판정 블록을 직접 비교)" > /tmp/leaderboard.md
             head -c 2000 /tmp/leaderboard.err >> /tmp/leaderboard.md 2>/dev/null || true
+          fi
+          if [ ! -s /tmp/leaderboard.json ]; then
+            echo '{}' > /tmp/leaderboard.json
           fi
           exit 0
 
@@ -530,6 +535,16 @@ jobs:
             echo "| GLOBAL-TREND-WIDE verdict ssh_exit | ${VERDICT_WIDE_EXIT:-?} |"
             echo ""
             cat /tmp/leaderboard.md 2>/dev/null || echo '(leaderboard unavailable)'
+            echo ""
+            echo "## 🧾 리더보드 결정 JSON (기계 판독 단일 증거)"
+            echo ""
+            echo "> 아래 JSON 은 위 리더보드와 같은 순수 코어 출력이다. 재지정·감시 루프는"
+            echo "> 가능하면 이 기계 판독 증거를 우선 소비해야 한다. 특히 known_count,"
+            echo "> unknown_count, observation_health 로 후보 관측 품질을 분리해 본다."
+            echo ""
+            echo '```json'
+            cat /tmp/leaderboard.json 2>/dev/null || echo '{}'
+            echo '```'
             echo ""
             echo "## 🚦 Halt 깃발 상태 (읽기 전용 진단)"
             echo ""

@@ -5,7 +5,7 @@
 찍는다. 읽기 전용 — 주문 0건, 돈 0 이동, 새 측정 0(발행된 판정 숫자 비교만).
 
 두 입력 모드:
-  --verdict-dir DIR   : 워크플로 모드 — DIR/verdict_<key>.json 6개를 읽는다(러너 /tmp).
+  --verdict-dir DIR   : 워크플로 모드 — DIR/verdict_<key>.json 7개를 읽는다(러너 /tmp).
   --from-sidecar FILE : 컨테이너 검증 모드 — 발행된 LAST_RUN.md 를 트랙 헤더별로 파싱
                         (git show origin/automation/rebalance-paper-forward-last-run:LAST_RUN.md).
 
@@ -28,7 +28,7 @@ from auto_invest.analytics.forward_tournament import (
     rank_tournament,
 )
 
-# 트랙 레지스트리(단일 출처) — rebalance-paper-forward.yml 의 6개 A/B 트랙과 일치.
+# 트랙 레지스트리(단일 출처) — rebalance-paper-forward.yml 의 7개 A/B 트랙과 일치.
 #   key            : 워크플로의 /tmp/verdict_<key>.json 파일명 + 결정 JSON 키.
 #   label          : 사람이 읽는 트랙 이름.
 #   header_substr  : 발행된 사이드카에서 그 트랙 판정 블록을 찾는 헤더 부분 문자열(유일).
@@ -69,7 +69,10 @@ def extract_json_after_header(text: str | None, header: str) -> dict | None:
     lines = text.splitlines()
     start = None
     for i, line in enumerate(lines):
-        if header in line:
+        # 같은 문구가 상단 설명에도 등장한다(예: "추세 필터 ON vs OFF"). 트랙 판정은
+        # 항상 마크다운 heading 이므로 heading 줄만 매칭한다. 아니면 첫 번째 일반
+        # 코드블록(halt 진단 등)을 JSON 으로 파싱하려다 해당 트랙이 UNKNOWN 이 된다.
+        if line.lstrip().startswith("#") and header in line:
             start = i
             break
     if start is None:
@@ -79,7 +82,7 @@ def extract_json_after_header(text: str | None, header: str) -> dict | None:
     for line in lines[start + 1 :]:
         stripped = line.strip()
         if not in_block:
-            if stripped.startswith("```"):
+            if stripped.startswith("```json"):
                 in_block = True
             continue
         if stripped.startswith("```"):
@@ -133,7 +136,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument(
         "--verdict-dir",
         default=None,
-        help="워크플로 모드 — DIR/verdict_<key>.json 6개를 읽는다(러너 /tmp).",
+        help="워크플로 모드 — DIR/verdict_<key>.json 7개를 읽는다(러너 /tmp).",
     )
     ap.add_argument(
         "--from-sidecar",

@@ -9,6 +9,9 @@ from auto_invest.analytics.forward_tournament import (
     EDGE_CONFIRMED,
     INSUFFICIENT_DATA,
     NO_EDGE,
+    OBS_HEALTH_BLOCKED,
+    OBS_HEALTH_DEGRADED,
+    OBS_HEALTH_OK,
     PREMATURE,
     UNKNOWN,
     build_track_result,
@@ -119,6 +122,9 @@ def test_all_premature_no_champion():
     assert board.challenger_key is None
     assert board.incumbent_key == "global"
     assert "아직 비교 불가" in board.headline
+    assert board.observation_health == OBS_HEALTH_OK
+    assert board.known_count == 3
+    assert board.unknown_count == 0
 
 
 def test_premature_sorted_by_obs_desc():
@@ -192,6 +198,43 @@ def test_all_unknown():
     board = rank_tournament(tracks)
     assert board.champion_key is None
     assert "판정 불가" in board.headline
+    assert board.observation_health == OBS_HEALTH_BLOCKED
+    assert board.known_count == 0
+    assert board.unknown_count == 2
+
+
+def test_non_incumbent_unknown_degrades_observation_health():
+    tracks = [
+        _track("global", incumbent=True, vj=_verdict(n_obs=4)),
+        _track("wide", vj=None),
+    ]
+    board = rank_tournament(tracks)
+    assert board.observation_health == OBS_HEALTH_DEGRADED
+    assert board.known_count == 1
+    assert board.unknown_count == 1
+    assert "wide" in board.observation_note
+
+
+def test_incumbent_unknown_blocks_observation_health():
+    tracks = [
+        _track("global", incumbent=True, vj=None),
+        _track("wide", vj=_verdict(n_obs=4)),
+    ]
+    board = rank_tournament(tracks)
+    assert board.observation_health == OBS_HEALTH_BLOCKED
+    assert "라이브 검증 트랙" in board.observation_note
+
+
+def test_lagging_track_degrades_observation_health():
+    tracks = [
+        _track("global", incumbent=True, vj=_verdict(n_obs=4)),
+        _track("globalfixed", vj=_verdict(n_obs=1)),
+    ]
+    board = rank_tournament(tracks)
+    assert board.observation_health == OBS_HEALTH_DEGRADED
+    assert board.max_n_obs == 4
+    assert board.min_n_obs == 1
+    assert board.lagging_keys == ("globalfixed",)
 
 
 # ---- 순위 정렬: 티어 + 품질 --------------------------------------------------------
