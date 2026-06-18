@@ -199,6 +199,27 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
 시간을 낭비함. 다음 세션은 모든 도구 호출에 `antml:invoke`/`antml:parameter` 접두사를 반드시
 정확히 쓸 것.
 
+## 최근 마일스톤 — 2026-06-18 (🛡 A6 guard 실제 자율 변경 경로 배선)
+
+main 머지 `e2cf6b3`(#340). 직전 A6 안전 경계 guard가 단순 유틸/API 단계에 머물러 있던 것을,
+실제 자율 변경 적용 경로의 문 앞에 연결했다. 이제 시스템이 스스로 후보를 만들거나 파일을 쓰는
+대표 경로가 `ProposedChange`를 만들고 `assert_autonomous_boundary_allowed()` 또는
+`decide_boundary()`를 통과한다.
+
+- **배선한 경로**: 자율 튜너 L1 적용(`tune --apply`), 튜너 L2/L3 캐너리 임시 커밋
+  materialize, `autoarm-decide --write-sentinel`, `ladder-decide --write-sentinel`,
+  `reassign-decide --write-config`.
+- **A6 차단 방식**: 튜너 후보는 `safety_boundary`로 skipped 기록. 직접 캐너리 제출은
+  `skipped/safety_boundary`로 반환. CLI 쓰기 경로는 실제 파일 쓰기 직전
+  `_assert_autonomous_write_allowed()`가 `SafetyBoundaryError`로 막는다.
+- **비-A6 보존**: 기존 A4 자본 사다리와 A5 전략 재지정은 계속 허용. 단, 비기본
+  `--dd-budget-pct`처럼 손실 예산 자체를 바꾸는 경우는 `LOSS_BUDGET` surface로 선언해 A6로 차단.
+- **안전 경계**: 등급 3 변경. 헌법·커널 파일, cap 값, whitelist 내용, 자본 사다리 공식,
+  라이브 권한, 주문 경로는 바꾸지 않았다. 돈 경로 0·실주문 권한 확대 0.
+- **검증**: 머지 직전 `uv run pytest` 2168 통과·4 스킵, `uv run ruff check src tests` 통과.
+  PR 품질 관문 통과. 머지 후 `Deploy on merge to main` 성공(run 27753310901), KIS smoke 성공
+  (run 27753310915, `key_valid=true`, `smoke_state=success`).
+
 ## 최근 마일스톤 — 2026-06-18 (🧰 저장소 소유 agent 스킬 추적 — 다중 디바이스 운영 지식 동기화)
 
 main 머지 `988c7a6`(#338). 기존 미추적 `.agents/`를 저장소 정식 항목으로 포함했다. 운영자가
@@ -2908,14 +2929,14 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 |------|-------|
 | 헌법 | **v6.0.0** (X.5 자율 전략 재지정 위임 포함, 안전 경계 기록 완료) |
 | 운영자 응대 정책 | `AGENTS.md` Codex 작업 운영 규칙 + `CLAUDE.md` 기존 Claude 정책. Codex는 `AGENTS.md` 우선 |
-| 마지막 main 커밋 | `988c7a6 Merge pull request #338 — track repository agent skills` |
-| 활성 작업 | 열린 PR 없음. `.agents/` 저장소 정식 추적은 PR #338로 머지 완료. 다음 작업은 운영자 새 지시 또는 기존 후속 후보에서 선택 |
-| 최근 완료 | PR #338: `.agents/` 아래 저장소 소유 스킬 문서를 정식 추적 대상으로 추가. `/sync`, `/handoff`, `/deploy-status`, Spec Kit 계열 스킬이 다중 디바이스에서 프로젝트와 함께 이동 |
-| 안전 경계 | 이번 변경은 운영 체계(등급 2)만 변경. Kernel 등재 파일·헌법·돈 경로·주문 경로·비밀값·감사 로그 영향 없음 |
-| main 테스트 | 2164 통과, 4 스킵 (라이브 KIS smoke 4건, `KIS_LIVE_TEST=1` 가드) |
+| 마지막 main 커밋 | `e2cf6b3 Merge pull request #340 — wire A6 boundary guard into autonomous writes` |
+| 활성 작업 | 열린 PR 없음. A6 guard 실제 자율 변경 경로 배선과 배포까지 완료. 다음 작업은 운영자 새 지시 또는 기존 후속 후보에서 선택 |
+| 최근 완료 | PR #340: A6 안전 경계 guard를 튜너 후보/캐너리 임시 커밋/자동 무장/자본 사다리/전략 재지정 쓰기 경로에 배선. A6 후보는 blocked 또는 exception으로 고정 |
+| 안전 경계 | 이번 변경은 안전 경계 적용 위치를 넓힌 등급 3 변경. 헌법·커널·cap 값·whitelist 내용·자본 사다리 공식·라이브 권한·주문 경로는 변경 없음 |
+| main 테스트 | 2168 통과, 4 스킵 (라이브 KIS smoke 4건, `KIS_LIVE_TEST=1` 가드) |
 | main 린트 | `uv run ruff check src tests` 깨끗 |
 | 열린 PR | 없음 (`gh pr list --state open` 결과 빈 목록) |
-| 다음 세션 핵심 | `.agents/`는 이제 저장소 소유 스킬 디렉터리다. 스킬 수정은 운영 체계 변경(등급 2)으로 보고, PR·머지·배포·원격 브랜치 판단 전에는 `/sync`로 네트워크 상태를 갱신 |
+| 다음 세션 핵심 | 새 자율 쓰기 경로가 생기면 `ProposedChange` + `assert_autonomous_boundary_allowed()`를 같은 문 앞에 붙일 것. PR·머지·배포·원격 브랜치 판단 전에는 `/sync`로 네트워크 상태를 갱신 |
 
 ## 과거 상세 요약표 (역사 보존 — 일부 행은 위 현재 요약표보다 낡을 수 있음)
 
