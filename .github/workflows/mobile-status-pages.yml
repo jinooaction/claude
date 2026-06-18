@@ -18,16 +18,14 @@ on:
       - 'src/auto_invest/analytics/pipeline_liveness.py'
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
   group: mobile-status-pages
   cancel-in-progress: true
 
 jobs:
-  build:
+  publish:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
@@ -66,26 +64,20 @@ jobs:
             --run-url "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
             --source "automation sidecars"
           cp /tmp/mobile-status-site/status.html /tmp/mobile-status-site/index.html
+          touch /tmp/mobile-status-site/.nojekyll
 
-      - name: Configure Pages
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: /tmp/mobile-status-site
-
-  deploy:
-    needs: build
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    timeout-minutes: 8
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Publish gh-pages branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -uo pipefail
+          cd /tmp/mobile-status-site
+          git init -q
+          git config user.name "mobile-status-bot"
+          git config user.email "mobile-status-bot@noreply.github.com"
+          git checkout --orphan publish -q
+          git add index.html status.html .nojekyll
+          git commit -q -m "mobile status ${GITHUB_RUN_ID} @ ${GITHUB_SHA:0:7}"
+          git push --force \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "publish:gh-pages"
