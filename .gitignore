@@ -29,6 +29,7 @@ credentials.json
 # Keep skills/commands committed but ignore anything sensitive.
 .claude/settings.local.json
 .claude/.credentials*
+.codex/state/
 
 # Build / dist
 build/
