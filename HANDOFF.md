@@ -199,6 +199,23 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
 시간을 낭비함. 다음 세션은 모든 도구 호출에 `antml:invoke`/`antml:parameter` 접두사를 반드시
 정확히 쓸 것.
 
+## 최근 마일스톤 — 2026-06-18 (🧭 다중 기기 Codex 운영 규칙 — 모바일·SSH·Cloud 역할 분리)
+
+main 머지 `99fc160`(#347). 운영자가 좋은 MacBook, 오래된 MacBook SSH 호스트, 모바일 앱,
+Codex Cloud를 함께 쓰는 실제 운영 구성을 검증했고, 이를 Codex가 매번 먼저 판단하도록
+`AGENTS.md`에 규칙으로 고정했다.
+
+- **핵심 규칙**: 병렬 작업은 브랜치, worktree, 또는 풀 리퀘스트 단위로 분리한다. 모바일 앱이나
+  SSH 호스트에서 시작한 작업도 읽기 전용 확인을 넘어서면 `main`에서 직접 수정하지 않는다.
+- **장치별 역할**: 오래된 MacBook SSH 호스트는 가벼운 코드 읽기·문서 수정·작은 패치·상태 확인,
+  좋은 MacBook은 로컬 앱·브라우저 로그인 세션·시뮬레이터·큰 테스트·최종 검증, Codex Cloud는
+  노트북이 꺼져도 되는 병렬 구현·문서·테스트 보강·조사 작업에 우선 사용한다.
+- **의도**: 운영자가 장치별 제약을 기억하는 대신, Codex가 작업 시작 시 실행 위치를 먼저 판단하고
+  맞지 않으면 더 적합한 위치나 새 작업 단위를 제안한다.
+- **안전 경계**: 등급 2 운영 문서 변경만. 헌법·커널·주문 경로·비밀값·돈 경로 변경 없음.
+- **검증**: 머지 직전 `uv run pytest` 2170 통과·4 스킵, `uv run ruff check src tests` 통과.
+  PR 품질 관문 통과.
+
 ## 최근 마일스톤 — 2026-06-18 (📱 모바일 운영 상태판 GitHub Pages 발행)
 
 main 머지 `2958e82`(#345). 운영자가 휴대폰에서 자동화 생존 상태를 바로 볼 수 있도록,
@@ -2953,14 +2970,14 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 |------|-------|
 | 헌법 | **v6.0.0** (X.5 자율 전략 재지정 위임 포함, 안전 경계 기록 완료) |
 | 운영자 응대 정책 | `AGENTS.md` Codex 작업 운영 규칙 + `CLAUDE.md` 기존 Claude 정책. Codex는 `AGENTS.md` 우선 |
-| 마지막 main 커밋 | `2958e82 Merge pull request #345 — publish mobile status page to gh-pages` |
-| 활성 작업 | 열린 PR 없음. 모바일 운영 상태판이 `gh-pages`로 발행되고 최신 deploy도 성공. 다음 작업은 운영자 새 지시 또는 기존 후속 후보에서 선택 |
-| 최근 완료 | PR #342~#345: 모바일 우선 `status.html` 생성기와 자동 발행 워크플로 추가. 최종 방식은 Pages API가 아니라 `gh-pages` 브랜치 발행이며, URL은 `https://jinooaction.github.io/claude/status.html` |
-| 안전 경계 | 이번 변경은 등급 2 운영 가시성 자동화. 읽기 전용 상태판이며 KIS·서버 SSH·SQLite 감사 로그·주문 경로·비밀값 접근 없음. 돈 경로와 안전 경계 변경 없음 |
+| 마지막 main 커밋 | `99fc160 Merge pull request #347 — add multi-device Codex workflow rules` |
+| 활성 작업 | 열린 PR 없음. 다중 기기 Codex 운영 규칙이 `AGENTS.md`에 반영됨. 다음 작업은 운영자 새 지시 또는 기존 후속 후보에서 선택 |
+| 최근 완료 | PR #347: 모바일 앱·오래된 MacBook SSH 호스트·좋은 MacBook·Codex Cloud 역할을 분리하고, 병렬 작업을 브랜치/worktree/PR 단위로 나누는 규칙을 `AGENTS.md`에 추가 |
+| 안전 경계 | 이번 변경은 등급 2 운영 문서 변경. 헌법·커널·KIS·서버 SSH·SQLite 감사 로그·주문 경로·비밀값·돈 경로 변경 없음 |
 | main 테스트 | 2170 통과, 4 스킵 (라이브 KIS smoke 4건, `KIS_LIVE_TEST=1` 가드) |
 | main 린트 | `uv run ruff check src tests` 깨끗 |
 | 열린 PR | 없음 (`gh pr list --state open` 결과 빈 목록) |
-| 다음 세션 핵심 | 모바일 상태판은 `https://jinooaction.github.io/claude/status.html`에서 확인. 새 자율 쓰기 경로가 생기면 `ProposedChange` + `assert_autonomous_boundary_allowed()`를 같은 문 앞에 붙일 것. PR·머지·배포·원격 브랜치 판단 전에는 `/sync`로 네트워크 상태를 갱신 |
+| 다음 세션 핵심 | 다중 기기 작업은 먼저 실행 위치를 판단한다. 오래된 MacBook SSH 호스트는 가벼운 작업, 좋은 MacBook은 로컬 상태·큰 검증, Codex Cloud는 노트북이 꺼져도 되는 병렬 작업에 우선 사용. PR·머지·배포·원격 브랜치 판단 전에는 `/sync`로 네트워크 상태를 갱신 |
 
 ## 과거 상세 요약표 (역사 보존 — 일부 행은 위 현재 요약표보다 낡을 수 있음)
 
