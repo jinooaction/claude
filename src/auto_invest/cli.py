@@ -39,7 +39,9 @@ from auto_invest.worker.loop import Worker, WorkerSettings
 
 app = typer.Typer(no_args_is_help=True, add_completion=False)
 db_app = typer.Typer(help="Database management subcommands.", no_args_is_help=True)
+safety_app = typer.Typer(help="Executable safety policy inspection.", no_args_is_help=True)
 app.add_typer(db_app, name="db")
+app.add_typer(safety_app, name="safety")
 logger = logging.getLogger(__name__)
 
 
@@ -1745,6 +1747,41 @@ def db_migrate(
         typer.echo("Applied migrations: " + ", ".join(applied))
     else:
         typer.echo("No pending migrations.")
+
+
+@safety_app.command("commands")
+def safety_commands(
+    output_format: str = typer.Option(
+        "json",
+        "--format",
+        help="json or markdown.",
+    ),
+) -> None:
+    """Render the executable command safety registry."""
+    import json as _json
+
+    from auto_invest.safety.command_registry import command_policies
+
+    if output_format not in ("json", "markdown"):
+        typer.echo("--format must be 'json' or 'markdown'.", err=True)
+        _exit(2)
+
+    policies = [p.to_json_dict() for p in command_policies().values()]
+    if output_format == "json":
+        typer.echo(_json.dumps({"commands": policies}, indent=2, ensure_ascii=False))
+        return
+
+    rows = [
+        "| command | level | orders | live config | capital | strategy | broker | db | llm |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
+    ]
+    for p in policies:
+        rows.append(
+            "| {name} | {level} | {can_place_order} | {can_change_live_config} | "
+            "{can_scale_capital} | {can_reassign_strategy} | {uses_broker} | "
+            "{writes_db} | {uses_llm} |".format(**p)
+        )
+    typer.echo("\n".join(rows))
 
 
 def _attach_judgment_summary(conn, rep):  # noqa: ANN001, ANN201
