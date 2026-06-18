@@ -1,0 +1,32 @@
+name: PR quality gate
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  pr-quality-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract PR body
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          event = json.loads(Path("${{ github.event_path }}").read_text(encoding="utf-8"))
+          body = event.get("pull_request", {}).get("body") or ""
+          Path("/tmp/pr_body.md").write_text(body, encoding="utf-8")
+          PY
+
+      - name: Validate quality gate sections
+        run: |
+          python3 scripts/check_pr_quality_gate.py /tmp/pr_body.md
