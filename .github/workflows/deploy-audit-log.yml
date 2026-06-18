@@ -1,0 +1,189 @@
+name: Deploy audit log verification
+
+# 서버 audit_log 의 DEPLOY_* 행을 읽기 전용으로 조회해 사이드카에 발행한다.
+# 목적: "GitHub Actions 배포 성공"과 "서버 DB 감사 행" 사이의 마지막 증거 공백을 닫기.
+# 안전: sqlite3 -readonly 만 사용, systemctl/git/주문 경로/설정 파일을 건드리지 않는다.
+#
+# 사용법:
+#   gh workflow run deploy-audit-log.yml --ref main
+#   git fetch origin automation/deploy-audit-last-run
+#   git show origin/automation/deploy-audit-last-run:LAST_RUN.md
+#
+# 특정 배포를 확인하려면 deploy journal 의 correlation_id 를 넣는다:
+#   gh workflow run deploy-audit-log.yml --ref main -f correlation_id=<hex>
+
+on:
+  workflow_dispatch:
+    inputs:
+      correlation_id:
+        description: "Optional deploy correlation_id. Empty means latest DEPLOY_* audit chain."
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install SSH key
+        env:
+          KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          echo "${KEY}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+      - name: Query deploy audit_log on server (read-only)
+        id: audit
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+          REQUESTED_CID: ${{ inputs.correlation_id }}
+        run: |
+          set +e
+          requested="${REQUESTED_CID:-}"
+          if [[ -n "${requested}" && ! "${requested}" =~ ^[0-9a-fA-F]{8,64}$ ]]; then
+            echo "Invalid correlation_id: must be 8-64 hex characters" | tee /tmp/deploy_audit.log
+            echo "ssh_exit=2" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          port="${PORT:-22}"
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "REQUESTED_CID='${requested}' bash -s" > /tmp/deploy_audit.log 2>&1 <<'REMOTE'
+          set -euo pipefail
+          db="/opt/auto-invest/data/auto_invest.db"
+          if [[ ! -r "${db}" ]]; then
+            echo "AUDIT_STATUS=missing_db"
+            echo "DB not readable: ${db}"
+            exit 3
+          fi
+
+          cid="${REQUESTED_CID:-}"
+          if [[ -z "${cid}" ]]; then
+            cid="$(sqlite3 -readonly "${db}" \
+              "SELECT correlation_id
+                 FROM audit_log
+                WHERE event_type LIKE 'DEPLOY_%'
+                  AND correlation_id IS NOT NULL
+                  AND correlation_id != ''
+                ORDER BY seq DESC
+                LIMIT 1;")"
+          fi
+
+          if [[ -z "${cid}" ]]; then
+            echo "AUDIT_STATUS=no_deploy_rows"
+            echo "No DEPLOY_* audit rows with correlation_id found."
+            exit 4
+          fi
+
+          row_count="$(sqlite3 -readonly "${db}" \
+            "SELECT COUNT(*)
+               FROM audit_log
+              WHERE correlation_id = '${cid}'
+                AND event_type LIKE 'DEPLOY_%';")"
+          terminal_event="$(sqlite3 -readonly "${db}" \
+            "SELECT event_type
+               FROM audit_log
+              WHERE correlation_id = '${cid}'
+                AND event_type LIKE 'DEPLOY_%'
+              ORDER BY seq DESC
+              LIMIT 1;")"
+
+          echo "AUDIT_STATUS=ok"
+          echo "AUDIT_CORRELATION_ID=${cid}"
+          echo "AUDIT_ROW_COUNT=${row_count}"
+          echo "AUDIT_TERMINAL_EVENT=${terminal_event}"
+          echo ""
+          echo "## DEPLOY audit rows"
+          sqlite3 -readonly -header -column "${db}" \
+            "SELECT seq,
+                    ts_utc,
+                    event_type,
+                    json_extract(payload_json, '$.phase') AS phase,
+                    substr(json_extract(payload_json, '$.sha_before'), 1, 12) AS sha_before,
+                    substr(json_extract(payload_json, '$.sha_after'), 1, 12) AS sha_after,
+                    json_extract(payload_json, '$.reason') AS reason
+               FROM audit_log
+              WHERE correlation_id = '${cid}'
+                AND event_type LIKE 'DEPLOY_%'
+              ORDER BY seq;"
+          REMOTE
+          ssh_exit=$?
+          echo "ssh_exit=${ssh_exit}" >> "$GITHUB_OUTPUT"
+          sed -n 's/^AUDIT_STATUS=/audit_status=/p' /tmp/deploy_audit.log >> "$GITHUB_OUTPUT"
+          sed -n 's/^AUDIT_CORRELATION_ID=/audit_correlation_id=/p' /tmp/deploy_audit.log >> "$GITHUB_OUTPUT"
+          sed -n 's/^AUDIT_ROW_COUNT=/audit_row_count=/p' /tmp/deploy_audit.log >> "$GITHUB_OUTPUT"
+          sed -n 's/^AUDIT_TERMINAL_EVENT=/audit_terminal_event=/p' /tmp/deploy_audit.log >> "$GITHUB_OUTPUT"
+          cat /tmp/deploy_audit.log
+
+      - name: Publish deploy audit sidecar
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SSH_EXIT: ${{ steps.audit.outputs.ssh_exit }}
+          AUDIT_STATUS: ${{ steps.audit.outputs.audit_status }}
+          AUDIT_CID: ${{ steps.audit.outputs.audit_correlation_id }}
+          AUDIT_ROW_COUNT: ${{ steps.audit.outputs.audit_row_count }}
+          AUDIT_TERMINAL: ${{ steps.audit.outputs.audit_terminal_event }}
+        run: |
+          set -uo pipefail
+          BRANCH=automation/deploy-audit-last-run
+          tmpdir=$(mktemp -d); cd "${tmpdir}"; git init -q
+          git config user.name "deploy-audit-bot"
+          git config user.email "deploy-audit-bot@noreply.github.com"
+          {
+            echo "# Deploy audit_log verification — latest run"
+            echo ""
+            echo "서버 audit_log 의 DEPLOY_* 행을 읽기 전용으로 조회한 결과입니다."
+            echo ""
+            echo "| 항목 | 값 |"
+            echo "|------|-----|"
+            echo "| run_id | ${GITHUB_RUN_ID} |"
+            echo "| commit | ${GITHUB_SHA} |"
+            echo "| trigger | ${GITHUB_EVENT_NAME} |"
+            echo "| timestamp_utc | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
+            echo "| ssh_exit | ${SSH_EXIT:-?} |"
+            echo "| audit_status | ${AUDIT_STATUS:-unknown} |"
+            echo "| correlation_id | ${AUDIT_CID:-} |"
+            echo "| deploy_row_count | ${AUDIT_ROW_COUNT:-0} |"
+            echo "| terminal_event | ${AUDIT_TERMINAL:-} |"
+            echo ""
+            echo "## Raw query output"
+            echo ""
+            echo '```'
+            cat /tmp/deploy_audit.log 2>/dev/null || echo '(unavailable)'
+            echo '```'
+          } > LAST_RUN.md
+          git checkout --orphan publish
+          git add LAST_RUN.md
+          git commit -q -m "deploy audit log verification ${GITHUB_RUN_ID}"
+          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "publish:${BRANCH}"
+
+      - name: Fail when deploy audit is not completed
+        if: always()
+        env:
+          SSH_EXIT: ${{ steps.audit.outputs.ssh_exit }}
+          AUDIT_STATUS: ${{ steps.audit.outputs.audit_status }}
+          AUDIT_TERMINAL: ${{ steps.audit.outputs.audit_terminal_event }}
+        run: |
+          if [[ "${SSH_EXIT:-1}" != "0" ]]; then
+            echo "::error::deploy audit SSH/query failed"
+            exit 1
+          fi
+          if [[ "${AUDIT_STATUS:-}" != "ok" ]]; then
+            echo "::error::deploy audit status is ${AUDIT_STATUS:-missing}"
+            exit 1
+          fi
+          if [[ "${AUDIT_TERMINAL:-}" != "DEPLOY_COMPLETED" ]]; then
+            echo "::error::latest deploy audit terminal event is ${AUDIT_TERMINAL:-missing}, not DEPLOY_COMPLETED"
+            exit 1
+          fi
