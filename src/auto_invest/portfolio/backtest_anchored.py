@@ -111,6 +111,8 @@ def backtest_anchored_verdict(
     *,
     oos_returns: list[Decimal],
     forward_returns: list[Decimal],
+    oos_edge_confirmed: bool = True,
+    oos_rejection_reason: str | None = None,
     num_trials: int = 1,
     trial_sharpe_std_annual: Decimal | float | int | None = None,
     dsr_threshold: Decimal = DEFAULT_DSR_THRESHOLD,
@@ -121,9 +123,10 @@ def backtest_anchored_verdict(
     """깊은 OOS 일수익률 + 짧은 forward 일수익률 → 엣지 판정(순수·결정론·보수적).
 
     1. OOS 가 얕으면(< min_oos_obs) INSUFFICIENT — 앵커 불가.
-    2. OOS 유의성(PSR/DSR) < 임계 또는 샤프 ≤ 0 → NO_EDGE(백테스트가 엣지를 못 세움).
-    3. forward 가 부족하면(< min_forward_obs) INSUFFICIENT — 지속 확인 불가.
-    4. 지속성 z = (forward 평균 − OOS 평균)/(OOS 표준편차/√forward수). z < −consistency_z 면
+    2. OOS walk-forward 가 벤치마크 대비 강건한 엣지를 못 세우면 NO_EDGE.
+    3. OOS 유의성(PSR/DSR) < 임계 또는 샤프 ≤ 0 → NO_EDGE(백테스트가 엣지를 못 세움).
+    4. forward 가 부족하면(< min_forward_obs) INSUFFICIENT — 지속 확인 불가.
+    5. 지속성 z = (forward 평균 − OOS 평균)/(OOS 표준편차/√forward수). z < −consistency_z 면
        라이브가 유의하게 악화 → NO_EDGE. 아니면 EDGE_CONFIRMED(검증 엣지가 지속).
     """
     oos_n = len(oos_returns)
@@ -153,6 +156,24 @@ def backtest_anchored_verdict(
     oos_signif = sig.dsr if (num_trials > 1 and sig.dsr is not None) else sig.psr
     oos_sharpe = sig.sharpe_annual
     oos_mean = Decimal(str(statistics.fmean(_floats(oos_returns))))
+
+    if not oos_edge_confirmed:
+        return AnchoredVerdict(
+            verdict=NO_EDGE,
+            reason=(
+                "OOS walk-forward 엣지 미확정 — "
+                f"{oos_rejection_reason or '벤치마크 대비 강건한 우위 없음'}"
+            ),
+            oos_n_obs=oos_n,
+            oos_sharpe_annual=oos_sharpe,
+            oos_significance=oos_signif,
+            forward_n_obs=fwd_n,
+            forward_mean_daily=None,
+            oos_mean_daily=oos_mean,
+            consistency_z=None,
+            dsr_threshold=dsr_threshold,
+            num_trials=num_trials,
+        )
 
     if oos_signif is None or oos_signif < dsr_threshold or oos_sharpe <= 0:
         return AnchoredVerdict(

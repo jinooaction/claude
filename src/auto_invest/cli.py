@@ -5106,6 +5106,8 @@ def forward_verdict_anchored_cmd(
     verdict = backtest_anchored_verdict(
         oos_returns=oos_returns,
         forward_returns=forward_returns,
+        oos_edge_confirmed=report.verdict.startswith("강건한 엣지 신호"),
+        oos_rejection_reason=report.verdict,
         num_trials=num_trials,
         dsr_threshold=_Decimal(str(dsr_threshold)),
         min_oos_obs=min_oos_obs,

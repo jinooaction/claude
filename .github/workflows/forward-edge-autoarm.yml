@@ -18,6 +18,8 @@ name: Capital ladder gate (forward edge -> rung promotions/demotions)
 #   - 센티넬 머지 자체는 미리보기만 — 실주문은 rebalance-live-canary.yml 의 시장시간
 #     스케줄에서만. 빠른 장중 방어선은 스펙 014 서킷 브레이커(이 게이트는 느린 거버너).
 #   - 즉시 정지: automation/AUTOARM_DISABLED 파일을 main 에 두면 게이트가 DISABLED no-op.
+#   - 단 0→1 가속: 표준 20일 forward 판정에 더해, 깊은 OOS + 짧은 forward 지속성
+#     앵커드 판정도 함께 본다. 앵커드 산출 실패는 미확정으로 처리해 기존 fail-safe 유지.
 #   - 결과는 사이드카 automation/edge-autoarm-last-run 으로 발행:
 #       git show origin/automation/edge-autoarm-last-run:LAST_RUN.md
 #
@@ -40,7 +42,7 @@ concurrency:
 jobs:
   ladder:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 25
     steps:
       - name: Checkout (fresh main — correct configs + sentinel for the decision)
         uses: actions/checkout@v4
@@ -90,6 +92,42 @@ jobs:
           # 판정 JSON 이 비었으면 빈 객체로 — ladder-decide 가 보수적으로 WAIT_EDGE 처리.
           if [[ ! -s /tmp/verdict_global.json ]]; then echo '{}' > /tmp/verdict_global.json; fi
 
+      - name: Compute anchored verdict on instance (read-only, deep OOS + short forward)
+        id: anchored
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "cd /opt/auto-invest && \
+                 wrk=/tmp/autoarm_anchored_global && \
+                 rm -rf \${wrk} && mkdir -p \${wrk} && \
+                 /usr/local/bin/uv run auto-invest bars-export \
+                   --portfolio deploy/global-trend-portfolio.toml \
+                   --db data/forward_global.db --out-dir \${wrk}/bars --json \
+                   > \${wrk}/bars-export.json && \
+                 /usr/local/bin/uv run auto-invest ingest-history \
+                   --from-dir \${wrk}/bars --out-dir \${wrk}/hist \
+                   > \${wrk}/ingest.log && \
+                 /usr/local/bin/uv run auto-invest forward-verdict-anchored \
+                   --portfolio deploy/global-trend-portfolio.toml \
+                   --db data/forward_global.db \
+                   --history-root \${wrk}/hist \
+                   --trailing-years 5 \
+                   --mode paper \
+                   --min-forward-obs 5 \
+                   --format json" \
+              > /tmp/anchored_global.json 2>/tmp/anchored_global.err
+          echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
+          echo "--- anchored verdict ---"; cat /tmp/anchored_global.json
+          echo "--- stderr ---"; cat /tmp/anchored_global.err
+          # 앵커드 산출 실패/공백은 미확정으로 흡수 — 표준 20일 판정만 남아 fail-safe.
+          if [[ ! -s /tmp/anchored_global.json ]]; then echo '{}' > /tmp/anchored_global.json; fi
+
       - name: Measure live evidence on instance (account NAV + growth since rung entry)
         env:
           HOST: ${{ secrets.VULTR_SSH_HOST }}
@@ -123,6 +161,7 @@ jobs:
           set -uo pipefail
           uv run auto-invest ladder-decide \
             --verdict-json /tmp/verdict_global.json \
+            --anchored-verdict-json /tmp/anchored_global.json \
             --live-growth-json /tmp/live_growth.json \
             --account-nav-json /tmp/account_nav.json \
             --live-portfolio deploy/canary-live-portfolio.toml \
@@ -222,6 +261,7 @@ jobs:
           tgt="$(jq -r '.target_rung // "?"' /tmp/decision.json 2>/dev/null || echo '?')"
           cap="$(jq -r '.target_capital_usd // "?"' /tmp/decision.json 2>/dev/null || echo '?')"
           nav="$(jq -r '.account_nav_usd // "?"' /tmp/decision.json 2>/dev/null || echo '?')"
+          edge_source="$(jq -r '.edge_source // "?"' /tmp/decision.json 2>/dev/null || echo '?')"
           tmpdir=$(mktemp -d); cd "${tmpdir}"; git init -q
           git config user.name "capital-ladder-bot"
           git config user.email "capital-ladder-bot@noreply.github.com"
@@ -241,6 +281,7 @@ jobs:
             echo "| **결정(action)** | **${ACTION:-?}** |"
             echo "| 단(rung) | ${cur} → ${tgt} |"
             echo "| 자본 | \$${cap} (실계좌 NAV \$${nav}) |"
+            echo "| 엣지 출처 | ${edge_source} |"
             echo "| 센티넬 변경 | ${CHANGED:-false} |"
             echo "| PR | ${PR_URL:-(없음 — 변경 없음)} |"
             echo "| 머지 | ${MERGED:-n/a} |"
@@ -269,6 +310,11 @@ jobs:
             echo "## forward 판정 JSON (검증된 앙상블, read-only)"
             echo '```json'
             cat /tmp/verdict_global.json 2>/dev/null || echo '{}'
+            echo '```'
+            echo ""
+            echo "## 앵커드 판정 JSON (깊은 OOS + 짧은 forward 지속성, read-only)"
+            echo '```json'
+            cat /tmp/anchored_global.json 2>/dev/null || echo '{}'
             echo '```'
             echo ""
             echo "## 라이브 실적 JSON (현재 단 진입 이후, read-only)"
