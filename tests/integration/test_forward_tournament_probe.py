@@ -1,7 +1,7 @@
 """스펙 053 — forward 토너먼트 리더보드 프로브 통합 테스트.
 
 두 입력 경로를 모두 검증한다:
-  - --verdict-dir : 워크플로가 만드는 /tmp/verdict_<key>.json 6개를 읽는 경로.
+  - --verdict-dir : 워크플로가 만드는 /tmp/verdict_<key>.json 7개를 읽는 경로.
   - --from-sidecar: 발행된 forward 사이드카 LAST_RUN.md 를 트랙 헤더별로 파싱하는 경로.
 scripts/ 는 패키지가 아니므로 파일 경로로 직접 로드한다(실제 진입점 검증).
 """
@@ -46,7 +46,7 @@ def test_manifest_lists_all_tracks(capsys):
     rc = probe_main(["--manifest"])
     assert rc == 0
     out = capsys.readouterr().out.strip().splitlines()
-    assert len(out) == 7  # 6 트랙 + globalfixed(재지정 후보)
+    assert len(out) == 7
     # global 이 incumbent(True)로 표시되는 유일한 트랙.
     incumbents = [ln for ln in out if ln.endswith("True")]
     assert len(incumbents) == 1
@@ -122,7 +122,16 @@ def _sidecar(verdicts_by_key: dict[str, dict]) -> str:
         "globalfixed": "## ⚖ 판정 — 글로벌 3자산 추세 고정(등가중) 재지정 후보",
         "wide": "## 🌍 판정 — 글로벌 분산 추세 확대 유니버스 (11 슬리브)",
     }
-    parts = ["# forward 페이퍼 A/B 토너먼트\n"]
+    parts = [
+        "# forward 페이퍼 A/B 토너먼트\n",
+        "추세 필터 **ON**(canary-portfolio.toml) vs **OFF**(대조군).",
+        "글로벌 분산 추세와 글로벌 3자산 추세 고정 후보를 함께 비교한다.",
+        "",
+        "```",
+        "이 일반 코드블록은 halt 진단 같은 부가 로그다. JSON 판정이 아니다.",
+        "```",
+        "",
+    ]
     for key, *_ in TRACKS:
         vj = verdicts_by_key[key]
         parts.append(headers[key])
@@ -149,12 +158,33 @@ def test_from_sidecar_parses_all_tracks(tmp_path, capsys):
     assert len(obj["rows"]) == 7
     # global 이 EDGE_CONFIRMED 로 정확히 파싱되어 챔피언(= incumbent).
     assert obj["champion_key"] == "global"
+    assert obj["known_count"] == 7
+    assert obj["unknown_count"] == 0
     g = next(r for r in obj["rows"] if r["key"] == "global")
     assert g["verdict"] == "EDGE_CONFIRMED"
     assert g["comparability"] == "COMPARABLE"
     # wide 는 NO_EDGE 로(global 블록과 안 섞임).
     w = next(r for r in obj["rows"] if r["key"] == "wide")
     assert w["verdict"] == "NO_EDGE"
+
+
+def test_from_sidecar_heading_only_parser_ignores_intro_collisions(tmp_path, capsys):
+    # 실제 사고: 상단 설명의 "추세 필터 ON" 문구를 트랙 헤더로 오인해, 그 뒤의
+    # 일반 코드블록을 JSON 으로 파싱하려다 trend/notrend 등이 UNKNOWN 이 됐다.
+    vmap = {key: _verdict(n_obs=4) for key, *_ in TRACKS}
+    md = _sidecar(vmap)
+    p = tmp_path / "forward.md"
+    p.write_text(md, encoding="utf-8")
+
+    rc = probe_main(["--from-sidecar", str(p), "--json", "--now", "2026-06-14T00:00:00Z"])
+    assert rc == 0
+    obj = json.loads(capsys.readouterr().out)
+
+    assert obj["known_count"] == 7
+    assert obj["unknown_count"] == 0
+    assert {r["key"]: r["comparability"] for r in obj["rows"]} == {
+        key: "PREMATURE" for key, *_ in TRACKS
+    }
 
 
 def test_from_sidecar_text_output(tmp_path, capsys):

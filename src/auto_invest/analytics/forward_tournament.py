@@ -3,7 +3,7 @@
 이 프로젝트가 반복적으로 물린 안티패턴은 "사이드카(또는 JSON 블록) 여러 개를 사람이
 머릿속에서 짜맞춰야 한다"는 것이다. 스펙 051(생존 감시)·052(첫-자본까지의 길)가 각각
 "파이프라인이 살아있나"·"검증된 한 트랙의 자본까지 길"을 한 곳에 모았듯, 이 모듈은
-**"6개 forward 페이퍼 트랙 중 누가 이기고 있나"를 한 곳에 모은다.**
+**"7개 forward 페이퍼 트랙 중 누가 이기고 있나"를 한 곳에 모은다.**
 
 배경: `rebalance-paper-forward.yml` A/B 토너먼트는 후보 전략 여러 개(추세 ON/OFF·
 위험관리 베타·멀티에셋 추세·글로벌 추세·확대 유니버스)를 각자 전용 DB 로 격리해 병렬
@@ -14,7 +14,7 @@ SPY·IEF·GLD)이 아직도 최강인지, 어떤 도전자가 EDGE_CONFIRMED 를
 됐는지(검증=배치 정합, 헌법 X.4 v5.0.0 사다리)를 알려면 사람이 6덩이를 눈으로 비교해야
 했다.
 
-이 모듈은 그 6 판정을 받아 **정직성 게이트로 순위를 매긴다**:
+이 모듈은 그 7개 판정을 받아 **정직성 게이트로 순위를 매긴다**:
 
   - 비교 가능(COMPARABLE) = 관측 ≥ 최소(스펙 035 기본 20). 엣지를 판정할 만큼 쌓임.
   - 잠정(PREMATURE)      = INSUFFICIENT_DATA(관측 < 최소). 지표는 아직 노이즈 → 순위는
@@ -48,6 +48,12 @@ PREMATURE = "PREMATURE"  # 관측 < 최소 — 지표 노이즈, 순위는 매�
 UNKNOWN = "UNKNOWN"  # 판정 JSON 못 읽음
 
 SCHEMA_VERSION = "1.0"
+
+# 후보 관측 품질. 토너먼트 자체의 생존은 사이드카 timestamp 로 보지만, "살아있는데
+# 일부 후보 판정을 못 읽거나 한 후보만 뒤처지는" 문제는 별도 품질 상태로 드러낸다.
+OBS_HEALTH_OK = "OK"
+OBS_HEALTH_DEGRADED = "DEGRADED"
+OBS_HEALTH_BLOCKED = "BLOCKED"
 
 # 스펙 035 기본 최소 관측(판정 JSON 에 min_obs_required 가 없을 때 폴백).
 DEFAULT_MIN_OBS = 20
@@ -257,6 +263,15 @@ class TournamentLeaderboard:
     comparable_count: int = 0  # 비교 가능 트랙 수 K(챔피언을 뽑은 가족 크기)
     adjusted_dsr_threshold: Decimal | None = None  # 1 − (1−기준)/K (없으면 평가 불가)
     champion_multiplicity_robust: bool | None = None  # 챔피언 유의확률 ≥ 보정 기준?(None=미평가)
+    # 후보 관측 품질 — 재지정 루프가 "도전자 없음"과 "후보 판정을 못 읽음"을 구분하게 한다.
+    track_count: int = 0
+    known_count: int = 0
+    unknown_count: int = 0
+    max_n_obs: int | None = None
+    min_n_obs: int | None = None
+    lagging_keys: tuple[str, ...] = ()
+    observation_health: str = OBS_HEALTH_OK
+    observation_note: str = ""
 
     def to_json_dict(self) -> dict:
         return {
@@ -272,6 +287,14 @@ class TournamentLeaderboard:
                 else str(self.adjusted_dsr_threshold)
             ),
             "champion_multiplicity_robust": self.champion_multiplicity_robust,
+            "track_count": self.track_count,
+            "known_count": self.known_count,
+            "unknown_count": self.unknown_count,
+            "max_n_obs": self.max_n_obs,
+            "min_n_obs": self.min_n_obs,
+            "lagging_keys": list(self.lagging_keys),
+            "observation_health": self.observation_health,
+            "observation_note": self.observation_note,
             "headline": self.headline,
             "note": self.note,
             "rows": [r.to_json_dict() for r in self.rows],
@@ -324,6 +347,24 @@ class TournamentLeaderboard:
             "🏠 라이브 검증 트랙 · 👑 챔피언(비교 가능 EDGE_CONFIRMED 1위) · 🚀 도전자"
             "(검증 트랙을 앞섬). 잠정(⏳)은 관측이 더 쌓여야 비교 가능 — 지표는 잠정치."
         )
+        health_icon = {
+            OBS_HEALTH_OK: "✅",
+            OBS_HEALTH_DEGRADED: "⚠",
+            OBS_HEALTH_BLOCKED: "🛑",
+        }.get(self.observation_health, "•")
+        lines += [
+            "",
+            "## 후보 관측 품질",
+            "",
+            f"{health_icon} **{self.observation_health}** — {self.observation_note}",
+            "",
+            "| 전체 | 판정 읽힘 | 판정 없음 | 최소 관측 | 최대 관측 | 뒤처진 트랙 |",
+            "|-----:|----------:|----------:|----------:|----------:|-------------|",
+            f"| {self.track_count} | {self.known_count} | {self.unknown_count} | "
+            f"{self.min_n_obs if self.min_n_obs is not None else '—'} | "
+            f"{self.max_n_obs if self.max_n_obs is not None else '—'} | "
+            f"{', '.join(self.lagging_keys) if self.lagging_keys else '—'} |",
+        ]
         if self.champion_key is not None:
             bar = _fmt_p(self.adjusted_dsr_threshold)
             if self.champion_multiplicity_robust is True:
@@ -422,6 +463,85 @@ def _mult_clause(
     )
 
 
+def _observation_quality(
+    ranked: list[TrackResult],
+    incumbent: TrackResult | None,
+) -> tuple[int, int, int, int | None, int | None, tuple[str, ...], str, str]:
+    """후보군 관측 품질을 요약한다.
+
+    생존 감시는 "워크플로가 돌았나"만 본다. 여기서는 "후보 판정이 모두 읽혔나",
+    "한 후보가 관측 누적에서 크게 뒤처졌나", "incumbent 판정을 잃어 사과 대 사과 비교가
+    불가능한가"를 드러낸다. 이 값은 거래를 일으키지 않고, 재지정 판단의 입력 품질을
+    설명하는 포렌식 표면이다.
+    """
+    track_count = len(ranked)
+    known = [t for t in ranked if t.comparability != UNKNOWN]
+    unknown = [t for t in ranked if t.comparability == UNKNOWN]
+    n_obs_values = [t.n_obs for t in known if t.n_obs is not None]
+    max_obs = max(n_obs_values) if n_obs_values else None
+    min_obs = min(n_obs_values) if n_obs_values else None
+    lagging: tuple[str, ...] = ()
+    if max_obs is not None:
+        # 하루 정도 차이는 워크플로 타이밍/신규 트랙에서 정상일 수 있다. 2관측 이상
+        # 뒤처지면 재지정 후보군의 비교 품질 저하로 표면화한다.
+        lagging = tuple(
+            t.key
+            for t in known
+            if t.n_obs is not None and max_obs - t.n_obs >= 2
+        )
+
+    if not known:
+        return (
+            track_count,
+            0,
+            len(unknown),
+            max_obs,
+            min_obs,
+            lagging,
+            OBS_HEALTH_BLOCKED,
+            "어떤 후보 판정도 읽히지 않음 — 토너먼트 입력 품질 차단.",
+        )
+    if incumbent is None or incumbent.comparability == UNKNOWN:
+        return (
+            track_count,
+            len(known),
+            len(unknown),
+            max_obs,
+            min_obs,
+            lagging,
+            OBS_HEALTH_BLOCKED,
+            "라이브 검증 트랙 판정을 읽지 못함 — 사과 대 사과 비교 불가.",
+        )
+    if unknown or lagging:
+        parts: list[str] = []
+        if unknown:
+            parts.append(
+                "판정 없음: " + ", ".join(t.key for t in unknown)
+            )
+        if lagging:
+            parts.append("관측 뒤처짐: " + ", ".join(lagging))
+        return (
+            track_count,
+            len(known),
+            len(unknown),
+            max_obs,
+            min_obs,
+            lagging,
+            OBS_HEALTH_DEGRADED,
+            "; ".join(parts) + " — 재지정 후보군 관측 품질 저하.",
+        )
+    return (
+        track_count,
+        len(known),
+        0,
+        max_obs,
+        min_obs,
+        lagging,
+        OBS_HEALTH_OK,
+        "모든 후보 판정이 읽혔고 관측 누적이 같은 속도로 진행 중.",
+    )
+
+
 def rank_tournament(
     tracks: list[TrackResult],
     *,
@@ -462,6 +582,16 @@ def rank_tournament(
     # 교차-트랙 다중비교(본페로니) 보정 — K=비교 가능 트랙 중 챔피언을 뽑은 선택 다중성.
     comparable_count = sum(1 for t in ranked if t.comparability == COMPARABLE)
     adjusted_threshold, champion_robust = _multiplicity(champion, comparable_count)
+    (
+        track_count,
+        known_count,
+        unknown_count,
+        max_n_obs,
+        min_n_obs,
+        lagging_keys,
+        observation_health,
+        observation_note,
+    ) = _observation_quality(ranked, incumbent)
 
     headline, note = _summarize(
         ranked,
@@ -485,6 +615,14 @@ def rank_tournament(
         comparable_count=comparable_count,
         adjusted_dsr_threshold=adjusted_threshold,
         champion_multiplicity_robust=champion_robust,
+        track_count=track_count,
+        known_count=known_count,
+        unknown_count=unknown_count,
+        max_n_obs=max_n_obs,
+        min_n_obs=min_n_obs,
+        lagging_keys=lagging_keys,
+        observation_health=observation_health,
+        observation_note=observation_note,
     )
 
 
@@ -587,6 +725,9 @@ __all__ = [
     "EDGE_CONFIRMED",
     "INSUFFICIENT_DATA",
     "NO_EDGE",
+    "OBS_HEALTH_BLOCKED",
+    "OBS_HEALTH_DEGRADED",
+    "OBS_HEALTH_OK",
     "PREMATURE",
     "SCHEMA_VERSION",
     "UNKNOWN",
