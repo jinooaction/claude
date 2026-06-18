@@ -33,13 +33,13 @@ git ls-remote --heads origin 'claude/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `82bd9d8` — Merge pull request #358 from jinooaction/Codex/leaderboard-observation-gate |
+| 마지막 main 커밋 | `43149ee` — Merge pull request #360 from jinooaction/Codex/handoff-leaderboard-observation |
 | main 테스트 | `uv run pytest -q` → 2191 passed, 4 skipped |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
-| 열린 PR | 없음(`gh pr list --state open` 결과 `[]`) |
-| 최근 출시 작업 | #358 forward `leaderboard.json` 관측 품질을 재지정 루프 입력 게이트로 연결 |
-| 활성 작업 | 없음. 다음 세션은 새 작업 전 `/sync`와 최신 사이드카 상태를 먼저 확인 |
-| 안전 경계 | 헌법·커널·주문 제한·비밀값·실제 주문·돈 경로 변경 없음 |
+| 열린 PR | 이 인계 갱신 PR #359 외 없음 |
+| 최근 출시 작업 | #360 인계 보정, #358 forward `leaderboard.json` 관측 품질 재지정 입력 게이트, #357 앵커드 자본 사다리 게이트 |
+| 활성 작업 | 이 인계 갱신 PR #359. 다음 세션은 새 작업 전 `/sync`와 최신 사이드카 상태를 먼저 확인 |
+| 안전 경계 | #357은 등급 4 돈 경로 변경이지만 현재 돈 이동 0. #358/#360/#359는 운영/문서 인계 변경, 헌법·커널·주문 제한·비밀값 변경 없음 |
 
 ## 완료된 작업 큐 (운영자 승인 — 2026-05-31, 1→2→3 전부 완료)
 
@@ -198,42 +198,52 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
    `forward-verdict-anchored`)로 돌려 **단순 보유를 강건하게 이기는(robust edge) 전략이 있는지**
    찾는다. forward-anchored-verdict.yml 을 전 후보로 확장(regime-stratify 가 global+wide 2트랙
    하는 패턴)하거나, 후보별 walk-forward 비교 사이드카를 만든다. **이게 실제 돈으로 가는 핵심.**
-2. 강건한 엣지가 있는 후보가 나오면 → 그 전략을 라이브 지정(검증=배치 지문 정합)하고, 가속기
-   게이트 활성화(아래 (b) 워크플로 배선)로 빠르게 확정.
+2. 강건한 엣지가 있는 후보가 나오면 → 그 전략을 라이브 지정(검증=배치 지문 정합)한다.
+   가속기 게이트 배선은 PR #357로 완료되어, `forward-edge-autoarm.yml` 이 앵커드 판정을
+   직접 계산해 `ladder-decide --anchored-verdict-json` 으로 넘긴다.
 3. 강건한 엣지가 *어느 후보에도* 없으면 → 전략 연구가 진짜 과제(추세추종 외 차원: 평균회귀·
    캐리·품질팩터 등 비상관 엣지 추가). 운영자와 방향 합의 후 후보 추가.
 
-**가속기 배선 현황(이번 세션 전부 머지, 활성화만 남음)**:
+**가속기 배선 현황(완료 — 실제 돈 게이트에 연결됨)**:
 - ✅ 엔진(#298)·파이프라인(#299)·CLI `forward-verdict-anchored`(#301)·발행 워크플로(#302)·
   결합 함수 `combine_edge_verdicts`(#304)·`ladder-decide --anchored-verdict-json` 결합(#305).
-- ⏳ **미완(b) 활성화**: `forward-edge-autoarm.yml` 이 앵커드 판정을 산출해 `ladder-decide`에
-  `--anchored-verdict-json` 으로 넘기는 워크플로 배선. 이게 실제 돈 게이트 가속을 켠다 —
-  강건한 엣지 전략을 먼저 찾은 뒤에 켤 것(엣지 없는데 켜봐야 의미 없음). 현재는 하위 호환이라
-  라이브 동작 무변경.
+- ✅ **게이트 소비 활성화(#357, main `28bd306`)**: `forward-edge-autoarm.yml` 이 표준
+  `forward-verdict`와 앵커드 `forward-verdict-anchored`를 둘 다 계산하고
+  `ladder-decide --anchored-verdict-json` 으로 넘긴다. 단, 앵커드 OOS walk-forward 가
+  벤치마크 대비 강건한 엣지를 못 세우면 `NO_EDGE`로 거부한다. 최신 수동 검증(run
+  `27778082054`)은 `WAIT_EDGE`, `edge_source=none`, 센티넬 변경 없음.
 
 **세션 운영 메모**: 이번 세션에 도구 호출 형식 오류(`antml:` 접두사 누락)가 반복돼 운영자
 시간을 낭비함. 다음 세션은 모든 도구 호출에 `antml:invoke`/`antml:parameter` 접두사를 반드시
 정확히 쓸 것.
 
-## 최근 관찰 — 2026-06-19 (A6 guard 이후 운영 상태 점검, 읽기 전용)
+## 최근 관찰 — 2026-06-19 (앵커드 자본 사다리·재지정 관측 게이트 운영 상태)
 
-현재 `main` 최신은 `82bd9d8`(#358, forward `leaderboard.json` 관측 품질을 재지정 루프 입력
-게이트로 연결)이다. 바로 앞에는 `28bd306`(#357, 앵커드 엣지 자본 사다리 배선),
-`d3d98a3`(#355, handoff main tip 보정), `1c60360`(#356, 로컬 다중 세션 guard 인계 갱신)이
-있다. `/sync`와 `gh pr list --state open` 기준 열린 PR은 없다.
+현재 `main` 최신은 `43149ee`(#360, #358 인계 보정)이다. 바로 앞에는 `82bd9d8`(#358,
+forward `leaderboard.json` 관측 품질을 재지정 루프 입력 게이트로 연결), `28bd306`(#357,
+앵커드 엣지 자본 사다리 배선), `d3d98a3`(#355, handoff main tip 보정)이 있다.
+`gh pr list --state open` 기준 열린 PR은 이 인계 갱신 PR #359뿐이다.
 
-- **배포 상태**: `258be63`은 `HANDOFF.md`만 바꾼 문서 커밋이라 `deploy-on-merge.yml`의
-  `paths-ignore`에 걸려 배포 트리거가 없다. A6 guard 실제 코드 머지 `e2cf6b3` 기준
-  `Deploy on merge to main` 성공과 KIS smoke 성공(`key_valid=true`, `smoke_state=success`)이
-  최신 코드 배포 증거다. 서버 `audit_log`의 `DEPLOY_*` 행은 이 컨테이너에서 직접 확인 불가.
-- **A6 guard 이후 첫 cron 여부**: 현재 확인 시각은 `2026-06-18T16:50:33Z`였다. 최신
-  `edge-autoarm-last-run`(02:04Z), `rebalance-paper-forward-last-run`(00:01Z),
-  `reassign-last-run`(05:08Z)은 `e2cf6b3` 배포(10:29Z KIS smoke 기준)보다 앞선 실행이라
-  guard 이후 첫 실행 증거로 보기는 이르다. 다음 22:30/23:50/00:20 UTC 스케줄 후 다시 관찰.
+- **배포 상태**: `28bd306` 기준 `Deploy on merge to main` 성공(run `27778015360`),
+  `KIS smoke` 성공(run `27778015311`, `key_valid=true`, `smoke_state=success`),
+  `Forward anchored verdict` 성공(run `27778015364`). 배포는 dry-run 워커 코드 교체이지
+  실거래 전환이 아니다. `82bd9d8`은 스펙/문서만이 아니라 워크플로와 코드 변경을 포함하므로
+  배포 확인 대상이다(다음 `/deploy-status`에서 해당 커밋 기준 확인). 서버 `audit_log`의
+  `DEPLOY_*` 행은 이 컨테이너에서 직접 확인 불가.
+- **재지정 관측 품질 게이트**: #358로 `rebalance-paper-forward` 사이드카가 `leaderboard.json`
+  파일을 함께 발행하고, `reassign-on-tournament.yml`은 더 이상 `LAST_RUN.md` 산문을 재파싱하지
+  않는다. `leaderboard.json`이 없거나 `observation_health`가 `BLOCKED`/`DEGRADED`면 재지정은
+  `HOLD`로 보수 차단된다. 다음 forward 실행 전에는 파일이 없을 수 있고, 그 경우 재지정은
+  `BLOCKED`로 멈추는 것이 정상이다.
+- **자본 사다리 수동 검증**: 새 배선을 `workflow_dispatch`로 즉시 실행(run `27778082054`).
+  결과는 `WAIT_EDGE`, `edge_source=none`, 센티넬 변경 false, PR 없음, 돈 이동 0. 표준 forward 는
+  `INSUFFICIENT_DATA`(4/20), 앵커드는 `NO_EDGE`(OOS 748관측, 유의성 0.998725지만 최근
+  5년 walk-forward 구간 0/3·평균 샤프가 단순 보유 이하라 벤치마크 대비 강건 엣지 미확정).
 - **현재 자본 사다리/재지정 상태**: `edge-autoarm`은 `WAIT_EDGE`, 센티넬 변경 없음.
   `reassign`은 `HOLD`, 라이브 설정 변경 없음. `money-path`는 `ACCUMULATING_EDGE`, 전진 관측
-  4/20, 전진 시계 `converging`, 표본 안정성 `settled`, 전략 지문 정합 `PASS`, 첫 자본 예상
-  `2026-07-10` 부근. 돈 이동 0.
+  4/20, 전진 시계 `converging`, 표본 안정성 `settled`, 전략 지문 정합 `PASS`다.
+  이전 ETA(`2026-07-10` 부근)는 표준 20관측 기준이므로, 앵커드 `NO_EDGE`가 유지되는 동안에는
+  첫 자본이 더 빨리 열리지 않는다. 돈 이동 0.
 - **재지정 입력 게이트 상태**: #358 머지 후 다음 forward 실행부터
   `automation/rebalance-paper-forward-last-run` 사이드카가 루트 `leaderboard.json` 파일을 발행한다.
   그 전에는 해당 파일이 없으므로 `reassign-on-tournament`가 `observation_health=BLOCKED`로
@@ -276,6 +286,30 @@ main 머지 `82bd9d8`(#358). 운영자 목표는 "후보 관측 품질 루프"�
 - **검증**: PR #358 머지 전 `uv run pytest` 2191 통과·4 스킵,
   `uv run ruff check src tests` 통과, 원격 PR 품질 관문 통과. 머지 후 `main` 기준
   `uv run pytest -q` 2191 통과·4 스킵, `uv run ruff check src tests` 통과.
+
+## 최근 마일스톤 — 2026-06-19 (🪜 자본 사다리 앵커드 엣지 게이트 배선 — 빠른 첫 자본, 기준 약화 방지)
+
+main 머지 `28bd306`(#357). 운영자가 “실제 체결 기준 전진 데이터가 아직 통계적으로 부족하다”는
+병목을 정석으로 해결하라고 지시했고, 표준 20관측 forward 판정만 기다리지 않아도 되게
+`forward-verdict-anchored`를 실제 자본 사다리 게이트에 연결했다.
+
+- **게이트 배선 완료**: `.github/workflows/forward-edge-autoarm.yml` 이 이제 표준
+  `forward-verdict`와 앵커드 `forward-verdict-anchored`를 둘 다 계산하고,
+  `ladder-decide --anchored-verdict-json` 으로 넘긴다. 앵커드 산출 실패·공백은 `{}`로 흡수해
+  기존 표준 판정만 남긴다.
+- **기준 약화 방지**: `backtest_anchored_verdict()`가 이제 OOS walk-forward 자체에서
+  벤치마크 대비 강건한 엣지를 못 세우면 `NO_EDGE`로 거부한다. 절대 수익률이 양수여도
+  단순 보유 대비 위험조정 우위가 없으면 첫 자본 게이트를 열지 않는다.
+- **실서버 검증**: PR 머지 후 `Deploy on merge to main` 성공, KIS smoke 성공, 관찰용
+  `forward-anchored-verdict` 성공. 이어 `forward-edge-autoarm.yml`을 수동 실행(run
+  `27778082054`)해 새 배선이 실제 서버에서 끝까지 도는지 확인했다.
+- **현재 판정**: `WAIT_EDGE`, `edge_source=none`, 센티넬 변경 없음, 돈 이동 0. 표준 forward 는
+  4/20으로 부족하고, 앵커드는 OOS 748관측·유의성 0.998725에도 최근 5년 walk-forward 0/3 구간
+  실패라 `NO_EDGE`. 즉 “빠른 경로”는 열렸지만 현재 증거로는 첫 자본을 열지 않는 게 맞다.
+- **안전 경계**: 등급 4 돈 경로 변경. 헌법·커널·캡·화이트리스트·낙폭 예산·서킷 브레이커·
+  주문 제한·비밀값 변경 없음. 실주문 워크플로 직접 변경 없음.
+- **검증**: `uv run pytest` 2184 통과·4 스킵, `uv run ruff check src tests` 통과.
+  YAML 파서 검증, `git diff --check`, PR 품질 관문, 자본 사다리 수동 실행까지 통과.
 
 ## 최근 마일스톤 — 2026-06-19 (로컬 다중 세션 충돌 방어 — 감지·차단·복구·격리)
 
@@ -3125,14 +3159,14 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 |------|-------|
 | 헌법 | **v6.0.0** (X.5 자율 전략 재지정 위임 포함, 안전 경계 기록 완료) |
 | 운영자 응대 정책 | `AGENTS.md` Codex 작업 운영 규칙 + `CLAUDE.md` 기존 Claude 정책. Codex는 `AGENTS.md` 우선 |
-| 마지막 main 커밋 | `1c60360 Merge pull request #356 from jinooaction/Codex/handoff-local-concurrency-guard` |
+| 마지막 main 커밋 | `43149ee Merge pull request #360 from jinooaction/Codex/handoff-leaderboard-observation` |
 | 활성 작업 | 이 인계 갱신 PR 외 열린 작업 없음. 새 작업 전 `/sync`와 `git status`를 먼저 보고, local concurrency guard가 `WARN`/`BLOCK`을 내면 `--mode isolate`로 별도 `worktree`를 만든다 |
-| 최근 완료 | PR #353: 로컬 다중 세션 guard 도입(SessionStart 감지, pre-commit/pre-push 차단, 복구 스냅샷, 격리 worktree, launchd watchdog). 직전 PR #352: forward 토너먼트 후보 관측 품질 JSON화 |
-| 안전 경계 | #353은 등급 2 운영 체계 변경. 헌법·커널·KIS·서버 SSH·SQLite 감사 로그·주문 경로·비밀값·돈 경로 변경 없음 |
-| main 테스트 | 2179 통과, 4 스킵 (라이브 KIS smoke 4건, `KIS_LIVE_TEST=1` 가드) |
+| 최근 완료 | PR #360: #358 인계 보정. PR #358: 재지정 루프가 `leaderboard.json` 관측 품질을 직접 소비하고 `BLOCKED`/`DEGRADED`면 `HOLD`. PR #357: 자본 사다리 게이트가 표준 20관측 forward 판정과 앵커드 OOS+짧은 forward 판정을 함께 소비. 수동 실행 run `27778082054` 결과 `WAIT_EDGE`, 센티넬 변경 없음 |
+| 안전 경계 | #360/#359는 문서 인계 변경, #358은 등급 2 운영 체계 변경(돈 경로 0). #357은 등급 4 돈 경로 변경이지만 헌법·커널·캡·화이트리스트·낙폭 예산·서킷 브레이커·주문 제한·비밀값 변경 없음. 현재 돈 이동 0 |
+| main 테스트 | 2191 통과, 4 스킵 (라이브 KIS smoke 4건, `KIS_LIVE_TEST=1` 가드) |
 | main 린트 | `uv run ruff check src tests` 깨끗 |
-| 열린 PR | 없음 (`gh pr list --repo jinooaction/claude --state open` 기준) |
-| 다음 세션 핵심 | local concurrency guard 경고가 있으면 같은 디렉터리에서 쓰지 말고 `python3 scripts/local_concurrency_guard.py --mode isolate`를 먼저 실행한다. 그 다음 `rebalance-paper-forward` sidecar의 `리더보드 결정 JSON`, `known_count=7`, `observation_health` 회복 여부를 관찰한다. PR·머지·배포·원격 브랜치 판단 전에는 `/sync`로 네트워크 상태를 갱신 |
+| 열린 PR | 이 인계 갱신 PR #359 외 없음 (`gh pr list --repo jinooaction/claude --state open` 기준) |
+| 다음 세션 핵심 | local concurrency guard 경고가 있으면 같은 디렉터리에서 쓰지 말고 `python3 scripts/local_concurrency_guard.py --mode isolate`를 먼저 실행한다. 그 다음 `edge-autoarm-last-run`의 `edge_source`와 앵커드 JSON, `rebalance-paper-forward-last-run:leaderboard.json` 발행 여부를 본다. 현재는 앵커드 `NO_EDGE`라 첫 자본 없음. PR·머지·배포·원격 브랜치 판단 전에는 `/sync`로 네트워크 상태를 갱신 |
 
 ## 과거 상세 요약표 (역사 보존 — 일부 행은 위 현재 요약표보다 낡을 수 있음)
 
