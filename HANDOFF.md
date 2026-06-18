@@ -199,6 +199,29 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
 시간을 낭비함. 다음 세션은 모든 도구 호출에 `antml:invoke`/`antml:parameter` 접두사를 반드시
 정확히 쓸 것.
 
+## 최근 마일스톤 — 2026-06-18 (🛡 A6 안전 경계 변경 차단 guard — 코드가 단일 출처)
+
+main 머지 `7722d0b`(#334). 이전 커밋 `a053d96`이 A0~A6 자율 권한 등급과 CLI 명령 registry를
+만든 뒤, 이번 커밋 `6049cdc`가 A6 안전 경계 변경을 실제 코드에서 판정하고 일반 자율 경로에서
+막는 첫 실행 레이어를 추가했다.
+
+- **코드 단일 출처**: `src/auto_invest/safety/boundary.py` 추가. `ProposedChange`(제안 변경)와
+  `BoundaryDecision`(경계 판정) 순수 모델, `BoundarySurface`(position caps, whitelist,
+  loss budget, live authority, safety policy), `decide_boundary()`,
+  `assert_autonomous_boundary_allowed()`를 제공한다.
+- **A6 판정**: cap, whitelist, loss budget, live authority, safety policy 변경은 경로 또는
+  요약 키워드 또는 명시 surface로 `AutonomyLevel.SAFETY_BOUNDARY_CHANGE`가 된다. 이 등급은
+  기존 `autonomy.py` 정책에 따라 `autonomous_allowed=False`, `operator_approval_required=True`.
+- **차단 동작**: 일반 자율 실행 경로는 `assert_autonomous_boundary_allowed()`를 호출하면 A6에서
+  `SafetyBoundaryError`로 막힌다. 아직 별도의 자율 변경 실행기가 없으므로 이번 작업은 guard API와
+  단위 테스트를 먼저 source of truth로 고정한 단계다.
+- **안전 경계**: 안전 정책 자체를 추가한 등급 3 변경. 기존 cap 값, whitelist 내용, 자본 사다리
+  수식, live 전환 워크플로, 주문 경로는 바꾸지 않았다. 커밋 메시지에
+  `this changes the safety perimeter` 기록.
+- **검증**: `uv run pytest` 2162 통과·4 스킵, `uv run ruff check src tests` 통과. PR 품질 관문
+  통과. 머지 후 `Deploy on merge to main` 성공(run 27746829311), KIS smoke 성공(run 27746829309,
+  `key_valid=true`, `smoke_state=success`).
+
 ## 최근 마일스톤 — 2026-06-18 (🧭 Codex 작업 품질 관문 — AGENTS.md + PR 강제 검사)
 
 main 머지 `ef16b60`(#332). 운영자가 요구한 "두 번 일하지 않는 세계 최고 수준 작업 체질"을
@@ -2848,12 +2871,12 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 |------|-------|
 | 헌법 | **v6.0.0** (X.5 자율 전략 재지정 위임 포함, 안전 경계 기록 완료) |
 | 운영자 응대 정책 | `AGENTS.md` Codex 작업 운영 규칙 + `CLAUDE.md` 기존 Claude 정책. Codex는 `AGENTS.md` 우선 |
-| 마지막 main 커밋 | `ef16b60 docs(codex): add agent quality gates` |
-| 활성 작업 | 열린 PR 없음. Codex 품질 관문 구축은 PR #332로 머지 완료. 다음 작업은 운영자 새 지시 또는 기존 후속 후보에서 선택 |
-| 최근 완료 | PR #332: Codex용 `AGENTS.md`, `.codex/quality-gate.md`, PR 양식, PR 품질 검사 워크플로, 검사 스크립트 추가. 긴 Codex 정적 문맥 훅 호출 제거, 짧은 git 상태 훅 유지 |
-| 안전 경계 | Kernel 0·헌법 0·돈 경로 0·주문 로직 0. 운영 체계(등급 2) 변경만 |
-| main 테스트 | 2142 통과, 4 스킵 (라이브 KIS smoke 4건, `KIS_LIVE_TEST=1` 가드) |
-| main 린트 | `uv run ruff check src tests scripts/check_pr_quality_gate.py` 깨끗 |
+| 마지막 main 커밋 | `7722d0b Merge pull request #334 — A6 safety boundary guard` |
+| 활성 작업 | 열린 PR 없음. A6 안전 경계 guard는 PR #334로 머지·배포 확인 완료. 다음 작업은 운영자 새 지시 또는 기존 후속 후보에서 선택 |
+| 최근 완료 | PR #334: `src/auto_invest/safety/boundary.py` 추가. cap·whitelist·loss budget·live authority·safety policy 변경을 A6로 분류하고, 일반 자율 경로 호출 시 `SafetyBoundaryError`로 막는 순수 guard와 테스트 추가 |
+| 안전 경계 | 안전 정책 추가(등급 3). Kernel 등재 파일·헌법·돈 경로·주문 경로는 미변경. 커밋 `6049cdc`에 `this changes the safety perimeter` 기록 |
+| main 테스트 | 2162 통과, 4 스킵 (라이브 KIS smoke 4건, `KIS_LIVE_TEST=1` 가드) |
+| main 린트 | `uv run ruff check src tests` 깨끗 |
 | 열린 PR | 없음 (`gh pr list --state open` 결과 빈 목록) |
 | 다음 세션 핵심 | 새 작업 전 `AGENTS.md`의 문제 정의·위험 등급·품질 관문을 실제로 적용. PR 본문은 `.github/pull_request_template.md`를 채우고 품질 검사 통과 필요 |
 
