@@ -6,7 +6,7 @@
 
 `AGENTS.md`(Codex) 또는 `CLAUDE.md`(Claude)의 운영 규칙과 세션 수명주기 정책에 따라, 모든 새 세션은 계획을 세우거나 운영자에게 무엇을 할지 물어보기 **전에** 현재 상태를 사실로 맞춥니다. Codex 기준 핵심 규칙은 `AGENTS.md`입니다.
 
-1. **자동(로컬)** — Codex는 `.codex/hooks/git_ground_truth.py`, Claude는 `.claude/hooks/git_ground_truth.py` 세션 시작 훅이 매 세션 라이브 git 상태를 출력합니다: 현재 브랜치·HEAD·작업트리 청결도·`origin/main` 대비 앞뒤·최근 `origin/main` 커밋·HANDOFF 파일 최신순. **산문으로 적힌 "active feature" 줄보다 이 블록을 더 신뢰하세요.**
+1. **자동(로컬)** — Codex는 `.codex/hooks/git_ground_truth.py`, Claude는 `.claude/hooks/git_ground_truth.py` 세션 시작 훅이 매 세션 라이브 git 상태를 출력합니다: 현재 브랜치·HEAD·작업트리 청결도와 샘플·`origin/main` 대비 앞뒤·최근 `origin/main` 커밋·핵심 HANDOFF 진입점. **산문으로 적힌 "active feature" 줄보다 이 블록을 더 신뢰하세요.**
 2. **`/sync` 실행(네트워크)** — 훅은 절대 멈추면 안 되므로 로컬 정보만 냅니다. 네트워크 발견은 `/sync` 스킬이 담당합니다: `git fetch`, 원격 `claude/*` 브랜치 목록, 열린 PR 목록(`mcp__github__list_pull_requests`), 각 브랜치의 살아있는 HANDOFF 읽기, `main` 실제 최신과 대조. 무엇이 머지됐고 무엇이 진행 중인지 불확실하면 세션 시작에 한 번 돌리세요.
 
 `/sync`가 자동화하는 옛 수동 절차(참고):
@@ -198,6 +198,25 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
 **세션 운영 메모**: 이번 세션에 도구 호출 형식 오류(`antml:` 접두사 누락)가 반복돼 운영자
 시간을 낭비함. 다음 세션은 모든 도구 호출에 `antml:invoke`/`antml:parameter` 접두사를 반드시
 정확히 쓸 것.
+
+## 최근 마일스톤 — 2026-06-18 (🧭 세션 시작 git 사실 훅 경량화 + 테스트 고정)
+
+main 머지 `ae4faf8`(#336). 운영자가 "세션 시작 훅이 정말 필요한가"를 확인한 뒤, 필요한 기능은
+남기고 토큰을 크게 쓰던 부분을 줄였다.
+
+- **유지한 기능**: 현재 브랜치, `HEAD`, 작업트리 상태, `origin/main` 대비 앞뒤, 최근 main 커밋,
+  핵심 HANDOFF 진입점, `/sync` 필요 조건 안내. 훅은 계속 로컬 전용이라 네트워크 때문에 세션 시작을
+  멈추지 않는다.
+- **줄인 기능**: 모든 과거 `HANDOFF-*.md` 전체 나열을 없애고, `HANDOFF.md`와 최신 번호
+  `HANDOFF-*.md` 3개만 보여준다. dirty worktree도 전체를 쏟지 않고 총 개수와 최대 6개 샘플만
+  보여준다.
+- **검증 고정**: `tests/unit/test_git_ground_truth_hook.py` 추가. ahead/behind, dirty 샘플 상한,
+  HANDOFF 상한, clean worktree 출력 계약을 단위 테스트로 고정했다.
+- **안전 경계**: Kernel 0·헌법 0·돈 경로 0·주문 로직 0. 운영 체계(등급 2) 변경만.
+- **검증**: 머지 직전 `uv run pytest` 2164 통과·4 스킵, `uv run ruff check src tests` 통과.
+  PR 품질 관문 통과. 머지 후 `Deploy on merge to main` 성공(run 27751486010). KIS smoke 사이드카는
+  이번 커밋으로 새로 갱신되지는 않았고, 최신 기록은 이전 main `7722d0b` 성공
+  (`key_valid=true`, `smoke_state=success`)이다.
 
 ## 최근 마일스톤 — 2026-06-18 (🛡 A6 안전 경계 변경 차단 guard — 코드가 단일 출처)
 
@@ -2871,14 +2890,14 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 |------|-------|
 | 헌법 | **v6.0.0** (X.5 자율 전략 재지정 위임 포함, 안전 경계 기록 완료) |
 | 운영자 응대 정책 | `AGENTS.md` Codex 작업 운영 규칙 + `CLAUDE.md` 기존 Claude 정책. Codex는 `AGENTS.md` 우선 |
-| 마지막 main 커밋 | `7722d0b Merge pull request #334 — A6 safety boundary guard` |
-| 활성 작업 | 열린 PR 없음. A6 안전 경계 guard는 PR #334로 머지·배포 확인 완료. 다음 작업은 운영자 새 지시 또는 기존 후속 후보에서 선택 |
-| 최근 완료 | PR #334: `src/auto_invest/safety/boundary.py` 추가. cap·whitelist·loss budget·live authority·safety policy 변경을 A6로 분류하고, 일반 자율 경로 호출 시 `SafetyBoundaryError`로 막는 순수 guard와 테스트 추가 |
-| 안전 경계 | 안전 정책 추가(등급 3). Kernel 등재 파일·헌법·돈 경로·주문 경로는 미변경. 커밋 `6049cdc`에 `this changes the safety perimeter` 기록 |
-| main 테스트 | 2162 통과, 4 스킵 (라이브 KIS smoke 4건, `KIS_LIVE_TEST=1` 가드) |
+| 마지막 main 커밋 | `ae4faf8 Merge pull request #336 — improve session start git ground truth hook` |
+| 활성 작업 | 열린 PR 없음. 세션 시작 git 사실 훅 경량화는 PR #336으로 머지·배포 확인 완료. 다음 작업은 운영자 새 지시 또는 기존 후속 후보에서 선택 |
+| 최근 완료 | PR #336: `.codex/hooks/git_ground_truth.py`가 핵심 로컬 git 사실과 HANDOFF 진입점만 짧게 출력하도록 경량화. dirty 샘플·HANDOFF 목록 상한을 추가하고 `tests/unit/test_git_ground_truth_hook.py`로 출력 계약 고정 |
+| 안전 경계 | 이번 변경은 운영 체계(등급 2)만 변경. Kernel 등재 파일·헌법·돈 경로·주문 경로·비밀값·감사 로그 영향 없음 |
+| main 테스트 | 2164 통과, 4 스킵 (라이브 KIS smoke 4건, `KIS_LIVE_TEST=1` 가드) |
 | main 린트 | `uv run ruff check src tests` 깨끗 |
 | 열린 PR | 없음 (`gh pr list --state open` 결과 빈 목록) |
-| 다음 세션 핵심 | 새 작업 전 `AGENTS.md`의 문제 정의·위험 등급·품질 관문을 실제로 적용. PR 본문은 `.github/pull_request_template.md`를 채우고 품질 검사 통과 필요 |
+| 다음 세션 핵심 | 세션 시작 훅은 로컬 사실만 짧게 보여준다. PR·머지·배포·원격 브랜치 판단 전에는 `/sync`로 네트워크 상태를 갱신하고, 새 작업 전 `AGENTS.md`의 문제 정의·위험 등급·품질 관문을 실제로 적용 |
 
 ## 과거 상세 요약표 (역사 보존 — 일부 행은 위 현재 요약표보다 낡을 수 있음)
 
