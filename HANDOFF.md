@@ -201,7 +201,7 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
 
 ## 최근 관찰 — 2026-06-19 (A6 guard 이후 운영 상태 점검, 읽기 전용)
 
-현재 `main` 최신은 `53530cc`(#350, SDD 운영 기준 문서화)이다. `/sync` 기준 열린 PR은 없고,
+현재 `main` 최신은 `fb89820`(#352, forward 토너먼트 관측 품질 루프 보강)이다. `/sync` 기준 열린 PR은 없고,
 원격에는 과거 `Codex/*` 작업 브랜치들이 남아 있지만 활성 PR로 이어진 것은 없다.
 
 - **배포 상태**: `258be63`은 `HANDOFF.md`만 바꾼 문서 커밋이라 `deploy-on-merge.yml`의
@@ -228,6 +228,37 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
   `ProposedChange` + `assert_autonomous_boundary_allowed()` 또는 `decide_boundary()`를 지난다.
   나머지 `contents: write` 워크플로는 사이드카 force-push, 운영자 확인형 go-live/halt, 검증 결과
   파일 작성으로 분류되어 이번 A6 guard 누락으로 보지 않았다.
+
+## 최근 마일스톤 — 2026-06-19 (forward 토너먼트 관측 품질 루프 — 오독 방지와 기계 판독 증거)
+
+main 머지 `fb89820`(#352). 운영자 지시 "루프 설계를 세계 최고 수준으로"의 첫 구현 슬라이스로,
+재지정 루프가 후보 관측 자료를 잘못 읽거나 관측 품질 저하를 숨긴 채 판단하지 않도록 고쳤다.
+
+- **근본 원인**: 최신 `rebalance-paper-forward-last-run` 사이드카에는 원시 판정 JSON 7개가 모두
+  있었지만, `forward_tournament_probe.py`가 설명 문장 안의 후보명(예: "추세 필터 ON")을 섹션
+  헤더처럼 오인해 첫 일반 코드블록을 JSON으로 파싱하려다 실패했다. 결과적으로 6개 트랙을
+  `UNKNOWN`처럼 보이게 만들 수 있었다.
+- **수정**: sidecar 헤더는 실제 markdown heading(`#`)만 인정하고, 판정 JSON fence는
+  `json` 코드블록만 받게 했다. 동시에 문서와 workflow의 낡은 "6개 트랙" 표현을 실제 7개
+  트랙 기준으로 바로잡았다.
+- **관측 품질 표면화**: `TournamentLeaderboard`가 `known_count`, `unknown_count`,
+  `lagging_keys`, `observation_health`(`OK`/`DEGRADED`/`BLOCKED`), `observation_note`를
+  출력한다. incumbent(라이브 검증 트랙) 판정이 없으면 `BLOCKED`, 일부 후보가 없거나 2관측 이상
+  뒤처지면 `DEGRADED`로 드러난다.
+- **기계 판독 단일 증거**: `.github/workflows/rebalance-paper-forward.yml`이 기존 사람용
+  `/tmp/leaderboard.md`에 더해 `/tmp/leaderboard.json`을 만들고 sidecar에
+  "리더보드 결정 JSON" 섹션으로 발행한다. 다음 루프는 사람이 읽는 산문 대신 이 JSON을
+  증거로 소비할 수 있다.
+- **실측 확인**: 최신 sidecar를 새 parser로 읽으면 `known_count=7`, `unknown_count=0`,
+  `observation_health=DEGRADED`, `lagging_keys=["globalfixed"]`다. 즉 오독은 사라졌고,
+  실제 남은 문제는 globalfixed 관측이 뒤처진다는 품질 저하로 정확히 분리됐다.
+- **안전 경계**: 등급 2 workflow/운영 루프 변경. 헌법·커널·주문 경로·비밀값·돈 경로 변경 없음.
+  기존 사람용 리더보드는 유지했고 기계 판독 JSON을 추가했다.
+- **검증**: PR 머지 전 `uv run pytest` 2179 통과·4 스킵, `uv run ruff check src tests` 통과.
+  main 인계 worktree에서 재확인: `uv run pytest -q` 2176 통과·4 스킵,
+  `uv run ruff check src tests` 통과.
+- **남은 후속**: 이번은 후보 관측 품질 루프 슬라이스다. 자본 사다리 사후 검증 루프,
+  정지 후 복구 루프, 새 `leaderboard.json`을 재지정 workflow가 직접 소비하는 단계는 후속이다.
 
 ## 최근 마일스톤 — 2026-06-19 (SDD 운영 기준 — 풀코스와 가벼운 기록의 판정표)
 
@@ -3020,14 +3051,14 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 |------|-------|
 | 헌법 | **v6.0.0** (X.5 자율 전략 재지정 위임 포함, 안전 경계 기록 완료) |
 | 운영자 응대 정책 | `AGENTS.md` Codex 작업 운영 규칙 + `CLAUDE.md` 기존 Claude 정책. Codex는 `AGENTS.md` 우선 |
-| 마지막 main 커밋 | `53530cc Merge pull request #350 — codify SDD operating policy` |
-| 활성 작업 | 열린 PR 없음. 현재 작업트리에는 다른 세션의 `Codex/loop-quality-control` 변경이 있을 수 있으므로 새 작업 전 `/sync`와 `git status`를 먼저 본다 |
-| 최근 완료 | PR #350: SDD 운영 기준을 `AGENTS.md`와 `.codex/quality-gate.md`에 고정. 새 기능은 풀 `/speckit-*`, 작은 보정은 위험 등급 기반 기록으로 두께 조절 |
-| 안전 경계 | 이번 SDD 운영 기준과 인수인계 갱신은 등급 2 운영 문서 변경. 헌법·커널·KIS·서버 SSH·SQLite 감사 로그·주문 경로·비밀값·돈 경로 변경 없음 |
-| main 테스트 | 2170 통과, 4 스킵 (라이브 KIS smoke 4건, `KIS_LIVE_TEST=1` 가드) |
+| 마지막 main 커밋 | `fb89820 Merge pull request #352 — harden forward tournament observation loop` |
+| 활성 작업 | 열린 PR 없음. 현재 운영자 로컬 기본 worktree에는 multi-session guard 관련 미커밋 변경이 남아 있을 수 있으므로 새 작업 전 `/sync`와 `git status`를 먼저 본다 |
+| 최근 완료 | PR #352: forward 토너먼트가 7개 후보 판정을 정확히 읽고 `observation_health`와 `leaderboard.json`으로 후보 관측 품질을 기계 판독 가능하게 발행 |
+| 안전 경계 | 이번 루프 품질 보강과 인수인계 갱신은 등급 2 운영/workflow 변경. 헌법·커널·KIS·서버 SSH·SQLite 감사 로그·주문 경로·비밀값·돈 경로 변경 없음 |
+| main 테스트 | 2176 통과, 4 스킵 (라이브 KIS smoke 4건, `KIS_LIVE_TEST=1` 가드) |
 | main 린트 | `uv run ruff check src tests` 깨끗 |
-| 열린 PR | 없음 (`mcp__codex_apps__github._get_users_recent_prs_in_repo` 기준) |
-| 다음 세션 핵심 | A6 guard 배포 후 첫 `edge-autoarm`/`rebalance-paper-forward`/`reassign` 스케줄 결과를 다시 확인한다. 현재 최신 실행들은 대부분 guard 배포 전 실행이라 확정 증거가 아니다. 전진 페이퍼의 KIS 시세 500 오류와 `CircuitBreakerOpen` 재발 여부도 함께 본다. PR·머지·배포·원격 브랜치 판단 전에는 `/sync`로 네트워크 상태를 갱신 |
+| 열린 PR | 없음 (`gh pr list --repo jinooaction/claude --state open` 기준) |
+| 다음 세션 핵심 | 다음 `rebalance-paper-forward` 실행 뒤 sidecar의 `리더보드 결정 JSON`이 발행되는지, `known_count=7`이 유지되는지, `observation_health`가 `OK`로 회복되는지 확인한다. 현재 실측으로는 오독은 해소됐고 `globalfixed` 관측 뒤처짐만 남았다. PR·머지·배포·원격 브랜치 판단 전에는 `/sync`로 네트워크 상태를 갱신 |
 
 ## 과거 상세 요약표 (역사 보존 — 일부 행은 위 현재 요약표보다 낡을 수 있음)
 
