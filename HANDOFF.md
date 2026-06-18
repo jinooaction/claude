@@ -201,8 +201,9 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
 
 ## 최근 관찰 — 2026-06-19 (A6 guard 이후 운영 상태 점검, 읽기 전용)
 
-현재 `main` 최신은 `f12e56d`(#354, loop 품질 머지 후 인계 갱신)이다. 바로 앞에는 `09f99e2`(#353,
-로컬 다중 세션 guard)와 `fb89820`(#352, forward 토너먼트 관측 품질 루프 보강)가 있다. `/sync` 기준 열린 PR은 없고,
+현재 `main` 최신은 `1c60360`(#356, 로컬 다중 세션 guard 인계 갱신)이다. 바로 앞에는
+`f12e56d`(#354, loop 품질 머지 후 인계 갱신), `09f99e2`(#353, 로컬 다중 세션 guard),
+`fb89820`(#352, forward 토너먼트 관측 품질 루프 보강)가 있다. `/sync` 기준 열린 PR은 없고,
 원격에는 과거 `Codex/*` 작업 브랜치들이 남아 있지만 활성 PR로 이어진 것은 없다.
 
 - **배포 상태**: `258be63`은 `HANDOFF.md`만 바꾼 문서 커밋이라 `deploy-on-merge.yml`의
@@ -229,6 +230,32 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
   `ProposedChange` + `assert_autonomous_boundary_allowed()` 또는 `decide_boundary()`를 지난다.
   나머지 `contents: write` 워크플로는 사이드카 force-push, 운영자 확인형 go-live/halt, 검증 결과
   파일 작성으로 분류되어 이번 A6 guard 누락으로 보지 않았다.
+
+## 최근 마일스톤 — 2026-06-19 (로컬 다중 세션 충돌 방어 — 감지·차단·복구·격리)
+
+main 머지 `09f99e2`(#353). 운영자가 "로컬 MacBook에서 여러 Codex 세션이 동시에 작업해도
+충돌하지 않게, 말이 아니라 방어 체계를 만들라"고 지시했고, 말뿐인 운영 규칙을 실제 로컬
+장치로 고정했다.
+
+- **세션 시작 감지**: `.codex/hooks.json`이 `scripts/local_concurrency_guard.py --mode
+  session-start`를 `git_ground_truth` 앞에 실행한다. 새 세션은 같은 `worktree`, 같은 브랜치,
+  같은 수정 파일 묶음을 쓰는 최근 세션을 바로 본다.
+- **커밋·푸시 차단**: `.githooks/pre-commit`과 `.githooks/pre-push`가 같은 `worktree`/브랜치/
+  파일 겹침, `main` 직접 커밋·푸시, `refs/heads/main` 직접 푸시를 막는다. 로컬 설정
+  `core.hooksPath=/Users/mason/Documents/codex/claude/.githooks` 적용 완료.
+- **복구 스냅샷**: 충돌 조짐이나 dirty worktree가 있으면 `.codex/state/concurrency/snapshots/`
+  아래에 `worktree.diff`, `index.diff`, `metadata.json`, 작은 미추적 파일 사본을 남긴다.
+  `.codex/state/`는 `.gitignore`에 추가해 커밋되지 않는다.
+- **격리 경로**: `python3 scripts/local_concurrency_guard.py --mode isolate`가 별도 브랜치와
+  별도 `worktree`를 만들어 새 세션이 기존 작업 디렉터리에서 쓰기 시작하지 않게 한다.
+- **상시 감시**: macOS `launchd`에 `com.auto-invest.local-concurrency-watchdog` 등록 완료.
+  확인 시 `state = running`, `pid = 6141`; 10초 간격으로 복구 스냅샷을 갱신한다.
+- **안전 경계**: 등급 2 운영 체계 변경. 헌법·커널·주문 경로·비밀값·돈 경로 변경 없음.
+  파일 시스템 커널 수준에서 같은 사용자 프로세스의 쓰기를 강제로 막지는 못하므로, 방어는
+  세션 시작 경고 + Git 차단 + 복구 스냅샷 + 격리 worktree로 구성된다.
+- **검증**: `uv run pytest` 2179 통과·4 스킵, `uv run ruff check src tests
+  scripts/local_concurrency_guard.py` 통과. `pre-commit`/`pre-push` 차단, `SessionStart` 출력,
+  `launchd` 감시자 기동 확인.
 
 ## 최근 마일스톤 — 2026-06-19 (forward 토너먼트 관측 품질 루프 — 오독 방지와 기계 판독 증거)
 
@@ -260,26 +287,6 @@ main 머지 `fb89820`(#352). 운영자 지시 "루프 설계를 세계 최고 �
   `uv run ruff check src tests` 통과.
 - **남은 후속**: 이번은 후보 관측 품질 루프 슬라이스다. 자본 사다리 사후 검증 루프,
   정지 후 복구 루프, 새 `leaderboard.json`을 재지정 workflow가 직접 소비하는 단계는 후속이다.
-
-## 최근 마일스톤 — 2026-06-19 (로컬 다중 세션 guard — 같은 worktree/브랜치 충돌 차단)
-
-main 머지 `09f99e2`(#353). 여러 Codex 세션이 같은 로컬 작업 디렉터리나 브랜치에서 동시에 쓰기
-작업을 하며 서로의 변경을 덮거나 잘못 커밋하는 위험을 줄이는 운영 guard가 추가됐다.
-
-- **구성**: `scripts/local_concurrency_guard.py`가 세션 lease, 같은 worktree/브랜치/파일 겹침,
-  `main` 직접 커밋·푸시 위험을 감지한다. 복구 스냅샷과 격리 `worktree` 생성 명령도 제공한다.
-- **배선**: `.codex/hooks.json`의 `SessionStart`에 guard 출력이 추가됐고, `.githooks/pre-commit`과
-  `.githooks/pre-push`가 위험 상태에서 커밋·푸시를 차단한다. `.gitignore`는 로컬 세션 상태
-  `.codex/state/`를 제외한다.
-- **운영 규칙**: `AGENTS.md`에 guard 경고 시 쓰기 작업을 중단하고
-  `python3 scripts/local_concurrency_guard.py --mode isolate`로 격리 worktree를 만들라는 규칙이
-  추가됐다.
-- **우회 경계**: 의도적 비상 복구용 `CODEX_CONCURRENCY_GUARD_ALLOW=1`은 남아 있다. 기본은 차단,
-  우회는 왜 안전한지 알고 있을 때만 쓴다.
-- **안전 경계**: 등급 2 로컬 운영 체계 변경. 헌법·커널·주문 경로·비밀값·돈 경로 변경 없음.
-- **검증**: PR #353에서 `uv run pytest` 2179 통과·4 스킵,
-  `uv run ruff check src tests scripts/local_concurrency_guard.py`, guard 단위 테스트,
-  pre-commit/pre-push 차단, launchd watchdog 실행을 확인했다.
 
 ## 최근 마일스톤 — 2026-06-19 (SDD 운영 기준 — 풀코스와 가벼운 기록의 판정표)
 
@@ -3072,14 +3079,14 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 |------|-------|
 | 헌법 | **v6.0.0** (X.5 자율 전략 재지정 위임 포함, 안전 경계 기록 완료) |
 | 운영자 응대 정책 | `AGENTS.md` Codex 작업 운영 규칙 + `CLAUDE.md` 기존 Claude 정책. Codex는 `AGENTS.md` 우선 |
-| 마지막 main 커밋 | `f12e56d Merge pull request #354 — refresh handoff after loop quality merge` |
-| 활성 작업 | 열린 PR 없음. local concurrency guard가 `WARN`/`BLOCK`을 내면 같은 worktree에서 쓰지 말고 격리 worktree로 옮긴다 |
-| 최근 완료 | PR #352: forward 토너먼트 관측 품질과 `leaderboard.json` 발행. PR #353: 로컬 다중 세션 guard. PR #354: 이 상태를 `HANDOFF.md`에 1차 반영 |
-| 안전 경계 | 최근 세 변경은 등급 2 workflow/운영 문서/로컬 guard 변경. 헌법·커널·KIS·서버 SSH·SQLite 감사 로그·주문 경로·비밀값·돈 경로 변경 없음 |
+| 마지막 main 커밋 | `1c60360 Merge pull request #356 from jinooaction/Codex/handoff-local-concurrency-guard` |
+| 활성 작업 | 이 인계 갱신 PR 외 열린 작업 없음. 새 작업 전 `/sync`와 `git status`를 먼저 보고, local concurrency guard가 `WARN`/`BLOCK`을 내면 `--mode isolate`로 별도 `worktree`를 만든다 |
+| 최근 완료 | PR #353: 로컬 다중 세션 guard 도입(SessionStart 감지, pre-commit/pre-push 차단, 복구 스냅샷, 격리 worktree, launchd watchdog). 직전 PR #352: forward 토너먼트 후보 관측 품질 JSON화 |
+| 안전 경계 | #353은 등급 2 운영 체계 변경. 헌법·커널·KIS·서버 SSH·SQLite 감사 로그·주문 경로·비밀값·돈 경로 변경 없음 |
 | main 테스트 | 2179 통과, 4 스킵 (라이브 KIS smoke 4건, `KIS_LIVE_TEST=1` 가드) |
 | main 린트 | `uv run ruff check src tests` 깨끗 |
 | 열린 PR | 없음 (`gh pr list --repo jinooaction/claude --state open` 기준) |
-| 다음 세션 핵심 | 세션 시작 시 guard 출력이 `WARN`/`BLOCK`이면 먼저 격리한다. 다음 `rebalance-paper-forward` 실행 뒤 sidecar의 `리더보드 결정 JSON`이 발행되는지, `known_count=7`이 유지되는지, `observation_health`가 `OK`로 회복되는지 확인한다. 현재 실측으로는 오독은 해소됐고 `globalfixed` 관측 뒤처짐만 남았다. PR·머지·배포·원격 브랜치 판단 전에는 `/sync`로 네트워크 상태를 갱신 |
+| 다음 세션 핵심 | local concurrency guard 경고가 있으면 같은 디렉터리에서 쓰지 말고 `python3 scripts/local_concurrency_guard.py --mode isolate`를 먼저 실행한다. 그 다음 `rebalance-paper-forward` sidecar의 `리더보드 결정 JSON`, `known_count=7`, `observation_health` 회복 여부를 관찰한다. PR·머지·배포·원격 브랜치 판단 전에는 `/sync`로 네트워크 상태를 갱신 |
 
 ## 과거 상세 요약표 (역사 보존 — 일부 행은 위 현재 요약표보다 낡을 수 있음)
 
