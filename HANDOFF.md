@@ -33,11 +33,11 @@ git ls-remote --heads origin 'claude/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `43149ee` — Merge pull request #360 from jinooaction/Codex/handoff-leaderboard-observation |
-| main 테스트 | `uv run pytest -q` → 2191 passed, 4 skipped |
+| 마지막 main 커밋 | `e846400` — Merge pull request #363 from jinooaction/Codex/fix-kis-smoke-temp-checkout |
+| main 테스트 | `uv run pytest -q` → 2192 passed, 4 skipped |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
 | 열린 PR | 없음(`gh pr list --state open` 결과 `[]`) |
-| 최근 출시 작업 | #358 forward `leaderboard.json` 관측 품질을 재지정 루프 입력 게이트로 연결, #357 앵커드 엣지 자본 사다리 배선 |
+| 최근 출시 작업 | #358 forward `leaderboard.json` 관측 품질을 재지정 루프 입력 게이트로 연결하고 실제 forward→reassign 수동 실행으로 소비 확인. #357 앵커드 엣지 자본 사다리 배선 |
 | 활성 작업 | 없음. 다음 세션은 새 작업 전 `/sync`와 최신 사이드카 상태를 먼저 확인 |
 | 안전 경계 | 헌법·커널·주문 제한·비밀값·실제 주문·돈 경로 변경 없음 |
 
@@ -219,10 +219,10 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
 
 ## 최근 관찰 — 2026-06-19 (앵커드 자본 사다리 + 재지정 관측 품질 게이트 이후)
 
-현재 `main` 최신은 `43149ee`(#360, #358 이후 인계 갱신)이다. 바로 앞에는 `82bd9d8`(#358,
-forward `leaderboard.json` 관측 품질을 재지정 루프 입력 게이트로 연결), `28bd306`(#357,
-앵커드 엣지 자본 사다리 배선), `d3d98a3`(#355, handoff main tip 보정)이 있다. 이 통합 인계
-갱신 뒤 열린 PR은 없어야 한다.
+현재 `main` 최신은 `e846400`(#363, KIS smoke 임시 checkout 소유권 보정)이다. 그 앞에는
+`b6d766e`(#361, #357·#358 인계 통합), `82bd9d8`(#358, forward `leaderboard.json` 관측
+품질을 재지정 루프 입력 게이트로 연결), `28bd306`(#357, 앵커드 엣지 자본 사다리 배선)이 있다.
+이 인계 갱신 뒤 열린 PR은 없어야 한다.
 
 - **배포 상태**: #357 코드 기준 `Deploy on merge to main` 성공(run `27778015360`),
   `KIS smoke` 성공(run `27778015311`, `key_valid=true`, `smoke_state=success`),
@@ -235,10 +235,11 @@ forward `leaderboard.json` 관측 품질을 재지정 루프 입력 게이트로
 - **현재 자본 사다리/재지정 상태**: `edge-autoarm`은 `WAIT_EDGE`, 센티넬 변경 없음.
   `reassign`은 `HOLD`, 라이브 설정 변경 없음. `money-path`의 이전 ETA(`2026-07-10` 부근)는
   표준 20관측 기준이므로, 앵커드 `NO_EDGE`가 유지되는 동안 첫 자본이 더 빨리 열리지 않는다.
-- **재지정 입력 게이트 상태**: #358 머지 후 다음 forward 실행부터
-  `automation/rebalance-paper-forward-last-run` 사이드카가 루트 `leaderboard.json` 파일을 발행한다.
-  그 전에는 해당 파일이 없으므로 `reassign-on-tournament`가 `observation_health=BLOCKED`로
-  보수 차단한다(라이브 무변경).
+- **재지정 입력 게이트 상태**: #358 머지 후 남은 위험을 수동 실행으로 닫았다.
+  `rebalance-paper-forward.yml` run `27795095144`가 성공했고, 사이드카 루트에
+  `leaderboard.json` 파일이 실제 발행됐다. 이어 `reassign-on-tournament.yml` run
+  `27795266222`가 그 JSON을 직접 소비해 `observation_health=DEGRADED`를 읽고 `HOLD`로 멈췄다.
+  하드닝 캐너리 미실행, 라이브 설정 변경 false, PR 없음, 돈 이동 0.
 - **globalfixed 관찰**: `rebalance-paper-forward-last-run`에서 `globalfixed`는 1/20 관측,
   `INSUFFICIENT_DATA`, 최대낙폭 0.000625%로 아직 판단 불가. 기존 글로벌 역변동성 트랙은
   4/20 관측, 최대낙폭 1.437534%.
@@ -268,10 +269,12 @@ main 머지 `82bd9d8`(#358). 운영자 목표는 "후보 관측 품질 루프"�
   `OK`일 때만 기존 도전자·다중검정·캐너리 판단을 계속한다.
 - **캐너리 절약**: `reassign-challenger-path`도 `observation_health=OK`가 아니면 빈 값을
   반환해 하드닝 캐너리를 실행하지 않는다.
-- **현재 sidecar 실측**: 최신 `LAST_RUN.md` 자체에는 아직 루트 `leaderboard.json` 파일이 없다.
-  현재 코드로 재생성한 값은 `known_count=7`, `unknown_count=0`,
-  `observation_health=DEGRADED`, `lagging_keys=["globalfixed"]`, `max_n_obs=4`,
-  `min_n_obs=1`, `challenger_key=null`, `incumbent_key="global"`이다.
+- **실제 sidecar 소비 확인**: `rebalance-paper-forward.yml` run `27795095144`가
+  `LAST_RUN.md`와 루트 `leaderboard.json`을 함께 발행했다. 값은 `known_count=7`,
+  `unknown_count=0`, `observation_health=DEGRADED`, `lagging_keys=["globalfixed"]`,
+  `max_n_obs=5`, `min_n_obs=2`, `challenger_key=null`, `incumbent_key="global"`.
+  이어 `reassign-on-tournament.yml` run `27795266222`가 같은 JSON을 소비해 `HOLD`,
+  `wrote_files=false`, 하드닝 캐너리 미실행으로 끝났다.
 - **안전 경계**: 등급 2 workflow/운영 루프 변경. 헌법·커널·주문 제한·비밀값·실제 주문·돈 경로
   변경 없음. 파일이 없거나 무효면 `BLOCKED`로 fail-closed 한다.
 - **검증**: PR #358 머지 전 `uv run pytest` 2191 통과·4 스킵,
@@ -3150,14 +3153,14 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 |------|-------|
 | 헌법 | **v6.0.0** (X.5 자율 전략 재지정 위임 포함, 안전 경계 기록 완료) |
 | 운영자 응대 정책 | `AGENTS.md` Codex 작업 운영 규칙 + `CLAUDE.md` 기존 Claude 정책. Codex는 `AGENTS.md` 우선 |
-| 마지막 main 커밋 | `43149ee Merge pull request #360 from jinooaction/Codex/handoff-leaderboard-observation` |
+| 마지막 main 커밋 | `e846400 Merge pull request #363 from jinooaction/Codex/fix-kis-smoke-temp-checkout` |
 | 활성 작업 | 이 통합 인계 갱신 PR 외 열린 작업 없음으로 정리 예정. 새 작업 전 `/sync`와 `git status`를 먼저 보고, local concurrency guard가 `WARN`/`BLOCK`을 내면 `--mode isolate`로 별도 `worktree`를 만든다 |
-| 최근 완료 | PR #358: forward `leaderboard.json` 관측 품질을 재지정 입력 게이트로 연결. PR #357: 자본 사다리 게이트가 표준 20관측 forward 판정과 앵커드 OOS+짧은 forward 판정을 함께 소비 |
+| 최근 완료 | PR #358: forward `leaderboard.json` 관측 품질을 재지정 입력 게이트로 연결하고 run `27795095144`/`27795266222`로 실제 발행·소비 확인. PR #357: 자본 사다리 게이트가 표준 20관측 forward 판정과 앵커드 OOS+짧은 forward 판정을 함께 소비 |
 | 안전 경계 | #358은 등급 2 운영 루프 변경, #357은 등급 4 돈 경로 변경. 둘 다 헌법·커널·캡·화이트리스트·낙폭 예산·서킷 브레이커·주문 제한·비밀값 변경 없음. 현재 돈 이동 0 |
-| main 테스트 | 2191 통과, 4 스킵 (라이브 KIS smoke 4건, `KIS_LIVE_TEST=1` 가드) |
+| main 테스트 | 2192 통과, 4 스킵 (라이브 KIS smoke 4건, `KIS_LIVE_TEST=1` 가드) |
 | main 린트 | `uv run ruff check src tests` 깨끗 |
 | 열린 PR | 없음 (`gh pr list --repo jinooaction/claude --state open` 기준) |
-| 다음 세션 핵심 | local concurrency guard 경고가 있으면 같은 디렉터리에서 쓰지 말고 `python3 scripts/local_concurrency_guard.py --mode isolate`를 먼저 실행한다. 그 다음 `edge-autoarm-last-run`의 `edge_source`와 앵커드 JSON, `rebalance-paper-forward-last-run:leaderboard.json` 실제 발행 여부를 본다. 현재는 앵커드 `NO_EDGE`라 첫 자본 없음. PR·머지·배포·원격 브랜치 판단 전에는 `/sync`로 네트워크 상태를 갱신 |
+| 다음 세션 핵심 | local concurrency guard 경고가 있으면 같은 디렉터리에서 쓰지 말고 `python3 scripts/local_concurrency_guard.py --mode isolate`를 먼저 실행한다. 그 다음 `edge-autoarm-last-run`의 `edge_source`와 앵커드 JSON, `rebalance-paper-forward-last-run:leaderboard.json`의 `observation_health`를 본다. 현재 재지정은 `DEGRADED`라 HOLD, 앵커드는 `NO_EDGE`라 첫 자본 없음. PR·머지·배포·원격 브랜치 판단 전에는 `/sync`로 네트워크 상태를 갱신 |
 
 ## 과거 상세 요약표 (역사 보존 — 일부 행은 위 현재 요약표보다 낡을 수 있음)
 
