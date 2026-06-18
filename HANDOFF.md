@@ -199,6 +199,30 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
 시간을 낭비함. 다음 세션은 모든 도구 호출에 `antml:invoke`/`antml:parameter` 접두사를 반드시
 정확히 쓸 것.
 
+## 최근 마일스톤 — 2026-06-18 (📱 모바일 운영 상태판 GitHub Pages 발행)
+
+main 머지 `2958e82`(#345). 운영자가 휴대폰에서 자동화 생존 상태를 바로 볼 수 있도록,
+읽기 전용 모바일 상태판을 만들고 `gh-pages` 브랜치로 자동 발행하게 했다.
+
+- **접근 URL**: `https://jinooaction.github.io/claude/status.html` (`index.html`도 같은 화면).
+  GitHub Pages 설정은 `gh-pages` 브랜치 `/` 기준으로 생성 완료, Pages build `built` 확인.
+- **보여주는 것**: 핵심 자동화(`rebalance-paper-forward`, `edge-autoarm`, `kis-smoke`,
+  `rebalance-live-canary`)와 보조 보고(`collect-public-data`, `regime-stratify`,
+  `promote-readiness`, `money-path`, `reassign`)의 마지막 사이드카 갱신 시각·상태·실행 링크.
+- **구현**: `scripts/generate_mobile_status.py`가 `pipeline_liveness.default_specs()`를 재사용해
+  `automation/*-last-run` 사이드카를 읽고 모바일 우선 HTML을 생성. 워크플로
+  `.github/workflows/mobile-status-pages.yml`이 매일 08:20 UTC, 수동 실행, 관련 파일 main
+  머지 때 `gh-pages` 브랜치에 `status.html`·`index.html`·`.nojekyll`을 force-push.
+- **실패 보정 기록**: 첫 시도(#342)는 Pages 미활성화, 두 번째(#343)는 Pages API 권한,
+  세 번째(#344)는 `uv` 설치 지연에 걸렸다. 최종 #345는 Pages API와 외부 설치를 제거하고
+  `PYTHONPATH=src python3` + `gh-pages` 브랜치 발행으로 성공(run `27755524303`).
+- **안전 경계**: 읽기 전용·돈 0 이동. KIS, 서버 SSH, SQLite `audit_log`, 주문 경로, 비밀값 접근
+  없음. `gh-pages` 발행 브랜치만 갱신. deploy-on-merge도 최신 main `2958e82`에서 성공(run
+  `27755524335`).
+- **검증**: 머지 직전 `uv run pytest` 2170 통과·4 스킵, `uv run ruff check src tests` 통과.
+  추가로 YAML 파서 검증, `PYTHONPATH=src python3 scripts/generate_mobile_status.py ...` 실행 확인,
+  `uv run ruff check scripts/generate_mobile_status.py` 통과.
+
 ## 최근 마일스톤 — 2026-06-18 (🛡 A6 guard 실제 자율 변경 경로 배선)
 
 main 머지 `e2cf6b3`(#340). 직전 A6 안전 경계 guard가 단순 유틸/API 단계에 머물러 있던 것을,
@@ -2929,14 +2953,14 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 |------|-------|
 | 헌법 | **v6.0.0** (X.5 자율 전략 재지정 위임 포함, 안전 경계 기록 완료) |
 | 운영자 응대 정책 | `AGENTS.md` Codex 작업 운영 규칙 + `CLAUDE.md` 기존 Claude 정책. Codex는 `AGENTS.md` 우선 |
-| 마지막 main 커밋 | `e2cf6b3 Merge pull request #340 — wire A6 boundary guard into autonomous writes` |
-| 활성 작업 | 열린 PR 없음. A6 guard 실제 자율 변경 경로 배선과 배포까지 완료. 다음 작업은 운영자 새 지시 또는 기존 후속 후보에서 선택 |
-| 최근 완료 | PR #340: A6 안전 경계 guard를 튜너 후보/캐너리 임시 커밋/자동 무장/자본 사다리/전략 재지정 쓰기 경로에 배선. A6 후보는 blocked 또는 exception으로 고정 |
-| 안전 경계 | 이번 변경은 안전 경계 적용 위치를 넓힌 등급 3 변경. 헌법·커널·cap 값·whitelist 내용·자본 사다리 공식·라이브 권한·주문 경로는 변경 없음 |
-| main 테스트 | 2168 통과, 4 스킵 (라이브 KIS smoke 4건, `KIS_LIVE_TEST=1` 가드) |
+| 마지막 main 커밋 | `2958e82 Merge pull request #345 — publish mobile status page to gh-pages` |
+| 활성 작업 | 열린 PR 없음. 모바일 운영 상태판이 `gh-pages`로 발행되고 최신 deploy도 성공. 다음 작업은 운영자 새 지시 또는 기존 후속 후보에서 선택 |
+| 최근 완료 | PR #342~#345: 모바일 우선 `status.html` 생성기와 자동 발행 워크플로 추가. 최종 방식은 Pages API가 아니라 `gh-pages` 브랜치 발행이며, URL은 `https://jinooaction.github.io/claude/status.html` |
+| 안전 경계 | 이번 변경은 등급 2 운영 가시성 자동화. 읽기 전용 상태판이며 KIS·서버 SSH·SQLite 감사 로그·주문 경로·비밀값 접근 없음. 돈 경로와 안전 경계 변경 없음 |
+| main 테스트 | 2170 통과, 4 스킵 (라이브 KIS smoke 4건, `KIS_LIVE_TEST=1` 가드) |
 | main 린트 | `uv run ruff check src tests` 깨끗 |
 | 열린 PR | 없음 (`gh pr list --state open` 결과 빈 목록) |
-| 다음 세션 핵심 | 새 자율 쓰기 경로가 생기면 `ProposedChange` + `assert_autonomous_boundary_allowed()`를 같은 문 앞에 붙일 것. PR·머지·배포·원격 브랜치 판단 전에는 `/sync`로 네트워크 상태를 갱신 |
+| 다음 세션 핵심 | 모바일 상태판은 `https://jinooaction.github.io/claude/status.html`에서 확인. 새 자율 쓰기 경로가 생기면 `ProposedChange` + `assert_autonomous_boundary_allowed()`를 같은 문 앞에 붙일 것. PR·머지·배포·원격 브랜치 판단 전에는 `/sync`로 네트워크 상태를 갱신 |
 
 ## 과거 상세 요약표 (역사 보존 — 일부 행은 위 현재 요약표보다 낡을 수 있음)
 
