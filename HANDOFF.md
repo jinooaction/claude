@@ -315,15 +315,17 @@ main 머지 `09f99e2`(#353). 운영자가 "로컬 MacBook에서 여러 Codex 세
   session-start`를 `git_ground_truth` 앞에 실행한다. 새 세션은 같은 `worktree`, 같은 브랜치,
   같은 수정 파일 묶음을 쓰는 최근 세션을 바로 본다.
 - **커밋·푸시 차단**: `.githooks/pre-commit`과 `.githooks/pre-push`가 같은 `worktree`/브랜치/
-  파일 겹침, `main` 직접 커밋·푸시, `refs/heads/main` 직접 푸시를 막는다. 로컬 설정
-  `core.hooksPath=/Users/mason/Documents/codex/claude/.githooks` 적용 완료.
+  파일 겹침, `main` 직접 커밋·푸시, `refs/heads/main` 직접 푸시를 막는다. 로컬 설정은
+  현재 clone의 `.githooks`를 가리켜야 하며, 재클론 후에는 `git config core.hooksPath "$(pwd)/.githooks"`로
+  다시 적용한다.
 - **복구 스냅샷**: 충돌 조짐이나 dirty worktree가 있으면 `.codex/state/concurrency/snapshots/`
   아래에 `worktree.diff`, `index.diff`, `metadata.json`, 작은 미추적 파일 사본을 남긴다.
   `.codex/state/`는 `.gitignore`에 추가해 커밋되지 않는다.
 - **격리 경로**: `python3 scripts/local_concurrency_guard.py --mode isolate`가 별도 브랜치와
   별도 `worktree`를 만들어 새 세션이 기존 작업 디렉터리에서 쓰기 시작하지 않게 한다.
 - **상시 감시**: macOS `launchd`에 `com.auto-invest.local-concurrency-watchdog` 등록 완료.
-  확인 시 `state = running`, `pid = 6141`; 10초 간격으로 복구 스냅샷을 갱신한다.
+  재클론 후에는 plist의 `WorkingDirectory`와 스크립트 경로가 현재 clone을 가리키는지 확인한다.
+  10초 간격으로 복구 스냅샷을 갱신한다.
 - **안전 경계**: 등급 2 운영 체계 변경. 헌법·커널·주문 경로·비밀값·돈 경로 변경 없음.
   파일 시스템 커널 수준에서 같은 사용자 프로세스의 쓰기를 강제로 막지는 못하므로, 방어는
   세션 시작 경고 + Git 차단 + 복구 스냅샷 + 격리 worktree로 구성된다.

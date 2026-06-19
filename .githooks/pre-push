@@ -1,2 +1,2 @@
 #!/bin/sh
-exec python3 /Users/mason/Documents/codex/claude/scripts/local_concurrency_guard.py --mode pre-push
+exec python3 scripts/local_concurrency_guard.py --mode pre-push
