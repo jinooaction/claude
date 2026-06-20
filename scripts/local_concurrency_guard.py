@@ -313,6 +313,17 @@ def read_leases(repo: Path, *, now: float | None = None) -> list[Lease]:
     return leases
 
 
+def _dedupe_leases(leases: list[Lease]) -> list[Lease]:
+    """Keep the newest lease for the same logical session/worktree/branch."""
+    latest: dict[tuple[str, str, str], Lease] = {}
+    for lease in leases:
+        key = (lease.thread_id, lease.worktree, lease.branch)
+        current = latest.get(key)
+        if current is None or lease.updated_at > current.updated_at:
+            latest[key] = lease
+    return sorted(latest.values(), key=lambda lease: lease.updated_at, reverse=True)
+
+
 def push_targets_main(stdin_text: str) -> bool:
     for line in stdin_text.splitlines():
         parts = line.split()
@@ -329,48 +340,35 @@ def evaluate(
     push_stdin: str = "",
 ) -> list[Finding]:
     findings: list[Finding] = []
-    others = [lease for lease in leases if lease.thread_id != state.thread_id]
-    same_worktree = [lease for lease in others if Path(lease.worktree) == state.worktree]
-    same_branch = [
+    others = [
         lease
-        for lease in others
-        if lease.branch == state.branch and state.branch not in ("", "(unknown)")
-    ]
-    overlap = [
-        lease
-        for lease in others
-        if state.dirty_paths
-        and lease.dirty_paths
-        and state.dirty_paths.intersection(lease.dirty_paths)
+        for lease in _dedupe_leases(leases)
+        if lease.thread_id != state.thread_id
     ]
 
     if mode in {"pre-commit", "pre-push"} and state.branch == "main":
         findings.append(Finding("BLOCK", "`main` 브랜치에서 직접 커밋하거나 푸시하려고 함."))
     if mode == "pre-push" and push_targets_main(push_stdin):
         findings.append(Finding("BLOCK", "`refs/heads/main`으로 직접 푸시하려고 함."))
-    for lease in same_worktree:
-        findings.append(
-            Finding(
-                "BLOCK" if mode in {"pre-commit", "pre-push"} else "WARN",
-                "다른 최근 세션이 같은 worktree를 사용 중: "
-                f"{lease.thread_id} ({lease.branch}@{lease.head})",
+    for lease in others:
+        reasons: list[str] = []
+        if Path(lease.worktree) == state.worktree:
+            reasons.append("같은 worktree")
+        if lease.branch == state.branch and state.branch not in ("", "(unknown)"):
+            reasons.append("같은 브랜치")
+        overlap = state.dirty_paths.intersection(lease.dirty_paths)
+        if overlap:
+            paths = ", ".join(sorted(overlap)[:6])
+            reasons.append(f"수정 파일 겹침: {paths}")
+        if reasons:
+            findings.append(
+                Finding(
+                    "BLOCK" if mode in {"pre-commit", "pre-push"} else "WARN",
+                    "다른 최근 세션과 충돌 가능: "
+                    f"{lease.thread_id} ({lease.branch}@{lease.head}, {lease.worktree}) - "
+                    + "; ".join(reasons),
+                )
             )
-        )
-    for lease in same_branch:
-        findings.append(
-            Finding(
-                "BLOCK" if mode in {"pre-commit", "pre-push"} else "WARN",
-                f"다른 최근 세션이 같은 브랜치를 사용 중: {lease.thread_id} ({lease.worktree})",
-            )
-        )
-    for lease in overlap:
-        paths = ", ".join(sorted(state.dirty_paths.intersection(lease.dirty_paths))[:6])
-        findings.append(
-            Finding(
-                "BLOCK" if mode in {"pre-commit", "pre-push"} else "WARN",
-                f"다른 최근 세션과 수정 파일이 겹침: {paths}",
-            )
-        )
     if state.branch == "main" and state.dirty_paths:
         findings.append(Finding("WARN", "`main` 브랜치 작업 트리에 변경 파일이 있음."))
     if not others and not findings:
@@ -387,7 +385,11 @@ def _format_age(seconds: float) -> str:
 
 def render_report(state: CurrentState, leases: list[Lease], findings: list[Finding]) -> str:
     now = time.time()
-    active = [lease for lease in leases if lease.thread_id != state.thread_id]
+    active = [
+        lease
+        for lease in _dedupe_leases(leases)
+        if lease.thread_id != state.thread_id
+    ]
     lines = [
         "# local multi-session guard",
         f"current thread : {state.thread_id}",
