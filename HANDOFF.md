@@ -29,15 +29,15 @@ git ls-remote --heads origin 'claude/*' | awk '{print $2}'
 
 상세 규칙은 Codex 세션에서는 `AGENTS.md`, Claude 세션에서는 `CLAUDE.md` 본문 참조.
 
-## 한눈 요약표 — 2026-06-19 최신 main 기준
+## 한눈 요약표 — 2026-06-20 최신 main 기준
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `e846400` — Merge pull request #363 from jinooaction/Codex/fix-kis-smoke-temp-checkout |
-| main 테스트 | `uv run pytest -q` → 2192 passed, 4 skipped |
+| 마지막 main 커밋 | `6c99145` — Merge pull request #366 from jinooaction/Codex/fix-local-codex-paths |
+| main 테스트 | `uv run pytest -q` → 2196 passed, 4 skipped |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
-| 열린 PR | 없음(`gh pr list --state open` 결과 `[]`) |
-| 최근 출시 작업 | #358 forward `leaderboard.json` 관측 품질을 재지정 루프 입력 게이트로 연결하고 실제 forward→reassign 수동 실행으로 소비 확인. #357 앵커드 엣지 자본 사다리 배선 |
+| 열린 PR | 없음(GitHub connector open PR 조회 결과 `[]`) |
+| 최근 출시 작업 | #366 Codex 훅 경로 복구 + local concurrency guard 중복 경고 압축. #365 배포 감사 로그 sidecar 발행 |
 | 활성 작업 | 없음. 다음 세션은 새 작업 전 `/sync`와 최신 사이드카 상태를 먼저 확인 |
 | 안전 경계 | 헌법·커널·주문 제한·비밀값·실제 주문·돈 경로 변경 없음 |
 
@@ -217,13 +217,19 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
 시간을 낭비함. 다음 세션은 모든 도구 호출에 `antml:invoke`/`antml:parameter` 접두사를 반드시
 정확히 쓸 것.
 
-## 최근 관찰 — 2026-06-19 (앵커드 자본 사다리 + 재지정 관측 품질 게이트 이후)
+## 최근 관찰 — 2026-06-20 (Codex 훅 경로 복구 + 동시성 경고 압축 이후)
 
-현재 `main` 최신은 `e846400`(#363, KIS smoke 임시 checkout 소유권 보정)이다. 그 앞에는
-`b6d766e`(#361, #357·#358 인계 통합), `82bd9d8`(#358, forward `leaderboard.json` 관측
-품질을 재지정 루프 입력 게이트로 연결), `28bd306`(#357, 앵커드 엣지 자본 사다리 배선)이 있다.
-이 인계 갱신 뒤 열린 PR은 없어야 한다.
+현재 `main` 최신은 `6c99145`(#366, Codex 훅 경로 복구 + local concurrency guard 경고 압축)이다.
+그 앞에는 `d1b1050`(#365, deploy audit log sidecar), `90e4d5a`(#364, leaderboard gate 소비
+인계), `e846400`(#363, KIS smoke 임시 checkout 소유권 보정)이 있다. 이 인계 갱신 시점의
+열린 PR은 없다.
 
+- **Codex 세션 시작 훅 상태**: `.codex/hooks.json`은 현재 clone 기준 상대 경로로
+  `scripts/local_concurrency_guard.py --mode session-start`와 `.codex/hooks/git_ground_truth.py`를
+  실행한다. 훅은 제거하지 않았다. 같은 `thread_id`/worktree/브랜치 lease는 최신 하나로 보이고,
+  같은 세션의 worktree·브랜치·수정 파일 겹침 원인은 한 줄로 요약된다.
+- **로컬 검증**: #366 머지 직전과 handoff 갱신 직전 모두 전체 검증 통과. 최신 main 기준
+  `uv run pytest -q`는 2196 통과·4 스킵, `uv run ruff check src tests`는 깨끗하다.
 - **배포 상태**: #357 코드 기준 `Deploy on merge to main` 성공(run `27778015360`),
   `KIS smoke` 성공(run `27778015311`, `key_valid=true`, `smoke_state=success`),
   `Forward anchored verdict` 성공(run `27778015364`). #358과 #360은 인계/워크플로 중심 변경이며
@@ -252,6 +258,23 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
   `ProposedChange` + `assert_autonomous_boundary_allowed()` 또는 `decide_boundary()`를 지난다.
   나머지 `contents: write` 워크플로는 사이드카 force-push, 운영자 확인형 go-live/halt, 검증 결과
   파일 작성으로 분류되어 이번 A6 guard 누락으로 보지 않았다.
+
+## 최근 마일스톤 — 2026-06-20 (Codex 세션 훅 경로 복구 + 동시성 경고 압축)
+
+main 머지 `6c99145`(#366). 운영자가 세션 시작 훅 제거 여부를 물었고, 결론은 제거가 아니라
+필요 기능 유지와 중복 출력 축소였다.
+
+- **훅 경로 복구**: `.codex/hooks.json`, `.githooks/pre-commit`, `.githooks/pre-push`의 삭제된
+  옛 clone 절대 경로 의존성을 제거하고 현재 clone 기준 상대 경로로 실행하게 했다.
+- **중복 경고 압축**: `scripts/local_concurrency_guard.py`가 같은 `thread_id`/worktree/브랜치 lease는
+  최신 기록 하나로 표시한다. 같은 세션의 "같은 worktree", "같은 브랜치", "수정 파일 겹침"도
+  별도 줄 세 개가 아니라 한 줄의 원인 목록으로 요약한다.
+- **남긴 안전장치**: 세션 시작 감지, `git_ground_truth`, pre-commit/pre-push 차단, 복구 스냅샷,
+  `--mode isolate` 격리 경로는 유지했다. lease TTL과 차단 기준은 약화하지 않았다.
+- **안전 경계**: 등급 2 운영 체계 변경. 헌법·커널·주문 경로·비밀값·돈 경로 변경 없음.
+- **검증**: `uv run pytest` 2196 통과·4 스킵, `uv run ruff check src tests
+  scripts/local_concurrency_guard.py` 통과. `python3 -m json.tool .codex/hooks.json`, `git diff --check`,
+  PR 품질 관문, `SessionStart` 출력, pre-commit 경로를 통한 커밋까지 확인했다.
 
 ## 최근 마일스톤 — 2026-06-19 (forward `leaderboard.json` 관측 품질을 재지정 입력 게이트로 연결)
 
@@ -3149,19 +3172,19 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 - KIS 자격 증명을 어디에도 푸시하지 **마세요**. `.env`는 gitignore되어 있고, 라이브 테스트는 `KIS_LIVE_TEST=1`로 게이트됨.
 - `main`에 직접 푸시하지 **마세요** (직접 푸시 금지; 모든 변경은 PR을 통해 머지).
 
-## 한눈 요약표 (현재 진실 — 2026-06-19)
+## 한눈 요약표 (현재 진실 — 2026-06-20)
 
 | 항목 | 상태 |
 |------|-------|
 | 헌법 | **v6.0.0** (X.5 자율 전략 재지정 위임 포함, 안전 경계 기록 완료) |
 | 운영자 응대 정책 | `AGENTS.md` Codex 작업 운영 규칙 + `CLAUDE.md` 기존 Claude 정책. Codex는 `AGENTS.md` 우선 |
-| 마지막 main 커밋 | `e846400 Merge pull request #363 from jinooaction/Codex/fix-kis-smoke-temp-checkout` |
-| 활성 작업 | 이 통합 인계 갱신 PR 외 열린 작업 없음으로 정리 예정. 새 작업 전 `/sync`와 `git status`를 먼저 보고, local concurrency guard가 `WARN`/`BLOCK`을 내면 `--mode isolate`로 별도 `worktree`를 만든다 |
-| 최근 완료 | PR #358: forward `leaderboard.json` 관측 품질을 재지정 입력 게이트로 연결하고 run `27795095144`/`27795266222`로 실제 발행·소비 확인. PR #357: 자본 사다리 게이트가 표준 20관측 forward 판정과 앵커드 OOS+짧은 forward 판정을 함께 소비 |
-| 안전 경계 | #358은 등급 2 운영 루프 변경, #357은 등급 4 돈 경로 변경. 둘 다 헌법·커널·캡·화이트리스트·낙폭 예산·서킷 브레이커·주문 제한·비밀값 변경 없음. 현재 돈 이동 0 |
-| main 테스트 | 2192 통과, 4 스킵 (라이브 KIS smoke 4건, `KIS_LIVE_TEST=1` 가드) |
+| 마지막 main 커밋 | `6c99145 Merge pull request #366 from jinooaction/Codex/fix-local-codex-paths` |
+| 활성 작업 | 없음. 새 작업 전 `/sync`와 `git status`를 먼저 보고, local concurrency guard가 `WARN`/`BLOCK`을 내면 `--mode isolate`로 별도 `worktree`를 만든다 |
+| 최근 완료 | PR #366: Codex 훅 경로 복구 + local concurrency guard 중복 경고 압축. PR #365: deploy audit log sidecar 발행. PR #358: forward `leaderboard.json` 관측 품질을 재지정 입력 게이트로 연결 |
+| 안전 경계 | #366은 등급 2 운영 체계 변경. 헌법·커널·캡·화이트리스트·낙폭 예산·서킷 브레이커·주문 제한·비밀값·돈 경로 변경 없음. 현재 돈 이동 0 |
+| main 테스트 | 2196 통과, 4 스킵 (라이브 KIS smoke 4건, `KIS_LIVE_TEST=1` 가드) |
 | main 린트 | `uv run ruff check src tests` 깨끗 |
-| 열린 PR | 없음 (`gh pr list --repo jinooaction/claude --state open` 기준) |
+| 열린 PR | 없음 (GitHub connector open PR 조회 기준) |
 | 다음 세션 핵심 | local concurrency guard 경고가 있으면 같은 디렉터리에서 쓰지 말고 `python3 scripts/local_concurrency_guard.py --mode isolate`를 먼저 실행한다. 그 다음 `edge-autoarm-last-run`의 `edge_source`와 앵커드 JSON, `rebalance-paper-forward-last-run:leaderboard.json`의 `observation_health`를 본다. 현재 재지정은 `DEGRADED`라 HOLD, 앵커드는 `NO_EDGE`라 첫 자본 없음. PR·머지·배포·원격 브랜치 판단 전에는 `/sync`로 네트워크 상태를 갱신 |
 
 ## 과거 상세 요약표 (역사 보존 — 일부 행은 위 현재 요약표보다 낡을 수 있음)
