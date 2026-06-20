@@ -33,11 +33,11 @@ git ls-remote --heads origin 'claude/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `6c99145` — Merge pull request #366 from jinooaction/Codex/fix-local-codex-paths |
-| main 테스트 | `uv run pytest -q` → 2196 passed, 4 skipped |
+| 마지막 main 커밋 | `cbc2cd4` — Merge pull request #368 from jinooaction/Codex/world-class-agent-harness |
+| main 테스트 | `uv run pytest -q` → 2205 passed, 4 skipped |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
 | 열린 PR | 없음(GitHub connector open PR 조회 결과 `[]`) |
-| 최근 출시 작업 | #366 Codex 훅 경로 복구 + local concurrency guard 중복 경고 압축. #365 배포 감사 로그 sidecar 발행 |
+| 최근 출시 작업 | #368 Codex 에이전트 하네스 평가·회귀 과제·PR 증거 관문. #367 HANDOFF 최신화. #366 Codex 훅 경로 복구 + local concurrency guard 중복 경고 압축 |
 | 활성 작업 | 없음. 다음 세션은 새 작업 전 `/sync`와 최신 사이드카 상태를 먼저 확인 |
 | 안전 경계 | 헌법·커널·주문 제한·비밀값·실제 주문·돈 경로 변경 없음 |
 
@@ -217,19 +217,30 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
 시간을 낭비함. 다음 세션은 모든 도구 호출에 `antml:invoke`/`antml:parameter` 접두사를 반드시
 정확히 쓸 것.
 
-## 최근 관찰 — 2026-06-20 (Codex 훅 경로 복구 + 동시성 경고 압축 이후)
+## 최근 관찰 — 2026-06-20 (Codex 에이전트 하네스 평가 출시 이후)
 
-현재 `main` 최신은 `6c99145`(#366, Codex 훅 경로 복구 + local concurrency guard 경고 압축)이다.
-그 앞에는 `d1b1050`(#365, deploy audit log sidecar), `90e4d5a`(#364, leaderboard gate 소비
-인계), `e846400`(#363, KIS smoke 임시 checkout 소유권 보정)이 있다. 이 인계 갱신 시점의
-열린 PR은 없다.
+현재 `main` 최신은 `cbc2cd4`(#368, Codex 에이전트 하네스 평가·회귀 과제·PR 증거 관문)이다.
+그 앞에는 `275d6c4`(#367, HANDOFF 최신화), `6c99145`(#366, Codex 훅 경로 복구 + local
+concurrency guard 경고 압축), `d1b1050`(#365, deploy audit log sidecar)가 있다. 이 인계
+갱신 시점의 열린 PR은 없다.
 
+- **Codex 하네스 평가 출시**: `scripts/agent_harness_probe.py --strict`가 세션 시작 훅 순서,
+  `git_ground_truth`, local concurrency guard, PR 품질 관문, `AGENTS.md`, SDD 포인터,
+  `HANDOFF.md`, `.codex/harness/evaluation_tasks.toml`을 로컬 읽기 전용으로 평가한다. 최신 main
+  기준 `OK (11/11)`.
+- **회귀 과제 묶음**: `.codex/harness/evaluation_tasks.toml`은 12개 대표 과제로 위험 등급 0~4와
+  10개 통제 범주(context truth, concurrency, SDD, PR quality, validation, safety boundary,
+  handoff, rollback, external effects 등)를 덮는다. 실제 주문·비밀값·네트워크 실행은 없다.
+- **PR 증거 관문**: `.github/pull_request_template.md`와 `scripts/check_pr_quality_gate.py`가
+  `## 하네스 검증`을 요구한다. 등급 2 이상 변경은 PR 본문 `- 하네스 평가:`에
+  `uv run python scripts/agent_harness_probe.py --strict` 결과를 남겨야 한다.
 - **Codex 세션 시작 훅 상태**: `.codex/hooks.json`은 현재 clone 기준 상대 경로로
   `scripts/local_concurrency_guard.py --mode session-start`와 `.codex/hooks/git_ground_truth.py`를
   실행한다. 훅은 제거하지 않았다. 같은 `thread_id`/worktree/브랜치 lease는 최신 하나로 보이고,
   같은 세션의 worktree·브랜치·수정 파일 겹침 원인은 한 줄로 요약된다.
-- **로컬 검증**: #366 머지 직전과 handoff 갱신 직전 모두 전체 검증 통과. 최신 main 기준
-  `uv run pytest -q`는 2196 통과·4 스킵, `uv run ruff check src tests`는 깨끗하다.
+- **로컬 검증**: #368 머지 전 `uv run pytest`는 2205 통과·4 스킵, `uv run ruff check src tests`는
+  깨끗했다. 이 handoff 갱신 직전 최신 main 기준 `uv run pytest -q`도 2205 통과·4 스킵,
+  `uv run ruff check src tests`도 깨끗하다.
 - **배포 상태**: #357 코드 기준 `Deploy on merge to main` 성공(run `27778015360`),
   `KIS smoke` 성공(run `27778015311`, `key_valid=true`, `smoke_state=success`),
   `Forward anchored verdict` 성공(run `27778015364`). #358과 #360은 인계/워크플로 중심 변경이며
@@ -258,6 +269,28 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
   `ProposedChange` + `assert_autonomous_boundary_allowed()` 또는 `decide_boundary()`를 지난다.
   나머지 `contents: write` 워크플로는 사이드카 force-push, 운영자 확인형 go-live/halt, 검증 결과
   파일 작성으로 분류되어 이번 A6 guard 누락으로 보지 않았다.
+
+## 최근 마일스톤 — 2026-06-20 (Codex 에이전트 하네스 평가 — 평가·회귀·PR 증거 관문)
+
+main 머지 `cbc2cd4`(#368). 운영자가 "목표 스킬 사용해서 세계 최고 수준 하네스"를 요청했고,
+목표 도구로 장기 목표를 만든 뒤 등급 2 운영 체계 변경으로 SDD와 하네스 검증을 적용했다. 상세:
+`HANDOFF-051-AGENT-HARNESS.md`, `specs/056-agent-harness-eval/`.
+
+- **하네스 평가 명령**: `scripts/agent_harness_probe.py --strict` 추가. 세션 시작 훅 순서,
+  `git_ground_truth`, local concurrency guard, PR 품질 관문, `AGENTS.md`, SDD 포인터, `HANDOFF.md`,
+  회귀 과제 묶음을 로컬 읽기 전용으로 검사한다. JSON/text 출력과 strict 비정상 종료를 지원한다.
+- **회귀 과제 묶음**: `.codex/harness/evaluation_tasks.toml`에 12개 대표 작업 시나리오를 고정했다.
+  위험 등급 0~4와 context truth, concurrency, worktree isolation, SDD, PR quality, validation,
+  safety boundary, handoff, rollback, external effects를 모두 덮는다.
+- **PR 품질 관문 강화**: PR 템플릿에 `## 하네스 검증`을 추가했고,
+  `scripts/check_pr_quality_gate.py`가 등급 2 이상에서
+  `uv run python scripts/agent_harness_probe.py --strict` 실행 증거를 요구한다.
+- **AGENTS/quality-gate 반영**: 등급 2 이상 변경은 하네스 strict 평가를 실행하고 PR 본문에 결과를
+  남기도록 `AGENTS.md`와 `.codex/quality-gate.md`에 고정했다.
+- **안전 경계**: 헌법·커널·주문 제한·비밀값·배포 제한·돈 경로 변경 없음. 새 프로브는 파일만
+  읽고 네트워크, 브로커, 비밀값, 주문 경로를 사용하지 않는다.
+- **검증**: `uv run pytest` 2205 통과·4 스킵, `uv run ruff check src tests` 통과,
+  `uv run python scripts/agent_harness_probe.py --strict` → `OK (11/11)`, PR 품질 관문 통과.
 
 ## 최근 마일스톤 — 2026-06-20 (Codex 세션 훅 경로 복구 + 동시성 경고 압축)
 
@@ -3117,6 +3150,7 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 
 ## 과거 인수인계 파일 (참고용)
 
+- `HANDOFF-051-AGENT-HARNESS.md` — Codex 에이전트 하네스 평가·회귀·PR 증거 관문 (2026-06-20, PR #368 `cbc2cd4`). `scripts/agent_harness_probe.py --strict`로 세션 시작 훅, 동시 작업 방어, SDD 포인터, PR 품질 관문, 회귀 과제 묶음을 로컬 읽기 전용 평가. 등급 2 이상 PR은 `## 하네스 검증`에 strict 평가 증거를 남겨야 함. 헌법·커널·주문·비밀값·돈 경로 변경 없음.
 - `HANDOFF-045-LIVE-PORTFOLIO-ARMED.md` — (A) 룰 워커 끄고 추세 방어 포트폴리오로 라이브 캐너리 무장 (2026-06-04, PR #178·#179 `96ff217`). 돈 단위 검증(코드+실데이터 드라이런: AAPL 1주 @ $312). 룰 워커 비활성 + 포트폴리오 무장($500). 첫 실주문=다음 시장시간 스케줄. 안전장치 다중.
 - `HANDOFF-046-SPEC-043-MULTI-ASSET-TREND.md` — 스펙 043 멀티에셋 분산 추세추종 (2026-06-05, PR #205 `64ead83`). 검증된 단일 자산 추세 방어를 비상관 자산(주식 SPY + 채권 IEF) 분산으로 확장. Shiller 1871~ 검증: 분산 샤프 1.58/1.81/1.78 vs 단일 1.18/1.43/1.29, 낙폭 절반, 모든 창·가중 조합 견고. forward 페이퍼 ARM D 배선. Kernel 0·돈 0·PAPER 전용.
 - `HANDOFF-047-SPEC-044-GROWTH-OPTIMAL.md` — 스펙 044 성장 최적 레버리지 (2026-06-05, PR #207 `ca3d47f`). 고정 자본 복리 극대화: 복리 천장은 샤프로 결정, 낙폭 예산 30%서 레버리지로 복리 ~2배(현대 9.5→14.7%, 최근 8.9→17.0%), 과레버리지=파산 정직 보고, 보수적 예산서 분산 우위. 리스크 패리티는 측정 후 50/50 유지. 레버리지는 연구 전용·라이브 K1 캡 불변. Kernel 0·돈 0.
@@ -3178,14 +3212,14 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 |------|-------|
 | 헌법 | **v6.0.0** (X.5 자율 전략 재지정 위임 포함, 안전 경계 기록 완료) |
 | 운영자 응대 정책 | `AGENTS.md` Codex 작업 운영 규칙 + `CLAUDE.md` 기존 Claude 정책. Codex는 `AGENTS.md` 우선 |
-| 마지막 main 커밋 | `6c99145 Merge pull request #366 from jinooaction/Codex/fix-local-codex-paths` |
+| 마지막 main 커밋 | `cbc2cd4 Merge pull request #368 from jinooaction/Codex/world-class-agent-harness` |
 | 활성 작업 | 없음. 새 작업 전 `/sync`와 `git status`를 먼저 보고, local concurrency guard가 `WARN`/`BLOCK`을 내면 `--mode isolate`로 별도 `worktree`를 만든다 |
-| 최근 완료 | PR #366: Codex 훅 경로 복구 + local concurrency guard 중복 경고 압축. PR #365: deploy audit log sidecar 발행. PR #358: forward `leaderboard.json` 관측 품질을 재지정 입력 게이트로 연결 |
-| 안전 경계 | #366은 등급 2 운영 체계 변경. 헌법·커널·캡·화이트리스트·낙폭 예산·서킷 브레이커·주문 제한·비밀값·돈 경로 변경 없음. 현재 돈 이동 0 |
-| main 테스트 | 2196 통과, 4 스킵 (라이브 KIS smoke 4건, `KIS_LIVE_TEST=1` 가드) |
+| 최근 완료 | PR #368: Codex 에이전트 하네스 평가·회귀 과제·PR 증거 관문. PR #367: HANDOFF 최신화. PR #366: Codex 훅 경로 복구 + local concurrency guard 중복 경고 압축 |
+| 안전 경계 | #368은 등급 2 운영 체계 변경. 헌법·커널·캡·화이트리스트·낙폭 예산·서킷 브레이커·주문 제한·비밀값·돈 경로 변경 없음. 현재 돈 이동 0 |
+| main 테스트 | 2205 통과, 4 스킵 (라이브 KIS smoke 4건, `KIS_LIVE_TEST=1` 가드) |
 | main 린트 | `uv run ruff check src tests` 깨끗 |
 | 열린 PR | 없음 (GitHub connector open PR 조회 기준) |
-| 다음 세션 핵심 | local concurrency guard 경고가 있으면 같은 디렉터리에서 쓰지 말고 `python3 scripts/local_concurrency_guard.py --mode isolate`를 먼저 실행한다. 그 다음 `edge-autoarm-last-run`의 `edge_source`와 앵커드 JSON, `rebalance-paper-forward-last-run:leaderboard.json`의 `observation_health`를 본다. 현재 재지정은 `DEGRADED`라 HOLD, 앵커드는 `NO_EDGE`라 첫 자본 없음. PR·머지·배포·원격 브랜치 판단 전에는 `/sync`로 네트워크 상태를 갱신 |
+| 다음 세션 핵심 | 등급 2 이상 운영 변경은 `uv run python scripts/agent_harness_probe.py --strict`를 실행하고 PR 본문 `## 하네스 검증`에 결과를 남긴다. local concurrency guard 경고가 있으면 같은 디렉터리에서 쓰지 말고 `python3 scripts/local_concurrency_guard.py --mode isolate`를 먼저 실행한다. PR·머지·배포·원격 브랜치 판단 전에는 `/sync`로 네트워크 상태를 갱신 |
 
 ## 과거 상세 요약표 (역사 보존 — 일부 행은 위 현재 요약표보다 낡을 수 있음)
 
