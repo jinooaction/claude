@@ -42,6 +42,8 @@
 - 린트 대상 변경: `uv run ruff check src tests`.
 - 문서·설정 변경: 형식 검증, 참조 경로 확인, 중복·충돌 확인.
 - 등급 2 이상: 실제 적용 경로 확인.
+- 등급 2 이상: `uv run python scripts/agent_harness_probe.py --strict`로 하네스 평가를 실행하고
+  PR 본문 `## 하네스 검증`에 결과를 남긴다.
 - 실행하지 못한 검증은 최종 보고에 남긴다.
 
 ## 6. 완료 관문

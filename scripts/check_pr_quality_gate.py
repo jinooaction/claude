@@ -15,6 +15,7 @@ REQUIRED_HEADINGS = [
     "## 탐색 근거",
     "## 변경 내용",
     "## 검증",
+    "## 하네스 검증",
     "## 안전 경계",
     "## 인계",
     "## 자동 머지 준비",
@@ -41,6 +42,13 @@ def _line_value(body: str, label: str) -> str | None:
     if not value or value == "-":
         return None
     return value
+
+
+def _selected_risk_grade(body: str) -> int | None:
+    match = re.search(r"^- \[[xX]\] 등급 ([0-4]):", body, re.MULTILINE)
+    if not match:
+        return None
+    return int(match.group(1))
 
 
 def main() -> int:
@@ -70,13 +78,28 @@ def main() -> int:
 
     if not args.template:
         errors: list[str] = []
-        if not re.search(r"^- \[[xX]\] 등급 [0-4]:", body, re.MULTILINE):
+        selected_grade = _selected_risk_grade(body)
+        if selected_grade is None:
             errors.append("위험 등급 하나를 [x]로 선택해야 합니다.")
 
         for field in REQUIRED_FIELDS:
             value = _line_value(body, field)
             if not value:
                 errors.append(f"문제 정의의 '{field}' 값을 채워야 합니다.")
+
+        harness_value = _line_value(body, "하네스 평가")
+        if not harness_value:
+            errors.append("하네스 검증의 '하네스 평가' 값을 채워야 합니다.")
+        elif (
+            selected_grade is not None
+            and selected_grade >= 2
+            and "agent_harness_probe.py --strict" not in harness_value
+        ):
+            errors.append(
+                "등급 2 이상 변경은 "
+                "`uv run python scripts/agent_harness_probe.py --strict` "
+                "실행 결과를 하네스 평가에 남겨야 합니다."
+            )
 
         if "없음 / 있음" in body:
             errors.append("안전 경계의 '없음 / 있음' 선택지를 실제 값으로 바꿔야 합니다.")
