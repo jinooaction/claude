@@ -7,19 +7,20 @@ Path: `automation/rebalance-micro-gtaa.request`
 Required fields:
 
 ```yaml
-armed: false
+armed: true
 capital_usd: 1000
 requested_by: mason
 stage: micro-gtaa-live-canary
-run_seq: 1
+run_seq: 2
 warning_drawdown_pct: 3
 hard_stop_drawdown_pct: 5
-note: "..."
+note: "운영자 2026-06-22 명시 승인: capital_usd=1000, armed=true, 수동 실행까지 승인."
 ```
 
 Rules:
 - `armed` must be `true` or `false`.
-- Committed default must be `armed: false`.
+- The baseline default was `armed: false`; the 2026-06-22 operator-approved live
+  activation is `armed: true` with `capital_usd: 1000`.
 - `capital_usd` must be an integer no greater than `1000`.
 - `warning_drawdown_pct` must be below `hard_stop_drawdown_pct`.
 - `hard_stop_drawdown_pct` must be no greater than `5`.
