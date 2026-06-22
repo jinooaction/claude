@@ -62,6 +62,11 @@ The service only reads `audit_log`; it does not submit, cancel, sync, or modify 
 Telegram's developer API page describes its APIs as free of charge, and this alert path
 uses the HTTPS Bot API only for text notifications. No Telegram billing account is required.
 
+Easiest path after adding GitHub repository secrets `TELEGRAM_BOT_TOKEN` and
+`TELEGRAM_CHAT_ID`: run the GitHub Actions workflow
+`Configure Telegram alerts on server`. It writes the server `.env`, sends a test
+message, and enables only `auto-invest-telegram-alerts.service`.
+
 1. In Telegram, create a bot with `@BotFather` and save the token.
 2. Send one message to the bot, then open
    `https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/getUpdates` to find `chat.id`.

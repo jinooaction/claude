@@ -1,0 +1,160 @@
+name: Configure Telegram alerts on server
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: configure-telegram-alerts
+  cancel-in-progress: false
+
+jobs:
+  configure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check required secrets
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          VULTR_SSH_HOST: ${{ secrets.VULTR_SSH_HOST }}
+          VULTR_SSH_USER: ${{ secrets.VULTR_SSH_USER }}
+          VULTR_SSH_PRIVATE_KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+          VULTR_SSH_PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          set -euo pipefail
+          echo "::add-mask::${TELEGRAM_BOT_TOKEN:-}"
+          echo "::add-mask::${TELEGRAM_CHAT_ID:-}"
+          missing=()
+          [[ -z "${TELEGRAM_BOT_TOKEN:-}" ]] && missing+=("TELEGRAM_BOT_TOKEN")
+          [[ -z "${TELEGRAM_CHAT_ID:-}" ]] && missing+=("TELEGRAM_CHAT_ID")
+          [[ -z "${VULTR_SSH_HOST:-}" ]] && missing+=("VULTR_SSH_HOST")
+          [[ -z "${VULTR_SSH_USER:-}" ]] && missing+=("VULTR_SSH_USER")
+          [[ -z "${VULTR_SSH_PRIVATE_KEY:-}" ]] && missing+=("VULTR_SSH_PRIVATE_KEY")
+          [[ -z "${VULTR_SSH_PORT:-}" ]] && missing+=("VULTR_SSH_PORT")
+          if [[ ${#missing[@]} -gt 0 ]]; then
+            echo "::error::Missing required secrets: ${missing[*]}"
+            exit 1
+          fi
+
+      - name: Install SSH key
+        env:
+          VULTR_SSH_PRIVATE_KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${VULTR_SSH_PRIVATE_KEY}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+      - name: Configure server Telegram alerts
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          VULTR_SSH_HOST: ${{ secrets.VULTR_SSH_HOST }}
+          VULTR_SSH_USER: ${{ secrets.VULTR_SSH_USER }}
+          VULTR_SSH_PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          set -euo pipefail
+          echo "::add-mask::${TELEGRAM_BOT_TOKEN}"
+          echo "::add-mask::${TELEGRAM_CHAT_ID}"
+          token_b64="$(printf '%s' "${TELEGRAM_BOT_TOKEN}" | base64 -w0)"
+          chat_b64="$(printf '%s' "${TELEGRAM_CHAT_ID}" | base64 -w0)"
+          echo "::add-mask::${token_b64}"
+          echo "::add-mask::${chat_b64}"
+          port="${VULTR_SSH_PORT:-22}"
+
+          ssh -o StrictHostKeyChecking=accept-new \
+              -o ConnectTimeout=15 \
+              -p "${port}" \
+              -i ~/.ssh/id_ed25519 \
+              "${VULTR_SSH_USER}@${VULTR_SSH_HOST}" \
+              "sudo TELEGRAM_BOT_TOKEN_B64='${token_b64}' TELEGRAM_CHAT_ID_B64='${chat_b64}' bash -s" <<'REMOTE'
+          set -euo pipefail
+          APP=/opt/auto-invest
+          ENV_FILE="${APP}/.env"
+          SERVICE=auto-invest-telegram-alerts.service
+
+          if [[ ! -d "${APP}" ]]; then
+            echo "ERROR: ${APP} not found" >&2
+            exit 1
+          fi
+
+          TOKEN="$(printf '%s' "${TELEGRAM_BOT_TOKEN_B64}" | base64 -d)"
+          CHAT_ID="$(printf '%s' "${TELEGRAM_CHAT_ID_B64}" | base64 -d)"
+
+          install -d -m 0750 -o auto-invest -g auto-invest "${APP}"
+          TELEGRAM_BOT_TOKEN="${TOKEN}" TELEGRAM_CHAT_ID="${CHAT_ID}" python3 - "${ENV_FILE}" <<'PY'
+          from __future__ import annotations
+
+          import os
+          import sys
+          from pathlib import Path
+
+          path = Path(sys.argv[1])
+          managed = {
+              "TELEGRAM_ENABLED": "true",
+              "TELEGRAM_BOT_TOKEN": os.environ["TELEGRAM_BOT_TOKEN"],
+              "TELEGRAM_CHAT_ID": os.environ["TELEGRAM_CHAT_ID"],
+              "TELEGRAM_SOURCE_LABEL": "auto-invest",
+          }
+          lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+          filtered: list[str] = []
+          for line in lines:
+              key = line.split("=", 1)[0].strip() if "=" in line else ""
+              if key not in managed:
+                  filtered.append(line)
+          if filtered and filtered[-1] != "":
+              filtered.append("")
+          filtered.extend(f"{key}={value}" for key, value in managed.items())
+          tmp = path.with_suffix(path.suffix + ".tmp")
+          tmp.write_text("\n".join(filtered) + "\n", encoding="utf-8")
+          tmp.replace(path)
+          PY
+          unset TOKEN CHAT_ID TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID
+          chown auto-invest:auto-invest "${ENV_FILE}"
+          chmod 0600 "${ENV_FILE}"
+          echo "Telegram values written to ${ENV_FILE}"
+
+          sudo -u auto-invest git -C "${APP}" fetch origin main --quiet || true
+          if sudo -u auto-invest git -C "${APP}" show origin/main:deploy/${SERVICE} > "/tmp/${SERVICE}.new" 2>/dev/null; then
+            install -m 0644 "/tmp/${SERVICE}.new" "/etc/systemd/system/${SERVICE}"
+            rm -f "/tmp/${SERVICE}.new"
+            echo "Installed ${SERVICE} from origin/main"
+          elif [[ -f "${APP}/deploy/${SERVICE}" ]]; then
+            install -m 0644 "${APP}/deploy/${SERVICE}" "/etc/systemd/system/${SERVICE}"
+            echo "Installed ${SERVICE} from working tree"
+          else
+            echo "ERROR: ${SERVICE} not found" >&2
+            exit 1
+          fi
+
+          systemctl daemon-reload
+          cd "${APP}"
+          sudo -u auto-invest /usr/local/bin/uv run auto-invest telegram-alerts \
+            --env-file .env \
+            --db data/auto_invest.db \
+            --state-file data/telegram_alerts_state.json \
+            --test-message
+          systemctl enable --now "${SERVICE}"
+          systemctl is-active --quiet "${SERVICE}"
+          echo "${SERVICE} is active"
+          journalctl -u "${SERVICE}" -n 20 --no-pager || true
+          REMOTE
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Configure Telegram alerts"
+            echo ""
+            echo "- Server Telegram `.env` sync attempted."
+            echo "- Test message runs before service enable."
+            echo "- Only `auto-invest-telegram-alerts.service` is enabled/started."
+            echo "- Trading worker, order routing, capital, whitelist, and risk gates are untouched."
+          } >> "$GITHUB_STEP_SUMMARY"
