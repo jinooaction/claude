@@ -33,13 +33,14 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `24c2947` — Merge pull request #378 from jinooaction/Codex/kis-order-diagnostics |
-| main 테스트 | `uv run pytest -q` → 2229 passed, 4 skipped |
+| 마지막 main 커밋 | `6384584` — Merge pull request #380 from jinooaction/Codex/telegram-order-alerts |
+| main 테스트 | `uv run pytest -q` → 2239 passed, 4 skipped |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
 | 열린 PR | 없음(GitHub open PR 조회 결과 `[]`) |
-| 최근 출시 작업 | #378 스펙 059 KIS 주문 전제 확인과 진단 보존. #376 마이크로 GTAA `armed:true` 운영자 승인 반영과 수동 live 실행. #374 스펙 058 마이크로 GTAA 실거래 캐너리 |
-| 활성 작업 | 코드 PR 없음. 운영상 마이크로 GTAA는 `armed:true` 유지 중이지만 다음 live 주문은 정규장·매수가능 현금 preflight와 손실 브레이커를 통과해야 함 |
-| 안전 경계 | 등급 4 돈 경로가 활성 상태. #378은 K4 감사 payload에 마스킹 진단을 추가했지만 실제 주문 재시도는 하지 않음. 헌법·커널 목록·비밀값·K1 캡·화이트리스트 변경 없음 |
+| 출시 완료 스펙 | 최신 추가: 060(Telegram 모바일 주문 알림), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
+| 최근 출시 작업 | #380 스펙 060 Telegram 모바일 주문 알림. #378 스펙 059 KIS 주문 전제 확인과 진단 보존. #376 마이크로 GTAA `armed:true` 운영자 승인 반영과 수동 live 실행 |
+| 활성 작업 | 코드 PR 없음. Telegram 알림 코드는 main에 있지만 운영자가 `TELEGRAM_*` 비밀값과 service enable을 하지 않으면 일반 주문 알림은 꺼져 있음. micro GTAA는 `armed:true` 유지 중이지만 다음 live 주문은 정규장·매수가능 현금 preflight와 손실 브레이커를 통과해야 함 |
+| 안전 경계 | #380은 등급 3 외부 API·비밀값 경로 추가지만 `audit_log` observer이며 주문·브로커·위험 게이트 코드는 변경하지 않음. #378 등급 4 돈 경로 진단 보존도 유지. 헌법·커널 목록·K1 캡·화이트리스트·낙폭 예산 변경 없음 |
 
 ## 완료된 작업 큐 (운영자 승인 — 2026-05-31, 1→2→3 전부 완료)
 
@@ -216,6 +217,64 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
 **세션 운영 메모**: 이번 세션에 도구 호출 형식 오류(`antml:` 접두사 누락)가 반복돼 운영자
 시간을 낭비함. 다음 세션은 모든 도구 호출에 `antml:invoke`/`antml:parameter` 접두사를 반드시
 정확히 쓸 것.
+
+## 최근 관찰 — 2026-06-22 (Telegram 모바일 주문 알림 출시 이후)
+
+현재 `main` 최신은 `6384584`(#380, 스펙 060 Telegram 모바일 주문 알림)이다.
+직전 주요 커밋은 `bb6aac3`(Telegram 알림 구현), `2d9e714`(#379, KIS 진단 handoff),
+`24c2947`(#378, KIS 주문 전제 확인과 진단 보존)이다. 이 인계 갱신 시점의 열린 PR은 없다.
+
+- **비용 판단**: Telegram 개발자 API는 공식 문서상 무료 사용 가능하고, 이번 경로는 결제 기능이
+  아니라 Bot API 텍스트 메시지만 쓴다. Telegram 과금 계정은 필요 없다. 단, 기존 GitHub Actions
+  실행과 서버 자원은 그대로 사용한다.
+- **micro GTAA 알림**: `.github/workflows/rebalance-micro-gtaa-canary.yml` 마지막에
+  `Notify Telegram - micro GTAA result` best-effort 단계를 추가했다. `TELEGRAM_BOT_TOKEN`과
+  `TELEGRAM_CHAT_ID` secrets가 없으면 성공 상태로 skip한다. 실패해도 workflow 결론과 주문
+  결과를 바꾸지 않는다.
+- **일반 주문 알림**: `auto-invest telegram-alerts` CLI가 SQLite `audit_log`의 새 주문·거부·체결·halt·
+  error 이벤트를 읽어 Telegram 메시지로 보낸다. 첫 실행은 명시적 `--replay-existing` 없으면 현재
+  마지막 `seq`부터 시작해 과거 로그를 폭주 전송하지 않는다.
+- **서버 서비스 상태**: `deploy/auto-invest-telegram-alerts.service`는 deploy sync로 설치되지만
+  자동 enable하지 않는다. 운영자가 `/opt/auto-invest/.env`에 `TELEGRAM_ENABLED=true`,
+  `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`를 넣고 test message를 확인한 뒤
+  `systemctl enable --now auto-invest-telegram-alerts.service`를 실행해야 일반 주문 실시간 알림이 켜진다.
+- **비밀값·로그**: 메시지와 CLI 오류 출력은 token, app key, app secret, authorization, 계좌번호를
+  마스킹하거나 출력하지 않는다. GitHub workflow의 HTTP 오류도 URL 전체를 출력하지 않게 했다.
+- **안전 경계**: 등급 3 외부 API·비밀값 경로 추가다. `audit_log`는 읽기만 하며 주문 제출, 취소,
+  체결 동기화, halt 설정을 하지 않는다. `src/auto_invest/execution`, `src/auto_invest/broker`,
+  `src/auto_invest/risk`, `config`, 헌법, 커널 목록 diff는 없다. `telegram-alerts` 안전 정책은
+  `A2` 제안 등급, 주문·브로커·DB 쓰기 권한 없음으로 등록했다.
+- **배포 확인**: #380 main push에 붙은 `Deploy on merge to main` run `27942372448`는 성공했다.
+  `KIS smoke (autonomous)` run `27942372526`도 성공했고 sidecar는 `key_valid=true`,
+  `smoke_state=success`, live KIS 테스트 4건 통과를 기록했다. 이 배포는 코드 반영 확인이며
+  Telegram 알림 service enable이나 실거래 전환이 아니다.
+- **검증**: PR #380 머지 전 `uv run pytest` 2239 통과·4 스킵,
+  `uv run ruff check src tests` 통과, YAML 파싱 검증, `git diff --check`,
+  `uv run python scripts/agent_harness_probe.py --strict` `OK (14/14)`,
+  `uv run python scripts/check_handoff_facts.py` 통과, PR 품질 관문 통과. 실제 Telegram delivery와
+  실서버 service enable은 운영자 비밀값·승인 없이는 실행하지 않았다.
+- **handoff 재검증 상태**: 최신 main에서 `uv run ruff check src tests`는 통과했다.
+  `uv run pytest -q`는 stale `HANDOFF.md` 때문에 하네스 2건만 실패했다. 이 handoff 갱신은
+  그 원인(`마지막 main 커밋` 행)을 바로잡았다. 갱신 후 `uv run python scripts/check_handoff_facts.py`,
+  `uv run python scripts/agent_harness_probe.py --strict`, `uv run pytest -q`,
+  `uv run ruff check src tests`가 모두 통과했다.
+
+## 최근 마일스톤 — 2026-06-22 (스펙 060 Telegram 모바일 주문 알림)
+
+main 머지 `6384584`(#380). 운영자가 "모바일에서 검증과 일반 주문 실행·매수·매도 결과를
+실시간으로 알고 싶다"고 요청했고, Telegram Bot API를 사용해 무료 모바일 알림 경로를 추가했다.
+상세: `HANDOFF-057-TELEGRAM-ORDER-ALERTS.md`, `specs/060-telegram-order-alerts/`.
+
+- **핵심 변경**: micro GTAA workflow 결과 알림, 서버 `audit_log` tailer CLI, 선택형 systemd service,
+  비밀값 마스킹, cursor 상태 파일, dry-run/test-message, 운영 문서를 추가했다.
+- **운영 켜기**: GitHub Actions 알림은 repository secrets `TELEGRAM_BOT_TOKEN`,
+  `TELEGRAM_CHAT_ID`가 있어야 전송된다. 서버 일반 주문 알림은 `.env` 설정과
+  `auto-invest-telegram-alerts.service` enable이 필요하다.
+- **안전 경계**: 외부 API·비밀값 경로 때문에 등급 3으로 처리했다. 주문 라우터·브로커 제출·위험
+  게이트·자본·화이트리스트·손실 브레이커는 변경하지 않았다. 알림 장애는 주문 경로를 막지 않는다.
+- **검증/배포**: `uv run pytest` 2239 통과·4 스킵, `uv run ruff check src tests` 통과,
+  `uv run python scripts/agent_harness_probe.py --strict` → `OK (14/14)`, PR 품질 관문 통과.
+  #380 deploy-on-merge run `27942372448` 성공, KIS smoke run `27942372526` 성공.
 
 ## 최근 관찰 — 2026-06-22 (KIS 주문 원인 확정 경로 복구 이후)
 
@@ -3444,13 +3503,14 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 |------|-------|
 | 헌법 | **v6.0.0** (X.5 자율 전략 재지정 위임 포함, 안전 경계 기록 완료) |
 | 운영자 응대 정책 | `AGENTS.md` Codex 작업 운영 규칙 + `CLAUDE.md` 기존 Claude 정책. Codex는 `AGENTS.md` 우선 |
-| 마지막 main 커밋 | `24c2947 Merge pull request #378 from jinooaction/Codex/kis-order-diagnostics` |
-| 활성 작업 | 코드 PR 없음. micro GTAA는 `armed:true`, `capital_usd:1000` 상태지만 다음 live 주문은 정규장·매수가능 현금 preflight와 손실 브레이커를 통과해야 한다 |
-| 최근 완료 | PR #378: 스펙 059 KIS 주문 전제 확인과 진단 보존. PR #377: micro GTAA 무장 상태 handoff 갱신. PR #376: micro GTAA `armed:true` 운영자 승인 반영과 수동 live 실행 |
-| 안전 경계 | #378은 등급 4 돈 경로 변경이며 K4 감사 payload를 추가 전용으로 확장했다. 실제 주문 재시도 0건, 새 접수·체결 0건. 헌법·커널 목록·캡·화이트리스트·낙폭 예산·서킷 브레이커·주문 제한·비밀값 변경 없음 |
-| main 테스트 | 2229 통과, 4 스킵 (라이브 KIS smoke 4건, `KIS_LIVE_TEST=1` 가드) |
+| 마지막 main 커밋 | `6384584 Merge pull request #380 from jinooaction/Codex/telegram-order-alerts` |
+| 활성 작업 | 코드 PR 없음. Telegram 알림 코드는 main에 있지만 일반 주문 알림 서비스는 운영자 `TELEGRAM_*` 설정과 enable 전까지 꺼져 있다. micro GTAA는 `armed:true`, `capital_usd:1000` 상태지만 다음 live 주문은 정규장·매수가능 현금 preflight와 손실 브레이커를 통과해야 한다 |
+| 최근 완료 | PR #380: 스펙 060 Telegram 모바일 주문 알림. PR #378: 스펙 059 KIS 주문 전제 확인과 진단 보존. PR #376: micro GTAA `armed:true` 운영자 승인 반영과 수동 live 실행 |
+| 안전 경계 | #380은 등급 3 외부 API·비밀값 경로 추가지만 observer 전용이고 주문·브로커·위험 게이트 변경 없음. #378은 등급 4 돈 경로 진단 보존. 실제 주문 재시도 0건, 새 접수·체결 0건. 헌법·커널 목록·캡·화이트리스트·낙폭 예산·서킷 브레이커·주문 제한 변경 없음 |
+| main 테스트 | `uv run pytest -q` → 2239 passed, 4 skipped |
 | main 린트 | `uv run ruff check src tests` 깨끗 |
 | 열린 PR | 없음 (GitHub connector open PR 조회 기준) |
+| 출시 완료 스펙 | 최신 추가: 060(Telegram 모바일 주문 알림), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
 | 다음 세션 핵심 | 등급 2 이상 운영 변경은 `uv run python scripts/agent_harness_probe.py --strict`와 `uv run python scripts/check_handoff_facts.py`를 실행하고 PR 본문 `## 하네스 검증`에 결과를 남긴다. local concurrency guard 경고가 있으면 같은 디렉터리에서 쓰지 말고 `python3 scripts/local_concurrency_guard.py --mode isolate`를 먼저 실행한다. PR·머지·배포·원격 브랜치 판단 전에는 `/sync`로 네트워크 상태를 갱신 |
 
 ## 과거 상세 요약표 (역사 보존 — 일부 행은 위 현재 요약표보다 낡을 수 있음)
