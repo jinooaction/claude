@@ -7,13 +7,13 @@
 `AGENTS.md`(Codex) 또는 `CLAUDE.md`(Claude)의 운영 규칙과 세션 수명주기 정책에 따라, 모든 새 세션은 계획을 세우거나 운영자에게 무엇을 할지 물어보기 **전에** 현재 상태를 사실로 맞춥니다. Codex 기준 핵심 규칙은 `AGENTS.md`입니다.
 
 1. **자동(로컬)** — Codex는 `.codex/hooks/git_ground_truth.py`, Claude는 `.claude/hooks/git_ground_truth.py` 세션 시작 훅이 매 세션 라이브 git 상태를 출력합니다: 현재 브랜치·HEAD·작업트리 청결도와 샘플·`origin/main` 대비 앞뒤·최근 `origin/main` 커밋·핵심 HANDOFF 진입점. **산문으로 적힌 "active feature" 줄보다 이 블록을 더 신뢰하세요.**
-2. **`/sync` 실행(네트워크)** — 훅은 절대 멈추면 안 되므로 로컬 정보만 냅니다. 네트워크 발견은 `/sync` 스킬이 담당합니다: `git fetch`, 원격 `claude/*` 브랜치 목록, 열린 PR 목록(`mcp__github__list_pull_requests`), 각 브랜치의 살아있는 HANDOFF 읽기, `main` 실제 최신과 대조. 무엇이 머지됐고 무엇이 진행 중인지 불확실하면 세션 시작에 한 번 돌리세요.
+2. **`/sync` 실행(네트워크)** — 훅은 절대 멈추면 안 되므로 로컬 정보만 냅니다. 네트워크 발견은 `/sync` 스킬이 담당합니다: `git fetch`, 원격 `Codex/*` 브랜치 목록, 열린 PR 목록(`mcp__github__list_pull_requests`), 각 브랜치의 살아있는 HANDOFF 읽기, `main` 실제 최신과 대조. 무엇이 머지됐고 무엇이 진행 중인지 불확실하면 세션 시작에 한 번 돌리세요.
 
 `/sync`가 자동화하는 옛 수동 절차(참고):
 
 ```bash
 git fetch origin
-git ls-remote --heads origin 'claude/*' | awk '{print $2}'
+git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 # + mcp__github__list_pull_requests owner=jinooaction repo=claude state=open
 # + git show origin/<브랜치>:HANDOFF-<NNN>.md   (각 브랜치의 살아있는 HANDOFF)
 # + git log origin/main -8 --pretty='%h %s'      (main 실제 최신)
@@ -29,15 +29,15 @@ git ls-remote --heads origin 'claude/*' | awk '{print $2}'
 
 상세 규칙은 Codex 세션에서는 `AGENTS.md`, Claude 세션에서는 `CLAUDE.md` 본문 참조.
 
-## 한눈 요약표 — 2026-06-20 최신 main 기준
+## 한눈 요약표 — 2026-06-22 최신 main 기준
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `cbc2cd4` — Merge pull request #368 from jinooaction/Codex/world-class-agent-harness |
+| 마지막 main 커밋 | `fe2af54` — Merge pull request #369 from jinooaction/Codex/handoff-after-agent-harness |
 | main 테스트 | `uv run pytest -q` → 2205 passed, 4 skipped |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
 | 열린 PR | 없음(GitHub connector open PR 조회 결과 `[]`) |
-| 최근 출시 작업 | #368 Codex 에이전트 하네스 평가·회귀 과제·PR 증거 관문. #367 HANDOFF 최신화. #366 Codex 훅 경로 복구 + local concurrency guard 중복 경고 압축 |
+| 최근 출시 작업 | #369 Codex 에이전트 하네스 이후 HANDOFF 최신화. #368 Codex 에이전트 하네스 평가·회귀 과제·PR 증거 관문. #367 HANDOFF 최신화 |
 | 활성 작업 | 없음. 다음 세션은 새 작업 전 `/sync`와 최신 사이드카 상태를 먼저 확인 |
 | 안전 경계 | 헌법·커널·주문 제한·비밀값·실제 주문·돈 경로 변경 없음 |
 
@@ -217,11 +217,12 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
 시간을 낭비함. 다음 세션은 모든 도구 호출에 `antml:invoke`/`antml:parameter` 접두사를 반드시
 정확히 쓸 것.
 
-## 최근 관찰 — 2026-06-20 (Codex 에이전트 하네스 평가 출시 이후)
+## 최근 관찰 — 2026-06-22 (Codex 에이전트 하네스 평가 출시 이후)
 
-현재 `main` 최신은 `cbc2cd4`(#368, Codex 에이전트 하네스 평가·회귀 과제·PR 증거 관문)이다.
-그 앞에는 `275d6c4`(#367, HANDOFF 최신화), `6c99145`(#366, Codex 훅 경로 복구 + local
-concurrency guard 경고 압축), `d1b1050`(#365, deploy audit log sidecar)가 있다. 이 인계
+현재 `main` 최신은 `fe2af54`(#369, Codex 에이전트 하네스 이후 HANDOFF 최신화)이다.
+그 앞에는 `cbc2cd4`(#368, Codex 에이전트 하네스 평가·회귀 과제·PR 증거 관문),
+`275d6c4`(#367, HANDOFF 최신화), `6c99145`(#366, Codex 훅 경로 복구 + local concurrency guard
+경고 압축)가 있다. 이 인계
 갱신 시점의 열린 PR은 없다.
 
 - **Codex 하네스 평가 출시**: `scripts/agent_harness_probe.py --strict`가 세션 시작 훅 순서,
@@ -236,7 +237,7 @@ concurrency guard 경고 압축), `d1b1050`(#365, deploy audit log sidecar)가 �
   `uv run python scripts/agent_harness_probe.py --strict` 결과를 남겨야 한다.
 - **Codex 세션 시작 훅 상태**: `.codex/hooks.json`은 현재 clone 기준 상대 경로로
   `scripts/local_concurrency_guard.py --mode session-start`와 `.codex/hooks/git_ground_truth.py`를
-  실행한다. 훅은 제거하지 않았다. 같은 `thread_id`/worktree/브랜치 lease는 최신 하나로 보이고,
+  실행한다. 훅은 제거하지 않았다. 같은 `thread_id`/worktree lease는 최신 하나로 보이고,
   같은 세션의 worktree·브랜치·수정 파일 겹침 원인은 한 줄로 요약된다.
 - **로컬 검증**: #368 머지 전 `uv run pytest`는 2205 통과·4 스킵, `uv run ruff check src tests`는
   깨끗했다. 이 handoff 갱신 직전 최신 main 기준 `uv run pytest -q`도 2205 통과·4 스킵,
@@ -3113,7 +3114,7 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 |------|------|---------|
 | `.claude/hooks/git_ground_truth.py` | 세션 시작 훅(자동) | 매 세션 라이브 로컬 git 상태 출력(현재 브랜치·HEAD·`origin/main` 대비·HANDOFF 최신순). 로컬 전용이라 절대 세션을 멈추지 않음. |
 | `.claude/hooks/session_context.py` | 세션 시작 훅(자동) | 더 이상 `specs/001`을 하드코딩하지 않음. 진짜 오래 사는 문서(헌법·CLAUDE.md·살아있는 HANDOFF)만 고정 → 프롬프트 캐시는 유지하되 죽은 스펙으로 세션을 오도하지 않음. |
-| `/sync` | 스킬 | 네트워크 발견(원격 `claude/*` 브랜치·열린 PR·각 브랜치 HANDOFF·main 실제 최신)을 한 번에. 시작 훅의 네트워크 절반. |
+| `/sync` | 스킬 | 네트워크 발견(원격 `Codex/*` 브랜치·열린 PR·각 브랜치 HANDOFF·main 실제 최신)을 한 번에. 시작 훅의 네트워크 절반. |
 | `/handoff` | 스킬 | 세션 끝에 `HANDOFF.md`(특히 아래 한눈 요약표)를 실제 git 상태로 갱신 후 푸시. 낡은 HANDOFF가 혼동의 가장 큰 원인이므로 이게 핵심 수정. |
 | `/deploy-status` | 스킬 | 머지가 라이브(dry-run) 워커에 실제로 배포됐는지 컨테이너 안에서 확인. 배포는 push 트리거(`deploy-on-merge.yml`)라 PR 체크에 안 잡힘 → main 커밋 체크 + kis-smoke 사이드카로 확인하고, 컨테이너가 못 보는 곳(Actions Summary·서버 audit_log)은 솔직히 운영자 몫으로 표시. |
 
@@ -3206,20 +3207,20 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 - KIS 자격 증명을 어디에도 푸시하지 **마세요**. `.env`는 gitignore되어 있고, 라이브 테스트는 `KIS_LIVE_TEST=1`로 게이트됨.
 - `main`에 직접 푸시하지 **마세요** (직접 푸시 금지; 모든 변경은 PR을 통해 머지).
 
-## 한눈 요약표 (현재 진실 — 2026-06-20)
+## 한눈 요약표 (현재 진실 — 2026-06-22)
 
 | 항목 | 상태 |
 |------|-------|
 | 헌법 | **v6.0.0** (X.5 자율 전략 재지정 위임 포함, 안전 경계 기록 완료) |
 | 운영자 응대 정책 | `AGENTS.md` Codex 작업 운영 규칙 + `CLAUDE.md` 기존 Claude 정책. Codex는 `AGENTS.md` 우선 |
-| 마지막 main 커밋 | `cbc2cd4 Merge pull request #368 from jinooaction/Codex/world-class-agent-harness` |
+| 마지막 main 커밋 | `fe2af54 Merge pull request #369 from jinooaction/Codex/handoff-after-agent-harness` |
 | 활성 작업 | 없음. 새 작업 전 `/sync`와 `git status`를 먼저 보고, local concurrency guard가 `WARN`/`BLOCK`을 내면 `--mode isolate`로 별도 `worktree`를 만든다 |
-| 최근 완료 | PR #368: Codex 에이전트 하네스 평가·회귀 과제·PR 증거 관문. PR #367: HANDOFF 최신화. PR #366: Codex 훅 경로 복구 + local concurrency guard 중복 경고 압축 |
-| 안전 경계 | #368은 등급 2 운영 체계 변경. 헌법·커널·캡·화이트리스트·낙폭 예산·서킷 브레이커·주문 제한·비밀값·돈 경로 변경 없음. 현재 돈 이동 0 |
+| 최근 완료 | PR #369: Codex 에이전트 하네스 이후 HANDOFF 최신화. PR #368: Codex 에이전트 하네스 평가·회귀 과제·PR 증거 관문. PR #367: HANDOFF 최신화 |
+| 안전 경계 | #368~#369는 등급 2 운영 체계·인계 변경. 헌법·커널·캡·화이트리스트·낙폭 예산·서킷 브레이커·주문 제한·비밀값·돈 경로 변경 없음. 현재 돈 이동 0 |
 | main 테스트 | 2205 통과, 4 스킵 (라이브 KIS smoke 4건, `KIS_LIVE_TEST=1` 가드) |
 | main 린트 | `uv run ruff check src tests` 깨끗 |
 | 열린 PR | 없음 (GitHub connector open PR 조회 기준) |
-| 다음 세션 핵심 | 등급 2 이상 운영 변경은 `uv run python scripts/agent_harness_probe.py --strict`를 실행하고 PR 본문 `## 하네스 검증`에 결과를 남긴다. local concurrency guard 경고가 있으면 같은 디렉터리에서 쓰지 말고 `python3 scripts/local_concurrency_guard.py --mode isolate`를 먼저 실행한다. PR·머지·배포·원격 브랜치 판단 전에는 `/sync`로 네트워크 상태를 갱신 |
+| 다음 세션 핵심 | 등급 2 이상 운영 변경은 `uv run python scripts/agent_harness_probe.py --strict`와 `uv run python scripts/check_handoff_facts.py`를 실행하고 PR 본문 `## 하네스 검증`에 결과를 남긴다. local concurrency guard 경고가 있으면 같은 디렉터리에서 쓰지 말고 `python3 scripts/local_concurrency_guard.py --mode isolate`를 먼저 실행한다. PR·머지·배포·원격 브랜치 판단 전에는 `/sync`로 네트워크 상태를 갱신 |
 
 ## 과거 상세 요약표 (역사 보존 — 일부 행은 위 현재 요약표보다 낡을 수 있음)
 

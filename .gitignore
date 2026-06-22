@@ -29,7 +29,16 @@ credentials.json
 # Keep skills/commands committed but ignore anything sensitive.
 .claude/settings.local.json
 .claude/.credentials*
+.codex/config.toml
 .codex/state/
+
+# Generated Codex/plugin bundle fragments sometimes land at repo root during
+# local UI/plugin work; they are not deploy inputs.
+/app-scope-*.js
+/main-*.js
+/src-*.js
+/use-host-config-*.js
+/vscode-api-*.js
 
 # Build / dist
 build/

@@ -8,7 +8,7 @@ REPO = Path(__file__).resolve().parents[2]
 CHECKER = REPO / "scripts" / "check_pr_quality_gate.py"
 
 
-def _body(*, grade: int, harness: str) -> str:
+def _body(*, grade: int, harness: str, handoff: str) -> str:
     grade_rows = []
     for idx in range(5):
         mark = "x" if idx == grade else " "
@@ -48,6 +48,7 @@ def _body(*, grade: int, harness: str) -> str:
 ## 하네스 검증
 
 - 하네스 평가: {harness}
+- HANDOFF 검증: {handoff}
 
 ## 안전 경계
 
@@ -97,10 +98,31 @@ def test_template_structure_passes():
 
 
 def test_grade_2_requires_strict_harness_evidence(tmp_path):
-    result = _run_checker(_body(grade=2, harness="미실행"), tmp_path)
+    result = _run_checker(
+        _body(
+            grade=2,
+            harness="미실행",
+            handoff="`uv run python scripts/check_handoff_facts.py` -> 통과",
+        ),
+        tmp_path,
+    )
 
     assert result.returncode == 1
     assert "등급 2 이상 변경" in result.stderr
+
+
+def test_grade_2_requires_handoff_fact_evidence(tmp_path):
+    result = _run_checker(
+        _body(
+            grade=2,
+            harness="`uv run python scripts/agent_harness_probe.py --strict` -> 통과",
+            handoff="미실행",
+        ),
+        tmp_path,
+    )
+
+    assert result.returncode == 1
+    assert "HANDOFF 검증" in result.stderr
 
 
 def test_grade_2_accepts_strict_harness_evidence(tmp_path):
@@ -108,6 +130,7 @@ def test_grade_2_accepts_strict_harness_evidence(tmp_path):
         _body(
             grade=2,
             harness="`uv run python scripts/agent_harness_probe.py --strict` -> 통과",
+            handoff="`uv run python scripts/check_handoff_facts.py` -> 통과",
         ),
         tmp_path,
     )
@@ -117,7 +140,10 @@ def test_grade_2_accepts_strict_harness_evidence(tmp_path):
 
 
 def test_grade_1_allows_not_applicable_harness_evidence(tmp_path):
-    result = _run_checker(_body(grade=1, harness="해당 없음"), tmp_path)
+    result = _run_checker(
+        _body(grade=1, harness="해당 없음", handoff="해당 없음"),
+        tmp_path,
+    )
 
     assert result.returncode == 0
     assert "pr-quality-gate-ok" in result.stdout

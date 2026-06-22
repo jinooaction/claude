@@ -35,7 +35,7 @@ Respond to the operator in **Korean** (AGENTS.md 규칙 1).
 
 3. **Open PRs (single source of truth for in-flight state).** Call the GitHub
    MCP tool — do NOT shell out to `gh` (unavailable here):
-   - `mcp__github__list_pull_requests` with `owner=jinooaction repo=Codex state=open`
+   - `mcp__github__list_pull_requests` with `owner=jinooaction repo=claude state=open`
    For each open PR note number, title, head branch, draft flag, and
    `mergeable_state` (use `mcp__github__pull_request_read` if you need detail).
 

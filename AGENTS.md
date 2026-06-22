@@ -69,7 +69,7 @@
 등급 2 이상은 "작게 고쳤다"만으로 충분하지 않다. 제공하던 기능, 제거되는 기능, 대체 수단, 실패 시 영향, 되돌리는 방법을 확인한다. 등급 3 이상은 헌법과 안전 경계 기록 의무를 우선한다. 등급 4는 운영자 명시 승인 없이 실행하지 않는다.
 
 등급 2 이상 변경은 `.codex/quality-gate.md`의 점검 순서를 작업 중 실제 기준으로 사용한다. 풀 리퀘스트를 만들거나 갱신할 때는 `.github/pull_request_template.md`의 항목을 채워 위험 등급, 문제 정의, 탐색 근거, 검증, 하네스 검증, 인계가 본문에 남게 한다. `.github/workflows/pr-quality-gate.yml`이 풀 리퀘스트 본문을 검사하므로 빈 양식이나 위험 등급 누락은 통과할 수 없어야 한다.
-등급 2 이상 변경은 `uv run python scripts/agent_harness_probe.py --strict`로 에이전트 하네스 상태를 평가하고, 풀 리퀘스트 본문 `## 하네스 검증`에 결과를 남긴다. 이 평가는 세션 시작 사실 확인, 동시 작업 방어, SDD 포인터, PR 품질 관문, 회귀 과제 묶음이 함께 살아 있는지 보는 로컬 읽기 전용 검사다.
+등급 2 이상 변경은 `uv run python scripts/agent_harness_probe.py --strict`로 에이전트 하네스 상태를 평가하고, `uv run python scripts/check_handoff_facts.py`로 `HANDOFF.md` 요약표의 사실성을 별도 확인한다. 풀 리퀘스트 본문 `## 하네스 검증`에는 두 결과를 모두 남긴다. 이 평가는 세션 시작 사실 확인, 동시 작업 방어, SDD 포인터, PR 품질 관문, 회귀 과제 묶음, 첫 판단 품질 과제, 레드팀 과제, HANDOFF 사실 검증이 함께 살아 있는지 보는 로컬 읽기 전용 검사다.
 
 ## 명세 주도 개발(SDD) 운영 기준
 
@@ -133,7 +133,7 @@ SDD는 이 저장소에서 선택 사항이 아니라 안전장치다. 다만 �
 - 좁은 수정은 관련 테스트를 먼저 돌릴 수 있지만, 머지 전에는 전체 테스트와 린트를 다시 돌린다.
 - 문서나 설정만 바꾼 경우에도 형식 검증, 참조 경로 확인, 중복·충돌 확인처럼 해당 변경에 맞는 검증을 한다.
 - 등급 2 이상 변경은 실제 적용 경로를 확인한다. 예를 들어 훅은 설정 파일에서 실제로 호출되는지, 문서는 Codex가 실제로 읽는 위치인지 확인한다.
-- 등급 2 이상 변경은 `uv run python scripts/agent_harness_probe.py --strict`를 실행해 하네스가 계속 살아 있는지 확인한다.
+- 등급 2 이상 변경은 `uv run python scripts/agent_harness_probe.py --strict`와 `uv run python scripts/check_handoff_facts.py`를 실행해 하네스와 HANDOFF 요약표가 계속 살아 있는지 확인한다.
 - 풀 리퀘스트 본문은 `scripts/check_pr_quality_gate.py <본문파일>`로 품질 관문 섹션, 위험 등급 선택, 문제 정의 필드, 안전 경계 선택이 검증되어야 한다. 양식 자체는 `scripts/check_pr_quality_gate.py --template .github/pull_request_template.md`로 구조를 확인한다.
 - 실패한 테스트나 린트는 무시하지 않는다. 실패 원인을 수정하거나, 실제 외부 환경 문제라면 정확히 보고한다.
 - 작업 완료 전 다음 질문에 스스로 답한다: 요청을 정확히 만족했는가, 숨은 중복이나 충돌은 없는가, 사라진 안전장치는 없는가, 다음 세션이 같은 판단을 반복하지 않아도 되는가.

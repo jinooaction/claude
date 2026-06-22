@@ -101,6 +101,20 @@ def main() -> int:
                 "실행 결과를 하네스 평가에 남겨야 합니다."
             )
 
+        handoff_value = _line_value(body, "HANDOFF 검증")
+        if not handoff_value:
+            errors.append("하네스 검증의 'HANDOFF 검증' 값을 채워야 합니다.")
+        elif (
+            selected_grade is not None
+            and selected_grade >= 2
+            and "check_handoff_facts.py" not in handoff_value
+        ):
+            errors.append(
+                "등급 2 이상 변경은 "
+                "`uv run python scripts/check_handoff_facts.py` "
+                "실행 결과를 HANDOFF 검증에 남겨야 합니다."
+            )
+
         if "없음 / 있음" in body:
             errors.append("안전 경계의 '없음 / 있음' 선택지를 실제 값으로 바꿔야 합니다.")
 

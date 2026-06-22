@@ -114,3 +114,43 @@ def test_render_report_deduplicates_same_logical_session(tmp_path):
     assert "new222" in report
     assert "old111" not in report
     assert "수정 파일 겹침: src/a.py" in report
+
+
+def test_render_report_deduplicates_same_session_after_branch_change(tmp_path):
+    guard = _load_guard()
+    state = guard.CurrentState(
+        repo=tmp_path,
+        worktree=tmp_path,
+        branch="Codex/current",
+        head="abc123",
+        thread_id="CODEX_THREAD_ID:this",
+        dirty_paths=frozenset({"src/a.py"}),
+    )
+    old_branch = guard.Lease(
+        path=tmp_path / "old-branch.json",
+        thread_id="TERM_SESSION_ID:terminal",
+        host="host",
+        worktree=str(tmp_path),
+        branch="Codex/old",
+        head="old111",
+        updated_at=time.time() - 60,
+        dirty_paths=frozenset({"old.py"}),
+    )
+    current_branch = guard.Lease(
+        path=tmp_path / "current-branch.json",
+        thread_id="TERM_SESSION_ID:terminal",
+        host="host",
+        worktree=str(tmp_path),
+        branch="Codex/current",
+        head="new222",
+        updated_at=time.time(),
+        dirty_paths=frozenset({"src/a.py"}),
+    )
+
+    findings = guard.evaluate(state, [old_branch, current_branch], mode="session-start")
+    report = guard.render_report(state, [old_branch, current_branch], findings)
+
+    assert "other sessions : 1 recent lease(s)" in report
+    assert "new222" in report
+    assert "old111" not in report
+    assert "Codex/old" not in report
