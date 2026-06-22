@@ -33,13 +33,13 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `75717a2` — Merge pull request #376 from jinooaction/Codex/arm-micro-gtaa-live |
-| main 테스트 | `uv run pytest -q` → 2222 passed, 4 skipped |
+| 마지막 main 커밋 | `24c2947` — Merge pull request #378 from jinooaction/Codex/kis-order-diagnostics |
+| main 테스트 | `uv run pytest -q` → 2229 passed, 4 skipped |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
 | 열린 PR | 없음(GitHub open PR 조회 결과 `[]`) |
-| 최근 출시 작업 | #376 마이크로 GTAA `armed:true` 운영자 승인 반영과 수동 live 실행. #374 스펙 058 마이크로 GTAA 실거래 캐너리. #372 HANDOFF-only merge 기준선 보정 |
-| 활성 작업 | 코드 PR 없음. 운영상 마이크로 GTAA는 `armed:true` 유지 중이며 다음 15:00 UTC 스케줄에서 자동 재시도 가능 |
-| 안전 경계 | 등급 4 돈 경로가 활성 상태. 수동 실행 run `27935469561`은 실제 주문 경로까지 들어갔으나 `KIS` 500으로 접수·체결 0건. 헌법·커널·비밀값 변경 없음 |
+| 최근 출시 작업 | #378 스펙 059 KIS 주문 전제 확인과 진단 보존. #376 마이크로 GTAA `armed:true` 운영자 승인 반영과 수동 live 실행. #374 스펙 058 마이크로 GTAA 실거래 캐너리 |
+| 활성 작업 | 코드 PR 없음. 운영상 마이크로 GTAA는 `armed:true` 유지 중이지만 다음 live 주문은 정규장·매수가능 현금 preflight와 손실 브레이커를 통과해야 함 |
+| 안전 경계 | 등급 4 돈 경로가 활성 상태. #378은 K4 감사 payload에 마스킹 진단을 추가했지만 실제 주문 재시도는 하지 않음. 헌법·커널 목록·비밀값·K1 캡·화이트리스트 변경 없음 |
 
 ## 완료된 작업 큐 (운영자 승인 — 2026-05-31, 1→2→3 전부 완료)
 
@@ -216,6 +216,54 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
 **세션 운영 메모**: 이번 세션에 도구 호출 형식 오류(`antml:` 접두사 누락)가 반복돼 운영자
 시간을 낭비함. 다음 세션은 모든 도구 호출에 `antml:invoke`/`antml:parameter` 접두사를 반드시
 정확히 쓸 것.
+
+## 최근 관찰 — 2026-06-22 (KIS 주문 원인 확정 경로 복구 이후)
+
+현재 `main` 최신은 `24c2947`(#378, 스펙 059 KIS 주문 전제 확인과 진단 보존)이다.
+직전 주요 커밋은 `56dfec6`(KIS 주문 진단 구현), `7477658`(#377, micro GTAA 무장 상태
+handoff 갱신), `75717a2`(#376, micro GTAA `armed:true` 승인 반영)이다. 이 인계 갱신 시점의
+열린 PR은 없다.
+
+- **근본 판단**: run `27935469561`의 과거 `KIS` 500은 GitHub 로그에 응답 본문이 남지 않아
+  사후 확정이 불가능하다. #378의 목표는 과거 오류를 추측으로 고치는 것이 아니라, 다음 실패에서
+  정규장·현금·payload·브로커 응답 중 어느 조건이 원인인지 재현 가능하게 확정하는 것이다.
+- **주문 전제 확인**: micro GTAA live 워크플로는 dry-run 미리보기 뒤, 손실 브레이커와 live 주문
+  전에 `Pre-live order preflight`를 실행한다. 정규장 여부, planned buy notional, `KIS` 매수가능
+  현금, 1% 비용 완충을 확인하고 실패하면 live 주문에 들어가지 않는다.
+- **KIS 주문 본문 정합성**: 해외주식 보통 주문 본문에 `CTAC_TLNO`, `MGCO_APTM_ODNO`,
+  `SLL_TYPE`, `ORD_SVR_DVSN_CD`를 포함했다. 이 변경은 주문 한도나 허용 종목을 넓히지 않는다.
+- **브로커 진단 보존**: `KIS` 주문 오류는 `KisOrderError`로 감싸고, 마스킹된 상태 코드·URL·응답
+  본문 미리보기·KIS 메시지를 감사 payload, 상태 전이 사유, 주문 결과 사유까지 전달한다.
+- **운영 상태**: `automation/rebalance-micro-gtaa.request`는 여전히 `armed:true`,
+  `capital_usd:1000`이다. #378에서는 실제 주문을 재시도하지 않았고, 새 접수·체결은 없다.
+- **배포 확인**: #378 main push에 붙은 `Deploy on merge to main` run `27939601985`는 성공했다.
+  이 배포는 dry-run worker 반영 확인이며 micro GTAA live 주문 실행이 아니다. `KIS` smoke sidecar는
+  `2026-06-21T08:01:35Z` run `27898040482` 기준의 오래된 성공 기록이라 #378 이후 주문 진단
+  실서버 증거로 보지 않는다.
+- **검증**: PR #378 머지 전 `uv run pytest` 2229 통과·4 스킵,
+  `uv run ruff check src tests` 통과, `uv run python scripts/agent_harness_probe.py --strict`
+  `OK (14/14)`, PR 품질 관문 통과. handoff 갱신 전 `uv run pytest -q`는 stale
+  `HANDOFF.md` 때문에 하네스 2건이 실패했고, 이 handoff 갱신은 그 원인(`마지막 main 커밋` 행)을
+  바로잡았다. handoff 갱신 후 `uv run python scripts/check_handoff_facts.py`,
+  `uv run python scripts/agent_harness_probe.py --strict`, `uv run pytest -q`,
+  `uv run ruff check src tests`가 모두 통과했다.
+
+## 최근 마일스톤 — 2026-06-22 (스펙 059 KIS 주문 원인 확정 경로 복구)
+
+main 머지 `24c2947`(#378). 운영자가 요구한 기준은 "유력 원인으로 조치하지 말고 진짜 원인을 먼저
+확정할 수 있게 하라"였다. PR #378은 micro GTAA live 주문 전에 실패 조건을 분리하고, 브로커 거부
+응답을 마스킹해 K4 감사 경로에 남기는 방식으로 원인 확정 능력을 복구했다. 상세:
+`HANDOFF-056-KIS-ORDER-DIAGNOSTICS.md`, `specs/059-kis-order-diagnostics/`.
+
+- **핵심 변경**: preflight가 정규장·매수가능 현금·주문 계획 비용을 검증하고, KIS 주문 본문은 공식
+  해외주식 보통 주문 필드를 포함한다. 브로커 4xx/5xx 오류는 마스킹된 구조화 진단으로 보존된다.
+- **실주문 판단**: #378은 실제 주문을 재시도하지 않았다. 다음 live 실행에서 preflight가 실패하면
+  주문 전 중단되고, preflight를 통과했는데 KIS가 거부하면 응답 진단이 남아야 한다.
+- **안전 경계**: 등급 4 돈 경로 변경이며 K4 감사 payload를 추가 전용으로 확장했다. 헌법·커널
+  목록·비밀값·K1 캡·화이트리스트·손실 브레이커·허용 종목은 변경하지 않았다.
+- **검증/배포**: `uv run pytest` 2229 통과·4 스킵, `uv run ruff check src tests` 통과,
+  `uv run python scripts/agent_harness_probe.py --strict` → `OK (14/14)`, PR 품질 관문 통과.
+  #378 deploy-on-merge run `27939601985` 성공.
 
 ## 최근 관찰 — 2026-06-22 (마이크로 GTAA 무장 및 수동 live 실행 이후)
 
@@ -3312,6 +3360,11 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 
 ## 과거 인수인계 파일 (참고용)
 
+- `HANDOFF-056-KIS-ORDER-DIAGNOSTICS.md` — 스펙 059 KIS 주문 원인 확정 경로 복구
+  (2026-06-22, PR #378 `24c2947`). micro GTAA live 주문 전 정규장·매수가능 현금 preflight를
+  추가하고, KIS 주문 본문을 공식 해외주식 보통 주문 필드에 맞췄으며, 브로커 거부 응답을 마스킹해
+  K4 감사 payload까지 보존한다. 실제 주문 재시도 0건, 새 접수·체결 0건. 다음 live 실패는
+  preflight 또는 KIS 진단으로 원인을 확정해야 한다.
 - `HANDOFF-055-MICRO-GTAA-ARMED.md` — 스펙 058 마이크로 GTAA 운영자 승인 무장 및 수동
   live 실행 (2026-06-22, PR #376 `75717a2`). `armed:true`, `capital_usd:1000`이 main에 남아
   있고, 수동 run `27935469561`은 live 단계까지 진입했으나 `KIS` 주문 API 500으로 `IEF` 1주와
@@ -3391,11 +3444,11 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 |------|-------|
 | 헌법 | **v6.0.0** (X.5 자율 전략 재지정 위임 포함, 안전 경계 기록 완료) |
 | 운영자 응대 정책 | `AGENTS.md` Codex 작업 운영 규칙 + `CLAUDE.md` 기존 Claude 정책. Codex는 `AGENTS.md` 우선 |
-| 마지막 main 커밋 | `119ad4a Merge pull request #372 from jinooaction/Codex/handoff-fact-merge-baseline` |
-| 활성 작업 | 없음. 새 작업 전 `/sync`와 `git status`를 먼저 보고, local concurrency guard가 `WARN`/`BLOCK`을 내면 `--mode isolate`로 별도 `worktree`를 만든다 |
-| 최근 완료 | PR #372: HANDOFF-only merge 기준선 보정. PR #371: #370 이후 HANDOFF 최신화. PR #370: Codex 품질·레드팀 하네스 + HANDOFF 사실 검증 |
-| 안전 경계 | #370·#372는 등급 2 운영 체계 변경, #371은 인계 갱신. 헌법·커널·캡·화이트리스트·낙폭 예산·서킷 브레이커·주문 제한·비밀값·돈 경로 변경 없음. 현재 돈 이동 0 |
-| main 테스트 | 2215 통과, 4 스킵 (라이브 KIS smoke 4건, `KIS_LIVE_TEST=1` 가드) |
+| 마지막 main 커밋 | `24c2947 Merge pull request #378 from jinooaction/Codex/kis-order-diagnostics` |
+| 활성 작업 | 코드 PR 없음. micro GTAA는 `armed:true`, `capital_usd:1000` 상태지만 다음 live 주문은 정규장·매수가능 현금 preflight와 손실 브레이커를 통과해야 한다 |
+| 최근 완료 | PR #378: 스펙 059 KIS 주문 전제 확인과 진단 보존. PR #377: micro GTAA 무장 상태 handoff 갱신. PR #376: micro GTAA `armed:true` 운영자 승인 반영과 수동 live 실행 |
+| 안전 경계 | #378은 등급 4 돈 경로 변경이며 K4 감사 payload를 추가 전용으로 확장했다. 실제 주문 재시도 0건, 새 접수·체결 0건. 헌법·커널 목록·캡·화이트리스트·낙폭 예산·서킷 브레이커·주문 제한·비밀값 변경 없음 |
+| main 테스트 | 2229 통과, 4 스킵 (라이브 KIS smoke 4건, `KIS_LIVE_TEST=1` 가드) |
 | main 린트 | `uv run ruff check src tests` 깨끗 |
 | 열린 PR | 없음 (GitHub connector open PR 조회 기준) |
 | 다음 세션 핵심 | 등급 2 이상 운영 변경은 `uv run python scripts/agent_harness_probe.py --strict`와 `uv run python scripts/check_handoff_facts.py`를 실행하고 PR 본문 `## 하네스 검증`에 결과를 남긴다. local concurrency guard 경고가 있으면 같은 디렉터리에서 쓰지 말고 `python3 scripts/local_concurrency_guard.py --mode isolate`를 먼저 실행한다. PR·머지·배포·원격 브랜치 판단 전에는 `/sync`로 네트워크 상태를 갱신 |
