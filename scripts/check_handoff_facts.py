@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 REPO = Path(__file__).resolve().parents[1]
+HANDOFF_ONLY_PREFIXES = ("specs/",)
 
 
 @dataclass(frozen=True)
@@ -31,6 +32,16 @@ class HandoffFactReport:
         return asdict(self)
 
 
+@dataclass(frozen=True)
+class MainBaseline:
+    log: str
+    reason: str
+
+    @property
+    def short(self) -> str:
+        return self.log.split(maxsplit=1)[0] if self.log else ""
+
+
 def _git(repo: Path, *args: str) -> str:
     out = subprocess.run(
         ["git", *args],
@@ -43,6 +54,37 @@ def _git(repo: Path, *args: str) -> str:
     if out.returncode != 0:
         return ""
     return out.stdout.strip()
+
+
+def _is_handoff_only_path(path: str) -> bool:
+    return path.endswith(".md") or path.startswith(HANDOFF_ONLY_PREFIXES)
+
+
+def _main_baselines(repo: Path) -> list[MainBaseline]:
+    main_log = _git(repo, "log", "-1", "--pretty=%h %s", "origin/main")
+    baselines = [MainBaseline(log=main_log, reason="origin/main")]
+
+    parents = _git(repo, "rev-list", "--parents", "-n", "1", "origin/main").split()
+    if len(parents) < 3:
+        return baselines
+
+    current, first_parent = parents[0], parents[1]
+    if not re.fullmatch(r"[0-9a-fA-F]{7,40}", current):
+        return baselines
+    if not re.fullmatch(r"[0-9a-fA-F]{7,40}", first_parent):
+        return baselines
+
+    changed = _git(repo, "diff", "--name-only", first_parent, current).splitlines()
+    if changed and all(_is_handoff_only_path(path) for path in changed):
+        parent_log = _git(repo, "log", "-1", "--pretty=%h %s", first_parent)
+        if parent_log:
+            baselines.append(
+                MainBaseline(
+                    log=parent_log,
+                    reason="previous main before handoff-only merge",
+                )
+            )
+    return baselines
 
 
 def _row_value(text: str, label: str) -> str | None:
@@ -85,15 +127,32 @@ def evaluate(
         )
         return HandoffFactReport(status="DEGRADED", facts=facts)
 
-    main_log = _git(repo, "log", "-1", "--pretty=%h %s", "origin/main")
-    main_short = main_log.split(maxsplit=1)[0] if main_log else ""
+    baselines = _main_baselines(repo)
     main_row = _row_value(text, "마지막 main 커밋")
+    matched = next(
+        (
+            baseline
+            for baseline in baselines
+            if baseline.short and main_row and baseline.short in main_row
+        ),
+        None,
+    )
     facts.append(
         _fact(
-            bool(main_short and main_row and main_short in main_row),
+            matched is not None,
             id="main_commit",
-            evidence=f"origin/main={main_log or '(missing)'}; HANDOFF={main_row or '(missing)'}",
-            ok="HANDOFF main commit row matches local origin/main",
+            evidence=(
+                "baselines="
+                + ", ".join(
+                    f"{baseline.reason}:{baseline.log or '(missing)'}"
+                    for baseline in baselines
+                )
+                + f"; HANDOFF={main_row or '(missing)'}"
+            ),
+            ok=(
+                "HANDOFF main commit row matches "
+                f"{matched.reason if matched else 'local repository facts'}"
+            ),
             fail="HANDOFF main commit row is stale or missing",
         )
     )
