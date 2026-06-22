@@ -71,6 +71,39 @@ def test_handoff_fact_check_fails_stale_main_commit(tmp_path, monkeypatch):
     assert main_fact.status == "FAIL"
 
 
+def test_handoff_fact_check_accepts_previous_baseline_for_handoff_only_merge(
+    tmp_path, monkeypatch
+):
+    checker = _load_checker()
+
+    def fake_git(_repo, *args):
+        if args == ("log", "-1", "--pretty=%h %s", "origin/main"):
+            return "eb32b8d Merge pull request #371 from handoff"
+        if args == ("rev-list", "--parents", "-n", "1", "origin/main"):
+            return "eb32b8d75986295 ecc93f2112bea88 ceb5749f00d"
+        if args == ("diff", "--name-only", "ecc93f2112bea88", "eb32b8d75986295"):
+            return "\n".join(
+                [
+                    "HANDOFF.md",
+                    "HANDOFF-052-AGENT-QUALITY-REDTEAM.md",
+                    "specs/057-agent-quality-redteam/tasks.md",
+                ]
+            )
+        if args == ("log", "-1", "--pretty=%h %s", "ecc93f2112bea88"):
+            return "ecc93f2 Merge pull request #370 from feature"
+        return ""
+
+    monkeypatch.setattr(checker, "_git", fake_git)
+    handoff = _handoff(tmp_path, "`ecc93f2` - Merge pull request #370")
+
+    report = checker.evaluate(tmp_path, handoff_path=handoff)
+
+    assert report.status == "OK"
+    main_fact = next(fact for fact in report.facts if fact.id == "main_commit")
+    assert main_fact.status == "PASS"
+    assert "previous main before handoff-only merge" in main_fact.message
+
+
 def test_handoff_fact_check_fails_missing_expected_validation(tmp_path, monkeypatch):
     checker = _load_checker()
     monkeypatch.setattr(
