@@ -33,8 +33,8 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from collections.abc import Awaitable, Callable, Mapping
+from dataclasses import dataclass, field
 from datetime import date
 from decimal import ROUND_FLOOR, Decimal
 
@@ -96,6 +96,16 @@ class RebalanceOrderResult:
 
 
 @dataclass(frozen=True)
+class RebalanceWithheldOrder:
+    """A planned order intentionally withheld before router submission."""
+
+    symbol: str
+    side: str
+    requested_qty: int
+    reason: str
+
+
+@dataclass(frozen=True)
 class RebalanceOutcome:
     """Everything one rebalance produced — for the CLI report and tests."""
 
@@ -103,6 +113,14 @@ class RebalanceOutcome:
     target_weights: dict[str, Decimal]
     planned: list[PlannedOrder]
     results: list[RebalanceOrderResult]
+    account_wide: bool = False
+    requested_side: str = "both"
+    effective_side: str = "both"
+    purchasable_cash_usd: Decimal | None = None
+    required_cash_usd: Decimal | None = None
+    planned_buy_notional_usd: Decimal = Decimal("0")
+    planned_sell_notional_usd: Decimal = Decimal("0")
+    withheld: list[RebalanceWithheldOrder] = field(default_factory=list)
 
 
 def _marketable_limit(side: Side, quote: Quote) -> Decimal:
@@ -157,6 +175,19 @@ def _closes_by_symbol(conn, universe, timeframe):
     return out
 
 
+def _normalized_side(side: str) -> str:
+    normalized = side.lower().strip()
+    if normalized not in {"both", "sell", "buy"}:
+        raise ValueError(f"execution_side must be one of both, sell, buy; got {side!r}")
+    return normalized
+
+
+def _cash_required(notional: Decimal, buffer_pct: Decimal) -> Decimal:
+    if notional <= 0:
+        return Decimal("0.00")
+    return (notional * (Decimal("1") + buffer_pct)).quantize(_CENT)
+
+
 async def execute_rebalance(
     *,
     config: PortfolioRebalanceConfig,
@@ -168,6 +199,11 @@ async def execute_rebalance(
     timeframe: str = "1d",
     stage: StrategyStage = StrategyStage.CANARY,
     dry_run: bool = False,
+    account_holdings: Mapping[str, int] | None = None,
+    liquidation_only_symbols: frozenset[str] | None = None,
+    execution_side: str = "both",
+    purchasable_cash_usd: Decimal | None = None,
+    cash_buffer_pct: Decimal = Decimal("0.01"),
 ) -> RebalanceOutcome:
     """Compute the target portfolio and route the rebalance via the live/paper router.
 
@@ -203,10 +239,40 @@ async def execute_rebalance(
         trend=_trend_spec(config),
     )
 
-    # 2. Current holdings (long-only; ignore zero rows).
-    holdings = {
-        p.symbol: p.qty for p in positions_mod.get_all_positions(conn) if p.qty
-    }
+    requested_side = _normalized_side(execution_side)
+    liquidation_only = liquidation_only_symbols or frozenset()
+    overlap = set(tw) & set(liquidation_only)
+    if overlap:
+        raise ValueError(
+            "liquidation-only symbols cannot be target buys: "
+            + ", ".join(sorted(overlap))
+        )
+
+    # 2. Current holdings (long-only; ignore zero rows). In account-wide mode
+    # the broker snapshot is the live planning source, but unmanaged holdings
+    # are deliberately kept out of the planner so they cannot be sold by default.
+    account_wide = account_holdings is not None
+    raw_holdings = (
+        dict(account_holdings)
+        if account_holdings is not None
+        else {p.symbol: p.qty for p in positions_mod.get_all_positions(conn) if p.qty}
+    )
+    holdings: dict[str, int] = {}
+    withheld: list[RebalanceWithheldOrder] = []
+    for symbol, qty in sorted(raw_holdings.items()):
+        if qty <= 0:
+            continue
+        if not account_wide or symbol in tw or symbol in liquidation_only:
+            holdings[symbol] = qty
+            continue
+        withheld.append(
+            RebalanceWithheldOrder(
+                symbol=symbol,
+                side="SELL",
+                requested_qty=qty,
+                reason="unmanaged_holding",
+            )
+        )
 
     # 3. Quotes for every symbol we might trade (targets + current holdings).
     needed = sorted(set(tw) | set(holdings))
@@ -240,10 +306,80 @@ async def execute_rebalance(
     global_exposure = sum(symbol_exposure.values(), Decimal("0"))
 
     # 6. Route SELLs first (free cash), then BUYs; each already symbol-sorted.
+    for planned in plan:
+        if planned.side == "BUY" and planned.symbol in liquidation_only:
+            raise ValueError(
+                f"liquidation-only symbol cannot be bought: {planned.symbol}"
+            )
+
     sells = [o for o in plan if o.side == "SELL"]
     buys = [o for o in plan if o.side == "BUY"]
+    planned_buy_notional = Decimal("0")
+    planned_sell_notional = Decimal("0")
+    for planned in sells + buys:
+        quote = quotes.get(planned.symbol)
+        if quote is None:
+            continue
+        side = Side.BUY if planned.side == "BUY" else Side.SELL
+        limit_price = _marketable_limit(side, quote)
+        cap_qty = _per_trade_cap_qty(total_capital_usd, caps, limit_price)
+        routed_qty = min(planned.qty, cap_qty)
+        if routed_qty < 1:
+            continue
+        notional = Decimal(routed_qty) * limit_price
+        if planned.side == "BUY":
+            planned_buy_notional += notional
+        else:
+            planned_sell_notional += notional
+    planned_buy_notional = planned_buy_notional.quantize(_CENT)
+    planned_sell_notional = planned_sell_notional.quantize(_CENT)
+    required_cash = _cash_required(planned_buy_notional, cash_buffer_pct)
+
+    effective_side = requested_side
+    cash_shortfall = (
+        purchasable_cash_usd is not None
+        and planned_buy_notional > 0
+        and purchasable_cash_usd < required_cash
+    )
+    if cash_shortfall:
+        effective_side = "sell" if sells else "none"
+
     results: list[RebalanceOrderResult] = []
     for planned in sells + buys:
+        if effective_side == "none":
+            withheld.append(
+                RebalanceWithheldOrder(
+                    symbol=planned.symbol,
+                    side=planned.side,
+                    requested_qty=planned.qty,
+                    reason="insufficient_purchasable_cash",
+                )
+            )
+            continue
+        if effective_side == "sell" and planned.side == "BUY":
+            withheld.append(
+                RebalanceWithheldOrder(
+                    symbol=planned.symbol,
+                    side=planned.side,
+                    requested_qty=planned.qty,
+                    reason=(
+                        "cash_shortfall_sell_first"
+                        if cash_shortfall
+                        else "side_filtered_sell_only"
+                    ),
+                )
+            )
+            continue
+        if effective_side == "buy" and planned.side == "SELL":
+            withheld.append(
+                RebalanceWithheldOrder(
+                    symbol=planned.symbol,
+                    side=planned.side,
+                    requested_qty=planned.qty,
+                    reason="side_filtered_buy_only",
+                )
+            )
+            continue
         quote = quotes.get(planned.symbol)
         if quote is None:
             continue  # no price this round
@@ -331,6 +467,14 @@ async def execute_rebalance(
         target_weights=tw,
         planned=plan,
         results=results,
+        account_wide=account_wide,
+        requested_side=requested_side,
+        effective_side=effective_side,
+        purchasable_cash_usd=purchasable_cash_usd,
+        required_cash_usd=required_cash,
+        planned_buy_notional_usd=planned_buy_notional,
+        planned_sell_notional_usd=planned_sell_notional,
+        withheld=withheld,
     )
 
 
@@ -338,5 +482,6 @@ __all__ = [
     "QuoteProvider",
     "RebalanceOrderResult",
     "RebalanceOutcome",
+    "RebalanceWithheldOrder",
     "execute_rebalance",
 ]

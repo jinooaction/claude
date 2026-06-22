@@ -2521,6 +2521,30 @@ def _load_portfolio_for_backtest(
     return caps, whitelist, portfolio
 
 
+def _load_account_rebalance_settings(path: Path) -> tuple[bool, frozenset[str], Decimal]:
+    """Load optional `[account_rebalance]` settings from a portfolio TOML."""
+    import tomllib
+
+    if not path.exists():
+        raise ConfigError(f"portfolio file not found: {path}")
+    try:
+        raw = tomllib.loads(path.read_bytes().decode("utf-8"))
+    except tomllib.TOMLDecodeError as e:
+        raise ConfigError(f"portfolio file is not valid TOML: {e}") from e
+
+    table = raw.get("account_rebalance", {})
+    enabled = bool(table.get("enabled", False))
+    liquidation = frozenset(
+        str(s).strip().upper() for s in table.get("liquidation_symbols", [])
+    )
+    cash_buffer_pct = Decimal(str(table.get("cash_buffer_pct", "0.01")))
+    if cash_buffer_pct < 0:
+        raise ConfigError("[account_rebalance].cash_buffer_pct must be non-negative")
+    if any(not s for s in liquidation):
+        raise ConfigError("[account_rebalance].liquidation_symbols contains an empty symbol")
+    return enabled, liquidation, cash_buffer_pct
+
+
 @app.command("ingest-history")
 def ingest_history_cmd(
     from_dir: Path = typer.Option(
@@ -4065,8 +4089,19 @@ def rebalance_once_cmd(
     dry_run: bool = typer.Option(
         False,
         "--dry-run",
-        help="Preview the plan (scores → weights → orders) WITHOUT placing or "
-        "contacting KIS — offline, prices from the latest stored bars. Safe anywhere.",
+        help="Preview the plan WITHOUT placing orders. Normally offline; with "
+        "--account-wide it may perform read-only KIS position/cash calls.",
+    ),
+    account_wide: bool = typer.Option(
+        False,
+        "--account-wide",
+        help="Plan from latest broker positions and purchasable cash. Requires "
+        "[account_rebalance].enabled=true in the portfolio file.",
+    ),
+    side: str = typer.Option(
+        "both",
+        "--side",
+        help="Order side mode: both, sell, or buy. Cash shortfall may narrow both to sell.",
     ),
     confirm_live: bool = typer.Option(
         False,
@@ -4092,7 +4127,11 @@ def rebalance_once_cmd(
     from decimal import Decimal as _Decimal
 
     from auto_invest.broker.models import Quote
-    from auto_invest.broker.overseas import get_quote_resolving_market
+    from auto_invest.broker.overseas import (
+        get_positions_resolving_market,
+        get_purchasable_cash_usd,
+        get_quote_resolving_market,
+    )
     from auto_invest.config.enums import StrategyStage
     from auto_invest.execution.order_router import OrderRouter
     from auto_invest.execution.rebalancer import execute_rebalance
@@ -4100,6 +4139,10 @@ def rebalance_once_cmd(
 
     if mode not in ("paper", "live"):
         typer.echo(f"--mode must be 'paper' or 'live', got {mode!r}", err=True)
+        _exit(64)
+    side = side.lower().strip()
+    if side not in ("both", "sell", "buy"):
+        typer.echo(f"--side must be one of both, sell, buy; got {side!r}", err=True)
         _exit(64)
 
     # Expand ${KIS_ACCOUNT_NO} (and any ${VAR}) in the portfolio whitelist using the
@@ -4112,6 +4155,9 @@ def rebalance_once_cmd(
         _pf_env = None
     try:
         caps, whitelist, port_cfg = _load_portfolio_for_backtest(portfolio, env=_pf_env)
+        account_enabled, liquidation_symbols, cash_buffer_pct = (
+            _load_account_rebalance_settings(portfolio)
+        )
     except ConfigError as exc:
         typer.echo(f"portfolio validation failed: {exc}", err=True)
         _exit(65)
@@ -4127,6 +4173,30 @@ def rebalance_once_cmd(
             err=True,
         )
         _exit(65)
+
+    if account_wide:
+        if not account_enabled:
+            typer.echo(
+                "--account-wide requires [account_rebalance].enabled=true in the portfolio",
+                err=True,
+            )
+            _exit(65)
+        overlap = sorted(set(port_cfg.universe) & set(liquidation_symbols))
+        if overlap:
+            typer.echo(
+                "account_rebalance liquidation symbols overlap target universe: "
+                f"{overlap}",
+                err=True,
+            )
+            _exit(65)
+        missing_liquidation = sorted(set(liquidation_symbols) - set(whitelist.symbols))
+        if missing_liquidation:
+            typer.echo(
+                "liquidation-only symbols not on the whitelist for sell routing: "
+                f"{missing_liquidation}",
+                err=True,
+            )
+            _exit(65)
 
     # Live safety interlock: real orders require an explicit acknowledgement.
     if mode == "live" and not dry_run and not confirm_live:
@@ -4225,6 +4295,7 @@ def rebalance_once_cmd(
                     timeframe=timeframe,
                     stage=StrategyStage.CANARY,
                     dry_run=True,
+                    execution_side=side,
                 )
             finally:
                 conn.close()
@@ -4275,6 +4346,24 @@ def rebalance_once_cmd(
                 )
 
             try:
+                broker_holdings: dict[str, int] | None = None
+                purchasable_cash: _Decimal | None = None
+                if account_wide:
+                    positions = await get_positions_resolving_market(
+                        broker,
+                        access_token=token.access_token,
+                        app_key=secrets["KIS_APP_KEY"],
+                        app_secret=secrets["KIS_APP_SECRET"],
+                        account=secrets["KIS_ACCOUNT_NO"],
+                    )
+                    broker_holdings = {p.symbol: p.qty for p in positions if p.qty > 0}
+                    purchasable_cash = await get_purchasable_cash_usd(
+                        broker,
+                        access_token=token.access_token,
+                        app_key=secrets["KIS_APP_KEY"],
+                        app_secret=secrets["KIS_APP_SECRET"],
+                        account=secrets["KIS_ACCOUNT_NO"],
+                    )
                 return await execute_rebalance(
                     config=port_cfg,  # type: ignore[arg-type]
                     router=router,
@@ -4284,11 +4373,19 @@ def rebalance_once_cmd(
                     caps=caps,  # type: ignore[arg-type]
                     timeframe=timeframe,
                     stage=StrategyStage.CANARY,
+                    dry_run=dry_run,
+                    account_holdings=broker_holdings,
+                    liquidation_only_symbols=(
+                        liquidation_symbols if account_wide else frozenset()
+                    ),
+                    execution_side=side,
+                    purchasable_cash_usd=purchasable_cash,
+                    cash_buffer_pct=cash_buffer_pct,
                 )
             finally:
                 conn.close()
 
-    outcome = asyncio.run(_go_dry() if dry_run else _go())
+    outcome = asyncio.run(_go() if account_wide or not dry_run else _go_dry())
     mode_label = "dry-run" if dry_run else mode
 
     if as_json:
@@ -4297,6 +4394,25 @@ def rebalance_once_cmd(
                 {
                     "portfolio_id": outcome.portfolio_id,  # type: ignore[attr-defined]
                     "mode": mode_label,
+                    "account_wide": outcome.account_wide,  # type: ignore[attr-defined]
+                    "requested_side": outcome.requested_side,  # type: ignore[attr-defined]
+                    "effective_side": outcome.effective_side,  # type: ignore[attr-defined]
+                    "purchasable_cash_usd": (
+                        str(outcome.purchasable_cash_usd)  # type: ignore[attr-defined]
+                        if outcome.purchasable_cash_usd is not None  # type: ignore[attr-defined]
+                        else None
+                    ),
+                    "required_cash_usd": (
+                        str(outcome.required_cash_usd)  # type: ignore[attr-defined]
+                        if outcome.required_cash_usd is not None  # type: ignore[attr-defined]
+                        else None
+                    ),
+                    "planned_buy_notional_usd": str(
+                        outcome.planned_buy_notional_usd  # type: ignore[attr-defined]
+                    ),
+                    "planned_sell_notional_usd": str(
+                        outcome.planned_sell_notional_usd  # type: ignore[attr-defined]
+                    ),
                     "target_weights": {
                         s: str(w) for s, w in outcome.target_weights.items()  # type: ignore[attr-defined]
                     },
@@ -4312,12 +4428,30 @@ def rebalance_once_cmd(
                         }
                         for r in outcome.results  # type: ignore[attr-defined]
                     ],
+                    "withheld_orders": [
+                        {
+                            "symbol": w.symbol,
+                            "side": w.side,
+                            "requested_qty": w.requested_qty,
+                            "reason": w.reason,
+                        }
+                        for w in outcome.withheld  # type: ignore[attr-defined]
+                    ],
                 }
             )
         )
         return
 
     typer.echo(f"rebalance {outcome.portfolio_id}  mode={mode_label}")  # type: ignore[attr-defined]
+    typer.echo(
+        "account_wide="
+        f"{outcome.account_wide} side={outcome.requested_side}->{outcome.effective_side}"  # type: ignore[attr-defined]
+    )
+    if outcome.purchasable_cash_usd is not None:  # type: ignore[attr-defined]
+        typer.echo(
+            "cash: purchasable="
+            f"{outcome.purchasable_cash_usd} required={outcome.required_cash_usd}"  # type: ignore[attr-defined]
+        )
     typer.echo(
         "target weights: "
         + ", ".join(
@@ -4331,6 +4465,14 @@ def rebalance_once_cmd(
             f"@~{r.limit_price_usd}  -> {r.state}"
             + (f" ({r.reason})" if r.reason else "")
         )
+    if outcome.withheld:  # type: ignore[attr-defined]
+        typer.echo("")
+        typer.echo("withheld:")
+        for w in outcome.withheld:  # type: ignore[attr-defined]
+            typer.echo(
+                f"  {w.side:4} {w.symbol:6} req={w.requested_qty} -> WITHHELD "
+                f"({w.reason})"
+            )
 
 
 @app.command("walk-forward")

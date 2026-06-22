@@ -7,6 +7,7 @@ canary-live-rules.toml 별도). 운영 설정의 오타·스키마 깨짐을 CI 
 
 from __future__ import annotations
 
+import tomllib
 from pathlib import Path
 
 from auto_invest.cli import _load_portfolio_for_backtest
@@ -100,9 +101,17 @@ def test_micro_gtaa_live_canary_invariants():
     caps, wl, cfg = _load_portfolio_for_backtest(
         _MICRO_GTAA_LIVE, env={"KIS_ACCOUNT_NO": "ACC-TEST"}
     )
+    raw = tomllib.loads(_MICRO_GTAA_LIVE.read_text(encoding="utf-8"))
+    account_rebalance = raw.get("account_rebalance", {})
+    liquidation_symbols = set(account_rebalance.get("liquidation_symbols", []))
+
     assert set(cfg.universe) == {"SPYM", "IEF", "GLDM"}
-    assert set(wl.symbols) == {"SPYM", "IEF", "GLDM"}
+    assert liquidation_symbols == {"BHP", "MRK", "ORANY", "RELX"}
+    assert set(wl.symbols) == set(cfg.universe) | liquidation_symbols
     assert set(cfg.universe) <= set(wl.symbols)
+    assert set(cfg.universe).isdisjoint(liquidation_symbols)
+    assert account_rebalance.get("enabled") is True
+    assert account_rebalance.get("cash_buffer_pct") == "0.01"
     assert cfg.weight_scheme == "equal"
     assert cfg.top_n == 3
     assert cfg.rebalance_mode == "hold_replace"

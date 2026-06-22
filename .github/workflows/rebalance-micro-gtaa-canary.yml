@@ -126,6 +126,7 @@ jobs:
               -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
               "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest rebalance-once \
                  --portfolio deploy/micro-gtaa-live-portfolio.toml --dry-run \
+                 --account-wide --side both \
                  --capital ${CAP} --db data/auto_invest.db --env-file .env --json" \
               > /tmp/micro_preview.json 2>/tmp/micro_preview.err
           echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
@@ -171,7 +172,7 @@ jobs:
           from auto_invest.config.loader import load_secrets
           from auto_invest.worker.schedule import is_session_open, next_session_open
 
-          FEE_BUFFER_PCT = Decimal("1.0")
+          FEE_BUFFER = Decimal("0.01")
 
           def _dec(value: object) -> Decimal:
               try:
@@ -183,10 +184,13 @@ jobs:
               raw = base64.b64decode(os.environ["PREVIEW_B64"]).decode()
               return json.loads(raw)
 
-          def _planned_buy_notional(preview: dict) -> Decimal:
+          def _planned_notional(preview: dict, side: str) -> Decimal:
+              key = f"planned_{side.lower()}_notional_usd"
+              if preview.get(key) is not None:
+                  return _dec(preview[key]).quantize(Decimal("0.01"))
               total = Decimal("0")
               for row in preview.get("results", []):
-                  if row.get("side") != "BUY":
+                  if row.get("side") != side:
                       continue
                   qty = int(row.get("routed_qty") or 0)
                   if qty <= 0:
@@ -228,18 +232,26 @@ jobs:
                   "event": os.environ.get("EVENT", ""),
                   "session_open": bool(is_session_open(now)),
                   "next_session_open_utc": next_session_open(now).isoformat(),
+                  "account_wide_enabled": None,
+                  "execution_side_requested": None,
+                  "execution_side_effective": None,
                   "planned_buy_notional_usd": None,
-                  "fee_buffer_pct": str(FEE_BUFFER_PCT),
+                  "planned_sell_notional_usd": None,
+                  "fee_buffer_pct": str(FEE_BUFFER),
                   "required_cash_usd": None,
                   "purchasable_cash_usd": None,
                   "reason": None,
               }
               try:
-                  planned = _planned_buy_notional(_preview())
-                  required = (planned * (Decimal("1") + FEE_BUFFER_PCT / Decimal("100"))).quantize(
-                      Decimal("0.01")
-                  )
-                  payload["planned_buy_notional_usd"] = str(planned)
+                  preview = _preview()
+                  planned_buy = _planned_notional(preview, "BUY")
+                  planned_sell = _planned_notional(preview, "SELL")
+                  required = (planned_buy * (Decimal("1") + FEE_BUFFER)).quantize(Decimal("0.01"))
+                  payload["account_wide_enabled"] = bool(preview.get("account_wide"))
+                  payload["execution_side_requested"] = preview.get("requested_side") or "both"
+                  payload["execution_side_effective"] = preview.get("effective_side") or "both"
+                  payload["planned_buy_notional_usd"] = str(planned_buy)
+                  payload["planned_sell_notional_usd"] = str(planned_sell)
                   payload["required_cash_usd"] = str(required)
               except Exception as exc:  # noqa: BLE001
                   payload["reason"] = f"preview_notional_unavailable: {exc}"
@@ -259,10 +271,21 @@ jobs:
                   return
 
               payload["purchasable_cash_usd"] = str(cash)
-              if cash < Decimal(str(payload["required_cash_usd"])):
-                  payload["reason"] = "insufficient_purchasable_cash"
+              required = Decimal(str(payload["required_cash_usd"]))
+              planned_sell = Decimal(str(payload["planned_sell_notional_usd"] or "0"))
+              if cash < required:
+                  if planned_sell > 0:
+                      payload["ok"] = True
+                      payload["execution_side_effective"] = "sell"
+                      payload["reason"] = "sell_first_cash_shortfall"
+                  else:
+                      payload["reason"] = "insufficient_purchasable_cash"
               else:
                   payload["ok"] = True
+                  if planned_sell > 0 and Decimal(str(payload["planned_buy_notional_usd"] or "0")) == 0:
+                      payload["execution_side_effective"] = "sell"
+                  else:
+                      payload["execution_side_effective"] = "both"
                   payload["reason"] = "preflight_ok"
               print(json.dumps(payload, sort_keys=True, ensure_ascii=False))
 
@@ -284,8 +307,17 @@ jobs:
           PY
           then
             echo "ok=true" >> "$GITHUB_OUTPUT"
+            effective_side="$(python - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path('/tmp/micro_preflight.json').read_text(encoding='utf-8'))
+          print(data.get('execution_side_effective') or 'both')
+          PY
+          )"
+            echo "effective_side=${effective_side}" >> "$GITHUB_OUTPUT"
           else
             echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "effective_side=none" >> "$GITHUB_OUTPUT"
           fi
           exit 0
 
@@ -380,14 +412,17 @@ jobs:
           USER: ${{ secrets.VULTR_SSH_USER }}
           PORT: ${{ secrets.VULTR_SSH_PORT }}
           CAP: ${{ steps.gate.outputs.capital }}
+          SIDE: ${{ steps.preflight.outputs.effective_side }}
         run: |
           set +e
           port="${PORT:-22}"
-          echo "ARMED — placing REAL micro GTAA orders (capital=${CAP})."
+          SIDE="${SIDE:-both}"
+          echo "ARMED — placing REAL micro GTAA orders (capital=${CAP}, side=${SIDE})."
           ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
               -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
               "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest rebalance-once \
                  --portfolio deploy/micro-gtaa-live-portfolio.toml \
+                 --account-wide --side ${SIDE} \
                  --mode live --confirm-live \
                  --capital ${CAP} --db data/auto_invest.db --env-file .env --json" \
               > /tmp/micro_live.json 2>/tmp/micro_live.err
@@ -454,6 +489,67 @@ jobs:
               echo "> 무장 상태이나 이번 실행은 실주문 없음(event=${EVENT:-?}). push 이벤트는 미리보기만 한다."
             fi
             echo ""
+            echo "## 계좌 전체 재배치 상태"
+          python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          from pathlib import Path
+
+          def load(path: str) -> dict:
+              try:
+                  text = Path(path).read_text(encoding="utf-8").strip()
+              except FileNotFoundError:
+                  return {}
+              if not text or text.startswith("("):
+                  return {}
+              try:
+                  data = json.loads(text)
+              except json.JSONDecodeError:
+                  return {}
+              return data if isinstance(data, dict) else {}
+
+          preview = load("/tmp/micro_preview.json")
+          preflight = load("/tmp/micro_preflight.json")
+          effective = (
+              preflight.get("execution_side_effective")
+              or preview.get("effective_side")
+              or "unknown"
+          )
+          next_step = {
+              "sell": "청산 전용 매도 실행 후 다음 주기에 KIS 매수 가능 현금 재확인",
+              "both": "현금과 게이트가 충분하면 목표 종목 매수까지 실행",
+              "buy": "목표 종목 매수만 실행",
+              "none": "주문 없음, 차단 사유 확인",
+          }.get(str(effective), "다음 실행에서 상태 재확인")
+          rows = {
+              "account_wide_enabled": preflight.get(
+                  "account_wide_enabled", preview.get("account_wide")
+              ),
+              "execution_side_requested": preflight.get(
+                  "execution_side_requested", preview.get("requested_side")
+              ),
+              "execution_side_effective": effective,
+              "purchasable_cash_usd": preflight.get(
+                  "purchasable_cash_usd", preview.get("purchasable_cash_usd")
+              ),
+              "required_cash_usd": preflight.get(
+                  "required_cash_usd", preview.get("required_cash_usd")
+              ),
+              "planned_buy_notional_usd": preflight.get(
+                  "planned_buy_notional_usd", preview.get("planned_buy_notional_usd")
+              ),
+              "planned_sell_notional_usd": preflight.get(
+                  "planned_sell_notional_usd", preview.get("planned_sell_notional_usd")
+              ),
+              "next_step": next_step,
+          }
+          print("| 항목 | 값 |")
+          print("|------|-----|")
+          for key, value in rows.items():
+              print(f"| {key} | {value if value is not None else '?'} |")
+          PY
+            echo ""
             echo "## 드라이런 미리보기"
             echo '```json'
             cat /tmp/micro_preview.json 2>/dev/null || echo '{}'
@@ -497,6 +593,7 @@ jobs:
           ARMED: ${{ steps.gate.outputs.armed }}
           CAP: ${{ steps.gate.outputs.capital }}
           LIVE_OUTCOME: ${{ steps.live.outcome }}
+          EFFECTIVE_SIDE: ${{ steps.preflight.outputs.effective_side }}
         run: |
           set +e
           if [[ -z "${TELEGRAM_BOT_TOKEN:-}" || -z "${TELEGRAM_CHAT_ID:-}" ]]; then
@@ -566,6 +663,7 @@ jobs:
               "auto-invest micro GTAA",
               f"run={os.environ.get('RUN_ID')} event={os.environ.get('EVENT')}",
               f"armed={os.environ.get('ARMED')} capital_usd={os.environ.get('CAP')}",
+              f"effective_side={os.environ.get('EFFECTIVE_SIDE') or 'skipped'}",
               f"preflight_ok={preflight_ok} reason={short(preflight_reason)}",
               f"live_step={os.environ.get('LIVE_OUTCOME') or 'skipped'}",
           ]

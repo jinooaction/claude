@@ -13,6 +13,8 @@
 # - 기본 워크플로 센티넬은 armed:false. push 는 미리보기만.
 # - 수동/스케줄 실주문도 capital_usd <= 1000, 정규장 지정가, K1 캡, 서킷 브레이커를 통과해야 한다.
 # - 레버리지·마진·옵션·공매도·시장가 없음.
+# - BHP/MRK/ORANY/RELX 는 현재 계좌 기존 보유 청산 전용이다. 목표 유니버스가 아니며
+#   account-wide 리밸런서가 매수를 거부한다.
 
 [caps]
 per_trade_pct                  = 40.0
@@ -26,10 +28,15 @@ daily_loss_limit_pct           = 3.0
 max_total_drawdown_pct         = 5.0
 
 [whitelist]
-symbols     = ["SPYM", "IEF", "GLDM"]
+symbols     = ["SPYM", "IEF", "GLDM", "BHP", "MRK", "ORANY", "RELX"]
 accounts    = ["${KIS_ACCOUNT_NO}"]
 order_types = ["LIMIT"]
 sessions    = ["REGULAR"]
+
+[account_rebalance]
+enabled             = true
+liquidation_symbols = ["BHP", "MRK", "ORANY", "RELX"]
+cash_buffer_pct     = "0.01"
 
 [portfolio]
 id            = "micro-gtaa"
