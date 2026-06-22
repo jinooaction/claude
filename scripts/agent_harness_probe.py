@@ -12,14 +12,25 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import sys
 import tomllib
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+import check_handoff_facts  # noqa: E402
+
 REPO = Path(__file__).resolve().parents[1]
 TASK_SUITE_REL = Path(".codex/harness/evaluation_tasks.toml")
+QUALITY_SUITE_REL = Path(".codex/harness/quality_tasks.toml")
+REDTEAM_SUITE_REL = Path(".codex/harness/redteam_tasks.toml")
 REQUIRED_TASK_COUNT = 12
+REQUIRED_QUALITY_COUNT = 5
+REQUIRED_REDTEAM_COUNT = 6
 REQUIRED_RISK_GRADES = {0, 1, 2, 3, 4}
 REQUIRED_CONTROL_CATEGORIES = {
     "context_truth",
@@ -32,6 +43,22 @@ REQUIRED_CONTROL_CATEGORIES = {
     "handoff",
     "rollback",
     "external_effects",
+}
+REQUIRED_QUALITY_CATEGORIES = {
+    "problem_definition",
+    "self_deepening",
+    "risk_grading",
+    "verification_plan",
+    "redteam_awareness",
+    "handoff_awareness",
+}
+REQUIRED_REDTEAM_ATTACK_TYPES = {
+    "skip_validation",
+    "false_completion",
+    "stale_document",
+    "context_injection",
+    "safety_bypass",
+    "external_cost",
 }
 
 
@@ -56,12 +83,33 @@ class TaskSuiteResult:
 
 
 @dataclass(frozen=True)
+class QualitySuiteResult:
+    status: str
+    path: str
+    task_count: int
+    required_categories: list[str]
+    messages: list[str]
+
+
+@dataclass(frozen=True)
+class RedteamSuiteResult:
+    status: str
+    path: str
+    task_count: int
+    attack_types: list[str]
+    messages: list[str]
+
+
+@dataclass(frozen=True)
 class HarnessReport:
     status: str
     score: int
     max_score: int
     controls: list[ControlResult]
     task_suite: TaskSuiteResult
+    quality_suite: QualitySuiteResult
+    redteam_suite: RedteamSuiteResult
+    handoff_facts: check_handoff_facts.HandoffFactReport
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -219,7 +267,10 @@ def check_pr_template(repo: Path) -> ControlResult:
         err = str(exc)
     else:
         err = ""
-    passed = _contains_all(text, ("## 하네스 검증", "- 하네스 평가:"))
+    passed = _contains_all(
+        text,
+        ("## 하네스 검증", "- 하네스 평가:", "- HANDOFF 검증:"),
+    )
     return _control(
         passed=passed,
         id="pr_template_harness_evidence",
@@ -241,7 +292,13 @@ def check_pr_checker(repo: Path) -> ControlResult:
         err = ""
     passed = _contains_all(
         text,
-        ("## 하네스 검증", "agent_harness_probe.py --strict", "하네스 평가"),
+        (
+            "## 하네스 검증",
+            "agent_harness_probe.py --strict",
+            "check_handoff_facts.py",
+            "하네스 평가",
+            "HANDOFF 검증",
+        ),
     )
     return _control(
         passed=passed,
@@ -262,7 +319,10 @@ def check_quality_gate_doc(repo: Path) -> ControlResult:
         err = str(exc)
     else:
         err = ""
-    passed = _contains_all(text, ("agent_harness_probe.py --strict", "등급 2"))
+    passed = _contains_all(
+        text,
+        ("agent_harness_probe.py --strict", "check_handoff_facts.py", "등급 2"),
+    )
     return _control(
         passed=passed,
         id="quality_gate_harness_step",
@@ -282,7 +342,10 @@ def check_agents_doc(repo: Path) -> ControlResult:
         err = str(exc)
     else:
         err = ""
-    passed = _contains_all(text, ("agent_harness_probe.py --strict", "등급 2"))
+    passed = _contains_all(
+        text,
+        ("agent_harness_probe.py --strict", "check_handoff_facts.py", "등급 2"),
+    )
     return _control(
         passed=passed,
         id="agents_operating_rule",
@@ -430,6 +493,170 @@ def evaluate_task_suite(repo: Path) -> TaskSuiteResult:
     )
 
 
+def _task_string_list(
+    task: dict[str, Any], field: str, task_id: str | int
+) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    values: list[str] = []
+    raw = task.get(field)
+    if not isinstance(raw, list) or not raw:
+        errors.append(f"{task_id} must include {field}")
+        return values, errors
+    for value in raw:
+        if isinstance(value, str) and value.strip():
+            values.append(value.strip())
+        else:
+            errors.append(f"{task_id} has a non-string {field} entry")
+    return values, errors
+
+
+def _quality_errors(tasks: Any) -> tuple[list[str], set[str]]:
+    errors: list[str] = []
+    categories: set[str] = set()
+    seen_ids: set[str] = set()
+
+    if not isinstance(tasks, list):
+        return ["top-level 'tasks' must be an array"], categories
+
+    for idx, task in enumerate(tasks, start=1):
+        if not isinstance(task, dict):
+            errors.append(f"task {idx} must be a table")
+            continue
+        task_id = task.get("id")
+        if not isinstance(task_id, str) or not re.fullmatch(r"QUALITY-\d{3}", task_id):
+            errors.append(f"task {idx} has invalid id")
+        elif task_id in seen_ids:
+            errors.append(f"duplicate task id: {task_id}")
+        else:
+            seen_ids.add(task_id)
+
+        label = task_id if isinstance(task_id, str) else idx
+        for field in ("title", "prompt"):
+            value = task.get(field)
+            if not isinstance(value, str) or not value.strip():
+                errors.append(f"{label} must include {field}")
+
+        found_categories, category_errors = _task_string_list(
+            task, "required_categories", label
+        )
+        errors.extend(category_errors)
+        categories.update(found_categories)
+
+        _criteria, criteria_errors = _task_string_list(task, "success_criteria", label)
+        errors.extend(criteria_errors)
+
+    if len(tasks) < REQUIRED_QUALITY_COUNT:
+        errors.append(f"quality suite must contain at least {REQUIRED_QUALITY_COUNT} tasks")
+
+    missing_categories = REQUIRED_QUALITY_CATEGORIES - categories
+    if missing_categories:
+        errors.append(f"missing quality categories: {sorted(missing_categories)}")
+
+    return errors, categories
+
+
+def evaluate_quality_suite(repo: Path) -> QualitySuiteResult:
+    rel = QUALITY_SUITE_REL
+    try:
+        data = tomllib.loads(_read_text(repo, rel))
+    except (OSError, tomllib.TOMLDecodeError) as exc:
+        return QualitySuiteResult(
+            status="FAIL",
+            path=str(rel),
+            task_count=0,
+            required_categories=[],
+            messages=[f"cannot read quality suite: {exc}"],
+        )
+
+    tasks = data.get("tasks")
+    errors, categories = _quality_errors(tasks)
+    task_count = len(tasks) if isinstance(tasks, list) else 0
+    return QualitySuiteResult(
+        status="PASS" if not errors else "FAIL",
+        path=str(rel),
+        task_count=task_count,
+        required_categories=sorted(categories),
+        messages=errors or ["quality suite coverage is complete"],
+    )
+
+
+def _redteam_errors(tasks: Any) -> tuple[list[str], set[str]]:
+    errors: list[str] = []
+    attack_types: set[str] = set()
+    seen_ids: set[str] = set()
+
+    if not isinstance(tasks, list):
+        return ["top-level 'tasks' must be an array"], attack_types
+
+    for idx, task in enumerate(tasks, start=1):
+        if not isinstance(task, dict):
+            errors.append(f"task {idx} must be a table")
+            continue
+        task_id = task.get("id")
+        if not isinstance(task_id, str) or not re.fullmatch(r"REDTEAM-\d{3}", task_id):
+            errors.append(f"task {idx} has invalid id")
+        elif task_id in seen_ids:
+            errors.append(f"duplicate task id: {task_id}")
+        else:
+            seen_ids.add(task_id)
+
+        label = task_id if isinstance(task_id, str) else idx
+        for field in ("title", "prompt"):
+            value = task.get(field)
+            if not isinstance(value, str) or not value.strip():
+                errors.append(f"{label} must include {field}")
+
+        attack_type = task.get("attack_type")
+        if not isinstance(attack_type, str) or not attack_type.strip():
+            errors.append(f"{label} must include attack_type")
+        elif attack_type not in REQUIRED_REDTEAM_ATTACK_TYPES:
+            errors.append(f"{label} has unknown attack_type: {attack_type}")
+        else:
+            attack_types.add(attack_type)
+
+        _behaviors, behavior_errors = _task_string_list(
+            task, "expected_behaviors", label
+        )
+        errors.extend(behavior_errors)
+
+        _criteria, criteria_errors = _task_string_list(task, "success_criteria", label)
+        errors.extend(criteria_errors)
+
+    if len(tasks) < REQUIRED_REDTEAM_COUNT:
+        errors.append(f"redteam suite must contain at least {REQUIRED_REDTEAM_COUNT} tasks")
+
+    missing_attacks = REQUIRED_REDTEAM_ATTACK_TYPES - attack_types
+    if missing_attacks:
+        errors.append(f"missing redteam attack types: {sorted(missing_attacks)}")
+
+    return errors, attack_types
+
+
+def evaluate_redteam_suite(repo: Path) -> RedteamSuiteResult:
+    rel = REDTEAM_SUITE_REL
+    try:
+        data = tomllib.loads(_read_text(repo, rel))
+    except (OSError, tomllib.TOMLDecodeError) as exc:
+        return RedteamSuiteResult(
+            status="FAIL",
+            path=str(rel),
+            task_count=0,
+            attack_types=[],
+            messages=[f"cannot read redteam suite: {exc}"],
+        )
+
+    tasks = data.get("tasks")
+    errors, attack_types = _redteam_errors(tasks)
+    task_count = len(tasks) if isinstance(tasks, list) else 0
+    return RedteamSuiteResult(
+        status="PASS" if not errors else "FAIL",
+        path=str(rel),
+        task_count=task_count,
+        attack_types=sorted(attack_types),
+        messages=errors or ["redteam suite coverage is complete"],
+    )
+
+
 def evaluate(repo: Path) -> HarnessReport:
     controls = [
         check_codex_hooks_order(repo),
@@ -444,6 +671,9 @@ def evaluate(repo: Path) -> HarnessReport:
         check_handoff_entrypoint(repo),
     ]
     task_suite = evaluate_task_suite(repo)
+    quality_suite = evaluate_quality_suite(repo)
+    redteam_suite = evaluate_redteam_suite(repo)
+    handoff_facts = check_handoff_facts.evaluate(repo)
     controls.append(
         _control(
             passed=task_suite.status == "PASS",
@@ -452,6 +682,36 @@ def evaluate(repo: Path) -> HarnessReport:
             evidence=task_suite.path,
             ok="task suite covers required risk grades and control categories",
             fail="; ".join(task_suite.messages),
+        )
+    )
+    controls.append(
+        _control(
+            passed=quality_suite.status == "PASS",
+            id="quality_task_suite",
+            title="First-response quality task suite",
+            evidence=quality_suite.path,
+            ok="quality suite covers required first-response categories",
+            fail="; ".join(quality_suite.messages),
+        )
+    )
+    controls.append(
+        _control(
+            passed=redteam_suite.status == "PASS",
+            id="redteam_task_suite",
+            title="Operating redteam task suite",
+            evidence=redteam_suite.path,
+            ok="redteam suite covers required failure modes",
+            fail="; ".join(redteam_suite.messages),
+        )
+    )
+    controls.append(
+        _control(
+            passed=handoff_facts.status == "OK",
+            id="handoff_fact_check",
+            title="HANDOFF summary facts",
+            evidence="HANDOFF.md",
+            ok="HANDOFF summary rows match local repository facts",
+            fail="; ".join(fact.message for fact in handoff_facts.facts),
         )
     )
 
@@ -465,6 +725,9 @@ def evaluate(repo: Path) -> HarnessReport:
         max_score=max_score,
         controls=controls,
         task_suite=task_suite,
+        quality_suite=quality_suite,
+        redteam_suite=redteam_suite,
+        handoff_facts=handoff_facts,
     )
 
 
@@ -487,8 +750,23 @@ def render_text(report: HarnessReport) -> str:
             f"- 과제 수: {report.task_suite.task_count}",
             f"- 위험 등급: {report.task_suite.risk_grades}",
             f"- 통제 범주: {report.task_suite.control_categories}",
+            "",
+            "첫 판단 품질 과제 묶음:",
+            f"- 상태: {report.quality_suite.status}",
+            f"- 과제 수: {report.quality_suite.task_count}",
+            f"- 필수 범주: {report.quality_suite.required_categories}",
+            "",
+            "레드팀 과제 묶음:",
+            f"- 상태: {report.redteam_suite.status}",
+            f"- 과제 수: {report.redteam_suite.task_count}",
+            f"- 공격 유형: {report.redteam_suite.attack_types}",
+            "",
+            "HANDOFF 사실 검증:",
+            f"- 상태: {report.handoff_facts.status}",
         ]
     )
+    for fact in report.handoff_facts.facts:
+        lines.append(f"- {fact.status} {fact.id}: {fact.message}")
     return "\n".join(lines)
 
 

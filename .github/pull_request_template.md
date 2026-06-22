@@ -38,7 +38,8 @@
 
 ## 하네스 검증
 
-- 하네스 평가: 등급 2 이상은 `uv run python scripts/agent_harness_probe.py --strict` 결과를 적는다. 등급 0~1은 해당 없음 가능.
+- 하네스 평가: 등급 2 이상은 `uv run python scripts/agent_harness_probe.py --strict` 결과를 적는다. 이 평가는 기본 운영 통제, 첫 판단 품질 과제, 레드팀 과제를 포함한다. 등급 0~1은 해당 없음 가능.
+- HANDOFF 검증: 등급 2 이상은 `uv run python scripts/check_handoff_facts.py` 결과를 적는다. 등급 0~1은 해당 없음 가능.
 
 ## 안전 경계
 

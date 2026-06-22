@@ -142,7 +142,7 @@ mechanical, in three parts — two automatic, one a session-end discipline.
 
 2. **Run `/sync` for the network half.** The ground-truth hook is local-only so
    it can never hang a start-up. `/sync` does the network discovery a hook must
-   not: `git fetch`, list remote `claude/*` branches, list open PRs via
+   not: `git fetch`, list remote `Codex/*` branches, list open PRs via
    `mcp__github__list_pull_requests`, read the live HANDOFF, and reconcile
    against `main`. Run it at the start of any session where you are unsure what
    is merged or in-flight (it replaces hand-typing the sequence below).
@@ -150,7 +150,7 @@ mechanical, in three parts — two automatic, one a session-end discipline.
    ```bash
    # what /sync automates:
    git fetch origin
-   git ls-remote --heads origin 'claude/*' | awk '{print $2}'
+   git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
    # + mcp__github__list_pull_requests owner=jinooaction repo=claude state=open
    # + git show origin/<branch>:HANDOFF-<NNN>.md   (live HANDOFF on each branch)
    # + git log origin/main -8 --pretty='%h %s'      (real main tip)
@@ -215,7 +215,10 @@ After a successful merge, the session SHOULD:
 ---
 
 <!-- SPECKIT START -->
-Active feature: **스펙 012 (튜너 L2/L3 → 하드닝 캐너리 자동 투입)** — 진행 중. 계획: `specs/012-tuner-canary-queue/plan.md`. 브랜치 `claude/upbeat-bell-Sq9qm`. 자율 튜너의 L2/L3 후보(모델·토큰 같은 위험 변경)가 지금은 감사 로그만 적고 버려지는데(빈 껍데기), 이를 스펙 007 하드닝 캐너리로 자동 투입해 검증(과거 리플레이+충격+퍼즈)하고 합격/불합격을 기록한다. **안전 경계: 합격해도 라이브 자동 승격 0건(운영자/스펙 006 게이트 전용, 헌법 IX.B-2). 캐너리는 검증=시뮬레이션이지 배포가 아니다.** 진짜 현재 상태는 항상 `git_ground_truth` 시작 훅 블록 + 최신 HANDOFF + `/sync`를 믿을 것.
+Active feature pointer: `.specify/feature.json` is the maintained pointer for
+the current worktree. Do not trust prose in this block as the source of truth
+for in-flight work; use the `git_ground_truth` start hook, latest `HANDOFF.md`,
+and `/sync` against `jinooaction/claude` `Codex/*` branches before continuing.
 
 머지 완료(베이스라인): spec 004 (LLM 판단 지점), 005 (자율 튜너), 006 (배포 자동화), 007 (하드닝 카나리), 008 (백테스트), 009 (paper-run), 010 (자동 룰 설계자), 011 (라이브 성과 측정). **주의: 일부 tasks.md 가 stale 0% 로 표시된 적 있음 — 코드/테스트를 믿을 것.**
 

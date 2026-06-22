@@ -314,10 +314,10 @@ def read_leases(repo: Path, *, now: float | None = None) -> list[Lease]:
 
 
 def _dedupe_leases(leases: list[Lease]) -> list[Lease]:
-    """Keep the newest lease for the same logical session/worktree/branch."""
-    latest: dict[tuple[str, str, str], Lease] = {}
+    """Keep the newest lease for the same logical session/worktree."""
+    latest: dict[tuple[str, str], Lease] = {}
     for lease in leases:
-        key = (lease.thread_id, lease.worktree, lease.branch)
+        key = (lease.thread_id, lease.worktree)
         current = latest.get(key)
         if current is None or lease.updated_at > current.updated_at:
             latest[key] = lease
