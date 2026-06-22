@@ -19,10 +19,11 @@ def _field(text: str, key: str) -> str | None:
     return None
 
 
-def test_micro_gtaa_sentinel_defaults_to_preview_only():
+def test_micro_gtaa_sentinel_is_operator_approved_live_armed():
     text = _SENTINEL.read_text(encoding="utf-8")
-    assert _field(text, "armed") == "false"
+    assert _field(text, "armed") == "true"
     assert _field(text, "stage") == "micro-gtaa-live-canary"
+    assert "운영자 2026-06-22 명시 승인" in (_field(text, "note") or "")
 
 
 def test_micro_gtaa_sentinel_capital_and_stop_policy_are_bounded():

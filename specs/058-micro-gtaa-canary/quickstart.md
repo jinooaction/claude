@@ -7,17 +7,17 @@ uv run pytest tests/unit/test_micro_gtaa_canary.py tests/unit/test_canary_portfo
 ```
 
 Expected:
-- The sentinel is `armed: false`.
+- The 2026-06-22 operator-approved sentinel is `armed: true`.
 - `capital_usd` is no more than `1000`.
 - The micro portfolio is limited to `SPYM`, `IEF`, `GLDM`.
 
 ## 2. Preview Without Real Orders
 
-Run the GitHub Actions workflow manually with the sentinel still unarmed, or update only the sentinel note/run sequence and merge.
+Push-triggered merges still preview only, even when the sentinel is armed.
 
 Expected:
 - The workflow publishes `automation/rebalance-micro-gtaa-last-run`.
-- The live step is skipped.
+- The live step is skipped on `push`.
 - The preview section shows planned orders or a clear reason no order is planned.
 
 ## 3. Arm for a Micro Live Run
