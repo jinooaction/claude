@@ -60,12 +60,38 @@ def test_micro_gtaa_workflow_preview_precedes_live_step():
 
 def test_micro_gtaa_workflow_checks_breaker_before_live_step():
     text = _WORKFLOW.read_text(encoding="utf-8")
+    preflight_idx = text.index("Pre-live order preflight")
     breaker_idx = text.index("Pre-live circuit breaker gate")
     live_idx = text.index("LIVE rebalance")
+    assert preflight_idx < breaker_idx < live_idx
     assert breaker_idx < live_idx
     assert "evaluate_from_audit" in text[breaker_idx:live_idx]
     assert "set_halt" in text[breaker_idx:live_idx]
+    assert "steps.preflight.outputs.ok == 'true'" in text[breaker_idx:live_idx]
     assert "steps.breaker.outcome == 'success'" in text[live_idx:]
+    assert "steps.preflight.outputs.ok == 'true'" in text[live_idx:]
+
+
+def test_micro_gtaa_workflow_preflight_records_session_and_cash():
+    text = _WORKFLOW.read_text(encoding="utf-8")
+    preflight = re.search(
+        r"name: Pre-live order preflight.*?(?=\n\n      - name:|\Z)",
+        text,
+        flags=re.DOTALL,
+    )
+    assert preflight is not None
+    block = preflight.group(0)
+    assert "is_session_open" in block
+    assert "get_purchasable_cash_usd" in block
+    assert "planned_buy_notional_usd" in block
+    assert "/tmp/micro_preflight.json" in block
+    assert "ok=true" in block
+
+
+def test_micro_gtaa_sidecar_publishes_preflight_evidence():
+    text = _WORKFLOW.read_text(encoding="utf-8")
+    assert "## 라이브 전 주문 전제 확인" in text
+    assert "cat /tmp/micro_preflight.json" in text
 
 
 def test_micro_gtaa_workflow_manual_cap_guard_is_present():

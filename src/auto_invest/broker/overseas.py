@@ -22,6 +22,7 @@ from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
 
 from auto_invest.broker.client import ResilientClient
+from auto_invest.broker.diagnostics import KisOrderError, diagnostics_from_exception
 from auto_invest.broker.models import (
     BalanceSnapshot,
     BrokerExecution,
@@ -312,28 +313,46 @@ async def place_order(
     """Submit an overseas order. Returns the broker-assigned order id."""
     cano, acnt_prdt = _split_account(request.account)
     tr_id = TR_ID_BUY if request.side.value == "BUY" else TR_ID_SELL
-    response = await client.request(
-        "POST",
-        "/uapi/overseas-stock/v1/trading/order",
-        headers=_kis_headers(
-            access_token=access_token,
-            app_key=app_key,
-            app_secret=app_secret,
-            tr_id=tr_id,
-            extra={"content-type": "application/json"},
+    endpoint = "/uapi/overseas-stock/v1/trading/order"
+    body = {
+        "CANO": cano,
+        "ACNT_PRDT_CD": acnt_prdt,
+        "OVRS_EXCG_CD": market,
+        "PDNO": request.symbol,
+        "ORD_QTY": str(request.qty),
+        "OVRS_ORD_UNPR": (
+            str(request.limit_price_usd) if request.limit_price_usd is not None else "0"
         ),
-        json={
-            "CANO": cano,
-            "ACNT_PRDT_CD": acnt_prdt,
-            "OVRS_EXCG_CD": market,
-            "PDNO": request.symbol,
-            "ORD_QTY": str(request.qty),
-            "OVRS_ORD_UNPR": (
-                str(request.limit_price_usd) if request.limit_price_usd is not None else "0"
+        "CTAC_TLNO": "",
+        "MGCO_APTM_ODNO": "",
+        "SLL_TYPE": "" if request.side.value == "BUY" else "00",
+        "ORD_SVR_DVSN_CD": "0",
+        "ORD_DVSN": "00" if request.order_type.value == "LIMIT" else "01",
+    }
+    try:
+        response = await client.request(
+            "POST",
+            endpoint,
+            headers=_kis_headers(
+                access_token=access_token,
+                app_key=app_key,
+                app_secret=app_secret,
+                tr_id=tr_id,
+                extra={"content-type": "application/json"},
             ),
-            "ORD_DVSN": "00" if request.order_type.value == "LIMIT" else "01",
-        },
-    )
+            json=body,
+        )
+    except Exception as exc:
+        diagnostics = diagnostics_from_exception(
+            exc,
+            request_summary={
+                "method": "POST",
+                "endpoint": endpoint,
+                "tr_id": tr_id,
+                "body": body,
+            },
+        )
+        raise KisOrderError("KIS order request failed", diagnostics=diagnostics) from exc
     body = response.json()["output"]
     return OrderResult(
         kis_order_id=body["ODNO"],

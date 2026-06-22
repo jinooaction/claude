@@ -132,11 +132,169 @@ jobs:
           echo "--- preview ---"; cat /tmp/micro_preview.json
           echo "--- stderr ---"; cat /tmp/micro_preview.err
 
+      - name: Pre-live order preflight
+        id: preflight
+        if: >-
+          steps.gate.outputs.armed == 'true' &&
+          steps.gate.outputs.blocked != 'true' &&
+          github.event_name != 'push'
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+          CAP: ${{ steps.gate.outputs.capital }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          preview_b64="$(base64 -w0 /tmp/micro_preview.json 2>/dev/null || base64 /tmp/micro_preview.json | tr -d '\n')"
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "cd /opt/auto-invest && PREVIEW_B64='${preview_b64}' CAP='${CAP}' EVENT='${GITHUB_EVENT_NAME}' bash -s" \
+              > /tmp/micro_preflight.json 2>/tmp/micro_preflight.err <<'REMOTE'
+          set -euo pipefail
+          /usr/local/bin/uv run python - <<'PY'
+          from __future__ import annotations
+
+          import asyncio
+          import base64
+          import json
+          import os
+          from datetime import UTC, datetime
+          from decimal import Decimal, InvalidOperation
+          from pathlib import Path
+
+          import httpx
+
+          from auto_invest.broker.auth import get_valid_token
+          from auto_invest.broker.client import AsyncTokenBucket, CircuitBreaker, ResilientClient
+          from auto_invest.broker.overseas import get_purchasable_cash_usd
+          from auto_invest.config.loader import load_secrets
+          from auto_invest.worker.schedule import is_session_open, next_session_open
+
+          FEE_BUFFER_PCT = Decimal("1.0")
+
+          def _dec(value: object) -> Decimal:
+              try:
+                  return Decimal(str(value))
+              except (InvalidOperation, ValueError) as exc:
+                  raise ValueError(f"invalid decimal: {value!r}") from exc
+
+          def _preview() -> dict:
+              raw = base64.b64decode(os.environ["PREVIEW_B64"]).decode()
+              return json.loads(raw)
+
+          def _planned_buy_notional(preview: dict) -> Decimal:
+              total = Decimal("0")
+              for row in preview.get("results", []):
+                  if row.get("side") != "BUY":
+                      continue
+                  qty = int(row.get("routed_qty") or 0)
+                  if qty <= 0:
+                      continue
+                  total += Decimal(qty) * _dec(row.get("limit_price_usd"))
+              return total.quantize(Decimal("0.01"))
+
+          async def _cash() -> Decimal:
+              secrets = load_secrets(Path(".env"))
+              async with httpx.AsyncClient(
+                  base_url="https://openapi.koreainvestment.com:9443", timeout=30.0
+              ) as inner:
+                  token = await get_valid_token(
+                      inner,
+                      base_url="https://openapi.koreainvestment.com:9443",
+                      app_key=secrets["KIS_APP_KEY"],
+                      app_secret=secrets["KIS_APP_SECRET"],
+                      cache_path=Path("data/kis_token.json"),
+                  )
+                  broker = ResilientClient(
+                      inner,
+                      rate_limiter=AsyncTokenBucket(rate_per_sec=15.0, capacity=15.0),
+                      breaker=CircuitBreaker(failure_threshold=5, cooldown_seconds=30.0),
+                      max_retries=4,
+                  )
+                  return await get_purchasable_cash_usd(
+                      broker,
+                      access_token=token.access_token,
+                      app_key=secrets["KIS_APP_KEY"],
+                      app_secret=secrets["KIS_APP_SECRET"],
+                      account=secrets["KIS_ACCOUNT_NO"],
+                  )
+
+          async def main() -> None:
+              now = datetime.now(UTC)
+              payload = {
+                  "ok": False,
+                  "timestamp_utc": now.isoformat(),
+                  "event": os.environ.get("EVENT", ""),
+                  "session_open": bool(is_session_open(now)),
+                  "next_session_open_utc": next_session_open(now).isoformat(),
+                  "planned_buy_notional_usd": None,
+                  "fee_buffer_pct": str(FEE_BUFFER_PCT),
+                  "required_cash_usd": None,
+                  "purchasable_cash_usd": None,
+                  "reason": None,
+              }
+              try:
+                  planned = _planned_buy_notional(_preview())
+                  required = (planned * (Decimal("1") + FEE_BUFFER_PCT / Decimal("100"))).quantize(
+                      Decimal("0.01")
+                  )
+                  payload["planned_buy_notional_usd"] = str(planned)
+                  payload["required_cash_usd"] = str(required)
+              except Exception as exc:  # noqa: BLE001
+                  payload["reason"] = f"preview_notional_unavailable: {exc}"
+                  print(json.dumps(payload, sort_keys=True, ensure_ascii=False))
+                  return
+
+              if not payload["session_open"]:
+                  payload["reason"] = "us_regular_session_closed"
+                  print(json.dumps(payload, sort_keys=True, ensure_ascii=False))
+                  return
+
+              try:
+                  cash = await _cash()
+              except Exception as exc:  # noqa: BLE001
+                  payload["reason"] = f"purchasable_cash_unavailable: {type(exc).__name__}: {exc}"
+                  print(json.dumps(payload, sort_keys=True, ensure_ascii=False))
+                  return
+
+              payload["purchasable_cash_usd"] = str(cash)
+              if cash < Decimal(str(payload["required_cash_usd"])):
+                  payload["reason"] = "insufficient_purchasable_cash"
+              else:
+                  payload["ok"] = True
+                  payload["reason"] = "preflight_ok"
+              print(json.dumps(payload, sort_keys=True, ensure_ascii=False))
+
+          asyncio.run(main())
+          PY
+          REMOTE
+          rc=$?
+          echo "ssh_exit=$rc" >> "$GITHUB_OUTPUT"
+          echo "--- pre-live order preflight ---"
+          cat /tmp/micro_preflight.json
+          echo "--- stderr ---"
+          cat /tmp/micro_preflight.err
+          if python - <<'PY'
+          import json
+          from pathlib import Path
+
+          data = json.loads(Path("/tmp/micro_preflight.json").read_text(encoding="utf-8"))
+          raise SystemExit(0 if data.get("ok") is True else 1)
+          PY
+          then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          fi
+          exit 0
+
       - name: Pre-live circuit breaker gate
         id: breaker
         if: >-
           steps.gate.outputs.armed == 'true' &&
           steps.gate.outputs.blocked != 'true' &&
+          steps.preflight.outputs.ok == 'true' &&
           github.event_name != 'push'
         env:
           HOST: ${{ secrets.VULTR_SSH_HOST }}
@@ -214,6 +372,7 @@ jobs:
         if: >-
           steps.gate.outputs.armed == 'true' &&
           steps.gate.outputs.blocked != 'true' &&
+          steps.preflight.outputs.ok == 'true' &&
           steps.breaker.outcome == 'success' &&
           github.event_name != 'push'
         env:
@@ -303,6 +462,11 @@ jobs:
             echo "## 라이브 전 손실 브레이커"
             echo '```json'
             cat /tmp/micro_breaker.log 2>/dev/null || echo '(미실행)'
+            echo '```'
+            echo ""
+            echo "## 라이브 전 주문 전제 확인"
+            echo '```json'
+            cat /tmp/micro_preflight.json 2>/dev/null || echo '(미실행)'
             echo '```'
             echo ""
             echo "## 라이브 재조정 결과"

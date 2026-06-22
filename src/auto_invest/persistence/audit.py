@@ -141,6 +141,7 @@ class OrderRejectedByBrokerPayload(AuditPayload):
     event_type: Literal["ORDER_REJECTED_BY_BROKER"] = "ORDER_REJECTED_BY_BROKER"
     broker_code: str
     broker_message: str
+    diagnostics: dict[str, Any] | None = None
 
 
 class FillPayload(AuditPayload):
