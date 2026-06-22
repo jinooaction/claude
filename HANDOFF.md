@@ -33,7 +33,7 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `119ad4a` — Merge pull request #372 from jinooaction/Codex/handoff-fact-merge-baseline |
+| 마지막 main 커밋 | `4f5c3aa` — Merge pull request #373 from jinooaction/Codex/handoff-after-baseline-fix |
 | main 테스트 | `uv run pytest -q` → 2215 passed, 4 skipped |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
 | 열린 PR | 없음(GitHub connector open PR 조회 결과 `[]`) |

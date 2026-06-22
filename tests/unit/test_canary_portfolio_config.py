@@ -15,6 +15,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 _CANARY = _REPO_ROOT / "deploy" / "canary-portfolio.toml"
 _CANARY_NOTREND = _REPO_ROOT / "deploy" / "canary-portfolio-notrend.toml"
 _CANARY_LIVE = _REPO_ROOT / "deploy" / "canary-live-portfolio.toml"
+_MICRO_GTAA_LIVE = _REPO_ROOT / "deploy" / "micro-gtaa-live-portfolio.toml"
 _RMBETA = _REPO_ROOT / "deploy" / "risk-managed-beta-portfolio.toml"
 _MULTIASSET = _REPO_ROOT / "deploy" / "multi-asset-trend-portfolio.toml"
 
@@ -87,6 +88,31 @@ def test_live_canary_strategy_matches_validated_ensemble():
         validated_path, env={"KIS_ACCOUNT_NO": "ACC-TEST"}
     )
     assert strategy_fingerprint(live) == strategy_fingerprint(validated)
+
+
+def test_micro_gtaa_live_canary_invariants():
+    """스펙 058 — 빠른 실거래용 마이크로 GTAA 캐너리는 별도 소액 경로여야 한다.
+
+    기존 자본 사다리 검증 집합(SPY·IEF·GLD)을 덮지 않고, $1,000 정수주에서 세 다리를
+    표현하기 위해 SPYM·IEF·GLDM 만 허용한다. 기본 위험은 설정과 워크플로 센티넬의
+    $1,000 상한으로 묶인다.
+    """
+    caps, wl, cfg = _load_portfolio_for_backtest(
+        _MICRO_GTAA_LIVE, env={"KIS_ACCOUNT_NO": "ACC-TEST"}
+    )
+    assert set(cfg.universe) == {"SPYM", "IEF", "GLDM"}
+    assert set(wl.symbols) == {"SPYM", "IEF", "GLDM"}
+    assert set(cfg.universe) <= set(wl.symbols)
+    assert cfg.weight_scheme == "equal"
+    assert cfg.top_n == 3
+    assert cfg.rebalance_mode == "hold_replace"
+    assert cfg.trend_filter is not None
+    assert cfg.trend_filter.method == "sma"
+    assert cfg.trend_filter.on_insufficient == "cash"
+    assert cfg.trend_filter.ensemble_windows == (63, 126, 189, 252)
+    assert caps.per_trade_pct <= caps.per_symbol_pct <= caps.global_exposure_pct
+    assert caps.daily_loss_limit_pct == 3
+    assert caps.max_total_drawdown_pct == 5
 
 
 def test_notrend_control_config_is_identical_minus_trend_filter():
