@@ -75,7 +75,7 @@
 - [x] T024 Run `python3 scripts/check_pr_quality_gate.py --template .github/pull_request_template.md`.
 - [x] T025 Run `uv run pytest`.
 - [x] T026 Run `uv run ruff check src tests`.
-- [ ] T027 Update PR body and handoff records after merge if required.
+- [x] T027 Update PR body and handoff records after merge if required.
 
 ## Dependencies & Execution Order
 
