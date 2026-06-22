@@ -1,0 +1,322 @@
+name: Micro GTAA live canary rebalance (guarded, real money)
+
+# 스펙 058 — 운영자 승인형 마이크로 GTAA 실거래 캐너리.
+#
+# 이 워크플로는 실제 돈을 움직일 수 있지만 기본은 미리보기다.
+# 실주문 조건은 모두 만족해야 한다:
+#   1. automation/rebalance-micro-gtaa.request 의 armed: true
+#   2. capital_usd <= 1000
+#   3. github.event_name != 'push' (무장 머지 자체는 미리보기만)
+#   4. 기존 K1 캡, 화이트리스트, 지정가, 정규장, 서킷 브레이커 통과
+#
+# 기존 자본 사다리/라이브 캐너리 경로는 건드리지 않는다.
+
+on:
+  schedule:
+    - cron: "0 15 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      capital:
+        description: "마이크로 GTAA 캐너리 자본 USD (최대 1000)."
+        required: false
+        default: "1000"
+  push:
+    branches: [main]
+    paths:
+      - 'automation/rebalance-micro-gtaa.request'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rebalance-micro-gtaa-canary
+  cancel-in-progress: false
+
+jobs:
+  micro-gtaa-canary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read micro arming sentinel
+        id: gate
+        run: |
+          set -uo pipefail
+          REQ=automation/rebalance-micro-gtaa.request
+          armed=false
+          capital="${{ github.event.inputs.capital || '1000' }}"
+          warning=3
+          hard_stop=5
+          if [[ -f "$REQ" ]]; then
+            a="$(grep -E '^armed:' "$REQ" | head -1 | awk '{print $2}' || true)"
+            c="$(grep -E '^capital_usd:' "$REQ" | head -1 | awk '{print $2}' || true)"
+            w="$(grep -E '^warning_drawdown_pct:' "$REQ" | head -1 | awk '{print $2}' || true)"
+            h="$(grep -E '^hard_stop_drawdown_pct:' "$REQ" | head -1 | awk '{print $2}' || true)"
+            [[ -n "$a" ]] && armed="$a"
+            [[ -n "$c" ]] && capital="$c"
+            [[ -n "$w" ]] && warning="$w"
+            [[ -n "$h" ]] && hard_stop="$h"
+          fi
+          blocked=false
+          if [[ "$armed" != "true" && "$armed" != "false" ]]; then
+            echo "invalid armed value: $armed" >&2
+            armed=false; blocked=true
+          fi
+          if ! [[ "$capital" =~ ^[0-9]+$ ]]; then
+            echo "capital_usd must be an integer: $capital" >&2
+            armed=false; blocked=true
+          elif (( capital < 1 || capital > 1000 )); then
+            echo "capital_usd=$capital outside micro range 1..1000; refusing live." >&2
+            armed=false; blocked=true
+          fi
+          if ! [[ "$warning" =~ ^[0-9]+([.][0-9]+)?$ && "$hard_stop" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+            echo "drawdown thresholds must be numeric: warning=$warning hard_stop=$hard_stop" >&2
+            armed=false; blocked=true
+          elif (( $(awk -v w="$warning" -v h="$hard_stop" 'BEGIN { print (w >= h || h > 5) ? 1 : 0 }') )); then
+            echo "invalid drawdown thresholds: warning=$warning hard_stop=$hard_stop" >&2
+            armed=false; blocked=true
+          fi
+          echo "armed=$armed" >> "$GITHUB_OUTPUT"
+          echo "capital=$capital" >> "$GITHUB_OUTPUT"
+          echo "warning=$warning" >> "$GITHUB_OUTPUT"
+          echo "hard_stop=$hard_stop" >> "$GITHUB_OUTPUT"
+          echo "blocked=$blocked" >> "$GITHUB_OUTPUT"
+          echo "armed=$armed capital=$capital warning=$warning hard_stop=$hard_stop blocked=$blocked"
+
+      - name: Install SSH key
+        if: steps.gate.outputs.blocked != 'true'
+        env:
+          KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          echo "${KEY}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+      - name: Backfill micro GTAA daily bars
+        if: steps.gate.outputs.blocked != 'true'
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest backfill-bars \
+                 --portfolio deploy/micro-gtaa-live-portfolio.toml --min-bars 1000 \
+                 --db data/auto_invest.db --env-file .env --json" \
+              > /tmp/micro_backfill.log 2>&1
+          echo "exit=$?"; cat /tmp/micro_backfill.log
+
+      - name: DRY-RUN preview — micro GTAA planned orders (no real orders)
+        id: preview
+        if: steps.gate.outputs.blocked != 'true'
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+          CAP: ${{ steps.gate.outputs.capital }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest rebalance-once \
+                 --portfolio deploy/micro-gtaa-live-portfolio.toml --dry-run \
+                 --capital ${CAP} --db data/auto_invest.db --env-file .env --json" \
+              > /tmp/micro_preview.json 2>/tmp/micro_preview.err
+          echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
+          echo "--- preview ---"; cat /tmp/micro_preview.json
+          echo "--- stderr ---"; cat /tmp/micro_preview.err
+
+      - name: Pre-live circuit breaker gate
+        id: breaker
+        if: >-
+          steps.gate.outputs.armed == 'true' &&
+          steps.gate.outputs.blocked != 'true' &&
+          github.event_name != 'push'
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+          CAP: ${{ steps.gate.outputs.capital }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" "CAP='${CAP}' bash -s" \
+              > /tmp/micro_breaker.log 2>&1 <<'REMOTE'
+          set -euo pipefail
+          cd /opt/auto-invest
+          /usr/local/bin/uv run python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          import tomllib
+          from datetime import UTC, datetime
+          from decimal import Decimal
+          from pathlib import Path
+
+          from auto_invest.config.caps import SizingCaps
+          from auto_invest.market_data.store import get_latest_bar
+          from auto_invest.persistence import db, positions
+          from auto_invest.risk.circuit_breaker import evaluate_from_audit
+          from auto_invest.worker.halt import set_halt
+
+          portfolio = Path("deploy/micro-gtaa-live-portfolio.toml")
+          db_path = Path("data/auto_invest.db")
+          halt_path = Path("data/halt.flag")
+          capital = Decimal(os.environ["CAP"])
+          caps = SizingCaps.model_validate(tomllib.loads(portfolio.read_text(encoding="utf-8"))["caps"])
+
+          conn = db.get_connection(db_path)
+          db.migrate(conn)
+          try:
+              marks = {}
+              for pos in positions.get_all_positions(conn):
+                  bar = get_latest_bar(conn, symbol=pos.symbol, timeframe="1d")
+                  if bar is not None:
+                      marks[pos.symbol] = bar.close_usd
+              decision = evaluate_from_audit(
+                  conn,
+                  mode="live",
+                  starting_capital=capital,
+                  caps=caps,
+                  now=datetime.now(UTC),
+                  marks=marks,
+              )
+          finally:
+              conn.close()
+
+          payload = {
+              "tripped": decision.tripped,
+              "breached": decision.breached,
+              "reason": decision.reason,
+              "metadata": decision.metadata,
+          }
+          print(json.dumps(payload, sort_keys=True, ensure_ascii=False))
+          if decision.tripped:
+              set_halt(halt_path, f"micro_gtaa_circuit_breaker: {decision.reason}")
+              raise SystemExit(42)
+          PY
+          REMOTE
+          rc=$?
+          echo "ssh_exit=$rc" >> "$GITHUB_OUTPUT"
+          echo "--- pre-live circuit breaker ---"; cat /tmp/micro_breaker.log
+          exit "$rc"
+
+      - name: LIVE rebalance — REAL MICRO ORDERS
+        id: live
+        if: >-
+          steps.gate.outputs.armed == 'true' &&
+          steps.gate.outputs.blocked != 'true' &&
+          steps.breaker.outcome == 'success' &&
+          github.event_name != 'push'
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+          CAP: ${{ steps.gate.outputs.capital }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          echo "ARMED — placing REAL micro GTAA orders (capital=${CAP})."
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest rebalance-once \
+                 --portfolio deploy/micro-gtaa-live-portfolio.toml \
+                 --mode live --confirm-live \
+                 --capital ${CAP} --db data/auto_invest.db --env-file .env --json" \
+              > /tmp/micro_live.json 2>/tmp/micro_live.err
+          echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
+          echo "--- live rebalance ---"; cat /tmp/micro_live.json
+          echo "--- stderr ---"; cat /tmp/micro_live.err
+
+      - name: Measure micro live track
+        id: measure
+        if: steps.gate.outputs.blocked != 'true'
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+          CAP: ${{ steps.gate.outputs.capital }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "cd /opt/auto-invest && \
+                 /usr/local/bin/uv run auto-invest nav-snapshot --mode live --capital ${CAP} --db data/auto_invest.db --env-file .env --snapshot --format json; \
+                 /usr/local/bin/uv run auto-invest forward-verdict --mode live --portfolio deploy/micro-gtaa-live-portfolio.toml --db data/auto_invest.db --format json" \
+              > /tmp/micro_measure.log 2>&1
+          echo "exit=$?"; cat /tmp/micro_measure.log
+
+      - name: Publish micro GTAA result to sidecar branch
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ARMED: ${{ steps.gate.outputs.armed }}
+          CAP: ${{ steps.gate.outputs.capital }}
+          WARNING: ${{ steps.gate.outputs.warning }}
+          HARD_STOP: ${{ steps.gate.outputs.hard_stop }}
+          BLOCKED: ${{ steps.gate.outputs.blocked }}
+          LIVE_OUTCOME: ${{ steps.live.outcome }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -o pipefail
+          BRANCH=automation/rebalance-micro-gtaa-last-run
+          tmpdir=$(mktemp -d); cd "${tmpdir}"; git init -q
+          git config user.name "micro-gtaa-bot"
+          git config user.email "micro-gtaa-bot@noreply.github.com"
+          {
+            echo "# 마이크로 GTAA 라이브 캐너리 — 최신 실행"
+            echo ""
+            echo "| 항목 | 값 |"
+            echo "|------|-----|"
+            echo "| run_id | ${GITHUB_RUN_ID} |"
+            echo "| timestamp_utc | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
+            echo "| armed | ${ARMED:-?} |"
+            echo "| capital_usd | ${CAP:-?} |"
+            echo "| blocked | ${BLOCKED:-?} |"
+            echo "| event | ${EVENT:-?} |"
+            echo "| LIVE 스텝 | ${LIVE_OUTCOME:-skipped} (success=실주문 실행 / skipped=미실행) |"
+            echo "| warning_drawdown_pct | ${WARNING:-?} |"
+            echo "| hard_stop_drawdown_pct | ${HARD_STOP:-?} |"
+            echo ""
+            if [[ "${ARMED:-false}" != "true" ]]; then
+              echo "> 드라이런 미리보기만(armed=false) — 실주문 0건."
+            elif [[ "${LIVE_OUTCOME:-skipped}" == "success" ]]; then
+              echo "> 무장 + 실주문 실행 — 아래 결과와 감사 로그를 확인해야 한다."
+            else
+              echo "> 무장 상태이나 이번 실행은 실주문 없음(event=${EVENT:-?}). push 이벤트는 미리보기만 한다."
+            fi
+            echo ""
+            echo "## 드라이런 미리보기"
+            echo '```json'
+            cat /tmp/micro_preview.json 2>/dev/null || echo '{}'
+            echo '```'
+            echo ""
+            echo "## 라이브 전 손실 브레이커"
+            echo '```json'
+            cat /tmp/micro_breaker.log 2>/dev/null || echo '(미실행)'
+            echo '```'
+            echo ""
+            echo "## 라이브 재조정 결과"
+            echo '```json'
+            cat /tmp/micro_live.json 2>/dev/null || echo '(미실행)'
+            echo '```'
+            echo ""
+            echo "## 측정 로그"
+            echo '```'
+            cat /tmp/micro_measure.log 2>/dev/null || echo '(none)'
+            echo '```'
+          } > LAST_RUN.md
+          git checkout --orphan publish
+          git add LAST_RUN.md
+          git commit -q -m "micro-gtaa run ${GITHUB_RUN_ID} (armed=${ARMED:-?})"
+          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "publish:${BRANCH}"
+          echo "Published to ${BRANCH}."

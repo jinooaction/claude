@@ -1,0 +1,19 @@
+# 마이크로 GTAA 실거래 캐너리 무장 센티넬 (스펙 058).
+#
+# 이 파일이 main 에 머지되면 rebalance-micro-gtaa-canary.yml 이 발화한다.
+# - armed: false -> 드라이런 미리보기만(실주문 0건).
+# - armed: true  -> 스케줄 또는 수동 dispatch 에서만 실주문 가능(push 이벤트는 계속 미리보기만).
+#
+# 운영자 승인 경계:
+# - capital_usd 는 수동 마이크로 권한상 $1,000 이하.
+# - 허용 종목은 SPYM·IEF·GLDM, 정규장 지정가만.
+# - hard_stop_drawdown_pct 는 5 이하. 이를 넘기면 다음 실주문 전 무장 해제가 원칙.
+
+armed: false
+capital_usd: 1000
+requested_by: mason
+stage: micro-gtaa-live-canary
+run_seq: 1
+warning_drawdown_pct: 3
+hard_stop_drawdown_pct: 5
+note: "스펙 058 초기 마이크로 GTAA 캐너리. 기본은 미리보기 전용, 실주문 0건."

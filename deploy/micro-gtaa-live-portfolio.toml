@@ -1,0 +1,52 @@
+# 스펙 058 — 마이크로 GTAA 실거래 캐너리.
+#
+# 목적: 기존 자본 사다리(스펙 050)의 증거 게이트를 낮추지 않고, 운영자 명시 승인 하에
+# 최대 $1,000 소액으로 주식·채권·금 3다리 실거래 노출을 빠르게 만든다.
+#
+# 왜 SPYM/IEF/GLDM 인가:
+# - 기존 라이브 검증 집합 SPY·IEF·GLD 는 전략적으로 맞지만 $1,000 정수주 캐너리에서는
+#   SPY/GLD 단가가 높아 세 다리 표현이 약하다.
+# - SPYM 은 저단가 S&P 500 노출, IEF 는 기존 중기 미국채 노출, GLDM 은 저단가 금 노출이다.
+# - 이 파일은 "통계적 엣지 확정"이 아니라 작은 실제 체결·감사·정합성 실험이다.
+#
+# 안전:
+# - 기본 워크플로 센티넬은 armed:false. push 는 미리보기만.
+# - 수동/스케줄 실주문도 capital_usd <= 1000, 정규장 지정가, K1 캡, 서킷 브레이커를 통과해야 한다.
+# - 레버리지·마진·옵션·공매도·시장가 없음.
+
+[caps]
+per_trade_pct                  = 40.0
+per_symbol_pct                 = 40.0
+global_exposure_pct            = 100.0
+canary_capital_pct             = 5.0
+canary_min_duration_days       = 10
+canary_acceptance_drawdown_pct = 5.0
+circuit_breaker_enabled        = true
+daily_loss_limit_pct           = 3.0
+max_total_drawdown_pct         = 5.0
+
+[whitelist]
+symbols     = ["SPYM", "IEF", "GLDM"]
+accounts    = ["${KIS_ACCOUNT_NO}"]
+order_types = ["LIMIT"]
+sessions    = ["REGULAR"]
+
+[portfolio]
+id            = "micro-gtaa"
+universe      = ["SPYM", "IEF", "GLDM"]
+weights       = { momentum = "1.0" }
+weight_scheme = "equal"
+top_n         = 3
+rebalance_mode             = "hold_replace"
+invested_fraction          = "0.99"
+rebalance_every_n_sessions = 21
+lookback_bars              = 200
+momentum_period            = 120
+rebalance_threshold_pct    = "2.0"
+min_notional_usd           = "25"
+
+[portfolio.trend_filter]
+method           = "sma"
+lookback         = 200
+on_insufficient  = "cash"
+ensemble_windows = [63, 126, 189, 252]
