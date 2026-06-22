@@ -39,6 +39,7 @@ install -m 0644 /opt/auto-invest/deploy/auto-invest-deploy.service /etc/systemd/
 install -m 0644 /opt/auto-invest/deploy/auto-invest-deploy.timer /etc/systemd/system/auto-invest-deploy.timer
 install -m 0644 /opt/auto-invest/deploy/auto-invest-tune.service /etc/systemd/system/auto-invest-tune.service
 install -m 0644 /opt/auto-invest/deploy/auto-invest-tune.timer /etc/systemd/system/auto-invest-tune.timer
+install -m 0644 /opt/auto-invest/deploy/auto-invest-telegram-alerts.service /etc/systemd/system/auto-invest-telegram-alerts.service
 
 systemctl daemon-reload
 
@@ -54,6 +55,46 @@ systemctl enable --now auto-invest-deploy.timer
 systemctl enable --now auto-invest-tune.timer
 ```
 
+### Optional: Telegram mobile order alerts
+
+Telegram alerts are disabled until the operator provides secrets and enables the service.
+The service only reads `audit_log`; it does not submit, cancel, sync, or modify orders.
+Telegram's developer API page describes its APIs as free of charge, and this alert path
+uses the HTTPS Bot API only for text notifications. No Telegram billing account is required.
+
+1. In Telegram, create a bot with `@BotFather` and save the token.
+2. Send one message to the bot, then open
+   `https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/getUpdates` to find `chat.id`.
+3. Add these lines to `/opt/auto-invest/.env`:
+
+```dotenv
+TELEGRAM_ENABLED=true
+TELEGRAM_BOT_TOKEN=...
+TELEGRAM_CHAT_ID=...
+TELEGRAM_SOURCE_LABEL=auto-invest
+```
+
+4. Validate a mobile test message:
+
+```bash
+cd /opt/auto-invest
+/usr/local/bin/uv run auto-invest telegram-alerts \
+  --env-file .env --db data/auto_invest.db \
+  --state-file data/telegram_alerts_state.json --test-message
+```
+
+5. Enable the observer:
+
+```bash
+systemctl enable --now auto-invest-telegram-alerts.service
+```
+
+Disable mobile alerts without touching the trading worker:
+
+```bash
+systemctl disable --now auto-invest-telegram-alerts.service
+```
+
 ## 3. Verify
 
 ```bash
@@ -63,6 +104,7 @@ journalctl -u auto-invest.service -n 50
 systemctl list-timers auto-invest-deploy.timer auto-invest-tune.timer
 journalctl -u auto-invest-deploy.service -n 50
 journalctl -u auto-invest-tune.service -n 50
+journalctl -u auto-invest-telegram-alerts.service -n 50
 ```
 
 The deploy timer's calendar expression intentionally OMITS hours

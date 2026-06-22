@@ -28,6 +28,7 @@ UNITS=(
     auto-invest-deploy.timer
     auto-invest-tune.service
     auto-invest-tune.timer
+    auto-invest-telegram-alerts.service
 )
 
 echo "[sync-units] fetching ${REF} (read-only, no checkout)"
@@ -79,6 +80,8 @@ if [ -f /etc/systemd/system/auto-invest-tune.timer ]; then
     systemctl enable --now auto-invest-tune.timer
 fi
 systemctl enable auto-invest.service || true
+# Telegram alerts are optional and require operator-provided TELEGRAM_* secrets.
+# The unit is installed above but intentionally not enabled automatically.
 
 echo "[sync-units] timers:"
 systemctl list-timers auto-invest-deploy.timer auto-invest-tune.timer --no-pager || true

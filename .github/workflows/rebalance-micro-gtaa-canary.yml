@@ -484,3 +484,120 @@ jobs:
           git commit -q -m "micro-gtaa run ${GITHUB_RUN_ID} (armed=${ARMED:-?})"
           git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "publish:${BRANCH}"
           echo "Published to ${BRANCH}."
+
+      - name: Notify Telegram — micro GTAA result
+        if: always()
+        continue-on-error: true
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RUN_ID: ${{ github.run_id }}
+          EVENT: ${{ github.event_name }}
+          ARMED: ${{ steps.gate.outputs.armed }}
+          CAP: ${{ steps.gate.outputs.capital }}
+          LIVE_OUTCOME: ${{ steps.live.outcome }}
+        run: |
+          set +e
+          if [[ -z "${TELEGRAM_BOT_TOKEN:-}" || -z "${TELEGRAM_CHAT_ID:-}" ]]; then
+            echo "Telegram secrets absent; skipping notification."
+            exit 0
+          fi
+          python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          import urllib.error
+          import urllib.request
+          from pathlib import Path
+
+          def load_json(path: str) -> object:
+              try:
+                  text = Path(path).read_text(encoding="utf-8").strip()
+              except FileNotFoundError:
+                  return None
+              if not text or text.startswith("("):
+                  return None
+              try:
+                  return json.loads(text)
+              except json.JSONDecodeError:
+                  return None
+
+          def short(value: object, limit: int = 180) -> str:
+              text = "" if value is None else str(value)
+              return text if len(text) <= limit else text[:limit] + "...<truncated>"
+
+          preflight = load_json("/tmp/micro_preflight.json")
+          live = load_json("/tmp/micro_live.json")
+          preview = load_json("/tmp/micro_preview.json")
+
+          preflight_reason = None
+          preflight_ok = None
+          if isinstance(preflight, dict):
+              preflight_ok = preflight.get("ok")
+              preflight_reason = preflight.get("reason")
+
+          order_lines: list[str] = []
+          if isinstance(live, dict):
+              for row in live.get("results", [])[:6]:
+                  order_lines.append(
+                      " ".join(
+                          str(part)
+                          for part in (
+                              row.get("symbol"),
+                              row.get("side"),
+                              f"qty={row.get('routed_qty')}",
+                              row.get("state"),
+                              short(row.get("reason"), 120),
+                          )
+                          if part not in (None, "")
+                      )
+                  )
+          if not order_lines and isinstance(preview, dict):
+              planned = [
+                  f"{row.get('symbol')} {row.get('side')} qty={row.get('routed_qty')}"
+                  for row in preview.get("results", [])[:6]
+              ]
+              if planned:
+                  order_lines.append("preview: " + "; ".join(planned))
+
+          lines = [
+              "auto-invest micro GTAA",
+              f"run={os.environ.get('RUN_ID')} event={os.environ.get('EVENT')}",
+              f"armed={os.environ.get('ARMED')} capital_usd={os.environ.get('CAP')}",
+              f"preflight_ok={preflight_ok} reason={short(preflight_reason)}",
+              f"live_step={os.environ.get('LIVE_OUTCOME') or 'skipped'}",
+          ]
+          if order_lines:
+              lines.append("orders=" + " | ".join(order_lines))
+          lines.append(os.environ.get("RUN_URL", ""))
+          text = "\n".join(lines)
+          if len(text) > 3800:
+              text = text[:3800] + "\n...<truncated>"
+
+          url = f"https://api.telegram.org/bot{os.environ['TELEGRAM_BOT_TOKEN']}/sendMessage"
+          body = json.dumps(
+              {
+                  "chat_id": os.environ["TELEGRAM_CHAT_ID"],
+                  "text": text,
+                  "disable_web_page_preview": True,
+              }
+          ).encode("utf-8")
+          req = urllib.request.Request(
+              url,
+              data=body,
+              headers={"Content-Type": "application/json"},
+              method="POST",
+          )
+          try:
+              with urllib.request.urlopen(req, timeout=10) as response:
+                  response.read()
+          except urllib.error.HTTPError as exc:
+              print(f"Telegram notification failed: HTTPError status={exc.code}")
+              raise SystemExit(0)
+          except (urllib.error.URLError, TimeoutError, OSError) as exc:
+              print(f"Telegram notification failed: {type(exc).__name__}")
+              raise SystemExit(0)
+          print("Telegram notification sent.")
+          PY

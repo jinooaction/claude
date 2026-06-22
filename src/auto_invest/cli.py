@@ -90,6 +90,136 @@ def _require_clean_migrations(db_path: Path, *, allow_apply: bool) -> None:
         conn.close()
 
 
+@app.command("telegram-alerts")
+def telegram_alerts(
+    db_path: Path = typer.Option(
+        Path("data/auto_invest.db"),
+        "--db",
+        help="SQLite audit_log database path.",
+    ),
+    env_file: Path | None = typer.Option(
+        None,
+        "--env-file",
+        help="Optional .env file containing TELEGRAM_* values.",
+    ),
+    state_file: Path = typer.Option(
+        Path("data/telegram_alerts_state.json"),
+        "--state-file",
+        help="Cursor state file that stores the last alerted audit seq.",
+    ),
+    once: bool = typer.Option(
+        False,
+        "--once",
+        help="Process one batch and exit.",
+    ),
+    follow_mode: bool = typer.Option(
+        False,
+        "--follow",
+        help="Poll continuously for new audit rows.",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Print would-send messages without requiring Telegram secrets.",
+    ),
+    replay_existing: bool = typer.Option(
+        False,
+        "--replay-existing",
+        help="If no cursor exists, start from seq 0 instead of current max seq.",
+    ),
+    include_paper: bool = typer.Option(
+        False,
+        "--include-paper",
+        help="Also alert ORDER_PAPER_FILLED events.",
+    ),
+    poll_interval_seconds: float = typer.Option(
+        5.0,
+        "--poll-interval",
+        help="Polling interval for --follow.",
+    ),
+    test_message: bool = typer.Option(
+        False,
+        "--test-message",
+        help="Send or print a Telegram test message and exit.",
+    ),
+) -> None:
+    """Send Telegram alerts from audit_log order events.
+
+    This command is an observer. It reads committed audit rows and never submits,
+    cancels, modifies, or syncs orders.
+    """
+    import sys as _sys
+
+    from auto_invest.notifications.audit_tail import follow, process_once
+    from auto_invest.notifications.telegram import (
+        TelegramConfigError,
+        TelegramNotifier,
+        load_telegram_config,
+    )
+
+    configure_logging()
+    try:
+        cfg = load_telegram_config(env_file, require=not dry_run)
+    except (TelegramConfigError, ValueError) as exc:
+        typer.echo(f"Telegram configuration error: {exc}", err=True)
+        _exit(2)
+
+    if test_message:
+        text = (
+            f"{cfg.source_label} Telegram alerts test\n"
+            "이 메시지가 보이면 모바일 알림 채널이 연결됐습니다."
+        )
+        if dry_run:
+            typer.echo(text)
+            return
+        try:
+            asyncio.run(TelegramNotifier(cfg).send_message(text))
+        except Exception as exc:  # noqa: BLE001
+            typer.echo(f"Telegram send failed: {type(exc).__name__}", err=True)
+            _exit(1)
+        typer.echo("Telegram test message sent.")
+        return
+
+    if not once and not follow_mode:
+        once = True
+
+    try:
+        if follow_mode:
+            asyncio.run(
+                follow(
+                    db_path=db_path,
+                    state_file=state_file,
+                    config=cfg,
+                    dry_run=dry_run,
+                    replay_existing=replay_existing,
+                    include_paper=include_paper,
+                    poll_interval_seconds=poll_interval_seconds,
+                    output=_sys.stdout,
+                )
+            )
+        else:
+            count = asyncio.run(
+                process_once(
+                    db_path=db_path,
+                    state_file=state_file,
+                    config=cfg,
+                    dry_run=dry_run,
+                    replay_existing=replay_existing,
+                    include_paper=include_paper,
+                    output=_sys.stdout,
+                )
+            )
+            typer.echo(f"telegram-alerts processed={count}")
+    except FileNotFoundError as exc:
+        typer.echo(str(exc), err=True)
+        _exit(1)
+    except KeyboardInterrupt:
+        raise typer.Exit(130) from None
+    except Exception as exc:  # noqa: BLE001
+        typer.echo(f"Telegram alert loop failed: {type(exc).__name__}", err=True)
+        _exit(1)
+
+
 @app.command()
 def run(
     config: Path = typer.Option(

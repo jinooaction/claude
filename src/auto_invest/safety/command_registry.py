@@ -293,6 +293,11 @@ COMMAND_POLICIES: dict[str, CommandPolicy] = {
         AutonomyLevel.READ_ONLY,
         "Read one-screen operator status.",
     ),
+    "telegram-alerts": _p(
+        "telegram-alerts",
+        AutonomyLevel.PROPOSAL,
+        "Read audit_log and send best-effort Telegram operator alerts; no orders.",
+    ),
     "tune": _p(
         "tune",
         AutonomyLevel.PROPOSAL,
