@@ -33,13 +33,13 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `f3d5085` — Merge pull request #374 from jinooaction/Codex/micro-gtaa-live-canary |
+| 마지막 main 커밋 | `75717a2` — Merge pull request #376 from jinooaction/Codex/arm-micro-gtaa-live |
 | main 테스트 | `uv run pytest -q` → 2222 passed, 4 skipped |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
-| 열린 PR | 없음(GitHub connector open PR 조회 결과 `[]`) |
-| 최근 출시 작업 | #374 스펙 058 마이크로 GTAA 실거래 캐너리. #372 HANDOFF-only merge 기준선 보정. #370 Codex 품질·레드팀 하네스 + HANDOFF 사실 검증 |
-| 활성 작업 | 없음. 다음 세션은 새 작업 전 `/sync`와 최신 사이드카 상태를 먼저 확인 |
-| 안전 경계 | #374는 등급 4 돈 경로 추가지만 기본 `armed:false`라 push/merge 실주문 0건. 헌법·커널·비밀값 변경 없음 |
+| 열린 PR | 없음(GitHub open PR 조회 결과 `[]`) |
+| 최근 출시 작업 | #376 마이크로 GTAA `armed:true` 운영자 승인 반영과 수동 live 실행. #374 스펙 058 마이크로 GTAA 실거래 캐너리. #372 HANDOFF-only merge 기준선 보정 |
+| 활성 작업 | 코드 PR 없음. 운영상 마이크로 GTAA는 `armed:true` 유지 중이며 다음 15:00 UTC 스케줄에서 자동 재시도 가능 |
+| 안전 경계 | 등급 4 돈 경로가 활성 상태. 수동 실행 run `27935469561`은 실제 주문 경로까지 들어갔으나 `KIS` 500으로 접수·체결 0건. 헌법·커널·비밀값 변경 없음 |
 
 ## 완료된 작업 큐 (운영자 승인 — 2026-05-31, 1→2→3 전부 완료)
 
@@ -217,9 +217,72 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
 시간을 낭비함. 다음 세션은 모든 도구 호출에 `antml:invoke`/`antml:parameter` 접두사를 반드시
 정확히 쓸 것.
 
-## 최근 관찰 — 2026-06-22 (마이크로 GTAA 캐너리 머지 이후)
+## 최근 관찰 — 2026-06-22 (마이크로 GTAA 무장 및 수동 live 실행 이후)
 
-현재 `main` 최신은 `f3d5085`(#374, 스펙 058 마이크로 GTAA 실거래 캐너리)이다.
+현재 `main` 최신은 `75717a2`(#376, 마이크로 GTAA `armed:true` 운영자 승인 반영)이다.
+그 앞에는 `bd78148`(무장 커밋), `6716e54`(#375, 마이크로 GTAA 캐너리 handoff 갱신),
+`f3d5085`(#374, 스펙 058 마이크로 GTAA 실거래 캐너리)가 있다. 이 인계 갱신 시점의
+열린 PR은 없다.
+
+- **운영자 승인 반영**: `automation/rebalance-micro-gtaa.request`는 `armed:true`,
+  `capital_usd:1000`, `run_seq:2` 상태로 main에 머지됐다. 승인 문구는 센티넬 note와
+  스펙 058 문서에 남겼다.
+- **push 실행 확인**: #376 main push에 붙은
+  `Micro GTAA live canary rebalance (guarded, real money)` run `27935422049`는 성공했다.
+  이벤트가 `push`라 live 단계는 건너뛰었고, 미리보기만 발행했다. 미리보기 주문 계획은
+  `IEF` 1주 매수, `SPYM` 3주 매수였으며 `GLDM`은 현재 신호와 정수주 조건에서 주문 계획에
+  잡히지 않았다.
+- **배포 확인**: #376 main push에 붙은 `Deploy on merge to main` run `27935422052`는 성공했다.
+  이 배포는 코드 반영 확인이며, micro GTAA 실주문은 아래 수동 workflow 실행에서 별도로
+  일어났다.
+- **수동 live 실행**: 운영자 승인 후 `workflow_dispatch`로 run `27935469561`을 실행했다.
+  실행 브랜치는 `main`, 대상 커밋은 `75717a289b2f015b12d260066f8eedae573669a8`,
+  입력 자본은 1,000달러다. `Checkout`, 센티넬 읽기, SSH 설정, 일봉 백필, dry-run 미리보기,
+  live 전 손실 브레이커, live 재조정, 측정, sidecar 발행이 모두 `success`로 끝났다.
+- **브레이커 결과**: live 전 손실 브레이커는 `tripped=false`, 이유는 `within loss limits`.
+  일일 손실 한도는 -30달러, 총 낙폭 바닥은 950달러였다.
+- **실제 주문 결과**: live 재조정은 실제 주문 경로에 들어갔지만, 두 주문 모두 브로커가 거부했다.
+  `IEF` 1주 매수는 지정가 94.55달러, `SPYM` 3주 매수는 지정가 88.07달러로 라우팅됐고,
+  둘 다 `REJECTED_BY_BROKER` 상태다. 사유는 `KIS` 해외주식 주문 API
+  `/uapi/overseas-stock/v1/trading/order`의 `500 Internal Server Error`다.
+- **돈 이동 판단**: sidecar 기준 주문 접수·체결은 0건이다. 최신 측정 스냅샷은
+  `PORTFOLIO_NAV_SNAPSHOT seq=3651`, 현금 1,000달러, 보유 0개, NAV 1,000달러,
+  판정 `INSUFFICIENT_DATA`(9/20 관측)다.
+- **현재 운영 상태**: `armed:true`가 main에 남아 있다. 별도 비무장 PR이나 halt가 없으면
+  워크플로 스케줄(`0 15 * * 1-5`, 15:00 UTC)이 다음 실행에서 자동으로 live 재시도할 수 있다.
+  반복 500이면 `KIS` 주문 엔드포인트 원인 확인 또는 정규장 실행 결과 확인이 필요하다.
+- **검증**: PR #376 머지 전 `uv run pytest` 2222 통과·4 스킵,
+  `uv run ruff check src tests` 통과, `uv run python scripts/agent_harness_probe.py --strict`
+  `OK (14/14)`, `uv run python scripts/check_handoff_facts.py` 통과. handoff 갱신 전
+  `uv run pytest -q`는 stale `HANDOFF.md` 때문에 하네스 2건이 실패했고, 이 handoff 갱신은
+  그 원인(`마지막 main 커밋` 행)을 바로잡았다. handoff 갱신 후
+  `uv run python scripts/check_handoff_facts.py`, `uv run python scripts/agent_harness_probe.py --strict`,
+  `uv run pytest -q`, `uv run ruff check src tests`가 모두 통과했다.
+
+## 최근 마일스톤 — 2026-06-22 (스펙 058 마이크로 GTAA armed=true 수동 실행)
+
+main 머지 `75717a2`(#376). 운영자가 "마이크로 GTAA를 `capital_usd=1000`, `armed=true`로
+무장하고 수동 실행까지 승인한다"고 명시했고, 등급 4 돈 경로 승인 범위 안에서 센티넬 무장과
+수동 live workflow 실행을 완료했다. 상세: `HANDOFF-055-MICRO-GTAA-ARMED.md`,
+`automation/rebalance-micro-gtaa.request`.
+
+- **핵심 변경**: micro GTAA 센티넬을 `armed:true`, `capital_usd:1000`, `run_seq:2`로 갱신하고,
+  테스트·스펙·빠른 시작 문서가 운영자 승인형 활성 상태를 설명하게 했다.
+- **수동 실행 결과**: run `27935469561`에서 live 단계까지 성공적으로 진입했다. 다만 `KIS`
+  주문 엔드포인트 500 오류로 `IEF` 1주와 `SPYM` 3주 주문이 모두 브로커 거부됐고,
+  접수·체결은 0건이다.
+- **안전 경계**: 헌법·커널·비밀값·K1/K2 코드·주문 제한은 변경하지 않았다. 손실 브레이커와
+  기존 K1 캡·화이트리스트·지정가·정규장·halt gate는 유지된다. 돈 경로는 활성화됐으므로
+  다음 스케줄 재시도 가능성을 항상 먼저 확인해야 한다.
+- **검증/배포**: `uv run pytest` 2222 통과·4 스킵, `uv run ruff check src tests` 통과,
+  `uv run python scripts/agent_harness_probe.py --strict` → `OK (14/14)`, PR 품질 관문 통과.
+  #376 main push run `27935422049`와 deploy run `27935422052` 모두 성공. handoff 갱신 후
+  `uv run pytest -q`도 2222 통과·4 스킵으로 재확인했다.
+
+## 최근 관찰 — 2026-06-22 (#374 마이크로 GTAA 기본 비무장 출시 이후)
+
+이 관찰은 #374 직후, #376 무장 전의 상태 기록이다. 당시 `main` 최신은
+`f3d5085`(#374, 스펙 058 마이크로 GTAA 실거래 캐너리)였다.
 그 앞에는 `7b4ec52`(기능 커밋), `4f5c3aa`(#373, handoff 기준선 보정 이후 최신화)가 있다.
 이 인계 갱신 시점의 열린 PR은 없다.
 
@@ -3249,6 +3312,10 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 
 ## 과거 인수인계 파일 (참고용)
 
+- `HANDOFF-055-MICRO-GTAA-ARMED.md` — 스펙 058 마이크로 GTAA 운영자 승인 무장 및 수동
+  live 실행 (2026-06-22, PR #376 `75717a2`). `armed:true`, `capital_usd:1000`이 main에 남아
+  있고, 수동 run `27935469561`은 live 단계까지 진입했으나 `KIS` 주문 API 500으로 `IEF` 1주와
+  `SPYM` 3주가 모두 브로커 거부됐다. 접수·체결 0건. 다음 15:00 UTC 스케줄에서 자동 재시도 가능.
 - `HANDOFF-054-MICRO-GTAA-CANARY.md` — 스펙 058 마이크로 GTAA 실거래 캐너리
   (2026-06-22, PR #374 `f3d5085`). `SPYM`·`IEF`·`GLDM` 3다리 소액 실거래 경로를 추가했다.
   기본 `armed:false`, push는 미리보기 전용, 실주문은 비-push 이벤트와 사전 손실 브레이커 및
