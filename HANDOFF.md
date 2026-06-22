@@ -33,11 +33,11 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `ecc93f2` — Merge pull request #370 from jinooaction/Codex/agent-quality-redteam-harness |
-| main 테스트 | `uv run pytest -q` → 2214 passed, 4 skipped |
+| 마지막 main 커밋 | `119ad4a` — Merge pull request #372 from jinooaction/Codex/handoff-fact-merge-baseline |
+| main 테스트 | `uv run pytest -q` → 2215 passed, 4 skipped |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
 | 열린 PR | 없음(GitHub connector open PR 조회 결과 `[]`) |
-| 최근 출시 작업 | #370 Codex 품질·레드팀 하네스 + HANDOFF 사실 검증. #369 Codex 에이전트 하네스 이후 HANDOFF 최신화. #368 Codex 에이전트 하네스 평가·회귀 과제·PR 증거 관문 |
+| 최근 출시 작업 | #372 HANDOFF-only merge 기준선 보정. #371 #370 이후 HANDOFF 최신화. #370 Codex 품질·레드팀 하네스 + HANDOFF 사실 검증 |
 | 활성 작업 | 없음. 다음 세션은 새 작업 전 `/sync`와 최신 사이드카 상태를 먼저 확인 |
 | 안전 경계 | 헌법·커널·주문 제한·비밀값·실제 주문·돈 경로 변경 없음 |
 
@@ -217,11 +217,11 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
 시간을 낭비함. 다음 세션은 모든 도구 호출에 `antml:invoke`/`antml:parameter` 접두사를 반드시
 정확히 쓸 것.
 
-## 최근 관찰 — 2026-06-22 (Codex 품질·레드팀 하네스 출시 이후)
+## 최근 관찰 — 2026-06-22 (Codex 품질·레드팀 하네스 + handoff 기준선 보정 이후)
 
-현재 `main` 최신은 `ecc93f2`(#370, Codex 품질·레드팀 하네스 + HANDOFF 사실 검증)이다.
-그 앞에는 `e9ede02`(PR #370 본 커밋), `fe2af54`(#369, Codex 에이전트 하네스 이후 HANDOFF
-최신화), `cbc2cd4`(#368, Codex 에이전트 하네스 평가·회귀 과제·PR 증거 관문)가 있다. 이 인계
+현재 `main` 최신은 `119ad4a`(#372, HANDOFF-only merge 기준선 보정)이다.
+그 앞에는 `602de73`(PR #372 본 커밋), `eb32b8d`(#371, #370 이후 HANDOFF 최신화),
+`ecc93f2`(#370, Codex 품질·레드팀 하네스 + HANDOFF 사실 검증)가 있다. 이 인계
 갱신 시점의 열린 PR은 없다.
 
 - **Codex 하네스 확장 출시**: `scripts/agent_harness_probe.py --strict`가 세션 시작 훅 순서,
@@ -234,6 +234,9 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
   우회, 외부 비용·돈 경로 압박을 필수 실패 유도 유형으로 둔다.
 - **HANDOFF 사실 검증**: `scripts/check_handoff_facts.py`가 `HANDOFF.md`의 마지막 main 커밋 행을
   실제 `origin/main`과 대조한다. 선택적으로 main 테스트, 린트, 열린 PR 행도 검증한다.
+  최신 `origin/main`이 `.md` 또는 `specs/`만 바꾼 handoff-only merge이면, 그 merge의 첫 번째
+  부모도 유효 기준선으로 인정한다. handoff PR은 자기 merge commit 해시를 미리 쓸 수 없기
+  때문이다. 일반 코드 merge의 stale 실패는 유지된다.
 - **회귀 과제 묶음**: `.codex/harness/evaluation_tasks.toml`은 12개 대표 과제로 위험 등급 0~4와
   10개 통제 범주(context truth, concurrency, SDD, PR quality, validation, safety boundary,
   handoff, rollback, external effects 등)를 덮는다. 실제 주문·비밀값·네트워크 실행은 없다.
@@ -245,11 +248,11 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
   `scripts/local_concurrency_guard.py --mode session-start`와 `.codex/hooks/git_ground_truth.py`를
   실행한다. 훅은 제거하지 않았다. 같은 `thread_id`/worktree lease는 최신 하나로 보이고,
   같은 세션의 worktree·브랜치·수정 파일 겹침 원인은 한 줄로 요약된다.
-- **로컬 검증**: #370 머지 전 `uv run pytest`는 2214 통과·4 스킵,
+- **로컬 검증**: #372 머지 전 `uv run pytest -q`는 2215 통과·4 스킵,
   `uv run ruff check src tests`는 깨끗했다. 이 handoff 갱신 직전 최신 main 기준
-  `uv run pytest -q`도 2214 통과·4 스킵, `uv run ruff check src tests`도 깨끗하다.
-- **배포 상태**: #370 코드 기준 `Deploy on merge to main` 성공(run `27926136342`).
-  서버 journal에서 워커 stop/start와 deploy correlation id `65667036df7ea6077b236f2dc1277f6e`를
+  `uv run pytest -q`도 2215 통과·4 스킵, `uv run ruff check src tests`도 깨끗하다.
+- **배포 상태**: #372 코드 기준 `Deploy on merge to main` 성공(run `27926514587`).
+  서버 journal에서 워커 stop/start와 deploy correlation id `68e0d2e01c439296086067f63af89c65`를
   확인했다. KIS smoke 사이드카는 이 handoff 작성 시점 기준 직전 스케줄 실행(`fe2af54`,
   `key_valid=true`, `smoke_state=success`)을 가리킨다. 서버 `audit_log`의 `DEPLOY_*` 행은 이
   컨테이너에서 직접 확인 불가.
@@ -277,6 +280,22 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
   `ProposedChange` + `assert_autonomous_boundary_allowed()` 또는 `decide_boundary()`를 지난다.
   나머지 `contents: write` 워크플로는 사이드카 force-push, 운영자 확인형 go-live/halt, 검증 결과
   파일 작성으로 분류되어 이번 A6 guard 누락으로 보지 않았다.
+
+## 최근 마일스톤 — 2026-06-22 (HANDOFF-only merge 기준선 보정)
+
+main 머지 `119ad4a`(#372). PR #370에서 `HANDOFF.md` 사실 검증을 도입한 뒤, PR #371 handoff-only
+merge가 자기 자신의 merge commit 해시를 미리 쓸 수 없어 strict 하네스가 다시 stale로 판정하는
+재귀 문제가 드러났다. 상세: `HANDOFF-053-HANDOFF-BASELINE.md`.
+
+- **보정 내용**: `scripts/check_handoff_facts.py`는 일반 경우 `origin/main`과 `HANDOFF.md`의
+  `마지막 main 커밋` 행이 일치해야 한다. 단, 최신 `origin/main`이 `.md` 또는 `specs/`만 바꾼
+  handoff-only merge이면 그 merge의 첫 번째 부모도 유효 기준선으로 인정한다.
+- **유지되는 방어**: 일반 코드 merge의 stale HANDOFF는 계속 실패한다. 예외는 문서·스펙 전용
+  handoff merge로 좁혔다.
+- **검증/배포**: `uv run pytest -q` 2215 통과·4 스킵, `uv run ruff check src tests` 통과,
+  `uv run python scripts/agent_harness_probe.py --strict` → `OK (14/14)`. `Deploy on merge to main`
+  run `27926514587` 성공, 서버 journal에서 deploy correlation id
+  `68e0d2e01c439296086067f63af89c65` 확인.
 
 ## 최근 마일스톤 — 2026-06-22 (Codex 품질·레드팀 하네스 + HANDOFF 사실 검증)
 
@@ -3184,6 +3203,10 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 
 ## 과거 인수인계 파일 (참고용)
 
+- `HANDOFF-053-HANDOFF-BASELINE.md` — HANDOFF-only merge 기준선 보정 (2026-06-22, PR #372
+  `119ad4a`). `check_handoff_facts.py`가 일반 stale HANDOFF는 계속 실패시키되, `.md` 또는
+  `specs/`만 바꾼 handoff-only merge 직후에는 첫 번째 부모를 유효 기준선으로 인정한다.
+  헌법·커널·주문·비밀값·돈 경로 변경 없음.
 - `HANDOFF-052-AGENT-QUALITY-REDTEAM.md` — Codex 품질·레드팀 하네스와 HANDOFF 사실 검증
   (2026-06-22, PR #370 `ecc93f2`). `scripts/agent_harness_probe.py --strict`가 품질 과제,
   레드팀 과제, HANDOFF 사실 검증까지 포함해 `OK (14/14)`를 요구한다. 등급 2 이상 PR은
@@ -3251,11 +3274,11 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 |------|-------|
 | 헌법 | **v6.0.0** (X.5 자율 전략 재지정 위임 포함, 안전 경계 기록 완료) |
 | 운영자 응대 정책 | `AGENTS.md` Codex 작업 운영 규칙 + `CLAUDE.md` 기존 Claude 정책. Codex는 `AGENTS.md` 우선 |
-| 마지막 main 커밋 | `ecc93f2 Merge pull request #370 from jinooaction/Codex/agent-quality-redteam-harness` |
+| 마지막 main 커밋 | `119ad4a Merge pull request #372 from jinooaction/Codex/handoff-fact-merge-baseline` |
 | 활성 작업 | 없음. 새 작업 전 `/sync`와 `git status`를 먼저 보고, local concurrency guard가 `WARN`/`BLOCK`을 내면 `--mode isolate`로 별도 `worktree`를 만든다 |
-| 최근 완료 | PR #370: Codex 품질·레드팀 하네스 + HANDOFF 사실 검증. PR #369: Codex 에이전트 하네스 이후 HANDOFF 최신화. PR #368: Codex 에이전트 하네스 평가·회귀 과제·PR 증거 관문 |
-| 안전 경계 | #370은 등급 2 운영 체계 변경. 헌법·커널·캡·화이트리스트·낙폭 예산·서킷 브레이커·주문 제한·비밀값·돈 경로 변경 없음. 현재 돈 이동 0 |
-| main 테스트 | 2214 통과, 4 스킵 (라이브 KIS smoke 4건, `KIS_LIVE_TEST=1` 가드) |
+| 최근 완료 | PR #372: HANDOFF-only merge 기준선 보정. PR #371: #370 이후 HANDOFF 최신화. PR #370: Codex 품질·레드팀 하네스 + HANDOFF 사실 검증 |
+| 안전 경계 | #370·#372는 등급 2 운영 체계 변경, #371은 인계 갱신. 헌법·커널·캡·화이트리스트·낙폭 예산·서킷 브레이커·주문 제한·비밀값·돈 경로 변경 없음. 현재 돈 이동 0 |
+| main 테스트 | 2215 통과, 4 스킵 (라이브 KIS smoke 4건, `KIS_LIVE_TEST=1` 가드) |
 | main 린트 | `uv run ruff check src tests` 깨끗 |
 | 열린 PR | 없음 (GitHub connector open PR 조회 기준) |
 | 다음 세션 핵심 | 등급 2 이상 운영 변경은 `uv run python scripts/agent_harness_probe.py --strict`와 `uv run python scripts/check_handoff_facts.py`를 실행하고 PR 본문 `## 하네스 검증`에 결과를 남긴다. local concurrency guard 경고가 있으면 같은 디렉터리에서 쓰지 말고 `python3 scripts/local_concurrency_guard.py --mode isolate`를 먼저 실행한다. PR·머지·배포·원격 브랜치 판단 전에는 `/sync`로 네트워크 상태를 갱신 |
