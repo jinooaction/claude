@@ -33,12 +33,12 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `801dda1` — Merge pull request #383 from jinooaction/Codex/handoff-after-telegram-server-connect |
+| 마지막 main 커밋 | `3440001` — Merge pull request #384 from jinooaction/Codex/money-path-state-guard |
 | main 테스트 | `uv run pytest` → 2249 passed, 4 skipped |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
 | 열린 PR | 없음(GitHub open PR 조회 결과 `[]`) |
 | 출시 완료 스펙 | 최신 추가: 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
-| 최근 출시 작업 | #382 스펙 061 Telegram 서버 연결 자동화와 실제 workflow 실행. #380 스펙 060 Telegram 모바일 주문 알림. #378 스펙 059 KIS 주문 전제 확인과 진단 보존 |
+| 최근 출시 작업 | #384 스펙 062 money-path 실제 돈 최상위 상태. #382 스펙 061 Telegram 서버 연결 자동화와 실제 workflow 실행. #380 스펙 060 Telegram 모바일 주문 알림 |
 | 활성 작업 | 코드 PR 없음. Telegram GitHub secrets 설정과 서버 `.env` 반영, test message, `auto-invest-telegram-alerts.service` enable/start까지 완료됨. micro GTAA는 `armed:true`, `capital_usd:1000` 유지 중이며 money-path의 `live_money_state.status`를 먼저 확인해야 함 |
 | 안전 경계 | #382는 등급 3 외부 API·비밀값 서버 연결 경로 추가지만 observer service만 enable/start했고 주문·브로커·위험 게이트·자본·화이트리스트 코드는 변경하지 않음. #378 등급 4 돈 경로 진단 보존도 유지. 헌법·커널 목록·K1 캡·화이트리스트·낙폭 예산 변경 없음 |
 
@@ -238,9 +238,53 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
 시간을 낭비함. 다음 세션은 모든 도구 호출에 `antml:invoke`/`antml:parameter` 접두사를 반드시
 정확히 쓸 것.
 
-## 최근 관찰 — 2026-06-22 (Telegram 서버 연결 자동화 이후)
+## 최근 관찰 — 2026-06-22 (스펙 062 money-path 실제 돈 최상위 상태)
 
-현재 `main` 최신은 `845c5b1`(#382, 스펙 061 Telegram 서버 연결 자동화)이다.
+현재 `main` 최신은 `3440001`(#384, 스펙 062 money-path 실제 돈 최상위 상태)이다.
+직전 주요 커밋은 `81a2c17`(money-path live-money state 구현), `801dda1`(#383, Telegram 서버
+연결 handoff), `845c5b1`(#382, Telegram 서버 연결 자동화)이다. 이 인계 갱신 시점의 열린 PR은 없다.
+
+- **핵심 교정**: 실제 돈 상태는 더 이상 오래된 `HANDOFF.md` 역사 문단, KIS smoke 현금값, 기존
+  첫-자본 ETA만으로 판단하지 않는다. money-path JSON/text의 `live_money_state`가 최상위 판독
+  표면이다.
+- **현재 판독 원본**: live 의도는 `automation/rebalance-micro-gtaa.request`, 마지막 실행 증거는
+  `origin/automation/rebalance-micro-gtaa-last-run:LAST_RUN.md`, 종합 표면은
+  `origin/automation/money-path-last-run:LAST_RUN.md`다.
+- **스펙 062 로컬 재현 결과**: automation sidecar를 fetch한 뒤 `scripts/money_path_probe.py`를
+  실행하면 `live_money_state.status=REAL_ORDER_PATH_ARMED`, `can_submit_real_orders=true`,
+  `capital_usd=1000`으로 나온다. 다음 예약 live 후보는 로컬 재현 시각
+  `2026-06-22T12:55:00Z` 기준 `2026-06-22T15:00:00Z`였다. 그 이후 세션은 최신 sidecar를 다시 읽는다.
+- **마지막 실행 증거 분리**: 마지막 micro GTAA 실행 `run_id=27935469561`은 `event=workflow_dispatch`,
+  `live_step=success`였지만, 브로커 주문 상태는 `REJECTED_BY_BROKER` 2건이고 접수·체결은 0건이다.
+  "실제 돈 경로가 켜짐"과 "주문이 접수·체결됨"을 분리해서 말해야 한다.
+- **안전 경계**: 등급 2 운영 상태 판독 변경이다. 실제 주문 실행, 자본 증액, live 전략 변경,
+  K1/K2/K4/K5/K6, 비밀값, 감사 로그, 브로커 주문 제한은 바꾸지 않았다.
+- **검증**: PR #384 머지 전 `uv run pytest` 2249 통과·4 스킵, `uv run ruff check src tests`
+  통과, `uv run python scripts/agent_harness_probe.py --strict` `OK (14/14)`,
+  `uv run python scripts/check_handoff_facts.py` 통과, PR 품질 관문 통과. 머지 직전 전체 테스트와
+  린트를 다시 실행해 같은 결과를 확인했다.
+
+## 최근 마일스톤 — 2026-06-22 (스펙 062 money-path 실제 돈 최상위 상태)
+
+main 머지 `3440001`(#384). 운영자가 "오늘 저녁부터 실제 돈이 투자되기 시작할텐데"라는 현재
+상태를 물었을 때, 최근 작업과 코드에서 `micro GTAA armed:true`를 먼저 확인하지 못한 사고를
+재발하지 않도록 money-path 상태 표면을 고쳤다. 상세: `HANDOFF-059-MONEY-PATH-STATE.md`,
+`specs/062-money-path-state/`.
+
+- **핵심 변경**: `src/auto_invest/analytics/money_path.py`가 `live_money_state`를 JSON에 추가하고,
+  text report 첫 섹션을 `실제 돈 최상위 상태`로 렌더링한다. 기존 자본 사다리 상태는 보존하되
+  두 번째 섹션으로 내려갔다.
+- **micro GTAA 소비**: `scripts/money_path_probe.py`가 `automation/rebalance-micro-gtaa.request`와
+  `rebalance-micro-gtaa-last-run`을 읽는다. preflight 없는 옛 sidecar는 깨지지 않고
+  `preflight evidence absent`로 표시된다.
+- **회귀 방지**: `tests/unit/test_money_path.py`와 `tests/integration/test_money_path_probe.py`가
+  `armed:true`, `armed:false`, 자본 한도 초과, 센티넬 누락, manifest 소비 여부, 출력 순서를 고정한다.
+- **운영 규칙**: 이 파일 상단의 "돈 경로 상태 판독 규칙"을 따라 최신 money-path 또는 원본 sidecar를
+  먼저 읽고 답한다. KIS smoke 현금값은 preflight 입력일 뿐 `armed` 상태의 대체 근거가 아니다.
+
+## 이전 관찰 — 2026-06-22 (Telegram 서버 연결 자동화 이후, #384 이전)
+
+당시 `main` 최신은 `845c5b1`(#382, 스펙 061 Telegram 서버 연결 자동화)였다.
 직전 주요 커밋은 `8cf5635`(서버 연결 workflow 구현), `32cdccf`(#381, Telegram 알림 handoff),
 `6384584`(#380, 스펙 060 Telegram 모바일 주문 알림)이다. 이 인계 갱신 시점의 열린 PR은 없다.
 
@@ -3453,6 +3497,10 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 
 ## 과거 인수인계 파일 (참고용)
 
+- `HANDOFF-059-MONEY-PATH-STATE.md` — 스펙 062 money-path 실제 돈 최상위 상태
+  (2026-06-22, PR #384 `3440001`). `live_money_state`를 money-path JSON/text 최상위에 추가하고,
+  micro GTAA `armed:true`, 자본 1000달러, 마지막 실행의 브로커 거부 2건·접수체결 0건을 한곳에서
+  분리해 보이게 했다. 읽기 전용 보고 변경이며 주문·자본·K1/K2/K4/K5/K6 변경 없음.
 - `HANDOFF-058-TELEGRAM-SERVER-CONNECT.md` — 스펙 061 Telegram 서버 연결 자동화
   (2026-06-22, PR #382 `845c5b1`). GitHub secrets의 Telegram token/chat id를 서버
   `/opt/auto-invest/.env`에 반영하고, test message 후 `auto-invest-telegram-alerts.service`만
