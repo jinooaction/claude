@@ -56,6 +56,8 @@ def test_micro_gtaa_workflow_preview_precedes_live_step():
     live_idx = text.index("LIVE rebalance")
     assert preview_idx < live_idx
     assert "--dry-run" in text[preview_idx:live_idx]
+    assert "--account-wide" in text[preview_idx:live_idx]
+    assert "--side both" in text[preview_idx:live_idx]
 
 
 def test_micro_gtaa_workflow_checks_breaker_before_live_step():
@@ -84,13 +86,31 @@ def test_micro_gtaa_workflow_preflight_records_session_and_cash():
     assert "is_session_open" in block
     assert "get_purchasable_cash_usd" in block
     assert "planned_buy_notional_usd" in block
+    assert "planned_sell_notional_usd" in block
+    assert "effective_side" in block
+    assert "sell_first_cash_shortfall" in block
     assert "/tmp/micro_preflight.json" in block
     assert "ok=true" in block
+
+
+def test_micro_gtaa_workflow_live_uses_account_wide_effective_side():
+    text = _WORKFLOW.read_text(encoding="utf-8")
+    live_step = re.search(
+        r"name: LIVE rebalance.*?(?=\n\n      - name:|\Z)",
+        text,
+        flags=re.DOTALL,
+    )
+    assert live_step is not None
+    block = live_step.group(0)
+    assert "steps.preflight.outputs.effective_side" in block
+    assert "--account-wide" in block
+    assert "--side ${SIDE}" in block
 
 
 def test_micro_gtaa_sidecar_publishes_preflight_evidence():
     text = _WORKFLOW.read_text(encoding="utf-8")
     assert "## 라이브 전 주문 전제 확인" in text
+    assert "## 계좌 전체 재배치 상태" in text
     assert "cat /tmp/micro_preflight.json" in text
 
 

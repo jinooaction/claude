@@ -305,3 +305,73 @@ async def test_dry_run_computes_plan_but_routes_nothing(conn, tmp_path):
     sides = {(r.symbol, r.side) for r in out.results}
     assert ("LOSE", "SELL") in sides  # dropout previewed as a sell
     assert ("WIN", "BUY") in sides  # top name previewed as a buy
+
+
+@pytest.mark.asyncio
+async def test_account_wide_cash_shortfall_runs_sell_only_and_withholds_buys(
+    conn, tmp_path
+):
+    """계좌 전체 모드는 브로커 보유를 실제 자본으로 보되, 현금 부족이면 매도부터 한다."""
+    for sym, growth in (("SPYM", 1.01), ("IEF", 1.004), ("GLDM", 1.006)):
+        _seed_bars(conn, sym, [100 * (growth**i) for i in range(40)])
+
+    class _BoomRouter:
+        async def submit_order(self, **kwargs):
+            raise AssertionError("dry_run must not route any order")
+
+    out = await execute_rebalance(
+        config=_cfg(("SPYM", "IEF", "GLDM"), top_n=3, invested_fraction=Decimal("0.99")),
+        router=_BoomRouter(),
+        conn=conn,
+        quote_provider=_quote_provider(
+            {
+                "SPYM": "90",
+                "IEF": "95",
+                "GLDM": "65",
+                "BHP": "48",
+                "MRK": "80",
+            }
+        ),
+        total_capital_usd=Decimal("1000"),
+        caps=_caps(per_trade="100", per_symbol="100", glob="100"),
+        dry_run=True,
+        account_holdings={"BHP": 1, "MRK": 3, "UNMANAGED": 2},
+        liquidation_only_symbols=frozenset({"BHP", "MRK"}),
+        execution_side="both",
+        purchasable_cash_usd=Decimal("10"),
+    )
+
+    assert out.account_wide is True
+    assert out.effective_side == "sell"
+    assert out.planned_buy_notional_usd > 0
+    assert out.planned_sell_notional_usd > 0
+    assert {(r.symbol, r.side) for r in out.results} == {("BHP", "SELL"), ("MRK", "SELL")}
+    assert all(r.state == "DRY_RUN" for r in out.results)
+    withheld = {(w.symbol, w.side, w.reason) for w in out.withheld}
+    assert ("SPYM", "BUY", "cash_shortfall_sell_first") in withheld
+    assert ("UNMANAGED", "SELL", "unmanaged_holding") in withheld
+
+
+@pytest.mark.asyncio
+async def test_account_wide_refuses_liquidation_only_buy_symbol(conn, tmp_path):
+    _seed_bars(conn, "BHP", [100 * (1.01**i) for i in range(40)])
+    _seed_bars(conn, "IEF", [100 * (1.002**i) for i in range(40)])
+
+    class _BoomRouter:
+        async def submit_order(self, **kwargs):
+            raise AssertionError("must fail before routing")
+
+    with pytest.raises(ValueError, match="liquidation-only.*target"):
+        await execute_rebalance(
+            config=_cfg(("BHP", "IEF"), top_n=1, invested_fraction=Decimal("0.99")),
+            router=_BoomRouter(),
+            conn=conn,
+            quote_provider=_quote_provider({"BHP": "48", "IEF": "95"}),
+            total_capital_usd=Decimal("1000"),
+            caps=_caps(),
+            dry_run=True,
+            account_holdings={},
+            liquidation_only_symbols=frozenset({"BHP"}),
+            execution_side="both",
+            purchasable_cash_usd=Decimal("1000"),
+        )
