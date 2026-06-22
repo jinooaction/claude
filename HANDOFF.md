@@ -33,13 +33,13 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `4f5c3aa` — Merge pull request #373 from jinooaction/Codex/handoff-after-baseline-fix |
-| main 테스트 | `uv run pytest -q` → 2215 passed, 4 skipped |
+| 마지막 main 커밋 | `f3d5085` — Merge pull request #374 from jinooaction/Codex/micro-gtaa-live-canary |
+| main 테스트 | `uv run pytest -q` → 2222 passed, 4 skipped |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
 | 열린 PR | 없음(GitHub connector open PR 조회 결과 `[]`) |
-| 최근 출시 작업 | #372 HANDOFF-only merge 기준선 보정. #371 #370 이후 HANDOFF 최신화. #370 Codex 품질·레드팀 하네스 + HANDOFF 사실 검증 |
+| 최근 출시 작업 | #374 스펙 058 마이크로 GTAA 실거래 캐너리. #372 HANDOFF-only merge 기준선 보정. #370 Codex 품질·레드팀 하네스 + HANDOFF 사실 검증 |
 | 활성 작업 | 없음. 다음 세션은 새 작업 전 `/sync`와 최신 사이드카 상태를 먼저 확인 |
-| 안전 경계 | 헌법·커널·주문 제한·비밀값·실제 주문·돈 경로 변경 없음 |
+| 안전 경계 | #374는 등급 4 돈 경로 추가지만 기본 `armed:false`라 push/merge 실주문 0건. 헌법·커널·비밀값 변경 없음 |
 
 ## 완료된 작업 큐 (운영자 승인 — 2026-05-31, 1→2→3 전부 완료)
 
@@ -216,6 +216,52 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
 **세션 운영 메모**: 이번 세션에 도구 호출 형식 오류(`antml:` 접두사 누락)가 반복돼 운영자
 시간을 낭비함. 다음 세션은 모든 도구 호출에 `antml:invoke`/`antml:parameter` 접두사를 반드시
 정확히 쓸 것.
+
+## 최근 관찰 — 2026-06-22 (마이크로 GTAA 캐너리 머지 이후)
+
+현재 `main` 최신은 `f3d5085`(#374, 스펙 058 마이크로 GTAA 실거래 캐너리)이다.
+그 앞에는 `7b4ec52`(기능 커밋), `4f5c3aa`(#373, handoff 기준선 보정 이후 최신화)가 있다.
+이 인계 갱신 시점의 열린 PR은 없다.
+
+- **스펙 058 출시**: `specs/058-micro-gtaa-canary/`가 출시됐다. 목표는 기존 증거 기반 자본
+  사다리를 낮추지 않고, 별도 운영자 승인형 소액 경로로 `SPYM`·`IEF`·`GLDM` 주식·채권·금
+  3다리 마이크로 GTAA 실거래 준비를 앞당기는 것이다.
+- **기본 상태**: `automation/rebalance-micro-gtaa.request`는 `armed:false`, `capital_usd:1000`.
+  push/merge 실행은 미리보기만 하며 실주문은 0건이다.
+- **실주문 조건**: 새 워크플로
+  `.github/workflows/rebalance-micro-gtaa-canary.yml`은 `armed:true`, `capital_usd <= 1000`,
+  비-push 이벤트, 사전 손실 브레이커 통과, 기존 K1 캡·화이트리스트·지정가·정규장·halt gate를
+  모두 요구한다.
+- **손실 중단**: 포트폴리오 설정은 일일 손실 3%, 총 낙폭 5%를 사용한다. 라이브 스텝 직전
+  `evaluate_from_audit` 기반 브레이커를 평가하고 위반 시 `data/halt.flag`를 세운 뒤 실주문 전에
+  실패한다.
+- **머지 후 실행 확인**: main push에 붙은 `Micro GTAA live canary rebalance (guarded, real money)`
+  run `27934619940` 성공. sidecar `automation/rebalance-micro-gtaa-last-run`은 `armed=false`,
+  `event=push`, `LIVE 스텝=skipped`, "실주문 0건"을 기록했다.
+- **배포 확인**: main push에 붙은 `Deploy on merge to main` run `27934619924` 성공. 배포는 dry-run
+  워커 코드 반영이며 실거래 전환이 아니다. KIS smoke sidecar 최신은 스케줄 run `27898040482`,
+  `key_valid=true`, `smoke_state=success`다. 서버 Actions Summary와 `audit_log`의 `DEPLOY_*` 행은
+  이 컨테이너에서 직접 확인하지 않았다.
+- **검증**: PR #374 머지 전 `uv run pytest` 2222 통과·4 스킵, 머지 직전 재실행도 2222 통과·4 스킵.
+  handoff 갱신 전 `uv run pytest -q`는 stale `HANDOFF.md` 때문에 하네스 2건이 실패했고, 이
+  handoff 갱신은 그 원인(`마지막 main 커밋` 행)을 바로잡는다. `uv run ruff check src tests`는
+  깨끗하다.
+
+## 최근 마일스톤 — 2026-06-22 (스펙 058 마이크로 GTAA 실거래 캐너리)
+
+main 머지 `f3d5085`(#374). 운영자가 실제 돈 투입 시점을 앞당기되 세계 최고 수준과 최대 수익을
+목표로 하라고 지시했고, 등급 4 돈 경로 변경으로 별도 마이크로 GTAA 캐너리를 출시했다. 상세:
+`HANDOFF-054-MICRO-GTAA-CANARY.md`, `specs/058-micro-gtaa-canary/`.
+
+- **핵심 변경**: `SPYM`·`IEF`·`GLDM` 동일가중 마이크로 포트폴리오와 기본 비무장 센티넬,
+  guarded workflow, sidecar 기록, 안전 회귀 테스트를 추가했다.
+- **안전 경계**: 새 실주문 경로는 추가됐지만 기본은 `armed:false`다. 헌법·커널·비밀값·K1/K2
+  코드·기존 자본 사다리·기존 라이브 캐너리 경로는 변경하지 않았다.
+- **실주문 방어**: push 이벤트는 항상 미리보기만 한다. 실제 주문은 수동/스케줄 실행에서
+  `armed:true`와 자본 상한, 손실 브레이커, K1 캡, whitelist, `LIMIT`, `REGULAR`가 모두 통과해야 한다.
+- **검증/배포**: `uv run pytest` 2222 통과·4 스킵, `uv run ruff check src tests` 통과,
+  `uv run python scripts/agent_harness_probe.py --strict` → `OK (14/14)`, PR 품질 관문 통과.
+  main push 후 deploy run `27934619924` 성공, Micro GTAA run `27934619940` 성공·실주문 0건.
 
 ## 최근 관찰 — 2026-06-22 (Codex 품질·레드팀 하네스 + handoff 기준선 보정 이후)
 
@@ -3203,6 +3249,10 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 
 ## 과거 인수인계 파일 (참고용)
 
+- `HANDOFF-054-MICRO-GTAA-CANARY.md` — 스펙 058 마이크로 GTAA 실거래 캐너리
+  (2026-06-22, PR #374 `f3d5085`). `SPYM`·`IEF`·`GLDM` 3다리 소액 실거래 경로를 추가했다.
+  기본 `armed:false`, push는 미리보기 전용, 실주문은 비-push 이벤트와 사전 손실 브레이커 및
+  기존 K1·화이트리스트·지정가·정규장 게이트 통과가 필요하다. 헌법·커널·비밀값 변경 없음.
 - `HANDOFF-053-HANDOFF-BASELINE.md` — HANDOFF-only merge 기준선 보정 (2026-06-22, PR #372
   `119ad4a`). `check_handoff_facts.py`가 일반 stale HANDOFF는 계속 실패시키되, `.md` 또는
   `specs/`만 바꾼 handoff-only merge 직후에는 첫 번째 부모를 유효 기준선으로 인정한다.
