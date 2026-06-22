@@ -21,6 +21,7 @@ last known stage per (rule_id, symbol).
 
 from __future__ import annotations
 
+import json
 import re
 import sqlite3
 import uuid
@@ -765,11 +766,18 @@ class OrderRouter:
                 market=order_exchange or self.market,
             )
         except Exception as exc:  # noqa: BLE001 — translate to audit row
+            diagnostics = getattr(exc, "diagnostics", None)
+            broker_message = (
+                json.dumps(diagnostics, ensure_ascii=False, sort_keys=True)
+                if isinstance(diagnostics, dict)
+                else str(exc)
+            )
             audit.append(
                 self.conn,
                 OrderRejectedByBrokerPayload(
                     broker_code=type(exc).__name__,
-                    broker_message=str(exc),
+                    broker_message=broker_message,
+                    diagnostics=diagnostics if isinstance(diagnostics, dict) else None,
                 ),
                 rule_id=rule.id,
                 symbol=rule.symbol,
@@ -780,12 +788,12 @@ class OrderRouter:
                 correlation_id,
                 "INTENT",
                 "REJECTED_BY_BROKER",
-                str(exc),
+                broker_message,
             )
             return OrderOutcome(
                 state="REJECTED_BY_BROKER",
                 correlation_id=correlation_id,
-                reason=str(exc),
+                reason=broker_message,
             )
 
         # Success: audit + state transition + remember broker id.
