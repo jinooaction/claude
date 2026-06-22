@@ -15,6 +15,10 @@ name: Money-path readiness (첫-자본까지의 길 종합)
 # git show 로 읽어 라벨된 JSON 을 뽑고, 순수 코어(analytics.money_path)로 단계(stage)·
 # 막는 게이트·첫-자본 ETA 를 종합해 사이드카로 발행한다.
 #
+# 스펙 062: 별도 운영자 승인형 micro GTAA 실거래 캐너리도 최상위 live-money 상태로
+# 함께 읽는다. 기존 자본 사다리가 단0이어도 micro GTAA 가 armed:true 면 실제 돈 경로가
+# 켜진 상태이므로 보고서 맨 앞에서 드러나야 한다.
+#
 # 안전: 읽기 전용·돈 0 이동. 새 측정·재계산 없음 — 발행된 숫자를 합칠 뿐이다. 실제
 # 자본 배치는 자본 사다리 게이트(forward-edge-autoarm.yml)가, 라이브 전환은 운영자
 # 게이트(헌법 X.4)가 한다. 이건 *보고*라 빨갛게 실패시키지 않는다(거짓 경보 0). 누적
@@ -37,6 +41,8 @@ on:
       - 'src/auto_invest/analytics/money_path.py'
       - 'scripts/money_path_probe.py'
       - '.github/workflows/money-path.yml'
+      - 'automation/rebalance-micro-gtaa.request'
+      - '.github/workflows/rebalance-micro-gtaa-canary.yml'
 
 permissions:
   contents: write  # 사이드카 force-push 용 (automation/money-path-last-run).
