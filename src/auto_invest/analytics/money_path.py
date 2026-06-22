@@ -46,7 +46,7 @@ from auto_invest.portfolio.capital_ladder import (
     RUNG_FRACTIONS,
 )
 
-SCHEMA_VERSION = "1.0"
+SCHEMA_VERSION = "1.1"
 
 # 자본 사다리 결정 라벨(capital_ladder 와 동일 — 재사용보다 명시로 결합도 낮춤).
 ACTION_PROMOTE = "PROMOTE"
@@ -82,6 +82,31 @@ GATE_NA = "N/A"
 ETA_MEASURED = "measured"  # 직전 사이드카 대비 실측 누적 속도
 ETA_NOMINAL = "nominal"  # 전진 스케줄 가정(거래일당 ~1 관측)
 ETA_NONE = "n/a"  # 추정 불가/불필요
+
+# 실제 돈 최상위 상태. 기존 money-path 는 자본 사다리의 첫 자본 ETA 를 잘 보여줬지만,
+# 스펙 058 이후 별도 운영자 승인형 micro GTAA live 경로가 생겼다. 이 상태는 첫-자본
+# 사다리보다 먼저 보여야 한다.
+LIVE_STATUS_ARMED = "REAL_ORDER_PATH_ARMED"
+LIVE_STATUS_PREVIEW = "PREVIEW_ONLY"
+LIVE_STATUS_BLOCKED = "BLOCKED"
+LIVE_STATUS_UNKNOWN = "UNKNOWN"
+MICRO_GTAA_PATH = "micro-gtaa-live-canary"
+MICRO_MAX_CAPITAL_USD = 1000
+MICRO_SCHEDULE_HOUR_UTC = 15
+MICRO_REQUIRED_GATES = (
+    "non-push workflow event",
+    "US regular session",
+    "KIS purchasable cash >= planned buys + 1% buffer",
+    "micro circuit breaker clear",
+    "K1 caps and K2 whitelist",
+)
+_BROKER_ACCEPTED_STATES = {
+    "ACCEPTED",
+    "SUBMITTED",
+    "OPEN",
+    "PARTIALLY_FILLED",
+    "FILLED",
+}
 
 # 전진 시계 수렴 상태 — "살아있지만 수렴 못 하는" 정체/리셋을 드러낸다.
 # 생존 감시(스펙 051)는 워크플로가 *멈췄나*(사이드카 나이)만 잡는다. 워크플로가
@@ -224,6 +249,68 @@ class SafetyBudget:
 
 
 @dataclass(frozen=True)
+class MicroGtaaRunEvidence:
+    """micro GTAA 마지막 실행 증거 — job success 와 브로커 접수/체결을 분리한다."""
+
+    run_id: str | None
+    timestamp_utc: str | None
+    event: str | None
+    live_step: str | None
+    preflight_ok: bool | None
+    preflight_reason: str
+    breaker_reason: str | None
+    order_states: list[str]
+    accepted_or_filled_count: int
+    broker_rejected_count: int
+
+    def to_dict(self) -> dict:
+        return {
+            "run_id": self.run_id,
+            "timestamp_utc": self.timestamp_utc,
+            "event": self.event,
+            "live_step": self.live_step,
+            "preflight_ok": self.preflight_ok,
+            "preflight_reason": self.preflight_reason,
+            "breaker_reason": self.breaker_reason,
+            "order_states": list(self.order_states),
+            "accepted_or_filled_count": self.accepted_or_filled_count,
+            "broker_rejected_count": self.broker_rejected_count,
+        }
+
+
+@dataclass(frozen=True)
+class LiveMoneyState:
+    """현재 실제 돈 경로 최상위 상태.
+
+    can_submit_real_orders=True 는 "비-push 실행이 preflight 와 안전 게이트를 통과하면
+    실주문 단계에 도달할 수 있음"이다. 주문 접수/체결 보장은 아니다.
+    """
+
+    status: str
+    can_submit_real_orders: bool
+    path: str
+    capital_usd: int | None
+    max_capital_usd: int
+    next_scheduled_live_utc: str | None
+    required_gates: tuple[str, ...]
+    detail: str
+    last_run: MicroGtaaRunEvidence | None
+
+    def to_dict(self) -> dict:
+        return {
+            "status": self.status,
+            "can_submit_real_orders": self.can_submit_real_orders,
+            "path": self.path,
+            "capital_usd": self.capital_usd,
+            "max_capital_usd": self.max_capital_usd,
+            "next_scheduled_live_utc": self.next_scheduled_live_utc,
+            "required_gates": list(self.required_gates),
+            "detail": self.detail,
+            "last_run": None if self.last_run is None else self.last_run.to_dict(),
+        }
+
+
+@dataclass(frozen=True)
 class MoneyPathReport:
     """첫-자본까지의 길 종합 보고 — 읽기 전용 결정 표면."""
 
@@ -237,6 +324,7 @@ class MoneyPathReport:
     account_nav_usd: str | None
     deployed_capital_usd: int | None
     canary_armed: bool | None
+    live_money_state: LiveMoneyState
     gates: list[GateCondition]
     eta: EtaProjection
     safety: SafetyBudget | None  # 자본 방어선 예산(내려가는 길) — BLOCKED 면 None
@@ -254,6 +342,7 @@ class MoneyPathReport:
             "account_nav_usd": self.account_nav_usd,
             "deployed_capital_usd": self.deployed_capital_usd,
             "canary_armed": self.canary_armed,
+            "live_money_state": self.live_money_state.to_dict(),
             "gates": [g.to_dict() for g in self.gates],
             "eta": self.eta.to_dict(),
             "safety_budget": None if self.safety is None else self.safety.to_dict(),
@@ -272,7 +361,13 @@ class MoneyPathReport:
         }.get(self.stage, "•")
         gate_icon = {GATE_PASS: "✅", GATE_PENDING: "⏳", GATE_FAIL: "❌", GATE_NA: "—"}
         lines = [
-            f"# 첫-자본까지의 길 (as of {self.as_of_utc}) — 읽기 전용, 돈 0 이동",
+            f"# 돈 경로 상태 / 첫-자본까지의 길 (as of {self.as_of_utc}) — 읽기 전용, 돈 0 이동",
+            "",
+            "## 실제 돈 최상위 상태",
+            "",
+            *self._live_money_lines(),
+            "",
+            "## 기존 자본 사다리 상태",
             "",
             f"단계: {stage_icon} **{self.stage}**",
             "",
@@ -342,6 +437,59 @@ class MoneyPathReport:
             "게이트가 자율로 한다(헌법 X.4 상시 위임). 운영자 전용은 입금·킬스위치·낙폭 예산뿐.",
         ]
         return "\n".join(lines)
+
+    def _live_money_lines(self) -> list[str]:
+        state = self.live_money_state
+        status_label = {
+            LIVE_STATUS_ARMED: (
+                "🟠 실제 돈 경로 무장 — preflight 통과 후 실주문 가능"
+            ),
+            LIVE_STATUS_PREVIEW: "⚪ 미리보기 전용 — 실주문 불가",
+            LIVE_STATUS_BLOCKED: "🛑 차단 — 실주문 불가",
+            LIVE_STATUS_UNKNOWN: "❓ 불명 — 단정 금지",
+        }.get(state.status, state.status)
+        submit = (
+            "예(비-push 실행 + preflight 통과 필요)"
+            if state.can_submit_real_orders
+            else "아니오"
+        )
+        cap = "(불명)" if state.capital_usd is None else f"${state.capital_usd}"
+        next_run = state.next_scheduled_live_utc or "(없음)"
+        lines = [
+            f"> {status_label}",
+            "",
+            "| 항목 | 값 |",
+            "|------|-----|",
+            f"| 경로 | {state.path} |",
+            f"| 상태 | {state.status} |",
+            f"| 실주문 단계 도달 가능 | {submit} |",
+            f"| 선언 자본 / 한도 | {cap} / ${state.max_capital_usd} |",
+            f"| 다음 예약 live 후보 | {next_run} |",
+            f"| 남은 필수 게이트 | {', '.join(state.required_gates)} |",
+            f"| 판정 근거 | {state.detail} |",
+        ]
+        if state.last_run is None:
+            lines.append("| 마지막 micro GTAA 실행 | (sidecar 없음) |")
+            return lines
+
+        run = state.last_run
+        live_step = run.live_step or "(불명)"
+        states = ", ".join(run.order_states) if run.order_states else "(주문 결과 없음)"
+        fill_text = (
+            f"브로커 접수·체결 {run.accepted_or_filled_count}건, "
+            f"브로커 거부 {run.broker_rejected_count}건"
+        )
+        lines += [
+            "| 마지막 run | "
+            f"{run.run_id or '(불명)'} / {run.timestamp_utc or '(시각 불명)'} / "
+            f"event={run.event or '(불명)'} |",
+            f"| 마지막 LIVE 스텝 | {live_step} |",
+            f"| 마지막 preflight | ok={run.preflight_ok}, reason={run.preflight_reason} |",
+            f"| 마지막 손실 브레이커 | {run.breaker_reason or '(불명)'} |",
+            f"| 마지막 주문 상태 | {states} |",
+            f"| 마지막 접수·체결 판단 | {fill_text} |",
+        ]
+        return lines
 
     def _armed_text(self) -> str:
         if self.canary_armed is None:
@@ -575,6 +723,146 @@ def _parse_iso(ts: str | None) -> datetime | None:
     return dt
 
 
+def _bool(value: object) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered == "true":
+            return True
+        if lowered == "false":
+            return False
+    return None
+
+
+def _next_micro_schedule(now: datetime) -> str:
+    """다음 평일 15:00 UTC micro GTAA 예약 live 후보 시각."""
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=UTC)
+    now = now.astimezone(UTC)
+    candidate = now.replace(
+        hour=MICRO_SCHEDULE_HOUR_UTC, minute=0, second=0, microsecond=0
+    )
+    if now.weekday() >= 5 or now >= candidate:
+        candidate = candidate + timedelta(days=1)
+        while candidate.weekday() >= 5:
+            candidate = candidate + timedelta(days=1)
+    return candidate.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _micro_run_evidence(data: dict | None) -> MicroGtaaRunEvidence | None:
+    if not data:
+        return None
+
+    live_result = data.get("live_result")
+    results = live_result.get("results", []) if isinstance(live_result, dict) else []
+    order_states = [
+        str(row.get("state"))
+        for row in results
+        if isinstance(row, dict) and row.get("state") is not None
+    ]
+    accepted = sum(1 for state in order_states if state in _BROKER_ACCEPTED_STATES)
+    rejected = sum(1 for state in order_states if state == "REJECTED_BY_BROKER")
+
+    preflight = data.get("preflight")
+    if isinstance(preflight, dict):
+        preflight_ok = preflight.get("ok") if isinstance(preflight.get("ok"), bool) else None
+        preflight_reason = str(preflight.get("reason") or "preflight reason absent")
+    else:
+        preflight_ok = None
+        preflight_reason = "preflight evidence absent"
+
+    breaker = data.get("breaker")
+    breaker_reason = (
+        str(breaker.get("reason")) if isinstance(breaker, dict) and breaker.get("reason") else None
+    )
+
+    return MicroGtaaRunEvidence(
+        run_id=None if data.get("run_id") is None else str(data.get("run_id")),
+        timestamp_utc=(
+            None if data.get("timestamp_utc") is None else str(data.get("timestamp_utc"))
+        ),
+        event=None if data.get("event") is None else str(data.get("event")),
+        live_step=None if data.get("live_step") is None else str(data.get("live_step")),
+        preflight_ok=preflight_ok,
+        preflight_reason=preflight_reason,
+        breaker_reason=breaker_reason,
+        order_states=order_states,
+        accepted_or_filled_count=accepted,
+        broker_rejected_count=rejected,
+    )
+
+
+def assess_live_money_state(
+    *,
+    micro_request: dict | None,
+    micro_last_run: dict | None = None,
+    now: datetime,
+) -> LiveMoneyState:
+    """micro GTAA 실거래 경로 최상위 상태를 분류(읽기 전용·결정론)."""
+    last_run = _micro_run_evidence(micro_last_run)
+    base = {
+        "path": MICRO_GTAA_PATH,
+        "max_capital_usd": MICRO_MAX_CAPITAL_USD,
+        "required_gates": MICRO_REQUIRED_GATES,
+        "last_run": last_run,
+    }
+    if not micro_request:
+        return LiveMoneyState(
+            status=LIVE_STATUS_UNKNOWN,
+            can_submit_real_orders=False,
+            capital_usd=None,
+            next_scheduled_live_utc=None,
+            detail="micro GTAA 센티넬을 읽지 못함 — 실제 돈 상태 단정 금지.",
+            **base,
+        )
+
+    armed = _bool(micro_request.get("armed"))
+    capital = _int(micro_request.get("capital_usd"))
+    if armed is None:
+        return LiveMoneyState(
+            status=LIVE_STATUS_UNKNOWN,
+            can_submit_real_orders=False,
+            capital_usd=capital,
+            next_scheduled_live_utc=None,
+            detail=f"armed 값 파싱 불가: {micro_request.get('armed')!r}",
+            **base,
+        )
+    if capital is None or capital < 1 or capital > MICRO_MAX_CAPITAL_USD:
+        return LiveMoneyState(
+            status=LIVE_STATUS_BLOCKED,
+            can_submit_real_orders=False,
+            capital_usd=capital,
+            next_scheduled_live_utc=None,
+            detail=(
+                f"capital_usd={micro_request.get('capital_usd')!r} 이 micro 한도 "
+                f"1..{MICRO_MAX_CAPITAL_USD} 밖이거나 파싱 불가."
+            ),
+            **base,
+        )
+    if not armed:
+        return LiveMoneyState(
+            status=LIVE_STATUS_PREVIEW,
+            can_submit_real_orders=False,
+            capital_usd=capital,
+            next_scheduled_live_utc=None,
+            detail="armed:false — push/스케줄 모두 미리보기만, 실주문 0건.",
+            **base,
+        )
+
+    return LiveMoneyState(
+        status=LIVE_STATUS_ARMED,
+        can_submit_real_orders=True,
+        capital_usd=capital,
+        next_scheduled_live_utc=_next_micro_schedule(now),
+        detail=(
+            "센티넬 armed:true + 유효 자본. 다음 비-push 실행은 정규장·현금 preflight, "
+            "손실 브레이커, K1 캡, K2 화이트리스트를 통과하면 실주문 단계에 도달한다."
+        ),
+        **base,
+    )
+
+
 def _pct_str(value: Decimal) -> str:
     """Decimal 퍼센트를 과학적 표기 없이 사람이 읽는 문자열로.
 
@@ -698,6 +986,8 @@ def assess_money_path(
     promote_ready: dict | None = None,
     prior: dict | None = None,
     fingerprint: dict | None = None,
+    micro_request: dict | None = None,
+    micro_last_run: dict | None = None,
     dd_budget_pct: Decimal = DEFAULT_DD_BUDGET_PCT,
     now: datetime,
 ) -> MoneyPathReport:
@@ -713,10 +1003,17 @@ def assess_money_path(
         {'match': bool|None, 'diverged': [field...], 'live_path', 'validated_path'}(선택).
         자본 사다리가 지문 불일치면 어떤 단에서도 자본을 배치하지 않으므로(BLOCKED),
         이 입력으로 '엣지를 쌓아도 배포가 막히는' 분기를 미리 진단한다.
+    micro_request/micro_last_run: 스펙 058 micro GTAA 별도 실거래 캐너리의 현재 센티넬과
+        마지막 실행 증거. 기존 자본 사다리와 별개 실제 돈 경로라 최상위 상태로 표면화한다.
     """
     if now.tzinfo is None:
         now = now.replace(tzinfo=UTC)
     as_of = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+    live_money_state = assess_live_money_state(
+        micro_request=micro_request,
+        micro_last_run=micro_last_run,
+        now=now,
+    )
 
     ladder = ladder or {}
     forward_verdict = forward_verdict or {}
@@ -1101,6 +1398,7 @@ def assess_money_path(
         account_nav_usd=None if account_nav is None else str(account_nav),
         deployed_capital_usd=deployed_capital,
         canary_armed=canary_armed,
+        live_money_state=live_money_state,
         gates=gates,
         eta=eta,
         safety=safety,
@@ -1125,6 +1423,10 @@ __all__ = [
     "GATE_PASS",
     "GATE_PENDING",
     "SCHEMA_VERSION",
+    "LIVE_STATUS_ARMED",
+    "LIVE_STATUS_BLOCKED",
+    "LIVE_STATUS_PREVIEW",
+    "LIVE_STATUS_UNKNOWN",
     "STAGE_ACCUMULATING",
     "STAGE_BLOCKED",
     "STAGE_DEFENDED",
@@ -1133,7 +1435,10 @@ __all__ = [
     "STAGE_NO_EDGE_YET",
     "EtaProjection",
     "GateCondition",
+    "LiveMoneyState",
+    "MicroGtaaRunEvidence",
     "MoneyPathReport",
     "SafetyBudget",
+    "assess_live_money_state",
     "assess_money_path",
 ]

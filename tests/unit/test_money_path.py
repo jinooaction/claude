@@ -16,6 +16,10 @@ from auto_invest.analytics.money_path import (
     GATE_FAIL,
     GATE_PASS,
     GATE_PENDING,
+    LIVE_STATUS_ARMED,
+    LIVE_STATUS_BLOCKED,
+    LIVE_STATUS_PREVIEW,
+    LIVE_STATUS_UNKNOWN,
     SAMPLE_CHURNING,
     SAMPLE_SETTLED,
     SAMPLE_STABLE,
@@ -31,10 +35,12 @@ from auto_invest.analytics.money_path import (
     _capital_pct,
     _project_trading_date,
     _trading_days_between,
+    assess_live_money_state,
     assess_money_path,
 )
 
 NOW = datetime(2026, 6, 13, 8, 0, 0, tzinfo=UTC)  # 2026-06-13 = 토요일
+MONDAY_BEFORE_MICRO_SCHEDULE = datetime(2026, 6, 22, 12, 55, 0, tzinfo=UTC)
 
 
 def _ladder(action="WAIT_EDGE", cur=0, tgt=0, nav="1518.21", cap=None, dd="0", obs=3):
@@ -79,6 +85,107 @@ def _verdict(
     if snapshots is not None:
         d["snapshot_count"] = snapshots
     return d
+
+
+def _micro_request(armed="true", capital="1000"):
+    return {
+        "armed": armed,
+        "capital_usd": capital,
+        "stage": "micro-gtaa-live-canary",
+        "run_seq": "2",
+        "warning_drawdown_pct": "3",
+        "hard_stop_drawdown_pct": "5",
+        "note": "운영자 2026-06-22 명시 승인",
+    }
+
+
+def _micro_last_run(preflight=None):
+    return {
+        "run_id": "27935469561",
+        "timestamp_utc": "2026-06-22T07:04:12Z",
+        "event": "workflow_dispatch",
+        "live_step": "success",
+        "preflight": preflight,
+        "breaker": {"reason": "within loss limits", "tripped": False},
+        "live_result": {
+            "portfolio_id": "micro-gtaa",
+            "mode": "live",
+            "results": [
+                {"symbol": "IEF", "state": "REJECTED_BY_BROKER"},
+                {"symbol": "SPYM", "state": "REJECTED_BY_BROKER"},
+            ],
+        },
+    }
+
+
+# ── 스펙 062: 실제 돈 최상위 상태(micro GTAA) ──
+
+
+def test_live_money_state_micro_armed_surfaces_real_order_path():
+    state = assess_live_money_state(
+        micro_request=_micro_request(),
+        micro_last_run=_micro_last_run(),
+        now=MONDAY_BEFORE_MICRO_SCHEDULE,
+    )
+    assert state.status == LIVE_STATUS_ARMED
+    assert state.can_submit_real_orders is True
+    assert state.capital_usd == 1000
+    assert state.next_scheduled_live_utc == "2026-06-22T15:00:00Z"
+    assert state.last_run is not None
+    assert state.last_run.live_step == "success"
+    assert state.last_run.accepted_or_filled_count == 0
+    assert state.last_run.broker_rejected_count == 2
+    assert state.last_run.preflight_reason == "preflight evidence absent"
+
+
+def test_live_money_state_micro_disarmed_is_preview_only():
+    state = assess_live_money_state(
+        micro_request=_micro_request(armed="false"),
+        micro_last_run=None,
+        now=MONDAY_BEFORE_MICRO_SCHEDULE,
+    )
+    assert state.status == LIVE_STATUS_PREVIEW
+    assert state.can_submit_real_orders is False
+    assert state.next_scheduled_live_utc is None
+
+
+def test_live_money_state_micro_invalid_capital_blocks_orders():
+    state = assess_live_money_state(
+        micro_request=_micro_request(capital="1001"),
+        micro_last_run=None,
+        now=MONDAY_BEFORE_MICRO_SCHEDULE,
+    )
+    assert state.status == LIVE_STATUS_BLOCKED
+    assert state.can_submit_real_orders is False
+
+
+def test_live_money_state_missing_sentinel_is_unknown():
+    state = assess_live_money_state(
+        micro_request=None,
+        micro_last_run=None,
+        now=MONDAY_BEFORE_MICRO_SCHEDULE,
+    )
+    assert state.status == LIVE_STATUS_UNKNOWN
+    assert state.can_submit_real_orders is False
+
+
+def test_money_path_report_puts_live_money_state_before_ladder_stage():
+    r = assess_money_path(
+        ladder=_ladder(),
+        forward_verdict=_verdict(n_obs=1),
+        micro_request=_micro_request(),
+        micro_last_run=_micro_last_run(),
+        now=MONDAY_BEFORE_MICRO_SCHEDULE,
+    )
+    d = r.to_dict()
+    assert d["live_money_state"]["status"] == LIVE_STATUS_ARMED
+    assert d["live_money_state"]["can_submit_real_orders"] is True
+    text = r.as_text()
+    assert "실제 돈 최상위 상태" in text
+    assert "실제 돈 경로 무장" in text
+    assert "preflight 통과 후 실주문 가능" in text
+    assert "브로커 접수·체결 0건" in text
+    assert text.index("실제 돈 최상위 상태") < text.index("## 기존 자본 사다리 상태")
 
 
 # ── 헬퍼: 거래일 계산 / 추정 도달일 ──

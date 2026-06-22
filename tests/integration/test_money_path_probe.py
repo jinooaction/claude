@@ -77,6 +77,38 @@ _CANARY_SIDECAR = (
     "| capital_usd | 500 |\n"
 )
 
+_MICRO_SIDECAR_OLD_FORMAT = (
+    "# 마이크로 GTAA 라이브 캐너리 — 최신 실행\n\n"
+    "| 항목 | 값 |\n|------|-----|\n"
+    "| run_id | 27935469561 |\n"
+    "| timestamp_utc | 2026-06-22T07:04:12Z |\n"
+    "| armed | true |\n"
+    "| capital_usd | 1000 |\n"
+    "| blocked | false |\n"
+    "| event | workflow_dispatch |\n"
+    "| LIVE 스텝 | success (success=실주문 실행 / skipped=미실행) |\n\n"
+    "## 라이브 전 손실 브레이커\n"
+    "```json\n"
+    '{"reason": "within loss limits", "tripped": false}\n'
+    "```\n\n"
+    "## 라이브 재조정 결과\n"
+    "```json\n"
+    '{"results": [{"state": "REJECTED_BY_BROKER"}, {"state": "REJECTED_BY_BROKER"}]}\n'
+    "```\n"
+)
+
+_MICRO_REQUEST_ARMED = """armed: true
+capital_usd: 1000
+requested_by: mason
+stage: micro-gtaa-live-canary
+run_seq: 2
+warning_drawdown_pct: 3
+hard_stop_drawdown_pct: 5
+note: "운영자 2026-06-22 명시 승인"
+"""
+
+_MICRO_REQUEST_DISARMED = _MICRO_REQUEST_ARMED.replace("armed: true", "armed: false")
+
 
 def _write(d: Path, key: str, text: str) -> None:
     (d / f"{key}.md").write_text(text, encoding="utf-8")
@@ -183,7 +215,63 @@ def test_probe_manifest_lists_consumed_sidecars(capsys):
     probe_main(["--manifest"])
     out = capsys.readouterr().out
     assert "edge-autoarm\tautomation/edge-autoarm-last-run\tLAST_RUN.md" in out
+    assert (
+        "rebalance-micro-gtaa\tautomation/rebalance-micro-gtaa-last-run\tLAST_RUN.md"
+        in out
+    )
     assert "money-path\tautomation/money-path-last-run\tLAST_RUN.md" in out
+
+
+def test_probe_micro_armed_state_is_top_level_json(tmp_path, capsys):
+    req = tmp_path / "micro.request"
+    req.write_text(_MICRO_REQUEST_ARMED, encoding="utf-8")
+    _write(tmp_path, "edge-autoarm", _edge_sidecar())
+    _write(tmp_path, "rebalance-live-canary", _CANARY_SIDECAR)
+    _write(tmp_path, "rebalance-micro-gtaa", _MICRO_SIDECAR_OLD_FORMAT)
+    rc = probe_main(
+        [
+            "--sidecar-dir",
+            str(tmp_path),
+            "--micro-request",
+            str(req),
+            "--json",
+            "--now",
+            "2026-06-22T12:55:00Z",
+        ]
+    )
+    assert rc == 0
+    out = json.loads(capsys.readouterr().out)
+    live = out["live_money_state"]
+    assert live["status"] == "REAL_ORDER_PATH_ARMED"
+    assert live["can_submit_real_orders"] is True
+    assert live["capital_usd"] == 1000
+    assert live["next_scheduled_live_utc"] == "2026-06-22T15:00:00Z"
+    assert live["last_run"]["broker_rejected_count"] == 2
+    assert live["last_run"]["accepted_or_filled_count"] == 0
+    assert live["last_run"]["preflight_reason"] == "preflight evidence absent"
+
+
+def test_probe_micro_disarmed_state_is_preview_only_text(tmp_path, capsys):
+    req = tmp_path / "micro.request"
+    req.write_text(_MICRO_REQUEST_DISARMED, encoding="utf-8")
+    _write(tmp_path, "edge-autoarm", _edge_sidecar())
+    _write(tmp_path, "rebalance-live-canary", _CANARY_SIDECAR)
+    rc = probe_main(
+        [
+            "--sidecar-dir",
+            str(tmp_path),
+            "--micro-request",
+            str(req),
+            "--now",
+            "2026-06-22T12:55:00Z",
+        ]
+    )
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "실제 돈 최상위 상태" in out
+    assert "미리보기 전용" in out
+    assert "## 기존 자본 사다리 상태" in out
+    assert out.index("실제 돈 최상위 상태") < out.index("## 기존 자본 사다리 상태")
 
 
 # ── 전략 지문 정합(compute_fingerprint_status) — 사다리 게이트와 동일 비교 ──

@@ -33,14 +33,34 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `845c5b1` — Merge pull request #382 from jinooaction/Codex/telegram-server-connect |
-| main 테스트 | `uv run pytest -q` → 2242 passed, 4 skipped |
+| 마지막 main 커밋 | `801dda1` — Merge pull request #383 from jinooaction/Codex/handoff-after-telegram-server-connect |
+| main 테스트 | `uv run pytest` → 2249 passed, 4 skipped |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
 | 열린 PR | 없음(GitHub open PR 조회 결과 `[]`) |
-| 출시 완료 스펙 | 최신 추가: 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
+| 출시 완료 스펙 | 최신 추가: 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
 | 최근 출시 작업 | #382 스펙 061 Telegram 서버 연결 자동화와 실제 workflow 실행. #380 스펙 060 Telegram 모바일 주문 알림. #378 스펙 059 KIS 주문 전제 확인과 진단 보존 |
-| 활성 작업 | 코드 PR 없음. Telegram GitHub secrets 설정과 서버 `.env` 반영, test message, `auto-invest-telegram-alerts.service` enable/start까지 완료됨. micro GTAA는 `armed:true` 유지 중이지만 다음 live 주문은 정규장·매수가능 현금 preflight와 손실 브레이커를 통과해야 함 |
+| 활성 작업 | 코드 PR 없음. Telegram GitHub secrets 설정과 서버 `.env` 반영, test message, `auto-invest-telegram-alerts.service` enable/start까지 완료됨. micro GTAA는 `armed:true`, `capital_usd:1000` 유지 중이며 money-path의 `live_money_state.status`를 먼저 확인해야 함 |
 | 안전 경계 | #382는 등급 3 외부 API·비밀값 서버 연결 경로 추가지만 observer service만 enable/start했고 주문·브로커·위험 게이트·자본·화이트리스트 코드는 변경하지 않음. #378 등급 4 돈 경로 진단 보존도 유지. 헌법·커널 목록·K1 캡·화이트리스트·낙폭 예산 변경 없음 |
+
+## 돈 경로 상태 판독 규칙 (필수 — 스펙 062)
+
+다음 세션은 실제 돈 상태를 오래된 `HANDOFF.md` 역사 문단, KIS smoke 현금값, 기존 첫-자본 ETA만 보고 판단하지 않는다. 먼저 money-path가 생성한 최상위 실제 돈 상태를 본다.
+
+1. `git fetch origin '+refs/heads/automation/*:refs/remotes/origin/automation/*'`로 자동화 사이드카를 갱신한다.
+2. 우선 `git show origin/automation/money-path-last-run:LAST_RUN.md`에서 `## 실제 돈 최상위 상태`를 확인한다. 그 섹션이 없으면 아직 스펙 062 money-path가 한 번도 발행되지 않은 상태이므로 아래 원본 증거를 직접 읽거나 `scripts/money_path_probe.py`를 로컬 재현한다.
+3. 현재 live 의도 원본은 `automation/rebalance-micro-gtaa.request`다. 마지막 실행 증거는 `origin/automation/rebalance-micro-gtaa-last-run:LAST_RUN.md`다. KIS smoke 현금값은 preflight 입력일 뿐, `armed` 상태나 다음 live 가능 여부의 대체 근거가 아니다.
+4. `live_money_state.status`가 `REAL_ORDER_PATH_ARMED`이면 "실제 돈 경로가 켜져 있음"으로 답한다. 단, 이것은 비-push 실행이 미국 정규장, KIS 매수가능 현금 1% 버퍼, micro 손실 브레이커, K1 한도와 K2 허용 종목을 통과하면 실주문 단계에 도달할 수 있다는 뜻이지 접수·체결 보장이 아니다.
+5. 스펙 062 작성 중 로컬 재현 기준(2026-06-22T12:55:00Z): micro GTAA는 `armed:true`, `capital_usd:1000`, `status=REAL_ORDER_PATH_ARMED`, 다음 예약 live 후보는 `2026-06-22T15:00:00Z`였다. 마지막 실행 `run_id=27935469561`은 live step 자체는 성공했지만 브로커 주문 상태는 `REJECTED_BY_BROKER` 2건, 접수·체결 0건이었다. 이 시각 이후에는 반드시 최신 money-path 또는 micro sidecar를 다시 읽고 말한다.
+
+빠른 로컬 재현:
+
+```bash
+tmpdir="$(mktemp -d)"
+uv run python scripts/money_path_probe.py --manifest | while IFS=$'\t' read -r key ref file; do
+  git show "origin/$ref:$file" > "$tmpdir/$key.md" 2>/dev/null || true
+done
+uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.live_money_state'
+```
 
 ## 완료된 작업 큐 (운영자 승인 — 2026-05-31, 1→2→3 전부 완료)
 

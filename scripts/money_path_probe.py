@@ -25,6 +25,11 @@ from auto_invest.analytics.money_path import assess_money_path
 CONSUMED_SIDECARS: list[tuple[str, str, str]] = [
     ("edge-autoarm", "automation/edge-autoarm-last-run", "LAST_RUN.md"),
     ("rebalance-live-canary", "automation/rebalance-live-canary-last-run", "LAST_RUN.md"),
+    (
+        "rebalance-micro-gtaa",
+        "automation/rebalance-micro-gtaa-last-run",
+        "LAST_RUN.md",
+    ),
     ("promote-readiness", "automation/promote-readiness-last-run", "LAST_RUN.md"),
     # 자기 직전 사이드카 — ETA 실측 누적 속도용(첫 실행엔 없음 → nominal 로 폴백).
     ("money-path", "automation/money-path-last-run", "LAST_RUN.md"),
@@ -35,6 +40,7 @@ CONSUMED_SIDECARS: list[tuple[str, str, str]] = [
 # 사다리 게이트와 같은 두 파일을 읽어야 비교가 정확하다.
 DEFAULT_LIVE_PORTFOLIO = "deploy/canary-live-portfolio.toml"
 DEFAULT_VALIDATED_PORTFOLIO = "deploy/global-trend-portfolio.toml"
+DEFAULT_MICRO_REQUEST = "automation/rebalance-micro-gtaa.request"
 
 # strategy_fingerprint(autoarm) 튜플 위치 ↔ 사람이 읽는 항목 이름(같은 순서 유지 필수).
 _FP_FIELDS = (
@@ -50,6 +56,73 @@ _FP_FIELDS = (
 )
 
 _ARMED_RE = re.compile(r"armed\s*\(무장 여부\)\s*\|\s*(true|false)", re.IGNORECASE)
+
+
+def _field(text: str, key: str) -> str | None:
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith(f"{key}:"):
+            return stripped.split(":", 1)[1].strip().strip('"')
+    return None
+
+
+def parse_micro_request(text: str | None) -> dict | None:
+    """micro GTAA 센티넬을 보수적으로 읽는다(없으면 None)."""
+    if not text:
+        return None
+    keys = (
+        "armed",
+        "capital_usd",
+        "requested_by",
+        "stage",
+        "run_seq",
+        "warning_drawdown_pct",
+        "hard_stop_drawdown_pct",
+        "note",
+    )
+    return {key: _field(text, key) for key in keys if _field(text, key) is not None}
+
+
+def _table_rows(text: str | None) -> dict[str, str]:
+    rows: dict[str, str] = {}
+    if not text:
+        return rows
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("|") or "|" not in stripped[1:]:
+            continue
+        cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+        if len(cells) < 2 or cells[0] in ("항목", "------"):
+            continue
+        rows[cells[0]] = cells[1]
+    return rows
+
+
+def _live_step(raw: str | None) -> str | None:
+    if not raw:
+        return None
+    value = raw.strip()
+    return value.split(maxsplit=1)[0] if value else None
+
+
+def parse_micro_sidecar(text: str | None) -> dict | None:
+    """micro GTAA LAST_RUN.md 에서 마지막 실행 증거를 읽는다.
+
+    #378 이전 사이드카에는 preflight 섹션이 없을 수 있다. 그 경우 None 으로 넘겨
+    코어가 'preflight evidence absent' 로 표시한다.
+    """
+    if not text:
+        return None
+    rows = _table_rows(text)
+    return {
+        "run_id": rows.get("run_id"),
+        "timestamp_utc": rows.get("timestamp_utc"),
+        "event": rows.get("event"),
+        "live_step": _live_step(rows.get("LIVE 스텝")),
+        "preflight": extract_json_after_header(text, "라이브 전 주문 전제 확인"),
+        "breaker": extract_json_after_header(text, "라이브 전 손실 브레이커"),
+        "live_result": extract_json_after_header(text, "라이브 재조정 결과"),
+    }
 
 
 def _load_portfolio_cfg(path: Path):
@@ -186,9 +259,11 @@ def build_report(
     now: datetime,
     live_portfolio: Path | None = None,
     validated_portfolio: Path | None = None,
+    micro_request_path: Path | None = None,
 ):
     edge = _read(sidecar_dir, "edge-autoarm")
     canary = _read(sidecar_dir, "rebalance-live-canary")
+    micro = _read(sidecar_dir, "rebalance-micro-gtaa")
     promote = _read(sidecar_dir, "promote-readiness")
     prior_raw = _read(sidecar_dir, "money-path")
 
@@ -199,6 +274,16 @@ def build_report(
         promote, "promote-check"
     ) or extract_json_after_header(promote, "JSON")
     canary_armed = parse_canary_armed(canary)
+    try:
+        micro_request_text = (
+            micro_request_path.read_text(encoding="utf-8")
+            if micro_request_path is not None
+            else None
+        )
+    except OSError:
+        micro_request_text = None
+    micro_request = parse_micro_request(micro_request_text)
+    micro_last_run = parse_micro_sidecar(micro)
     prior = parse_prior(prior_raw)
 
     fingerprint = None
@@ -213,6 +298,8 @@ def build_report(
         promote_ready=promote_ready,
         prior=prior,
         fingerprint=fingerprint,
+        micro_request=micro_request,
+        micro_last_run=micro_last_run,
         now=now,
     )
     # 다음 실행의 ETA 실측 + 표본 churn 비교를 위해, 이번 forward 관측 수와 베이시스 제외
@@ -240,6 +327,11 @@ def main(argv: list[str] | None = None) -> int:
         help="전진 페이퍼에서 검증한 설정(전략 지문 비교 대상). 사다리 게이트와 동일.",
     )
     ap.add_argument(
+        "--micro-request",
+        default=DEFAULT_MICRO_REQUEST,
+        help="micro GTAA 무장 센티넬. 없거나 파싱 불가하면 실제 돈 상태를 UNKNOWN 으로 표시.",
+    )
+    ap.add_argument(
         "--manifest",
         action="store_true",
         help="소비할 사이드카 레지스트리를 'key<TAB>branch<TAB>filename' 으로 출력하고 종료.",
@@ -262,8 +354,13 @@ def main(argv: list[str] | None = None) -> int:
 
     live_pf = Path(args.live_portfolio) if args.live_portfolio else None
     val_pf = Path(args.validated_portfolio) if args.validated_portfolio else None
+    micro_req = Path(args.micro_request) if args.micro_request else None
     report, forward_n_obs, forward_legacy = build_report(
-        Path(args.sidecar_dir), now, live_portfolio=live_pf, validated_portfolio=val_pf
+        Path(args.sidecar_dir),
+        now,
+        live_portfolio=live_pf,
+        validated_portfolio=val_pf,
+        micro_request_path=micro_req,
     )
 
     if args.json:
