@@ -29,18 +29,18 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 상세 규칙은 Codex 세션에서는 `AGENTS.md`, Claude 세션에서는 `CLAUDE.md` 본문 참조.
 
-## 한눈 요약표 — 2026-06-22 최신 main 기준
+## 한눈 요약표 — 2026-06-23 KST 최신 main 기준
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `3440001` — Merge pull request #384 from jinooaction/Codex/money-path-state-guard |
-| main 테스트 | `uv run pytest` → 2249 passed, 4 skipped |
+| 마지막 main 커밋 | `7a14315` — Merge pull request #386 from jinooaction/Codex/account-wide-micro-gtaa |
+| main 테스트 | `uv run pytest -q` → 2252 passed, 4 skipped |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
 | 열린 PR | 없음(GitHub open PR 조회 결과 `[]`) |
-| 출시 완료 스펙 | 최신 추가: 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
-| 최근 출시 작업 | #384 스펙 062 money-path 실제 돈 최상위 상태. #382 스펙 061 Telegram 서버 연결 자동화와 실제 workflow 실행. #380 스펙 060 Telegram 모바일 주문 알림 |
-| 활성 작업 | 코드 PR 없음. Telegram GitHub secrets 설정과 서버 `.env` 반영, test message, `auto-invest-telegram-alerts.service` enable/start까지 완료됨. micro GTAA는 `armed:true`, `capital_usd:1000` 유지 중이며 money-path의 `live_money_state.status`를 먼저 확인해야 함 |
-| 안전 경계 | #382는 등급 3 외부 API·비밀값 서버 연결 경로 추가지만 observer service만 enable/start했고 주문·브로커·위험 게이트·자본·화이트리스트 코드는 변경하지 않음. #378 등급 4 돈 경로 진단 보존도 유지. 헌법·커널 목록·K1 캡·화이트리스트·낙폭 예산 변경 없음 |
+| 출시 완료 스펙 | 최신 추가: 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
+| 최근 출시 작업 | #386 스펙 063 계좌 전체 micro GTAA 자율 재배치. #384 스펙 062 money-path 실제 돈 최상위 상태. #382 스펙 061 Telegram 서버 연결 자동화와 실제 workflow 실행 |
+| 활성 작업 | 코드 PR 없음. micro GTAA는 `armed:true`, `capital_usd:1000` 유지 중이며, #386 이후 다음 비-push live canary 실행부터 계좌 전체 preview와 현금 부족 시 청산 전용 sell-first 루프가 적용됨 |
+| 안전 경계 | #386은 등급 4 돈 경로 변경. K2 설정 표면에 기존 보유 `BHP`, `MRK`, `ORANY`, `RELX`가 청산 전용으로 추가됐지만 목표 유니버스는 `SPYM`, `IEF`, `GLDM`이고 account-wide 리밸런서가 해당 종목 매수를 거부함. 헌법·커널 목록·K1/K2 코드·K4 감사 경로·비밀값·낙폭 예산 변경 없음 |
 
 ## 돈 경로 상태 판독 규칙 (필수 — 스펙 062)
 
@@ -50,7 +50,8 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 2. 우선 `git show origin/automation/money-path-last-run:LAST_RUN.md`에서 `## 실제 돈 최상위 상태`를 확인한다. 그 섹션이 없으면 아직 스펙 062 money-path가 한 번도 발행되지 않은 상태이므로 아래 원본 증거를 직접 읽거나 `scripts/money_path_probe.py`를 로컬 재현한다.
 3. 현재 live 의도 원본은 `automation/rebalance-micro-gtaa.request`다. 마지막 실행 증거는 `origin/automation/rebalance-micro-gtaa-last-run:LAST_RUN.md`다. KIS smoke 현금값은 preflight 입력일 뿐, `armed` 상태나 다음 live 가능 여부의 대체 근거가 아니다.
 4. `live_money_state.status`가 `REAL_ORDER_PATH_ARMED`이면 "실제 돈 경로가 켜져 있음"으로 답한다. 단, 이것은 비-push 실행이 미국 정규장, KIS 매수가능 현금 1% 버퍼, micro 손실 브레이커, K1 한도와 K2 허용 종목을 통과하면 실주문 단계에 도달할 수 있다는 뜻이지 접수·체결 보장이 아니다.
-5. 스펙 062 작성 중 로컬 재현 기준(2026-06-22T12:55:00Z): micro GTAA는 `armed:true`, `capital_usd:1000`, `status=REAL_ORDER_PATH_ARMED`, 다음 예약 live 후보는 `2026-06-22T15:00:00Z`였다. 마지막 실행 `run_id=27935469561`은 live step 자체는 성공했지만 브로커 주문 상태는 `REJECTED_BY_BROKER` 2건, 접수·체결 0건이었다. 이 시각 이후에는 반드시 최신 money-path 또는 micro sidecar를 다시 읽고 말한다.
+5. 스펙 063 이후 micro GTAA live canary는 계좌 전체 preview를 만든다. 기존 보유 `BHP`, `MRK`, `ORANY`, `RELX`는 목표 유니버스가 아니라 청산 전용이다. 현금이 목표 매수와 1% 완충금을 충족하지 못하고 청산 전용 매도 후보가 있으면 이번 주기는 `effective_side=sell`로 매도만 실행하고, 매수는 다음 fresh KIS 현금 조회가 충분할 때까지 보류한다.
+6. 스펙 062 작성 중 로컬 재현 기준(2026-06-22T12:55:00Z): micro GTAA는 `armed:true`, `capital_usd:1000`, `status=REAL_ORDER_PATH_ARMED`, 다음 예약 live 후보는 `2026-06-22T15:00:00Z`였다. 마지막 실행 `run_id=27935469561`은 live step 자체는 성공했지만 브로커 주문 상태는 `REJECTED_BY_BROKER` 2건, 접수·체결 0건이었다. 이 시각 이후에는 반드시 최신 money-path 또는 micro sidecar를 다시 읽고 말한다.
 
 빠른 로컬 재현:
 
@@ -61,6 +62,39 @@ uv run python scripts/money_path_probe.py --manifest | while IFS=$'\t' read -r k
 done
 uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.live_money_state'
 ```
+
+## 최근 관찰 — 2026-06-23 KST (스펙 063 계좌 전체 micro GTAA 자율 재배치)
+
+현재 `main` 최신은 `7a14315`(#386, 스펙 063 계좌 전체 micro GTAA 자율 재배치)이다.
+직전 주요 커밋은 `45e15bc`(account-wide micro GTAA 구현), `64bf37d`(#385, money-path
+handoff 갱신), `3440001`(#384, money-path 실제 돈 최상위 상태)이다. 이 인계 갱신 시작 시점의
+열린 PR은 없다.
+
+- **핵심 교정**: 새 입금이 없어도 기존 보유를 "못 판다"가 아니라 계좌 전체 자본으로 본다.
+  기존 보유를 팔지, 보유할지, 목표 종목을 살지는 브로커 포지션·현금·목표 비중·안전 게이트를
+  함께 보고 판단한다.
+- **적용된 live canary 동작**: `auto-invest rebalance-once --account-wide --side both`가 KIS
+  포지션과 매수 가능 현금을 읽는다. dry-run이어도 `--account-wide`가 있으면 읽기 전용 KIS 호출을
+  수행하지만 주문은 제출하지 않는다. 기본 dry-run은 여전히 offline이다.
+- **청산 전용 기존 보유**: `deploy/micro-gtaa-live-portfolio.toml`의 `[account_rebalance]`에
+  `BHP`, `MRK`, `ORANY`, `RELX`가 `liquidation_symbols`로 선언됐다. 목표 유니버스는 계속
+  `SPYM`, `IEF`, `GLDM`이다. 리밸런서는 청산 전용 종목이 매수 후보가 되면 실패 폐쇄한다.
+- **현금 부족 처리**: 계획 매수 금액 + 1% 완충금보다 KIS 매수 가능 현금이 부족하고 청산 전용
+  매도 후보가 있으면 workflow preflight가 `effective_side=sell`을 내보낸다. live 단계는 이 값을
+  받아 매수 없이 매도만 실행한다. 매수는 매도 대금이 KIS 매수 가능 현금으로 확인되는 다음
+  실행으로 넘어간다.
+- **증거 표면**: `automation/rebalance-micro-gtaa-last-run` sidecar에는 계좌 전체 재배치 상태,
+  requested/effective side, 필요 현금, 계획 매수·매도 금액, 다음 단계가 표시된다. Telegram 요약도
+  `effective_side`를 포함한다.
+- **안전 경계**: 등급 4 돈 경로 변경이다. K2 설정 표면은 청산 전용 매도를 위해 넓어졌지만,
+  K1/K2 코드, 주문 라우터, 감사 로그, 비밀값, 손실 브레이커, 헌법, 커널 목록은 바꾸지 않았다.
+  실제 KIS 주문은 이 작업 중 수동 실행하지 않았다.
+- **검증**: PR #386 머지 전 `uv run pytest` 2252 통과·4 스킵, `uv run ruff check src tests`
+  통과, focused tests 23 통과, workflow YAML 파싱 OK, 하네스 `OK (14/14)`, PR 품질 관문 통과.
+  handoff 갱신 전 main에서 `uv run pytest -q`는 stale `HANDOFF.md` 때문에 하네스 2건만 실패했다.
+  이 handoff 갱신은 그 원인(`마지막 main 커밋` 행)을 바로잡았다. 갱신 후
+  `uv run python scripts/check_handoff_facts.py`, `uv run python scripts/agent_harness_probe.py --strict`,
+  `uv run pytest -q`, `uv run ruff check src tests`가 모두 통과했다.
 
 ## 완료된 작업 큐 (운영자 승인 — 2026-05-31, 1→2→3 전부 완료)
 
@@ -263,6 +297,25 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
   통과, `uv run python scripts/agent_harness_probe.py --strict` `OK (14/14)`,
   `uv run python scripts/check_handoff_facts.py` 통과, PR 품질 관문 통과. 머지 직전 전체 테스트와
   린트를 다시 실행해 같은 결과를 확인했다.
+
+## 최근 마일스톤 — 2026-06-23 KST (스펙 063 계좌 전체 micro GTAA 자율 재배치)
+
+main 머지 `7a14315`(#386). 운영자가 "새 입금은 안 되지만 기존 보유는 수익 관점에서 팔 수도,
+보유할 수도 있어야 한다"와 "단발성이 아니라 적용 시점부터 지속 자율 운영돼야 한다"고 명시했고,
+등급 4 돈 경로 변경으로 micro GTAA live canary를 계좌 전체 재배치 루프로 확장했다. 상세:
+`HANDOFF-060-ACCOUNT-WIDE-MICRO-GTAA.md`, `specs/063-account-wide-micro-gtaa/`.
+
+- **핵심 변경**: 브로커 포지션과 KIS 매수 가능 현금을 live 계획 입력으로 사용한다. 기존 장부
+  포지션만 보던 cash-only 한계를 보완했다.
+- **청산 전용 안전장치**: 기존 보유 `BHP`, `MRK`, `ORANY`, `RELX`는 K2 설정 표면에 포함되지만
+  목표 유니버스가 아니며, account-wide 리밸런서가 매수 주문을 거부한다.
+- **지속 루프**: cash shortfall이면 이번 주기는 `effective_side=sell`로 청산 전용 매도만 실행하고,
+  다음 주기에서 KIS가 확인한 현금이 충분할 때 목표 종목 매수를 진행한다.
+- **증거**: workflow sidecar와 Telegram 요약에 계좌 전체 모드, effective side, 필요 현금,
+  계획 매수·매도 금액, 다음 단계가 남는다.
+- **검증/배포**: `uv run pytest` 2252 통과·4 스킵, `uv run ruff check src tests` 통과,
+  `uv run python scripts/agent_harness_probe.py --strict` → `OK (14/14)`, PR 품질 관문 통과.
+  PR #386은 merge 방식으로 main에 머지됐다.
 
 ## 최근 마일스톤 — 2026-06-22 (스펙 062 money-path 실제 돈 최상위 상태)
 
