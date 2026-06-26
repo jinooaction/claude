@@ -33,14 +33,14 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `7195c48` — Merge pull request #388 from jinooaction/Codex/fix-telegram-alert-flood-kis-diagnostics |
-| main 테스트 | `uv run pytest -q` → 2257 passed, 4 skipped |
+| 마지막 main 커밋 | `4175f13` — Merge pull request #390 from jinooaction/Codex/rejected-order-opportunity-alerts |
+| main 테스트 | `uv run pytest -q` → 2262 passed, 4 skipped |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
 | 열린 PR | 없음(GitHub open PR 조회 결과 `[]`) |
-| 출시 완료 스펙 | 최신 추가: 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
-| 최근 출시 작업 | #388 Telegram 알림 폭주 방지와 KIS HTTP 200 오류 진단 보강. #386 스펙 063 계좌 전체 micro GTAA 자율 재배치. #384 스펙 062 money-path 실제 돈 최상위 상태 |
-| 활성 작업 | 코드 PR 없음. Telegram 알림 서비스는 #388 배포 후 `Manage Telegram alerts on server` run `28212999028`로 재시작됐고, status run `28213025727` 기준 `enabled`/`active`이며 재시작 이후 새 전송 로그는 보이지 않음. micro GTAA는 `armed:true`, `capital_usd:1000` 유지 |
-| 안전 경계 | #388은 등급 3 외부 API·운영 알림·브로커 진단 변경. 주문 게이트·자본·허용 종목·포지션 한도·손실 브레이커·헌법·커널 목록 변경 없음. #386은 등급 4 돈 경로 변경으로 계좌 전체 micro GTAA 청산 전용 sell-first 루프를 도입한 상태 |
+| 출시 완료 스펙 | 최신 추가: 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
+| 최근 출시 작업 | #390 거부 주문 기회손익 평가와 Telegram 가독성 개선. #388 Telegram 알림 폭주 방지와 KIS HTTP 200 오류 진단 보강. #386 스펙 063 계좌 전체 micro GTAA 자율 재배치 |
+| 활성 작업 | 코드 PR 없음. #390 머지 후 micro GTAA sidecar와 Telegram은 거부 주문의 현재가 기준 기회손익을 보고한다. Telegram 알림 서비스는 #388 배포 후 `Manage Telegram alerts on server` run `28212999028`로 재시작됐고, status run `28213025727` 기준 `enabled`/`active`이며 재시작 이후 새 전송 로그는 보이지 않음. micro GTAA는 `armed:true`, `capital_usd:1000` 유지 |
+| 안전 경계 | #390은 등급 2 운영 관측 변경(워크플로·Telegram 메시지·읽기 전용 현재가 조회 CLI). 주문 라우터·게이트·자본·허용 종목·포지션 한도·손실 브레이커·헌법·커널 목록 변경 없음. #388은 등급 3 외부 API·운영 알림·브로커 진단 변경, #386은 등급 4 돈 경로 변경으로 계좌 전체 micro GTAA 청산 전용 sell-first 루프를 도입한 상태 |
 
 ## 돈 경로 상태 판독 규칙 (필수 — 스펙 062)
 
@@ -62,6 +62,36 @@ uv run python scripts/money_path_probe.py --manifest | while IFS=$'\t' read -r k
 done
 uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.live_money_state'
 ```
+
+## 최근 관찰 — 2026-06-26 KST (거부 주문 기회손익과 Telegram 가독성 보강)
+
+현재 `main` 최신은 `4175f13`(#390, 거부 주문 기회손익과 Telegram 가독성 보강)이다.
+직전 주요 커밋은 `4bd4157`(구현 커밋), `c76ce51`(#389, Telegram flood handoff),
+`7195c48`(#388, Telegram 알림 폭주 방지와 KIS 진단 보강)이다. 이 인계 갱신 시작 시점의
+열린 PR은 없다.
+
+- **문제 교정**: 이전 대화에서 "주문 실패" 여부만 봐서는 전략 평가가 안 된다는 운영자 지적이
+  있었다. 이제 거부된 BUY/SELL 주문을 현재가와 비교해 "정상 체결됐다면 지금 더 유리했는가"를
+  자동 계산한다. 양수는 거부 주문이 체결됐으면 현재 더 유리, 음수는 거부가 결과적으로 더 유리하다는
+  뜻이다.
+- **새 재현 명령**: `auto-invest rejected-order-opportunity --result-json <rebalance-json> --env-file .env --db data/auto_invest.db`.
+  이 명령은 읽기 전용이며 주문을 재시도하지 않는다. `--marks-json`으로 테스트용 현재가를 넣을 수 있고,
+  현재가 조회 실패는 `mark_fetch_error`와 `missing_mark_symbols`로 드러난다.
+- **micro GTAA 증거 표면**: `.github/workflows/rebalance-micro-gtaa-canary.yml`에
+  `Evaluate rejected order opportunity` 단계가 추가됐다. 서버의 KIS 현재가를 읽어
+  `/tmp/micro_opportunity.json`을 만들고, sidecar `## 거부 주문 기회손익`과 Telegram
+  `4. 거부 주문 기회손익` 섹션에 같은 근거를 표시한다. 실패해도 주문·sidecar·Telegram 결론을
+  실패시키지 않는 best-effort 관측 단계다.
+- **Telegram 가독성**: micro GTAA 알림은 실행, 라이브 전제 확인, 주문 결과, 거부 주문 기회손익,
+  확인 링크로 나뉜다. audit-log tailer 알림도 `[source] 제목`, 상태, 이벤트, 대상, 진단, 판단 줄로
+  정리됐다. 브로커 거부는 "접수·체결되지 않았다"를 명시한다.
+- **안전 경계**: 등급 2 운영 관측 변경이다. 실제 주문 실행, 주문 재시도, 라우터, K1/K2 게이트,
+  자본, 허용 종목, 포지션 한도, 손실 브레이커, 헌법, 커널 목록은 바꾸지 않았다. 새 CLI는 안전
+  레지스트리에서 `READ_ONLY`, `can_place_order=false`, `uses_broker=true`로 등록됐다.
+- **검증**: PR #390 머지 전 focused tests 30 통과, `uv run pytest -q` 2262 통과·4 스킵,
+  `uv run ruff check src tests` 통과, workflow YAML 파싱 OK, 하네스 `OK (14/14)`, HANDOFF 사실
+  검증 OK, PR 품질 관문 통과. handoff 갱신 전 main에서 `uv run pytest -q`는 stale `HANDOFF.md`
+  때문에 하네스 2건만 실패했다. 이 handoff 갱신은 그 원인(`마지막 main 커밋` 행)을 바로잡았다.
 
 ## 최근 관찰 — 2026-06-26 KST (Telegram 알림 폭주 방지와 KIS 진단 보강)
 
@@ -334,6 +364,25 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
   통과, `uv run python scripts/agent_harness_probe.py --strict` `OK (14/14)`,
   `uv run python scripts/check_handoff_facts.py` 통과, PR 품질 관문 통과. 머지 직전 전체 테스트와
   린트를 다시 실행해 같은 결과를 확인했다.
+
+## 최근 마일스톤 — 2026-06-26 KST (거부 주문 기회손익과 Telegram 가독성 보강)
+
+main 머지 `4175f13`(#390). 운영자가 "매수가 정상적으로 진행됐다면 지금 돈 벌었는지 잃었는지"를
+전략 평가 기준으로 요구했고, 이에 맞춰 거부된 BUY/SELL 주문을 현재가 기준으로 평가하는 읽기 전용
+기회손익 표면을 추가했다. 상세: `HANDOFF-062-REJECTED-ORDER-OPPORTUNITY-ALERTS.md`,
+`specs/060-telegram-order-alerts/`.
+
+- **핵심 변경**: `auto-invest rejected-order-opportunity` CLI, `analytics/order_opportunity.py`,
+  micro GTAA workflow의 `/tmp/micro_opportunity.json`, sidecar `## 거부 주문 기회손익`, Telegram
+  `4. 거부 주문 기회손익` 섹션을 추가했다.
+- **판단 기준**: 양수는 거부 주문이 정상 체결됐으면 현재 더 유리, 음수는 거부가 결과적으로 더 유리.
+  수수료, 세금, 환율, 실제 체결 가능성은 제외한 단순 현재가 비교다.
+- **Telegram 가독성**: micro GTAA 메시지는 실행, 전제 확인, 주문 결과, 기회손익, 확인 링크로
+  나뉜다. audit tailer의 broker rejection 알림은 접수·체결 0건임을 판단 줄로 명시한다.
+- **안전 경계**: 등급 2 운영 관측 변경이다. 주문 재시도, 주문 라우터, 게이트, 자본, whitelist,
+  손실 브레이커, 헌법, 커널 목록 변경 없음.
+- **검증/배포**: `uv run pytest -q` 2262 통과·4 스킵, `uv run ruff check src tests` 통과,
+  하네스 `OK (14/14)`, PR 품질 관문 통과. PR #390은 merge 방식으로 main에 머지됐다.
 
 ## 최근 마일스톤 — 2026-06-26 KST (Telegram 알림 폭주 방지와 KIS 진단 보강)
 
@@ -3604,6 +3653,10 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 
 ## 과거 인수인계 파일 (참고용)
 
+- `HANDOFF-062-REJECTED-ORDER-OPPORTUNITY-ALERTS.md` — 거부 주문 기회손익과 Telegram 가독성 보강
+  (2026-06-26, PR #390 `4175f13`). 거부된 BUY/SELL 주문을 현재가 기준으로 평가하는 읽기 전용
+  `auto-invest rejected-order-opportunity` 명령과 micro GTAA sidecar/Telegram 기회손익 섹션을
+  추가했다. 주문 라우터·게이트·자본·허용 종목 변경 없음.
 - `HANDOFF-061-TELEGRAM-ALERT-FLOOD-FIX.md` — Telegram 알림 폭주 방지와 KIS 진단 보강
   (2026-06-26, PR #388 `7195c48`). 오래된 Telegram cursor catch-up을 기본 최신 25개로 제한하고,
   동일 `ERROR` 1시간 cooldown, KIS HTTP 200 오류 본문 진단 보존, Telegram 알림 서비스 전용
