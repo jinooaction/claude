@@ -176,6 +176,31 @@ def _line(label: str, value: object | None) -> str | None:
     return f"{label}={value}"
 
 
+def _join_parts(*parts: str | None) -> str:
+    return " ".join(part for part in parts if part)
+
+
+def _nested_dict(value: object, key: str) -> dict:
+    if not isinstance(value, dict):
+        return {}
+    nested = value.get(key)
+    return nested if isinstance(nested, dict) else {}
+
+
+def _kis_request_summary(diagnostics: dict) -> str:
+    request = _nested_dict(diagnostics, "request_summary")
+    body = _nested_dict(request, "body")
+    if not body:
+        return ""
+    return _join_parts(
+        _line("pdno", body.get("PDNO")),
+        _line("qty", body.get("ORD_QTY")),
+        _line("limit", body.get("OVRS_ORD_UNPR")),
+        _line("exchange", body.get("OVRS_EXCG_CD")),
+        _line("side_code", body.get("SLL_BUY_DVSN_CD")),
+    )
+
+
 def format_alert(row: sqlite3.Row, *, source_label: str = "auto-invest") -> str:
     payload = _payload(row)
     event = row["event_type"]
@@ -191,96 +216,111 @@ def format_alert(row: sqlite3.Row, *, source_label: str = "auto-invest") -> str:
         "ERROR": "오류",
         "ORDER_PAPER_FILLED": "페이퍼 체결",
     }.get(event, event)
+    status = {
+        "ORDER_INTENT": "라우터가 주문 제출을 준비했습니다.",
+        "ORDER_SUBMITTED": (
+            "브로커가 주문을 접수했습니다. 체결은 FILL 이벤트로 별도 확인합니다."
+        ),
+        "ORDER_REJECTED_BY_GATE": (
+            "내부 안전 게이트가 주문을 막았습니다. 브로커에는 제출되지 않았습니다."
+        ),
+        "ORDER_REJECTED_BY_BROKER": "브로커가 주문을 거부했습니다. 접수/체결 0건으로 봅니다.",
+        "FILL": "체결 기록이 들어왔습니다.",
+        "CANCEL": "주문 취소 이벤트가 들어왔습니다.",
+        "CIRCUIT_BREAKER_TRIPPED": "손실 브레이커가 동작했습니다.",
+        "HALT_SET": "거래 중지 플래그가 설정되었습니다.",
+        "ERROR": "운영 오류가 기록되었습니다.",
+        "ORDER_PAPER_FILLED": "페이퍼 주문이 시뮬레이션 체결되었습니다.",
+    }.get(event, "감사 로그 이벤트가 기록되었습니다.")
     lines = [
-        f"{source_label} {title}",
-        f"event={event} seq={row['seq']} ts={row['ts_utc']}",
+        f"[{source_label}] {title}",
+        f"상태: {status}",
+        f"이벤트: {event} seq={row['seq']} ts_utc={row['ts_utc']}",
     ]
     context = [
         _line("symbol", row["symbol"]),
         _line("rule", row["rule_id"]),
         _line("correlation", row["correlation_id"]),
     ]
-    lines.extend(item for item in context if item)
+    context_line = _join_parts(*context)
+    if context_line:
+        lines.append(f"대상: {context_line}")
 
     if event == "ORDER_INTENT":
         lines.append(
-            " ".join(
-                item
-                for item in (
-                    _line("side", payload.get("side")),
-                    _line("qty", payload.get("qty")),
-                    _line("type", payload.get("order_type")),
-                    _line("limit", payload.get("limit_price_usd")),
-                )
-                if item
+            "주문: "
+            + _join_parts(
+                _line("side", payload.get("side")),
+                _line("qty", payload.get("qty")),
+                _line("type", payload.get("order_type")),
+                _line("limit", payload.get("limit_price_usd")),
             )
         )
     elif event == "ORDER_SUBMITTED":
         lines.append(
-            " ".join(
-                item
-                for item in (
-                    _line("kis_order_id", payload.get("kis_order_id")),
-                    _line("submitted_at", payload.get("submitted_at_utc")),
-                )
-                if item
+            "접수: "
+            + _join_parts(
+                _line("kis_order_id", payload.get("kis_order_id")),
+                _line("submitted_at", payload.get("submitted_at_utc")),
             )
         )
     elif event == "ORDER_REJECTED_BY_GATE":
         lines.append(
-            " ".join(
-                item
-                for item in (
-                    _line("gate", payload.get("gate")),
-                    _line("reason", payload.get("reason")),
-                )
-                if item
+            "거부: "
+            + _join_parts(
+                _line("gate", payload.get("gate")),
+                _line("reason", payload.get("reason")),
             )
         )
     elif event == "ORDER_REJECTED_BY_BROKER":
         diagnostics = payload.get("diagnostics") or {}
         diag = diagnostics if isinstance(diagnostics, dict) else {}
         lines.append(
-            " ".join(
-                item
-                for item in (
-                    _line("broker", payload.get("broker_code")),
-                    _line("message", payload.get("broker_message")),
-                    _line("http", diag.get("http_status")),
-                    _line("msg_cd", diag.get("kis_msg_cd")),
-                    _line("msg", diag.get("kis_msg1")),
-                )
-                if item
+            "진단: "
+            + _join_parts(
+                _line("broker", payload.get("broker_code")),
+                _line("message", payload.get("broker_message")),
+                _line("http", diag.get("http_status")),
+                _line("msg_cd", diag.get("kis_msg_cd")),
+                _line("msg", diag.get("kis_msg1")),
             )
         )
+        request_summary = _kis_request_summary(diag)
+        if request_summary:
+            lines.append(f"요청: {request_summary}")
+        lines.append("판단: 주문은 브로커에서 거부되어 접수·체결되지 않았습니다.")
     elif event in {"FILL", "ORDER_PAPER_FILLED"}:
         lines.append(
-            " ".join(
-                item
-                for item in (
-                    _line("qty", payload.get("qty")),
-                    _line("price", payload.get("price_usd") or payload.get("fill_price_usd")),
-                    _line("executed_at", payload.get("executed_at_utc")),
-                )
-                if item
+            "체결: "
+            + _join_parts(
+                _line("qty", payload.get("qty")),
+                _line(
+                    "price",
+                    payload.get("price_usd") or payload.get("fill_price_usd"),
+                ),
+                _line("executed_at", payload.get("executed_at_utc")),
             )
         )
     elif event == "CANCEL":
-        lines.append(_line("reason", payload.get("reason")) or "")
+        lines.append(
+            "취소: " + (_line("reason", payload.get("reason")) or "reason=unknown")
+        )
     elif event == "CIRCUIT_BREAKER_TRIPPED":
-        lines.append(_line("reason", payload.get("reason")) or str(payload))
+        lines.append(
+            "브레이커: "
+            + (_line("reason", payload.get("reason")) or str(payload))
+        )
     elif event == "HALT_SET":
-        lines.append(_line("reason", payload.get("reason")) or "")
+        lines.append(
+            "중지: " + (_line("reason", payload.get("reason")) or "reason=unknown")
+        )
     elif event == "ERROR":
         lines.append(
-            " ".join(
-                item
-                for item in (
-                    _line("where", payload.get("where")),
-                    _line("type", payload.get("exc_type")),
-                    _line("message", payload.get("message")),
-                )
-                if item
+            "오류: "
+            + _join_parts(
+                _line("where", payload.get("where")),
+                _line("type", payload.get("exc_type")),
+                _line("message", payload.get("message")),
             )
         )
     else:

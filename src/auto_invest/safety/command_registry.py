@@ -235,6 +235,12 @@ COMMAND_POLICIES: dict[str, CommandPolicy] = {
         writes_db=True,
         uses_broker=True,
     ),
+    "rejected-order-opportunity": _p(
+        "rejected-order-opportunity",
+        AutonomyLevel.READ_ONLY,
+        "Evaluate current-mark opportunity PnL for rejected rebalance orders.",
+        uses_broker=True,
+    ),
     "reassign-challenger-path": _p(
         "reassign-challenger-path",
         AutonomyLevel.STRATEGY_REASSIGNMENT,

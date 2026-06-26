@@ -62,6 +62,8 @@
 - [X] T016 Run `uv run ruff check src tests`.
 - [X] T017 Run `uv run python scripts/check_pr_quality_gate.py --template .github/pull_request_template.md`.
 - [X] T018 Prepare PR body with risk grade 3, secret/external API safety notes, and validation evidence.
+- [X] T019 Add read-only rejected-order opportunity PnL reporting for micro GTAA sidecar and Telegram messages.
+- [X] T020 Reformat micro GTAA and audit-log Telegram messages into readable status/order/diagnostic/opportunity sections.
 
 ## Dependencies & Execution Order
 

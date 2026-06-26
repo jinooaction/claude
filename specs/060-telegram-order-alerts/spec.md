@@ -20,6 +20,7 @@
 1. **Given** 텔레그램 비밀값이 설정되어 있고 micro GTAA 워크플로가 끝났을 때, **When** 결과 발행 단계가 실행되면, **Then** run id, event, preflight reason, live outcome, 주문 요약, run URL을 포함한 텔레그램 메시지가 전송된다.
 2. **Given** 텔레그램 비밀값이 없을 때, **When** micro GTAA 워크플로가 끝나면, **Then** 알림 단계는 skip되고 workflow 결론을 실패로 바꾸지 않는다.
 3. **Given** 텔레그램 API가 일시 실패할 때, **When** 알림 전송이 실패하면, **Then** workflow의 주문·측정·sidecar 결과는 그대로 유지되고 알림 실패만 로그에 남는다.
+4. **Given** micro GTAA live 결과에 거부된 매수 또는 매도 주문이 있을 때, **When** 결과 발행 단계가 실행되면, **Then** 현재가 기준으로 "정상 체결됐다면 지금 더 유리했는지"를 양수/음수 기회손익으로 계산해 sidecar와 텔레그램에 함께 표시한다.
 
 ---
 
@@ -64,6 +65,7 @@
 - 동일한 `ERROR` 이벤트가 반복 기록되면 지정된 cooldown 안에서는 같은 오류를 중복 전송하지 않고 cursor는 계속 전진해야 한다.
 - GitHub Actions micro 알림은 secrets가 없거나 비어 있으면 skip해야 한다.
 - 알림은 실주문, 취소, 체결 동기화, halt 설정을 직접 수행하면 안 된다.
+- 거부 주문 기회손익 현재가 조회가 실패해도 주문, sidecar 발행, 텔레그램 전송은 실패하면 안 되며, 조회 실패 사유와 현재가 누락 종목을 메시지에 드러내야 한다.
 
 ## Requirements
 
@@ -83,6 +85,8 @@
 - **FR-012**: System MUST NOT change strategy, capital, whitelist, order caps, circuit breaker thresholds, broker order submission behavior, or existing audit event semantics.
 - **FR-013**: The audit-log tailer MUST cap stale-cursor catch-up by default and expose an operator option to adjust or disable that cap.
 - **FR-014**: The audit-log tailer MUST suppress repeated identical `ERROR` alerts within a bounded cooldown while still advancing the persisted cursor.
+- **FR-015**: System MUST evaluate rejected rebalance BUY/SELL orders against current marks when available and report opportunity PnL where positive means the rejected order would currently be more favorable.
+- **FR-016**: Telegram messages for micro GTAA and audit-log order alerts MUST use readable sections that separate status, order result, diagnostics, opportunity PnL, and next verification context.
 
 ### Key Entities
 
@@ -90,6 +94,7 @@
 - **Audit Alert Cursor**: Persisted last processed audit seq that prevents duplicate messages.
 - **Order Alert Event**: Sanitized view of an audit_log row and payload suitable for mobile display.
 - **Micro Workflow Alert**: GitHub Actions summary for one micro GTAA run with preflight, live outcome, and run URL.
+- **Rejected Order Opportunity Report**: Read-only report derived from rebalance JSON and current marks that quantifies hypothetical PnL for rejected orders without retrying them.
 
 ## Success Criteria
 
@@ -103,6 +108,7 @@
 - **SC-006**: Operator documentation lets a mobile user validate Telegram delivery with a test message before enabling the audit tailer service.
 - **SC-007**: A stale cursor pointing far behind the audit log sends only the configured newest catch-up count and advances to the newest processed seq.
 - **SC-008**: Repeated identical `ERROR` rows inside the cooldown window produce one mobile alert, not one alert per row.
+- **SC-009**: A rebalance result with rejected BUY and SELL orders produces deterministic opportunity PnL in JSON/text, and missing current marks are reported without failing the workflow.
 
 ## Assumptions
 
