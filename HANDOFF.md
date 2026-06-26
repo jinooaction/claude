@@ -33,14 +33,14 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `4175f13` — Merge pull request #390 from jinooaction/Codex/rejected-order-opportunity-alerts |
-| main 테스트 | `uv run pytest -q` → 2262 passed, 4 skipped |
+| 마지막 main 커밋 | `f76aa07` — Merge pull request #392 from jinooaction/Codex/opportunity-strategy-loop |
+| main 테스트 | `uv run pytest -q` → 2274 passed, 4 skipped |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
 | 열린 PR | 없음(GitHub open PR 조회 결과 `[]`) |
-| 출시 완료 스펙 | 최신 추가: 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
-| 최근 출시 작업 | #390 거부 주문 기회손익 평가와 Telegram 가독성 개선. #388 Telegram 알림 폭주 방지와 KIS HTTP 200 오류 진단 보강. #386 스펙 063 계좌 전체 micro GTAA 자율 재배치 |
-| 활성 작업 | 코드 PR 없음. #390 머지 후 micro GTAA sidecar와 Telegram은 거부 주문의 현재가 기준 기회손익을 보고한다. Telegram 알림 서비스는 #388 배포 후 `Manage Telegram alerts on server` run `28212999028`로 재시작됐고, status run `28213025727` 기준 `enabled`/`active`이며 재시작 이후 새 전송 로그는 보이지 않음. micro GTAA는 `armed:true`, `capital_usd:1000` 유지 |
-| 안전 경계 | #390은 등급 2 운영 관측 변경(워크플로·Telegram 메시지·읽기 전용 현재가 조회 CLI). 주문 라우터·게이트·자본·허용 종목·포지션 한도·손실 브레이커·헌법·커널 목록 변경 없음. #388은 등급 3 외부 API·운영 알림·브로커 진단 변경, #386은 등급 4 돈 경로 변경으로 계좌 전체 micro GTAA 청산 전용 sell-first 루프를 도입한 상태 |
+| 출시 완료 스펙 | 최신 추가: 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
+| 최근 출시 작업 | #392 거부 주문 기회손익을 rolling history와 자율 재지정 evidence로 연결. #390 거부 주문 기회손익 평가와 Telegram 가독성 개선. #388 Telegram 알림 폭주 방지와 KIS HTTP 200 오류 진단 보강 |
+| 활성 작업 | 코드 PR 없음. #392 머지 후 다음 micro GTAA 실행부터 sidecar에 `opportunity_history.json`·`opportunity_monitor.json`이 발행되고 Telegram은 누적 전략/실행 평가를 표시한다. `reassign-on-tournament`는 이 monitor를 evidence-only로 읽지만 기존 5중 게이트를 우회하지 않는다. micro GTAA는 `armed:true`, `capital_usd:1000` 유지 |
+| 안전 경계 | #392는 등급 2 운영 관측·평가 루프 변경(워크플로·sidecar·Telegram·재지정 evidence). 실제 주문, 주문 재시도, 전략 파일 교체, 자본, 허용 종목, 포지션 한도, 손실 브레이커, 헌법, 커널 목록 변경 없음. #386은 등급 4 돈 경로 변경으로 계좌 전체 micro GTAA 청산 전용 sell-first 루프를 도입한 상태 |
 
 ## 돈 경로 상태 판독 규칙 (필수 — 스펙 062)
 
@@ -62,6 +62,42 @@ uv run python scripts/money_path_probe.py --manifest | while IFS=$'\t' read -r k
 done
 uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.live_money_state'
 ```
+
+## 최근 관찰 — 2026-06-26 KST (거부 주문 누적 평가와 자율 재지정 피드백 루프)
+
+현재 `main` 최신은 `f76aa07`(#392, 거부 주문 누적 평가와 자율 재지정 피드백 루프)이다.
+직전 주요 커밋은 `219a537`(구현 커밋), `2b04742`(#391, #390 handoff), `4175f13`(#390,
+거부 주문 기회손익과 Telegram 가독성 보강)이다. 이 인계 갱신 시작 시점의 열린 PR은 없다.
+
+- **문제 교정**: #390은 "거부된 주문이 정상 체결됐다면 지금 유리한가"를 단발로 답했지만,
+  운영자가 요구한 전략 평가는 누적 판단이어야 했다. 이제 micro GTAA 실행마다 기회손익 보고를
+  rolling history에 붙이고 누적 `STRATEGY_REVIEW` 또는 `EXECUTION_REVIEW` verdict를 낸다.
+- **새 재현 명령**: `auto-invest opportunity-monitor --history-json <history> --opportunity-json <report> --history-out <out> --monitor-out <out>`.
+  이 명령은 브로커를 호출하지 않고 주문도 재시도하지 않는다. 양수 누적은 거부 때문에 이익을
+  놓쳤다는 실행 경로 신호, 음수 누적은 전략 의도가 손실이었을 수 있다는 전략 검토 신호다.
+- **micro GTAA 증거 표면**: `automation/rebalance-micro-gtaa-last-run` sidecar는 다음 실행부터
+  `opportunity_history.json`과 `opportunity_monitor.json`을 함께 발행한다. `LAST_RUN.md`에는
+  `## 거부 주문 누적 평가` 섹션이 추가된다.
+- **Telegram 가독성**: micro GTAA 알림은 새 `5. 누적 전략/실행 평가` 섹션에서 verdict, 누적
+  전략 의도 손익, 최신 신호, 연속 손실/이익, 다음 조치, 안전 문구를 보여 준다.
+- **자율 재지정 연결**: `reassign-on-tournament.yml`은 최신 `opportunity_monitor.json`을 읽어
+  `reassign-decide --execution-feedback-json`에 넘긴다. 결정 JSON에는 `execution_feedback`이
+  남지만 `effect=evidence_only_no_gate_override`이며, 도전자·다중검정·캐너리 5중 게이트를
+  통과하지 않으면 자동 전략 교체는 없다.
+- **배포 확인**: #392 main push의 `Deploy on merge to main` run `28237830935`는 성공했다.
+  같은 커밋의 KIS smoke run `28237830957`도 `secrets_present=true`, `key_valid=true`,
+  `smoke_state=success`, `smoke_exit=0`이다. money-path run `28237830995`도 성공했고
+  `live_money_state.status=REAL_ORDER_PATH_ARMED`를 보고했다. 배포는 dry-run worker 코드 반영이지
+  실거래 전환이 아니다.
+- **안전 경계**: 등급 2 운영 관측·평가 변경이다. 실제 주문 실행, 주문 재시도, 주문 라우터,
+  전략 파일 교체, K1/K2 게이트, 자본, 허용 종목, 포지션 한도, 손실 브레이커, 헌법, 커널 목록은
+  바꾸지 않았다.
+- **검증**: PR #392 머지 전 `uv run pytest` 2274 통과·4 스킵, `uv run ruff check src tests`
+  통과, `uv run python scripts/check_handoff_facts.py` OK, `uv run python scripts/agent_harness_probe.py --strict`
+  OK (14/14), PR 품질 관문 통과. handoff 갱신 전 main에서 `uv run pytest -q`는 stale
+  `HANDOFF.md` 때문에 하네스 2건만 실패했다. 이 handoff 갱신은 그 원인(`마지막 main 커밋` 행)을
+  바로잡았다. 갱신 후 `uv run python scripts/check_handoff_facts.py`, `uv run python scripts/agent_harness_probe.py --strict`,
+  `uv run pytest -q`, `uv run ruff check src tests`가 모두 통과했다.
 
 ## 최근 관찰 — 2026-06-26 KST (거부 주문 기회손익과 Telegram 가독성 보강)
 
@@ -364,6 +400,25 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
   통과, `uv run python scripts/agent_harness_probe.py --strict` `OK (14/14)`,
   `uv run python scripts/check_handoff_facts.py` 통과, PR 품질 관문 통과. 머지 직전 전체 테스트와
   린트를 다시 실행해 같은 결과를 확인했다.
+
+## 최근 마일스톤 — 2026-06-26 KST (거부 주문 누적 평가와 자율 재지정 피드백 루프)
+
+main 머지 `f76aa07`(#392). 거부 주문 기회손익을 단발 보고에서 rolling history와 자율 재지정
+evidence 입력으로 확장했다. 상세: `HANDOFF-063-REJECTED-OPPORTUNITY-FEEDBACK-LOOP.md`,
+`specs/064-rejected-opportunity-feedback/`.
+
+- **핵심 변경**: `auto-invest opportunity-monitor`, `analytics/opportunity_monitor.py`,
+  `scripts/opportunity_monitor_sidecar.py`, micro GTAA sidecar의 `opportunity_history.json`과
+  `opportunity_monitor.json`, Telegram `5. 누적 전략/실행 평가` 섹션을 추가했다.
+- **판단 기준**: 양수 누적은 거부 주문이 정상 체결됐으면 이익이었을 가능성, 음수 누적은 전략
+  의도가 손실이었을 가능성이다. 표본이 부족하면 `INSUFFICIENT_DATA`로 자동 전략 판단을 보류한다.
+- **재지정 연결**: `reassign-on-tournament`는 monitor JSON을 `reassign-decide`에 넘기지만
+  `execution_feedback.effect=evidence_only_no_gate_override`로 기록만 한다. 기존 5중 게이트 불변.
+- **안전 경계**: 등급 2 운영 관측·평가 루프 변경이다. 주문 재시도, 주문 라우터, 게이트, 자본,
+  whitelist, 손실 브레이커, 헌법, 커널 목록 변경 없음.
+- **검증/배포**: `uv run pytest` 2274 통과·4 스킵, `uv run ruff check src tests` 통과,
+  하네스 `OK (14/14)`, PR 품질 관문 통과. #392 deploy run `28237830935` 성공,
+  KIS smoke run `28237830957` 성공.
 
 ## 최근 마일스톤 — 2026-06-26 KST (거부 주문 기회손익과 Telegram 가독성 보강)
 
@@ -3653,6 +3708,10 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 
 ## 과거 인수인계 파일 (참고용)
 
+- `HANDOFF-063-REJECTED-OPPORTUNITY-FEEDBACK-LOOP.md` — 거부 주문 누적 평가와 자율 재지정
+  피드백 루프 (2026-06-26, PR #392 `f76aa07`). micro GTAA 거부 주문 기회손익을 rolling
+  history와 monitor verdict로 누적하고, Telegram·sidecar·reassign evidence에 연결했다.
+  기존 5중 재지정 게이트를 우회하지 않으며 주문·자본·전략 파일 변경 없음.
 - `HANDOFF-062-REJECTED-ORDER-OPPORTUNITY-ALERTS.md` — 거부 주문 기회손익과 Telegram 가독성 보강
   (2026-06-26, PR #390 `4175f13`). 거부된 BUY/SELL 주문을 현재가 기준으로 평가하는 읽기 전용
   `auto-invest rejected-order-opportunity` 명령과 micro GTAA sidecar/Telegram 기회손익 섹션을
