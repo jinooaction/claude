@@ -20,6 +20,14 @@ def test_reassign_workflow_consumes_published_leaderboard_json() -> None:
     assert "--leaderboard-json /tmp/leaderboard.json" in text
 
 
+def test_reassign_workflow_consumes_opportunity_feedback_json() -> None:
+    text = _workflow_text()
+    assert "Read micro GTAA opportunity feedback" in text
+    assert "origin/${BRANCH}:opportunity_monitor.json" in text
+    assert "--execution-feedback-json /tmp/opportunity_monitor.json" in text
+    assert "라이브 거부 주문 누적 평가 JSON" in text
+
+
 def test_reassign_workflow_does_not_reparse_markdown_sidecar() -> None:
     text = _workflow_text()
     assert "forward_tournament_probe.py --from-sidecar" not in text

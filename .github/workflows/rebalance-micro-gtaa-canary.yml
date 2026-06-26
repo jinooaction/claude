@@ -489,6 +489,53 @@ jobs:
           echo "--- rejected order opportunity ---"; cat /tmp/micro_opportunity.json
           echo "--- stderr ---"; cat /tmp/micro_opportunity.err
 
+      - name: Update rejected order opportunity monitor
+        id: opportunity_monitor
+        if: always()
+        continue-on-error: true
+        env:
+          ARMED: ${{ steps.gate.outputs.armed }}
+          CAP: ${{ steps.gate.outputs.capital }}
+          LIVE_OUTCOME: ${{ steps.live.outcome }}
+          EVENT: ${{ github.event_name }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set +e
+          BRANCH=automation/rebalance-micro-gtaa-last-run
+          git fetch origin "${BRANCH}" || true
+          if ! git show "origin/${BRANCH}:opportunity_history.json" \
+              > /tmp/micro_opportunity_history_prev.json 2>/tmp/micro_opportunity_history.err; then
+            echo '{"schema_version":1,"records":[]}' > /tmp/micro_opportunity_history_prev.json
+          fi
+          python3 scripts/opportunity_monitor_sidecar.py \
+            --history-json /tmp/micro_opportunity_history_prev.json \
+            --opportunity-json /tmp/micro_opportunity.json \
+            --history-out /tmp/micro_opportunity_history.json \
+            --monitor-out /tmp/micro_opportunity_monitor.json \
+            --run-id "${GITHUB_RUN_ID}" \
+            --run-url "${RUN_URL}" \
+            --event "${EVENT:-unknown}" \
+            --live-outcome "${LIVE_OUTCOME:-skipped}" \
+            --armed "${ARMED:-unknown}" \
+            --capital-usd "${CAP:-unknown}" \
+            --max-entries 60 \
+            --format text \
+            > /tmp/micro_opportunity_monitor.txt 2>/tmp/micro_opportunity_monitor.err
+          rc=$?
+          if [[ $rc -ne 0 || ! -s /tmp/micro_opportunity_monitor.json ]]; then
+            cat > /tmp/micro_opportunity_monitor.json <<'JSON'
+          {"schema_version":1,"verdict":"NO_VALUED_REJECTIONS","verdict_label_ko":"평가 불가","latest_signal":"FLAT_OR_UNVALUED","interpretation_ko":"누적 평가 생성 실패 또는 평가 표본 없음","next_action_ko":"워크플로 로그와 opportunity JSON을 확인합니다.","safety_note_ko":"이 신호는 주문·전략·자본을 직접 변경하지 않습니다.","counts":{"records":0,"valued_records":0,"rejected_orders":0,"valued_orders":0},"cumulative":{"total_intended_order_mark_pnl_usd":"+0.00","buy_intended_order_mark_pnl_usd":"+0.00","sell_intended_order_mark_pnl_usd":"+0.00"},"streaks":{"intent_loss":0,"intent_gain":0},"latest":null}
+          JSON
+            cp /tmp/micro_opportunity_history_prev.json /tmp/micro_opportunity_history.json 2>/dev/null || \
+              echo '{"schema_version":1,"records":[]}' > /tmp/micro_opportunity_history.json
+          fi
+          echo "--- rejected order opportunity monitor ---"
+          cat /tmp/micro_opportunity_monitor.json
+          echo "--- monitor text ---"
+          cat /tmp/micro_opportunity_monitor.txt 2>/dev/null || true
+          echo "--- monitor stderr ---"
+          cat /tmp/micro_opportunity_monitor.err 2>/dev/null || true
+
       - name: Publish micro GTAA result to sidecar branch
         if: always()
         env:
@@ -506,6 +553,10 @@ jobs:
           tmpdir=$(mktemp -d); cd "${tmpdir}"; git init -q
           git config user.name "micro-gtaa-bot"
           git config user.email "micro-gtaa-bot@noreply.github.com"
+          cp /tmp/micro_opportunity_history.json opportunity_history.json 2>/dev/null || \
+            echo '{"schema_version":1,"records":[]}' > opportunity_history.json
+          cp /tmp/micro_opportunity_monitor.json opportunity_monitor.json 2>/dev/null || \
+            echo '{"schema_version":1,"verdict":"NO_VALUED_REJECTIONS"}' > opportunity_monitor.json
           {
             echo "# 마이크로 GTAA 라이브 캐너리 — 최신 실행"
             echo ""
@@ -672,13 +723,61 @@ jobs:
             cat /tmp/micro_opportunity.json 2>/dev/null || echo '{}'
             echo '```'
             echo ""
+            echo "## 거부 주문 누적 평가"
+          python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          from pathlib import Path
+
+          def load(path: str) -> dict:
+              try:
+                  text = Path(path).read_text(encoding="utf-8").strip()
+              except FileNotFoundError:
+                  return {}
+              if not text:
+                  return {}
+              try:
+                  data = json.loads(text)
+              except json.JSONDecodeError:
+                  return {}
+              return data if isinstance(data, dict) else {}
+
+          monitor = load("/tmp/micro_opportunity_monitor.json")
+          counts = monitor.get("counts") if isinstance(monitor.get("counts"), dict) else {}
+          cumulative = (
+              monitor.get("cumulative")
+              if isinstance(monitor.get("cumulative"), dict)
+              else {}
+          )
+          streaks = monitor.get("streaks") if isinstance(monitor.get("streaks"), dict) else {}
+          latest = monitor.get("latest") if isinstance(monitor.get("latest"), dict) else {}
+          print("기준: 음수=전략 의도가 손실이었을 가능성, 양수=거부 때문에 이익을 놓쳤을 가능성.")
+          print("단일 신호로 주문 재시도·전략 교체·자본 변경을 하지 않는다.")
+          print("")
+          print("| 항목 | 값 |")
+          print("|------|-----|")
+          print(f"| verdict | {monitor.get('verdict', '?')} ({monitor.get('verdict_label_ko', '?')}) |")
+          print(f"| latest_signal | {monitor.get('latest_signal', '?')} |")
+          print(f"| cumulative_pnl_usd | {cumulative.get('total_intended_order_mark_pnl_usd', '+0.00')} |")
+          print(f"| valued_runs | {counts.get('valued_records', 0)}/{counts.get('records', 0)} |")
+          print(f"| valued_orders | {counts.get('valued_orders', 0)}/{counts.get('rejected_orders', 0)} |")
+          print(f"| streak_loss_gain | {streaks.get('intent_loss', 0)} / {streaks.get('intent_gain', 0)} |")
+          print(f"| latest_run | {latest.get('run_id') or '?'} |")
+          print(f"| next_action | {monitor.get('next_action_ko', '?')} |")
+          PY
+            echo ""
+            echo '```json'
+            cat /tmp/micro_opportunity_monitor.json 2>/dev/null || echo '{}'
+            echo '```'
+            echo ""
             echo "## 측정 로그"
             echo '```'
             cat /tmp/micro_measure.log 2>/dev/null || echo '(none)'
             echo '```'
           } > LAST_RUN.md
           git checkout --orphan publish
-          git add LAST_RUN.md
+          git add LAST_RUN.md opportunity_history.json opportunity_monitor.json
           git commit -q -m "micro-gtaa run ${GITHUB_RUN_ID} (armed=${ARMED:-?})"
           git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "publish:${BRANCH}"
           echo "Published to ${BRANCH}."
@@ -731,6 +830,7 @@ jobs:
           live = load_json("/tmp/micro_live.json")
           preview = load_json("/tmp/micro_preview.json")
           opportunity = load_json("/tmp/micro_opportunity.json")
+          opportunity_monitor = load_json("/tmp/micro_opportunity_monitor.json")
 
           preflight_reason = None
           preflight_ok = None
@@ -839,6 +939,54 @@ jobs:
           if not opportunity_lines:
               opportunity_lines.append("- 평가할 거부 주문 없음")
 
+          monitor_lines: list[str] = []
+          if isinstance(opportunity_monitor, dict):
+              counts = (
+                  opportunity_monitor.get("counts")
+                  if isinstance(opportunity_monitor.get("counts"), dict)
+                  else {}
+              )
+              cumulative = (
+                  opportunity_monitor.get("cumulative")
+                  if isinstance(opportunity_monitor.get("cumulative"), dict)
+                  else {}
+              )
+              streaks = (
+                  opportunity_monitor.get("streaks")
+                  if isinstance(opportunity_monitor.get("streaks"), dict)
+                  else {}
+              )
+              latest = (
+                  opportunity_monitor.get("latest")
+                  if isinstance(opportunity_monitor.get("latest"), dict)
+                  else {}
+              )
+              monitor_lines.extend(
+                  [
+                      "- verdict: {verdict} ({label})".format(
+                          verdict=opportunity_monitor.get("verdict", "?"),
+                          label=opportunity_monitor.get("verdict_label_ko", "?"),
+                      ),
+                      "- 누적 전략 의도 손익: {pnl} USD (평가 실행 {runs}/{total_runs}, 평가 주문 {orders}/{total_orders})".format(
+                          pnl=cumulative.get("total_intended_order_mark_pnl_usd", "+0.00"),
+                          runs=counts.get("valued_records", 0),
+                          total_runs=counts.get("records", 0),
+                          orders=counts.get("valued_orders", 0),
+                          total_orders=counts.get("rejected_orders", 0),
+                      ),
+                      "- 최신 신호: {signal}, 최신 pnl: {pnl} USD, 연속 손실/이익: {loss}/{gain}".format(
+                          signal=opportunity_monitor.get("latest_signal", "FLAT_OR_UNVALUED"),
+                          pnl=latest.get("total_intended_order_mark_pnl_usd", "N/A"),
+                          loss=streaks.get("intent_loss", 0),
+                          gain=streaks.get("intent_gain", 0),
+                      ),
+                      "- 다음 조치: " + short(opportunity_monitor.get("next_action_ko"), 220),
+                      "- 안전: " + short(opportunity_monitor.get("safety_note_ko"), 180),
+                  ]
+              )
+          if not monitor_lines:
+              monitor_lines.append("- 누적 평가 없음")
+
           lines = [
               "[auto-invest] micro GTAA 실행 결과",
               f"상태: {headline}",
@@ -864,7 +1012,15 @@ jobs:
               ]
           )
           lines.extend(opportunity_lines)
-          lines.extend(["", "5. 확인 링크", os.environ.get("RUN_URL", "")])
+          lines.extend(
+              [
+                  "",
+                  "5. 누적 전략/실행 평가",
+                  "- 기준: 음수=전략 의도 손실 검토, 양수=실행 경로 손실 검토",
+              ]
+          )
+          lines.extend(monitor_lines)
+          lines.extend(["", "6. 확인 링크", os.environ.get("RUN_URL", "")])
           text = "\n".join(lines)
           if len(text) > 3800:
               text = text[:3800] + "\n...<truncated>"

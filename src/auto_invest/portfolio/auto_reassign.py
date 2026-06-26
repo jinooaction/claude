@@ -32,7 +32,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import Any
 
 from auto_invest.analytics.forward_tournament import (
     OBS_HEALTH_BLOCKED,
@@ -67,8 +69,9 @@ class ReassignDecision:
     observation_health: str = OBS_HEALTH_OK  # OK 일 때만 기존 재지정 판단 진행
     observation_note: str = ""
     gate_observation_quality: bool = True  # 후보 관측 품질 입력 게이트
+    execution_feedback: dict[str, Any] | None = None
 
-    SCHEMA_VERSION = "1.1"
+    SCHEMA_VERSION = "1.2"
 
     @property
     def all_gates_pass(self) -> bool:
@@ -88,6 +91,7 @@ class ReassignDecision:
             "canary_verdict": self.canary_verdict,
             "observation_health": self.observation_health,
             "observation_note": self.observation_note,
+            "execution_feedback": self.execution_feedback,
             "reason": self.reason,
             "gates": {
                 "observation_quality_ok": self.gate_observation_quality,
@@ -103,6 +107,7 @@ def decide_reassignment(
     leaderboard: TournamentLeaderboard,
     canary_verdict: str | None,
     kill_switch_present: bool,
+    execution_feedback: Mapping[str, Any] | None = None,
 ) -> ReassignDecision:
     """토너먼트 리더보드 + 하드닝 캐너리 결과 → 자동 재지정 결정(순수·보수적 fail-safe).
 
@@ -121,6 +126,7 @@ def decide_reassignment(
     incumbent = leaderboard.incumbent_key
     observation_health = leaderboard.observation_health or OBS_HEALTH_OK
     observation_note = leaderboard.observation_note or ""
+    feedback = _execution_feedback_summary(execution_feedback)
     g_observation = observation_health == OBS_HEALTH_OK
     g_challenger = challenger is not None
     g_mult = leaderboard.champion_multiplicity_robust is True
@@ -134,6 +140,7 @@ def decide_reassignment(
             canary_verdict=canary_verdict,
             observation_health=observation_health,
             observation_note=observation_note,
+            execution_feedback=feedback,
             reason=reason,
             gate_observation_quality=g_observation,
             gate_challenger=g_challenger,
@@ -185,6 +192,28 @@ def decide_reassignment(
         f"하드닝 캐너리 PASS) → 라이브를 '{incumbent}'에서 '{challenger}'로 재지정 + 자본 "
         "사다리 rung 0 리셋(새 전략을 25%부터 자율 재검증).",
     )
+
+
+def _execution_feedback_summary(
+    feedback: Mapping[str, Any] | None,
+) -> dict[str, Any] | None:
+    if not isinstance(feedback, Mapping) or not feedback:
+        return None
+    cumulative = feedback.get("cumulative")
+    counts = feedback.get("counts")
+    latest = feedback.get("latest")
+    return {
+        "source": "rejected_order_opportunity_monitor",
+        "effect": "evidence_only_no_gate_override",
+        "verdict": feedback.get("verdict"),
+        "verdict_label_ko": feedback.get("verdict_label_ko"),
+        "latest_signal": feedback.get("latest_signal"),
+        "interpretation_ko": feedback.get("interpretation_ko"),
+        "next_action_ko": feedback.get("next_action_ko"),
+        "cumulative": dict(cumulative) if isinstance(cumulative, Mapping) else {},
+        "counts": dict(counts) if isinstance(counts, Mapping) else {},
+        "latest": dict(latest) if isinstance(latest, Mapping) else None,
+    }
 
 
 __all__ = [

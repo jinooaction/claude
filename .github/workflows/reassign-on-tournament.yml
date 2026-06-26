@@ -89,6 +89,24 @@ jobs:
           echo "challenger_path=${challenger}" >> "$GITHUB_OUTPUT"
           echo "challenger_path=${challenger:-(none)}"
 
+      - name: Read micro GTAA opportunity feedback (read-only)
+        id: opportunity_feedback
+        run: |
+          set -uo pipefail
+          BRANCH=automation/rebalance-micro-gtaa-last-run
+          git fetch origin "${BRANCH}" || true
+          if git show "origin/${BRANCH}:opportunity_monitor.json" > /tmp/opportunity_monitor.json 2>/tmp/opportunity_monitor.err; then
+            :
+          else
+            cat > /tmp/opportunity_monitor.json <<'JSON'
+          {"schema_version":1,"verdict":"NO_VALUED_REJECTIONS","verdict_label_ko":"평가 가능한 거부 주문 없음","latest_signal":"FLAT_OR_UNVALUED","interpretation_ko":"published micro GTAA opportunity_monitor.json unavailable","next_action_ko":"다음 micro GTAA 실행에서 표본을 갱신합니다.","counts":{"records":0,"valued_records":0,"rejected_orders":0,"valued_orders":0},"cumulative":{"total_intended_order_mark_pnl_usd":"+0.00"},"streaks":{"intent_loss":0,"intent_gain":0},"latest":null}
+          JSON
+            echo "(micro opportunity_monitor.json 없음 — 재지정 게이트는 기존 입력만 사용)"
+          fi
+          verdict="$(jq -r '.verdict // "UNKNOWN"' /tmp/opportunity_monitor.json 2>/dev/null || echo UNKNOWN)"
+          echo "verdict=${verdict}" >> "$GITHUB_OUTPUT"
+          echo "micro opportunity feedback verdict: ${verdict}"
+
       - name: ④ Hardened canary on the challenger (instance SSH; PASS/FAIL or empty)
         id: canary
         if: steps.board.outputs.challenger_path != ''
@@ -131,6 +149,7 @@ jobs:
           uv run auto-invest reassign-decide \
             --leaderboard-json /tmp/leaderboard.json \
             --canary-verdict "${VERDICT:-}" \
+            --execution-feedback-json /tmp/opportunity_monitor.json \
             --live-portfolio deploy/canary-live-portfolio.toml \
             --sentinel automation/rebalance-live.request \
             --kill-switch automation/AUTOARM_DISABLED \
@@ -222,6 +241,7 @@ jobs:
           CHALLENGER_PATH: ${{ steps.board.outputs.challenger_path }}
           PR_URL: ${{ steps.pr.outputs.pr_url }}
           MERGED: ${{ steps.pr.outputs.merged }}
+          FEEDBACK_VERDICT: ${{ steps.opportunity_feedback.outputs.verdict }}
         run: |
           set -uo pipefail
           BRANCH=automation/reassign-last-run
@@ -248,6 +268,7 @@ jobs:
             echo "| incumbent → challenger | ${incumbent} → ${challenger} |"
             echo "| 챔피언 설정 | ${CHALLENGER_PATH:-(도전자 없음)} |"
             echo "| ④ 캐너리 verdict | ${VERDICT:-(미실행 — 도전자 없음/데이터 없음)} |"
+            echo "| 라이브 거부 주문 누적 verdict | ${FEEDBACK_VERDICT:-UNKNOWN} |"
             echo "| 라이브 설정 변경 | ${CHANGED:-false} |"
             echo "| PR | ${PR_URL:-(없음 — 변경 없음)} |"
             echo "| 머지 | ${MERGED:-n/a} |"
@@ -267,6 +288,13 @@ jobs:
             echo "## 5중 게이트 결정 JSON"
             echo '```json'
             cat /tmp/decision.json 2>/dev/null || echo '{}'
+            echo '```'
+            echo ""
+            echo "## 라이브 거부 주문 누적 평가 JSON"
+            echo ""
+            echo "이 신호는 재지정 결정의 읽기 전용 실행 피드백이다. 기존 5중 게이트를 우회하지 않는다."
+            echo '```json'
+            cat /tmp/opportunity_monitor.json 2>/dev/null || echo '{}'
             echo '```'
             echo ""
             echo "## ④ 하드닝 캐너리 결과 JSON"
