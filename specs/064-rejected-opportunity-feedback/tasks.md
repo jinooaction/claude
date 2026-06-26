@@ -38,4 +38,4 @@
 - [x] T014 Run full `uv run pytest`
 - [x] T015 Run full `uv run ruff check src tests`
 - [x] T016 Run handoff fact check and strict agent harness
-- [ ] T017 Open/merge PR and refresh handoff
+- [x] T017 Open/merge PR and refresh handoff
