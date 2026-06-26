@@ -175,6 +175,45 @@ async def test_place_order_non_json_error_preserves_body_preview():
 
 
 @pytest.mark.asyncio
+async def test_place_order_http_200_error_body_preserves_kis_diagnostics():
+    async with _client() as client:
+        with respx.mock(base_url=BASE) as mock:
+            mock.post("/uapi/overseas-stock/v1/trading/order").mock(
+                return_value=httpx.Response(
+                    200,
+                    json={
+                        "rt_cd": "1",
+                        "msg_cd": "APBK1234",
+                        "msg1": "주문 가능 금액 부족",
+                        "CANO": "12345678",
+                    },
+                )
+            )
+            with pytest.raises(KisOrderError) as raised:
+                await place_order(
+                    client,
+                    access_token="tok",
+                    app_key="app",
+                    app_secret="sec",
+                    request=_order(Side.BUY),
+                    market="NASD",
+                )
+
+    assert str(raised.value) == "KIS order response missing output"
+    diagnostics = raised.value.diagnostics
+    assert diagnostics["http_status"] == 200
+    assert diagnostics["kis_rt_cd"] == "1"
+    assert diagnostics["kis_msg_cd"] == "APBK1234"
+    assert diagnostics["kis_msg1"] == "주문 가능 금액 부족"
+    assert diagnostics["endpoint"] == "/uapi/overseas-stock/v1/trading/order"
+    body = diagnostics["request_summary"]["body"]
+    assert body["CANO"] != "12345678"
+    assert body["ACNT_PRDT_CD"] == "**"
+    assert "12345678" not in json.dumps(diagnostics, ensure_ascii=False)
+    assert "tok" not in json.dumps(diagnostics, ensure_ascii=False)
+
+
+@pytest.mark.asyncio
 async def test_order_router_persists_broker_diagnostics_in_audit_payload(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):

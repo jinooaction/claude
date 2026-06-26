@@ -18,6 +18,7 @@ from auto_invest.notifications.telegram import (
 )
 from auto_invest.persistence import audit, db
 from auto_invest.persistence.audit import (
+    ErrorPayload,
     FillPayload,
     OrderRejectedByBrokerPayload,
     OrderSubmittedPayload,
@@ -150,6 +151,114 @@ def test_process_once_replays_existing_and_advances_cursor(tmp_path: Path) -> No
     assert "체결" in out.text
     assert "qty=1" in out.text
     assert load_cursor(state).last_seq == seq
+
+
+def test_process_once_caps_stale_cursor_catchup_to_newest_rows(tmp_path: Path) -> None:
+    db_path = _db(tmp_path)
+    state = tmp_path / "state.json"
+    conn = db.get_connection(db_path)
+    try:
+        for idx in range(10):
+            audit.append(
+                conn,
+                OrderSubmittedPayload(
+                    kis_order_id=f"K{idx}",
+                    submitted_at_utc="2026-06-22T15:00:00Z",
+                ),
+                symbol="IEF",
+            )
+        last_seq = conn.execute("SELECT MAX(seq) AS seq FROM audit_log").fetchone()["seq"]
+    finally:
+        conn.close()
+    state.write_text(
+        json.dumps({"last_seq": 0, "updated_at_utc": "2026-06-22T15:00:00Z"}),
+        encoding="utf-8",
+    )
+
+    class Buffer:
+        def __init__(self) -> None:
+            self.text = ""
+
+        def write(self, value: str) -> None:
+            self.text += value
+
+    out = Buffer()
+    sent = asyncio.run(
+        process_once(
+            db_path=db_path,
+            state_file=state,
+            config=TelegramConfig(bot_token=None, chat_id=None),
+            dry_run=True,
+            max_catchup_alerts=3,
+            output=out,
+        )
+    )
+
+    assert sent == 3
+    assert "kis_order_id=K7" in out.text
+    assert "kis_order_id=K8" in out.text
+    assert "kis_order_id=K9" in out.text
+    assert "kis_order_id=K0" not in out.text
+    assert load_cursor(state).last_seq == last_seq
+
+
+def test_process_once_suppresses_repeated_error_alerts_with_cooldown(tmp_path: Path) -> None:
+    db_path = _db(tmp_path)
+    state = tmp_path / "state.json"
+    conn = db.get_connection(db_path)
+    try:
+        for _ in range(3):
+            audit.append(
+                conn,
+                ErrorPayload(where="worker.loop", message="same failure", exc_type="RuntimeError"),
+                symbol="IEF",
+            )
+        third_seq = conn.execute("SELECT MAX(seq) AS seq FROM audit_log").fetchone()["seq"]
+    finally:
+        conn.close()
+
+    class Buffer:
+        def __init__(self) -> None:
+            self.text = ""
+
+        def write(self, value: str) -> None:
+            self.text += value
+
+    out = Buffer()
+    sent = asyncio.run(
+        process_once(
+            db_path=db_path,
+            state_file=state,
+            config=TelegramConfig(bot_token=None, chat_id=None),
+            dry_run=True,
+            replay_existing=True,
+            output=out,
+        )
+    )
+    assert sent == 1
+    assert out.text.count("auto-invest 오류") == 1
+    assert load_cursor(state).last_seq == third_seq
+
+    conn = db.get_connection(db_path)
+    try:
+        fourth_seq = audit.append(
+            conn,
+            ErrorPayload(where="worker.loop", message="same failure", exc_type="RuntimeError"),
+            symbol="IEF",
+        )
+    finally:
+        conn.close()
+
+    sent = asyncio.run(
+        process_once(
+            db_path=db_path,
+            state_file=state,
+            config=TelegramConfig(bot_token=None, chat_id=None),
+            dry_run=True,
+        )
+    )
+    assert sent == 0
+    assert load_cursor(state).last_seq == fourth_seq
 
 
 def test_telegram_notifier_retries_then_succeeds() -> None:

@@ -1,0 +1,114 @@
+name: Manage Telegram alerts on server
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Telegram alert service action"
+        required: true
+        default: status
+        type: choice
+        options:
+          - status
+          - disable
+          - restart
+          - enable
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manage-telegram-alerts
+  cancel-in-progress: false
+
+jobs:
+  manage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check required secrets
+        env:
+          VULTR_SSH_HOST: ${{ secrets.VULTR_SSH_HOST }}
+          VULTR_SSH_USER: ${{ secrets.VULTR_SSH_USER }}
+          VULTR_SSH_PRIVATE_KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+          VULTR_SSH_PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          set -euo pipefail
+          missing=()
+          [[ -z "${VULTR_SSH_HOST:-}" ]] && missing+=("VULTR_SSH_HOST")
+          [[ -z "${VULTR_SSH_USER:-}" ]] && missing+=("VULTR_SSH_USER")
+          [[ -z "${VULTR_SSH_PRIVATE_KEY:-}" ]] && missing+=("VULTR_SSH_PRIVATE_KEY")
+          [[ -z "${VULTR_SSH_PORT:-}" ]] && missing+=("VULTR_SSH_PORT")
+          if [[ ${#missing[@]} -gt 0 ]]; then
+            echo "::error::Missing required secrets: ${missing[*]}"
+            exit 1
+          fi
+
+      - name: Install SSH key
+        env:
+          VULTR_SSH_PRIVATE_KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${VULTR_SSH_PRIVATE_KEY}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+      - name: Manage Telegram alert service
+        env:
+          ACTION: ${{ inputs.action }}
+          VULTR_SSH_HOST: ${{ secrets.VULTR_SSH_HOST }}
+          VULTR_SSH_USER: ${{ secrets.VULTR_SSH_USER }}
+          VULTR_SSH_PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          set -euo pipefail
+          port="${VULTR_SSH_PORT:-22}"
+          ssh -o StrictHostKeyChecking=accept-new \
+              -o ConnectTimeout=15 \
+              -p "${port}" \
+              -i ~/.ssh/id_ed25519 \
+              "${VULTR_SSH_USER}@${VULTR_SSH_HOST}" \
+              "sudo TELEGRAM_ALERT_ACTION='${ACTION}' bash -s" <<'REMOTE'
+          set -euo pipefail
+          SERVICE=auto-invest-telegram-alerts.service
+          case "${TELEGRAM_ALERT_ACTION}" in
+            status)
+              systemctl is-enabled "${SERVICE}" || true
+              systemctl is-active "${SERVICE}" || true
+              ;;
+            disable)
+              systemctl disable --now "${SERVICE}"
+              if systemctl is-active --quiet "${SERVICE}"; then
+                echo "ERROR: ${SERVICE} is still active after disable" >&2
+                exit 1
+              fi
+              ;;
+            restart)
+              systemctl restart "${SERVICE}"
+              systemctl is-active --quiet "${SERVICE}"
+              ;;
+            enable)
+              systemctl enable --now "${SERVICE}"
+              systemctl is-active --quiet "${SERVICE}"
+              ;;
+            *)
+              echo "ERROR: unsupported action: ${TELEGRAM_ALERT_ACTION}" >&2
+              exit 2
+              ;;
+          esac
+          echo "${SERVICE} action=${TELEGRAM_ALERT_ACTION}"
+          journalctl -u "${SERVICE}" -n 50 --no-pager || true
+          REMOTE
+
+      - name: Summary
+        if: always()
+        env:
+          ACTION: ${{ inputs.action }}
+        run: |
+          {
+            echo "## Manage Telegram alerts"
+            echo ""
+            echo "- Requested action: \`${ACTION}\`"
+            echo "- Scope: only \`auto-invest-telegram-alerts.service\`."
+            echo "- Trading worker, order routing, capital, whitelist, and risk gates are untouched."
+          } >> "$GITHUB_STEP_SUMMARY"
