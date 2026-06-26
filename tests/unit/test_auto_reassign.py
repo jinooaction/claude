@@ -159,3 +159,26 @@ def test_all_gates_pass_false_when_any_gate_open() -> None:
     lb = _lb(challenger_key="x", champion_multiplicity_robust=True)
     d = decide_reassignment(leaderboard=lb, canary_verdict=None, kill_switch_present=False)
     assert d.all_gates_pass is False
+
+
+def test_execution_feedback_is_evidence_only() -> None:
+    lb = _lb(challenger_key=None)
+    feedback = {
+        "verdict": "STRATEGY_REVIEW",
+        "verdict_label_ko": "전략 검토 필요",
+        "latest_signal": "INTENT_LOSS",
+        "cumulative": {"total_intended_order_mark_pnl_usd": "-5.50"},
+        "counts": {"records": 2, "valued_records": 2},
+    }
+
+    d = decide_reassignment(
+        leaderboard=lb,
+        canary_verdict="PASS",
+        kill_switch_present=False,
+        execution_feedback=feedback,
+    )
+
+    assert d.action == ACTION_HOLD
+    out = d.to_json_dict()
+    assert out["execution_feedback"]["verdict"] == "STRATEGY_REVIEW"
+    assert out["execution_feedback"]["effect"] == "evidence_only_no_gate_override"

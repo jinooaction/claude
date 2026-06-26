@@ -112,6 +112,40 @@ def test_challenger_without_canary_waits(tmp_path: Path) -> None:
     assert "execution" not in out
 
 
+def test_execution_feedback_json_is_included_without_changing_action(tmp_path: Path) -> None:
+    lb = _leaderboard(tmp_path, challenger_key=None)
+    feedback = _write(
+        tmp_path,
+        "opportunity_monitor.json",
+        json.dumps(
+            {
+                "verdict": "STRATEGY_REVIEW",
+                "verdict_label_ko": "전략 검토 필요",
+                "latest_signal": "INTENT_LOSS",
+                "cumulative": {"total_intended_order_mark_pnl_usd": "-5.50"},
+                "counts": {"records": 2, "valued_records": 2},
+            }
+        ),
+    )
+    res = _invoke(
+        tmp_path,
+        [
+            "--leaderboard-json",
+            str(lb),
+            "--canary-verdict",
+            "PASS",
+            "--execution-feedback-json",
+            str(feedback),
+        ],
+    )
+
+    assert res.exit_code == 0, res.output
+    out = json.loads(res.stdout)
+    assert out["action"] == "HOLD"
+    assert out["execution_feedback"]["verdict"] == "STRATEGY_REVIEW"
+    assert out["execution_feedback"]["effect"] == "evidence_only_no_gate_override"
+
+
 def test_blocked_observation_health_holds(tmp_path: Path) -> None:
     lb = _leaderboard(
         tmp_path,

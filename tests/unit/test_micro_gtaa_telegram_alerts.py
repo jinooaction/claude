@@ -29,6 +29,7 @@ def test_micro_gtaa_telegram_notification_runs_after_sidecar_publish() -> None:
     assert "/tmp/micro_preflight.json" in text[notify_idx:]
     assert "/tmp/micro_live.json" in text[notify_idx:]
     assert "/tmp/micro_opportunity.json" in text[notify_idx:]
+    assert "/tmp/micro_opportunity_monitor.json" in text[notify_idx:]
 
 
 def test_micro_gtaa_workflow_evaluates_rejected_order_opportunity() -> None:
@@ -41,3 +42,14 @@ def test_micro_gtaa_workflow_evaluates_rejected_order_opportunity() -> None:
     assert "/tmp/micro_opportunity.json" in block
     assert "mark_fetch_error" in block
     assert "## 거부 주문 기회손익" in text
+
+
+def test_micro_gtaa_workflow_publishes_rejected_order_opportunity_monitor() -> None:
+    text = _WORKFLOW.read_text(encoding="utf-8")
+    assert "Update rejected order opportunity monitor" in text
+    assert "scripts/opportunity_monitor_sidecar.py" in text
+    assert "opportunity_history.json" in text
+    assert "opportunity_monitor.json" in text
+    assert "## 거부 주문 누적 평가" in text
+    assert "5. 누적 전략/실행 평가" in text
+    assert "음수=전략 의도 손실 검토" in text

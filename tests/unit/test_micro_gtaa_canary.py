@@ -112,8 +112,11 @@ def test_micro_gtaa_sidecar_publishes_preflight_evidence():
     assert "## 라이브 전 주문 전제 확인" in text
     assert "## 계좌 전체 재배치 상태" in text
     assert "## 거부 주문 기회손익" in text
+    assert "## 거부 주문 누적 평가" in text
     assert "cat /tmp/micro_preflight.json" in text
     assert "cat /tmp/micro_opportunity.json" in text
+    assert "opportunity_history.json" in text
+    assert "opportunity_monitor.json" in text
 
 
 def test_micro_gtaa_workflow_manual_cap_guard_is_present():

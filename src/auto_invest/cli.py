@@ -1161,6 +1161,150 @@ def rejected_order_opportunity_cmd(
         typer.echo(render_rejected_order_opportunity_text(report))
 
 
+@app.command("opportunity-monitor")
+def opportunity_monitor_cmd(
+    history_json: Path | None = typer.Option(
+        None,
+        "--history-json",
+        help="기존 opportunity_history.json. 없거나 손상되면 빈 기록으로 처리.",
+    ),
+    opportunity_json: Path | None = typer.Option(
+        None,
+        "--opportunity-json",
+        help="이번 실행의 rejected-order-opportunity JSON. 지정하면 history 에 추가.",
+    ),
+    history_out: Path | None = typer.Option(
+        None,
+        "--history-out",
+        help="갱신된 rolling history JSON 출력 경로.",
+    ),
+    monitor_out: Path | None = typer.Option(
+        None,
+        "--monitor-out",
+        help="누적 monitor summary JSON 출력 경로.",
+    ),
+    run_id: str | None = typer.Option(None, "--run-id", help="GitHub Actions run id."),
+    run_url: str | None = typer.Option(None, "--run-url", help="GitHub Actions run URL."),
+    event: str | None = typer.Option(None, "--event", help="workflow event 이름."),
+    live_outcome: str | None = typer.Option(
+        None,
+        "--live-outcome",
+        help="LIVE rebalance step outcome.",
+    ),
+    armed: str | None = typer.Option(
+        None,
+        "--armed",
+        help="micro GTAA armed 값(true/false/unknown).",
+    ),
+    capital_usd: str | None = typer.Option(
+        None,
+        "--capital-usd",
+        help="micro GTAA declared capital USD.",
+    ),
+    timestamp_utc: str | None = typer.Option(
+        None,
+        "--timestamp-utc",
+        help="기록 시각 ISO8601 UTC. 생략하면 현재 UTC.",
+    ),
+    max_entries: int = typer.Option(
+        60,
+        "--max-entries",
+        help="rolling history 최대 보존 실행 수.",
+    ),
+    min_valued_reports: int = typer.Option(
+        2,
+        "--min-valued-reports",
+        help="자동 verdict 에 필요한 최소 평가 가능 실행 수.",
+    ),
+    strategy_review_loss_usd: str = typer.Option(
+        "-5.00",
+        "--strategy-review-loss-usd",
+        help="누적 전략 의도 손실 검토 임계값(음수).",
+    ),
+    execution_review_gain_usd: str = typer.Option(
+        "5.00",
+        "--execution-review-gain-usd",
+        help="거부로 놓친 누적 이익 검토 임계값(양수).",
+    ),
+    streak_threshold: int = typer.Option(
+        2,
+        "--streak-threshold",
+        help="같은 방향 최신 연속 신호 검토 임계 횟수.",
+    ),
+    output_format: str = typer.Option("json", "--format", help="json | text."),
+) -> None:
+    """거부 주문 기회손익을 rolling history 로 누적하고 전략/실행 검토 신호를 낸다.
+
+    이 명령은 브로커를 호출하지 않고 주문을 재시도하지 않는다. 양수 누적은 거부 때문에
+    이익을 놓쳤다는 실행 경로 신호, 음수 누적은 전략 의도가 손실이었을 수 있다는 전략
+    검토 신호로 해석한다. 단, 이 신호 하나로 자동 전략 교체를 수행하지 않는다.
+    """
+    import json as _json
+
+    from auto_invest.analytics.opportunity_monitor import (
+        OpportunityMonitorThresholds,
+        append_opportunity_record,
+        empty_opportunity_history,
+        render_opportunity_monitor_text,
+        summarize_opportunity_history,
+    )
+
+    if output_format not in ("json", "text"):
+        typer.echo("--format must be 'json' or 'text'.", err=True)
+        _exit(2)
+
+    def _read_json(path: Path | None) -> dict:
+        if path is None:
+            return {}
+        try:
+            text = path.read_text(encoding="utf-8").strip()
+        except FileNotFoundError:
+            return {}
+        if not text or text.startswith("("):
+            return {}
+        try:
+            data = _json.loads(text)
+        except _json.JSONDecodeError:
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    history = _read_json(history_json)
+    if opportunity_json is not None:
+        history = append_opportunity_record(
+            history,
+            _read_json(opportunity_json),
+            run_id=run_id,
+            run_url=run_url,
+            event=event,
+            live_outcome=live_outcome,
+            armed=armed,
+            capital_usd=capital_usd,
+            timestamp_utc=timestamp_utc,
+            max_entries=max_entries,
+        )
+    elif not history:
+        history = empty_opportunity_history(max_entries=max_entries)
+
+    thresholds = OpportunityMonitorThresholds(
+        min_valued_reports=min_valued_reports,
+        strategy_review_loss_usd=strategy_review_loss_usd,
+        execution_review_gain_usd=execution_review_gain_usd,
+        streak_threshold=streak_threshold,
+    )
+    summary = summarize_opportunity_history(history, thresholds=thresholds)
+
+    history_text = _json.dumps(history, ensure_ascii=False, indent=2) + "\n"
+    monitor_text = _json.dumps(summary, ensure_ascii=False, indent=2) + "\n"
+    if history_out is not None:
+        history_out.write_text(history_text, encoding="utf-8")
+    if monitor_out is not None:
+        monitor_out.write_text(monitor_text, encoding="utf-8")
+    if output_format == "json":
+        typer.echo(monitor_text, nl=False)
+    else:
+        typer.echo(render_opportunity_monitor_text(summary))
+
+
 def _d_iso_now() -> str:
     """ISO8601 millis with Z suffix."""
     from datetime import UTC, datetime
@@ -5952,6 +6096,11 @@ def reassign_decide_cmd(
         help="챔피언에 대한 하드닝 캐너리(스펙 007) 결과: PASS | FAIL | (빈값=미실행). "
         "PASS 가 아니면 ④ 게이트 미통과 → WAIT_CANARY(라이브 무변경).",
     ),
+    execution_feedback_json: Path | None = typer.Option(
+        None,
+        "--execution-feedback-json",
+        help="선택: opportunity-monitor JSON. 재지정 결정 증거에 포함하되 게이트를 우회하지 않음.",
+    ),
     kill_switch: Path = typer.Option(
         Path("automation/AUTOARM_DISABLED"),
         "--kill-switch",
@@ -6060,6 +6209,7 @@ def reassign_decide_cmd(
         leaderboard=leaderboard,
         canary_verdict=(canary_verdict.strip() or None),
         kill_switch_present=kill_switch.exists(),
+        execution_feedback=_read_json(execution_feedback_json),
     )
     out: dict = decision.to_json_dict()
     out["wrote_files"] = False

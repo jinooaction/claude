@@ -198,6 +198,11 @@ COMMAND_POLICIES: dict[str, CommandPolicy] = {
         "Record or inspect a portfolio NAV snapshot.",
         writes_db=True,
     ),
+    "opportunity-monitor": _p(
+        "opportunity-monitor",
+        AutonomyLevel.PROPOSAL,
+        "Update rejected-order opportunity history and emit review signals; no orders.",
+    ),
     "paper-report": _p(
         "paper-report",
         AutonomyLevel.READ_ONLY,

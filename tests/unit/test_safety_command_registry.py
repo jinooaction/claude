@@ -57,6 +57,9 @@ def test_safety_commands_json_cli():
     assert commands["rejected-order-opportunity"]["level"] == "A0"
     assert commands["rejected-order-opportunity"]["can_place_order"] is False
     assert commands["rejected-order-opportunity"]["uses_broker"] is True
+    assert commands["opportunity-monitor"]["level"] == "A2"
+    assert commands["opportunity-monitor"]["can_place_order"] is False
+    assert commands["opportunity-monitor"]["uses_broker"] is False
 
 
 def test_safety_commands_bad_format_exits_2():
