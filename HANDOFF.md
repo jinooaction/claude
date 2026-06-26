@@ -29,18 +29,18 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 상세 규칙은 Codex 세션에서는 `AGENTS.md`, Claude 세션에서는 `CLAUDE.md` 본문 참조.
 
-## 한눈 요약표 — 2026-06-23 KST 최신 main 기준
+## 한눈 요약표 — 2026-06-26 KST 최신 main 기준
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `7a14315` — Merge pull request #386 from jinooaction/Codex/account-wide-micro-gtaa |
-| main 테스트 | `uv run pytest -q` → 2252 passed, 4 skipped |
+| 마지막 main 커밋 | `7195c48` — Merge pull request #388 from jinooaction/Codex/fix-telegram-alert-flood-kis-diagnostics |
+| main 테스트 | `uv run pytest -q` → 2257 passed, 4 skipped |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
 | 열린 PR | 없음(GitHub open PR 조회 결과 `[]`) |
 | 출시 완료 스펙 | 최신 추가: 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
-| 최근 출시 작업 | #386 스펙 063 계좌 전체 micro GTAA 자율 재배치. #384 스펙 062 money-path 실제 돈 최상위 상태. #382 스펙 061 Telegram 서버 연결 자동화와 실제 workflow 실행 |
-| 활성 작업 | 코드 PR 없음. micro GTAA는 `armed:true`, `capital_usd:1000` 유지 중이며, #386 이후 다음 비-push live canary 실행부터 계좌 전체 preview와 현금 부족 시 청산 전용 sell-first 루프가 적용됨 |
-| 안전 경계 | #386은 등급 4 돈 경로 변경. K2 설정 표면에 기존 보유 `BHP`, `MRK`, `ORANY`, `RELX`가 청산 전용으로 추가됐지만 목표 유니버스는 `SPYM`, `IEF`, `GLDM`이고 account-wide 리밸런서가 해당 종목 매수를 거부함. 헌법·커널 목록·K1/K2 코드·K4 감사 경로·비밀값·낙폭 예산 변경 없음 |
+| 최근 출시 작업 | #388 Telegram 알림 폭주 방지와 KIS HTTP 200 오류 진단 보강. #386 스펙 063 계좌 전체 micro GTAA 자율 재배치. #384 스펙 062 money-path 실제 돈 최상위 상태 |
+| 활성 작업 | 코드 PR 없음. Telegram 알림 서비스는 #388 배포 후 `Manage Telegram alerts on server` run `28212999028`로 재시작됐고, status run `28213025727` 기준 `enabled`/`active`이며 재시작 이후 새 전송 로그는 보이지 않음. micro GTAA는 `armed:true`, `capital_usd:1000` 유지 |
+| 안전 경계 | #388은 등급 3 외부 API·운영 알림·브로커 진단 변경. 주문 게이트·자본·허용 종목·포지션 한도·손실 브레이커·헌법·커널 목록 변경 없음. #386은 등급 4 돈 경로 변경으로 계좌 전체 micro GTAA 청산 전용 sell-first 루프를 도입한 상태 |
 
 ## 돈 경로 상태 판독 규칙 (필수 — 스펙 062)
 
@@ -62,6 +62,43 @@ uv run python scripts/money_path_probe.py --manifest | while IFS=$'\t' read -r k
 done
 uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.live_money_state'
 ```
+
+## 최근 관찰 — 2026-06-26 KST (Telegram 알림 폭주 방지와 KIS 진단 보강)
+
+현재 `main` 최신은 `7195c48`(#388, Telegram 알림 폭주 방지와 KIS 진단 보강)이다.
+직전 주요 커밋은 `46c36b9`(구현 커밋), `cd7eb4f`(#387, account-wide micro GTAA handoff),
+`7a14315`(#386, 계좌 전체 micro GTAA 자율 재배치)이다. 이 인계 갱신 시작 시점의 열린 PR은 없다.
+
+- **상황 판단**: Telegram 메시지 9000개 이상은 GitHub Actions가 주문 workflow를 반복 실행한
+  증거가 아니었다. 최신 micro GTAA workflow run은 Telegram 알림 1건만 보냈고, 서버의
+  `auto-invest-telegram-alerts.service`가 감사 로그를 tailing하면서 오래된 cursor 또는 반복
+  `ERROR` row를 따라잡는 경로가 폭주 원인으로 확인됐다.
+- **tailer 방어**: `auto-invest telegram-alerts`는 기존 state file이 오래된 seq를 가리켜도 기본
+  최신 25개만 catch-up한다. 동일한 `ERROR`는 기본 3600초 안에 한 번만 보내고, 억제된 row도
+  cursor는 전진한다. 옵션은 `--max-catchup-alerts`, `--error-cooldown-seconds`다.
+- **KIS 진단 보강**: KIS 주문 응답이 HTTP 200이어도 `rt_cd` 실패 또는 `output.ODNO` 누락이면
+  성공으로 보지 않고 `KisOrderError`를 발생시킨다. 이제 `KeyError('output')` 대신 HTTP 상태,
+  KIS `rt_cd/msg_cd/msg1`, 응답 미리보기, 마스킹된 요청 요약이 남는다.
+- **운영 제어 경로**: `.github/workflows/manage-telegram-alerts.yml`이 추가됐다. 운영자는 로컬 SSH
+  없이 GitHub Actions에서 `auto-invest-telegram-alerts.service`만 `status`, `disable`, `restart`,
+  `enable` 할 수 있다. 거래 worker, 주문 라우터, 자본, whitelist, 위험 게이트는 건드리지 않는다.
+- **배포 확인**: #388 main push의 `Deploy on merge to main` run `28212963179`는 성공했다.
+  `KIS smoke (autonomous)` run `28212963184`도 `7195c48`에서 성공했고 sidecar는
+  `secrets_present=true`, `key_valid=true`, `smoke_state=success`, `smoke_exit=0`이다.
+- **서버 조치 확인**: `Manage Telegram alerts on server` run `28212999028`로 Telegram 알림 서비스를
+  `restart`했고 성공했다. 재시작 약 50초 뒤 status run `28213025727`은 서비스가 `enabled`/`active`
+  라고 보고했다. 최신 50줄 journal에는 재시작 직전 5~6초 간격 Telegram 전송 로그가 있었지만,
+  재시작 이후 새 `sendMessage` 로그는 보이지 않았다.
+- **안전 경계**: 등급 3 외부 API·운영 알림·브로커 진단 변경이다. 실제 주문은 실행하지 않았고,
+  주문 게이트·자본·허용 종목·포지션 한도·손실 브레이커·헌법·커널 목록은 바꾸지 않았다.
+  감사 로그 원본은 그대로 두며, cursor state에는 동일 오류 억제용 SHA-256 fingerprint만 저장한다.
+- **검증**: PR #388 머지 전 focused tests 21 통과, `uv run pytest` 2257 통과·4 스킵,
+  `uv run ruff check src tests` 통과, `uv run auto-invest telegram-alerts --help` 옵션 노출 확인,
+  하네스 `OK (14/14)`, PR 품질 관문 통과. handoff 갱신 전 `uv run pytest -q`는 stale
+  `HANDOFF.md` 때문에 하네스 2건만 실패했다. 이 handoff 갱신은 그 원인(`마지막 main 커밋` 행)을
+  바로잡았다. 갱신 후 `uv run python scripts/check_handoff_facts.py`,
+  `uv run python scripts/agent_harness_probe.py --strict`, `uv run pytest -q`,
+  `uv run ruff check src tests`가 모두 통과했다.
 
 ## 최근 관찰 — 2026-06-23 KST (스펙 063 계좌 전체 micro GTAA 자율 재배치)
 
@@ -297,6 +334,23 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
   통과, `uv run python scripts/agent_harness_probe.py --strict` `OK (14/14)`,
   `uv run python scripts/check_handoff_facts.py` 통과, PR 품질 관문 통과. 머지 직전 전체 테스트와
   린트를 다시 실행해 같은 결과를 확인했다.
+
+## 최근 마일스톤 — 2026-06-26 KST (Telegram 알림 폭주 방지와 KIS 진단 보강)
+
+main 머지 `7195c48`(#388). Telegram 메시지 9000개 이상 누적 상황을 조사한 뒤, 서버 audit tailer가
+오래된 cursor 또는 반복 `ERROR` row를 계속 전송할 수 있는 경로와 KIS HTTP 200 오류 본문이
+`KeyError('output')`로 사라지는 경로를 함께 닫았다. 상세: `HANDOFF-061-TELEGRAM-ALERT-FLOOD-FIX.md`,
+`specs/060-telegram-order-alerts/`, `specs/059-kis-order-diagnostics/`.
+
+- **핵심 변경**: Telegram tailer stale cursor catch-up 기본 25개 제한, 동일 `ERROR` 1시간 cooldown,
+  KIS HTTP 200 오류 본문 진단 보존, `auto-invest-telegram-alerts.service` 전용 수동 관리 workflow.
+- **운영 조치**: #388 배포 성공 뒤 workflow run `28212999028`로 Telegram 알림 서비스를 재시작했다.
+  status run `28213025727` 기준 서비스는 `enabled`/`active`이고 재시작 이후 새 전송 로그는 보이지 않았다.
+- **안전 경계**: 등급 3 외부 API·운영 알림·브로커 진단 변경이다. 실제 주문, 자본, whitelist,
+  주문 게이트, 손실 브레이커, 헌법, 커널 목록은 변경하지 않았다.
+- **검증/배포**: `uv run pytest` 2257 통과·4 스킵, `uv run ruff check src tests` 통과,
+  하네스 `OK (14/14)`, PR 품질 관문 통과. #388 deploy run `28212963179` 성공,
+  KIS smoke run `28212963184` 성공.
 
 ## 최근 마일스톤 — 2026-06-23 KST (스펙 063 계좌 전체 micro GTAA 자율 재배치)
 
@@ -3550,6 +3604,15 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 
 ## 과거 인수인계 파일 (참고용)
 
+- `HANDOFF-061-TELEGRAM-ALERT-FLOOD-FIX.md` — Telegram 알림 폭주 방지와 KIS 진단 보강
+  (2026-06-26, PR #388 `7195c48`). 오래된 Telegram cursor catch-up을 기본 최신 25개로 제한하고,
+  동일 `ERROR` 1시간 cooldown, KIS HTTP 200 오류 본문 진단 보존, Telegram 알림 서비스 전용
+  `status/disable/restart/enable` workflow를 추가했다. #388 배포와 KIS smoke 성공 뒤 서비스
+  재시작 run `28212999028`도 성공했다.
+- `HANDOFF-060-ACCOUNT-WIDE-MICRO-GTAA.md` — 스펙 063 계좌 전체 micro GTAA 자율 재배치
+  (2026-06-23, PR #386 `7a14315`). 기존 KIS 보유와 현금을 계좌 전체 입력으로 읽고,
+  `BHP`, `MRK`, `ORANY`, `RELX`를 청산 전용으로 선언해 현금 부족 시 매도부터 실행하는
+  sell-first 루프를 추가했다. 목표 매수 유니버스는 계속 `SPYM`, `IEF`, `GLDM`이다.
 - `HANDOFF-059-MONEY-PATH-STATE.md` — 스펙 062 money-path 실제 돈 최상위 상태
   (2026-06-22, PR #384 `3440001`). `live_money_state`를 money-path JSON/text 최상위에 추가하고,
   micro GTAA `armed:true`, 자본 1000달러, 마지막 실행의 브로커 거부 2건·접수체결 0건을 한곳에서
