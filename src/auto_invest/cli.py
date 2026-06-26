@@ -137,6 +137,19 @@ def telegram_alerts(
         "--poll-interval",
         help="Polling interval for --follow.",
     ),
+    max_catchup_alerts: int = typer.Option(
+        25,
+        "--max-catchup-alerts",
+        help=(
+            "Maximum stale-cursor backlog alerts to send on startup. "
+            "Use 0 to skip backlog, negative to disable the cap."
+        ),
+    ),
+    error_cooldown_seconds: float = typer.Option(
+        3600.0,
+        "--error-cooldown-seconds",
+        help="Suppress identical ERROR alerts for this many seconds. Use 0 to disable.",
+    ),
     test_message: bool = typer.Option(
         False,
         "--test-message",
@@ -194,6 +207,8 @@ def telegram_alerts(
                     replay_existing=replay_existing,
                     include_paper=include_paper,
                     poll_interval_seconds=poll_interval_seconds,
+                    max_catchup_alerts=max_catchup_alerts,
+                    error_cooldown_seconds=error_cooldown_seconds,
                     output=_sys.stdout,
                 )
             )
@@ -206,6 +221,8 @@ def telegram_alerts(
                     dry_run=dry_run,
                     replay_existing=replay_existing,
                     include_paper=include_paper,
+                    max_catchup_alerts=max_catchup_alerts,
+                    error_cooldown_seconds=error_cooldown_seconds,
                     output=_sys.stdout,
                 )
             )

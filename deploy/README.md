@@ -94,11 +94,21 @@ cd /opt/auto-invest
 systemctl enable --now auto-invest-telegram-alerts.service
 ```
 
+The observer starts at the current audit seq on a fresh state file. If an
+existing state file is stale, it sends only the newest 25 catch-up alerts by
+default (`--max-catchup-alerts`) and suppresses identical `ERROR` alerts for
+one hour by default (`--error-cooldown-seconds`).
+
 Disable mobile alerts without touching the trading worker:
 
 ```bash
 systemctl disable --now auto-invest-telegram-alerts.service
 ```
+
+Without direct server SSH from the local machine, run the manual GitHub Actions
+workflow `Manage Telegram alerts on server` with action `status`, `disable`,
+`restart`, or `enable`. That workflow controls only
+`auto-invest-telegram-alerts.service`.
 
 ## 3. Verify
 

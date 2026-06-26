@@ -59,6 +59,7 @@
 - 예약주문 가능 시간대는 "일반 주문 허용"으로 취급하지 않는다. 예약주문 지원은 별도 스펙 전까지 자동 사용하지 않는다.
 - KIS 잔고 또는 매수 가능 현금 조회가 실패하면 주문 금액이 작아 보여도 실주문을 보내지 않는다.
 - KIS 오류 본문이 너무 크면 진단에 필요한 앞부분만 제한적으로 보존하고 비밀값 마스킹을 먼저 적용한다.
+- KIS가 HTTP 200을 반환했지만 `rt_cd`가 실패이거나 `output.ODNO`가 없으면 성공으로 취급하지 않고 응답 코드·메시지를 진단으로 남긴다.
 - HTTP 오류가 재시도 후 최종 실패했을 때도 마지막 응답의 상태와 본문 요약을 잃지 않는다.
 - 이 기능은 헌법, 커널 목록, 포지션 한도, 화이트리스트, 비밀값 로딩 규칙을 완화하지 않는다.
 
@@ -72,7 +73,7 @@
 - **FR-004**: System MUST keep push-triggered arming commits preview-only and MUST NOT place real orders from a push event.
 - **FR-005**: System MUST align the normal US overseas-stock order body with the current KIS official sample's required normal-order fields, including `ORD_SVR_DVSN_CD`.
 - **FR-006**: System MUST keep normal micro GTAA orders as regular-session limit orders only and MUST NOT silently switch to reservation-order or daytime-order endpoints.
-- **FR-007**: System MUST preserve broker rejection diagnostics, including HTTP status, endpoint, KIS response code/message when present, response body preview, and sanitized request summary.
+- **FR-007**: System MUST preserve broker rejection diagnostics, including HTTP status, endpoint, KIS response code/message when present, response body preview, and sanitized request summary, even when KIS returns HTTP 200 with an error body.
 - **FR-008**: System MUST mask account numbers, tokens, app keys, app secrets, and any authorization header value in diagnostics.
 - **FR-009**: System MUST expose diagnostics in both the local audit payload used by order routing and the micro GTAA sidecar output used by the operator.
 - **FR-010**: System MUST include automated tests for session blocking, KIS payload shape, diagnostics preservation, and secret masking.
@@ -93,6 +94,7 @@
 - **SC-001**: A simulated armed micro GTAA run outside US regular hours submits zero broker orders and records a session-blocked reason.
 - **SC-002**: Unit tests prove normal KIS buy and sell request bodies contain all official-sample required fields.
 - **SC-003**: Unit tests prove an HTTP error with a KIS JSON body preserves the KIS diagnostic fields while masking account and credential material.
+- **SC-003A**: Unit tests prove an HTTP 200 response without an accepted KIS order id is rejected with KIS diagnostic fields instead of an opaque `KeyError`.
 - **SC-004**: A simulated insufficient-cash preflight submits zero broker orders and records the observed cash and planned notional.
 - **SC-005**: The implementation passes the repository's full `uv run pytest` and `uv run ruff check src tests` gates before merge.
 - **SC-006**: The operator can read the sidecar output from the next failed broker attempt and identify whether the cause was session, cash, request shape, or KIS response content.

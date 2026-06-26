@@ -60,6 +60,8 @@
 - 응답 diagnostics에 계좌번호, token, app key, app secret, authorization 값이 들어오면 반드시 마스킹되어야 한다.
 - 텔레그램 API 장애는 bounded retry 후 포기하고 다음 이벤트 처리를 계속해야 한다.
 - 첫 실행에서 오래된 audit_log 전체를 폭주 전송하지 않아야 한다. 명시적 replay 옵션이 없으면 현재 마지막 seq부터 시작한다.
+- state file이 이미 있지만 오래된 seq를 가리키는 경우에도 기본값으로 최신 소량만 catch-up하고 오래된 backlog 전체를 폭주 전송하지 않아야 한다.
+- 동일한 `ERROR` 이벤트가 반복 기록되면 지정된 cooldown 안에서는 같은 오류를 중복 전송하지 않고 cursor는 계속 전진해야 한다.
 - GitHub Actions micro 알림은 secrets가 없거나 비어 있으면 skip해야 한다.
 - 알림은 실주문, 취소, 체결 동기화, halt 설정을 직접 수행하면 안 된다.
 
@@ -79,6 +81,8 @@
 - **FR-010**: System MUST provide operator setup documentation for creating a Telegram bot, finding chat id, setting GitHub secrets, and setting server `.env` values.
 - **FR-011**: System MUST include automated tests for message formatting, secret masking, state advancement, dry-run behavior, and absent-secret skip behavior.
 - **FR-012**: System MUST NOT change strategy, capital, whitelist, order caps, circuit breaker thresholds, broker order submission behavior, or existing audit event semantics.
+- **FR-013**: The audit-log tailer MUST cap stale-cursor catch-up by default and expose an operator option to adjust or disable that cap.
+- **FR-014**: The audit-log tailer MUST suppress repeated identical `ERROR` alerts within a bounded cooldown while still advancing the persisted cursor.
 
 ### Key Entities
 
@@ -97,6 +101,8 @@
 - **SC-004**: Dry-run mode can be run locally with no Telegram token and prints the same alert text that would be sent.
 - **SC-005**: The implementation passes targeted tests, full `uv run pytest`, and `uv run ruff check src tests`.
 - **SC-006**: Operator documentation lets a mobile user validate Telegram delivery with a test message before enabling the audit tailer service.
+- **SC-007**: A stale cursor pointing far behind the audit log sends only the configured newest catch-up count and advances to the newest processed seq.
+- **SC-008**: Repeated identical `ERROR` rows inside the cooldown window produce one mobile alert, not one alert per row.
 
 ## Assumptions
 

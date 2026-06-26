@@ -22,7 +22,11 @@ from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
 
 from auto_invest.broker.client import ResilientClient
-from auto_invest.broker.diagnostics import KisOrderError, diagnostics_from_exception
+from auto_invest.broker.diagnostics import (
+    KisOrderError,
+    diagnostics_from_exception,
+    diagnostics_from_response,
+)
 from auto_invest.broker.models import (
     BalanceSnapshot,
     BrokerExecution,
@@ -329,6 +333,12 @@ async def place_order(
         "ORD_SVR_DVSN_CD": "0",
         "ORD_DVSN": "00" if request.order_type.value == "LIMIT" else "01",
     }
+    request_summary = {
+        "method": "POST",
+        "endpoint": endpoint,
+        "tr_id": tr_id,
+        "body": body,
+    }
     try:
         response = await client.request(
             "POST",
@@ -345,17 +355,35 @@ async def place_order(
     except Exception as exc:
         diagnostics = diagnostics_from_exception(
             exc,
-            request_summary={
-                "method": "POST",
-                "endpoint": endpoint,
-                "tr_id": tr_id,
-                "body": body,
-            },
+            request_summary=request_summary,
         )
         raise KisOrderError("KIS order request failed", diagnostics=diagnostics) from exc
-    body = response.json()["output"]
+
+    try:
+        response_body = response.json()
+    except ValueError as exc:
+        diagnostics = diagnostics_from_response(
+            response,
+            request_summary=request_summary,
+            message=str(exc),
+            exception_type=type(exc).__name__,
+        )
+        raise KisOrderError("KIS order response was not JSON", diagnostics=diagnostics) from exc
+
+    output = response_body.get("output") if isinstance(response_body, dict) else None
+    order_id = output.get("ODNO") if isinstance(output, dict) else None
+    rt_cd = response_body.get("rt_cd") if isinstance(response_body, dict) else None
+    if rt_cd not in (None, "", "0") or not order_id:
+        diagnostics = diagnostics_from_response(
+            response,
+            request_summary=request_summary,
+            message="KIS order response missing accepted order id",
+            exception_type="KisOrderResponseError",
+        )
+        raise KisOrderError("KIS order response missing output", diagnostics=diagnostics)
+
     return OrderResult(
-        kis_order_id=body["ODNO"],
+        kis_order_id=str(order_id),
         accepted_at_utc=datetime.now(UTC),
     )
 

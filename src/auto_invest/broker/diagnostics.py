@@ -116,6 +116,60 @@ def _json_field(body: object, key: str) -> object | None:
     return None
 
 
+def _request_from_response(response: httpx.Response) -> httpx.Request | None:
+    try:
+        return response.request
+    except RuntimeError:
+        return None
+
+
+def diagnostics_from_response(
+    response: httpx.Response,
+    *,
+    request_summary: Mapping[str, Any] | None = None,
+    message: str = "",
+    exception_type: str | None = None,
+    request: httpx.Request | None = None,
+    response_body_limit: int = 2048,
+) -> dict[str, Any]:
+    """Build masked diagnostics from a broker response, including HTTP 200 errors."""
+    raw_request_summary = dict(request_summary or {})
+    sensitive_values = _sensitive_values(raw_request_summary)
+    request = request or _request_from_response(response)
+    diagnostics: dict[str, Any] = {
+        "exception_type": exception_type,
+        "message": _truncate(message, 1000),
+        "http_status": response.status_code,
+        "method": request.method if request is not None else None,
+        "endpoint": _endpoint_from_request(request),
+        "kis_rt_cd": None,
+        "kis_msg_cd": None,
+        "kis_msg1": None,
+        "response_body_preview": None,
+        "response_json": None,
+        "request_summary": sanitize_for_broker_diagnostics(raw_request_summary),
+    }
+
+    try:
+        body_text = response.text
+    except Exception:  # noqa: BLE001 - diagnostics must not mask original failure.
+        body_text = ""
+    diagnostics["response_body_preview"] = _truncate(
+        _mask_text(body_text, sensitive_values=sensitive_values),
+        response_body_limit,
+    )
+    try:
+        response_json = response.json()
+    except json.JSONDecodeError:
+        response_json = None
+    if response_json is not None:
+        diagnostics["response_json"] = sanitize_for_broker_diagnostics(response_json)
+        diagnostics["kis_rt_cd"] = _json_field(response_json, "rt_cd")
+        diagnostics["kis_msg_cd"] = _json_field(response_json, "msg_cd")
+        diagnostics["kis_msg1"] = _json_field(response_json, "msg1")
+    return diagnostics
+
+
 def diagnostics_from_exception(
     exc: BaseException,
     *,
@@ -124,7 +178,6 @@ def diagnostics_from_exception(
 ) -> dict[str, Any]:
     """Build masked, durable diagnostics from a broker exception."""
     raw_request_summary = dict(request_summary or {})
-    sensitive_values = _sensitive_values(raw_request_summary)
     diagnostics: dict[str, Any] = {
         "exception_type": type(exc).__name__,
         "message": _truncate(str(exc), 1000),
@@ -142,26 +195,15 @@ def diagnostics_from_exception(
     if isinstance(exc, httpx.HTTPStatusError):
         response = exc.response
         request = exc.request or response.request
-        diagnostics["http_status"] = response.status_code
-        diagnostics["method"] = request.method if request is not None else None
-        diagnostics["endpoint"] = _endpoint_from_request(request)
-        try:
-            body_text = response.text
-        except Exception:  # noqa: BLE001 - diagnostics must not mask original failure.
-            body_text = ""
-        diagnostics["response_body_preview"] = _truncate(
-            _mask_text(body_text, sensitive_values=sensitive_values),
-            response_body_limit,
+        diagnostics.update(
+            diagnostics_from_response(
+                response,
+                request_summary=raw_request_summary,
+                message=str(exc),
+                exception_type=type(exc).__name__,
+                request=request,
+                response_body_limit=response_body_limit,
+            )
         )
-        try:
-            response_json = response.json()
-        except json.JSONDecodeError:
-            response_json = None
-        if response_json is not None:
-            sanitized = sanitize_for_broker_diagnostics(response_json)
-            diagnostics["response_json"] = sanitized
-            diagnostics["kis_rt_cd"] = _json_field(response_json, "rt_cd")
-            diagnostics["kis_msg_cd"] = _json_field(response_json, "msg_cd")
-            diagnostics["kis_msg1"] = _json_field(response_json, "msg1")
 
     return diagnostics
