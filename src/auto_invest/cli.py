@@ -1049,6 +1049,118 @@ async def _fetch_marks(
     return marks
 
 
+@app.command("rejected-order-opportunity")
+def rejected_order_opportunity_cmd(
+    result_json: Path = typer.Option(
+        ...,
+        "--result-json",
+        help="rebalance-once --json 결과 파일. 없거나 비어 있으면 거부 주문 0건으로 처리.",
+    ),
+    marks_json: Path | None = typer.Option(
+        None,
+        "--marks-json",
+        help="선택: {SYMBOL: current_mark_usd} JSON. 지정하면 KIS 시세 조회를 생략.",
+    ),
+    env_file: Path | None = typer.Option(
+        None,
+        "--env-file",
+        help="선택: KIS 현재가 조회용 .env. --marks-json 이 없을 때만 사용.",
+    ),
+    db_path: Path = typer.Option(
+        Path("data/auto_invest.db"),
+        "--db",
+        help="KIS token cache 위치를 잡기 위한 SQLite 경로. DB 쓰기는 하지 않음.",
+    ),
+    base_url: str = typer.Option(
+        "https://openapi.koreainvestment.com:9443",
+        "--base-url",
+        help="KIS REST base URL.",
+    ),
+    no_marks: bool = typer.Option(
+        False,
+        "--no-marks",
+        help="현재가 조회를 생략하고 거부 주문 목록만 보고.",
+    ),
+    output_format: str = typer.Option(
+        "text",
+        "--format",
+        help="text 또는 json.",
+    ),
+) -> None:
+    """거부된 rebalance 주문의 현재가 기준 기회손익을 계산한다.
+
+    양수는 해당 거부 주문이 정상 체결됐더라면 현재 더 유리했음을 뜻한다. 음수는
+    거부된 것이 결과적으로 더 유리했음을 뜻한다. 이 명령은 읽기 전용이며 주문을
+    재시도하지 않는다.
+    """
+    import json as _json
+    from decimal import Decimal as _Decimal
+
+    from auto_invest.analytics.order_opportunity import (
+        build_rejected_order_opportunity_report,
+        rejected_order_symbols,
+        render_rejected_order_opportunity_text,
+    )
+
+    if output_format not in ("text", "json"):
+        typer.echo("--format must be 'text' or 'json'.", err=True)
+        _exit(2)
+
+    def _read_json(path: Path) -> dict:
+        try:
+            text = path.read_text(encoding="utf-8").strip()
+        except FileNotFoundError:
+            return {}
+        if not text or text.startswith("("):
+            return {}
+        try:
+            data = _json.loads(text)
+        except _json.JSONDecodeError:
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    result = _read_json(result_json)
+    symbols = list(rejected_order_symbols(result))
+    marks: dict[str, _Decimal] = {}
+    mark_fetch_error: str | None = None
+
+    if no_marks or not symbols:
+        pass
+    elif marks_json is not None:
+        raw_marks = _read_json(marks_json)
+        for symbol, value in raw_marks.items():
+            try:
+                marks[str(symbol).upper()] = _Decimal(str(value))
+            except Exception:  # noqa: BLE001 - bad mark input just leaves that symbol unvalued
+                continue
+    elif env_file is not None:
+        try:
+            secrets = load_secrets(env_file)
+            marks = asyncio.run(
+                _fetch_marks(
+                    symbols,
+                    base_url=base_url,
+                    app_key=secrets["KIS_APP_KEY"],
+                    app_secret=secrets["KIS_APP_SECRET"],
+                    db_path=db_path,
+                )
+            )
+        except Exception as exc:  # noqa: BLE001 - opportunity report must not block workflows
+            mark_fetch_error = f"{type(exc).__name__}: {exc}"
+    else:
+        mark_fetch_error = "no marks source provided"
+
+    report = build_rejected_order_opportunity_report(
+        result,
+        marks,
+        mark_fetch_error=mark_fetch_error,
+    )
+    if output_format == "json":
+        typer.echo(_json.dumps(report.to_json_dict(), ensure_ascii=False, indent=2))
+    else:
+        typer.echo(render_rejected_order_opportunity_text(report))
+
+
 def _d_iso_now() -> str:
     """ISO8601 millis with Z suffix."""
     from datetime import UTC, datetime

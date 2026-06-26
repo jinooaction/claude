@@ -54,6 +54,9 @@ def test_safety_commands_json_cli():
     assert commands["telegram-alerts"]["can_place_order"] is False
     assert commands["telegram-alerts"]["writes_db"] is False
     assert commands["telegram-alerts"]["uses_broker"] is False
+    assert commands["rejected-order-opportunity"]["level"] == "A0"
+    assert commands["rejected-order-opportunity"]["can_place_order"] is False
+    assert commands["rejected-order-opportunity"]["uses_broker"] is True
 
 
 def test_safety_commands_bad_format_exits_2():

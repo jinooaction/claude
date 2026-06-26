@@ -65,6 +65,9 @@ def test_format_broker_rejection_alert_masks_sensitive_values(tmp_path: Path) ->
                         "body": {
                             "CANO": "12345678",
                             "ACNT_PRDT_CD": "01",
+                            "PDNO": "IEF",
+                            "ORD_QTY": "3",
+                            "OVRS_ORD_UNPR": "95.08",
                             "appkey": "secret-token",
                         }
                     },
@@ -79,8 +82,12 @@ def test_format_broker_rejection_alert_masks_sensitive_values(tmp_path: Path) ->
 
     message = format_alert(row, source_label="test")
     assert "브로커 거부" in message
+    assert "상태: KIS가 주문을 거부했습니다" not in message
+    assert "상태: 브로커가 주문을 거부했습니다" in message
+    assert "판단: 주문은 브로커에서 거부되어 접수·체결되지 않았습니다." in message
     assert "http=500" in message
     assert "msg_cd=APBK001" in message
+    assert "요청: pdno=IEF qty=3 limit=95.08" in message
     assert "IEF" in message
     assert "12345678" not in message
     assert "secret-token" not in message
@@ -236,7 +243,7 @@ def test_process_once_suppresses_repeated_error_alerts_with_cooldown(tmp_path: P
         )
     )
     assert sent == 1
-    assert out.text.count("auto-invest 오류") == 1
+    assert out.text.count("[auto-invest] 오류") == 1
     assert load_cursor(state).last_seq == third_seq
 
     conn = db.get_connection(db_path)
