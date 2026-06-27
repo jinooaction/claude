@@ -29,18 +29,18 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 상세 규칙은 Codex 세션에서는 `AGENTS.md`, Claude 세션에서는 `CLAUDE.md` 본문 참조.
 
-## 한눈 요약표 — 2026-06-26 KST 최신 main 기준
+## 한눈 요약표 — 2026-06-27 KST 최신 main 기준
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `f76aa07` — Merge pull request #392 from jinooaction/Codex/opportunity-strategy-loop |
-| main 테스트 | `uv run pytest -q` → 2274 passed, 4 skipped |
+| 마지막 main 커밋 | `6272178` — Merge pull request #394 from jinooaction/Codex/micro-gtaa-intent-loss-gate |
+| main 테스트 | `uv run pytest -q` → 2283 passed, 4 skipped |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
 | 열린 PR | 없음(GitHub open PR 조회 결과 `[]`) |
-| 출시 완료 스펙 | 최신 추가: 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
-| 최근 출시 작업 | #392 거부 주문 기회손익을 rolling history와 자율 재지정 evidence로 연결. #390 거부 주문 기회손익 평가와 Telegram 가독성 개선. #388 Telegram 알림 폭주 방지와 KIS HTTP 200 오류 진단 보강 |
-| 활성 작업 | 코드 PR 없음. #392 머지 후 다음 micro GTAA 실행부터 sidecar에 `opportunity_history.json`·`opportunity_monitor.json`이 발행되고 Telegram은 누적 전략/실행 평가를 표시한다. `reassign-on-tournament`는 이 monitor를 evidence-only로 읽지만 기존 5중 게이트를 우회하지 않는다. micro GTAA는 `armed:true`, `capital_usd:1000` 유지 |
-| 안전 경계 | #392는 등급 2 운영 관측·평가 루프 변경(워크플로·sidecar·Telegram·재지정 evidence). 실제 주문, 주문 재시도, 전략 파일 교체, 자본, 허용 종목, 포지션 한도, 손실 브레이커, 헌법, 커널 목록 변경 없음. #386은 등급 4 돈 경로 변경으로 계좌 전체 micro GTAA 청산 전용 sell-first 루프를 도입한 상태 |
+| 출시 완료 스펙 | 최신 추가: 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
+| 최근 출시 작업 | #394 micro GTAA `INTENT_LOSS` 신호에서 실주문 차단. #392 거부 주문 기회손익을 rolling history와 자율 재지정 evidence로 연결. #390 거부 주문 기회손익 평가와 Telegram 가독성 개선 |
+| 활성 작업 | 코드 PR 없음. micro GTAA는 `armed:false`, `capital_usd:1000`, 최신 sidecar run `28274580272`에서 `LIVE 스텝=skipped`, strategy-intent gate `ok=false`, `reason=latest_intent_loss`, 누적 의도 손익 `-1.14 USD`. 전략 검토 전까지 실주문 0건 상태 |
+| 안전 경계 | #394는 등급 4 돈 경로 변경이지만 방향은 실제 주문 가능성 축소. 실제 주문 실행, 자본 증액, 허용 종목 확대, 주문 라우터, K1/K2/K4/K5/K6 코드, 헌법, 커널 목록 변경 없음. #392의 누적 monitor와 #394의 live gate가 함께 작동 |
 
 ## 돈 경로 상태 판독 규칙 (필수 — 스펙 062)
 
@@ -49,9 +49,9 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 1. `git fetch origin '+refs/heads/automation/*:refs/remotes/origin/automation/*'`로 자동화 사이드카를 갱신한다.
 2. 우선 `git show origin/automation/money-path-last-run:LAST_RUN.md`에서 `## 실제 돈 최상위 상태`를 확인한다. 그 섹션이 없으면 아직 스펙 062 money-path가 한 번도 발행되지 않은 상태이므로 아래 원본 증거를 직접 읽거나 `scripts/money_path_probe.py`를 로컬 재현한다.
 3. 현재 live 의도 원본은 `automation/rebalance-micro-gtaa.request`다. 마지막 실행 증거는 `origin/automation/rebalance-micro-gtaa-last-run:LAST_RUN.md`다. KIS smoke 현금값은 preflight 입력일 뿐, `armed` 상태나 다음 live 가능 여부의 대체 근거가 아니다.
-4. `live_money_state.status`가 `REAL_ORDER_PATH_ARMED`이면 "실제 돈 경로가 켜져 있음"으로 답한다. 단, 이것은 비-push 실행이 미국 정규장, KIS 매수가능 현금 1% 버퍼, micro 손실 브레이커, K1 한도와 K2 허용 종목을 통과하면 실주문 단계에 도달할 수 있다는 뜻이지 접수·체결 보장이 아니다.
+4. `live_money_state.status`가 `PREVIEW_ONLY`이면 "실주문 불가"로 답한다. `REAL_ORDER_PATH_ARMED`이면 "실제 돈 경로가 켜져 있음"으로 답한다. 단, 이것은 비-push 실행이 미국 정규장, KIS 매수가능 현금 1% 버퍼, micro 손실 브레이커, K1 한도와 K2 허용 종목을 통과하면 실주문 단계에 도달할 수 있다는 뜻이지 접수·체결 보장이 아니다.
 5. 스펙 063 이후 micro GTAA live canary는 계좌 전체 preview를 만든다. 기존 보유 `BHP`, `MRK`, `ORANY`, `RELX`는 목표 유니버스가 아니라 청산 전용이다. 현금이 목표 매수와 1% 완충금을 충족하지 못하고 청산 전용 매도 후보가 있으면 이번 주기는 `effective_side=sell`로 매도만 실행하고, 매수는 다음 fresh KIS 현금 조회가 충분할 때까지 보류한다.
-6. 스펙 062 작성 중 로컬 재현 기준(2026-06-22T12:55:00Z): micro GTAA는 `armed:true`, `capital_usd:1000`, `status=REAL_ORDER_PATH_ARMED`, 다음 예약 live 후보는 `2026-06-22T15:00:00Z`였다. 마지막 실행 `run_id=27935469561`은 live step 자체는 성공했지만 브로커 주문 상태는 `REJECTED_BY_BROKER` 2건, 접수·체결 0건이었다. 이 시각 이후에는 반드시 최신 money-path 또는 micro sidecar를 다시 읽고 말한다.
+6. 스펙 065 이후 현재 기준(2026-06-27T01:34Z): micro GTAA는 `armed:false`, money-path `live_money_state.status=PREVIEW_ONLY`, 최신 micro sidecar run `28274580272`는 `event=push`, `LIVE 스텝=skipped`, strategy-intent gate `ok=false`, `reason=latest_intent_loss`다. 스펙 062의 2026-06-22 `armed:true` 기록은 역사이며 현재 상태 근거로 쓰지 않는다.
 
 빠른 로컬 재현:
 
@@ -62,6 +62,42 @@ uv run python scripts/money_path_probe.py --manifest | while IFS=$'\t' read -r k
 done
 uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.live_money_state'
 ```
+
+## 최근 관찰 — 2026-06-27 KST (micro GTAA 손실 의도 실주문 차단)
+
+현재 `main` 최신은 `6272178`(#394, micro GTAA 손실 의도 실주문 차단)이다.
+직전 주요 커밋은 `e98f7e9`(구현 커밋), `a64b9fc`(#393, #392 handoff),
+`f76aa07`(#392, 거부 주문 누적 평가와 자율 재지정 피드백 루프)이다. 이 인계 갱신 시작 시점의
+열린 PR은 없다.
+
+- **문제 교정**: 최신 micro GTAA 거부 주문 기회손익은 `latest_signal=INTENT_LOSS`,
+  `cumulative_pnl_usd=-1.14`였다. 즉 그 매수가 정상 체결됐다면 현재 mark 기준 더 불리했을
+  가능성이 있었고, 같은 전략 의도를 실주문으로 반복하면 안 된다는 운영자 지적이 맞았다.
+- **즉시 중단**: `automation/rebalance-micro-gtaa.request`는 `armed:false`, `run_seq:3`이다.
+  note에는 2026-06-27 조치와 `INTENT_LOSS`, `-1.14 USD`, 전략 검토 전 실주문 중단 사유가 남아 있다.
+- **지속 차단**: `.github/workflows/rebalance-micro-gtaa-canary.yml`은 preflight 전에
+  `scripts/opportunity_live_gate.py`를 실행한다. 최신 monitor가 `latest_signal=INTENT_LOSS` 또는
+  `verdict=STRATEGY_REVIEW`이면 preflight, 손실 브레이커, live 주문 단계가 실행 조건을 만족하지
+  못한다. 게이트 평가 자체가 실패하면 `gate_evaluation_unavailable`으로 fail-closed 한다.
+- **손실 신호 보존**: live가 실행되지 않은 run은 빈 opportunity 기록을 append하지 않는다.
+  그래서 이전 `INTENT_LOSS` 기록이 차단 실행 때문에 `FLAT_OR_UNVALUED`로 지워지지 않는다.
+- **post-merge 실행 증거**: #394 main push의 micro GTAA run `28274580272`는 성공했고
+  `Pre-live order preflight`, `Pre-live circuit breaker gate`, `LIVE rebalance — REAL MICRO ORDERS`가
+  모두 skipped였다. 최신 sidecar는 `armed=false`, `LIVE 스텝=skipped`, `next_step=전략 의도 게이트
+  차단(latest_intent_loss) — 전략 검토 전까지 실주문 0건`을 보여 준다.
+- **배포/상태 확인**: #394 main push의 `Deploy on merge to main` run `28274580264`는 성공했다.
+  `Money-path readiness` run `28274580263`도 성공했고 `live_money_state.status=PREVIEW_ONLY`,
+  `can_submit_real_orders=false`를 보고했다. KIS smoke sidecar 최신은 아직 `28237830957` /
+  commit `f76aa07` 기준이므로 #394 직후 새 smoke sidecar는 확인하지 못했다.
+- **Telegram 가독성**: micro GTAA Telegram 알림은 strategy-intent gate의 `ok`, `reason`을
+  표시하고, 차단 시 "전략 의도 게이트 차단(실주문 0건)"으로 읽힌다.
+- **안전 경계**: 등급 4 돈 경로 변경이지만 방향은 주문 가능성 축소다. 실제 주문 실행, 주문
+  라우터, 자본 증액, 허용 종목 확대, 포지션 한도, 손실 브레이커, K1/K2/K4/K5/K6 코드, 헌법,
+  커널 목록은 바꾸지 않았다.
+- **검증**: PR #394 머지 전 focused tests 30 통과, broader focused tests 105 통과,
+  `uv run pytest` 2283 통과·4 스킵, `uv run ruff check src tests` 통과, workflow YAML parse OK,
+  workflow `run` block `bash -n` OK, 하네스 `OK (14/14)`, HANDOFF 사실 검증 OK, PR 품질 관문
+  통과. 머지 직전 전체 테스트와 린트를 다시 실행해 같은 결과를 확인했다.
 
 ## 최근 관찰 — 2026-06-26 KST (거부 주문 누적 평가와 자율 재지정 피드백 루프)
 
@@ -400,6 +436,26 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
   통과, `uv run python scripts/agent_harness_probe.py --strict` `OK (14/14)`,
   `uv run python scripts/check_handoff_facts.py` 통과, PR 품질 관문 통과. 머지 직전 전체 테스트와
   린트를 다시 실행해 같은 결과를 확인했다.
+
+## 최근 마일스톤 — 2026-06-27 KST (micro GTAA 손실 의도 실주문 차단)
+
+main 머지 `6272178`(#394). 최신 micro GTAA 거부 주문 기회손익이 `INTENT_LOSS`, 누적 의도 손익
+`-1.14 USD`였기 때문에, 전략 검토 전까지 같은 전략 의도가 실주문으로 반복되지 않도록 닫았다.
+상세: `HANDOFF-064-MICRO-GTAA-INTENT-LOSS-GATE.md`, `specs/065-micro-gtaa-intent-loss-gate/`.
+
+- **핵심 변경**: `automation/rebalance-micro-gtaa.request`를 `armed:false`로 전환하고,
+  `opportunity_monitor.py`의 live gate와 `scripts/opportunity_live_gate.py`를 추가했다.
+- **워크플로 차단**: micro GTAA workflow는 strategy-intent gate가 `ok=true`일 때만 preflight,
+  손실 브레이커, live 주문으로 진행한다. 게이트 평가 실패는 fail-closed다.
+- **증거 보존**: live 미실행 run은 빈 opportunity record를 append하지 않으므로 최신 손실 신호가
+  차단 실행 때문에 사라지지 않는다.
+- **post-merge 증거**: run `28274580272`에서 live 주문 단계는 skipped, sidecar는
+  `reason=latest_intent_loss`, `실주문 0건`을 표시했다. money-path run `28274580263`은
+  `PREVIEW_ONLY`를 보고했다.
+- **안전 경계**: 등급 4 돈 경로 변경이나 실제 주문 가능성을 줄였다. 자본, whitelist, 주문 라우터,
+  손실 브레이커, 헌법, 커널 목록 변경 없음.
+- **검증/배포**: `uv run pytest` 2283 통과·4 스킵, `uv run ruff check src tests` 통과,
+  하네스 `OK (14/14)`, PR 품질 관문 통과. #394 deploy run `28274580264` 성공.
 
 ## 최근 마일스톤 — 2026-06-26 KST (거부 주문 누적 평가와 자율 재지정 피드백 루프)
 
@@ -3708,6 +3764,10 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 
 ## 과거 인수인계 파일 (참고용)
 
+- `HANDOFF-064-MICRO-GTAA-INTENT-LOSS-GATE.md` — micro GTAA 손실 의도 실주문 차단
+  (2026-06-27, PR #394 `6272178`). 최신 `INTENT_LOSS`, 누적 의도 손익 `-1.14 USD`를 근거로
+  micro GTAA를 `armed:false`로 전환하고, strategy-intent gate가 preflight/live 주문 단계를
+  막도록 했다. post-merge run `28274580272`에서 live 주문 단계는 skipped였다.
 - `HANDOFF-063-REJECTED-OPPORTUNITY-FEEDBACK-LOOP.md` — 거부 주문 누적 평가와 자율 재지정
   피드백 루프 (2026-06-26, PR #392 `f76aa07`). micro GTAA 거부 주문 기회손익을 rolling
   history와 monitor verdict로 누적하고, Telegram·sidecar·reassign evidence에 연결했다.

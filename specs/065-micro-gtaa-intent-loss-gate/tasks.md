@@ -67,5 +67,5 @@
 
 - [X] T014 Run focused tests for opportunity monitor, micro GTAA workflow, Telegram, and opportunity CLI.
 - [X] T015 Run `uv run pytest` and `uv run ruff check src tests`.
-- [ ] T016 Update `HANDOFF.md` and add a milestone file if the PR merges.
-- [ ] T017 Run `uv run python scripts/check_handoff_facts.py` and `uv run python scripts/agent_harness_probe.py --strict`.
+- [X] T016 Update `HANDOFF.md` and add a milestone file if the PR merges.
+- [X] T017 Run `uv run python scripts/check_handoff_facts.py` and `uv run python scripts/agent_harness_probe.py --strict`.
