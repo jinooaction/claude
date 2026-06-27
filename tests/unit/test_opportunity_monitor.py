@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 from auto_invest.analytics.opportunity_monitor import (
+    LIVE_GATE_REASON_ALLOWED,
+    LIVE_GATE_REASON_INTENT_LOSS,
+    LIVE_GATE_REASON_MONITOR_UNAVAILABLE,
+    LIVE_GATE_REASON_STRATEGY_REVIEW,
     SIGNAL_INTENT_GAIN,
     SIGNAL_INTENT_LOSS,
     VERDICT_EXECUTION_REVIEW,
@@ -8,6 +12,8 @@ from auto_invest.analytics.opportunity_monitor import (
     VERDICT_NO_VALUED_REJECTIONS,
     VERDICT_STRATEGY_REVIEW,
     append_opportunity_record,
+    assess_opportunity_live_gate,
+    render_opportunity_live_gate_text,
     render_opportunity_monitor_text,
     summarize_opportunity_history,
 )
@@ -93,3 +99,52 @@ def test_render_text_explains_verdict_and_safety_note() -> None:
     assert "거부 주문 누적 평가" in text
     assert "STRATEGY_REVIEW" in text
     assert "주문 재시도" in text
+
+
+def test_live_gate_blocks_latest_intent_loss_even_with_insufficient_data() -> None:
+    summary = summarize_opportunity_history(_history(_report("-1.14")))
+
+    gate = assess_opportunity_live_gate(summary)
+
+    assert gate["ok"] is False
+    assert gate["reason"] == LIVE_GATE_REASON_INTENT_LOSS
+    assert gate["latest_signal"] == SIGNAL_INTENT_LOSS
+    assert gate["verdict"] == VERDICT_INSUFFICIENT_DATA
+
+
+def test_live_gate_blocks_strategy_review() -> None:
+    summary = summarize_opportunity_history(_history(_report("-3.00"), _report("-2.50")))
+
+    gate = assess_opportunity_live_gate(summary)
+
+    assert gate["ok"] is False
+    assert LIVE_GATE_REASON_STRATEGY_REVIEW in gate["blocking_reasons"]
+    assert gate["verdict"] == VERDICT_STRATEGY_REVIEW
+
+
+def test_live_gate_allows_execution_review_to_reach_existing_gates() -> None:
+    summary = summarize_opportunity_history(_history(_report("+3.00"), _report("+2.50")))
+
+    gate = assess_opportunity_live_gate(summary)
+
+    assert gate["ok"] is True
+    assert gate["reason"] == LIVE_GATE_REASON_ALLOWED
+    assert gate["verdict"] == VERDICT_EXECUTION_REVIEW
+
+
+def test_live_gate_missing_monitor_is_not_positive_approval() -> None:
+    gate = assess_opportunity_live_gate({})
+
+    assert gate["ok"] is True
+    assert gate["reason"] == LIVE_GATE_REASON_MONITOR_UNAVAILABLE
+    assert gate["verdict"] is None
+    assert "읽지 못했습니다" in gate["policy_ko"]
+
+
+def test_render_live_gate_text_includes_block_reason() -> None:
+    summary = summarize_opportunity_history(_history(_report("-1.14")))
+    text = render_opportunity_live_gate_text(assess_opportunity_live_gate(summary))
+
+    assert "micro GTAA 전략 의도 게이트" in text
+    assert "ok=False" in text
+    assert LIVE_GATE_REASON_INTENT_LOSS in text

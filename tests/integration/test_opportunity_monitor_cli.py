@@ -84,3 +84,40 @@ def test_opportunity_monitor_cli_text_mode_without_history() -> None:
     assert result.exit_code == 0, result.output
     assert "거부 주문 누적 평가" in result.stdout
     assert "NO_VALUED_REJECTIONS" in result.stdout
+
+
+def test_opportunity_monitor_cli_without_opportunity_json_preserves_history(
+    tmp_path: Path,
+) -> None:
+    prior = append_opportunity_record(
+        {},
+        _report("-1.14"),
+        run_id="28253047287",
+        timestamp_utc="2026-06-26T17:03:12Z",
+    )
+    history_json = tmp_path / "history.json"
+    history_out = tmp_path / "opportunity_history.json"
+    monitor_out = tmp_path / "opportunity_monitor.json"
+    history_json.write_text(json.dumps(prior), encoding="utf-8")
+
+    result = runner.invoke(
+        app,
+        [
+            "opportunity-monitor",
+            "--history-json",
+            str(history_json),
+            "--history-out",
+            str(history_out),
+            "--monitor-out",
+            str(monitor_out),
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    history = json.loads(history_out.read_text(encoding="utf-8"))
+    summary = json.loads(monitor_out.read_text(encoding="utf-8"))
+    assert [record["run_id"] for record in history["records"]] == ["28253047287"]
+    assert summary["latest_signal"] == "INTENT_LOSS"
+    assert summary["latest"]["run_id"] == "28253047287"

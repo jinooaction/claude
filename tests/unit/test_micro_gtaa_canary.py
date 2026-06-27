@@ -19,11 +19,13 @@ def _field(text: str, key: str) -> str | None:
     return None
 
 
-def test_micro_gtaa_sentinel_is_operator_approved_live_armed():
+def test_micro_gtaa_sentinel_is_disarmed_after_intent_loss():
     text = _SENTINEL.read_text(encoding="utf-8")
-    assert _field(text, "armed") == "true"
+    assert _field(text, "armed") == "false"
     assert _field(text, "stage") == "micro-gtaa-live-canary"
-    assert "운영자 2026-06-22 명시 승인" in (_field(text, "note") or "")
+    note = _field(text, "note") or ""
+    assert "latest_signal=INTENT_LOSS" in note
+    assert "실주문 중단" in note
 
 
 def test_micro_gtaa_sentinel_capital_and_stop_policy_are_bounded():
@@ -46,6 +48,7 @@ def test_micro_gtaa_workflow_push_can_only_preview():
     block = live_step.group(0)
     assert "steps.gate.outputs.armed == 'true'" in block
     assert "steps.gate.outputs.blocked != 'true'" in block
+    assert "steps.intent_gate.outputs.ok == 'true'" in block
     assert "github.event_name != 'push'" in block
     assert "--mode live --confirm-live" in block
 
@@ -69,8 +72,10 @@ def test_micro_gtaa_workflow_checks_breaker_before_live_step():
     assert breaker_idx < live_idx
     assert "evaluate_from_audit" in text[breaker_idx:live_idx]
     assert "set_halt" in text[breaker_idx:live_idx]
+    assert "steps.intent_gate.outputs.ok == 'true'" in text[breaker_idx:live_idx]
     assert "steps.preflight.outputs.ok == 'true'" in text[breaker_idx:live_idx]
     assert "steps.breaker.outcome == 'success'" in text[live_idx:]
+    assert "steps.intent_gate.outputs.ok == 'true'" in text[live_idx:]
     assert "steps.preflight.outputs.ok == 'true'" in text[live_idx:]
 
 
@@ -83,6 +88,7 @@ def test_micro_gtaa_workflow_preflight_records_session_and_cash():
     )
     assert preflight is not None
     block = preflight.group(0)
+    assert "steps.intent_gate.outputs.ok == 'true'" in block
     assert "is_session_open" in block
     assert "get_purchasable_cash_usd" in block
     assert "planned_buy_notional_usd" in block
@@ -109,6 +115,7 @@ def test_micro_gtaa_workflow_live_uses_account_wide_effective_side():
 
 def test_micro_gtaa_sidecar_publishes_preflight_evidence():
     text = _WORKFLOW.read_text(encoding="utf-8")
+    assert "## 라이브 전 전략 의도 게이트" in text
     assert "## 라이브 전 주문 전제 확인" in text
     assert "## 계좌 전체 재배치 상태" in text
     assert "## 거부 주문 기회손익" in text
@@ -124,3 +131,40 @@ def test_micro_gtaa_workflow_manual_cap_guard_is_present():
     assert "capital > 1000" in text
     assert "outside micro range 1..1000" in text
     assert "BRANCH=automation/rebalance-micro-gtaa-last-run" in text
+
+
+def test_micro_gtaa_workflow_has_strategy_intent_gate_before_preflight():
+    text = _WORKFLOW.read_text(encoding="utf-8")
+    gate_idx = text.index("Pre-live strategy-intent gate")
+    preflight_idx = text.index("Pre-live order preflight")
+    live_idx = text.index("LIVE rebalance")
+    assert gate_idx < preflight_idx < live_idx
+    block = text[gate_idx:preflight_idx]
+    assert "scripts/opportunity_live_gate.py" in block
+    assert "opportunity_monitor.json" in block
+    assert "/tmp/micro_intent_gate.json" in block
+    assert "echo \"ok=${ok}\" >> \"$GITHUB_OUTPUT\"" in block
+    assert '"ok":false' in block
+    assert '"reason":"gate_evaluation_unavailable"' in block
+    assert "실주문 경로에서는 안전하게 차단합니다" in block
+
+
+def test_micro_gtaa_workflow_does_not_append_opportunity_when_live_skipped():
+    text = _WORKFLOW.read_text(encoding="utf-8")
+    monitor_idx = text.index("Update rejected order opportunity monitor")
+    publish_idx = text.index("Publish micro GTAA result to sidecar branch")
+    block = text[monitor_idx:publish_idx]
+    assert "monitor_args=(" in block
+    assert "if [[ -s /tmp/micro_live.json ]]" in block
+    assert "monitor_args+=(--opportunity-json /tmp/micro_opportunity.json)" in block
+
+
+def test_micro_gtaa_sidecar_next_step_names_strategy_intent_block():
+    text = _WORKFLOW.read_text(encoding="utf-8")
+    status_idx = text.index("## 계좌 전체 재배치 상태")
+    gate_idx = text.index("## 라이브 전 전략 의도 게이트")
+    block = text[status_idx:gate_idx]
+    assert 'intent_gate = load("/tmp/micro_intent_gate.json")' in block
+    assert 'intent_gate.get("ok") is False' in block
+    assert "전략 의도 게이트 차단" in block
+    assert "전략 검토 전까지 실주문 0건" in block

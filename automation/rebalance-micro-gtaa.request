@@ -9,11 +9,11 @@
 # - 허용 종목은 SPYM·IEF·GLDM, 정규장 지정가만.
 # - hard_stop_drawdown_pct 는 5 이하. 이를 넘기면 다음 실주문 전 무장 해제가 원칙.
 
-armed: true
+armed: false
 capital_usd: 1000
 requested_by: mason
 stage: micro-gtaa-live-canary
-run_seq: 2
+run_seq: 3
 warning_drawdown_pct: 3
 hard_stop_drawdown_pct: 5
-note: "운영자 2026-06-22 명시 승인: capital_usd=1000, armed=true, 수동 실행까지 승인."
+note: "2026-06-27 조치: 최신 거부 주문 기회손익 latest_signal=INTENT_LOSS, 체결 가정 손익 -1.14 USD. 전략 검토 전까지 실주문 중단."

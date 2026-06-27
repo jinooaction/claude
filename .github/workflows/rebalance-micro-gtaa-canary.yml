@@ -85,6 +85,51 @@ jobs:
           echo "blocked=$blocked" >> "$GITHUB_OUTPUT"
           echo "armed=$armed capital=$capital warning=$warning hard_stop=$hard_stop blocked=$blocked"
 
+      - name: Pre-live strategy-intent gate
+        id: intent_gate
+        if: steps.gate.outputs.blocked != 'true'
+        run: |
+          set +e
+          BRANCH=automation/rebalance-micro-gtaa-last-run
+          git fetch origin "${BRANCH}" || true
+          if ! git show "origin/${BRANCH}:opportunity_monitor.json" \
+              > /tmp/micro_opportunity_monitor_prev.json 2>/tmp/micro_intent_gate.err; then
+            echo '{}' > /tmp/micro_opportunity_monitor_prev.json
+          fi
+          python3 scripts/opportunity_live_gate.py \
+            --monitor-json /tmp/micro_opportunity_monitor_prev.json \
+            --out /tmp/micro_intent_gate.json \
+            --format text \
+            > /tmp/micro_intent_gate.txt 2>>/tmp/micro_intent_gate.err
+          rc=$?
+          if [[ $rc -ne 0 || ! -s /tmp/micro_intent_gate.json ]]; then
+            cat > /tmp/micro_intent_gate.json <<'JSON'
+          {"schema_version":1,"ok":false,"reason":"gate_evaluation_unavailable","blocking_reasons":["gate_evaluation_unavailable"],"verdict":null,"latest_signal":null,"cumulative_pnl_usd":null,"latest_run_id":null,"policy_ko":"전략 의도 게이트 평가에 실패했습니다. 실주문 경로에서는 안전하게 차단합니다.","next_action_ko":"워크플로 로그와 opportunity monitor sidecar를 확인한 뒤 다시 무장합니다.","safety_note_ko":"기존 무장·정규장·현금·손실 브레이커 게이트는 그대로 적용되며, 이 실패는 주문 허용으로 해석하지 않습니다."}
+          JSON
+          fi
+          ok="$(python3 - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path("/tmp/micro_intent_gate.json").read_text(encoding="utf-8"))
+          print("true" if data.get("ok") is True else "false")
+          PY
+          )"
+          reason="$(python3 - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path("/tmp/micro_intent_gate.json").read_text(encoding="utf-8"))
+          print(data.get("reason") or "unknown")
+          PY
+          )"
+          echo "ok=${ok}" >> "$GITHUB_OUTPUT"
+          echo "reason=${reason}" >> "$GITHUB_OUTPUT"
+          echo "--- strategy-intent gate ---"
+          cat /tmp/micro_intent_gate.json
+          echo "--- gate text ---"
+          cat /tmp/micro_intent_gate.txt 2>/dev/null || true
+          echo "--- gate stderr ---"
+          cat /tmp/micro_intent_gate.err 2>/dev/null || true
+
       - name: Install SSH key
         if: steps.gate.outputs.blocked != 'true'
         env:
@@ -138,6 +183,7 @@ jobs:
         if: >-
           steps.gate.outputs.armed == 'true' &&
           steps.gate.outputs.blocked != 'true' &&
+          steps.intent_gate.outputs.ok == 'true' &&
           github.event_name != 'push'
         env:
           HOST: ${{ secrets.VULTR_SSH_HOST }}
@@ -326,6 +372,7 @@ jobs:
         if: >-
           steps.gate.outputs.armed == 'true' &&
           steps.gate.outputs.blocked != 'true' &&
+          steps.intent_gate.outputs.ok == 'true' &&
           steps.preflight.outputs.ok == 'true' &&
           github.event_name != 'push'
         env:
@@ -404,6 +451,7 @@ jobs:
         if: >-
           steps.gate.outputs.armed == 'true' &&
           steps.gate.outputs.blocked != 'true' &&
+          steps.intent_gate.outputs.ok == 'true' &&
           steps.preflight.outputs.ok == 'true' &&
           steps.breaker.outcome == 'success' &&
           github.event_name != 'push'
@@ -507,19 +555,23 @@ jobs:
               > /tmp/micro_opportunity_history_prev.json 2>/tmp/micro_opportunity_history.err; then
             echo '{"schema_version":1,"records":[]}' > /tmp/micro_opportunity_history_prev.json
           fi
-          python3 scripts/opportunity_monitor_sidecar.py \
-            --history-json /tmp/micro_opportunity_history_prev.json \
-            --opportunity-json /tmp/micro_opportunity.json \
-            --history-out /tmp/micro_opportunity_history.json \
-            --monitor-out /tmp/micro_opportunity_monitor.json \
-            --run-id "${GITHUB_RUN_ID}" \
-            --run-url "${RUN_URL}" \
-            --event "${EVENT:-unknown}" \
-            --live-outcome "${LIVE_OUTCOME:-skipped}" \
-            --armed "${ARMED:-unknown}" \
-            --capital-usd "${CAP:-unknown}" \
-            --max-entries 60 \
-            --format text \
+          monitor_args=(
+            --history-json /tmp/micro_opportunity_history_prev.json
+            --history-out /tmp/micro_opportunity_history.json
+            --monitor-out /tmp/micro_opportunity_monitor.json
+            --run-id "${GITHUB_RUN_ID}"
+            --run-url "${RUN_URL}"
+            --event "${EVENT:-unknown}"
+            --live-outcome "${LIVE_OUTCOME:-skipped}"
+            --armed "${ARMED:-unknown}"
+            --capital-usd "${CAP:-unknown}"
+            --max-entries 60
+            --format text
+          )
+          if [[ -s /tmp/micro_live.json ]]; then
+            monitor_args+=(--opportunity-json /tmp/micro_opportunity.json)
+          fi
+          python3 scripts/opportunity_monitor_sidecar.py "${monitor_args[@]}" \
             > /tmp/micro_opportunity_monitor.txt 2>/tmp/micro_opportunity_monitor.err
           rc=$?
           if [[ $rc -ne 0 || ! -s /tmp/micro_opportunity_monitor.json ]]; then
@@ -545,6 +597,8 @@ jobs:
           WARNING: ${{ steps.gate.outputs.warning }}
           HARD_STOP: ${{ steps.gate.outputs.hard_stop }}
           BLOCKED: ${{ steps.gate.outputs.blocked }}
+          INTENT_GATE_OK: ${{ steps.intent_gate.outputs.ok }}
+          INTENT_GATE_REASON: ${{ steps.intent_gate.outputs.reason }}
           LIVE_OUTCOME: ${{ steps.live.outcome }}
           EVENT: ${{ github.event_name }}
         run: |
@@ -602,17 +656,22 @@ jobs:
 
           preview = load("/tmp/micro_preview.json")
           preflight = load("/tmp/micro_preflight.json")
+          intent_gate = load("/tmp/micro_intent_gate.json")
           effective = (
               preflight.get("execution_side_effective")
               or preview.get("effective_side")
               or "unknown"
           )
-          next_step = {
-              "sell": "청산 전용 매도 실행 후 다음 주기에 KIS 매수 가능 현금 재확인",
-              "both": "현금과 게이트가 충분하면 목표 종목 매수까지 실행",
-              "buy": "목표 종목 매수만 실행",
-              "none": "주문 없음, 차단 사유 확인",
-          }.get(str(effective), "다음 실행에서 상태 재확인")
+          if intent_gate.get("ok") is False:
+              reason = intent_gate.get("reason") or "unknown"
+              next_step = f"전략 의도 게이트 차단({reason}) — 전략 검토 전까지 실주문 0건"
+          else:
+              next_step = {
+                  "sell": "청산 전용 매도 실행 후 다음 주기에 KIS 매수 가능 현금 재확인",
+                  "both": "현금과 게이트가 충분하면 목표 종목 매수까지 실행",
+                  "buy": "목표 종목 매수만 실행",
+                  "none": "주문 없음, 차단 사유 확인",
+              }.get(str(effective), "다음 실행에서 상태 재확인")
           rows = {
               "account_wide_enabled": preflight.get(
                   "account_wide_enabled", preview.get("account_wide")
@@ -640,6 +699,11 @@ jobs:
           for key, value in rows.items():
               print(f"| {key} | {value if value is not None else '?'} |")
           PY
+            echo ""
+            echo "## 라이브 전 전략 의도 게이트"
+            echo '```json'
+            cat /tmp/micro_intent_gate.json 2>/dev/null || echo '(미실행)'
+            echo '```'
             echo ""
             echo "## 드라이런 미리보기"
             echo '```json'
@@ -795,6 +859,8 @@ jobs:
           CAP: ${{ steps.gate.outputs.capital }}
           LIVE_OUTCOME: ${{ steps.live.outcome }}
           EFFECTIVE_SIDE: ${{ steps.preflight.outputs.effective_side }}
+          INTENT_GATE_OK: ${{ steps.intent_gate.outputs.ok }}
+          INTENT_GATE_REASON: ${{ steps.intent_gate.outputs.reason }}
         run: |
           set +e
           if [[ -z "${TELEGRAM_BOT_TOKEN:-}" || -z "${TELEGRAM_CHAT_ID:-}" ]]; then
@@ -827,6 +893,7 @@ jobs:
               return text if len(text) <= limit else text[:limit] + "...<truncated>"
 
           preflight = load_json("/tmp/micro_preflight.json")
+          intent_gate = load_json("/tmp/micro_intent_gate.json")
           live = load_json("/tmp/micro_live.json")
           preview = load_json("/tmp/micro_preview.json")
           opportunity = load_json("/tmp/micro_opportunity.json")
@@ -837,6 +904,11 @@ jobs:
           if isinstance(preflight, dict):
               preflight_ok = preflight.get("ok")
               preflight_reason = preflight.get("reason")
+          intent_gate_ok = None
+          intent_gate_reason = None
+          if isinstance(intent_gate, dict):
+              intent_gate_ok = intent_gate.get("ok")
+              intent_gate_reason = intent_gate.get("reason")
 
           def rows(doc: object) -> list[dict]:
               if not isinstance(doc, dict):
@@ -894,6 +966,8 @@ jobs:
 
           if os.environ.get("ARMED") != "true":
               headline = "미리보기만 실행(실주문 0건)"
+          elif intent_gate_ok is False:
+              headline = "전략 의도 게이트 차단(실주문 0건)"
           elif os.environ.get("LIVE_OUTCOME") != "success":
               headline = "실주문 단계 미실행 또는 실패"
           elif rejected_count:
@@ -998,6 +1072,8 @@ jobs:
               f"- live_step: {os.environ.get('LIVE_OUTCOME') or 'skipped'}",
               "",
               "2. 라이브 전제 확인",
+              f"- strategy_intent_gate_ok: {intent_gate_ok}",
+              f"- strategy_intent_gate_reason: {short(intent_gate_reason)}",
               f"- preflight_ok: {preflight_ok}",
               f"- reason: {short(preflight_reason)}",
               "",

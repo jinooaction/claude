@@ -19,6 +19,8 @@ def test_micro_gtaa_workflow_has_best_effort_telegram_notification() -> None:
     assert "4. 거부 주문 기회손익" in block
     assert "브로커 거부(접수/체결 안 됨)" in block
     assert "양수=체결됐으면 현재 더 유리" in block
+    assert "strategy_intent_gate_ok" in block
+    assert "전략 의도 게이트 차단" in block
 
 
 def test_micro_gtaa_telegram_notification_runs_after_sidecar_publish() -> None:
@@ -27,6 +29,7 @@ def test_micro_gtaa_telegram_notification_runs_after_sidecar_publish() -> None:
     notify_idx = text.index("Notify Telegram — micro GTAA result")
     assert publish_idx < notify_idx
     assert "/tmp/micro_preflight.json" in text[notify_idx:]
+    assert "/tmp/micro_intent_gate.json" in text[notify_idx:]
     assert "/tmp/micro_live.json" in text[notify_idx:]
     assert "/tmp/micro_opportunity.json" in text[notify_idx:]
     assert "/tmp/micro_opportunity_monitor.json" in text[notify_idx:]
