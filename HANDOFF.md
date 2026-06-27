@@ -33,14 +33,14 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `6272178` — Merge pull request #394 from jinooaction/Codex/micro-gtaa-intent-loss-gate |
-| main 테스트 | `uv run pytest -q` → 2283 passed, 4 skipped |
+| 마지막 main 커밋 | `d97d6a2` — Merge pull request #396 from jinooaction/Codex/strategy-review-observation-repair |
+| main 테스트 | `uv run pytest -q` → 2286 passed, 4 skipped |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
 | 열린 PR | 없음(GitHub open PR 조회 결과 `[]`) |
-| 출시 완료 스펙 | 최신 추가: 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
-| 최근 출시 작업 | #394 micro GTAA `INTENT_LOSS` 신호에서 실주문 차단. #392 거부 주문 기회손익을 rolling history와 자율 재지정 evidence로 연결. #390 거부 주문 기회손익 평가와 Telegram 가독성 개선 |
-| 활성 작업 | 코드 PR 없음. micro GTAA는 `armed:false`, `capital_usd:1000`, 최신 sidecar run `28274580272`에서 `LIVE 스텝=skipped`, strategy-intent gate `ok=false`, `reason=latest_intent_loss`, 누적 의도 손익 `-1.14 USD`. 전략 검토 전까지 실주문 0건 상태 |
-| 안전 경계 | #394는 등급 4 돈 경로 변경이지만 방향은 실제 주문 가능성 축소. 실제 주문 실행, 자본 증액, 허용 종목 확대, 주문 라우터, K1/K2/K4/K5/K6 코드, 헌법, 커널 목록 변경 없음. #392의 누적 monitor와 #394의 live gate가 함께 작동 |
+| 출시 완료 스펙 | 최신 추가: 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
+| 최근 출시 작업 | #396 strategy review 관측 품질 false blocker 보정. #394 micro GTAA `INTENT_LOSS` 신호에서 실주문 차단. #392 거부 주문 기회손익을 rolling history와 자율 재지정 evidence로 연결 |
+| 활성 작업 | 코드 PR 없음. micro GTAA는 `armed:false`, `capital_usd:1000`, 최신 micro sidecar run `28274580272`에서 `LIVE 스텝=skipped`, strategy-intent gate `ok=false`, `reason=latest_intent_loss`, 누적 의도 손익 `-1.14 USD`. 최신 reassign sidecar run `28278589509`는 #396 이전 코드의 `DEGRADED` 판정이므로 다음 실행에서는 all-premature lag를 `OK`로 보고해야 한다. 단, 아직 비교 가능한 도전자는 없으므로 재지정은 HOLD가 정상 |
+| 안전 경계 | #396은 등급 2 운영 판단 보정이며 주문, 자본, 허용 종목, 전략 설정, 센티넬, K1/K2/K4/K5/K6, 헌법, 커널 목록 변경 없음. #394는 등급 4 돈 경로 변경이지만 방향은 실제 주문 가능성 축소. #392의 누적 monitor와 #394의 live gate가 함께 작동 |
 
 ## 돈 경로 상태 판독 규칙 (필수 — 스펙 062)
 
@@ -53,6 +53,22 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 5. 스펙 063 이후 micro GTAA live canary는 계좌 전체 preview를 만든다. 기존 보유 `BHP`, `MRK`, `ORANY`, `RELX`는 목표 유니버스가 아니라 청산 전용이다. 현금이 목표 매수와 1% 완충금을 충족하지 못하고 청산 전용 매도 후보가 있으면 이번 주기는 `effective_side=sell`로 매도만 실행하고, 매수는 다음 fresh KIS 현금 조회가 충분할 때까지 보류한다.
 6. 스펙 065 이후 현재 기준(2026-06-27T01:34Z): micro GTAA는 `armed:false`, money-path `live_money_state.status=PREVIEW_ONLY`, 최신 micro sidecar run `28274580272`는 `event=push`, `LIVE 스텝=skipped`, strategy-intent gate `ok=false`, `reason=latest_intent_loss`다. 스펙 062의 2026-06-22 `armed:true` 기록은 역사이며 현재 상태 근거로 쓰지 않는다.
 
+## 전략 검토 상태 판독 규칙 (필수 — 스펙 066)
+
+최신 reassign sidecar run `28278589509`는 #396 이전 코드로 생성되어 `globalfixed`의 관측 수가 9회,
+다른 후보들이 12회라는 이유로 후보 관측 품질을 `DEGRADED`로 표시했다. 그러나 모든 후보가
+최소 관측 20회 전이면 이것은 "장애"가 아니라 정상 누적 차이다. 다음 세션은 아래 순서로 읽는다.
+
+1. `git fetch origin '+refs/heads/automation/*:refs/remotes/origin/automation/*'`로 sidecar를 갱신한다.
+2. `git show origin/automation/reassign-last-run:LAST_RUN.md`에서 run 시각과 코드 커밋을 먼저 본다. #396(`d97d6a2`) 전 실행이면 관측 품질 판정이 stale일 수 있다.
+3. 스펙 066 이후 `observation_health` 규칙:
+   - 모든 후보가 알려져 있고 모두 `PREMATURE`이면 관측 수 차이가 있어도 `OK`. `lagging_keys`는 참고 정보로만 남는다.
+   - 하나 이상의 후보가 `COMPARABLE`이고 다른 알려진 후보가 최소 관측 미달이면 `DEGRADED`.
+   - 모든 알려진 후보가 `COMPARABLE`이면 관측 수 차이가 있어도 `OK`.
+   - 판정 누락은 `DEGRADED`, 라이브 검증 트랙 누락은 `BLOCKED`.
+4. 이 보정은 재지정을 앞당기는 변경이 아니다. 현재 true blocker는 "후보 품질 장애"가 아니라
+   "아직 비교 가능한 도전자 없음"이다. 실주문, 센티넬, 자본, whitelist, live 전략 설정은 바꾸지 않았다.
+
 빠른 로컬 재현:
 
 ```bash
@@ -62,6 +78,34 @@ uv run python scripts/money_path_probe.py --manifest | while IFS=$'\t' read -r k
 done
 uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.live_money_state'
 ```
+
+## 최근 관찰 — 2026-06-27 KST (전략 검토 관측 품질 오판 보정)
+
+현재 `main` 최신은 `d97d6a2`(#396, strategy review 관측 품질 보정)이다.
+직전 주요 커밋은 `f78ac15`(구현 커밋), `458c999`(#395, #394 handoff),
+`6272178`(#394, micro GTAA 손실 의도 실주문 차단)이다. 이 인계 갱신 시작 시점의 열린 PR은 없다.
+
+- **문제 교정**: 최신 reassign sidecar run `28278589509`는 `globalfixed`가 9회, 다른 후보들이
+  최대 12회 관측이라는 이유로 `observation_health=DEGRADED`를 냈다. 하지만 모든 후보가
+  최소 관측 20회 전이라면 아직 어떤 후보도 비교 가능하지 않으므로, 올바른 상태는 "정상 누적 중,
+  비교 가능한 도전자 없음"이다.
+- **코드 변경**: `src/auto_invest/analytics/forward_tournament.py`의 `_observation_quality()`가
+  all-premature, mixed comparable/premature, all-comparable 상태를 분리한다. all-premature lag와
+  all-comparable lag는 `OK`이고, mixed comparable/premature는 `DEGRADED`를 유지한다.
+- **보존한 방어**: `lagging_keys`, 최소/최대 관측 수는 계속 표시한다. non-incumbent 판정 누락은
+  `DEGRADED`, incumbent 판정 누락은 `BLOCKED`로 남겼다.
+- **스펙 기록**: `specs/066-strategy-review-observation-health/`에 목표, 비목표, 안전 경계,
+  quickstart, tasks, requirement checklist를 남겼다.
+- **배포 확인**: #396 main push의 `Deploy on merge to main` run `28282838560`은 성공했다.
+  이 배포는 dry-run worker 코드 반영이며 실거래 전환이 아니다.
+- **KIS smoke sidecar**: 최신 sidecar는 run `28281245727`, commit `458c999`, `smoke_state=success`,
+  `key_valid=true`로 #396 이전 예약 실행이다. 따라서 이번 머지의 post-merge 보조 증거로는 보지 않는다.
+- **안전 경계**: 등급 2 운영 판단 보정이다. 실제 주문 실행, micro GTAA 재무장, 자본 증액,
+  허용 종목 확대, live 전략 교체, 주문 라우터, K1/K2/K4/K5/K6 코드, 헌법, 커널 목록 변경 없음.
+- **검증**: PR #396 머지 전 focused tests 70 통과, `uv run pytest` 2286 통과·4 스킵,
+  `uv run ruff check src tests` 통과, `git diff --check` 통과, PR 본문 품질 관문 통과,
+  하네스 `OK (14/14)`, HANDOFF 사실 검증 OK. PR quality gate도 성공했고 merge 방식으로
+  main에 머지했다.
 
 ## 최근 관찰 — 2026-06-27 KST (micro GTAA 손실 의도 실주문 차단)
 
@@ -436,6 +480,23 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
   통과, `uv run python scripts/agent_harness_probe.py --strict` `OK (14/14)`,
   `uv run python scripts/check_handoff_facts.py` 통과, PR 품질 관문 통과. 머지 직전 전체 테스트와
   린트를 다시 실행해 같은 결과를 확인했다.
+
+## 최근 마일스톤 — 2026-06-27 KST (전략 검토 관측 품질 오판 보정)
+
+main 머지 `d97d6a2`(#396). 최신 reassign sidecar가 모든 후보 최소 관측 전의 정상 관측 수 차이를
+후보 품질 장애로 오판하던 문제를 고쳤다. 상세: `HANDOFF-065-STRATEGY-OBSERVATION-HEALTH.md`,
+`specs/066-strategy-review-observation-health/`.
+
+- **핵심 변경**: all-premature lag는 `observation_health=OK`, mixed comparable/premature는
+  `DEGRADED`, all-comparable lag는 `OK`로 구분한다.
+- **포렌식 보존**: `lagging_keys`, 최소/최대 관측 수는 계속 표시한다. missing verdict와 incumbent
+  missing 방어는 그대로 유지했다.
+- **운영 결론**: 다음 reassign 실행에서 all-premature lag는 장애로 보지 않아야 한다. 단, 아직
+  비교 가능한 도전자가 없으면 재지정은 HOLD가 정상이다.
+- **안전 경계**: 등급 2 운영 판단 보정이다. 실주문, micro GTAA 재무장, 자본, whitelist, live 전략,
+  주문 라우터, 헌법, 커널 목록 변경 없음.
+- **검증/배포**: `uv run pytest` 2286 통과·4 스킵, `uv run ruff check src tests` 통과,
+  하네스 `OK (14/14)`, PR 품질 관문 통과. #396 deploy run `28282838560` 성공.
 
 ## 최근 마일스톤 — 2026-06-27 KST (micro GTAA 손실 의도 실주문 차단)
 
@@ -3764,6 +3825,10 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 
 ## 과거 인수인계 파일 (참고용)
 
+- `HANDOFF-065-STRATEGY-OBSERVATION-HEALTH.md` — 전략 검토 관측 품질 오판 보정
+  (2026-06-27, PR #396 `d97d6a2`). 모든 후보가 최소 관측 전인 정상 누적 차이를
+  `DEGRADED`로 오판하지 않게 했고, mixed comparable/premature 상태는 계속 `DEGRADED`로 막는다.
+  실주문, 자본, whitelist, live 전략, 센티넬 변경 없음.
 - `HANDOFF-064-MICRO-GTAA-INTENT-LOSS-GATE.md` — micro GTAA 손실 의도 실주문 차단
   (2026-06-27, PR #394 `6272178`). 최신 `INTENT_LOSS`, 누적 의도 손익 `-1.14 USD`를 근거로
   micro GTAA를 `armed:false`로 전환하고, strategy-intent gate가 preflight/live 주문 단계를
