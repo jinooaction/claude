@@ -225,16 +225,43 @@ def test_incumbent_unknown_blocks_observation_health():
     assert "라이브 검증 트랙" in board.observation_note
 
 
-def test_lagging_track_degrades_observation_health():
+def test_all_premature_lagging_track_is_observation_ok():
     tracks = [
         _track("global", incumbent=True, vj=_verdict(n_obs=4)),
         _track("globalfixed", vj=_verdict(n_obs=1)),
     ]
     board = rank_tournament(tracks)
-    assert board.observation_health == OBS_HEALTH_DEGRADED
+    assert board.observation_health == OBS_HEALTH_OK
     assert board.max_n_obs == 4
     assert board.min_n_obs == 1
     assert board.lagging_keys == ("globalfixed",)
+    assert "최소 관측 전" in board.observation_note
+
+
+def test_lagging_below_min_degrades_after_any_track_comparable():
+    tracks = [
+        _track("global", incumbent=True, vj=_verdict(verdict=NO_EDGE, n_obs=20)),
+        _track("globalfixed", vj=_verdict(n_obs=18)),
+    ]
+    board = rank_tournament(tracks)
+    assert board.observation_health == OBS_HEALTH_DEGRADED
+    assert board.max_n_obs == 20
+    assert board.min_n_obs == 18
+    assert board.lagging_keys == ("globalfixed",)
+    assert "최소 관측 미달" in board.observation_note
+
+
+def test_lagging_after_all_tracks_comparable_is_observation_ok():
+    tracks = [
+        _track("global", incumbent=True, vj=_verdict(verdict=NO_EDGE, n_obs=23)),
+        _track("globalfixed", vj=_verdict(verdict=NO_EDGE, n_obs=20)),
+    ]
+    board = rank_tournament(tracks)
+    assert board.observation_health == OBS_HEALTH_OK
+    assert board.max_n_obs == 23
+    assert board.min_n_obs == 20
+    assert board.lagging_keys == ("globalfixed",)
+    assert "참고 정보" in board.observation_note
 
 
 # ---- 순위 정렬: 티어 + 품질 --------------------------------------------------------

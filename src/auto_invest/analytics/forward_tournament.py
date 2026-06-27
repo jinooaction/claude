@@ -477,6 +477,12 @@ def _observation_quality(
     track_count = len(ranked)
     known = [t for t in ranked if t.comparability != UNKNOWN]
     unknown = [t for t in ranked if t.comparability == UNKNOWN]
+    known_below_min = [
+        t
+        for t in known
+        if t.n_obs is None or t.min_obs is None or t.n_obs < t.min_obs
+    ]
+    any_comparable = any(t.comparability == COMPARABLE for t in known)
     n_obs_values = [t.n_obs for t in known if t.n_obs is not None]
     max_obs = max(n_obs_values) if n_obs_values else None
     min_obs = min(n_obs_values) if n_obs_values else None
@@ -512,12 +518,9 @@ def _observation_quality(
             OBS_HEALTH_BLOCKED,
             "라이브 검증 트랙 판정을 읽지 못함 — 사과 대 사과 비교 불가.",
         )
-    if unknown or lagging:
+    if unknown:
         parts: list[str] = []
-        if unknown:
-            parts.append(
-                "판정 없음: " + ", ".join(t.key for t in unknown)
-            )
+        parts.append("판정 없음: " + ", ".join(t.key for t in unknown))
         if lagging:
             parts.append("관측 뒤처짐: " + ", ".join(lagging))
         return (
@@ -529,6 +532,45 @@ def _observation_quality(
             lagging,
             OBS_HEALTH_DEGRADED,
             "; ".join(parts) + " — 재지정 후보군 관측 품질 저하.",
+        )
+    if any_comparable and known_below_min:
+        parts = [
+            "최소 관측 미달: " + ", ".join(t.key for t in known_below_min)
+        ]
+        if lagging:
+            parts.append("관측 뒤처짐: " + ", ".join(lagging))
+        return (
+            track_count,
+            len(known),
+            len(unknown),
+            max_obs,
+            min_obs,
+            lagging,
+            OBS_HEALTH_DEGRADED,
+            "; ".join(parts) + " — 일부 후보가 비교 가능 구간에 들어와 후보군 관측 품질 저하.",
+        )
+    if lagging:
+        if any_comparable:
+            note = (
+                "모든 후보가 최소 관측을 충족. 관측 수 차이는 참고 정보로만 표시: "
+                + ", ".join(lagging)
+                + "."
+            )
+        else:
+            note = (
+                "모든 후보 판정이 읽혔고 비교 전 관측 누적 중. 관측 수 차이: "
+                + ", ".join(lagging)
+                + " — 최소 관측 전에는 재지정 장애로 취급하지 않음."
+            )
+        return (
+            track_count,
+            len(known),
+            len(unknown),
+            max_obs,
+            min_obs,
+            lagging,
+            OBS_HEALTH_OK,
+            note,
         )
     return (
         track_count,
