@@ -82,6 +82,22 @@ def test_verdict_dir_all_premature(tmp_path, capsys):
     assert "아직 비교 불가" in obj["headline"]
 
 
+def test_verdict_dir_current_all_premature_lag_is_observation_ok(tmp_path, capsys):
+    mapping = {key: _verdict(n_obs=12) for key, *_ in TRACKS}
+    mapping["globalfixed"] = _verdict(n_obs=9)
+    d = _write_verdict_dir(tmp_path, mapping)
+    rc = probe_main(["--verdict-dir", str(d), "--json", "--now", "2026-06-27T00:00:00Z"])
+    assert rc == 0
+    obj = json.loads(capsys.readouterr().out)
+    assert obj["known_count"] == 7
+    assert obj["unknown_count"] == 0
+    assert obj["max_n_obs"] == 12
+    assert obj["min_n_obs"] == 9
+    assert obj["lagging_keys"] == ["globalfixed"]
+    assert obj["observation_health"] == "OK"
+    assert "최소 관측 전" in obj["observation_note"]
+
+
 def test_verdict_dir_challenger(tmp_path, capsys):
     # wide 가 EDGE_CONFIRMED 1위, global(incumbent)도 비교 가능 NO_EDGE → 도전자 경보.
     mapping = {key: _verdict(verdict="NO_EDGE", n_obs=25, calmar="0.3")
