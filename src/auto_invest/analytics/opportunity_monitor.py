@@ -25,6 +25,11 @@ VERDICT_OBSERVE = "OBSERVE"
 VERDICT_STRATEGY_REVIEW = "STRATEGY_REVIEW"
 VERDICT_EXECUTION_REVIEW = "EXECUTION_REVIEW"
 
+LIVE_GATE_REASON_ALLOWED = "allowed"
+LIVE_GATE_REASON_MONITOR_UNAVAILABLE = "monitor_unavailable"
+LIVE_GATE_REASON_INTENT_LOSS = "latest_intent_loss"
+LIVE_GATE_REASON_STRATEGY_REVIEW = "strategy_review"
+
 _CENT = Decimal("0.01")
 
 
@@ -398,6 +403,104 @@ def _next_action(verdict: str) -> str:
     return "관찰을 지속하고 기존 자율 재지정 5중 게이트를 유지합니다."
 
 
+def assess_opportunity_live_gate(
+    monitor_doc: Mapping[str, Any] | None,
+    *,
+    as_of_utc: str | None = None,
+) -> dict[str, Any]:
+    """Return whether opportunity evidence allows another live micro GTAA attempt.
+
+    The gate is intentionally one-way: it may block a live order attempt, but it
+    never approves one by itself. Existing arming, session, cash, caps, whitelist,
+    and circuit-breaker gates still have to pass.
+    """
+
+    if not isinstance(monitor_doc, Mapping) or not monitor_doc:
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "as_of_utc": as_of_utc or _now_iso(),
+            "ok": True,
+            "reason": LIVE_GATE_REASON_MONITOR_UNAVAILABLE,
+            "blocking_reasons": [],
+            "verdict": None,
+            "latest_signal": None,
+            "cumulative_pnl_usd": None,
+            "latest_run_id": None,
+            "policy_ko": (
+                "기회손익 monitor를 읽지 못했습니다. 이 게이트만으로는 추가 차단하지 "
+                "않지만, 기존 무장·정규장·현금·손실 브레이커 게이트는 그대로 적용됩니다."
+            ),
+            "next_action_ko": "opportunity_monitor.json 발행 상태를 확인합니다.",
+            "safety_note_ko": (
+                "이 게이트는 주문을 허용하지 않고, 손실 의도 신호가 있을 때만 "
+                "차단합니다."
+            ),
+        }
+
+    verdict = _string_or_none(monitor_doc.get("verdict"))
+    latest_signal = _string_or_none(monitor_doc.get("latest_signal"))
+    cumulative = (
+        monitor_doc.get("cumulative")
+        if isinstance(monitor_doc.get("cumulative"), Mapping)
+        else {}
+    )
+    latest = monitor_doc.get("latest") if isinstance(monitor_doc.get("latest"), Mapping) else {}
+    blocking_reasons: list[str] = []
+
+    if latest_signal == SIGNAL_INTENT_LOSS:
+        blocking_reasons.append(LIVE_GATE_REASON_INTENT_LOSS)
+    if verdict == VERDICT_STRATEGY_REVIEW:
+        blocking_reasons.append(LIVE_GATE_REASON_STRATEGY_REVIEW)
+
+    ok = not blocking_reasons
+    reason = LIVE_GATE_REASON_ALLOWED if ok else ",".join(blocking_reasons)
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "as_of_utc": as_of_utc or _now_iso(),
+        "ok": ok,
+        "reason": reason,
+        "blocking_reasons": blocking_reasons,
+        "verdict": verdict,
+        "latest_signal": latest_signal,
+        "cumulative_pnl_usd": cumulative.get("total_intended_order_mark_pnl_usd"),
+        "latest_run_id": latest.get("run_id"),
+        "policy_ko": (
+            "최신 거부 주문 기회손익이 손실 방향(INTENT_LOSS)이거나 누적 판정이 "
+            "STRATEGY_REVIEW이면 micro GTAA 실주문을 차단합니다."
+        ),
+        "next_action_ko": (
+            "실주문을 멈추고 forward 토너먼트·전략 검토 증거를 확인합니다."
+            if not ok
+            else "이 게이트는 추가 차단하지 않습니다. 기존 live 안전 게이트를 계속 확인합니다."
+        ),
+        "safety_note_ko": (
+            "이 게이트는 실주문을 차단만 합니다. 주문 재시도, 전략 교체, 자본 변경을 "
+            "직접 수행하지 않습니다."
+        ),
+    }
+
+
+def render_opportunity_live_gate_text(decision: Mapping[str, Any]) -> str:
+    lines = [
+        "micro GTAA 전략 의도 게이트",
+        f"ok={decision.get('ok')}",
+        f"reason={decision.get('reason')}",
+        (
+            "evidence: verdict={verdict}, latest_signal={signal}, "
+            "cumulative_pnl_usd={pnl}, latest_run_id={run_id}"
+        ).format(
+            verdict=decision.get("verdict"),
+            signal=decision.get("latest_signal"),
+            pnl=decision.get("cumulative_pnl_usd"),
+            run_id=decision.get("latest_run_id"),
+        ),
+        f"정책: {decision.get('policy_ko')}",
+        f"다음 조치: {decision.get('next_action_ko')}",
+        str(decision.get("safety_note_ko")),
+    ]
+    return "\n".join(lines)
+
+
 def render_opportunity_monitor_text(summary: Mapping[str, Any]) -> str:
     counts = summary.get("counts") if isinstance(summary.get("counts"), Mapping) else {}
     cumulative = (
@@ -448,14 +551,20 @@ __all__ = [
     "SIGNAL_FLAT_OR_UNVALUED",
     "SIGNAL_INTENT_GAIN",
     "SIGNAL_INTENT_LOSS",
+    "LIVE_GATE_REASON_ALLOWED",
+    "LIVE_GATE_REASON_INTENT_LOSS",
+    "LIVE_GATE_REASON_MONITOR_UNAVAILABLE",
+    "LIVE_GATE_REASON_STRATEGY_REVIEW",
     "VERDICT_EXECUTION_REVIEW",
     "VERDICT_INSUFFICIENT_DATA",
     "VERDICT_NO_VALUED_REJECTIONS",
     "VERDICT_OBSERVE",
     "VERDICT_STRATEGY_REVIEW",
+    "assess_opportunity_live_gate",
     "append_opportunity_record",
     "build_opportunity_record",
     "empty_opportunity_history",
+    "render_opportunity_live_gate_text",
     "render_opportunity_monitor_text",
     "summarize_opportunity_history",
 ]
