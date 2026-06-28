@@ -26,7 +26,7 @@ uv run python scripts/evolution_loop_probe.py \
 Expected properties:
 
 - The command exits `0`.
-- The output includes top candidates, stale evidence, safe offline work, waiting-on-market-data items, and operator-review items.
+- The output includes top breakthrough candidates, stale evidence, safe high-leverage work, evidence-dependency items, and operator-review items.
 - No broker secrets are required.
 - No trading configuration files are modified.
 

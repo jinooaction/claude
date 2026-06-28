@@ -5,9 +5,9 @@
 
 ## Summary
 
-Build a read-first autonomous improvement loop that keeps the system productive while market evidence accumulates. The loop scans current evidence surfaces, ranks improvement candidates across the whole operating domain, turns selected candidates into bounded experiments, promotes only evidence-backed improvements through existing gates, and records learning so future sessions do not repeat the same discovery work.
+Build a read-first permanent autonomous growth loop that continuously compounds profit capacity, evidence quality, capital-path readiness, safety, and learning speed. The loop scans current evidence surfaces, ranks high-leverage breakthrough candidates across the whole operating domain, turns selected candidates into bounded experiments, promotes only evidence-backed improvements through existing gates, and records learning so future sessions do not repeat the same discovery work.
 
-The first implementation slice is intentionally read-only: candidate discovery, experiment planning, evidence packaging, latest-run sidecar, and learning ledger. It must not submit orders, increase capital, widen whitelists, relax caps, enable live order mode, or swap live strategies outside the existing reassignment and capital ladder gates.
+The first implementation slice is intentionally read-only: breakthrough candidate discovery, experiment planning, evidence packaging, latest-run sidecar, and learning ledger. It must not submit orders, increase capital, widen whitelists, relax caps, enable live order mode, or swap live strategies outside the existing reassignment and capital ladder gates.
 
 ## Technical Context
 
@@ -61,7 +61,7 @@ specs/067-autonomous-evolution-loop/
 ```text
 src/auto_invest/
 ├── analytics/
-│   ├── evolution_loop.py          # candidate discovery, scoring, promotion classification
+│   ├── evolution_loop.py          # breakthrough discovery, scoring, promotion classification
 │   └── pipeline_liveness.py       # existing liveness registry extended with evolution sidecar
 ├── cli.py                         # planned `evolution-scan` command wiring
 └── reports/

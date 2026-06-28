@@ -11,6 +11,7 @@
 - [X] All mandatory sections are completed.
 - [X] Scope boundaries exclude direct orders, capital increases, whitelist expansion, cap relaxation, and parallel live strategy swaps.
 - [X] Korean operator-facing behavior is covered.
+- [X] Permanent autonomous growth is framed as the primary goal; waiting time is only an evidence dependency, not the loop's purpose.
 
 ## Requirement Completeness
 
@@ -27,6 +28,7 @@
 - [X] User scenarios cover the primary autonomous loop.
 - [X] Feature meets measurable outcomes defined in Success Criteria.
 - [X] Safety and money-path boundaries are explicit enough for planning.
+- [X] Candidate ranking includes high-leverage breakthrough value, not only local blocker removal or idle-time utilization.
 
 ## Safety Review
 
