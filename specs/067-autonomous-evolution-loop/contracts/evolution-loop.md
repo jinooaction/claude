@@ -59,8 +59,9 @@ candidate_backlog.json
 
 - `timestamp_utc`
 - `commit`
-- top safe offline work
-- waiting-on-market-data items
+- top breakthrough candidates
+- safe high-leverage work inside existing gates
+- evidence-dependency items, including market-observation dependencies when relevant
 - safety-boundary review items
 - stale evidence
 - explicit statement that no orders, capital, whitelist, or cap changes were made

@@ -31,23 +31,23 @@
 
 ---
 
-## Phase 3: User Story 1 - 전 영역 개선 후보를 자동으로 발굴한다 (Priority: P1) MVP
+## Phase 3: User Story 1 - 전 영역 고레버리지 돌파 후보를 자동으로 발굴한다 (Priority: P1) MVP
 
-**Goal**: Produce a deterministic, ordered improvement candidate list from current evidence surfaces.
+**Goal**: Produce a deterministic, ordered breakthrough candidate list from current evidence surfaces.
 
 **Independent Test**: Fixed fixtures produce the same candidate order and safety classifications across repeated runs.
 
 - [ ] T009 [P] [US1] Implement domain registry covering at least eight domains in `src/auto_invest/analytics/evolution_loop.py`.
 - [ ] T010 [US1] Implement evidence parsing for money-path, micro GTAA, reassignment, pipeline-liveness, handoff summary, and released spec signals in `src/auto_invest/analytics/evolution_loop.py`.
-- [ ] T011 [US1] Implement candidate generation and deterministic scoring in `src/auto_invest/analytics/evolution_loop.py`.
+- [ ] T011 [US1] Implement breakthrough candidate generation and deterministic scoring by long-term profit capacity, evidence confidence, capital-path alignment, safety preservation, learning velocity, and compounding value in `src/auto_invest/analytics/evolution_loop.py`.
 - [ ] T012 [P] [US1] Add unit tests for deterministic candidate generation in `tests/unit/test_evolution_loop.py`.
 - [ ] T013 [P] [US1] Add integration tests for `scripts/evolution_loop_probe.py --json` in `tests/integration/test_evolution_loop_probe.py`.
 
-**Checkpoint**: The loop can report top safe offline work without writing trading config.
+**Checkpoint**: The loop can report top high-leverage breakthrough work without writing trading config.
 
 ---
 
-## Phase 4: User Story 2 - 개선 후보를 안전한 실험으로 바꾼다 (Priority: P1)
+## Phase 4: User Story 2 - 돌파 후보를 안전한 실험으로 바꾼다 (Priority: P1)
 
 **Goal**: Convert selected candidates into bounded experiment plans with success and failure criteria.
 
@@ -61,7 +61,7 @@
 
 ---
 
-## Phase 5: User Story 3 - 검증된 개선만 기존 안전 게이트로 승격한다 (Priority: P1)
+## Phase 5: User Story 3 - 검증된 돌파 후보만 기존 안전 게이트로 승격한다 (Priority: P1)
 
 **Goal**: Promote only evidence-backed candidates, and route money-path or strategy changes through existing gates.
 
