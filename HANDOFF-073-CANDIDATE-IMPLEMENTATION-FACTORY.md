@@ -1,6 +1,6 @@
 # HANDOFF 073 — 후보 구현 공장 자동화 (2026-06-29 KST)
 
-main 베이스라인: `b395e83`(PR #414). `BACKTEST_REQUIRED`에 멈춘 자율 성장 후보를 후보별 검증 패키지와 enriched backlog로 변환하는 스펙 070을 출시했다.
+main 베이스라인: `9ee51b0`(PR #415). `BACKTEST_REQUIRED`에 멈춘 자율 성장 후보를 후보별 검증 패키지와 enriched backlog로 변환하는 스펙 070을 출시하고, post-merge 입력 fetch 보정을 완료했다.
 
 ## 무엇이 바뀌었나
 
@@ -23,12 +23,13 @@ main 베이스라인: `b395e83`(PR #414). `BACKTEST_REQUIRED`에 멈춘 자율 �
 
 - `Candidate implementation factory` run `28339636371`: success, commit `b395e83e4f2975a74a14a3a182383adf8cc9e422`
 - sidecar: `automation/candidate-implementation-factory-last-run`
-- push-trigger 첫 실행은 optional result evidence branch fetch가 같은 fetch 명령에 묶인 탓에 입력 수집이 비어 후보 0개를 발행했다. 후속 브랜치 `Codex/fix-candidate-factory-fetch`에서 automation wildcard fetch로 고쳤다.
-- 로컬 smoke는 최신 sidecar 후보 9개를 모두 패키지화했다. 전략/포트폴리오 후보 2개는 `BACKTEST_REQUIRED`, 나머지 7개는 `FACTORY_PACKAGE_READY`로 분리됐다.
+- push-trigger 첫 실행은 optional result evidence branch fetch가 같은 fetch 명령에 묶인 탓에 입력 수집이 비어 후보 0개를 발행했다.
+- PR #415가 automation wildcard fetch로 고쳤고, `Candidate implementation factory` run `28339828605`가 commit `9ee51b065e74deae5df41d568a7cd5b2c1887cb5` 기준 후보 9개를 모두 패키지화했다.
+- 전략/포트폴리오 후보 2개는 `BACKTEST_REQUIRED`, 나머지 7개는 `FACTORY_PACKAGE_READY`로 분리된다.
 
 ## 배포와 smoke
 
-- `Deploy on merge to main` run `28339636369`: success
+- `Deploy on merge to main` run `28339828619`: success
 - `KIS smoke (autonomous)` run `28339636380`: success
 - KIS smoke commit: `b395e83e4f2975a74a14a3a182383adf8cc9e422`
 - `key_valid=true`, live broker smoke 4건 통과
@@ -62,6 +63,10 @@ PR #414 머지 전:
 - `uv run pytest tests/integration/test_candidate_factory_probe.py -q` → 4 passed
 - `uv run ruff check tests/integration/test_candidate_factory_probe.py` → All checks passed
 - `git diff --check` → clean
+- `uv run pytest` → 2342 passed, 4 skipped
+- `uv run ruff check src tests` → All checks passed
+- `uv run python scripts/check_handoff_facts.py` → OK
+- `uv run python scripts/agent_harness_probe.py --strict` → OK (14/14)
 
 ## 다음 세션 한 줄
 
