@@ -110,7 +110,7 @@
 - [x] T030 Run `uv run pytest` and `uv run ruff check src tests` for `src/` and `tests/`.
 - [x] T031 Run `uv run python scripts/check_handoff_facts.py` and `uv run python scripts/agent_harness_probe.py --strict`.
 - [x] T032 Open a PR using `.github/pull_request_template.md` with risk grade, problem definition, safety boundary review, validation, and handoff notes.
-- [ ] T033 Merge when gates pass, then refresh `HANDOFF.md` if implementation changes operating truth.
+- [x] T033 Merge when gates pass, then refresh `HANDOFF.md` if implementation changes operating truth.
 
 ## Dependencies & Execution Order
 
