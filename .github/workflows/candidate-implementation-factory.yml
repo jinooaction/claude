@@ -1,0 +1,142 @@
+name: Candidate implementation factory (후보 -> 검증 패키지)
+
+# 스펙 070 — BACKTEST_REQUIRED 후보를 실행 가능한 검증 패키지와 enriched backlog로 변환한다.
+#
+# 안전: 이 워크플로는 automation sidecar JSON과 선택적 result evidence만 읽는다.
+# 브로커 API, 주문, 자본 사다리, live 전략 설정, whitelist/caps, sentinels를 건드리지 않는다.
+
+on:
+  schedule:
+    # 매일 08:40 UTC — autonomous-evolution(08:30) 이후, promotion-scan(08:45) 이전.
+    - cron: "40 8 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/auto_invest/analytics/candidate_factory.py'
+      - 'scripts/candidate_factory_probe.py'
+      - 'src/auto_invest/analytics/promotion_loop.py'
+      - 'src/auto_invest/analytics/pipeline_liveness.py'
+      - 'src/auto_invest/cli.py'
+      - '.github/workflows/candidate-implementation-factory.yml'
+      - '.github/workflows/autonomous-promotion-loop.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: candidate-implementation-factory
+  cancel-in-progress: false
+
+jobs:
+  factory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Collect factory inputs
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/candidate_factory_inputs
+          git fetch --depth=1 origin \
+            automation/autonomous-evolution-last-run \
+            automation/autonomous-promotion-last-run \
+            automation/candidate-implementation-results || true
+
+          if git show origin/automation/autonomous-evolution-last-run:candidate_backlog.json \
+              > /tmp/candidate_factory_inputs/candidate_backlog.json 2>/tmp/candidate_backlog.err; then
+            echo "candidate backlog collected"
+          else
+            echo '{"schema_version":"1.0","candidates":[]}' \
+              > /tmp/candidate_factory_inputs/candidate_backlog.json
+            echo "candidate backlog missing; factory will publish empty/degraded run"
+          fi
+
+          if git show origin/automation/autonomous-promotion-last-run:promotion_summary.json \
+              > /tmp/candidate_factory_inputs/promotion_summary.json 2>/tmp/promotion_summary.err; then
+            echo "promotion summary collected"
+          else
+            echo '{"schema_version":"1.0","assessments":[]}' \
+              > /tmp/candidate_factory_inputs/promotion_summary.json
+            echo "promotion summary missing; factory will use backlog only"
+          fi
+
+          if git show origin/automation/candidate-implementation-results:candidate_results.json \
+              > /tmp/candidate_factory_inputs/candidate_results.json 2>/tmp/candidate_results.err; then
+            echo "candidate result evidence collected"
+          else
+            echo '{"schema_version":"1.0","results":[]}' \
+              > /tmp/candidate_factory_inputs/candidate_results.json
+            echo "candidate result evidence missing; packages will not be marked pass"
+          fi
+
+      - name: Build candidate implementation packages
+        run: |
+          set -euo pipefail
+          uv run python scripts/candidate_factory_probe.py \
+            --candidate-backlog /tmp/candidate_factory_inputs/candidate_backlog.json \
+            --promotion-summary /tmp/candidate_factory_inputs/promotion_summary.json \
+            --result-evidence /tmp/candidate_factory_inputs/candidate_results.json \
+            --summary-out /tmp/LAST_RUN.md \
+            --json-out /tmp/candidate_factory.json \
+            --enriched-backlog-out /tmp/candidate_backlog.enriched.json \
+            --package-plan-out /tmp/candidate_packages.json \
+            --run-id "${GITHUB_RUN_ID}"
+          cat /tmp/LAST_RUN.md
+
+      - name: Publish sidecar
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          BRANCH=automation/candidate-implementation-factory-last-run
+          tmpdir=$(mktemp -d)
+
+          cp /tmp/LAST_RUN.md "${tmpdir}/LAST_RUN.md" 2>/dev/null || {
+            echo "# 후보 구현 공장 — 보고 생성 실패" > "${tmpdir}/LAST_RUN.md"
+            echo "" >> "${tmpdir}/LAST_RUN.md"
+            echo "factory step failed before LAST_RUN.md was written." >> "${tmpdir}/LAST_RUN.md"
+          }
+          cp /tmp/candidate_factory.json "${tmpdir}/candidate_factory.json" \
+            2>/dev/null || echo '{}' > "${tmpdir}/candidate_factory.json"
+          cp /tmp/candidate_backlog.enriched.json "${tmpdir}/candidate_backlog.enriched.json" \
+            2>/dev/null || echo '{"schema_version":"1.0","candidates":[]}' \
+            > "${tmpdir}/candidate_backlog.enriched.json"
+          cp /tmp/candidate_packages.json "${tmpdir}/candidate_packages.json" \
+            2>/dev/null || echo '{"schema_version":"1.0","packages":[]}' \
+            > "${tmpdir}/candidate_packages.json"
+
+          {
+            echo ""
+            echo "## workflow metadata"
+            echo ""
+            echo "| 항목 | 값 |"
+            echo "|------|-----|"
+            echo "| run_id | ${GITHUB_RUN_ID} |"
+            echo "| run_url | https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} |"
+            echo "| commit | ${GITHUB_SHA} |"
+            echo "| trigger | ${GITHUB_EVENT_NAME} |"
+            echo "| timestamp_utc | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
+            echo "| safety | no broker, no orders, no capital/live config/whitelist/caps/sentinel change |"
+          } >> "${tmpdir}/LAST_RUN.md"
+
+          cd "${tmpdir}"
+          git init -q
+          git config user.name "candidate-factory-bot"
+          git config user.email "candidate-factory-bot@noreply.github.com"
+          git checkout --orphan publish -q
+          git add LAST_RUN.md candidate_factory.json candidate_backlog.enriched.json \
+            candidate_packages.json
+          git commit -q -m "candidate-implementation-factory run ${GITHUB_RUN_ID}"
+          git push --force \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "publish:${BRANCH}"
+          echo "Published to ${BRANCH}."

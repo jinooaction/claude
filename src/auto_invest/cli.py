@@ -6605,6 +6605,133 @@ def evolution_scan_cmd(
         typer.echo(summary.as_markdown())
 
 
+@app.command("candidate-factory")
+def candidate_factory_cmd(
+    candidate_backlog: Path = typer.Option(
+        ...,
+        "--candidate-backlog",
+        help="Candidate backlog JSON from autonomous evolution or factory sidecar.",
+    ),
+    promotion_summary: Path | None = typer.Option(
+        None,
+        "--promotion-summary",
+        help="Optional promotion summary JSON for source stage context.",
+    ),
+    result_evidence: Path | None = typer.Option(
+        None,
+        "--result-evidence",
+        help="Optional machine-readable candidate result evidence JSON.",
+    ),
+    summary_out: Path | None = typer.Option(
+        None,
+        "--summary-out",
+        help="Markdown latest-run summary output path.",
+    ),
+    json_out: Path | None = typer.Option(
+        None,
+        "--json-out",
+        help="Machine-readable factory summary JSON output path.",
+    ),
+    enriched_backlog_out: Path | None = typer.Option(
+        None,
+        "--enriched-backlog-out",
+        help="Candidate backlog with factory promotion_evidence patches.",
+    ),
+    package_plan_out: Path | None = typer.Option(
+        None,
+        "--package-plan-out",
+        help="Machine-readable candidate implementation package plan.",
+    ),
+    output_format: str = typer.Option(
+        "text",
+        "--format",
+        help="stdout format: text or json.",
+    ),
+    now: str | None = typer.Option(
+        None,
+        "--now",
+        help="As-of timestamp ISO-8601 UTC for deterministic tests.",
+    ),
+    run_id: str = typer.Option(
+        "local",
+        "--run-id",
+        help="Run identifier recorded in the summary.",
+    ),
+) -> None:
+    """Build candidate implementation packages without live side effects.
+
+    The command converts every autonomous candidate into a deterministic
+    backtest/validation package and merges machine-readable result evidence
+    into promotion_evidence only when the evidence explicitly passes.
+    It does not call broker APIs, place orders, modify capital, widen
+    whitelists, relax caps, swap live strategies, or edit sentinels.
+    """
+    import json as _json
+    import subprocess as _subprocess
+    from datetime import UTC as _UTC
+    from datetime import datetime as _datetime
+
+    from auto_invest.analytics.candidate_factory import (
+        build_candidate_factory_run,
+        write_candidate_factory_artifacts,
+    )
+
+    def _read_json(path: Path | None) -> dict | None:
+        if path is None:
+            return None
+        try:
+            raw = path.read_text(encoding="utf-8")
+        except (FileNotFoundError, OSError):
+            return None
+        try:
+            data = _json.loads(raw)
+        except _json.JSONDecodeError:
+            return None
+        return data if isinstance(data, dict) else None
+
+    def _parse_now(text: str | None):
+        if not text:
+            return _datetime.now(_UTC)
+        parsed = _datetime.fromisoformat(text.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=_UTC)
+        return parsed.astimezone(_UTC)
+
+    def _commit() -> str:
+        try:
+            return _subprocess.check_output(
+                ["git", "rev-parse", "HEAD"],
+                text=True,
+                stderr=_subprocess.DEVNULL,
+            ).strip()
+        except (OSError, _subprocess.CalledProcessError):
+            return "unknown"
+
+    if output_format not in {"text", "json"}:
+        typer.echo("--format 은 text 또는 json 이어야 합니다.", err=True)
+        raise typer.Exit(2)
+
+    run = build_candidate_factory_run(
+        candidate_backlog=_read_json(candidate_backlog),
+        promotion_summary=_read_json(promotion_summary),
+        result_evidence=_read_json(result_evidence),
+        now=_parse_now(now),
+        commit=_commit(),
+        run_id=run_id,
+    )
+    write_candidate_factory_artifacts(
+        run,
+        summary_out=summary_out,
+        json_out=json_out,
+        enriched_backlog_out=enriched_backlog_out,
+        package_plan_out=package_plan_out,
+    )
+    if output_format == "json":
+        typer.echo(_json.dumps(run.as_dict(), ensure_ascii=False))
+    else:
+        typer.echo(run.as_markdown())
+
+
 @app.command("promotion-scan")
 def promotion_scan_cmd(
     evidence_dir: Path = typer.Option(

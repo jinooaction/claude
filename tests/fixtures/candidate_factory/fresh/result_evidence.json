@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "results": [
+    {
+      "candidate_id": "candidate-1ed634d8bf6d",
+      "historical_backtest": "pass",
+      "recent_oos": "pass",
+      "walk_forward": "pass",
+      "source_ref": "artifact://candidate-1ed634d8bf6d/walk-forward.json",
+      "forward_track": {
+        "track_key": "micro-gtaa-research",
+        "portfolio_path": "deploy/micro-gtaa-live-portfolio.toml",
+        "db_path": "data/promotion_micro_gtaa.db",
+        "halt_path": "data/promotion_micro_gtaa.halt.flag"
+      }
+    },
+    {
+      "candidate_id": "candidate-fd04772a23c5",
+      "factory_validation": "pass",
+      "source_ref": "artifact://candidate-fd04772a23c5/money-path.json"
+    }
+  ]
+}

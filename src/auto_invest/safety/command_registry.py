@@ -154,6 +154,12 @@ COMMAND_POLICIES: dict[str, CommandPolicy] = {
         "Classify autonomous-evolution candidates into promotion stages; "
         "no orders or live config changes.",
     ),
+    "candidate-factory": _p(
+        "candidate-factory",
+        AutonomyLevel.READ_ONLY,
+        "Build candidate implementation packages and enriched backlog evidence; "
+        "no orders, broker calls, capital scaling, or live config changes.",
+    ),
     "promotion-actions": _p(
         "promotion-actions",
         AutonomyLevel.PROPOSAL,

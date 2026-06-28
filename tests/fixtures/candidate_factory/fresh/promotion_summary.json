@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0",
+  "assessments": [
+    {"stage": "BACKTEST_REQUIRED", "candidate": {"candidate_id": "candidate-1ed634d8bf6d"}},
+    {"stage": "BACKTEST_REQUIRED", "candidate": {"candidate_id": "candidate-fd04772a23c5"}},
+    {"stage": "BACKTEST_REQUIRED", "candidate": {"candidate_id": "candidate-cc96b35062da"}},
+    {"stage": "BACKTEST_REQUIRED", "candidate": {"candidate_id": "candidate-88a7e7f07361"}},
+    {"stage": "BACKTEST_REQUIRED", "candidate": {"candidate_id": "candidate-fa66202bf496"}},
+    {"stage": "BACKTEST_REQUIRED", "candidate": {"candidate_id": "candidate-e481b0309206"}},
+    {"stage": "BACKTEST_REQUIRED", "candidate": {"candidate_id": "candidate-dff4f9344b02"}},
+    {"stage": "BACKTEST_REQUIRED", "candidate": {"candidate_id": "candidate-6ee3370e933d"}},
+    {"stage": "BACKTEST_REQUIRED", "candidate": {"candidate_id": "candidate-facf2fa31834"}}
+  ]
+}

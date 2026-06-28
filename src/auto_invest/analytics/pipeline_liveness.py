@@ -371,6 +371,14 @@ def default_specs() -> list[SidecarSpec]:
             description="자율 승격 루프(스펙 068, 후보→검증 단계 분류 보고 전용)",
         ),
         SidecarSpec(
+            key="candidate-implementation-factory",
+            branch="automation/candidate-implementation-factory-last-run",
+            filename="LAST_RUN.md",
+            max_age_hours=30.0,  # 매일 08:40 — 후보를 검증 패키지와 evidence patch로 변환
+            critical=False,
+            description="후보 구현 공장(스펙 070, BACKTEST_REQUIRED 후보→검증 패키지)",
+        ),
+        SidecarSpec(
             key="autonomous-promotion-actions",
             branch="automation/autonomous-promotion-actions-last-run",
             filename="LAST_RUN.md",
