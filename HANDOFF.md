@@ -33,14 +33,15 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `0b7c248` — Merge pull request #398 from jinooaction/Codex/micro-gtaa-blocker-review |
+| 마지막 main 커밋 | `8f9a99f` — Merge pull request #400 from jinooaction/Codex/autonomous-evolution-loop |
 | main 테스트 | `uv run pytest -q` → 2286 passed, 4 skipped |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
 | 열린 PR | 없음(GitHub open PR 조회 결과 `[]`) |
 | 출시 완료 스펙 | 최신 추가: 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
-| 최근 출시 작업 | #398 micro GTAA `INTENT_LOSS` 차단 중 next action 안내 보정. #396 strategy review 관측 품질 false blocker 보정. #394 micro GTAA `INTENT_LOSS` 신호에서 실주문 차단 |
-| 활성 작업 | 코드 PR 없음. micro GTAA는 `armed:false`, `capital_usd:1000`, 최신 micro sidecar run `28274580272`에서 `LIVE 스텝=skipped`, strategy-intent gate `ok=false`, `reason=latest_intent_loss`, 누적 의도 손익 `-1.14 USD`. #398 이후 로컬 재현의 `next_action_ko`는 "새 live 표본은 자동으로 쌓이지 않습니다"로 바뀐다. 최신 reassign sidecar run `28278589509`는 #396 이전 코드의 `DEGRADED` 판정이므로 다음 실행에서는 all-premature lag를 `OK`로 보고해야 한다. 단, 아직 비교 가능한 도전자는 없으므로 재지정은 HOLD가 정상 |
-| 안전 경계 | #398과 #396은 등급 2 운영 판단·안내 보정이며 주문, 자본, 허용 종목, 전략 설정, 센티넬, K1/K2/K4/K5/K6, 헌법, 커널 목록 변경 없음. #394는 등급 4 돈 경로 변경이지만 방향은 실제 주문 가능성 축소. #392의 누적 monitor와 #394의 live gate가 함께 작동 |
+| 골격 스펙 | 최신 추가: 067(자율 고도화 루프 설계; 구현 미착수, `tasks.md` T001부터 시작) |
+| 최근 출시 작업 | #400 스펙 067 자율 고도화 루프 SDD 산출물 추가. #398 micro GTAA `INTENT_LOSS` 차단 중 next action 안내 보정. #396 strategy review 관측 품질 false blocker 보정 |
+| 활성 작업 | 코드 PR 없음. `.specify/feature.json`은 `specs/067-autonomous-evolution-loop`를 가리킨다. 스펙 067 구현은 아직 시작하지 않았고, 다음 세션은 `tasks.md` T001부터 진행하면 된다. micro GTAA는 기존 상태 그대로 `armed:false`, `capital_usd:1000`, 최신 micro sidecar run `28274580272`에서 `LIVE 스텝=skipped`, strategy-intent gate `ok=false`, `reason=latest_intent_loss`, 누적 의도 손익 `-1.14 USD`. 최신 reassign sidecar run `28278589509`는 #396 이전 코드의 `DEGRADED` 판정이므로 다음 실행에서는 all-premature lag를 `OK`로 보고해야 한다. 단, 아직 비교 가능한 도전자는 없으므로 재지정은 HOLD가 정상 |
+| 안전 경계 | #400은 등급 2 SDD·운영 포인터 변경이며 주문, 자본, 허용 종목, 전략 설정, 센티넬, K1/K2/K4/K5/K6, 헌법, 커널 목록 변경 없음. #398과 #396도 등급 2 운영 판단·안내 보정이다. #394는 등급 4 돈 경로 변경이지만 방향은 실제 주문 가능성 축소. #392의 누적 monitor와 #394의 live gate가 함께 작동 |
 
 ## 돈 경로 상태 판독 규칙 (필수 — 스펙 062)
 
@@ -79,6 +80,29 @@ uv run python scripts/money_path_probe.py --manifest | while IFS=$'\t' read -r k
 done
 uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.live_money_state'
 ```
+
+## 최근 관찰 — 2026-06-28 KST (스펙 067 자율 고도화 루프 설계)
+
+현재 `main` 최신은 `8f9a99f`(#400, 스펙 067 자율 고도화 루프 설계)이다.
+직전 주요 커밋은 `d8ba8b1`(설계 커밋), `1439690`(#399, #398 handoff),
+`0b7c248`(#398, micro GTAA intent-loss next-action 안내 보정)이다. 이 인계 갱신 시점의 열린
+PR은 없다.
+
+- **문제 정의**: 운영자는 forward 관측이나 live gate 해제처럼 달력 시간이 필요한 동안에도,
+  데이터 수집·분석·전략 설계·포트폴리오 설계·실시간 매매·회고·에이전트 운영 전 영역에서
+  시스템이 스스로 다음 개선 후보를 찾고 안전한 실험으로 승격하길 원했다.
+- **스펙 기록**: `specs/067-autonomous-evolution-loop/`에 `spec.md`, `plan.md`, `research.md`,
+  `data-model.md`, `quickstart.md`, `contracts/evolution-loop.md`, `tasks.md`, checklist를 남겼다.
+  `.specify/feature.json`과 `CLAUDE.md` Speckit 포인터도 새 스펙을 가리킨다.
+- **범위 고정**: 첫 구현 슬라이스는 read-only 스캔, 후보 발굴, 실험 계획, 학습 장부, latest-run
+  sidecar, pipeline liveness 편입이다. 구현은 아직 시작하지 않았고 `tasks.md` T001부터 남아 있다.
+- **보존한 방어**: 자동 고도화 루프가 주문, 자본, whitelist, caps, 실거래 모드, live 전략 교체를
+  직접 수행하지 못하도록 요구사항에 명시했다. 전략 교체는 스펙 055 5중 게이트, 자본 증액은
+  스펙 050 자본 사다리 밖에서 처리하지 않는다.
+- **검증**: PR #400 머지 전 `uv run pytest` 2286 통과·4 스킵, `uv run ruff check src tests` 통과,
+  `git diff --cached --check` 통과, PR 본문 품질 관문 통과, 하네스 `OK (14/14)`, HANDOFF 사실
+  검증 OK. 머지 후 `HANDOFF.md` stale 때문에 `uv run pytest -q`가 하네스 2건에서 실패했고,
+  이 handoff 갱신이 그 원인을 바로잡는다.
 
 ## 최근 관찰 — 2026-06-28 KST (micro GTAA intent-loss 다음 행동 안내 보정)
 
@@ -509,6 +533,21 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
   통과, `uv run python scripts/agent_harness_probe.py --strict` `OK (14/14)`,
   `uv run python scripts/check_handoff_facts.py` 통과, PR 품질 관문 통과. 머지 직전 전체 테스트와
   린트를 다시 실행해 같은 결과를 확인했다.
+
+## 최근 마일스톤 — 2026-06-28 KST (스펙 067 자율 고도화 루프 설계)
+
+main 머지 `8f9a99f`(#400). 운영자가 "기다리는 시간이 아까우니 모든 분야에서 세계 최고 수준으로
+자동 자율 고도화하는 루프"를 요구해, 이를 바로 실주문 경로로 만들지 않고 read-only 후보 발굴·
+실험 설계·증거 패키징·기존 게이트 승격·학습 장부로 분리한 스펙 067을 남겼다. 상세:
+`HANDOFF-067-AUTONOMOUS-EVOLUTION-LOOP.md`, `specs/067-autonomous-evolution-loop/`.
+
+- **핵심 설계**: 데이터 수집, 데이터 품질, 분석, 전략 설계, 포트폴리오 설계, 실행 품질,
+  live readiness, 회고, 에이전트 운영 품질을 도메인으로 두고, evidence surface를 읽어 개선 후보를
+  산출한다.
+- **안전 경계**: 자동 루프는 주문, 자본, whitelist, caps, live 전략 교체를 직접 수행하지 않는다.
+  검증된 후보도 스펙 055 재지정 게이트와 스펙 050 자본 사다리 같은 기존 경로로만 승격한다.
+- **현재 상태**: 구현 미착수. 다음 구현 세션은 `specs/067-autonomous-evolution-loop/tasks.md`
+  T001부터 시작한다.
 
 ## 최근 마일스톤 — 2026-06-28 KST (micro GTAA intent-loss 다음 행동 안내 보정)
 
@@ -3868,6 +3907,14 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 
 ## 과거 인수인계 파일 (참고용)
 
+- `HANDOFF-067-AUTONOMOUS-EVOLUTION-LOOP.md` — 스펙 067 자율 고도화 루프 설계
+  (2026-06-28, PR #400 `8f9a99f`). 기다리는 시장 관측 시간 동안 전 영역 개선 후보를 자동으로
+  발굴하고 안전한 실험으로 승격하는 상위 read-only 루프를 설계했다. 구현은 아직 시작하지 않았고
+  `tasks.md` T001부터 남아 있다. 주문·자본·whitelist·caps·live 전략 변경 없음.
+- `HANDOFF-066-MICRO-GTAA-BLOCKER-REVIEW.md` — micro GTAA intent-loss 다음 행동 안내 보정
+  (2026-06-28, PR #398 `0b7c248`). `INTENT_LOSS` 차단 중에는 새 live 표본이 자동으로 쌓이지
+  않으므로, forward 토너먼트·재지정 증거 또는 별도 전략 검토 후 재무장 여부를 판단하도록
+  안내를 바로잡았다. 주문 차단, `armed:false`, 자본, 허용 종목, 전략 설정 변경 없음.
 - `HANDOFF-065-STRATEGY-OBSERVATION-HEALTH.md` — 전략 검토 관측 품질 오판 보정
   (2026-06-27, PR #396 `d97d6a2`). 모든 후보가 최소 관측 전인 정상 누적 차이를
   `DEGRADED`로 오판하지 않게 했고, mixed comparable/premature 상태는 계속 `DEGRADED`로 막는다.
