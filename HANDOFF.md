@@ -33,15 +33,15 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `ddecebb` — Merge pull request #408 from jinooaction/Codex/autonomous-promotion-loop |
-| main 테스트 | `uv run pytest -q` → 2321 passed, 4 skipped |
+| 마지막 main 커밋 | `27da8b4` — Merge pull request #410 from jinooaction/Codex/autonomous-promotion-actions |
+| main 테스트 | `uv run pytest -q` → 2333 passed, 4 skipped |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
 | 열린 PR | 없음(GitHub open PR 조회 결과 `[]`) |
-| 출시 완료 스펙 | 최신 추가: 068(자율 승격 루프 자동화), 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
-| 골격 스펙 | 없음. `.specify/feature.json`은 추적을 위해 `specs/068-autonomous-promotion-loop`를 가리키지만, 스펙 068 구현은 #408로 main에 들어갔다. |
-| 최근 출시 작업 | #408 스펙 068 자율 승격 루프 자동화. #407 운영자 이해 가능 보고 handoff 갱신. #406 운영자가 이해 가능한 완료 보고 강제. #404 스펙 067 영구 자율 성장 루프 구현. |
-| 활성 작업 | 코드 PR 없음. 자율 성장 후보는 이제 `automation/autonomous-evolution-last-run`에서 후보를 만들고, `automation/autonomous-promotion-last-run`에서 백테스트·최근 표본외·forward paper·소액 live canary 후보·기존 돈 게이트 입력 중 다음 안전 단계로 분류한다. 최신 promotion run `28332023253`은 commit `ddecebb`, `overall_status=ok`, 누락 증거 없음이며 상위 후보들은 아직 `BACKTEST_REQUIRED`다. 다음 세션은 `git show origin/automation/autonomous-promotion-last-run:LAST_RUN.md`를 먼저 읽어 승격 큐를 확인한다. micro GTAA는 기존 상태 그대로 `armed:false`, `capital_usd:1000`, 최신 micro sidecar run `28274580272`에서 `LIVE 스텝=skipped`, strategy-intent gate `ok=false`, `reason=latest_intent_loss`, 누적 의도 손익 `-1.14 USD`. |
-| 안전 경계 | #408 자율 승격 루프는 등급 2 read-only 자동화다. 주문, 브로커 API 호출, 자본 증액, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, 센티넬, K1/K2/K4/K5/K6, 헌법, 커널 목록 변경 없음. 백테스트 통과는 캐너리 후보 자격이지 실계좌 실행 검증 완료가 아니며, 전략·자본 후보는 기존 스펙 055 재지정 게이트와 스펙 050 자본 사다리 밖으로 승격하지 않는다. |
+| 출시 완료 스펙 | 최신 추가: 069(자율 승격 실행 루프: forward paper 등록 큐와 hardened canary 제출 큐 자동화), 068(자율 승격 루프 자동 분류), 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
+| 골격 스펙 | 없음. `.specify/feature.json`은 추적을 위해 `specs/069-autonomous-promotion-actions`를 가리키지만, 스펙 069 구현은 #410으로 main에 들어갔다. |
+| 최근 출시 작업 | #410 스펙 069 자율 승격 실행 루프 자동화. #408 스펙 068 자율 승격 루프 자동 분류. #407 운영자 이해 가능 보고 handoff 갱신. #406 운영자가 이해 가능한 완료 보고 강제. #404 스펙 067 영구 자율 성장 루프 구현. |
+| 활성 작업 | 코드 PR 없음. 자율 성장 후보는 `automation/autonomous-evolution-last-run`에서 후보를 만들고, `automation/autonomous-promotion-last-run`에서 다음 검증 단계로 분류하며, `automation/autonomous-promotion-actions-last-run`이 검증 큐 등록 상태를 만든다. 최신 promotion run `28333113599`은 commit `27da8b4`, `overall_status=ok`, 누락 증거 없음이며 상위 후보들은 아직 `BACKTEST_REQUIRED`다. 최신 action run `28333113593`은 `registered=0`, `submitted=0`, `blocked=0`; 최신 promotion-forward run `28333113584`은 `track_count=0`; 최신 promotion-canary run `28333113596`은 `pending_submission_count=0`이다. 다음 세션은 `git show origin/automation/autonomous-promotion-actions-last-run:LAST_RUN.md`와 `git show origin/automation/autonomous-promotion-last-run:LAST_RUN.md`를 먼저 읽어 승격 큐와 실행 큐를 확인한다. micro GTAA는 기존 상태 그대로 `armed:false`, `capital_usd:1000`, 최신 micro sidecar run `28274580272`에서 `LIVE 스텝=skipped`, strategy-intent gate `ok=false`, `reason=latest_intent_loss`, 누적 의도 손익 `-1.14 USD`. |
+| 안전 경계 | #410 자율 승격 실행 루프는 등급 2 운영 자동화다. 신규 action workflow는 SSH/KIS/브로커를 쓰지 않고, 신규 forward workflow는 `--mode paper`만 사용하며, 신규 canary workflow는 `canary-portfolio`만 실행한다. 주문, 자본 증액, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, live sentinel, K1/K2/K4/K5/K6, 헌법, 커널 목록 변경 없음. 백테스트 통과는 캐너리 후보 자격이지 실계좌 실행 검증 완료가 아니며, 전략·자본 후보는 기존 스펙 055 재지정 게이트와 스펙 050 자본 사다리 밖으로 승격하지 않는다. |
 
 ## 돈 경로 상태 판독 규칙 (필수 — 스펙 062)
 
@@ -80,6 +80,45 @@ uv run python scripts/money_path_probe.py --manifest | while IFS=$'\t' read -r k
 done
 uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.live_money_state'
 ```
+
+## 최근 관찰 — 2026-06-29 KST (스펙 069 자율 승격 실행 루프 자동화)
+
+현재 `main` 최신은 `27da8b4`(#410, 스펙 069 자율 승격 실행 루프 자동화)이다.
+직전 주요 커밋은 `56a6719`(스펙 069 구현), `0d9bbe5`(#409, 스펙 068 handoff),
+`ddecebb`(#408, 스펙 068 자율 승격 루프 자동 분류)이다. 이 인계 갱신 시점의 열린 PR은 없다.
+
+- **문제 정의**: 스펙 068은 후보를 다음 검증 단계로 분류했지만, `FORWARD_REGISTRATION_READY` 후보를
+  실제 forward paper 관측 큐에 올리거나 `CANARY_CANDIDATE` 후보를 hardened canary 검증 큐에 올리는
+  실행층은 아직 없었다. 운영자가 원한 것은 판단에서 멈추지 않는 영구 자율 성장 루프다.
+- **구현 상태**: `src/auto_invest/analytics/promotion_actions.py`가 promotion summary를 읽어
+  promotion 전용 forward registry와 canary submission next state를 만든다. `scripts/promotion_action_probe.py`,
+  `auto-invest promotion-actions`, `.github/workflows/autonomous-promotion-actions.yml`가 같은 결정을
+  로컬·명령줄·GitHub Actions에서 재현한다.
+- **실행 경로**: `promotion-forward-tracks.yml`는 action sidecar의 `promotion-forward-registry.next.json`을
+  우선 읽고 tracked `automation/promotion-forward-registry.json`은 fallback으로 쓴다. 등록된 후보는
+  `backfill-bars -> rebalance-once --mode paper -> nav-snapshot --mode paper -> forward-verdict --mode paper`
+  순서로만 검증한다. `promotion-canary-submissions.yml`도 action sidecar의
+  `promotion-canary-submissions.next.json`을 우선 읽고, pending 후보는 `canary-portfolio`만 실행한다.
+- **닫힌 루프**: `autonomous-promotion-loop.yml`이 이제 `promotion-forward`와 `promotion-canary` sidecar를
+  증거로 수집한다. `promotion_loop.py`는 후보 ID 주변의 verdict를 읽어 `EDGE_CONFIRMED`면 canary 후보로,
+  canary `PASS`면 기존 스펙 050/055 게이트 준비 후보로 올린다.
+- **첫 실행 증거**: #410 main push 뒤 `Autonomous promotion actions` run `28333113593`, `Promotion forward tracks`
+  run `28333113584`, `Promotion canary submissions` run `28333113596`, `Autonomous promotion loop`
+  run `28333113599`가 모두 success였다. 현재 후보들은 아직 모두 `BACKTEST_REQUIRED`라 action summary는
+  `registered=0`, `submitted=0`, `blocked=0`, forward `track_count=0`, canary `pending_submission_count=0`이다.
+- **배포와 smoke**: #410 main push의 `Deploy on merge to main` run `28333113591`은 success다.
+  `KIS smoke (autonomous)` run `28333113580`도 commit `27da8b4` 기준 success, `key_valid=true`,
+  live broker smoke 4건 통과다. 배포는 dry-run worker 코드 반영이며 실거래 전환이 아니다.
+- **안전 경계**: 등급 2 운영 자동화다. 신규 action workflow는 SSH/KIS/브로커를 쓰지 않는다.
+  신규 forward는 `--mode paper`만 사용하고, 신규 canary는 `canary-portfolio`만 실행한다. 실제 주문,
+  자본 증액, whitelist/caps 확대, live 전략 교체, live sentinel, 헌법, 커널 목록, K1/K2/K4/K5/K6 변경 없음.
+- **검증**: PR #410 머지 전 focused pytest 48 통과, `uv run pytest` 2333 통과·4 스킵,
+  `uv run ruff check src tests` 통과, `git diff --check` 통과, touched workflow YAML parse OK,
+  `promotion_action_probe.py` artifact smoke와 `auto-invest promotion-actions` CLI smoke 통과, 하네스 `OK (14/14)`,
+  HANDOFF 사실 검증 OK, PR 품질 관문 성공. handoff 갱신 후 `uv run pytest -q` 2333 통과·4 스킵,
+  `uv run ruff check src tests` 통과, `uv run python scripts/check_handoff_facts.py` OK,
+  `uv run python scripts/agent_harness_probe.py --strict` OK (14/14)다.
+- **상세 인계**: `HANDOFF-072-AUTONOMOUS-PROMOTION-ACTIONS.md`.
 
 ## 최근 관찰 — 2026-06-29 KST (스펙 068 자율 승격 루프 자동화)
 
