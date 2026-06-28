@@ -34,6 +34,6 @@
 
 - [x] T019 Run focused pytest and ruff for new surfaces.
 - [x] T020 Run full `uv run pytest` and `uv run ruff check src tests`.
-- [ ] T021 Push branch and open PR with quality-gate body.
-- [ ] T022 Merge when gates pass and verify deployment/sidecar implications.
-- [ ] T023 Refresh `HANDOFF.md` and verify handoff facts.
+- [x] T021 Push branch and open PR with quality-gate body.
+- [x] T022 Merge when gates pass and verify deployment/sidecar implications.
+- [x] T023 Refresh `HANDOFF.md` and verify handoff facts.
