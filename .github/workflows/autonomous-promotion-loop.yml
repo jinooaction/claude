@@ -1,0 +1,136 @@
+name: Autonomous promotion loop (후보 -> 검증 단계 자동 분류)
+
+# 스펙 068 — read-only 자율 승격 루프.
+#
+# 목적: 자율 성장 루프가 만든 후보를 백테스트, 최근 표본외, forward paper,
+# 소액 live canary 후보, 기존 돈 게이트 중 다음 안전 단계로 분류한다.
+#
+# 안전: 이 워크플로는 이미 발행된 sidecar와 JSON 후보만 읽는다. 브로커 API 호출,
+# 주문, 자본 증액, whitelist/caps 변경, live 전략 교체 없음.
+
+on:
+  schedule:
+    # 매일 08:45 UTC — autonomous-evolution(08:30) 이후 후보 승격 상태 분류.
+    - cron: "45 8 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/auto_invest/analytics/promotion_loop.py'
+      - 'scripts/promotion_loop_probe.py'
+      - 'src/auto_invest/cli.py'
+      - 'src/auto_invest/analytics/pipeline_liveness.py'
+      - '.github/workflows/autonomous-promotion-loop.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: autonomous-promotion-loop
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Collect promotion evidence sidecars (read-only)
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/promotion_evidence
+          git fetch --depth=1 origin \
+            '+refs/heads/automation/*:refs/remotes/origin/automation/*' || true
+
+          git show origin/automation/autonomous-evolution-last-run:candidate_backlog.json \
+            > /tmp/promotion_evidence/candidate_backlog.json 2>/dev/null || echo '{"candidates":[]}' \
+            > /tmp/promotion_evidence/candidate_backlog.json
+          git show origin/automation/autonomous-evolution-last-run:evolution_summary.json \
+            > /tmp/promotion_evidence/evolution_summary.json 2>/dev/null || echo '{"candidates":[]}' \
+            > /tmp/promotion_evidence/evolution_summary.json
+
+          for item in \
+            "money-path automation/money-path-last-run LAST_RUN.md" \
+            "rebalance-paper-forward automation/rebalance-paper-forward-last-run LAST_RUN.md" \
+            "reassign automation/reassign-last-run LAST_RUN.md" \
+            "rebalance-micro-gtaa automation/rebalance-micro-gtaa-last-run LAST_RUN.md"; do
+            set -- ${item}
+            key="$1"; branch="$2"; filename="$3"
+            if git show "origin/${branch}:${filename}" \
+                 > "/tmp/promotion_evidence/${key}.md" 2>/dev/null; then
+              echo "✓ ${key}: evidence collected (${branch}:${filename})"
+            else
+              echo "✗ ${key}: evidence missing (${branch})"
+            fi
+          done
+
+      - name: Run autonomous promotion scan
+        run: |
+          set -euo pipefail
+          uv run python scripts/promotion_loop_probe.py \
+            --evidence-dir /tmp/promotion_evidence \
+            --summary-out /tmp/LAST_RUN.md \
+            --json-out /tmp/promotion_summary.json \
+            --queue-out /tmp/promotion_queue.json \
+            --run-id "${GITHUB_RUN_ID}"
+          cat /tmp/LAST_RUN.md
+
+      - name: Publish sidecar
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          BRANCH=automation/autonomous-promotion-last-run
+          tmpdir=$(mktemp -d)
+
+          if [[ -f /tmp/LAST_RUN.md ]]; then
+            cp /tmp/LAST_RUN.md "${tmpdir}/LAST_RUN.md"
+          else
+            {
+              echo "# 자율 승격 루프 — 보고 생성 실패"
+              echo ""
+              echo "scan step failed before LAST_RUN.md was written."
+              echo ""
+              echo "읽기 전용 실행입니다. 주문, 자본, whitelist, caps, live 전략은 변경하지 않았습니다."
+            } > "${tmpdir}/LAST_RUN.md"
+          fi
+
+          cp /tmp/promotion_summary.json "${tmpdir}/promotion_summary.json" \
+            2>/dev/null || echo '{}' > "${tmpdir}/promotion_summary.json"
+          cp /tmp/promotion_queue.json "${tmpdir}/promotion_queue.json" \
+            2>/dev/null || echo '{"schema_version":"1.0","queue":[]}' \
+            > "${tmpdir}/promotion_queue.json"
+
+          {
+            echo ""
+            echo "## workflow metadata"
+            echo ""
+            echo "| 항목 | 값 |"
+            echo "|------|-----|"
+            echo "| run_id | ${GITHUB_RUN_ID} |"
+            echo "| run_url | https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} |"
+            echo "| commit | ${GITHUB_SHA} |"
+            echo "| trigger | ${GITHUB_EVENT_NAME} |"
+            echo "| timestamp_utc | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
+            echo "| safety | no orders, no capital change, no whitelist/caps change, no live strategy change |"
+          } >> "${tmpdir}/LAST_RUN.md"
+
+          cd "${tmpdir}"
+          git init -q
+          git config user.name "autonomous-promotion-bot"
+          git config user.email "autonomous-promotion-bot@noreply.github.com"
+          git checkout --orphan publish -q
+          git add LAST_RUN.md promotion_summary.json promotion_queue.json
+          git commit -q -m "autonomous-promotion run ${GITHUB_RUN_ID} @ ${GITHUB_SHA:0:7}"
+          git push --force \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "publish:${BRANCH}"
+          echo "Published to ${BRANCH}."
