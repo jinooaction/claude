@@ -33,15 +33,15 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `c4400b7` — Merge pull request #406 from jinooaction/Codex/operator-readable-reporting |
-| main 테스트 | `uv run pytest -q` → 2310 passed, 4 skipped |
+| 마지막 main 커밋 | `ddecebb` — Merge pull request #408 from jinooaction/Codex/autonomous-promotion-loop |
+| main 테스트 | `uv run pytest -q` → 2321 passed, 4 skipped |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
 | 열린 PR | 없음(GitHub open PR 조회 결과 `[]`) |
-| 출시 완료 스펙 | 최신 추가: 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
-| 골격 스펙 | 없음. `.specify/feature.json`은 추적을 위해 `specs/067-autonomous-evolution-loop`를 계속 가리키지만, 스펙 067 구현은 #404로 main에 들어갔다. |
-| 최근 출시 작업 | #406 운영자가 이해 가능한 완료 보고 강제. #405 스펙 067 구현 handoff 갱신. #404 스펙 067 영구 자율 성장 루프 구현. #402 스펙 067 목표 프레이밍 정정 |
-| 활성 작업 | 코드 PR 없음. 완료 보고는 이제 PR 번호·커밋·테스트 수 나열이 아니라 실제 운영 상태 변화, 돈 경로와 안전 경계 영향, 검증, 남은 위험을 먼저 쉬운 한글로 설명해야 한다. autonomous-evolution workflow 첫 push 실행 run `28329967896`은 `automation/autonomous-evolution-last-run`을 발행했고 `overall_status=ok`, stale/missing evidence 없음, operator review 없음. 다음 세션은 `git show origin/automation/autonomous-evolution-last-run:LAST_RUN.md`를 먼저 읽어 최신 고레버리지 후보와 학습 장부를 확인한다. micro GTAA는 기존 상태 그대로 `armed:false`, `capital_usd:1000`, 최신 micro sidecar run `28274580272`에서 `LIVE 스텝=skipped`, strategy-intent gate `ok=false`, `reason=latest_intent_loss`, 누적 의도 손익 `-1.14 USD`. |
-| 안전 경계 | #406은 등급 2 운영 규칙·품질 관문·하네스 변경이며 주문, 브로커 API 호출, 자본, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, 센티넬, K1/K2/K4/K5/K6, 헌법, 커널 목록 변경 없음. #404 자율 성장 루프도 read-only이며 검증된 후보는 스펙 055 재지정 게이트와 스펙 050 자본 사다리로만 승격한다. |
+| 출시 완료 스펙 | 최신 추가: 068(자율 승격 루프 자동화), 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
+| 골격 스펙 | 없음. `.specify/feature.json`은 추적을 위해 `specs/068-autonomous-promotion-loop`를 가리키지만, 스펙 068 구현은 #408로 main에 들어갔다. |
+| 최근 출시 작업 | #408 스펙 068 자율 승격 루프 자동화. #407 운영자 이해 가능 보고 handoff 갱신. #406 운영자가 이해 가능한 완료 보고 강제. #404 스펙 067 영구 자율 성장 루프 구현. |
+| 활성 작업 | 코드 PR 없음. 자율 성장 후보는 이제 `automation/autonomous-evolution-last-run`에서 후보를 만들고, `automation/autonomous-promotion-last-run`에서 백테스트·최근 표본외·forward paper·소액 live canary 후보·기존 돈 게이트 입력 중 다음 안전 단계로 분류한다. 최신 promotion run `28332023253`은 commit `ddecebb`, `overall_status=ok`, 누락 증거 없음이며 상위 후보들은 아직 `BACKTEST_REQUIRED`다. 다음 세션은 `git show origin/automation/autonomous-promotion-last-run:LAST_RUN.md`를 먼저 읽어 승격 큐를 확인한다. micro GTAA는 기존 상태 그대로 `armed:false`, `capital_usd:1000`, 최신 micro sidecar run `28274580272`에서 `LIVE 스텝=skipped`, strategy-intent gate `ok=false`, `reason=latest_intent_loss`, 누적 의도 손익 `-1.14 USD`. |
+| 안전 경계 | #408 자율 승격 루프는 등급 2 read-only 자동화다. 주문, 브로커 API 호출, 자본 증액, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, 센티넬, K1/K2/K4/K5/K6, 헌법, 커널 목록 변경 없음. 백테스트 통과는 캐너리 후보 자격이지 실계좌 실행 검증 완료가 아니며, 전략·자본 후보는 기존 스펙 055 재지정 게이트와 스펙 050 자본 사다리 밖으로 승격하지 않는다. |
 
 ## 돈 경로 상태 판독 규칙 (필수 — 스펙 062)
 
@@ -80,6 +80,38 @@ uv run python scripts/money_path_probe.py --manifest | while IFS=$'\t' read -r k
 done
 uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.live_money_state'
 ```
+
+## 최근 관찰 — 2026-06-29 KST (스펙 068 자율 승격 루프 자동화)
+
+현재 `main` 최신은 `ddecebb`(#408, 스펙 068 자율 승격 루프 자동화)이다.
+직전 주요 커밋은 `0b91c05`(작업 상태 갱신), `4d9747e`(승격 루프 구현),
+`9a0aa1e`(#407, 운영자 이해 가능 보고 handoff 갱신)이다. 이 인계 갱신 시점의 열린 PR은 없다.
+
+- **문제 정의**: 자율 성장 루프가 후보를 만들더라도, 그 후보가 곧바로 돈 경로로 들어가면 안 된다.
+  후보마다 지금 필요한 다음 검증 단계가 백테스트인지, 최근 표본외인지, forward paper인지,
+  소액 live canary 후보인지, 기존 돈 게이트 입력인지 자동으로 분류해야 한다.
+- **구현 상태**: `src/auto_invest/analytics/promotion_loop.py`가 `candidate_backlog.json`,
+  `evolution_summary.json`, 기존 sidecar를 읽어 결정론적 승격 큐를 만든다. `scripts/promotion_loop_probe.py`,
+  `auto-invest promotion-scan`, `.github/workflows/autonomous-promotion-loop.yml`가 같은 판정을
+  로컬·명령줄·GitHub Actions에서 재현한다.
+- **백테스트와 소액 실거래의 분리**: 세계 최고 수준 백테스트는 전략 논리, 비용, 과최적화,
+  최근 regime 위험을 줄이는 필수 필터다. 하지만 브로커 주문 거부, 부분 체결과 미체결, 실계좌
+  현금·결제·보유 종목 충돌, 장중 스프레드와 슬리피지, API 지연·토큰 갱신, append-only 감사 로그와
+  일일 정산은 실제 브로커 경로에서만 검증된다. 그래서 백테스트 통과는 캐너리 후보 자격이지
+  실계좌 실행 검증 완료가 아니다.
+- **첫 실행 증거**: #408 main push 뒤 `Autonomous promotion loop` run `28332023253`이 성공했고
+  `automation/autonomous-promotion-last-run`을 발행했다. 최신 `LAST_RUN.md`는 commit `ddecebb24afe...`,
+  `overall_status=ok`, 누락 증거 없음, 안전 문구 "주문, 자본, whitelist/caps, live 전략, sentinels 변경 없음"을 보고한다.
+  현재 상위 후보들은 모두 `BACKTEST_REQUIRED`라서 아직 캐너리나 돈 게이트로 넘어갈 후보는 없다.
+- **배포와 smoke**: #408 main push의 `Deploy on merge to main` run `28332023265`는 success다.
+  `KIS smoke (autonomous)` run `28332023268`도 commit `ddecebb` 기준 success, `key_valid=true`,
+  live broker smoke 4건 통과다. 배포는 dry-run worker 코드 반영이며 실거래 전환이 아니다.
+- **안전 경계**: 등급 2 read-only 운영 자동화다. 실제 주문 실행, 브로커 API 호출, 자본 증액,
+  whitelist/caps 확대, live 전략 교체, 센티넬 변경, 헌법, 커널 목록, K1/K2/K4/K5/K6 변경 없음.
+  전략 교체는 스펙 055 재지정 게이트, 자본 증액은 스펙 050 자본 사다리 밖에서 처리하지 않는다.
+- **검증**: PR #408 머지 전 `uv run pytest -q` 2321 통과·4 스킵, `uv run ruff check src tests`
+  통과, `git diff --check` 통과, `promotion-scan` smoke 통과, 하네스 `OK (14/14)`,
+  HANDOFF 사실 검증 OK, PR 품질 관문 성공. 머지 직전 전체 테스트와 린트를 다시 실행해 같은 결과를 확인했다.
 
 ## 최근 관찰 — 2026-06-29 KST (운영자가 이해 가능한 완료 보고 강제)
 
@@ -588,6 +620,24 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
   통과, `uv run python scripts/agent_harness_probe.py --strict` `OK (14/14)`,
   `uv run python scripts/check_handoff_facts.py` 통과, PR 품질 관문 통과. 머지 직전 전체 테스트와
   린트를 다시 실행해 같은 결과를 확인했다.
+
+## 최근 마일스톤 — 2026-06-29 KST (스펙 068 자율 승격 루프 자동화)
+
+main 머지 `ddecebb`(#408). 자율 성장 후보를 실제 돈 경로로 바로 보내지 않고 다음 검증 단계로
+자동 분류하는 read-only 승격 루프를 추가했다. 상세:
+`HANDOFF-071-AUTONOMOUS-PROMOTION-LOOP.md`, `specs/068-autonomous-promotion-loop/`.
+
+- **핵심 구현**: 후보 backlog와 sidecar 증거를 읽어 `BACKTEST_REQUIRED`,
+  `RECENT_OOS_REQUIRED`, `FORWARD_REGISTRATION_READY`, `FORWARD_ACCUMULATING`,
+  `CANARY_CANDIDATE`, `EXISTING_GATE_READY`, `OPERATOR_REVIEW` 등으로 분류한다.
+- **운영 표면**: `auto-invest promotion-scan`, `scripts/promotion_loop_probe.py`,
+  GitHub Actions `Autonomous promotion loop`, pipeline liveness `autonomous-promotion` sidecar.
+- **중요한 판단**: 백테스트는 전략 검증이고 소액 live canary는 브로커·계좌·주문·체결 실행 경로 검증이다.
+  아무리 정교한 백테스트도 브로커 주문 거부, 부분 체결, 현금·결제 충돌, 실시간 슬리피지를 완료 검증하지 못한다.
+- **안전 경계**: 주문, 자본, whitelist/caps, live 전략 교체, 브로커 API 호출, 센티넬 변경 없음.
+  전략·자본 후보는 기존 스펙 055 재지정 게이트와 스펙 050 자본 사다리로만 간다.
+- **검증**: PR #408 머지 전 전체 테스트 2321 통과·4 스킵, 전체 린트 통과, 하네스 OK (14/14),
+  HANDOFF 사실 검증 OK, PR 품질 관문 성공. main push 뒤 배포와 KIS smoke도 success.
 
 ## 최근 마일스톤 — 2026-06-29 KST (운영자가 이해 가능한 완료 보고 강제)
 
