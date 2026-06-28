@@ -46,9 +46,7 @@ jobs:
           set -euo pipefail
           mkdir -p /tmp/candidate_factory_inputs
           git fetch --depth=1 origin \
-            automation/autonomous-evolution-last-run \
-            automation/autonomous-promotion-last-run \
-            automation/candidate-implementation-results || true
+            '+refs/heads/automation/*:refs/remotes/origin/automation/*' || true
 
           if git show origin/automation/autonomous-evolution-last-run:candidate_backlog.json \
               > /tmp/candidate_factory_inputs/candidate_backlog.json 2>/tmp/candidate_backlog.err; then
