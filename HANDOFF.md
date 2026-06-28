@@ -33,13 +33,13 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `27da8b4` — Merge pull request #410 from jinooaction/Codex/autonomous-promotion-actions |
+| 마지막 main 커밋 | `b99f19c` — Merge pull request #412 from jinooaction/Codex/close-promotion-action-tasks |
 | main 테스트 | `uv run pytest -q` → 2333 passed, 4 skipped |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
 | 열린 PR | 없음(GitHub open PR 조회 결과 `[]`) |
 | 출시 완료 스펙 | 최신 추가: 069(자율 승격 실행 루프: forward paper 등록 큐와 hardened canary 제출 큐 자동화), 068(자율 승격 루프 자동 분류), 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
 | 골격 스펙 | 없음. `.specify/feature.json`은 추적을 위해 `specs/069-autonomous-promotion-actions`를 가리키지만, 스펙 069 구현은 #410으로 main에 들어갔다. |
-| 최근 출시 작업 | #410 스펙 069 자율 승격 실행 루프 자동화. #408 스펙 068 자율 승격 루프 자동 분류. #407 운영자 이해 가능 보고 handoff 갱신. #406 운영자가 이해 가능한 완료 보고 강제. #404 스펙 067 영구 자율 성장 루프 구현. |
+| 최근 출시 작업 | #412 스펙 069 release task closure. #411 스펙 069 handoff 갱신. #410 스펙 069 자율 승격 실행 루프 자동화. #408 스펙 068 자율 승격 루프 자동 분류. #407 운영자 이해 가능 보고 handoff 갱신. #406 운영자가 이해 가능한 완료 보고 강제. #404 스펙 067 영구 자율 성장 루프 구현. |
 | 활성 작업 | 코드 PR 없음. 자율 성장 후보는 `automation/autonomous-evolution-last-run`에서 후보를 만들고, `automation/autonomous-promotion-last-run`에서 다음 검증 단계로 분류하며, `automation/autonomous-promotion-actions-last-run`이 검증 큐 등록 상태를 만든다. 최신 promotion run `28333113599`은 commit `27da8b4`, `overall_status=ok`, 누락 증거 없음이며 상위 후보들은 아직 `BACKTEST_REQUIRED`다. 최신 action run `28333113593`은 `registered=0`, `submitted=0`, `blocked=0`; 최신 promotion-forward run `28333113584`은 `track_count=0`; 최신 promotion-canary run `28333113596`은 `pending_submission_count=0`이다. 다음 세션은 `git show origin/automation/autonomous-promotion-actions-last-run:LAST_RUN.md`와 `git show origin/automation/autonomous-promotion-last-run:LAST_RUN.md`를 먼저 읽어 승격 큐와 실행 큐를 확인한다. micro GTAA는 기존 상태 그대로 `armed:false`, `capital_usd:1000`, 최신 micro sidecar run `28274580272`에서 `LIVE 스텝=skipped`, strategy-intent gate `ok=false`, `reason=latest_intent_loss`, 누적 의도 손익 `-1.14 USD`. |
 | 안전 경계 | #410 자율 승격 실행 루프는 등급 2 운영 자동화다. 신규 action workflow는 SSH/KIS/브로커를 쓰지 않고, 신규 forward workflow는 `--mode paper`만 사용하며, 신규 canary workflow는 `canary-portfolio`만 실행한다. 주문, 자본 증액, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, live sentinel, K1/K2/K4/K5/K6, 헌법, 커널 목록 변경 없음. 백테스트 통과는 캐너리 후보 자격이지 실계좌 실행 검증 완료가 아니며, 전략·자본 후보는 기존 스펙 055 재지정 게이트와 스펙 050 자본 사다리 밖으로 승격하지 않는다. |
 
@@ -83,9 +83,10 @@ uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.
 
 ## 최근 관찰 — 2026-06-29 KST (스펙 069 자율 승격 실행 루프 자동화)
 
-현재 `main` 최신은 `27da8b4`(#410, 스펙 069 자율 승격 실행 루프 자동화)이다.
-직전 주요 커밋은 `56a6719`(스펙 069 구현), `0d9bbe5`(#409, 스펙 068 handoff),
-`ddecebb`(#408, 스펙 068 자율 승격 루프 자동 분류)이다. 이 인계 갱신 시점의 열린 PR은 없다.
+현재 `main` 최신은 `b99f19c`(#412, 스펙 069 tasks release closure)이다.
+실제 기능 최신은 `27da8b4`(#410, 스펙 069 자율 승격 실행 루프 자동화)이며,
+직전 주요 커밋은 `b81e2de`(#411, 스펙 069 handoff), `56a6719`(스펙 069 구현),
+`0d9bbe5`(#409, 스펙 068 handoff)이다. 이 인계 갱신 시점의 열린 PR은 없다.
 
 - **문제 정의**: 스펙 068은 후보를 다음 검증 단계로 분류했지만, `FORWARD_REGISTRATION_READY` 후보를
   실제 forward paper 관측 큐에 올리거나 `CANARY_CANDIDATE` 후보를 hardened canary 검증 큐에 올리는
