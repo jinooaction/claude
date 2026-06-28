@@ -135,6 +135,7 @@ required_categories = [
   "verification_plan",
   "redteam_awareness",
   "handoff_awareness",
+  "operator_readability",
 ]
 success_criteria = ["done"]
 """
