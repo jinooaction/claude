@@ -33,15 +33,15 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `9e1e492` — Merge pull request #402 from jinooaction/Codex/evolution-breakthrough-goal |
-| main 테스트 | `uv run pytest -q` → 2286 passed, 4 skipped |
+| 마지막 main 커밋 | `424a70e` — Merge pull request #404 from jinooaction/Codex/autonomous-evolution-implementation |
+| main 테스트 | `uv run pytest -q` → 2310 passed, 4 skipped |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
 | 열린 PR | 없음(GitHub open PR 조회 결과 `[]`) |
-| 출시 완료 스펙 | 최신 추가: 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
-| 골격 스펙 | 최신 추가: 067(자율 고도화 루프 설계; 구현 미착수, `tasks.md` T001부터 시작) |
-| 최근 출시 작업 | #402 스펙 067 목표 프레이밍 정정. #401 스펙 067 handoff 갱신. #400 스펙 067 자율 고도화 루프 SDD 산출물 추가. #398 micro GTAA `INTENT_LOSS` 차단 중 next action 안내 보정 |
-| 활성 작업 | 코드 PR 없음. `.specify/feature.json`은 `specs/067-autonomous-evolution-loop`를 가리킨다. 스펙 067 구현은 아직 시작하지 않았고, 다음 세션은 `tasks.md` T001부터 진행하면 된다. 후보 점수화는 "기다림 활용"이 아니라 영구 성장·고레버리지 돌파 기준으로 설계해야 한다. micro GTAA는 기존 상태 그대로 `armed:false`, `capital_usd:1000`, 최신 micro sidecar run `28274580272`에서 `LIVE 스텝=skipped`, strategy-intent gate `ok=false`, `reason=latest_intent_loss`, 누적 의도 손익 `-1.14 USD`. 최신 reassign sidecar run `28278589509`는 #396 이전 코드의 `DEGRADED` 판정이므로 다음 실행에서는 all-premature lag를 `OK`로 보고해야 한다. 단, 아직 비교 가능한 도전자는 없으므로 재지정은 HOLD가 정상 |
-| 안전 경계 | #402는 등급 2 스펙·인계 프레이밍 보정이며 주문, 자본, 허용 종목, 전략 설정, 센티넬, K1/K2/K4/K5/K6, 헌법, 커널 목록 변경 없음. #401은 handoff-only 갱신이다. #400은 등급 2 SDD·운영 포인터 변경이다. #398과 #396도 등급 2 운영 판단·안내 보정이다. #394는 등급 4 돈 경로 변경이지만 방향은 실제 주문 가능성 축소 |
+| 출시 완료 스펙 | 최신 추가: 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
+| 골격 스펙 | 없음. `.specify/feature.json`은 추적을 위해 `specs/067-autonomous-evolution-loop`를 계속 가리키지만, 스펙 067 구현은 #404로 main에 들어갔다. |
+| 최근 출시 작업 | #404 스펙 067 영구 자율 성장 루프 구현. #403 스펙 067 handoff 갱신. #402 스펙 067 목표 프레이밍 정정. #400 스펙 067 자율 고도화 루프 SDD 산출물 추가 |
+| 활성 작업 | 코드 PR 없음. autonomous-evolution workflow 첫 push 실행 run `28329967896`이 `automation/autonomous-evolution-last-run`을 발행했고 `overall_status=ok`, stale/missing evidence 없음, operator review 없음. 다음 세션은 `git show origin/automation/autonomous-evolution-last-run:LAST_RUN.md`를 먼저 읽어 최신 고레버리지 후보와 학습 장부를 확인한다. micro GTAA는 기존 상태 그대로 `armed:false`, `capital_usd:1000`, 최신 micro sidecar run `28274580272`에서 `LIVE 스텝=skipped`, strategy-intent gate `ok=false`, `reason=latest_intent_loss`, 누적 의도 손익 `-1.14 USD`. 최신 reassign sidecar run `28278589509`는 #396 이전 코드의 `DEGRADED` 판정이므로 다음 실행에서는 all-premature lag를 `OK`로 보고해야 한다. 단, 아직 비교 가능한 도전자는 없으므로 재지정은 HOLD가 정상 |
+| 안전 경계 | #404는 등급 2 운영 자동화·sidecar·CLI 추가이며 read-only다. 주문, 브로커 API 호출, 자본, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, 센티넬, K1/K2/K4/K5/K6, 헌법, 커널 목록 변경 없음. 검증된 후보도 스펙 055 재지정 게이트와 스펙 050 자본 사다리로만 승격한다. |
 
 ## 돈 경로 상태 판독 규칙 (필수 — 스펙 062)
 
@@ -81,9 +81,39 @@ done
 uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.live_money_state'
 ```
 
+## 최근 관찰 — 2026-06-29 KST (스펙 067 영구 자율 성장 루프 구현)
+
+현재 `main` 최신은 `424a70e`(#404, 스펙 067 영구 자율 성장 루프 구현)이다.
+직전 주요 커밋은 `b72ec7e`(구현 커밋), `a98d44f`(#403, 스펙 067 handoff 갱신),
+`9e1e492`(#402, 스펙 067 목표 프레이밍 정정)이다. 이 인계 갱신 시점의 열린 PR은 없다.
+
+- **구현 상태**: `src/auto_invest/analytics/evolution_loop.py`가 sidecar와 handoff 증거를 읽어
+  데이터 수집, 데이터 품질, 분석, 전략 설계, 포트폴리오 설계, 실행 품질, 실시간 매매 준비도,
+  회고, 에이전트 운영 품질 전 영역의 고레버리지 돌파 후보를 결정론적으로 만든다.
+- **실행 경로**: `scripts/evolution_loop_probe.py`는 workflow용 manifest, JSON/text 출력,
+  `LAST_RUN.md`, `evolution_summary.json`, `learning_ledger.json`, `candidate_backlog.json`을 만든다.
+  로컬에서는 `auto-invest evolution-scan --evidence-dir <dir>`로 같은 read-only scan을 재현한다.
+- **자동화**: `.github/workflows/autonomous-evolution-loop.yml`은 매일 08:30 UTC와 관련 main push 때
+  sidecar를 수집하고 `automation/autonomous-evolution-last-run`을 force-push로 발행한다. shell step은
+  `set -euo pipefail`로 실패를 조용히 삼키지 않는다.
+- **첫 실행 증거**: #404 main push 뒤 workflow run `28329967896`이 성공적으로 sidecar를 발행했다.
+  최신 `LAST_RUN.md`는 commit `424a70e16a442b0bde54db2da47b3d69ab14e78c`, `overall_status=ok`,
+  stale/missing evidence 없음, operator review 없음, 안전 문구 "주문, 자본, whitelist/caps, live 전략
+  변경 없음"을 보고한다.
+- **현재 상위 후보**: 1) micro GTAA 의도 손익 재검토와 대체 전략 연구, 2) 돈 경로 준비도와 기존
+  게이트 정렬, 3) 비상관 포트폴리오 후보 비교력 강화. 시장 관측 대기는 루프의 목적이 아니라
+  일부 후보의 `evidence_dependency`일 뿐이다.
+- **보존한 방어**: 후보 발견·실험 계획·학습 장부는 모두 read-only다. 실제 주문, 브로커 API 호출,
+  자본 증액, whitelist/caps 확대, live 전략 교체를 하지 않는다. 전략 후보는 스펙 055 재지정
+  게이트, 자본 후보는 스펙 050 자본 사다리 밖으로 승격하지 않는다.
+- **검증**: PR #404 머지 전 `uv run pytest` 2310 통과·4 스킵, `uv run ruff check src tests` 통과,
+  `git diff --check` 통과, PR 본문 품질 관문 통과, 하네스 `OK (14/14)`, HANDOFF 사실 검증 OK.
+  handoff 갱신 전 main의 `uv run pytest -q`는 stale `HANDOFF.md` 때문에 하네스 2건만 실패했고,
+  이 handoff 갱신은 그 원인을 바로잡는다.
+
 ## 최근 관찰 — 2026-06-29 KST (스펙 067 영구 성장 목표 정정)
 
-현재 `main` 최신은 `9e1e492`(#402, 스펙 067 목표 프레이밍 정정)이다.
+이 기록 작성 당시 `main` 최신은 `9e1e492`(#402, 스펙 067 목표 프레이밍 정정)였다.
 직전 주요 커밋은 `605cb11`(#402 실제 문서 커밋), `ba52f46`(#401, 스펙 067 handoff 갱신),
 `8f9a99f`(#400, 스펙 067 자율 고도화 루프 설계)이다. 이 인계 갱신 시점의 열린 PR은 없다.
 
@@ -94,8 +124,9 @@ uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.
 - **스펙 기록**: `specs/067-autonomous-evolution-loop/`에 `spec.md`, `plan.md`, `research.md`,
   `data-model.md`, `quickstart.md`, `contracts/evolution-loop.md`, `tasks.md`, checklist가 모두
   영구 성장·고레버리지 돌파·증거 의존성 기준을 반영한다. 상세: `HANDOFF-068-EVOLUTION-BREAKTHROUGH-FRAMING.md`.
-- **범위 고정**: 첫 구현 슬라이스는 read-only 스캔, 고레버리지 돌파 후보 발굴, 실험 계획, 학습 장부,
-  latest-run sidecar, pipeline liveness 편입이다. 구현은 아직 시작하지 않았고 `tasks.md` T001부터 남아 있다.
+- **범위 고정(당시 기록)**: 첫 구현 슬라이스는 read-only 스캔, 고레버리지 돌파 후보 발굴, 실험 계획, 학습 장부,
+  latest-run sidecar, pipeline liveness 편입이었다. 당시 구현은 아직 시작하지 않았고 `tasks.md` T001부터 남아 있었다.
+  현재는 #404로 구현 완료됐으므로 위 #404 섹션을 우선한다.
 - **보존한 방어**: 자동 고도화 루프가 주문, 자본, whitelist, caps, 실거래 모드, live 전략 교체를
   직접 수행하지 못하도록 요구사항에 명시했다. 전략 교체는 스펙 055 5중 게이트, 자본 증액은
   스펙 050 자본 사다리 밖에서 처리하지 않는다.
@@ -533,6 +564,21 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
   `uv run python scripts/check_handoff_facts.py` 통과, PR 품질 관문 통과. 머지 직전 전체 테스트와
   린트를 다시 실행해 같은 결과를 확인했다.
 
+## 최근 마일스톤 — 2026-06-29 KST (스펙 067 영구 자율 성장 루프 구현)
+
+main 머지 `424a70e`(#404). 스펙 067을 read-only 운영 루프로 구현했고, 첫 push workflow가
+`automation/autonomous-evolution-last-run` sidecar를 `overall_status=ok`로 발행했다. 상세:
+`HANDOFF-069-AUTONOMOUS-EVOLUTION-IMPLEMENTATION.md`, `specs/067-autonomous-evolution-loop/`.
+
+- **핵심 구현**: evidence surface → breakthrough candidate → experiment plan → promotion decision →
+  learning ledger → latest-run report 흐름을 pure analytics와 probe/CLI/workflow로 연결했다.
+- **운영 표면**: `auto-invest evolution-scan`, `scripts/evolution_loop_probe.py`, GitHub Actions
+  `Autonomous evolution loop`, pipeline liveness `autonomous-evolution` sidecar.
+- **안전 경계**: 주문, 자본, whitelist/caps, live 전략 교체, 브로커 API 호출 없음. 전략·자본 후보는
+  기존 스펙 055 재지정 게이트와 스펙 050 자본 사다리로만 승격한다.
+- **검증**: PR #404 머지 전 전체 테스트 2310 통과·4 스킵, 전체 린트 통과, 하네스 OK (14/14),
+  HANDOFF 사실 검증 OK, PR 품질 관문 성공.
+
 ## 최근 마일스톤 — 2026-06-29 KST (스펙 067 영구 성장 목표 정정)
 
 main 머지 `9e1e492`(#402). 스펙 067의 목표를 "기다리는 시간 활용"이 아니라 "지금부터 영구적으로
@@ -546,8 +592,8 @@ main 머지 `9e1e492`(#402). 스펙 067의 목표를 "기다리는 시간 활용
   종류다. 특정 후보가 시장 관측에 묶여도 루프는 다른 안전한 고레버리지 작업을 계속 고른다.
 - **안전 경계**: 자동 루프는 주문, 자본, whitelist, caps, live 전략 교체를 직접 수행하지 않는다.
   검증된 후보도 스펙 055 재지정 게이트와 스펙 050 자본 사다리 같은 기존 경로로만 승격한다.
-- **현재 상태**: 구현 미착수. 다음 구현 세션은 `specs/067-autonomous-evolution-loop/tasks.md`
-  T001부터 시작한다.
+- **당시 상태**: 구현 미착수였다. 현재는 #404로 구현 완료됐으므로 다음 세션은
+  `automation/autonomous-evolution-last-run` sidecar를 우선 읽는다.
 
 ## 최근 마일스톤 — 2026-06-28 KST (micro GTAA intent-loss 다음 행동 안내 보정)
 
@@ -3907,14 +3953,18 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 
 ## 과거 인수인계 파일 (참고용)
 
+- `HANDOFF-069-AUTONOMOUS-EVOLUTION-IMPLEMENTATION.md` — 스펙 067 영구 자율 성장 루프 구현
+  (2026-06-29, PR #404 `424a70e`). read-only 루프가 sidecar와 handoff 증거를 읽어 고레버리지
+  후보, 안전한 실험 계획, 학습 장부, 최신 실행 보고서를 발행한다. 첫 workflow run `28329967896`은
+  `overall_status=ok`였고 주문·자본·whitelist/caps·live 전략 변경 없음.
 - `HANDOFF-068-EVOLUTION-BREAKTHROUGH-FRAMING.md` — 스펙 067 영구 성장 목표 정정
   (2026-06-29, PR #402 `9e1e492`). 자율 고도화 루프를 기다림 활용이 아니라 전 영역 돈 버는 능력과
-  검증 능력을 복리화하는 상시 성장 엔진으로 재정의했다. 구현은 아직 시작하지 않았고 `tasks.md`
-  T001부터 남아 있다. 주문·자본·whitelist·caps·live 전략 변경 없음.
+  검증 능력을 복리화하는 상시 성장 엔진으로 재정의했다. 당시 구현은 아직 시작하지 않았고
+  `tasks.md` T001부터 남아 있었다. 주문·자본·whitelist·caps·live 전략 변경 없음.
 - `HANDOFF-067-AUTONOMOUS-EVOLUTION-LOOP.md` — 스펙 067 자율 고도화 루프 설계
   (2026-06-28, PR #400 `8f9a99f`). 전 영역 고레버리지 돌파 후보를 자동으로 발굴하고 안전한
-  실험으로 승격하는 영구 read-only 성장 루프를 설계했다. 구현은 아직 시작하지 않았고 `tasks.md`
-  T001부터 남아 있다. 주문·자본·whitelist·caps·live 전략 변경 없음.
+  실험으로 승격하는 영구 read-only 성장 루프를 설계했다. 당시 구현은 아직 시작하지 않았고
+  `tasks.md` T001부터 남아 있었다. 주문·자본·whitelist·caps·live 전략 변경 없음.
 - `HANDOFF-066-MICRO-GTAA-BLOCKER-REVIEW.md` — micro GTAA intent-loss 다음 행동 안내 보정
   (2026-06-28, PR #398 `0b7c248`). `INTENT_LOSS` 차단 중에는 새 live 표본이 자동으로 쌓이지
   않으므로, forward 토너먼트·재지정 증거 또는 별도 전략 검토 후 재무장 여부를 판단하도록
