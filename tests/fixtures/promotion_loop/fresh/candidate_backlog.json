@@ -1,0 +1,69 @@
+{
+  "schema_version": "1.0",
+  "candidates": [
+    {
+      "candidate_id": "candidate-backtest-only",
+      "domain_key": "strategy_design",
+      "title_ko": "백테스트만 통과한 대체 전략",
+      "status": "new",
+      "risk_grade": 2,
+      "safety_impact": [],
+      "evidence_refs": ["strategy-research"],
+      "next_action_ko": "forward paper 등록 전 표본외 검증을 확인한다.",
+      "composite_score": 700,
+      "promotion_evidence": {
+        "historical_backtest": "pass"
+      }
+    },
+    {
+      "candidate_id": "candidate-forward-ready",
+      "domain_key": "portfolio_design",
+      "title_ko": "표본외 검증을 통과한 포트폴리오 후보",
+      "status": "new",
+      "risk_grade": 2,
+      "safety_impact": [],
+      "evidence_refs": ["strategy-research"],
+      "next_action_ko": "forward paper 트랙에 등록한다.",
+      "composite_score": 650,
+      "promotion_evidence": {
+        "historical_backtest": "pass",
+        "recent_oos": "pass",
+        "walk_forward": "pass"
+      }
+    },
+    {
+      "candidate_id": "candidate-capital-gate",
+      "domain_key": "live_readiness",
+      "title_ko": "자본 사다리 입력 후보",
+      "status": "new",
+      "risk_grade": 4,
+      "safety_impact": ["capital"],
+      "evidence_refs": ["rebalance-paper-forward"],
+      "next_action_ko": "자본 사다리로만 제출한다.",
+      "composite_score": 620,
+      "promotion_evidence": {
+        "historical_backtest": "pass",
+        "recent_oos": "pass",
+        "walk_forward": "pass",
+        "forward_paper": "pass",
+        "small_live_canary": "pass"
+      }
+    },
+    {
+      "candidate_id": "candidate-unsafe",
+      "domain_key": "portfolio_design",
+      "title_ko": "허용 종목 확대 후보",
+      "status": "new",
+      "risk_grade": 4,
+      "safety_impact": ["whitelist"],
+      "evidence_refs": ["research"],
+      "next_action_ko": "운영자 검토가 필요하다.",
+      "composite_score": 800,
+      "promotion_evidence": {
+        "historical_backtest": "pass",
+        "recent_oos": "pass",
+        "walk_forward": "pass"
+      }
+    }
+  ]
+}

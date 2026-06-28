@@ -6603,3 +6603,120 @@ def evolution_scan_cmd(
         typer.echo(_json.dumps(summary.as_dict(), ensure_ascii=False))
     else:
         typer.echo(summary.as_markdown())
+
+
+@app.command("promotion-scan")
+def promotion_scan_cmd(
+    evidence_dir: Path = typer.Option(
+        ...,
+        "--evidence-dir",
+        help="Collected promotion evidence directory.",
+    ),
+    summary_out: Path | None = typer.Option(
+        None,
+        "--summary-out",
+        help="Markdown latest-run summary output path.",
+    ),
+    json_out: Path | None = typer.Option(
+        None,
+        "--json-out",
+        help="Machine-readable summary JSON output path.",
+    ),
+    queue_out: Path | None = typer.Option(
+        None,
+        "--queue-out",
+        help="Machine-readable promotion queue JSON output path.",
+    ),
+    output_format: str = typer.Option(
+        "text",
+        "--format",
+        help="stdout format: text or json.",
+    ),
+    now: str | None = typer.Option(
+        None,
+        "--now",
+        help="As-of timestamp ISO-8601 UTC for deterministic tests.",
+    ),
+    run_id: str = typer.Option(
+        "local",
+        "--run-id",
+        help="Run identifier recorded in the summary.",
+    ),
+) -> None:
+    """Run the read-only autonomous promotion scan.
+
+    The command classifies evolution candidates into backtest, OOS, forward,
+    canary, or existing-gate stages. It does not call broker APIs, place orders,
+    modify capital, widen whitelists, relax caps, swap live strategies, or edit
+    sentinels.
+    """
+    import json as _json
+    import subprocess as _subprocess
+    from datetime import UTC as _UTC
+    from datetime import datetime as _datetime
+
+    from auto_invest.analytics.promotion_loop import (
+        scan_promotion,
+        write_promotion_artifacts,
+    )
+
+    def _read_json(path: Path) -> dict | None:
+        try:
+            raw = path.read_text(encoding="utf-8")
+        except (FileNotFoundError, OSError):
+            return None
+        try:
+            data = _json.loads(raw)
+        except _json.JSONDecodeError:
+            return None
+        return data if isinstance(data, dict) else None
+
+    def _read_evidence(path: Path) -> dict[str, str | None]:
+        evidence: dict[str, str | None] = {}
+        for item in sorted(path.glob("*.md")):
+            try:
+                evidence[item.stem] = item.read_text(encoding="utf-8")
+            except OSError:
+                evidence[item.stem] = None
+        return evidence
+
+    def _parse_now(text: str | None):
+        if not text:
+            return _datetime.now(_UTC)
+        parsed = _datetime.fromisoformat(text.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=_UTC)
+        return parsed.astimezone(_UTC)
+
+    def _commit() -> str:
+        try:
+            return _subprocess.check_output(
+                ["git", "rev-parse", "HEAD"],
+                text=True,
+                stderr=_subprocess.DEVNULL,
+            ).strip()
+        except (OSError, _subprocess.CalledProcessError):
+            return "unknown"
+
+    if output_format not in {"text", "json"}:
+        typer.echo("--format 은 text 또는 json 이어야 합니다.", err=True)
+        raise typer.Exit(2)
+
+    summary = scan_promotion(
+        candidate_backlog=_read_json(evidence_dir / "candidate_backlog.json"),
+        evolution_summary=_read_json(evidence_dir / "evolution_summary.json"),
+        evidence_texts=_read_evidence(evidence_dir),
+        now=_parse_now(now),
+        commit=_commit(),
+        run_id=run_id,
+    )
+    write_promotion_artifacts(
+        summary,
+        summary_out=summary_out,
+        json_out=json_out,
+        queue_out=queue_out,
+    )
+    if output_format == "json":
+        typer.echo(_json.dumps(summary.as_dict(), ensure_ascii=False))
+    else:
+        typer.echo(summary.as_markdown())

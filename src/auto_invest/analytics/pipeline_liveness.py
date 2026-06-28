@@ -363,6 +363,14 @@ def default_specs() -> list[SidecarSpec]:
             description="영구 자율 성장 루프(스펙 067, 고레버리지 돌파 후보 보고 전용)",
         ),
         SidecarSpec(
+            key="autonomous-promotion",
+            branch="automation/autonomous-promotion-last-run",
+            filename="LAST_RUN.md",
+            max_age_hours=30.0,  # 매일 08:45 — 성장 후보를 검증 단계로 승격 분류
+            critical=False,
+            description="자율 승격 루프(스펙 068, 후보→검증 단계 분류 보고 전용)",
+        ),
+        SidecarSpec(
             key="reassign",
             branch="automation/reassign-last-run",
             filename="LAST_RUN.md",

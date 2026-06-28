@@ -148,6 +148,12 @@ COMMAND_POLICIES: dict[str, CommandPolicy] = {
         "Read collected evidence and render autonomous-evolution candidates; "
         "no orders or live config changes.",
     ),
+    "promotion-scan": _p(
+        "promotion-scan",
+        AutonomyLevel.READ_ONLY,
+        "Classify autonomous-evolution candidates into promotion stages; "
+        "no orders or live config changes.",
+    ),
     "fills": _p(
         "fills",
         AutonomyLevel.PROPOSAL,
