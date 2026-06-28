@@ -208,6 +208,22 @@ def test_default_specs_registry_sane():
     assert "autonomous-promotion" in keys
     assert by_key["autonomous-promotion"].critical is False
     assert by_key["autonomous-promotion"].branch == "automation/autonomous-promotion-last-run"
+    # 스펙 069 — 승격 실행 루프와 promotion 전용 검증 채널도 감시 대상.
+    # 돈 이동은 기존 게이트만 담당하므로 비핵심이지만, 침묵 정지는 드러나야 한다.
+    assert "autonomous-promotion-actions" in keys
+    assert by_key["autonomous-promotion-actions"].critical is False
+    assert (
+        by_key["autonomous-promotion-actions"].branch
+        == "automation/autonomous-promotion-actions-last-run"
+    )
+    assert "promotion-forward" in keys
+    assert by_key["promotion-forward"].critical is False
+    assert by_key["promotion-forward"].branch == "automation/promotion-forward-last-run"
+    assert by_key["promotion-forward"].max_age_hours >= 72.0
+    assert "promotion-canary" in keys
+    assert by_key["promotion-canary"].critical is False
+    assert by_key["promotion-canary"].branch == "automation/promotion-canary-last-run"
+    assert by_key["promotion-canary"].max_age_hours >= 72.0
     # 스펙 055 — 자율 전략 재지정 폐회로(평일 스케줄)도 감시 대상이어야 한다.
     # 정지 시 검증된 incumbent 가 그대로 라이브로 남는 fail-safe 라 비핵심(저하만,
     # 빨강 아님) — 단 가장 최신 자율 루프의 침묵 정지는 반드시 드러나야 한다.

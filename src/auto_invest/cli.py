@@ -6720,3 +6720,126 @@ def promotion_scan_cmd(
         typer.echo(_json.dumps(summary.as_dict(), ensure_ascii=False))
     else:
         typer.echo(summary.as_markdown())
+
+
+@app.command("promotion-actions")
+def promotion_actions_cmd(
+    promotion_summary: Path = typer.Option(
+        ...,
+        "--promotion-summary",
+        help="Machine-readable promotion summary JSON.",
+    ),
+    forward_registry: Path = typer.Option(
+        ...,
+        "--forward-registry",
+        help="Current promotion forward registry JSON.",
+    ),
+    canary_submissions: Path = typer.Option(
+        ...,
+        "--canary-submissions",
+        help="Current promotion canary submissions JSON.",
+    ),
+    summary_out: Path | None = typer.Option(
+        None,
+        "--summary-out",
+        help="Markdown latest-run summary output path.",
+    ),
+    json_out: Path | None = typer.Option(
+        None,
+        "--json-out",
+        help="Machine-readable promotion actions JSON output path.",
+    ),
+    forward_registry_out: Path | None = typer.Option(
+        None,
+        "--forward-registry-out",
+        help="Next promotion forward registry JSON output path.",
+    ),
+    canary_submissions_out: Path | None = typer.Option(
+        None,
+        "--canary-submissions-out",
+        help="Next promotion canary submissions JSON output path.",
+    ),
+    output_format: str = typer.Option(
+        "text",
+        "--format",
+        help="stdout format: text or json.",
+    ),
+    now: str | None = typer.Option(
+        None,
+        "--now",
+        help="As-of timestamp ISO-8601 UTC for deterministic tests.",
+    ),
+    run_id: str = typer.Option(
+        "local",
+        "--run-id",
+        help="Run identifier recorded in the summary.",
+    ),
+) -> None:
+    """Build promotion forward/canary action state without live orders.
+
+    The command converts a promotion summary into promotion-only forward paper
+    registrations and hardened canary submissions. It does not call broker APIs,
+    place orders, modify capital, edit live strategy config, or touch sentinels.
+    """
+    import json as _json
+    import subprocess as _subprocess
+    from datetime import UTC as _UTC
+    from datetime import datetime as _datetime
+
+    from auto_invest.analytics.promotion_actions import (
+        build_promotion_actions,
+        write_promotion_action_artifacts,
+    )
+
+    def _read_json(path: Path) -> dict | None:
+        try:
+            raw = path.read_text(encoding="utf-8")
+        except (FileNotFoundError, OSError):
+            return None
+        try:
+            data = _json.loads(raw)
+        except _json.JSONDecodeError:
+            return None
+        return data if isinstance(data, dict) else None
+
+    def _parse_now(text: str | None):
+        if not text:
+            return _datetime.now(_UTC)
+        parsed = _datetime.fromisoformat(text.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=_UTC)
+        return parsed.astimezone(_UTC)
+
+    def _commit() -> str:
+        try:
+            return _subprocess.check_output(
+                ["git", "rev-parse", "HEAD"],
+                text=True,
+                stderr=_subprocess.DEVNULL,
+            ).strip()
+        except (OSError, _subprocess.CalledProcessError):
+            return "unknown"
+
+    if output_format not in {"text", "json"}:
+        typer.echo("--format 은 text 또는 json 이어야 합니다.", err=True)
+        raise typer.Exit(2)
+
+    run = build_promotion_actions(
+        promotion_summary=_read_json(promotion_summary),
+        forward_registry=_read_json(forward_registry),
+        canary_submissions=_read_json(canary_submissions),
+        now=_parse_now(now),
+        commit=_commit(),
+        run_id=run_id,
+    )
+    write_promotion_action_artifacts(
+        run,
+        summary_out=summary_out,
+        json_out=json_out,
+        forward_registry_out=forward_registry_out,
+        canary_submissions_out=canary_submissions_out,
+    )
+    if output_format == "json":
+        typer.echo(_json.dumps(run.as_dict(), ensure_ascii=False))
+    else:
+        typer.echo(run.as_markdown())

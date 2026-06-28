@@ -1,0 +1,165 @@
+name: Promotion forward tracks (등록 후보 paper 검증)
+
+# 스펙 069 — promotion 전용 forward paper 실행 루프.
+#
+# 안전: 등록된 트랙은 모두 --mode paper 로만 실행한다. 이 워크플로는 live mode,
+# confirm-live, live request sentinel, capital ladder sentinel을 사용하지 않는다.
+
+on:
+  schedule:
+    # 매 거래일 22:45 UTC — 기본 forward paper(22:30) 이후 promotion 후보 관측.
+    - cron: "45 22 * * 1-5"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'automation/promotion-forward-registry.json'
+      - '.github/workflows/promotion-forward-tracks.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: promotion-forward-tracks
+  cancel-in-progress: false
+
+jobs:
+  forward:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read promotion forward registry
+        id: registry
+        run: |
+          set -euo pipefail
+          git fetch --depth=1 origin automation/autonomous-promotion-actions-last-run || true
+          if git show \
+              origin/automation/autonomous-promotion-actions-last-run:promotion-forward-registry.next.json \
+              > /tmp/promotion-forward-registry.json 2>/tmp/promotion-forward-registry.err; then
+            source="autonomous-promotion-actions sidecar"
+          else
+            cp automation/promotion-forward-registry.json /tmp/promotion-forward-registry.json
+            source="tracked fallback"
+          fi
+          jq -e '.tracks | type == "array"' /tmp/promotion-forward-registry.json
+          count="$(jq '.tracks | length' /tmp/promotion-forward-registry.json)"
+          echo "track_count=${count}" >> "$GITHUB_OUTPUT"
+          echo "promotion forward track_count=${count} source=${source}"
+
+      - name: Install SSH key
+        if: steps.registry.outputs.track_count != '0'
+        env:
+          KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          echo "${KEY}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+      - name: Run registered promotion forward tracks
+        if: steps.registry.outputs.track_count != '0'
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          set +e
+          : > /tmp/promotion_forward_results.jsonl
+          port="${PORT:-22}"
+          while IFS= read -r encoded; do
+            row="$(printf '%s' "${encoded}" | base64 --decode)"
+            candidate_id="$(jq -r '.candidate_id' <<<"${row}")"
+            track_key="$(jq -r '.track_key' <<<"${row}")"
+            portfolio="$(jq -r '.portfolio_path' <<<"${row}")"
+            db_path="$(jq -r '.db_path' <<<"${row}")"
+            halt_path="$(jq -r '.halt_path' <<<"${row}")"
+            capital="$(jq -r '.capital_usd' <<<"${row}")"
+            max_symbols="$(jq -r '.max_symbols' <<<"${row}")"
+            min_bars="$(jq -r '.min_bars' <<<"${row}")"
+            log="/tmp/promotion_forward_${track_key}.log"
+            ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+                -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+                "cd /opt/auto-invest && \
+                   /usr/local/bin/uv run auto-invest backfill-bars \
+                     --portfolio ${portfolio} --max-symbols ${max_symbols} \
+                     --min-bars ${min_bars} --order deepen --db ${db_path} \
+                     --env-file .env --json && \
+                   /usr/local/bin/uv run auto-invest rebalance-once \
+                     --portfolio ${portfolio} --mode paper --capital ${capital} \
+                     --halt-path ${halt_path} --db ${db_path} --env-file .env --json && \
+                   /usr/local/bin/uv run auto-invest nav-snapshot \
+                     --mode paper --capital ${capital} --db ${db_path} \
+                     --env-file .env --snapshot --format json && \
+                   /usr/local/bin/uv run auto-invest forward-verdict \
+                     --mode paper --portfolio ${portfolio} --db ${db_path} --format json" \
+                > "${log}" 2>&1
+            status="$?"
+            jq -n \
+              --arg candidate_id "${candidate_id}" \
+              --arg track_key "${track_key}" \
+              --arg portfolio_path "${portfolio}" \
+              --arg log_path "${log}" \
+              --argjson ssh_exit "${status}" \
+              '{candidate_id:$candidate_id, track_key:$track_key, portfolio_path:$portfolio_path, ssh_exit:$ssh_exit, log_path:$log_path}' \
+              >> /tmp/promotion_forward_results.jsonl
+            echo "track ${track_key} ssh_exit=${status}"
+            cat "${log}"
+          done < <(jq -r '.tracks[] | @base64' /tmp/promotion-forward-registry.json)
+          jq -s '.' /tmp/promotion_forward_results.jsonl > /tmp/promotion_forward_results.json
+
+      - name: Build empty forward results when no tracks
+        if: steps.registry.outputs.track_count == '0'
+        run: |
+          echo '[]' > /tmp/promotion_forward_results.json
+          echo "# promotion forward tracks: no registered tracks" > /tmp/promotion_forward_no_tracks.log
+
+      - name: Publish promotion forward sidecar
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TRACK_COUNT: ${{ steps.registry.outputs.track_count }}
+        run: |
+          set -euo pipefail
+          BRANCH=automation/promotion-forward-last-run
+          tmpdir=$(mktemp -d)
+          cp /tmp/promotion-forward-registry.json "${tmpdir}/promotion-forward-registry.json" \
+            2>/dev/null || echo '{"schema_version":"1.0","tracks":[]}' \
+            > "${tmpdir}/promotion-forward-registry.json"
+          cp /tmp/promotion_forward_results.json "${tmpdir}/promotion_forward_results.json" \
+            2>/dev/null || echo '[]' > "${tmpdir}/promotion_forward_results.json"
+          {
+            echo "# promotion forward tracks — 최신 실행"
+            echo ""
+            echo "| 항목 | 값 |"
+            echo "|------|-----|"
+            echo "| run_id | ${GITHUB_RUN_ID} |"
+            echo "| run_url | https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} |"
+            echo "| commit | ${GITHUB_SHA} |"
+            echo "| trigger | ${GITHUB_EVENT_NAME} |"
+            echo "| timestamp_utc | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
+            echo "| track_count | ${TRACK_COUNT:-0} |"
+            echo "| safety | paper only, no live mode, no capital/live config/sentinel change |"
+            echo ""
+            echo "## 결과 JSON"
+            echo '```json'
+            cat /tmp/promotion_forward_results.json 2>/dev/null || echo '[]'
+            echo '```'
+            echo ""
+            echo "## Registry"
+            echo '```json'
+            cat /tmp/promotion-forward-registry.json 2>/dev/null || echo '{}'
+            echo '```'
+          } > "${tmpdir}/LAST_RUN.md"
+          cd "${tmpdir}"
+          git init -q
+          git config user.name "promotion-forward-bot"
+          git config user.email "promotion-forward-bot@noreply.github.com"
+          git checkout --orphan publish -q
+          git add LAST_RUN.md promotion-forward-registry.json promotion_forward_results.json
+          git commit -q -m "promotion-forward run ${GITHUB_RUN_ID}"
+          git push --force \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "publish:${BRANCH}"
+          echo "Published to ${BRANCH}."
