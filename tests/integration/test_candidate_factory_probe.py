@@ -83,6 +83,10 @@ def test_factory_workflow_publishes_sidecar_without_order_or_broker_path() -> No
     text = _FACTORY_WORKFLOW.read_text(encoding="utf-8")
     assert "schedule:" in text and "workflow_dispatch:" in text
     assert "40 8 * * *" in text
+    assert "+refs/heads/automation/*:refs/remotes/origin/automation/*" in text
+    assert (
+        "automation/candidate-implementation-results || true" not in text
+    )
     assert "automation/candidate-implementation-factory-last-run" in text
     assert "candidate_factory_probe.py" in text
     assert "candidate_backlog.enriched.json" in text

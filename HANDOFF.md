@@ -33,15 +33,15 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `b99f19c` — Merge pull request #412 from jinooaction/Codex/close-promotion-action-tasks |
-| main 테스트 | `uv run pytest -q` → 2333 passed, 4 skipped |
+| 마지막 main 커밋 | `b395e83` — Merge pull request #414 from jinooaction/Codex/candidate-implementation-factory |
+| main 테스트 | `uv run pytest` → 2342 passed, 4 skipped |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
 | 열린 PR | 없음(GitHub open PR 조회 결과 `[]`) |
-| 출시 완료 스펙 | 최신 추가: 069(자율 승격 실행 루프: forward paper 등록 큐와 hardened canary 제출 큐 자동화), 068(자율 승격 루프 자동 분류), 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
-| 골격 스펙 | 없음. `.specify/feature.json`은 추적을 위해 `specs/069-autonomous-promotion-actions`를 가리키지만, 스펙 069 구현은 #410으로 main에 들어갔다. |
-| 최근 출시 작업 | #412 스펙 069 release task closure. #411 스펙 069 handoff 갱신. #410 스펙 069 자율 승격 실행 루프 자동화. #408 스펙 068 자율 승격 루프 자동 분류. #407 운영자 이해 가능 보고 handoff 갱신. #406 운영자가 이해 가능한 완료 보고 강제. #404 스펙 067 영구 자율 성장 루프 구현. |
-| 활성 작업 | 코드 PR 없음. 자율 성장 후보는 `automation/autonomous-evolution-last-run`에서 후보를 만들고, `automation/autonomous-promotion-last-run`에서 다음 검증 단계로 분류하며, `automation/autonomous-promotion-actions-last-run`이 검증 큐 등록 상태를 만든다. 최신 promotion run `28333113599`은 commit `27da8b4`, `overall_status=ok`, 누락 증거 없음이며 상위 후보들은 아직 `BACKTEST_REQUIRED`다. 최신 action run `28333113593`은 `registered=0`, `submitted=0`, `blocked=0`; 최신 promotion-forward run `28333113584`은 `track_count=0`; 최신 promotion-canary run `28333113596`은 `pending_submission_count=0`이다. 다음 세션은 `git show origin/automation/autonomous-promotion-actions-last-run:LAST_RUN.md`와 `git show origin/automation/autonomous-promotion-last-run:LAST_RUN.md`를 먼저 읽어 승격 큐와 실행 큐를 확인한다. micro GTAA는 기존 상태 그대로 `armed:false`, `capital_usd:1000`, 최신 micro sidecar run `28274580272`에서 `LIVE 스텝=skipped`, strategy-intent gate `ok=false`, `reason=latest_intent_loss`, 누적 의도 손익 `-1.14 USD`. |
-| 안전 경계 | #410 자율 승격 실행 루프는 등급 2 운영 자동화다. 신규 action workflow는 SSH/KIS/브로커를 쓰지 않고, 신규 forward workflow는 `--mode paper`만 사용하며, 신규 canary workflow는 `canary-portfolio`만 실행한다. 주문, 자본 증액, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, live sentinel, K1/K2/K4/K5/K6, 헌법, 커널 목록 변경 없음. 백테스트 통과는 캐너리 후보 자격이지 실계좌 실행 검증 완료가 아니며, 전략·자본 후보는 기존 스펙 055 재지정 게이트와 스펙 050 자본 사다리 밖으로 승격하지 않는다. |
+| 출시 완료 스펙 | 최신 추가: 070(후보 구현 공장: `BACKTEST_REQUIRED` 후보를 검증 패키지와 enriched backlog로 변환), 069(자율 승격 실행 루프: forward paper 등록 큐와 hardened canary 제출 큐 자동화), 068(자율 승격 루프 자동 분류), 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
+| 골격 스펙 | 없음. `.specify/feature.json`은 추적을 위해 `specs/070-candidate-implementation-factory`를 가리키지만, 스펙 070 구현은 #414로 main에 들어갔다. |
+| 최근 출시 작업 | #414 스펙 070 후보 구현 공장 자동화. #413 스펙 069 handoff-after-close-tasks. #412 스펙 069 release task closure. #411 스펙 069 handoff 갱신. #410 스펙 069 자율 승격 실행 루프 자동화. #408 스펙 068 자율 승격 루프 자동 분류. #407 운영자 이해 가능 보고 handoff 갱신. |
+| 활성 작업 | 코드 PR 없음. 자율 성장 후보는 `automation/autonomous-evolution-last-run`에서 후보를 만들고, 스펙 070 `automation/candidate-implementation-factory-last-run`이 후보별 검증 패키지와 enriched backlog를 만들며, `automation/autonomous-promotion-last-run`이 enriched backlog를 우선 읽어 다음 검증 단계로 분류한다. #414 push-trigger 첫 candidate factory run `28339636371`은 workflow 입력 fetch 버그 때문에 후보 0개를 발행했지만, 로컬 smoke는 최신 후보 9개를 모두 패키지화했다. 후속 브랜치 `Codex/fix-candidate-factory-fetch`에서 automation wildcard fetch로 보정 중이다. 최신 KIS smoke run `28339636380`은 commit `b395e83`, `smoke_state=success`, `key_valid=true`. micro GTAA는 기존 상태 그대로 `armed:false`, `capital_usd:1000`, 최신 micro sidecar run `28274580272`에서 `LIVE 스텝=skipped`, strategy-intent gate `ok=false`, `reason=latest_intent_loss`, 누적 의도 손익 `-1.14 USD`. |
+| 안전 경계 | #414 후보 구현 공장은 등급 2 운영 자동화다. 새 factory workflow는 SSH/KIS/브로커를 쓰지 않고, `candidate_backlog.enriched.json`과 `candidate_packages.json`만 발행한다. 결과 증거가 없으면 `pass`를 만들지 않는다. 주문, 자본 증액, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, live sentinel, K1/K2/K4/K5/K6, 헌법, 커널 목록 변경 없음. 백테스트 통과는 캐너리 후보 자격이지 실계좌 실행 검증 완료가 아니며, 전략·자본 후보는 기존 스펙 055 재지정 게이트와 스펙 050 자본 사다리 밖으로 승격하지 않는다. |
 
 ## 돈 경로 상태 판독 규칙 (필수 — 스펙 062)
 
@@ -80,6 +80,44 @@ uv run python scripts/money_path_probe.py --manifest | while IFS=$'\t' read -r k
 done
 uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.live_money_state'
 ```
+
+## 최근 관찰 — 2026-06-29 KST (스펙 070 후보 구현 공장 자동화)
+
+현재 `main` 최신은 `b395e83`(#414, 스펙 070 후보 구현 공장 자동화)이다.
+직전 주요 커밋은 `61c6499`(스펙 070 구현), `f7b597b`(#413, 스펙 069 task closure handoff),
+`b99f19c`(#412, 스펙 069 release task closure)이다. 이 인계 갱신 시점의 열린 PR은 없다.
+
+- **문제 정의**: 스펙 067~069로 후보 발굴, 승격 분류, 검증 큐 연결은 생겼지만,
+  현재 후보들은 모두 `BACKTEST_REQUIRED`에서 멈춰 있었다. 후보마다 어떤 검증 패키지를
+  실행해야 하는지, 어떤 결과가 있어야 `promotion_evidence`가 채워지는지 자동화해야 했다.
+- **구현 상태**: `src/auto_invest/analytics/candidate_factory.py`가 candidate backlog와 optional result evidence를
+  읽어 후보별 implementation package와 enriched backlog를 만든다. `scripts/candidate_factory_probe.py`,
+  `auto-invest candidate-factory`, `.github/workflows/candidate-implementation-factory.yml`가 같은 결정을 재현한다.
+- **승격 연결**: `autonomous-promotion-loop.yml`은 이제 candidate factory의
+  `candidate_backlog.enriched.json`을 raw evolution backlog보다 우선 읽는다. `promotion_loop.py`는
+  비전략 factory package를 `FACTORY_PACKAGE_READY`로 분리하므로 운영·데이터 후보가 전략 백테스트 대기로
+  잘못 보이지 않는다.
+- **증거 규칙**: 전략/포트폴리오 후보는 `historical_backtest`, `recent_oos`, `walk_forward`가 모두
+  기계 판독 result evidence에서 `pass`일 때만 forward 등록 준비로 올라간다. 결과가 없으면 `pending` 또는
+  `ready`로 남고, `pass`는 만들어지지 않는다.
+- **첫 실행 증거**: #414 main push 뒤 `Candidate implementation factory` run `28339636371`은 success였지만,
+  optional result evidence branch fetch가 같은 fetch 명령에 묶인 탓에 입력 수집이 비어 후보 0개를 발행했다.
+  후속 브랜치 `Codex/fix-candidate-factory-fetch`에서 automation wildcard fetch로 보정 중이다.
+  로컬 smoke는 최신 sidecar 후보 9개를 모두 패키지화했고, 전략/포트폴리오 2개는 `BACKTEST_REQUIRED`,
+  나머지 7개는 `FACTORY_PACKAGE_READY`로 분리했다.
+- **배포와 smoke**: #414 main push의 `Deploy on merge to main` run `28339636369`은 success다.
+  `KIS smoke (autonomous)` run `28339636380`도 commit `b395e83` 기준 success, `key_valid=true`,
+  live broker smoke 4건 통과다. 배포는 dry-run worker 코드 반영이며 실거래 전환이 아니다.
+- **안전 경계**: 등급 2 운영 자동화다. 신규 factory workflow는 SSH/KIS/브로커를 쓰지 않는다.
+  실제 주문, 자본 증액, whitelist/caps 확대, live 전략 교체, live sentinel, 헌법, 커널 목록,
+  K1/K2/K4/K5/K6 변경 없음. `Backtest -> Canary -> Full` 순서는 유지된다.
+- **검증**: PR #414 머지 전 focused pytest 40 통과, 실제 최신 sidecar 후보 9개 smoke 통과,
+  enriched backlog promotion scan smoke 통과, `uv run pytest` 2342 통과·4 스킵,
+  `uv run ruff check src tests` 통과, `git diff --check` 통과, 하네스 `OK (14/14)`,
+  HANDOFF 사실 검증 OK, PR 품질 관문 성공. 후속 fetch 보정 브랜치에서
+  `uv run pytest tests/integration/test_candidate_factory_probe.py -q` 4 통과,
+  `uv run ruff check tests/integration/test_candidate_factory_probe.py` 통과, `git diff --check` 통과.
+- **상세 인계**: `HANDOFF-073-CANDIDATE-IMPLEMENTATION-FACTORY.md`.
 
 ## 최근 관찰 — 2026-06-29 KST (스펙 069 자율 승격 실행 루프 자동화)
 
@@ -4081,6 +4119,17 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 
 ## 과거 인수인계 파일 (참고용)
 
+- `HANDOFF-073-CANDIDATE-IMPLEMENTATION-FACTORY.md` — 스펙 070 후보 구현 공장 자동화
+  (2026-06-29, PR #414 `b395e83`). `BACKTEST_REQUIRED` 후보를 검증 패키지와
+  enriched backlog로 변환하고, 실제 결과 증거가 세 필수 검증을 통과할 때만
+  `promotion_evidence`를 보강한다. 첫 push run의 입력 fetch 버그는 후속 브랜치에서 보정 중이다.
+- `HANDOFF-072-AUTONOMOUS-PROMOTION-ACTIONS.md` — 스펙 069 자율 승격 실행 루프 자동화
+  (2026-06-29, PR #410 `27da8b4`). 승격 후보를 promotion 전용 forward paper 등록 큐와
+  hardened canary 제출 큐로 자동 연결했다. 신규 forward는 paper 전용이고, canary는 기존
+  안전 게이트 밖에서 실주문을 만들지 않는다.
+- `HANDOFF-071-AUTONOMOUS-PROMOTION-LOOP.md` — 스펙 068 자율 승격 루프 자동 분류
+  (2026-06-29, PR #408 `ddecebb`). 성장 후보를 백테스트, 최근 표본외, forward paper,
+  canary 후보, 기존 돈 게이트 중 다음 안전 단계로 분류한다. 주문·자본·live 전략 변경 없음.
 - `HANDOFF-070-OPERATOR-READABLE-REPORTING.md` — 운영자가 이해 가능한 완료 보고 강제
   (2026-06-29, PR #406 `c4400b7`). 완료 보고가 PR 번호·커밋·테스트 수만 나열하지 않고 실제
   운영 상태 변화, 돈 경로와 안전 경계 영향, 검증, 남은 위험을 쉬운 한글로 설명하도록
