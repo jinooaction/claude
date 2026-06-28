@@ -334,7 +334,7 @@ def summarize_opportunity_history(
         "verdict_label_ko": label,
         "latest_signal": latest_signal,
         "interpretation_ko": interpretation,
-        "next_action_ko": _next_action(verdict),
+        "next_action_ko": _next_action(verdict, latest_signal),
         "safety_note_ko": (
             "이 신호는 관찰·검토 입력입니다. 주문 재시도, 전략 교체, "
             "자본 변경을 직접 수행하지 않습니다."
@@ -385,7 +385,7 @@ def _latest_summary(record: Mapping[str, Any] | None) -> dict[str, Any] | None:
     }
 
 
-def _next_action(verdict: str) -> str:
+def _next_action(verdict: str, latest_signal: str | None = None) -> str:
     if verdict == VERDICT_STRATEGY_REVIEW:
         return (
             "전략 의도 손실 신호입니다. forward 토너먼트·캐너리 증거와 함께 "
@@ -397,6 +397,12 @@ def _next_action(verdict: str) -> str:
             "게이트 문제를 우선 검토합니다."
         )
     if verdict == VERDICT_INSUFFICIENT_DATA:
+        if latest_signal == SIGNAL_INTENT_LOSS:
+            return (
+                "최신 손실 의도 신호가 실주문을 막고 있어 새 live 표본은 자동으로 "
+                "쌓이지 않습니다. forward 토너먼트·재지정 증거를 기다리거나 별도 "
+                "전략 검토 후 재무장 여부를 판단합니다."
+            )
         return "다음 micro GTAA 실행에서 표본을 더 쌓습니다."
     if verdict == VERDICT_NO_VALUED_REJECTIONS:
         return "현재가로 평가 가능한 거부 주문이 생길 때까지 관찰합니다."

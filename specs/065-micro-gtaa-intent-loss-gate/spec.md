@@ -72,6 +72,7 @@
 - **FR-007**: System MUST preserve existing K1 position caps, K2 whitelist, K4 audit trail, K5 secret masking, regular-session preflight, cash preflight, circuit breaker, and manual capital limit.
 - **FR-008**: System MUST keep missing or unreadable opportunity monitor data separate from a positive approval signal.
 - **FR-009**: System MUST fail closed when the live workflow cannot evaluate the intent-loss gate decision file.
+- **FR-010**: System MUST NOT tell operators that additional live samples will automatically accumulate while the latest `INTENT_LOSS` gate is blocking live order submission.
 
 ### Key Entities
 
