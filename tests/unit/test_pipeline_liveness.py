@@ -200,6 +200,10 @@ def test_default_specs_registry_sane():
     assert by_key["collect-public-data"].critical is False
     # 스펙 052 — 첫-자본까지의 길 보고자도 감시 대상(감시자가 보고자를 감시, 비핵심).
     assert by_key["money-path"].critical is False
+    # 스펙 067 — 영구 자율 성장 루프도 감시 대상. 실패는 가시성 저하이지 돈 이동 아님.
+    assert "autonomous-evolution" in keys
+    assert by_key["autonomous-evolution"].critical is False
+    assert by_key["autonomous-evolution"].branch == "automation/autonomous-evolution-last-run"
     # 스펙 055 — 자율 전략 재지정 폐회로(평일 스케줄)도 감시 대상이어야 한다.
     # 정지 시 검증된 incumbent 가 그대로 라이브로 남는 fail-safe 라 비핵심(저하만,
     # 빨강 아님) — 단 가장 최신 자율 루프의 침묵 정지는 반드시 드러나야 한다.

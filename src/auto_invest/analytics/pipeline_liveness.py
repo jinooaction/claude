@@ -355,6 +355,14 @@ def default_specs() -> list[SidecarSpec]:
             description="첫-자본까지의 길 종합·ETA(스펙 052, 보고 전용)",
         ),
         SidecarSpec(
+            key="autonomous-evolution",
+            branch="automation/autonomous-evolution-last-run",
+            filename="LAST_RUN.md",
+            max_age_hours=30.0,  # 매일 08:30 — 영구 자율 성장 후보 발굴(보고 전용)
+            critical=False,
+            description="영구 자율 성장 루프(스펙 067, 고레버리지 돌파 후보 보고 전용)",
+        ),
+        SidecarSpec(
             key="reassign",
             branch="automation/reassign-last-run",
             filename="LAST_RUN.md",
