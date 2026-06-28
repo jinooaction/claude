@@ -108,6 +108,81 @@ def test_canary_candidate_requires_forward_pass_but_not_broker_complete() -> Non
     assert assessment.execution_validation_complete is False
 
 
+def test_promotion_forward_sidecar_can_advance_candidate_to_canary() -> None:
+    backlog = {
+        "candidates": [
+            {
+                "candidate_id": "candidate-promo-forward",
+                "title_ko": "promotion forward 관측 후보",
+                "domain_key": "strategy_design",
+                "status": "new",
+                "risk_grade": 2,
+                "safety_impact": [],
+                "evidence_refs": ["promotion-forward"],
+                "composite_score": 610,
+                "promotion_evidence": {
+                    "historical_backtest": "pass",
+                    "recent_oos": "pass",
+                    "walk_forward": "pass",
+                },
+            }
+        ]
+    }
+    evidence = {
+        "promotion-forward": """
+        # promotion forward tracks
+        [{"candidate_id":"candidate-promo-forward","verdict":"EDGE_CONFIRMED"}]
+        """
+    }
+    summary = scan_promotion(
+        candidate_backlog=backlog,
+        evidence_texts=evidence,
+        now=NOW,
+        commit="abc1234",
+        run_id="test",
+    )
+    assert summary.assessments[0].stage == STAGE_CANARY_CANDIDATE
+
+
+def test_promotion_canary_sidecar_can_advance_candidate_to_existing_gate() -> None:
+    backlog = {
+        "candidates": [
+            {
+                "candidate_id": "candidate-promo-canary",
+                "title_ko": "promotion canary 통과 후보",
+                "domain_key": "strategy_design",
+                "status": "new",
+                "risk_grade": 3,
+                "safety_impact": ["live_strategy"],
+                "evidence_refs": ["promotion-forward", "promotion-canary"],
+                "composite_score": 620,
+                "promotion_evidence": {
+                    "historical_backtest": "pass",
+                    "recent_oos": "pass",
+                    "walk_forward": "pass",
+                    "forward_paper": "pass",
+                },
+            }
+        ]
+    }
+    evidence = {
+        "promotion-canary": """
+        # promotion canary submissions
+        [{"candidate_id":"candidate-promo-canary","verdict":"PASS"}]
+        """
+    }
+    summary = scan_promotion(
+        candidate_backlog=backlog,
+        evidence_texts=evidence,
+        now=NOW,
+        commit="abc1234",
+        run_id="test",
+    )
+    assessment = summary.assessments[0]
+    assert assessment.stage == STAGE_EXISTING_GATE_READY
+    assert assessment.next_gate == "spec-055-autonomous-reassignment"
+
+
 def test_backtest_vs_canary_explanation_lists_broker_gaps() -> None:
     gaps = backtest_vs_canary_explanation()
     assert "브로커 주문 거부" in gaps

@@ -1,0 +1,164 @@
+name: Promotion canary submissions (등록 후보 hardened canary)
+
+# 스펙 069 — promotion 전용 hardened canary 검증 루프.
+#
+# 안전: canary-portfolio 검증만 실행한다. live mode, confirm-live,
+# live request sentinel, 자본 사다리 sentinel, live 전략 설정을 건드리지 않는다.
+
+on:
+  schedule:
+    # 화~토 00:40 UTC — promotion forward 실행과 기본 재지정 루프 이후.
+    - cron: "40 0 * * 2-6"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'automation/promotion-canary-submissions.json'
+      - '.github/workflows/promotion-canary-submissions.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: promotion-canary-submissions
+  cancel-in-progress: false
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read promotion canary submissions
+        id: submissions
+        run: |
+          set -euo pipefail
+          git fetch --depth=1 origin automation/autonomous-promotion-actions-last-run || true
+          if git show \
+              origin/automation/autonomous-promotion-actions-last-run:promotion-canary-submissions.next.json \
+              > /tmp/promotion-canary-submissions.json 2>/tmp/promotion-canary-submissions.err; then
+            source="autonomous-promotion-actions sidecar"
+          else
+            cp automation/promotion-canary-submissions.json /tmp/promotion-canary-submissions.json
+            source="tracked fallback"
+          fi
+          jq -e '.submissions | type == "array"' /tmp/promotion-canary-submissions.json
+          count="$(jq '[.submissions[] | select((.status // "pending") == "pending")] | length' \
+            /tmp/promotion-canary-submissions.json)"
+          echo "submission_count=${count}" >> "$GITHUB_OUTPUT"
+          echo "promotion canary pending submission_count=${count} source=${source}"
+
+      - name: Install SSH key
+        if: steps.submissions.outputs.submission_count != '0'
+        env:
+          KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          echo "${KEY}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+      - name: Run promotion hardened canary submissions
+        if: steps.submissions.outputs.submission_count != '0'
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          set +e
+          : > /tmp/promotion_canary_results.jsonl
+          port="${PORT:-22}"
+          while IFS= read -r encoded; do
+            row="$(printf '%s' "${encoded}" | base64 --decode)"
+            candidate_id="$(jq -r '.candidate_id' <<<"${row}")"
+            safe_id="$(printf '%s' "${candidate_id}" | tr -cd 'A-Za-z0-9_.-' | cut -c1-64)"
+            if [[ -z "${safe_id}" ]]; then safe_id="unknown"; fi
+            portfolio="$(jq -r '.portfolio_path' <<<"${row}")"
+            db_path="$(jq -r '.db_path' <<<"${row}")"
+            halt_path="$(jq -r '.halt_path' <<<"${row}")"
+            bands_toml="$(jq -r '.bands_toml' <<<"${row}")"
+            log="/tmp/promotion_canary_${safe_id}.log"
+            json_out="/tmp/promotion_canary_${safe_id}.json"
+            ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+                -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+                "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest canary-portfolio \
+                   --portfolio ${portfolio} \
+                   --bars-db data/auto_invest.db \
+                   --bands-toml ${bands_toml} \
+                   --db ${db_path} \
+                   --halt-path ${halt_path} \
+                   --format json" \
+                > "${json_out}" 2>"${log}"
+            status="$?"
+            verdict="$(jq -r '.verdict // empty' "${json_out}" 2>/dev/null || true)"
+            jq -n \
+              --arg candidate_id "${candidate_id}" \
+              --arg portfolio_path "${portfolio}" \
+              --arg verdict "${verdict}" \
+              --arg json_path "${json_out}" \
+              --arg log_path "${log}" \
+              --argjson ssh_exit "${status}" \
+              '{candidate_id:$candidate_id, portfolio_path:$portfolio_path, verdict:$verdict, ssh_exit:$ssh_exit, json_path:$json_path, log_path:$log_path}' \
+              >> /tmp/promotion_canary_results.jsonl
+            echo "candidate ${candidate_id} canary_verdict=${verdict:-none} ssh_exit=${status}"
+            cat "${json_out}" 2>/dev/null || true
+            cat "${log}" 2>/dev/null || true
+          done < <(jq -r '.submissions[] | select((.status // "pending") == "pending") | @base64' \
+            /tmp/promotion-canary-submissions.json)
+          jq -s '.' /tmp/promotion_canary_results.jsonl > /tmp/promotion_canary_results.json
+
+      - name: Build empty canary results when no submissions
+        if: steps.submissions.outputs.submission_count == '0'
+        run: |
+          echo '[]' > /tmp/promotion_canary_results.json
+          echo "# promotion canary: no pending submissions" > /tmp/promotion_canary_no_submissions.log
+
+      - name: Publish promotion canary sidecar
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SUBMISSION_COUNT: ${{ steps.submissions.outputs.submission_count }}
+        run: |
+          set -euo pipefail
+          BRANCH=automation/promotion-canary-last-run
+          tmpdir=$(mktemp -d)
+          cp /tmp/promotion-canary-submissions.json "${tmpdir}/promotion-canary-submissions.json" \
+            2>/dev/null || echo '{"schema_version":"1.0","submissions":[]}' \
+            > "${tmpdir}/promotion-canary-submissions.json"
+          cp /tmp/promotion_canary_results.json "${tmpdir}/promotion_canary_results.json" \
+            2>/dev/null || echo '[]' > "${tmpdir}/promotion_canary_results.json"
+          {
+            echo "# promotion canary submissions — 최신 실행"
+            echo ""
+            echo "| 항목 | 값 |"
+            echo "|------|-----|"
+            echo "| run_id | ${GITHUB_RUN_ID} |"
+            echo "| run_url | https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} |"
+            echo "| commit | ${GITHUB_SHA} |"
+            echo "| trigger | ${GITHUB_EVENT_NAME} |"
+            echo "| timestamp_utc | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
+            echo "| pending_submission_count | ${SUBMISSION_COUNT:-0} |"
+            echo "| safety | canary-portfolio only, no live mode, no capital/live config/sentinel change |"
+            echo ""
+            echo "## 결과 JSON"
+            echo '```json'
+            cat /tmp/promotion_canary_results.json 2>/dev/null || echo '[]'
+            echo '```'
+            echo ""
+            echo "## Submissions"
+            echo '```json'
+            cat /tmp/promotion-canary-submissions.json 2>/dev/null || echo '{}'
+            echo '```'
+          } > "${tmpdir}/LAST_RUN.md"
+          cd "${tmpdir}"
+          git init -q
+          git config user.name "promotion-canary-bot"
+          git config user.email "promotion-canary-bot@noreply.github.com"
+          git checkout --orphan publish -q
+          git add LAST_RUN.md promotion-canary-submissions.json promotion_canary_results.json
+          git commit -q -m "promotion-canary run ${GITHUB_RUN_ID}"
+          git push --force \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "publish:${BRANCH}"
+          echo "Published to ${BRANCH}."

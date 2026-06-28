@@ -479,9 +479,9 @@ def _evidence_layers(
         ),
         EvidenceLayer(
             "small_live_canary",
-            _canary_status(promotion, evidence_texts),
+            _canary_status(candidate, promotion, evidence_texts),
             "실제 브로커·계좌·주문·체결 경로를 소액으로 검증한다.",
-            "reassign 또는 live canary sidecar",
+            "promotion-canary, reassign 또는 live canary sidecar",
         ),
     )
 
@@ -511,7 +511,19 @@ def _forward_status(
     explicit = _status_value(promotion.get("forward_paper"))
     if explicit != EVIDENCE_UNKNOWN:
         return explicit
-    if "rebalance-paper-forward" not in candidate.evidence_refs:
+    promotion_status = _candidate_window_status(
+        evidence_texts.get("promotion-forward"),
+        candidate.candidate_id,
+        pass_tokens=("edge_confirmed", '"verdict":"edge_confirmed"', '"verdict": "edge_confirmed"'),
+        fail_tokens=("no_edge", '"verdict":"no_edge"', '"verdict": "no_edge"'),
+        pending_tokens=("insufficient_data", "premature", "관측 부족"),
+    )
+    if promotion_status != EVIDENCE_UNKNOWN:
+        return promotion_status
+    if (
+        "rebalance-paper-forward" not in candidate.evidence_refs
+        and "promotion-forward" not in candidate.evidence_refs
+    ):
         return EVIDENCE_MISSING
     raw = (evidence_texts.get("rebalance-paper-forward") or "").lower()
     if "edge_confirmed" in raw:
@@ -524,12 +536,34 @@ def _forward_status(
 
 
 def _canary_status(
+    candidate: PromotionCandidate,
     promotion: Mapping[str, Any],
     evidence_texts: Mapping[str, str | None],
 ) -> str:
     explicit = _status_value(promotion.get("small_live_canary"))
     if explicit != EVIDENCE_UNKNOWN:
         return explicit
+    promotion_status = _candidate_window_status(
+        evidence_texts.get("promotion-canary"),
+        candidate.candidate_id,
+        pass_tokens=(
+            '"verdict":"pass"',
+            '"verdict": "pass"',
+            "canary_verdict=pass",
+            "canary_verdict: pass",
+        ),
+        fail_tokens=(
+            '"verdict":"fail"',
+            '"verdict": "fail"',
+            '"verdict":"failed"',
+            '"verdict": "failed"',
+            "canary_verdict=fail",
+            "canary_verdict: fail",
+        ),
+        pending_tokens=("pending", "wait_canary", "coverage", "none"),
+    )
+    if promotion_status != EVIDENCE_UNKNOWN:
+        return promotion_status
     raw = "\n".join(
         text or "" for key, text in evidence_texts.items() if "canary" in key or key == "reassign"
     ).lower()
@@ -540,6 +574,29 @@ def _canary_status(
     if raw:
         return EVIDENCE_PENDING
     return EVIDENCE_MISSING
+
+
+def _candidate_window_status(
+    text: str | None,
+    candidate_id: str,
+    *,
+    pass_tokens: Sequence[str],
+    fail_tokens: Sequence[str],
+    pending_tokens: Sequence[str],
+) -> str:
+    raw = (text or "").lower()
+    needle = candidate_id.lower()
+    idx = raw.find(needle)
+    if idx < 0:
+        return EVIDENCE_UNKNOWN
+    window = raw[max(0, idx - 300) : idx + 1500]
+    if any(token in window for token in pass_tokens):
+        return EVIDENCE_PASS
+    if any(token in window for token in fail_tokens):
+        return EVIDENCE_FAIL
+    if any(token in window for token in pending_tokens):
+        return EVIDENCE_PENDING
+    return EVIDENCE_UNKNOWN
 
 
 def _status_value(value: Any) -> str:

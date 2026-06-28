@@ -154,6 +154,12 @@ COMMAND_POLICIES: dict[str, CommandPolicy] = {
         "Classify autonomous-evolution candidates into promotion stages; "
         "no orders or live config changes.",
     ),
+    "promotion-actions": _p(
+        "promotion-actions",
+        AutonomyLevel.PROPOSAL,
+        "Build promotion-only forward paper registrations and canary submissions; "
+        "no orders, broker calls, capital scaling, or live config changes.",
+    ),
     "fills": _p(
         "fills",
         AutonomyLevel.PROPOSAL,

@@ -371,6 +371,30 @@ def default_specs() -> list[SidecarSpec]:
             description="자율 승격 루프(스펙 068, 후보→검증 단계 분류 보고 전용)",
         ),
         SidecarSpec(
+            key="autonomous-promotion-actions",
+            branch="automation/autonomous-promotion-actions-last-run",
+            filename="LAST_RUN.md",
+            max_age_hours=30.0,  # 매일 09:00 — 승격 후보를 검증 큐로 자동 연결
+            critical=False,
+            description="자율 승격 실행 루프(스펙 069, forward/canary 큐 연결)",
+        ),
+        SidecarSpec(
+            key="promotion-forward",
+            branch="automation/promotion-forward-last-run",
+            filename="LAST_RUN.md",
+            max_age_hours=80.0,  # 평일 22:45 — promotion 후보 forward paper 관측
+            critical=False,
+            description="promotion 전용 forward paper 검증(스펙 069, paper only)",
+        ),
+        SidecarSpec(
+            key="promotion-canary",
+            branch="automation/promotion-canary-last-run",
+            filename="LAST_RUN.md",
+            max_age_hours=80.0,  # 화~토 00:40 — promotion 후보 hardened canary
+            critical=False,
+            description="promotion 전용 hardened canary 검증(스펙 069, live order 없음)",
+        ),
+        SidecarSpec(
             key="reassign",
             branch="automation/reassign-last-run",
             filename="LAST_RUN.md",

@@ -1,0 +1,129 @@
+{
+  "schema_version": "1.0",
+  "run_id": "promotion-fixture",
+  "commit": "fixture",
+  "timestamp_utc": "2026-06-29T00:00:00Z",
+  "overall_status": "ok",
+  "operator_review": [],
+  "missing_evidence": [],
+  "assessments": [
+    {
+      "candidate_id": "candidate-forward-ready",
+      "stage": "FORWARD_REGISTRATION_READY",
+      "allowed_next_action": "forward paper 트랙 등록 후보로 올린다.",
+      "blocked_reason_ko": "아직 보지 않은 미래 데이터로 검증되지 않았다.",
+      "next_gate": null,
+      "priority_score": 900,
+      "candidate": {
+        "candidate_id": "candidate-forward-ready",
+        "title_ko": "검증 준비가 끝난 forward 후보",
+        "domain_key": "portfolio_design",
+        "source_status": "new",
+        "risk_grade": 2,
+        "safety_impact": [],
+        "evidence_refs": ["strategy-research"],
+        "next_action_ko": "forward paper 트랙에 등록한다.",
+        "priority_score": 900,
+        "promotion_evidence": {
+          "historical_backtest": "pass",
+          "recent_oos": "pass",
+          "walk_forward": "pass",
+          "forward_track": {
+            "track_key": "promo-forward-a",
+            "portfolio_path": "deploy/promotion_forward_a.toml",
+            "db_path": "data/promotion_forward_a.db",
+            "halt_path": "data/promotion_forward_a.halt.flag",
+            "capital_usd": 12000,
+            "max_symbols": 90,
+            "min_bars": 800
+          }
+        }
+      }
+    },
+    {
+      "candidate_id": "candidate-canary-ready",
+      "stage": "CANARY_CANDIDATE",
+      "allowed_next_action": "소액 live canary 후보로 제출하되 주문 실행은 기존 게이트에 맡긴다.",
+      "blocked_reason_ko": "전략 검증은 통과했지만 브로커 실행 검증은 미완료다.",
+      "next_gate": "spec-055-autonomous-reassignment",
+      "priority_score": 850,
+      "candidate": {
+        "candidate_id": "candidate-canary-ready",
+        "title_ko": "forward 통과 canary 후보",
+        "domain_key": "portfolio_design",
+        "source_status": "new",
+        "risk_grade": 3,
+        "safety_impact": ["live_strategy"],
+        "evidence_refs": ["rebalance-paper-forward"],
+        "next_action_ko": "hardened canary 검증 큐에 제출한다.",
+        "priority_score": 850,
+        "promotion_evidence": {
+          "historical_backtest": "pass",
+          "recent_oos": "pass",
+          "walk_forward": "pass",
+          "forward_paper": "pass",
+          "canary_track": {
+            "portfolio_path": "deploy/promotion_canary_a.toml",
+            "db_path": "data/promotion_canary_a.db",
+            "halt_path": "data/promotion_canary_a.halt.flag",
+            "bands_toml": "config/canary_bands_reassign.toml"
+          }
+        }
+      }
+    },
+    {
+      "candidate_id": "candidate-bad-path",
+      "stage": "FORWARD_REGISTRATION_READY",
+      "allowed_next_action": "forward paper 트랙 등록 후보로 올린다.",
+      "blocked_reason_ko": "아직 보지 않은 미래 데이터로 검증되지 않았다.",
+      "next_gate": null,
+      "priority_score": 700,
+      "candidate": {
+        "candidate_id": "candidate-bad-path",
+        "title_ko": "위험 경로 후보",
+        "domain_key": "portfolio_design",
+        "source_status": "new",
+        "risk_grade": 2,
+        "safety_impact": [],
+        "evidence_refs": ["strategy-research"],
+        "next_action_ko": "forward paper 트랙에 등록한다.",
+        "priority_score": 700,
+        "promotion_evidence": {
+          "historical_backtest": "pass",
+          "recent_oos": "pass",
+          "walk_forward": "pass",
+          "forward_track": {
+            "track_key": "bad-path",
+            "portfolio_path": "../deploy/escape.toml"
+          }
+        }
+      }
+    },
+    {
+      "candidate_id": "candidate-existing-gate",
+      "stage": "EXISTING_GATE_READY",
+      "allowed_next_action": "기존 돈 게이트 입력으로만 제출한다.",
+      "blocked_reason_ko": "전략 검증과 실행 경로 검증이 모두 충족됐다.",
+      "next_gate": "spec-050-capital-ladder",
+      "priority_score": 820,
+      "candidate": {
+        "candidate_id": "candidate-existing-gate",
+        "title_ko": "기존 게이트 준비 후보",
+        "domain_key": "live_readiness",
+        "source_status": "new",
+        "risk_grade": 4,
+        "safety_impact": ["capital"],
+        "evidence_refs": ["rebalance-paper-forward", "reassign"],
+        "next_action_ko": "자본 사다리 입력으로만 제출한다.",
+        "priority_score": 820,
+        "promotion_evidence": {
+          "historical_backtest": "pass",
+          "recent_oos": "pass",
+          "walk_forward": "pass",
+          "forward_paper": "pass",
+          "small_live_canary": "pass"
+        }
+      }
+    }
+  ]
+}

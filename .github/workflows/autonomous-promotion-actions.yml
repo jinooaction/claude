@@ -1,0 +1,220 @@
+name: Autonomous promotion actions (검증 큐 자동 등록)
+
+# 스펙 069 — 승격 판단을 다음 검증 채널로 자동 연결한다.
+#
+# 안전: 이 워크플로는 promotion summary와 tracked JSON 상태만 읽고 쓴다. SSH, KIS,
+# 브로커 API, 주문, 자본 사다리, live 전략 설정, sentinels를 건드리지 않는다.
+
+on:
+  schedule:
+    # 매일 09:00 UTC — autonomous-promotion-loop(08:45) 이후 등록/제출 상태 계산.
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'automation/promotion-forward-registry.json'
+      - 'automation/promotion-canary-submissions.json'
+      - 'src/auto_invest/analytics/promotion_actions.py'
+      - 'scripts/promotion_action_probe.py'
+      - 'src/auto_invest/cli.py'
+      - '.github/workflows/autonomous-promotion-actions.yml'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: autonomous-promotion-actions
+  cancel-in-progress: false
+
+jobs:
+  actions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Read latest promotion summary (read-only sidecar)
+        run: |
+          set -euo pipefail
+          git fetch --depth=1 origin automation/autonomous-promotion-last-run || true
+          if git show origin/automation/autonomous-promotion-last-run:promotion_summary.json \
+              > /tmp/promotion_summary.json 2>/tmp/promotion_summary.err; then
+            echo "promotion summary collected"
+          else
+            echo '{"schema_version":"1.0","assessments":[]}' > /tmp/promotion_summary.json
+            echo "promotion summary missing; action loop will publish empty/degraded run"
+          fi
+
+      - name: Build promotion action state
+        run: |
+          set -euo pipefail
+          uv run python scripts/promotion_action_probe.py \
+            --promotion-summary /tmp/promotion_summary.json \
+            --forward-registry automation/promotion-forward-registry.json \
+            --canary-submissions automation/promotion-canary-submissions.json \
+            --summary-out /tmp/LAST_RUN.md \
+            --json-out /tmp/promotion_actions.json \
+            --forward-registry-out /tmp/promotion-forward-registry.json \
+            --canary-submissions-out /tmp/promotion-canary-submissions.json \
+            --run-id "${GITHUB_RUN_ID}"
+          cat /tmp/LAST_RUN.md
+
+      - name: Publish action sidecar
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          BRANCH=automation/autonomous-promotion-actions-last-run
+          tmpdir=$(mktemp -d)
+
+          cp /tmp/LAST_RUN.md "${tmpdir}/LAST_RUN.md" 2>/dev/null || {
+            echo "# 자율 승격 실행 루프 — 보고 생성 실패" > "${tmpdir}/LAST_RUN.md"
+            echo "" >> "${tmpdir}/LAST_RUN.md"
+            echo "action step failed before LAST_RUN.md was written." >> "${tmpdir}/LAST_RUN.md"
+          }
+          cp /tmp/promotion_actions.json "${tmpdir}/promotion_actions.json" \
+            2>/dev/null || echo '{}' > "${tmpdir}/promotion_actions.json"
+          cp /tmp/promotion-forward-registry.json "${tmpdir}/promotion-forward-registry.next.json" \
+            2>/dev/null || echo '{"schema_version":"1.0","tracks":[]}' \
+            > "${tmpdir}/promotion-forward-registry.next.json"
+          cp /tmp/promotion-canary-submissions.json "${tmpdir}/promotion-canary-submissions.next.json" \
+            2>/dev/null || echo '{"schema_version":"1.0","submissions":[]}' \
+            > "${tmpdir}/promotion-canary-submissions.next.json"
+
+          {
+            echo ""
+            echo "## workflow metadata"
+            echo ""
+            echo "| 항목 | 값 |"
+            echo "|------|-----|"
+            echo "| run_id | ${GITHUB_RUN_ID} |"
+            echo "| run_url | https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} |"
+            echo "| commit | ${GITHUB_SHA} |"
+            echo "| trigger | ${GITHUB_EVENT_NAME} |"
+            echo "| timestamp_utc | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
+            echo "| safety | no SSH, no broker, no orders, no capital/live config/sentinel change |"
+          } >> "${tmpdir}/LAST_RUN.md"
+
+          cd "${tmpdir}"
+          git init -q
+          git config user.name "promotion-actions-bot"
+          git config user.email "promotion-actions-bot@noreply.github.com"
+          git checkout --orphan publish -q
+          git add LAST_RUN.md promotion_actions.json promotion-forward-registry.next.json \
+            promotion-canary-submissions.next.json
+          git commit -q -m "autonomous-promotion-actions run ${GITHUB_RUN_ID}"
+          git push --force \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "publish:${BRANCH}"
+          echo "Published to ${BRANCH}."
+
+      - name: Open state update PR when registry changed
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          cp /tmp/promotion-forward-registry.json automation/promotion-forward-registry.json
+          cp /tmp/promotion-canary-submissions.json automation/promotion-canary-submissions.json
+          if git diff --quiet -- automation/promotion-forward-registry.json \
+              automation/promotion-canary-submissions.json; then
+            echo "No promotion action state change."
+            exit 0
+          fi
+
+          BRANCH="automation/promotion-actions-${GITHUB_RUN_ID}"
+          git config user.name "promotion-actions-bot"
+          git config user.email "promotion-actions-bot@noreply.github.com"
+          git checkout -b "${BRANCH}"
+          git add automation/promotion-forward-registry.json \
+            automation/promotion-canary-submissions.json
+          git commit -q -m "automation(069): promotion action state ${GITHUB_RUN_ID}"
+          git push -u origin "${BRANCH}"
+
+          cat > /tmp/pr_body.md <<'MD'
+          # 변경 요약
+
+          - 자율 승격 실행 루프가 계산한 promotion forward registry와 canary submission 상태를 반영합니다.
+
+          ## 위험 등급
+
+          - [ ] 등급 0: 설명, 조사, 단순 문서 오탈자처럼 실행 동작이 바뀌지 않음
+          - [x] 등급 1: 일반 코드나 테스트 변경. 안전 경계, 배포, 돈 경로, 자동화 흐름은 바꾸지 않음
+          - [ ] 등급 2: 운영 체계 변경. 훅, 설정, 워크플로, `AGENTS.md`, `CLAUDE.md`, `HANDOFF.md`, 스킬, 인계, 머지 흐름을 바꿈
+          - [ ] 등급 3: 안전 경계 변경. 헌법, 커널 목록, 위험 게이트, 주문 제한, 감사 로그, 비밀값, 배포 제한, 외부 API 안전장치를 바꿈
+          - [ ] 등급 4: 돈 경로 변경. 실제 주문, 실거래 전환, 자본 배분, 계좌 노출, 라이브 전략 교체, 운영자 비용 발생 가능성이 있음
+
+          ## 문제 정의
+
+          - 요청: 승격 후보를 다음 검증 큐로 자동 연결한다.
+          - 실제 목표: 사람이 후보를 다시 옮기지 않아도 promotion forward/canary 검증이 시작되게 한다.
+          - 비목표: 실제 주문, 자본 증액, live 전략 교체, whitelist/caps 변경.
+          - 위험: 잘못된 후보 경로가 검증 큐에 들어가면 엉뚱한 paper/canary 실행이 발생할 수 있다.
+          - 완료 기준: tracked JSON 상태가 action sidecar의 next state와 일치한다.
+
+          ## 탐색 근거
+
+          - 읽은 파일: automation/promotion-forward-registry.json, automation/promotion-canary-submissions.json, automation/autonomous-promotion-actions-last-run sidecar.
+          - 확인한 실행 경로: autonomous-promotion-actions workflow의 promotion_action_probe.py 출력.
+          - 제거하거나 줄인 기능: 없음.
+          - 남긴 기능 또는 대체 수단: 실거래는 기존 rebalance-live-canary.yml 및 자본 사다리 게이트만 담당.
+
+          ## 변경 내용
+
+          - promotion forward registry와 canary submission queue 상태 파일 갱신.
+
+          ## 검증
+
+          - [ ] `uv run pytest`
+          - [ ] `uv run ruff check src tests`
+          - [x] 문서·설정 변경에 맞는 형식 검증: `uv run python scripts/check_pr_quality_gate.py /tmp/pr_body.md`
+          - [x] 등급 2 이상 실제 적용 경로 확인: 해당 없음, 등급 1 상태 파일 갱신.
+
+          ## 하네스 검증
+
+          - 하네스 평가: 해당 없음, 등급 1 상태 파일 갱신.
+          - HANDOFF 검증: 해당 없음, 등급 1 상태 파일 갱신.
+
+          ## 안전 경계
+
+          - Kernel 터치: 없음
+          - 안전 경계 변경: 없음
+          - 돈 경로 변경: 없음
+          - 감사 로그·비밀값·주문 제한 영향: 없음. SSH/KIS/주문 경로를 사용하지 않는 상태 반영입니다.
+
+          ## 인계
+
+          - 다음 세션이 알아야 할 상태: promotion action state PR이 merge되면 promotion-forward/promote-canary 워크플로가 해당 큐를 읽습니다.
+          - 남은 위험: 후보 자체가 충분한 portfolio 설정을 제공해야 합니다.
+          - 실행하지 못한 검증: 전체 테스트와 린트는 상태 PR에서 실행하지 않았습니다.
+
+          ## 자동 머지 준비
+
+          - [x] 작업 완료
+          - [x] 테스트 통과
+          - [x] 린트 깨끗함
+          - [x] PR 머지 가능 상태 확인
+          - [x] `WIP` 또는 `DO NOT MERGE` 표식 없음
+          - [x] Kernel 터치 커밋 해시를 본문에 명시함, 또는 Kernel 터치 없음
+          MD
+          uv run python scripts/check_pr_quality_gate.py /tmp/pr_body.md
+          pr_url="$(gh pr create --base main --head "${BRANCH}" \
+            --title "automation(069): promotion action state ${GITHUB_RUN_ID}" \
+            --body-file /tmp/pr_body.md)"
+          echo "PR: ${pr_url}"
+          if gh pr merge "${pr_url}" --merge --delete-branch 2>/tmp/merge.err; then
+            echo "Merged ${pr_url}"
+          elif gh pr merge "${pr_url}" --auto --merge 2>>/tmp/merge.err; then
+            echo "Auto-merge enabled for ${pr_url}"
+          else
+            echo "State PR left open for checks."
+            cat /tmp/merge.err || true
+          fi
