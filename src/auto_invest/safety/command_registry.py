@@ -142,6 +142,12 @@ COMMAND_POLICIES: dict[str, CommandPolicy] = {
         "Report LLM token efficiency metrics; records price-table audit metadata.",
         writes_db=True,
     ),
+    "evolution-scan": _p(
+        "evolution-scan",
+        AutonomyLevel.READ_ONLY,
+        "Read collected evidence and render autonomous-evolution candidates; "
+        "no orders or live config changes.",
+    ),
     "fills": _p(
         "fills",
         AutonomyLevel.PROPOSAL,

@@ -60,6 +60,10 @@ def test_safety_commands_json_cli():
     assert commands["opportunity-monitor"]["level"] == "A2"
     assert commands["opportunity-monitor"]["can_place_order"] is False
     assert commands["opportunity-monitor"]["uses_broker"] is False
+    assert commands["evolution-scan"]["level"] == "A0"
+    assert commands["evolution-scan"]["can_place_order"] is False
+    assert commands["evolution-scan"]["uses_broker"] is False
+    assert commands["evolution-scan"]["writes_db"] is False
 
 
 def test_safety_commands_bad_format_exits_2():

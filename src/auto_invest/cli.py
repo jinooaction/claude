@@ -6466,3 +6466,140 @@ def canary_portfolio_cmd(
             f"실패지표={outcome.failing_metrics}"
         )
     raise typer.Exit(EXIT_OK if outcome.passed else EXIT_FAILED)
+
+
+@app.command("evolution-scan")
+def evolution_scan_cmd(
+    evidence_dir: Path = typer.Option(
+        ...,
+        "--evidence-dir",
+        help="Collected evidence markdown directory.",
+    ),
+    ledger_json: Path | None = typer.Option(
+        None,
+        "--ledger-json",
+        help="Existing learning ledger JSON. Missing file means empty ledger.",
+    ),
+    summary_out: Path | None = typer.Option(
+        None,
+        "--summary-out",
+        help="Markdown latest-run summary output path.",
+    ),
+    json_out: Path | None = typer.Option(
+        None,
+        "--json-out",
+        help="Machine-readable summary JSON output path.",
+    ),
+    ledger_out: Path | None = typer.Option(
+        None,
+        "--ledger-out",
+        help="Updated learning ledger JSON output path.",
+    ),
+    candidate_backlog_out: Path | None = typer.Option(
+        None,
+        "--candidate-backlog-out",
+        help="Candidate backlog JSON output path.",
+    ),
+    output_format: str = typer.Option(
+        "text",
+        "--format",
+        help="stdout format: text or json.",
+    ),
+    now: str | None = typer.Option(
+        None,
+        "--now",
+        help="As-of timestamp ISO-8601 UTC for deterministic tests.",
+    ),
+    run_id: str = typer.Option(
+        "local",
+        "--run-id",
+        help="Run identifier recorded in the summary.",
+    ),
+) -> None:
+    """Run the read-only autonomous evolution scan.
+
+    The command reads already-collected evidence files. It does not call broker
+    APIs, place orders, modify capital, widen whitelists, relax caps, or swap
+    live strategies.
+    """
+    import json as _json
+    import subprocess as _subprocess
+    from datetime import UTC as _UTC
+    from datetime import datetime as _datetime
+
+    from auto_invest.analytics.evolution_loop import (
+        DEFAULT_EVIDENCE_REQUIREMENTS,
+        scan_evolution,
+        write_summary_artifacts,
+    )
+
+    def _read_json(path: Path | None) -> dict | None:
+        if path is None:
+            return None
+        try:
+            raw = path.read_text(encoding="utf-8")
+        except (FileNotFoundError, OSError):
+            return None
+        try:
+            data = _json.loads(raw)
+        except _json.JSONDecodeError:
+            return None
+        return data if isinstance(data, dict) else None
+
+    def _read_evidence(path: Path) -> dict[str, str | None]:
+        evidence: dict[str, str | None] = {}
+        for req in DEFAULT_EVIDENCE_REQUIREMENTS:
+            item = path / f"{req.key}.md"
+            try:
+                evidence[req.key] = item.read_text(encoding="utf-8")
+            except (FileNotFoundError, OSError):
+                evidence[req.key] = None
+        for item in sorted(path.glob("*.md")):
+            if item.stem in evidence:
+                continue
+            try:
+                evidence[item.stem] = item.read_text(encoding="utf-8")
+            except OSError:
+                evidence[item.stem] = None
+        return evidence
+
+    def _parse_now(text: str | None):
+        if not text:
+            return _datetime.now(_UTC)
+        parsed = _datetime.fromisoformat(text.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=_UTC)
+        return parsed.astimezone(_UTC)
+
+    def _commit() -> str:
+        try:
+            return _subprocess.check_output(
+                ["git", "rev-parse", "HEAD"],
+                text=True,
+                stderr=_subprocess.DEVNULL,
+            ).strip()
+        except (OSError, _subprocess.CalledProcessError):
+            return "unknown"
+
+    if output_format not in {"text", "json"}:
+        typer.echo("--format 은 text 또는 json 이어야 합니다.", err=True)
+        raise typer.Exit(2)
+
+    summary = scan_evolution(
+        _read_evidence(evidence_dir),
+        ledger_doc=_read_json(ledger_json),
+        now=_parse_now(now),
+        commit=_commit(),
+        run_id=run_id,
+    )
+    write_summary_artifacts(
+        summary,
+        summary_out=summary_out,
+        json_out=json_out,
+        ledger_out=ledger_out,
+        candidate_backlog_out=candidate_backlog_out,
+    )
+    if output_format == "json":
+        typer.echo(_json.dumps(summary.as_dict(), ensure_ascii=False))
+    else:
+        typer.echo(summary.as_markdown())

@@ -1,0 +1,140 @@
+name: Autonomous evolution loop (영구 자율 성장 후보 발굴)
+
+# 스펙 067 — read-only 영구 자율 성장 루프.
+#
+# 목적: 데이터 수집, 데이터 품질, 분석, 전략 설계, 포트폴리오 설계, 실행 품질,
+# live readiness, 회고, 에이전트 운영 전 영역에서 고레버리지 돌파 후보를 발굴한다.
+#
+# 안전: 이 워크플로는 이미 발행된 sidecar와 repo 문서만 읽는다. 브로커 API 호출,
+# 주문, 자본 증액, whitelist/caps 변경, live 전략 교체 없음.
+
+on:
+  schedule:
+    # 매일 08:30 UTC — money-path(08:00) 이후 후보 종합.
+    - cron: "30 8 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/auto_invest/analytics/evolution_loop.py'
+      - 'scripts/evolution_loop_probe.py'
+      - 'src/auto_invest/cli.py'
+      - 'src/auto_invest/analytics/pipeline_liveness.py'
+      - '.github/workflows/autonomous-evolution-loop.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: autonomous-evolution-loop
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Collect evidence sidecars (read-only)
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/evolution_evidence
+          git fetch --depth=1 origin \
+            '+refs/heads/automation/*:refs/remotes/origin/automation/*' || true
+          uv run python scripts/evolution_loop_probe.py --manifest > /tmp/evolution_manifest.tsv
+          while IFS=$'\t' read -r key branch filename; do
+            [[ -z "${key}" ]] && continue
+            if git show "origin/${branch}:${filename}" \
+                 > "/tmp/evolution_evidence/${key}.md" 2>/dev/null; then
+              echo "✓ ${key}: evidence collected (${branch}:${filename})"
+            else
+              rm -f "/tmp/evolution_evidence/${key}.md"
+              echo "✗ ${key}: evidence missing (${branch})"
+            fi
+          done < /tmp/evolution_manifest.tsv
+          cp HANDOFF.md /tmp/evolution_evidence/handoff.md
+          cp specs/067-autonomous-evolution-loop/spec.md \
+            /tmp/evolution_evidence/spec-067.md
+
+      - name: Load previous learning ledger
+        run: |
+          set -euo pipefail
+          git show origin/automation/autonomous-evolution-last-run:learning_ledger.json \
+            > /tmp/learning_ledger_prior.json 2>/dev/null || echo '{}' \
+            > /tmp/learning_ledger_prior.json
+
+      - name: Run autonomous evolution scan
+        run: |
+          set -euo pipefail
+          uv run python scripts/evolution_loop_probe.py \
+            --evidence-dir /tmp/evolution_evidence \
+            --ledger-json /tmp/learning_ledger_prior.json \
+            --summary-out /tmp/LAST_RUN.md \
+            --json-out /tmp/evolution_summary.json \
+            --ledger-out /tmp/learning_ledger.json \
+            --candidate-backlog-out /tmp/candidate_backlog.json \
+            --run-id "${GITHUB_RUN_ID}"
+          cat /tmp/LAST_RUN.md
+
+      - name: Publish sidecar
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          BRANCH=automation/autonomous-evolution-last-run
+          tmpdir=$(mktemp -d)
+
+          if [[ -f /tmp/LAST_RUN.md ]]; then
+            cp /tmp/LAST_RUN.md "${tmpdir}/LAST_RUN.md"
+          else
+            {
+              echo "# 자율 성장 루프 — 보고 생성 실패"
+              echo ""
+              echo "scan step failed before LAST_RUN.md was written."
+              echo ""
+              echo "읽기 전용 실행입니다. 주문, 자본, whitelist, caps, live 전략은 변경하지 않았습니다."
+            } > "${tmpdir}/LAST_RUN.md"
+          fi
+
+          cp /tmp/evolution_summary.json "${tmpdir}/evolution_summary.json" \
+            2>/dev/null || echo '{}' > "${tmpdir}/evolution_summary.json"
+          cp /tmp/learning_ledger.json "${tmpdir}/learning_ledger.json" \
+            2>/dev/null || echo '{"schema_version":"1.0","entries":[]}' \
+            > "${tmpdir}/learning_ledger.json"
+          cp /tmp/candidate_backlog.json "${tmpdir}/candidate_backlog.json" \
+            2>/dev/null || echo '{"schema_version":"1.0","candidates":[]}' \
+            > "${tmpdir}/candidate_backlog.json"
+
+          {
+            echo ""
+            echo "## workflow metadata"
+            echo ""
+            echo "| 항목 | 값 |"
+            echo "|------|-----|"
+            echo "| run_id | ${GITHUB_RUN_ID} |"
+            echo "| run_url | https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} |"
+            echo "| commit | ${GITHUB_SHA} |"
+            echo "| trigger | ${GITHUB_EVENT_NAME} |"
+            echo "| timestamp_utc | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
+            echo "| safety | no orders, no capital change, no whitelist/caps change, no live strategy change |"
+          } >> "${tmpdir}/LAST_RUN.md"
+
+          cd "${tmpdir}"
+          git init -q
+          git config user.name "autonomous-evolution-bot"
+          git config user.email "autonomous-evolution-bot@noreply.github.com"
+          git checkout --orphan publish -q
+          git add LAST_RUN.md evolution_summary.json learning_ledger.json candidate_backlog.json
+          git commit -q -m "autonomous-evolution run ${GITHUB_RUN_ID} @ ${GITHUB_SHA:0:7}"
+          git push --force \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "publish:${BRANCH}"
+          echo "Published to ${BRANCH}."
