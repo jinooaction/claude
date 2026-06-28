@@ -42,7 +42,7 @@
 - [x] T018 Run focused tests for promotion loop and liveness.
 - [x] T019 Run full `uv run pytest` and `uv run ruff check src tests`.
 - [x] T020 Run `uv run python scripts/check_handoff_facts.py` and `uv run python scripts/agent_harness_probe.py --strict`.
-- [ ] T021 Open PR with grade 2 risk and complete quality gate body.
+- [x] T021 Open PR with grade 2 risk and complete quality gate body.
 - [ ] T022 Merge when green and refresh HANDOFF.
 
 ## Dependencies & Execution Order
