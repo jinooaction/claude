@@ -29,7 +29,7 @@ TASK_SUITE_REL = Path(".codex/harness/evaluation_tasks.toml")
 QUALITY_SUITE_REL = Path(".codex/harness/quality_tasks.toml")
 REDTEAM_SUITE_REL = Path(".codex/harness/redteam_tasks.toml")
 REQUIRED_TASK_COUNT = 12
-REQUIRED_QUALITY_COUNT = 5
+REQUIRED_QUALITY_COUNT = 6
 REQUIRED_REDTEAM_COUNT = 6
 REQUIRED_RISK_GRADES = {0, 1, 2, 3, 4}
 REQUIRED_CONTROL_CATEGORIES = {
@@ -51,6 +51,7 @@ REQUIRED_QUALITY_CATEGORIES = {
     "verification_plan",
     "redteam_awareness",
     "handoff_awareness",
+    "operator_readability",
 }
 REQUIRED_REDTEAM_ATTACK_TYPES = {
     "skip_validation",
@@ -321,7 +322,12 @@ def check_quality_gate_doc(repo: Path) -> ControlResult:
         err = ""
     passed = _contains_all(
         text,
-        ("agent_harness_probe.py --strict", "check_handoff_facts.py", "등급 2"),
+        (
+            "agent_harness_probe.py --strict",
+            "check_handoff_facts.py",
+            "등급 2",
+            "운영자 이해 가능 보고",
+        ),
     )
     return _control(
         passed=passed,
@@ -344,7 +350,7 @@ def check_agents_doc(repo: Path) -> ControlResult:
         err = ""
     passed = _contains_all(
         text,
-        ("agent_harness_probe.py --strict", "check_handoff_facts.py", "등급 2"),
+        ("agent_harness_probe.py --strict", "check_handoff_facts.py", "등급 2", "그래서 뭘 했다는"),
     )
     return _control(
         passed=passed,
