@@ -29,18 +29,18 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 상세 규칙은 Codex 세션에서는 `AGENTS.md`, Claude 세션에서는 `CLAUDE.md` 본문 참조.
 
-## 한눈 요약표 — 2026-06-27 KST 최신 main 기준
+## 한눈 요약표 — 2026-06-28 KST 최신 main 기준
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `d97d6a2` — Merge pull request #396 from jinooaction/Codex/strategy-review-observation-repair |
+| 마지막 main 커밋 | `0b7c248` — Merge pull request #398 from jinooaction/Codex/micro-gtaa-blocker-review |
 | main 테스트 | `uv run pytest -q` → 2286 passed, 4 skipped |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
 | 열린 PR | 없음(GitHub open PR 조회 결과 `[]`) |
 | 출시 완료 스펙 | 최신 추가: 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
-| 최근 출시 작업 | #396 strategy review 관측 품질 false blocker 보정. #394 micro GTAA `INTENT_LOSS` 신호에서 실주문 차단. #392 거부 주문 기회손익을 rolling history와 자율 재지정 evidence로 연결 |
-| 활성 작업 | 코드 PR 없음. micro GTAA는 `armed:false`, `capital_usd:1000`, 최신 micro sidecar run `28274580272`에서 `LIVE 스텝=skipped`, strategy-intent gate `ok=false`, `reason=latest_intent_loss`, 누적 의도 손익 `-1.14 USD`. 최신 reassign sidecar run `28278589509`는 #396 이전 코드의 `DEGRADED` 판정이므로 다음 실행에서는 all-premature lag를 `OK`로 보고해야 한다. 단, 아직 비교 가능한 도전자는 없으므로 재지정은 HOLD가 정상 |
-| 안전 경계 | #396은 등급 2 운영 판단 보정이며 주문, 자본, 허용 종목, 전략 설정, 센티넬, K1/K2/K4/K5/K6, 헌법, 커널 목록 변경 없음. #394는 등급 4 돈 경로 변경이지만 방향은 실제 주문 가능성 축소. #392의 누적 monitor와 #394의 live gate가 함께 작동 |
+| 최근 출시 작업 | #398 micro GTAA `INTENT_LOSS` 차단 중 next action 안내 보정. #396 strategy review 관측 품질 false blocker 보정. #394 micro GTAA `INTENT_LOSS` 신호에서 실주문 차단 |
+| 활성 작업 | 코드 PR 없음. micro GTAA는 `armed:false`, `capital_usd:1000`, 최신 micro sidecar run `28274580272`에서 `LIVE 스텝=skipped`, strategy-intent gate `ok=false`, `reason=latest_intent_loss`, 누적 의도 손익 `-1.14 USD`. #398 이후 로컬 재현의 `next_action_ko`는 "새 live 표본은 자동으로 쌓이지 않습니다"로 바뀐다. 최신 reassign sidecar run `28278589509`는 #396 이전 코드의 `DEGRADED` 판정이므로 다음 실행에서는 all-premature lag를 `OK`로 보고해야 한다. 단, 아직 비교 가능한 도전자는 없으므로 재지정은 HOLD가 정상 |
+| 안전 경계 | #398과 #396은 등급 2 운영 판단·안내 보정이며 주문, 자본, 허용 종목, 전략 설정, 센티넬, K1/K2/K4/K5/K6, 헌법, 커널 목록 변경 없음. #394는 등급 4 돈 경로 변경이지만 방향은 실제 주문 가능성 축소. #392의 누적 monitor와 #394의 live gate가 함께 작동 |
 
 ## 돈 경로 상태 판독 규칙 (필수 — 스펙 062)
 
@@ -52,6 +52,7 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 4. `live_money_state.status`가 `PREVIEW_ONLY`이면 "실주문 불가"로 답한다. `REAL_ORDER_PATH_ARMED`이면 "실제 돈 경로가 켜져 있음"으로 답한다. 단, 이것은 비-push 실행이 미국 정규장, KIS 매수가능 현금 1% 버퍼, micro 손실 브레이커, K1 한도와 K2 허용 종목을 통과하면 실주문 단계에 도달할 수 있다는 뜻이지 접수·체결 보장이 아니다.
 5. 스펙 063 이후 micro GTAA live canary는 계좌 전체 preview를 만든다. 기존 보유 `BHP`, `MRK`, `ORANY`, `RELX`는 목표 유니버스가 아니라 청산 전용이다. 현금이 목표 매수와 1% 완충금을 충족하지 못하고 청산 전용 매도 후보가 있으면 이번 주기는 `effective_side=sell`로 매도만 실행하고, 매수는 다음 fresh KIS 현금 조회가 충분할 때까지 보류한다.
 6. 스펙 065 이후 현재 기준(2026-06-27T01:34Z): micro GTAA는 `armed:false`, money-path `live_money_state.status=PREVIEW_ONLY`, 최신 micro sidecar run `28274580272`는 `event=push`, `LIVE 스텝=skipped`, strategy-intent gate `ok=false`, `reason=latest_intent_loss`다. 스펙 062의 2026-06-22 `armed:true` 기록은 역사이며 현재 상태 근거로 쓰지 않는다.
+7. PR #398 이후 `latest_signal=INTENT_LOSS`인데 verdict가 아직 `INSUFFICIENT_DATA`인 경우, "다음 micro GTAA 실행에서 live 표본이 자동으로 더 쌓인다"고 말하지 않는다. live gate가 실주문을 막으므로 새 live 표본은 자동 누적되지 않는다. 다음 행동은 forward 토너먼트·재지정 증거를 기다리거나 별도 전략 검토 후 재무장 여부를 판단하는 것이다.
 
 ## 전략 검토 상태 판독 규칙 (필수 — 스펙 066)
 
@@ -78,6 +79,34 @@ uv run python scripts/money_path_probe.py --manifest | while IFS=$'\t' read -r k
 done
 uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.live_money_state'
 ```
+
+## 최근 관찰 — 2026-06-28 KST (micro GTAA intent-loss 다음 행동 안내 보정)
+
+현재 `main` 최신은 `0b7c248`(#398, micro GTAA intent-loss next-action 안내 보정)이다.
+직전 주요 커밋은 `cb05752`(구현 커밋), `7898793`(#397, #396 handoff),
+`d97d6a2`(#396, strategy review 관측 품질 보정)이다. 이 인계 갱신 시작 시점의 열린 PR은 없다.
+
+- **문제 교정**: 최신 `opportunity_monitor.json`은 `latest_signal=INTENT_LOSS`,
+  `verdict=INSUFFICIENT_DATA`, 누적 의도 손익 `-1.14 USD`다. 기존 안내는 "다음 micro GTAA 실행에서
+  표본을 더 쌓습니다"라고 했지만, #394 live gate가 같은 신호에서 실주문을 차단하므로 새 live
+  표본은 자동으로 쌓이지 않는다.
+- **코드 변경**: `src/auto_invest/analytics/opportunity_monitor.py`가 `VERDICT_INSUFFICIENT_DATA`와
+  `latest_signal=INTENT_LOSS` 조합에서 "새 live 표본은 자동으로 쌓이지 않습니다. forward
+  토너먼트·재지정 증거를 기다리거나 별도 전략 검토 후 재무장 여부를 판단합니다"로 안내한다.
+- **보존한 방어**: `INTENT_LOSS` live 차단, `armed:false`, history 보존, workflow gate 조건,
+  주문 라우터, 자본, 허용 종목은 바꾸지 않았다. 이 PR은 재무장이나 실주문 허용이 아니다.
+- **운영 재현**: 최신 `opportunity_history.json`으로 `auto-invest opportunity-monitor`를 로컬
+  재현하면 `next_action_ko`가 새 문구로 나온다. 최신 money-path 재현은 여전히 `PREVIEW_ONLY`,
+  `ACCUMULATING_EDGE`, forward 관측 `12/20`이다.
+- **전략 검토 상태**: 최신 코드로 `rebalance-paper-forward-last-run:LAST_RUN.md`를 다시 파싱하면
+  관측 품질은 `OK`로 보정된다. 하지만 비교 가능한 도전자는 0개이므로 `reassign-decide`는
+  `HOLD`가 정상이다.
+- **안전 경계**: 등급 2 운영 안내 보정이다. 실제 주문 실행, micro GTAA 재무장, 자본 증액,
+  허용 종목 확대, live 전략 교체, 주문 라우터, K1/K2/K4/K5/K6 코드, 헌법, 커널 목록 변경 없음.
+- **검증**: PR #398 머지 전 focused tests 14 통과, `uv run pytest` 2286 통과·4 스킵,
+  `uv run ruff check src tests` 통과, `git diff --check` 통과, PR 본문 품질 관문 통과,
+  하네스 `OK (14/14)`, HANDOFF 사실 검증 OK. PR quality gate도 성공했고 merge 방식으로 main에
+  머지했다.
 
 ## 최근 관찰 — 2026-06-27 KST (전략 검토 관측 품질 오판 보정)
 
@@ -480,6 +509,20 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
   통과, `uv run python scripts/agent_harness_probe.py --strict` `OK (14/14)`,
   `uv run python scripts/check_handoff_facts.py` 통과, PR 품질 관문 통과. 머지 직전 전체 테스트와
   린트를 다시 실행해 같은 결과를 확인했다.
+
+## 최근 마일스톤 — 2026-06-28 KST (micro GTAA intent-loss 다음 행동 안내 보정)
+
+`INTENT_LOSS`가 live 주문을 차단하는 동안 새 live 표본이 자동으로 쌓이는 것처럼 안내하던
+운영 표면을 바로잡았다. 상세: `HANDOFF-066-MICRO-GTAA-BLOCKER-REVIEW.md`,
+`specs/065-micro-gtaa-intent-loss-gate/`.
+
+- **문제**: 최신 micro GTAA monitor는 `latest_signal=INTENT_LOSS`, `verdict=INSUFFICIENT_DATA`,
+  누적 의도 손익 `-1.14 USD`다. 기존 `next_action_ko`는 "다음 micro GTAA 실행에서 표본을 더
+  쌓습니다"였지만, #394 gate가 live를 막으므로 이는 실제 회복 경로가 아니다.
+- **보정**: `opportunity_monitor`가 해당 조합에서는 "새 live 표본은 자동으로 쌓이지 않는다"와
+  "forward 토너먼트·재지정 증거 또는 별도 전략 검토 후 재무장 판단"을 안내한다.
+- **안전 경계**: 주문 차단, `armed:false`, 자본, 허용 종목, 전략 설정, 센티넬, K1/K2/K4/K5/K6,
+  헌법, 커널 목록 변경 없음.
 
 ## 최근 마일스톤 — 2026-06-27 KST (전략 검토 관측 품질 오판 보정)
 
