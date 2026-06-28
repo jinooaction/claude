@@ -51,6 +51,7 @@ def test_single_negative_signal_is_insufficient_for_auto_review() -> None:
     assert summary["verdict"] == VERDICT_INSUFFICIENT_DATA
     assert summary["latest_signal"] == SIGNAL_INTENT_LOSS
     assert summary["cumulative"]["total_intended_order_mark_pnl_usd"] == "-10.00"
+    assert "새 live 표본은 자동으로 쌓이지 않습니다" in summary["next_action_ko"]
 
 
 def test_negative_cumulative_triggers_strategy_review() -> None:
@@ -110,6 +111,7 @@ def test_live_gate_blocks_latest_intent_loss_even_with_insufficient_data() -> No
     assert gate["reason"] == LIVE_GATE_REASON_INTENT_LOSS
     assert gate["latest_signal"] == SIGNAL_INTENT_LOSS
     assert gate["verdict"] == VERDICT_INSUFFICIENT_DATA
+    assert "새 live 표본은 자동으로 쌓이지 않습니다" in summary["next_action_ko"]
 
 
 def test_live_gate_blocks_strategy_review() -> None:

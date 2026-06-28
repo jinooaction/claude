@@ -121,3 +121,4 @@ def test_opportunity_monitor_cli_without_opportunity_json_preserves_history(
     assert [record["run_id"] for record in history["records"]] == ["28253047287"]
     assert summary["latest_signal"] == "INTENT_LOSS"
     assert summary["latest"]["run_id"] == "28253047287"
+    assert "새 live 표본은 자동으로 쌓이지 않습니다" in summary["next_action_ko"]
