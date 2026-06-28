@@ -33,15 +33,15 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `424a70e` — Merge pull request #404 from jinooaction/Codex/autonomous-evolution-implementation |
+| 마지막 main 커밋 | `c4400b7` — Merge pull request #406 from jinooaction/Codex/operator-readable-reporting |
 | main 테스트 | `uv run pytest -q` → 2310 passed, 4 skipped |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
 | 열린 PR | 없음(GitHub open PR 조회 결과 `[]`) |
 | 출시 완료 스펙 | 최신 추가: 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
 | 골격 스펙 | 없음. `.specify/feature.json`은 추적을 위해 `specs/067-autonomous-evolution-loop`를 계속 가리키지만, 스펙 067 구현은 #404로 main에 들어갔다. |
-| 최근 출시 작업 | #404 스펙 067 영구 자율 성장 루프 구현. #403 스펙 067 handoff 갱신. #402 스펙 067 목표 프레이밍 정정. #400 스펙 067 자율 고도화 루프 SDD 산출물 추가 |
-| 활성 작업 | 코드 PR 없음. autonomous-evolution workflow 첫 push 실행 run `28329967896`이 `automation/autonomous-evolution-last-run`을 발행했고 `overall_status=ok`, stale/missing evidence 없음, operator review 없음. 다음 세션은 `git show origin/automation/autonomous-evolution-last-run:LAST_RUN.md`를 먼저 읽어 최신 고레버리지 후보와 학습 장부를 확인한다. micro GTAA는 기존 상태 그대로 `armed:false`, `capital_usd:1000`, 최신 micro sidecar run `28274580272`에서 `LIVE 스텝=skipped`, strategy-intent gate `ok=false`, `reason=latest_intent_loss`, 누적 의도 손익 `-1.14 USD`. 최신 reassign sidecar run `28278589509`는 #396 이전 코드의 `DEGRADED` 판정이므로 다음 실행에서는 all-premature lag를 `OK`로 보고해야 한다. 단, 아직 비교 가능한 도전자는 없으므로 재지정은 HOLD가 정상 |
-| 안전 경계 | #404는 등급 2 운영 자동화·sidecar·CLI 추가이며 read-only다. 주문, 브로커 API 호출, 자본, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, 센티넬, K1/K2/K4/K5/K6, 헌법, 커널 목록 변경 없음. 검증된 후보도 스펙 055 재지정 게이트와 스펙 050 자본 사다리로만 승격한다. |
+| 최근 출시 작업 | #406 운영자가 이해 가능한 완료 보고 강제. #405 스펙 067 구현 handoff 갱신. #404 스펙 067 영구 자율 성장 루프 구현. #402 스펙 067 목표 프레이밍 정정 |
+| 활성 작업 | 코드 PR 없음. 완료 보고는 이제 PR 번호·커밋·테스트 수 나열이 아니라 실제 운영 상태 변화, 돈 경로와 안전 경계 영향, 검증, 남은 위험을 먼저 쉬운 한글로 설명해야 한다. autonomous-evolution workflow 첫 push 실행 run `28329967896`은 `automation/autonomous-evolution-last-run`을 발행했고 `overall_status=ok`, stale/missing evidence 없음, operator review 없음. 다음 세션은 `git show origin/automation/autonomous-evolution-last-run:LAST_RUN.md`를 먼저 읽어 최신 고레버리지 후보와 학습 장부를 확인한다. micro GTAA는 기존 상태 그대로 `armed:false`, `capital_usd:1000`, 최신 micro sidecar run `28274580272`에서 `LIVE 스텝=skipped`, strategy-intent gate `ok=false`, `reason=latest_intent_loss`, 누적 의도 손익 `-1.14 USD`. |
+| 안전 경계 | #406은 등급 2 운영 규칙·품질 관문·하네스 변경이며 주문, 브로커 API 호출, 자본, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, 센티넬, K1/K2/K4/K5/K6, 헌법, 커널 목록 변경 없음. #404 자율 성장 루프도 read-only이며 검증된 후보는 스펙 055 재지정 게이트와 스펙 050 자본 사다리로만 승격한다. |
 
 ## 돈 경로 상태 판독 규칙 (필수 — 스펙 062)
 
@@ -80,6 +80,31 @@ uv run python scripts/money_path_probe.py --manifest | while IFS=$'\t' read -r k
 done
 uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.live_money_state'
 ```
+
+## 최근 관찰 — 2026-06-29 KST (운영자가 이해 가능한 완료 보고 강제)
+
+현재 `main` 최신은 `c4400b7`(#406, 운영자가 이해 가능한 완료 보고 강제)이다.
+직전 주요 커밋은 `f6dfe51`(구현 커밋), `c542d30`(#405, 스펙 067 구현 handoff 갱신),
+`424a70e`(#404, 스펙 067 영구 자율 성장 루프 구현)이다. 이 인계 갱신 시점의 열린 PR은 없다.
+
+- **문제 정의**: 운영자가 "그래서 뭘 했다는 거야?"라고 다시 물어야 하는 완료 보고는 시스템 실패다.
+  PR 번호, 커밋, 테스트 수, sidecar run id를 증거로 나열했지만 실제 운영 상태 변화와 의미를 먼저
+  설명하지 않았던 것이 원인이다.
+- **운영 규칙 변경**: `AGENTS.md`의 보고 기준에 "운영자가 바로 이해할 수 있는 한 문장 결론"을
+  필수로 넣었다. 큰 작업 후에는 무엇을 만들었는지, 돈 경로·자동화·안전 경계·다음 세션 행동에
+  어떤 의미가 있는지, 무엇으로 확인했는지, 남은 위험이 무엇인지 쉬운 한글로 분리해야 한다.
+- **품질 관문 변경**: `.codex/quality-gate.md`에 `운영자 이해 가능 보고` 점검을 추가했다.
+  첫 문장이 PR 번호나 커밋 해시가 아니라 실제 운영 상태를 설명하는지, 테스트·배포·sidecar가
+  증거로 쓰이고 그 의미가 설명됐는지 확인한다.
+- **하네스 변경**: `.codex/harness/quality_tasks.toml`에 `QUALITY-006`을 추가하고,
+  `scripts/agent_harness_probe.py`의 필수 첫 판단 품질 범주에 `operator_readability`를 넣었다.
+  이 범주가 빠지면 strict 하네스가 깨진다.
+- **안전 경계**: 등급 2 운영 체계 변경이다. 실제 주문, 브로커 API 호출, 자본 증액, whitelist/caps,
+  live 전략 교체, 헌법, 커널 목록, 주문 제한, 비밀값, 감사 로그는 바꾸지 않았다.
+- **검증**: PR #406 머지 전 `uv run pytest` 2310 통과·4 스킵, `uv run ruff check src tests` 통과,
+  focused script 린트 통과, 하네스 `OK (14/14)`, HANDOFF 사실 검증 OK, PR 품질 관문 성공.
+  handoff 갱신 전 main의 `uv run pytest -q`는 stale `HANDOFF.md` 때문에 하네스 2건만 실패했고,
+  이 handoff 갱신은 그 원인을 바로잡는다.
 
 ## 최근 관찰 — 2026-06-29 KST (스펙 067 영구 자율 성장 루프 구현)
 
@@ -563,6 +588,19 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
   통과, `uv run python scripts/agent_harness_probe.py --strict` `OK (14/14)`,
   `uv run python scripts/check_handoff_facts.py` 통과, PR 품질 관문 통과. 머지 직전 전체 테스트와
   린트를 다시 실행해 같은 결과를 확인했다.
+
+## 최근 마일스톤 — 2026-06-29 KST (운영자가 이해 가능한 완료 보고 강제)
+
+main 머지 `c4400b7`(#406). 완료 보고가 운영자에게 실제 의미를 전달하지 못한 문제를 운영 규칙,
+품질 관문, 하네스 품질 과제로 고정했다. 상세:
+`HANDOFF-070-OPERATOR-READABLE-REPORTING.md`, `AGENTS.md`, `.codex/quality-gate.md`.
+
+- **핵심 변경**: 최종 답변은 실제 운영 상태 변화부터 말하고, 의미·돈 경로/안전 경계 영향·검증·
+  남은 위험을 쉬운 한글로 분리해야 한다.
+- **하네스 고정**: 첫 판단 품질 과제는 이제 6개이며 `operator_readability`가 필수 범주다.
+- **안전 경계**: 운영 보고 규칙 변경뿐이다. 주문, 자본, whitelist/caps, live 전략, 헌법, 커널 목록 변경 없음.
+- **검증**: PR #406 머지 전 전체 테스트 2310 통과·4 스킵, 전체 린트 통과, 하네스 OK (14/14),
+  HANDOFF 사실 검증 OK, PR 품질 관문 성공.
 
 ## 최근 마일스톤 — 2026-06-29 KST (스펙 067 영구 자율 성장 루프 구현)
 
@@ -3953,6 +3991,10 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 
 ## 과거 인수인계 파일 (참고용)
 
+- `HANDOFF-070-OPERATOR-READABLE-REPORTING.md` — 운영자가 이해 가능한 완료 보고 강제
+  (2026-06-29, PR #406 `c4400b7`). 완료 보고가 PR 번호·커밋·테스트 수만 나열하지 않고 실제
+  운영 상태 변화, 돈 경로와 안전 경계 영향, 검증, 남은 위험을 쉬운 한글로 설명하도록
+  `AGENTS.md`, 품질 관문, 하네스 품질 과제에 `operator_readability`를 고정했다.
 - `HANDOFF-069-AUTONOMOUS-EVOLUTION-IMPLEMENTATION.md` — 스펙 067 영구 자율 성장 루프 구현
   (2026-06-29, PR #404 `424a70e`). read-only 루프가 sidecar와 handoff 증거를 읽어 고레버리지
   후보, 안전한 실험 계획, 학습 장부, 최신 실행 보고서를 발행한다. 첫 workflow run `28329967896`은
