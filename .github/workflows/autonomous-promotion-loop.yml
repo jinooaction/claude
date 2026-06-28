@@ -53,14 +53,21 @@ jobs:
           git fetch --depth=1 origin \
             '+refs/heads/automation/*:refs/remotes/origin/automation/*' || true
 
-          git show origin/automation/autonomous-evolution-last-run:candidate_backlog.json \
-            > /tmp/promotion_evidence/candidate_backlog.json 2>/dev/null || echo '{"candidates":[]}' \
-            > /tmp/promotion_evidence/candidate_backlog.json
+          if git show origin/automation/candidate-implementation-factory-last-run:candidate_backlog.enriched.json \
+              > /tmp/promotion_evidence/candidate_backlog.json 2>/dev/null; then
+            echo "✓ candidate-factory: enriched backlog collected"
+          else
+            git show origin/automation/autonomous-evolution-last-run:candidate_backlog.json \
+              > /tmp/promotion_evidence/candidate_backlog.json 2>/dev/null || echo '{"candidates":[]}' \
+              > /tmp/promotion_evidence/candidate_backlog.json
+            echo "✗ candidate-factory: enriched backlog missing; using autonomous-evolution backlog"
+          fi
           git show origin/automation/autonomous-evolution-last-run:evolution_summary.json \
             > /tmp/promotion_evidence/evolution_summary.json 2>/dev/null || echo '{"candidates":[]}' \
             > /tmp/promotion_evidence/evolution_summary.json
 
           for item in \
+            "candidate-factory automation/candidate-implementation-factory-last-run LAST_RUN.md" \
             "money-path automation/money-path-last-run LAST_RUN.md" \
             "rebalance-paper-forward automation/rebalance-paper-forward-last-run LAST_RUN.md" \
             "promotion-forward automation/promotion-forward-last-run LAST_RUN.md" \

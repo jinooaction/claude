@@ -20,6 +20,7 @@ SCHEMA_VERSION = "1.0"
 
 STAGE_EVIDENCE_MISSING = "EVIDENCE_MISSING"
 STAGE_BACKTEST_REQUIRED = "BACKTEST_REQUIRED"
+STAGE_FACTORY_PACKAGE_READY = "FACTORY_PACKAGE_READY"
 STAGE_RECENT_OOS_REQUIRED = "RECENT_OOS_REQUIRED"
 STAGE_FORWARD_REGISTRATION_READY = "FORWARD_REGISTRATION_READY"
 STAGE_FORWARD_ACCUMULATING = "FORWARD_ACCUMULATING"
@@ -60,6 +61,8 @@ _HARD_OPERATOR_SURFACES = {
     "kernel",
     "paid_service",
 }
+
+_FACTORY_STRATEGY_KINDS = {"strategy_backtest", "portfolio_backtest"}
 
 
 @dataclass(frozen=True)
@@ -359,6 +362,15 @@ def assess_candidate(
             "candidate backlog의 근거가 불충분하다.",
             next_gate=next_gate,
         )
+    if _has_non_strategy_factory_package(candidate):
+        return _assessment(
+            candidate,
+            STAGE_FACTORY_PACKAGE_READY,
+            layers,
+            "후보 구현 공장 패키지를 실행하고 결과 evidence를 누적한다.",
+            "전략/포트폴리오 후보가 아니므로 forward paper 등록 대상은 아니다.",
+            next_gate=next_gate,
+        )
     if layer_status["historical_backtest"] != EVIDENCE_PASS:
         return _assessment(
             candidate,
@@ -646,6 +658,15 @@ def _source_for(key: str, promotion: Mapping[str, Any]) -> str | None:
     return str(value) if value else None
 
 
+def _has_non_strategy_factory_package(candidate: PromotionCandidate) -> bool:
+    evidence = candidate.promotion_evidence
+    kind = str(evidence.get("factory_kind") or "").strip()
+    status = str(evidence.get("factory_status") or "").strip()
+    if not kind or kind in _FACTORY_STRATEGY_KINDS:
+        return False
+    return status in {"ready", "pending", "evidence_passed", "pass"}
+
+
 def _has_missing_source(candidate: PromotionCandidate) -> bool:
     return not candidate.evidence_refs and not candidate.promotion_evidence
 
@@ -678,9 +699,10 @@ def _stage_sort(stage: str) -> int:
         STAGE_FORWARD_ACCUMULATING: 3,
         STAGE_RECENT_OOS_REQUIRED: 4,
         STAGE_BACKTEST_REQUIRED: 5,
-        STAGE_EVIDENCE_MISSING: 6,
-        STAGE_OPERATOR_REVIEW: 7,
-        STAGE_DISCARD: 8,
+        STAGE_FACTORY_PACKAGE_READY: 6,
+        STAGE_EVIDENCE_MISSING: 7,
+        STAGE_OPERATOR_REVIEW: 8,
+        STAGE_DISCARD: 9,
     }
     return order.get(stage, 99)
 
@@ -720,6 +742,7 @@ __all__ = [
     "STAGE_DISCARD",
     "STAGE_EVIDENCE_MISSING",
     "STAGE_EXISTING_GATE_READY",
+    "STAGE_FACTORY_PACKAGE_READY",
     "STAGE_FORWARD_ACCUMULATING",
     "STAGE_FORWARD_REGISTRATION_READY",
     "STAGE_OPERATOR_REVIEW",

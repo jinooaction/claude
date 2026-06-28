@@ -220,7 +220,7 @@ the current worktree. Do not trust prose in this block as the source of truth
 for in-flight work; use the `git_ground_truth` start hook, latest `HANDOFF.md`,
 and `/sync` against `jinooaction/claude` `Codex/*` branches before continuing.
 
-현재 계획 포인터: `specs/069-autonomous-promotion-actions/plan.md` — 자율 승격 후보를 forward paper 등록과 canary 검증 제출로 자동 연결하는 실행 루프 설계.
+현재 계획 포인터: `specs/070-candidate-implementation-factory/plan.md` — `BACKTEST_REQUIRED` 후보를 실행 가능한 검증 패키지와 `promotion_evidence` 보강 경로로 자동 변환하는 후보 구현 공장 설계.
 
 머지 완료(베이스라인): spec 004 (LLM 판단 지점), 005 (자율 튜너), 006 (배포 자동화), 007 (하드닝 카나리), 008 (백테스트), 009 (paper-run), 010 (자동 룰 설계자), 011 (라이브 성과 측정). **주의: 일부 tasks.md 가 stale 0% 로 표시된 적 있음 — 코드/테스트를 믿을 것.**
 

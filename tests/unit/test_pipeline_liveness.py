@@ -208,6 +208,14 @@ def test_default_specs_registry_sane():
     assert "autonomous-promotion" in keys
     assert by_key["autonomous-promotion"].critical is False
     assert by_key["autonomous-promotion"].branch == "automation/autonomous-promotion-last-run"
+    # 스펙 070 — BACKTEST_REQUIRED 후보를 검증 패키지와 enriched backlog로 변환하는
+    # 공장도 promotion scan 앞단에서 침묵 정지가 드러나야 한다. 돈 이동은 없으므로 비핵심.
+    assert "candidate-implementation-factory" in keys
+    assert by_key["candidate-implementation-factory"].critical is False
+    assert (
+        by_key["candidate-implementation-factory"].branch
+        == "automation/candidate-implementation-factory-last-run"
+    )
     # 스펙 069 — 승격 실행 루프와 promotion 전용 검증 채널도 감시 대상.
     # 돈 이동은 기존 게이트만 담당하므로 비핵심이지만, 침묵 정지는 드러나야 한다.
     assert "autonomous-promotion-actions" in keys

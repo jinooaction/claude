@@ -68,6 +68,13 @@ def test_safety_commands_json_cli():
     assert commands["promotion-scan"]["can_place_order"] is False
     assert commands["promotion-scan"]["uses_broker"] is False
     assert commands["promotion-scan"]["writes_db"] is False
+    assert commands["candidate-factory"]["level"] == "A0"
+    assert commands["candidate-factory"]["can_place_order"] is False
+    assert commands["candidate-factory"]["can_change_live_config"] is False
+    assert commands["candidate-factory"]["can_scale_capital"] is False
+    assert commands["candidate-factory"]["can_reassign_strategy"] is False
+    assert commands["candidate-factory"]["uses_broker"] is False
+    assert commands["candidate-factory"]["writes_db"] is False
     assert commands["promotion-actions"]["level"] == "A2"
     assert commands["promotion-actions"]["can_place_order"] is False
     assert commands["promotion-actions"]["can_change_live_config"] is False

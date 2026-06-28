@@ -1,0 +1,104 @@
+{
+  "schema_version": "1.0",
+  "candidates": [
+    {
+      "candidate_id": "candidate-1ed634d8bf6d",
+      "domain_key": "strategy_design",
+      "title_ko": "micro GTAA 의도 손익 재검토와 대체 전략 연구",
+      "status": "new",
+      "risk_grade": 2,
+      "safety_impact": [],
+      "evidence_refs": ["money-path", "rebalance-micro-gtaa", "rebalance-paper-forward"],
+      "breakthrough_type": "profit_power",
+      "composite_score": 618
+    },
+    {
+      "candidate_id": "candidate-fd04772a23c5",
+      "domain_key": "live_readiness",
+      "title_ko": "돈 경로 준비도와 기존 게이트 정렬",
+      "status": "new",
+      "risk_grade": 2,
+      "safety_impact": [],
+      "evidence_refs": ["money-path", "edge-autoarm", "reassign"],
+      "breakthrough_type": "capital_path",
+      "composite_score": 597
+    },
+    {
+      "candidate_id": "candidate-cc96b35062da",
+      "domain_key": "portfolio_design",
+      "title_ko": "비상관 포트폴리오 후보 비교력 강화",
+      "status": "evidence_dependent",
+      "risk_grade": 2,
+      "safety_impact": [],
+      "evidence_refs": ["reassign", "rebalance-paper-forward"],
+      "breakthrough_type": "profit_power",
+      "composite_score": 574
+    },
+    {
+      "candidate_id": "candidate-88a7e7f07361",
+      "domain_key": "agent_ops",
+      "title_ko": "자율 루프 sidecar와 handoff 생존성",
+      "status": "new",
+      "risk_grade": 2,
+      "safety_impact": [],
+      "evidence_refs": ["pipeline-liveness", "handoff"],
+      "breakthrough_type": "operator_leverage",
+      "composite_score": 568
+    },
+    {
+      "candidate_id": "candidate-fa66202bf496",
+      "domain_key": "review",
+      "title_ko": "학습 장부로 폐기·보류 후보 재발굴 차단",
+      "status": "new",
+      "risk_grade": 2,
+      "safety_impact": [],
+      "evidence_refs": ["learning-ledger"],
+      "breakthrough_type": "operator_leverage",
+      "composite_score": 559
+    },
+    {
+      "candidate_id": "candidate-e481b0309206",
+      "domain_key": "analysis",
+      "title_ko": "레짐·성과 분석을 후보 점수화 입력으로 승격",
+      "status": "new",
+      "risk_grade": 2,
+      "safety_impact": [],
+      "evidence_refs": ["regime-stratify", "performance"],
+      "breakthrough_type": "profit_power",
+      "composite_score": 556
+    },
+    {
+      "candidate_id": "candidate-dff4f9344b02",
+      "domain_key": "execution_quality",
+      "title_ko": "주문 거부·체결 품질 손익 관측",
+      "status": "new",
+      "risk_grade": 2,
+      "safety_impact": [],
+      "evidence_refs": ["order-diagnostics", "fills"],
+      "breakthrough_type": "profit_power",
+      "composite_score": 527
+    },
+    {
+      "candidate_id": "candidate-6ee3370e933d",
+      "domain_key": "data_quality",
+      "title_ko": "오래된 증거와 성과 실패 분리",
+      "status": "new",
+      "risk_grade": 2,
+      "safety_impact": [],
+      "evidence_refs": ["bars-status", "recency"],
+      "breakthrough_type": "risk_reduction",
+      "composite_score": 524
+    },
+    {
+      "candidate_id": "candidate-facf2fa31834",
+      "domain_key": "data_collection",
+      "title_ko": "공개 데이터 수집·교차 검증 확장",
+      "status": "new",
+      "risk_grade": 2,
+      "safety_impact": [],
+      "evidence_refs": ["public-data"],
+      "breakthrough_type": "operator_leverage",
+      "composite_score": 494
+    }
+  ]
+}
