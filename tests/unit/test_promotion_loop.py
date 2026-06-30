@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from auto_invest.analytics.promotion_loop import (
+    EVIDENCE_MISSING,
     STAGE_CANARY_CANDIDATE,
     STAGE_EXISTING_GATE_READY,
     STAGE_FORWARD_REGISTRATION_READY,
@@ -53,6 +54,46 @@ def test_backtest_only_candidate_cannot_skip_to_canary() -> None:
     assert assessment.strategy_validation_complete is False
     assert assessment.execution_validation_complete is False
     assert "브로커" in _summary().as_markdown()
+
+
+def test_downstream_evidence_is_hidden_until_strategy_prerequisites_pass() -> None:
+    backlog = {
+        "candidates": [
+            {
+                "candidate_id": "candidate-not-ready",
+                "title_ko": "전략 검증 미완료 후보",
+                "domain_key": "strategy_design",
+                "status": "new",
+                "risk_grade": 2,
+                "safety_impact": [],
+                "evidence_refs": ["promotion-forward", "promotion-canary"],
+                "composite_score": 610,
+                "promotion_evidence": {
+                    "historical_backtest": "pending",
+                    "recent_oos": "pending",
+                    "walk_forward": "pending",
+                    "forward_paper": "pass",
+                    "small_live_canary": "pass",
+                },
+            }
+        ]
+    }
+    evidence = {
+        "promotion-forward": (
+            '[{"candidate_id":"candidate-not-ready","verdict":"EDGE_CONFIRMED"}]'
+        ),
+        "promotion-canary": '[{"candidate_id":"candidate-not-ready","verdict":"PASS"}]',
+    }
+    assessment = scan_promotion(
+        candidate_backlog=backlog,
+        evidence_texts=evidence,
+        now=NOW,
+        commit="abc1234",
+        run_id="test",
+    ).assessments[0]
+    layers = {layer.name: layer.status for layer in assessment.evidence_layers}
+    assert layers["forward_paper"] == EVIDENCE_MISSING
+    assert layers["small_live_canary"] == EVIDENCE_MISSING
 
 
 def test_oos_and_walk_forward_candidate_is_forward_registration_ready() -> None:

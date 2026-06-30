@@ -379,6 +379,14 @@ def default_specs() -> list[SidecarSpec]:
             description="후보 구현 공장(스펙 070, BACKTEST_REQUIRED 후보→검증 패키지)",
         ),
         SidecarSpec(
+            key="candidate-result-executor",
+            branch="automation/candidate-implementation-results",
+            filename="LAST_RUN.md",
+            max_age_hours=30.0,  # 매일 08:42 — 후보 패키지를 candidate result evidence로 변환
+            critical=False,
+            description="후보 결과 실행기(스펙 071, 검증 패키지→결과 evidence)",
+        ),
+        SidecarSpec(
             key="autonomous-promotion-actions",
             branch="automation/autonomous-promotion-actions-last-run",
             filename="LAST_RUN.md",

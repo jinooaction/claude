@@ -1,0 +1,118 @@
+name: Candidate result executor (검증 패키지 -> 결과 증거)
+
+# 스펙 071 — 후보 구현 공장이 만든 candidate_packages.json을 안전한 실행 결과로 바꾼다.
+#
+# 안전: 이 워크플로는 candidate package JSON을 읽고 allowlist 된 no-live 검증
+# 명령만 실행한다. 브로커 API, 주문, 자본 사다리, live 전략 설정, whitelist/caps,
+# sentinels를 건드리지 않는다.
+
+on:
+  schedule:
+    # 매일 08:42 UTC — candidate factory(08:40) 이후, factory second pass(08:44) 이전.
+    - cron: "42 8 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/auto_invest/analytics/candidate_result_executor.py'
+      - 'scripts/candidate_result_executor_probe.py'
+      - 'src/auto_invest/analytics/candidate_factory.py'
+      - 'src/auto_invest/analytics/pipeline_liveness.py'
+      - 'src/auto_invest/cli.py'
+      - 'src/auto_invest/safety/command_registry.py'
+      - '.github/workflows/candidate-result-executor.yml'
+      - '.github/workflows/candidate-implementation-factory.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: candidate-result-executor
+  cancel-in-progress: false
+
+jobs:
+  execute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Collect candidate packages
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/candidate_result_inputs
+          git fetch --depth=1 origin \
+            '+refs/heads/automation/*:refs/remotes/origin/automation/*' || true
+
+          if git show origin/automation/candidate-implementation-factory-last-run:candidate_packages.json \
+              > /tmp/candidate_result_inputs/candidate_packages.json 2>/tmp/candidate_packages.err; then
+            echo "candidate packages collected"
+          else
+            echo '{"schema_version":"1.0","packages":[]}' \
+              > /tmp/candidate_result_inputs/candidate_packages.json
+            echo "candidate packages missing; result executor will publish empty/degraded run"
+          fi
+
+      - name: Execute candidate validation packages
+        run: |
+          set -euo pipefail
+          uv run python scripts/candidate_result_executor_probe.py \
+            --package-plan /tmp/candidate_result_inputs/candidate_packages.json \
+            --summary-out /tmp/LAST_RUN.md \
+            --json-out /tmp/candidate_result_executor.json \
+            --results-out /tmp/candidate_results.json \
+            --timeout-seconds 60 \
+            --run-id "${GITHUB_RUN_ID}"
+          cat /tmp/LAST_RUN.md
+
+      - name: Publish result sidecar
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          BRANCH=automation/candidate-implementation-results
+          tmpdir=$(mktemp -d)
+
+          cp /tmp/LAST_RUN.md "${tmpdir}/LAST_RUN.md" 2>/dev/null || {
+            echo "# 후보 결과 실행기 — 보고 생성 실패" > "${tmpdir}/LAST_RUN.md"
+            echo "" >> "${tmpdir}/LAST_RUN.md"
+            echo "executor step failed before LAST_RUN.md was written." >> "${tmpdir}/LAST_RUN.md"
+          }
+          cp /tmp/candidate_result_executor.json "${tmpdir}/candidate_result_executor.json" \
+            2>/dev/null || echo '{}' > "${tmpdir}/candidate_result_executor.json"
+          cp /tmp/candidate_results.json "${tmpdir}/candidate_results.json" \
+            2>/dev/null || echo '{"schema_version":"1.0","results":[]}' \
+            > "${tmpdir}/candidate_results.json"
+
+          {
+            echo ""
+            echo "## workflow metadata"
+            echo ""
+            echo "| 항목 | 값 |"
+            echo "|------|-----|"
+            echo "| run_id | ${GITHUB_RUN_ID} |"
+            echo "| run_url | https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} |"
+            echo "| commit | ${GITHUB_SHA} |"
+            echo "| trigger | ${GITHUB_EVENT_NAME} |"
+            echo "| timestamp_utc | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
+            echo "| safety | no broker, no orders, no capital/live config/whitelist/caps/sentinel change |"
+          } >> "${tmpdir}/LAST_RUN.md"
+
+          cd "${tmpdir}"
+          git init -q
+          git config user.name "candidate-result-bot"
+          git config user.email "candidate-result-bot@noreply.github.com"
+          git checkout --orphan publish -q
+          git add LAST_RUN.md candidate_result_executor.json candidate_results.json
+          git commit -q -m "candidate-result-executor run ${GITHUB_RUN_ID}"
+          git push --force \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "publish:${BRANCH}"
+          echo "Published to ${BRANCH}."

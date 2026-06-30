@@ -160,6 +160,13 @@ COMMAND_POLICIES: dict[str, CommandPolicy] = {
         "Build candidate implementation packages and enriched backlog evidence; "
         "no orders, broker calls, capital scaling, or live config changes.",
     ),
+    "candidate-results": _p(
+        "candidate-results",
+        AutonomyLevel.PROPOSAL,
+        "Execute allowlisted candidate validation packages and publish result evidence; "
+        "no orders, broker calls, capital scaling, or live config changes.",
+        writes_db=True,
+    ),
     "promotion-actions": _p(
         "promotion-actions",
         AutonomyLevel.PROPOSAL,

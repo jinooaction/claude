@@ -6732,6 +6732,119 @@ def candidate_factory_cmd(
         typer.echo(run.as_markdown())
 
 
+@app.command("candidate-results")
+def candidate_results_cmd(
+    package_plan: Path = typer.Option(
+        ...,
+        "--package-plan",
+        help="Candidate implementation package plan JSON.",
+    ),
+    summary_out: Path | None = typer.Option(
+        None,
+        "--summary-out",
+        help="Markdown latest-run summary output path.",
+    ),
+    json_out: Path | None = typer.Option(
+        None,
+        "--json-out",
+        help="Machine-readable executor summary JSON output path.",
+    ),
+    results_out: Path | None = typer.Option(
+        None,
+        "--results-out",
+        help="Machine-readable candidate result evidence JSON output path.",
+    ),
+    timeout_seconds: int = typer.Option(
+        120,
+        "--timeout-seconds",
+        help="Maximum seconds per package command.",
+    ),
+    output_format: str = typer.Option(
+        "text",
+        "--format",
+        help="stdout format: text or json.",
+    ),
+    now: str | None = typer.Option(
+        None,
+        "--now",
+        help="As-of timestamp ISO-8601 UTC for deterministic tests.",
+    ),
+    run_id: str = typer.Option(
+        "local",
+        "--run-id",
+        help="Run identifier recorded in the summary.",
+    ),
+) -> None:
+    """Execute safe candidate validation packages and emit result evidence.
+
+    The command runs only allowlisted no-live validation commands. It may
+    create validation artifacts, but blocks live-order, broker, capital,
+    whitelist/caps, sentinel, SSH, and secret-bearing surfaces before execution.
+    """
+    import json as _json
+    import subprocess as _subprocess
+    from datetime import UTC as _UTC
+    from datetime import datetime as _datetime
+
+    from auto_invest.analytics.candidate_result_executor import (
+        build_candidate_result_executor_run,
+        write_candidate_result_artifacts,
+    )
+
+    def _read_json(path: Path | None) -> dict | None:
+        if path is None:
+            return None
+        try:
+            raw = path.read_text(encoding="utf-8")
+        except (FileNotFoundError, OSError):
+            return None
+        try:
+            data = _json.loads(raw)
+        except _json.JSONDecodeError:
+            return None
+        return data if isinstance(data, dict) else None
+
+    def _parse_now(text: str | None):
+        if not text:
+            return _datetime.now(_UTC)
+        parsed = _datetime.fromisoformat(text.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=_UTC)
+        return parsed.astimezone(_UTC)
+
+    def _commit() -> str:
+        try:
+            return _subprocess.check_output(
+                ["git", "rev-parse", "HEAD"],
+                text=True,
+                stderr=_subprocess.DEVNULL,
+            ).strip()
+        except (OSError, _subprocess.CalledProcessError):
+            return "unknown"
+
+    if output_format not in {"text", "json"}:
+        typer.echo("--format 은 text 또는 json 이어야 합니다.", err=True)
+        raise typer.Exit(2)
+
+    run = build_candidate_result_executor_run(
+        package_plan=_read_json(package_plan),
+        now=_parse_now(now),
+        commit=_commit(),
+        run_id=run_id,
+        timeout_seconds=timeout_seconds,
+    )
+    write_candidate_result_artifacts(
+        run,
+        summary_out=summary_out,
+        json_out=json_out,
+        results_out=results_out,
+    )
+    if output_format == "json":
+        typer.echo(_json.dumps(run.as_dict(), ensure_ascii=False))
+    else:
+        typer.echo(run.as_markdown())
+
+
 @app.command("promotion-scan")
 def promotion_scan_cmd(
     evidence_dir: Path = typer.Option(
