@@ -240,6 +240,54 @@ def test_command_contract_error_is_machine_readable_for_pending_ops_package() ->
     assert payload["retryable"] is False
 
 
+def test_data_quality_pipeline_liveness_command_is_allowed_and_can_pass() -> None:
+    seen: list[tuple[str, ...]] = []
+
+    def runner(command: list[str] | tuple[str, ...], timeout: int) -> CommandExecution:
+        seen.append(tuple(command))
+        return CommandExecution(
+            command=tuple(command),
+            exit_code=0,
+            stdout=json.dumps({"overall_status": "OK"}),
+            stderr="",
+        )
+
+    run = build_candidate_result_executor_run(
+        package_plan={
+            "schema_version": "1.0",
+            "packages": [
+                {
+                    "package_id": "pkg-data",
+                    "candidate_id": "candidate-data",
+                    "package_kind": "data_quality",
+                    "status": "ready",
+                    "commands": [
+                        "uv run python scripts/pipeline_liveness_probe.py "
+                        "--sidecar-dir /tmp/candidate_result_sidecars --strict --json"
+                    ],
+                }
+            ],
+        },
+        now=NOW,
+        runner=runner,
+    )
+
+    assert seen == [
+        (
+            "uv",
+            "run",
+            "python",
+            "scripts/pipeline_liveness_probe.py",
+            "--sidecar-dir",
+            "/tmp/candidate_result_sidecars",
+            "--strict",
+            "--json",
+        )
+    ]
+    assert run.results[0].status == STATUS_PASS
+    assert run.results[0].factory_validation == "pass"
+
+
 def test_markdown_reports_diagnostic_counts_and_next_action() -> None:
     run = build_candidate_result_executor_run(
         package_plan={

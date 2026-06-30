@@ -7,7 +7,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from auto_invest.analytics.candidate_factory import (
+    KIND_ANALYTICS_VALIDATION,
+    KIND_DATA_QUALITY,
     KIND_GATE_ALIGNMENT,
+    KIND_OPS_LIVENESS,
     KIND_PORTFOLIO_BACKTEST,
     KIND_STRATEGY_BACKTEST,
     STATUS_EVIDENCE_PASSED,
@@ -53,8 +56,34 @@ def test_factory_builds_one_package_for_every_current_candidate_kind() -> None:
     assert by_id["candidate-1ed634d8bf6d"].package_kind == KIND_STRATEGY_BACKTEST
     assert by_id["candidate-cc96b35062da"].package_kind == KIND_PORTFOLIO_BACKTEST
     assert by_id["candidate-fd04772a23c5"].package_kind == KIND_GATE_ALIGNMENT
+    assert by_id["candidate-88a7e7f07361"].package_kind == KIND_OPS_LIVENESS
+    assert by_id["candidate-e481b0309206"].package_kind == KIND_ANALYTICS_VALIDATION
+    assert by_id["candidate-6ee3370e933d"].package_kind == KIND_DATA_QUALITY
     assert all(package.status == STATUS_READY for package in run.packages)
     assert "portfolio-walk-forward" in by_id["candidate-1ed634d8bf6d"].commands[0]
+
+
+def test_factory_emits_current_candidate_support_input_commands() -> None:
+    run = _run()
+    by_id = {package.candidate_id: package for package in run.packages}
+
+    ops_command = by_id["candidate-88a7e7f07361"].commands[0]
+    assert "scripts/pipeline_liveness_probe.py" in ops_command
+    assert "--sidecar-dir /tmp/candidate_result_sidecars" in ops_command
+    assert "--strict --json" in ops_command
+
+    analytics_command = by_id["candidate-e481b0309206"].commands[0]
+    assert analytics_command == (
+        "uv run auto-invest macro-regime "
+        "--data-dir /tmp/candidate_result_public_data --json"
+    )
+    assert "--format json" not in analytics_command
+
+    data_quality_command = by_id["candidate-6ee3370e933d"].commands[0]
+    assert "scripts/pipeline_liveness_probe.py" in data_quality_command
+    assert "--sidecar-dir /tmp/candidate_result_sidecars" in data_quality_command
+    assert "bars-status" not in data_quality_command
+    assert "data/auto_invest.db" not in data_quality_command
 
 
 def test_missing_result_evidence_never_creates_false_pass() -> None:

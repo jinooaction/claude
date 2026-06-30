@@ -18,10 +18,15 @@ on:
       - 'scripts/candidate_result_executor_probe.py'
       - 'src/auto_invest/analytics/candidate_factory.py'
       - 'src/auto_invest/analytics/pipeline_liveness.py'
+      - 'scripts/pipeline_liveness_probe.py'
+      - 'src/auto_invest/market_data/macro_regime.py'
+      - 'src/auto_invest/market_data/public_data.py'
+      - 'deploy/public-data.toml'
       - 'src/auto_invest/cli.py'
       - 'src/auto_invest/safety/command_registry.py'
       - '.github/workflows/candidate-result-executor.yml'
       - '.github/workflows/candidate-implementation-factory.yml'
+      - '.github/workflows/collect-public-data.yml'
 
 permissions:
   contents: write
@@ -57,6 +62,38 @@ jobs:
             echo '{"schema_version":"1.0","packages":[]}' \
               > /tmp/candidate_result_inputs/candidate_packages.json
             echo "candidate packages missing; result executor will publish empty/degraded run"
+          fi
+
+          sidecar_dir=/tmp/candidate_result_sidecars
+          mkdir -p "${sidecar_dir}"
+          uv run python scripts/pipeline_liveness_probe.py --manifest \
+            > /tmp/candidate_result_inputs/pipeline_liveness_manifest.tsv
+          while IFS=$'\t' read -r key ref file; do
+            [[ -n "${key}" ]] || continue
+            if git show "origin/${ref}:${file}" > "${sidecar_dir}/${key}.md" 2>/tmp/sidecar.err; then
+              echo "support sidecar collected: ${key}"
+            else
+              echo "support sidecar missing: ${key} (${ref}:${file})"
+            fi
+          done < /tmp/candidate_result_inputs/pipeline_liveness_manifest.tsv
+
+          public_data_dir=/tmp/candidate_result_public_data
+          mkdir -p "${public_data_dir}"
+          if git ls-tree -r --name-only origin/automation/public-data \
+              > /tmp/candidate_result_inputs/public_data_files.txt 2>/tmp/public-data.err; then
+            while IFS= read -r file; do
+              [[ -n "${file}" ]] || continue
+              mkdir -p "${public_data_dir}/$(dirname "${file}")"
+              if git show "origin/automation/public-data:${file}" \
+                  > "${public_data_dir}/${file}" 2>/tmp/public-data-file.err; then
+                true
+              else
+                echo "public data file missing: ${file}"
+              fi
+            done < /tmp/candidate_result_inputs/public_data_files.txt
+            echo "public data support files collected"
+          else
+            echo "public data sidecar missing; analytics candidates may remain pending"
           fi
 
       - name: Execute candidate validation packages
