@@ -60,6 +60,9 @@ _HARD_OPERATOR_SURFACES = {
     "paid_service",
 }
 
+_CANDIDATE_RESULT_SIDECAR_DIR = "/tmp/candidate_result_sidecars"
+_CANDIDATE_RESULT_PUBLIC_DATA_DIR = "/tmp/candidate_result_public_data"
+
 
 @dataclass(frozen=True)
 class ImplementationPackage:
@@ -567,7 +570,10 @@ def _commands_for(kind: str, candidate_id: str) -> tuple[str, ...]:
     if kind == KIND_GATE_ALIGNMENT:
         return ("uv run python scripts/money_path_probe.py --manifest",)
     if kind == KIND_OPS_LIVENESS:
-        return ("uv run python scripts/pipeline_liveness_probe.py --json",)
+        return (
+            "uv run python scripts/pipeline_liveness_probe.py "
+            f"--sidecar-dir {_CANDIDATE_RESULT_SIDECAR_DIR} --strict --json",
+        )
     if kind == KIND_REVIEW_LEDGER:
         return (
             "uv run python scripts/evolution_loop_probe.py "
@@ -578,8 +584,14 @@ def _commands_for(kind: str, candidate_id: str) -> tuple[str, ...]:
     if kind == KIND_DATA_COLLECTION:
         return ("uv run auto-invest collect-public-data --json",)
     if kind == KIND_DATA_QUALITY:
-        return ("uv run auto-invest bars-status --symbols SPY,TLT,GLD,DBC --json",)
-    return ("uv run auto-invest macro-regime --format json",)
+        return (
+            "uv run python scripts/pipeline_liveness_probe.py "
+            f"--sidecar-dir {_CANDIDATE_RESULT_SIDECAR_DIR} --strict --json",
+        )
+    return (
+        "uv run auto-invest macro-regime "
+        f"--data-dir {_CANDIDATE_RESULT_PUBLIC_DATA_DIR} --json",
+    )
 
 
 def _required_inputs_for(kind: str) -> tuple[str, ...]:
@@ -588,9 +600,11 @@ def _required_inputs_for(kind: str) -> tuple[str, ...]:
     if kind == KIND_DATA_COLLECTION:
         return ("deploy/public-data.toml", "network access to public data sources")
     if kind == KIND_DATA_QUALITY:
-        return ("price_bars database or exported historical CSVs",)
+        return ("pipeline liveness sidecars",)
     if kind == KIND_OPS_LIVENESS:
-        return ("automation sidecar LAST_RUN.md files",)
+        return ("pipeline liveness sidecars",)
+    if kind == KIND_ANALYTICS_VALIDATION:
+        return ("public data sidecar snapshot",)
     if kind == KIND_GATE_ALIGNMENT:
         return ("money-path and promotion sidecars",)
     return ("current automation sidecars",)

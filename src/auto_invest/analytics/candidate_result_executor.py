@@ -79,7 +79,10 @@ _ALLOWED_PREFIXES: dict[str, tuple[tuple[str, ...], ...]] = {
     KIND_REVIEW_LEDGER: (("uv", "run", "python", "scripts/evolution_loop_probe.py"),),
     KIND_ANALYTICS_VALIDATION: (("uv", "run", "auto-invest", "macro-regime"),),
     KIND_EXECUTION_QUALITY: (("uv", "run", "python", "scripts/money_path_probe.py"),),
-    KIND_DATA_QUALITY: (("uv", "run", "auto-invest", "bars-status"),),
+    KIND_DATA_QUALITY: (
+        ("uv", "run", "auto-invest", "bars-status"),
+        ("uv", "run", "python", "scripts/pipeline_liveness_probe.py"),
+    ),
     KIND_DATA_COLLECTION: (("uv", "run", "auto-invest", "collect-public-data"),),
 }
 

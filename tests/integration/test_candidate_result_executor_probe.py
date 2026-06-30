@@ -83,6 +83,11 @@ def test_result_executor_workflow_publishes_sidecar_without_order_or_broker_path
     assert "schedule:" in text and "workflow_dispatch:" in text
     assert "42 8 * * *" in text
     assert "automation/candidate-implementation-factory-last-run:candidate_packages.json" in text
+    assert "/tmp/candidate_result_sidecars" in text
+    assert "pipeline_liveness_probe.py --manifest" in text
+    assert "origin/${ref}:${file}" in text
+    assert "/tmp/candidate_result_public_data" in text
+    assert "origin/automation/public-data" in text
     assert "automation/candidate-implementation-results" in text
     assert "candidate_result_executor_probe.py" in text
     assert "candidate_results.json" in text
