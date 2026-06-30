@@ -11,6 +11,7 @@ from auto_invest.analytics.candidate_factory import (
     KIND_PORTFOLIO_BACKTEST,
     KIND_STRATEGY_BACKTEST,
     STATUS_EVIDENCE_PASSED,
+    STATUS_PENDING,
     STATUS_READY,
     build_candidate_factory_run,
 )
@@ -99,6 +100,132 @@ def test_non_trading_validation_does_not_pretend_to_be_strategy_backtest() -> No
     )
     by_stage = {assessment.candidate_id: assessment.stage for assessment in summary.assessments}
     assert by_stage["candidate-fd04772a23c5"] == STAGE_FACTORY_PACKAGE_READY
+
+
+def test_pending_result_diagnostics_flow_into_promotion_evidence_without_false_pass() -> None:
+    run = _run(
+        {
+            "schema_version": "1.0",
+            "results": [
+                {
+                    "candidate_id": "candidate-1ed634d8bf6d",
+                    "package_id": "pkg-c9a284fa4235",
+                    "package_kind": "strategy_backtest",
+                    "status": "pending",
+                    "source_ref": "candidate-result-executor:pkg-c9a284fa4235",
+                    "historical_backtest": "pending",
+                    "recent_oos": "pending",
+                    "walk_forward": "pending",
+                    "diagnostics": [
+                        {
+                            "code": "data_history_missing",
+                            "severity": "warning",
+                            "retryable": True,
+                            "summary_ko": "과거 가격 데이터가 준비되지 않았다.",
+                            "evidence_source": "command",
+                            "next_actions": [
+                                {
+                            "action_code": "prepare_history_dataset",
+                            "summary_ko": (
+                                "안전한 데이터 수집 또는 ingest-history 실행 경로를 "
+                                "준비한다."
+                            ),
+                                    "owner": "automation",
+                                    "safe_to_auto_run": True,
+                                }
+                            ],
+                            "details": {"exit_code": 64},
+                        }
+                    ],
+                    "next_actions": [
+                        {
+                            "action_code": "prepare_history_dataset",
+                            "summary_ko": (
+                                "안전한 데이터 수집 또는 ingest-history 실행 경로를 "
+                                "준비한다."
+                            ),
+                            "owner": "automation",
+                            "safe_to_auto_run": True,
+                        }
+                    ],
+                    "retryable": True,
+                }
+            ],
+        }
+    )
+    by_id = {package.candidate_id: package for package in run.packages}
+    assert by_id["candidate-1ed634d8bf6d"].status == STATUS_PENDING
+    assert run.counts[STATUS_EVIDENCE_PASSED] == 0
+    evidence = run.enriched_candidate_backlog["candidates"][0]["promotion_evidence"]
+    assert evidence["historical_backtest"] == "pending"
+    assert evidence["factory_diagnostics"][0]["code"] == "data_history_missing"
+    assert evidence["factory_next_actions"][0]["action_code"] == "prepare_history_dataset"
+    assert evidence["factory_retryable"] is True
+    summary = scan_promotion(
+        candidate_backlog=run.enriched_candidate_backlog,
+        evidence_texts={},
+        now=NOW,
+    )
+    by_stage = {assessment.candidate_id: assessment.stage for assessment in summary.assessments}
+    assert by_stage["candidate-1ed634d8bf6d"] == STAGE_BACKTEST_REQUIRED
+
+
+def test_blocked_result_diagnostics_block_factory_patch() -> None:
+    run = _run(
+        {
+            "schema_version": "1.0",
+            "results": [
+                {
+                    "candidate_id": "candidate-fd04772a23c5",
+                    "package_id": "pkg-03d9502cd7de",
+                    "package_kind": "gate_alignment",
+                    "status": "blocked",
+                    "source_ref": "candidate-result-executor:pkg-03d9502cd7de",
+                    "block_reason_ko": "자동 실행 안전 범위 밖의 명령이다.",
+                    "diagnostics": [
+                        {
+                            "code": "unsafe_command",
+                            "severity": "blocked",
+                            "retryable": False,
+                            "summary_ko": "자동 실행 안전 범위 밖의 명령이다.",
+                            "evidence_source": "package",
+                            "next_actions": [
+                                {
+                            "action_code": "remove_unsafe_command_surface",
+                            "summary_ko": (
+                                "live, broker, SSH, 자본, whitelist/caps, sentinel "
+                                "표면을 제거한다."
+                            ),
+                                    "owner": "operator",
+                                    "safe_to_auto_run": False,
+                                }
+                            ],
+                            "details": {"fragment": "--mode live"},
+                        }
+                    ],
+                    "next_actions": [
+                        {
+                            "action_code": "remove_unsafe_command_surface",
+                            "summary_ko": (
+                                "live, broker, SSH, 자본, whitelist/caps, sentinel "
+                                "표면을 제거한다."
+                            ),
+                            "owner": "operator",
+                            "safe_to_auto_run": False,
+                        }
+                    ],
+                    "retryable": False,
+                }
+            ],
+        }
+    )
+    by_id = {package.candidate_id: package for package in run.packages}
+    assert by_id["candidate-fd04772a23c5"].status == "blocked"
+    evidence = run.enriched_candidate_backlog["candidates"][1]["promotion_evidence"]
+    assert evidence["factory_status"] == "blocked"
+    assert evidence["factory_diagnostics"][0]["code"] == "unsafe_command"
+    assert evidence["factory_retryable"] is False
+    assert "factory_validation" not in evidence
 
 
 def test_hard_safety_surface_is_blocked_without_pass_patch() -> None:

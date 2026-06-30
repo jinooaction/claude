@@ -42,6 +42,16 @@ STATUS_FAIL = "fail"
 STATUS_PENDING = "pending"
 STATUS_BLOCKED = "blocked"
 
+DIAG_DATA_HISTORY_MISSING = "data_history_missing"
+DIAG_COMMAND_CONTRACT_ERROR = "command_contract_error"
+DIAG_INSUFFICIENT_PASS_EVIDENCE = "insufficient_pass_evidence"
+DIAG_TIMEOUT = "timeout"
+DIAG_UNSAFE_COMMAND = "unsafe_command"
+DIAG_UNSUPPORTED_PACKAGE = "unsupported_package"
+DIAG_MISSING_COMMAND = "missing_command"
+DIAG_EXECUTION_FAILED = "execution_failed"
+DIAG_MISSING_INPUT = "missing_input"
+
 _STRATEGY_KINDS = {KIND_STRATEGY_BACKTEST, KIND_PORTFOLIO_BACKTEST}
 
 _SUPPORTED_KINDS = {
@@ -124,6 +134,44 @@ Runner = Callable[[Sequence[str], int], CommandExecution]
 
 
 @dataclass(frozen=True)
+class CandidateNextAction:
+    action_code: str
+    summary_ko: str
+    owner: str
+    safe_to_auto_run: bool
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "action_code": self.action_code,
+            "summary_ko": self.summary_ko,
+            "owner": self.owner,
+            "safe_to_auto_run": self.safe_to_auto_run,
+        }
+
+
+@dataclass(frozen=True)
+class CandidateEvidenceDiagnostic:
+    code: str
+    severity: str
+    retryable: bool
+    summary_ko: str
+    evidence_source: str
+    next_actions: tuple[CandidateNextAction, ...]
+    details: Mapping[str, Any]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "code": self.code,
+            "severity": self.severity,
+            "retryable": self.retryable,
+            "summary_ko": self.summary_ko,
+            "evidence_source": self.evidence_source,
+            "next_actions": [action.to_dict() for action in self.next_actions],
+            "details": _safe_detail(self.details),
+        }
+
+
+@dataclass(frozen=True)
 class CandidateResultRow:
     candidate_id: str
     package_id: str
@@ -138,6 +186,7 @@ class CandidateResultRow:
     output_summary_ko: str
     raw_metrics: Mapping[str, Any]
     executions: tuple[CommandExecution, ...]
+    diagnostics: tuple[CandidateEvidenceDiagnostic, ...]
 
     def to_dict(self) -> dict[str, Any]:
         out: dict[str, Any] = {
@@ -151,6 +200,14 @@ class CandidateResultRow:
             "raw_metrics": dict(self.raw_metrics),
             "executions": [execution.to_dict() for execution in self.executions],
         }
+        if self.diagnostics:
+            out["diagnostics"] = [
+                diagnostic.to_dict() for diagnostic in self.diagnostics
+            ]
+            out["next_actions"] = [
+                action.to_dict() for action in _flatten_next_actions(self.diagnostics)
+            ]
+            out["retryable"] = self.retryable
         if self.historical_backtest is not None:
             out["historical_backtest"] = self.historical_backtest
         if self.recent_oos is not None:
@@ -160,6 +217,12 @@ class CandidateResultRow:
         if self.factory_validation is not None:
             out["factory_validation"] = self.factory_validation
         return out
+
+    @property
+    def retryable(self) -> bool:
+        return self.status != STATUS_PASS and any(
+            diagnostic.retryable for diagnostic in self.diagnostics
+        )
 
 
 @dataclass(frozen=True)
@@ -184,6 +247,17 @@ class CandidateResultExecutorRun:
             counts[result.status] = counts.get(result.status, 0) + 1
         return counts
 
+    @property
+    def diagnostic_counts(self) -> dict[str, int]:
+        counts: dict[str, int] = {}
+        for item in self.missing_inputs:
+            if item:
+                counts[DIAG_MISSING_INPUT] = counts.get(DIAG_MISSING_INPUT, 0) + 1
+        for result in self.results:
+            for diagnostic in result.diagnostics:
+                counts[diagnostic.code] = counts.get(diagnostic.code, 0) + 1
+        return dict(sorted(counts.items()))
+
     def as_dict(self) -> dict[str, Any]:
         return {
             "schema_version": self.schema_version,
@@ -192,6 +266,7 @@ class CandidateResultExecutorRun:
             "timestamp_utc": self.timestamp_utc,
             "overall_status": self.overall_status,
             "counts": self.counts,
+            "diagnostic_counts": self.diagnostic_counts,
             "missing_inputs": list(self.missing_inputs),
             "results": [result.to_dict() for result in self.results],
         }
@@ -228,6 +303,10 @@ class CandidateResultExecutorRun:
             lines += ["", "## 누락 입력", ""]
             for item in self.missing_inputs:
                 lines.append(f"- `{item}`")
+        if self.diagnostic_counts:
+            lines += ["", "## 진단 집계", ""]
+            for code, count in self.diagnostic_counts.items():
+                lines.append(f"- `{code}`: {count}")
         lines += ["", "## 후보별 결과", ""]
         if not self.results:
             lines.append("- 후보 패키지 없음")
@@ -239,6 +318,12 @@ class CandidateResultExecutorRun:
             if result.block_reason_ko:
                 lines.append(f"  - 사유: {result.block_reason_ko}")
             lines.append(f"  - 요약: {result.output_summary_ko}")
+            if result.diagnostics:
+                first = result.diagnostics[0]
+                lines.append(f"  - 진단: `{first.code}` — {first.summary_ko}")
+                actions = _flatten_next_actions(result.diagnostics)
+                if actions:
+                    lines.append(f"  - 다음 행동: {actions[0].summary_ko}")
         lines += [
             "",
             "## 안전 문구",
@@ -362,7 +447,9 @@ def _execute_package(
         executions.append(runner(tokens, timeout_seconds))
 
     if kind in _STRATEGY_KINDS:
-        status, evidence_status, reason, summary, metrics = _strategy_result(executions)
+        status, evidence_status, reason, summary, metrics, diagnostics = _strategy_result(
+            executions
+        )
         return CandidateResultRow(
             candidate_id=candidate_id,
             package_id=package_id,
@@ -377,9 +464,12 @@ def _execute_package(
             output_summary_ko=summary,
             raw_metrics=metrics,
             executions=tuple(executions),
+            diagnostics=diagnostics,
         )
 
-    status, validation, reason, summary, metrics = _non_strategy_result(executions)
+    status, validation, reason, summary, metrics, diagnostics = _non_strategy_result(
+        executions
+    )
     return CandidateResultRow(
         candidate_id=candidate_id,
         package_id=package_id,
@@ -394,6 +484,7 @@ def _execute_package(
         output_summary_ko=summary,
         raw_metrics=metrics,
         executions=tuple(executions),
+        diagnostics=diagnostics,
     )
 
 
@@ -419,35 +510,49 @@ def _blocked_result(
         output_summary_ko="안전 또는 지원 범위 밖이라 실행하지 않았다.",
         raw_metrics={},
         executions=(),
+        diagnostics=(_blocked_diagnostic(kind=kind, reason=reason),),
     )
 
 
 def _strategy_result(
     executions: Sequence[CommandExecution],
-) -> tuple[str, str, str | None, str, Mapping[str, Any]]:
+) -> tuple[
+    str,
+    str,
+    str | None,
+    str,
+    Mapping[str, Any],
+    tuple[CandidateEvidenceDiagnostic, ...],
+]:
     if not executions:
+        diagnostics = (_diagnostic(DIAG_MISSING_COMMAND, evidence_source="package"),)
         return (
             STATUS_PENDING,
             EVIDENCE_PENDING,
             "실행할 검증 명령이 없다.",
             "검증 명령 부재로 보류했다.",
             {},
+            diagnostics,
         )
     if any(execution.timed_out for execution in executions):
+        diagnostics = _diagnostics_from_executions(executions)
         return (
             STATUS_PENDING,
             EVIDENCE_PENDING,
             "검증 명령이 시간 초과됐다.",
             "시간 초과로 증거를 확정하지 못했다.",
             _execution_metrics(executions),
+            diagnostics,
         )
     if all(execution.exit_code != 0 for execution in executions):
+        diagnostics = _diagnostics_from_executions(executions)
         return (
             STATUS_PENDING,
             EVIDENCE_PENDING,
             "검증 명령이 실행됐지만 데이터 또는 환경 부족으로 실패했다.",
             "명령 실패를 통과로 보지 않고 보류했다.",
             _execution_metrics(executions),
+            diagnostics,
         )
 
     combined = "\n".join(f"{execution.stdout}\n{execution.stderr}" for execution in executions)
@@ -460,6 +565,7 @@ def _strategy_result(
             None,
             "전략 검증 출력이 강건한 엣지 기준을 통과했다.",
             metrics,
+            (),
         )
     if _has_verdict_marker(verdict_text, _FAIL_VERDICT_MARKERS):
         return (
@@ -468,6 +574,7 @@ def _strategy_result(
             "전략 검증 출력이 엣지 없음 또는 실패를 보고했다.",
             "검증 결과가 전략 엣지 실패를 보고했다.",
             metrics,
+            (),
         )
     if _numeric_dsr_pass(metrics):
         return (
@@ -476,42 +583,61 @@ def _strategy_result(
             None,
             "전략 검증의 디플레이티드 샤프가 통과 기준을 넘었다.",
             metrics,
+            (),
         )
+    diagnostics = _dedupe_diagnostics(
+        _diagnostics_from_executions(executions)
+        + (_diagnostic(DIAG_INSUFFICIENT_PASS_EVIDENCE, evidence_source="output"),)
+    )
     return (
         STATUS_PENDING,
         EVIDENCE_PENDING,
         "검증 출력이 충분한 통과 증거를 제공하지 않았다.",
         "실행은 됐지만 승격용 통과 증거로는 부족하다.",
         metrics,
+        diagnostics,
     )
 
 
 def _non_strategy_result(
     executions: Sequence[CommandExecution],
-) -> tuple[str, str, str | None, str, Mapping[str, Any]]:
+) -> tuple[
+    str,
+    str,
+    str | None,
+    str,
+    Mapping[str, Any],
+    tuple[CandidateEvidenceDiagnostic, ...],
+]:
     if not executions:
+        diagnostics = (_diagnostic(DIAG_MISSING_COMMAND, evidence_source="package"),)
         return (
             STATUS_PENDING,
             EVIDENCE_PENDING,
             "실행할 검증 명령이 없다.",
             "검증 명령 부재로 보류했다.",
             {},
+            diagnostics,
         )
     if any(execution.timed_out for execution in executions):
+        diagnostics = _diagnostics_from_executions(executions)
         return (
             STATUS_PENDING,
             EVIDENCE_PENDING,
             "검증 명령이 시간 초과됐다.",
             "시간 초과로 factory validation을 확정하지 못했다.",
             _execution_metrics(executions),
+            diagnostics,
         )
     if any(execution.exit_code != 0 for execution in executions):
+        diagnostics = _diagnostics_from_executions(executions)
         return (
             STATUS_PENDING,
             EVIDENCE_PENDING,
             "no-live 검증 명령이 비정상 종료했다.",
             "검증 명령 실패를 통과로 보지 않고 보류했다.",
             _execution_metrics(executions),
+            diagnostics,
         )
     return (
         STATUS_PASS,
@@ -519,6 +645,7 @@ def _non_strategy_result(
         None,
         "no-live 검증 명령이 정상 종료했다.",
         _extract_json_metrics(executions) or _execution_metrics(executions),
+        (),
     )
 
 
@@ -625,6 +752,210 @@ def _numeric_dsr_pass(metrics: Mapping[str, Any]) -> bool:
         return False
 
 
+def _diagnostics_from_executions(
+    executions: Sequence[CommandExecution],
+) -> tuple[CandidateEvidenceDiagnostic, ...]:
+    diagnostics: list[CandidateEvidenceDiagnostic] = []
+    for execution in executions:
+        if execution.timed_out:
+            diagnostics.append(
+                _diagnostic(
+                    DIAG_TIMEOUT,
+                    evidence_source="command",
+                    details=_execution_details(execution),
+                )
+            )
+            continue
+        if execution.exit_code == 0:
+            continue
+        text = f"{execution.stdout}\n{execution.stderr}".lower()
+        if "no ingested datasets" in text or "ingest-history" in text:
+            code = DIAG_DATA_HISTORY_MISSING
+        elif (
+            "usage:" in text
+            or "the following arguments are required" in text
+            or "unrecognized arguments" in text
+            or "가 필요" in text
+        ):
+            code = DIAG_COMMAND_CONTRACT_ERROR
+        else:
+            code = DIAG_EXECUTION_FAILED
+        diagnostics.append(
+            _diagnostic(
+                code,
+                evidence_source="command",
+                details=_execution_details(execution),
+            )
+        )
+    if not diagnostics and executions:
+        return ()
+    return _dedupe_diagnostics(tuple(diagnostics))
+
+
+def _blocked_diagnostic(*, kind: str, reason: str) -> CandidateEvidenceDiagnostic:
+    lowered = reason.lower()
+    if "지원하지 않는 패키지" in reason:
+        code = DIAG_UNSUPPORTED_PACKAGE
+    elif "실행 명령이 없다" in reason:
+        code = DIAG_MISSING_COMMAND
+    elif "안전하지 않은" in reason or "허용되지 않은" in reason:
+        code = DIAG_UNSAFE_COMMAND
+    else:
+        code = DIAG_EXECUTION_FAILED
+    return _diagnostic(
+        code,
+        evidence_source="package",
+        details={"package_kind": kind, "reason": lowered or reason},
+    )
+
+
+def _diagnostic(
+    code: str,
+    *,
+    evidence_source: str,
+    details: Mapping[str, Any] | None = None,
+) -> CandidateEvidenceDiagnostic:
+    action = _next_action_for(code)
+    retryable = code in {
+        DIAG_DATA_HISTORY_MISSING,
+        DIAG_TIMEOUT,
+        DIAG_EXECUTION_FAILED,
+        DIAG_MISSING_INPUT,
+    }
+    severity = "blocked" if code in {
+        DIAG_UNSAFE_COMMAND,
+        DIAG_UNSUPPORTED_PACKAGE,
+        DIAG_MISSING_COMMAND,
+    } else "warning"
+    summaries = {
+        DIAG_DATA_HISTORY_MISSING: "과거 가격 데이터가 준비되지 않았다.",
+        DIAG_COMMAND_CONTRACT_ERROR: "검증 명령 계약에 필요한 입력이 빠져 있다.",
+        DIAG_INSUFFICIENT_PASS_EVIDENCE: "실행 출력에 통과 verdict가 충분히 없다.",
+        DIAG_TIMEOUT: "검증 명령이 제한 시간 안에 끝나지 않았다.",
+        DIAG_UNSAFE_COMMAND: "자동 실행 안전 범위 밖의 명령이다.",
+        DIAG_UNSUPPORTED_PACKAGE: "지원하지 않는 후보 패키지 종류다.",
+        DIAG_MISSING_COMMAND: "패키지에 실행 가능한 검증 명령이 없다.",
+        DIAG_EXECUTION_FAILED: "검증 명령이 비정상 종료했다.",
+        DIAG_MISSING_INPUT: "필수 입력 sidecar 또는 JSON이 없다.",
+    }
+    return CandidateEvidenceDiagnostic(
+        code=code,
+        severity=severity,
+        retryable=retryable,
+        summary_ko=summaries.get(code, "검증 결과를 확정할 수 없다."),
+        evidence_source=evidence_source,
+        next_actions=(action,),
+        details=dict(details or {}),
+    )
+
+
+def _next_action_for(code: str) -> CandidateNextAction:
+    actions = {
+        DIAG_DATA_HISTORY_MISSING: CandidateNextAction(
+            action_code="prepare_history_dataset",
+            summary_ko="안전한 데이터 수집 또는 ingest-history 실행 경로를 준비한다.",
+            owner="automation",
+            safe_to_auto_run=True,
+        ),
+        DIAG_COMMAND_CONTRACT_ERROR: CandidateNextAction(
+            action_code="repair_candidate_package_command",
+            summary_ko="후보 공장의 no-live 검증 명령 인자 계약을 보정한다.",
+            owner="candidate_factory",
+            safe_to_auto_run=False,
+        ),
+        DIAG_INSUFFICIENT_PASS_EVIDENCE: CandidateNextAction(
+            action_code="emit_machine_readable_verdict",
+            summary_ko="검증 명령이 명확한 pass/fail verdict와 핵심 통계를 내도록 보강한다.",
+            owner="future_spec",
+            safe_to_auto_run=False,
+        ),
+        DIAG_TIMEOUT: CandidateNextAction(
+            action_code="bound_or_extend_validation_runtime",
+            summary_ko="검증 범위를 줄이거나 별도 시간 예산이 있는 검증 경로로 분리한다.",
+            owner="candidate_factory",
+            safe_to_auto_run=False,
+        ),
+        DIAG_UNSAFE_COMMAND: CandidateNextAction(
+            action_code="remove_unsafe_command_surface",
+            summary_ko="live, broker, SSH, 자본, whitelist/caps, sentinel 표면을 제거한다.",
+            owner="operator",
+            safe_to_auto_run=False,
+        ),
+        DIAG_UNSUPPORTED_PACKAGE: CandidateNextAction(
+            action_code="add_package_kind_contract",
+            summary_ko="새 package kind의 no-live 검증 계약과 allowlist를 별도 스펙으로 정의한다.",
+            owner="future_spec",
+            safe_to_auto_run=False,
+        ),
+        DIAG_MISSING_COMMAND: CandidateNextAction(
+            action_code="add_no_live_validation_command",
+            summary_ko="후보 패키지에 안전한 no-live 검증 명령을 추가한다.",
+            owner="candidate_factory",
+            safe_to_auto_run=False,
+        ),
+        DIAG_EXECUTION_FAILED: CandidateNextAction(
+            action_code="inspect_validation_failure",
+            summary_ko="종료 코드와 제한된 출력을 바탕으로 실패 원인을 더 좁힌다.",
+            owner="automation",
+            safe_to_auto_run=True,
+        ),
+        DIAG_MISSING_INPUT: CandidateNextAction(
+            action_code="restore_candidate_package_sidecar",
+            summary_ko="후보 패키지 sidecar 수집 경로와 JSON 형식을 복구한다.",
+            owner="automation",
+            safe_to_auto_run=True,
+        ),
+    }
+    return actions.get(code, actions[DIAG_EXECUTION_FAILED])
+
+
+def _execution_details(execution: CommandExecution) -> dict[str, Any]:
+    return {
+        "command": list(execution.command),
+        "exit_code": execution.exit_code,
+        "stderr_excerpt": _excerpt(execution.stderr, limit=400),
+        "stdout_excerpt": _excerpt(execution.stdout, limit=400),
+        "timed_out": execution.timed_out,
+    }
+
+
+def _dedupe_diagnostics(
+    diagnostics: Sequence[CandidateEvidenceDiagnostic],
+) -> tuple[CandidateEvidenceDiagnostic, ...]:
+    seen: set[str] = set()
+    out: list[CandidateEvidenceDiagnostic] = []
+    for diagnostic in diagnostics:
+        if diagnostic.code in seen:
+            continue
+        seen.add(diagnostic.code)
+        out.append(diagnostic)
+    return tuple(out)
+
+
+def _flatten_next_actions(
+    diagnostics: Sequence[CandidateEvidenceDiagnostic],
+) -> tuple[CandidateNextAction, ...]:
+    seen: set[str] = set()
+    actions: list[CandidateNextAction] = []
+    for diagnostic in diagnostics:
+        for action in diagnostic.next_actions:
+            if action.action_code in seen:
+                continue
+            seen.add(action.action_code)
+            actions.append(action)
+    return tuple(actions)
+
+
+def _safe_detail(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {str(key): _safe_detail(item) for key, item in value.items()}
+    if isinstance(value, list | tuple):
+        return [_safe_detail(item) for item in value]
+    if isinstance(value, str):
+        return mask_sensitive_values(value)
+    return value
+
+
 def _execution_metrics(executions: Sequence[CommandExecution]) -> dict[str, Any]:
     return {
         "executions": [execution.to_dict() for execution in executions],
@@ -649,7 +980,18 @@ def _iso(value: datetime) -> str:
 __all__ = [
     "CandidateResultExecutorRun",
     "CandidateResultRow",
+    "CandidateEvidenceDiagnostic",
+    "CandidateNextAction",
     "CommandExecution",
+    "DIAG_COMMAND_CONTRACT_ERROR",
+    "DIAG_DATA_HISTORY_MISSING",
+    "DIAG_EXECUTION_FAILED",
+    "DIAG_INSUFFICIENT_PASS_EVIDENCE",
+    "DIAG_MISSING_COMMAND",
+    "DIAG_MISSING_INPUT",
+    "DIAG_TIMEOUT",
+    "DIAG_UNSAFE_COMMAND",
+    "DIAG_UNSUPPORTED_PACKAGE",
     "OVERALL_DEGRADED",
     "OVERALL_OK",
     "STATUS_BLOCKED",
