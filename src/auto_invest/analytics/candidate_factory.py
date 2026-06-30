@@ -379,7 +379,7 @@ def _build_package(
     elif result is not None and result.any_strategy_evidence_failed:
         status = STATUS_BLOCKED
         block = "기계 판독 검증 결과에 실패가 있어 승격 증거로 병합하지 않는다."
-    elif kind in _STRATEGY_KINDS and result is not None and result.all_strategy_evidence_passed:
+    elif result is not None and _package_evidence_passed(kind, result):
         status = STATUS_EVIDENCE_PASSED
         block = None
     elif result is not None:
@@ -455,6 +455,12 @@ def _promotion_patch(
     if result.canary_track is not None:
         patch["canary_track"] = dict(result.canary_track)
     return patch
+
+
+def _package_evidence_passed(kind: str, result: EvidenceResult) -> bool:
+    if kind in _STRATEGY_KINDS:
+        return result.all_strategy_evidence_passed
+    return _status_value(result.raw.get("factory_validation")) == EVIDENCE_PASS
 
 
 def _candidate_rows(

@@ -86,6 +86,9 @@ def test_strategy_result_evidence_can_advance_to_forward_registration_ready() ->
 
 def test_non_trading_validation_does_not_pretend_to_be_strategy_backtest() -> None:
     run = _run(_json("result_evidence.json"))
+    by_package = {package.candidate_id: package for package in run.packages}
+    assert by_package["candidate-fd04772a23c5"].status == STATUS_EVIDENCE_PASSED
+    assert run.counts[STATUS_EVIDENCE_PASSED] == 2
     live_readiness = run.enriched_candidate_backlog["candidates"][1]["promotion_evidence"]
     assert live_readiness["factory_validation"] == "pass"
     assert "historical_backtest" not in live_readiness
