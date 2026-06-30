@@ -29,19 +29,19 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 상세 규칙은 Codex 세션에서는 `AGENTS.md`, Claude 세션에서는 `CLAUDE.md` 본문 참조.
 
-## 한눈 요약표 — 2026-06-30 KST 최신 main 기준
+## 한눈 요약표 — 2026-07-01 KST 최신 main 기준
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `0b743c2` — Merge pull request #419 from jinooaction/Codex/candidate-factory-result-status |
-| main 테스트 | `uv run pytest` → 2351 passed, 4 skipped |
+| 마지막 main 커밋 | `e00ef09` — Merge pull request #421 from jinooaction/Codex/candidate-evidence-diagnostics |
+| main 테스트 | `uv run pytest` → 2356 passed, 4 skipped |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
 | 열린 PR | 없음(GitHub open PR 조회 결과 `[]`) |
-| 출시 완료 스펙 | 최신 추가: 071(후보 결과 실행기: 검증 패키지를 candidate result evidence로 변환하고 sidecar 발행), 070(후보 구현 공장: `BACKTEST_REQUIRED` 후보를 검증 패키지와 enriched backlog로 변환), 069(자율 승격 실행 루프: forward paper 등록 큐와 hardened canary 제출 큐 자동화), 068(자율 승격 루프 자동 분류), 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
-| 골격 스펙 | 없음. `.specify/feature.json`은 추적을 위해 `specs/071-candidate-result-executor`를 가리키지만, 스펙 071 구현은 #417로 main에 들어갔다. |
-| 최근 출시 작업 | #419 후보 공장 result status 보정. #418 스펙 071 handoff 갱신. #417 스펙 071 후보 결과 실행기 루프. #416 스펙 070 handoff 갱신. #415 스펙 070 candidate factory input fetch 보정. #414 스펙 070 후보 구현 공장 자동화. #410 스펙 069 자율 승격 실행 루프 자동화. #408 스펙 068 자율 승격 루프 자동 분류. |
-| 활성 작업 | 코드 PR 없음. 자율 성장 후보는 `automation/autonomous-evolution-last-run`에서 후보를 만들고, 스펙 070 `automation/candidate-implementation-factory-last-run`이 후보별 검증 패키지를 만들며, 스펙 071 `automation/candidate-implementation-results`가 검증 패키지 실행 결과를 발행한다. #419 이후 result executor run `28422210017`은 commit `0b743c2`, `overall_status=degraded`, `pass=4`, `pending=5`, `fail=0`, `blocked=0`이다. 최신 factory run `28422210026`은 `overall_status=ok`, `evidence_passed=4`, `pending=5`, `ready=0`, `blocked=0`으로 result evidence를 소비했다. 후속 promotion loop run `28422336507`, promotion actions run `28422350673`, pipeline liveness run `28422367089`가 모두 success였고, liveness overall은 `OK`다. 최신 deploy run `28422210023`은 commit `0b743c2` 기준 success다. 최신 KIS smoke run `28421591753`은 commit `b827364`, `smoke_state=success`, `key_valid=true`이며 #419 path에서는 새 smoke가 트리거되지 않았다. |
-| 안전 경계 | #417 후보 결과 실행기는 등급 2 운영 자동화이고 #419는 그 결과 상태 판독 보정이다. 새 workflow는 no-live 검증 명령만 allowlist로 실행하고 결과 sidecar만 발행한다. 주문, 자본 증액, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, live sentinel, K1/K2/K4/K5/K6, 헌법, 커널 목록 변경 없음. 전략 후보는 `historical_backtest`, `recent_oos`, `walk_forward`가 모두 실제 결과에서 `pass`일 때만 forward 등록 준비로 올라간다. 현재 전략 후보 2개는 pending/backtest required라 돈 경로로 승격되지 않았다. |
+| 출시 완료 스펙 | 최신 추가: 072(후보 증거 진단: pending 원인과 다음 행동을 기계 판독 가능하게 분해), 071(후보 결과 실행기: 검증 패키지를 candidate result evidence로 변환하고 sidecar 발행), 070(후보 구현 공장: `BACKTEST_REQUIRED` 후보를 검증 패키지와 enriched backlog로 변환), 069(자율 승격 실행 루프: forward paper 등록 큐와 hardened canary 제출 큐 자동화), 068(자율 승격 루프 자동 분류), 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
+| 골격 스펙 | 없음. `.specify/feature.json`은 추적을 위해 `specs/072-candidate-evidence-diagnostics`를 가리키지만, 스펙 072 구현은 #421로 main에 들어갔다. |
+| 최근 출시 작업 | #421 스펙 072 후보 증거 진단 루프. #420 스펙 070/071 handoff 갱신. #419 후보 공장 result status 보정. #418 스펙 071 handoff 갱신. #417 스펙 071 후보 결과 실행기 루프. #416 스펙 070 handoff 갱신. #415 스펙 070 candidate factory input fetch 보정. #414 스펙 070 후보 구현 공장 자동화. |
+| 활성 작업 | 코드 PR 없음. 자율 성장 후보는 `automation/autonomous-evolution-last-run`에서 후보를 만들고, 스펙 070 `automation/candidate-implementation-factory-last-run`이 후보별 검증 패키지를 만들며, 스펙 071/072 `automation/candidate-implementation-results`가 검증 패키지 실행 결과와 진단을 발행한다. #421 이후 result executor run `28455402752`는 commit `e00ef09`, `overall_status=degraded`, `pass=4`, `pending=5`, `fail=0`, `blocked=0`, 진단 집계 `command_contract_error=2`, `data_history_missing=2`, `execution_failed=1`, `insufficient_pass_evidence=1`이다. result sidecar 발행 뒤 factory run `28455608750`을 재실행했고, enriched backlog의 5개 pending 후보가 `factory_diagnostics`, `factory_next_actions`, `factory_retryable`을 갖는다. 후속 promotion loop run `28455673993`, promotion actions run `28455707966`, pipeline liveness run `28455738048`가 모두 success였고, liveness overall은 `OK`다. 최신 deploy run `28455400890`은 commit `e00ef09` 기준 success다. 최신 KIS smoke sidecar는 run `28426196361`, commit `419fbf7`, `smoke_state=success`, `key_valid=true`이며 #421 코드 배포와 직접 같은 커밋은 아니다. |
+| 안전 경계 | #421 스펙 072는 등급 2 운영 자동화 진단 보강이다. no-live 검증 결과를 `diagnostics`, `next_actions`, `retryable`로 보강하지만 주문, 자본 증액, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, live sentinel, 브로커 주문, K1/K2/K4/K5/K6, 헌법, 커널 목록은 변경하지 않았다. 전략 후보는 `historical_backtest`, `recent_oos`, `walk_forward`가 모두 실제 결과에서 `pass`일 때만 forward 등록 준비로 올라간다. 현재 전략 후보 2개는 pending/backtest required라 돈 경로로 승격되지 않았다. |
 
 ## 돈 경로 상태 판독 규칙 (필수 — 스펙 062)
 
@@ -80,6 +80,50 @@ uv run python scripts/money_path_probe.py --manifest | while IFS=$'\t' read -r k
 done
 uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.live_money_state'
 ```
+
+## 최근 관찰 — 2026-07-01 KST (스펙 072 후보 증거 진단 루프)
+
+현재 `main` 최신은 `e00ef09`(#421, 스펙 072 후보 증거 진단 루프)이다.
+직전 주요 커밋은 `6d4d43b`(스펙 072 구현), `419fbf7`(#420, 스펙 070/071 handoff 갱신),
+`0b743c2`(#419, 후보 공장 result status 보정)이다. 이 인계 갱신 시점의 열린 PR은 없다.
+
+- **문제 정의**: #419 이후 result executor와 candidate factory는 `pass=4`, `pending=5`를
+  정확히 표시했지만, pending 5개가 왜 멈췄는지 기계가 재시도·보강 계획으로 소비할 수 있는
+  형태는 아니었다. `pending`은 실패, 데이터 부족, 명령 계약 오류, 통과 증거 부족이 섞인 상태라
+  다음 루프가 무엇을 고쳐야 하는지 알기 어려웠다.
+- **구현 상태**: `candidate_result_executor.py`가 pending/blocked 결과에
+  `diagnostics`, `next_actions`, `retryable`을 추가한다. 주요 진단 코드는
+  `data_history_missing`, `command_contract_error`, `insufficient_pass_evidence`,
+  `execution_failed`, `timeout`, `unsafe_command`, `unsupported_package`, `missing_command`,
+  `missing_input`이다. `candidate_factory.py`는 이 값을 enriched backlog의
+  `promotion_evidence.factory_diagnostics`, `factory_next_actions`, `factory_retryable`로 전파한다.
+- **배포 후 실제 실행**: #421 main push에서 `Deploy on merge to main` run `28455400890` success,
+  `Candidate result executor` run `28455402752` success, `Candidate implementation factory` push run
+  `28455402674` success였다. result executor sidecar는 commit `e00ef09`, `overall_status=degraded`,
+  `pass=4`, `pending=5`, `fail=0`, `blocked=0`과 진단 집계
+  `command_contract_error=2`, `data_history_missing=2`, `execution_failed=1`,
+  `insufficient_pass_evidence=1`을 기록했다.
+- **후속 소비 확인**: result sidecar 발행 뒤 factory run `28455608750`을 workflow dispatch로
+  재실행했다. 최신 `candidate_backlog.enriched.json`은 후보 9개 중 pending 5개에
+  `factory_diagnostics`를 채웠다. 후보별 다음 행동은 과거 데이터 준비 2건,
+  검증 명령 인자 계약 보정 2건, 검증 실패 원인 좁히기 1건이며, retryable은 3건이다.
+- **후속 루프 확인**: 최신 sidecar들을 소비하도록 `Autonomous promotion loop` run `28455673993`,
+  `Autonomous promotion actions` run `28455707966`, `Pipeline liveness` run `28455738048`를
+  dispatch했고 모두 success였다. promotion actions는 `registered=0`, `submitted=0`,
+  `blocked=0`이고, liveness는 `candidate-implementation-factory`, `candidate-result-executor`,
+  `autonomous-promotion`, `autonomous-promotion-actions`를 모두 `OK`로 보고했다.
+- **현재 다음 행동**: 전략/포트폴리오 후보 2개는 `data_history_missing` 때문에 안전한 과거 데이터
+  준비 또는 `ingest-history` 실행 경로가 필요하다. `ops_liveness`와 `analytics_validation`은
+  `command_contract_error`라 후보 공장이 만든 no-live 검증 명령 인자 계약을 고쳐야 한다.
+  `data_quality`는 `execution_failed`라 제한된 출력과 종료 코드를 더 좁혀야 한다.
+- **안전 경계**: 등급 2 운영 자동화 진단 보강이다. no-live 검증 결과와 sidecar JSON만 바꿨다.
+  실제 주문, 브로커 API, 자본 증액, whitelist/caps 확대, live 전략 교체, live sentinel, 헌법,
+  커널 목록, K1/K2/K4/K5/K6 변경 없음. 배포는 dry-run worker 코드 반영이며 실거래 전환이 아니다.
+- **검증**: PR #421 머지 전 focused pytest 18 통과, 최신 sidecar 입력 로컬 smoke에서
+  `pass=4`, `pending=5`와 진단 집계를 재현, 전체 테스트 2356 통과·4 스킵,
+  `uv run ruff check src tests` 통과, strict 하네스 `OK (14/14)`, HANDOFF 사실 검증 OK,
+  PR 품질 관문 성공. 머지 직전 전체 테스트와 린트를 다시 실행해 같은 결과를 확인했다.
+- **상세 인계**: `HANDOFF-076-CANDIDATE-EVIDENCE-DIAGNOSTICS.md`.
 
 ## 최근 관찰 — 2026-06-30 KST (후보 공장 result status 보정)
 
@@ -770,7 +814,29 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
   `uv run python scripts/check_handoff_facts.py` 통과, PR 품질 관문 통과. 머지 직전 전체 테스트와
   린트를 다시 실행해 같은 결과를 확인했다.
 
-## 최근 마일스톤 — 2026-06-30 KST (스펙 071 후보 결과 실행기 루프)
+## 최근 마일스톤 — 2026-07-01 KST (스펙 072 후보 증거 진단 루프)
+
+main 머지 `e00ef09`(#421). 후보 결과 실행기의 `pending`을 단순 보류가 아니라
+원인 진단과 다음 행동으로 분해했고, 후보 공장이 그 진단을 enriched backlog로 전파한다. 상세:
+`HANDOFF-076-CANDIDATE-EVIDENCE-DIAGNOSTICS.md`, `specs/072-candidate-evidence-diagnostics/`.
+
+- **핵심 구현**: `candidate_result_executor.py`가 `diagnostics`, `next_actions`, `retryable`을
+  결과 evidence에 추가하고, `candidate_factory.py`가 이를 `factory_diagnostics`,
+  `factory_next_actions`, `factory_retryable`로 전파한다.
+- **실행 결과**: #421 deploy run `28455400890` success, result executor run `28455402752` success.
+  최신 result sidecar는 `pass=4`, `pending=5`, `blocked=0`, 진단 집계
+  `command_contract_error=2`, `data_history_missing=2`, `execution_failed=1`,
+  `insufficient_pass_evidence=1`이다.
+- **후속 루프**: result sidecar 이후 factory run `28455608750`을 재실행해 pending 5개 진단이
+  enriched backlog에 들어간 것을 확인했다. promotion loop run `28455673993`,
+  promotion actions run `28455707966`, pipeline liveness run `28455738048` 모두 success.
+  liveness overall `OK`.
+- **안전 경계**: 주문, 브로커, 자본, whitelist/caps, live config, sentinel, 헌법, 커널 변경 없음.
+  배포는 dry-run worker 코드 반영이며 실거래 전환이 아니다.
+- **다음 행동**: 과거 데이터 준비 2건, 검증 명령 인자 계약 보정 2건, 검증 실패 원인 좁히기 1건이
+  기계 판독 next action으로 남아 있다.
+
+## 최근 마일스톤 — 2026-06-30 KST (후보 공장 result status 보정과 스펙 071 후보 결과 실행기)
 
 main 머지 `0b743c2`(#419). 후보 공장이 result executor 증거를 먹은 뒤 비전략 no-live
 검증 통과 후보를 모두 `pending`처럼 표시하던 상태 판독을 고쳤다. 상세:
