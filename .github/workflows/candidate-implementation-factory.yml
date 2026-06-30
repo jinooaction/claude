@@ -7,18 +7,23 @@ name: Candidate implementation factory (후보 -> 검증 패키지)
 
 on:
   schedule:
-    # 매일 08:40 UTC — autonomous-evolution(08:30) 이후, promotion-scan(08:45) 이전.
+    # 매일 08:40 UTC — autonomous-evolution(08:30) 이후 패키지 생성.
+    # 매일 08:44 UTC — candidate-result-executor(08:42) 결과를 다시 먹어 promotion 전 보강.
     - cron: "40 8 * * *"
+    - cron: "44 8 * * *"
   workflow_dispatch:
   push:
     branches: [main]
     paths:
       - 'src/auto_invest/analytics/candidate_factory.py'
+      - 'src/auto_invest/analytics/candidate_result_executor.py'
       - 'scripts/candidate_factory_probe.py'
+      - 'scripts/candidate_result_executor_probe.py'
       - 'src/auto_invest/analytics/promotion_loop.py'
       - 'src/auto_invest/analytics/pipeline_liveness.py'
       - 'src/auto_invest/cli.py'
       - '.github/workflows/candidate-implementation-factory.yml'
+      - '.github/workflows/candidate-result-executor.yml'
       - '.github/workflows/autonomous-promotion-loop.yml'
 
 permissions:

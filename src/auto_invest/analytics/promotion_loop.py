@@ -464,34 +464,56 @@ def _evidence_layers(
     evidence_texts: Mapping[str, str | None],
 ) -> tuple[EvidenceLayer, ...]:
     promotion = candidate.promotion_evidence
+    historical_backtest = _explicit_or_text_status(
+        promotion,
+        "historical_backtest",
+        evidence_texts,
+    )
+    recent_oos = _explicit_or_text_status(promotion, "recent_oos", evidence_texts)
+    walk_forward = _explicit_or_text_status(promotion, "walk_forward", evidence_texts)
+    strategy_evidence_passed = (
+        historical_backtest == EVIDENCE_PASS
+        and recent_oos == EVIDENCE_PASS
+        and walk_forward == EVIDENCE_PASS
+    )
+    forward_paper = (
+        _forward_status(candidate, promotion, evidence_texts)
+        if strategy_evidence_passed
+        else EVIDENCE_MISSING
+    )
+    small_live_canary = (
+        _canary_status(candidate, promotion, evidence_texts)
+        if strategy_evidence_passed and forward_paper == EVIDENCE_PASS
+        else EVIDENCE_MISSING
+    )
     return (
         EvidenceLayer(
             "historical_backtest",
-            _explicit_or_text_status(promotion, "historical_backtest", evidence_texts),
+            historical_backtest,
             "과거 여러 구간에서 전략 논리와 비용 내성을 검증한다.",
             _source_for("historical_backtest", promotion),
         ),
         EvidenceLayer(
             "recent_oos",
-            _explicit_or_text_status(promotion, "recent_oos", evidence_texts),
+            recent_oos,
             "최근 regime에서 완전히 죽은 전략인지 확인한다.",
             _source_for("recent_oos", promotion),
         ),
         EvidenceLayer(
             "walk_forward",
-            _explicit_or_text_status(promotion, "walk_forward", evidence_texts),
+            walk_forward,
             "여러 표본외 구간으로 과최적화 위험을 줄인다.",
             _source_for("walk_forward", promotion),
         ),
         EvidenceLayer(
             "forward_paper",
-            _forward_status(candidate, promotion, evidence_texts),
+            forward_paper,
             "전략 고정 후 아직 보지 않은 미래 데이터로 검증한다.",
             "rebalance-paper-forward",
         ),
         EvidenceLayer(
             "small_live_canary",
-            _canary_status(candidate, promotion, evidence_texts),
+            small_live_canary,
             "실제 브로커·계좌·주문·체결 경로를 소액으로 검증한다.",
             "promotion-canary, reassign 또는 live canary sidecar",
         ),
