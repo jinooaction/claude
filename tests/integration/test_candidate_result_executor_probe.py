@@ -67,8 +67,14 @@ def test_probe_writes_pending_results_when_runtime_data_is_absent(tmp_path, caps
     payload = json.loads(summary_json.read_text(encoding="utf-8"))
     assert payload["run_id"] == "test-run"
     assert len(payload["results"]) == 9
+    assert payload["diagnostic_counts"]
     result_doc = json.loads(results.read_text(encoding="utf-8"))
     assert result_doc["results"]
+    pending = [item for item in result_doc["results"] if item["status"] == "pending"]
+    assert pending
+    assert all(item.get("diagnostics") for item in pending)
+    assert all(item.get("next_actions") for item in pending)
+    assert "진단 집계" in summary.read_text(encoding="utf-8")
     assert "주문, 자본 사다리" in capsys.readouterr().out
 
 

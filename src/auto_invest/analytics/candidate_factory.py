@@ -98,12 +98,16 @@ class ImplementationPackage:
 @dataclass(frozen=True)
 class EvidenceResult:
     candidate_id: str
+    status: str
     historical_backtest: str
     recent_oos: str
     walk_forward: str
     source_ref: str | None
     forward_track: Mapping[str, Any] | None
     canary_track: Mapping[str, Any] | None
+    diagnostics: tuple[Mapping[str, Any], ...]
+    next_actions: tuple[Mapping[str, Any], ...]
+    retryable: bool
     raw: Mapping[str, Any]
 
     @property
@@ -275,12 +279,16 @@ def parse_result_evidence(doc: Mapping[str, Any] | None) -> dict[str, EvidenceRe
         canary_track = raw.get("canary_track")
         results[candidate_id] = EvidenceResult(
             candidate_id=candidate_id,
+            status=str(raw.get("status") or "").strip().lower(),
             historical_backtest=_status_value(raw.get("historical_backtest")),
             recent_oos=_status_value(raw.get("recent_oos")),
             walk_forward=_status_value(raw.get("walk_forward")),
             source_ref=str(raw.get("source_ref") or "") or None,
             forward_track=forward_track if isinstance(forward_track, Mapping) else None,
             canary_track=canary_track if isinstance(canary_track, Mapping) else None,
+            diagnostics=_mapping_sequence(raw.get("diagnostics")),
+            next_actions=_mapping_sequence(raw.get("next_actions")),
+            retryable=bool(raw.get("retryable")),
             raw=raw,
         )
     return results
@@ -379,6 +387,9 @@ def _build_package(
     elif result is not None and result.any_strategy_evidence_failed:
         status = STATUS_BLOCKED
         block = "기계 판독 검증 결과에 실패가 있어 승격 증거로 병합하지 않는다."
+    elif result is not None and result.status == "blocked":
+        status = STATUS_BLOCKED
+        block = str(result.raw.get("block_reason_ko") or "검증 결과가 blocked 상태다.")
     elif result is not None and _package_evidence_passed(kind, result):
         status = STATUS_EVIDENCE_PASSED
         block = None
@@ -433,6 +444,8 @@ def _promotion_patch(
     if block_reason_ko:
         patch["factory_block_reason_ko"] = block_reason_ko
     if status == STATUS_BLOCKED:
+        if result is not None:
+            _attach_result_diagnostics(patch, result)
         return patch
     if kind not in _STRATEGY_KINDS:
         if result is not None and not result.any_strategy_evidence_failed:
@@ -440,6 +453,7 @@ def _promotion_patch(
             if _status_value(validation) == EVIDENCE_PASS:
                 patch["factory_validation"] = EVIDENCE_PASS
                 patch["factory_validation_source"] = result.source_ref
+            _attach_result_diagnostics(patch, result)
         return patch
     if result is None:
         for key in _EVIDENCE_KEYS:
@@ -454,6 +468,7 @@ def _promotion_patch(
         patch["forward_track"] = dict(result.forward_track)
     if result.canary_track is not None:
         patch["canary_track"] = dict(result.canary_track)
+    _attach_result_diagnostics(patch, result)
     return patch
 
 
@@ -461,6 +476,15 @@ def _package_evidence_passed(kind: str, result: EvidenceResult) -> bool:
     if kind in _STRATEGY_KINDS:
         return result.all_strategy_evidence_passed
     return _status_value(result.raw.get("factory_validation")) == EVIDENCE_PASS
+
+
+def _attach_result_diagnostics(patch: dict[str, Any], result: EvidenceResult) -> None:
+    if result.diagnostics:
+        patch["factory_diagnostics"] = [dict(item) for item in result.diagnostics]
+    if result.next_actions:
+        patch["factory_next_actions"] = [dict(item) for item in result.next_actions]
+    if result.diagnostics or result.next_actions:
+        patch["factory_retryable"] = result.retryable
 
 
 def _candidate_rows(
@@ -587,6 +611,12 @@ def _status_value(value: Any) -> str:
     if text in {EVIDENCE_PENDING, "running", "queued"}:
         return EVIDENCE_PENDING
     return EVIDENCE_MISSING
+
+
+def _mapping_sequence(value: Any) -> tuple[Mapping[str, Any], ...]:
+    if not isinstance(value, list):
+        return ()
+    return tuple(dict(item) for item in value if isinstance(item, Mapping))
 
 
 def _mapping_has_list(doc: Mapping[str, Any] | None, key: str) -> bool:
