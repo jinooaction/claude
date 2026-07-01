@@ -33,15 +33,15 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `d3ca5d5` — Merge pull request #426 from jinooaction/Codex/075-promotion-factory-result-state |
-| main 테스트 | `uv run pytest` → 2363 passed, 4 skipped |
+| 마지막 main 커밋 | `fa8cc32` — Merge pull request #428 from jinooaction/Codex/075-strategy-failure-learning |
+| main 테스트 | `uv run pytest` → 2366 passed, 4 skipped |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
 | 열린 PR | 없음(GitHub open PR 조회 결과 `[]`) |
-| 출시 완료 스펙 | 최신 추가: 074(후보 가격 이력 지원: result executor가 read-only 서버 bars-export와 ingest-history로 전략/포트폴리오 후보 history-root를 준비), 073(후보 pending next action 보정: 명령 계약 오류와 support input 미준비를 자동 실행 가능한 pass로 줄임), 072(후보 증거 진단: pending 원인과 다음 행동을 기계 판독 가능하게 분해), 071(후보 결과 실행기: 검증 패키지를 candidate result evidence로 변환하고 sidecar 발행), 070(후보 구현 공장: `BACKTEST_REQUIRED` 후보를 검증 패키지와 enriched backlog로 변환), 069(자율 승격 실행 루프: forward paper 등록 큐와 hardened canary 제출 큐 자동화), 068(자율 승격 루프 자동 분류), 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
-| 골격 스펙 | 없음. `.specify/feature.json`은 추적을 위해 `specs/074-candidate-history-support`를 가리키지만, 스펙 074 구현은 #425로 main에 들어갔다. |
-| 최근 출시 작업 | #426 후보 공장 실패 결과의 승격 루프 반복 보정. #425 스펙 074 후보 가격 이력 지원. #424 스펙 073 handoff 갱신. #423 스펙 073 후보 pending next action 보정. #422 스펙 072 handoff 갱신. #421 스펙 072 후보 증거 진단 루프. |
-| 활성 작업 | 코드 PR 없음. #425 배포와 후속 sidecar 재실행까지 완료됐고, #426 follow-up도 main에 머지되어 sidecar에 반영됐다. result executor run `28503338531`은 commit `fcc6e5f`, `pass=7`, `fail=2`, `pending=0`, `blocked=0`, 진단 집계 없음, 두 전략/포트폴리오 후보 모두 `--history-root`를 사용했다. factory run `28504209235`는 commit `d3ca5d5`, `evidence_passed=7`, `blocked=2`, `pending=0`, `ready=0`로 결과 실패를 enriched backlog에 반영했다. promotion loop run `28504209238`은 commit `d3ca5d5`, `overall_status=ok`, 두 전략/포트폴리오 후보를 `DISCARD`로 분류했다. 최신 deploy run `28504209256`은 commit `d3ca5d5` 기준 success다. 최신 KIS smoke sidecar는 run `28500268994`, commit `f9f8908`, `smoke_state=success`, `key_valid=true`이며 #425/#426과 같은 commit의 직접 smoke는 아니다. |
-| 안전 경계 | #425 스펙 074와 follow-up 보정은 등급 2 운영 자동화 보정이다. 후보 가격 이력 준비와 승격 루프 판정 문구를 고치지만 주문, 자본 증액, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, live sentinel, 브로커 주문, K1/K2/K4/K5/K6, 헌법, 커널 목록은 변경하지 않았다. 전략 후보는 `historical_backtest`, `recent_oos`, `walk_forward`가 모두 실제 결과에서 `pass`일 때만 forward 등록 준비로 올라간다. 현재 전략 후보 2개는 가격 이력 부족은 해소됐지만 백테스트 결과가 no-edge/fail이라 돈 경로로 승격되지 않는다. |
+| 출시 완료 스펙 | 최신 추가: 075(전략 실패 학습: promotion `DISCARD` 전략/포트폴리오 후보를 autonomous evolution `learning_ledger.json`의 `rejected` 항목으로 영구 기록), 074(후보 가격 이력 지원: result executor가 read-only 서버 bars-export와 ingest-history로 전략/포트폴리오 후보 history-root를 준비), 073(후보 pending next action 보정: 명령 계약 오류와 support input 미준비를 자동 실행 가능한 pass로 줄임), 072(후보 증거 진단: pending 원인과 다음 행동을 기계 판독 가능하게 분해), 071(후보 결과 실행기: 검증 패키지를 candidate result evidence로 변환하고 sidecar 발행), 070(후보 구현 공장: `BACKTEST_REQUIRED` 후보를 검증 패키지와 enriched backlog로 변환), 069(자율 승격 실행 루프: forward paper 등록 큐와 hardened canary 제출 큐 자동화), 068(자율 승격 루프 자동 분류), 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
+| 골격 스펙 | 없음. `.specify/feature.json`은 추적을 위해 `specs/075-strategy-failure-learning`을 가리키고, 스펙 075 구현은 #428로 main에 들어갔다. |
+| 최근 출시 작업 | #428 스펙 075 전략 실패 학습 장부화. #426 후보 공장 실패 결과의 승격 루프 반복 보정. #425 스펙 074 후보 가격 이력 지원. #424 스펙 073 handoff 갱신. #423 스펙 073 후보 pending next action 보정. #422 스펙 072 handoff 갱신. |
+| 활성 작업 | 코드 PR 없음. #428 배포와 autonomous evolution sidecar 실행까지 완료됐다. 최신 deploy run `28507752817`은 commit `fa8cc32` 기준 success다. 최신 autonomous evolution run `28507752974`는 commit `fa8cc32`, `overall_status=ok`이며 `learning_ledger.json`에 `candidate-1ed634d8bf6d`, `candidate-cc96b35062da`를 모두 `decision=rejected`, `evidence_package_id=autonomous-promotion:28504209238`로 기록했다. `candidate_backlog.json`에서도 두 후보 status는 `rejected`다. result executor run `28503338531`은 commit `fcc6e5f`, `pass=7`, `fail=2`, `pending=0`, `blocked=0`이고, promotion loop run `28504209238`은 commit `d3ca5d5`, 두 전략/포트폴리오 후보를 `DISCARD`로 분류했다. 최신 KIS smoke sidecar는 run `28500268994`, commit `f9f8908`, `smoke_state=success`, `key_valid=true`이며 #428과 같은 commit의 직접 smoke는 아니다. |
+| 안전 경계 | #428 스펙 075는 등급 2 운영 자동화 보정이다. 기존 promotion summary와 evolution sidecar JSON만 읽어 실패 후보를 학습 장부에 남긴다. 주문, 자본 증액, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, live sentinel, 브로커 주문, K1/K2/K4/K5/K6, 헌법, 커널 목록은 변경하지 않았다. `Backtest -> Canary -> Full` 순서는 유지되며, 현재 전략 후보 2개는 가격 이력 부족은 해소됐지만 백테스트 no-edge/fail이라 돈 경로로 승격되지 않는다. |
 
 ## 돈 경로 상태 판독 규칙 (필수 — 스펙 062)
 
@@ -80,6 +80,38 @@ uv run python scripts/money_path_probe.py --manifest | while IFS=$'\t' read -r k
 done
 uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.live_money_state'
 ```
+
+## 최근 관찰 — 2026-07-01 KST (스펙 075 전략 실패 학습 장부화)
+
+현재 `main` 최신 코드 머지는 `fa8cc32`(#428, 스펙 075 전략 실패 학습 장부화)이다.
+직전 관련 커밋은 `d3ca5d5`(#426, 승격 루프 `DISCARD` 보정), `fcc6e5f`(#425, 스펙 074 후보 가격 이력 지원)이다.
+이 인계 갱신 시점의 열린 PR은 없다.
+
+- **문제 정의**: 스펙 074로 가격 이력 부족은 해결됐고, #426으로 promotion loop는 두 전략/포트폴리오
+  후보를 `DISCARD`로 분류했다. 남은 문제는 autonomous evolution loop가 이 실패를 영구 장부에
+  흡수하지 않으면 같은 후보가 다음 성장 루프에서 새 돌파 후보처럼 반복될 수 있다는 점이었다.
+- **구현 상태**: `evolution_loop.py`가 `automation/autonomous-promotion-last-run:promotion_summary.json`을
+  기본 evidence manifest에 추가했다. `DISCARD` stage인 `strategy_design`/`portfolio_design` 후보만
+  `PromotionFailureSignal`로 읽고, `learning_ledger.json`에 `decision=rejected`로 병합한다.
+  기존 rejected entry가 있으면 중복 생성하지 않고, promotion summary가 없거나 깨졌으면 기존 후보 생성은
+  fail-open으로 계속 실행한다.
+- **배포 후 실제 실행**: #428 main push 뒤 `Deploy on merge to main` run `28507752817`은 success,
+  `Autonomous evolution loop` run `28507752974`도 success였다. 두 실행 모두 commit
+  `fa8cc32353929993a050e0d8e1d088918ec2891e` 기준이다.
+- **sidecar 확인**: 최신 `origin/automation/autonomous-evolution-last-run:learning_ledger.json`은
+  `candidate-1ed634d8bf6d`와 `candidate-cc96b35062da`를 모두 `decision=rejected`,
+  `evidence_package_id=autonomous-promotion:28504209238`로 기록한다.
+  `candidate_backlog.json`과 `evolution_summary.json`에서도 두 후보 status는 `rejected`다.
+- **안전 경계**: 등급 2 운영 자동화 보정이다. 기존 sidecar JSON을 읽어 학습 장부와 후보 상태를
+  갱신할 뿐이다. 실제 주문, 브로커 API, 자본 증액, whitelist/caps 확대, live 전략 교체,
+  live sentinel, 헌법, 커널 목록, K1/K2/K4/K5/K6 변경 없음.
+- **검증**: PR #428 머지 전 focused evolution tests 27 통과, 최신 sidecar local smoke에서 두 후보가
+  `rejected` 장부 항목이 되는 것을 확인했다. `uv run pytest` 2366 통과·4 스킵,
+  `uv run ruff check src tests` 통과, `git diff --check` 통과, HANDOFF 사실 검증 OK,
+  strict 하네스 `OK (14/14)`, PR 품질 관문 성공. 머지 직전 전체 테스트와 린트를 다시 실행해 같은
+  결과를 확인했다. handoff 갱신 시작 전에는 `HANDOFF.md`가 아직 #426을 가리켜 전체 테스트 중
+  하네스 2건만 실패했고, 이 인계 갱신이 그 원인을 바로잡는다.
+- **상세 인계**: `HANDOFF-079-STRATEGY-FAILURE-LEARNING.md`.
 
 ## 최근 관찰 — 2026-07-01 KST (스펙 074 후보 가격 이력 지원과 승격 실패 반영)
 
@@ -897,6 +929,23 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
   통과, `uv run python scripts/agent_harness_probe.py --strict` `OK (14/14)`,
   `uv run python scripts/check_handoff_facts.py` 통과, PR 품질 관문 통과. 머지 직전 전체 테스트와
   린트를 다시 실행해 같은 결과를 확인했다.
+
+## 최근 마일스톤 — 2026-07-01 KST (스펙 075 전략 실패 학습 장부화)
+
+main 코드 머지 `fa8cc32`(#428). autonomous evolution loop가 promotion summary의 `DISCARD`
+전략/포트폴리오 후보를 읽어 `learning_ledger.json`에 `rejected`로 남긴다. 상세:
+`HANDOFF-079-STRATEGY-FAILURE-LEARNING.md`, `specs/075-strategy-failure-learning/`.
+
+- **핵심 구현**: `promotion-summary` evidence requirement를 추가하고, `DISCARD` stage인
+  `strategy_design`/`portfolio_design` 후보만 실패 학습 신호로 해석한다. 이미 같은 rejected 장부가
+  있으면 중복하지 않는다.
+- **실행 결과**: deploy run `28507752817` success, autonomous evolution run `28507752974` success.
+  최신 `learning_ledger.json`은 `candidate-1ed634d8bf6d`, `candidate-cc96b35062da`를 모두
+  `decision=rejected`, `evidence_package_id=autonomous-promotion:28504209238`로 기록한다.
+- **안전 경계**: 기존 sidecar 읽기와 장부 출력만 바뀌었다. 주문, 자본, whitelist/caps, live config,
+  sentinel, 헌법, 커널 변경 없음. 실패 후보는 돈 경로로 승격하지 않는다.
+- **다음 행동**: 이 두 후보를 다시 승격 대상으로 보지 말고, 새 전략/포트폴리오 아이디어를 만들면
+  다시 `Backtest -> Canary -> Full` 순서로 검증한다.
 
 ## 최근 마일스톤 — 2026-07-01 KST (스펙 074 후보 가격 이력 지원)
 
@@ -4386,6 +4435,13 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 
 ## 과거 인수인계 파일 (참고용)
 
+- `HANDOFF-079-STRATEGY-FAILURE-LEARNING.md` — 스펙 075 전략 실패 학습 장부화
+  (2026-07-01, PR #428 `fa8cc32`). promotion summary의 `DISCARD` 전략/포트폴리오 후보를
+  autonomous evolution `learning_ledger.json`의 `rejected` 항목으로 남겨 같은 실패 후보가
+  새 승격 후보처럼 반복되지 않게 했다.
+- `HANDOFF-078-CANDIDATE-HISTORY-SUPPORT.md` — 스펙 074 후보 가격 이력 지원과 승격 실패 반영
+  (2026-07-01, PR #425 `fcc6e5f`, PR #426 `d3ca5d5`). 후보 결과 실행기가 전략/포트폴리오
+  후보 가격 이력을 준비하고, 실패한 후보 공장 결과를 promotion loop가 `DISCARD`로 분류한다.
 - `HANDOFF-077-CANDIDATE-PENDING-NEXT-ACTIONS.md` — 스펙 073 후보 pending next action 보정
   (2026-07-01, PR #423 `0de15a4`). 후보 공장 명령 계약과 result executor support input을 보정해
   `command_contract_error` 2건과 `execution_failed` 1건을 제거했다. 최신 result sidecar는
