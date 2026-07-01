@@ -217,6 +217,120 @@ def test_rejected_ledger_entry_prevents_reactivation() -> None:
     assert by_id[rejected_id].status == "rejected"
 
 
+def test_promotion_discard_entries_become_rejected_learning_ledger_entries() -> None:
+    evidence = _fixture_evidence()
+    evidence["promotion-summary"] = json.dumps(
+        {
+            "schema_version": "1.0",
+            "run_id": "28504209238",
+            "assessments": [
+                {
+                    "candidate_id": "candidate-1ed634d8bf6d",
+                    "stage": "DISCARD",
+                    "allowed_next_action": "재설계 후보로 보낸다.",
+                    "blocked_reason_ko": "전략 백테스트 실패",
+                    "candidate": {
+                        "candidate_id": "candidate-1ed634d8bf6d",
+                        "domain_key": "strategy_design",
+                        "title_ko": "micro GTAA 의도 손익 재검토와 대체 전략 연구",
+                    },
+                },
+                {
+                    "candidate_id": "candidate-cc96b35062da",
+                    "stage": "DISCARD",
+                    "allowed_next_action": "재설계 후보로 보낸다.",
+                    "blocked_reason_ko": "포트폴리오 백테스트 실패",
+                    "candidate": {
+                        "candidate_id": "candidate-cc96b35062da",
+                        "domain_key": "portfolio_design",
+                        "title_ko": "비상관 포트폴리오 후보 비교력 강화",
+                    },
+                },
+            ],
+        },
+        ensure_ascii=False,
+    )
+
+    summary = scan_evolution(evidence, now=NOW, commit="abc1234", run_id="test")
+    ledger = {
+        (entry.candidate_id, entry.decision): entry for entry in summary.learning_ledger
+    }
+
+    strategy = ledger[("candidate-1ed634d8bf6d", "rejected")]
+    portfolio = ledger[("candidate-cc96b35062da", "rejected")]
+    assert strategy.reason_ko == "전략 백테스트 실패"
+    assert portfolio.reason_ko == "포트폴리오 백테스트 실패"
+    assert strategy.evidence_package_id == "autonomous-promotion:28504209238"
+    assert portfolio.evidence_package_id == "autonomous-promotion:28504209238"
+    by_id = {candidate.candidate_id: candidate for candidate in summary.candidates}
+    assert by_id["candidate-1ed634d8bf6d"].status == "rejected"
+    assert by_id["candidate-cc96b35062da"].status == "rejected"
+
+
+def test_promotion_discard_entries_do_not_duplicate_existing_rejections() -> None:
+    evidence = _fixture_evidence()
+    evidence["promotion-summary"] = json.dumps(
+        {
+            "run_id": "run-new",
+            "assessments": [
+                {
+                    "candidate_id": "candidate-1ed634d8bf6d",
+                    "stage": "DISCARD",
+                    "blocked_reason_ko": "전략 백테스트 실패",
+                    "candidate": {
+                        "candidate_id": "candidate-1ed634d8bf6d",
+                        "domain_key": "strategy_design",
+                    },
+                }
+            ],
+        },
+        ensure_ascii=False,
+    )
+    ledger = {
+        "entries": [
+            LearningLedgerEntry(
+                entry_id="ledger-old",
+                candidate_id="candidate-1ed634d8bf6d",
+                decision="rejected",
+                reason_ko="기존 실패",
+                evidence_package_id="autonomous-promotion:old",
+                next_recheck_condition=None,
+                created_at_utc="2026-06-28T00:00:00Z",
+            ).to_dict()
+        ]
+    }
+
+    summary = scan_evolution(
+        evidence,
+        ledger_doc=ledger,
+        now=NOW,
+        commit="abc1234",
+        run_id="test",
+    )
+    entries = [
+        entry
+        for entry in summary.learning_ledger
+        if entry.candidate_id == "candidate-1ed634d8bf6d"
+        and entry.decision == "rejected"
+    ]
+    assert len(entries) == 1
+    assert entries[0].reason_ko == "기존 실패"
+
+
+def test_malformed_promotion_summary_fails_open() -> None:
+    evidence = _fixture_evidence()
+    evidence["promotion-summary"] = "{not-json"
+
+    summary = scan_evolution(evidence, now=NOW, commit="abc1234", run_id="test")
+
+    assert summary.candidates
+    assert summary.learning_ledger
+    assert not any(
+        entry.evidence_package_id == "autonomous-promotion"
+        for entry in summary.learning_ledger
+    )
+
+
 def test_summary_json_is_secret_safe() -> None:
     evidence = _fixture_evidence()
     evidence["manual"] = "KIS_APP_KEY=abcdef123456"

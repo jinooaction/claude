@@ -25,6 +25,10 @@ def test_probe_manifest_lists_required_sidecars(capsys) -> None:
     assert "money-path\tautomation/money-path-last-run\tLAST_RUN.md" in out
     assert "reassign\tautomation/reassign-last-run\tLAST_RUN.md" in out
     assert "pipeline-liveness\tautomation/pipeline-liveness-last-run\tLAST_RUN.md" in out
+    assert (
+        "promotion-summary\tautomation/autonomous-promotion-last-run\tpromotion_summary.json"
+        in out
+    )
 
 
 def test_probe_json_output_includes_expected_sections(capsys) -> None:

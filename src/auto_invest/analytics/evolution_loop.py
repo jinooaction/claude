@@ -170,6 +170,13 @@ DEFAULT_EVIDENCE_REQUIREMENTS: tuple[EvidenceRequirement, ...] = (
         "LAST_RUN.md",
         80.0,
     ),
+    EvidenceRequirement(
+        "promotion-summary",
+        "automation/autonomous-promotion-last-run",
+        "promotion_summary.json",
+        30.0,
+        "sidecar-json",
+    ),
 )
 
 
@@ -368,6 +375,14 @@ class LearningLedgerEntry:
             "next_recheck_condition": self.next_recheck_condition,
             "created_at_utc": self.created_at_utc,
         }
+
+
+@dataclass(frozen=True)
+class PromotionFailureSignal:
+    candidate_id: str
+    title_ko: str
+    reason_ko: str
+    evidence_package_id: str | None
 
 
 @dataclass(frozen=True)
@@ -653,9 +668,16 @@ def scan_evolution(
     surfaces = build_evidence_surfaces(evidence_texts, now=now)
     candidates = _generate_candidates(surfaces)
     ledger_entries = parse_learning_ledger(ledger_doc)
+    promotion_failures = parse_promotion_failure_signals(evidence_texts.get("promotion-summary"))
+    candidates = apply_promotion_failure_signals(candidates, promotion_failures)
     candidates = apply_learning_ledger(candidates, ledger_entries)
     plans = tuple(generate_experiment_plan(candidate) for candidate in candidates)
-    ledger_entries = update_learning_ledger(ledger_entries, candidates, timestamp)
+    ledger_entries = update_learning_ledger(
+        ledger_entries,
+        candidates,
+        timestamp,
+        promotion_failures=promotion_failures,
+    )
     stale = tuple(
         surface.key
         for surface in surfaces
@@ -784,6 +806,79 @@ def parse_learning_ledger(doc: Mapping[str, Any] | None) -> tuple[LearningLedger
     return tuple(entries)
 
 
+def parse_promotion_failure_signals(raw: str | None) -> tuple[PromotionFailureSignal, ...]:
+    if not raw:
+        return ()
+    try:
+        doc = json.loads(raw)
+    except json.JSONDecodeError:
+        return ()
+    if not isinstance(doc, Mapping):
+        return ()
+    run_id = _none_if_blank(doc.get("run_id"))
+    evidence_package_id = f"autonomous-promotion:{run_id}" if run_id else "autonomous-promotion"
+    raw_assessments = doc.get("assessments")
+    if not isinstance(raw_assessments, list):
+        return ()
+    signals: list[PromotionFailureSignal] = []
+    seen: set[str] = set()
+    for assessment in raw_assessments:
+        if not isinstance(assessment, Mapping):
+            continue
+        if str(assessment.get("stage") or "").strip().upper() != "DISCARD":
+            continue
+        candidate = assessment.get("candidate")
+        candidate_doc = candidate if isinstance(candidate, Mapping) else {}
+        domain_key = str(candidate_doc.get("domain_key") or "").strip()
+        if domain_key not in {"strategy_design", "portfolio_design"}:
+            continue
+        candidate_id = str(
+            assessment.get("candidate_id") or candidate_doc.get("candidate_id") or ""
+        ).strip()
+        if not candidate_id or candidate_id in seen:
+            continue
+        reason = str(
+            assessment.get("blocked_reason_ko")
+            or assessment.get("allowed_next_action")
+            or "promotion loop에서 DISCARD로 판정됐다."
+        )
+        title = str(candidate_doc.get("title_ko") or candidate_id)
+        signals.append(
+            PromotionFailureSignal(
+                candidate_id=candidate_id,
+                title_ko=mask_sensitive_values(title),
+                reason_ko=mask_sensitive_values(reason),
+                evidence_package_id=evidence_package_id,
+            )
+        )
+        seen.add(candidate_id)
+    return tuple(signals)
+
+
+def apply_promotion_failure_signals(
+    candidates: Sequence[BreakthroughCandidate],
+    failures: Sequence[PromotionFailureSignal],
+) -> tuple[BreakthroughCandidate, ...]:
+    if not failures:
+        return tuple(candidates)
+    failure_by_id = {failure.candidate_id: failure for failure in failures}
+    updated: list[BreakthroughCandidate] = []
+    for candidate in candidates:
+        failure = failure_by_id.get(candidate.candidate_id)
+        if failure is None:
+            updated.append(candidate)
+            continue
+        updated.append(
+            replace(
+                candidate,
+                status=STATUS_REJECTED,
+                next_action_ko=failure.reason_ko,
+                recheck_condition=None,
+            )
+        )
+    return tuple(_sort_candidates(updated))
+
+
 def apply_learning_ledger(
     candidates: Sequence[BreakthroughCandidate],
     entries: Sequence[LearningLedgerEntry],
@@ -805,9 +900,12 @@ def update_learning_ledger(
     existing: Sequence[LearningLedgerEntry],
     candidates: Sequence[BreakthroughCandidate],
     timestamp_utc: str,
+    *,
+    promotion_failures: Sequence[PromotionFailureSignal] = (),
 ) -> tuple[LearningLedgerEntry, ...]:
     entries = list(existing)
     seen = {(entry.candidate_id, entry.decision) for entry in entries}
+    failure_by_id = {failure.candidate_id: failure for failure in promotion_failures}
     for candidate in candidates:
         if candidate.status not in {
             STATUS_REJECTED,
@@ -827,14 +925,33 @@ def update_learning_ledger(
         key = (candidate.candidate_id, decision)
         if key in seen:
             continue
+        failure = failure_by_id.get(candidate.candidate_id) if decision == "rejected" else None
+        reason_ko = failure.reason_ko if failure else candidate.next_action_ko
+        evidence_package_id = failure.evidence_package_id if failure else None
         entries.append(
             LearningLedgerEntry(
                 entry_id=_stable_id("ledger", candidate.candidate_id, decision),
                 candidate_id=candidate.candidate_id,
                 decision=decision,
-                reason_ko=candidate.next_action_ko,
-                evidence_package_id=None,
+                reason_ko=reason_ko,
+                evidence_package_id=evidence_package_id,
                 next_recheck_condition=candidate.recheck_condition,
+                created_at_utc=timestamp_utc,
+            )
+        )
+        seen.add(key)
+    for failure in promotion_failures:
+        key = (failure.candidate_id, "rejected")
+        if key in seen:
+            continue
+        entries.append(
+            LearningLedgerEntry(
+                entry_id=_stable_id("ledger", failure.candidate_id, "rejected"),
+                candidate_id=failure.candidate_id,
+                decision="rejected",
+                reason_ko=failure.reason_ko,
+                evidence_package_id=failure.evidence_package_id,
+                next_recheck_condition=None,
                 created_at_utc=timestamp_utc,
             )
         )
@@ -1358,7 +1475,9 @@ __all__ = [
     "ExperimentPlan",
     "LearningLedgerEntry",
     "PromotionDecision",
+    "PromotionFailureSignal",
     "apply_learning_ledger",
+    "apply_promotion_failure_signals",
     "assert_no_secret_like_values",
     "build_evidence_surfaces",
     "candidate_backlog_document",
@@ -1369,6 +1488,7 @@ __all__ = [
     "ledger_document",
     "mask_sensitive_values",
     "parse_learning_ledger",
+    "parse_promotion_failure_signals",
     "parse_timestamp_utc",
     "risk_grade_for_surfaces",
     "scan_evolution",
