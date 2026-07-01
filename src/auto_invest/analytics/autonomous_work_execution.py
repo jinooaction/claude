@@ -32,6 +32,7 @@ PARSE_MALFORMED = "malformed"
 STATUS_EXECUTION_READY = "EXECUTION_READY"
 STATUS_OPERATOR_APPROVAL_REQUIRED = "OPERATOR_APPROVAL_REQUIRED"
 STATUS_OBSERVATION_WAIT = "OBSERVATION_WAIT"
+STATUS_RELEASED = "RELEASED"
 STATUS_SUPPRESSED = "SUPPRESSED"
 STATUS_BLOCKED = "BLOCKED"
 
@@ -45,6 +46,7 @@ _REJECTED_STATUSES = {
 }
 _BLOCKED_STATUSES = {"blocked", "missing_input", "missing_inputs"}
 _OPERATOR_STATUSES = {"operator_review", "operator_approval", "approval_required"}
+_RELEASED_STATUSES = {"released", "release", "completed", "complete", "done", "shipped"}
 
 _SOURCE_REFS: dict[str, str] = {
     "capital-path-readiness": (
@@ -62,6 +64,7 @@ _SOURCE_REFS: dict[str, str] = {
     "candidate-result-executor": (
         "automation/candidate-implementation-results:candidate_results.json"
     ),
+    "released-work": "automation/released-work-last-run:released_work.json",
     "pipeline-liveness": "automation/pipeline-liveness-last-run:LAST_RUN.md",
 }
 
@@ -588,7 +591,15 @@ def _summary_for_parsed(parsed: Any) -> str:
             f"readiness={parsed.get('readiness_state')}, "
             f"live={parsed.get('live_money_status')}"
         )
-    for key in ("candidates", "packages", "results", "actions", "assessments", "entries"):
+    for key in (
+        "candidates",
+        "packages",
+        "results",
+        "actions",
+        "assessments",
+        "entries",
+        "released_work",
+    ):
         raw = parsed.get(key)
         if isinstance(raw, list):
             return f"{key}={len(raw)}"
@@ -810,6 +821,60 @@ def _apply_ledger_rejections(
     return tuple(updated)
 
 
+def _released_candidates(released_work: Any) -> dict[str, str]:
+    released: dict[str, str] = {}
+    for item in _items(released_work, ("released_work", "entries", "records")):
+        candidate_id = _candidate_id(item, "released")
+        status = _candidate_status(item).lower()
+        if status not in _RELEASED_STATUSES:
+            continue
+        released[candidate_id] = _candidate_reason(
+            item,
+            "released-work 장부가 완료된 후보로 기록했다.",
+        )
+    return released
+
+
+def _apply_released_work(
+    packets: Sequence[WorkPacket],
+    released_work: Any,
+) -> tuple[WorkPacket, ...]:
+    released = _released_candidates(released_work)
+    if not released:
+        return tuple(packets)
+    updated: list[WorkPacket] = []
+    for packet in packets:
+        reason = released.get(packet.candidate_id)
+        if reason is None:
+            updated.append(packet)
+            continue
+        updated.append(
+            replace(
+                packet,
+                status=STATUS_RELEASED,
+                reason_ko=f"released-work 장부가 이 후보를 완료 처리했다: {reason}",
+                next_action_ko="이미 구현·머지·인계된 후보이므로 다음 후보로 넘어간다.",
+                required_inputs=tuple(
+                    dict.fromkeys(
+                        [
+                            *packet.required_inputs,
+                            _SOURCE_REFS["released-work"],
+                        ]
+                    )
+                ),
+                source_refs=tuple(
+                    dict.fromkeys(
+                        [
+                            *packet.source_refs,
+                            _SOURCE_REFS["released-work"],
+                        ]
+                    )
+                ),
+            )
+        )
+    return tuple(updated)
+
+
 def _dedupe_packets(packets: Sequence[WorkPacket]) -> tuple[WorkPacket, ...]:
     by_candidate: dict[str, WorkPacket] = {}
     for packet in packets:
@@ -824,8 +889,9 @@ def _packet_sort_key(packet: WorkPacket) -> tuple[int, int, str]:
         STATUS_EXECUTION_READY: 0,
         STATUS_OPERATOR_APPROVAL_REQUIRED: 1,
         STATUS_BLOCKED: 2,
-        STATUS_SUPPRESSED: 3,
-    }.get(packet.status, 4)
+        STATUS_RELEASED: 3,
+        STATUS_SUPPRESSED: 4,
+    }.get(packet.status, 5)
     return (status_rank, -packet.priority_score, packet.candidate_id)
 
 
@@ -883,6 +949,7 @@ def build_autonomous_work_execution(
     )
     packets.extend(_candidate_packets(parsed))
     packets = list(_apply_ledger_rejections(packets, parsed.get("evolution-ledger")))
+    packets = list(_apply_released_work(packets, parsed.get("released-work")))
 
     ordered = _dedupe_packets(packets)
     ranked = tuple(packet for packet in ordered if packet.status == STATUS_EXECUTION_READY)[:10]
@@ -913,6 +980,7 @@ __all__ = [
     "STATUS_EXECUTION_READY",
     "STATUS_OBSERVATION_WAIT",
     "STATUS_OPERATOR_APPROVAL_REQUIRED",
+    "STATUS_RELEASED",
     "STATUS_SUPPRESSED",
     "WorkPacket",
     "build_autonomous_work_execution",

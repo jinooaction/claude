@@ -1,0 +1,59 @@
+name: Released work ledger
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "5 9 * * *"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/released-work-ledger.yml"
+      - "scripts/released_work_probe.py"
+      - "src/auto_invest/analytics/released_work.py"
+      - "specs/**/spec.md"
+      - "specs/**/plan.md"
+      - "specs/**/tasks.md"
+      - "specs/**/contracts/**"
+
+permissions:
+  contents: write
+
+jobs:
+  released-work-ledger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Build released-work ledger
+        run: |
+          uv run python scripts/released_work_probe.py \
+            --repo-root "$GITHUB_WORKSPACE" \
+            --run-id "$GITHUB_RUN_ID" \
+            --commit "$GITHUB_SHA" \
+            --json-out /tmp/released_work.json \
+            --summary-out /tmp/LAST_RUN.md
+
+      - name: Publish released-work sidecar
+        run: |
+          set -euo pipefail
+          workdir="$(mktemp -d)"
+          git clone --depth 1 --branch automation/released-work-last-run \
+            "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "$workdir" || {
+              git clone --depth 1 "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$workdir"
+              cd "$workdir"
+              git checkout --orphan automation/released-work-last-run
+              git rm -rf .
+            }
+          cd "$workdir"
+          cp /tmp/LAST_RUN.md LAST_RUN.md
+          cp /tmp/released_work.json released_work.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add LAST_RUN.md released_work.json
+          git commit -m "Update released work ledger" || exit 0
+          git push origin HEAD:automation/released-work-last-run --force

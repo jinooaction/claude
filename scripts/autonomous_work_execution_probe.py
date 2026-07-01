@@ -16,6 +16,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from auto_invest.analytics.autonomous_work_execution import build_autonomous_work_execution
+from auto_invest.analytics.released_work import scan_released_work
 
 CONSUMED_SIDECARS: list[tuple[str, str, str]] = [
     (
@@ -45,6 +46,7 @@ CONSUMED_SIDECARS: list[tuple[str, str, str]] = [
         "automation/candidate-implementation-results",
         "candidate_results.json",
     ),
+    ("released-work", "automation/released-work-last-run", "released_work.json"),
     ("pipeline-liveness", "automation/pipeline-liveness-last-run", "LAST_RUN.md"),
 ]
 
@@ -56,7 +58,14 @@ def _parse_now(raw: str | None) -> datetime:
     return parsed.replace(tzinfo=UTC) if parsed.tzinfo is None else parsed.astimezone(UTC)
 
 
-def _read_evidence(evidence_dir: Path) -> dict[str, str | None]:
+def _read_evidence(
+    evidence_dir: Path,
+    *,
+    repo_root: Path | None,
+    now: datetime,
+    run_id: str,
+    commit: str,
+) -> dict[str, str | None]:
     evidence: dict[str, str | None] = {}
     for key, _, _ in CONSUMED_SIDECARS:
         path = evidence_dir / f"{key}.md"
@@ -64,6 +73,13 @@ def _read_evidence(evidence_dir: Path) -> dict[str, str | None]:
             evidence[key] = path.read_text(encoding="utf-8")
         except (FileNotFoundError, OSError):
             evidence[key] = None
+    if repo_root is not None:
+        report = scan_released_work(repo_root, now=now, run_id=run_id, commit=commit)
+        evidence["released-work"] = json.dumps(
+            report.to_dict(),
+            ensure_ascii=False,
+            sort_keys=True,
+        )
     return evidence
 
 
@@ -85,6 +101,14 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--json", action="store_true", help="Print JSON instead of Markdown.")
     parser.add_argument("--json-out", type=Path, help="Write JSON report to this path.")
     parser.add_argument("--summary-out", type=Path, help="Write Markdown report to this path.")
+    parser.add_argument(
+        "--repo-root",
+        type=Path,
+        help=(
+            "Repository root to scan for completed specs. When provided, current checkout "
+            "released-work evidence overrides the sidecar snapshot."
+        ),
+    )
     parser.add_argument("--now", help="Override current UTC time for deterministic tests.")
     parser.add_argument("--run-id", default="local", help="Workflow run id.")
     parser.add_argument("--commit", default="unknown", help="Source commit hash.")
@@ -100,9 +124,16 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{key}\t{branch}\t{filename}")
         return 0
 
+    now = _parse_now(args.now)
     report = build_autonomous_work_execution(
-        _read_evidence(args.evidence_dir),
-        now=_parse_now(args.now),
+        _read_evidence(
+            args.evidence_dir,
+            repo_root=args.repo_root,
+            now=now,
+            run_id=args.run_id,
+            commit=args.commit,
+        ),
+        now=now,
         run_id=args.run_id,
         commit=args.commit,
     )

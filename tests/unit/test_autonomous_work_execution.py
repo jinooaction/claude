@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from auto_invest.analytics.autonomous_work_execution import (
     STATUS_EXECUTION_READY,
     STATUS_OPERATOR_APPROVAL_REQUIRED,
+    STATUS_RELEASED,
     build_autonomous_work_execution,
 )
 
@@ -162,6 +163,53 @@ def test_learning_ledger_suppresses_rejected_candidate_from_other_sources():
     assert report.selected_work.candidate_id == "candidate-rejected"
     assert report.selected_work.status == "SUPPRESSED"
     assert "learning ledger" in report.selected_work.reason_ko
+
+
+def test_released_work_consumes_completed_candidate_and_selects_next_candidate():
+    report = build_autonomous_work_execution(
+        {
+            "capital-path-readiness": _json(
+                {
+                    "priority_candidates": [
+                        {
+                            "candidate_id": "candidate-fd04772a23c5",
+                            "domain_key": "live_readiness",
+                            "status": "new",
+                            "score": 597,
+                            "title_ko": "돈 경로 준비도와 기존 게이트 정렬",
+                        },
+                        {
+                            "candidate_id": "candidate-e481b0309206",
+                            "domain_key": "analysis",
+                            "status": "new",
+                            "score": 531,
+                            "title_ko": "레짐 성과 후보 점수화",
+                        },
+                    ]
+                }
+            ),
+            "released-work": _json(
+                {
+                    "released_work": [
+                        {
+                            "candidate_id": "candidate-fd04772a23c5",
+                            "status": "released",
+                            "reason_ko": "스펙 078로 구현·머지·인계 완료",
+                        }
+                    ]
+                }
+            ),
+            "pipeline-liveness": _liveness(),
+        },
+        now=NOW,
+    )
+
+    assert report.selected_work is not None
+    assert report.selected_work.candidate_id == "candidate-e481b0309206"
+    assert report.selected_work.status == STATUS_EXECUTION_READY
+    released = {packet.candidate_id: packet for packet in report.suppressed_work}
+    assert released["candidate-fd04772a23c5"].status == STATUS_RELEASED
+    assert "released-work" in released["candidate-fd04772a23c5"].reason_ko
 
 
 def test_missing_all_evidence_emits_liveness_repair_packet():
