@@ -23,6 +23,6 @@
 ## 4. 배포와 인계
 
 - [x] T012 PR 본문 품질 관문 작성·검증
-- [ ] T013 PR 생성, 확인, 자동 머지
-- [ ] T014 post-merge workflow sidecar 확인
-- [ ] T015 HANDOFF 갱신
+- [x] T013 PR 생성, 확인, 자동 머지
+- [x] T014 post-merge workflow sidecar 확인
+- [x] T015 HANDOFF 갱신
