@@ -9,6 +9,7 @@ from pathlib import Path
 from auto_invest.analytics.promotion_loop import (
     EVIDENCE_MISSING,
     STAGE_CANARY_CANDIDATE,
+    STAGE_DISCARD,
     STAGE_EXISTING_GATE_READY,
     STAGE_FORWARD_REGISTRATION_READY,
     STAGE_OPERATOR_REVIEW,
@@ -94,6 +95,41 @@ def test_downstream_evidence_is_hidden_until_strategy_prerequisites_pass() -> No
     layers = {layer.name: layer.status for layer in assessment.evidence_layers}
     assert layers["forward_paper"] == EVIDENCE_MISSING
     assert layers["small_live_canary"] == EVIDENCE_MISSING
+
+
+def test_blocked_strategy_factory_result_does_not_repeat_backtest_package() -> None:
+    backlog = {
+        "candidates": [
+            {
+                "candidate_id": "candidate-factory-blocked",
+                "title_ko": "공장 검증 실패 후보",
+                "domain_key": "strategy_design",
+                "status": "new",
+                "risk_grade": 2,
+                "safety_impact": [],
+                "evidence_refs": ["candidate-factory"],
+                "composite_score": 610,
+                "promotion_evidence": {
+                    "factory_kind": "strategy_backtest",
+                    "factory_status": "blocked",
+                    "factory_block_reason_ko": (
+                        "기계 판독 검증 결과에 실패가 있어 승격 증거로 병합하지 않는다."
+                    ),
+                },
+            }
+        ]
+    }
+    assessment = scan_promotion(
+        candidate_backlog=backlog,
+        evidence_texts={},
+        now=NOW,
+        commit="abc1234",
+        run_id="test",
+    ).assessments[0]
+
+    assert assessment.stage == STAGE_DISCARD
+    assert "재설계" in assessment.allowed_next_action
+    assert "기계 판독 검증 결과에 실패" in assessment.blocked_reason_ko
 
 
 def test_oos_and_walk_forward_candidate_is_forward_registration_ready() -> None:

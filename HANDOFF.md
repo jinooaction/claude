@@ -33,15 +33,15 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `0de15a4` — Merge pull request #423 from jinooaction/Codex/candidate-pending-next-actions |
-| main 테스트 | `uv run pytest` → 2358 passed, 4 skipped |
+| 마지막 main 커밋 | `fcc6e5f` — Merge pull request #425 from jinooaction/Codex/074-candidate-history-support |
+| main 테스트 | `uv run pytest` → 2362 passed, 4 skipped |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
 | 열린 PR | 없음(GitHub open PR 조회 결과 `[]`) |
-| 출시 완료 스펙 | 최신 추가: 073(후보 pending next action 보정: 명령 계약 오류와 support input 미준비를 자동 실행 가능한 pass로 줄임), 072(후보 증거 진단: pending 원인과 다음 행동을 기계 판독 가능하게 분해), 071(후보 결과 실행기: 검증 패키지를 candidate result evidence로 변환하고 sidecar 발행), 070(후보 구현 공장: `BACKTEST_REQUIRED` 후보를 검증 패키지와 enriched backlog로 변환), 069(자율 승격 실행 루프: forward paper 등록 큐와 hardened canary 제출 큐 자동화), 068(자율 승격 루프 자동 분류), 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
-| 골격 스펙 | 없음. `.specify/feature.json`은 추적을 위해 `specs/073-candidate-pending-next-actions`를 가리키지만, 스펙 073 구현은 #423으로 main에 들어갔다. |
-| 최근 출시 작업 | #423 스펙 073 후보 pending next action 보정. #422 스펙 072 handoff 갱신. #421 스펙 072 후보 증거 진단 루프. #420 스펙 070/071 handoff 갱신. #419 후보 공장 result status 보정. #418 스펙 071 handoff 갱신. #417 스펙 071 후보 결과 실행기 루프. |
-| 활성 작업 | 코드 PR 없음. 자율 성장 후보는 `automation/autonomous-evolution-last-run`에서 후보를 만들고, 스펙 070/073 `automation/candidate-implementation-factory-last-run`이 후보별 검증 패키지와 enriched backlog를 만들며, 스펙 071~073 `automation/candidate-implementation-results`가 검증 패키지 실행 결과와 진단을 발행한다. #423 이후 result executor run `28474761904`는 commit `0de15a4`, `overall_status=degraded`, `pass=7`, `pending=2`, `fail=0`, `blocked=0`, 진단 집계 `data_history_missing=2`, `insufficient_pass_evidence=1`이다. result sidecar 발행 뒤 factory run `28474828027`을 재실행했고, factory sidecar는 `evidence_passed=7`, `pending=2`, `ready=0`, `blocked=0`이다. 후속 promotion loop run `28474881043`도 success였고, 전략/포트폴리오 후보 2개만 `BACKTEST_REQUIRED`, 비전략 후보 7개는 `FACTORY_PACKAGE_READY`다. 최신 deploy run `28474687085`은 commit `0de15a4` 기준 success다. 최신 KIS smoke sidecar는 run `28426196361`, commit `419fbf7`, `smoke_state=success`, `key_valid=true`이며 #423 코드 배포와 직접 같은 커밋은 아니다. |
-| 안전 경계 | #423 스펙 073은 등급 2 운영 자동화 보정이다. 후보 명령 계약과 workflow support input 준비를 고쳐 no-live 후보 3개를 통과로 줄였지만 주문, 자본 증액, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, live sentinel, 브로커 주문, K1/K2/K4/K5/K6, 헌법, 커널 목록은 변경하지 않았다. 전략 후보는 `historical_backtest`, `recent_oos`, `walk_forward`가 모두 실제 결과에서 `pass`일 때만 forward 등록 준비로 올라간다. 현재 전략 후보 2개는 가격 이력 부족으로 pending/backtest required라 돈 경로로 승격되지 않았다. |
+| 출시 완료 스펙 | 최신 추가: 074(후보 가격 이력 지원: result executor가 read-only 서버 bars-export와 ingest-history로 전략/포트폴리오 후보 history-root를 준비), 073(후보 pending next action 보정: 명령 계약 오류와 support input 미준비를 자동 실행 가능한 pass로 줄임), 072(후보 증거 진단: pending 원인과 다음 행동을 기계 판독 가능하게 분해), 071(후보 결과 실행기: 검증 패키지를 candidate result evidence로 변환하고 sidecar 발행), 070(후보 구현 공장: `BACKTEST_REQUIRED` 후보를 검증 패키지와 enriched backlog로 변환), 069(자율 승격 실행 루프: forward paper 등록 큐와 hardened canary 제출 큐 자동화), 068(자율 승격 루프 자동 분류), 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
+| 골격 스펙 | 없음. `.specify/feature.json`은 추적을 위해 `specs/074-candidate-history-support`를 가리키지만, 스펙 074 구현은 #425로 main에 들어갔다. |
+| 최근 출시 작업 | #425 스펙 074 후보 가격 이력 지원. #424 스펙 073 handoff 갱신. #423 스펙 073 후보 pending next action 보정. #422 스펙 072 handoff 갱신. #421 스펙 072 후보 증거 진단 루프. #420 스펙 070/071 handoff 갱신. #419 후보 공장 result status 보정. |
+| 활성 작업 | #425 배포와 후속 sidecar 재실행까지 완료됐다. result executor run `28503338531`은 commit `fcc6e5f`, `pass=7`, `fail=2`, `pending=0`, `blocked=0`, 진단 집계 없음, 두 전략/포트폴리오 후보 모두 `--history-root`를 사용했다. factory run `28503561736`은 `evidence_passed=7`, `blocked=2`, `pending=0`, `ready=0`로 결과 실패를 enriched backlog에 반영했다. main 기준 promotion loop run `28503609658`은 success였지만 아직 factory 실패를 `DISCARD`로 반영하지 못해 이 브랜치(`Codex/075-promotion-factory-result-state`)에서 follow-up 보정 중이다. 최신 deploy run `28503224288`은 commit `fcc6e5f` 기준 success다. 최신 KIS smoke sidecar는 run `28500268994`, commit `f9f8908`, `smoke_state=success`, `key_valid=true`이며 #425와 같은 commit의 직접 smoke는 아니다. |
+| 안전 경계 | #425 스펙 074와 follow-up 보정은 등급 2 운영 자동화 보정이다. 후보 가격 이력 준비와 승격 루프 판정 문구를 고치지만 주문, 자본 증액, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, live sentinel, 브로커 주문, K1/K2/K4/K5/K6, 헌법, 커널 목록은 변경하지 않았다. 전략 후보는 `historical_backtest`, `recent_oos`, `walk_forward`가 모두 실제 결과에서 `pass`일 때만 forward 등록 준비로 올라간다. 현재 전략 후보 2개는 가격 이력 부족은 해소됐지만 백테스트 결과가 no-edge/fail이라 돈 경로로 승격되지 않는다. |
 
 ## 돈 경로 상태 판독 규칙 (필수 — 스펙 062)
 
@@ -80,6 +80,45 @@ uv run python scripts/money_path_probe.py --manifest | while IFS=$'\t' read -r k
 done
 uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.live_money_state'
 ```
+
+## 최근 관찰 — 2026-07-01 KST (스펙 074 후보 가격 이력 지원과 승격 실패 반영)
+
+현재 `main` 최신은 `fcc6e5f`(#425, 스펙 074 후보 가격 이력 지원)이다.
+직전 주요 커밋은 `66b053c`(스펙 074 구현), `f9f8908`(#424, 스펙 073 handoff 갱신),
+`0de15a4`(#423, 스펙 073 후보 pending next action 보정)이다. 이 인계 갱신 시작 시점의 열린 PR은 없다.
+
+- **문제 정의**: 스펙 073 뒤 남은 후보 2개는 둘 다 `data_history_missing` 때문에
+  `BACKTEST_REQUIRED`에서 멈췄다. 목표는 실거래·브로커 주문·자본 변경 없이 후보 결과 실행기가
+  필요한 가격 이력을 준비하고, 결과가 실패하면 다음 루프가 같은 백테스트를 반복하지 않게 만드는 것이다.
+- **구현 상태**: `candidate_history_support.py`와 `candidate_history_support_probe.py`가
+  후보별 portfolio/db/history-root manifest를 만든다. `candidate_factory.py`는 전략/포트폴리오
+  후보 명령에 `--history-root /tmp/candidate_result_history/.../hist`를 붙인다.
+  `candidate-result-executor.yml`은 SSH key가 있을 때 서버의 `/opt/auto-invest`에서 read-only
+  `bars-export`와 `ingest-history`를 실행해 `/tmp/candidate_result_history`를 채운다.
+- **배포 후 실제 실행**: #425 main push에서 `Deploy on merge to main` run `28503224288` success였다.
+  result executor는 push 직후 한 번 이전 패키지를 읽는 경합이 있었고, 이후 workflow dispatch run
+  `28503338531`을 재실행했다. 최신 result sidecar는 commit `fcc6e5f`, `pass=7`, `fail=2`,
+  `pending=0`, `blocked=0`, 진단 집계 없음이며 두 전략/포트폴리오 실행 모두 `--history-root`를 포함한다.
+- **후속 소비 확인**: result sidecar 뒤 `Candidate implementation factory` run `28503561736`을
+  재실행했다. 최신 factory sidecar는 commit `fcc6e5f`, `evidence_passed=7`, `blocked=2`,
+  `pending=0`, `ready=0`이다. 두 후보는 이제 "데이터가 없어 대기"가 아니라 "기계 판독 백테스트 실패라
+  승격 증거로 병합하지 않음"이다.
+- **승격 루프 보정**: main 기준 `Autonomous promotion loop` run `28503609658`은 success였지만,
+  factory의 `factory_status=blocked`를 아직 `DISCARD`로 해석하지 못해 `BACKTEST_REQUIRED` 문구를
+  반복했다. follow-up 브랜치 `Codex/075-promotion-factory-result-state`는
+  `promotion_loop.py`가 전략/포트폴리오 공장 실패를 재백테스트 대기가 아니라 재설계/학습 장부 후보로
+  분류하게 고친다. 로컬 최신 sidecar smoke에서 두 후보 모두 `DISCARD`로 분류됨을 확인했다.
+- **안전 경계**: 등급 2 운영 자동화 보정이다. 주문, 브로커 실주문 API, 자본 증액, whitelist/caps 확대,
+  live 전략 교체, live sentinel, 헌법, 커널 목록, K1/K2/K4/K5/K6 변경 없음. 서버 `bars-export`와
+  `ingest-history`는 읽기 전용 가격 이력 준비이고, 실패하면 후보는 통과로 위조되지 않는다.
+- **검증**: 스펙 074 PR #425 머지 전 focused pytest 24 통과, synthetic history smoke에서
+  `pending=0`, `fail=2`, `diagnostic_counts={}` 재현, `uv run pytest` 2362 통과·4 스킵,
+  `uv run ruff check src tests` 통과, `git diff --check` 통과, workflow YAML parse OK,
+  strict 하네스 `OK (14/14)`, HANDOFF 사실 검증 OK, PR 품질 관문 성공. follow-up 보정은
+  `uv run pytest tests/unit/test_promotion_loop.py tests/integration/test_promotion_loop_probe.py tests/unit/test_candidate_factory.py -q`
+  23 통과, `uv run ruff check src/auto_invest/analytics/promotion_loop.py tests/unit/test_promotion_loop.py` 통과,
+  최신 sidecar 로컬 promotion smoke에서 두 후보 `DISCARD`를 확인했다.
+- **상세 인계**: `HANDOFF-078-CANDIDATE-HISTORY-SUPPORT.md`.
 
 ## 최근 관찰 — 2026-07-01 KST (스펙 073 후보 pending next action 보정)
 
@@ -857,6 +896,26 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
   통과, `uv run python scripts/agent_harness_probe.py --strict` `OK (14/14)`,
   `uv run python scripts/check_handoff_facts.py` 통과, PR 품질 관문 통과. 머지 직전 전체 테스트와
   린트를 다시 실행해 같은 결과를 확인했다.
+
+## 최근 마일스톤 — 2026-07-01 KST (스펙 074 후보 가격 이력 지원)
+
+main 머지 `fcc6e5f`(#425). 후보 결과 실행기가 전략/포트폴리오 후보의 가격 이력을 서버의
+read-only `bars-export`와 `ingest-history`로 준비하고, 후보 명령에 `--history-root`를 붙여
+`data_history_missing` pending을 제거했다. 상세: `HANDOFF-078-CANDIDATE-HISTORY-SUPPORT.md`,
+`specs/074-candidate-history-support/`.
+
+- **핵심 구현**: `candidate_history_support.py`가 후보별 portfolio/db/history-root manifest를 만들고,
+  `candidate-result-executor.yml`이 SSH 사용 가능 시 서버에서 가격 이력을 준비한다. 실주문, 자본,
+  live 설정, whitelist/caps, sentinel은 건드리지 않는다.
+- **실행 결과**: result executor run `28503338531`은 `pass=7`, `fail=2`, `pending=0`,
+  `blocked=0`, 진단 집계 없음이다. 두 전략/포트폴리오 후보 모두 `--history-root`를 사용했다.
+- **후속 루프**: factory run `28503561736`은 `evidence_passed=7`, `blocked=2`, `pending=0`을
+  반영했다. main 기준 promotion loop run `28503609658`은 아직 factory 실패를 `DISCARD`로 반영하지
+  못해 follow-up 브랜치 `Codex/075-promotion-factory-result-state`에서 보정 중이다.
+- **안전 경계**: 주문, 브로커 실주문, 자본, whitelist/caps, live config, sentinel, 헌법, 커널 변경 없음.
+  배포는 dry-run worker 코드 반영이며 실거래 전환이 아니다.
+- **다음 행동**: 두 후보는 더 이상 데이터 부족 대기가 아니다. 백테스트 no-edge/fail 후보를 승격하지
+  않고 재설계 또는 학습 장부로 보내도록 promotion loop 보정을 머지한 뒤, handoff를 다시 갱신한다.
 
 ## 최근 마일스톤 — 2026-07-01 KST (스펙 073 후보 pending next action 보정)
 

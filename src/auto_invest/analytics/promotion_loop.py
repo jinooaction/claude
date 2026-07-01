@@ -371,6 +371,16 @@ def assess_candidate(
             "전략/포트폴리오 후보가 아니므로 forward paper 등록 대상은 아니다.",
             next_gate=next_gate,
         )
+    factory_failure = _strategy_factory_failure_reason(candidate)
+    if factory_failure:
+        return _assessment(
+            candidate,
+            STAGE_DISCARD,
+            layers,
+            "검증 실패 후보를 승격하지 않고 재설계 또는 학습 장부 후보로 보낸다.",
+            factory_failure,
+            next_gate=None,
+        )
     if layer_status["historical_backtest"] != EVIDENCE_PASS:
         return _assessment(
             candidate,
@@ -687,6 +697,20 @@ def _has_non_strategy_factory_package(candidate: PromotionCandidate) -> bool:
     if not kind or kind in _FACTORY_STRATEGY_KINDS:
         return False
     return status in {"ready", "pending", "evidence_passed", "pass"}
+
+
+def _strategy_factory_failure_reason(candidate: PromotionCandidate) -> str | None:
+    evidence = candidate.promotion_evidence
+    kind = str(evidence.get("factory_kind") or "").strip()
+    status = str(evidence.get("factory_status") or "").strip().lower()
+    if kind not in _FACTORY_STRATEGY_KINDS:
+        return None
+    if status not in {"blocked", "fail", "failed", "no_edge", "false"}:
+        return None
+    reason = str(evidence.get("factory_block_reason_ko") or "").strip()
+    if reason:
+        return reason
+    return "후보 구현 공장의 기계 판독 검증 결과가 실패했다."
 
 
 def _has_missing_source(candidate: PromotionCandidate) -> bool:
