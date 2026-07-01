@@ -15,6 +15,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from auto_invest.analytics.candidate_history_support import (
+    require_history_root_for_portfolio,
+)
 from auto_invest.analytics.evolution_loop import mask_sensitive_values
 
 SCHEMA_VERSION = "1.0"
@@ -550,22 +553,25 @@ def _commands_for(kind: str, candidate_id: str) -> tuple[str, ...]:
     slug = _safe_slug(candidate_id)
     if kind == KIND_STRATEGY_BACKTEST:
         return (
-            "uv run auto-invest portfolio-walk-forward --portfolio "
-            "deploy/micro-gtaa-live-portfolio.toml --trailing-years 5 "
-            f"--db data/candidate-factory/{slug}.db "
-            f"--halt-path data/candidate-factory/{slug}.halt.flag --json",
+            _portfolio_walk_forward_command(
+                portfolio="deploy/micro-gtaa-live-portfolio.toml",
+                db_path=f"data/candidate-factory/{slug}.db",
+                halt_path=f"data/candidate-factory/{slug}.halt.flag",
+            ),
             "uv run python scripts/deep_walk_forward_probe.py --segment-months 60",
         )
     if kind == KIND_PORTFOLIO_BACKTEST:
         return (
-            "uv run auto-invest portfolio-walk-forward --portfolio "
-            "deploy/global-trend-wide-portfolio.toml --trailing-years 5 "
-            f"--db data/candidate-factory/{slug}-wide.db "
-            f"--halt-path data/candidate-factory/{slug}.halt.flag --json",
-            "uv run auto-invest portfolio-walk-forward --portfolio "
-            "deploy/multi-asset-trend-portfolio.toml --trailing-years 5 "
-            f"--db data/candidate-factory/{slug}-multi.db "
-            f"--halt-path data/candidate-factory/{slug}.halt.flag --json",
+            _portfolio_walk_forward_command(
+                portfolio="deploy/global-trend-wide-portfolio.toml",
+                db_path=f"data/candidate-factory/{slug}-wide.db",
+                halt_path=f"data/candidate-factory/{slug}.halt.flag",
+            ),
+            _portfolio_walk_forward_command(
+                portfolio="deploy/multi-asset-trend-portfolio.toml",
+                db_path=f"data/candidate-factory/{slug}-multi.db",
+                halt_path=f"data/candidate-factory/{slug}.halt.flag",
+            ),
         )
     if kind == KIND_GATE_ALIGNMENT:
         return ("uv run python scripts/money_path_probe.py --manifest",)
@@ -596,7 +602,11 @@ def _commands_for(kind: str, candidate_id: str) -> tuple[str, ...]:
 
 def _required_inputs_for(kind: str) -> tuple[str, ...]:
     if kind in _STRATEGY_KINDS:
-        return ("data/history dataset", "portfolio TOML", "candidate result evidence")
+        return (
+            "candidate history support datasets",
+            "portfolio TOML",
+            "candidate result evidence",
+        )
     if kind == KIND_DATA_COLLECTION:
         return ("deploy/public-data.toml", "network access to public data sources")
     if kind == KIND_DATA_QUALITY:
@@ -608,6 +618,21 @@ def _required_inputs_for(kind: str) -> tuple[str, ...]:
     if kind == KIND_GATE_ALIGNMENT:
         return ("money-path and promotion sidecars",)
     return ("current automation sidecars",)
+
+
+def _portfolio_walk_forward_command(
+    *,
+    portfolio: str,
+    db_path: str,
+    halt_path: str,
+) -> str:
+    history_root = require_history_root_for_portfolio(portfolio)
+    return (
+        "uv run auto-invest portfolio-walk-forward "
+        f"--portfolio {portfolio} --trailing-years 5 "
+        f"--history-root {history_root} "
+        f"--db {db_path} --halt-path {halt_path} --json"
+    )
 
 
 def _produces_evidence_for(kind: str) -> tuple[str, ...]:

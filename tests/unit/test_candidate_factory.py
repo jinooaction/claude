@@ -61,6 +61,9 @@ def test_factory_builds_one_package_for_every_current_candidate_kind() -> None:
     assert by_id["candidate-6ee3370e933d"].package_kind == KIND_DATA_QUALITY
     assert all(package.status == STATUS_READY for package in run.packages)
     assert "portfolio-walk-forward" in by_id["candidate-1ed634d8bf6d"].commands[0]
+    assert "--history-root /tmp/candidate_result_history/micro-gtaa/hist" in (
+        by_id["candidate-1ed634d8bf6d"].commands[0]
+    )
 
 
 def test_factory_emits_current_candidate_support_input_commands() -> None:
@@ -84,6 +87,22 @@ def test_factory_emits_current_candidate_support_input_commands() -> None:
     assert "--sidecar-dir /tmp/candidate_result_sidecars" in data_quality_command
     assert "bars-status" not in data_quality_command
     assert "data/auto_invest.db" not in data_quality_command
+
+    strategy_package = by_id["candidate-1ed634d8bf6d"]
+    assert strategy_package.required_inputs[0] == "candidate history support datasets"
+    assert "--history-root /tmp/candidate_result_history/micro-gtaa/hist" in (
+        strategy_package.commands[0]
+    )
+
+    portfolio_package = by_id["candidate-cc96b35062da"]
+    assert "--history-root /tmp/candidate_result_history/global-trend-wide/hist" in (
+        portfolio_package.commands[0]
+    )
+    assert "--history-root /tmp/candidate_result_history/multi-asset-trend/hist" in (
+        portfolio_package.commands[1]
+    )
+    assert "VULTR_SSH" not in "\n".join(portfolio_package.commands)
+    assert " ssh " not in f" {' '.join(portfolio_package.commands)} "
 
 
 def test_missing_result_evidence_never_creates_false_pass() -> None:
