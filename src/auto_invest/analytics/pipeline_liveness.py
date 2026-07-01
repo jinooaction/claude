@@ -355,6 +355,14 @@ def default_specs() -> list[SidecarSpec]:
             description="첫-자본까지의 길 종합·ETA(스펙 052, 보고 전용)",
         ),
         SidecarSpec(
+            key="capital-path-readiness",
+            branch="automation/capital-path-readiness-last-run",
+            filename="LAST_RUN.md",
+            max_age_hours=30.0,  # 매일 08:10 — 자본 경로 준비도 종합(보고 전용)
+            critical=False,
+            description="자본 경로 준비도 루프(스펙 076, 보고 전용)",
+        ),
+        SidecarSpec(
             key="autonomous-evolution",
             branch="automation/autonomous-evolution-last-run",
             filename="LAST_RUN.md",
