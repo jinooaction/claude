@@ -1,0 +1,123 @@
+name: Capital path readiness (자본 경로 준비도)
+
+# 스펙 076 — 자본 경로 준비도 루프.
+#
+# 목적: money-path, edge-autoarm, reassign, paper-forward, kis-smoke, promotion/evolution
+# sidecar를 한 번에 읽어 "지금 자본 투입 준비도가 어디까지 왔나"와 "다음 안전 행동은
+# 무엇인가"를 매일 자동 산출한다.
+#
+# 안전: 읽기 전용·돈 0 이동. 이 워크플로는 automation sidecar 브랜치들을 fetch/read하고
+# 자기 sidecar 브랜치만 발행한다. 실제 주문, 계좌 자본 배분, live 설정 변경은 기존
+# 게이트와 운영자 승인 경계에 남긴다.
+
+on:
+  schedule:
+    # 매일 08:10 UTC — money-path(08:00) 직후, 직전 promotion/evolution 결과와 함께 종합.
+    - cron: "10 8 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/auto_invest/analytics/capital_path_readiness.py'
+      - 'src/auto_invest/analytics/pipeline_liveness.py'
+      - 'scripts/capital_path_readiness_probe.py'
+      - '.github/workflows/capital-path-readiness.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: capital-path-readiness
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Collect source sidecars
+        run: |
+          set -uo pipefail
+          mkdir -p /tmp/capital_path_sidecars
+          git fetch --depth=1 origin \
+            '+refs/heads/automation/*:refs/remotes/origin/automation/*' || true
+          uv run python scripts/capital_path_readiness_probe.py --manifest > /tmp/manifest.tsv
+          while IFS=$'\t' read -r key branch filename; do
+            [[ -z "${key}" ]] && continue
+            if git show "origin/${branch}:${filename}" \
+                 > "/tmp/capital_path_sidecars/${key}.md" 2>/dev/null; then
+              echo "collected ${key}: ${branch}:${filename}"
+            else
+              rm -f "/tmp/capital_path_sidecars/${key}.md"
+              echo "missing ${key}: ${branch}:${filename}"
+            fi
+          done < /tmp/manifest.tsv
+
+      - name: Assess capital path readiness
+        run: |
+          set -uo pipefail
+          uv run python scripts/capital_path_readiness_probe.py \
+            --evidence-dir /tmp/capital_path_sidecars \
+            --run-id "${GITHUB_RUN_ID}" \
+            --commit "${GITHUB_SHA}" \
+            --json-out /tmp/capital_path_readiness.json \
+            --summary-out /tmp/capital_path_readiness.md
+          cat /tmp/capital_path_readiness.md
+
+      - name: Publish sidecar
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -uo pipefail
+          BRANCH=automation/capital-path-readiness-last-run
+          tmpdir=$(mktemp -d)
+
+          {
+            if [[ -f /tmp/capital_path_readiness.md ]]; then
+              cat /tmp/capital_path_readiness.md
+            else
+              echo "# 자본 경로 준비도 루프 — 보고 생성 실패"
+              echo ""
+              echo "Assess 스텝 진입 전 실패. 워크플로 로그를 확인해야 합니다."
+            fi
+            echo ""
+            echo "## 메타데이터"
+            echo ""
+            echo "| 항목 | 값 |"
+            echo "|------|-----|"
+            echo "| run_id | ${GITHUB_RUN_ID} |"
+            echo "| run_url | https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} |"
+            echo "| commit | ${GITHUB_SHA} |"
+            echo "| trigger | ${GITHUB_EVENT_NAME} |"
+            echo "| timestamp_utc | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
+            echo ""
+            echo "## 결정 JSON"
+            echo ""
+            echo '```json'
+            cat /tmp/capital_path_readiness.json 2>/dev/null || echo "{}"
+            echo '```'
+          } > "${tmpdir}/LAST_RUN.md"
+          cp /tmp/capital_path_readiness.json "${tmpdir}/capital_path_readiness.json" \
+            2>/dev/null || echo '{}' > "${tmpdir}/capital_path_readiness.json"
+
+          cd "${tmpdir}"
+          git init -q
+          git config user.name "capital-path-readiness-bot"
+          git config user.email "capital-path-readiness-bot@noreply.github.com"
+          git checkout --orphan publish -q
+          git add LAST_RUN.md capital_path_readiness.json
+          git commit -q -m "capital-path-readiness run ${GITHUB_RUN_ID} @ ${GITHUB_SHA:0:7}"
+          git push --force \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "publish:${BRANCH}"
+          echo "Published to ${BRANCH}."
+          echo "Read: git fetch origin ${BRANCH} && git show origin/${BRANCH}:LAST_RUN.md"
