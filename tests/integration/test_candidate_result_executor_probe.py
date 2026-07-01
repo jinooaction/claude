@@ -88,15 +88,25 @@ def test_result_executor_workflow_publishes_sidecar_without_order_or_broker_path
     assert "origin/${ref}:${file}" in text
     assert "/tmp/candidate_result_public_data" in text
     assert "origin/automation/public-data" in text
+    assert "candidate_history_support_probe.py --manifest" in text
+    assert "candidate_history_manifest.tsv" in text
+    assert "/tmp/candidate_result_history" in text
+    assert "bars-export" in text
+    assert "ingest-history" in text
     assert "automation/candidate-implementation-results" in text
     assert "candidate_result_executor_probe.py" in text
     assert "candidate_results.json" in text
     assert "KIS_" not in text
-    assert "VULTR_SSH" not in text
-    assert "ssh " not in text and "ssh -" not in text
+    assert "VULTR_SSH_PRIVATE_KEY" in text
+    assert "VULTR_SSH_HOST" in text
+    assert "VULTR_SSH_USER" in text
+    assert "ssh " in text and "scp " in text
     assert "--mode live" not in text
     assert "--confirm-live" not in text
     assert "rebalance-live.request" not in text
+    assert "rebalance-micro-gtaa.request" not in text
+    assert "rebalance-once" not in text
+    assert "backfill-bars" not in text
 
 
 def test_factory_workflow_collects_candidate_result_sidecar() -> None:

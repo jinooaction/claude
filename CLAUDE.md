@@ -220,7 +220,7 @@ the current worktree. Do not trust prose in this block as the source of truth
 for in-flight work; use the `git_ground_truth` start hook, latest `HANDOFF.md`,
 and `/sync` against `jinooaction/claude` `Codex/*` branches before continuing.
 
-현재 계획 포인터: `specs/073-candidate-pending-next-actions/plan.md` — 후보 결과 실행기에서 자동으로 고칠 수 있는 pending 원인(명령 계약 오류, support input 미준비, 기본 DB 의존)을 줄이고, 가격 이력 부족은 별도 데이터 수집 작업으로 정직하게 남기는 설계.
+현재 계획 포인터: `specs/074-candidate-history-support/plan.md` — 후보 결과 실행기의 남은 가격 이력 pending을 줄이기 위해, 서버의 기존 가격 DB를 읽기 전용으로 `bars-export -> ingest-history` 변환해 후보 백테스트가 deterministic `--history-root`를 쓰게 만드는 설계.
 
 머지 완료(베이스라인): spec 004 (LLM 판단 지점), 005 (자율 튜너), 006 (배포 자동화), 007 (하드닝 카나리), 008 (백테스트), 009 (paper-run), 010 (자동 룰 설계자), 011 (라이브 성과 측정). **주의: 일부 tasks.md 가 stale 0% 로 표시된 적 있음 — 코드/테스트를 믿을 것.**
 

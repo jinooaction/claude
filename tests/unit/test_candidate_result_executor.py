@@ -135,6 +135,65 @@ def test_strategy_verdict_is_case_insensitive() -> None:
     assert run.results[0].walk_forward == "pass"
 
 
+def test_strategy_history_root_command_is_allowed_and_can_pass() -> None:
+    seen: list[tuple[str, ...]] = []
+
+    def runner(command: list[str] | tuple[str, ...], timeout: int) -> CommandExecution:
+        seen.append(tuple(command))
+        return CommandExecution(
+            command=tuple(command),
+            exit_code=0,
+            stdout=json.dumps({"strategy_dsr": "0.97", "verdict": "EDGE_CONFIRMED"}),
+            stderr="",
+        )
+
+    run = build_candidate_result_executor_run(
+        package_plan={
+            "schema_version": "1.0",
+            "packages": [
+                {
+                    "package_id": "pkg-history",
+                    "candidate_id": "candidate-history",
+                    "package_kind": "strategy_backtest",
+                    "status": "ready",
+                    "commands": [
+                        "uv run auto-invest portfolio-walk-forward "
+                        "--portfolio deploy/micro-gtaa-live-portfolio.toml "
+                        "--trailing-years 5 "
+                        "--history-root /tmp/candidate_result_history/micro-gtaa/hist "
+                        "--db data/candidate-factory/candidate-history.db "
+                        "--halt-path data/candidate-factory/candidate-history.halt.flag "
+                        "--json"
+                    ],
+                }
+            ],
+        },
+        now=NOW,
+        runner=runner,
+    )
+
+    assert seen == [
+        (
+            "uv",
+            "run",
+            "auto-invest",
+            "portfolio-walk-forward",
+            "--portfolio",
+            "deploy/micro-gtaa-live-portfolio.toml",
+            "--trailing-years",
+            "5",
+            "--history-root",
+            "/tmp/candidate_result_history/micro-gtaa/hist",
+            "--db",
+            "data/candidate-factory/candidate-history.db",
+            "--halt-path",
+            "data/candidate-factory/candidate-history.halt.flag",
+            "--json",
+        )
+    ]
+    assert run.results[0].status == STATUS_PASS
+
+
 def test_unsafe_command_is_blocked_without_execution() -> None:
     calls: list[tuple[str, ...]] = []
 
