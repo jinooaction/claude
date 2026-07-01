@@ -1,7 +1,8 @@
 name: Autonomous work execution loop (자율 작업 실행)
 
 # 스펙 077 — 기존 자율 성장·승격·자본 준비도 sidecar를 읽어 다음 Codex 작업 패킷을
-# 자동 발행한다.
+# 자동 발행한다. 스펙 079부터 현재 체크아웃의 완료 스펙도 읽어 이미 출시된 후보를
+# 다시 선택하지 않는다.
 #
 # 안전: 읽기 전용. 이 워크플로는 automation sidecar 브랜치들을 fetch/read하고 자기
 # sidecar 브랜치만 발행한다. 실제 주문, 계좌 자본 배분, live 설정 변경, 코드 자동 수정,
@@ -16,9 +17,13 @@ on:
     branches: [main]
     paths:
       - 'src/auto_invest/analytics/autonomous_work_execution.py'
+      - 'src/auto_invest/analytics/released_work.py'
       - 'src/auto_invest/analytics/pipeline_liveness.py'
       - 'scripts/autonomous_work_execution_probe.py'
+      - 'scripts/released_work_probe.py'
       - '.github/workflows/autonomous-work-execution.yml'
+      - 'specs/**/tasks.md'
+      - 'specs/**/contracts/**'
 
 permissions:
   contents: write
@@ -64,6 +69,7 @@ jobs:
           set -uo pipefail
           uv run python scripts/autonomous_work_execution_probe.py \
             --evidence-dir /tmp/autonomous_work_sidecars \
+            --repo-root "$GITHUB_WORKSPACE" \
             --run-id "${GITHUB_RUN_ID}" \
             --commit "${GITHUB_SHA}" \
             --json-out /tmp/autonomous_work_execution.json \

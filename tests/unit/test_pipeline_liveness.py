@@ -224,6 +224,11 @@ def test_default_specs_registry_sane():
         by_key["candidate-result-executor"].branch
         == "automation/candidate-implementation-results"
     )
+    # 스펙 079 — 완료 후보 소비 장부. 정지하면 같은 완료 후보를 반복 선택할 수 있으나
+    # 돈 이동 경로는 아니므로 비핵심 감시로 드러낸다.
+    assert "released-work" in keys
+    assert by_key["released-work"].critical is False
+    assert by_key["released-work"].branch == "automation/released-work-last-run"
     # 스펙 069 — 승격 실행 루프와 promotion 전용 검증 채널도 감시 대상.
     # 돈 이동은 기존 게이트만 담당하므로 비핵심이지만, 침묵 정지는 드러나야 한다.
     assert "autonomous-promotion-actions" in keys

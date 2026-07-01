@@ -42,6 +42,7 @@ def test_manifest_matches_contract(capsys):
             "candidate-result-executor\tautomation/candidate-implementation-results\t"
             "candidate_results.json"
         ),
+        "released-work\tautomation/released-work-last-run\treleased_work.json",
         "pipeline-liveness\tautomation/pipeline-liveness-last-run\tLAST_RUN.md",
     ]
 
@@ -101,6 +102,68 @@ def test_probe_writes_json_and_markdown(tmp_path, capsys):
     assert "자율 작업 실행 루프" in summary_out.read_text(encoding="utf-8")
 
 
+def test_probe_repo_root_released_work_overrides_sidecar_lag(tmp_path, capsys):
+    evidence_dir = tmp_path / "evidence"
+    evidence_dir.mkdir()
+    repo_root = tmp_path / "repo"
+    contracts_dir = (
+        repo_root
+        / "specs"
+        / "078-money-gate-alignment-loop"
+        / "contracts"
+    )
+    contracts_dir.mkdir(parents=True)
+    (contracts_dir.parent / "tasks.md").write_text("- [x] 구현 완료\n", encoding="utf-8")
+    (contracts_dir / "money-gate-alignment.md").write_text(
+        '{ "selected_work_candidate": "candidate-fd04772a23c5" }\n',
+        encoding="utf-8",
+    )
+    (evidence_dir / "capital-path-readiness.md").write_text(
+        json.dumps(
+            {
+                "priority_candidates": [
+                    {
+                        "candidate_id": "candidate-fd04772a23c5",
+                        "domain_key": "live_readiness",
+                        "status": "new",
+                        "score": 597,
+                    },
+                    {
+                        "candidate_id": "candidate-e481b0309206",
+                        "domain_key": "analysis",
+                        "status": "new",
+                        "score": 531,
+                    },
+                ]
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    (evidence_dir / "pipeline-liveness.md").write_text(
+        "## 결정 JSON\n\n```json\n{\"overall\":\"OK\",\"checks\":[]}\n```\n",
+        encoding="utf-8",
+    )
+
+    rc = probe_main(
+        [
+            "--evidence-dir",
+            str(evidence_dir),
+            "--repo-root",
+            str(repo_root),
+            "--json",
+            "--now",
+            "2026-07-02T09:10:00Z",
+        ]
+    )
+
+    assert rc == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["selected_work"]["candidate_id"] == "candidate-e481b0309206"
+    suppressed = {item["candidate_id"]: item for item in payload["suppressed_work"]}
+    assert suppressed["candidate-fd04772a23c5"]["status"] == "RELEASED"
+
+
 def test_pipeline_liveness_registers_autonomous_work_execution():
     specs = {spec.key: spec for spec in default_specs()}
 
@@ -109,6 +172,14 @@ def test_pipeline_liveness_registers_autonomous_work_execution():
         "automation/autonomous-work-execution-last-run"
     )
     assert specs["autonomous-work-execution"].critical is False
+
+
+def test_pipeline_liveness_registers_released_work():
+    specs = {spec.key: spec for spec in default_specs()}
+
+    assert "released-work" in specs
+    assert specs["released-work"].branch == "automation/released-work-last-run"
+    assert specs["released-work"].critical is False
 
 
 def test_workflow_stays_read_only_safety_contract():
@@ -130,3 +201,5 @@ def test_workflow_stays_read_only_safety_contract():
     for token in forbidden:
         assert token not in workflow
     assert "automation/autonomous-work-execution-last-run" in workflow
+    assert "--repo-root \"$GITHUB_WORKSPACE\"" in workflow
+    assert "scripts/released_work_probe.py" in workflow
