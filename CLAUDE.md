@@ -220,7 +220,7 @@ the current worktree. Do not trust prose in this block as the source of truth
 for in-flight work; use the `git_ground_truth` start hook, latest `HANDOFF.md`,
 and `/sync` against `jinooaction/claude` `Codex/*` branches before continuing.
 
-현재 계획 포인터: `specs/077-autonomous-work-execution-loop/plan.md` — 기존 성장·승격·자본 준비도 sidecar를 읽어 다음 Codex 작업 패킷을 자동 발행하는 읽기 전용 운영 루프 설계.
+현재 계획 포인터: `specs/078-money-gate-alignment-loop/plan.md` — 돈 경로 관련 sidecar를 한 장의 evidence package로 정렬하고 불일치와 다음 자동 작업을 발행하는 읽기 전용 운영 루프 설계.
 
 머지 완료(베이스라인): spec 004 (LLM 판단 지점), 005 (자율 튜너), 006 (배포 자동화), 007 (하드닝 카나리), 008 (백테스트), 009 (paper-run), 010 (자동 룰 설계자), 011 (라이브 성과 측정). **주의: 일부 tasks.md 가 stale 0% 로 표시된 적 있음 — 코드/테스트를 믿을 것.**
 
