@@ -38,13 +38,15 @@ jobs:
             --summary-out /tmp/LAST_RUN.md
 
       - name: Publish released-work sidecar
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           workdir="$(mktemp -d)"
           git clone --depth 1 --branch automation/released-work-last-run \
-            "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
             "$workdir" || {
-              git clone --depth 1 "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$workdir"
+              git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$workdir"
               cd "$workdir"
               git checkout --orphan automation/released-work-last-run
               git rm -rf .

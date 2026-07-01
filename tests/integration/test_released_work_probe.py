@@ -76,5 +76,8 @@ def test_workflow_stays_read_only_safety_contract():
     ]
     for token in forbidden:
         assert token not in workflow
+    assert "GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}" in workflow
+    assert "${GH_TOKEN}" in workflow
+    assert "${GITHUB_TOKEN}" not in workflow
     assert "automation/released-work-last-run" in workflow
     assert "scripts/released_work_probe.py" in workflow
