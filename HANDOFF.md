@@ -33,15 +33,15 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `fa8cc32` — Merge pull request #428 from jinooaction/Codex/075-strategy-failure-learning |
-| main 테스트 | `uv run pytest` → 2366 passed, 4 skipped |
+| 마지막 main 커밋 | `23ec54b` — Merge pull request #430 from jinooaction/Codex/076-capital-path-readiness-loop |
+| main 테스트 | `uv run pytest` → 2374 passed, 4 skipped |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
-| 열린 PR | 없음(GitHub open PR 조회 결과 `[]`) |
-| 출시 완료 스펙 | 최신 추가: 075(전략 실패 학습: promotion `DISCARD` 전략/포트폴리오 후보를 autonomous evolution `learning_ledger.json`의 `rejected` 항목으로 영구 기록), 074(후보 가격 이력 지원: result executor가 read-only 서버 bars-export와 ingest-history로 전략/포트폴리오 후보 history-root를 준비), 073(후보 pending next action 보정: 명령 계약 오류와 support input 미준비를 자동 실행 가능한 pass로 줄임), 072(후보 증거 진단: pending 원인과 다음 행동을 기계 판독 가능하게 분해), 071(후보 결과 실행기: 검증 패키지를 candidate result evidence로 변환하고 sidecar 발행), 070(후보 구현 공장: `BACKTEST_REQUIRED` 후보를 검증 패키지와 enriched backlog로 변환), 069(자율 승격 실행 루프: forward paper 등록 큐와 hardened canary 제출 큐 자동화), 068(자율 승격 루프 자동 분류), 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
-| 골격 스펙 | 없음. `.specify/feature.json`은 추적을 위해 `specs/075-strategy-failure-learning`을 가리키고, 스펙 075 구현은 #428로 main에 들어갔다. |
-| 최근 출시 작업 | #428 스펙 075 전략 실패 학습 장부화. #426 후보 공장 실패 결과의 승격 루프 반복 보정. #425 스펙 074 후보 가격 이력 지원. #424 스펙 073 handoff 갱신. #423 스펙 073 후보 pending next action 보정. #422 스펙 072 handoff 갱신. |
-| 활성 작업 | 코드 PR 없음. #428 배포와 autonomous evolution sidecar 실행까지 완료됐다. 최신 deploy run `28507752817`은 commit `fa8cc32` 기준 success다. 최신 autonomous evolution run `28507752974`는 commit `fa8cc32`, `overall_status=ok`이며 `learning_ledger.json`에 `candidate-1ed634d8bf6d`, `candidate-cc96b35062da`를 모두 `decision=rejected`, `evidence_package_id=autonomous-promotion:28504209238`로 기록했다. `candidate_backlog.json`에서도 두 후보 status는 `rejected`다. result executor run `28503338531`은 commit `fcc6e5f`, `pass=7`, `fail=2`, `pending=0`, `blocked=0`이고, promotion loop run `28504209238`은 commit `d3ca5d5`, 두 전략/포트폴리오 후보를 `DISCARD`로 분류했다. 최신 KIS smoke sidecar는 run `28500268994`, commit `f9f8908`, `smoke_state=success`, `key_valid=true`이며 #428과 같은 commit의 직접 smoke는 아니다. |
-| 안전 경계 | #428 스펙 075는 등급 2 운영 자동화 보정이다. 기존 promotion summary와 evolution sidecar JSON만 읽어 실패 후보를 학습 장부에 남긴다. 주문, 자본 증액, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, live sentinel, 브로커 주문, K1/K2/K4/K5/K6, 헌법, 커널 목록은 변경하지 않았다. `Backtest -> Canary -> Full` 순서는 유지되며, 현재 전략 후보 2개는 가격 이력 부족은 해소됐지만 백테스트 no-edge/fail이라 돈 경로로 승격되지 않는다. |
+| 열린 PR | 코드 PR 없음. #430 뒤 남은 작업은 이 handoff-only 기록 갱신뿐이었다. |
+| 출시 완료 스펙 | 최신 추가: 076(자본 경로 준비도 루프: money-path, edge-autoarm, reassign, paper-forward, KIS smoke, promotion/evolution sidecar를 읽어 자본 투입 준비도와 다음 안전 행동을 `automation/capital-path-readiness-last-run`에 발행), 075(전략 실패 학습: promotion `DISCARD` 전략/포트폴리오 후보를 autonomous evolution `learning_ledger.json`의 `rejected` 항목으로 영구 기록), 074(후보 가격 이력 지원: result executor가 read-only 서버 bars-export와 ingest-history로 전략/포트폴리오 후보 history-root를 준비), 073(후보 pending next action 보정: 명령 계약 오류와 support input 미준비를 자동 실행 가능한 pass로 줄임), 072(후보 증거 진단: pending 원인과 다음 행동을 기계 판독 가능하게 분해), 071(후보 결과 실행기: 검증 패키지를 candidate result evidence로 변환하고 sidecar 발행), 070(후보 구현 공장: `BACKTEST_REQUIRED` 후보를 검증 패키지와 enriched backlog로 변환), 069(자율 승격 실행 루프: forward paper 등록 큐와 hardened canary 제출 큐 자동화), 068(자율 승격 루프 자동 분류), 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
+| 골격 스펙 | 없음. `.specify/feature.json`은 추적을 위해 `specs/076-capital-path-readiness-loop`을 가리키고, 스펙 076 구현은 #430으로 main에 들어갔다. |
+| 최근 출시 작업 | #430 스펙 076 자본 경로 준비도 루프. #428 스펙 075 전략 실패 학습 장부화. #426 후보 공장 실패 결과의 승격 루프 반복 보정. #425 스펙 074 후보 가격 이력 지원. #424 스펙 073 handoff 갱신. #423 스펙 073 후보 pending next action 보정. |
+| 활성 작업 | 코드 PR 없음. #430 배포와 `Capital path readiness` sidecar 실행까지 완료됐다. 최신 deploy run `28518083151`은 commit `23ec54b` 기준 success다. 최신 capital path readiness run `28518083087`은 commit `23ec54b`, `readiness_state=ACCUMULATING_EDGE`, `live_money_status=PREVIEW_ONLY`, `capital_ladder_stage=ACCUMULATING_EDGE`, `blocking_gate=전진 관측 부족: 14/20`이다. 최신 pipeline liveness는 run `28518134667`, `overall=OK`, `capital-path-readiness=OK`다. 우선 후보 1순위는 `candidate-fd04772a23c5`(`live_readiness`, 점수 597)이고, `candidate-1ed634d8bf6d`, `candidate-cc96b35062da`는 rejected로 억제된다. 최신 KIS smoke sidecar는 run `28500268994`, commit `f9f8908`, `smoke_state=success`, `key_valid=true`이며 #430과 같은 commit의 직접 smoke는 아니다. |
+| 안전 경계 | #430 스펙 076은 등급 2 운영 자동화 추가다. 기존 sidecar JSON/Markdown을 읽어 준비도 보고 sidecar를 발행할 뿐이다. 주문, 자본 증액, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, live sentinel, 브로커 주문, K1/K2/K4/K5/K6, 헌법, 커널 목록은 변경하지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`이며, 배포 성공은 dry-run worker 코드 반영이지 실거래 전환이 아니다. |
 
 ## 돈 경로 상태 판독 규칙 (필수 — 스펙 062)
 
@@ -80,6 +80,45 @@ uv run python scripts/money_path_probe.py --manifest | while IFS=$'\t' read -r k
 done
 uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.live_money_state'
 ```
+
+## 최근 관찰 — 2026-07-01 KST (스펙 076 자본 경로 준비도 루프)
+
+현재 `main` 최신 코드 머지는 `23ec54b`(#430, 스펙 076 자본 경로 준비도 루프)이다.
+직전 관련 커밋은 `fa8cc32`(#428, 스펙 075 전략 실패 학습 장부화), `d3ca5d5`(#426,
+후보 공장 실패 결과의 승격 루프 반복 보정)이다. 이 인계 갱신 시점의 코드 PR은 없다.
+
+- **문제 정의**: money-path, reassign, forward paper, KIS smoke, promotion/evolution sidecar가
+  각각 따로 살아 있어 "지금 돈을 더 벌기 위해 자본 경로가 어디까지 왔나"를 사람이 매번
+  조합해야 했다. 스펙 076은 이 상태를 하나의 준비도 sidecar로 묶어 다음 안전 행동을 자동 산출한다.
+- **구현 상태**: `capital_path_readiness.py`는 money-path의 `live_money_state.status`와
+  자본 사다리 `stage`를 최우선 근거로 삼아 `readiness_state`를 산출한다. evolution backlog의
+  자본 경로 관련 후보는 우선 후보로 올리고, learning ledger나 promotion summary에서 실패로
+  표시된 후보는 억제 후보로 남긴다. money-path가 없거나 깨지면 `UNKNOWN`으로 fail-closed 처리한다.
+- **자동화 상태**: `.github/workflows/capital-path-readiness.yml`은 매일 08:10 UTC와 main push 때
+  실행되어 `automation/capital-path-readiness-last-run`에 `LAST_RUN.md`와
+  `capital_path_readiness.json`을 발행한다. `pipeline_liveness.py`도 이 sidecar를 비핵심
+  보고 루프로 감시한다.
+- **배포 후 실제 실행**: #430 main push 뒤 `Deploy on merge to main` run `28518083151`은 success,
+  `Capital path readiness` run `28518083087`도 success였다. 둘 다 commit
+  `23ec54be9a7c98b6b0c10cb038f5c25249713fa1` 기준이다.
+- **sidecar 확인**: 최신 `origin/automation/capital-path-readiness-last-run:LAST_RUN.md`는
+  `readiness_state=ACCUMULATING_EDGE`, `live_money_status=PREVIEW_ONLY`,
+  `capital_ladder_stage=ACCUMULATING_EDGE`, `blocking_gate=전진 관측 부족: 14/20`을 기록한다.
+  우선 후보 1순위는 `candidate-fd04772a23c5`(`live_readiness`, 점수 597)이고,
+  `candidate-1ed634d8bf6d`, `candidate-cc96b35062da`는 rejected 후보로 억제된다.
+- **감시 보정**: main push 직후 pipeline liveness가 새 sidecar보다 먼저 돌아
+  `capital-path-readiness=MISSING`으로 한 번 `DEGRADED`를 기록했다. 같은 main commit으로
+  workflow dispatch run `28518134667`을 재실행했고 최신 liveness sidecar는 `overall=OK`,
+  `capital-path-readiness=OK`다.
+- **안전 경계**: 등급 2 운영 자동화 추가다. 기존 sidecar를 읽고 새 보고 sidecar만 쓴다.
+  실제 주문, 브로커 실주문 API, 자본 증액, whitelist/caps 확대, live 전략 교체, live sentinel,
+  헌법, 커널 목록, K1/K2/K4/K5/K6 변경 없음. 배포는 dry-run worker 코드 반영이며 실거래 전환이 아니다.
+- **검증**: PR #430 머지 전 focused pytest 8 통과, 최신 sidecar local smoke에서
+  `ACCUMULATING_EDGE / PREVIEW_ONLY / ACCUMULATING_EDGE`와 rejected 후보 억제를 확인했다.
+  `uv run pytest` 2374 통과·4 스킵, `uv run ruff check src tests` 통과, `git diff --check` 통과,
+  HANDOFF 사실 검증 OK, strict 하네스 `OK (14/14)`, PR 품질 관문 성공. 머지 직전 전체 테스트와
+  린트를 다시 실행해 같은 결과를 확인했다.
+- **상세 인계**: `HANDOFF-080-CAPITAL-PATH-READINESS.md`.
 
 ## 최근 관찰 — 2026-07-01 KST (스펙 075 전략 실패 학습 장부화)
 
@@ -929,6 +968,19 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
   통과, `uv run python scripts/agent_harness_probe.py --strict` `OK (14/14)`,
   `uv run python scripts/check_handoff_facts.py` 통과, PR 품질 관문 통과. 머지 직전 전체 테스트와
   린트를 다시 실행해 같은 결과를 확인했다.
+
+## 최근 마일스톤 — 2026-07-01 KST (스펙 076 자본 경로 준비도 루프)
+
+스펙 076이 #430으로 main에 들어갔다. 새 루프는 money-path, edge-autoarm, reassign,
+paper-forward, KIS smoke, promotion/evolution sidecar를 읽어 자본 경로 준비도와 다음 안전
+행동을 `automation/capital-path-readiness-last-run`에 발행한다. 최신 run `28518083087`은
+commit `23ec54b` 기준 success이고, 현재 상태는 `ACCUMULATING_EDGE / PREVIEW_ONLY`,
+blocker는 `전진 관측 부족: 14/20`이다. pipeline liveness는 병렬 실행 경합 뒤 run
+`28518134667`로 재실행해 `overall=OK`, `capital-path-readiness=OK`가 됐다. 상세:
+`HANDOFF-080-CAPITAL-PATH-READINESS.md`, `specs/076-capital-path-readiness-loop/`.
+
+안전 경계: 읽기 전용 보고 루프다. 실제 주문, 실거래 전환, 자본 배분, whitelist/caps/live 설정,
+헌법·커널 변경 없음. deploy success는 dry-run worker 코드 반영이지 실거래 전환이 아니다.
 
 ## 최근 마일스톤 — 2026-07-01 KST (스펙 075 전략 실패 학습 장부화)
 

@@ -36,8 +36,8 @@
 - [X] T015 Run `uv run pytest`.
 - [X] T016 Run `uv run ruff check src tests`.
 - [X] T017 Run PR quality gate, handoff fact check, and strict agent harness.
-- [ ] T018 Commit, push, open PR, satisfy checks, and merge when automatic merge conditions are met.
-- [ ] T019 Check post-merge workflow/sidecar status and refresh HANDOFF.
+- [X] T018 Commit, push, open PR, satisfy checks, and merge when automatic merge conditions are met.
+- [X] T019 Check post-merge workflow/sidecar status and refresh HANDOFF.
 
 ## Dependencies & Execution Order
 
