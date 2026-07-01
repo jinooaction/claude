@@ -1,8 +1,8 @@
 # HANDOFF 078 — 후보 가격 이력 지원과 승격 실패 반영 (2026-07-01 KST)
 
-main 베이스라인: `fcc6e5f`(PR #425). 스펙 074는 남은 전략/포트폴리오 후보 2개의
-`data_history_missing` 대기를 없애기 위해, 후보 결과 실행기가 가격 이력을 준비하고
-`portfolio-walk-forward`에 `--history-root`를 넘기게 했다.
+main 베이스라인: `d3ca5d5`(PR #426). 스펙 074(#425)는 남은 전략/포트폴리오 후보 2개의
+`data_history_missing` 대기를 없앴고, 후속 보정(#426)은 실패한 후보 공장 결과를 승격 루프가
+다시 `BACKTEST_REQUIRED`로 반복하지 않게 했다.
 
 ## 무엇이 바뀌었나
 
@@ -17,7 +17,7 @@ main 베이스라인: `fcc6e5f`(PR #425). 스펙 074는 남은 전략/포트폴�
   - SSH key가 있을 때 서버 `/opt/auto-invest`에서 read-only `bars-export`와 `ingest-history`를 실행한다.
   - 생성된 `/tmp/candidate_result_history`를 runner로 가져와 후보 검증 패키지에 제공한다.
   - SSH key가 없으면 통과로 위조하지 않고 기존처럼 후보를 pending/degraded로 남긴다.
-- follow-up 브랜치 `Codex/075-promotion-factory-result-state`
+- PR #426 follow-up
   - `promotion_loop.py`가 전략/포트폴리오 공장 결과 `blocked/fail`을 다시 `BACKTEST_REQUIRED`로
     반복하지 않고 `DISCARD`로 분류하게 보정한다.
 
@@ -45,6 +45,10 @@ main 베이스라인: `fcc6e5f`(PR #425). 스펙 074는 남은 전략/포트폴�
 - result sidecar 뒤 재실행한 `Candidate implementation factory` run `28503561736`: success
 - 최신 factory summary:
   - `evidence_passed=7`, `blocked=2`, `pending=0`, `ready=0`
+- #426 머지 뒤 자동 실행된 `Candidate implementation factory` run `28504209235`: success,
+  commit `d3ca5d57924925c0556f32c4e3c048df2e38c8a2`
+- #426 머지 뒤 자동 실행된 `Autonomous promotion loop` run `28504209238`: success,
+  commit `d3ca5d57924925c0556f32c4e3c048df2e38c8a2`, 두 전략/포트폴리오 후보 `DISCARD`
 
 ## 후보별 현재 상태
 
@@ -63,10 +67,9 @@ main 베이스라인: `fcc6e5f`(PR #425). 스펙 074는 남은 전략/포트폴�
 ## 후속 루프 검증
 
 - `Candidate result executor` run `28503338531`: success, commit `fcc6e5f`
-- `Candidate implementation factory` run `28503561736`: success, commit `fcc6e5f`
-- `Autonomous promotion loop` run `28503609658`: success, commit `fcc6e5f`
-- main 기준 promotion loop는 아직 factory `blocked`를 `BACKTEST_REQUIRED`로 보여준다.
-  follow-up 패치는 최신 sidecar smoke에서 두 후보를 `DISCARD`로 분류하는 것을 확인했다.
+- `Candidate implementation factory` run `28504209235`: success, commit `d3ca5d5`
+- `Autonomous promotion loop` run `28504209238`: success, commit `d3ca5d5`
+- 최신 promotion sidecar는 `candidate-1ed634d8bf6d`, `candidate-cc96b35062da`를 모두 `DISCARD`로 분류한다.
 
 ## 안전 경계
 
@@ -105,7 +108,22 @@ follow-up 보정 전:
 - `uv run ruff check src/auto_invest/analytics/promotion_loop.py tests/unit/test_promotion_loop.py`
   -> All checks passed
 
+PR #426 머지 전:
+
+- `uv run pytest` -> 2363 passed, 4 skipped
+- `uv run ruff check src tests` -> All checks passed
+- `git diff --check` -> OK
+- `uv run python scripts/check_handoff_facts.py` -> OK
+- `uv run python scripts/agent_harness_probe.py --strict` -> OK (14/14)
+- PR 품질 관문 -> success, mergeable, merge 방식으로 main에 병합
+
+머지 후:
+
+- `Deploy on merge to main` run `28504209256`: success, commit `d3ca5d5`
+- `Candidate implementation factory` run `28504209235`: success, `blocked=2`, `evidence_passed=7`
+- `Autonomous promotion loop` run `28504209238`: success, 두 전략/포트폴리오 후보 `DISCARD`
+
 ## 다음 세션 한 줄
 
-가격 이력 부족은 해결됐다. 남은 두 전략/포트폴리오 후보는 백테스트 실패 후보이므로,
-승격하지 말고 재설계 또는 학습 장부로 보내는 promotion loop 보정을 머지한 뒤 handoff를 다시 갱신한다.
+가격 이력 부족은 해결됐고, 남은 두 전략/포트폴리오 후보는 백테스트 실패 후보로 `DISCARD` 처리됐다.
+다음 작업은 이 둘을 승격하는 것이 아니라 새 전략 재설계 후보를 다시 `Backtest -> Canary -> Full` 순서로 넣는 것이다.
