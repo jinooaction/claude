@@ -363,6 +363,15 @@ def default_specs() -> list[SidecarSpec]:
             description="자본 경로 준비도 루프(스펙 076, 보고 전용)",
         ),
         SidecarSpec(
+            key="autonomous-work-execution",
+            branch="automation/autonomous-work-execution-last-run",
+            filename="LAST_RUN.md",
+            max_age_hours=30.0,  # 매일 09:10 — 다음 Codex 작업 패킷 발행(보고 전용)
+            critical=False,
+            description="자율 작업 실행 루프(스펙 077, 다음 작업 패킷 보고 전용)",
+            first_expected_utc="2026-07-01T09:10:00Z",
+        ),
+        SidecarSpec(
             key="autonomous-evolution",
             branch="automation/autonomous-evolution-last-run",
             filename="LAST_RUN.md",
