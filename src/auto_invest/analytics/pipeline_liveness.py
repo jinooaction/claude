@@ -372,6 +372,15 @@ def default_specs() -> list[SidecarSpec]:
             first_expected_utc="2026-07-01T09:10:00Z",
         ),
         SidecarSpec(
+            key="money-gate-alignment",
+            branch="automation/money-gate-alignment-last-run",
+            filename="LAST_RUN.md",
+            max_age_hours=30.0,  # 매일 09:20 — 돈 경로 sidecar 정렬(보고 전용)
+            critical=False,
+            description="돈 경로 게이트 정렬 루프(스펙 078, 보고 전용)",
+            first_expected_utc="2026-07-01T09:20:00Z",
+        ),
+        SidecarSpec(
             key="autonomous-evolution",
             branch="automation/autonomous-evolution-last-run",
             filename="LAST_RUN.md",

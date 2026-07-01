@@ -1,0 +1,122 @@
+name: Money gate alignment loop (돈 경로 게이트 정렬)
+
+# 스펙 078 — 돈 경로 관련 sidecar를 한 장의 evidence package로 정렬한다.
+#
+# 안전: 읽기 전용. 이 워크플로는 automation sidecar 브랜치들을 fetch/read하고 자기
+# sidecar 브랜치만 발행한다. 실제 주문, 계좌 자본 배분, live 설정 변경, 코드 자동 수정,
+# PR 자동 생성, 머지는 수행하지 않는다.
+
+on:
+  schedule:
+    # 매일 09:20 UTC — autonomous-work-execution(09:10) 직후 돈 경로 게이트 정렬.
+    - cron: "20 9 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/auto_invest/analytics/money_gate_alignment.py'
+      - 'src/auto_invest/analytics/pipeline_liveness.py'
+      - 'scripts/money_gate_alignment_probe.py'
+      - '.github/workflows/money-gate-alignment.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: money-gate-alignment
+  cancel-in-progress: false
+
+jobs:
+  align-gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Collect source sidecars
+        run: |
+          set -uo pipefail
+          mkdir -p /tmp/money_gate_sidecars
+          git fetch --depth=1 origin \
+            '+refs/heads/automation/*:refs/remotes/origin/automation/*' || true
+          uv run python scripts/money_gate_alignment_probe.py --manifest \
+            > /tmp/money_gate_manifest.tsv
+          while IFS=$'\t' read -r key branch filename; do
+            [[ -z "${key}" ]] && continue
+            if git show "origin/${branch}:${filename}" \
+                 > "/tmp/money_gate_sidecars/${key}.md" 2>/dev/null; then
+              echo "collected ${key}: ${branch}:${filename}"
+            else
+              rm -f "/tmp/money_gate_sidecars/${key}.md"
+              echo "missing ${key}: ${branch}:${filename}"
+            fi
+          done < /tmp/money_gate_manifest.tsv
+
+      - name: Align money gates
+        run: |
+          set -uo pipefail
+          uv run python scripts/money_gate_alignment_probe.py \
+            --evidence-dir /tmp/money_gate_sidecars \
+            --run-id "${GITHUB_RUN_ID}" \
+            --commit "${GITHUB_SHA}" \
+            --json-out /tmp/money_gate_alignment.json \
+            --summary-out /tmp/money_gate_alignment.md
+          cat /tmp/money_gate_alignment.md
+
+      - name: Publish sidecar
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -uo pipefail
+          BRANCH=automation/money-gate-alignment-last-run
+          tmpdir=$(mktemp -d)
+
+          {
+            if [[ -f /tmp/money_gate_alignment.md ]]; then
+              cat /tmp/money_gate_alignment.md
+            else
+              echo "# 돈 경로 게이트 정렬 루프 — 보고 생성 실패"
+              echo ""
+              echo "Align step failed before money_gate_alignment.md was written."
+              echo ""
+              echo "읽기 전용 실행입니다. 주문, 자본, live 설정, 코드/PR/머지는 변경하지 않았습니다."
+            fi
+            echo ""
+            echo "## 메타데이터"
+            echo ""
+            echo "| 항목 | 값 |"
+            echo "|------|-----|"
+            echo "| run_id | ${GITHUB_RUN_ID} |"
+            echo "| run_url | https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} |"
+            echo "| commit | ${GITHUB_SHA} |"
+            echo "| trigger | ${GITHUB_EVENT_NAME} |"
+            echo "| timestamp_utc | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
+            echo ""
+            echo "## 결정 JSON"
+            echo ""
+            echo '```json'
+            cat /tmp/money_gate_alignment.json 2>/dev/null || echo "{}"
+            echo '```'
+          } > "${tmpdir}/LAST_RUN.md"
+          cp /tmp/money_gate_alignment.json "${tmpdir}/money_gate_alignment.json" \
+            2>/dev/null || echo '{}' > "${tmpdir}/money_gate_alignment.json"
+
+          cd "${tmpdir}"
+          git init -q
+          git config user.name "money-gate-alignment-bot"
+          git config user.email "money-gate-alignment-bot@noreply.github.com"
+          git checkout --orphan publish -q
+          git add LAST_RUN.md money_gate_alignment.json
+          git commit -q -m "money-gate-alignment run ${GITHUB_RUN_ID} @ ${GITHUB_SHA:0:7}"
+          git push --force \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "publish:${BRANCH}"
+          echo "Published to ${BRANCH}."
+          echo "Read: git fetch origin ${BRANCH} && git show origin/${BRANCH}:LAST_RUN.md"
