@@ -33,15 +33,15 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `996ce56` — Merge pull request #432 from jinooaction/Codex/077-autonomous-work-execution-loop |
-| main 테스트 | `uv run pytest` → 2384 passed, 4 skipped |
+| 마지막 main 커밋 | `09b528a` — Merge pull request #434 from jinooaction/Codex/078-money-gate-alignment-loop |
+| main 테스트 | `uv run pytest` → 2394 passed, 4 skipped |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
-| 열린 PR | 코드 PR 없음. #432 뒤 남은 작업은 이 handoff-only 기록 갱신뿐이었다. |
-| 출시 완료 스펙 | 최신 추가: 077(자율 작업 실행 루프: 성장·승격·후보 검증·자본 준비도·파이프라인 생존 sidecar를 읽어 다음 Codex 작업 패킷을 `automation/autonomous-work-execution-last-run`에 발행), 076(자본 경로 준비도 루프: money-path, edge-autoarm, reassign, paper-forward, KIS smoke, promotion/evolution sidecar를 읽어 자본 투입 준비도와 다음 안전 행동을 `automation/capital-path-readiness-last-run`에 발행), 075(전략 실패 학습: promotion `DISCARD` 전략/포트폴리오 후보를 autonomous evolution `learning_ledger.json`의 `rejected` 항목으로 영구 기록), 074(후보 가격 이력 지원: result executor가 read-only 서버 bars-export와 ingest-history로 전략/포트폴리오 후보 history-root를 준비), 073(후보 pending next action 보정: 명령 계약 오류와 support input 미준비를 자동 실행 가능한 pass로 줄임), 072(후보 증거 진단: pending 원인과 다음 행동을 기계 판독 가능하게 분해), 071(후보 결과 실행기: 검증 패키지를 candidate result evidence로 변환하고 sidecar 발행), 070(후보 구현 공장: `BACKTEST_REQUIRED` 후보를 검증 패키지와 enriched backlog로 변환), 069(자율 승격 실행 루프: forward paper 등록 큐와 hardened canary 제출 큐 자동화), 068(자율 승격 루프 자동 분류), 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
-| 골격 스펙 | 없음. `.specify/feature.json`은 추적을 위해 `specs/077-autonomous-work-execution-loop`을 가리키고, 스펙 077 구현은 #432로 main에 들어갔다. |
-| 최근 출시 작업 | #432 스펙 077 자율 작업 실행 루프. #430 스펙 076 자본 경로 준비도 루프. #428 스펙 075 전략 실패 학습 장부화. #426 후보 공장 실패 결과의 승격 루프 반복 보정. #425 스펙 074 후보 가격 이력 지원. #423 스펙 073 후보 pending next action 보정. |
-| 활성 작업 | 코드 PR 없음. #432 배포와 `Autonomous work execution loop` sidecar 실행까지 완료됐다. 최신 deploy run `28523867765`은 commit `996ce56` 기준 success다. 최신 autonomous work execution run `28523867803`은 commit `996ce56`, `overall_status=EXECUTION_READY`, `selected_work=candidate-fd04772a23c5`, `risk_grade=2`, `priority_score=3597`이다. 최신 pipeline liveness는 run `28523925493`, `overall=OK`, `autonomous-work-execution=OK`다. 최신 KIS smoke sidecar는 run `28523981341`, commit `996ce56`, `smoke_state=success`, `key_valid=true`다. 다음 실행 후보는 `candidate-fd04772a23c5`(돈 경로 준비도와 기존 게이트 정렬)이고, `candidate-1ed634d8bf6d`, `candidate-cc96b35062da`는 rejected로 억제된다. |
-| 안전 경계 | #432 스펙 077은 등급 2 운영 자동화 추가다. 기존 sidecar JSON/Markdown을 읽어 다음 Codex 작업 패킷 sidecar를 발행할 뿐이다. 주문, 자본 증액, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, live sentinel, 브로커 주문, K1/K2/K4/K5/K6, 헌법, 커널 목록은 변경하지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`이며, 배포 성공은 dry-run worker 코드 반영이지 실거래 전환이 아니다. |
+| 열린 PR | 코드 PR 없음. #434 뒤 남은 작업은 이 handoff-only 기록 갱신뿐이었다. |
+| 출시 완료 스펙 | 최신 추가: 078(돈 경로 게이트 정렬 루프: money-path, capital-path-readiness, edge-autoarm, reassign, forward, pipeline, autonomous-work, KIS smoke sidecar를 한 번에 대조해 돈 경로 불일치와 다음 안전 행동을 `automation/money-gate-alignment-last-run`에 발행), 077(자율 작업 실행 루프: 성장·승격·후보 검증·자본 준비도·파이프라인 생존 sidecar를 읽어 다음 Codex 작업 패킷을 `automation/autonomous-work-execution-last-run`에 발행), 076(자본 경로 준비도 루프: money-path, edge-autoarm, reassign, paper-forward, KIS smoke, promotion/evolution sidecar를 읽어 자본 투입 준비도와 다음 안전 행동을 `automation/capital-path-readiness-last-run`에 발행), 075(전략 실패 학습: promotion `DISCARD` 전략/포트폴리오 후보를 autonomous evolution `learning_ledger.json`의 `rejected` 항목으로 영구 기록), 074(후보 가격 이력 지원: result executor가 read-only 서버 bars-export와 ingest-history로 전략/포트폴리오 후보 history-root를 준비), 073(후보 pending next action 보정: 명령 계약 오류와 support input 미준비를 자동 실행 가능한 pass로 줄임), 072(후보 증거 진단: pending 원인과 다음 행동을 기계 판독 가능하게 분해), 071(후보 결과 실행기: 검증 패키지를 candidate result evidence로 변환하고 sidecar 발행), 070(후보 구현 공장: `BACKTEST_REQUIRED` 후보를 검증 패키지와 enriched backlog로 변환), 069(자율 승격 실행 루프: forward paper 등록 큐와 hardened canary 제출 큐 자동화), 068(자율 승격 루프 자동 분류), 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
+| 골격 스펙 | 없음. `.specify/feature.json`은 추적을 위해 `specs/078-money-gate-alignment-loop`을 가리키고, 스펙 078 구현은 #434로 main에 들어갔다. |
+| 최근 출시 작업 | #434 스펙 078 돈 경로 게이트 정렬 루프. #432 스펙 077 자율 작업 실행 루프. #430 스펙 076 자본 경로 준비도 루프. #428 스펙 075 전략 실패 학습 장부화. #426 후보 공장 실패 결과의 승격 루프 반복 보정. #425 스펙 074 후보 가격 이력 지원. |
+| 활성 작업 | 코드 PR 없음. #434 배포와 `Money gate alignment loop` sidecar 실행까지 완료됐다. 최신 deploy run `28526440236`은 commit `09b528a` 기준 success다. 최신 money gate alignment run `28526440247`은 `overall_status=ALIGNED_WAITING`, `live_money_status=PREVIEW_ONLY`, `readiness_state=ACCUMULATING_EDGE`, `capital_ladder_stage=ACCUMULATING_EDGE`, `blocking_gate=전진 관측 부족: 14/20 (통계적 유의까지 더 쌓여야 함).`, `selected_work_candidate=candidate-fd04772a23c5`다. 최신 pipeline liveness는 workflow dispatch run `28526482569`, `overall=OK`, `money-gate-alignment=OK`다. 최신 KIS smoke sidecar는 run `28523981341`, commit `996ce56`, `smoke_state=success`, `key_valid=true`인 #434 이전 읽기 전용 브로커 생존 확인이다. 다음 행동은 전진 관측을 계속 누적하고, 최소 관측 이후 기존 자본 사다리로만 승격하는 것이다. |
+| 안전 경계 | #434 스펙 078은 등급 2 운영 자동화 추가다. 기존 sidecar JSON/Markdown을 읽어 돈 경로 게이트 정렬 보고 sidecar만 쓴다. 주문, 자본 증액, 자본 배분, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, live sentinel, 브로커 주문, K1/K2/K4/K5/K6, 헌법, 커널 목록, 비밀값, 외부 유료 서비스는 변경하지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`이며, 배포 성공은 dry-run worker 코드 반영이지 실거래 전환이 아니다. |
 
 ## 돈 경로 상태 판독 규칙 (필수 — 스펙 062)
 
@@ -80,6 +80,53 @@ uv run python scripts/money_path_probe.py --manifest | while IFS=$'\t' read -r k
 done
 uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.live_money_state'
 ```
+
+## 최근 관찰 — 2026-07-01 KST (스펙 078 돈 경로 게이트 정렬 루프)
+
+현재 `main` 최신 코드 머지는 `09b528a`(#434, 스펙 078 돈 경로 게이트 정렬 루프)이다.
+직전 관련 커밋은 `996ce56`(#432, 스펙 077 자율 작업 실행 루프), `23ec54b`(#430,
+스펙 076 자본 경로 준비도 루프)이다. 이 인계 갱신 시점의 코드 PR은 없다.
+
+- **문제 정의**: money-path, 자본 준비도, edge-autoarm, reassign, forward, pipeline,
+  자율 작업 실행, KIS smoke가 각각 따로 살아 있어 "돈 경로가 정말 같은 이야기를 하는가"를
+  사람이 매번 손으로 맞춰야 했다. 스펙 078은 이 표면들을 한 번에 대조해 불일치와 다음 안전 행동을
+  결정론적으로 발행한다.
+- **구현 상태**: `money_gate_alignment.py`는 8개 sidecar를 `GateSurface`로 정규화하고
+  `MoneyGateAlignmentDecision`을 만든다. 돈 경로가 `PREVIEW_ONLY`이고 자본 사다리가
+  `ACCUMULATING_EDGE`이며 edge/reassign/forward가 모두 최소 관측 대기라면 `ALIGNED_WAITING`으로
+  판정한다. sidecar가 없거나 깨지면 `UNKNOWN` 또는 `BLOCKED`로 fail-closed 처리한다.
+- **자동화 상태**: `.github/workflows/money-gate-alignment.yml`은 매일 09:20 UTC와 main push 때
+  실행되어 `automation/money-gate-alignment-last-run`에 `LAST_RUN.md`와
+  `money_gate_alignment.json`을 발행한다. `pipeline_liveness.py`도 `money-gate-alignment`를
+  비핵심 보고 sidecar로 감시한다.
+- **배포 후 실제 실행**: #434 main push 뒤 `Deploy on merge to main` run `28526440236`은 success,
+  `Money gate alignment loop` run `28526440247`도 success였다. 둘 다 commit
+  `09b528a900f884c42135a39a03436c685375ab5f` 기준이다.
+- **sidecar 확인**: 최신 `origin/automation/money-gate-alignment-last-run:LAST_RUN.md`는
+  `overall_status=ALIGNED_WAITING`, `live_money_status=PREVIEW_ONLY`,
+  `readiness_state=ACCUMULATING_EDGE`, `capital_ladder_stage=ACCUMULATING_EDGE`,
+  `blocking_gate=전진 관측 부족: 14/20 (통계적 유의까지 더 쌓여야 함).`,
+  `selected_work_candidate=candidate-fd04772a23c5`를 기록한다.
+- **정렬 이슈**: 현재 이슈는 장애가 아니라 `WAITING forward_observation`이다. 기대값은
+  `EDGE_CONFIRMED`, 관측값은 `14/20`이며, 다음 행동은 전진 관측을 계속 누적하고 최소 관측 이후
+  기존 자본 사다리로만 승격하는 것이다.
+- **감시 보정**: main push 직후 pipeline liveness가 새 sidecar보다 먼저 돌아 한 번 오래된 상태를
+  볼 수 있었다. 같은 main commit으로 workflow dispatch run `28526482569`을 재실행했고 최신
+  liveness sidecar는 `overall=OK`, `money-gate-alignment=OK`다.
+- **KIS smoke**: 최신 KIS smoke sidecar run `28523981341`은 commit `996ce56` 기준 success,
+  `key_valid=true`, `smoke_state=success`다. #434 이후 실행은 아니므로 스펙 078 배포 증거가 아니라
+  최근 읽기 전용 브로커 생존 확인으로만 본다.
+- **안전 경계**: 등급 2 운영 자동화 추가다. 기존 sidecar를 읽고 새 보고 sidecar만 쓴다.
+  실제 주문, 브로커 실주문 API, 자본 증액, 자본 배분, whitelist/caps 확대, live 전략 교체,
+  live sentinel, 헌법, 커널 목록, K1/K2/K4/K5/K6, 비밀값, 외부 유료 서비스 변경 없음.
+  배포는 dry-run worker 코드 반영이며 실거래 전환이 아니다.
+- **검증**: PR #434 머지 전 focused pytest 10 통과, 인접 루프 통합 테스트 12 통과, 최신
+  sidecar local smoke에서 `ALIGNED_WAITING / PREVIEW_ONLY / ACCUMULATING_EDGE`,
+  `WAITING forward_observation`, 입력 sidecar 8개 `ok`를 확인했다. `uv run pytest`
+  2394 통과·4 스킵, `uv run ruff check src tests` 통과, `git diff --check` 통과,
+  HANDOFF 사실 검증 OK, strict 하네스 `OK (14/14)`, PR 품질 관문 성공. 머지 직전 전체 테스트와
+  린트를 다시 실행해 같은 결과를 확인했다.
+- **상세 인계**: `HANDOFF-082-MONEY-GATE-ALIGNMENT.md`.
 
 ## 최근 관찰 — 2026-07-01 KST (스펙 077 자율 작업 실행 루프)
 
@@ -1010,6 +1057,22 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
   통과, `uv run python scripts/agent_harness_probe.py --strict` `OK (14/14)`,
   `uv run python scripts/check_handoff_facts.py` 통과, PR 품질 관문 통과. 머지 직전 전체 테스트와
   린트를 다시 실행해 같은 결과를 확인했다.
+
+## 최근 마일스톤 — 2026-07-01 KST (스펙 078 돈 경로 게이트 정렬 루프)
+
+스펙 078이 #434로 main에 들어갔다. 새 루프는 money-path, capital-path-readiness,
+edge-autoarm, reassign, forward, pipeline, autonomous-work, KIS smoke sidecar를 읽어
+돈 경로 게이트가 서로 같은 상태를 말하는지 `automation/money-gate-alignment-last-run`에
+발행한다. 최신 run `28526440247`은 commit `09b528a` 기준 success이고, 현재 판정은
+`ALIGNED_WAITING / PREVIEW_ONLY / ACCUMULATING_EDGE`다. blocker는
+`전진 관측 부족: 14/20 (통계적 유의까지 더 쌓여야 함).`이고, 선택 후보는
+`candidate-fd04772a23c5`다. pipeline liveness는 병렬 실행 경합 뒤 run `28526482569`로
+재실행해 `overall=OK`, `money-gate-alignment=OK`가 됐다. 상세:
+`HANDOFF-082-MONEY-GATE-ALIGNMENT.md`, `specs/078-money-gate-alignment-loop/`.
+
+안전 경계: 읽기 전용 게이트 정렬 보고 루프다. 실제 주문, 실거래 전환, 자본 배분,
+whitelist/caps/live 설정, 비밀값, 외부 유료 서비스, 헌법·커널 변경 없음. deploy success는
+dry-run worker 코드 반영이지 실거래 전환이 아니다.
 
 ## 최근 마일스톤 — 2026-07-01 KST (스펙 077 자율 작업 실행 루프)
 
@@ -4543,6 +4606,12 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 이 불변량은 스펙 007 하드닝 캐너리에 의해 **생산 배포 경계**에서 강제됩니다 (라이브 워커가 새 코드를 받기 전에).
 
 ## 과거 인수인계 파일 (참고용)
+
+- `HANDOFF-082-MONEY-GATE-ALIGNMENT.md` — 스펙 078 돈 경로 게이트 정렬 루프
+  (2026-07-01, PR #434 `09b528a`). money-path, capital-path-readiness, edge-autoarm,
+  reassign, forward, pipeline, autonomous-work, KIS smoke sidecar를 한 번에 대조해
+  `ALIGNED_WAITING / PREVIEW_ONLY / ACCUMULATING_EDGE`와 `WAITING forward_observation`
+  상태를 발행한다. 읽기 전용 보고 루프이며 주문·자본·live 설정 변경 없음.
 
 - `HANDOFF-081-AUTONOMOUS-WORK-EXECUTION.md` — 스펙 077 자율 작업 실행 루프
   (2026-07-01, PR #432 `996ce56`). 기존 자율 성장·승격·후보 검증·자본 준비도·
