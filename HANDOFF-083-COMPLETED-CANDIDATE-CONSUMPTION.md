@@ -1,6 +1,6 @@
 # HANDOFF 083 — 완료 후보 소비 장부와 차순위 자동 선택 (2026-07-02 KST)
 
-main 코드 베이스라인: `1a9a518`(PR #436). 스펙 079는 이미 구현·머지·인계된 자율 작업 후보를 `released-work` 장부로 소비하고, `autonomous-work-execution`이 같은 후보를 반복 선택하지 않고 다음 수익 후보로 이동하게 하는 읽기 전용 운영 루프다.
+main 코드 베이스라인: `c8beb25`(PR #437). 스펙 079는 이미 구현·머지·인계된 자율 작업 후보를 `released-work` 장부로 소비하고, `autonomous-work-execution`이 같은 후보를 반복 선택하지 않고 다음 수익 후보로 이동하게 하는 읽기 전용 운영 루프다. PR #437은 PR #436 뒤 발견된 `released-work` sidecar publish token 누락을 보정했다.
 
 ## 무엇이 바뀌었나
 
@@ -34,7 +34,15 @@ main 코드 베이스라인: `1a9a518`(PR #436). 스펙 079는 이미 구현·�
 - `Deploy on merge to main` run `28555267958`: success, commit `1a9a518`
 - `Autonomous work execution loop` run `28555267985`: success, commit `1a9a518`
 - `Pipeline liveness watchdog` run `28555267972`: success, commit `1a9a518`
-- `Released work ledger` run `28555267975`: failure. 원인은 publish step이 `set -u` 상태에서 env로 주입되지 않은 `${GITHUB_TOKEN}`을 직접 참조한 것이다. 후속 브랜치 `Codex/079-released-work-token`에서 `GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}` 주입과 회귀 테스트를 추가했다.
+- PR #437 merge commit: `c8beb2561b0c328f0d56dc11e4d2cf91784b2867`
+- `Deploy on merge to main` run `28555565031`: success, commit `c8beb25`
+- `Released work ledger` run `28555267975`: failure. 원인은 publish step이 `set -u` 상태에서 env로 주입되지 않은 `${GITHUB_TOKEN}`을 직접 참조한 것이다.
+- `Released work ledger` run `28555565017`: success, commit `c8beb25`
+  - `overall_status=OK`
+  - `released_count=1`
+  - `candidate-fd04772a23c5=released`
+  - 근거 파일 `specs/078-money-gate-alignment-loop/contracts/money-gate-alignment.md`
+- `Pipeline liveness watchdog` dispatch run `28555617349`: success, commit `c8beb25`, `overall=OK`, `released-work=OK`
 
 ## 안전 경계
 
@@ -59,12 +67,17 @@ PR #436 머지 전:
 - `uv run python scripts/check_handoff_facts.py` -> OK
 - PR 품질 관문 -> success, mergeable clean, merge 방식으로 main에 병합
 
-후속 publish token 보정 전:
+후속 publish token 보정:
 
 - `uv run pytest tests/integration/test_released_work_probe.py -q` -> 2 passed
 - `uv run ruff check tests/integration/test_released_work_probe.py` -> All checks passed
-- 전체 테스트 첫 재실행은 `HANDOFF.md`가 `1a9a518`을 아직 가리키지 않아 `test_agent_harness_probe` 2건이 실패했다. 이 파일과 `HANDOFF.md` 갱신으로 하네스 사실 기준을 복구한다.
+- `uv run python scripts/check_handoff_facts.py` -> OK
+- `uv run python scripts/agent_harness_probe.py --strict` -> OK (14/14)
+- `uv run pytest` -> 2402 passed, 4 skipped
+- `uv run ruff check src tests` -> All checks passed
+- PR #437 품질 관문 -> success, mergeable clean, merge 방식으로 main에 병합
+- #437 merge 후 `Released work ledger` run `28555565017`, deploy run `28555565031`, pipeline liveness dispatch run `28555617349` 모두 success
 
 ## 다음 세션 한 줄
 
-스펙 079 이후 자율 작업 실행 루프는 완료된 `candidate-fd04772a23c5`를 `RELEASED`로 소비하고, 차순위 수익 후보 `candidate-e481b0309206`로 자동 이동한다. 단, `released-work` sidecar publish token 누락은 후속 PR에서 반드시 확인해야 한다.
+스펙 079 이후 자율 작업 실행 루프는 완료된 `candidate-fd04772a23c5`를 `RELEASED`로 소비하고, 차순위 수익 후보 `candidate-e481b0309206`로 자동 이동한다. `released-work` sidecar publish token 누락은 #437에서 보정됐고, 최신 sidecar와 pipeline liveness는 둘 다 OK다.
