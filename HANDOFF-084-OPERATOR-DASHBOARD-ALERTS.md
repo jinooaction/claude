@@ -1,6 +1,6 @@
 # HANDOFF 084 — 운영자 대시보드와 모바일 알림 루프 (2026-07-02 KST)
 
-main 인계 기준: `43b5da8`(PR #441). 스펙 080은 자율 성장·승격·후보 검증·돈 경로 준비도·돈 경로 정렬 루프의 sidecar를 운영자용 한 화면과 모바일 알림 판단으로 묶는 읽기 전용 운영 루프다. 운영자가 다시 물어보기 전에 "지금 돈 경로는 안전한가", "다음 자율 작업은 무엇인가", "모바일 알림이 필요한가"를 확인할 수 있게 만든다.
+main 인계 기준: `27388dd`(PR #442). 스펙 080은 자율 성장·승격·후보 검증·돈 경로 준비도·돈 경로 정렬 루프의 sidecar를 운영자용 한 화면과 모바일 알림 판단으로 묶는 읽기 전용 운영 루프다. 운영자가 다시 물어보기 전에 "지금 돈 경로는 안전한가", "다음 자율 작업은 무엇인가", "모바일 알림이 필요한가"를 확인할 수 있게 만든다. #441이 기능을 추가했고, #442가 post-merge에서 발견된 모바일 상태판 publish 실패를 보정했다.
 
 ## 무엇이 바뀌었나
 
@@ -30,10 +30,12 @@ main 인계 기준: `43b5da8`(PR #441). 스펙 080은 자율 성장·승격·후
 ## 배포 후 실제 실행 증거
 
 - PR #441 merge commit: `43b5da8f99e0b28db9049a2023d0b618647b0f73`
-- `Deploy on merge to main` run `28561843637`: success, commit `43b5da8`
-- `Operator mobile alerts` run `28561843669`: success, commit `43b5da8`
-- `Pipeline liveness watchdog` run `28561843616`: success, commit `43b5da8`
-- 최신 `automation/operator-status-last-run:LAST_RUN.md`
+- PR #442 merge commit: `27388dd8f340697c08c06c365f9c1aefd54829e0`
+- `Deploy on merge to main` run `28562202999`: success, commit `27388dd`
+- `Operator mobile alerts` run `28562203117`: success, commit `27388dd`
+- `Mobile status page (GitHub Pages)` run `28562203120`: success, commit `27388dd`
+- #441의 `Mobile status page (GitHub Pages)` run `28561843601`은 failure였지만 #442에서 보정됐다.
+- 최신 `automation/operator-status-last-run:operator_status.json`
   - `overall_status=OK`
   - `alert_level=SILENT_OK`
   - `send_status=NOT_ATTEMPTED`
@@ -43,12 +45,17 @@ main 인계 기준: `43b5da8`(PR #441). 스펙 080은 자율 성장·승격·후
   - `autonomous-work-execution=EXECUTION_READY`
   - 다음 자율 작업 후보: `candidate-e481b0309206`
   - 제목: `레짐·성과 분석을 후보 점수화 입력으로 승격`
+- 최신 `origin/gh-pages:status.html`
+  - `operator-status-data` 포함
+  - `운영자 요약` 포함
+  - `실제 돈 경로` 포함
+  - `다음 자율 작업` 포함
 
 ## 후속 보정
 
 #441 main push의 `Mobile status page (GitHub Pages)` run `28561843601`은 failure였다. 원인은 상태판 workflow가 의존성 설치 없이 bare `python3`로 `scripts/generate_mobile_status.py --manifest`를 실행하는데, 새 `operator_status.py`가 `auto_invest.notifications.telegram`을 import하면서 `httpx`가 없는 환경에서 실패한 것이다.
 
-후속 브랜치 `Codex/080-operator-dashboard-alert-loop-followup`은 `operator_status.py`가 Telegram transport 모듈을 import하지 않게 고친다. 알림 문구 마스킹과 길이 제한은 분석 모듈 내부의 표준 라이브러리 코드로 처리하고, 실제 Telegram 전송 모듈은 workflow의 전송 단계에서만 사용한다.
+#442는 `operator_status.py`가 Telegram transport 모듈을 import하지 않게 고쳤다. 알림 문구 마스킹과 길이 제한은 분석 모듈 내부의 표준 라이브러리 코드로 처리하고, 실제 Telegram 전송 모듈은 workflow의 전송 단계에서만 사용한다. #442 main push에서 모바일 상태판 workflow가 성공해 보정이 실제 원격 실행 조건에서 확인됐다.
 
 ## 안전 경계
 
@@ -82,7 +89,13 @@ PR #441 머지 전:
 - `uv run pytest tests/unit/test_operator_status.py tests/integration/test_mobile_status_page.py tests/unit/test_operator_mobile_alerts_workflow.py` -> 13 passed
 - `uv run ruff check src/auto_invest/analytics/operator_status.py tests/unit/test_operator_status.py tests/integration/test_mobile_status_page.py tests/unit/test_operator_mobile_alerts_workflow.py` -> All checks passed
 - `uv run pytest` 첫 재실행은 stale `HANDOFF.md` 때문에 `test_agent_harness_probe.py` 2건만 실패했다. 이 handoff 갱신이 `마지막 main 커밋` 행을 #441 기준으로 고쳐 그 원인을 제거한다.
+- `uv run python scripts/check_handoff_facts.py` -> OK
+- `uv run python scripts/agent_harness_probe.py --strict` -> OK (14/14)
+- `uv run pytest` -> 2415 passed, 4 skipped
+- `uv run ruff check src tests` -> All checks passed
+- #442 post-merge workflow 확인 -> deploy, operator alerts, mobile status page 모두 success
+- 최종 handoff-only 정리에서 `specs/080-operator-dashboard-alert-loop/tasks.md` T021~T023을 완료 처리했다.
 
 ## 다음 세션 한 줄
 
-스펙 080은 `operator-status` sidecar와 모바일 상태판을 추가해 자율 루프의 돈 경로, 다음 작업, 개입 필요 상태를 운영자가 바로 볼 수 있게 했다. #441에서 operator-status와 deploy는 성공했고, 모바일 상태판 publish 실패는 후속 브랜치에서 Telegram transport import 의존을 끊어 복구 중이다.
+스펙 080은 `operator-status` sidecar와 모바일 상태판을 추가해 자율 루프의 돈 경로, 다음 작업, 개입 필요 상태를 운영자가 바로 볼 수 있게 했다. #442 기준 deploy, operator alerts, mobile status page가 모두 성공했고, 최신 operator-status는 `OK / PREVIEW_ONLY / candidate-e481b0309206`를 보고한다.

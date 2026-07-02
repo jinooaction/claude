@@ -52,9 +52,9 @@
 - [x] T018 `uv run pytest` 전체 테스트를 실행한다.
 - [x] T019 `uv run ruff check src tests` 린트를 실행한다.
 - [x] T020 PR 본문을 `.github/pull_request_template.md` 기준으로 작성하고 `scripts/check_pr_quality_gate.py`로 검증한다.
-- [ ] T021 PR 생성·푸시·머지 가능 상태 확인·자동 머지를 수행한다.
-- [ ] T022 main 머지 후 deploy/status와 operator-status 또는 관련 sidecar 실행 상태를 확인한다.
-- [ ] T023 `HANDOFF.md`와 새 `HANDOFF-084-OPERATOR-DASHBOARD-ALERTS.md`를 갱신하고 handoff 검증을 실행한다.
+- [x] T021 PR 생성·푸시·머지 가능 상태 확인·자동 머지를 수행한다.
+- [x] T022 main 머지 후 deploy/status와 operator-status 또는 관련 sidecar 실행 상태를 확인한다.
+- [x] T023 `HANDOFF.md`와 새 `HANDOFF-084-OPERATOR-DASHBOARD-ALERTS.md`를 갱신하고 handoff 검증을 실행한다.
 
 ## Dependencies & Execution Order
 

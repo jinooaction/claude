@@ -33,14 +33,14 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `43b5da8` — Merge pull request #441 from jinooaction/Codex/080-operator-dashboard-alert-loop |
-| main 테스트 | 후속 브랜치에서 `uv run pytest` → 2415 passed, 4 skipped. #441 직후 전체 테스트는 stale `HANDOFF.md` 때문에 하네스 2건만 실패했고, 이 handoff 갱신 뒤 통과했다. |
+| 마지막 main 커밋 | `27388dd` — Merge pull request #442 from jinooaction/Codex/080-operator-dashboard-alert-loop-followup |
+| main 테스트 | `uv run pytest` → 2415 passed, 4 skipped |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
-| 열린 PR | #441은 머지 완료. 후속 브랜치 `Codex/080-operator-dashboard-alert-loop-followup`은 #441 뒤 발견된 모바일 상태판 `httpx` import 실패를 보정하고 handoff를 현재 main에 맞춘다. |
+| 열린 PR | 코드 PR 없음. #441 스펙 080 기능과 #442 모바일 상태판 publish 보정이 모두 머지됐고, 이 handoff-only 정리로 tasks와 인계 기록을 실제 상태에 맞춘다. |
 | 출시 완료 스펙 | 최신 추가: 080(운영자 대시보드와 모바일 알림 루프: `operator-status` sidecar, GitHub Pages 모바일 상태판 요약, 개입 필요 시 Telegram best-effort 알림), 079(완료 후보 소비 장부: 완료된 Speckit 후보를 `released-work` 장부로 기록하고 `autonomous-work-execution`이 `RELEASED`로 소비해 차순위 후보로 이동), 078(돈 경로 게이트 정렬 루프: money-path, capital-path-readiness, edge-autoarm, reassign, forward, pipeline, autonomous-work, KIS smoke sidecar를 한 번에 대조해 돈 경로 불일치와 다음 안전 행동을 `automation/money-gate-alignment-last-run`에 발행), 077(자율 작업 실행 루프: 성장·승격·후보 검증·자본 준비도·파이프라인 생존 sidecar를 읽어 다음 Codex 작업 패킷을 `automation/autonomous-work-execution-last-run`에 발행), 076(자본 경로 준비도 루프: money-path, edge-autoarm, reassign, paper-forward, KIS smoke, promotion/evolution sidecar를 읽어 자본 투입 준비도와 다음 안전 행동을 `automation/capital-path-readiness-last-run`에 발행), 075(전략 실패 학습: promotion `DISCARD` 전략/포트폴리오 후보를 autonomous evolution `learning_ledger.json`의 `rejected` 항목으로 영구 기록), 074(후보 가격 이력 지원: result executor가 read-only 서버 bars-export와 ingest-history로 전략/포트폴리오 후보 history-root를 준비), 073(후보 pending next action 보정: 명령 계약 오류와 support input 미준비를 자동 실행 가능한 pass로 줄임), 072(후보 증거 진단: pending 원인과 다음 행동을 기계 판독 가능하게 분해), 071(후보 결과 실행기: 검증 패키지를 candidate result evidence로 변환하고 sidecar 발행), 070(후보 구현 공장: `BACKTEST_REQUIRED` 후보를 검증 패키지와 enriched backlog로 변환), 069(자율 승격 실행 루프: forward paper 등록 큐와 hardened canary 제출 큐 자동화), 068(자율 승격 루프 자동 분류), 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
-| 골격 스펙 | 없음. `.specify/feature.json`은 추적을 위해 `specs/080-operator-dashboard-alert-loop`를 가리킨다. 스펙 080 기능은 #441로 main에 들어갔고, 후속 브랜치가 모바일 상태판 publish 실패 보정과 완료 인계를 진행 중이다. |
-| 최근 출시 작업 | #441 스펙 080 운영자 대시보드와 모바일 알림 루프. #439 스펙 079 tasks 완료 상태 정리. #437 스펙 079 `released-work` sidecar publish token 보정과 인계 갱신. #436 스펙 079 완료 후보 소비 장부. #434 스펙 078 돈 경로 게이트 정렬 루프. #432 스펙 077 자율 작업 실행 루프. #430 스펙 076 자본 경로 준비도 루프. #428 스펙 075 전략 실패 학습 장부화. |
-| 활성 작업 | #441 main push에서 `Deploy on merge to main` run `28561843637` success, `Operator mobile alerts` run `28561843669` success, `operator-status` sidecar `overall_status=OK`, `send_status=NOT_ATTEMPTED`, `money-path=PREVIEW_ONLY`, `selected_work=candidate-e481b0309206`를 확인했다. 같은 push의 `Mobile status page (GitHub Pages)` run `28561843601`은 `operator_status.py`가 `telegram.py`를 import하며 `httpx`가 없는 bare `python3` 경로에서 failure였다. 후속 브랜치가 이 import 의존을 끊어 publish 경로를 복구한다. |
+| 골격 스펙 | 없음. `.specify/feature.json`은 추적을 위해 `specs/080-operator-dashboard-alert-loop`를 가리킨다. 스펙 080 구현, 후속 보정, post-merge sidecar 확인, tasks 완료 정리가 끝났다. |
+| 최근 출시 작업 | #442 스펙 080 모바일 상태판 publish 보정과 인계 갱신. #441 스펙 080 운영자 대시보드와 모바일 알림 루프. #439 스펙 079 tasks 완료 상태 정리. #437 스펙 079 `released-work` sidecar publish token 보정과 인계 갱신. #436 스펙 079 완료 후보 소비 장부. #434 스펙 078 돈 경로 게이트 정렬 루프. #432 스펙 077 자율 작업 실행 루프. #430 스펙 076 자본 경로 준비도 루프. |
+| 활성 작업 | #442 main push에서 `Deploy on merge to main` run `28562202999` success, `Operator mobile alerts` run `28562203117` success, `Mobile status page (GitHub Pages)` run `28562203120` success를 확인했다. 최신 `operator-status` sidecar는 commit `27388dd`, `overall_status=OK`, `send_status=NOT_ATTEMPTED`, `money-path=PREVIEW_ONLY`, `selected_work=candidate-e481b0309206`를 기록한다. `origin/gh-pages:status.html`에는 `operator-status-data`, `운영자 요약`, `실제 돈 경로`, `다음 자율 작업`이 포함된다. |
 | 안전 경계 | #441/#442 후속은 등급 2 운영 자동화와 상태판/알림 보정이다. 기존 sidecar를 읽어 operator-status와 모바일 상태판을 만들고, ACTION_REQUIRED 이상일 때만 Telegram best-effort 알림을 보낸다. 주문, 자본 증액, 자본 배분, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, live sentinel, 브로커 주문, K1/K2/K4/K5/K6, 헌법, 커널 목록, 비밀값, 외부 유료 서비스는 변경하지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`이며, 배포 성공은 dry-run worker 코드 반영이지 실거래 전환이 아니다. |
 
 ## 돈 경로 상태 판독 규칙 (필수 — 스펙 062)
@@ -83,9 +83,9 @@ uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.
 
 ## 최근 관찰 — 2026-07-02 KST (스펙 080 운영자 대시보드와 모바일 알림 루프)
 
-현재 `main` 최신 머지는 `43b5da8`(#441, 스펙 080 운영자 대시보드와 모바일 알림 루프)이다.
-직전 관련 커밋은 `65c2602`(스펙 080 구현), `db35efd`(#440, 스펙 079 handoff 갱신),
-`88929c8`(#439, 스펙 079 tasks 완료 상태 정리)이다.
+현재 `main` 최신 기능 머지는 `27388dd`(#442, 스펙 080 모바일 상태판 publish 보정과 인계 갱신)이다.
+직전 관련 커밋은 `43b5da8`(#441, 스펙 080 운영자 대시보드와 모바일 알림 루프),
+`65c2602`(스펙 080 구현), `db35efd`(#440, 스펙 079 handoff 갱신)이다.
 
 - **문제 정의**: 자율 성장, 승격, 후보 검증, 돈 경로 준비도, 돈 경로 정렬 루프는 이미 sidecar를
   발행하지만, 운영자는 Codex에게 다시 물어보기 전까지 "지금 돈 경로가 안전한가", "다음 자율 작업은
@@ -96,18 +96,19 @@ uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.
   표시한다. `.github/workflows/operator-mobile-alerts.yml`은 매일 09:25 UTC와 관련 main push 때
   `automation/operator-status-last-run`을 발행하고, `ACTION_REQUIRED` 이상에서만 Telegram 전송을
   best-effort로 시도한다.
-- **배포 후 실제 실행**: #441 main push 뒤 `Deploy on merge to main` run `28561843637`은 success,
-  `Operator mobile alerts` run `28561843669`도 success였다. 최신 operator-status sidecar는 commit
-  `43b5da8`, `overall_status=OK`, `alert_level=SILENT_OK`, `send_status=NOT_ATTEMPTED`,
+- **배포 후 실제 실행**: #441 main push 뒤 `Deploy on merge to main` run `28561843637`과
+  `Operator mobile alerts` run `28561843669`는 success였지만, `Mobile status page (GitHub Pages)` run
+  `28561843601`은 failure였다. 원인은 `generate_mobile_status.py --manifest`가 의존성 설치 없는
+  bare `python3`에서 실행되는데, `operator_status.py`가 `telegram.py`를 import하면서 `httpx` 없는
+  환경에서 `ModuleNotFoundError`가 난 것이다. #442가 이 import 의존을 끊었다.
+- **최종 post-merge 확인**: #442 main push 뒤 `Deploy on merge to main` run `28562202999`,
+  `Operator mobile alerts` run `28562203117`, `Mobile status page (GitHub Pages)` run `28562203120`이
+  모두 success였다. 최신 operator-status sidecar는 commit `27388dd`,
+  `overall_status=OK`, `alert_level=SILENT_OK`, `send_status=NOT_ATTEMPTED`,
   `money-path=PREVIEW_ONLY`, `money-gate-alignment=ALIGNED_WAITING`,
   `autonomous-work-execution=EXECUTION_READY`, 다음 후보 `candidate-e481b0309206`
-  (`레짐·성과 분석을 후보 점수화 입력으로 승격`)를 기록한다.
-- **발견된 후속 보정**: 같은 #441 push의 `Mobile status page (GitHub Pages)` run `28561843601`은
-  failure였다. 원인은 `generate_mobile_status.py --manifest`가 의존성 설치 없는 bare `python3`에서
-  실행되는데, `operator_status.py`가 `telegram.py`를 import하면서 `httpx` 없는 환경에서
-  `ModuleNotFoundError`가 난 것이다. 후속 브랜치 `Codex/080-operator-dashboard-alert-loop-followup`은
-  `operator_status.py`를 순수 표준 라이브러리 분석 모듈로 되돌리고, Telegram 전송 모듈은 실제 알림
-  전송 단계에만 남긴다.
+  (`레짐·성과 분석을 후보 점수화 입력으로 승격`)를 기록한다. `origin/gh-pages:status.html`도
+  `operator-status-data`, `운영자 요약`, `실제 돈 경로`, `다음 자율 작업`을 포함한다.
 - **안전 경계**: 등급 2 운영 자동화다. 새 루프는 기존 sidecar와 GitHub Actions Secrets만 읽고,
   자기 sidecar 또는 GitHub Pages만 갱신한다. 실제 주문, 브로커 실주문 API, 자본 증액, 자본 배분,
   whitelist/caps 확대, live 전략 교체, live sentinel, 헌법, 커널 목록, K1/K2/K4/K5/K6,
@@ -117,7 +118,9 @@ uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.
   workflow YAML parse 통과, `uv run pytest` 2414 통과·4 스킵, `uv run ruff check src tests` 통과,
   strict 하네스 `OK (14/14)`, HANDOFF 사실 검증 OK, PR 품질 관문 성공. 후속 브랜치에서는 bare
   `PYTHONPATH=src python3 scripts/generate_mobile_status.py --manifest`를 통과시켜 실패 경로를 재현
-  기준으로 고쳤고, 관련 pytest 13 통과와 관련 ruff 통과를 확인했다.
+  기준으로 고쳤고, 관련 pytest 13 통과와 관련 ruff 통과를 확인했다. #442 전 `uv run pytest`는
+  2415 통과·4 스킵, `uv run ruff check src tests`는 통과했다. 이 최종 handoff 정리에서 스펙 080
+  tasks T021~T023도 실제 완료 상태와 맞춰 체크했다.
 - **상세 인계**: `HANDOFF-084-OPERATOR-DASHBOARD-ALERTS.md`.
 
 ## 최근 관찰 — 2026-07-02 KST (스펙 079 완료 후보 소비 장부)
@@ -1146,13 +1149,13 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
 ## 최근 마일스톤 — 2026-07-02 KST (스펙 080 운영자 대시보드와 모바일 알림 루프)
 
 스펙 080은 흩어진 자율 루프 sidecar를 운영자용 한 줄 판단으로 묶는다. #441은 `operator-status`
-sidecar와 모바일 상태판 요약, 개입 필요 시 Telegram best-effort 알림 루프를 추가했다.
-post-merge evidence는 `Deploy on merge to main` run `28561843637` success,
-`Operator mobile alerts` run `28561843669` success, operator-status
+sidecar와 모바일 상태판 요약, 개입 필요 시 Telegram best-effort 알림 루프를 추가했고, #442는
+모바일 상태판 publish 경로의 bare `python3`/`httpx` 의존 실패를 보정했다. 최종 post-merge evidence는
+`Deploy on merge to main` run `28562202999` success, `Operator mobile alerts` run `28562203117`
+success, `Mobile status page (GitHub Pages)` run `28562203120` success, operator-status
 `overall_status=OK`, `send_status=NOT_ATTEMPTED`, `money-path=PREVIEW_ONLY`,
-`selected_work=candidate-e481b0309206`이다. 같은 push의 모바일 상태판 run `28561843601`은
-bare `python3`에서 `httpx`가 없어 실패했고, 후속 브랜치가 `operator_status.py`의 Telegram
-transport import 의존을 끊어 복구한다. 상세: `HANDOFF-084-OPERATOR-DASHBOARD-ALERTS.md`.
+`selected_work=candidate-e481b0309206`이다. `origin/gh-pages:status.html`에 운영자 요약 데이터가
+포함된 것도 확인했다. 상세: `HANDOFF-084-OPERATOR-DASHBOARD-ALERTS.md`.
 
 ## 최근 마일스톤 — 2026-07-01 KST (스펙 078 돈 경로 게이트 정렬 루프)
 
