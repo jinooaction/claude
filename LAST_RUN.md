@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-07-02T14:15:25.026337Z)
+# 완료 후보 소비 장부 (as of 2026-07-02T14:30:57.445179Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -8,8 +8,8 @@
 | 항목 | 값 |
 |------|-----|
 | overall_status | OK |
-| released_count | 5 |
-| scanned_specs | 35 |
+| released_count | 6 |
+| scanned_specs | 36 |
 
 ## 완료 후보
 
@@ -18,6 +18,7 @@
 | candidate-6ee3370e933d | released | 084-stale-evidence-failure-separation | specs/084-stale-evidence-failure-separation/contracts/capital-path-observability.md | completed_candidate_id |
 | candidate-dff4f9344b02 | released | 083-rejected-order-execution-quality | specs/083-rejected-order-execution-quality/contracts/execution-quality.md | completed_candidate_id |
 | candidate-e481b0309206 | released | 082-regime-performance-candidate-scoring | specs/082-regime-performance-candidate-scoring/contracts/regime-performance-candidate-scoring.md | completed_candidate_id |
+| candidate-facf2fa31834 | released | 085-public-data-cross-validation | specs/085-public-data-cross-validation/contracts/public-data-fred-cross-check.md | completed_candidate_id |
 | candidate-fd04772a23c5 | released | 078-money-gate-alignment-loop | specs/078-money-gate-alignment-loop/contracts/money-gate-alignment.md | selected_work_candidate |
 | candidate-fd04772a23c5 | released | 079-completed-candidate-consumption | specs/079-completed-candidate-consumption/spec.md | selected_work_candidate |
 
@@ -69,7 +70,6 @@
 | 070-candidate-implementation-factory | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 071-candidate-result-executor | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 072-candidate-evidence-diagnostics | 체크박스 작업이 없거나 완료되지 않았습니다. |
-| 085-public-data-cross-validation | 체크박스 작업이 없거나 완료되지 않았습니다. |
 
 ## 안전 경계
 
@@ -86,7 +86,7 @@
 
 ```json
 {
-  "commit": "d381199fe34afa43869c327afc8adfcc32c2d57a",
+  "commit": "67bb1c213efcdd300f9f392b0f0fa053ac651c1c",
   "overall_status": "OK",
   "released_work": [
     {
@@ -117,6 +117,15 @@
       "status": "released"
     },
     {
+      "candidate_id": "candidate-facf2fa31834",
+      "entry_id": "released-1969f1e6479c",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/085-public-data-cross-validation/contracts/public-data-fred-cross-check.md",
+      "spec_id": "085-public-data-cross-validation",
+      "status": "released"
+    },
+    {
       "candidate_id": "candidate-fd04772a23c5",
       "entry_id": "released-c16b3365c562",
       "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
@@ -135,7 +144,7 @@
       "status": "released"
     }
   ],
-  "run_id": "28596925315",
+  "run_id": "28597986203",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -181,7 +190,8 @@
     "081-autonomous-loop-quality-closure",
     "082-regime-performance-candidate-scoring",
     "083-rejected-order-execution-quality",
-    "084-stale-evidence-failure-separation"
+    "084-stale-evidence-failure-separation",
+    "085-public-data-cross-validation"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -360,12 +370,8 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "072-candidate-evidence-diagnostics"
-    },
-    {
-      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "085-public-data-cross-validation"
     }
   ],
-  "timestamp_utc": "2026-07-02T14:15:25.026337Z"
+  "timestamp_utc": "2026-07-02T14:30:57.445179Z"
 }
 ```
