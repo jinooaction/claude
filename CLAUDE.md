@@ -220,7 +220,7 @@ the current worktree. Do not trust prose in this block as the source of truth
 for in-flight work; use the `git_ground_truth` start hook, latest `HANDOFF.md`,
 and `/sync` against `jinooaction/claude` `Codex/*` branches before continuing.
 
-현재 계획 포인터: `specs/083-rejected-order-execution-quality/plan.md` — 거부 주문 기회손익, 브로커 거부 코드, KIS smoke 상태를 읽기 전용 실행 품질 패키지로 묶고 자율 성장·생존 감시 표면에 연결하는 운영 보정 설계.
+현재 계획 포인터: `specs/084-stale-evidence-failure-separation/plan.md` — 오래된 증거, 완료 후보 잔향, sidecar 신선도 문제를 자본 경로 후보 실패와 분리해 읽기 전용 관측 이슈로 보고하는 운영 보정 설계.
 
 머지 완료(베이스라인): spec 004 (LLM 판단 지점), 005 (자율 튜너), 006 (배포 자동화), 007 (하드닝 카나리), 008 (백테스트), 009 (paper-run), 010 (자동 룰 설계자), 011 (라이브 성과 측정). **주의: 일부 tasks.md 가 stale 0% 로 표시된 적 있음 — 코드/테스트를 믿을 것.**
 
