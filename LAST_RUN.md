@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-07-02T04:45:00.576733Z)
+# 완료 후보 소비 장부 (as of 2026-07-02T04:55:58.882211Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -8,13 +8,14 @@
 | 항목 | 값 |
 |------|-----|
 | overall_status | OK |
-| released_count | 2 |
-| scanned_specs | 32 |
+| released_count | 3 |
+| scanned_specs | 33 |
 
 ## 완료 후보
 
 | 후보 | 상태 | 스펙 | 근거 파일 | 근거 필드 |
 |------|------|------|-----------|-----------|
+| candidate-e481b0309206 | released | 082-regime-performance-candidate-scoring | specs/082-regime-performance-candidate-scoring/contracts/regime-performance-candidate-scoring.md | completed_candidate_id |
 | candidate-fd04772a23c5 | released | 078-money-gate-alignment-loop | specs/078-money-gate-alignment-loop/contracts/money-gate-alignment.md | selected_work_candidate |
 | candidate-fd04772a23c5 | released | 079-completed-candidate-consumption | specs/079-completed-candidate-consumption/spec.md | selected_work_candidate |
 
@@ -66,7 +67,6 @@
 | 070-candidate-implementation-factory | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 071-candidate-result-executor | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 072-candidate-evidence-diagnostics | 체크박스 작업이 없거나 완료되지 않았습니다. |
-| 082-regime-performance-candidate-scoring | 체크박스 작업이 없거나 완료되지 않았습니다. |
 
 ## 안전 경계
 
@@ -83,9 +83,18 @@
 
 ```json
 {
-  "commit": "0a5ad0f95be67a863f6f0c3ab37aed4d1af5f968",
+  "commit": "45b5d8f094bcb30845ecddfcbc625d7b0fc1c6c4",
   "overall_status": "OK",
   "released_work": [
+    {
+      "candidate_id": "candidate-e481b0309206",
+      "entry_id": "released-fdeed342e18d",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/082-regime-performance-candidate-scoring/contracts/regime-performance-candidate-scoring.md",
+      "spec_id": "082-regime-performance-candidate-scoring",
+      "status": "released"
+    },
     {
       "candidate_id": "candidate-fd04772a23c5",
       "entry_id": "released-c16b3365c562",
@@ -105,7 +114,7 @@
       "status": "released"
     }
   ],
-  "run_id": "28566029091",
+  "run_id": "28566434208",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -148,7 +157,8 @@
     "078-money-gate-alignment-loop",
     "079-completed-candidate-consumption",
     "080-operator-dashboard-alert-loop",
-    "081-autonomous-loop-quality-closure"
+    "081-autonomous-loop-quality-closure",
+    "082-regime-performance-candidate-scoring"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -327,12 +337,8 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "072-candidate-evidence-diagnostics"
-    },
-    {
-      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "082-regime-performance-candidate-scoring"
     }
   ],
-  "timestamp_utc": "2026-07-02T04:45:00.576733Z"
+  "timestamp_utc": "2026-07-02T04:55:58.882211Z"
 }
 ```
