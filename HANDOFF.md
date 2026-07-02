@@ -33,14 +33,14 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `e77a42c` — Merge pull request #451 from jinooaction/Codex/isolated-20260702-082829-019f20e8-a765-77 |
-| main 테스트 | `uv run pytest` → 2435 passed, 4 skipped. handoff 갱신 전 `pytest -q`는 HANDOFF stale 때문에 agent harness 단위 테스트 2건이 실패했으나, 이 갱신으로 해소 대상이다. |
+| 마지막 main 커밋 | `b92bee0` — Merge pull request #452 from jinooaction/Codex/084-stale-evidence-handoff |
+| main 테스트 | `uv run pytest` → 2435 passed, 4 skipped |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
-| 열린 PR | 코드 PR 없음. #451 스펙 084 오래된 증거와 성과 실패 분리가 머지됐다. 이 handoff-only 정리가 `HANDOFF.md`를 `e77a42c` main 사실에 맞춘다. |
+| 열린 PR | 코드 PR 없음. #451 스펙 084 구현과 #452 인계 갱신은 머지됐다. 남았던 capital-path-readiness sidecar 순서 위험은 workflow_dispatch run `28584170609`로 해소됐다. |
 | 출시 완료 스펙 | 최신 추가: 084(오래된 증거와 성과 실패 분리: `capital-path-readiness`가 `released-work`와 `pipeline-liveness`를 읽어 완료 후보 잔향과 stale/missing sidecar를 `observability_issues`로 분리하고 `candidate-6ee3370e933d`를 완료 후보로 소비), 083(주문 거부·체결 품질 손익 관측: `execution-quality` sidecar가 거부 주문, KIS 오류 코드, KIS smoke, live gate를 읽기 전용 증거로 묶고 `candidate-dff4f9344b02`를 완료 후보로 소비), 082(레짐·성과 후보 점수화), 081(자율 루프 품질 폐쇄), 080(운영자 대시보드와 모바일 알림 루프), 079(완료 후보 소비 장부), 078(돈 경로 게이트 정렬 루프), 077(자율 작업 실행 루프), 076(자본 경로 준비도 루프), 075(전략 실패 학습), 074(후보 가격 이력 지원), 073(후보 pending next action 보정), 072(후보 증거 진단), 071(후보 결과 실행기), 070(후보 구현 공장), 069(자율 승격 실행 루프), 068(자율 승격 루프 자동 분류), 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
 | 골격 스펙 | 없음. `.specify/feature.json`은 추적을 위해 `specs/084-stale-evidence-failure-separation`을 가리킨다. 스펙 084 구현, post-merge sidecar 확인, tasks 완료 정리, 완료 후보 마커 보강이 끝났다. |
-| 최근 출시 작업 | #451 스펙 084 오래된 증거와 성과 실패 분리. #449 실행 품질 sidecar freshness 판독 보정과 스펙 083 인계 정리. #448 스펙 083 주문 거부·체결 품질 손익 관측. #447 스펙 082 최종 인계 정리. #446 스펙 082 레짐·성과 후보 점수화. #445 스펙 081 인계 정리. #444 스펙 081 자율 루프 품질 폐쇄. #443 스펙 080 최종 인계 정리. |
-| 활성 작업 | #451 main push에서 `Deploy on merge to main` run `28576674026`, `Capital path readiness` run `28576674262`, `Released work ledger` run `28576674252`, `Autonomous work execution loop` run `28576674094`가 success였다. 최신 capital-path-readiness sidecar는 commit `e77a42c`, `observability_issues`에 완료 후보 잔향 3건(`candidate-fd04772a23c5`, `candidate-e481b0309206`, `candidate-dff4f9344b02`)을 기록한다. 같은 push 순서 때문에 capital-path-readiness 자체는 아직 `candidate-6ee3370e933d`를 priority에 남겼지만, 최신 released-work는 `candidate-6ee3370e933d`를 released로 소비했고 최신 autonomous-work sidecar는 이 후보를 `RELEASED`로 억제해 다음 후보 `candidate-facf2fa31834`(공개 데이터 수집·교차 검증 확장)를 선택했다. |
+| 최근 출시 작업 | #452 스펙 084 인계 갱신. #451 스펙 084 오래된 증거와 성과 실패 분리. #449 실행 품질 sidecar freshness 판독 보정과 스펙 083 인계 정리. #448 스펙 083 주문 거부·체결 품질 손익 관측. #447 스펙 082 최종 인계 정리. #446 스펙 082 레짐·성과 후보 점수화. #445 스펙 081 인계 정리. |
+| 활성 작업 | #451 main push에서 `Deploy on merge to main` run `28576674026`, `Released work ledger` run `28576674252`, `Autonomous work execution loop` run `28576674094`가 success였다. 남았던 같은 push 순서 위험은 `Capital path readiness`를 수동 workflow_dispatch로 재실행한 run `28584170609`(commit `b92bee0`)가 success로 닫았다. 최신 capital-path-readiness sidecar는 `candidate-6ee3370e933d`를 priority에서 제외해 suppressed와 `released-candidate-echo` 관측 이슈로 기록하고, 우선 후보를 `candidate-facf2fa31834`(공개 데이터 수집·교차 검증 확장) 하나만 남긴다. 돈 경로는 계속 `PREVIEW_ONLY`다. |
 | 안전 경계 | #451은 등급 2 운영 자동화 보정이다. `capital-path-readiness`가 읽는 sidecar와 JSON/Markdown 보고 형식만 바꿨고 주문, 자본 증액, 자본 배분, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, live sentinel, 브로커 주문, K1/K2/K4/K5/K6, 헌법, 커널 목록, 비밀값, 외부 유료 서비스는 변경하지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`이며, 배포 성공은 dry-run worker 코드 반영이지 실거래 전환이 아니다. |
 
 ## 돈 경로 상태 판독 규칙 (필수 — 스펙 062)
@@ -83,9 +83,10 @@ uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.
 
 ## 최근 관찰 — 2026-07-02 KST (스펙 084 오래된 증거와 성과 실패 분리)
 
-현재 `main` 최신 머지는 `e77a42c`(#451, 스펙 084 오래된 증거와 성과 실패 분리)이다.
-직전 관련 커밋은 `0184f5c`(#450, 스펙 083 최종 인계 정리), `f874b64`(#449, 실행 품질
-sidecar freshness 판독 보정)이다.
+현재 `main` 최신 머지는 `b92bee0`(#452, 스펙 084 인계 갱신)이다.
+스펙 084 코드 베이스라인은 `e77a42c`(#451, 오래된 증거와 성과 실패 분리)이고, 직전 관련
+커밋은 `0184f5c`(#450, 스펙 083 최종 인계 정리), `f874b64`(#449, 실행 품질 sidecar
+freshness 판독 보정)이다.
 
 - **문제 정의**: 자율 작업 실행 루프는 `candidate-6ee3370e933d`를 다음 후보로 골랐다.
   목표는 오래된 증거, 완료 후보 잔향, sidecar 신선도 문제를 전략 성과 실패나 새 후보처럼
@@ -97,21 +98,24 @@ sidecar freshness 판독 보정)이다.
   gate는 바꾸지 않는다.
 - **post-merge 실행**: #451 main push 뒤 `Deploy on merge to main` run `28576674026`,
   `Capital path readiness` run `28576674262`, `Released work ledger` run `28576674252`,
-  `Autonomous work execution loop` run `28576674094`가 success였다.
-- **sidecar 확인**: 최신 capital-path-readiness sidecar는 commit `e77a42c`, run `28576674262`,
-  `readiness_state=ACCUMULATING_EDGE`, 완료 후보 잔향 3건(`candidate-fd04772a23c5`,
-  `candidate-e481b0309206`, `candidate-dff4f9344b02`)을 `observability_issues`로 기록한다.
-  같은 push 순서 때문에 이 sidecar는 아직 `candidate-6ee3370e933d`를 priority에 남겼다.
-  최신 released-work sidecar는 run `28576674252`에서 `candidate-6ee3370e933d`를 `released`로
-  소비했고, 최신 autonomous-work sidecar는 run `28576674094`에서 이 후보를 `RELEASED`로 억제해
-  다음 후보 `candidate-facf2fa31834`(`공개 데이터 수집·교차 검증 확장`)를 선택했다.
+  `Autonomous work execution loop` run `28576674094`가 success였다. #452 인계 갱신 뒤 남은
+  sidecar 순서 위험을 닫기 위해 `Capital path readiness`를 workflow_dispatch로 재실행했고,
+  run `28584170609`(commit `b92bee0`)도 success였다.
+- **sidecar 확인**: 최신 capital-path-readiness sidecar는 commit `b92bee0`, run `28584170609`,
+  `readiness_state=ACCUMULATING_EDGE`, 완료 후보 잔향 4건(`candidate-fd04772a23c5`,
+  `candidate-e481b0309206`, `candidate-dff4f9344b02`, `candidate-6ee3370e933d`)을
+  `observability_issues`로 기록한다. `candidate-6ee3370e933d`는 priority가 아니라 suppressed
+  후보이며, 최신 released-work와 autonomous-work sidecar도 이 후보를 완료·억제 상태로 본다.
+  다음 실제 착수 후보는 `candidate-facf2fa31834`(`공개 데이터 수집·교차 검증 확장`) 하나다.
 - **안전 경계**: 등급 2 운영 자동화 보정이다. 실제 주문, 브로커 실주문 API, 자본 증액,
   자본 배분, whitelist/caps 확대, live 전략 교체, live sentinel, 헌법, 커널 목록, K1/K2/K4/K5/K6,
   비밀값, 외부 유료 서비스 변경 없음. 배포는 dry-run worker 코드 반영이며 실거래 전환이 아니다.
 - **검증**: focused pytest 10 통과, 실제 sidecar dry-run 확인, `uv run pytest` 2435 통과·4 스킵,
   `uv run ruff check src tests` 통과, `uv run python scripts/check_handoff_facts.py` OK,
   `uv run python scripts/agent_harness_probe.py --strict` OK(14/14), PR 품질 관문 성공,
-  post-merge deploy/capital-readiness/released-work/autonomous-work runs 확인 완료.
+  post-merge deploy/capital-readiness/released-work/autonomous-work runs 확인 완료. 남은 sidecar
+  순서 위험은 workflow_dispatch run `28584170609` 성공과 최신 capital-path-readiness sidecar
+  재확인으로 닫았다.
 - **상세 인계**: `HANDOFF-088-STALE-EVIDENCE-SEPARATION.md`.
 
 ## 최근 관찰 — 2026-07-02 KST (스펙 083 주문 거부·체결 품질 손익 관측)
@@ -1323,13 +1327,14 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
 
 ## 최근 마일스톤 — 2026-07-02 KST (스펙 084 오래된 증거와 성과 실패 분리)
 
-- main 코드 베이스라인: `e77a42c`(PR #451).
+- main 코드 베이스라인: `e77a42c`(PR #451). 최신 인계 베이스라인: `b92bee0`(PR #452).
 - `capital-path-readiness`가 `released-work`와 `pipeline-liveness`를 읽어 완료 후보 잔향과
   sidecar 신선도 문제를 `observability_issues`로 분리한다.
 - post-merge runs: deploy `28576674026`, capital-path-readiness `28576674262`,
   released-work `28576674252`, autonomous-work `28576674094` 모두 success.
-- `released-work`는 `candidate-6ee3370e933d`를 `released`로 소비했고, 최신 autonomous-work는 다음
-  후보 `candidate-facf2fa31834`를 선택했다.
+- 남은 sidecar 순서 위험은 capital-path-readiness workflow_dispatch run `28584170609` 성공으로
+  닫혔다. 최신 capital-path-readiness sidecar는 `candidate-6ee3370e933d`를 released echo로 억제하고
+  priority를 `candidate-facf2fa31834` 하나만 남긴다.
 - 안전 경계: 등급 2 운영 자동화 보정. 주문, 자본, live 전략, whitelist/caps, 헌법, 커널,
   비밀값, 외부 유료 서비스 변경 없음.
 - 상세: `HANDOFF-088-STALE-EVIDENCE-SEPARATION.md`.
