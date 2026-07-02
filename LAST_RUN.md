@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-07-02T04:11:47.803767Z)
+# 완료 후보 소비 장부 (as of 2026-07-02T04:45:00.576733Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -66,6 +66,7 @@
 | 070-candidate-implementation-factory | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 071-candidate-result-executor | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 072-candidate-evidence-diagnostics | 체크박스 작업이 없거나 완료되지 않았습니다. |
+| 082-regime-performance-candidate-scoring | 체크박스 작업이 없거나 완료되지 않았습니다. |
 
 ## 안전 경계
 
@@ -82,7 +83,7 @@
 
 ```json
 {
-  "commit": "a98db6edae2834643d941dc1a14230d6818aa9dd",
+  "commit": "0a5ad0f95be67a863f6f0c3ab37aed4d1af5f968",
   "overall_status": "OK",
   "released_work": [
     {
@@ -104,7 +105,7 @@
       "status": "released"
     }
   ],
-  "run_id": "28564808405",
+  "run_id": "28566029091",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -326,8 +327,12 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "072-candidate-evidence-diagnostics"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "082-regime-performance-candidate-scoring"
     }
   ],
-  "timestamp_utc": "2026-07-02T04:11:47.803767Z"
+  "timestamp_utc": "2026-07-02T04:45:00.576733Z"
 }
 ```
