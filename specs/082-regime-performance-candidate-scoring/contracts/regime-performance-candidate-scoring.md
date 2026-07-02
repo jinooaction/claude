@@ -37,6 +37,15 @@ When `promote-readiness` is stale, missing, malformed, or setup-error-like, the 
 }
 ```
 
+## Released-work marker
+
+`released-work` consumes only explicit completion markers from fully checked Speckit work.
+When this spec is merged and post-merge handoff is refreshed, the completed candidate is:
+
+```text
+completed_candidate_id: candidate-e481b0309206
+```
+
 ## Safety contract
 
 This feature must not add any of the following to the autonomous evolution workflow:

@@ -66,7 +66,7 @@
 - [x] T014 Run `uv run pytest` and `uv run ruff check src tests`.
 - [x] T015 Run `uv run python scripts/check_handoff_facts.py` and `uv run python scripts/agent_harness_probe.py --strict`.
 - [x] T016 Create PR with risk grade, problem definition, safety boundary review, validation, and handoff notes.
-- [ ] T017 Merge when gates pass and refresh `HANDOFF.md` after merge.
+- [x] T017 Merge when gates pass and refresh `HANDOFF.md` after merge.
 
 ## Dependencies & Execution Order
 
