@@ -79,6 +79,12 @@ jobs:
               > /tmp/candidate_factory_inputs/candidate_results.json
             echo "candidate result evidence missing; packages will not be marked pass"
           fi
+          uv run python scripts/released_work_probe.py \
+            --repo-root . \
+            --run-id "${GITHUB_RUN_ID}" \
+            --commit "${GITHUB_SHA}" \
+            --json-out /tmp/candidate_factory_inputs/released_work.json \
+            --json > /tmp/released_work.stdout.json
 
       - name: Build candidate implementation packages
         run: |
@@ -87,6 +93,7 @@ jobs:
             --candidate-backlog /tmp/candidate_factory_inputs/candidate_backlog.json \
             --promotion-summary /tmp/candidate_factory_inputs/promotion_summary.json \
             --result-evidence /tmp/candidate_factory_inputs/candidate_results.json \
+            --released-work /tmp/candidate_factory_inputs/released_work.json \
             --summary-out /tmp/LAST_RUN.md \
             --json-out /tmp/candidate_factory.json \
             --enriched-backlog-out /tmp/candidate_backlog.enriched.json \

@@ -25,6 +25,13 @@ jq '.released_work[] | select(.candidate_id=="candidate-88a7e7f07361")' /tmp/rel
 
 Expected: one `released` entry sourced from `specs/086-autonomous-sidecar-handoff-liveness/contracts/agent-ops-liveness-closure.md`.
 
+## Downstream Stale-Sidecar Reproduction
+
+Use stale promotion/factory inputs with current released-work evidence. Expected result:
+
+- promotion stage for `candidate-88a7e7f07361`: `DISCARD`
+- factory package output contains no `candidate-88a7e7f07361`
+
 ## Full Grade-2 Validation
 
 ```bash

@@ -65,6 +65,12 @@ jobs:
           git show origin/automation/autonomous-evolution-last-run:evolution_summary.json \
             > /tmp/promotion_evidence/evolution_summary.json 2>/dev/null || echo '{"candidates":[]}' \
             > /tmp/promotion_evidence/evolution_summary.json
+          uv run python scripts/released_work_probe.py \
+            --repo-root . \
+            --run-id "${GITHUB_RUN_ID}" \
+            --commit "${GITHUB_SHA}" \
+            --json-out /tmp/promotion_evidence/released-work.md \
+            --json > /tmp/released_work.stdout.json
 
           for item in \
             "candidate-factory automation/candidate-implementation-factory-last-run LAST_RUN.md" \

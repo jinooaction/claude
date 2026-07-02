@@ -55,6 +55,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--candidate-backlog", type=Path, required=True)
     parser.add_argument("--promotion-summary", type=Path, default=None)
     parser.add_argument("--result-evidence", type=Path, default=None)
+    parser.add_argument("--released-work", type=Path, default=None)
     parser.add_argument("--summary-out", type=Path, default=None)
     parser.add_argument("--json-out", type=Path, default=None)
     parser.add_argument("--enriched-backlog-out", type=Path, default=None)
@@ -69,6 +70,7 @@ def main(argv: list[str] | None = None) -> int:
         candidate_backlog=_read_json(args.candidate_backlog),
         promotion_summary=_read_json(args.promotion_summary),
         result_evidence=_read_json(args.result_evidence),
+        released_work=_read_json(args.released_work),
         now=_parse_now(args.now),
         commit=args.commit or _git_commit(),
         run_id=args.run_id,

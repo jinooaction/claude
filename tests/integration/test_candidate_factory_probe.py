@@ -55,6 +55,8 @@ def test_probe_writes_sidecar_artifacts(tmp_path, capsys) -> None:
             str(_FIXTURES / "promotion_summary.json"),
             "--result-evidence",
             str(_FIXTURES / "result_evidence.json"),
+            "--released-work",
+            str(_FIXTURES / "released_work.json"),
             "--summary-out",
             str(summary),
             "--json-out",
@@ -89,6 +91,8 @@ def test_factory_workflow_publishes_sidecar_without_order_or_broker_path() -> No
     )
     assert "automation/candidate-implementation-factory-last-run" in text
     assert "candidate_factory_probe.py" in text
+    assert "released_work_probe.py" in text
+    assert "--released-work /tmp/candidate_factory_inputs/released_work.json" in text
     assert "candidate_backlog.enriched.json" in text
     assert "candidate_packages.json" in text
     assert "KIS_" not in text
@@ -104,6 +108,7 @@ def test_promotion_workflow_prefers_factory_enriched_backlog() -> None:
     assert "candidate-implementation-factory-last-run:candidate_backlog.enriched.json" in text
     assert "candidate-factory: enriched backlog collected" in text
     assert "using autonomous-evolution backlog" in text
+    assert "released_work_probe.py" in text
     assert (
         "candidate-factory automation/candidate-implementation-factory-last-run LAST_RUN.md"
         in text

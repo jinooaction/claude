@@ -65,6 +65,8 @@
 - [x] T013 Run `uv run pytest`.
 - [x] T014 Run `uv run ruff check src tests`.
 - [x] T015 Run `git diff --check`.
+- [x] T016 Close post-merge stale-sidecar race by feeding current released-work evidence into promotion and candidate-factory workflows.
+- [x] T017 Add stale released-work regression tests for promotion/factory suppression.
 
 ## Completion Evidence Outside Released-Work Checklist
 
