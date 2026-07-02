@@ -1,6 +1,6 @@
 # HANDOFF 088 — 오래된 증거와 성과 실패 분리 (2026-07-02 KST)
 
-main 코드 베이스라인: `e77a42c`(PR #451). 최신 인계 베이스라인은 `b92bee0`(PR #452)이고, 남았던 sidecar 순서 위험은 `Capital path readiness` workflow_dispatch run `28584170609`로 닫혔다. 이 작업은 자율 작업 실행 루프가 고른 `candidate-6ee3370e933d`를 처리한 등급 2 운영 보정이다. 오래된 증거, 완료 후보 잔향, sidecar 신선도 문제를 전략 성과 실패나 새 작업 후보처럼 보이지 않게 `capital-path-readiness` 보고서의 `observability_issues`로 분리했다.
+main 코드 베이스라인: `e77a42c`(PR #451). 최신 인계 베이스라인은 `4daf5d7`(PR #453)이고, 남았던 sidecar 순서 위험은 `Capital path readiness` workflow_dispatch run `28584170609`와 최신 schedule run `28584438033`으로 닫혔다. 이 작업은 자율 작업 실행 루프가 고른 `candidate-6ee3370e933d`를 처리한 등급 2 운영 보정이다. 오래된 증거, 완료 후보 잔향, sidecar 신선도 문제를 전략 성과 실패나 새 작업 후보처럼 보이지 않게 `capital-path-readiness` 보고서의 `observability_issues`로 분리했다.
 
 ## 무엇이 바뀌었나
 
@@ -20,7 +20,7 @@ main 코드 베이스라인: `e77a42c`(PR #451). 최신 인계 베이스라인�
 - 완료된 후보가 upstream backlog에 남아 있어도 더 이상 “다음 작업 후보”처럼만 보이지 않는다.
 - sidecar 지연이나 누락은 성과 실패가 아니라 관측 품질 문제로 분리된다.
 - 다음 실제 자율 작업 선택은 `autonomous-work-execution`이 최종 권위다. #451 뒤 이 루프는 `candidate-6ee3370e933d`를 `RELEASED`로 억제하고 `candidate-facf2fa31834`를 선택했다.
-- 같은 main push 안에서 `capital-path-readiness`가 `released-work`보다 먼저 실행될 수 있던 순서 위험은 #452 뒤 수동 workflow_dispatch run `28584170609`로 재검증했다. 최신 capital-path-readiness sidecar도 이제 `candidate-6ee3370e933d`를 priority가 아니라 suppressed와 `released-candidate-echo` 관측 이슈로 기록한다.
+- 같은 main push 안에서 `capital-path-readiness`가 `released-work`보다 먼저 실행될 수 있던 순서 위험은 #452 뒤 수동 workflow_dispatch run `28584170609`와 최신 schedule run `28584438033`으로 재검증했다. 최신 capital-path-readiness sidecar도 이제 `candidate-6ee3370e933d`를 priority가 아니라 suppressed와 `released-candidate-echo` 관측 이슈로 기록한다.
 
 ## 배포 후 실제 실행 증거
 
@@ -32,10 +32,12 @@ main 코드 베이스라인: `e77a42c`(PR #451). 최신 인계 베이스라인�
 - `Autonomous work execution loop` run `28576674094`: success, commit `e77a42c`
 - PR #452 handoff merge commit: `b92bee062609d37daadfb09c4bc433ea8417bd28`
 - `Capital path readiness` workflow_dispatch run `28584170609`: success, commit `b92bee0`
+- PR #453 handoff merge commit: `4daf5d7eebf9dfad906a87589b859186e7efa9a1`
+- `Capital path readiness` schedule run `28584438033`: success, commit `b92bee0`
 
 최신 `origin/automation/capital-path-readiness-last-run:capital_path_readiness.json`:
 
-- `run_id=28584170609`
+- `run_id=28584438033`
 - `commit=b92bee062609d37daadfb09c4bc433ea8417bd28`
 - `readiness_state=ACCUMULATING_EDGE`
 - `priority_candidates=["candidate-facf2fa31834"]`
@@ -88,6 +90,7 @@ handoff 갱신 전 #451 main 기준:
 sidecar 순서 위험 해소 재검증:
 
 - `Capital path readiness` workflow_dispatch run `28584170609` -> success, 최신 sidecar에서 `candidate-6ee3370e933d`가 priority에서 빠지고 `released-candidate-echo`로 기록됨
+- `Capital path readiness` schedule run `28584438033` -> success, 최신 sidecar에서 같은 결론 유지
 - `uv run python scripts/check_handoff_facts.py` -> OK
 - `uv run python scripts/agent_harness_probe.py --strict` -> OK (14/14)
 - `uv run ruff check src tests` -> All checks passed
