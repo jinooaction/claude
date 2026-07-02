@@ -220,7 +220,7 @@ the current worktree. Do not trust prose in this block as the source of truth
 for in-flight work; use the `git_ground_truth` start hook, latest `HANDOFF.md`,
 and `/sync` against `jinooaction/claude` `Codex/*` branches before continuing.
 
-현재 계획 포인터: `specs/081-autonomous-loop-quality-closure/plan.md` — 자율 작업 실행 패킷에 Codex 착수 계약을 추가하고, 돈 경로 관측 수 시점 차이를 정보성으로 분리하며, operator-status 뒤 pipeline-liveness가 최신 상태를 다시 읽게 하는 읽기 전용 운영 보정 설계.
+현재 계획 포인터: `specs/082-regime-performance-candidate-scoring/plan.md` — 레짐 층화와 승격 준비 성과 표면을 자율 성장 후보 점수의 증거 신뢰도와 성장 레버리지 입력으로 반영하는 읽기 전용 운영 보정 설계.
 
 머지 완료(베이스라인): spec 004 (LLM 판단 지점), 005 (자율 튜너), 006 (배포 자동화), 007 (하드닝 카나리), 008 (백테스트), 009 (paper-run), 010 (자동 룰 설계자), 011 (라이브 성과 측정). **주의: 일부 tasks.md 가 stale 0% 로 표시된 적 있음 — 코드/테스트를 믿을 것.**
 

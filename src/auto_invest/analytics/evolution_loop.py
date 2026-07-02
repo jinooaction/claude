@@ -171,6 +171,12 @@ DEFAULT_EVIDENCE_REQUIREMENTS: tuple[EvidenceRequirement, ...] = (
         80.0,
     ),
     EvidenceRequirement(
+        "promote-readiness",
+        "automation/promote-readiness-last-run",
+        "LAST_RUN.md",
+        30.0,
+    ),
+    EvidenceRequirement(
         "promotion-summary",
         "automation/autonomous-promotion-last-run",
         "promotion_summary.json",
@@ -1082,29 +1088,7 @@ def _generate_candidates(
             EVIDENCE_SIDECAR_FRESHNESS if stale else EVIDENCE_NONE,
             "stale evidence 목록을 후보와 별도 관측 이슈로 보고한다.",
         ),
-        _candidate(
-            "analysis",
-            "레짐·성과 분석을 후보 점수화 입력으로 승격",
-            "분석 결과가 대화에 머물지 않고 후보 점수화의 증거 신뢰도와 "
-            "성장 레버리지로 들어가야 한다.",
-            ("regime-stratify", "public-data"),
-            "profit",
-            "learning_velocity",
-            72,
-            80,
-            58,
-            min(
-                _confidence_score(by_key.get("regime-stratify")),
-                _confidence_score(by_key.get("public-data")),
-            ),
-            92,
-            86,
-            82,
-            EVIDENCE_SIDECAR_FRESHNESS
-            if {"regime-stratify", "public-data"} & set(stale)
-            else EVIDENCE_NONE,
-            "레짐·성과 sidecar를 후보 스코어 입력으로 쓰는 실험을 설계한다.",
-        ),
+        _analysis_candidate(by_key, stale, signals),
         _strategy_candidate(by_key, signals),
         _portfolio_candidate(by_key, signals),
         _candidate(
@@ -1184,6 +1168,51 @@ def _strategy_candidate(
         86,
         dependency,
         "read-only 전략 증거 패키지를 만들고 새 전략은 backtest부터 시작한다.",
+    )
+
+
+def _analysis_candidate(
+    by_key: Mapping[str, EvidenceSurface],
+    stale: Sequence[str],
+    signals: Mapping[str, set[str]],
+) -> BreakthroughCandidate:
+    evidence_refs = ("regime-stratify", "public-data", "promote-readiness")
+    stale_or_missing = set(evidence_refs) & set(stale)
+    performance_signals = signals.get("promote-readiness", set())
+    setup_error = "setup_error" in performance_signals
+    evidence_dependency = (
+        EVIDENCE_SIDECAR_FRESHNESS if stale_or_missing or setup_error else EVIDENCE_NONE
+    )
+    valid_performance = evidence_dependency == EVIDENCE_NONE and bool(
+        {"performance_ready", "performance_not_ready"} & performance_signals
+    )
+    evidence_confidence = min(_confidence_score(by_key.get(key)) for key in evidence_refs)
+    if setup_error:
+        evidence_confidence = min(evidence_confidence, 42)
+    growth_leverage = 74 if valid_performance else 70
+    learning_velocity = 88 if valid_performance else 82
+    next_action = (
+        "레짐·성과 sidecar를 후보 스코어 입력으로 쓰는 실험을 설계한다."
+        if evidence_dependency == EVIDENCE_NONE
+        else "레짐·성과 점수 입력 전에 promote-readiness와 분석 sidecar 신선도를 복구·재확인한다."
+    )
+    return _candidate(
+        "analysis",
+        "레짐·성과 분석을 후보 점수화 입력으로 승격",
+        "분석 결과가 대화에 머물지 않고 후보 점수화의 증거 신뢰도와 "
+        "성장 레버리지로 들어가야 한다.",
+        evidence_refs,
+        "profit",
+        "learning_velocity",
+        growth_leverage,
+        80,
+        58,
+        evidence_confidence,
+        92,
+        learning_velocity,
+        82,
+        evidence_dependency,
+        next_action,
     )
 
 
@@ -1370,6 +1399,18 @@ def _signals(key: str, raw: str) -> set[str]:
             signals.add(signal)
     if key == "pipeline-liveness" and "ok" in lowered and not {"degraded", "critical"} & signals:
         signals.add("liveness_ok")
+    if key == "promote-readiness":
+        if re.search(r"ready\s*\([^)]*\)\s*\|\s*true", lowered) or re.search(
+            r"\bready\b[^|\n]*\|\s*true", lowered
+        ):
+            signals.add("performance_ready")
+        if re.search(r"ready\s*\([^)]*\)\s*\|\s*false", lowered) or re.search(
+            r"\bready\b[^|\n]*\|\s*false", lowered
+        ):
+            signals.add("performance_not_ready")
+        exit_match = re.search(r"ssh_exit\s*\|\s*([0-9]+)", lowered)
+        if exit_match and exit_match.group(1) not in {"0", "1"}:
+            signals.add("setup_error")
     return signals
 
 
