@@ -153,6 +153,82 @@ def test_market_observation_dependency_is_not_loop_purpose() -> None:
     assert summary.safe_high_leverage_work
 
 
+def test_analysis_candidate_uses_regime_and_performance_evidence() -> None:
+    summary = scan_evolution(_fixture_evidence(), now=NOW, commit="abc1234", run_id="test")
+    candidate = next(
+        c for c in summary.candidates if c.candidate_id == "candidate-e481b0309206"
+    )
+    assert candidate.evidence_refs == (
+        "regime-stratify",
+        "public-data",
+        "promote-readiness",
+    )
+    assert candidate.evidence_dependency == "none"
+    assert candidate.status == "new"
+    assert candidate.composite_score >= 560
+    assert "레짐·성과 sidecar" in candidate.next_action_ko
+
+
+def test_missing_performance_evidence_lowers_analysis_confidence() -> None:
+    fresh = scan_evolution(_fixture_evidence(), now=NOW, commit="abc1234", run_id="test")
+    missing_evidence = _fixture_evidence()
+    missing_evidence.pop("promote-readiness")
+    missing = scan_evolution(missing_evidence, now=NOW, commit="abc1234", run_id="test")
+
+    fresh_candidate = next(
+        c for c in fresh.candidates if c.candidate_id == "candidate-e481b0309206"
+    )
+    missing_candidate = next(
+        c for c in missing.candidates if c.candidate_id == "candidate-e481b0309206"
+    )
+    assert "promote-readiness" in missing.stale_evidence
+    assert missing_candidate.evidence_dependency == "sidecar_freshness"
+    assert missing_candidate.status == "evidence_dependent"
+    assert missing_candidate.composite_score < fresh_candidate.composite_score
+    assert "신선도" in missing_candidate.next_action_ko
+
+
+def test_stale_performance_evidence_lowers_analysis_confidence() -> None:
+    fresh = scan_evolution(_fixture_evidence(), now=NOW, commit="abc1234", run_id="test")
+    stale_evidence = _fixture_evidence()
+    stale_evidence["promote-readiness"] = (
+        ROOT / "tests" / "fixtures" / "evolution_loop" / "stale" / "promote-readiness.md"
+    ).read_text(encoding="utf-8")
+    stale = scan_evolution(stale_evidence, now=NOW, commit="abc1234", run_id="test")
+
+    fresh_candidate = next(
+        c for c in fresh.candidates if c.candidate_id == "candidate-e481b0309206"
+    )
+    stale_candidate = next(
+        c for c in stale.candidates if c.candidate_id == "candidate-e481b0309206"
+    )
+    assert "promote-readiness" in stale.stale_evidence
+    assert stale_candidate.evidence_dependency == "sidecar_freshness"
+    assert stale_candidate.status == "evidence_dependent"
+    assert stale_candidate.composite_score < fresh_candidate.composite_score
+    assert "신선도" in stale_candidate.next_action_ko
+
+
+def test_setup_error_performance_evidence_does_not_boost_analysis_candidate() -> None:
+    evidence = _fixture_evidence()
+    evidence["promote-readiness"] = """
+# 풀라이브 승격 준비(헌법 VI 게이트) — 최신 평가
+
+| 항목 | 값 |
+|------|-----|
+| timestamp_utc | 2026-06-29T00:50:00Z |
+| READY (VI 트랙레코드) | false |
+| ssh_exit | 2 (0=READY,1=NOT READY,그외=셋업/오류) |
+"""
+    summary = scan_evolution(evidence, now=NOW, commit="abc1234", run_id="test")
+    candidate = next(
+        c for c in summary.candidates if c.candidate_id == "candidate-e481b0309206"
+    )
+    assert candidate.evidence_dependency == "sidecar_freshness"
+    assert candidate.status == "evidence_dependent"
+    assert candidate.evidence_confidence <= 42
+
+
 def test_experiment_plan_keeps_trading_changes_out_of_goal() -> None:
     candidate = _candidate(evidence_dependency="market_observation")
     plan = generate_experiment_plan(candidate)
