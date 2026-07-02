@@ -15,6 +15,7 @@ import httpx
 import pytest
 
 from auto_invest.market_data.public_data import (
+    USER_AGENT,
     PublicBar,
     SeriesPoint,
     bls_v1_url,
@@ -264,6 +265,19 @@ def test_fetch_text_4xx_no_retry(monkeypatch: pytest.MonkeyPatch) -> None:
     ):
         fetch_text(client, "https://example.com/x")
     assert calls["n"] == 1
+
+
+def test_fetch_text_can_use_httpx_default_user_agent() -> None:
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.headers.get("user-agent", ""))
+        return httpx.Response(200, text="ok")
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        assert fetch_text(client, "https://fred.stlouisfed.org/x", user_agent=None) == "ok"
+    assert seen and seen[0].startswith("python-httpx/")
+    assert seen[0] != USER_AGENT
 
 
 # ---------- 수집 오케스트레이션 (발행 게이트 + fail-soft + 교차 검증 연결) ----------
@@ -626,6 +640,15 @@ def _dbnomics_h15_body(value: str, *, end: date, days: int = 80) -> str:
     )
 
 
+def _fred_rate_body(series: str, value: str, *, end: date, days: int = 80) -> str:
+    """FRED 그래프 CSV 금리 — 재무부 모의 응답(_treasury_body)과 같은 값."""
+    rows = []
+    for i in range(days):
+        d = end - timedelta(days=days - 1 - i)
+        rows.append(f"{d.isoformat()},{value}")
+    return f"observation_date,{series}\n" + "\n".join(rows)
+
+
 def _official_config() -> dict:
     return {
         "treasury": {
@@ -634,6 +657,12 @@ def _official_config() -> dict:
             "max_staleness_days": 7,
             "maturities": {"2 Yr": "UST2Y", "10 Yr": "UST10Y"},
             "spread": {"id": "UST10Y2Y", "long": "10 Yr", "short": "2 Yr"},
+        },
+        "fred": {
+            "series": ["DGS2", "DGS10"],
+            "min_rows": 50,
+            "max_staleness_days": 7,
+            "user_agent": "httpx-default",
         },
         "cboe": {"vix": True, "min_rows": 50, "max_staleness_days": 7},
         "bls": {"series": ["LNS14000000", "CUUR0000SA0"], "min_rows": 12},
@@ -669,6 +698,22 @@ def _official_config() -> dict:
                 "min_overlap": 60,
                 "min_agree_pct": "99.5",
             },
+            {
+                "kind": "levels",
+                "a": "treasury:UST2Y",
+                "b": "fred:DGS2",
+                "tolerance": "0.001",
+                "min_overlap": 60,
+                "min_agree_pct": "99.5",
+            },
+            {
+                "kind": "levels",
+                "a": "treasury:UST10Y",
+                "b": "fred:DGS10",
+                "tolerance": "0.001",
+                "min_overlap": 60,
+                "min_agree_pct": "99.5",
+            },
         ],
     }
 
@@ -688,6 +733,12 @@ def _official_handler(request: httpx.Request) -> httpx.Response:
         if "RIFLGFCY10_N.B" in path:
             return httpx.Response(200, text=_dbnomics_h15_body("4.40", end=AS_OF))
         return httpx.Response(200, text=_dbnomics_body())
+    if host == "fred.stlouisfed.org":
+        series = request.url.params["id"]
+        if series == "DGS2":
+            return httpx.Response(200, text=_fred_rate_body(series, "3.90", end=AS_OF))
+        if series == "DGS10":
+            return httpx.Response(200, text=_fred_rate_body(series, "4.40", end=AS_OF))
     raise AssertionError(f"예상 밖 호출: {request.url}")
 
 
@@ -698,18 +749,42 @@ def test_collect_official_sources_happy_path(tmp_path: Path) -> None:
             client, _official_config(), out_dir=out_dir, as_of=AS_OF
         )
     assert summary["overall_ok"] is True
-    # UST2Y + UST10Y + 파생 스프레드 + VIX + BLS 2종 + DBnomics 미러 3종 = 9
-    assert summary["published"] == 9
-    # CPI 미러 + 금리 두-기관 대조 2건(재무부 vs 연준 H.15) — 전부 PASS
-    assert [c["status"] for c in summary["cross_checks"]] == ["PASS", "PASS", "PASS"]
+    # UST2Y + UST10Y + 파생 스프레드 + FRED 2종 + VIX + BLS 2종 + DBnomics 3종 = 11
+    assert summary["published"] == 11
+    # CPI 미러 + 금리 대조 4건(DBnomics H.15 2건, FRED 2건) — 전부 PASS
+    assert [c["status"] for c in summary["cross_checks"]] == [
+        "PASS",
+        "PASS",
+        "PASS",
+        "PASS",
+        "PASS",
+    ]
     spread = (out_dir / "treasury" / "UST10Y2Y.csv").read_text(encoding="utf-8")
     assert ",0.50" in spread  # 4.40 - 3.90
     # VIX 는 종가 시계열로 발행 (1990년대 초 원본 OHLC 정합 깨짐 실측 대응)
     vix = (out_dir / "cboe" / "VIX.csv").read_text(encoding="utf-8")
     assert vix.splitlines()[0] == "date,value"
     assert (out_dir / "bls" / "CUUR0000SA0.csv").exists()
+    assert (out_dir / "fred" / "DGS2.csv").exists()
+    assert (out_dir / "fred" / "DGS10.csv").exists()
     assert (out_dir / "dbnomics" / "BLS_CU_CUUR0000SA0.csv").exists()
     assert (out_dir / "dbnomics" / "FED_H15_RIFLGFCY10_N.B.csv").exists()
+
+
+def test_collect_fred_uses_configured_default_user_agent(tmp_path: Path) -> None:
+    fred_uas: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "fred.stlouisfed.org":
+            fred_uas.append(request.headers.get("user-agent", ""))
+        return _official_handler(request)
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        collect_public_data(
+            client, _official_config(), out_dir=tmp_path / "out", as_of=AS_OF
+        )
+    assert len(fred_uas) == 2
+    assert all(ua.startswith("python-httpx/") and ua != USER_AGENT for ua in fred_uas)
 
 
 def test_collect_official_sources_failsoft_and_spread_needs_both_legs(
@@ -726,9 +801,15 @@ def test_collect_official_sources_failsoft_and_spread_needs_both_legs(
             client, _official_config(), out_dir=out_dir, as_of=AS_OF
         )
     assert summary["overall_ok"] is False
-    assert summary["published"] == 6  # VIX + BLS 2종 + DBnomics 3종은 계속 발행
+    assert summary["published"] == 8  # FRED 2종 + VIX + BLS 2종 + DBnomics 3종은 계속 발행
     by_id = {i["id"]: i for i in summary["items"]}
     assert not by_id["UST10Y"]["ok"] and not by_id["UST2Y"]["ok"]
     assert not by_id["UST10Y2Y"]["ok"]  # 한 다리만 죽어도 스프레드는 미발행
     # CPI 짝은 영향 없음 — 금리 두-기관 대조는 재무부 다리가 죽어 SKIPPED 로 정직 표기
-    assert [c["status"] for c in summary["cross_checks"]] == ["PASS", "SKIPPED", "SKIPPED"]
+    assert [c["status"] for c in summary["cross_checks"]] == [
+        "PASS",
+        "SKIPPED",
+        "SKIPPED",
+        "SKIPPED",
+        "SKIPPED",
+    ]
