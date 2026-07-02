@@ -17,10 +17,13 @@ on:
     branches: [main]
     paths:
       - 'src/auto_invest/analytics/evolution_loop.py'
+      - 'src/auto_invest/analytics/execution_quality.py'
       - 'scripts/evolution_loop_probe.py'
+      - 'scripts/execution_quality_probe.py'
       - 'src/auto_invest/cli.py'
       - 'src/auto_invest/analytics/pipeline_liveness.py'
       - '.github/workflows/autonomous-evolution-loop.yml'
+      - '.github/workflows/execution-quality.yml'
 
 permissions:
   contents: write

@@ -26,6 +26,11 @@ def test_probe_manifest_lists_required_sidecars(capsys) -> None:
     assert "reassign\tautomation/reassign-last-run\tLAST_RUN.md" in out
     assert "pipeline-liveness\tautomation/pipeline-liveness-last-run\tLAST_RUN.md" in out
     assert "promote-readiness\tautomation/promote-readiness-last-run\tLAST_RUN.md" in out
+    assert "kis-smoke\tautomation/kis-smoke-last-run\tLAST_RUN.md" in out
+    assert (
+        "execution-quality\tautomation/execution-quality-last-run\texecution_quality.json"
+        in out
+    )
     assert (
         "promotion-summary\tautomation/autonomous-promotion-last-run\tpromotion_summary.json"
         in out
@@ -92,6 +97,8 @@ def test_autonomous_evolution_workflow_is_read_only_and_publishes_sidecar() -> N
     assert "automation/autonomous-evolution-last-run" in text
     assert "evolution_loop_probe.py --manifest" in text
     assert "--candidate-backlog-out" in text
+    assert "src/auto_invest/analytics/execution_quality.py" in text
+    assert ".github/workflows/execution-quality.yml" in text
     assert "VULTR_SSH" not in text
     assert "KIS_" not in text
     assert "ssh " not in text and "ssh -" not in text

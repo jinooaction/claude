@@ -236,6 +236,12 @@ def test_default_specs_registry_sane():
     assert "operator-status" in keys
     assert by_key["operator-status"].critical is False
     assert by_key["operator-status"].branch == "automation/operator-status-last-run"
+    # 스펙 083 — 실행 품질 패키지. 주문 거부·브로커 오류 관측은 보고 전용이므로
+    # 멈추면 비핵심 저하로 드러내되 돈 경로 CRITICAL 로 보지 않는다.
+    assert "execution-quality" in keys
+    assert by_key["execution-quality"].critical is False
+    assert by_key["execution-quality"].branch == "automation/execution-quality-last-run"
+    assert by_key["execution-quality"].first_expected_utc is not None
     # 스펙 069 — 승격 실행 루프와 promotion 전용 검증 채널도 감시 대상.
     # 돈 이동은 기존 게이트만 담당하므로 비핵심이지만, 침묵 정지는 드러나야 한다.
     assert "autonomous-promotion-actions" in keys
