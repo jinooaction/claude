@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-07-02T02:49:24.297710Z)
+# 완료 후보 소비 장부 (as of 2026-07-02T03:06:17.461350Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -9,7 +9,7 @@
 |------|-----|
 | overall_status | OK |
 | released_count | 2 |
-| scanned_specs | 30 |
+| scanned_specs | 31 |
 
 ## 완료 후보
 
@@ -66,7 +66,6 @@
 | 070-candidate-implementation-factory | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 071-candidate-result-executor | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 072-candidate-evidence-diagnostics | 체크박스 작업이 없거나 완료되지 않았습니다. |
-| 080-operator-dashboard-alert-loop | 체크박스 작업이 없거나 완료되지 않았습니다. |
 
 ## 안전 경계
 
@@ -83,7 +82,7 @@
 
 ```json
 {
-  "commit": "43b5da8f99e0b28db9049a2023d0b618647b0f73",
+  "commit": "eb7de678bc2923dd919eace8ad08580dce5d05c7",
   "overall_status": "OK",
   "released_work": [
     {
@@ -105,7 +104,7 @@
       "status": "released"
     }
   ],
-  "run_id": "28561843583",
+  "run_id": "28562450265",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -146,7 +145,8 @@
     "076-capital-path-readiness-loop",
     "077-autonomous-work-execution-loop",
     "078-money-gate-alignment-loop",
-    "079-completed-candidate-consumption"
+    "079-completed-candidate-consumption",
+    "080-operator-dashboard-alert-loop"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -325,12 +325,8 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "072-candidate-evidence-diagnostics"
-    },
-    {
-      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "080-operator-dashboard-alert-loop"
     }
   ],
-  "timestamp_utc": "2026-07-02T02:49:24.297710Z"
+  "timestamp_utc": "2026-07-02T03:06:17.461350Z"
 }
 ```
