@@ -33,15 +33,15 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `27388dd` — Merge pull request #442 from jinooaction/Codex/080-operator-dashboard-alert-loop-followup |
-| main 테스트 | `uv run pytest` → 2415 passed, 4 skipped |
+| 마지막 main 커밋 | `649a8df` — Merge pull request #444 from jinooaction/Codex/081-autonomous-loop-world-class |
+| main 테스트 | `uv run pytest` → 2417 passed, 4 skipped |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
-| 열린 PR | 코드 PR 없음. #441 스펙 080 기능과 #442 모바일 상태판 publish 보정이 모두 머지됐고, 이 handoff-only 정리로 tasks와 인계 기록을 실제 상태에 맞춘다. |
-| 출시 완료 스펙 | 최신 추가: 080(운영자 대시보드와 모바일 알림 루프: `operator-status` sidecar, GitHub Pages 모바일 상태판 요약, 개입 필요 시 Telegram best-effort 알림), 079(완료 후보 소비 장부: 완료된 Speckit 후보를 `released-work` 장부로 기록하고 `autonomous-work-execution`이 `RELEASED`로 소비해 차순위 후보로 이동), 078(돈 경로 게이트 정렬 루프: money-path, capital-path-readiness, edge-autoarm, reassign, forward, pipeline, autonomous-work, KIS smoke sidecar를 한 번에 대조해 돈 경로 불일치와 다음 안전 행동을 `automation/money-gate-alignment-last-run`에 발행), 077(자율 작업 실행 루프: 성장·승격·후보 검증·자본 준비도·파이프라인 생존 sidecar를 읽어 다음 Codex 작업 패킷을 `automation/autonomous-work-execution-last-run`에 발행), 076(자본 경로 준비도 루프: money-path, edge-autoarm, reassign, paper-forward, KIS smoke, promotion/evolution sidecar를 읽어 자본 투입 준비도와 다음 안전 행동을 `automation/capital-path-readiness-last-run`에 발행), 075(전략 실패 학습: promotion `DISCARD` 전략/포트폴리오 후보를 autonomous evolution `learning_ledger.json`의 `rejected` 항목으로 영구 기록), 074(후보 가격 이력 지원: result executor가 read-only 서버 bars-export와 ingest-history로 전략/포트폴리오 후보 history-root를 준비), 073(후보 pending next action 보정: 명령 계약 오류와 support input 미준비를 자동 실행 가능한 pass로 줄임), 072(후보 증거 진단: pending 원인과 다음 행동을 기계 판독 가능하게 분해), 071(후보 결과 실행기: 검증 패키지를 candidate result evidence로 변환하고 sidecar 발행), 070(후보 구현 공장: `BACKTEST_REQUIRED` 후보를 검증 패키지와 enriched backlog로 변환), 069(자율 승격 실행 루프: forward paper 등록 큐와 hardened canary 제출 큐 자동화), 068(자율 승격 루프 자동 분류), 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
-| 골격 스펙 | 없음. `.specify/feature.json`은 추적을 위해 `specs/080-operator-dashboard-alert-loop`를 가리킨다. 스펙 080 구현, 후속 보정, post-merge sidecar 확인, tasks 완료 정리가 끝났다. |
-| 최근 출시 작업 | #442 스펙 080 모바일 상태판 publish 보정과 인계 갱신. #441 스펙 080 운영자 대시보드와 모바일 알림 루프. #439 스펙 079 tasks 완료 상태 정리. #437 스펙 079 `released-work` sidecar publish token 보정과 인계 갱신. #436 스펙 079 완료 후보 소비 장부. #434 스펙 078 돈 경로 게이트 정렬 루프. #432 스펙 077 자율 작업 실행 루프. #430 스펙 076 자본 경로 준비도 루프. |
-| 활성 작업 | #442 main push에서 `Deploy on merge to main` run `28562202999` success, `Operator mobile alerts` run `28562203117` success, `Mobile status page (GitHub Pages)` run `28562203120` success를 확인했다. 최신 `operator-status` sidecar는 commit `27388dd`, `overall_status=OK`, `send_status=NOT_ATTEMPTED`, `money-path=PREVIEW_ONLY`, `selected_work=candidate-e481b0309206`를 기록한다. `origin/gh-pages:status.html`에는 `operator-status-data`, `운영자 요약`, `실제 돈 경로`, `다음 자율 작업`이 포함된다. |
-| 안전 경계 | #441/#442 후속은 등급 2 운영 자동화와 상태판/알림 보정이다. 기존 sidecar를 읽어 operator-status와 모바일 상태판을 만들고, ACTION_REQUIRED 이상일 때만 Telegram best-effort 알림을 보낸다. 주문, 자본 증액, 자본 배분, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, live sentinel, 브로커 주문, K1/K2/K4/K5/K6, 헌법, 커널 목록, 비밀값, 외부 유료 서비스는 변경하지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`이며, 배포 성공은 dry-run worker 코드 반영이지 실거래 전환이 아니다. |
+| 열린 PR | 코드 PR 없음. #444 스펙 081 자율 루프 품질 폐쇄가 머지됐고, 이 handoff-only 정리로 `HANDOFF.md`와 스펙 081 T016 완료 기록을 실제 상태에 맞춘다. |
+| 출시 완료 스펙 | 최신 추가: 081(자율 루프 품질 폐쇄: `autonomous-work-execution` 작업 패킷에 자율 착수 수준·착수 설명·완료 관문을 추가하고, money-gate 관측 수 차이를 `SNAPSHOT_SKEW` 정보성 이슈로 분리하며, `operator-status` 완료 뒤 `pipeline-liveness`가 다시 실행될 수 있게 함), 080(운영자 대시보드와 모바일 알림 루프: `operator-status` sidecar, GitHub Pages 모바일 상태판 요약, 개입 필요 시 Telegram best-effort 알림), 079(완료 후보 소비 장부: 완료된 Speckit 후보를 `released-work` 장부로 기록하고 `autonomous-work-execution`이 `RELEASED`로 소비해 차순위 후보로 이동), 078(돈 경로 게이트 정렬 루프: money-path, capital-path-readiness, edge-autoarm, reassign, forward, pipeline, autonomous-work, KIS smoke sidecar를 한 번에 대조해 돈 경로 불일치와 다음 안전 행동을 `automation/money-gate-alignment-last-run`에 발행), 077(자율 작업 실행 루프: 성장·승격·후보 검증·자본 준비도·파이프라인 생존 sidecar를 읽어 다음 Codex 작업 패킷을 `automation/autonomous-work-execution-last-run`에 발행), 076(자본 경로 준비도 루프: money-path, edge-autoarm, reassign, paper-forward, KIS smoke, promotion/evolution sidecar를 읽어 자본 투입 준비도와 다음 안전 행동을 `automation/capital-path-readiness-last-run`에 발행), 075(전략 실패 학습: promotion `DISCARD` 전략/포트폴리오 후보를 autonomous evolution `learning_ledger.json`의 `rejected` 항목으로 영구 기록), 074(후보 가격 이력 지원: result executor가 read-only 서버 bars-export와 ingest-history로 전략/포트폴리오 후보 history-root를 준비), 073(후보 pending next action 보정: 명령 계약 오류와 support input 미준비를 자동 실행 가능한 pass로 줄임), 072(후보 증거 진단: pending 원인과 다음 행동을 기계 판독 가능하게 분해), 071(후보 결과 실행기: 검증 패키지를 candidate result evidence로 변환하고 sidecar 발행), 070(후보 구현 공장: `BACKTEST_REQUIRED` 후보를 검증 패키지와 enriched backlog로 변환), 069(자율 승격 실행 루프: forward paper 등록 큐와 hardened canary 제출 큐 자동화), 068(자율 승격 루프 자동 분류), 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
+| 골격 스펙 | 없음. `.specify/feature.json`은 추적을 위해 `specs/081-autonomous-loop-quality-closure`를 가리킨다. 스펙 081 구현, post-merge sidecar 확인, tasks 완료 정리가 끝났다. |
+| 최근 출시 작업 | #444 스펙 081 자율 루프 품질 폐쇄. #443 스펙 080 최종 인계 정리. #442 스펙 080 모바일 상태판 publish 보정과 인계 갱신. #441 스펙 080 운영자 대시보드와 모바일 알림 루프. #439 스펙 079 tasks 완료 상태 정리. #437 스펙 079 `released-work` sidecar publish token 보정과 인계 갱신. #436 스펙 079 완료 후보 소비 장부. #434 스펙 078 돈 경로 게이트 정렬 루프. #432 스펙 077 자율 작업 실행 루프. |
+| 활성 작업 | #444 main push에서 `Deploy on merge to main` run `28564456852` success, `Autonomous work execution loop` run `28564456840` success, `Money gate alignment loop` run `28564456849` success, `Pipeline liveness watchdog` run `28564456858` success를 확인했다. 최신 `autonomous-work-execution` sidecar는 commit `649a8df`, `selected_work=candidate-e481b0309206`, `autonomy_level=CODEX_AUTONOMOUS_START`, `completion_gates`를 기록한다. 최신 `money-gate-alignment` sidecar는 `ALIGNED_WAITING`을 유지하면서 관측 수 차이를 `SNAPSHOT_SKEW`로 분리한다. 최신 `pipeline-liveness` sidecar는 `overall=OK`, `operator-status=OK`다. |
+| 안전 경계 | #444는 등급 2 운영 자동화 보정이다. 안전 후보를 "Codex가 시작해도 되는 작업 패킷"으로 명확히 만들었을 뿐, 코드 자동 작성자·PR 자동 생성자·실거래 실행자를 추가하지 않았다. 주문, 자본 증액, 자본 배분, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, live sentinel, 브로커 주문, K1/K2/K4/K5/K6, 헌법, 커널 목록, 비밀값, 외부 유료 서비스는 변경하지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`이며, 배포 성공은 dry-run worker 코드 반영이지 실거래 전환이 아니다. |
 
 ## 돈 경로 상태 판독 규칙 (필수 — 스펙 062)
 
@@ -81,9 +81,54 @@ done
 uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.live_money_state'
 ```
 
+## 최근 관찰 — 2026-07-02 KST (스펙 081 자율 루프 품질 폐쇄)
+
+현재 `main` 최신 기능 머지는 `649a8df`(#444, 스펙 081 자율 루프 품질 폐쇄)이다.
+직전 관련 커밋은 `eb7de67`(#443, 스펙 080 최종 인계 정리), `27388dd`(#442, 스펙 080
+모바일 상태판 publish 보정)이다.
+
+- **문제 정의**: 자율 성장 루프는 다음 후보를 고르고 운영자 상태판까지 보여주게 됐지만,
+  세 가지 흠이 남아 있었다. 안전한 위험 등급 2 후보도 "Codex가 바로 시작해도 되는지"가
+  작업 패킷에 명시되지 않았고, money-path `14/20`과 edge/forward `15/20` 차이가 장애처럼
+  보일 수 있었으며, `operator-status`가 새로 발행된 뒤 `pipeline-liveness`가 오래된 상태를
+  한 번 더 남길 수 있었다.
+- **구현 상태**: `autonomous_work_execution.py`의 `WorkPacket`에 `autonomy_level`,
+  `start_guidance_ko`, `completion_gates`를 추가했다. 위험 등급 2 이하이고 주문·자본·비밀값·헌법·
+  live 전략·유료 서비스 표면을 건드리지 않는 후보는 `CODEX_AUTONOMOUS_START`로 표시된다.
+  위험 후보는 기존처럼 `OPERATOR_APPROVAL_REQUIRED` 또는 복구 필요 상태로 남는다.
+- **돈 경로 정렬 보정**: `money_gate_alignment.py`는 money-path와 edge/forward sidecar의 관측 수가
+  서로 달라도 모두 관측 부족 대기를 말하면 `ALIGNED_WAITING`을 유지한다. 동시에 관측 시점 차이는
+  `SNAPSHOT_SKEW` 정보성 이슈로 남겨 다음 aligned run에서 수렴 여부를 볼 수 있게 했다.
+- **감시 보정**: `.github/workflows/pipeline-liveness.yml`은 기존 cron/push/수동 실행에 더해
+  `Operator mobile alerts` workflow 완료 후 다시 실행될 수 있다. 이 후속 실행은 읽기 전용이고
+  `automation/pipeline-liveness-last-run`만 갱신한다.
+- **배포 후 실제 실행**: #444 main push 뒤 `Deploy on merge to main` run `28564456852` success,
+  `Autonomous work execution loop` run `28564456840` success, `Money gate alignment loop` run
+  `28564456849` success, `Pipeline liveness watchdog` run `28564456858` success를 확인했다.
+  deploy 로그는 `systemctl start exit=0`, unit sync exit `0`이고, journal은
+  `auto-invest-deploy.service: Deactivated successfully`를 기록했다.
+- **sidecar 확인**: 최신 `autonomous-work-execution` sidecar는 commit `649a8df`,
+  `selected_work=candidate-e481b0309206`, `autonomy_level=CODEX_AUTONOMOUS_START`,
+  `start_guidance_ko=운영자 추가 질문 없이 새 worktree 또는 브랜치에서 SDD 두께를 판단하고 구현, 검증, PR, 자동 머지 절차로 진행할 수 있다.`,
+  `completion_gates=focused pytest, uv run pytest, ruff, HANDOFF 사실 검증, strict 하네스, PR 품질 관문, 필요한 HANDOFF 갱신`을 기록한다.
+  최신 `money-gate-alignment` sidecar는 `overall_status=ALIGNED_WAITING`,
+  `live_money_status=PREVIEW_ONLY`, `SNAPSHOT_SKEW` 관측값
+  `14-15/20 (money-path=14, edge-autoarm=15, rebalance-paper-forward=15)`를 기록한다.
+  최신 `pipeline-liveness` sidecar는 `overall=OK`, `operator-status=OK`, `money-gate-alignment=OK`,
+  `autonomous-work-execution=OK`다.
+- **안전 경계**: 등급 2 운영 자동화 보정이다. 실제 주문, 브로커 실주문 API, 자본 증액, 자본 배분,
+  whitelist/caps 확대, live 전략 교체, live sentinel, 헌법, 커널 목록, K1/K2/K4/K5/K6,
+  비밀값, 외부 유료 서비스 변경 없음. 새 `autonomy_level`은 Codex가 기존 작업 절차를 시작해도
+  된다는 표시이지, 시스템이 스스로 코드를 쓰거나 PR을 만드는 실행자가 아니다.
+- **검증**: focused pytest 53 통과, `uv run pytest` 2417 통과·4 스킵,
+  `uv run ruff check src tests` 통과, `git diff --check` 통과, `uv run python scripts/check_handoff_facts.py` OK,
+  `uv run python scripts/agent_harness_probe.py --strict` OK(14/14), PR 품질 관문 성공,
+  post-merge sidecar와 deploy run 확인 완료.
+- **상세 인계**: `HANDOFF-085-AUTONOMOUS-LOOP-QUALITY-CLOSURE.md`.
+
 ## 최근 관찰 — 2026-07-02 KST (스펙 080 운영자 대시보드와 모바일 알림 루프)
 
-현재 `main` 최신 기능 머지는 `27388dd`(#442, 스펙 080 모바일 상태판 publish 보정과 인계 갱신)이다.
+스펙 080 기능 기준 머지는 `27388dd`(#442, 스펙 080 모바일 상태판 publish 보정과 인계 갱신)이다.
 직전 관련 커밋은 `43b5da8`(#441, 스펙 080 운영자 대시보드와 모바일 알림 루프),
 `65c2602`(스펙 080 구현), `db35efd`(#440, 스펙 079 handoff 갱신)이다.
 
@@ -1145,6 +1190,25 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
   통과, `uv run python scripts/agent_harness_probe.py --strict` `OK (14/14)`,
   `uv run python scripts/check_handoff_facts.py` 통과, PR 품질 관문 통과. 머지 직전 전체 테스트와
   린트를 다시 실행해 같은 결과를 확인했다.
+
+## 최근 마일스톤 — 2026-07-02 KST (스펙 081 자율 루프 품질 폐쇄)
+
+스펙 081은 자율 성장 루프의 남은 운영상 흠을 닫았다. #444가
+`autonomous-work-execution` 작업 패킷에 `CODEX_AUTONOMOUS_START`, 한글 착수 안내,
+완료 관문을 넣어 다음 Codex 세션이 안전 후보를 해석 없이 시작할 수 있게 했다. 또한
+money-path `14/20`과 edge/forward `15/20`처럼 sidecar 시점 차이에서 생기는 관측 수 불일치는
+`SNAPSHOT_SKEW` 정보성 이슈로 남기고, 실제 판정은 `ALIGNED_WAITING`으로 유지한다.
+`pipeline-liveness`는 `Operator mobile alerts` 완료 뒤 다시 실행될 수 있어 최신
+`operator-status`를 읽는 후속 감시 경로가 생겼다.
+
+post-merge evidence는 deploy run `28564456852` success, autonomous work run `28564456840` success,
+money gate alignment run `28564456849` success, pipeline liveness run `28564456858` success다.
+최신 선택 후보는 `candidate-e481b0309206`이고, 돈 경로는 여전히 `PREVIEW_ONLY`다. 상세:
+`HANDOFF-085-AUTONOMOUS-LOOP-QUALITY-CLOSURE.md`, `specs/081-autonomous-loop-quality-closure/`.
+
+안전 경계: 읽기 전용 운영 자동화 보정이다. 실제 주문, 실거래 전환, 자본 배분,
+whitelist/caps/live 설정, 비밀값, 외부 유료 서비스, 헌법·커널 변경 없음. deploy success는
+dry-run worker 코드 반영이지 실거래 전환이 아니다.
 
 ## 최근 마일스톤 — 2026-07-02 KST (스펙 080 운영자 대시보드와 모바일 알림 루프)
 
