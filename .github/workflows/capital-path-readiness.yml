@@ -20,6 +20,7 @@ on:
     paths:
       - 'src/auto_invest/analytics/capital_path_readiness.py'
       - 'src/auto_invest/analytics/pipeline_liveness.py'
+      - 'src/auto_invest/analytics/released_work.py'
       - 'scripts/capital_path_readiness_probe.py'
       - '.github/workflows/capital-path-readiness.yml'
 

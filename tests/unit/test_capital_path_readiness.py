@@ -39,6 +39,17 @@ def _money_path(stage: str = "ACCUMULATING_EDGE", status: str = LIVE_STATUS_PREV
     )
 
 
+def _liveness(*checks: dict, overall: str = "OK") -> str:
+    return _fenced(
+        "결정 JSON",
+        {
+            "schema_version": "1.0",
+            "overall": overall,
+            "checks": list(checks),
+        },
+    )
+
+
 def test_accumulating_edge_preview_only_uses_existing_gates():
     report = build_capital_path_readiness(
         {
@@ -79,6 +90,85 @@ def test_accumulating_edge_preview_only_uses_existing_gates():
         "candidate-fd04772a23c5"
     ]
     assert report.suppressed_candidates == []
+
+
+def test_released_work_suppresses_echo_as_observability_issue():
+    report = build_capital_path_readiness(
+        {
+            "money-path": _money_path(),
+            "pipeline-liveness": _liveness(),
+            "evolution-backlog": json.dumps(
+                {
+                    "candidates": [
+                        {
+                            "candidate_id": "candidate-fd04772a23c5",
+                            "domain_key": "live_readiness",
+                            "status": "new",
+                            "score": 597,
+                            "title_ko": "money path readiness/gate alignment",
+                        }
+                    ]
+                },
+                ensure_ascii=False,
+            ),
+            "released-work": json.dumps(
+                {
+                    "released_work": [
+                        {
+                            "candidate_id": "candidate-fd04772a23c5",
+                            "status": "released",
+                            "reason_ko": "스펙 078로 구현·머지·인계 완료",
+                        }
+                    ]
+                },
+                ensure_ascii=False,
+            ),
+        },
+        now=NOW,
+    )
+
+    assert report.priority_candidates == []
+    assert [candidate.candidate_id for candidate in report.suppressed_candidates] == [
+        "candidate-fd04772a23c5"
+    ]
+    assert report.suppressed_candidates[0].status == "released"
+    assert "released-work" in report.suppressed_candidates[0].source
+    issue = report.observability_issues[0]
+    assert issue.issue_type == "released_candidate_echo"
+    assert issue.severity == "info"
+    assert issue.affected_candidate_id == "candidate-fd04772a23c5"
+    assert report.readiness_state == STATE_ACCUMULATING_EDGE
+
+
+def test_pipeline_liveness_issues_do_not_change_money_path_state():
+    report = build_capital_path_readiness(
+        {
+            "money-path": _money_path(),
+            "pipeline-liveness": _liveness(
+                {
+                    "key": "execution-quality",
+                    "status": "STALE",
+                    "critical": False,
+                    "detail": "보고용 sidecar 지연",
+                },
+                {
+                    "key": "kis-smoke",
+                    "status": "MISSING",
+                    "critical": True,
+                    "detail": "핵심 sidecar 없음",
+                },
+                overall="CRITICAL",
+            ),
+        },
+        now=NOW,
+    )
+
+    issues = {issue.source_key: issue for issue in report.observability_issues}
+    assert issues["execution-quality"].issue_type == "pipeline_liveness"
+    assert issues["execution-quality"].severity == "warning"
+    assert issues["kis-smoke"].severity == "critical"
+    assert report.readiness_state == STATE_ACCUMULATING_EDGE
+    assert report.live_money_status == LIVE_STATUS_PREVIEW
 
 
 def test_learning_ledger_suppresses_rejected_candidates():

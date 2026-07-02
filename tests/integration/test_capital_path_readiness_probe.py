@@ -31,6 +31,16 @@ def _write_money_path(sidecar_dir: Path) -> None:
     )
 
 
+def _write_liveness(sidecar_dir: Path) -> None:
+    payload = {"schema_version": "1.0", "overall": "OK", "checks": []}
+    (sidecar_dir / "pipeline-liveness.md").write_text(
+        "## 결정 JSON\n\n```json\n"
+        + json.dumps(payload, ensure_ascii=False)
+        + "\n```\n",
+        encoding="utf-8",
+    )
+
+
 def test_manifest_matches_contract(capsys):
     rc = probe_main(["--manifest"])
 
@@ -45,11 +55,14 @@ def test_manifest_matches_contract(capsys):
         "autonomous-promotion\tautomation/autonomous-promotion-last-run\tpromotion_summary.json",
         "evolution-backlog\tautomation/autonomous-evolution-last-run\tcandidate_backlog.json",
         "evolution-ledger\tautomation/autonomous-evolution-last-run\tlearning_ledger.json",
+        "released-work\tautomation/released-work-last-run\treleased_work.json",
+        "pipeline-liveness\tautomation/pipeline-liveness-last-run\tLAST_RUN.md",
     ]
 
 
 def test_probe_writes_json_and_markdown(tmp_path, capsys):
     _write_money_path(tmp_path)
+    _write_liveness(tmp_path)
     (tmp_path / "evolution-backlog.md").write_text(
         json.dumps(
             {
@@ -96,9 +109,12 @@ def test_probe_writes_json_and_markdown(tmp_path, capsys):
     assert printed == written
     assert written["readiness_state"] == "ACCUMULATING_EDGE"
     assert written["live_money_status"] == "PREVIEW_ONLY"
+    assert written["observability_issues"] == []
     assert written["run_id"] == "123"
     assert written["commit"] == "abc123"
-    assert "자본 경로 준비도 루프" in summary_out.read_text(encoding="utf-8")
+    summary = summary_out.read_text(encoding="utf-8")
+    assert "자본 경로 준비도 루프" in summary
+    assert "## 관측 이슈" in summary
 
 
 def test_pipeline_liveness_registers_capital_path_readiness():

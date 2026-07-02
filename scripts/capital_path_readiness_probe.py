@@ -26,6 +26,8 @@ CONSUMED_SIDECARS: list[tuple[str, str, str]] = [
     ("autonomous-promotion", "automation/autonomous-promotion-last-run", "promotion_summary.json"),
     ("evolution-backlog", "automation/autonomous-evolution-last-run", "candidate_backlog.json"),
     ("evolution-ledger", "automation/autonomous-evolution-last-run", "learning_ledger.json"),
+    ("released-work", "automation/released-work-last-run", "released_work.json"),
+    ("pipeline-liveness", "automation/pipeline-liveness-last-run", "LAST_RUN.md"),
 ]
 
 

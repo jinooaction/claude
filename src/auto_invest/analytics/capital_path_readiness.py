@@ -43,6 +43,10 @@ PARSE_PRESENT = "present"
 PARSE_MISSING = "missing"
 PARSE_MALFORMED = "malformed"
 
+OBS_INFO = "info"
+OBS_WARNING = "warning"
+OBS_CRITICAL = "critical"
+
 _CAPITAL_RELATED_DOMAINS = {
     "live_readiness": 0,
     "execution_quality": 1,
@@ -52,6 +56,9 @@ _CAPITAL_RELATED_DOMAINS = {
     "portfolio_design": 5,
 }
 _REJECTED_WORDS = {"rejected", "discard", "discarded", "failed", "blocked"}
+_RELEASED_WORDS = {"released", "complete", "completed", "done"}
+_LIVENESS_OK_STATUSES = {"OK", "PASS", "PRESENT", "PENDING", "HEALTHY"}
+_LIVENESS_CRITICAL_STATUSES = {"STALE", "MISSING", "CRITICAL"}
 
 
 @dataclass(frozen=True)
@@ -99,6 +106,32 @@ class ReadinessCandidate:
 
 
 @dataclass(frozen=True)
+class ReadinessObservabilityIssue:
+    """후보 실패와 분리해 보여줄 증거·관측 품질 이슈."""
+
+    issue_id: str
+    issue_type: str
+    severity: str
+    source_key: str
+    status: str
+    summary_ko: str
+    next_action_ko: str
+    affected_candidate_id: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "issue_id": self.issue_id,
+            "issue_type": self.issue_type,
+            "severity": self.severity,
+            "source_key": self.source_key,
+            "status": self.status,
+            "summary_ko": self.summary_ko,
+            "next_action_ko": self.next_action_ko,
+            "affected_candidate_id": self.affected_candidate_id,
+        }
+
+
+@dataclass(frozen=True)
 class CapitalPathReadinessReport:
     """자본 경로 준비도 종합 보고."""
 
@@ -114,6 +147,7 @@ class CapitalPathReadinessReport:
     required_existing_gates: list[str]
     priority_candidates: list[ReadinessCandidate]
     suppressed_candidates: list[ReadinessCandidate]
+    observability_issues: list[ReadinessObservabilityIssue]
     evidence_surfaces: list[ReadinessEvidenceSurface]
 
     def to_dict(self) -> dict[str, Any]:
@@ -130,6 +164,7 @@ class CapitalPathReadinessReport:
             "required_existing_gates": self.required_existing_gates,
             "priority_candidates": [c.to_dict() for c in self.priority_candidates],
             "suppressed_candidates": [c.to_dict() for c in self.suppressed_candidates],
+            "observability_issues": [issue.to_dict() for issue in self.observability_issues],
             "evidence_surfaces": [s.to_dict() for s in self.evidence_surfaces],
         }
 
@@ -179,6 +214,23 @@ class CapitalPathReadinessReport:
                 )
         else:
             lines.append("- 억제할 실패 후보 없음.")
+        lines += [
+            "",
+            "## 관측 이슈",
+            "",
+        ]
+        if self.observability_issues:
+            lines += [
+                "| 이슈 | 심각도 | 출처 | 상태 | 요약 | 다음 조치 |",
+                "|------|--------|------|------|------|-----------|",
+            ]
+            for issue in self.observability_issues:
+                lines.append(
+                    f"| {issue.issue_id} | {issue.severity} | {issue.source_key} | "
+                    f"{issue.status} | {issue.summary_ko} | {issue.next_action_ko} |"
+                )
+        else:
+            lines.append("- 후보 실패와 분리해 볼 증거 관측 이슈 없음.")
         lines += [
             "",
             "## 입력 증거",
@@ -267,6 +319,10 @@ def _json_list_or_dict(text: str | None, *headers: str) -> list[Any] | dict[str,
 
 def _is_rejected(value: object) -> bool:
     return str(value or "").strip().lower() in _REJECTED_WORDS
+
+
+def _is_released(value: object) -> bool:
+    return str(value or "").strip().lower() in _RELEASED_WORDS
 
 
 def _items(value: Any, keys: tuple[str, ...]) -> list[dict[str, Any]]:
@@ -362,6 +418,30 @@ def _ledger_rejections(ledger_value: Any) -> dict[str, ReadinessCandidate]:
     return rejected
 
 
+def _released_candidates(released_value: Any) -> dict[str, ReadinessCandidate]:
+    released: dict[str, ReadinessCandidate] = {}
+    for item in _items(released_value, ("released_work", "entries", "items", "candidates")):
+        status = item.get("status") or item.get("decision") or item.get("outcome")
+        if not _is_released(status):
+            continue
+        candidate_id = _candidate_id(item)
+        if not candidate_id:
+            continue
+        released[candidate_id] = ReadinessCandidate(
+            candidate_id=candidate_id,
+            domain_key=_candidate_domain(item),
+            status="released",
+            title_ko=_candidate_title(item),
+            reason_ko=_candidate_reason(
+                item,
+                "released-work가 완료 후보로 기록했다.",
+            ),
+            source="released-work",
+            score=None,
+        )
+    return released
+
+
 def _promotion_candidates(
     promotion_value: Any,
 ) -> tuple[list[ReadinessCandidate], list[ReadinessCandidate]]:
@@ -389,19 +469,66 @@ def _candidate_routing(
     backlog_value: Any,
     ledger_value: Any,
     promotion_value: Any,
-) -> tuple[list[ReadinessCandidate], list[ReadinessCandidate]]:
+    released_value: Any,
+) -> tuple[
+    list[ReadinessCandidate],
+    list[ReadinessCandidate],
+    list[ReadinessObservabilityIssue],
+]:
     ledger_rejected = _ledger_rejections(ledger_value)
+    released = _released_candidates(released_value)
     priority: list[ReadinessCandidate] = []
     suppressed: dict[str, ReadinessCandidate] = dict(ledger_rejected)
+    observability_issues: dict[str, ReadinessObservabilityIssue] = {}
+
+    def suppress_released_echo(candidate: ReadinessCandidate) -> bool:
+        released_candidate = released.get(candidate.candidate_id)
+        if released_candidate is None:
+            return False
+        suppressed.setdefault(
+            candidate.candidate_id,
+            ReadinessCandidate(
+                candidate_id=candidate.candidate_id,
+                domain_key=candidate.domain_key or released_candidate.domain_key,
+                status="released",
+                title_ko=candidate.title_ko or released_candidate.title_ko,
+                reason_ko=(
+                    "released-work가 완료로 기록했지만 upstream 후보 목록에 남아 있어 "
+                    "작업 후보가 아니라 관측 잔향으로 분리했다."
+                ),
+                source=f"{candidate.source}+released-work",
+                score=candidate.score,
+            ),
+        )
+        issue_id = f"released-candidate-echo:{candidate.candidate_id}"
+        observability_issues.setdefault(
+            issue_id,
+            ReadinessObservabilityIssue(
+                issue_id=issue_id,
+                issue_type="released_candidate_echo",
+                severity=OBS_INFO,
+                source_key="released-work",
+                status="RELEASED",
+                summary_ko=(
+                    f"이미 출시된 후보가 {candidate.source} 후보 목록에 남아 있습니다."
+                ),
+                next_action_ko=(
+                    "released-work 장부와 upstream 후보 sidecar 생산 순서를 확인합니다."
+                ),
+                affected_candidate_id=candidate.candidate_id,
+            ),
+        )
+        return True
 
     promotion_priority, promotion_suppressed = _promotion_candidates(promotion_value)
     for candidate in promotion_suppressed:
+        suppress_released_echo(candidate)
         suppressed.setdefault(candidate.candidate_id, candidate)
-    priority.extend(
-        candidate
-        for candidate in promotion_priority
-        if candidate.candidate_id not in suppressed
-    )
+    for candidate in promotion_priority:
+        if suppress_released_echo(candidate):
+            continue
+        if candidate.candidate_id not in suppressed:
+            priority.append(candidate)
 
     for item in _items(backlog_value, ("candidates", "backlog", "items")):
         candidate = _candidate_from_item(
@@ -410,6 +537,8 @@ def _candidate_routing(
             fallback_reason="자본 경로 준비도 개선 후보로 유지한다.",
         )
         if candidate is None:
+            continue
+        if suppress_released_echo(candidate):
             continue
         if _is_rejected(candidate.status):
             suppressed.setdefault(candidate.candidate_id, candidate)
@@ -432,7 +561,73 @@ def _candidate_routing(
             c.candidate_id,
         ),
     )
-    return ordered[:5], list(suppressed.values())
+    return ordered[:5], list(suppressed.values()), list(observability_issues.values())
+
+
+def _liveness_severity(status: str, critical: bool) -> str:
+    if critical and status in _LIVENESS_CRITICAL_STATUSES:
+        return OBS_CRITICAL
+    return OBS_WARNING
+
+
+def _pipeline_liveness_issues(
+    pipeline_value: Any,
+    *,
+    raw_present: bool,
+) -> list[ReadinessObservabilityIssue]:
+    if not raw_present:
+        return [
+            ReadinessObservabilityIssue(
+                issue_id="pipeline-liveness:missing-input",
+                issue_type="pipeline_liveness",
+                severity=OBS_WARNING,
+                source_key="pipeline-liveness",
+                status="MISSING",
+                summary_ko=(
+                    "pipeline-liveness sidecar를 읽지 못해 증거 신선도를 "
+                    "확인할 수 없습니다."
+                ),
+                next_action_ko="pipeline-liveness workflow와 sidecar 발행 상태를 확인합니다.",
+            )
+        ]
+    if not isinstance(pipeline_value, dict):
+        return [
+            ReadinessObservabilityIssue(
+                issue_id="pipeline-liveness:malformed-input",
+                issue_type="malformed_evidence",
+                severity=OBS_WARNING,
+                source_key="pipeline-liveness",
+                status="MALFORMED",
+                summary_ko="pipeline-liveness sidecar는 있지만 구조화 JSON을 읽지 못했습니다.",
+                next_action_ko="pipeline-liveness LAST_RUN.md의 결정 JSON 형식을 확인합니다.",
+            )
+        ]
+
+    issues: list[ReadinessObservabilityIssue] = []
+    for check in _items(pipeline_value, ("checks",)):
+        key = str(check.get("key") or check.get("name") or "unknown")
+        status = str(check.get("status") or "UNKNOWN").upper()
+        if status in _LIVENESS_OK_STATUSES:
+            continue
+        critical = bool(check.get("critical"))
+        detail = str(check.get("detail") or "").strip()
+        summary = f"{key} sidecar 상태가 {status}입니다."
+        if detail:
+            summary = f"{summary} {detail}"
+        issues.append(
+            ReadinessObservabilityIssue(
+                issue_id=f"pipeline-liveness:{key}",
+                issue_type="pipeline_liveness",
+                severity=_liveness_severity(status, critical),
+                source_key=key,
+                status=status,
+                summary_ko=summary,
+                next_action_ko=(
+                    "해당 sidecar의 마지막 workflow 실행과 발행 시각을 확인합니다."
+                ),
+            )
+        )
+    return issues
 
 
 def _gate_list(money: Mapping[str, Any] | None) -> list[str]:
@@ -592,13 +787,32 @@ def build_capital_path_readiness(
     promotion = _json_list_or_dict(evidence_texts.get("autonomous-promotion"), "결정 JSON")
     backlog = _json_list_or_dict(evidence_texts.get("evolution-backlog"), "결정 JSON")
     ledger = _json_list_or_dict(evidence_texts.get("evolution-ledger"), "결정 JSON")
+    released_work = _json_dict(evidence_texts.get("released-work"), "결정 JSON")
+    pipeline_liveness = _json_dict(evidence_texts.get("pipeline-liveness"), "결정 JSON")
 
-    priority_candidates, suppressed_candidates = _candidate_routing(backlog, ledger, promotion)
+    priority_candidates, suppressed_candidates, routing_issues = _candidate_routing(
+        backlog,
+        ledger,
+        promotion,
+        released_work,
+    )
+    observability_issues = [
+        *routing_issues,
+        *_pipeline_liveness_issues(
+            pipeline_liveness,
+            raw_present=evidence_texts.get("pipeline-liveness") is not None,
+        ),
+    ]
     readiness_state = _classify(money)
     live_money_status = _live_status(money)
     capital_ladder_stage = _capital_stage(money)
     blocking_gate = _blocking_gate(money, reassign)
     next_action = _next_action(readiness_state, money, len(priority_candidates))
+    liveness_overall = (
+        str(pipeline_liveness.get("overall", "UNKNOWN"))
+        if isinstance(pipeline_liveness, dict)
+        else "UNKNOWN"
+    )
 
     evidence_surfaces = [
         _surface(
@@ -665,6 +879,22 @@ def build_capital_path_readiness(
             f"억제 후보 {len(_ledger_rejections(ledger))}개 확인",
             parse_required=True,
         ),
+        _surface(
+            "released-work",
+            "automation/released-work-last-run:released_work.json",
+            evidence_texts.get("released-work"),
+            released_work,
+            f"완료 후보 {len(_released_candidates(released_work))}개 확인",
+            parse_required=True,
+        ),
+        _surface(
+            "pipeline-liveness",
+            "automation/pipeline-liveness-last-run:LAST_RUN.md",
+            evidence_texts.get("pipeline-liveness"),
+            pipeline_liveness,
+            f"overall={liveness_overall}",
+            parse_required=True,
+        ),
     ]
 
     return CapitalPathReadinessReport(
@@ -680,6 +910,7 @@ def build_capital_path_readiness(
         required_existing_gates=_gate_list(money),
         priority_candidates=priority_candidates,
         suppressed_candidates=suppressed_candidates,
+        observability_issues=observability_issues,
         evidence_surfaces=evidence_surfaces,
     )
 
@@ -693,6 +924,9 @@ __all__ = [
     "PARSE_MISSING",
     "PARSE_OK",
     "PARSE_PRESENT",
+    "OBS_CRITICAL",
+    "OBS_INFO",
+    "OBS_WARNING",
     "SCHEMA_VERSION",
     "STATE_ACCUMULATING_EDGE",
     "STATE_CAPITAL_ARMABLE",
@@ -703,6 +937,7 @@ __all__ = [
     "CapitalPathReadinessReport",
     "ReadinessCandidate",
     "ReadinessEvidenceSurface",
+    "ReadinessObservabilityIssue",
     "build_capital_path_readiness",
     "extract_json_after_header",
 ]
