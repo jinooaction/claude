@@ -1,6 +1,6 @@
 # HANDOFF 083 — 완료 후보 소비 장부와 차순위 자동 선택 (2026-07-02 KST)
 
-main 코드 베이스라인: `c8beb25`(PR #437). 스펙 079는 이미 구현·머지·인계된 자율 작업 후보를 `released-work` 장부로 소비하고, `autonomous-work-execution`이 같은 후보를 반복 선택하지 않고 다음 수익 후보로 이동하게 하는 읽기 전용 운영 루프다. PR #437은 PR #436 뒤 발견된 `released-work` sidecar publish token 누락을 보정했다.
+main 인계 기준: `88929c8`(PR #439). 최신 코드 베이스라인은 `c8beb25`(PR #437)이다. 스펙 079는 이미 구현·머지·인계된 자율 작업 후보를 `released-work` 장부로 소비하고, `autonomous-work-execution`이 같은 후보를 반복 선택하지 않고 다음 수익 후보로 이동하게 하는 읽기 전용 운영 루프다. PR #437은 PR #436 뒤 발견된 `released-work` sidecar publish token 누락을 보정했고, PR #439는 스펙 작업표를 실제 완료 상태와 맞췄다.
 
 ## 무엇이 바뀌었나
 
@@ -43,6 +43,9 @@ main 코드 베이스라인: `c8beb25`(PR #437). 스펙 079는 이미 구현·�
   - `candidate-fd04772a23c5=released`
   - 근거 파일 `specs/078-money-gate-alignment-loop/contracts/money-gate-alignment.md`
 - `Pipeline liveness watchdog` dispatch run `28555617349`: success, commit `c8beb25`, `overall=OK`, `released-work=OK`
+- PR #439 merge commit: `88929c86ff76bd22fec87495190f1a083610be58`
+  - 코드 동작 변경 없음
+  - `specs/079-completed-candidate-consumption/tasks.md`의 T017, T018, T019 완료 처리
 
 ## 안전 경계
 
@@ -77,7 +80,10 @@ PR #436 머지 전:
 - `uv run ruff check src tests` -> All checks passed
 - PR #437 품질 관문 -> success, mergeable clean, merge 방식으로 main에 병합
 - #437 merge 후 `Released work ledger` run `28555565017`, deploy run `28555565031`, pipeline liveness dispatch run `28555617349` 모두 success
+- PR #439 전 `uv run pytest` -> 2402 passed, 4 skipped
+- PR #439 전 `uv run ruff check src tests` -> All checks passed
+- PR #439 전 strict 하네스와 HANDOFF 사실 검증 -> OK
 
 ## 다음 세션 한 줄
 
-스펙 079 이후 자율 작업 실행 루프는 완료된 `candidate-fd04772a23c5`를 `RELEASED`로 소비하고, 차순위 수익 후보 `candidate-e481b0309206`로 자동 이동한다. `released-work` sidecar publish token 누락은 #437에서 보정됐고, 최신 sidecar와 pipeline liveness는 둘 다 OK다.
+스펙 079 이후 자율 작업 실행 루프는 완료된 `candidate-fd04772a23c5`를 `RELEASED`로 소비하고, 차순위 수익 후보 `candidate-e481b0309206`로 자동 이동한다. `released-work` sidecar publish token 누락은 #437에서 보정됐고, 최신 sidecar와 pipeline liveness는 둘 다 OK이며, 스펙 작업표도 #439로 완료 상태와 일치한다.
