@@ -399,6 +399,15 @@ def default_specs() -> list[SidecarSpec]:
             first_expected_utc="2026-07-01T09:20:00Z",
         ),
         SidecarSpec(
+            key="execution-quality",
+            branch="automation/execution-quality-last-run",
+            filename="LAST_RUN.md",
+            max_age_hours=30.0,  # 평일 15:30 — 주문 거부·브로커 오류 관측 패키지
+            critical=False,
+            description="주문 거부·체결 품질 패키지(스펙 083, 보고 전용)",
+            first_expected_utc="2026-07-03T15:30:00Z",
+        ),
+        SidecarSpec(
             key="autonomous-evolution",
             branch="automation/autonomous-evolution-last-run",
             filename="LAST_RUN.md",

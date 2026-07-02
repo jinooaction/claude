@@ -38,6 +38,16 @@ def test_probe_all_fresh_json(tmp_path, capsys):
     assert {c["key"] for c in out["checks"]} == {s.key for s in default_specs()}
 
 
+def test_probe_manifest_includes_execution_quality(capsys):
+    rc = probe_main(["--manifest"])
+
+    assert rc == 0
+    assert (
+        "execution-quality\tautomation/execution-quality-last-run\tLAST_RUN.md"
+        in capsys.readouterr().out
+    )
+
+
 def test_probe_missing_critical_strict_exits_nonzero(tmp_path, capsys):
     # 핵심(rebalance-paper-forward) 사이드카만 빼고 나머지는 신선하게.
     for spec in default_specs():

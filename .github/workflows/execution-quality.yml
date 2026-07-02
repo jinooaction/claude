@@ -1,0 +1,128 @@
+name: Execution quality package
+
+# 스펙 083 — 실행 품질 패키징.
+#
+# 목적: 이미 발행된 micro GTAA 거부 주문 기회손익, 누적 monitor, 브로커 거부 코드,
+# KIS smoke 결과를 하나의 읽기 전용 sidecar로 묶는다.
+#
+# 안전: 이 워크플로는 automation sidecar만 읽는다. 비밀값, 원격 접속, 브로커 호출,
+# 주문, 자본 배분, live 전략 변경, whitelist/caps 변경 없음.
+
+on:
+  schedule:
+    # 평일 15:30 UTC — micro GTAA 정기 실행(15:00 UTC) 이후 실행 품질 패키징.
+    - cron: "30 15 * * 1-5"
+  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - "Micro GTAA live canary rebalance (guarded, real money)"
+      - "KIS smoke (autonomous)"
+    types:
+      - completed
+  push:
+    branches: [main]
+    paths:
+      - 'src/auto_invest/analytics/execution_quality.py'
+      - 'src/auto_invest/analytics/evolution_loop.py'
+      - 'src/auto_invest/analytics/pipeline_liveness.py'
+      - 'scripts/execution_quality_probe.py'
+      - '.github/workflows/execution-quality.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: execution-quality
+  cancel-in-progress: false
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Collect evidence sidecars
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/execution_quality_evidence
+          git fetch --depth=1 origin \
+            '+refs/heads/automation/*:refs/remotes/origin/automation/*' || true
+          uv run python scripts/execution_quality_probe.py --manifest \
+            > /tmp/execution_quality_manifest.tsv
+          while IFS=$'\t' read -r key branch filename; do
+            [[ -z "${key}" ]] && continue
+            if git show "origin/${branch}:${filename}" \
+                > "/tmp/execution_quality_evidence/${key}.md" 2>/dev/null; then
+              echo "collected ${key} (${branch}:${filename})"
+            else
+              rm -f "/tmp/execution_quality_evidence/${key}.md"
+              echo "missing ${key} (${branch}:${filename})"
+            fi
+          done < /tmp/execution_quality_manifest.tsv
+
+      - name: Build execution quality package
+        run: |
+          set -euo pipefail
+          uv run python scripts/execution_quality_probe.py \
+            --evidence-dir /tmp/execution_quality_evidence \
+            --summary-out /tmp/LAST_RUN.md \
+            --json-out /tmp/execution_quality.json \
+            --run-id "${GITHUB_RUN_ID}" \
+            --commit "${GITHUB_SHA}"
+          cat /tmp/LAST_RUN.md
+
+      - name: Publish sidecar
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          BRANCH=automation/execution-quality-last-run
+          tmpdir=$(mktemp -d)
+
+          if [[ -f /tmp/LAST_RUN.md ]]; then
+            cp /tmp/LAST_RUN.md "${tmpdir}/LAST_RUN.md"
+          else
+            {
+              echo "# 실행 품질 패키지 — 보고 생성 실패"
+              echo ""
+              echo "package step failed before LAST_RUN.md was written."
+              echo ""
+              echo "읽기 전용 실행입니다. 주문, 자본, whitelist, caps, live 전략은 변경하지 않았습니다."
+            } > "${tmpdir}/LAST_RUN.md"
+          fi
+          cp /tmp/execution_quality.json "${tmpdir}/execution_quality.json" \
+            2>/dev/null || echo '{}' > "${tmpdir}/execution_quality.json"
+
+          {
+            echo ""
+            echo "## workflow metadata"
+            echo ""
+            echo "| 항목 | 값 |"
+            echo "|------|-----|"
+            echo "| run_id | ${GITHUB_RUN_ID} |"
+            echo "| run_url | https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} |"
+            echo "| commit | ${GITHUB_SHA} |"
+            echo "| trigger | ${GITHUB_EVENT_NAME} |"
+            echo "| timestamp_utc | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
+            echo "| safety | no orders, no capital change, no whitelist/caps change, no live strategy change |"
+          } >> "${tmpdir}/LAST_RUN.md"
+
+          cd "${tmpdir}"
+          git init -q
+          git config user.name "execution-quality-bot"
+          git config user.email "execution-quality-bot@noreply.github.com"
+          git checkout --orphan publish -q
+          git add LAST_RUN.md execution_quality.json
+          git commit -q -m "execution-quality run ${GITHUB_RUN_ID} @ ${GITHUB_SHA:0:7}"
+          git push --force \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "publish:${BRANCH}"
+          echo "Published to ${BRANCH}."

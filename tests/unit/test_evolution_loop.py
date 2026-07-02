@@ -169,6 +169,42 @@ def test_analysis_candidate_uses_regime_and_performance_evidence() -> None:
     assert "레짐·성과 sidecar" in candidate.next_action_ko
 
 
+def test_execution_quality_candidate_uses_packaged_evidence() -> None:
+    summary = scan_evolution(_fixture_evidence(), now=NOW, commit="abc1234", run_id="test")
+    candidate = next(
+        c for c in summary.candidates if c.candidate_id == "candidate-dff4f9344b02"
+    )
+
+    assert candidate.evidence_refs == (
+        "execution-quality",
+        "rebalance-micro-gtaa",
+        "kis-smoke",
+    )
+    assert candidate.evidence_dependency == "none"
+    assert candidate.status == "new"
+    assert candidate.evidence_confidence >= 80
+    assert "execution-quality sidecar" in candidate.next_action_ko
+
+
+def test_missing_execution_quality_evidence_lowers_execution_candidate_confidence() -> None:
+    fresh = scan_evolution(_fixture_evidence(), now=NOW, commit="abc1234", run_id="test")
+    missing_evidence = _fixture_evidence()
+    missing_evidence.pop("execution-quality")
+    missing = scan_evolution(missing_evidence, now=NOW, commit="abc1234", run_id="test")
+
+    fresh_candidate = next(
+        c for c in fresh.candidates if c.candidate_id == "candidate-dff4f9344b02"
+    )
+    missing_candidate = next(
+        c for c in missing.candidates if c.candidate_id == "candidate-dff4f9344b02"
+    )
+    assert "execution-quality" in missing.stale_evidence
+    assert missing_candidate.evidence_dependency == "sidecar_freshness"
+    assert missing_candidate.status == "evidence_dependent"
+    assert missing_candidate.composite_score < fresh_candidate.composite_score
+    assert "신선도" in missing_candidate.next_action_ko
+
+
 def test_missing_performance_evidence_lowers_analysis_confidence() -> None:
     fresh = scan_evolution(_fixture_evidence(), now=NOW, commit="abc1234", run_id="test")
     missing_evidence = _fixture_evidence()

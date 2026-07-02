@@ -149,6 +149,14 @@ DEFAULT_EVIDENCE_REQUIREMENTS: tuple[EvidenceRequirement, ...] = (
         "LAST_RUN.md",
         80.0,
     ),
+    EvidenceRequirement("kis-smoke", "automation/kis-smoke-last-run", "LAST_RUN.md", 30.0),
+    EvidenceRequirement(
+        "execution-quality",
+        "automation/execution-quality-last-run",
+        "execution_quality.json",
+        30.0,
+        "sidecar-json",
+    ),
     EvidenceRequirement("reassign", "automation/reassign-last-run", "LAST_RUN.md", 80.0),
     EvidenceRequirement(
         "pipeline-liveness",
@@ -1091,23 +1099,7 @@ def _generate_candidates(
         _analysis_candidate(by_key, stale, signals),
         _strategy_candidate(by_key, signals),
         _portfolio_candidate(by_key, signals),
-        _candidate(
-            "execution_quality",
-            "주문 거부·체결 품질 손익 관측",
-            _problem_for_execution(signals),
-            ("rebalance-micro-gtaa",),
-            "risk_reduction",
-            "execution_quality",
-            70,
-            65,
-            70,
-            _confidence_score(by_key.get("rebalance-micro-gtaa")),
-            90,
-            74,
-            72,
-            EVIDENCE_NONE,
-            "거부 주문 기회손익과 브로커 오류율을 읽기 전용으로 증거 패키징한다.",
-        ),
+        _execution_candidate(by_key, stale, signals),
         _live_readiness_candidate(by_key, signals),
         _candidate(
             "review",
@@ -1212,6 +1204,43 @@ def _analysis_candidate(
         learning_velocity,
         82,
         evidence_dependency,
+        next_action,
+    )
+
+
+def _execution_candidate(
+    by_key: Mapping[str, EvidenceSurface],
+    stale: Sequence[str],
+    signals: Mapping[str, set[str]],
+) -> BreakthroughCandidate:
+    quality = by_key.get("execution-quality")
+    dependency = (
+        EVIDENCE_SIDECAR_FRESHNESS
+        if quality is None or "execution-quality" in stale
+        else EVIDENCE_NONE
+    )
+    next_action = (
+        "execution-quality sidecar 신선도를 회복한 뒤 거부 주문 기회손익과 "
+        "브로커 오류율을 읽기 전용으로 증거 패키징한다."
+        if dependency == EVIDENCE_SIDECAR_FRESHNESS
+        else "execution-quality sidecar의 거부 주문 기회손익과 브로커 오류율을 "
+        "읽기 전용으로 증거 패키징한다."
+    )
+    return _candidate(
+        "execution_quality",
+        "주문 거부·체결 품질 손익 관측",
+        _problem_for_execution(signals),
+        ("execution-quality", "rebalance-micro-gtaa", "kis-smoke"),
+        "risk_reduction",
+        "execution_quality",
+        70,
+        65,
+        70,
+        _confidence_score(quality),
+        90,
+        74,
+        72,
+        dependency,
         next_action,
     )
 
@@ -1376,6 +1405,28 @@ def _sort_candidates(
 
 
 def _summary_for(key: str, raw: str, freshness: str, signals: set[str]) -> str:
+    if key == "execution-quality":
+        try:
+            doc = json.loads(raw)
+        except json.JSONDecodeError:
+            doc = None
+        if isinstance(doc, Mapping):
+            monitor = doc.get("opportunity_monitor")
+            rejections = doc.get("broker_rejections")
+            broker_errors = (
+                rejections.get("parsed_broker_errors")
+                if isinstance(rejections, Mapping)
+                else "?"
+            )
+            return (
+                f"execution-quality: {freshness}, "
+                f"status={doc.get('overall_status', '?')}, "
+                f"verdict={monitor.get('verdict', '?') if isinstance(monitor, Mapping) else '?'}, "
+                f"broker_errors={broker_errors}"
+            )
+    if key == "kis-smoke":
+        state = "success" if "smoke_state | success" in raw.lower() else "unknown"
+        return f"kis-smoke: {freshness}, state={state}, {len(raw)} chars"
     signal_text = ", ".join(sorted(signals)) if signals else "특이 신호 없음"
     return f"{key}: {freshness}, {signal_text}, {len(raw)} chars"
 
@@ -1399,6 +1450,40 @@ def _signals(key: str, raw: str) -> set[str]:
             signals.add(signal)
     if key == "pipeline-liveness" and "ok" in lowered and not {"degraded", "critical"} & signals:
         signals.add("liveness_ok")
+    if key == "kis-smoke":
+        if "smoke_state | success" in lowered or '"smoke_state": "success"' in lowered:
+            signals.add("broker_smoke_success")
+        if "smoke_exit | 0" not in lowered and "smoke_state" in lowered:
+            signals.add("broker_smoke_attention")
+    if key == "execution-quality":
+        try:
+            doc = json.loads(raw)
+        except json.JSONDecodeError:
+            doc = None
+        if isinstance(doc, Mapping):
+            status = str(doc.get("overall_status") or "").lower()
+            if status == "strategy_review":
+                signals.add("strategy_review")
+            if status == "execution_review":
+                signals.add("execution_review")
+            monitor = doc.get("opportunity_monitor")
+            if isinstance(monitor, Mapping):
+                latest = str(monitor.get("latest_signal") or "").lower()
+                if latest == "intent_loss":
+                    signals.add("latest_intent_loss")
+                if latest == "intent_gain":
+                    signals.add("latest_intent_gain")
+            rejections = doc.get("broker_rejections")
+            if isinstance(rejections, Mapping):
+                try:
+                    if int(rejections.get("parsed_broker_errors") or 0) > 0:
+                        signals.add("broker_rejection_error")
+                        signals.add("rejected_order")
+                except (TypeError, ValueError):
+                    pass
+            smoke = doc.get("broker_smoke")
+            if isinstance(smoke, Mapping) and smoke.get("smoke_state") == "success":
+                signals.add("broker_smoke_success")
     if key == "promote-readiness":
         if re.search(r"ready\s*\([^)]*\)\s*\|\s*true", lowered) or re.search(
             r"\bready\b[^|\n]*\|\s*true", lowered
@@ -1455,7 +1540,14 @@ def _problem_for_data_collection(
 
 def _problem_for_execution(signals: Mapping[str, set[str]]) -> str:
     micro = signals.get("rebalance-micro-gtaa", set())
-    if "rejected_order" in micro:
+    quality = signals.get("execution-quality", set())
+    if "rejected_order" in micro or quality & {
+        "latest_intent_loss",
+        "latest_intent_gain",
+        "broker_rejection_error",
+        "strategy_review",
+        "execution_review",
+    }:
         return "최근 주문 거부가 있으므로 체결 품질과 기회손익을 읽기 전용으로 분석해야 한다."
     return "실행 품질은 주문 거부, 브로커 오류, 체결 품질 증거를 계속 누적해야 한다."
 
