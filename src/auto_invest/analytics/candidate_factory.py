@@ -30,6 +30,8 @@ STATUS_PENDING = "pending"
 STATUS_BLOCKED = "blocked"
 STATUS_EVIDENCE_PASSED = "evidence_passed"
 
+_CLOSED_SOURCE_STATUSES = {"released", "release", "completed", "complete", "done", "shipped"}
+
 EVIDENCE_PASS = "pass"
 EVIDENCE_FAIL = "fail"
 EVIDENCE_PENDING = "pending"
@@ -501,7 +503,9 @@ def _candidate_rows(
         return tuple(
             item
             for item in candidate_backlog["candidates"]  # type: ignore[index]
-            if isinstance(item, Mapping) and _candidate_id(item)
+            if isinstance(item, Mapping)
+            and _candidate_id(item)
+            and str(item.get("status") or "").strip().lower() not in _CLOSED_SOURCE_STATUSES
         )
     if not _mapping_has_list(promotion_summary, "assessments"):
         return ()

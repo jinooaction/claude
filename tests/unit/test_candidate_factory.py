@@ -66,6 +66,35 @@ def test_factory_builds_one_package_for_every_current_candidate_kind() -> None:
     )
 
 
+def test_factory_skips_released_source_candidates() -> None:
+    backlog = _json("candidate_backlog.json")
+    released = {
+        **backlog["candidates"][7],
+        "candidate_id": "candidate-88a7e7f07361",
+        "status": "released",
+    }
+    active = {
+        **backlog["candidates"][4],
+        "candidate_id": "candidate-next",
+        "status": "new",
+    }
+    backlog["candidates"] = [released, active]
+
+    run = build_candidate_factory_run(
+        candidate_backlog=backlog,
+        promotion_summary=_json("promotion_summary.json"),
+        now=NOW,
+        commit="abc1234",
+        run_id="unit",
+    )
+
+    assert {package.candidate_id for package in run.packages} == {"candidate-next"}
+    assert [
+        candidate["candidate_id"]
+        for candidate in run.enriched_candidate_backlog["candidates"]
+    ] == ["candidate-88a7e7f07361", "candidate-next"]
+
+
 def test_factory_emits_current_candidate_support_input_commands() -> None:
     run = _run()
     by_id = {package.candidate_id: package for package in run.packages}

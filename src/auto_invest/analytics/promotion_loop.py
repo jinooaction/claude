@@ -29,6 +29,8 @@ STAGE_EXISTING_GATE_READY = "EXISTING_GATE_READY"
 STAGE_OPERATOR_REVIEW = "OPERATOR_REVIEW"
 STAGE_DISCARD = "DISCARD"
 
+_RELEASED_STATUSES = {"released", "release", "completed", "complete", "done", "shipped"}
+
 EVIDENCE_MISSING = "missing"
 EVIDENCE_PENDING = "pending"
 EVIDENCE_PASS = "pass"
@@ -334,6 +336,15 @@ def assess_candidate(
     layers = _evidence_layers(candidate, evidence_texts)
     layer_status = {layer.name: layer.status for layer in layers}
     next_gate = _next_gate(candidate.safety_impact)
+    if candidate.source_status.lower() in _RELEASED_STATUSES:
+        return _assessment(
+            candidate,
+            STAGE_DISCARD,
+            layers,
+            "이미 완료된 후보이므로 승격하지 않는다.",
+            "상류 자율 성장 backlog가 완료 후보로 표시했다.",
+            next_gate=None,
+        )
     if candidate.source_status == "rejected":
         return _assessment(
             candidate,

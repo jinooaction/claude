@@ -58,6 +58,7 @@ def test_probe_json_output_includes_expected_sections(capsys) -> None:
     assert payload["safe_high_leverage_work"]
     assert "market_observation" in payload["evidence_dependencies"]
     assert payload["operator_review"] == []
+    assert any(surface["key"] == "handoff" for surface in payload["evidence_surfaces"])
 
 
 def test_probe_writes_sidecar_artifacts(tmp_path, capsys) -> None:

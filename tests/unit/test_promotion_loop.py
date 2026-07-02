@@ -132,6 +132,34 @@ def test_blocked_strategy_factory_result_does_not_repeat_backtest_package() -> N
     assert "기계 판독 검증 결과에 실패" in assessment.blocked_reason_ko
 
 
+def test_released_source_status_is_discarded() -> None:
+    backlog = {
+        "candidates": [
+            {
+                "candidate_id": "candidate-88a7e7f07361",
+                "title_ko": "자율 루프 sidecar와 handoff 생존성",
+                "domain_key": "agent_ops",
+                "status": "released",
+                "risk_grade": 2,
+                "safety_impact": [],
+                "evidence_refs": ["pipeline-liveness", "handoff"],
+                "composite_score": 568,
+            }
+        ]
+    }
+    assessment = scan_promotion(
+        candidate_backlog=backlog,
+        evidence_texts={},
+        now=NOW,
+        commit="abc1234",
+        run_id="test",
+    ).assessments[0]
+
+    assert assessment.stage == STAGE_DISCARD
+    assert "이미 완료" in assessment.allowed_next_action
+    assert "완료 후보" in assessment.blocked_reason_ko
+
+
 def test_oos_and_walk_forward_candidate_is_forward_registration_ready() -> None:
     by_id = {a.candidate_id: a for a in _summary().assessments}
     assert by_id["candidate-forward-ready"].stage == STAGE_FORWARD_REGISTRATION_READY
