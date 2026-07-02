@@ -29,6 +29,7 @@ PARSE_MALFORMED = "malformed"
 
 SEVERITY_INFO = "INFO"
 SEVERITY_WAITING = "WAITING"
+SEVERITY_SNAPSHOT_SKEW = "SNAPSHOT_SKEW"
 SEVERITY_MISALIGNED = "MISALIGNED"
 SEVERITY_BLOCKED = "BLOCKED"
 
@@ -337,6 +338,92 @@ def _table_value(text: str | None, label: str) -> str | None:
 
 def _normalize(value: object) -> str:
     return re.sub(r"\s+", " ", _clean(value)).strip()
+
+
+def _int_value(value: object) -> int | None:
+    if value is None:
+        return None
+    match = re.search(r"\d+", str(value))
+    return int(match.group(0)) if match else None
+
+
+def _ratio_from_text(text: object) -> tuple[int | None, int | None]:
+    match = re.search(r"(\d+)\s*/\s*(\d+)", str(text or ""))
+    if not match:
+        return None, None
+    return int(match.group(1)), int(match.group(2))
+
+
+def _observation_counts(
+    money: Mapping[str, Any] | None,
+    edge_forward: Mapping[str, Any] | None,
+    forward: Mapping[str, Any] | None,
+) -> dict[str, tuple[int | None, int | None]]:
+    counts: dict[str, tuple[int | None, int | None]] = {}
+    money_n = _int_value(_nested(money, "forward_n_obs"))
+    blocker_n, blocker_min = _ratio_from_text(_money_blocking_gate(money))
+    if money_n is None:
+        money_n = blocker_n
+    if money_n is not None:
+        counts["money-path"] = (money_n, blocker_min)
+
+    if isinstance(edge_forward, Mapping):
+        edge_n = _int_value(edge_forward.get("n_obs"))
+        edge_min = _int_value(edge_forward.get("min_obs_required"))
+        if edge_n is not None:
+            counts["edge-autoarm"] = (edge_n, edge_min)
+
+    if isinstance(forward, Mapping):
+        forward_n = _int_value(forward.get("max_n_obs"))
+        if forward_n is not None:
+            counts["rebalance-paper-forward"] = (forward_n, None)
+    return counts
+
+
+def _observation_summary(
+    money: Mapping[str, Any] | None,
+    edge_forward: Mapping[str, Any] | None,
+    forward: Mapping[str, Any] | None,
+) -> str:
+    counts = _observation_counts(money, edge_forward, forward)
+    values = [value for value, _ in counts.values() if value is not None]
+    if not values:
+        return _money_blocking_gate(money)
+    min_required = next((limit for _, limit in counts.values() if limit is not None), 20)
+    if len(set(values)) == 1:
+        return f"{values[0]}/{min_required}"
+    source_values = ", ".join(f"{key}={value}" for key, (value, _) in counts.items())
+    return f"{min(values)}-{max(values)}/{min_required} ({source_values})"
+
+
+def _snapshot_skew_issue(
+    money: Mapping[str, Any] | None,
+    edge_forward: Mapping[str, Any] | None,
+    forward: Mapping[str, Any] | None,
+) -> GateAlignmentIssue | None:
+    counts = _observation_counts(money, edge_forward, forward)
+    values = {value for value, _ in counts.values() if value is not None}
+    if len(values) <= 1:
+        return None
+    return _issue(
+        SEVERITY_SNAPSHOT_SKEW,
+        "snapshot_provenance",
+        "same observation snapshot",
+        _observation_summary(money, edge_forward, forward),
+        (
+            "서로 다른 sidecar 실행 시각 때문에 관측 수가 다르지만 모든 게이트가 "
+            "관측 부족 대기를 말한다."
+        ),
+        (
+            "다음 aligned run에서 money-path, edge-autoarm, forward sidecar가 같은 "
+            "관측 수로 수렴하는지 확인한다."
+        ),
+        (
+            SOURCE_REFS["money-path"],
+            SOURCE_REFS["edge-autoarm"],
+            SOURCE_REFS["rebalance-paper-forward"],
+        ),
+    )
 
 
 def _issue(
@@ -732,6 +819,7 @@ def _waiting_issue(
     money: Mapping[str, Any] | None,
     edge_forward: Mapping[str, Any] | None,
     reassign: Mapping[str, Any] | None,
+    forward: Mapping[str, Any] | None,
 ) -> GateAlignmentIssue | None:
     if not money:
         return None
@@ -740,9 +828,7 @@ def _waiting_issue(
     verdict = _str_field(edge_forward, "verdict")
     reassign_action = _str_field(reassign, "action")
     if stage == STAGE_ACCUMULATING or verdict == VERDICT_INSUFFICIENT:
-        n_obs = _str_field(edge_forward, "n_obs") or _str_field(money, "forward_n_obs")
-        min_obs = _str_field(edge_forward, "min_obs_required", "20")
-        observed = f"{n_obs}/{min_obs}" if n_obs else blocker
+        observed = _observation_summary(money, edge_forward, forward) or blocker
         return _issue(
             SEVERITY_WAITING,
             "forward_observation",
@@ -824,6 +910,11 @@ def build_money_gate_alignment(
     )
     edge = parsed["edge-autoarm"] if isinstance(parsed["edge-autoarm"], Mapping) else None
     reassign = parsed["reassign"] if isinstance(parsed["reassign"], Mapping) else None
+    forward = (
+        parsed["rebalance-paper-forward"]
+        if isinstance(parsed["rebalance-paper-forward"], Mapping)
+        else None
+    )
     liveness = (
         parsed["pipeline-liveness"]
         if isinstance(parsed["pipeline-liveness"], Mapping)
@@ -852,7 +943,10 @@ def build_money_gate_alignment(
     issues.extend(_edge_reassign_issues(money, edge, edge_forward, reassign))
 
     if not any(issue.severity in {SEVERITY_BLOCKED, SEVERITY_MISALIGNED} for issue in issues):
-        waiting = _waiting_issue(money, edge_forward, reassign)
+        skew = _snapshot_skew_issue(money, edge_forward, forward)
+        if skew is not None:
+            issues.append(skew)
+        waiting = _waiting_issue(money, edge_forward, reassign, forward)
         if waiting is not None:
             issues.append(waiting)
 
@@ -885,6 +979,7 @@ __all__ = [
     "SEVERITY_BLOCKED",
     "SEVERITY_INFO",
     "SEVERITY_MISALIGNED",
+    "SEVERITY_SNAPSHOT_SKEW",
     "SEVERITY_WAITING",
     "STATUS_ALIGNED_READY",
     "STATUS_ALIGNED_WAITING",

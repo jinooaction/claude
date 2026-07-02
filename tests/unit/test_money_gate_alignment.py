@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from auto_invest.analytics.money_gate_alignment import (
     SEVERITY_BLOCKED,
     SEVERITY_MISALIGNED,
+    SEVERITY_SNAPSHOT_SKEW,
     SEVERITY_WAITING,
     STATUS_ALIGNED_WAITING,
     STATUS_BLOCKED,
@@ -66,7 +67,11 @@ def _capital(stage: str = "ACCUMULATING_EDGE", blocker: str = BLOCKER) -> str:
     )
 
 
-def _edge(action: str = "WAIT_EDGE", verdict: str = "INSUFFICIENT_DATA") -> str:
+def _edge(
+    action: str = "WAIT_EDGE",
+    verdict: str = "INSUFFICIENT_DATA",
+    n_obs: int = 14,
+) -> str:
     return (
         _fenced(
             "결정 JSON",
@@ -84,7 +89,7 @@ def _edge(action: str = "WAIT_EDGE", verdict: str = "INSUFFICIENT_DATA") -> str:
             {
                 "schema_version": "1.1",
                 "verdict": verdict,
-                "n_obs": 14,
+                "n_obs": n_obs,
                 "min_obs_required": 20,
                 "snapshot_count": 15,
             },
@@ -111,14 +116,14 @@ def _reassign(action: str = "HOLD", challenger: str | None = None) -> str:
     )
 
 
-def _forward() -> str:
+def _forward(max_n_obs: int = 14) -> str:
     return _fenced(
         "리더보드 결정 JSON",
         {
             "schema_version": "1.0",
             "comparable_count": 0,
             "known_count": 7,
-            "max_n_obs": 14,
+            "max_n_obs": max_n_obs,
             "observation_health": "OK",
         },
     )
@@ -192,6 +197,34 @@ def test_aligned_waiting_when_existing_gates_agree():
     assert len(report.gate_surfaces) == 8
     assert report.run_id == "123"
     assert report.commit == "abc123"
+
+
+def test_observation_count_skew_is_informational_not_misaligned():
+    report = build_money_gate_alignment(
+        _evidence(
+            **{
+                "edge-autoarm": _edge(n_obs=15),
+                "rebalance-paper-forward": _forward(max_n_obs=15),
+            }
+        ),
+        now=NOW,
+    )
+
+    assert report.overall_status == STATUS_ALIGNED_WAITING
+    skew = [
+        issue
+        for issue in report.alignment_issues
+        if issue.severity == SEVERITY_SNAPSHOT_SKEW
+    ]
+    assert len(skew) == 1
+    assert skew[0].gate_key == "snapshot_provenance"
+    assert "14-15/20" in skew[0].observed
+    waiting = [
+        issue
+        for issue in report.alignment_issues
+        if issue.severity == SEVERITY_WAITING
+    ][0]
+    assert "14-15/20" in waiting.observed
 
 
 def test_stage_mismatch_becomes_misaligned():

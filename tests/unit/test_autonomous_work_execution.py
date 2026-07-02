@@ -6,6 +6,10 @@ import json
 from datetime import UTC, datetime
 
 from auto_invest.analytics.autonomous_work_execution import (
+    AUTONOMY_CLOSED_RELEASED,
+    AUTONOMY_CODEX_START,
+    AUTONOMY_OPERATOR_APPROVAL,
+    CODEX_COMPLETION_GATES,
     STATUS_EXECUTION_READY,
     STATUS_OPERATOR_APPROVAL_REQUIRED,
     STATUS_RELEASED,
@@ -54,6 +58,9 @@ def test_selects_capital_path_priority_candidate():
     assert report.selected_work is not None
     assert report.selected_work.candidate_id == "candidate-fd04772a23c5"
     assert report.selected_work.status == STATUS_EXECUTION_READY
+    assert report.selected_work.autonomy_level == AUTONOMY_CODEX_START
+    assert "운영자 추가 질문 없이" in report.selected_work.start_guidance_ko
+    assert report.selected_work.completion_gates == CODEX_COMPLETION_GATES
     assert report.selected_work.risk_grade == 2
     assert report.selected_work.priority_score == 3597
     assert report.run_id == "123"
@@ -123,6 +130,8 @@ def test_safety_surface_requires_operator_approval():
     assert report.selected_work is not None
     assert report.selected_work.candidate_id == "candidate-live-order"
     assert report.selected_work.status == STATUS_OPERATOR_APPROVAL_REQUIRED
+    assert report.selected_work.autonomy_level == AUTONOMY_OPERATOR_APPROVAL
+    assert "운영자 명시 승인" in report.selected_work.start_guidance_ko
     assert report.selected_work.risk_grade == 4
     assert "orders" in report.selected_work.safety_impact
 
@@ -209,6 +218,7 @@ def test_released_work_consumes_completed_candidate_and_selects_next_candidate()
     assert report.selected_work.status == STATUS_EXECUTION_READY
     released = {packet.candidate_id: packet for packet in report.suppressed_work}
     assert released["candidate-fd04772a23c5"].status == STATUS_RELEASED
+    assert released["candidate-fd04772a23c5"].autonomy_level == AUTONOMY_CLOSED_RELEASED
     assert "released-work" in released["candidate-fd04772a23c5"].reason_ko
 
 

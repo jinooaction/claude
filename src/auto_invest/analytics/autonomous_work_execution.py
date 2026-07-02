@@ -36,6 +36,12 @@ STATUS_RELEASED = "RELEASED"
 STATUS_SUPPRESSED = "SUPPRESSED"
 STATUS_BLOCKED = "BLOCKED"
 
+AUTONOMY_CODEX_START = "CODEX_AUTONOMOUS_START"
+AUTONOMY_OPERATOR_APPROVAL = "OPERATOR_APPROVAL_REQUIRED"
+AUTONOMY_RECOVERY_REQUIRED = "RECOVERY_REQUIRED"
+AUTONOMY_CLOSED_RELEASED = "CLOSED_RELEASED"
+AUTONOMY_CLOSED_SUPPRESSED = "CLOSED_SUPPRESSED"
+
 _REJECTED_STATUSES = {
     "reject",
     "rejected",
@@ -91,6 +97,16 @@ SAFETY_INVARIANTS: tuple[str, ...] = (
     "work packet only; code/PR/merge stays in Codex review path",
 )
 
+CODEX_COMPLETION_GATES: tuple[str, ...] = (
+    "관련 focused pytest 통과",
+    "uv run pytest 통과",
+    "uv run ruff check src tests 통과",
+    "uv run python scripts/check_handoff_facts.py 통과",
+    "uv run python scripts/agent_harness_probe.py --strict 통과",
+    "PR 품질 관문 통과",
+    "필요한 HANDOFF 갱신",
+)
+
 
 @dataclass(frozen=True)
 class EvidenceSurface:
@@ -125,8 +141,11 @@ class WorkPacket:
     safety_impact: tuple[str, ...]
     priority_score: int
     status: str
+    autonomy_level: str
     reason_ko: str
     next_action_ko: str
+    start_guidance_ko: str
+    completion_gates: tuple[str, ...]
     required_inputs: tuple[str, ...]
     safety_boundary: tuple[str, ...]
     source_refs: tuple[str, ...]
@@ -142,8 +161,11 @@ class WorkPacket:
             "safety_impact": list(self.safety_impact),
             "priority_score": self.priority_score,
             "status": self.status,
+            "autonomy_level": self.autonomy_level,
             "reason_ko": self.reason_ko,
             "next_action_ko": self.next_action_ko,
+            "start_guidance_ko": self.start_guidance_ko,
+            "completion_gates": list(self.completion_gates),
             "required_inputs": list(self.required_inputs),
             "safety_boundary": list(self.safety_boundary),
             "source_refs": list(self.source_refs),
@@ -202,22 +224,27 @@ class AutonomousWorkExecutionReport:
                 f"| selected_work | {_table(packet.candidate_id)} |",
                 f"| title_ko | {_table(packet.title_ko)} |",
                 f"| status | {packet.status} |",
+                f"| autonomy_level | {packet.autonomy_level} |",
                 f"| risk_grade | {packet.risk_grade} |",
                 f"| priority_score | {packet.priority_score} |",
                 f"| next_action_ko | {_table(packet.next_action_ko)} |",
+                f"| start_guidance_ko | {_table(packet.start_guidance_ko)} |",
             ]
+            if packet.completion_gates:
+                gates = "; ".join(packet.completion_gates)
+                lines.append(f"| completion_gates | {_table(gates)} |")
 
         lines += ["", "## 실행 가능 후보", ""]
         if self.ranked_work:
             lines += [
-                "| 후보 | 영역 | 상태 | 위험 | 점수 | 이유 |",
-                "|------|------|------|-----:|-----:|------|",
+                "| 후보 | 영역 | 상태 | 자율 수준 | 위험 | 점수 | 이유 |",
+                "|------|------|------|----------|-----:|-----:|------|",
             ]
             for packet in self.ranked_work:
                 lines.append(
                     f"| {_table(packet.candidate_id)} | {_table(packet.domain_key)} | "
-                    f"{packet.status} | {packet.risk_grade} | {packet.priority_score} | "
-                    f"{_table(packet.reason_ko)} |"
+                    f"{packet.status} | {packet.autonomy_level} | {packet.risk_grade} | "
+                    f"{packet.priority_score} | {_table(packet.reason_ko)} |"
                 )
         else:
             lines.append("- 현재 실행 가능한 안전 후보가 없습니다.")
@@ -476,6 +503,58 @@ def _status_for_candidate(
     return STATUS_EXECUTION_READY
 
 
+def _execution_contract(
+    status: str,
+    risk_grade: int,
+    safety_impact: Sequence[str],
+) -> tuple[str, str, tuple[str, ...]]:
+    if status == STATUS_EXECUTION_READY and risk_grade <= 2 and not safety_impact:
+        return (
+            AUTONOMY_CODEX_START,
+            (
+                "운영자 추가 질문 없이 새 worktree 또는 브랜치에서 SDD 두께를 판단하고 "
+                "구현, 검증, PR, 자동 머지 절차로 진행할 수 있다."
+            ),
+            CODEX_COMPLETION_GATES,
+        )
+    if status == STATUS_OPERATOR_APPROVAL_REQUIRED:
+        return (
+            AUTONOMY_OPERATOR_APPROVAL,
+            "운영자 명시 승인 전에는 구현·실행하지 말고 안전 경계와 승인 필요 사유만 보고한다.",
+            (
+                "운영자 승인 기록",
+                "안전 경계 영향 재평가",
+                "필요 시 별도 SDD와 PR 품질 관문",
+            ),
+        )
+    if status == STATUS_BLOCKED:
+        return (
+            AUTONOMY_RECOVERY_REQUIRED,
+            "후보 실행보다 입력 sidecar나 workflow 복구를 먼저 수행한다.",
+            ("복구 focused pytest 통과", "생존 감시 재실행", "HANDOFF 필요 시 갱신"),
+        )
+    if status == STATUS_RELEASED:
+        return (
+            AUTONOMY_CLOSED_RELEASED,
+            "이미 구현·머지·인계된 후보이므로 다시 착수하지 않는다.",
+            ("released-work 장부 유지",),
+        )
+    if status == STATUS_SUPPRESSED:
+        return (
+            AUTONOMY_CLOSED_SUPPRESSED,
+            (
+                "learning ledger가 억제한 후보이므로 새 증거 또는 재검토 조건 없이는 "
+                "다시 착수하지 않는다."
+            ),
+            ("learning ledger 억제 사유 유지",),
+        )
+    return (
+        AUTONOMY_RECOVERY_REQUIRED,
+        "상태를 해석할 수 없으므로 입력 증거를 먼저 복구한다.",
+        ("입력 증거 파싱 복구",),
+    )
+
+
 def _packet_id(candidate_id: str, title_ko: str, source_refs: Sequence[str]) -> str:
     digest = hashlib.sha256(
         "|".join([candidate_id, title_ko, *source_refs]).encode("utf-8")
@@ -504,6 +583,11 @@ def _packet_from_item(
     next_action = _candidate_next_action(item, fallback_action)
     source_refs = (source_ref,)
     score = source_weight + _candidate_score(item)
+    autonomy_level, start_guidance, completion_gates = _execution_contract(
+        status,
+        risk_grade,
+        safety_impact,
+    )
     return WorkPacket(
         packet_id=_packet_id(candidate_id, title, source_refs),
         candidate_id=candidate_id,
@@ -514,8 +598,11 @@ def _packet_from_item(
         safety_impact=safety_impact,
         priority_score=score,
         status=status,
+        autonomy_level=autonomy_level,
         reason_ko=reason,
         next_action_ko=next_action,
+        start_guidance_ko=start_guidance,
+        completion_gates=completion_gates,
         required_inputs=_required_inputs(item, source_ref),
         safety_boundary=SAFETY_INVARIANTS,
         source_refs=source_refs,
@@ -534,6 +621,7 @@ def _generated_packet(
     status: str = STATUS_EXECUTION_READY,
 ) -> WorkPacket:
     source_refs = (source_ref,)
+    autonomy_level, start_guidance, completion_gates = _execution_contract(status, 2, ())
     return WorkPacket(
         packet_id=_packet_id(candidate_id, title_ko, source_refs),
         candidate_id=candidate_id,
@@ -544,8 +632,11 @@ def _generated_packet(
         safety_impact=(),
         priority_score=priority_score,
         status=status,
+        autonomy_level=autonomy_level,
         reason_ko=reason_ko,
         next_action_ko=next_action_ko,
+        start_guidance_ko=start_guidance,
+        completion_gates=completion_gates,
         required_inputs=source_refs,
         safety_boundary=SAFETY_INVARIANTS,
         source_refs=source_refs,
@@ -812,6 +903,12 @@ def _apply_ledger_rejections(
             replace(
                 packet,
                 status=STATUS_SUPPRESSED,
+                autonomy_level=AUTONOMY_CLOSED_SUPPRESSED,
+                start_guidance_ko=(
+                    "learning ledger가 억제한 후보이므로 새 증거 또는 재검토 조건 없이는 "
+                    "다시 착수하지 않는다."
+                ),
+                completion_gates=("learning ledger 억제 사유 유지",),
                 reason_ko=(
                     "learning ledger가 이 후보를 억제했다: "
                     f"{reason}"
@@ -852,6 +949,9 @@ def _apply_released_work(
             replace(
                 packet,
                 status=STATUS_RELEASED,
+                autonomy_level=AUTONOMY_CLOSED_RELEASED,
+                start_guidance_ko="이미 구현·머지·인계된 후보이므로 다시 착수하지 않는다.",
+                completion_gates=("released-work 장부 유지",),
                 reason_ko=f"released-work 장부가 이 후보를 완료 처리했다: {reason}",
                 next_action_ko="이미 구현·머지·인계된 후보이므로 다음 후보로 넘어간다.",
                 required_inputs=tuple(
@@ -973,6 +1073,12 @@ def build_autonomous_work_execution(
 
 __all__ = [
     "AutonomousWorkExecutionReport",
+    "AUTONOMY_CLOSED_RELEASED",
+    "AUTONOMY_CLOSED_SUPPRESSED",
+    "AUTONOMY_CODEX_START",
+    "AUTONOMY_OPERATOR_APPROVAL",
+    "AUTONOMY_RECOVERY_REQUIRED",
+    "CODEX_COMPLETION_GATES",
     "EvidenceSurface",
     "SAFETY_INVARIANTS",
     "SCHEMA_VERSION",
