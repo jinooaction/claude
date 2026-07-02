@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
+from pathlib import Path
 
 from auto_invest.analytics.operator_status import (
     ALERT_ACTION_REQUIRED,
@@ -13,6 +14,7 @@ from auto_invest.analytics.operator_status import (
 )
 
 NOW = datetime(2026, 7, 2, 9, 25, 0, tzinfo=UTC)
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _fenced(payload: dict) -> str:
@@ -146,6 +148,14 @@ def test_alert_message_masks_sensitive_values() -> None:
 
     assert "secret-1234" not in report.alert_decision.message_ko
     assert "8783665778" not in report.alert_decision.message_ko
+
+
+def test_operator_status_has_no_telegram_transport_import() -> None:
+    source = (REPO_ROOT / "src/auto_invest/analytics/operator_status.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert "auto_invest.notifications.telegram import" not in source
 
 
 def test_report_with_send_status_updates_decision_only() -> None:
