@@ -267,9 +267,17 @@ def scan_promotion(
     now = _ensure_utc(now or datetime.now(UTC))
     evidence_texts = evidence_texts or {}
     candidates = parse_candidates(candidate_backlog, evolution_summary)
+    released_candidates = _released_candidate_reasons(evidence_texts.get("released-work"))
     assessments = tuple(
         sorted(
-            (assess_candidate(candidate, evidence_texts) for candidate in candidates),
+            (
+                assess_candidate(
+                    candidate,
+                    evidence_texts,
+                    released_reason=released_candidates.get(candidate.candidate_id),
+                )
+                for candidate in candidates
+            ),
             key=lambda a: (_stage_sort(a.stage), -a.priority_score, a.candidate_id),
         )
     )
@@ -332,10 +340,21 @@ def parse_candidates(
 def assess_candidate(
     candidate: PromotionCandidate,
     evidence_texts: Mapping[str, str | None],
+    *,
+    released_reason: str | None = None,
 ) -> PromotionAssessment:
     layers = _evidence_layers(candidate, evidence_texts)
     layer_status = {layer.name: layer.status for layer in layers}
     next_gate = _next_gate(candidate.safety_impact)
+    if released_reason is not None:
+        return _assessment(
+            candidate,
+            STAGE_DISCARD,
+            layers,
+            "released-work 장부가 완료한 후보이므로 승격하지 않는다.",
+            f"released-work 장부가 완료 후보로 표시했다: {released_reason}",
+            next_gate=None,
+        )
     if candidate.source_status.lower() in _RELEASED_STATUSES:
         return _assessment(
             candidate,
@@ -722,6 +741,35 @@ def _strategy_factory_failure_reason(candidate: PromotionCandidate) -> str | Non
     if reason:
         return reason
     return "후보 구현 공장의 기계 판독 검증 결과가 실패했다."
+
+
+def _released_candidate_reasons(raw: str | None) -> dict[str, str]:
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(parsed, Mapping):
+        return {}
+    candidates: dict[str, str] = {}
+    for item in _released_items(parsed):
+        candidate_id = str(item.get("candidate_id") or "").strip()
+        if not candidate_id:
+            continue
+        reason = str(item.get("reason_ko") or "released-work 완료 후보").strip()
+        candidates[candidate_id] = reason
+    return candidates
+
+
+def _released_items(doc: Mapping[str, Any]) -> tuple[Mapping[str, Any], ...]:
+    items: list[Mapping[str, Any]] = []
+    for key in ("released_work", "entries", "records"):
+        value = doc.get(key)
+        if not isinstance(value, list):
+            continue
+        items.extend(item for item in value if isinstance(item, Mapping))
+    return tuple(items)
 
 
 def _has_missing_source(candidate: PromotionCandidate) -> bool:

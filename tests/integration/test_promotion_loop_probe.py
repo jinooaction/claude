@@ -71,6 +71,8 @@ def test_autonomous_promotion_workflow_is_read_only_and_publishes_sidecar() -> N
     assert "schedule:" in text and "workflow_dispatch:" in text
     assert "automation/autonomous-promotion-last-run" in text
     assert "promotion_loop_probe.py" in text
+    assert "released_work_probe.py" in text
+    assert "/tmp/promotion_evidence/released-work.md" in text
     assert "promotion_queue.json" in text
     assert "VULTR_SSH" not in text
     assert "KIS_" not in text

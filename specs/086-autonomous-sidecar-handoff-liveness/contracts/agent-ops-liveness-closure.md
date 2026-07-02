@@ -27,6 +27,16 @@ When incomplete:
 - The candidate remains actionable.
 - The next action continues to point at restoring liveness registration or handoff entrypoint.
 
+## Downstream Race Contract
+
+Promotion and candidate-factory automation may start at the same time as autonomous-evolution and released-work after a push to `main`. They must therefore generate or consume released-work evidence for the current checkout before acting on stale automation sidecar candidates.
+
+When `released-work` contains `candidate-88a7e7f07361`:
+
+- Promotion assessment stage is `DISCARD`.
+- Candidate factory emits no package for this candidate.
+- Candidate result executor has no new package for this candidate to execute.
+
 ## Safety Contract
 
 This contract is read-only. It MUST NOT touch broker APIs, order submission, capital allocation, live strategy changes, whitelist/caps, secrets, paid services, constitution, or kernel manifest.

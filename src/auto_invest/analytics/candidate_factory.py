@@ -229,12 +229,13 @@ def build_candidate_factory_run(
     candidate_backlog: Mapping[str, Any] | None,
     promotion_summary: Mapping[str, Any] | None = None,
     result_evidence: Mapping[str, Any] | None = None,
+    released_work: Mapping[str, Any] | None = None,
     now: datetime | None = None,
     commit: str = "unknown",
     run_id: str = "local",
 ) -> CandidateFactoryRun:
     now = _ensure_utc(now or datetime.now(UTC))
-    candidates = _candidate_rows(candidate_backlog, promotion_summary)
+    candidates = _candidate_rows(candidate_backlog, promotion_summary, released_work)
     stage_by_id = _stage_by_candidate_id(promotion_summary)
     results = parse_result_evidence(result_evidence)
     packages = tuple(
@@ -498,13 +499,16 @@ def _attach_result_diagnostics(patch: dict[str, Any], result: EvidenceResult) ->
 def _candidate_rows(
     candidate_backlog: Mapping[str, Any] | None,
     promotion_summary: Mapping[str, Any] | None,
+    released_work: Mapping[str, Any] | None,
 ) -> tuple[Mapping[str, Any], ...]:
+    released = _released_candidate_ids(released_work)
     if _mapping_has_list(candidate_backlog, "candidates"):
         return tuple(
             item
             for item in candidate_backlog["candidates"]  # type: ignore[index]
             if isinstance(item, Mapping)
             and _candidate_id(item)
+            and _candidate_id(item) not in released
             and str(item.get("status") or "").strip().lower() not in _CLOSED_SOURCE_STATUSES
         )
     if not _mapping_has_list(promotion_summary, "assessments"):
@@ -515,8 +519,27 @@ def _candidate_rows(
             continue
         candidate = assessment.get("candidate")
         if isinstance(candidate, Mapping) and _candidate_id(candidate):
+            if _candidate_id(candidate) in released:
+                continue
             rows.append(candidate)
     return tuple(rows)
+
+
+def _released_candidate_ids(doc: Mapping[str, Any] | None) -> set[str]:
+    if not isinstance(doc, Mapping):
+        return set()
+    released: set[str] = set()
+    for key in ("released_work", "entries", "records"):
+        value = doc.get(key)
+        if not isinstance(value, list):
+            continue
+        for item in value:
+            if not isinstance(item, Mapping):
+                continue
+            candidate_id = _candidate_id(item)
+            if candidate_id:
+                released.add(candidate_id)
+    return released
 
 
 def _stage_by_candidate_id(promotion_summary: Mapping[str, Any] | None) -> dict[str, str]:

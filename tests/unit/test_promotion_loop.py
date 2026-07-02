@@ -27,6 +27,10 @@ def _json(name: str) -> dict:
     return json.loads((FIXTURES / name).read_text(encoding="utf-8"))
 
 
+def _doc(payload: dict) -> str:
+    return json.dumps(payload, ensure_ascii=False)
+
+
 def _evidence() -> dict[str, str]:
     return {path.stem: path.read_text(encoding="utf-8") for path in FIXTURES.glob("*.md")}
 
@@ -158,6 +162,46 @@ def test_released_source_status_is_discarded() -> None:
     assert assessment.stage == STAGE_DISCARD
     assert "이미 완료" in assessment.allowed_next_action
     assert "완료 후보" in assessment.blocked_reason_ko
+
+
+def test_released_work_sidecar_discards_stale_source_candidate() -> None:
+    backlog = {
+        "candidates": [
+            {
+                "candidate_id": "candidate-88a7e7f07361",
+                "title_ko": "자율 루프 sidecar와 handoff 생존성",
+                "domain_key": "agent_ops",
+                "status": "new",
+                "risk_grade": 2,
+                "safety_impact": [],
+                "evidence_refs": ["pipeline-liveness", "handoff"],
+                "composite_score": 568,
+            }
+        ]
+    }
+    assessment = scan_promotion(
+        candidate_backlog=backlog,
+        evidence_texts={
+            "released-work": _doc(
+                {
+                    "released_work": [
+                        {
+                            "candidate_id": "candidate-88a7e7f07361",
+                            "status": "released",
+                            "reason_ko": "스펙 086 완료",
+                        }
+                    ]
+                }
+            )
+        },
+        now=NOW,
+        commit="abc1234",
+        run_id="test",
+    ).assessments[0]
+
+    assert assessment.stage == STAGE_DISCARD
+    assert "released-work" in assessment.allowed_next_action
+    assert "스펙 086 완료" in assessment.blocked_reason_ko
 
 
 def test_oos_and_walk_forward_candidate_is_forward_registration_ready() -> None:
