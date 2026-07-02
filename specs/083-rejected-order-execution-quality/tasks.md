@@ -71,8 +71,8 @@
 - [x] T019 Run focused tests from `quickstart.md`.
 - [x] T020 Run `uv run pytest` and `uv run ruff check src tests`.
 - [x] T021 Run `uv run python scripts/check_handoff_facts.py` and `uv run python scripts/agent_harness_probe.py --strict`.
-- [ ] T022 Create PR with risk grade, problem definition, safety boundary review, validation, and handoff notes.
-- [ ] T023 Merge when gates pass and refresh `HANDOFF.md` after merge.
+- [x] T022 Create PR with risk grade, problem definition, safety boundary review, validation, and handoff notes.
+- [x] T023 Merge when gates pass and refresh `HANDOFF.md` after merge.
 
 ## Dependencies & Execution Order
 
