@@ -1,6 +1,6 @@
 # HANDOFF 087 — 주문 거부·체결 품질 손익 관측 (2026-07-02 KST)
 
-main 코드 베이스라인: `b4fa316`(PR #448). 스펙 083은 자율 작업 실행 루프가 고른 `candidate-dff4f9344b02`를 처리한 등급 2 운영 보정이다. 이미 발행된 sidecar만 읽어 주문 거부, 브로커 오류 코드, KIS smoke, live gate 상태를 하나의 실행 품질 증거 패키지로 묶었다.
+main 코드 베이스라인: `f874b64`(PR #449). 스펙 083 기능 베이스라인은 `b4fa316`(PR #448)이다. 이 작업은 자율 작업 실행 루프가 고른 `candidate-dff4f9344b02`를 처리한 등급 2 운영 보정이다. 이미 발행된 sidecar만 읽어 주문 거부, 브로커 오류 코드, KIS smoke, live gate 상태를 하나의 실행 품질 증거 패키지로 묶었고, #449에서 생존 감시가 보고서 자체 발행 시각을 freshness로 읽게 보정했다.
 
 ## 무엇이 바뀌었나
 
@@ -28,11 +28,12 @@ main 코드 베이스라인: `b4fa316`(PR #448). 스펙 083은 자율 작업 실
 - 현재 발행된 실행 품질 sidecar의 종합 판정은 `OBSERVE`다. live gate는 `latest_intent_loss` 때문에 실주문을 막고 있으며, 새 live 표본은 자동으로 쌓이지 않는다.
 - 브로커 거부 관측은 `APBK1672` 2건으로 파싱됐고, KIS smoke는 최근 성공 상태다.
 - `released-work`는 `candidate-dff4f9344b02`를 `released`로 소비했다. 자율 작업 실행 루프는 같은 후보를 다시 고르지 않고 다음 후보 `candidate-6ee3370e933d`(`오래된 증거와 성과 실패 분리`)를 선택했다.
-- 같은 push에서 자율 성장 루프가 실행 품질 sidecar보다 약간 먼저 돌아 `execution-quality`를 stale로 본 기록이 있다. 바로 뒤 sidecar와 liveness는 정상 발행됐으므로 순서상 지연이며, 다음 자율 성장 주기에서 해소되어야 한다.
+- #448 직후 같은 push에서 자율 성장 루프가 실행 품질 sidecar보다 약간 먼저 돌아 `execution-quality`를 stale로 본 기록이 있었다. #449 뒤 최신 자율 성장 sidecar는 `오래되었거나 누락된 증거: 없음`으로 회복됐다.
 
 ## 배포 후 실제 실행 증거
 
 - PR #448 merge commit: `b4fa3164bab2eebcc4cd42f7ff502ae5027aa820`
+- PR #449 merge commit: `f874b642de0f19b779278ee3a6b986ff4213b024`
 - `Deploy on merge to main` run `28573162272`: success, commit `b4fa316`
 - `Execution quality package` run `28573162279`: success, commit `b4fa316`
 - `Pipeline liveness watchdog` run `28573162215`: success, commit `b4fa316`
@@ -40,12 +41,13 @@ main 코드 베이스라인: `b4fa316`(PR #448). 스펙 083은 자율 작업 실
 - `Released work ledger` run `28573162227`: success, commit `b4fa316`
 - `Autonomous work execution loop` run `28573162293`: success, commit `b4fa316`
 - `Candidate result executor` run `28573162239`: success, commit `b4fa316`
+- #449 후속 runs: deploy `28574000074`, execution-quality `28574000181`, pipeline-liveness push `28574000145`, pipeline-liveness workflow_run `28574020426`, autonomous evolution `28574000146`, autonomous work `28574000140`, candidate result executor `28574000112` 모두 success, commit `f874b64`
 - deploy success는 dry-run worker 코드 반영이다. 서버 `audit_log`는 이 컨테이너에서 직접 확인하지 못했다.
 
 최신 `origin/automation/execution-quality-last-run:LAST_RUN.md`:
 
-- `run_id=28573162279`
-- `commit=b4fa3164bab2eebcc4cd42f7ff502ae5027aa820`
+- `run_id=28574000181`
+- `commit=f874b642de0f19b779278ee3a6b986ff4213b024`
 - `overall_status=OBSERVE`
 - `monitor_verdict=INSUFFICIENT_DATA`
 - `latest_signal=INTENT_LOSS`
@@ -53,6 +55,14 @@ main 코드 베이스라인: `b4fa316`(PR #448). 스펙 083은 자율 작업 실
 - `rejected_orders=2`, `parsed_broker_errors=2`, `kis_msg_codes={"APBK1672": 2}`
 - KIS smoke: `state=success`, `exit=0`, `tests_total=4`, `tests_failed=0`, `smoke_error_rate=0.0000`
 - 안전 문구: 주문 없음, 자본 변경 없음, whitelist/caps 변경 없음, live 전략 변경 없음
+
+최신 `origin/automation/pipeline-liveness-last-run:LAST_RUN.md`:
+
+- `run_id=28574020426`
+- `commit=f874b642de0f19b779278ee3a6b986ff4213b024`
+- `overall=OK`
+- `execution-quality`: `status=OK`, `timestamp_utc=2026-07-02T07:45:40Z`, `age_hours=0.0`
+- 모든 핵심 sidecar 신선
 
 최신 `origin/automation/released-work-last-run:released_work.json`:
 
@@ -70,7 +80,7 @@ main 코드 베이스라인: `b4fa316`(PR #448). 스펙 083은 자율 작업 실
 
 최신 `origin/automation/candidate-implementation-results:LAST_RUN.md`:
 
-- `run_id=28573162239`
+- `run_id=28574000112`
 - `overall_status=degraded`
 - execution_quality `candidate-dff4f9344b02`는 no-live 검증 pass
 - 기존 strategy_backtest와 portfolio_backtest 패키지 2건은 blocked로 남아 있다. 이번 스펙 083의 새 실패가 아니라 별도 관찰 지점이다.
@@ -107,7 +117,9 @@ PR #448 머지 전:
 - `uv run pytest` -> 2433 passed, 4 skipped
 - `uv run python scripts/check_handoff_facts.py` -> OK
 - `uv run python scripts/agent_harness_probe.py --strict` -> OK (14/14)
+- PR #449 품질 관문 -> success
+- #449 post-merge deploy, execution-quality, pipeline-liveness, autonomous evolution, autonomous work, candidate result executor runs -> success
 
 ## 다음 세션 한 줄
 
-스펙 083은 완료됐다. 실행 품질 sidecar는 주문 거부 2건과 KIS smoke 성공을 읽기 전용으로 묶어 발행했고, `candidate-dff4f9344b02`는 `released-work`에 소비되어 다음 후보는 `candidate-6ee3370e933d`로 넘어갔다.
+스펙 083은 완료됐다. 실행 품질 sidecar는 주문 거부 2건과 KIS smoke 성공을 읽기 전용으로 묶어 발행했고, pipeline-liveness도 그 sidecar를 보고서 자체 시각으로 신선하게 본다. `candidate-dff4f9344b02`는 `released-work`에 소비되어 다음 실제 착수 후보는 `candidate-6ee3370e933d`다.
