@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-07-01T23:53:22.965687Z)
+# 완료 후보 소비 장부 (as of 2026-07-02T00:03:17.908101Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -8,14 +8,15 @@
 | 항목 | 값 |
 |------|-----|
 | overall_status | OK |
-| released_count | 1 |
-| scanned_specs | 29 |
+| released_count | 2 |
+| scanned_specs | 30 |
 
 ## 완료 후보
 
 | 후보 | 상태 | 스펙 | 근거 파일 | 근거 필드 |
 |------|------|------|-----------|-----------|
 | candidate-fd04772a23c5 | released | 078-money-gate-alignment-loop | specs/078-money-gate-alignment-loop/contracts/money-gate-alignment.md | selected_work_candidate |
+| candidate-fd04772a23c5 | released | 079-completed-candidate-consumption | specs/079-completed-candidate-consumption/spec.md | selected_work_candidate |
 
 ## 제외한 스펙
 
@@ -65,7 +66,6 @@
 | 070-candidate-implementation-factory | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 071-candidate-result-executor | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 072-candidate-evidence-diagnostics | 체크박스 작업이 없거나 완료되지 않았습니다. |
-| 079-completed-candidate-consumption | 체크박스 작업이 없거나 완료되지 않았습니다. |
 
 ## 안전 경계
 
@@ -82,7 +82,7 @@
 
 ```json
 {
-  "commit": "c8beb2561b0c328f0d56dc11e4d2cf91784b2867",
+  "commit": "88929c86ff76bd22fec87495190f1a083610be58",
   "overall_status": "OK",
   "released_work": [
     {
@@ -93,9 +93,18 @@
       "source_file": "specs/078-money-gate-alignment-loop/contracts/money-gate-alignment.md",
       "spec_id": "078-money-gate-alignment-loop",
       "status": "released"
+    },
+    {
+      "candidate_id": "candidate-fd04772a23c5",
+      "entry_id": "released-552c7027b931",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "selected_work_candidate",
+      "source_file": "specs/079-completed-candidate-consumption/spec.md",
+      "spec_id": "079-completed-candidate-consumption",
+      "status": "released"
     }
   ],
-  "run_id": "28555565017",
+  "run_id": "28555953826",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -135,7 +144,8 @@
     "075-strategy-failure-learning",
     "076-capital-path-readiness-loop",
     "077-autonomous-work-execution-loop",
-    "078-money-gate-alignment-loop"
+    "078-money-gate-alignment-loop",
+    "079-completed-candidate-consumption"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -314,12 +324,8 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "072-candidate-evidence-diagnostics"
-    },
-    {
-      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "079-completed-candidate-consumption"
     }
   ],
-  "timestamp_utc": "2026-07-01T23:53:22.965687Z"
+  "timestamp_utc": "2026-07-02T00:03:17.908101Z"
 }
 ```
