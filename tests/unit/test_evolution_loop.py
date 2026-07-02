@@ -9,6 +9,8 @@ from pathlib import Path
 import pytest
 
 from auto_invest.analytics.evolution_loop import (
+    STATUS_NEW,
+    STATUS_RELEASED,
     BreakthroughCandidate,
     EvidencePackage,
     LearningLedgerEntry,
@@ -33,6 +35,10 @@ def _fixture_evidence() -> dict[str, str]:
 def _fixture_dir_evidence(name: str) -> dict[str, str]:
     fixture_dir = ROOT / "tests" / "fixtures" / "evolution_loop" / name
     return {path.stem: path.read_text(encoding="utf-8") for path in fixture_dir.glob("*.md")}
+
+
+def _agent_ops_candidate(summary):
+    return next(c for c in summary.candidates if c.candidate_id == "candidate-88a7e7f07361")
 
 
 def _candidate(**overrides) -> BreakthroughCandidate:
@@ -118,6 +124,74 @@ def test_scan_is_deterministic_and_covers_all_domains() -> None:
     assert "실주문 재개" not in first.candidates[0].title_ko
     assert first.safe_high_leverage_work
     assert "operator_review" in first.as_dict()
+
+
+def test_agent_ops_candidate_is_released_when_liveness_and_handoff_are_satisfied() -> None:
+    evidence = _fixture_evidence()
+    evidence["pipeline-liveness"] = """
+# 파이프라인 생존 감시
+
+| 사이드카 | 핵심 | 상태 | 나이(h) | 한계(h) | 마지막 갱신 |
+|----------|:----:|:----:|--------:|--------:|-------------|
+| autonomous-evolution |  | 🟢 OK | 0.7 | 30 | 2026-06-29T00:20:00Z |
+
+## 결정 JSON
+
+```json
+{
+  "overall": "OK",
+  "checks": [
+    {"key": "autonomous-evolution", "status": "OK"}
+  ]
+}
+```
+"""
+    evidence["handoff"] = """
+# auto-invest — 다음 세션 인수인계 (main 베이스라인)
+
+## 세션 시작 절차 (필수)
+
+세션 시작 훅은 로컬 git 상태를 출력한다. 무엇이 머지됐고 무엇이 진행 중인지
+불확실하면 HANDOFF.md와 `/sync` 스킬로 원격 브랜치와 열린 PR을 확인한다.
+"""
+
+    summary = scan_evolution(evidence, now=NOW, commit="abc1234", run_id="test")
+    candidate = _agent_ops_candidate(summary)
+
+    assert candidate.status == STATUS_RELEASED
+    assert "candidate-88a7e7f07361" not in summary.safe_high_leverage_work
+    assert "이미 충족" in candidate.next_action_ko
+
+
+def test_agent_ops_candidate_stays_actionable_when_handoff_entrypoint_is_missing() -> None:
+    evidence = _fixture_evidence()
+    evidence["pipeline-liveness"] = """
+{"timestamp_utc":"2026-06-29T00:20:00Z","overall":"OK","checks":[{"key":"autonomous-evolution","status":"OK"}]}
+"""
+    evidence["handoff"] = "오래된 노트. 세션 시작 절차와 sync 경로가 없다."
+
+    summary = scan_evolution(evidence, now=NOW, commit="abc1234", run_id="test")
+    candidate = _agent_ops_candidate(summary)
+
+    assert candidate.status == STATUS_NEW
+    assert "candidate-88a7e7f07361" in summary.safe_high_leverage_work
+
+
+def test_agent_ops_candidate_stays_actionable_when_liveness_registration_is_missing() -> None:
+    evidence = _fixture_evidence()
+    evidence["handoff"] = """
+# auto-invest — 다음 세션 인수인계 (main 베이스라인)
+
+## 세션 시작 절차 (필수)
+
+세션 시작 훅과 HANDOFF.md, `/sync`로 현재 git 상태를 확인한다.
+"""
+
+    summary = scan_evolution(evidence, now=NOW, commit="abc1234", run_id="test")
+    candidate = _agent_ops_candidate(summary)
+
+    assert candidate.status == STATUS_NEW
+    assert "candidate-88a7e7f07361" in summary.safe_high_leverage_work
 
 
 def test_scan_separates_stale_evidence_from_strategy_failure() -> None:

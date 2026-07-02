@@ -222,6 +222,45 @@ def test_released_work_consumes_completed_candidate_and_selects_next_candidate()
     assert "released-work" in released["candidate-fd04772a23c5"].reason_ko
 
 
+def test_released_source_status_is_not_execution_ready():
+    report = build_autonomous_work_execution(
+        {
+            "capital-path-readiness": _json({"priority_candidates": []}),
+            "evolution-backlog": _json(
+                {
+                    "candidates": [
+                        {
+                            "candidate_id": "candidate-88a7e7f07361",
+                            "domain_key": "agent_ops",
+                            "status": "released",
+                            "title_ko": "자율 루프 sidecar와 handoff 생존성",
+                            "next_action_ko": "이미 충족",
+                            "composite_score": 568,
+                        },
+                        {
+                            "candidate_id": "candidate-next",
+                            "domain_key": "analysis",
+                            "status": "new",
+                            "title_ko": "다음 후보",
+                            "next_action_ko": "다음 후보를 진행한다.",
+                            "composite_score": 100,
+                        },
+                    ]
+                }
+            ),
+            "pipeline-liveness": _liveness(),
+        },
+        now=NOW,
+    )
+
+    assert report.selected_work is not None
+    assert report.selected_work.candidate_id == "candidate-next"
+    released = {packet.candidate_id: packet for packet in report.suppressed_work}
+    assert released["candidate-88a7e7f07361"].status == STATUS_RELEASED
+    assert released["candidate-88a7e7f07361"].autonomy_level == AUTONOMY_CLOSED_RELEASED
+    assert "다시 착수하지 않는다" in released["candidate-88a7e7f07361"].start_guidance_ko
+
+
 def test_missing_all_evidence_emits_liveness_repair_packet():
     report = build_autonomous_work_execution({}, now=NOW)
 

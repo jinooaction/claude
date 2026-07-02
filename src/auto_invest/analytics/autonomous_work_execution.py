@@ -496,6 +496,8 @@ def _status_for_candidate(
     lowered = source_status.strip().lower()
     if lowered in _REJECTED_STATUSES:
         return STATUS_SUPPRESSED
+    if lowered in _RELEASED_STATUSES:
+        return STATUS_RELEASED
     if lowered in _BLOCKED_STATUSES:
         return STATUS_BLOCKED
     if lowered in _OPERATOR_STATUSES or risk_grade >= 3 or safety_impact:

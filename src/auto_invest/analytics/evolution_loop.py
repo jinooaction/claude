@@ -23,6 +23,7 @@ STATUS_PLANNED = "planned"
 STATUS_EVIDENCE_DEPENDENT = "evidence_dependent"
 STATUS_PROMOTED = "promoted"
 STATUS_REJECTED = "rejected"
+STATUS_RELEASED = "released"
 STATUS_OPERATOR_REVIEW = "operator_review"
 
 DECISION_DISCARD = "discard"
@@ -1312,6 +1313,18 @@ def _agent_ops_candidate(
     stale: Sequence[str],
 ) -> BreakthroughCandidate:
     dependency = EVIDENCE_SIDECAR_FRESHNESS if "pipeline-liveness" in stale else EVIDENCE_NONE
+    signals = {
+        key: set(surface.machine_payload.get("signals") or ())
+        for key, surface in by_key.items()
+    }
+    completed = _agent_ops_liveness_closure_satisfied(signals)
+    next_action = (
+        "이미 충족: autonomous-evolution sidecar는 pipeline-liveness가 감시하고 "
+        "HANDOFF는 세션 시작 진입점과 /sync 경로를 제공한다."
+        if completed
+        else "autonomous-evolution sidecar를 pipeline liveness에 등록하고 "
+        "handoff에 단일 진입점을 남긴다."
+    )
     return _candidate(
         "agent_ops",
         "자율 루프 sidecar와 handoff 생존성",
@@ -1327,8 +1340,8 @@ def _agent_ops_candidate(
         92,
         92,
         dependency,
-        "autonomous-evolution sidecar를 pipeline liveness에 등록하고 "
-        "handoff에 단일 진입점을 남긴다.",
+        next_action,
+        status=STATUS_RELEASED if completed else None,
     )
 
 
@@ -1431,6 +1444,64 @@ def _summary_for(key: str, raw: str, freshness: str, signals: set[str]) -> str:
     return f"{key}: {freshness}, {signal_text}, {len(raw)} chars"
 
 
+def _json_docs_from_text(raw: str) -> tuple[Mapping[str, Any], ...]:
+    docs: list[Mapping[str, Any]] = []
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        parsed = None
+    if isinstance(parsed, Mapping):
+        docs.append(parsed)
+    for match in re.finditer(r"```json\s*(.*?)```", raw, flags=re.DOTALL | re.IGNORECASE):
+        try:
+            parsed = json.loads(match.group(1))
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, Mapping):
+            docs.append(parsed)
+    return tuple(docs)
+
+
+def _pipeline_check_ok(raw: str, check_key: str) -> bool:
+    for doc in _json_docs_from_text(raw):
+        checks = doc.get("checks")
+        if not isinstance(checks, list):
+            continue
+        for item in checks:
+            if not isinstance(item, Mapping):
+                continue
+            if item.get("key") != check_key:
+                continue
+            if str(item.get("status") or "").strip().upper() == "OK":
+                return True
+    for line in raw.splitlines():
+        if check_key not in line.lower():
+            continue
+        if re.search(r"\bOK\b", line) and not re.search(
+            r"\b(LATE|STALE|MISSING|CRITICAL|DEGRADED)\b",
+            line,
+        ):
+            return True
+    return False
+
+
+def _handoff_entrypoint_ok(raw: str) -> bool:
+    lowered = raw.lower()
+    return (
+        "/sync" in raw
+        and "handoff.md" in lowered
+        and ("세션 시작" in raw or "session start" in lowered)
+        and ("git" in lowered or "ground truth" in lowered)
+    )
+
+
+def _agent_ops_liveness_closure_satisfied(signals: Mapping[str, set[str]]) -> bool:
+    return (
+        "autonomous_evolution_liveness_ok" in signals.get("pipeline-liveness", set())
+        and "handoff_entrypoint_ok" in signals.get("handoff", set())
+    )
+
+
 def _signals(key: str, raw: str) -> set[str]:
     lowered = raw.lower()
     signals: set[str] = set()
@@ -1450,6 +1521,10 @@ def _signals(key: str, raw: str) -> set[str]:
             signals.add(signal)
     if key == "pipeline-liveness" and "ok" in lowered and not {"degraded", "critical"} & signals:
         signals.add("liveness_ok")
+    if key == "pipeline-liveness" and _pipeline_check_ok(raw, "autonomous-evolution"):
+        signals.add("autonomous_evolution_liveness_ok")
+    if key == "handoff" and _handoff_entrypoint_ok(raw):
+        signals.add("handoff_entrypoint_ok")
     if key == "kis-smoke":
         if "smoke_state | success" in lowered or '"smoke_state": "success"' in lowered:
             signals.add("broker_smoke_success")
