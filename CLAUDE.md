@@ -220,7 +220,7 @@ the current worktree. Do not trust prose in this block as the source of truth
 for in-flight work; use the `git_ground_truth` start hook, latest `HANDOFF.md`,
 and `/sync` against `jinooaction/claude` `Codex/*` branches before continuing.
 
-현재 계획 포인터: `specs/079-completed-candidate-consumption/plan.md` — 완료된 자율 작업 후보를 released-work 장부로 소비하고 자율 작업 실행 루프가 차순위 후보로 자동 이동하게 하는 읽기 전용 운영 루프 설계.
+현재 계획 포인터: `specs/080-operator-dashboard-alert-loop/plan.md` — 운영자가 모바일에서 자율 루프 진행 상황, 실제 돈 경로 상태, 다음 자율 작업, 개입 필요 이벤트를 한눈에 확인하고 필요한 경우 Telegram 알림을 받게 하는 읽기 전용 운영 루프 설계.
 
 머지 완료(베이스라인): spec 004 (LLM 판단 지점), 005 (자율 튜너), 006 (배포 자동화), 007 (하드닝 카나리), 008 (백테스트), 009 (paper-run), 010 (자동 룰 설계자), 011 (라이브 성과 측정). **주의: 일부 tasks.md 가 stale 0% 로 표시된 적 있음 — 코드/테스트를 믿을 것.**
 

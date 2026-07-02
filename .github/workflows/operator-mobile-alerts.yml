@@ -1,0 +1,216 @@
+name: Operator mobile alerts
+
+# 스펙 080 — 운영자 대시보드와 모바일 알림 루프.
+#
+# 안전: 읽기 전용. automation/* sidecar를 읽고 operator-status sidecar를 발행한다.
+# Telegram은 개입 필요 상태에서만 best-effort로 보내며, 실패해도 주문·자본·live 경로에
+# 영향을 주지 않는다. 서버 SSH, broker, trading worker, 실거래 전환은 접근하지 않는다.
+
+on:
+  schedule:
+    # money-gate-alignment(09:20 UTC) 이후 운영자 요약과 모바일 알림을 만든다.
+    - cron: "25 9 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/auto_invest/analytics/operator_status.py'
+      - 'src/auto_invest/analytics/pipeline_liveness.py'
+      - 'scripts/operator_status_probe.py'
+      - 'scripts/generate_mobile_status.py'
+      - '.github/workflows/operator-mobile-alerts.yml'
+      - '.github/workflows/mobile-status-pages.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: operator-mobile-alerts
+  cancel-in-progress: false
+
+jobs:
+  operator-status:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Collect source sidecars
+        run: |
+          set -uo pipefail
+          mkdir -p /tmp/operator_status_sidecars
+          git fetch --depth=1 origin \
+            '+refs/heads/automation/*:refs/remotes/origin/automation/*' || true
+          uv run python scripts/operator_status_probe.py --manifest \
+            > /tmp/operator_status_manifest.tsv
+          while IFS=$'\t' read -r key branch filename; do
+            [[ -z "${key}" ]] && continue
+            if git show "origin/${branch}:${filename}" \
+                 > "/tmp/operator_status_sidecars/${key}.md" 2>/dev/null; then
+              echo "collected ${key}: ${branch}:${filename}"
+            else
+              rm -f "/tmp/operator_status_sidecars/${key}.md"
+              echo "missing ${key}: ${branch}:${filename}"
+            fi
+          done < /tmp/operator_status_manifest.tsv
+
+      - name: Build operator status report
+        run: |
+          set -uo pipefail
+          uv run python scripts/operator_status_probe.py \
+            --evidence-dir /tmp/operator_status_sidecars \
+            --run-id "${GITHUB_RUN_ID}" \
+            --commit "${GITHUB_SHA}" \
+            --dashboard-url "https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/status.html" \
+            --json-out /tmp/operator_status.json \
+            --summary-out /tmp/operator_status.md
+          cat /tmp/operator_status.md
+
+      - name: Notify Telegram when action is required
+        if: always()
+        continue-on-error: true
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          set -uo pipefail
+          echo "::add-mask::${TELEGRAM_BOT_TOKEN:-}"
+          echo "::add-mask::${TELEGRAM_CHAT_ID:-}"
+          uv run python - <<'PY'
+          from __future__ import annotations
+
+          import asyncio
+          import json
+          import os
+          from pathlib import Path
+
+          from auto_invest.analytics.operator_status import (
+              SEND_FAILED,
+              SEND_NOT_ATTEMPTED,
+              SEND_SENT,
+              SEND_SKIPPED_MISSING_SECRETS,
+          )
+          from auto_invest.notifications.telegram import TelegramConfig, TelegramNotifier
+
+          status_path = Path("/tmp/operator_status.json")
+          send_status_path = Path("/tmp/operator_send_status.txt")
+          try:
+              payload = json.loads(status_path.read_text(encoding="utf-8"))
+              decision = payload.get("alert_decision", {})
+              if not decision.get("should_send"):
+                  send_status_path.write_text(SEND_NOT_ATTEMPTED + "\n", encoding="utf-8")
+                  print("operator-status alert not attempted: no action-required state")
+                  raise SystemExit(0)
+              token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+              chat_id = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+              if not token or not chat_id:
+                  send_status_path.write_text(
+                      SEND_SKIPPED_MISSING_SECRETS + "\n",
+                      encoding="utf-8",
+                  )
+                  print("operator-status alert skipped: Telegram secrets absent")
+                  raise SystemExit(0)
+              cfg = TelegramConfig(
+                  bot_token=token,
+                  chat_id=chat_id,
+                  source_label="auto-invest operator-status",
+                  max_retries=1,
+              )
+              asyncio.run(TelegramNotifier(cfg).send_message(str(decision["message_ko"])))
+              send_status_path.write_text(SEND_SENT + "\n", encoding="utf-8")
+              print("operator-status Telegram alert sent")
+          except SystemExit:
+              raise
+          except Exception as exc:  # noqa: BLE001
+              send_status_path.write_text(SEND_FAILED + "\n", encoding="utf-8")
+              print(f"operator-status Telegram alert failed: {type(exc).__name__}")
+          PY
+
+      - name: Finalize operator status report
+        if: always()
+        run: |
+          set -uo pipefail
+          uv run python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          from pathlib import Path
+
+          from auto_invest.analytics.operator_status import (
+              SEND_FAILED,
+              report_from_dict,
+          )
+
+          json_path = Path("/tmp/operator_status.json")
+          summary_path = Path("/tmp/operator_status.md")
+          send_status_path = Path("/tmp/operator_send_status.txt")
+          if json_path.exists():
+              payload = json.loads(json_path.read_text(encoding="utf-8"))
+          else:
+              payload = {
+                  "schema_version": "1.0",
+                  "run_id": "unknown",
+                  "commit": "unknown",
+                  "timestamp_utc": "",
+                  "overall_status": "ACTION_REQUIRED",
+                  "headline_ko": "operator status report generation failed",
+                  "next_action_ko": "workflow log를 확인한다.",
+                  "alert_decision": {"send_status": SEND_FAILED},
+                  "surfaces": [],
+                  "dashboard_sections": [],
+                  "safety_invariants": [],
+              }
+          send_status = (
+              send_status_path.read_text(encoding="utf-8").strip()
+              if send_status_path.exists()
+              else SEND_FAILED
+          )
+          payload.setdefault("alert_decision", {})["send_status"] = send_status
+          report = report_from_dict(payload)
+          json_path.write_text(
+              json.dumps(report.to_dict(), ensure_ascii=False, indent=2, sort_keys=True)
+              + "\n",
+              encoding="utf-8",
+          )
+          summary_path.write_text(report.as_markdown() + "\n", encoding="utf-8")
+          print(f"operator-status send_status={send_status}")
+          PY
+
+      - name: Publish sidecar
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -uo pipefail
+          BRANCH=automation/operator-status-last-run
+          tmpdir=$(mktemp -d)
+
+          if [[ -f /tmp/operator_status.md ]]; then
+            cp /tmp/operator_status.md "${tmpdir}/LAST_RUN.md"
+          else
+            {
+              echo "# 운영자 상태 보고 — 보고 생성 실패"
+              echo ""
+              echo "Build step failed before operator_status.md was written."
+              echo ""
+              echo "읽기 전용 실행입니다. 주문, 자본, live 설정, 서버 SSH는 변경하지 않았습니다."
+            } > "${tmpdir}/LAST_RUN.md"
+          fi
+          cp /tmp/operator_status.json "${tmpdir}/operator_status.json" \
+            2>/dev/null || echo '{}' > "${tmpdir}/operator_status.json"
+
+          cd "${tmpdir}"
+          git init -q
+          git config user.name "operator-status-bot"
+          git config user.email "operator-status-bot@noreply.github.com"
+          git checkout --orphan publish -q
+          git add LAST_RUN.md operator_status.json
+          git commit -q -m "operator-status run ${GITHUB_RUN_ID} @ ${GITHUB_SHA:0:7}"
+          git push --force \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "publish:${BRANCH}"
+          echo "Published to ${BRANCH}."

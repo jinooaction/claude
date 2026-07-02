@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from auto_invest.analytics.operator_status import OperatorStatusReport, parse_operator_status
 from auto_invest.analytics.pipeline_liveness import (
     CRITICAL,
     DEGRADED,
@@ -34,6 +35,7 @@ WORKFLOW_BY_KEY = {
     "promote-readiness": "promote-readiness.yml",
     "money-path": "money-path.yml",
     "reassign": "reassign-on-tournament.yml",
+    "operator-status": "operator-mobile-alerts.yml",
 }
 
 LABEL_BY_KEY = {
@@ -46,6 +48,7 @@ LABEL_BY_KEY = {
     "promote-readiness": "승격 준비",
     "money-path": "첫 자본 경로",
     "reassign": "전략 재지정",
+    "operator-status": "운영자 상태",
 }
 
 STATUS_LABEL = {
@@ -87,6 +90,14 @@ def _read_observations(sidecar_dir: Path, specs: list[SidecarSpec]) -> dict[str,
         except (FileNotFoundError, OSError):
             observations[spec.key] = None
     return observations
+
+
+def _read_operator_status(sidecar_dir: Path) -> OperatorStatusReport | None:
+    try:
+        raw = (sidecar_dir / "operator-status.md").read_text(encoding="utf-8")
+    except (FileNotFoundError, OSError):
+        return None
+    return parse_operator_status(raw)
 
 
 def _format_age(check: LivenessCheck) -> str:
@@ -167,6 +178,85 @@ def _render_json_script(report_dict: dict) -> str:
     )
 
 
+def _render_optional_json_script(report: OperatorStatusReport | None) -> str:
+    if report is None:
+        return ""
+    payload = json.dumps(report.to_dict(), ensure_ascii=False, separators=(",", ":"))
+    return (
+        '<script type="application/json" id="operator-status-data">'
+        f"{html.escape(payload)}"
+        "</script>"
+    )
+
+
+def _operator_status_class(status: str) -> str:
+    return {
+        "OK": "ok",
+        "ATTENTION": "degraded",
+        "ACTION_REQUIRED": "critical",
+        "CRITICAL": "critical",
+    }.get(status, "degraded")
+
+
+def _render_operator_block(report: OperatorStatusReport | None) -> str:
+    if report is None:
+        return """
+    <section class="operator-panel degraded" aria-labelledby="operator-title">
+      <div>
+        <p id="operator-title">운영자 요약</p>
+        <h2>대기</h2>
+        <p>operator-status sidecar가 아직 없습니다. 다음 알림 루프 실행 뒤 이 영역이 채워집니다.</p>
+      </div>
+    </section>
+"""
+    sections = "\n".join(
+        "\n".join(
+            [
+                '<article class="operator-section">',
+                f"  <span>{html.escape(section.title_ko)}</span>",
+                f"  <strong>{html.escape(section.status)}</strong>",
+                f"  <p>{html.escape(section.body_ko)}</p>",
+                "</article>",
+            ]
+        )
+        for section in report.dashboard_sections
+    )
+    action_surfaces = [
+        surface
+        for surface in report.surfaces
+        if surface.severity in {"action", "critical"}
+    ]
+    if action_surfaces:
+        action_list = "\n".join(
+            f"<li><strong>{html.escape(surface.key)}</strong>: "
+            f"{html.escape(surface.summary_ko)}</li>"
+            for surface in action_surfaces
+        )
+    else:
+        action_list = "<li>개입 필요 항목이 없습니다.</li>"
+    status_class = html.escape(_operator_status_class(report.overall_status))
+    return f"""
+    <section class="operator-panel {status_class}" aria-labelledby="operator-title">
+      <div>
+        <p id="operator-title">운영자 요약</p>
+        <h2>{html.escape(report.overall_status)}</h2>
+        <p>{html.escape(report.headline_ko)}</p>
+      </div>
+      <div class="operator-next">
+        <span>다음 행동</span>
+        <strong>{html.escape(report.next_action_ko)}</strong>
+      </div>
+      <div class="operator-grid">
+        {sections}
+      </div>
+      <div class="action-list">
+        <span>개입 필요</span>
+        <ul>{action_list}</ul>
+      </div>
+    </section>
+"""
+
+
 def render_status_page(
     *,
     sidecar_dir: Path,
@@ -175,6 +265,7 @@ def render_status_page(
     specs = default_specs()
     observations = _read_observations(sidecar_dir, specs)
     report = assess_liveness(specs, observations, context.generated_at)
+    operator_report = _read_operator_status(sidecar_dir)
     specs_by_key = {spec.key: spec for spec in specs}
     report_dict = report.as_dict()
 
@@ -197,6 +288,7 @@ def render_status_page(
         critical_only=False,
     )
     run_link = _html_link("생성 실행", context.run_url)
+    operator_block = _render_operator_block(operator_report)
 
     return f"""<!doctype html>
 <html lang="ko">
@@ -379,12 +471,79 @@ def render_status_page(
       border-radius: 8px;
       font-size: .88rem;
     }}
+    .operator-panel {{
+      display: grid;
+      gap: 12px;
+      margin-top: 16px;
+      padding: 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 5px solid var(--pending);
+      border-radius: 8px;
+    }}
+    .operator-panel.ok {{ border-left-color: var(--ok); }}
+    .operator-panel.degraded {{ border-left-color: var(--late); }}
+    .operator-panel.critical {{ border-left-color: var(--bad); }}
+    .operator-panel h2 {{
+      margin: 2px 0 6px;
+      font-size: 1.45rem;
+    }}
+    .operator-next {{
+      padding: 12px;
+      background: var(--surface-soft);
+      border-radius: 8px;
+    }}
+    .operator-next span, .operator-section span, .action-list span {{
+      display: block;
+      color: var(--muted);
+      font-size: .76rem;
+      font-weight: 700;
+    }}
+    .operator-next strong {{
+      display: block;
+      margin-top: 4px;
+      overflow-wrap: anywhere;
+    }}
+    .operator-grid {{
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }}
+    .operator-section {{
+      min-width: 0;
+      padding: 10px;
+      background: var(--surface-soft);
+      border-radius: 8px;
+    }}
+    .operator-section strong {{
+      display: block;
+      margin-top: 2px;
+      font-size: .9rem;
+    }}
+    .operator-section p {{
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: .82rem;
+      overflow-wrap: anywhere;
+    }}
+    .action-list ul {{
+      margin: 6px 0 0;
+      padding-left: 18px;
+      color: var(--muted);
+    }}
+    .action-list li {{
+      margin: 4px 0;
+      overflow-wrap: anywhere;
+    }}
     @media (min-width: 720px) {{
       main {{ padding: 28px; }}
       .hero {{ grid-template-columns: 1.2fr 1fr; align-items: center; }}
       .meta-grid {{ grid-template-columns: repeat(4, minmax(0, 1fr)); }}
       .status-row {{ grid-template-columns: minmax(0, 1fr) 170px 100px; }}
       .row-links {{ grid-column: auto; justify-content: flex-end; }}
+      .operator-panel {{ grid-template-columns: minmax(0, 1fr) 1fr; }}
+      .operator-grid, .action-list {{ grid-column: 1 / -1; }}
+      .operator-grid {{ grid-template-columns: repeat(4, minmax(0, 1fr)); }}
     }}
   </style>
 </head>
@@ -419,6 +578,8 @@ def render_status_page(
       </div>
     </section>
 
+    {operator_block}
+
     <h2>핵심 자동화</h2>
     {critical_rows}
 
@@ -433,6 +594,7 @@ def render_status_page(
     </section>
 
     {_render_json_script(report_dict)}
+    {_render_optional_json_script(operator_report)}
   </main>
 </body>
 </html>

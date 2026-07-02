@@ -229,6 +229,11 @@ def test_default_specs_registry_sane():
     assert "released-work" in keys
     assert by_key["released-work"].critical is False
     assert by_key["released-work"].branch == "automation/released-work-last-run"
+    # 스펙 080 — 운영자 대시보드/모바일 알림 루프. 멈추면 가시성 저하라
+    # 비핵심으로 드러내되 돈 경로 빨강으로 보지는 않는다.
+    assert "operator-status" in keys
+    assert by_key["operator-status"].critical is False
+    assert by_key["operator-status"].branch == "automation/operator-status-last-run"
     # 스펙 069 — 승격 실행 루프와 promotion 전용 검증 채널도 감시 대상.
     # 돈 이동은 기존 게이트만 담당하므로 비핵심이지만, 침묵 정지는 드러나야 한다.
     assert "autonomous-promotion-actions" in keys

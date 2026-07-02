@@ -16,6 +16,9 @@ on:
       - 'scripts/generate_mobile_status.py'
       - '.github/workflows/mobile-status-pages.yml'
       - 'src/auto_invest/analytics/pipeline_liveness.py'
+      - 'src/auto_invest/analytics/operator_status.py'
+      - 'scripts/operator_status_probe.py'
+      - '.github/workflows/operator-mobile-alerts.yml'
 
 permissions:
   contents: write
