@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-07-02T14:30:57.445179Z)
+# 완료 후보 소비 장부 (as of 2026-07-02T23:35:08.175030Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -8,14 +8,15 @@
 | 항목 | 값 |
 |------|-----|
 | overall_status | OK |
-| released_count | 6 |
-| scanned_specs | 36 |
+| released_count | 7 |
+| scanned_specs | 37 |
 
 ## 완료 후보
 
 | 후보 | 상태 | 스펙 | 근거 파일 | 근거 필드 |
 |------|------|------|-----------|-----------|
 | candidate-6ee3370e933d | released | 084-stale-evidence-failure-separation | specs/084-stale-evidence-failure-separation/contracts/capital-path-observability.md | completed_candidate_id |
+| candidate-88a7e7f07361 | released | 086-autonomous-sidecar-handoff-liveness | specs/086-autonomous-sidecar-handoff-liveness/contracts/agent-ops-liveness-closure.md | completed_candidate_id |
 | candidate-dff4f9344b02 | released | 083-rejected-order-execution-quality | specs/083-rejected-order-execution-quality/contracts/execution-quality.md | completed_candidate_id |
 | candidate-e481b0309206 | released | 082-regime-performance-candidate-scoring | specs/082-regime-performance-candidate-scoring/contracts/regime-performance-candidate-scoring.md | completed_candidate_id |
 | candidate-facf2fa31834 | released | 085-public-data-cross-validation | specs/085-public-data-cross-validation/contracts/public-data-fred-cross-check.md | completed_candidate_id |
@@ -86,7 +87,7 @@
 
 ```json
 {
-  "commit": "67bb1c213efcdd300f9f392b0f0fa053ac651c1c",
+  "commit": "671b1a7f0a6846e34467eac22f7c38a147f8e99a",
   "overall_status": "OK",
   "released_work": [
     {
@@ -96,6 +97,15 @@
       "source_field": "completed_candidate_id",
       "source_file": "specs/084-stale-evidence-failure-separation/contracts/capital-path-observability.md",
       "spec_id": "084-stale-evidence-failure-separation",
+      "status": "released"
+    },
+    {
+      "candidate_id": "candidate-88a7e7f07361",
+      "entry_id": "released-cc3d455ebca5",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/086-autonomous-sidecar-handoff-liveness/contracts/agent-ops-liveness-closure.md",
+      "spec_id": "086-autonomous-sidecar-handoff-liveness",
       "status": "released"
     },
     {
@@ -144,7 +154,7 @@
       "status": "released"
     }
   ],
-  "run_id": "28597986203",
+  "run_id": "28628313152",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -191,7 +201,8 @@
     "082-regime-performance-candidate-scoring",
     "083-rejected-order-execution-quality",
     "084-stale-evidence-failure-separation",
-    "085-public-data-cross-validation"
+    "085-public-data-cross-validation",
+    "086-autonomous-sidecar-handoff-liveness"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -372,6 +383,6 @@
       "spec_id": "072-candidate-evidence-diagnostics"
     }
   ],
-  "timestamp_utc": "2026-07-02T14:30:57.445179Z"
+  "timestamp_utc": "2026-07-02T23:35:08.175030Z"
 }
 ```
