@@ -53,6 +53,34 @@ def test_parse_timestamp_from_json_with_fraction():
     assert parse_timestamp_utc(text) == "2026-06-13T01:53:50.182Z"
 
 
+def test_parse_timestamp_prefers_top_level_json_over_nested_input_evidence():
+    text = (
+        '{"input": {"timestamp_utc": "2026-06-13T01:00:00Z"}, '
+        '"as_of_utc": "2026-06-13T03:00:00Z"}'
+    )
+    assert parse_timestamp_utc(text) == "2026-06-13T03:00:00Z"
+
+
+def test_parse_timestamp_prefers_markdown_metadata_row_over_embedded_json():
+    text = """
+# 실행 품질 패키지 (as of 2026-06-13T03:00:00Z)
+
+```json
+{
+  "broker_smoke": {"timestamp_utc": "2026-06-13T01:00:00Z"},
+  "timestamp_utc": "2026-06-13T03:00:00Z"
+}
+```
+
+## workflow metadata
+
+| 항목 | 값 |
+|------|-----|
+| timestamp_utc | 2026-06-13T03:00:30Z |
+"""
+    assert parse_timestamp_utc(text) == "2026-06-13T03:00:30Z"
+
+
 def test_parse_timestamp_none_when_absent_or_empty():
     assert parse_timestamp_utc("표에 시각이 없는 본문") is None
     assert parse_timestamp_utc("") is None
