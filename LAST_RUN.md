@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-07-02T07:29:35.486083Z)
+# 완료 후보 소비 장부 (as of 2026-07-02T08:34:15.746411Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -8,13 +8,14 @@
 | 항목 | 값 |
 |------|-----|
 | overall_status | OK |
-| released_count | 4 |
-| scanned_specs | 34 |
+| released_count | 5 |
+| scanned_specs | 35 |
 
 ## 완료 후보
 
 | 후보 | 상태 | 스펙 | 근거 파일 | 근거 필드 |
 |------|------|------|-----------|-----------|
+| candidate-6ee3370e933d | released | 084-stale-evidence-failure-separation | specs/084-stale-evidence-failure-separation/contracts/capital-path-observability.md | completed_candidate_id |
 | candidate-dff4f9344b02 | released | 083-rejected-order-execution-quality | specs/083-rejected-order-execution-quality/contracts/execution-quality.md | completed_candidate_id |
 | candidate-e481b0309206 | released | 082-regime-performance-candidate-scoring | specs/082-regime-performance-candidate-scoring/contracts/regime-performance-candidate-scoring.md | completed_candidate_id |
 | candidate-fd04772a23c5 | released | 078-money-gate-alignment-loop | specs/078-money-gate-alignment-loop/contracts/money-gate-alignment.md | selected_work_candidate |
@@ -84,9 +85,18 @@
 
 ```json
 {
-  "commit": "b4fa3164bab2eebcc4cd42f7ff502ae5027aa820",
+  "commit": "e77a42c4631daae2bcd422a1b40d2175e419caeb",
   "overall_status": "OK",
   "released_work": [
+    {
+      "candidate_id": "candidate-6ee3370e933d",
+      "entry_id": "released-5ec4973c2784",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/084-stale-evidence-failure-separation/contracts/capital-path-observability.md",
+      "spec_id": "084-stale-evidence-failure-separation",
+      "status": "released"
+    },
     {
       "candidate_id": "candidate-dff4f9344b02",
       "entry_id": "released-0ded68a68263",
@@ -124,7 +134,7 @@
       "status": "released"
     }
   ],
-  "run_id": "28573162227",
+  "run_id": "28576674252",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -169,7 +179,8 @@
     "080-operator-dashboard-alert-loop",
     "081-autonomous-loop-quality-closure",
     "082-regime-performance-candidate-scoring",
-    "083-rejected-order-execution-quality"
+    "083-rejected-order-execution-quality",
+    "084-stale-evidence-failure-separation"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -350,6 +361,6 @@
       "spec_id": "072-candidate-evidence-diagnostics"
     }
   ],
-  "timestamp_utc": "2026-07-02T07:29:35.486083Z"
+  "timestamp_utc": "2026-07-02T08:34:15.746411Z"
 }
 ```
