@@ -30,6 +30,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -51,9 +52,18 @@ CRITICAL = "CRITICAL"
 _OVERALL_SEVERITY = {HEALTHY: 0, DEGRADED: 1, CRITICAL: 2}
 
 # `timestamp_utc` 옆에 붙은 ISO-8601 UTC 타임스탬프(소수 초·Z 허용)를 찾는다.
-# LAST_RUN.md 의 마크다운 표 행(`| timestamp_utc | ... |`)과 JSON 둘 다 매칭.
+_ISO_UTC = r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z"
+_ISO_UTC_RE = re.compile(rf"^{_ISO_UTC}$")
+
+# LAST_RUN.md 에는 결정 JSON 안의 입력 증거 시각과 workflow metadata 시각이 함께
+# 들어갈 수 있다. 사이드카 freshness 는 보고서 자체 발행 시각이어야 하므로,
+# 마크다운 표의 최상위 metadata 행과 헤더 as-of 시각을 일반 fallback 보다 먼저 본다.
+_MD_TS_ROW_RE = re.compile(rf"^\|\s*timestamp_utc\s*\|\s*({_ISO_UTC})\s*\|", re.MULTILINE)
+_AS_OF_RE = re.compile(rf"\bas of\s+({_ISO_UTC})\b", re.IGNORECASE)
+
+# 마지막 fallback: JSON 조각이나 오래된 Markdown 에서 첫 `timestamp_utc` 값을 찾는다.
 _TS_RE = re.compile(
-    r"timestamp_utc[^0-9]*?(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)"
+    rf"timestamp_utc[^0-9]*?({_ISO_UTC})"
 )
 
 
@@ -163,12 +173,32 @@ class LivenessReport:
         return "\n".join(lines)
 
 
+def _top_level_json_timestamp(text: str) -> str | None:
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    for key in ("timestamp_utc", "as_of_utc"):
+        value = payload.get(key)
+        if isinstance(value, str) and _ISO_UTC_RE.match(value):
+            return value
+    return None
+
+
 def parse_timestamp_utc(text: str | None) -> str | None:
-    """사이드카 본문에서 `timestamp_utc` ISO-8601 값을 추출(없으면 None)."""
+    """사이드카 본문에서 보고서 자체의 UTC 시각을 추출(없으면 None)."""
     if not text:
         return None
-    m = _TS_RE.search(text)
-    return m.group(1) if m else None
+    json_ts = _top_level_json_timestamp(text.strip())
+    if json_ts:
+        return json_ts
+    for pattern in (_MD_TS_ROW_RE, _AS_OF_RE, _TS_RE):
+        m = pattern.search(text)
+        if m:
+            return m.group(1)
+    return None
 
 
 def _age_hours(ts_str: str, now: datetime) -> float:
