@@ -4,7 +4,9 @@ name: Collect public data (research)
 #
 # 4차(운영자 선택, 2026-06-11): 공식 키리스 조합 — 미 재무부 일일 금리 +
 # Cboe VIX 이력 + BLS 거시(실업률·CPI) + DBnomics 미러(교차 검증 짝).
-# 처음 승인됐던 Stooq·FRED 는 실측에서 실행기 IP 차단 확정 → 탐침으로만 추적.
+# Stooq 는 실행기 IP 차단 확정 → 탐침으로만 추적. FRED 그래프 CSV 는
+# DGS2/DGS10 금리만 httpx 기본 user-agent 로 연구 수집에 승격한다.
+# FRED 공식 API 키 경로는 키 등록 전까지 탐침/후속 선택지로만 남긴다.
 # 컨테이너는 GitHub 만 닿지만 이 실행기는 인터넷 전체에 닿으므로, 여기서
 # 수집·검증해 automation/public-data 사이드카 브랜치로 발행한다 — 이후의
 # 연구 세션(컨테이너)은 git 으로 깊은 이력에 닿는다(데이터 천장 자율 해제).

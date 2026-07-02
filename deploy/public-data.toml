@@ -1,8 +1,10 @@
 # 공개 데이터 수집 채널 설정 (4단계 계획 ④ — 연구 전용)
 #
 # 4차(운영자 선택, 2026-06-11): 공식 키리스 조합 — 미 재무부 금리 + Cboe VIX +
-# BLS 거시(+DBnomics 미러 교차 검증). 승인됐던 Stooq·FRED 는 실측에서 실행기
-# IP 차단(JS 장벽·타르핏)이 확정돼 수집에서 빼고 탐침으로만 추적한다.
+# BLS 거시(+DBnomics 미러 교차 검증). Stooq 는 실측에서 실행기 IP 차단(JS
+# 장벽)이 확정돼 수집에서 빼고 탐침으로만 추적한다. FRED 그래프 CSV 는
+# httpx 기본 user-agent 로 DGS2/DGS10 금리만 연구 수집에 승격한다.
+# FRED 공식 API 키 경로는 키 등록 전까지 탐침/후속 선택지로만 남긴다.
 # 가격 일봉 이력 확장은 보류 — 가격 소스는 KIS 백필이 유지한다(운영자 결정).
 # 격리 원칙: 이 채널의 산출물은 연구·백테스트·검증 전용 — 라이브 매매 신호는
 # 계속 KIS 데이터(price_bars)만 사용한다. 수집은 collect-public-data.yml 이
@@ -21,11 +23,11 @@ time_budget_seconds = 480
 # 소스 경로 탐침 — 매 런이 측정 장비가 된다. 각 주소를 채널 UA / httpx 기본 UA
 # 두 가지로 두드려 상태·지연·첫 바이트를 summary 에 기록(수 KB 만 읽고 끊음).
 # 3차 실측(2026-06-11): 재무부 200/186ms, Cboe 200/64ms, DBnomics 200/717ms,
-# BLS v1 200/161ms — 전부 즉답. Stooq=JS 장벽, FRED 그래프=타르핏(차단 유지),
-# FRED 공식 API=키만 있으면 열림(400 즉답). 차단 변화 추적용으로 계속 두드린다.
+# BLS v1 200/161ms — 전부 즉답. Stooq=JS 장벽, FRED 공식 API=키만 있으면
+# 열림(400 즉답). FRED 그래프 CSV DGS2/DGS10은 아래 [fred] 수집 자체가
+# 매일의 측정이므로 탐침 중복 호출에서 제외한다.
 urls = [
     "https://stooq.com/q/d/l/?s=spy.us&i=d",                     # Stooq 직접 CSV (실측: JS 봇 장벽 — 해제되면 가격 이력 확장 재논의)
-    "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS10",  # FRED 그래프 CSV (실측: 타르핏 — 변화 추적용 유지)
     "https://api.stlouisfed.org/fred/series/observations?series_id=DGS10&file_type=json",  # FRED 공식 API (키 등록 시 열림 — 보류 중)
 ]
 # DBnomics 연준 H.15 10년 금리 탐침은 증거 수집을 마치고(2026-06-12 실측 200/0.4~0.7초)
@@ -48,6 +50,15 @@ max_staleness_days = 7
 id = "UST10Y2Y"
 long = "10 Yr"
 short = "2 Yr"
+
+[fred]
+# FRED 그래프 CSV — 키 불필요 공개 엔드포인트. candidate-facf2fa31834 증거에서
+# 채널 UA 는 timeout, httpx 기본 UA 는 200으로 확인되어 DGS2/DGS10에만
+# 명시적으로 기본 UA 를 쓴다. 연구 전용이며 라이브 신호 입력이 아니다.
+series = ["DGS2", "DGS10"]
+min_rows = 1500
+max_staleness_days = 7
+user_agent = "httpx-default"
 
 [cboe]
 # Cboe VIX 공식 이력 (1990년~, 단일 CSV) — 종가 시계열로 발행.
@@ -109,6 +120,25 @@ min_agree_pct = "99.5"
 kind = "levels"
 a = "treasury:UST10Y"
 b = "dbnomics:FED/H15/RIFLGFCY10_N.B"
+tolerance = "0.001"
+min_overlap = 60
+min_agree_pct = "99.5"
+
+[[cross_checks]]
+# 재무부 직접 수집 vs FRED 그래프 CSV — 같은 H.15 계열 금리의 두 공개 경로 대조.
+# FRED 는 DBnomics 와 다른 전송 경로라 조용한 절단·헤더·날짜 정렬 오류를 한 번
+# 더 잡는다. 합격선은 DBnomics H.15 대조와 동일하게 99.5%.
+kind = "levels"
+a = "treasury:UST2Y"
+b = "fred:DGS2"
+tolerance = "0.001"
+min_overlap = 60
+min_agree_pct = "99.5"
+
+[[cross_checks]]
+kind = "levels"
+a = "treasury:UST10Y"
+b = "fred:DGS10"
 tolerance = "0.001"
 min_overlap = 60
 min_agree_pct = "99.5"

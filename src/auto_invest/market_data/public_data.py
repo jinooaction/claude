@@ -1,9 +1,11 @@
 """공개 데이터 수집 채널 (세계 최고 수준 4단계 계획 ④ — 연구 전용).
 
 4차(운영자 선택, 2026-06-11): 공식 키리스 조합 — 미 재무부 일일 금리 곡선 +
-Cboe VIX 이력 + BLS 거시(실업률·CPI) + DBnomics 미러(교차 검증 짝). 처음
-승인됐던 Stooq·FRED 는 실측에서 실행기 IP 차단(JS 장벽·타르핏)이 확정돼
-수집 대상에서 빠지고 탐침으로만 추적한다(파서는 차단 해제 대비로 유지).
+Cboe VIX 이력 + BLS 거시(실업률·CPI) + DBnomics 미러(교차 검증 짝).
+처음 승인됐던 Stooq 는 실측에서 실행기 IP 차단(JS 장벽)이 확정돼 수집 대상에서
+빠지고 탐침으로만 추적한다. FRED 그래프 CSV 는 DGS2/DGS10 금리만 httpx 기본
+user-agent 로 연구 수집에 승격한다. FRED 공식 API 키 경로는 여전히 탐침/후속
+선택지다.
 컨테이너는 GitHub 만 닿지만 GitHub Actions 실행기는 인터넷 전체에 닿으므로,
 수집은 `.github/workflows/collect-public-data.yml` 이 실행기에서 돌리고 결과를
 `automation/public-data` 사이드카 브랜치로 발행한다.
@@ -541,6 +543,7 @@ def fetch_text(
     *,
     max_retries: int = 3,
     timeout: float | None = None,
+    user_agent: str | None = USER_AGENT,
 ) -> str:
     """공개 CSV 한 건을 받아온다. 5xx/네트워크 오류는 지수 백오프로 재시도.
 
@@ -553,7 +556,9 @@ def fetch_text(
     last_exc: Exception | None = None
     for attempt in range(max_retries + 1):
         try:
-            kwargs: dict[str, Any] = {"headers": {"User-Agent": USER_AGENT}}
+            kwargs: dict[str, Any] = {}
+            if user_agent is not None:
+                kwargs["headers"] = {"User-Agent": user_agent}
             if timeout is not None:
                 kwargs["timeout"] = timeout
             resp = client.get(url, **kwargs)
@@ -572,6 +577,17 @@ def fetch_text(
                 time.sleep(delay)
                 delay *= 2
     raise last_exc if last_exc else RuntimeError("unreachable")
+
+
+def _user_agent_from_config(raw: Any) -> str | None:
+    """설정의 user-agent 모드를 실제 fetch 헤더 값으로 바꾼다."""
+
+    mode = str(raw if raw is not None else "channel").strip().lower()
+    if mode in ("", "channel", "public-data"):
+        return USER_AGENT
+    if mode == "httpx-default":
+        return None
+    raise ValueError(f"지원하지 않는 user_agent 모드: {raw!r}")
 
 
 def probe_url(
@@ -683,8 +699,14 @@ def collect_public_data(
     # 검증 통과 값 레지스트리 — 교차 검증이 "provider:id" 로 참조한다.
     registry: dict[str, dict[str, Decimal]] = {}
 
-    def _fetch(url: str) -> str:
-        return fetch_text(client, url, max_retries=max_retries, timeout=request_timeout)
+    def _fetch(url: str, *, user_agent: str | None = USER_AGENT) -> str:
+        return fetch_text(
+            client,
+            url,
+            max_retries=max_retries,
+            timeout=request_timeout,
+            user_agent=user_agent,
+        )
 
     def _budget_item(kind: str, item_id: str) -> dict[str, Any] | None:
         if _over_budget():
@@ -742,7 +764,7 @@ def collect_public_data(
             item.update(ok=False, issues=[f"{type(exc).__name__}: {exc}"])
         items.append(item)
 
-    # ---- FRED 그래프 CSV (실측: 타르핏 — 위와 동일하게 fail-soft) ----------------
+    # ---- FRED 그래프 CSV (DGS2/DGS10 연구 수집; 공식 API 키 경로는 보류) ---------
     fred_cfg = config.get("fred", {})
     for series_id in fred_cfg.get("series", []):
         item = {"kind": "fred", "id": series_id}
@@ -750,7 +772,14 @@ def collect_public_data(
             items.append(skipped)
             continue
         try:
-            points = parse_fred_csv(_fetch(fred_csv_url(series_id)))
+            points = parse_fred_csv(
+                _fetch(
+                    fred_csv_url(series_id),
+                    user_agent=_user_agent_from_config(
+                        fred_cfg.get("user_agent", "channel")
+                    ),
+                )
+            )
             v = validate_series(
                 points,
                 as_of=as_of,
