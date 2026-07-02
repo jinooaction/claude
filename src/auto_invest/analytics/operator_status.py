@@ -14,8 +14,6 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Any
 
-from auto_invest.notifications.telegram import sanitize_for_alert, truncate_message
-
 SCHEMA_VERSION = "1.0"
 
 PARSE_OK = "ok"
@@ -636,12 +634,12 @@ def _alert_decision(
         surfaces=reasons,
         dashboard_url=dashboard_url,
     )
-    clean_message = sanitize_for_alert(_mask_alert_text(message))
+    clean_message = _mask_alert_text(message)
     return MobileAlertDecision(
         alert_level=level,
         should_send=should_send,
         reason_ko=reason,
-        message_ko=truncate_message(str(clean_message), limit=1800),
+        message_ko=_truncate_alert_message(clean_message, limit=1800),
     )
 
 
@@ -681,6 +679,12 @@ def _mask_alert_text(text: str) -> str:
         text,
     )
     return re.sub(r"\b\d{6,}\b", lambda m: "*" * (len(m.group(0)) - 2) + m.group(0)[-2:], masked)
+
+
+def _truncate_alert_message(text: str, *, limit: int) -> str:
+    if len(text) <= limit:
+        return text
+    return text[:limit] + "\n...<truncated>"
 
 
 def _json_any(raw: str | None) -> Any | None:
