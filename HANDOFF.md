@@ -33,15 +33,15 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `b4fa316` — Merge pull request #448 from jinooaction/Codex/083-rejected-order-execution-quality |
-| main 테스트 | `uv run pytest` → 2433 passed, 4 skipped(후속 liveness timestamp 보정과 handoff 갱신 포함). |
+| 마지막 main 커밋 | `f874b64` — Merge pull request #449 from jinooaction/Codex/083-execution-quality-liveness-timestamp |
+| main 테스트 | `uv run pytest` → 2433 passed, 4 skipped(#449 후속 liveness timestamp 보정과 handoff 갱신 포함). |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
-| 열린 PR | 코드 PR 없음. #448 스펙 083 주문 거부·체결 품질 손익 관측이 머지됐고, 이 handoff/liveness 보정 브랜치가 `HANDOFF.md`와 실행 품질 sidecar freshness 판독을 실제 상태에 맞춘다. |
+| 열린 PR | 코드 PR 없음. #448 스펙 083 주문 거부·체결 품질 손익 관측과 #449 실행 품질 sidecar freshness 판독 보정이 모두 머지됐다. 이 final handoff-only 정리가 `HANDOFF.md`를 `f874b64` main 사실에 맞춘다. |
 | 출시 완료 스펙 | 최신 추가: 083(주문 거부·체결 품질 손익 관측: `execution-quality` sidecar가 거부 주문, KIS 오류 코드, KIS smoke, live gate를 읽기 전용 증거로 묶고 `candidate-dff4f9344b02`를 완료 후보로 소비), 082(레짐·성과 후보 점수화: `promote-readiness`를 자율 성장 evidence manifest와 `candidate-e481b0309206` 점수 입력에 포함하고, 누락·stale·셋업 오류는 `sidecar_freshness` 의존으로 낮춤), 081(자율 루프 품질 폐쇄: `autonomous-work-execution` 작업 패킷에 자율 착수 수준·착수 설명·완료 관문을 추가하고, money-gate 관측 수 차이를 `SNAPSHOT_SKEW` 정보성 이슈로 분리하며, `operator-status` 완료 뒤 `pipeline-liveness`가 다시 실행될 수 있게 함), 080(운영자 대시보드와 모바일 알림 루프: `operator-status` sidecar, GitHub Pages 모바일 상태판 요약, 개입 필요 시 Telegram best-effort 알림), 079(완료 후보 소비 장부: 완료된 Speckit 후보를 `released-work` 장부로 기록하고 `autonomous-work-execution`이 `RELEASED`로 소비해 차순위 후보로 이동), 078(돈 경로 게이트 정렬 루프: money-path, capital-path-readiness, edge-autoarm, reassign, forward, pipeline, autonomous-work, KIS smoke sidecar를 한 번에 대조해 돈 경로 불일치와 다음 안전 행동을 `automation/money-gate-alignment-last-run`에 발행), 077(자율 작업 실행 루프: 성장·승격·후보 검증·자본 준비도·파이프라인 생존 sidecar를 읽어 다음 Codex 작업 패킷을 `automation/autonomous-work-execution-last-run`에 발행), 076(자본 경로 준비도 루프), 075(전략 실패 학습), 074(후보 가격 이력 지원), 073(후보 pending next action 보정), 072(후보 증거 진단), 071(후보 결과 실행기), 070(후보 구현 공장), 069(자율 승격 실행 루프), 068(자율 승격 루프 자동 분류), 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
 | 골격 스펙 | 없음. `.specify/feature.json`은 추적을 위해 `specs/083-rejected-order-execution-quality`를 가리킨다. 스펙 083 구현, post-merge sidecar 확인, tasks 완료 정리, 완료 후보 마커 보강이 끝났다. |
-| 최근 출시 작업 | #448 스펙 083 주문 거부·체결 품질 손익 관측. #447 스펙 082 최종 인계 정리. #446 스펙 082 레짐·성과 후보 점수화. #445 스펙 081 인계 정리. #444 스펙 081 자율 루프 품질 폐쇄. #443 스펙 080 최종 인계 정리. #442 스펙 080 모바일 상태판 publish 보정과 인계 갱신. #441 스펙 080 운영자 대시보드와 모바일 알림 루프. #439 스펙 079 tasks 완료 상태 정리. #437 스펙 079 `released-work` sidecar publish token 보정과 인계 갱신. |
-| 활성 작업 | #448 main push에서 `Deploy on merge to main` run `28573162272` success, `Execution quality package` run `28573162279` success, `Pipeline liveness watchdog` run `28573162215`과 workflow_run `28573180853` success, `Released work ledger` run `28573162227` success, `Autonomous work execution loop` run `28573162293` success, `Candidate result executor` run `28573162239` success를 확인했다. 최신 execution-quality sidecar는 `overall_status=OBSERVE`, `APBK1672` 거부 2건, KIS smoke error rate `0.0000`, live gate `latest_intent_loss`를 기록한다. 최신 autonomous-work sidecar는 완료된 `candidate-dff4f9344b02`를 `RELEASED`로 억제하고 다음 후보 `candidate-6ee3370e933d`(오래된 증거와 성과 실패 분리)를 선택한다. |
-| 안전 경계 | #448은 등급 2 운영 자동화 보정이다. 실행 품질 패키지는 이미 발행된 sidecar만 읽는 보고 전용이며 주문, 자본 증액, 자본 배분, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, live sentinel, 브로커 주문, K1/K2/K4/K5/K6, 헌법, 커널 목록, 비밀값, 외부 유료 서비스는 변경하지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`이며, 배포 성공은 dry-run worker 코드 반영이지 실거래 전환이 아니다. |
+| 최근 출시 작업 | #449 실행 품질 sidecar freshness 판독 보정과 스펙 083 인계 정리. #448 스펙 083 주문 거부·체결 품질 손익 관측. #447 스펙 082 최종 인계 정리. #446 스펙 082 레짐·성과 후보 점수화. #445 스펙 081 인계 정리. #444 스펙 081 자율 루프 품질 폐쇄. #443 스펙 080 최종 인계 정리. #442 스펙 080 모바일 상태판 publish 보정과 인계 갱신. #441 스펙 080 운영자 대시보드와 모바일 알림 루프. |
+| 활성 작업 | #449 main push에서 `Deploy on merge to main` run `28574000074` success, `Execution quality package` run `28574000181` success, `Pipeline liveness watchdog` run `28574000145`과 workflow_run `28574020426` success, `Autonomous evolution loop` run `28574000146` success, `Autonomous work execution loop` run `28574000140` success, `Candidate result executor` run `28574000112` success를 확인했다. 최신 execution-quality sidecar는 commit `f874b64`, `overall_status=OBSERVE`, `APBK1672` 거부 2건, KIS smoke error rate `0.0000`, live gate `latest_intent_loss`를 기록한다. 최신 pipeline-liveness는 `execution-quality`를 보고서 자체 시각 `2026-07-02T07:45:40Z`로 읽고 `OK`로 판정한다. 최신 autonomous-work sidecar는 완료된 `candidate-dff4f9344b02`를 `RELEASED`로 억제하고 다음 후보 `candidate-6ee3370e933d`(오래된 증거와 성과 실패 분리)를 선택한다. |
+| 안전 경계 | #448과 #449는 등급 2 운영 자동화 보정이다. 실행 품질 패키지와 liveness timestamp 보정은 이미 발행된 sidecar만 읽는 보고 전용이며 주문, 자본 증액, 자본 배분, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, live sentinel, 브로커 주문, K1/K2/K4/K5/K6, 헌법, 커널 목록, 비밀값, 외부 유료 서비스는 변경하지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`이며, 배포 성공은 dry-run worker 코드 반영이지 실거래 전환이 아니다. |
 
 ## 돈 경로 상태 판독 규칙 (필수 — 스펙 062)
 
@@ -83,9 +83,9 @@ uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.
 
 ## 최근 관찰 — 2026-07-02 KST (스펙 083 주문 거부·체결 품질 손익 관측)
 
-현재 `main` 최신 기능 머지는 `b4fa316`(#448, 스펙 083 주문 거부·체결 품질 손익 관측)이다.
-직전 관련 커밋은 `45b5d8f`(#447, 스펙 082 인계 정리), `0a5ad0f`(#446, 스펙 082
-레짐·성과 후보 점수화)이다.
+현재 `main` 최신 머지는 `f874b64`(#449, 실행 품질 sidecar freshness 판독 보정)이다.
+스펙 083 기능 머지는 `b4fa316`(#448, 주문 거부·체결 품질 손익 관측)이고, 직전 관련 커밋은
+`45b5d8f`(#447, 스펙 082 인계 정리), `0a5ad0f`(#446, 스펙 082 레짐·성과 후보 점수화)이다.
 
 - **문제 정의**: 자율 작업 실행 루프는 `candidate-dff4f9344b02`를 다음 안전 후보로 골랐다. 최근
   micro GTAA 경로에는 거부 주문과 손실 의도 차단이 있었지만, 주문 거부·브로커 오류·KIS smoke·
@@ -96,26 +96,30 @@ uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.
   점수 입력으로 쓰고, `released-work`는 `completed_candidate_id: candidate-dff4f9344b02`를 소비한다.
 - **후속 품질 보정**: 새 `LAST_RUN.md` 안에는 입력 증거의 `timestamp_utc`와 workflow metadata의
   `timestamp_utc`가 함께 있다. `pipeline_liveness.py`가 첫 `timestamp_utc`만 잡으면 sidecar 자체
-  발행 시각이 아니라 KIS smoke 입력 시각을 freshness로 볼 수 있어, 이 브랜치에서 metadata 행과
+  발행 시각이 아니라 KIS smoke 입력 시각을 freshness로 볼 수 있어, #449가 metadata 행과
   top-level JSON 시각을 우선 읽도록 보정했다.
 - **배포 후 실제 실행**: #448 main push 뒤 `Deploy on merge to main` run `28573162272`,
   `Execution quality package` run `28573162279`, `Pipeline liveness watchdog` run `28573162215`과
   workflow_run `28573180853`, `Released work ledger` run `28573162227`, `Autonomous work execution loop`
-  run `28573162293`, `Candidate result executor` run `28573162239`가 모두 success다.
-- **sidecar 확인**: 최신 execution-quality sidecar는 commit `b4fa316`, run `28573162279`,
+  run `28573162293`, `Candidate result executor` run `28573162239`가 success였다. #449 main push 뒤에는
+  `Deploy on merge to main` run `28574000074`, `Execution quality package` run `28574000181`,
+  `Pipeline liveness watchdog` run `28574000145`과 workflow_run `28574020426`, `Autonomous evolution loop`
+  run `28574000146`, `Autonomous work execution loop` run `28574000140`, `Candidate result executor`
+  run `28574000112`가 모두 success다.
+- **sidecar 확인**: 최신 execution-quality sidecar는 commit `f874b64`, run `28574000181`,
   `overall_status=OBSERVE`, `monitor_verdict=INSUFFICIENT_DATA`, `latest_signal=INTENT_LOSS`,
   `cumulative_pnl_usd=-1.14`, `rejected_orders=2`, `parsed_broker_errors=2`,
   `kis_msg_codes={"APBK1672": 2}`, KIS smoke `state=success`, `smoke_error_rate=0.0000`을 기록한다.
-  후속 로컬 liveness probe는 `execution-quality.timestamp_utc=2026-07-02T07:29:37Z`,
-  `status=OK`, `age_hours=0.01`로 보고서 자체 발행 시각을 잡는 것을 확인했다.
+  최신 pipeline-liveness sidecar는 run `28574020426`, commit `f874b64`에서 `execution-quality`의 마지막
+  갱신을 `2026-07-02T07:45:40Z`로 읽고 `OK`로 판정한다.
 - **완료 후보 소비**: 최신 `released-work` sidecar는 `candidate-dff4f9344b02`를 `released`로 기록한다.
   최신 `autonomous-work-execution` sidecar는 같은 후보를 `RELEASED`로 억제하고 다음 후보
   `candidate-6ee3370e933d`(`오래된 증거와 성과 실패 분리`)를 선택한다.
-- **남은 관찰 지점**: 같은 push에서 자율 성장 루프가 execution-quality sidecar보다 약간 먼저 돌아
-  `execution-quality`를 stale evidence로 본 기록이 있다. 곧바로 execution-quality와 liveness가
-  성공 발행됐으므로 순서상 지연이며, 다음 자율 성장 주기에서 해소되는지 보면 된다. 후보 결과
-  실행기의 기존 strategy_backtest/portfolio_backtest blocked 2건은 이번 스펙의 새 실패가 아니라
-  별도 후보 검증 관찰 지점이다.
+- **남은 관찰 지점**: #449 뒤 최신 자율 성장 sidecar는 `오래되었거나 누락된 증거: 없음`으로 회복됐다.
+  다만 자율 성장 후보 backlog에는 완료된 `candidate-dff4f9344b02`도 점수화 후보로 계속 보일 수 있다.
+  실제 착수 루프인 `autonomous-work-execution`은 `released-work` 장부를 읽어 이 후보를 `RELEASED`로
+  억제하므로 다음 실제 착수 후보는 `candidate-6ee3370e933d`다. 후보 결과 실행기의 기존
+  strategy_backtest/portfolio_backtest blocked 2건은 이번 스펙의 새 실패가 아니라 별도 후보 검증 관찰 지점이다.
 - **안전 경계**: 등급 2 운영 자동화 보정이다. 실제 주문, 브로커 실주문 API, 자본 증액, 자본 배분,
   whitelist/caps 확대, live 전략 교체, live sentinel, 헌법, 커널 목록, K1/K2/K4/K5/K6, 비밀값,
   외부 유료 서비스 변경 없음. 배포는 dry-run worker 코드 반영이며 실거래 전환이 아니다.
@@ -123,7 +127,8 @@ uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.
   `uv run ruff check src tests` 통과, `uv run python scripts/check_handoff_facts.py` OK,
   `uv run python scripts/agent_harness_probe.py --strict` OK(14/14), PR 품질 관문 성공,
   post-merge sidecar와 deploy run 확인 완료. 후속 liveness timestamp 보정은 focused pytest 32 통과,
-  실제 sidecar probe, `uv run pytest` 2433 통과·4 스킵, strict 하네스 14/14로 검증했다.
+  실제 sidecar probe, `uv run pytest` 2433 통과·4 스킵, strict 하네스 14/14, #449 PR 품질 관문,
+  post-merge deploy와 sidecar run 성공으로 검증했다.
 - **상세 인계**: `HANDOFF-087-REJECTED-ORDER-EXECUTION-QUALITY.md`.
 
 ## 최근 관찰 — 2026-07-02 KST (스펙 082 레짐·성과 후보 점수화)
@@ -4883,9 +4888,10 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 ## 과거 인수인계 파일 (참고용)
 
 - `HANDOFF-087-REJECTED-ORDER-EXECUTION-QUALITY.md` — 스펙 083 주문 거부·체결 품질 손익 관측
-  (2026-07-02, PR #448 `b4fa316`). `execution-quality` sidecar로 거부 주문, KIS 오류 코드,
-  KIS smoke, live gate를 읽기 전용 증거로 묶고, 완료 마커로 `candidate-dff4f9344b02` 반복 선택을
-  막는다. 읽기 전용 운영 보정이며 주문·자본·live 설정 변경 없음.
+  (2026-07-02, PR #448 `b4fa316`, PR #449 `f874b64`). `execution-quality` sidecar로 거부 주문,
+  KIS 오류 코드, KIS smoke, live gate를 읽기 전용 증거로 묶고, liveness가 보고서 자체 발행 시각을
+  freshness로 읽게 했다. 완료 마커로 `candidate-dff4f9344b02` 반복 선택을 막는다. 읽기 전용 운영 보정이며
+  주문·자본·live 설정 변경 없음.
 
 - `HANDOFF-086-REGIME-PERFORMANCE-CANDIDATE-SCORING.md` — 스펙 082 레짐·성과 후보 점수화
   (2026-07-02, PR #446 `0a5ad0f`). `promote-readiness`를 자율 성장 후보 점수화 입력으로
