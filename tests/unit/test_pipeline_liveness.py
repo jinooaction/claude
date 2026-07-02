@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from pathlib import Path
 
 from auto_invest.analytics.pipeline_liveness import (
     CRITICAL,
@@ -21,6 +22,7 @@ from auto_invest.analytics.pipeline_liveness import (
 )
 
 NOW = datetime(2026, 6, 13, 12, 0, 0, tzinfo=UTC)
+WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "pipeline-liveness.yml"
 
 
 def _md(ts: str) -> str:
@@ -263,6 +265,14 @@ def test_default_specs_registry_sane():
     for s in specs:
         assert s.max_age_hours > 0
         assert s.branch.startswith("automation/")
+
+
+def test_pipeline_liveness_reruns_after_operator_status_workflow():
+    text = WORKFLOW.read_text(encoding="utf-8")
+
+    assert "workflow_run:" in text
+    assert "Operator mobile alerts" in text
+    assert "completed" in text
 
 
 def test_reassign_loop_pending_before_first_run_is_not_alarm():
