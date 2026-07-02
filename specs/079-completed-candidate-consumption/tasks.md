@@ -30,6 +30,6 @@
 ## 5. 배포와 인계
 
 - [x] T016 PR 본문 품질 관문 작성·검증
-- [ ] T017 PR 생성, 확인, 자동 머지
-- [ ] T018 post-merge workflow sidecar 확인
-- [ ] T019 HANDOFF 갱신
+- [x] T017 PR 생성, 확인, 자동 머지
+- [x] T018 post-merge workflow sidecar 확인
+- [x] T019 HANDOFF 갱신
