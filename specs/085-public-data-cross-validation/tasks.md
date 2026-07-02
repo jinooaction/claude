@@ -72,7 +72,7 @@
 - [x] T018 Run `uv run ruff check src tests`
 - [x] T019 Run `uv run python scripts/check_handoff_facts.py`
 - [x] T020 Run `uv run python scripts/agent_harness_probe.py --strict`
-- [ ] T021 Add HANDOFF update for spec 085 in `HANDOFF.md` and `HANDOFF-089-PUBLIC-DATA-CROSS-VALIDATION.md`
+- [x] T021 Add HANDOFF update for spec 085 in `HANDOFF.md` and `HANDOFF-089-PUBLIC-DATA-CROSS-VALIDATION.md`
 - [x] T022 Run PR quality gate body validation before opening PR
 
 ## Dependencies & Execution Order
