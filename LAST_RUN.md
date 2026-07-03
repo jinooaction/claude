@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-07-03T01:27:02.738635Z)
+# 완료 후보 소비 장부 (as of 2026-07-03T04:09:31.915317Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -8,8 +8,8 @@
 | 항목 | 값 |
 |------|-----|
 | overall_status | OK |
-| released_count | 8 |
-| scanned_specs | 38 |
+| released_count | 9 |
+| scanned_specs | 39 |
 
 ## 완료 후보
 
@@ -23,6 +23,7 @@
 | candidate-facf2fa31834 | released | 085-public-data-cross-validation | specs/085-public-data-cross-validation/contracts/public-data-fred-cross-check.md | completed_candidate_id |
 | candidate-fd04772a23c5 | released | 078-money-gate-alignment-loop | specs/078-money-gate-alignment-loop/contracts/money-gate-alignment.md | selected_work_candidate |
 | candidate-fd04772a23c5 | released | 079-completed-candidate-consumption | specs/079-completed-candidate-consumption/spec.md | selected_work_candidate |
+| candidate-macro-growth-discovery | released | 088-autonomous-macro-growth-discovery | specs/088-autonomous-macro-growth-discovery/spec.md | completed_candidate_id |
 
 ## 제외한 스펙
 
@@ -88,7 +89,7 @@
 
 ```json
 {
-  "commit": "753afb73b2e3926e536a3e0340d998491785a7bb",
+  "commit": "927beb02a2385b06d6d3f860ce5cf5fa27aa051f",
   "overall_status": "OK",
   "released_work": [
     {
@@ -162,9 +163,18 @@
       "source_file": "specs/079-completed-candidate-consumption/spec.md",
       "spec_id": "079-completed-candidate-consumption",
       "status": "released"
+    },
+    {
+      "candidate_id": "candidate-macro-growth-discovery",
+      "entry_id": "released-7097146b4564",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/088-autonomous-macro-growth-discovery/spec.md",
+      "spec_id": "088-autonomous-macro-growth-discovery",
+      "status": "released"
     }
   ],
-  "run_id": "28632340016",
+  "run_id": "28637783779",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -213,7 +223,8 @@
     "084-stale-evidence-failure-separation",
     "085-public-data-cross-validation",
     "086-autonomous-sidecar-handoff-liveness",
-    "087-learning-ledger-candidate-memory"
+    "087-learning-ledger-candidate-memory",
+    "088-autonomous-macro-growth-discovery"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -394,6 +405,6 @@
       "spec_id": "072-candidate-evidence-diagnostics"
     }
   ],
-  "timestamp_utc": "2026-07-03T01:27:02.738635Z"
+  "timestamp_utc": "2026-07-03T04:09:31.915317Z"
 }
 ```

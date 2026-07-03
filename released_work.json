@@ -1,5 +1,5 @@
 {
-  "commit": "753afb73b2e3926e536a3e0340d998491785a7bb",
+  "commit": "927beb02a2385b06d6d3f860ce5cf5fa27aa051f",
   "overall_status": "OK",
   "released_work": [
     {
@@ -73,9 +73,18 @@
       "source_file": "specs/079-completed-candidate-consumption/spec.md",
       "spec_id": "079-completed-candidate-consumption",
       "status": "released"
+    },
+    {
+      "candidate_id": "candidate-macro-growth-discovery",
+      "entry_id": "released-7097146b4564",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/088-autonomous-macro-growth-discovery/spec.md",
+      "spec_id": "088-autonomous-macro-growth-discovery",
+      "status": "released"
     }
   ],
-  "run_id": "28632340016",
+  "run_id": "28637783779",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -124,7 +133,8 @@
     "084-stale-evidence-failure-separation",
     "085-public-data-cross-validation",
     "086-autonomous-sidecar-handoff-liveness",
-    "087-learning-ledger-candidate-memory"
+    "087-learning-ledger-candidate-memory",
+    "088-autonomous-macro-growth-discovery"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -305,5 +315,5 @@
       "spec_id": "072-candidate-evidence-diagnostics"
     }
   ],
-  "timestamp_utc": "2026-07-03T01:27:02.738635Z"
+  "timestamp_utc": "2026-07-03T04:09:31.915317Z"
 }
