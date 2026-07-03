@@ -5,7 +5,7 @@
 
 ## Summary
 
-`candidate-88a7e7f07361` asks to register `autonomous-evolution` in `pipeline-liveness` and leave a single HANDOFF entrypoint. Current main already satisfies those conditions, but `evolution_loop` still emits the candidate as `new`. This plan adds a narrow completion predicate so the agent-operations candidate becomes non-actionable when the liveness and handoff evidence are present, while preserving the candidate as actionable if either evidence surface regresses. The work also adds a completed-candidate contract marker for `released-work`, and makes promotion/factory consume current-checkout released-work evidence so simultaneous post-merge workflow runs cannot resurrect a stale candidate package.
+`candidate-88a7e7f07361` asks to register `autonomous-evolution` in `pipeline-liveness` and leave a single HANDOFF entrypoint. Current main already satisfies those conditions, but `evolution_loop` still emits the candidate as `new`. This plan adds a narrow completion predicate so the agent-operations candidate becomes non-actionable when the liveness and handoff evidence are present, while preserving the candidate as actionable if either evidence surface regresses. The work also adds a completed-candidate contract marker for `released-work`, and makes promotion/factory/result-executor consume current-checkout released-work evidence so simultaneous post-merge workflow runs cannot resurrect a stale candidate package or result.
 
 ## Technical Context
 
@@ -55,9 +55,12 @@ src/auto_invest/analytics/evolution_loop.py
 src/auto_invest/analytics/autonomous_work_execution.py
 src/auto_invest/analytics/promotion_loop.py
 src/auto_invest/analytics/candidate_factory.py
+src/auto_invest/analytics/candidate_result_executor.py
 scripts/candidate_factory_probe.py
+scripts/candidate_result_executor_probe.py
 .github/workflows/autonomous-promotion-loop.yml
 .github/workflows/candidate-implementation-factory.yml
+.github/workflows/candidate-result-executor.yml
 tests/unit/test_evolution_loop.py
 tests/unit/test_autonomous_work_execution.py
 tests/unit/test_promotion_loop.py
@@ -65,6 +68,7 @@ tests/unit/test_candidate_factory.py
 tests/integration/test_evolution_loop_probe.py
 tests/integration/test_promotion_loop_probe.py
 tests/integration/test_candidate_factory_probe.py
+tests/integration/test_candidate_result_executor_probe.py
 .specify/feature.json
 CLAUDE.md
 ```

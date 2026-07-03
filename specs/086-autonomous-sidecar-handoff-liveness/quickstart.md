@@ -27,10 +27,11 @@ Expected: one `released` entry sourced from `specs/086-autonomous-sidecar-handof
 
 ## Downstream Stale-Sidecar Reproduction
 
-Use stale promotion/factory inputs with current released-work evidence. Expected result:
+Use stale promotion/factory/result-executor inputs with current released-work evidence. Expected result:
 
 - promotion stage for `candidate-88a7e7f07361`: `DISCARD`
 - factory package output contains no `candidate-88a7e7f07361`
+- result-executor output contains no fresh `candidate-88a7e7f07361` result
 
 ## Full Grade-2 Validation
 

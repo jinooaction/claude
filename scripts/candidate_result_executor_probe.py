@@ -53,6 +53,7 @@ def _git_commit() -> str:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--package-plan", type=Path, required=True)
+    parser.add_argument("--released-work", type=Path, default=None)
     parser.add_argument("--summary-out", type=Path, default=None)
     parser.add_argument("--json-out", type=Path, default=None)
     parser.add_argument("--results-out", type=Path, default=None)
@@ -70,6 +71,7 @@ def main(argv: list[str] | None = None) -> int:
 
     run = build_candidate_result_executor_run(
         package_plan=_read_json(args.package_plan),
+        released_work=_read_json(args.released_work),
         now=_parse_now(args.now),
         commit=args.commit or _git_commit(),
         run_id=args.run_id,
