@@ -11,6 +11,7 @@ from auto_invest.analytics.autonomous_work_execution import (
     AUTONOMY_OPERATOR_APPROVAL,
     CODEX_COMPLETION_GATES,
     MACRO_GROWTH_DISCOVERY_CANDIDATE_ID,
+    MACRO_GROWTH_OBJECTIVE_CALIBRATION_CANDIDATE_ID,
     MACRO_GROWTH_SOURCE_DIVERSIFICATION_CANDIDATE_ID,
     STATUS_EXECUTION_READY,
     STATUS_OPERATOR_APPROVAL_REQUIRED,
@@ -351,6 +352,68 @@ def test_released_macro_bootstrap_advances_to_next_macro_candidate():
     )
     assert report.selected_work.status == STATUS_EXECUTION_READY
     assert "정적 템플릿 밖" in report.selected_work.next_action_ko
+
+
+def test_released_source_diversification_output_advances_to_objective_calibration():
+    source_output_candidate_id = "candidate-source-diversification-sidecar-bottleneck"
+    report = build_autonomous_work_execution(
+        {
+            "capital-path-readiness": _json({"priority_candidates": []}),
+            "evolution-backlog": _json(
+                {
+                    "candidates": [
+                        {
+                            "candidate_id": source_output_candidate_id,
+                            "domain_key": "agent_ops",
+                            "status": "new",
+                            "score": 600,
+                            "title_ko": "증거 기반 후보 소스 다변화",
+                            "next_action_ko": (
+                                "학습 장부, released-work, pipeline-liveness, "
+                                "capital-path-readiness sidecar를 후보 생성 입력으로 승격한다."
+                            ),
+                            "safety_impact": [],
+                            "risk_grade": 2,
+                        }
+                    ]
+                }
+            ),
+            "released-work": _json(
+                {
+                    "released_work": [
+                        {
+                            "candidate_id": MACRO_GROWTH_DISCOVERY_CANDIDATE_ID,
+                            "status": "released",
+                            "reason_ko": "스펙 088 완료",
+                        },
+                        {
+                            "candidate_id": MACRO_GROWTH_SOURCE_DIVERSIFICATION_CANDIDATE_ID,
+                            "status": "released",
+                            "reason_ko": "스펙 089 완료",
+                        },
+                        {
+                            "candidate_id": source_output_candidate_id,
+                            "status": "released",
+                            "reason_ko": "스펙 090 완료",
+                        },
+                    ]
+                }
+            ),
+            "pipeline-liveness": _liveness(),
+        },
+        now=NOW,
+    )
+
+    assert report.selected_work is not None
+    assert (
+        report.selected_work.candidate_id
+        == MACRO_GROWTH_OBJECTIVE_CALIBRATION_CANDIDATE_ID
+    )
+    assert report.selected_work.status == STATUS_EXECUTION_READY
+    assert "목적 함수" in report.selected_work.title_ko
+    released = {packet.candidate_id: packet for packet in report.suppressed_work}
+    assert released[source_output_candidate_id].status == STATUS_RELEASED
+    assert "다시 착수하지 않는다" in released[source_output_candidate_id].start_guidance_ko
 
 
 def test_macro_growth_does_not_mask_operator_approval_candidate():
