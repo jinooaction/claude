@@ -92,6 +92,70 @@ def test_probe_writes_sidecar_artifacts(tmp_path, capsys) -> None:
     assert "주문, 자본, whitelist, caps, live 전략은 변경하지 않았습니다" in capsys.readouterr().out
 
 
+def test_probe_replays_learning_ledger_suppression(tmp_path, capsys) -> None:
+    ledger_in = tmp_path / "learning_ledger_in.json"
+    summary_json = tmp_path / "evolution_summary.json"
+    ledger_out = tmp_path / "learning_ledger_out.json"
+    backlog = tmp_path / "candidate_backlog.json"
+    candidate_id = "candidate-fa66202bf496"
+    ledger_in.write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0",
+                "entries": [
+                    {
+                        "entry_id": "ledger-fa66202bf496-hold",
+                        "candidate_id": candidate_id,
+                        "decision": "evidence_dependent",
+                        "reason_ko": "결과 실행기 검증만 있고 다음 sidecar 재검토 전이라 보류",
+                        "evidence_package_id": "candidate-result-executor:pkg-ae5a47448ec9",
+                        "next_recheck_condition": "released-work 최신 실행 뒤 재검토",
+                        "created_at_utc": "2026-07-03T00:00:00Z",
+                    }
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    rc = probe_main(
+        [
+            "--evidence-dir",
+            str(_FIXTURES),
+            "--ledger-json",
+            str(ledger_in),
+            "--json-out",
+            str(summary_json),
+            "--ledger-out",
+            str(ledger_out),
+            "--candidate-backlog-out",
+            str(backlog),
+            "--json",
+            "--now",
+            "2026-06-29T01:00:00Z",
+            "--commit",
+            "abc1234",
+            "--run-id",
+            "test-run",
+        ]
+    )
+
+    assert rc == 0
+    payload = json.loads(capsys.readouterr().out)
+    candidates = {candidate["candidate_id"]: candidate for candidate in payload["candidates"]}
+    assert candidates[candidate_id]["status"] == "evidence_dependent"
+    assert candidate_id not in payload["safe_high_leverage_work"]
+    backlog_candidates = {
+        candidate["candidate_id"]: candidate
+        for candidate in json.loads(backlog.read_text(encoding="utf-8"))["candidates"]
+    }
+    assert backlog_candidates[candidate_id]["status"] == "evidence_dependent"
+    assert json.loads(ledger_out.read_text(encoding="utf-8"))["entries"][0][
+        "evidence_package_id"
+    ] == "candidate-result-executor:pkg-ae5a47448ec9"
+
+
 def test_autonomous_evolution_workflow_is_read_only_and_publishes_sidecar() -> None:
     text = _WORKFLOW.read_text(encoding="utf-8")
     assert "schedule:" in text and "workflow_dispatch:" in text

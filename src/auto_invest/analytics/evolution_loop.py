@@ -33,6 +33,20 @@ DECISION_OPEN_PR = "open_pr"
 DECISION_FEED_EXISTING_GATE = "feed_existing_gate"
 DECISION_OPERATOR_REVIEW = "operator_review"
 
+LEDGER_REJECTED_DECISIONS = {"rejected", "reject", "discard", "discarded"}
+LEDGER_HOLD_DECISIONS = {
+    "evidence_dependent",
+    "deferred",
+    "hold",
+    "observe",
+    "observed",
+}
+LEDGER_OPERATOR_REVIEW_DECISIONS = {
+    "operator_review",
+    "operator_approval",
+    "approval_required",
+}
+
 EVIDENCE_NONE = "none"
 EVIDENCE_MARKET_OBSERVATION = "market_observation"
 EVIDENCE_SIDECAR_FRESHNESS = "sidecar_freshness"
@@ -904,11 +918,56 @@ def apply_learning_ledger(
     updated: list[BreakthroughCandidate] = []
     for candidate in candidates:
         entry = by_candidate.get(candidate.candidate_id)
-        if entry and entry.decision == "rejected" and not entry.next_recheck_condition:
-            updated.append(replace(candidate, status=STATUS_REJECTED))
+        if entry is None:
+            updated.append(candidate)
+            continue
+
+        decision = entry.decision.strip().lower()
+        if decision in LEDGER_REJECTED_DECISIONS:
+            updated.append(
+                replace(
+                    candidate,
+                    status=STATUS_REJECTED,
+                    next_action_ko=_ledger_next_action(entry),
+                    recheck_condition=entry.next_recheck_condition,
+                )
+            )
+        elif decision in LEDGER_HOLD_DECISIONS:
+            updated.append(
+                replace(
+                    candidate,
+                    status=STATUS_EVIDENCE_DEPENDENT,
+                    evidence_dependency=EVIDENCE_OPERATOR_REVIEW,
+                    next_action_ko=_ledger_next_action(entry),
+                    recheck_condition=entry.next_recheck_condition,
+                )
+            )
+        elif decision in LEDGER_OPERATOR_REVIEW_DECISIONS:
+            updated.append(
+                replace(
+                    candidate,
+                    status=STATUS_OPERATOR_REVIEW,
+                    evidence_dependency=EVIDENCE_OPERATOR_REVIEW,
+                    next_action_ko=_ledger_next_action(entry),
+                    recheck_condition=entry.next_recheck_condition,
+                )
+            )
         else:
             updated.append(candidate)
     return tuple(_sort_candidates(updated))
+
+
+def _ledger_next_action(entry: LearningLedgerEntry) -> str:
+    parts = [
+        "learning_ledger.json 결정으로 자동 후보 재활성화를 보류한다.",
+    ]
+    if entry.reason_ko:
+        parts.append(f"사유: {entry.reason_ko}")
+    if entry.evidence_package_id:
+        parts.append(f"근거 패키지: {entry.evidence_package_id}")
+    if entry.next_recheck_condition:
+        parts.append(f"재검토 조건: {entry.next_recheck_condition}")
+    return mask_sensitive_values(" ".join(parts))
 
 
 def update_learning_ledger(
