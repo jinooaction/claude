@@ -1,5 +1,5 @@
 {
-  "commit": "b243a06e77a04361a8c052b7f0a31cf2768389c7",
+  "commit": "2f64cbadc0e5ebe36fa84e26b9d839ac439caef5",
   "overall_status": "OK",
   "released_work": [
     {
@@ -91,9 +91,18 @@
       "source_file": "specs/088-autonomous-macro-growth-discovery/spec.md",
       "spec_id": "088-autonomous-macro-growth-discovery",
       "status": "released"
+    },
+    {
+      "candidate_id": "candidate-source-diversification-sidecar-bottleneck",
+      "entry_id": "released-a46d4eb9d9e0",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/090-source-diversification-candidate-closure/contracts/source-diversification-candidate-closure.md",
+      "spec_id": "090-source-diversification-candidate-closure",
+      "status": "released"
     }
   ],
-  "run_id": "28639386219",
+  "run_id": "28643121934",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -144,7 +153,8 @@
     "086-autonomous-sidecar-handoff-liveness",
     "087-learning-ledger-candidate-memory",
     "088-autonomous-macro-growth-discovery",
-    "089-evolution-source-diversification"
+    "089-evolution-source-diversification",
+    "090-source-diversification-candidate-closure"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -325,5 +335,5 @@
       "spec_id": "072-candidate-evidence-diagnostics"
     }
   ],
-  "timestamp_utc": "2026-07-03T04:57:01.765879Z"
+  "timestamp_utc": "2026-07-03T06:35:48.640417Z"
 }

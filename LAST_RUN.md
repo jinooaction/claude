@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-07-03T04:57:01.765879Z)
+# 완료 후보 소비 장부 (as of 2026-07-03T06:35:48.640417Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -8,8 +8,8 @@
 | 항목 | 값 |
 |------|-----|
 | overall_status | OK |
-| released_count | 10 |
-| scanned_specs | 40 |
+| released_count | 11 |
+| scanned_specs | 41 |
 
 ## 완료 후보
 
@@ -25,6 +25,7 @@
 | candidate-fd04772a23c5 | released | 078-money-gate-alignment-loop | specs/078-money-gate-alignment-loop/contracts/money-gate-alignment.md | selected_work_candidate |
 | candidate-fd04772a23c5 | released | 079-completed-candidate-consumption | specs/079-completed-candidate-consumption/spec.md | selected_work_candidate |
 | candidate-macro-growth-discovery | released | 088-autonomous-macro-growth-discovery | specs/088-autonomous-macro-growth-discovery/spec.md | completed_candidate_id |
+| candidate-source-diversification-sidecar-bottleneck | released | 090-source-diversification-candidate-closure | specs/090-source-diversification-candidate-closure/contracts/source-diversification-candidate-closure.md | completed_candidate_id |
 
 ## 제외한 스펙
 
@@ -90,7 +91,7 @@
 
 ```json
 {
-  "commit": "b243a06e77a04361a8c052b7f0a31cf2768389c7",
+  "commit": "2f64cbadc0e5ebe36fa84e26b9d839ac439caef5",
   "overall_status": "OK",
   "released_work": [
     {
@@ -182,9 +183,18 @@
       "source_file": "specs/088-autonomous-macro-growth-discovery/spec.md",
       "spec_id": "088-autonomous-macro-growth-discovery",
       "status": "released"
+    },
+    {
+      "candidate_id": "candidate-source-diversification-sidecar-bottleneck",
+      "entry_id": "released-a46d4eb9d9e0",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/090-source-diversification-candidate-closure/contracts/source-diversification-candidate-closure.md",
+      "spec_id": "090-source-diversification-candidate-closure",
+      "status": "released"
     }
   ],
-  "run_id": "28639386219",
+  "run_id": "28643121934",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -235,7 +245,8 @@
     "086-autonomous-sidecar-handoff-liveness",
     "087-learning-ledger-candidate-memory",
     "088-autonomous-macro-growth-discovery",
-    "089-evolution-source-diversification"
+    "089-evolution-source-diversification",
+    "090-source-diversification-candidate-closure"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -416,6 +427,6 @@
       "spec_id": "072-candidate-evidence-diagnostics"
     }
   ],
-  "timestamp_utc": "2026-07-03T04:57:01.765879Z"
+  "timestamp_utc": "2026-07-03T06:35:48.640417Z"
 }
 ```
