@@ -9,7 +9,9 @@ from pathlib import Path
 import pytest
 
 from auto_invest.analytics.evolution_loop import (
+    STATUS_EVIDENCE_DEPENDENT,
     STATUS_NEW,
+    STATUS_OPERATOR_REVIEW,
     STATUS_RELEASED,
     BreakthroughCandidate,
     EvidencePackage,
@@ -39,6 +41,10 @@ def _fixture_dir_evidence(name: str) -> dict[str, str]:
 
 def _agent_ops_candidate(summary):
     return next(c for c in summary.candidates if c.candidate_id == "candidate-88a7e7f07361")
+
+
+def _candidate_by_id(summary, candidate_id: str):
+    return next(c for c in summary.candidates if c.candidate_id == candidate_id)
 
 
 def _candidate(**overrides) -> BreakthroughCandidate:
@@ -401,6 +407,65 @@ def test_rejected_ledger_entry_prevents_reactivation() -> None:
     second = scan_evolution(evidence, ledger_doc=ledger, now=NOW, commit="abc1234", run_id="test")
     by_id = {candidate.candidate_id: candidate for candidate in second.candidates}
     assert by_id[rejected_id].status == "rejected"
+
+
+def test_evidence_dependent_ledger_entry_blocks_safe_reactivation() -> None:
+    evidence = _fixture_evidence()
+    candidate_id = "candidate-fa66202bf496"
+    ledger = {
+        "entries": [
+            LearningLedgerEntry(
+                entry_id="ledger-fa66202bf496-hold",
+                candidate_id=candidate_id,
+                decision="evidence_dependent",
+                reason_ko="결과 실행기가 package pkg-ae5a47448ec9만 확인했으므로 재검증 전 보류",
+                evidence_package_id="candidate-result-executor:pkg-ae5a47448ec9",
+                next_recheck_condition=(
+                    "released-work와 promotion sidecar가 같은 커밋을 소비한 뒤 재검토"
+                ),
+                created_at_utc="2026-07-03T00:00:00Z",
+            ).to_dict()
+        ]
+    }
+
+    summary = scan_evolution(
+        evidence, ledger_doc=ledger, now=NOW, commit="abc1234", run_id="test"
+    )
+    candidate = _candidate_by_id(summary, candidate_id)
+
+    assert candidate.status == STATUS_EVIDENCE_DEPENDENT
+    assert candidate_id not in summary.safe_high_leverage_work
+    assert "pkg-ae5a47448ec9" in candidate.next_action_ko
+    assert "released-work" in candidate.next_action_ko
+
+
+def test_operator_review_ledger_entry_blocks_autonomous_start() -> None:
+    evidence = _fixture_evidence()
+    candidate_id = "candidate-e481b0309206"
+    ledger = {
+        "entries": [
+            LearningLedgerEntry(
+                entry_id="ledger-e481b0309206-review",
+                candidate_id=candidate_id,
+                decision="operator_review",
+                reason_ko="분석 후보가 운영 판단 없이 자동 시작되면 범위가 과해진다.",
+                evidence_package_id="manual-review:2026-07-03",
+                next_recheck_condition="운영자가 분석 범위를 확정한 뒤 재검토",
+                created_at_utc="2026-07-03T00:00:00Z",
+            ).to_dict()
+        ]
+    }
+
+    summary = scan_evolution(
+        evidence, ledger_doc=ledger, now=NOW, commit="abc1234", run_id="test"
+    )
+    candidate = _candidate_by_id(summary, candidate_id)
+
+    assert candidate.status == STATUS_OPERATOR_REVIEW
+    assert candidate_id in summary.operator_review
+    assert candidate_id not in summary.safe_high_leverage_work
+    assert "운영자" in candidate.next_action_ko
+    assert "manual-review:2026-07-03" in candidate.next_action_ko
 
 
 def test_promotion_discard_entries_become_rejected_learning_ledger_entries() -> None:

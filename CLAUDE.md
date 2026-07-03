@@ -220,7 +220,7 @@ the current worktree. Do not trust prose in this block as the source of truth
 for in-flight work; use the `git_ground_truth` start hook, latest `HANDOFF.md`,
 and `/sync` against `jinooaction/claude` `Codex/*` branches before continuing.
 
-현재 계획 포인터: `specs/086-autonomous-sidecar-handoff-liveness/plan.md` — 이미 충족된 자율 루프 sidecar/HANDOFF 생존성 후보를 반복 작업으로 남기지 않도록 완료 판정과 인계를 닫는 운영 보정 설계.
+현재 계획 포인터: `specs/087-learning-ledger-candidate-memory/plan.md` — 학습 장부가 폐기·보류·운영자 검토 후보를 실제로 다시 활성 후보에서 빼도록 만드는 운영 보정 설계.
 
 머지 완료(베이스라인): spec 004 (LLM 판단 지점), 005 (자율 튜너), 006 (배포 자동화), 007 (하드닝 카나리), 008 (백테스트), 009 (paper-run), 010 (자동 룰 설계자), 011 (라이브 성과 측정). **주의: 일부 tasks.md 가 stale 0% 로 표시된 적 있음 — 코드/테스트를 믿을 것.**
 
