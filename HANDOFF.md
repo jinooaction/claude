@@ -33,15 +33,15 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `e8779c8` — Merge pull request #458 from jinooaction/Codex/087-released-work-downstream-suppression |
-| main 테스트 | PR #458 머지 직전 `uv run pytest` → 2446 passed, 4 skipped |
+| 마지막 main 커밋 | `2de0f95` — Merge pull request #459 from jinooaction/Codex/088-released-work-result-executor-suppression |
+| main 테스트 | PR #459 머지 직전 `uv run pytest` → 2447 passed, 4 skipped |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
-| 열린 PR | 없음. 현재 로컬 follow-up 브랜치 `Codex/088-released-work-result-executor-suppression`에서 PR #458 뒤 발견된 result executor stale package race를 닫는 중이다. |
+| 열린 PR | 없음. |
 | 출시 완료 스펙 | 최신 추가: 086(자율 루프 sidecar와 HANDOFF 생존성 완료 후보 폐쇄), 085(공개 데이터 수집·교차 검증 확장), 084(오래된 증거와 성과 실패 분리), 083(주문 거부·체결 품질 손익 관측), 082(레짐·성과 후보 점수화), 081(자율 루프 품질 폐쇄), 080(운영자 대시보드와 모바일 알림 루프), 079(완료 후보 소비 장부), 078(돈 경로 게이트 정렬 루프), 077(자율 작업 실행 루프), 076(자본 경로 준비도 루프), 075(전략 실패 학습), 074(후보 가격 이력 지원), 073(후보 pending next action 보정), 072(후보 증거 진단), 071(후보 결과 실행기), 070(후보 구현 공장), 069(자율 승격 실행 루프), 068(자율 승격 루프 자동 분류), 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
-| 골격 스펙 | 없음. `.specify/feature.json`은 `specs/086-autonomous-sidecar-handoff-liveness`를 가리킨다. 스펙 086 구현과 완료 후보 마커는 #457로 main에 들어갔고, follow-up은 같은 스펙의 downstream race 보정이다. |
-| 최근 출시 작업 | #458 스펙 086 downstream promotion/factory stale sidecar 억제. #457 스펙 086 자율 루프 sidecar/HANDOFF 생존성 완료 후보 폐쇄. #456 스펙 085 인계 갱신. #455 스펙 085 공개 데이터 수집·교차 검증 확장. #453 스펙 084 sidecar 순서 위험 인계 정리. |
-| 활성 작업 | #458 main push에서 released-work, promotion, factory, result executor는 모두 success였고 promotion은 `candidate-88a7e7f07361`를 `DISCARD`, factory/package는 후보 없음으로 보았다. result executor는 동시에 직전 패키지를 읽어 이 후보 결과를 한 번 더 발행했다. 현재 follow-up 브랜치가 result executor도 현재 checkout의 released-work 장부를 먼저 읽어 stale package 실행을 건너뛰게 고치는 중이다. 돈 경로는 계속 `PREVIEW_ONLY`다. |
-| 안전 경계 | #457, #458, 현재 follow-up은 등급 2 운영 자동화 보정이다. 후보 상태 판정, 완료 후보 장부, promotion/factory/result executor 입력 필터만 바꿨고 주문, 자본 증액, 자본 배분, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, live sentinel, 브로커 주문, K1/K2/K4/K5/K6, 헌법, 커널 목록, 비밀값, 외부 유료 서비스는 변경하지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`다. |
+| 골격 스펙 | 없음. `.specify/feature.json`은 최신 출시 스펙 `specs/086-autonomous-sidecar-handoff-liveness`를 가리킨다. 스펙 086 본작업과 downstream race 보정은 #457, #458, #459로 main에 들어갔다. |
+| 최근 출시 작업 | #459 스펙 086 result executor stale package 억제. #458 스펙 086 downstream promotion/factory stale sidecar 억제. #457 스펙 086 자율 루프 sidecar/HANDOFF 생존성 완료 후보 폐쇄. #456 스펙 085 인계 갱신. #455 스펙 085 공개 데이터 수집·교차 검증 확장. |
+| 활성 작업 | 없음. 최신 자율 작업 실행 sidecar는 `candidate-88a7e7f07361`를 `RELEASED`로 억제하고 다음 착수 후보를 `candidate-fa66202bf496`로 제시한다. 돈 경로는 계속 `PREVIEW_ONLY`다. |
+| 안전 경계 | #457, #458, #459는 등급 2 운영 자동화 보정이다. 후보 상태 판정, 완료 후보 장부, promotion/factory/result executor 입력 필터만 바꿨고 주문, 자본 증액, 자본 배분, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, live sentinel, 브로커 주문, K1/K2/K4/K5/K6, 헌법, 커널 목록, 비밀값, 외부 유료 서비스는 변경하지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`다. |
 
 ## 돈 경로 상태 판독 규칙 (필수 — 스펙 062)
 
@@ -83,17 +83,18 @@ uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.
 
 ## 최근 관찰 — 2026-07-03 KST (스펙 086 자율 루프 sidecar와 HANDOFF 생존성)
 
-현재 `main` 최신 머지는 `e8779c8`(#458, 스펙 086 downstream promotion/factory stale sidecar 억제)이다.
-직전 스펙 086 기능 머지는 `671b1a7`(#457, 자율 루프 sidecar/HANDOFF 생존성 완료 후보 폐쇄)이고,
-현재 follow-up 브랜치 `Codex/088-released-work-result-executor-suppression`가 result executor stale package race를 닫는 중이다.
+현재 `main` 최신 머지는 `2de0f95`(#459, 스펙 086 result executor stale package 억제)이다.
+직전 스펙 086 머지는 `e8779c8`(#458, promotion/factory stale sidecar 억제)와 `671b1a7`(#457,
+자율 루프 sidecar/HANDOFF 생존성 완료 후보 폐쇄)이다.
 
 - **문제 정의**: 자율 작업 실행 루프는 `candidate-88a7e7f07361`를 다음 후보로 제시했지만, 실제 main에는 이미
   `pipeline-liveness`의 `autonomous-evolution` 감시와 HANDOFF 세션 시작 `/sync` 진입점이 있었다. 목표는
   이미 충족된 운영 보정이 새 후보로 반복되지 않게 닫는 것이다.
 - **구현 상태**: `evolution_loop.py`는 `autonomous-evolution=OK`와 HANDOFF 진입점을 함께 확인하면
   `candidate-88a7e7f07361`를 `released`로 표시한다. `autonomous_work_execution.py`,
-  `promotion_loop.py`, `candidate_factory.py`는 `released` source 후보를 다시 착수·승격·패키징하지 않는다.
-  스펙 086 계약에는 `completed_candidate_id: candidate-88a7e7f07361` 마커가 있다.
+  `promotion_loop.py`, `candidate_factory.py`, `candidate_result_executor.py`는 `released` 후보를 다시
+  착수·승격·패키징·실행하지 않는다. 스펙 086 계약에는
+  `completed_candidate_id: candidate-88a7e7f07361` 마커가 있다.
 - **post-merge 확인**: #457 main push 뒤 `Deploy on merge to main` run `28628313144`,
   `Autonomous evolution loop` run `28628313165`, `Released work ledger` run `28628313152`,
   `Autonomous work execution loop` run `28628313148`, `Autonomous promotion loop` run `28628313151`,
@@ -103,10 +104,12 @@ uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.
   `Released work ledger` run `28628876631`, `Autonomous promotion loop` run `28628876633`,
   `Candidate implementation factory` run `28628876598`, `Candidate result executor` run `28628876613`이 success였다.
   promotion은 `candidate-88a7e7f07361`를 `DISCARD`로 버렸고 factory/package에는 이 후보가 없다.
-- **남은 follow-up**: result executor는 같은 push에서 직전 `candidate_packages.json`를 먼저 읽어
-  `candidate-88a7e7f07361` 결과를 한 번 더 발행했다. `Codex/088-released-work-result-executor-suppression`
-  브랜치가 result executor workflow에서 현재 checkout의 released-work 장부를 즉시 생성해 stale package 실행을
-  건너뛰도록 보정 중이다.
+- **#459 follow-up 확인**: #459 main push 뒤 `Deploy on merge to main` run `28629315303`,
+  `Candidate result executor` run `28629315296`, `Released work ledger` run `28629315307`,
+  `Autonomous work execution loop` run `28629315301`, `Candidate implementation factory` run
+  `28629315287`이 success였다. 최신 sidecar 확인 결과 released-work는 이 후보를 `released`,
+  autonomous-work는 `RELEASED`, promotion은 기존 #458 sidecar에서 `DISCARD`, factory/package는 후보 없음,
+  result executor와 `candidate_results.json`도 후보 없음이다.
 - **안전 경계**: 등급 2 운영 자동화 보정이다. 실제 주문, 브로커 실주문 API, 자본 증액, 자본 배분,
   whitelist/caps 확대, live 전략 교체, live sentinel, 헌법, 커널 목록, K1/K2/K4/K5/K6, 비밀값,
   외부 유료 서비스 변경 없음. 배포는 dry-run worker 코드 반영이며 실거래 전환이 아니다.
@@ -115,8 +118,10 @@ uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.
   `uv run python scripts/agent_harness_probe.py --strict` OK(14/14), PR 품질 관문 성공,
   post-merge deploy와 sidecar run 성공 확인 완료. PR #458 머지 전 focused pytest 31 통과,
   stale promotion/factory 로컬 재현 성공, `uv run pytest` 2446 통과·4 스킵, lint와 하네스 통과,
-  post-merge deploy와 sidecar run 성공 확인 완료. 현재 result executor follow-up은 focused result tests와
-  stale package 재현을 거친 뒤 전체 검증 예정이다.
+  post-merge deploy와 sidecar run 성공 확인 완료. PR #459 머지 전 focused result tests 14 통과,
+  stale result package 로컬 재현 성공, `uv run pytest` 2447 통과·4 스킵, lint와 하네스 통과,
+  PR 품질 관문 성공, post-merge deploy와 sidecar run 성공 확인 완료.
+- **상세 인계**: `HANDOFF-090-AUTONOMOUS-SIDECAR-HANDOFF-LIVENESS.md`.
 
 ## 최근 관찰 — 2026-07-02 KST (스펙 085 공개 데이터 수집·교차 검증 확장)
 
@@ -1400,6 +1405,20 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
   통과, `uv run python scripts/agent_harness_probe.py --strict` `OK (14/14)`,
   `uv run python scripts/check_handoff_facts.py` 통과, PR 품질 관문 통과. 머지 직전 전체 테스트와
   린트를 다시 실행해 같은 결과를 확인했다.
+
+## 최근 마일스톤 — 2026-07-03 KST (스펙 086 자율 루프 sidecar와 HANDOFF 생존성)
+
+- main 코드 베이스라인: `2de0f95`(PR #459). 관련 머지: #457 `671b1a7`, #458 `e8779c8`.
+- `candidate-88a7e7f07361`는 이미 충족된 `autonomous-evolution` liveness와 HANDOFF `/sync` 진입점 보정이므로,
+  자율 성장 루프가 이를 `released`로 낮추고 `released-work` 완료 장부가 반복 선택을 막는다.
+- #458은 promotion/factory가 직전 sidecar를 읽어도 current-checkout released-work 장부로 이 후보를 버리게 했고,
+  #459는 result executor도 stale package 실행과 fresh result 발행을 건너뛰게 했다.
+- post-merge runs: deploy `28629315303`, released-work `28629315307`, autonomous-work `28629315301`,
+  candidate factory `28629315287`, candidate result executor `28629315296` success. 최신 sidecar에서
+  released-work=`released`, autonomous-work=`RELEASED`, promotion=`DISCARD`, factory/package/result 후보 없음.
+- 안전 경계: 등급 2 운영 자동화 보정. 주문, 자본, live 전략, whitelist/caps, 헌법, 커널,
+  비밀값, 외부 유료 서비스 변경 없음.
+- 상세: `HANDOFF-090-AUTONOMOUS-SIDECAR-HANDOFF-LIVENESS.md`.
 
 ## 최근 마일스톤 — 2026-07-02 KST (스펙 085 공개 데이터 수집·교차 검증 확장)
 
@@ -5028,6 +5047,7 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 
 ## 과거 인수인계 파일 (참고용)
 
+- `HANDOFF-090-AUTONOMOUS-SIDECAR-HANDOFF-LIVENESS.md` — 스펙 086 자율 루프 sidecar와 HANDOFF 생존성
 - `HANDOFF-089-PUBLIC-DATA-CROSS-VALIDATION.md` — 스펙 085 공개 데이터 수집·교차 검증 확장
 - `HANDOFF-088-STALE-EVIDENCE-SEPARATION.md` — 스펙 084 오래된 증거와 성과 실패 분리
 - `HANDOFF-087-REJECTED-ORDER-EXECUTION-QUALITY.md` — 스펙 083 주문 거부·체결 품질 손익 관측
