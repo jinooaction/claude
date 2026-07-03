@@ -416,6 +416,113 @@ def test_released_source_diversification_output_advances_to_objective_calibratio
     assert "다시 착수하지 않는다" in released[source_output_candidate_id].start_guidance_ko
 
 
+def test_objective_calibration_tracks_selected_work_deterministically():
+    source_output_candidate_id = "candidate-source-diversification-sidecar-bottleneck"
+    evidence = {
+        "capital-path-readiness": _json({"priority_candidates": []}),
+        "evolution-backlog": _json(
+            {
+                "candidates": [
+                    {
+                        "candidate_id": source_output_candidate_id,
+                        "domain_key": "agent_ops",
+                        "status": "new",
+                        "score": 600,
+                        "title_ko": "증거 기반 후보 소스 다변화",
+                        "next_action_ko": "후보 생성 입력을 확장한다.",
+                        "safety_impact": [],
+                        "risk_grade": 2,
+                    }
+                ]
+            }
+        ),
+        "released-work": _json(
+            {
+                "released_work": [
+                    {
+                        "candidate_id": MACRO_GROWTH_DISCOVERY_CANDIDATE_ID,
+                        "status": "released",
+                        "reason_ko": "스펙 088 완료",
+                    },
+                    {
+                        "candidate_id": MACRO_GROWTH_SOURCE_DIVERSIFICATION_CANDIDATE_ID,
+                        "status": "released",
+                        "reason_ko": "스펙 089 완료",
+                    },
+                    {
+                        "candidate_id": source_output_candidate_id,
+                        "status": "released",
+                        "reason_ko": "스펙 090 완료",
+                    },
+                ]
+            }
+        ),
+        "pipeline-liveness": _liveness(),
+    }
+
+    first = build_autonomous_work_execution(evidence, now=NOW).to_dict()
+    second = build_autonomous_work_execution(evidence, now=NOW).to_dict()
+
+    assert first["objective_calibration"] == second["objective_calibration"]
+    calibration = first["objective_calibration"]
+    assert (
+        calibration["selected_candidate_id"]
+        == MACRO_GROWTH_OBJECTIVE_CALIBRATION_CANDIDATE_ID
+    )
+    assert calibration["exploration_budget"]["max_parallel_candidates"] == 1
+    assert calibration["exploration_budget"]["max_ranked_candidates"] == 10
+    assert calibration["learning_metrics"]["ranked_count"] == 1
+    selected_score = calibration["candidate_scores"][0]
+    assert selected_score["candidate_id"] == calibration["selected_candidate_id"]
+    assert set(selected_score["component_scores"]) >= {
+        "growth_leverage",
+        "evidence_readiness",
+        "validation_cost_fit",
+        "safety_margin",
+        "learning_value",
+    }
+    assert selected_score["component_scores"]["safety_margin"] == 100
+    assert selected_score["total_score"] > 0
+
+    markdown = build_autonomous_work_execution(evidence, now=NOW).as_markdown()
+    assert "## 목적 함수 보정" in markdown
+    assert MACRO_GROWTH_OBJECTIVE_CALIBRATION_CANDIDATE_ID in markdown
+    assert "max_parallel_candidates" in markdown
+
+
+def test_objective_calibration_penalizes_safety_impact_candidates():
+    report = build_autonomous_work_execution(
+        {
+            "capital-path-readiness": _json({"priority_candidates": []}),
+            "evolution-backlog": _json(
+                {
+                    "candidates": [
+                        {
+                            "candidate_id": "candidate-live-order",
+                            "domain_key": "execution_quality",
+                            "status": "new",
+                            "title_ko": "실제 주문 제출 자동화",
+                            "next_action_ko": "주문 제출 경로를 자동화한다.",
+                            "score": 1000,
+                        }
+                    ]
+                }
+            ),
+            "pipeline-liveness": _liveness(),
+        },
+        now=NOW,
+    )
+
+    payload = report.to_dict()
+    assert payload["selected_work"]["status"] == STATUS_OPERATOR_APPROVAL_REQUIRED
+    calibration = payload["objective_calibration"]
+    score = calibration["candidate_scores"][0]
+    assert score["candidate_id"] == "candidate-live-order"
+    assert score["status"] == STATUS_OPERATOR_APPROVAL_REQUIRED
+    assert score["component_scores"]["safety_margin"] < 50
+    assert any("operator approval" in item for item in calibration["stop_conditions"])
+
+
 def test_macro_growth_does_not_mask_operator_approval_candidate():
     report = build_autonomous_work_execution(
         {
