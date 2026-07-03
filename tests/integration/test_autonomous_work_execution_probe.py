@@ -164,6 +164,59 @@ def test_probe_repo_root_released_work_overrides_sidecar_lag(tmp_path, capsys):
     assert suppressed["candidate-fd04772a23c5"]["status"] == "RELEASED"
 
 
+def test_probe_closed_queue_emits_macro_growth_candidate(tmp_path, capsys):
+    (tmp_path / "capital-path-readiness.md").write_text(
+        json.dumps(
+            {
+                "priority_candidates": [
+                    {
+                        "candidate_id": "candidate-fd04772a23c5",
+                        "domain_key": "live_readiness",
+                        "status": "new",
+                        "score": 597,
+                    }
+                ]
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "released-work.md").write_text(
+        json.dumps(
+            {
+                "released_work": [
+                    {
+                        "candidate_id": "candidate-fd04772a23c5",
+                        "status": "released",
+                        "reason_ko": "이미 완료",
+                    }
+                ]
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "pipeline-liveness.md").write_text(
+        "## 결정 JSON\n\n```json\n{\"overall\":\"OK\",\"checks\":[]}\n```\n",
+        encoding="utf-8",
+    )
+
+    rc = probe_main(
+        [
+            "--evidence-dir",
+            str(tmp_path),
+            "--json",
+            "--now",
+            "2026-07-03T00:00:00Z",
+        ]
+    )
+
+    assert rc == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["selected_work"]["candidate_id"] == "candidate-macro-growth-discovery"
+    assert payload["selected_work"]["status"] == "EXECUTION_READY"
+
+
 def test_pipeline_liveness_registers_autonomous_work_execution():
     specs = {spec.key: spec for spec in default_specs()}
 

@@ -10,6 +10,8 @@ from auto_invest.analytics.autonomous_work_execution import (
     AUTONOMY_CODEX_START,
     AUTONOMY_OPERATOR_APPROVAL,
     CODEX_COMPLETION_GATES,
+    MACRO_GROWTH_DISCOVERY_CANDIDATE_ID,
+    MACRO_GROWTH_SOURCE_DIVERSIFICATION_CANDIDATE_ID,
     STATUS_EXECUTION_READY,
     STATUS_OPERATOR_APPROVAL_REQUIRED,
     STATUS_RELEASED,
@@ -169,9 +171,10 @@ def test_learning_ledger_suppresses_rejected_candidate_from_other_sources():
     )
 
     assert report.selected_work is not None
-    assert report.selected_work.candidate_id == "candidate-rejected"
-    assert report.selected_work.status == "SUPPRESSED"
-    assert "learning ledger" in report.selected_work.reason_ko
+    assert report.selected_work.candidate_id == MACRO_GROWTH_DISCOVERY_CANDIDATE_ID
+    suppressed = {packet.candidate_id: packet for packet in report.suppressed_work}
+    assert suppressed["candidate-rejected"].status == "SUPPRESSED"
+    assert "learning ledger" in suppressed["candidate-rejected"].reason_ko
 
 
 def test_released_work_consumes_completed_candidate_and_selects_next_candidate():
@@ -261,6 +264,125 @@ def test_released_source_status_is_not_execution_ready():
     assert "다시 착수하지 않는다" in released["candidate-88a7e7f07361"].start_guidance_ko
 
 
+def test_closed_regular_queue_emits_macro_growth_candidate():
+    report = build_autonomous_work_execution(
+        {
+            "capital-path-readiness": _json(
+                {
+                    "priority_candidates": [
+                        {
+                            "candidate_id": "candidate-fd04772a23c5",
+                            "domain_key": "live_readiness",
+                            "status": "new",
+                            "score": 597,
+                            "title_ko": "돈 경로 준비도와 기존 게이트 정렬",
+                        }
+                    ]
+                }
+            ),
+            "released-work": _json(
+                {
+                    "released_work": [
+                        {
+                            "candidate_id": "candidate-fd04772a23c5",
+                            "status": "released",
+                            "reason_ko": "스펙 078로 구현·머지·인계 완료",
+                        }
+                    ]
+                }
+            ),
+            "pipeline-liveness": _liveness(),
+        },
+        now=NOW,
+    )
+
+    assert report.selected_work is not None
+    assert report.selected_work.candidate_id == MACRO_GROWTH_DISCOVERY_CANDIDATE_ID
+    assert report.selected_work.status == STATUS_EXECUTION_READY
+    assert report.selected_work.autonomy_level == AUTONOMY_CODEX_START
+    assert "정적 후보" in report.selected_work.reason_ko
+    assert _source_refs(report.selected_work) >= {
+        "automation/released-work-last-run:released_work.json",
+        "automation/pipeline-liveness-last-run:LAST_RUN.md",
+        "automation/capital-path-readiness-last-run:capital_path_readiness.json",
+    }
+
+
+def test_released_macro_bootstrap_advances_to_next_macro_candidate():
+    report = build_autonomous_work_execution(
+        {
+            "capital-path-readiness": _json(
+                {
+                    "priority_candidates": [
+                        {
+                            "candidate_id": "candidate-fd04772a23c5",
+                            "domain_key": "live_readiness",
+                            "status": "new",
+                            "score": 597,
+                        }
+                    ]
+                }
+            ),
+            "released-work": _json(
+                {
+                    "released_work": [
+                        {
+                            "candidate_id": "candidate-fd04772a23c5",
+                            "status": "released",
+                            "reason_ko": "스펙 078 완료",
+                        },
+                        {
+                            "candidate_id": MACRO_GROWTH_DISCOVERY_CANDIDATE_ID,
+                            "status": "released",
+                            "reason_ko": "스펙 088 완료",
+                        },
+                    ]
+                }
+            ),
+            "pipeline-liveness": _liveness(),
+        },
+        now=NOW,
+    )
+
+    assert report.selected_work is not None
+    assert (
+        report.selected_work.candidate_id
+        == MACRO_GROWTH_SOURCE_DIVERSIFICATION_CANDIDATE_ID
+    )
+    assert report.selected_work.status == STATUS_EXECUTION_READY
+    assert "정적 템플릿 밖" in report.selected_work.next_action_ko
+
+
+def test_macro_growth_does_not_mask_operator_approval_candidate():
+    report = build_autonomous_work_execution(
+        {
+            "capital-path-readiness": _json({"priority_candidates": []}),
+            "evolution-backlog": _json(
+                {
+                    "candidates": [
+                        {
+                            "candidate_id": "candidate-live-order",
+                            "domain_key": "execution_quality",
+                            "status": "new",
+                            "title_ko": "실제 주문 제출 자동화",
+                            "next_action_ko": "주문 제출 경로를 자동화한다.",
+                            "score": 1000,
+                        }
+                    ]
+                }
+            ),
+            "pipeline-liveness": _liveness(),
+        },
+        now=NOW,
+    )
+
+    assert report.selected_work is not None
+    assert report.selected_work.candidate_id == "candidate-live-order"
+    assert report.selected_work.status == STATUS_OPERATOR_APPROVAL_REQUIRED
+    ranked_ids = {packet.candidate_id for packet in report.ranked_work}
+    assert MACRO_GROWTH_DISCOVERY_CANDIDATE_ID not in ranked_ids
+
+
 def test_missing_all_evidence_emits_liveness_repair_packet():
     report = build_autonomous_work_execution({}, now=NOW)
 
@@ -298,3 +420,7 @@ def test_deterministic_order_for_same_inputs():
 
     assert first == second
     assert first["selected_work"]["candidate_id"] == "candidate-a"
+
+
+def _source_refs(packet) -> set[str]:
+    return set(packet.source_refs)

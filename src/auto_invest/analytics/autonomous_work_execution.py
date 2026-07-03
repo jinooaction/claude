@@ -42,6 +42,14 @@ AUTONOMY_RECOVERY_REQUIRED = "RECOVERY_REQUIRED"
 AUTONOMY_CLOSED_RELEASED = "CLOSED_RELEASED"
 AUTONOMY_CLOSED_SUPPRESSED = "CLOSED_SUPPRESSED"
 
+MACRO_GROWTH_DISCOVERY_CANDIDATE_ID = "candidate-macro-growth-discovery"
+MACRO_GROWTH_SOURCE_DIVERSIFICATION_CANDIDATE_ID = (
+    "candidate-evolution-source-diversification"
+)
+MACRO_GROWTH_OBJECTIVE_CALIBRATION_CANDIDATE_ID = (
+    "candidate-autonomous-growth-objective-calibration"
+)
+
 _REJECTED_STATUSES = {
     "reject",
     "rejected",
@@ -53,6 +61,7 @@ _REJECTED_STATUSES = {
 _BLOCKED_STATUSES = {"blocked", "missing_input", "missing_inputs"}
 _OPERATOR_STATUSES = {"operator_review", "operator_approval", "approval_required"}
 _RELEASED_STATUSES = {"released", "release", "completed", "complete", "done", "shipped"}
+_CLOSED_QUEUE_STATUSES = {STATUS_RELEASED, STATUS_SUPPRESSED}
 
 _SOURCE_REFS: dict[str, str] = {
     "capital-path-readiness": (
@@ -105,6 +114,60 @@ CODEX_COMPLETION_GATES: tuple[str, ...] = (
     "uv run python scripts/agent_harness_probe.py --strict 통과",
     "PR 품질 관문 통과",
     "필요한 HANDOFF 갱신",
+)
+
+
+@dataclass(frozen=True)
+class MacroGrowthCandidateTemplate:
+    """정적 후보 큐가 닫혔을 때 순차적으로 꺼내는 거시 성장 후보."""
+
+    candidate_id: str
+    title_ko: str
+    priority_score: int
+    reason_ko: str
+    next_action_ko: str
+
+
+_MACRO_GROWTH_CANDIDATES: tuple[MacroGrowthCandidateTemplate, ...] = (
+    MacroGrowthCandidateTemplate(
+        candidate_id=MACRO_GROWTH_DISCOVERY_CANDIDATE_ID,
+        title_ko="거시 자율 성장 후보 발굴기",
+        priority_score=2800,
+        reason_ko=(
+            "정적 후보 템플릿과 기존 sidecar 후보가 모두 완료·억제로 닫혀 "
+            "새 성장 축을 합성해야 한다."
+        ),
+        next_action_ko=(
+            "closed-queue 신호를 SDD로 설계하고, released-work 뒤 다음 거시 후보로 "
+            "이어지는 결정론적 후보 발굴 규칙을 구현한다."
+        ),
+    ),
+    MacroGrowthCandidateTemplate(
+        candidate_id=MACRO_GROWTH_SOURCE_DIVERSIFICATION_CANDIDATE_ID,
+        title_ko="정적 후보 템플릿 밖 증거 기반 후보 공간 확장",
+        priority_score=2700,
+        reason_ko=(
+            "거시 후보 발굴 부트스트랩은 출시됐지만 upstream evolution 후보 생성은 "
+            "여전히 고정 템플릿 중심이다."
+        ),
+        next_action_ko=(
+            "정적 템플릿 밖 sidecar 나이, 반복 실패 유형, released-work 포화, "
+            "관찰 병목을 후보 생성 입력으로 확장한다."
+        ),
+    ),
+    MacroGrowthCandidateTemplate(
+        candidate_id=MACRO_GROWTH_OBJECTIVE_CALIBRATION_CANDIDATE_ID,
+        title_ko="자율 성장 목적 함수와 탐색 예산 보정",
+        priority_score=2600,
+        reason_ko=(
+            "후보 공간 확장 뒤에는 성장률, 검증 비용, 안전 경계를 함께 보는 "
+            "탐색 목적 함수가 필요하다."
+        ),
+        next_action_ko=(
+            "후보 발굴의 목적 함수, 탐색 예산, 중단 조건, 반복 학습 지표를 "
+            "측정 가능한 계약으로 고정한다."
+        ),
+    ),
 )
 
 
@@ -977,6 +1040,98 @@ def _apply_released_work(
     return tuple(updated)
 
 
+def _macro_growth_source_refs() -> tuple[str, ...]:
+    return (
+        _SOURCE_REFS["evolution-backlog"],
+        _SOURCE_REFS["released-work"],
+        _SOURCE_REFS["pipeline-liveness"],
+        _SOURCE_REFS["capital-path-readiness"],
+    )
+
+
+def _regular_queue_is_closed(
+    packets: Sequence[WorkPacket],
+    surfaces: Sequence[EvidenceSurface],
+) -> bool:
+    if any(packet.status == STATUS_EXECUTION_READY for packet in packets):
+        return False
+    if any(
+        packet.status in {STATUS_OPERATOR_APPROVAL_REQUIRED, STATUS_BLOCKED}
+        for packet in packets
+    ):
+        return False
+    if packets:
+        return all(packet.status in _CLOSED_QUEUE_STATUSES for packet in packets)
+    return not all(surface.parse_status == PARSE_MISSING for surface in surfaces)
+
+
+def _macro_growth_packets(
+    packets: Sequence[WorkPacket],
+    *,
+    released_work: Any,
+    surfaces: Sequence[EvidenceSurface],
+) -> tuple[WorkPacket, ...]:
+    if not _regular_queue_is_closed(packets, surfaces):
+        return ()
+
+    released = _released_candidates(released_work)
+    existing_ids = {packet.candidate_id for packet in packets}
+    closed_count = sum(packet.status in _CLOSED_QUEUE_STATUSES for packet in packets)
+    released_count = sum(packet.status == STATUS_RELEASED for packet in packets)
+    suppressed_count = sum(packet.status == STATUS_SUPPRESSED for packet in packets)
+
+    for template in _MACRO_GROWTH_CANDIDATES:
+        if template.candidate_id in released or template.candidate_id in existing_ids:
+            continue
+        return (
+            _macro_growth_packet(
+                template,
+                closed_count=closed_count,
+                released_count=released_count,
+                suppressed_count=suppressed_count,
+            ),
+        )
+    return ()
+
+
+def _macro_growth_packet(
+    template: MacroGrowthCandidateTemplate,
+    *,
+    closed_count: int,
+    released_count: int,
+    suppressed_count: int,
+) -> WorkPacket:
+    source_refs = _macro_growth_source_refs()
+    autonomy_level, start_guidance, completion_gates = _execution_contract(
+        STATUS_EXECUTION_READY,
+        2,
+        (),
+    )
+    queue_summary = (
+        f"현재 일반 후보 큐는 닫힌 후보 {closed_count}개"
+        f"(완료 {released_count}개, 억제 {suppressed_count}개)로 구성된다."
+    )
+    return WorkPacket(
+        packet_id=_packet_id(template.candidate_id, template.title_ko, source_refs),
+        candidate_id=template.candidate_id,
+        domain_key="agent_ops",
+        title_ko=template.title_ko,
+        work_type=_DOMAIN_WORK_TYPES["agent_ops"],
+        risk_grade=2,
+        safety_impact=(),
+        priority_score=template.priority_score,
+        status=STATUS_EXECUTION_READY,
+        autonomy_level=autonomy_level,
+        reason_ko=f"{template.reason_ko} {queue_summary}",
+        next_action_ko=template.next_action_ko,
+        start_guidance_ko=start_guidance,
+        completion_gates=completion_gates,
+        required_inputs=source_refs,
+        safety_boundary=SAFETY_INVARIANTS,
+        source_refs=source_refs,
+    )
+
+
 def _dedupe_packets(packets: Sequence[WorkPacket]) -> tuple[WorkPacket, ...]:
     by_candidate: dict[str, WorkPacket] = {}
     for packet in packets:
@@ -1054,6 +1209,16 @@ def build_autonomous_work_execution(
     packets = list(_apply_released_work(packets, parsed.get("released-work")))
 
     ordered = _dedupe_packets(packets)
+    ordered = _dedupe_packets(
+        [
+            *ordered,
+            *_macro_growth_packets(
+                ordered,
+                released_work=parsed.get("released-work"),
+                surfaces=surfaces,
+            ),
+        ]
+    )
     ranked = tuple(packet for packet in ordered if packet.status == STATUS_EXECUTION_READY)[:10]
     suppressed = tuple(packet for packet in ordered if packet.status != STATUS_EXECUTION_READY)[:10]
     selected = ranked[0] if ranked else (suppressed[0] if suppressed else None)
@@ -1082,6 +1247,9 @@ __all__ = [
     "AUTONOMY_RECOVERY_REQUIRED",
     "CODEX_COMPLETION_GATES",
     "EvidenceSurface",
+    "MACRO_GROWTH_DISCOVERY_CANDIDATE_ID",
+    "MACRO_GROWTH_OBJECTIVE_CALIBRATION_CANDIDATE_ID",
+    "MACRO_GROWTH_SOURCE_DIVERSIFICATION_CANDIDATE_ID",
     "SAFETY_INVARIANTS",
     "SCHEMA_VERSION",
     "STATUS_BLOCKED",
