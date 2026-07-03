@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-07-03T04:09:31.915317Z)
+# 완료 후보 소비 장부 (as of 2026-07-03T04:57:01.765879Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -8,8 +8,8 @@
 | 항목 | 값 |
 |------|-----|
 | overall_status | OK |
-| released_count | 9 |
-| scanned_specs | 39 |
+| released_count | 10 |
+| scanned_specs | 40 |
 
 ## 완료 후보
 
@@ -19,6 +19,7 @@
 | candidate-88a7e7f07361 | released | 086-autonomous-sidecar-handoff-liveness | specs/086-autonomous-sidecar-handoff-liveness/contracts/agent-ops-liveness-closure.md | completed_candidate_id |
 | candidate-dff4f9344b02 | released | 083-rejected-order-execution-quality | specs/083-rejected-order-execution-quality/contracts/execution-quality.md | completed_candidate_id |
 | candidate-e481b0309206 | released | 082-regime-performance-candidate-scoring | specs/082-regime-performance-candidate-scoring/contracts/regime-performance-candidate-scoring.md | completed_candidate_id |
+| candidate-evolution-source-diversification | released | 089-evolution-source-diversification | specs/089-evolution-source-diversification/spec.md | completed_candidate_id |
 | candidate-fa66202bf496 | released | 087-learning-ledger-candidate-memory | specs/087-learning-ledger-candidate-memory/spec.md | completed_candidate_id |
 | candidate-facf2fa31834 | released | 085-public-data-cross-validation | specs/085-public-data-cross-validation/contracts/public-data-fred-cross-check.md | completed_candidate_id |
 | candidate-fd04772a23c5 | released | 078-money-gate-alignment-loop | specs/078-money-gate-alignment-loop/contracts/money-gate-alignment.md | selected_work_candidate |
@@ -89,7 +90,7 @@
 
 ```json
 {
-  "commit": "927beb02a2385b06d6d3f860ce5cf5fa27aa051f",
+  "commit": "b243a06e77a04361a8c052b7f0a31cf2768389c7",
   "overall_status": "OK",
   "released_work": [
     {
@@ -126,6 +127,15 @@
       "source_field": "completed_candidate_id",
       "source_file": "specs/082-regime-performance-candidate-scoring/contracts/regime-performance-candidate-scoring.md",
       "spec_id": "082-regime-performance-candidate-scoring",
+      "status": "released"
+    },
+    {
+      "candidate_id": "candidate-evolution-source-diversification",
+      "entry_id": "released-3a5107ade49f",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/089-evolution-source-diversification/spec.md",
+      "spec_id": "089-evolution-source-diversification",
       "status": "released"
     },
     {
@@ -174,7 +184,7 @@
       "status": "released"
     }
   ],
-  "run_id": "28637783779",
+  "run_id": "28639386219",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -224,7 +234,8 @@
     "085-public-data-cross-validation",
     "086-autonomous-sidecar-handoff-liveness",
     "087-learning-ledger-candidate-memory",
-    "088-autonomous-macro-growth-discovery"
+    "088-autonomous-macro-growth-discovery",
+    "089-evolution-source-diversification"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -405,6 +416,6 @@
       "spec_id": "072-candidate-evidence-diagnostics"
     }
   ],
-  "timestamp_utc": "2026-07-03T04:09:31.915317Z"
+  "timestamp_utc": "2026-07-03T04:57:01.765879Z"
 }
 ```
