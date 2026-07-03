@@ -33,15 +33,15 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `b243a06` — Merge pull request #465 from jinooaction/Codex/089-evolution-source-diversification |
-| main 테스트 | PR #465 머지 전 `uv run pytest` → 2458 passed, 4 skipped. 인계 갱신 전 main 기준 `uv run pytest -q`는 낡은 HANDOFF 때문에 2 failed, 2456 passed, 4 skipped였고, 이 handoff 갱신 후 `uv run pytest -q` → 2458 passed, 4 skipped. |
+| 마지막 main 커밋 | `2f64cba` — Merge pull request #467 from jinooaction/Codex/090-source-diversification-bottleneck |
+| main 테스트 | PR #467 머지 전 `uv run pytest -q` → 2459 passed, 4 skipped. 인계 갱신 전 main 기준 `uv run pytest -q`는 낡은 HANDOFF 때문에 2 failed, 2457 passed, 4 skipped였고, 이 handoff 갱신 후 `uv run pytest -q` → 2459 passed, 4 skipped. |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
 | 열린 PR | 없음. |
-| 출시 완료 스펙 | 최신 추가: 089(정적 후보 템플릿 밖 증거 기반 후보 공간 확장), 088(거시 자율 성장 후보 발굴기), 087(학습 장부로 폐기·보류 후보 재발굴 차단), 086(자율 루프 sidecar와 HANDOFF 생존성 완료 후보 폐쇄), 085(공개 데이터 수집·교차 검증 확장), 084(오래된 증거와 성과 실패 분리), 083(주문 거부·체결 품질 손익 관측), 082(레짐·성과 후보 점수화), 081(자율 루프 품질 폐쇄), 080(운영자 대시보드와 모바일 알림 루프), 079(완료 후보 소비 장부), 078(돈 경로 게이트 정렬 루프), 077(자율 작업 실행 루프), 076(자본 경로 준비도 루프), 075(전략 실패 학습), 074(후보 가격 이력 지원), 073(후보 pending next action 보정), 072(후보 증거 진단), 071(후보 결과 실행기), 070(후보 구현 공장), 069(자율 승격 실행 루프), 068(자율 승격 루프 자동 분류), 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
-| 골격 스펙 | 없음. `.specify/feature.json`은 최신 출시 스펙 `specs/089-evolution-source-diversification`을 가리킨다. 스펙 089은 #465로 main에 들어갔다. |
-| 최근 출시 작업 | #465 스펙 089 정적 후보 템플릿 밖 증거 기반 후보 공간 확장. #464 스펙 088 인계. #463 스펙 088 거시 자율 성장 후보 발굴기. #462 스펙 087 인계. #461 스펙 087 학습 장부 보류·운영자 검토 후보 재활성화 차단. |
-| 활성 작업 | 열린 PR 없음. 최신 autonomous-evolution sidecar run `28639386349`은 새 후보 `candidate-source-diversification-sidecar-bottleneck`을 `new`/safe_high_leverage_work로 발행했다. 같은 push에서 autonomous-work sidecar run `28639386220`은 evolution sidecar 갱신 전 입력을 읽어 `candidate-autonomous-growth-objective-calibration`을 선택했지만, 최신 sidecar들을 다시 넣은 로컬 재현은 `candidate-source-diversification-sidecar-bottleneck`을 `EXECUTION_READY`로 선택한다. 다음 세션은 `/sync` 후 최신 sidecar 재현 또는 다음 autonomous-work 실행을 확인하고 이 후보를 이어받는다. 돈 경로는 계속 `PREVIEW_ONLY`다. |
-| 안전 경계 | #465는 등급 2 운영 자동화 보정이다. upstream autonomous-evolution 후보 생성과 sidecar 입력만 바꿨고 주문, 자본 증액, 자본 배분, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, live sentinel, 브로커 주문, K1/K2/K4/K5/K6, 헌법, 커널 목록, 비밀값, 외부 유료 서비스는 변경하지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`다. |
+| 출시 완료 스펙 | 최신 추가: 090(source diversification 산출 후보 완료 폐쇄), 089(정적 후보 템플릿 밖 증거 기반 후보 공간 확장), 088(거시 자율 성장 후보 발굴기), 087(학습 장부로 폐기·보류 후보 재발굴 차단), 086(자율 루프 sidecar와 HANDOFF 생존성 완료 후보 폐쇄), 085(공개 데이터 수집·교차 검증 확장), 084(오래된 증거와 성과 실패 분리), 083(주문 거부·체결 품질 손익 관측), 082(레짐·성과 후보 점수화), 081(자율 루프 품질 폐쇄), 080(운영자 대시보드와 모바일 알림 루프), 079(완료 후보 소비 장부), 078(돈 경로 게이트 정렬 루프), 077(자율 작업 실행 루프), 076(자본 경로 준비도 루프), 075(전략 실패 학습), 074(후보 가격 이력 지원), 073(후보 pending next action 보정), 072(후보 증거 진단), 071(후보 결과 실행기), 070(후보 구현 공장), 069(자율 승격 실행 루프), 068(자율 승격 루프 자동 분류), 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
+| 골격 스펙 | 없음. `.specify/feature.json`은 최신 출시 스펙 `specs/090-source-diversification-candidate-closure`를 가리킨다. 스펙 090은 #467로 main에 들어갔다. |
+| 최근 출시 작업 | #467 스펙 090 source diversification 산출 후보 완료 폐쇄. #466 스펙 089 인계. #465 스펙 089 정적 후보 템플릿 밖 증거 기반 후보 공간 확장. #464 스펙 088 인계. #463 스펙 088 거시 자율 성장 후보 발굴기. |
+| 활성 작업 | 열린 PR 없음. 최신 released-work sidecar run `28643121934`은 `candidate-source-diversification-sidecar-bottleneck`을 스펙 090 완료 후보로 released 처리했다. 최신 autonomous-work sidecar run `28643121911`은 다음 후보 `candidate-autonomous-growth-objective-calibration`을 `EXECUTION_READY`로 선택한다. 다음 세션은 이 후보를 SDD 기준으로 이어받으면 된다. 돈 경로는 계속 `PREVIEW_ONLY`다. |
+| 안전 경계 | #467은 등급 2 운영 자동화 보정이다. completed-candidate marker와 회귀 테스트, Speckit 포인터만 바꿨고 주문, 자본 증액, 자본 배분, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, live sentinel, 브로커 주문, K1/K2/K4/K5/K6, 헌법, 커널 목록, 비밀값, 외부 유료 서비스는 변경하지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`다. |
 
 ## 돈 경로 상태 판독 규칙 (필수 — 스펙 062)
 
@@ -80,6 +80,43 @@ uv run python scripts/money_path_probe.py --manifest | while IFS=$'\t' read -r k
 done
 uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.live_money_state'
 ```
+
+## 최근 관찰 — 2026-07-03 KST (스펙 090 source diversification 산출 후보 완료 폐쇄)
+
+현재 `main` 최신 머지는 `2f64cba`(#467, 스펙 090 source diversification 산출 후보 완료 폐쇄)이다.
+기능 커밋은 `a167fee`이고, 직전 main은 `55ec2da`(#466, 스펙 089 인계)이다.
+
+- **문제 정의**: 스펙 089는 정적 후보가 모두 닫힌 뒤 새 후보
+  `candidate-source-diversification-sidecar-bottleneck`을 만들었다. 그런데 이 후보의 행동 설명은
+  스펙 089가 이미 구현한 "학습 장부, released-work, pipeline-liveness, capital-path-readiness를
+  후보 생성 입력으로 승격"한 내용과 겹쳤다. 목표는 이 산출 후보를 완료 후보로 닫고 다음 실제 후보로
+  전진시키는 것이다.
+- **구현 상태**: `specs/090-source-diversification-candidate-closure/`가 completed marker
+  `candidate-source-diversification-sidecar-bottleneck`을 남긴다. 자율 작업 실행 회귀 테스트는 이 후보가
+  released-work로 닫히면 다음 후보 `candidate-autonomous-growth-objective-calibration`이 선택됨을 고정한다.
+- **post-merge 실행**: #467 main push 뒤 `Deploy on merge to main` run `28643121916`,
+  `Released work ledger` run `28643121934`, `Autonomous work execution loop` run `28643121911`이 success였다.
+- **sidecar 확인**: 최신 released-work sidecar는 commit `2f64cba`에서
+  `candidate-source-diversification-sidecar-bottleneck`을 spec
+  `090-source-diversification-candidate-closure`의 released 후보로 기록했다. 최신 autonomous-work sidecar는
+  같은 commit에서 `candidate-autonomous-growth-objective-calibration`을 `EXECUTION_READY`, risk grade 2,
+  safety impact 없음으로 선택했다.
+- **배포 확인**: deploy run `28643121916`의 `deploy` job은 success다. 컨테이너에서 서버 audit_log와
+  GitHub Actions Summary 원문은 직접 확인하지 못한다. KIS smoke sidecar 최신 run `28643034277`은 success지만
+  commit `55ec2da` 기준 스케줄 실행이므로 #467 배포의 직접 증거가 아니라 키와 smoke 건강 상태 참고 증거다.
+- **안전 경계**: 등급 2 운영 자동화 보정이다. 실제 주문, 브로커 실주문 API, 자본 증액, 자본 배분,
+  whitelist/caps 확대, live 전략 교체, live sentinel, 헌법, 커널 목록, K1/K2/K4/K5/K6, 비밀값,
+  외부 유료 서비스 변경 없음. 배포는 dry-run worker 코드 반영이며 실거래 전환이 아니다.
+- **검증**: PR #467 머지 전 focused pytest 12 통과, released-work 로컬 재현에서
+  `candidate-source-diversification-sidecar-bottleneck` released 확인, 최신 sidecar replay에서
+  `candidate-autonomous-growth-objective-calibration` 선택 확인, `uv run pytest -q` 2459 통과·4 스킵,
+  `uv run ruff check src tests` 통과, `git diff --check` 통과,
+  `uv run python scripts/check_handoff_facts.py` OK,
+  `uv run python scripts/agent_harness_probe.py --strict` OK(14/14), PR 품질 관문 성공,
+  post-merge deploy·released-work·autonomous-work run 성공 확인 완료. 인계 갱신 전 main 기준
+  `uv run pytest -q`는 낡은 HANDOFF 때문에 하네스 2건만 실패했고, 이 handoff 갱신 뒤
+  `uv run pytest -q`는 2459 통과·4 스킵이다.
+- **상세 인계**: `HANDOFF-094-SOURCE-DIVERSIFICATION-CANDIDATE-CLOSURE.md`.
 
 ## 최근 관찰 — 2026-07-03 KST (스펙 089 정적 후보 템플릿 밖 증거 기반 후보 공간 확장)
 
@@ -1519,6 +1556,18 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
   통과, `uv run python scripts/agent_harness_probe.py --strict` `OK (14/14)`,
   `uv run python scripts/check_handoff_facts.py` 통과, PR 품질 관문 통과. 머지 직전 전체 테스트와
   린트를 다시 실행해 같은 결과를 확인했다.
+
+## 최근 마일스톤 — 2026-07-03 KST (스펙 090 source diversification 산출 후보 완료 폐쇄)
+
+- main 코드 베이스라인: `2f64cba`(PR #467). 기능 커밋: `a167fee`.
+- `candidate-source-diversification-sidecar-bottleneck`은 스펙 090 completed marker로 released-work 장부에 들어갔다.
+- 최신 autonomous-work sidecar run `28643121911`은 다음 후보
+  `candidate-autonomous-growth-objective-calibration`을 `EXECUTION_READY`로 선택한다.
+- post-merge runs: deploy `28643121916`, released-work `28643121934`, autonomous-work
+  `28643121911` success.
+- 안전 경계: 등급 2 운영 자동화 보정. 주문, 자본, live 전략, whitelist/caps, 헌법, 커널,
+  비밀값, 외부 유료 서비스 변경 없음.
+- 상세: `HANDOFF-094-SOURCE-DIVERSIFICATION-CANDIDATE-CLOSURE.md`.
 
 ## 최근 마일스톤 — 2026-07-03 KST (스펙 089 정적 후보 템플릿 밖 증거 기반 후보 공간 확장)
 
