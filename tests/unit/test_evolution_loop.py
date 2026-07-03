@@ -28,6 +28,7 @@ from auto_invest.analytics.evolution_loop import (
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = ROOT / "tests" / "fixtures" / "evolution_loop" / "fresh"
 NOW = datetime(2026, 6, 29, 1, 0, 0, tzinfo=UTC)
+SOURCE_DIVERSIFICATION_ID = "candidate-source-diversification-sidecar-bottleneck"
 
 
 def _fixture_evidence() -> dict[str, str]:
@@ -45,6 +46,83 @@ def _agent_ops_candidate(summary):
 
 def _candidate_by_id(summary, candidate_id: str):
     return next(c for c in summary.candidates if c.candidate_id == candidate_id)
+
+
+def _closed_static_inputs() -> tuple[dict[str, str], dict[str, object]]:
+    evidence = _fixture_evidence()
+    base = scan_evolution(evidence, now=NOW, commit="abc1234", run_id="base")
+    evidence["released-work"] = json.dumps(
+        {
+            "schema_version": "1.0",
+            "released_work": [
+                {
+                    "candidate_id": candidate.candidate_id,
+                    "status": "released",
+                    "reason_ko": "테스트에서 정적 후보 포화를 재현했다.",
+                }
+                for candidate in base.candidates
+            ],
+        },
+        ensure_ascii=False,
+    )
+    evidence["capital-path-readiness"] = json.dumps(
+        {
+            "timestamp_utc": "2026-06-29T00:55:00Z",
+            "observability_issues": [
+                {
+                    "issue_id": "released-candidate-echo:candidate-facf2fa31834",
+                    "issue_type": "released_candidate_echo",
+                    "source_key": "released-work",
+                    "summary_ko": (
+                        "released-work 장부가 완료로 기록한 후보가 "
+                        "upstream 후보 목록에 남았다."
+                    ),
+                }
+            ],
+        },
+        ensure_ascii=False,
+    )
+    evidence["promotion-summary"] = json.dumps(
+        {
+            "run_id": "run-source-diversification",
+            "assessments": [
+                {
+                    "candidate_id": "candidate-1ed634d8bf6d",
+                    "stage": "DISCARD",
+                    "blocked_reason_ko": "전략 후보 검증 실패가 반복됐다.",
+                    "candidate": {
+                        "candidate_id": "candidate-1ed634d8bf6d",
+                        "domain_key": "strategy_design",
+                        "title_ko": "micro GTAA 의도 손익 재검토와 대체 전략 연구",
+                    },
+                }
+            ],
+        },
+        ensure_ascii=False,
+    )
+    ledger = {
+        "entries": [
+            LearningLedgerEntry(
+                entry_id="ledger-source-rejected",
+                candidate_id="candidate-1ed634d8bf6d",
+                decision="rejected",
+                reason_ko="반복 실패",
+                evidence_package_id="autonomous-promotion:run-source-diversification",
+                next_recheck_condition=None,
+                created_at_utc="2026-07-03T00:00:00Z",
+            ).to_dict(),
+            LearningLedgerEntry(
+                entry_id="ledger-source-hold",
+                candidate_id="candidate-dff4f9344b02",
+                decision="evidence_dependent",
+                reason_ko="다음 sidecar 재검토 전 보류",
+                evidence_package_id="candidate-result-executor:pkg-test",
+                next_recheck_condition="released-work 최신 실행 뒤 재검토",
+                created_at_utc="2026-07-03T00:00:00Z",
+            ).to_dict(),
+        ]
+    }
+    return evidence, ledger
 
 
 def _candidate(**overrides) -> BreakthroughCandidate:
@@ -588,3 +666,53 @@ def test_summary_json_is_secret_safe() -> None:
     summary = scan_evolution(evidence, now=NOW, commit="abc1234", run_id="test")
     payload = json.dumps(summary.as_dict(), ensure_ascii=False)
     assert "abcdef123456" not in payload
+
+
+def test_closed_static_candidate_set_creates_source_diversification_candidate() -> None:
+    evidence, ledger = _closed_static_inputs()
+
+    summary = scan_evolution(
+        evidence,
+        ledger_doc=ledger,
+        now=NOW,
+        commit="abc1234",
+        run_id="test",
+    )
+    candidate = _candidate_by_id(summary, SOURCE_DIVERSIFICATION_ID)
+
+    assert candidate.status == STATUS_NEW
+    assert candidate.risk_grade == 2
+    assert candidate.safety_impact == ()
+    assert candidate.candidate_id in summary.safe_high_leverage_work
+    assert "정적 후보" in candidate.problem_ko
+    assert "released-work" in candidate.evidence_refs
+    assert "capital-path-readiness" in candidate.evidence_refs
+
+
+def test_existing_safe_static_candidate_prevents_source_diversification_noise() -> None:
+    summary = scan_evolution(_fixture_evidence(), now=NOW, commit="abc1234", run_id="test")
+
+    assert any(candidate.status == STATUS_NEW for candidate in summary.candidates)
+    assert not any(
+        candidate.candidate_id == SOURCE_DIVERSIFICATION_ID for candidate in summary.candidates
+    )
+
+
+def test_source_diversification_reason_names_ledger_and_observation_bottlenecks() -> None:
+    evidence, ledger = _closed_static_inputs()
+
+    summary = scan_evolution(
+        evidence,
+        ledger_doc=ledger,
+        now=NOW,
+        commit="abc1234",
+        run_id="test",
+    )
+    candidate = _candidate_by_id(summary, SOURCE_DIVERSIFICATION_ID)
+
+    assert "rejected 1건" in candidate.problem_ko
+    assert "evidence_dependent 1건" in candidate.problem_ko
+    assert "promotion failure 1건" in candidate.problem_ko
+    assert "관찰 병목 1건" in candidate.problem_ko
+    assert "학습 장부" in candidate.next_action_ko
+    assert "sidecar" in candidate.next_action_ko

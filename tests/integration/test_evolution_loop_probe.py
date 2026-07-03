@@ -26,6 +26,11 @@ def test_probe_manifest_lists_required_sidecars(capsys) -> None:
     assert "reassign\tautomation/reassign-last-run\tLAST_RUN.md" in out
     assert "pipeline-liveness\tautomation/pipeline-liveness-last-run\tLAST_RUN.md" in out
     assert "promote-readiness\tautomation/promote-readiness-last-run\tLAST_RUN.md" in out
+    assert (
+        "capital-path-readiness\tautomation/capital-path-readiness-last-run\tcapital_path_readiness.json"
+        in out
+    )
+    assert "released-work\tautomation/released-work-last-run\treleased_work.json" in out
     assert "kis-smoke\tautomation/kis-smoke-last-run\tLAST_RUN.md" in out
     assert (
         "execution-quality\tautomation/execution-quality-last-run\texecution_quality.json"
@@ -154,6 +159,85 @@ def test_probe_replays_learning_ledger_suppression(tmp_path, capsys) -> None:
     assert json.loads(ledger_out.read_text(encoding="utf-8"))["entries"][0][
         "evidence_package_id"
     ] == "candidate-result-executor:pkg-ae5a47448ec9"
+
+
+def test_probe_writes_source_diversification_candidate_when_static_queue_is_closed(
+    tmp_path, capsys
+) -> None:
+    for source in _FIXTURES.glob("*.md"):
+        (tmp_path / source.name).write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+
+    seed_rc = probe_main(
+        [
+            "--evidence-dir",
+            str(tmp_path),
+            "--candidate-backlog-out",
+            str(tmp_path / "seed_backlog.json"),
+            "--json",
+            "--now",
+            "2026-06-29T01:00:00Z",
+            "--commit",
+            "abc1234",
+            "--run-id",
+            "seed",
+        ]
+    )
+    assert seed_rc == 0
+    capsys.readouterr()
+    seed = json.loads((tmp_path / "seed_backlog.json").read_text(encoding="utf-8"))
+    (tmp_path / "released-work.md").write_text(
+        json.dumps(
+            {
+                "released_work": [
+                    {"candidate_id": candidate["candidate_id"], "status": "released"}
+                    for candidate in seed["candidates"]
+                ]
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "capital-path-readiness.md").write_text(
+        json.dumps(
+            {
+                "timestamp_utc": "2026-06-29T00:55:00Z",
+                "observability_issues": [
+                    {
+                        "issue_id": "released-candidate-echo:test",
+                        "issue_type": "released_candidate_echo",
+                        "source_key": "released-work",
+                    }
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    rc = probe_main(
+        [
+            "--evidence-dir",
+            str(tmp_path),
+            "--candidate-backlog-out",
+            str(tmp_path / "candidate_backlog.json"),
+            "--json",
+            "--now",
+            "2026-06-29T01:00:00Z",
+            "--commit",
+            "abc1234",
+            "--run-id",
+            "test-run",
+        ]
+    )
+
+    assert rc == 0
+    payload = json.loads(capsys.readouterr().out)
+    candidates = {candidate["candidate_id"]: candidate for candidate in payload["candidates"]}
+    assert candidates["candidate-source-diversification-sidecar-bottleneck"]["status"] == "new"
+    assert (
+        "candidate-source-diversification-sidecar-bottleneck"
+        in payload["safe_high_leverage_work"]
+    )
 
 
 def test_autonomous_evolution_workflow_is_read_only_and_publishes_sidecar() -> None:
