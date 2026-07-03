@@ -33,15 +33,15 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `2de0f95` — Merge pull request #459 from jinooaction/Codex/088-released-work-result-executor-suppression |
-| main 테스트 | PR #459 머지 직전 `uv run pytest` → 2447 passed, 4 skipped |
+| 마지막 main 커밋 | `753afb7` — Merge pull request #461 from jinooaction/Codex/087-learning-ledger-candidate-memory |
+| main 테스트 | PR #461 머지 전 `uv run pytest` → 2450 passed, 4 skipped. 인계 갱신 전 main 기준 `uv run pytest -q`는 낡은 HANDOFF 때문에 2 failed, 2448 passed, 4 skipped였고, 이 handoff 갱신 후 `uv run pytest -q` → 2450 passed, 4 skipped. |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
 | 열린 PR | 없음. |
-| 출시 완료 스펙 | 최신 추가: 086(자율 루프 sidecar와 HANDOFF 생존성 완료 후보 폐쇄), 085(공개 데이터 수집·교차 검증 확장), 084(오래된 증거와 성과 실패 분리), 083(주문 거부·체결 품질 손익 관측), 082(레짐·성과 후보 점수화), 081(자율 루프 품질 폐쇄), 080(운영자 대시보드와 모바일 알림 루프), 079(완료 후보 소비 장부), 078(돈 경로 게이트 정렬 루프), 077(자율 작업 실행 루프), 076(자본 경로 준비도 루프), 075(전략 실패 학습), 074(후보 가격 이력 지원), 073(후보 pending next action 보정), 072(후보 증거 진단), 071(후보 결과 실행기), 070(후보 구현 공장), 069(자율 승격 실행 루프), 068(자율 승격 루프 자동 분류), 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
-| 골격 스펙 | 없음. `.specify/feature.json`은 최신 출시 스펙 `specs/086-autonomous-sidecar-handoff-liveness`를 가리킨다. 스펙 086 본작업과 downstream race 보정은 #457, #458, #459로 main에 들어갔다. |
-| 최근 출시 작업 | #459 스펙 086 result executor stale package 억제. #458 스펙 086 downstream promotion/factory stale sidecar 억제. #457 스펙 086 자율 루프 sidecar/HANDOFF 생존성 완료 후보 폐쇄. #456 스펙 085 인계 갱신. #455 스펙 085 공개 데이터 수집·교차 검증 확장. |
-| 활성 작업 | 없음. 최신 자율 작업 실행 sidecar는 `candidate-88a7e7f07361`를 `RELEASED`로 억제하고 다음 착수 후보를 `candidate-fa66202bf496`로 제시한다. 돈 경로는 계속 `PREVIEW_ONLY`다. |
-| 안전 경계 | #457, #458, #459는 등급 2 운영 자동화 보정이다. 후보 상태 판정, 완료 후보 장부, promotion/factory/result executor 입력 필터만 바꿨고 주문, 자본 증액, 자본 배분, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, live sentinel, 브로커 주문, K1/K2/K4/K5/K6, 헌법, 커널 목록, 비밀값, 외부 유료 서비스는 변경하지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`다. |
+| 출시 완료 스펙 | 최신 추가: 087(학습 장부로 폐기·보류 후보 재발굴 차단), 086(자율 루프 sidecar와 HANDOFF 생존성 완료 후보 폐쇄), 085(공개 데이터 수집·교차 검증 확장), 084(오래된 증거와 성과 실패 분리), 083(주문 거부·체결 품질 손익 관측), 082(레짐·성과 후보 점수화), 081(자율 루프 품질 폐쇄), 080(운영자 대시보드와 모바일 알림 루프), 079(완료 후보 소비 장부), 078(돈 경로 게이트 정렬 루프), 077(자율 작업 실행 루프), 076(자본 경로 준비도 루프), 075(전략 실패 학습), 074(후보 가격 이력 지원), 073(후보 pending next action 보정), 072(후보 증거 진단), 071(후보 결과 실행기), 070(후보 구현 공장), 069(자율 승격 실행 루프), 068(자율 승격 루프 자동 분류), 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
+| 골격 스펙 | 없음. `.specify/feature.json`은 최신 출시 스펙 `specs/087-learning-ledger-candidate-memory`를 가리킨다. 스펙 087은 #461로 main에 들어갔다. |
+| 최근 출시 작업 | #461 스펙 087 학습 장부 보류·운영자 검토 후보 재활성화 차단. #460 스펙 086 최종 인계. #459 스펙 086 result executor stale package 억제. #458 스펙 086 downstream promotion/factory stale sidecar 억제. #457 스펙 086 자율 루프 sidecar/HANDOFF 생존성 완료 후보 폐쇄. |
+| 활성 작업 | 없음. 최신 자율 작업 실행 sidecar는 `candidate-fa66202bf496`를 `RELEASED`로 억제했고 실행 가능한 안전 후보가 없다. `selected_work`에 보이는 `candidate-facf2fa31834`도 `CLOSED_RELEASED` 상태라 새 착수 후보가 아니다. 돈 경로는 계속 `PREVIEW_ONLY`다. |
+| 안전 경계 | #461은 등급 2 운영 자동화 보정이다. 학습 장부 후보 판독, 완료 후보 marker, 자율 작업 실행의 released-work 소비만 바꿨고 주문, 자본 증액, 자본 배분, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, live sentinel, 브로커 주문, K1/K2/K4/K5/K6, 헌법, 커널 목록, 비밀값, 외부 유료 서비스는 변경하지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`다. |
 
 ## 돈 경로 상태 판독 규칙 (필수 — 스펙 062)
 
@@ -80,6 +80,45 @@ uv run python scripts/money_path_probe.py --manifest | while IFS=$'\t' read -r k
 done
 uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.live_money_state'
 ```
+
+## 최근 관찰 — 2026-07-03 KST (스펙 087 학습 장부 후보 재발굴 차단)
+
+현재 `main` 최신 머지는 `753afb7`(#461, 스펙 087 학습 장부 후보 재발굴 차단)이다.
+기능 커밋은 `f1d86f4`이고, 직전 main은 `3c728b6`(#460, 스펙 086 최종 인계)이다.
+
+- **문제 정의**: 자율 작업 실행 루프가 `candidate-fa66202bf496`를 다음 후보로 제시했다. 목표는
+  `learning_ledger.json`에 이미 남은 `rejected`, `evidence_dependent`, `operator_review` 결정이
+  다음 자율 성장 실행에서 같은 후보를 다시 `safe_high_leverage_work`로 되살리지 못하게 하는 것이다.
+- **구현 상태**: `evolution_loop.py`의 `apply_learning_ledger`가 `rejected/discard`,
+  `evidence_dependent/deferred/observe`, `operator_review` 결정을 후보 상태에 실제 반영한다.
+  보류·운영자 검토 후보는 `safe_high_leverage_work`에서 빠지고, 다음 행동에는 ledger 사유,
+  근거 패키지, 재검토 조건을 남긴다. 알 수 없는 ledger decision은 기존처럼 실패 개방으로 둔다.
+- **완료 후보 소비**: 스펙 087 산출물은 `completed_candidate_id: candidate-fa66202bf496`를 담고,
+  #461 main push의 `Released work ledger` run `28632340016`은 이 후보를 `released`로 발행했다.
+  `Autonomous work execution loop` run `28632340035`는 `candidate-fa66202bf496`를 `RELEASED`로
+  억제하고 실행 가능한 안전 후보를 비웠다. `selected_work`에 보이는 `candidate-facf2fa31834`도
+  `CLOSED_RELEASED`라 새 착수 후보가 아니다.
+- **post-merge 실행**: #461 main push 뒤 `Deploy on merge to main` run `28632340034`,
+  `Released work ledger` run `28632340016`, `Autonomous evolution loop` run `28632340021`,
+  `Autonomous work execution loop` run `28632340035`, `Execution quality package` run `28632340008`가
+  모두 success였다. deploy run은 push:main에 붙은 직접 증거다. KIS smoke sidecar 최신 성공은
+  2026-07-02 schedule run이라 이번 merge의 직접 배포 증거로 쓰지 않는다.
+- **관찰 차이**: 자율 성장 원본 backlog는 `candidate-fa66202bf496`를 계속 `new`로 생성할 수 있다.
+  이번 작업의 완료 반복 방지는 released-work와 autonomous-work 실행 경로에서 확인된다. ledger entry가
+  실제로 들어온 후보는 새 `apply_learning_ledger` 경로로 보류·운영자 검토 상태가 된다.
+- **안전 경계**: 등급 2 운영 자동화 보정이다. 실제 주문, 브로커 실주문 API, 자본 증액, 자본 배분,
+  whitelist/caps 확대, live 전략 교체, live sentinel, 헌법, 커널 목록, K1/K2/K4/K5/K6, 비밀값,
+  외부 유료 서비스 변경 없음. 배포는 dry-run worker 코드 반영이며 실거래 전환이 아니다.
+- **검증**: PR #461 머지 전 focused pytest 39 통과, quickstart ledger replay에서
+  `candidate-fa66202bf496`가 `evidence_dependent`이고 `safe_high_leverage_work`에 없음을 확인,
+  `uv run pytest` 2450 통과·4 스킵, `uv run ruff check src tests` 통과, `git diff --check` 통과,
+  `uv run python scripts/check_handoff_facts.py` OK,
+  `uv run python scripts/agent_harness_probe.py --strict` OK(14/14), PR 품질 관문 성공,
+  `released_work_probe.py --repo-root .` 로컬 재현에서 `candidate-fa66202bf496` released 확인,
+  post-merge deploy와 sidecar run 성공 확인 완료. 인계 갱신 전 main 기준 `uv run pytest -q`는
+  낡은 HANDOFF 때문에 하네스 2건만 실패했고, 이 handoff 갱신 뒤 `uv run pytest -q`는
+  2450 통과·4 스킵이다.
+- **상세 인계**: `HANDOFF-091-LEARNING-LEDGER-CANDIDATE-MEMORY.md`.
 
 ## 최근 관찰 — 2026-07-03 KST (스펙 086 자율 루프 sidecar와 HANDOFF 생존성)
 
@@ -1405,6 +1444,19 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
   통과, `uv run python scripts/agent_harness_probe.py --strict` `OK (14/14)`,
   `uv run python scripts/check_handoff_facts.py` 통과, PR 품질 관문 통과. 머지 직전 전체 테스트와
   린트를 다시 실행해 같은 결과를 확인했다.
+
+## 최근 마일스톤 — 2026-07-03 KST (스펙 087 학습 장부 후보 재발굴 차단)
+
+- main 코드 베이스라인: `753afb7`(PR #461). 기능 커밋: `f1d86f4`.
+- `learning_ledger.json`의 `rejected/discard`, `evidence_dependent/deferred/observe`,
+  `operator_review` 결정이 후보 상태와 `safe_high_leverage_work`에 실제 반영된다.
+- `candidate-fa66202bf496`는 스펙 087 완료 marker로 released-work 장부에 들어갔고, 최신
+  autonomous-work sidecar에서 `RELEASED`로 억제된다. 현재 실행 가능한 안전 후보는 없다.
+- post-merge runs: deploy `28632340034`, released-work `28632340016`, autonomous-evolution
+  `28632340021`, autonomous-work `28632340035`, execution-quality `28632340008` success.
+- 안전 경계: 등급 2 운영 자동화 보정. 주문, 자본, live 전략, whitelist/caps, 헌법, 커널,
+  비밀값, 외부 유료 서비스 변경 없음.
+- 상세: `HANDOFF-091-LEARNING-LEDGER-CANDIDATE-MEMORY.md`.
 
 ## 최근 마일스톤 — 2026-07-03 KST (스펙 086 자율 루프 sidecar와 HANDOFF 생존성)
 
