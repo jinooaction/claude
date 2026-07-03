@@ -116,6 +116,29 @@ CODEX_COMPLETION_GATES: tuple[str, ...] = (
     "필요한 HANDOFF 갱신",
 )
 
+OBJECTIVE_VERSION = "autonomous-growth-objective-v1"
+MAX_RANKED_CANDIDATES = 10
+MAX_PARALLEL_CANDIDATES = 1
+MAX_VALIDATION_MINUTES = 90
+
+_OBJECTIVE_WEIGHTS: dict[str, int] = {
+    "growth_leverage": 30,
+    "evidence_readiness": 20,
+    "validation_cost_fit": 15,
+    "safety_margin": 25,
+    "learning_value": 10,
+}
+
+_OBJECTIVE_STOP_CONDITIONS: tuple[str, ...] = (
+    "operator approval required for safety-impact or grade >=4 work",
+    "missing or malformed required sidecar evidence blocks autonomous start",
+    (
+        "full pytest, ruff, handoff fact check, strict harness, "
+        "or PR quality gate failure blocks merge"
+    ),
+    "WIP or DO NOT MERGE PR body blocks automatic merge",
+)
+
 
 @dataclass(frozen=True)
 class MacroGrowthCandidateTemplate:
@@ -236,6 +259,107 @@ class WorkPacket:
 
 
 @dataclass(frozen=True)
+class ObjectiveExplorationBudget:
+    """자율 성장 후보 탐색의 Codex 작업 범위 예산."""
+
+    max_ranked_candidates: int
+    max_parallel_candidates: int
+    max_validation_minutes: int
+    requires_handoff_refresh: bool
+    requires_pr_quality_gate: bool
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "max_ranked_candidates": self.max_ranked_candidates,
+            "max_parallel_candidates": self.max_parallel_candidates,
+            "max_validation_minutes": self.max_validation_minutes,
+            "requires_handoff_refresh": self.requires_handoff_refresh,
+            "requires_pr_quality_gate": self.requires_pr_quality_gate,
+        }
+
+
+@dataclass(frozen=True)
+class ObjectiveLearningMetrics:
+    """반복 학습에 필요한 후보 큐 집계."""
+
+    ranked_count: int
+    suppressed_count: int
+    operator_approval_count: int
+    released_count: int
+    blocked_count: int
+    safety_impact_count: int
+
+    def to_dict(self) -> dict[str, int]:
+        return {
+            "ranked_count": self.ranked_count,
+            "suppressed_count": self.suppressed_count,
+            "operator_approval_count": self.operator_approval_count,
+            "released_count": self.released_count,
+            "blocked_count": self.blocked_count,
+            "safety_impact_count": self.safety_impact_count,
+        }
+
+
+@dataclass(frozen=True)
+class ObjectiveCandidateScore:
+    """후보 하나를 목적 함수 구성요소로 설명한 점수."""
+
+    candidate_id: str
+    status: str
+    risk_grade: int
+    priority_score: int
+    growth_leverage: int
+    evidence_readiness: int
+    validation_cost_fit: int
+    safety_margin: int
+    learning_value: int
+    total_score: int
+    explanation_ko: str
+
+    def component_scores(self) -> dict[str, int]:
+        return {
+            "growth_leverage": self.growth_leverage,
+            "evidence_readiness": self.evidence_readiness,
+            "validation_cost_fit": self.validation_cost_fit,
+            "safety_margin": self.safety_margin,
+            "learning_value": self.learning_value,
+        }
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "candidate_id": self.candidate_id,
+            "status": self.status,
+            "risk_grade": self.risk_grade,
+            "priority_score": self.priority_score,
+            "component_scores": self.component_scores(),
+            "total_score": self.total_score,
+            "explanation_ko": self.explanation_ko,
+        }
+
+
+@dataclass(frozen=True)
+class ObjectiveCalibration:
+    """자율 성장 목적 함수, 예산, 중단 조건, 학습 지표 계약."""
+
+    objective_version: str
+    selected_candidate_id: str | None
+    exploration_budget: ObjectiveExplorationBudget
+    stop_conditions: tuple[str, ...]
+    learning_metrics: ObjectiveLearningMetrics
+    candidate_scores: tuple[ObjectiveCandidateScore, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "objective_version": self.objective_version,
+            "selected_candidate_id": self.selected_candidate_id,
+            "exploration_budget": self.exploration_budget.to_dict(),
+            "stop_conditions": list(self.stop_conditions),
+            "learning_metrics": self.learning_metrics.to_dict(),
+            "candidate_scores": [score.to_dict() for score in self.candidate_scores],
+        }
+
+
+@dataclass(frozen=True)
 class AutonomousWorkExecutionReport:
     """자율 작업 실행 루프의 최종 보고."""
 
@@ -249,6 +373,7 @@ class AutonomousWorkExecutionReport:
     suppressed_work: tuple[WorkPacket, ...]
     evidence_surfaces: tuple[EvidenceSurface, ...]
     safety_invariants: tuple[str, ...]
+    objective_calibration: ObjectiveCalibration
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -264,6 +389,7 @@ class AutonomousWorkExecutionReport:
             "suppressed_work": [packet.to_dict() for packet in self.suppressed_work],
             "evidence_surfaces": [surface.to_dict() for surface in self.evidence_surfaces],
             "safety_invariants": list(self.safety_invariants),
+            "objective_calibration": self.objective_calibration.to_dict(),
         }
 
     def as_markdown(self) -> str:
@@ -327,6 +453,48 @@ class AutonomousWorkExecutionReport:
                 )
         else:
             lines.append("- 승인 필요 또는 억제 후보가 없습니다.")
+
+        calibration = self.objective_calibration
+        lines += [
+            "",
+            "## 목적 함수 보정",
+            "",
+            "| 항목 | 값 |",
+            "|------|-----|",
+            f"| objective_version | {calibration.objective_version} |",
+            f"| selected_candidate_id | {_table(calibration.selected_candidate_id or '(없음)')} |",
+        ]
+        budget = calibration.exploration_budget.to_dict()
+        for key, value in budget.items():
+            lines.append(f"| {key} | {value} |")
+
+        lines += ["", "### 중단 조건", ""]
+        for condition in calibration.stop_conditions:
+            lines.append(f"- {condition}")
+
+        metrics = calibration.learning_metrics.to_dict()
+        lines += ["", "### 반복 학습 지표", "", "| 지표 | 값 |", "|------|-----:|"]
+        for key, value in metrics.items():
+            lines.append(f"| {key} | {value} |")
+
+        lines += ["", "### 후보 점수", ""]
+        if calibration.candidate_scores:
+            lines += [
+                "| 후보 | 상태 | 위험 | 총점 | 성장 | 증거 | 검증 | 안전 | 학습 | 설명 |",
+                "|------|------|-----:|-----:|-----:|-----:|-----:|-----:|-----:|------|",
+            ]
+            for score in calibration.candidate_scores:
+                components = score.component_scores()
+                lines.append(
+                    f"| {_table(score.candidate_id)} | {score.status} | {score.risk_grade} | "
+                    f"{score.total_score} | {components['growth_leverage']} | "
+                    f"{components['evidence_readiness']} | "
+                    f"{components['validation_cost_fit']} | "
+                    f"{components['safety_margin']} | {components['learning_value']} | "
+                    f"{_table(score.explanation_ko)} |"
+                )
+        else:
+            lines.append("- 점수화할 후보가 없습니다.")
 
         lines += [
             "",
@@ -1169,6 +1337,171 @@ def _overall_status(
     return STATUS_OBSERVATION_WAIT
 
 
+def _clamp_score(value: int) -> int:
+    return min(100, max(0, value))
+
+
+def _surface_score(surface: EvidenceSurface | None) -> int:
+    if surface is None:
+        return 0
+    if surface.parse_status in {PARSE_OK, PARSE_PRESENT}:
+        return 100
+    if surface.parse_status == PARSE_MALFORMED:
+        return 25
+    return 0
+
+
+def _evidence_readiness_score(
+    packet: WorkPacket,
+    surfaces_by_ref: Mapping[str, EvidenceSurface],
+) -> int:
+    if not packet.required_inputs:
+        return 100
+    scores = [_surface_score(surfaces_by_ref.get(ref)) for ref in packet.required_inputs]
+    return round(sum(scores) / len(scores))
+
+
+def _growth_leverage_score(packet: WorkPacket) -> int:
+    score = round(packet.priority_score / 30)
+    if packet.work_type == _DOMAIN_WORK_TYPES["agent_ops"]:
+        score += 10
+    if packet.candidate_id in {
+        MACRO_GROWTH_DISCOVERY_CANDIDATE_ID,
+        MACRO_GROWTH_SOURCE_DIVERSIFICATION_CANDIDATE_ID,
+        MACRO_GROWTH_OBJECTIVE_CALIBRATION_CANDIDATE_ID,
+    }:
+        score += 5
+    if packet.status != STATUS_EXECUTION_READY:
+        score -= 10
+    return _clamp_score(score)
+
+
+def _validation_cost_fit_score(packet: WorkPacket) -> int:
+    score = 100 - (max(packet.risk_grade, 1) - 1) * 10
+    score -= min(20, max(0, len(packet.required_inputs) - 1) * 5)
+    if packet.status == STATUS_OPERATOR_APPROVAL_REQUIRED:
+        score -= 20
+    if packet.status == STATUS_BLOCKED:
+        score -= 30
+    return _clamp_score(score)
+
+
+def _safety_margin_score(packet: WorkPacket) -> int:
+    score = 100
+    score -= max(0, packet.risk_grade - 2) * 20
+    score -= len(packet.safety_impact) * 30
+    if packet.status == STATUS_OPERATOR_APPROVAL_REQUIRED:
+        score -= 10
+    return _clamp_score(score)
+
+
+def _learning_value_score(packet: WorkPacket) -> int:
+    score = 50
+    if packet.work_type == _DOMAIN_WORK_TYPES["agent_ops"]:
+        score += 25
+    if packet.candidate_id in {
+        MACRO_GROWTH_DISCOVERY_CANDIDATE_ID,
+        MACRO_GROWTH_SOURCE_DIVERSIFICATION_CANDIDATE_ID,
+        MACRO_GROWTH_OBJECTIVE_CALIBRATION_CANDIDATE_ID,
+    }:
+        score += 15
+    learning_text = f"{packet.reason_ko} {packet.next_action_ko}"
+    if any(token in learning_text for token in ("반복", "다시", "완료", "학습", "후보")):
+        score += 10
+    if packet.status in {STATUS_RELEASED, STATUS_SUPPRESSED}:
+        score -= 15
+    if packet.status == STATUS_OPERATOR_APPROVAL_REQUIRED:
+        score -= 10
+    return _clamp_score(score)
+
+
+def _total_objective_score(component_scores: Mapping[str, int]) -> int:
+    weighted = sum(
+        component_scores[key] * weight for key, weight in _OBJECTIVE_WEIGHTS.items()
+    )
+    total_weight = sum(_OBJECTIVE_WEIGHTS.values())
+    return (weighted + total_weight // 2) // total_weight
+
+
+def _objective_explanation(packet: WorkPacket, component_scores: Mapping[str, int]) -> str:
+    if packet.status == STATUS_OPERATOR_APPROVAL_REQUIRED:
+        return "안전 표면이 있어 운영자 명시 승인 전에는 자동 착수하지 않는 후보입니다."
+    if component_scores["evidence_readiness"] < 100:
+        return "필수 증거가 일부 부족해 착수 전 sidecar 상태 확인이 필요한 후보입니다."
+    if packet.work_type == _DOMAIN_WORK_TYPES["agent_ops"]:
+        return "안전 경계 안에서 자율 성장 루프의 반복 판단 비용을 줄이는 후보입니다."
+    return "기존 안전 경계 안에서 검증 가능한 다음 작업 후보입니다."
+
+
+def _objective_candidate_score(
+    packet: WorkPacket,
+    surfaces_by_ref: Mapping[str, EvidenceSurface],
+) -> ObjectiveCandidateScore:
+    component_scores = {
+        "growth_leverage": _growth_leverage_score(packet),
+        "evidence_readiness": _evidence_readiness_score(packet, surfaces_by_ref),
+        "validation_cost_fit": _validation_cost_fit_score(packet),
+        "safety_margin": _safety_margin_score(packet),
+        "learning_value": _learning_value_score(packet),
+    }
+    return ObjectiveCandidateScore(
+        candidate_id=packet.candidate_id,
+        status=packet.status,
+        risk_grade=packet.risk_grade,
+        priority_score=packet.priority_score,
+        growth_leverage=component_scores["growth_leverage"],
+        evidence_readiness=component_scores["evidence_readiness"],
+        validation_cost_fit=component_scores["validation_cost_fit"],
+        safety_margin=component_scores["safety_margin"],
+        learning_value=component_scores["learning_value"],
+        total_score=_total_objective_score(component_scores),
+        explanation_ko=_objective_explanation(packet, component_scores),
+    )
+
+
+def _objective_learning_metrics(
+    ranked: Sequence[WorkPacket],
+    suppressed: Sequence[WorkPacket],
+) -> ObjectiveLearningMetrics:
+    packets = [*ranked, *suppressed]
+    return ObjectiveLearningMetrics(
+        ranked_count=len(ranked),
+        suppressed_count=len(suppressed),
+        operator_approval_count=sum(
+            packet.status == STATUS_OPERATOR_APPROVAL_REQUIRED for packet in packets
+        ),
+        released_count=sum(packet.status == STATUS_RELEASED for packet in packets),
+        blocked_count=sum(packet.status == STATUS_BLOCKED for packet in packets),
+        safety_impact_count=sum(bool(packet.safety_impact) for packet in packets),
+    )
+
+
+def _objective_calibration(
+    selected: WorkPacket | None,
+    ranked: Sequence[WorkPacket],
+    suppressed: Sequence[WorkPacket],
+    surfaces: Sequence[EvidenceSurface],
+) -> ObjectiveCalibration:
+    surfaces_by_ref = {surface.source_ref: surface for surface in surfaces}
+    scored_packets = [*ranked, *suppressed]
+    return ObjectiveCalibration(
+        objective_version=OBJECTIVE_VERSION,
+        selected_candidate_id=selected.candidate_id if selected is not None else None,
+        exploration_budget=ObjectiveExplorationBudget(
+            max_ranked_candidates=MAX_RANKED_CANDIDATES,
+            max_parallel_candidates=MAX_PARALLEL_CANDIDATES,
+            max_validation_minutes=MAX_VALIDATION_MINUTES,
+            requires_handoff_refresh=True,
+            requires_pr_quality_gate=True,
+        ),
+        stop_conditions=_OBJECTIVE_STOP_CONDITIONS,
+        learning_metrics=_objective_learning_metrics(ranked, suppressed),
+        candidate_scores=tuple(
+            _objective_candidate_score(packet, surfaces_by_ref) for packet in scored_packets
+        ),
+    )
+
+
 def build_autonomous_work_execution(
     evidence_texts: Mapping[str, str | None],
     *,
@@ -1219,10 +1552,15 @@ def build_autonomous_work_execution(
             ),
         ]
     )
-    ranked = tuple(packet for packet in ordered if packet.status == STATUS_EXECUTION_READY)[:10]
-    suppressed = tuple(packet for packet in ordered if packet.status != STATUS_EXECUTION_READY)[:10]
+    ranked = tuple(
+        packet for packet in ordered if packet.status == STATUS_EXECUTION_READY
+    )[:MAX_RANKED_CANDIDATES]
+    suppressed = tuple(
+        packet for packet in ordered if packet.status != STATUS_EXECUTION_READY
+    )[:MAX_RANKED_CANDIDATES]
     selected = ranked[0] if ranked else (suppressed[0] if suppressed else None)
     overall = _overall_status(selected, ranked, suppressed, surfaces)
+    objective_calibration = _objective_calibration(selected, ranked, suppressed, surfaces)
 
     return AutonomousWorkExecutionReport(
         schema_version=SCHEMA_VERSION,
@@ -1235,6 +1573,7 @@ def build_autonomous_work_execution(
         suppressed_work=suppressed,
         evidence_surfaces=surfaces,
         safety_invariants=SAFETY_INVARIANTS,
+        objective_calibration=objective_calibration,
     )
 
 
@@ -1250,6 +1589,10 @@ __all__ = [
     "MACRO_GROWTH_DISCOVERY_CANDIDATE_ID",
     "MACRO_GROWTH_OBJECTIVE_CALIBRATION_CANDIDATE_ID",
     "MACRO_GROWTH_SOURCE_DIVERSIFICATION_CANDIDATE_ID",
+    "ObjectiveCalibration",
+    "ObjectiveCandidateScore",
+    "ObjectiveExplorationBudget",
+    "ObjectiveLearningMetrics",
     "SAFETY_INVARIANTS",
     "SCHEMA_VERSION",
     "STATUS_BLOCKED",

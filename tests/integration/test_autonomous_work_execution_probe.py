@@ -97,9 +97,18 @@ def test_probe_writes_json_and_markdown(tmp_path, capsys):
     assert printed == written
     assert written["selected_work"]["candidate_id"] == "candidate-fd04772a23c5"
     assert written["selected_work"]["status"] == "EXECUTION_READY"
+    assert written["objective_calibration"]["selected_candidate_id"] == (
+        "candidate-fd04772a23c5"
+    )
+    assert (
+        written["objective_calibration"]["exploration_budget"]["max_parallel_candidates"]
+        == 1
+    )
     assert written["run_id"] == "123"
     assert written["commit"] == "abc123"
-    assert "자율 작업 실행 루프" in summary_out.read_text(encoding="utf-8")
+    summary = summary_out.read_text(encoding="utf-8")
+    assert "자율 작업 실행 루프" in summary
+    assert "## 목적 함수 보정" in summary
 
 
 def test_probe_repo_root_released_work_overrides_sidecar_lag(tmp_path, capsys):
