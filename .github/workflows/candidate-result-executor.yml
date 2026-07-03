@@ -80,6 +80,12 @@ jobs:
               > /tmp/candidate_result_inputs/candidate_packages.json
             echo "candidate packages missing; result executor will publish empty/degraded run"
           fi
+          uv run python scripts/released_work_probe.py \
+            --repo-root . \
+            --run-id "${GITHUB_RUN_ID}" \
+            --commit "${GITHUB_SHA}" \
+            --json-out /tmp/candidate_result_inputs/released_work.json \
+            --json > /tmp/released_work.stdout.json
 
           sidecar_dir=/tmp/candidate_result_sidecars
           mkdir -p "${sidecar_dir}"
@@ -222,6 +228,7 @@ jobs:
           set -euo pipefail
           uv run python scripts/candidate_result_executor_probe.py \
             --package-plan /tmp/candidate_result_inputs/candidate_packages.json \
+            --released-work /tmp/candidate_result_inputs/released_work.json \
             --summary-out /tmp/LAST_RUN.md \
             --json-out /tmp/candidate_result_executor.json \
             --results-out /tmp/candidate_results.json \

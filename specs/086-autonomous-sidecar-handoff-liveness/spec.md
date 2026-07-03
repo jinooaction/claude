@@ -55,7 +55,7 @@
 - `pipeline-liveness`가 오래된 실행이라 `autonomous-evolution` OK를 담지 못하면 후보를 완료로 낮추지 않는다.
 - HANDOFF가 읽히지만 세션 시작 진입점이나 `/sync` 규칙을 담지 않으면 후보를 완료로 낮추지 않는다.
 - 후보를 완료로 낮춰도 `pipeline-liveness` 자체가 CRITICAL이면 자율 작업 실행 루프의 기존 복구 후보가 우선해야 한다.
-- push-to-main workflow가 동시에 실행되어 promotion/factory가 직전 backlog를 먼저 읽어도, 현재 체크아웃의 released-work 장부로 완료 후보를 다시 버려야 한다.
+- push-to-main workflow가 동시에 실행되어 promotion/factory/result executor가 직전 sidecar를 먼저 읽어도, 현재 체크아웃의 released-work 장부로 완료 후보를 다시 버려야 한다.
 - 이 작업은 새 sidecar 브랜치, 새 주문 경로, 새 배포 채널을 만들지 않는다.
 
 ## Requirements *(mandatory)*
@@ -69,7 +69,7 @@
 - **FR-005**: System MUST publish a Speckit contract with an explicit completed-candidate marker for `candidate-88a7e7f07361` after implementation tasks are complete.
 - **FR-006**: System MUST update the active feature pointer for the current worktree so future sessions locate this spec before acting on stale prose.
 - **FR-007**: System MUST verify focused unit behavior, released-work reproduction, full tests, lint, HANDOFF fact check, strict harness, and PR quality gate before merge.
-- **FR-008**: Promotion and candidate-factory workflows MUST generate current-checkout released-work evidence before scanning stale automation sidecars, so completed candidates are not re-promoted or re-packaged during simultaneous post-merge workflow runs.
+- **FR-008**: Promotion, candidate-factory, and candidate-result-executor workflows MUST generate current-checkout released-work evidence before scanning stale automation sidecars, so completed candidates are not re-promoted, re-packaged, or re-executed during simultaneous post-merge workflow runs.
 
 ### Key Entities *(include if feature involves data)*
 
@@ -87,7 +87,7 @@
 - **SC-003**: `released_work_probe.py --repo-root .` includes `candidate-88a7e7f07361` after tasks are checked complete and the explicit contract marker is present.
 - **SC-004**: Focused evolution-loop tests, released-work reproduction, full pytest, ruff, HANDOFF fact check, strict harness, and PR quality gate pass.
 - **SC-005**: No changed file belongs to broker order submission, capital ladder authority, whitelist/caps, live strategy switching, secrets, constitution, or kernel manifest.
-- **SC-006**: With stale promotion/factory sidecars from the previous run plus current released-work evidence, `candidate-88a7e7f07361` is `DISCARD` in promotion and absent from factory package outputs.
+- **SC-006**: With stale promotion/factory/result sidecars from the previous run plus current released-work evidence, `candidate-88a7e7f07361` is `DISCARD` in promotion, absent from factory package outputs, and absent from fresh result-executor outputs.
 
 ## Assumptions
 

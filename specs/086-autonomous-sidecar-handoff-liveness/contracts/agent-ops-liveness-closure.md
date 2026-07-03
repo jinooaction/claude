@@ -29,13 +29,13 @@ When incomplete:
 
 ## Downstream Race Contract
 
-Promotion and candidate-factory automation may start at the same time as autonomous-evolution and released-work after a push to `main`. They must therefore generate or consume released-work evidence for the current checkout before acting on stale automation sidecar candidates.
+Promotion, candidate-factory, and candidate-result-executor automation may start at the same time as autonomous-evolution and released-work after a push to `main`. They must therefore generate or consume released-work evidence for the current checkout before acting on stale automation sidecar candidates.
 
 When `released-work` contains `candidate-88a7e7f07361`:
 
 - Promotion assessment stage is `DISCARD`.
 - Candidate factory emits no package for this candidate.
-- Candidate result executor has no new package for this candidate to execute.
+- Candidate result executor does not execute or publish a fresh result for this candidate.
 
 ## Safety Contract
 

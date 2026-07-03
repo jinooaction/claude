@@ -67,6 +67,8 @@
 - [x] T015 Run `git diff --check`.
 - [x] T016 Close post-merge stale-sidecar race by feeding current released-work evidence into promotion and candidate-factory workflows.
 - [x] T017 Add stale released-work regression tests for promotion/factory suppression.
+- [x] T018 Close candidate-result-executor stale package race with current released-work evidence.
+- [x] T019 Add stale released-work regression tests for result executor suppression.
 
 ## Completion Evidence Outside Released-Work Checklist
 

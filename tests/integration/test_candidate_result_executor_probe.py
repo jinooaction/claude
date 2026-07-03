@@ -46,6 +46,8 @@ def test_probe_writes_pending_results_when_runtime_data_is_absent(tmp_path, caps
         [
             "--package-plan",
             str(package_plan),
+            "--released-work",
+            str(_FIXTURES / "released_work.json"),
             "--summary-out",
             str(summary),
             "--json-out",
@@ -83,6 +85,8 @@ def test_result_executor_workflow_publishes_sidecar_without_order_or_broker_path
     assert "schedule:" in text and "workflow_dispatch:" in text
     assert "42 8 * * *" in text
     assert "automation/candidate-implementation-factory-last-run:candidate_packages.json" in text
+    assert "released_work_probe.py" in text
+    assert "--released-work /tmp/candidate_result_inputs/released_work.json" in text
     assert "/tmp/candidate_result_sidecars" in text
     assert "pipeline_liveness_probe.py --manifest" in text
     assert "origin/${ref}:${file}" in text

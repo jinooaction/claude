@@ -87,6 +87,38 @@ def test_executor_creates_one_result_for_every_current_candidate_package() -> No
     assert run.counts[STATUS_PASS] == 9
 
 
+def test_released_work_skips_stale_candidate_package_without_execution() -> None:
+    plan = _package_plan()
+    plan["packages"] = [
+        package
+        for package in plan["packages"]
+        if package["candidate_id"] in {"candidate-88a7e7f07361", "candidate-e481b0309206"}
+    ]
+    calls: list[tuple[str, ...]] = []
+
+    def runner(command: list[str] | tuple[str, ...], timeout: int) -> CommandExecution:
+        calls.append(tuple(command))
+        return CommandExecution(command=tuple(command), exit_code=0, stdout="{}", stderr="")
+
+    run = build_candidate_result_executor_run(
+        package_plan=plan,
+        released_work={
+            "released_work": [
+                {
+                    "candidate_id": "candidate-88a7e7f07361",
+                    "status": "released",
+                    "reason_ko": "스펙 086 완료",
+                }
+            ]
+        },
+        now=NOW,
+        runner=runner,
+    )
+
+    assert {result.candidate_id for result in run.results} == {"candidate-e481b0309206"}
+    assert len(calls) == 1
+
+
 def test_missing_strategy_data_is_pending_not_false_pass() -> None:
     plan = _package_plan()
     plan["packages"] = [

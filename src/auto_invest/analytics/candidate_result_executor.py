@@ -340,6 +340,7 @@ class CandidateResultExecutorRun:
 def build_candidate_result_executor_run(
     *,
     package_plan: Mapping[str, Any] | None,
+    released_work: Mapping[str, Any] | None = None,
     now: datetime | None = None,
     commit: str = "unknown",
     run_id: str = "local",
@@ -347,7 +348,7 @@ def build_candidate_result_executor_run(
     runner: Runner | None = None,
 ) -> CandidateResultExecutorRun:
     now = _ensure_utc(now or datetime.now(UTC))
-    rows = _package_rows(package_plan)
+    rows = _package_rows(package_plan, released_work)
     missing_inputs: list[str] = []
     if package_plan is None or "packages" not in package_plan:
         missing_inputs.append("candidate_packages.packages")
@@ -702,10 +703,36 @@ def _run_command(tokens: Sequence[str], timeout_seconds: int) -> CommandExecutio
         )
 
 
-def _package_rows(package_plan: Mapping[str, Any] | None) -> tuple[Mapping[str, Any], ...]:
+def _package_rows(
+    package_plan: Mapping[str, Any] | None,
+    released_work: Mapping[str, Any] | None,
+) -> tuple[Mapping[str, Any], ...]:
     if not isinstance(package_plan, Mapping) or not isinstance(package_plan.get("packages"), list):
         return ()
-    return tuple(item for item in package_plan["packages"] if isinstance(item, Mapping))
+    released = _released_candidate_ids(released_work)
+    return tuple(
+        item
+        for item in package_plan["packages"]
+        if isinstance(item, Mapping)
+        and str(item.get("candidate_id") or "").strip() not in released
+    )
+
+
+def _released_candidate_ids(doc: Mapping[str, Any] | None) -> set[str]:
+    if not isinstance(doc, Mapping):
+        return set()
+    released: set[str] = set()
+    for key in ("released_work", "entries", "records"):
+        value = doc.get(key)
+        if not isinstance(value, list):
+            continue
+        for item in value:
+            if not isinstance(item, Mapping):
+                continue
+            candidate_id = str(item.get("candidate_id") or "").strip()
+            if candidate_id:
+                released.add(candidate_id)
+    return released
 
 
 def _extract_json_metrics(executions: Sequence[CommandExecution]) -> Mapping[str, Any] | None:
