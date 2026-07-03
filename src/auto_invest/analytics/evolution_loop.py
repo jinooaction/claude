@@ -26,6 +26,8 @@ STATUS_REJECTED = "rejected"
 STATUS_RELEASED = "released"
 STATUS_OPERATOR_REVIEW = "operator_review"
 
+SOURCE_DIVERSIFICATION_CANDIDATE_ID = "candidate-source-diversification-sidecar-bottleneck"
+
 DECISION_DISCARD = "discard"
 DECISION_OBSERVE = "observe"
 DECISION_CREATE_SPEC = "create_spec"
@@ -178,6 +180,20 @@ DEFAULT_EVIDENCE_REQUIREMENTS: tuple[EvidenceRequirement, ...] = (
         "automation/pipeline-liveness-last-run",
         "LAST_RUN.md",
         30.0,
+    ),
+    EvidenceRequirement(
+        "capital-path-readiness",
+        "automation/capital-path-readiness-last-run",
+        "capital_path_readiness.json",
+        30.0,
+        "sidecar-json",
+    ),
+    EvidenceRequirement(
+        "released-work",
+        "automation/released-work-last-run",
+        "released_work.json",
+        30.0,
+        "sidecar-json",
     ),
     EvidenceRequirement(
         "rebalance-paper-forward",
@@ -698,8 +714,17 @@ def scan_evolution(
     candidates = _generate_candidates(surfaces)
     ledger_entries = parse_learning_ledger(ledger_doc)
     promotion_failures = parse_promotion_failure_signals(evidence_texts.get("promotion-summary"))
+    released_candidates = parse_released_work(evidence_texts.get("released-work"))
     candidates = apply_promotion_failure_signals(candidates, promotion_failures)
     candidates = apply_learning_ledger(candidates, ledger_entries)
+    candidates = apply_released_work(candidates, released_candidates)
+    candidates = add_evidence_derived_candidates(
+        candidates,
+        surfaces,
+        ledger_entries,
+        promotion_failures,
+        released_candidates,
+    )
     plans = tuple(generate_experiment_plan(candidate) for candidate in candidates)
     ledger_entries = update_learning_ledger(
         ledger_entries,
@@ -884,6 +909,40 @@ def parse_promotion_failure_signals(raw: str | None) -> tuple[PromotionFailureSi
     return tuple(signals)
 
 
+def parse_released_work(raw: str | None) -> dict[str, str]:
+    if not raw:
+        return {}
+    released: dict[str, str] = {}
+    for doc in _json_docs_from_text(raw):
+        raw_entries = (
+            doc.get("released_work")
+            or doc.get("entries")
+            or doc.get("records")
+            or doc.get("items")
+            or []
+        )
+        if not isinstance(raw_entries, list):
+            continue
+        for item in raw_entries:
+            if not isinstance(item, Mapping):
+                continue
+            candidate_id = str(
+                item.get("candidate_id") or item.get("completed_candidate_id") or ""
+            ).strip()
+            if not candidate_id:
+                continue
+            status = str(item.get("status") or "released").strip().lower()
+            if status not in {"released", "release", "completed", "complete", "done"}:
+                continue
+            reason = str(
+                item.get("reason_ko")
+                or item.get("source_file")
+                or "released-work 장부가 완료 후보로 기록했다."
+            )
+            released[candidate_id] = mask_sensitive_values(reason)
+    return released
+
+
 def apply_promotion_failure_signals(
     candidates: Sequence[BreakthroughCandidate],
     failures: Sequence[PromotionFailureSignal],
@@ -955,6 +1014,165 @@ def apply_learning_ledger(
         else:
             updated.append(candidate)
     return tuple(_sort_candidates(updated))
+
+
+def apply_released_work(
+    candidates: Sequence[BreakthroughCandidate],
+    released_candidates: Mapping[str, str],
+) -> tuple[BreakthroughCandidate, ...]:
+    if not released_candidates:
+        return tuple(candidates)
+    updated: list[BreakthroughCandidate] = []
+    for candidate in candidates:
+        reason = released_candidates.get(candidate.candidate_id)
+        if reason is None:
+            updated.append(candidate)
+            continue
+        updated.append(
+            replace(
+                candidate,
+                status=STATUS_RELEASED,
+                evidence_dependency=EVIDENCE_NONE,
+                next_action_ko=f"released-work 장부가 이 후보를 완료 처리했다: {reason}",
+                recheck_condition=None,
+            )
+        )
+    return tuple(_sort_candidates(updated))
+
+
+def add_evidence_derived_candidates(
+    candidates: Sequence[BreakthroughCandidate],
+    surfaces: Sequence[EvidenceSurface],
+    ledger_entries: Sequence[LearningLedgerEntry],
+    promotion_failures: Sequence[PromotionFailureSignal],
+    released_candidates: Mapping[str, str],
+) -> tuple[BreakthroughCandidate, ...]:
+    if not _static_candidate_set_is_closed(candidates):
+        return tuple(candidates)
+    if any(
+        candidate.candidate_id == SOURCE_DIVERSIFICATION_CANDIDATE_ID
+        for candidate in candidates
+    ):
+        return tuple(candidates)
+    by_key = {surface.key: surface for surface in surfaces}
+    candidate = _source_diversification_candidate(
+        candidates,
+        by_key,
+        ledger_entries,
+        promotion_failures,
+        released_candidates,
+    )
+    return tuple(_sort_candidates((*candidates, candidate)))
+
+
+def _static_candidate_set_is_closed(candidates: Sequence[BreakthroughCandidate]) -> bool:
+    if not candidates:
+        return False
+    if any(
+        candidate.status == STATUS_OPERATOR_REVIEW or candidate.safety_impact
+        for candidate in candidates
+    ):
+        return False
+    return not any(
+        candidate.status in {STATUS_NEW, STATUS_PLANNED}
+        and candidate.risk_grade <= 2
+        and not candidate.safety_impact
+        for candidate in candidates
+    )
+
+
+def _source_diversification_candidate(
+    candidates: Sequence[BreakthroughCandidate],
+    by_key: Mapping[str, EvidenceSurface],
+    ledger_entries: Sequence[LearningLedgerEntry],
+    promotion_failures: Sequence[PromotionFailureSignal],
+    released_candidates: Mapping[str, str],
+) -> BreakthroughCandidate:
+    ledger_counts = _ledger_decision_counts(ledger_entries)
+    issue_count = _capital_observability_issue_count(by_key.get("capital-path-readiness"))
+    stale_or_missing = [
+        key
+        for key, surface in sorted(by_key.items())
+        if surface.freshness_status in {"late", "stale", "missing"}
+    ]
+    evidence_refs = _source_diversification_refs(by_key)
+    problem = (
+        f"정적 후보 {len(candidates)}개가 모두 완료·거절·보류로 닫혔다. "
+        f"released-work 완료 {len(released_candidates)}건, "
+        f"학습 장부 결정 {_format_ledger_counts(ledger_counts)}, "
+        f"promotion failure {len(promotion_failures)}건, "
+        f"관찰 병목 {issue_count}건, "
+        f"신선도 확인 필요 {len(stale_or_missing)}건이 새 후보 소스 확장을 요구한다."
+    )
+    next_action = (
+        "학습 장부, released-work, pipeline-liveness, capital-path-readiness sidecar를 "
+        "정적 템플릿 밖 후보 생성 입력으로 승격하고, 반복 실패와 관찰 병목을 "
+        "다음 SDD 후보로 결정론적으로 변환한다."
+    )
+    safety_impact = classify_safety_surfaces(
+        "증거 기반 후보 소스 다변화\n" f"{problem}\n{next_action}"
+    )
+    return BreakthroughCandidate(
+        candidate_id=SOURCE_DIVERSIFICATION_CANDIDATE_ID,
+        domain_key="agent_ops",
+        title_ko="증거 기반 후보 소스 다변화",
+        problem_ko=mask_sensitive_values(problem),
+        evidence_refs=evidence_refs,
+        expected_benefit="operator_leverage",
+        breakthrough_type="operator_leverage",
+        growth_leverage=76,
+        capability_compounding=94,
+        capital_path_alignment=58,
+        evidence_confidence=84 if len(evidence_refs) >= 2 else 55,
+        safety_preservation=96,
+        learning_velocity=92,
+        repeatability=94,
+        evidence_dependency=EVIDENCE_NONE,
+        confidence="high" if len(evidence_refs) >= 2 else "medium",
+        risk_grade=risk_grade_for_surfaces(safety_impact),
+        safety_impact=safety_impact,
+        status=STATUS_NEW if not safety_impact else STATUS_OPERATOR_REVIEW,
+        next_action_ko=mask_sensitive_values(next_action),
+        recheck_condition=None,
+    )
+
+
+def _ledger_decision_counts(entries: Sequence[LearningLedgerEntry]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for entry in entries:
+        decision = entry.decision.strip().lower()
+        if not decision:
+            continue
+        counts[decision] = counts.get(decision, 0) + 1
+    return counts
+
+
+def _format_ledger_counts(counts: Mapping[str, int]) -> str:
+    if not counts:
+        return "없음"
+    return ", ".join(f"{decision} {count}건" for decision, count in sorted(counts.items()))
+
+
+def _capital_observability_issue_count(surface: EvidenceSurface | None) -> int:
+    if surface is None:
+        return 0
+    value = surface.machine_payload.get("observability_issue_count")
+    return value if isinstance(value, int) else 0
+
+
+def _source_diversification_refs(
+    by_key: Mapping[str, EvidenceSurface],
+) -> tuple[str, ...]:
+    preferred = (
+        "released-work",
+        "pipeline-liveness",
+        "capital-path-readiness",
+        "promotion-summary",
+    )
+    refs = [key for key in preferred if key in by_key]
+    if len(refs) >= 2:
+        return tuple(refs)
+    return ("pipeline-liveness", "released-work")
 
 
 def _ledger_next_action(entry: LearningLedgerEntry) -> str:
@@ -1103,6 +1321,13 @@ def _surface_from_text(
     ts = parse_timestamp_utc(raw)
     freshness = _freshness(ts, now, req.max_age_hours)
     signals = _signals(req.key, raw)
+    machine_payload: dict[str, Any] = {"signals": sorted(signals)}
+    if req.key == "capital-path-readiness":
+        machine_payload["observability_issue_count"] = _json_list_count(
+            raw, "observability_issues"
+        )
+    if req.key == "released-work":
+        machine_payload["released_count"] = len(parse_released_work(raw))
     return EvidenceSurface(
         key=req.key,
         kind=req.kind,
@@ -1111,8 +1336,16 @@ def _surface_from_text(
         producer_commit=_producer_commit(raw),
         freshness_status=freshness,
         summary_ko=mask_sensitive_values(_summary_for(req.key, raw, freshness, signals)),
-        machine_payload={"signals": sorted(signals)},
+        machine_payload=machine_payload,
     )
+
+
+def _json_list_count(raw: str, key: str) -> int:
+    for doc in _json_docs_from_text(raw):
+        value = doc.get(key)
+        if isinstance(value, list):
+            return len(value)
+    return 0
 
 
 def _generate_candidates(
