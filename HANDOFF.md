@@ -33,15 +33,15 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `2f64cba` — Merge pull request #467 from jinooaction/Codex/090-source-diversification-bottleneck |
-| main 테스트 | PR #467 머지 전 `uv run pytest -q` → 2459 passed, 4 skipped. 인계 갱신 전 main 기준 `uv run pytest -q`는 낡은 HANDOFF 때문에 2 failed, 2457 passed, 4 skipped였고, 이 handoff 갱신 후 `uv run pytest -q` → 2459 passed, 4 skipped. |
+| 마지막 main 커밋 | `944d2dc` — Merge pull request #469 from jinooaction/Codex/091-autonomous-growth-objective-calibration |
+| main 테스트 | PR #469 머지 전 `uv run pytest` → 2461 passed, 4 skipped. 인계 갱신 전 main 기준 `uv run pytest -q`는 낡은 HANDOFF 때문에 2 failed, 2459 passed, 4 skipped였고, 이 handoff 갱신 후 `uv run pytest -q` → 2461 passed, 4 skipped. |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
 | 열린 PR | 없음. |
-| 출시 완료 스펙 | 최신 추가: 090(source diversification 산출 후보 완료 폐쇄), 089(정적 후보 템플릿 밖 증거 기반 후보 공간 확장), 088(거시 자율 성장 후보 발굴기), 087(학습 장부로 폐기·보류 후보 재발굴 차단), 086(자율 루프 sidecar와 HANDOFF 생존성 완료 후보 폐쇄), 085(공개 데이터 수집·교차 검증 확장), 084(오래된 증거와 성과 실패 분리), 083(주문 거부·체결 품질 손익 관측), 082(레짐·성과 후보 점수화), 081(자율 루프 품질 폐쇄), 080(운영자 대시보드와 모바일 알림 루프), 079(완료 후보 소비 장부), 078(돈 경로 게이트 정렬 루프), 077(자율 작업 실행 루프), 076(자본 경로 준비도 루프), 075(전략 실패 학습), 074(후보 가격 이력 지원), 073(후보 pending next action 보정), 072(후보 증거 진단), 071(후보 결과 실행기), 070(후보 구현 공장), 069(자율 승격 실행 루프), 068(자율 승격 루프 자동 분류), 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
-| 골격 스펙 | 없음. `.specify/feature.json`은 최신 출시 스펙 `specs/090-source-diversification-candidate-closure`를 가리킨다. 스펙 090은 #467로 main에 들어갔다. |
-| 최근 출시 작업 | #467 스펙 090 source diversification 산출 후보 완료 폐쇄. #466 스펙 089 인계. #465 스펙 089 정적 후보 템플릿 밖 증거 기반 후보 공간 확장. #464 스펙 088 인계. #463 스펙 088 거시 자율 성장 후보 발굴기. |
-| 활성 작업 | 열린 PR 없음. 최신 released-work sidecar run `28643121934`은 `candidate-source-diversification-sidecar-bottleneck`을 스펙 090 완료 후보로 released 처리했다. 최신 autonomous-work sidecar run `28643121911`은 다음 후보 `candidate-autonomous-growth-objective-calibration`을 `EXECUTION_READY`로 선택한다. 다음 세션은 이 후보를 SDD 기준으로 이어받으면 된다. 돈 경로는 계속 `PREVIEW_ONLY`다. |
-| 안전 경계 | #467은 등급 2 운영 자동화 보정이다. completed-candidate marker와 회귀 테스트, Speckit 포인터만 바꿨고 주문, 자본 증액, 자본 배분, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, live sentinel, 브로커 주문, K1/K2/K4/K5/K6, 헌법, 커널 목록, 비밀값, 외부 유료 서비스는 변경하지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`다. |
+| 출시 완료 스펙 | 최신 추가: 091(자율 성장 목적 함수와 탐색 예산 보정), 090(source diversification 산출 후보 완료 폐쇄), 089(정적 후보 템플릿 밖 증거 기반 후보 공간 확장), 088(거시 자율 성장 후보 발굴기), 087(학습 장부로 폐기·보류 후보 재발굴 차단), 086(자율 루프 sidecar와 HANDOFF 생존성 완료 후보 폐쇄), 085(공개 데이터 수집·교차 검증 확장), 084(오래된 증거와 성과 실패 분리), 083(주문 거부·체결 품질 손익 관측), 082(레짐·성과 후보 점수화), 081(자율 루프 품질 폐쇄), 080(운영자 대시보드와 모바일 알림 루프), 079(완료 후보 소비 장부), 078(돈 경로 게이트 정렬 루프), 077(자율 작업 실행 루프), 076(자본 경로 준비도 루프), 075(전략 실패 학습), 074(후보 가격 이력 지원), 073(후보 pending next action 보정), 072(후보 증거 진단), 071(후보 결과 실행기), 070(후보 구현 공장), 069(자율 승격 실행 루프), 068(자율 승격 루프 자동 분류), 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
+| 골격 스펙 | 없음. `.specify/feature.json`은 최신 출시 스펙 `specs/091-autonomous-growth-objective-calibration`을 가리킨다. 스펙 091은 #469로 main에 들어갔다. |
+| 최근 출시 작업 | #469 스펙 091 자율 성장 목적 함수와 탐색 예산 보정. #468 스펙 090 인계. #467 스펙 090 source diversification 산출 후보 완료 폐쇄. #466 스펙 089 인계. #465 스펙 089 정적 후보 템플릿 밖 증거 기반 후보 공간 확장. |
+| 활성 작업 | 열린 PR 없음. 최신 released-work sidecar run `28662665530`은 `candidate-autonomous-growth-objective-calibration`을 스펙 091 완료 후보로 released 처리했다. 최신 autonomous-work sidecar run `28662665589`은 `objective_calibration` 블록을 발행하지만 `overall_status=RELEASED`이고 새 `EXECUTION_READY` 후보는 없다. `selected_work=candidate-fd04772a23c5`는 닫힌 released 후보이지 새 착수 후보가 아니다. 돈 경로는 계속 `PREVIEW_ONLY`다. |
+| 안전 경계 | #469는 등급 2 운영 자동화 보정이다. 자율 작업 실행 보고서의 목적 함수, 탐색 예산, 중단 조건, 반복 학습 지표와 completed-candidate marker를 추가했다. 주문, 자본 증액, 자본 배분, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, live sentinel, 브로커 주문, K1/K2/K4/K5/K6, 헌법, 커널 목록, 비밀값, 외부 유료 서비스는 변경하지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`다. |
 
 ## 돈 경로 상태 판독 규칙 (필수 — 스펙 062)
 
@@ -1556,6 +1556,23 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
   통과, `uv run python scripts/agent_harness_probe.py --strict` `OK (14/14)`,
   `uv run python scripts/check_handoff_facts.py` 통과, PR 품질 관문 통과. 머지 직전 전체 테스트와
   린트를 다시 실행해 같은 결과를 확인했다.
+
+## 최근 마일스톤 — 2026-07-03 KST (스펙 091 자율 성장 목적 함수와 탐색 예산 보정)
+
+- main 코드 베이스라인: `944d2dc`(PR #469). 기능 커밋: `eb11416`.
+- autonomous-work 보고서가 `objective_calibration` 블록을 발행한다. 후보별 성장 기여도, 증거 준비도,
+  검증 비용 적합도, 안전 여유, 학습 가치, 총점, 탐색 예산, 중단 조건, 반복 학습 지표가 JSON과
+  Markdown에 남는다.
+- `candidate-autonomous-growth-objective-calibration`은 스펙 091 completed marker로 released-work
+  장부에 들어갔다.
+- 최신 autonomous-work sidecar run `28662665589`은 새 목적 함수 블록을 발행하지만,
+  `overall_status=RELEASED`이고 새 `EXECUTION_READY` 후보는 없다. `selected_work=candidate-fd04772a23c5`는
+  닫힌 released 후보다.
+- post-merge runs: deploy `28662665531`, released-work `28662665530`, autonomous-work
+  `28662665589` success.
+- 안전 경계: 등급 2 운영 자동화 보정. 주문, 자본, live 전략, whitelist/caps, 헌법, 커널,
+  비밀값, 외부 유료 서비스 변경 없음.
+- 상세: `HANDOFF-095-AUTONOMOUS-GROWTH-OBJECTIVE-CALIBRATION.md`.
 
 ## 최근 마일스톤 — 2026-07-03 KST (스펙 090 source diversification 산출 후보 완료 폐쇄)
 
@@ -5252,6 +5269,9 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 
 ## 과거 인수인계 파일 (참고용)
 
+- `HANDOFF-095-AUTONOMOUS-GROWTH-OBJECTIVE-CALIBRATION.md` — 스펙 091 자율 성장 목적 함수와 탐색 예산 보정
+- `HANDOFF-094-SOURCE-DIVERSIFICATION-CANDIDATE-CLOSURE.md` — 스펙 090 source diversification 산출 후보 완료 폐쇄
+- `HANDOFF-093-EVOLUTION-SOURCE-DIVERSIFICATION.md` — 스펙 089 정적 후보 템플릿 밖 증거 기반 후보 공간 확장
 - `HANDOFF-092-AUTONOMOUS-MACRO-GROWTH-DISCOVERY.md` — 스펙 088 거시 자율 성장 후보 발굴기
 - `HANDOFF-091-LEARNING-LEDGER-CANDIDATE-MEMORY.md` — 스펙 087 학습 장부 후보 재발굴 차단
 - `HANDOFF-090-AUTONOMOUS-SIDECAR-HANDOFF-LIVENESS.md` — 스펙 086 자율 루프 sidecar와 HANDOFF 생존성
