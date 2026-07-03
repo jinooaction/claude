@@ -1,5 +1,5 @@
 {
-  "commit": "36c2a2fc37d74f6e93b5f350f746f9acacb23844",
+  "commit": "944d2dc952784dbfcb38390acaca796aaef26180",
   "overall_status": "OK",
   "released_work": [
     {
@@ -18,6 +18,15 @@
       "source_field": "completed_candidate_id",
       "source_file": "specs/086-autonomous-sidecar-handoff-liveness/contracts/agent-ops-liveness-closure.md",
       "spec_id": "086-autonomous-sidecar-handoff-liveness",
+      "status": "released"
+    },
+    {
+      "candidate_id": "candidate-autonomous-growth-objective-calibration",
+      "entry_id": "released-5c52a6325649",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/091-autonomous-growth-objective-calibration/contracts/autonomous-growth-objective-calibration.md",
+      "spec_id": "091-autonomous-growth-objective-calibration",
       "status": "released"
     },
     {
@@ -102,7 +111,7 @@
       "status": "released"
     }
   ],
-  "run_id": "28657954195",
+  "run_id": "28662665530",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -154,7 +163,8 @@
     "087-learning-ledger-candidate-memory",
     "088-autonomous-macro-growth-discovery",
     "089-evolution-source-diversification",
-    "090-source-diversification-candidate-closure"
+    "090-source-diversification-candidate-closure",
+    "091-autonomous-growth-objective-calibration"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -335,5 +345,5 @@
       "spec_id": "072-candidate-evidence-diagnostics"
     }
   ],
-  "timestamp_utc": "2026-07-03T11:35:39.364775Z"
+  "timestamp_utc": "2026-07-03T13:09:35.721198Z"
 }
