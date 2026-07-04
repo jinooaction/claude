@@ -1,5 +1,5 @@
 {
-  "commit": "bd0334121e8e5e055d448c88a8558a23063fc568",
+  "commit": "7438f384cd191aa68605fc1e544ca7d886f04300",
   "overall_status": "OK",
   "released_work": [
     {
@@ -102,6 +102,15 @@
       "status": "released"
     },
     {
+      "candidate_id": "candidate-macro-candidate-map-regenerator",
+      "entry_id": "released-ccdf37bcad1e",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/093-macro-candidate-map-regenerator/data-model.md",
+      "spec_id": "093-macro-candidate-map-regenerator",
+      "status": "released"
+    },
+    {
       "candidate_id": "candidate-macro-growth-discovery",
       "entry_id": "released-7097146b4564",
       "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
@@ -120,7 +129,7 @@
       "status": "released"
     }
   ],
-  "run_id": "28703965093",
+  "run_id": "28705183167",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -174,7 +183,8 @@
     "089-evolution-source-diversification",
     "090-source-diversification-candidate-closure",
     "091-autonomous-growth-objective-calibration",
-    "092-frontier-candidate-discovery"
+    "092-frontier-candidate-discovery",
+    "093-macro-candidate-map-regenerator"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -355,5 +365,5 @@
       "spec_id": "072-candidate-evidence-diagnostics"
     }
   ],
-  "timestamp_utc": "2026-07-04T10:55:53.419093Z"
+  "timestamp_utc": "2026-07-04T11:46:12.940514Z"
 }
