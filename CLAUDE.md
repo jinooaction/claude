@@ -220,7 +220,7 @@ the current worktree. Do not trust prose in this block as the source of truth
 for in-flight work; use the `git_ground_truth` start hook, latest `HANDOFF.md`,
 and `/sync` against `jinooaction/claude` `Codex/*` branches before continuing.
 
-현재 계획 포인터: `specs/091-autonomous-growth-objective-calibration/plan.md` — 자율 성장 루프의 목적 함수, 탐색 예산, 중단 조건, 반복 학습 지표를 자율 작업 실행 보고서의 측정 가능한 계약으로 고정하는 운영 보정 설계.
+현재 계획 포인터: `specs/092-frontier-candidate-discovery/plan.md` — 자율 작업 실행 루프가 후보 고갈 뒤 released 후보를 새 작업처럼 보여주지 않고 frontier 발굴 후보를 발행하게 하는 운영 보정 설계.
 
 머지 완료(베이스라인): spec 004 (LLM 판단 지점), 005 (자율 튜너), 006 (배포 자동화), 007 (하드닝 카나리), 008 (백테스트), 009 (paper-run), 010 (자동 룰 설계자), 011 (라이브 성과 측정). **주의: 일부 tasks.md 가 stale 0% 로 표시된 적 있음 — 코드/테스트를 믿을 것.**
 
