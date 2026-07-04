@@ -104,11 +104,17 @@ def test_probe_writes_json_and_markdown(tmp_path, capsys):
         written["objective_calibration"]["exploration_budget"]["max_parallel_candidates"]
         == 1
     )
+    assert written["macro_candidate_map"][0]["domain_key"] == "investment_edge"
+    assert (
+        written["macro_candidate_map"][0]["recommended_candidate_id"]
+        == "candidate-investment-edge-frontier-map"
+    )
     assert written["run_id"] == "123"
     assert written["commit"] == "abc123"
     summary = summary_out.read_text(encoding="utf-8")
     assert "자율 작업 실행 루프" in summary
     assert "## 목적 함수 보정" in summary
+    assert "## 거시 후보 지도" in summary
 
 
 def test_probe_repo_root_released_work_overrides_sidecar_lag(tmp_path, capsys):

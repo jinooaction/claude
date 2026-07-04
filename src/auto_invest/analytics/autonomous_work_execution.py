@@ -50,6 +50,11 @@ MACRO_GROWTH_OBJECTIVE_CALIBRATION_CANDIDATE_ID = (
     "candidate-autonomous-growth-objective-calibration"
 )
 FRONTIER_DISCOVERY_CANDIDATE_ID = "candidate-autonomous-frontier-discovery"
+MACRO_CANDIDATE_MAP_REGENERATOR_ID = "candidate-macro-candidate-map-regenerator"
+INVESTMENT_EDGE_FRONTIER_CANDIDATE_ID = "candidate-investment-edge-frontier-map"
+DATA_EVIDENCE_FRONTIER_CANDIDATE_ID = "candidate-data-evidence-frontier-map"
+EXECUTION_QUALITY_FRONTIER_CANDIDATE_ID = "candidate-execution-quality-frontier-map"
+AGENT_OPS_FRONTIER_CANDIDATE_ID = "candidate-agent-ops-frontier-map"
 
 _REJECTED_STATUSES = {
     "reject",
@@ -152,6 +157,21 @@ class MacroGrowthCandidateTemplate:
     next_action_ko: str
 
 
+@dataclass(frozen=True)
+class MacroCandidateMapTemplate:
+    """후보 고갈 뒤 재생성할 상위 탐색 영역."""
+
+    domain_key: str
+    work_domain_key: str
+    label_ko: str
+    recommended_candidate_id: str
+    title_ko: str
+    priority_score: int
+    reason_ko: str
+    next_action_ko: str
+    source_domain_keys: tuple[str, ...]
+
+
 _MACRO_GROWTH_CANDIDATES: tuple[MacroGrowthCandidateTemplate, ...] = (
     MacroGrowthCandidateTemplate(
         candidate_id=MACRO_GROWTH_DISCOVERY_CANDIDATE_ID,
@@ -191,6 +211,76 @@ _MACRO_GROWTH_CANDIDATES: tuple[MacroGrowthCandidateTemplate, ...] = (
             "후보 발굴의 목적 함수, 탐색 예산, 중단 조건, 반복 학습 지표를 "
             "측정 가능한 계약으로 고정한다."
         ),
+    ),
+)
+
+_MACRO_CANDIDATE_MAP_TEMPLATES: tuple[MacroCandidateMapTemplate, ...] = (
+    MacroCandidateMapTemplate(
+        domain_key="investment_edge",
+        work_domain_key="strategy_design",
+        label_ko="투자 엣지",
+        recommended_candidate_id=INVESTMENT_EDGE_FRONTIER_CANDIDATE_ID,
+        title_ko="투자 엣지 frontier 지도와 실험 후보 재생성",
+        priority_score=2400,
+        reason_ko=(
+            "최근 후보는 운영 체계 개선에 치우쳤고, 장기 목표는 측정 가능한 투자 성과 "
+            "성장이다."
+        ),
+        next_action_ko=(
+            "forward verdict, money-path, released-work, learning ledger를 함께 읽어 "
+            "투자 엣지 후보 공간을 영역별로 지도화하고 첫 no-live 실험 후보를 생성한다."
+        ),
+        source_domain_keys=("analysis", "strategy_design", "portfolio_design"),
+    ),
+    MacroCandidateMapTemplate(
+        domain_key="data_evidence",
+        work_domain_key="data_quality",
+        label_ko="데이터 증거",
+        recommended_candidate_id=DATA_EVIDENCE_FRONTIER_CANDIDATE_ID,
+        title_ko="데이터 증거 frontier 지도와 입력 품질 후보 재생성",
+        priority_score=2300,
+        reason_ko=(
+            "새 투자 후보는 데이터 깊이와 교차 검증 표면이 충분해야 재현 가능하다."
+        ),
+        next_action_ko=(
+            "공개 데이터, regime, pipeline-liveness, public-data sidecar의 빈 영역을 "
+            "지도화해 다음 데이터 품질 후보를 생성한다."
+        ),
+        source_domain_keys=("data_quality", "data_collection"),
+    ),
+    MacroCandidateMapTemplate(
+        domain_key="execution_quality",
+        work_domain_key="execution_quality",
+        label_ko="체결 품질",
+        recommended_candidate_id=EXECUTION_QUALITY_FRONTIER_CANDIDATE_ID,
+        title_ko="체결 품질 frontier 지도와 거래 비용 후보 재생성",
+        priority_score=2200,
+        reason_ko=(
+            "투자 엣지가 실제 돈으로 이어지려면 주문 거부, 슬리피지, 지연, 비용 "
+            "관측이 계속 닫혀야 한다."
+        ),
+        next_action_ko=(
+            "execution-quality와 broker 진단 증거를 지도화해 다음 읽기 전용 체결 품질 "
+            "후보를 생성한다."
+        ),
+        source_domain_keys=("execution_quality", "live_readiness"),
+    ),
+    MacroCandidateMapTemplate(
+        domain_key="agent_ops",
+        work_domain_key="agent_ops",
+        label_ko="운영 체계",
+        recommended_candidate_id=AGENT_OPS_FRONTIER_CANDIDATE_ID,
+        title_ko="운영 체계 frontier 지도와 자율 루프 후보 재생성",
+        priority_score=2100,
+        reason_ko=(
+            "후보 생성·검증·인계 루프 자체가 멈추면 다음 세션이 다시 수동 발굴을 "
+            "반복한다."
+        ),
+        next_action_ko=(
+            "autonomous-work, released-work, handoff, harness 증거를 지도화해 다음 "
+            "운영 체계 후보를 생성한다."
+        ),
+        source_domain_keys=("agent_ops", "review"),
     ),
 )
 
@@ -339,6 +429,44 @@ class ObjectiveCandidateScore:
 
 
 @dataclass(frozen=True)
+class MacroCandidateMapEntry:
+    """후보 고갈 뒤 다음 탐색 영역을 설명하는 지도 행."""
+
+    domain_key: str
+    work_domain_key: str
+    label_ko: str
+    coverage_status: str
+    ready_count: int
+    operator_or_blocked_count: int
+    closed_count: int
+    released_count: int
+    suppressed_count: int
+    priority_score: int
+    recommended_candidate_id: str
+    title_ko: str
+    reason_ko: str
+    next_action_ko: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "domain_key": self.domain_key,
+            "work_domain_key": self.work_domain_key,
+            "label_ko": self.label_ko,
+            "coverage_status": self.coverage_status,
+            "ready_count": self.ready_count,
+            "operator_or_blocked_count": self.operator_or_blocked_count,
+            "closed_count": self.closed_count,
+            "released_count": self.released_count,
+            "suppressed_count": self.suppressed_count,
+            "priority_score": self.priority_score,
+            "recommended_candidate_id": self.recommended_candidate_id,
+            "title_ko": self.title_ko,
+            "reason_ko": self.reason_ko,
+            "next_action_ko": self.next_action_ko,
+        }
+
+
+@dataclass(frozen=True)
 class ObjectiveCalibration:
     """자율 성장 목적 함수, 예산, 중단 조건, 학습 지표 계약."""
 
@@ -372,6 +500,7 @@ class AutonomousWorkExecutionReport:
     selected_work: WorkPacket | None
     ranked_work: tuple[WorkPacket, ...]
     suppressed_work: tuple[WorkPacket, ...]
+    macro_candidate_map: tuple[MacroCandidateMapEntry, ...]
     evidence_surfaces: tuple[EvidenceSurface, ...]
     safety_invariants: tuple[str, ...]
     objective_calibration: ObjectiveCalibration
@@ -388,6 +517,9 @@ class AutonomousWorkExecutionReport:
             ),
             "ranked_work": [packet.to_dict() for packet in self.ranked_work],
             "suppressed_work": [packet.to_dict() for packet in self.suppressed_work],
+            "macro_candidate_map": [
+                entry.to_dict() for entry in self.macro_candidate_map
+            ],
             "evidence_surfaces": [surface.to_dict() for surface in self.evidence_surfaces],
             "safety_invariants": list(self.safety_invariants),
             "objective_calibration": self.objective_calibration.to_dict(),
@@ -496,6 +628,24 @@ class AutonomousWorkExecutionReport:
                 )
         else:
             lines.append("- 점수화할 후보가 없습니다.")
+
+        lines += ["", "## 거시 후보 지도", ""]
+        if self.macro_candidate_map:
+            lines += [
+                "| 영역 | 상태 | 실행 | 닫힘 | 완료 | 억제 | 점수 | 추천 후보 | 이유 |",
+                "|------|------|-----:|-----:|-----:|-----:|-----:|-----------|------|",
+            ]
+            for entry in self.macro_candidate_map:
+                lines.append(
+                    f"| {_table(entry.label_ko)} | {entry.coverage_status} | "
+                    f"{entry.ready_count} | {entry.closed_count} | "
+                    f"{entry.released_count} | {entry.suppressed_count} | "
+                    f"{entry.priority_score} | "
+                    f"{_table(entry.recommended_candidate_id)} | "
+                    f"{_table(entry.reason_ko)} |"
+                )
+        else:
+            lines.append("- 거시 후보 지도 항목이 없습니다.")
 
         lines += [
             "",
@@ -1239,6 +1389,7 @@ def _macro_growth_packets(
     *,
     released_work: Any,
     surfaces: Sequence[EvidenceSurface],
+    macro_candidate_map: Sequence[MacroCandidateMapEntry],
 ) -> tuple[WorkPacket, ...]:
     if not _regular_queue_is_closed(packets, surfaces):
         return ()
@@ -1267,7 +1418,22 @@ def _macro_growth_packets(
         suppressed_count=suppressed_count,
     )
     if frontier.candidate_id in released or frontier.candidate_id in existing_ids:
-        return ()
+        regenerator = _macro_candidate_map_regenerator_packet(
+            closed_count=closed_count,
+            released_count=released_count,
+            suppressed_count=suppressed_count,
+            macro_candidate_map=macro_candidate_map,
+        )
+        if (
+            regenerator.candidate_id not in released
+            and regenerator.candidate_id not in existing_ids
+        ):
+            return (regenerator,)
+        return _regenerated_macro_candidate_packets(
+            macro_candidate_map,
+            released=released,
+            existing_ids=existing_ids,
+        )
     return (frontier,)
 
 
@@ -1357,6 +1523,160 @@ def _frontier_discovery_packet(
         safety_boundary=SAFETY_INVARIANTS,
         source_refs=source_refs,
     )
+
+
+def _macro_candidate_map_regenerator_packet(
+    *,
+    closed_count: int,
+    released_count: int,
+    suppressed_count: int,
+    macro_candidate_map: Sequence[MacroCandidateMapEntry],
+) -> WorkPacket:
+    source_refs = _macro_growth_source_refs()
+    autonomy_level, start_guidance, completion_gates = _execution_contract(
+        STATUS_EXECUTION_READY,
+        2,
+        (),
+    )
+    top_entry = macro_candidate_map[0] if macro_candidate_map else None
+    top_summary = (
+        f" 최상위 미탐색 영역은 {top_entry.label_ko}이다."
+        if top_entry is not None
+        else ""
+    )
+    title = "거시 후보 지도와 후보 재생성 루프"
+    reason = (
+        "frontier discovery 후보까지 released-work로 닫혔으므로, 단일 후보가 아니라 "
+        "영역별 후보 지도를 만들어 다음 후보를 재생성해야 한다. "
+        f"현재 후보 큐는 닫힌 후보 {closed_count}개"
+        f"(완료 {released_count}개, 억제 {suppressed_count}개)다."
+        f"{top_summary}"
+    )
+    next_action = (
+        "투자 엣지, 데이터 증거, 체결 품질, 운영 체계 영역을 점수화하는 "
+        "macro candidate map을 만들고, released-work 포화 뒤 최고 우선순위 "
+        "미완료 영역 후보를 실행 후보로 발행한다."
+    )
+    return WorkPacket(
+        packet_id=_packet_id(MACRO_CANDIDATE_MAP_REGENERATOR_ID, title, source_refs),
+        candidate_id=MACRO_CANDIDATE_MAP_REGENERATOR_ID,
+        domain_key="agent_ops",
+        title_ko=title,
+        work_type=_DOMAIN_WORK_TYPES["agent_ops"],
+        risk_grade=2,
+        safety_impact=(),
+        priority_score=2450,
+        status=STATUS_EXECUTION_READY,
+        autonomy_level=autonomy_level,
+        reason_ko=reason,
+        next_action_ko=next_action,
+        start_guidance_ko=start_guidance,
+        completion_gates=completion_gates,
+        required_inputs=source_refs,
+        safety_boundary=SAFETY_INVARIANTS,
+        source_refs=source_refs,
+    )
+
+
+def _regenerated_macro_candidate_packets(
+    macro_candidate_map: Sequence[MacroCandidateMapEntry],
+    *,
+    released: Mapping[str, str],
+    existing_ids: set[str],
+) -> tuple[WorkPacket, ...]:
+    for entry in macro_candidate_map:
+        if entry.recommended_candidate_id in released:
+            continue
+        if entry.recommended_candidate_id in existing_ids:
+            continue
+        return (_packet_from_macro_map_entry(entry),)
+    return ()
+
+
+def _packet_from_macro_map_entry(entry: MacroCandidateMapEntry) -> WorkPacket:
+    source_refs = _macro_growth_source_refs()
+    autonomy_level, start_guidance, completion_gates = _execution_contract(
+        STATUS_EXECUTION_READY,
+        2,
+        (),
+    )
+    reason = (
+        f"거시 후보 지도에서 {entry.label_ko} 영역이 {entry.coverage_status} 상태다. "
+        f"실행 후보 {entry.ready_count}개, 닫힌 후보 {entry.closed_count}개"
+        f"(완료 {entry.released_count}개, 억제 {entry.suppressed_count}개). "
+        f"{entry.reason_ko}"
+    )
+    return WorkPacket(
+        packet_id=_packet_id(entry.recommended_candidate_id, entry.title_ko, source_refs),
+        candidate_id=entry.recommended_candidate_id,
+        domain_key=entry.work_domain_key,
+        title_ko=entry.title_ko,
+        work_type=_DOMAIN_WORK_TYPES.get(
+            entry.work_domain_key,
+            "autonomous_improvement",
+        ),
+        risk_grade=2,
+        safety_impact=(),
+        priority_score=entry.priority_score,
+        status=STATUS_EXECUTION_READY,
+        autonomy_level=autonomy_level,
+        reason_ko=reason,
+        next_action_ko=entry.next_action_ko,
+        start_guidance_ko=start_guidance,
+        completion_gates=completion_gates,
+        required_inputs=source_refs,
+        safety_boundary=SAFETY_INVARIANTS,
+        source_refs=source_refs,
+    )
+
+
+def _macro_candidate_map(
+    packets: Sequence[WorkPacket],
+) -> tuple[MacroCandidateMapEntry, ...]:
+    entries: list[MacroCandidateMapEntry] = []
+    for template in _MACRO_CANDIDATE_MAP_TEMPLATES:
+        matching = [
+            packet
+            for packet in packets
+            if packet.domain_key in template.source_domain_keys
+        ]
+        ready_count = sum(
+            packet.status == STATUS_EXECUTION_READY for packet in matching
+        )
+        operator_or_blocked_count = sum(
+            packet.status in {STATUS_OPERATOR_APPROVAL_REQUIRED, STATUS_BLOCKED}
+            for packet in matching
+        )
+        released_count = sum(packet.status == STATUS_RELEASED for packet in matching)
+        suppressed_count = sum(packet.status == STATUS_SUPPRESSED for packet in matching)
+        closed_count = released_count + suppressed_count
+        if ready_count:
+            coverage_status = "active"
+        elif operator_or_blocked_count:
+            coverage_status = "operator_or_blocked"
+        elif closed_count:
+            coverage_status = "exhausted"
+        else:
+            coverage_status = "underexplored"
+        entries.append(
+            MacroCandidateMapEntry(
+                domain_key=template.domain_key,
+                work_domain_key=template.work_domain_key,
+                label_ko=template.label_ko,
+                coverage_status=coverage_status,
+                ready_count=ready_count,
+                operator_or_blocked_count=operator_or_blocked_count,
+                closed_count=closed_count,
+                released_count=released_count,
+                suppressed_count=suppressed_count,
+                priority_score=template.priority_score,
+                recommended_candidate_id=template.recommended_candidate_id,
+                title_ko=template.title_ko,
+                reason_ko=template.reason_ko,
+                next_action_ko=template.next_action_ko,
+            )
+        )
+    return tuple(sorted(entries, key=lambda entry: (-entry.priority_score, entry.domain_key)))
 
 
 def _dedupe_packets(packets: Sequence[WorkPacket]) -> tuple[WorkPacket, ...]:
@@ -1601,6 +1921,7 @@ def build_autonomous_work_execution(
     packets = list(_apply_released_work(packets, parsed.get("released-work")))
 
     ordered = _dedupe_packets(packets)
+    macro_candidate_map = _macro_candidate_map(ordered)
     ordered = _dedupe_packets(
         [
             *ordered,
@@ -1608,6 +1929,7 @@ def build_autonomous_work_execution(
                 ordered,
                 released_work=parsed.get("released-work"),
                 surfaces=surfaces,
+                macro_candidate_map=macro_candidate_map,
             ),
         ]
     )
@@ -1630,6 +1952,7 @@ def build_autonomous_work_execution(
         selected_work=selected,
         ranked_work=ranked,
         suppressed_work=suppressed,
+        macro_candidate_map=macro_candidate_map,
         evidence_surfaces=surfaces,
         safety_invariants=SAFETY_INVARIANTS,
         objective_calibration=objective_calibration,
@@ -1646,7 +1969,13 @@ __all__ = [
     "CODEX_COMPLETION_GATES",
     "EvidenceSurface",
     "FRONTIER_DISCOVERY_CANDIDATE_ID",
+    "AGENT_OPS_FRONTIER_CANDIDATE_ID",
+    "DATA_EVIDENCE_FRONTIER_CANDIDATE_ID",
+    "EXECUTION_QUALITY_FRONTIER_CANDIDATE_ID",
+    "INVESTMENT_EDGE_FRONTIER_CANDIDATE_ID",
+    "MacroCandidateMapEntry",
     "MACRO_GROWTH_DISCOVERY_CANDIDATE_ID",
+    "MACRO_CANDIDATE_MAP_REGENERATOR_ID",
     "MACRO_GROWTH_OBJECTIVE_CALIBRATION_CANDIDATE_ID",
     "MACRO_GROWTH_SOURCE_DIVERSIFICATION_CANDIDATE_ID",
     "ObjectiveCalibration",
