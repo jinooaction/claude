@@ -49,6 +49,7 @@ MACRO_GROWTH_SOURCE_DIVERSIFICATION_CANDIDATE_ID = (
 MACRO_GROWTH_OBJECTIVE_CALIBRATION_CANDIDATE_ID = (
     "candidate-autonomous-growth-objective-calibration"
 )
+FRONTIER_DISCOVERY_CANDIDATE_ID = "candidate-autonomous-frontier-discovery"
 
 _REJECTED_STATUSES = {
     "reject",
@@ -1259,7 +1260,15 @@ def _macro_growth_packets(
                 suppressed_count=suppressed_count,
             ),
         )
-    return ()
+    frontier = _frontier_discovery_packet(
+        released_work=released_work,
+        closed_count=closed_count,
+        released_count=released_count,
+        suppressed_count=suppressed_count,
+    )
+    if frontier.candidate_id in released or frontier.candidate_id in existing_ids:
+        return ()
+    return (frontier,)
 
 
 def _macro_growth_packet(
@@ -1292,6 +1301,56 @@ def _macro_growth_packet(
         autonomy_level=autonomy_level,
         reason_ko=f"{template.reason_ko} {queue_summary}",
         next_action_ko=template.next_action_ko,
+        start_guidance_ko=start_guidance,
+        completion_gates=completion_gates,
+        required_inputs=source_refs,
+        safety_boundary=SAFETY_INVARIANTS,
+        source_refs=source_refs,
+    )
+
+
+def _frontier_discovery_packet(
+    *,
+    released_work: Any,
+    closed_count: int,
+    released_count: int,
+    suppressed_count: int,
+) -> WorkPacket:
+    source_refs = _macro_growth_source_refs()
+    autonomy_level, start_guidance, completion_gates = _execution_contract(
+        STATUS_EXECUTION_READY,
+        2,
+        (),
+    )
+    released = _released_candidates(released_work)
+    macro_released_count = sum(
+        template.candidate_id in released for template in _MACRO_GROWTH_CANDIDATES
+    )
+    title = "자율 후보 고갈 후 frontier 발굴"
+    reason = (
+        "기존 일반 후보와 macro 후보가 모두 닫혀 새 탐색 frontier를 발굴해야 한다. "
+        f"현재 후보 큐는 닫힌 후보 {closed_count}개"
+        f"(완료 {released_count}개, 억제 {suppressed_count}개)이고, "
+        f"기존 macro 후보 {macro_released_count}/{len(_MACRO_GROWTH_CANDIDATES)}개가 "
+        "released-work 장부에 기록됐다."
+    )
+    next_action = (
+        "frontier discovery 스펙으로 다음 후보 생성 축을 정의하고, "
+        "released-work 포화 뒤에도 새 실행 후보가 나오도록 결정론적 발굴 규칙을 구현한다."
+    )
+    return WorkPacket(
+        packet_id=_packet_id(FRONTIER_DISCOVERY_CANDIDATE_ID, title, source_refs),
+        candidate_id=FRONTIER_DISCOVERY_CANDIDATE_ID,
+        domain_key="agent_ops",
+        title_ko=title,
+        work_type=_DOMAIN_WORK_TYPES["agent_ops"],
+        risk_grade=2,
+        safety_impact=(),
+        priority_score=2500,
+        status=STATUS_EXECUTION_READY,
+        autonomy_level=autonomy_level,
+        reason_ko=reason,
+        next_action_ko=next_action,
         start_guidance_ko=start_guidance,
         completion_gates=completion_gates,
         required_inputs=source_refs,
@@ -1586,6 +1645,7 @@ __all__ = [
     "AUTONOMY_RECOVERY_REQUIRED",
     "CODEX_COMPLETION_GATES",
     "EvidenceSurface",
+    "FRONTIER_DISCOVERY_CANDIDATE_ID",
     "MACRO_GROWTH_DISCOVERY_CANDIDATE_ID",
     "MACRO_GROWTH_OBJECTIVE_CALIBRATION_CANDIDATE_ID",
     "MACRO_GROWTH_SOURCE_DIVERSIFICATION_CANDIDATE_ID",

@@ -10,6 +10,7 @@ from auto_invest.analytics.autonomous_work_execution import (
     AUTONOMY_CODEX_START,
     AUTONOMY_OPERATOR_APPROVAL,
     CODEX_COMPLETION_GATES,
+    FRONTIER_DISCOVERY_CANDIDATE_ID,
     MACRO_GROWTH_DISCOVERY_CANDIDATE_ID,
     MACRO_GROWTH_OBJECTIVE_CALIBRATION_CANDIDATE_ID,
     MACRO_GROWTH_SOURCE_DIVERSIFICATION_CANDIDATE_ID,
@@ -521,6 +522,116 @@ def test_objective_calibration_penalizes_safety_impact_candidates():
     assert score["status"] == STATUS_OPERATOR_APPROVAL_REQUIRED
     assert score["component_scores"]["safety_margin"] < 50
     assert any("operator approval" in item for item in calibration["stop_conditions"])
+
+
+def test_exhausted_macro_candidates_emit_frontier_discovery_candidate():
+    report = build_autonomous_work_execution(
+        {
+            "capital-path-readiness": _json(
+                {
+                    "priority_candidates": [
+                        {
+                            "candidate_id": "candidate-fd04772a23c5",
+                            "domain_key": "live_readiness",
+                            "status": "new",
+                            "score": 597,
+                        }
+                    ]
+                }
+            ),
+            "released-work": _json(
+                {
+                    "released_work": [
+                        {
+                            "candidate_id": "candidate-fd04772a23c5",
+                            "status": "released",
+                            "reason_ko": "스펙 078 완료",
+                        },
+                        {
+                            "candidate_id": MACRO_GROWTH_DISCOVERY_CANDIDATE_ID,
+                            "status": "released",
+                            "reason_ko": "스펙 088 완료",
+                        },
+                        {
+                            "candidate_id": MACRO_GROWTH_SOURCE_DIVERSIFICATION_CANDIDATE_ID,
+                            "status": "released",
+                            "reason_ko": "스펙 089 완료",
+                        },
+                        {
+                            "candidate_id": MACRO_GROWTH_OBJECTIVE_CALIBRATION_CANDIDATE_ID,
+                            "status": "released",
+                            "reason_ko": "스펙 091 완료",
+                        },
+                    ]
+                }
+            ),
+            "pipeline-liveness": _liveness(),
+        },
+        now=NOW,
+    )
+
+    assert report.overall_status == STATUS_EXECUTION_READY
+    assert report.selected_work is not None
+    assert report.selected_work.candidate_id == FRONTIER_DISCOVERY_CANDIDATE_ID
+    assert report.selected_work.status == STATUS_EXECUTION_READY
+    assert report.selected_work.risk_grade == 2
+    assert "닫힌 후보" in report.selected_work.reason_ko
+    assert "frontier" in report.selected_work.next_action_ko
+    assert set(report.selected_work.required_inputs) >= {
+        "automation/released-work-last-run:released_work.json",
+        "automation/pipeline-liveness-last-run:LAST_RUN.md",
+        "automation/capital-path-readiness-last-run:capital_path_readiness.json",
+    }
+    assert report.ranked_work[0].candidate_id == FRONTIER_DISCOVERY_CANDIDATE_ID
+
+
+def test_frontier_discovery_does_not_mask_regular_ready_candidate():
+    report = build_autonomous_work_execution(
+        {
+            "capital-path-readiness": _json(
+                {
+                    "priority_candidates": [
+                        {
+                            "candidate_id": "candidate-next",
+                            "domain_key": "analysis",
+                            "status": "new",
+                            "score": 100,
+                            "title_ko": "다음 일반 후보",
+                        }
+                    ]
+                }
+            ),
+            "released-work": _json(
+                {
+                    "released_work": [
+                        {
+                            "candidate_id": MACRO_GROWTH_DISCOVERY_CANDIDATE_ID,
+                            "status": "released",
+                            "reason_ko": "스펙 088 완료",
+                        },
+                        {
+                            "candidate_id": MACRO_GROWTH_SOURCE_DIVERSIFICATION_CANDIDATE_ID,
+                            "status": "released",
+                            "reason_ko": "스펙 089 완료",
+                        },
+                        {
+                            "candidate_id": MACRO_GROWTH_OBJECTIVE_CALIBRATION_CANDIDATE_ID,
+                            "status": "released",
+                            "reason_ko": "스펙 091 완료",
+                        },
+                    ]
+                }
+            ),
+            "pipeline-liveness": _liveness(),
+        },
+        now=NOW,
+    )
+
+    assert report.selected_work is not None
+    assert report.selected_work.candidate_id == "candidate-next"
+    assert FRONTIER_DISCOVERY_CANDIDATE_ID not in {
+        packet.candidate_id for packet in report.ranked_work
+    }
 
 
 def test_macro_growth_does_not_mask_operator_approval_candidate():
