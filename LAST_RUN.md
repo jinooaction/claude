@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-07-03T13:09:35.721198Z)
+# 완료 후보 소비 장부 (as of 2026-07-04T00:16:48.486227Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -8,8 +8,8 @@
 | 항목 | 값 |
 |------|-----|
 | overall_status | OK |
-| released_count | 12 |
-| scanned_specs | 42 |
+| released_count | 13 |
+| scanned_specs | 43 |
 
 ## 완료 후보
 
@@ -17,6 +17,7 @@
 |------|------|------|-----------|-----------|
 | candidate-6ee3370e933d | released | 084-stale-evidence-failure-separation | specs/084-stale-evidence-failure-separation/contracts/capital-path-observability.md | completed_candidate_id |
 | candidate-88a7e7f07361 | released | 086-autonomous-sidecar-handoff-liveness | specs/086-autonomous-sidecar-handoff-liveness/contracts/agent-ops-liveness-closure.md | completed_candidate_id |
+| candidate-autonomous-frontier-discovery | released | 092-frontier-candidate-discovery | specs/092-frontier-candidate-discovery/contracts/frontier-candidate-discovery.md | completed_candidate_id |
 | candidate-autonomous-growth-objective-calibration | released | 091-autonomous-growth-objective-calibration | specs/091-autonomous-growth-objective-calibration/contracts/autonomous-growth-objective-calibration.md | completed_candidate_id |
 | candidate-dff4f9344b02 | released | 083-rejected-order-execution-quality | specs/083-rejected-order-execution-quality/contracts/execution-quality.md | completed_candidate_id |
 | candidate-e481b0309206 | released | 082-regime-performance-candidate-scoring | specs/082-regime-performance-candidate-scoring/contracts/regime-performance-candidate-scoring.md | completed_candidate_id |
@@ -92,7 +93,7 @@
 
 ```json
 {
-  "commit": "944d2dc952784dbfcb38390acaca796aaef26180",
+  "commit": "b004d2f9373e24cf5adea36c52ad6a25f77a5dc8",
   "overall_status": "OK",
   "released_work": [
     {
@@ -111,6 +112,15 @@
       "source_field": "completed_candidate_id",
       "source_file": "specs/086-autonomous-sidecar-handoff-liveness/contracts/agent-ops-liveness-closure.md",
       "spec_id": "086-autonomous-sidecar-handoff-liveness",
+      "status": "released"
+    },
+    {
+      "candidate_id": "candidate-autonomous-frontier-discovery",
+      "entry_id": "released-7461df6a3b05",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/092-frontier-candidate-discovery/contracts/frontier-candidate-discovery.md",
+      "spec_id": "092-frontier-candidate-discovery",
       "status": "released"
     },
     {
@@ -204,7 +214,7 @@
       "status": "released"
     }
   ],
-  "run_id": "28662665530",
+  "run_id": "28689000437",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -257,7 +267,8 @@
     "088-autonomous-macro-growth-discovery",
     "089-evolution-source-diversification",
     "090-source-diversification-candidate-closure",
-    "091-autonomous-growth-objective-calibration"
+    "091-autonomous-growth-objective-calibration",
+    "092-frontier-candidate-discovery"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -438,6 +449,6 @@
       "spec_id": "072-candidate-evidence-diagnostics"
     }
   ],
-  "timestamp_utc": "2026-07-03T13:09:35.721198Z"
+  "timestamp_utc": "2026-07-04T00:16:48.486227Z"
 }
 ```
