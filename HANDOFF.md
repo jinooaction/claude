@@ -33,15 +33,15 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `b004d2f` — Merge pull request #471 from jinooaction/Codex/092-frontier-candidate-discovery-isolated |
-| main 테스트 | PR #471 머지 전 `uv run pytest` → 2463 passed, 4 skipped. 인계 갱신 전 main 기준 `uv run pytest -q`는 낡은 HANDOFF 때문에 2 failed, 2461 passed, 4 skipped였고, 이 handoff 갱신 후 `uv run pytest -q` → 2463 passed, 4 skipped. |
+| 마지막 main 커밋 | `7438f38` — Merge pull request #473 from jinooaction/Codex/093-macro-candidate-map-regenerator-isolated |
+| main 테스트 | PR #473 머지 전 `uv run pytest` → 2466 passed, 4 skipped. 인계 갱신 전 main 기준 `uv run pytest -q`는 낡은 HANDOFF 때문에 2 failed, 2464 passed, 4 skipped였고, 이 handoff 갱신 후 `uv run pytest -q` → 2466 passed, 4 skipped. |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
 | 열린 PR | 없음. |
-| 출시 완료 스펙 | 최신 추가: 092(자율 후보 고갈 뒤 frontier 발굴 후보 폐쇄), 091(자율 성장 목적 함수와 탐색 예산 보정), 090(source diversification 산출 후보 완료 폐쇄), 089(정적 후보 템플릿 밖 증거 기반 후보 공간 확장), 088(거시 자율 성장 후보 발굴기), 087(학습 장부로 폐기·보류 후보 재발굴 차단), 086(자율 루프 sidecar와 HANDOFF 생존성 완료 후보 폐쇄), 085(공개 데이터 수집·교차 검증 확장), 084(오래된 증거와 성과 실패 분리), 083(주문 거부·체결 품질 손익 관측), 082(레짐·성과 후보 점수화), 081(자율 루프 품질 폐쇄), 080(운영자 대시보드와 모바일 알림 루프), 079(완료 후보 소비 장부), 078(돈 경로 게이트 정렬 루프), 077(자율 작업 실행 루프), 076(자본 경로 준비도 루프), 075(전략 실패 학습), 074(후보 가격 이력 지원), 073(후보 pending next action 보정), 072(후보 증거 진단), 071(후보 결과 실행기), 070(후보 구현 공장), 069(자율 승격 실행 루프), 068(자율 승격 루프 자동 분류), 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
-| 골격 스펙 | 없음. `.specify/feature.json`은 최신 출시 스펙 `specs/092-frontier-candidate-discovery`를 가리킨다. 스펙 092는 #471로 main에 들어갔다. |
-| 최근 출시 작업 | #471 스펙 092 자율 후보 고갈 뒤 frontier 발굴 후보 폐쇄. #470 스펙 091 인계. #469 스펙 091 자율 성장 목적 함수와 탐색 예산 보정. #468 스펙 090 인계. #467 스펙 090 source diversification 산출 후보 완료 폐쇄. |
-| 활성 작업 | 열린 PR 없음. 최신 released-work sidecar run `28689000437`은 `candidate-autonomous-frontier-discovery`를 스펙 092 완료 후보로 released 처리했다. 최신 autonomous-work sidecar run `28689000427`은 `overall_status=RELEASED`, ranked 후보 0개이며 새 `EXECUTION_READY` 후보는 없다. `selected_work=candidate-fd04772a23c5`는 닫힌 released 후보이지 새 착수 후보가 아니다. 돈 경로는 최신 money-path sidecar 기준 `PREVIEW_ONLY`, `ACCUMULATING_EDGE` 16/20, ETA 2026-07-09다. |
-| 안전 경계 | #471은 등급 2 운영 자동화 보정이다. 자율 작업 실행 보고서가 후보 고갈 뒤 frontier discovery 후보를 발행하게 했고, 스펙 092 completed-candidate marker로 그 후보를 released-work에 닫았다. 주문, 자본 증액, 자본 배분, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, live sentinel, 브로커 주문, K1/K2/K4/K5/K6, 헌법, 커널 목록, 비밀값, 외부 유료 서비스는 변경하지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`다. |
+| 출시 완료 스펙 | 최신 추가: 093(거시 후보 지도와 후보 재생성 루프), 092(자율 후보 고갈 뒤 frontier 발굴 후보 폐쇄), 091(자율 성장 목적 함수와 탐색 예산 보정), 090(source diversification 산출 후보 완료 폐쇄), 089(정적 후보 템플릿 밖 증거 기반 후보 공간 확장), 088(거시 자율 성장 후보 발굴기), 087(학습 장부로 폐기·보류 후보 재발굴 차단), 086(자율 루프 sidecar와 HANDOFF 생존성 완료 후보 폐쇄), 085(공개 데이터 수집·교차 검증 확장), 084(오래된 증거와 성과 실패 분리), 083(주문 거부·체결 품질 손익 관측), 082(레짐·성과 후보 점수화), 081(자율 루프 품질 폐쇄), 080(운영자 대시보드와 모바일 알림 루프), 079(완료 후보 소비 장부), 078(돈 경로 게이트 정렬 루프), 077(자율 작업 실행 루프), 076(자본 경로 준비도 루프), 075(전략 실패 학습), 074(후보 가격 이력 지원), 073(후보 pending next action 보정), 072(후보 증거 진단), 071(후보 결과 실행기), 070(후보 구현 공장), 069(자율 승격 실행 루프), 068(자율 승격 루프 자동 분류), 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
+| 골격 스펙 | 없음. `.specify/feature.json`은 최신 출시 스펙 `specs/093-macro-candidate-map-regenerator`를 가리킨다. 스펙 093은 #473으로 main에 들어갔다. |
+| 최근 출시 작업 | #473 스펙 093 거시 후보 지도와 후보 재생성 루프. #472 스펙 092 인계. #471 스펙 092 자율 후보 고갈 뒤 frontier 발굴 후보 폐쇄. #470 스펙 091 인계. #469 스펙 091 자율 성장 목적 함수와 탐색 예산 보정. |
+| 활성 작업 | 열린 PR 없음. 최신 released-work sidecar run `28705183167`은 `candidate-macro-candidate-map-regenerator`를 스펙 093 완료 후보로 released 처리했다. 최신 autonomous-work sidecar run `28705183168`은 `candidate-investment-edge-frontier-map`을 `EXECUTION_READY`, 위험 등급 2, 안전 영향 없음으로 선택했다. 돈 경로는 최신 money-path sidecar 기준 `PREVIEW_ONLY`, stage `BLOCKED`, forward 관측 16개이며 실주문은 불가하다. |
+| 안전 경계 | #473은 등급 2 운영 자동화 보정이다. 자율 작업 실행 보고서에 거시 후보 지도를 추가하고, 스펙 093 완료 뒤 투자 엣지 frontier 후보를 재생성하게 했다. 주문, 자본 증액, 자본 배분, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, live sentinel, 브로커 주문, K1/K2/K4/K5/K6, 헌법, 커널 목록, 비밀값, 외부 유료 서비스는 변경하지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`다. |
 
 ## 돈 경로 상태 판독 규칙 (필수 — 스펙 062)
 
@@ -80,6 +80,43 @@ uv run python scripts/money_path_probe.py --manifest | while IFS=$'\t' read -r k
 done
 uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.live_money_state'
 ```
+
+## 최근 관찰 — 2026-07-04 KST (스펙 093 거시 후보 지도와 후보 재생성 루프)
+
+현재 `main` 최신 머지는 `7438f38`(#473, 스펙 093 거시 후보 지도와 후보 재생성 루프)이다.
+기능 커밋은 `23704a2`이고, 직전 main은 `bd03341`(#472, 스펙 092 인계)이다.
+
+- **문제 정의**: 스펙 092 뒤 frontier 후보까지 released-work로 닫히면 자율 작업 실행 루프가 다시
+  "새 실행 후보 없음" 상태로 돌아간다. 목표는 닫힌 후보 큐를 영역별 거시 후보 지도로 읽고,
+  다음 실행 가능한 frontier 후보를 재생성하는 것이다.
+- **구현 상태**: `autonomous_work_execution.py`가 `macro_candidate_map`을 JSON과 Markdown에 발행한다.
+  frontier discovery 후보가 released된 뒤에는 `candidate-macro-candidate-map-regenerator`를 먼저 발행하고,
+  이 regenerator 자체가 released되면 지도에서 최상위 미완료 영역인
+  `candidate-investment-edge-frontier-map`을 `EXECUTION_READY` 후보로 만든다.
+- **post-merge 실행**: #473 main push 뒤 `Deploy on merge to main` run `28705183202`,
+  `Released work ledger` run `28705183167`, `Autonomous work execution loop` run `28705183168`이 success였다.
+- **sidecar 확인**: 최신 released-work sidecar는 commit `7438f38`에서
+  `candidate-macro-candidate-map-regenerator`를 spec `093-macro-candidate-map-regenerator`의 released 후보로
+  기록했다. 최신 autonomous-work sidecar는 같은 commit에서 `candidate-investment-edge-frontier-map`을
+  `EXECUTION_READY`, risk grade 2, safety impact 없음으로 선택했다. 거시 후보 지도 첫 행은
+  `investment_edge`, 상태 `exhausted`, 추천 후보 `candidate-investment-edge-frontier-map`이다.
+- **배포 확인**: main commit의 `Deploy on merge to main` 체크에서 `deploy` job은 success다. 컨테이너에서
+  서버 audit_log와 GitHub Actions Summary 원문은 직접 확인하지 못한다. deploy-audit sidecar는 오래된
+  2026-06-18 수동 실행이고, KIS smoke sidecar 최신 run은 commit `bd03341` 기준 schedule 실행이라 #473
+  배포의 직접 증거가 아니다.
+- **안전 경계**: 등급 2 운영 자동화 보정이다. 실제 주문, 브로커 실주문 API, 자본 증액, 자본 배분,
+  whitelist/caps 확대, live 전략 교체, live sentinel, 헌법, 커널 목록, K1/K2/K4/K5/K6, 비밀값,
+  외부 유료 서비스 변경 없음. 배포는 dry-run worker 코드 반영이며 실거래 전환이 아니다.
+- **검증**: PR #473 머지 전 focused pytest 26 통과, latest sidecar replay에서
+  `candidate-investment-edge-frontier-map` 선택 확인, released-work 로컬 재현에서
+  `candidate-macro-candidate-map-regenerator` released 확인, `uv run pytest` 2466 통과·4 스킵,
+  `uv run ruff check src tests` 통과, `git diff --check` 통과,
+  `uv run python scripts/check_handoff_facts.py` OK,
+  `uv run python scripts/agent_harness_probe.py --strict` OK(14/14), PR 품질 관문 성공,
+  post-merge deploy·released-work·autonomous-work run 성공 확인 완료. 인계 갱신 전 main 기준
+  `uv run pytest -q`는 낡은 HANDOFF 때문에 하네스 2건만 실패했고, 이 handoff 갱신 뒤
+  `uv run pytest -q`는 2466 통과·4 스킵이다.
+- **상세 인계**: `HANDOFF-097-MACRO-CANDIDATE-MAP-REGENERATOR.md`.
 
 ## 최근 관찰 — 2026-07-04 KST (스펙 092 자율 후보 고갈 뒤 frontier 발굴 후보 폐쇄)
 
@@ -1594,6 +1631,19 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
   통과, `uv run python scripts/agent_harness_probe.py --strict` `OK (14/14)`,
   `uv run python scripts/check_handoff_facts.py` 통과, PR 품질 관문 통과. 머지 직전 전체 테스트와
   린트를 다시 실행해 같은 결과를 확인했다.
+
+## 최근 마일스톤 — 2026-07-04 KST (스펙 093 거시 후보 지도와 후보 재생성 루프)
+
+- main 코드 베이스라인: `7438f38`(PR #473). 기능 커밋: `23704a2`.
+- autonomous-work 보고서가 `macro_candidate_map`을 JSON과 Markdown에 발행한다.
+- `candidate-macro-candidate-map-regenerator`는 스펙 093 completed marker로 released-work 장부에 들어갔다.
+- 최신 autonomous-work sidecar run `28705183168`은 `candidate-investment-edge-frontier-map`을
+  `EXECUTION_READY`, 위험 등급 2, 안전 영향 없음으로 선택했다.
+- post-merge runs: deploy `28705183202`, released-work `28705183167`, autonomous-work
+  `28705183168` success.
+- 안전 경계: 등급 2 운영 자동화 보정. 주문, 자본, live 전략, whitelist/caps, 헌법, 커널,
+  비밀값, 외부 유료 서비스 변경 없음.
+- 상세: `HANDOFF-097-MACRO-CANDIDATE-MAP-REGENERATOR.md`.
 
 ## 최근 마일스톤 — 2026-07-04 KST (스펙 092 자율 후보 고갈 뒤 frontier 발굴 후보 폐쇄)
 
@@ -5321,6 +5371,7 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 
 ## 과거 인수인계 파일 (참고용)
 
+- `HANDOFF-097-MACRO-CANDIDATE-MAP-REGENERATOR.md` — 스펙 093 거시 후보 지도와 후보 재생성 루프
 - `HANDOFF-096-FRONTIER-CANDIDATE-DISCOVERY.md` — 스펙 092 자율 후보 고갈 뒤 frontier 발굴 후보 폐쇄
 - `HANDOFF-095-AUTONOMOUS-GROWTH-OBJECTIVE-CALIBRATION.md` — 스펙 091 자율 성장 목적 함수와 탐색 예산 보정
 - `HANDOFF-094-SOURCE-DIVERSIFICATION-CANDIDATE-CLOSURE.md` — 스펙 090 source diversification 산출 후보 완료 폐쇄
