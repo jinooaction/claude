@@ -220,7 +220,7 @@ the current worktree. Do not trust prose in this block as the source of truth
 for in-flight work; use the `git_ground_truth` start hook, latest `HANDOFF.md`,
 and `/sync` against `jinooaction/claude` `Codex/*` branches before continuing.
 
-현재 계획 포인터: `specs/093-macro-candidate-map-regenerator/plan.md` — 후보 고갈 뒤 거시 후보 지도를 만들고 완료된 frontier 후보 다음의 실행 가능 후보를 재생성하는 운영 보정 설계.
+현재 계획 포인터: `specs/094-investment-edge-frontier-map/plan.md` — 투자 엣지 frontier 후보를 완료 처리한 뒤 forward verdict와 money-path 증거를 읽는 첫 no-live 실험 후보로 전진시키는 운영 보정 설계.
 
 머지 완료(베이스라인): spec 004 (LLM 판단 지점), 005 (자율 튜너), 006 (배포 자동화), 007 (하드닝 카나리), 008 (백테스트), 009 (paper-run), 010 (자동 룰 설계자), 011 (라이브 성과 측정). **주의: 일부 tasks.md 가 stale 0% 로 표시된 적 있음 — 코드/테스트를 믿을 것.**
 

@@ -10,6 +10,7 @@ from auto_invest.analytics.autonomous_work_execution import (
     AUTONOMY_CODEX_START,
     AUTONOMY_OPERATOR_APPROVAL,
     CODEX_COMPLETION_GATES,
+    FORWARD_REGIME_EDGE_EXPERIMENT_CANDIDATE_ID,
     FRONTIER_DISCOVERY_CANDIDATE_ID,
     INVESTMENT_EDGE_FRONTIER_CANDIDATE_ID,
     MACRO_CANDIDATE_MAP_REGENERATOR_ID,
@@ -756,6 +757,173 @@ def test_released_regenerator_emits_investment_edge_frontier_candidate():
     assert report.selected_work.status == STATUS_EXECUTION_READY
     assert report.selected_work.domain_key == "strategy_design"
     assert "투자 엣지" in report.selected_work.title_ko
+
+
+def test_investment_edge_frontier_map_is_deterministic_and_rendered():
+    evidence = {
+        "capital-path-readiness": _json(
+            {
+                "priority_candidates": [
+                    {
+                        "candidate_id": "candidate-fd04772a23c5",
+                        "domain_key": "live_readiness",
+                        "status": "new",
+                        "score": 597,
+                    }
+                ]
+            }
+        ),
+        "rebalance-paper-forward": _json({"overall": "OK", "tracks": []}),
+        "edge-autoarm": _json({"overall": "OK"}),
+        "money-path": _json(
+            {
+                "overall_status": "OK",
+                "live_money_state": {"status": "PREVIEW_ONLY"},
+            }
+        ),
+        "released-work": _json(
+            {
+                "released_work": [
+                    {
+                        "candidate_id": "candidate-fd04772a23c5",
+                        "status": "released",
+                        "reason_ko": "스펙 078 완료",
+                    },
+                    {
+                        "candidate_id": MACRO_GROWTH_DISCOVERY_CANDIDATE_ID,
+                        "status": "released",
+                        "reason_ko": "스펙 088 완료",
+                    },
+                    {
+                        "candidate_id": MACRO_GROWTH_SOURCE_DIVERSIFICATION_CANDIDATE_ID,
+                        "status": "released",
+                        "reason_ko": "스펙 089 완료",
+                    },
+                    {
+                        "candidate_id": MACRO_GROWTH_OBJECTIVE_CALIBRATION_CANDIDATE_ID,
+                        "status": "released",
+                        "reason_ko": "스펙 091 완료",
+                    },
+                    {
+                        "candidate_id": FRONTIER_DISCOVERY_CANDIDATE_ID,
+                        "status": "released",
+                        "reason_ko": "스펙 092 완료",
+                    },
+                    {
+                        "candidate_id": MACRO_CANDIDATE_MAP_REGENERATOR_ID,
+                        "status": "released",
+                        "reason_ko": "스펙 093 완료",
+                    },
+                ]
+            }
+        ),
+        "pipeline-liveness": _liveness(),
+    }
+
+    first = build_autonomous_work_execution(evidence, now=NOW).to_dict()
+    second = build_autonomous_work_execution(evidence, now=NOW).to_dict()
+
+    assert first["investment_edge_frontier_map"] == second[
+        "investment_edge_frontier_map"
+    ]
+    assert (
+        first["investment_edge_frontier_map"][0]["recommended_candidate_id"]
+        == FORWARD_REGIME_EDGE_EXPERIMENT_CANDIDATE_ID
+    )
+    assert first["investment_edge_frontier_map"][0]["coverage_status"] == "open"
+
+    markdown = build_autonomous_work_execution(evidence, now=NOW).as_markdown()
+    assert "## 투자 엣지 frontier 지도" in markdown
+    assert FORWARD_REGIME_EDGE_EXPERIMENT_CANDIDATE_ID in markdown
+
+
+def test_released_investment_edge_frontier_emits_no_live_experiment_candidate():
+    report = build_autonomous_work_execution(
+        {
+            "capital-path-readiness": _json(
+                {
+                    "priority_candidates": [
+                        {
+                            "candidate_id": "candidate-fd04772a23c5",
+                            "domain_key": "live_readiness",
+                            "status": "new",
+                            "score": 597,
+                        }
+                    ]
+                }
+            ),
+            "rebalance-paper-forward": _json({"overall": "OK", "tracks": []}),
+            "edge-autoarm": _json({"overall": "OK"}),
+            "money-path": _json(
+                {
+                    "overall_status": "OK",
+                    "live_money_state": {"status": "PREVIEW_ONLY"},
+                }
+            ),
+            "released-work": _json(
+                {
+                    "released_work": [
+                        {
+                            "candidate_id": "candidate-fd04772a23c5",
+                            "status": "released",
+                            "reason_ko": "스펙 078 완료",
+                        },
+                        {
+                            "candidate_id": MACRO_GROWTH_DISCOVERY_CANDIDATE_ID,
+                            "status": "released",
+                            "reason_ko": "스펙 088 완료",
+                        },
+                        {
+                            "candidate_id": MACRO_GROWTH_SOURCE_DIVERSIFICATION_CANDIDATE_ID,
+                            "status": "released",
+                            "reason_ko": "스펙 089 완료",
+                        },
+                        {
+                            "candidate_id": MACRO_GROWTH_OBJECTIVE_CALIBRATION_CANDIDATE_ID,
+                            "status": "released",
+                            "reason_ko": "스펙 091 완료",
+                        },
+                        {
+                            "candidate_id": FRONTIER_DISCOVERY_CANDIDATE_ID,
+                            "status": "released",
+                            "reason_ko": "스펙 092 완료",
+                        },
+                        {
+                            "candidate_id": MACRO_CANDIDATE_MAP_REGENERATOR_ID,
+                            "status": "released",
+                            "reason_ko": "스펙 093 완료",
+                        },
+                        {
+                            "candidate_id": INVESTMENT_EDGE_FRONTIER_CANDIDATE_ID,
+                            "status": "released",
+                            "reason_ko": "스펙 094 완료",
+                        },
+                    ]
+                }
+            ),
+            "pipeline-liveness": _liveness(),
+        },
+        now=NOW,
+    )
+
+    assert report.overall_status == STATUS_EXECUTION_READY
+    assert report.selected_work is not None
+    assert (
+        report.selected_work.candidate_id
+        == FORWARD_REGIME_EDGE_EXPERIMENT_CANDIDATE_ID
+    )
+    assert report.selected_work.status == STATUS_EXECUTION_READY
+    assert report.selected_work.domain_key == "strategy_design"
+    assert report.selected_work.risk_grade == 2
+    assert report.selected_work.safety_impact == ()
+    assert "no-live" in report.selected_work.next_action_ko
+    assert set(report.selected_work.required_inputs) >= {
+        "automation/rebalance-paper-forward-last-run:LAST_RUN.md",
+        "automation/money-path-last-run:LAST_RUN.md",
+        "automation/released-work-last-run:released_work.json",
+        "automation/autonomous-evolution-last-run:learning_ledger.json",
+        "automation/pipeline-liveness-last-run:LAST_RUN.md",
+    }
 
 
 def test_macro_candidate_map_is_deterministic_and_rendered():

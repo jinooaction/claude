@@ -52,6 +52,15 @@ MACRO_GROWTH_OBJECTIVE_CALIBRATION_CANDIDATE_ID = (
 FRONTIER_DISCOVERY_CANDIDATE_ID = "candidate-autonomous-frontier-discovery"
 MACRO_CANDIDATE_MAP_REGENERATOR_ID = "candidate-macro-candidate-map-regenerator"
 INVESTMENT_EDGE_FRONTIER_CANDIDATE_ID = "candidate-investment-edge-frontier-map"
+FORWARD_REGIME_EDGE_EXPERIMENT_CANDIDATE_ID = (
+    "candidate-forward-regime-edge-experiment"
+)
+SIGNAL_DIVERSIFICATION_EDGE_EXPERIMENT_CANDIDATE_ID = (
+    "candidate-signal-diversification-edge-experiment"
+)
+COST_ADJUSTED_EDGE_EXPERIMENT_CANDIDATE_ID = (
+    "candidate-cost-adjusted-edge-experiment"
+)
 DATA_EVIDENCE_FRONTIER_CANDIDATE_ID = "candidate-data-evidence-frontier-map"
 EXECUTION_QUALITY_FRONTIER_CANDIDATE_ID = "candidate-execution-quality-frontier-map"
 AGENT_OPS_FRONTIER_CANDIDATE_ID = "candidate-agent-ops-frontier-map"
@@ -85,6 +94,9 @@ _SOURCE_REFS: dict[str, str] = {
     "candidate-result-executor": (
         "automation/candidate-implementation-results:candidate_results.json"
     ),
+    "rebalance-paper-forward": "automation/rebalance-paper-forward-last-run:LAST_RUN.md",
+    "edge-autoarm": "automation/edge-autoarm-last-run:LAST_RUN.md",
+    "money-path": "automation/money-path-last-run:LAST_RUN.md",
     "released-work": "automation/released-work-last-run:released_work.json",
     "pipeline-liveness": "automation/pipeline-liveness-last-run:LAST_RUN.md",
 }
@@ -172,6 +184,19 @@ class MacroCandidateMapTemplate:
     source_domain_keys: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class InvestmentEdgeFrontierTemplate:
+    """투자 엣지 영역 안에서 재생성할 no-live 실험 후보."""
+
+    frontier_key: str
+    label_ko: str
+    recommended_candidate_id: str
+    title_ko: str
+    priority_score: int
+    reason_ko: str
+    next_action_ko: str
+
+
 _MACRO_GROWTH_CANDIDATES: tuple[MacroGrowthCandidateTemplate, ...] = (
     MacroGrowthCandidateTemplate(
         candidate_id=MACRO_GROWTH_DISCOVERY_CANDIDATE_ID,
@@ -210,6 +235,54 @@ _MACRO_GROWTH_CANDIDATES: tuple[MacroGrowthCandidateTemplate, ...] = (
         next_action_ko=(
             "후보 발굴의 목적 함수, 탐색 예산, 중단 조건, 반복 학습 지표를 "
             "측정 가능한 계약으로 고정한다."
+        ),
+    ),
+)
+
+_INVESTMENT_EDGE_FRONTIER_TEMPLATES: tuple[InvestmentEdgeFrontierTemplate, ...] = (
+    InvestmentEdgeFrontierTemplate(
+        frontier_key="forward_regime_edge",
+        label_ko="forward 레짐 엣지",
+        recommended_candidate_id=FORWARD_REGIME_EDGE_EXPERIMENT_CANDIDATE_ID,
+        title_ko="forward 레짐 엣지 no-live 실험 설계",
+        priority_score=2350,
+        reason_ko=(
+            "forward verdict 관측과 레짐 성과 증거는 존재하지만, 레짐별 견고성을 "
+            "다음 no-live 실험 후보로 분리한 계약은 아직 없다."
+        ),
+        next_action_ko=(
+            "rebalance-paper-forward, money-path, released-work, learning ledger를 "
+            "함께 읽어 레짐별 forward edge no-live 실험 계약과 검증 기준을 SDD로 만든다."
+        ),
+    ),
+    InvestmentEdgeFrontierTemplate(
+        frontier_key="signal_diversification_edge",
+        label_ko="신호 다변화 엣지",
+        recommended_candidate_id=SIGNAL_DIVERSIFICATION_EDGE_EXPERIMENT_CANDIDATE_ID,
+        title_ko="신호 다변화 no-live 엣지 실험 설계",
+        priority_score=2250,
+        reason_ko=(
+            "기존 forward 후보가 특정 신호·전략군에 치우치면 세계 수준의 투자 엣지 "
+            "탐색 폭이 좁아진다."
+        ),
+        next_action_ko=(
+            "기존 forward verdict와 released-work를 읽어 상관이 낮은 신호 후보군을 "
+            "no-live 실험 후보로 분리한다."
+        ),
+    ),
+    InvestmentEdgeFrontierTemplate(
+        frontier_key="cost_adjusted_edge",
+        label_ko="비용 차감 엣지",
+        recommended_candidate_id=COST_ADJUSTED_EDGE_EXPERIMENT_CANDIDATE_ID,
+        title_ko="거래 비용 차감 no-live 엣지 실험 설계",
+        priority_score=2150,
+        reason_ko=(
+            "paper 성과가 실제 돈으로 이어지려면 비용과 슬리피지에 둔감한 엣지를 "
+            "분리해 검증해야 한다."
+        ),
+        next_action_ko=(
+            "forward verdict, execution-quality, money-path 증거를 함께 읽어 비용 차감 "
+            "no-live 실험 후보와 통과 기준을 만든다."
         ),
     ),
 )
@@ -467,6 +540,34 @@ class MacroCandidateMapEntry:
 
 
 @dataclass(frozen=True)
+class InvestmentEdgeFrontierMapEntry:
+    """투자 엣지 영역 안쪽의 no-live 실험 후보 지도 행."""
+
+    frontier_key: str
+    label_ko: str
+    coverage_status: str
+    priority_score: int
+    recommended_candidate_id: str
+    title_ko: str
+    reason_ko: str
+    next_action_ko: str
+    required_inputs: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "frontier_key": self.frontier_key,
+            "label_ko": self.label_ko,
+            "coverage_status": self.coverage_status,
+            "priority_score": self.priority_score,
+            "recommended_candidate_id": self.recommended_candidate_id,
+            "title_ko": self.title_ko,
+            "reason_ko": self.reason_ko,
+            "next_action_ko": self.next_action_ko,
+            "required_inputs": list(self.required_inputs),
+        }
+
+
+@dataclass(frozen=True)
 class ObjectiveCalibration:
     """자율 성장 목적 함수, 예산, 중단 조건, 학습 지표 계약."""
 
@@ -501,6 +602,7 @@ class AutonomousWorkExecutionReport:
     ranked_work: tuple[WorkPacket, ...]
     suppressed_work: tuple[WorkPacket, ...]
     macro_candidate_map: tuple[MacroCandidateMapEntry, ...]
+    investment_edge_frontier_map: tuple[InvestmentEdgeFrontierMapEntry, ...]
     evidence_surfaces: tuple[EvidenceSurface, ...]
     safety_invariants: tuple[str, ...]
     objective_calibration: ObjectiveCalibration
@@ -519,6 +621,9 @@ class AutonomousWorkExecutionReport:
             "suppressed_work": [packet.to_dict() for packet in self.suppressed_work],
             "macro_candidate_map": [
                 entry.to_dict() for entry in self.macro_candidate_map
+            ],
+            "investment_edge_frontier_map": [
+                entry.to_dict() for entry in self.investment_edge_frontier_map
             ],
             "evidence_surfaces": [surface.to_dict() for surface in self.evidence_surfaces],
             "safety_invariants": list(self.safety_invariants),
@@ -646,6 +751,22 @@ class AutonomousWorkExecutionReport:
                 )
         else:
             lines.append("- 거시 후보 지도 항목이 없습니다.")
+
+        lines += ["", "## 투자 엣지 frontier 지도", ""]
+        if self.investment_edge_frontier_map:
+            lines += [
+                "| 영역 | 상태 | 점수 | 추천 후보 | 이유 |",
+                "|------|------|-----:|-----------|------|",
+            ]
+            for entry in self.investment_edge_frontier_map:
+                lines.append(
+                    f"| {_table(entry.label_ko)} | {entry.coverage_status} | "
+                    f"{entry.priority_score} | "
+                    f"{_table(entry.recommended_candidate_id)} | "
+                    f"{_table(entry.reason_ko)} |"
+                )
+        else:
+            lines.append("- 투자 엣지 frontier 지도 항목이 없습니다.")
 
         lines += [
             "",
@@ -1368,6 +1489,16 @@ def _macro_growth_source_refs() -> tuple[str, ...]:
     )
 
 
+def _investment_edge_source_refs() -> tuple[str, ...]:
+    return (
+        _SOURCE_REFS["rebalance-paper-forward"],
+        _SOURCE_REFS["money-path"],
+        _SOURCE_REFS["released-work"],
+        _SOURCE_REFS["evolution-ledger"],
+        _SOURCE_REFS["pipeline-liveness"],
+    )
+
+
 def _regular_queue_is_closed(
     packets: Sequence[WorkPacket],
     surfaces: Sequence[EvidenceSurface],
@@ -1390,6 +1521,7 @@ def _macro_growth_packets(
     released_work: Any,
     surfaces: Sequence[EvidenceSurface],
     macro_candidate_map: Sequence[MacroCandidateMapEntry],
+    investment_edge_frontier_map: Sequence[InvestmentEdgeFrontierMapEntry],
 ) -> tuple[WorkPacket, ...]:
     if not _regular_queue_is_closed(packets, surfaces):
         return ()
@@ -1431,6 +1563,7 @@ def _macro_growth_packets(
             return (regenerator,)
         return _regenerated_macro_candidate_packets(
             macro_candidate_map,
+            investment_edge_frontier_map=investment_edge_frontier_map,
             released=released,
             existing_ids=existing_ids,
         )
@@ -1581,11 +1714,20 @@ def _macro_candidate_map_regenerator_packet(
 def _regenerated_macro_candidate_packets(
     macro_candidate_map: Sequence[MacroCandidateMapEntry],
     *,
+    investment_edge_frontier_map: Sequence[InvestmentEdgeFrontierMapEntry],
     released: Mapping[str, str],
     existing_ids: set[str],
 ) -> tuple[WorkPacket, ...]:
     for entry in macro_candidate_map:
         if entry.recommended_candidate_id in released:
+            if entry.recommended_candidate_id == INVESTMENT_EDGE_FRONTIER_CANDIDATE_ID:
+                nested = _regenerated_investment_edge_candidate_packets(
+                    investment_edge_frontier_map,
+                    released=released,
+                    existing_ids=existing_ids,
+                )
+                if nested:
+                    return nested
             continue
         if entry.recommended_candidate_id in existing_ids:
             continue
@@ -1615,6 +1757,55 @@ def _packet_from_macro_map_entry(entry: MacroCandidateMapEntry) -> WorkPacket:
             entry.work_domain_key,
             "autonomous_improvement",
         ),
+        risk_grade=2,
+        safety_impact=(),
+        priority_score=entry.priority_score,
+        status=STATUS_EXECUTION_READY,
+        autonomy_level=autonomy_level,
+        reason_ko=reason,
+        next_action_ko=entry.next_action_ko,
+        start_guidance_ko=start_guidance,
+        completion_gates=completion_gates,
+        required_inputs=source_refs,
+        safety_boundary=SAFETY_INVARIANTS,
+        source_refs=source_refs,
+    )
+
+
+def _regenerated_investment_edge_candidate_packets(
+    investment_edge_frontier_map: Sequence[InvestmentEdgeFrontierMapEntry],
+    *,
+    released: Mapping[str, str],
+    existing_ids: set[str],
+) -> tuple[WorkPacket, ...]:
+    for entry in investment_edge_frontier_map:
+        if entry.recommended_candidate_id in released:
+            continue
+        if entry.recommended_candidate_id in existing_ids:
+            continue
+        return (_packet_from_investment_edge_entry(entry),)
+    return ()
+
+
+def _packet_from_investment_edge_entry(
+    entry: InvestmentEdgeFrontierMapEntry,
+) -> WorkPacket:
+    source_refs = entry.required_inputs
+    autonomy_level, start_guidance, completion_gates = _execution_contract(
+        STATUS_EXECUTION_READY,
+        2,
+        (),
+    )
+    reason = (
+        f"투자 엣지 frontier 지도에서 {entry.label_ko} 영역이 "
+        f"{entry.coverage_status} 상태다. {entry.reason_ko}"
+    )
+    return WorkPacket(
+        packet_id=_packet_id(entry.recommended_candidate_id, entry.title_ko, source_refs),
+        candidate_id=entry.recommended_candidate_id,
+        domain_key="strategy_design",
+        title_ko=entry.title_ko,
+        work_type=_DOMAIN_WORK_TYPES["strategy_design"],
         risk_grade=2,
         safety_impact=(),
         priority_score=entry.priority_score,
@@ -1677,6 +1868,32 @@ def _macro_candidate_map(
             )
         )
     return tuple(sorted(entries, key=lambda entry: (-entry.priority_score, entry.domain_key)))
+
+
+def _investment_edge_frontier_map(
+    released_work: Any,
+) -> tuple[InvestmentEdgeFrontierMapEntry, ...]:
+    released = _released_candidates(released_work)
+    required_inputs = _investment_edge_source_refs()
+    entries = [
+        InvestmentEdgeFrontierMapEntry(
+            frontier_key=template.frontier_key,
+            label_ko=template.label_ko,
+            coverage_status=(
+                "released"
+                if template.recommended_candidate_id in released
+                else "open"
+            ),
+            priority_score=template.priority_score,
+            recommended_candidate_id=template.recommended_candidate_id,
+            title_ko=template.title_ko,
+            reason_ko=template.reason_ko,
+            next_action_ko=template.next_action_ko,
+            required_inputs=required_inputs,
+        )
+        for template in _INVESTMENT_EDGE_FRONTIER_TEMPLATES
+    ]
+    return tuple(sorted(entries, key=lambda entry: (-entry.priority_score, entry.frontier_key)))
 
 
 def _dedupe_packets(packets: Sequence[WorkPacket]) -> tuple[WorkPacket, ...]:
@@ -1922,6 +2139,9 @@ def build_autonomous_work_execution(
 
     ordered = _dedupe_packets(packets)
     macro_candidate_map = _macro_candidate_map(ordered)
+    investment_edge_frontier_map = _investment_edge_frontier_map(
+        parsed.get("released-work")
+    )
     ordered = _dedupe_packets(
         [
             *ordered,
@@ -1930,6 +2150,7 @@ def build_autonomous_work_execution(
                 released_work=parsed.get("released-work"),
                 surfaces=surfaces,
                 macro_candidate_map=macro_candidate_map,
+                investment_edge_frontier_map=investment_edge_frontier_map,
             ),
         ]
     )
@@ -1953,6 +2174,7 @@ def build_autonomous_work_execution(
         ranked_work=ranked,
         suppressed_work=suppressed,
         macro_candidate_map=macro_candidate_map,
+        investment_edge_frontier_map=investment_edge_frontier_map,
         evidence_surfaces=surfaces,
         safety_invariants=SAFETY_INVARIANTS,
         objective_calibration=objective_calibration,
@@ -1968,11 +2190,13 @@ __all__ = [
     "AUTONOMY_RECOVERY_REQUIRED",
     "CODEX_COMPLETION_GATES",
     "EvidenceSurface",
+    "FORWARD_REGIME_EDGE_EXPERIMENT_CANDIDATE_ID",
     "FRONTIER_DISCOVERY_CANDIDATE_ID",
     "AGENT_OPS_FRONTIER_CANDIDATE_ID",
     "DATA_EVIDENCE_FRONTIER_CANDIDATE_ID",
     "EXECUTION_QUALITY_FRONTIER_CANDIDATE_ID",
     "INVESTMENT_EDGE_FRONTIER_CANDIDATE_ID",
+    "InvestmentEdgeFrontierMapEntry",
     "MacroCandidateMapEntry",
     "MACRO_GROWTH_DISCOVERY_CANDIDATE_ID",
     "MACRO_CANDIDATE_MAP_REGENERATOR_ID",
