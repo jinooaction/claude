@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-07-05T11:06:39.829369Z)
+# 완료 후보 소비 장부 (as of 2026-07-05T11:59:36.909953Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -8,8 +8,8 @@
 | 항목 | 값 |
 |------|-----|
 | overall_status | OK |
-| released_count | 16 |
-| scanned_specs | 46 |
+| released_count | 17 |
+| scanned_specs | 47 |
 
 ## 완료 후보
 
@@ -30,6 +30,7 @@
 | candidate-investment-edge-frontier-map | released | 094-investment-edge-frontier-map | specs/094-investment-edge-frontier-map/spec.md | completed_candidate_id |
 | candidate-macro-candidate-map-regenerator | released | 093-macro-candidate-map-regenerator | specs/093-macro-candidate-map-regenerator/data-model.md | completed_candidate_id |
 | candidate-macro-growth-discovery | released | 088-autonomous-macro-growth-discovery | specs/088-autonomous-macro-growth-discovery/spec.md | completed_candidate_id |
+| candidate-signal-diversification-edge-experiment | released | 096-signal-diversification-edge-experiment | specs/096-signal-diversification-edge-experiment/spec.md | completed_candidate_id |
 | candidate-source-diversification-sidecar-bottleneck | released | 090-source-diversification-candidate-closure | specs/090-source-diversification-candidate-closure/contracts/source-diversification-candidate-closure.md | completed_candidate_id |
 
 ## 제외한 스펙
@@ -96,7 +97,7 @@
 
 ```json
 {
-  "commit": "d81609a93c6cfbbbcb6eed55301435ea57d96976",
+  "commit": "df8cc23902373f67f4e87f582850cf8af58790ad",
   "overall_status": "OK",
   "released_work": [
     {
@@ -235,6 +236,15 @@
       "status": "released"
     },
     {
+      "candidate_id": "candidate-signal-diversification-edge-experiment",
+      "entry_id": "released-9d0121aa91c7",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/096-signal-diversification-edge-experiment/spec.md",
+      "spec_id": "096-signal-diversification-edge-experiment",
+      "status": "released"
+    },
+    {
       "candidate_id": "candidate-source-diversification-sidecar-bottleneck",
       "entry_id": "released-a46d4eb9d9e0",
       "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
@@ -244,7 +254,7 @@
       "status": "released"
     }
   ],
-  "run_id": "28738681131",
+  "run_id": "28740023261",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -301,7 +311,8 @@
     "092-frontier-candidate-discovery",
     "093-macro-candidate-map-regenerator",
     "094-investment-edge-frontier-map",
-    "095-forward-regime-edge-experiment"
+    "095-forward-regime-edge-experiment",
+    "096-signal-diversification-edge-experiment"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -482,6 +493,6 @@
       "spec_id": "072-candidate-evidence-diagnostics"
     }
   ],
-  "timestamp_utc": "2026-07-05T11:06:39.829369Z"
+  "timestamp_utc": "2026-07-05T11:59:36.909953Z"
 }
 ```
