@@ -10,6 +10,8 @@ from auto_invest.analytics.autonomous_work_execution import (
     AUTONOMY_CODEX_START,
     AUTONOMY_OPERATOR_APPROVAL,
     CODEX_COMPLETION_GATES,
+    COST_ADJUSTED_EDGE_EXPERIMENT_CANDIDATE_ID,
+    DATA_EVIDENCE_FRONTIER_CANDIDATE_ID,
     FORWARD_REGIME_EDGE_EXPERIMENT_CANDIDATE_ID,
     FRONTIER_DISCOVERY_CANDIDATE_ID,
     INVESTMENT_EDGE_FRONTIER_CANDIDATE_ID,
@@ -17,6 +19,8 @@ from auto_invest.analytics.autonomous_work_execution import (
     MACRO_GROWTH_DISCOVERY_CANDIDATE_ID,
     MACRO_GROWTH_OBJECTIVE_CALIBRATION_CANDIDATE_ID,
     MACRO_GROWTH_SOURCE_DIVERSIFICATION_CANDIDATE_ID,
+    PUBLIC_DATA_INPUT_QUALITY_CANDIDATE_ID,
+    SIGNAL_DIVERSIFICATION_EDGE_EXPERIMENT_CANDIDATE_ID,
     STATUS_EXECUTION_READY,
     STATUS_OPERATOR_APPROVAL_REQUIRED,
     STATUS_RELEASED,
@@ -32,6 +36,21 @@ def _json(payload: dict) -> str:
 
 def _liveness(overall: str = "OK") -> str:
     return "## 결정 JSON\n\n```json\n" + _json({"overall": overall, "checks": []}) + "\n```\n"
+
+
+def _released_work(*candidate_ids: str) -> str:
+    return _json(
+        {
+            "released_work": [
+                {
+                    "candidate_id": candidate_id,
+                    "status": "released",
+                    "reason_ko": f"{candidate_id} 완료",
+                }
+                for candidate_id in candidate_ids
+            ]
+        }
+    )
 
 
 def test_selects_capital_path_priority_candidate():
@@ -923,6 +942,112 @@ def test_released_investment_edge_frontier_emits_no_live_experiment_candidate():
         "automation/released-work-last-run:released_work.json",
         "automation/autonomous-evolution-last-run:learning_ledger.json",
         "automation/pipeline-liveness-last-run:LAST_RUN.md",
+    }
+
+
+def test_completed_investment_edge_experiments_emit_data_evidence_frontier_candidate():
+    released_work = _released_work(
+        "candidate-fd04772a23c5",
+        MACRO_GROWTH_DISCOVERY_CANDIDATE_ID,
+        MACRO_GROWTH_SOURCE_DIVERSIFICATION_CANDIDATE_ID,
+        MACRO_GROWTH_OBJECTIVE_CALIBRATION_CANDIDATE_ID,
+        FRONTIER_DISCOVERY_CANDIDATE_ID,
+        MACRO_CANDIDATE_MAP_REGENERATOR_ID,
+        INVESTMENT_EDGE_FRONTIER_CANDIDATE_ID,
+        FORWARD_REGIME_EDGE_EXPERIMENT_CANDIDATE_ID,
+        SIGNAL_DIVERSIFICATION_EDGE_EXPERIMENT_CANDIDATE_ID,
+        COST_ADJUSTED_EDGE_EXPERIMENT_CANDIDATE_ID,
+    )
+    evidence = {
+        "capital-path-readiness": _json(
+            {
+                "priority_candidates": [
+                    {
+                        "candidate_id": "candidate-fd04772a23c5",
+                        "domain_key": "live_readiness",
+                        "status": "new",
+                        "score": 597,
+                    }
+                ]
+            }
+        ),
+        "public-data": _json({"overall_ok": True, "published": 11}),
+        "regime-stratify": _json({"overall": "OK", "total_return_days": 751}),
+        "released-work": released_work,
+        "pipeline-liveness": _liveness(),
+    }
+
+    first = build_autonomous_work_execution(evidence, now=NOW).to_dict()
+    second = build_autonomous_work_execution(evidence, now=NOW).to_dict()
+
+    assert first["data_evidence_frontier_map"] == second[
+        "data_evidence_frontier_map"
+    ]
+    assert (
+        first["data_evidence_frontier_map"][0]["recommended_candidate_id"]
+        == PUBLIC_DATA_INPUT_QUALITY_CANDIDATE_ID
+    )
+    assert first["data_evidence_frontier_map"][0]["coverage_status"] == "open"
+    assert first["selected_work"]["candidate_id"] == DATA_EVIDENCE_FRONTIER_CANDIDATE_ID
+    assert first["selected_work"]["domain_key"] == "data_quality"
+
+    markdown = build_autonomous_work_execution(evidence, now=NOW).as_markdown()
+    assert "## 데이터 증거 frontier 지도" in markdown
+    assert PUBLIC_DATA_INPUT_QUALITY_CANDIDATE_ID in markdown
+
+
+def test_released_data_evidence_frontier_emits_public_data_input_quality_candidate():
+    report = build_autonomous_work_execution(
+        {
+            "capital-path-readiness": _json(
+                {
+                    "priority_candidates": [
+                        {
+                            "candidate_id": "candidate-fd04772a23c5",
+                            "domain_key": "live_readiness",
+                            "status": "new",
+                            "score": 597,
+                        }
+                    ]
+                }
+            ),
+            "public-data": _json({"overall_ok": True, "published": 11}),
+            "regime-stratify": _json({"overall": "OK", "total_return_days": 751}),
+            "released-work": _released_work(
+                "candidate-fd04772a23c5",
+                MACRO_GROWTH_DISCOVERY_CANDIDATE_ID,
+                MACRO_GROWTH_SOURCE_DIVERSIFICATION_CANDIDATE_ID,
+                MACRO_GROWTH_OBJECTIVE_CALIBRATION_CANDIDATE_ID,
+                FRONTIER_DISCOVERY_CANDIDATE_ID,
+                MACRO_CANDIDATE_MAP_REGENERATOR_ID,
+                INVESTMENT_EDGE_FRONTIER_CANDIDATE_ID,
+                FORWARD_REGIME_EDGE_EXPERIMENT_CANDIDATE_ID,
+                SIGNAL_DIVERSIFICATION_EDGE_EXPERIMENT_CANDIDATE_ID,
+                COST_ADJUSTED_EDGE_EXPERIMENT_CANDIDATE_ID,
+                DATA_EVIDENCE_FRONTIER_CANDIDATE_ID,
+            ),
+            "pipeline-liveness": _liveness(),
+        },
+        now=NOW,
+    )
+
+    assert report.overall_status == STATUS_EXECUTION_READY
+    assert report.selected_work is not None
+    assert report.selected_work.candidate_id == PUBLIC_DATA_INPUT_QUALITY_CANDIDATE_ID
+    assert report.selected_work.status == STATUS_EXECUTION_READY
+    assert report.selected_work.domain_key == "data_quality"
+    assert report.selected_work.risk_grade == 2
+    assert report.selected_work.safety_impact == ()
+    assert "공개 데이터" in report.selected_work.next_action_ko
+    assert set(report.selected_work.required_inputs) >= {
+        "automation/public-data:LAST_RUN.md",
+        "automation/public-data:summary.json",
+        "automation/public-data:regime.json",
+        "automation/public-data:regime_timeline.csv",
+        "automation/regime-stratify-last-run:LAST_RUN.md",
+        "automation/pipeline-liveness-last-run:LAST_RUN.md",
+        "automation/released-work-last-run:released_work.json",
+        "automation/capital-path-readiness-last-run:capital_path_readiness.json",
     }
 
 

@@ -48,6 +48,8 @@ def test_manifest_matches_contract(capsys):
         ),
         "edge-autoarm\tautomation/edge-autoarm-last-run\tLAST_RUN.md",
         "money-path\tautomation/money-path-last-run\tLAST_RUN.md",
+        "public-data\tautomation/public-data\tLAST_RUN.md",
+        "regime-stratify\tautomation/regime-stratify-last-run\tLAST_RUN.md",
         "released-work\tautomation/released-work-last-run\treleased_work.json",
         "pipeline-liveness\tautomation/pipeline-liveness-last-run\tLAST_RUN.md",
     ]
@@ -74,6 +76,27 @@ def test_probe_writes_json_and_markdown(tmp_path, capsys):
     )
     (tmp_path / "pipeline-liveness.md").write_text(
         "## 결정 JSON\n\n```json\n{\"overall\":\"OK\",\"checks\":[]}\n```\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "public-data.md").write_text(
+        (
+            "# 공개 데이터 수집 채널\n\n"
+            "## summary.json\n\n"
+            "```json\n"
+            "{\"overall_ok\":true,\"published\":11,\"total_items\":11}\n"
+            "```\n"
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "regime-stratify.md").write_text(
+        (
+            "# 레짐 층화\n\n"
+            "```\n"
+            "regime stratify: 수익률 751일\n"
+            "--- stratified json ---\n"
+            "{\"schema_version\":\"1.0\",\"total_return_days\":751}\n"
+            "```\n"
+        ),
         encoding="utf-8",
     )
 
@@ -119,13 +142,21 @@ def test_probe_writes_json_and_markdown(tmp_path, capsys):
         written["investment_edge_frontier_map"][0]["recommended_candidate_id"]
         == "candidate-forward-regime-edge-experiment"
     )
+    assert (
+        written["data_evidence_frontier_map"][0]["recommended_candidate_id"]
+        == "candidate-public-data-input-quality-contract"
+    )
     assert written["run_id"] == "123"
     assert written["commit"] == "abc123"
+    surfaces = {surface["key"]: surface for surface in written["evidence_surfaces"]}
+    assert surfaces["public-data"]["parse_status"] == "ok"
+    assert surfaces["regime-stratify"]["parse_status"] == "ok"
     summary = summary_out.read_text(encoding="utf-8")
     assert "자율 작업 실행 루프" in summary
     assert "## 목적 함수 보정" in summary
     assert "## 거시 후보 지도" in summary
     assert "## 투자 엣지 frontier 지도" in summary
+    assert "## 데이터 증거 frontier 지도" in summary
 
 
 def test_probe_repo_root_released_work_overrides_sidecar_lag(tmp_path, capsys):
