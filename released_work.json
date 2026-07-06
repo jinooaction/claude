@@ -1,5 +1,5 @@
 {
-  "commit": "49c4331aefc3cbe0f1fff3c412c1f926bbd27cfe",
+  "commit": "6aa85c6f91a40f000ff3297928b3d346c4811124",
   "overall_status": "OK",
   "released_work": [
     {
@@ -45,6 +45,15 @@
       "source_field": "completed_candidate_id",
       "source_file": "specs/097-cost-adjusted-edge-experiment/data-model.md",
       "spec_id": "097-cost-adjusted-edge-experiment",
+      "status": "released"
+    },
+    {
+      "candidate_id": "candidate-data-evidence-frontier-map",
+      "entry_id": "released-821bb9f93d65",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/098-data-evidence-frontier-map/spec.md",
+      "spec_id": "098-data-evidence-frontier-map",
       "status": "released"
     },
     {
@@ -165,7 +174,7 @@
       "status": "released"
     }
   ],
-  "run_id": "28784829439",
+  "run_id": "28786862491",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -224,7 +233,8 @@
     "094-investment-edge-frontier-map",
     "095-forward-regime-edge-experiment",
     "096-signal-diversification-edge-experiment",
-    "097-cost-adjusted-edge-experiment"
+    "097-cost-adjusted-edge-experiment",
+    "098-data-evidence-frontier-map"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -405,5 +415,5 @@
       "spec_id": "072-candidate-evidence-diagnostics"
     }
   ],
-  "timestamp_utc": "2026-07-06T10:25:19.262144Z"
+  "timestamp_utc": "2026-07-06T11:03:31.063714Z"
 }
