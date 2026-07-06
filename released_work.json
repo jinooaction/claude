@@ -1,5 +1,5 @@
 {
-  "commit": "9ed61b8f0d0bdbf0aacc2707e50bead6932cded2",
+  "commit": "48314cd8c622340f4a7879a92d48a1cbb0e25ed5",
   "overall_status": "OK",
   "released_work": [
     {
@@ -183,7 +183,7 @@
       "status": "released"
     }
   ],
-  "run_id": "28792853168",
+  "run_id": "28799231124",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -423,7 +423,11 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "072-candidate-evidence-diagnostics"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "100-regime-timeline-coverage-contract"
     }
   ],
-  "timestamp_utc": "2026-07-06T12:51:56.737168Z"
+  "timestamp_utc": "2026-07-06T14:31:07.711582Z"
 }
