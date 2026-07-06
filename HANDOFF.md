@@ -33,15 +33,15 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `49c4331` — Merge pull request #481 from jinooaction/Codex/097-cost-adjusted-edge-experiment |
-| main 테스트 | PR #481 머지 전 `uv run pytest` → 2489 passed, 4 skipped. 머지 직전 재실행 `uv run pytest` → 2489 passed, 4 skipped. 인계 브랜치에서 HANDOFF 갱신 전 `uv run pytest -q`는 낡은 HANDOFF 때문에 하네스 2건만 실패했고, 이 handoff 갱신 후 재실행 기준은 2489 passed, 4 skipped. |
+| 마지막 main 커밋 | `6aa85c6` — Merge pull request #483 from jinooaction/Codex/098-data-evidence-frontier-map |
+| main 테스트 | PR #483 머지 전 `uv run pytest` → 2491 passed, 4 skipped. 머지 직전 재실행 `uv run pytest` → 2491 passed, 4 skipped. 인계 브랜치에서 HANDOFF 갱신 전 `uv run pytest -q`는 낡은 HANDOFF 때문에 하네스 2건만 실패했고, 이 handoff 갱신 후 재실행 기준은 2491 passed, 4 skipped. |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
 | 열린 PR | 없음. |
-| 출시 완료 스펙 | 최신 추가: 097(비용 차감 no-live 엣지 실험 계약과 비용 기준 대기 분리), 096(신호 다변화 no-live 엣지 실험 계약과 낮은 겹침 후보 분리), 095(forward 레짐 엣지 no-live 실험 계약과 관측 대기 판정), 094(투자 엣지 frontier 지도와 no-live 실험 후보 전진), 093(거시 후보 지도와 후보 재생성 루프), 092(자율 후보 고갈 뒤 frontier 발굴 후보 폐쇄), 091(자율 성장 목적 함수와 탐색 예산 보정), 090(source diversification 산출 후보 완료 폐쇄), 089(정적 후보 템플릿 밖 증거 기반 후보 공간 확장), 088(거시 자율 성장 후보 발굴기), 087(학습 장부로 폐기·보류 후보 재발굴 차단), 086(자율 루프 sidecar와 HANDOFF 생존성 완료 후보 폐쇄), 085(공개 데이터 수집·교차 검증 확장), 084(오래된 증거와 성과 실패 분리), 083(주문 거부·체결 품질 손익 관측), 082(레짐·성과 후보 점수화), 081(자율 루프 품질 폐쇄), 080(운영자 대시보드와 모바일 알림 루프), 079(완료 후보 소비 장부), 078(돈 경로 게이트 정렬 루프), 077(자율 작업 실행 루프), 076(자본 경로 준비도 루프), 075(전략 실패 학습), 074(후보 가격 이력 지원), 073(후보 pending next action 보정), 072(후보 증거 진단), 071(후보 결과 실행기), 070(후보 구현 공장), 069(자율 승격 실행 루프), 068(자율 승격 루프 자동 분류), 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
-| 골격 스펙 | 없음. `.specify/feature.json`은 최신 출시 스펙 `specs/097-cost-adjusted-edge-experiment`를 가리킨다. 스펙 097은 #481로 main에 들어갔다. |
-| 최근 출시 작업 | #481 스펙 097 비용 차감 no-live 엣지 실험 계약. #480 스펙 096 인계. #479 스펙 096 신호 다변화 no-live 엣지 실험 계약. #478 스펙 095 인계. #477 스펙 095 forward 레짐 엣지 no-live 실험 계약. |
-| 활성 작업 | 열린 PR 없음. 최신 released-work sidecar run `28784829439`는 `candidate-cost-adjusted-edge-experiment`를 스펙 097 완료 후보로 released 처리했다. 최신 autonomous-work sidecar run `28784829374`는 다음 후보 `candidate-data-evidence-frontier-map`를 `EXECUTION_READY`, 위험 등급 2, 안전 영향 없음으로 선택했다. 스펙 097 probe의 최신 sidecar 재현은 `overall_status=OBSERVATION_WAIT`, forward 관측 16/20, 남은 관측 4개, 비용 스트레스 후보 21개, 50bps 스트레스 기준 최상위 후보 `multiasset`(비용 차감 수익률 1.342695%), execution-quality `latest_signal=INTENT_LOSS`, 브로커 거부 2건, `cost-basis-completeness=WAIT`다. 돈 경로는 `PREVIEW_ONLY`, stage `BLOCKED`이며 실주문은 불가하다. |
-| 안전 경계 | #481은 등급 2 no-live 실험 계약 추가다. 보고서와 probe는 sidecar 읽기 전용이며 주문, 자본 증액, 자본 배분, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, live sentinel, 브로커 주문, K1/K2/K4/K5/K6, 헌법, 커널 목록, 비밀값, 외부 유료 서비스는 변경하지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`다. |
+| 출시 완료 스펙 | 최신 추가: 098(데이터 증거 frontier 지도와 공개 데이터 입력 품질 후보 전진), 097(비용 차감 no-live 엣지 실험 계약과 비용 기준 대기 분리), 096(신호 다변화 no-live 엣지 실험 계약과 낮은 겹침 후보 분리), 095(forward 레짐 엣지 no-live 실험 계약과 관측 대기 판정), 094(투자 엣지 frontier 지도와 no-live 실험 후보 전진), 093(거시 후보 지도와 후보 재생성 루프), 092(자율 후보 고갈 뒤 frontier 발굴 후보 폐쇄), 091(자율 성장 목적 함수와 탐색 예산 보정), 090(source diversification 산출 후보 완료 폐쇄), 089(정적 후보 템플릿 밖 증거 기반 후보 공간 확장), 088(거시 자율 성장 후보 발굴기), 087(학습 장부로 폐기·보류 후보 재발굴 차단), 086(자율 루프 sidecar와 HANDOFF 생존성 완료 후보 폐쇄), 085(공개 데이터 수집·교차 검증 확장), 084(오래된 증거와 성과 실패 분리), 083(주문 거부·체결 품질 손익 관측), 082(레짐·성과 후보 점수화), 081(자율 루프 품질 폐쇄), 080(운영자 대시보드와 모바일 알림 루프), 079(완료 후보 소비 장부), 078(돈 경로 게이트 정렬 루프), 077(자율 작업 실행 루프), 076(자본 경로 준비도 루프), 075(전략 실패 학습), 074(후보 가격 이력 지원), 073(후보 pending next action 보정), 072(후보 증거 진단), 071(후보 결과 실행기), 070(후보 구현 공장), 069(자율 승격 실행 루프), 068(자율 승격 루프 자동 분류), 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
+| 골격 스펙 | 없음. `.specify/feature.json`은 최신 출시 스펙 `specs/098-data-evidence-frontier-map`을 가리킨다. 스펙 098은 #483으로 main에 들어갔다. |
+| 최근 출시 작업 | #483 스펙 098 데이터 증거 frontier 지도. #482 스펙 097 인계. #481 스펙 097 비용 차감 no-live 엣지 실험 계약. #480 스펙 096 인계. #479 스펙 096 신호 다변화 no-live 엣지 실험 계약. |
+| 활성 작업 | 열린 PR 없음. 최신 released-work sidecar run `28786862491`는 `candidate-data-evidence-frontier-map`을 스펙 098 완료 후보로 released 처리했다. 최신 autonomous-work sidecar run `28786862604`는 다음 후보 `candidate-public-data-input-quality-contract`를 `EXECUTION_READY`, 위험 등급 2, 안전 영향 없음으로 선택했다. 데이터 증거 frontier 지도는 공개 데이터 입력 품질, 레짐 타임라인 커버리지, 데이터 증거 생존성 3개 영역을 open으로 보여주며, 첫 후보 required inputs는 public-data summary/regime/timeline, regime-stratify, pipeline-liveness, released-work, capital-path-readiness다. public-data 파싱은 `overall_ok=True, published=11`, regime-stratify 파싱은 `total_return_days=751`이다. 돈 경로는 `PREVIEW_ONLY`, stage `BLOCKED`이며 실주문은 불가하다. |
+| 안전 경계 | #483은 등급 2 데이터 품질 후보 지도와 work packet 보고서 확장이다. sidecar 읽기 전용이며 주문, 자본 증액, 자본 배분, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, live sentinel, 브로커 주문, K1/K2/K4/K5/K6, 헌법, 커널 목록, 비밀값, 외부 유료 서비스는 변경하지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`다. |
 
 ## 돈 경로 상태 판독 규칙 (필수 — 스펙 062)
 
@@ -80,6 +80,47 @@ uv run python scripts/money_path_probe.py --manifest | while IFS=$'\t' read -r k
 done
 uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.live_money_state'
 ```
+
+## 최근 관찰 — 2026-07-06 KST (스펙 098 데이터 증거 frontier 지도)
+
+현재 `main` 최신 코드 머지는 `6aa85c6`(#483, 스펙 098 데이터 증거 frontier 지도)이다.
+기능 커밋은 `3e6d8e6`이고, 직전 main은 `b8022d6`(#482, 스펙 097 인계)이다.
+
+- **문제 정의**: 스펙 097 뒤 자율 작업 실행 루프는 `candidate-data-evidence-frontier-map`을
+  다음 후보로 열었다. 투자 엣지 no-live 후보가 닫힌 뒤 다음 병목은 public-data, regime timeline,
+  regime-stratify, pipeline-liveness 같은 입력 증거의 품질을 후보로 분해하는 것이다.
+- **구현 상태**: `autonomous_work_execution.py`가 `data_evidence_frontier_map`을 JSON과 Markdown에
+  발행한다. 지도는 공개 데이터 입력 품질, 레짐 타임라인 커버리지, 데이터 증거 생존성 3개 영역을
+  open으로 보여주며, `candidate-data-evidence-frontier-map`이 released-work로 닫히면
+  `candidate-public-data-input-quality-contract`를 첫 실행 후보로 만든다. probe manifest는
+  `automation/public-data`와 `automation/regime-stratify-last-run` 입력을 읽기 전용으로 추가했다.
+- **post-merge 실행**: #483 main push 뒤 `Deploy on merge to main` run `28786862434`,
+  `Released work ledger` run `28786862491`, `Autonomous work execution loop` run `28786862604`이 success였다.
+- **sidecar 확인**: 최신 released-work sidecar는 commit `6aa85c6`에서
+  `candidate-data-evidence-frontier-map`을 spec `098-data-evidence-frontier-map`의 released 후보로
+  기록했다. 최신 autonomous-work sidecar는 같은 commit에서 `candidate-public-data-input-quality-contract`를
+  `EXECUTION_READY`, risk grade 2, safety impact 없음으로 선택했다. public-data 입력은
+  `overall_ok=True, published=11`, regime-stratify 입력은 `total_return_days=751`로 파싱됐다.
+- **배포 확인**: main commit의 `Deploy on merge to main` 체크에서 deploy run은 success다.
+  컨테이너에서 GitHub run 상태와 check-run 성공은 확인했다. 서버 audit_log는 직접 확인하지 못한다.
+  KIS smoke sidecar 최신 run은 #483 commit 직접 증거가 아니라 이전 schedule 실행 증거이므로 #483 배포 근거로 쓰지 않는다.
+  이 배포는 dry-run worker 코드 반영이며 실거래 전환이 아니다.
+- **안전 경계**: 등급 2 데이터 품질 후보 지도와 work packet 보고서 확장이다. sidecar 읽기 전용 보고서와
+  probe manifest만 바꿨다. 실제 주문, 브로커 실주문 API, 자본 증액, 자본 배분, whitelist/caps 확대,
+  live 전략 교체, live sentinel, 헌법, 커널 목록, K1/K2/K4/K5/K6, 비밀값, 외부 유료 서비스 변경 없음.
+  현재 돈 경로는 계속 `PREVIEW_ONLY`다.
+- **검증**: PR #483 머지 전 focused pytest 30 통과, 최신 sidecar replay에서
+  `candidate-data-evidence-frontier-map` 선택 확인, 완료 마커 적용 뒤
+  `candidate-public-data-input-quality-contract` 선택 확인, public-data와 regime-stratify 파싱 ok 확인,
+  released-work 로컬 재현에서 `candidate-data-evidence-frontier-map` released 확인,
+  `uv run pytest` 2491 통과·4 스킵, `uv run ruff check src tests` 통과, `git diff --check` 통과,
+  `uv run python scripts/check_handoff_facts.py` OK,
+  `uv run python scripts/agent_harness_probe.py --strict` OK(14/14), PR 품질 관문 성공,
+  머지 직전 `uv run pytest` 2491 통과·4 스킵 및 ruff 재통과,
+  post-merge deploy·released-work·autonomous-work run 성공 확인 완료. 인계 갱신 전 main 기준
+  `uv run pytest -q`는 낡은 HANDOFF 때문에 하네스 2건만 실패했고, 이 handoff 갱신 뒤
+  `uv run pytest -q`는 2491 통과·4 스킵이다.
+- **상세 인계**: `HANDOFF-102-DATA-EVIDENCE-FRONTIER-MAP.md`.
 
 ## 최근 관찰 — 2026-07-06 KST (스펙 097 비용 차감 no-live 엣지 실험 계약)
 
@@ -1800,6 +1841,22 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
   통과, `uv run python scripts/agent_harness_probe.py --strict` `OK (14/14)`,
   `uv run python scripts/check_handoff_facts.py` 통과, PR 품질 관문 통과. 머지 직전 전체 테스트와
   린트를 다시 실행해 같은 결과를 확인했다.
+
+## 최근 마일스톤 — 2026-07-06 KST (스펙 098 데이터 증거 frontier 지도)
+
+- main 코드 베이스라인: `6aa85c6`(PR #483). 기능 커밋: `3e6d8e6`.
+- autonomous-work 보고서가 `data_evidence_frontier_map`을 발행하고, 데이터 증거 영역을
+  공개 데이터 입력 품질, 레짐 타임라인 커버리지, 데이터 증거 생존성 3개 후보로 분해한다.
+- `candidate-data-evidence-frontier-map`은 스펙 098 completed marker로 released-work 장부에 들어갔다.
+- 최신 autonomous-work sidecar run `28786862604`는 `candidate-public-data-input-quality-contract`를
+  `EXECUTION_READY`, 위험 등급 2, 안전 영향 없음으로 선택했다.
+- 데이터 입력 증거 파싱은 public-data `overall_ok=True, published=11`, regime-stratify
+  `total_return_days=751`로 정상이다.
+- post-merge runs: deploy `28786862434`, released-work `28786862491`, autonomous-work
+  `28786862604` success.
+- 안전 경계: 등급 2 읽기 전용 work packet 확장이다. 주문, 자본, live 전략, whitelist/caps, 헌법, 커널,
+  비밀값, 외부 유료 서비스 변경 없음.
+- 상세: `HANDOFF-102-DATA-EVIDENCE-FRONTIER-MAP.md`.
 
 ## 최근 마일스톤 — 2026-07-06 KST (스펙 097 비용 차감 no-live 엣지 실험 계약)
 
@@ -5428,7 +5485,7 @@ K4 추가-전용 터치 2건(forensic 주의, K-meta 아님): `458a0d8`(`LIVE_PE
 
 이전 마일스톤(2026-05-22 KIS 회귀 자율 검증 도입, PR #33 `9096e21` / PR #34 `8cfb7d3`, main push 시 자동 회귀 smoke)은 `HANDOFF-012-KIS-AUTONOMOUS-VERIFY.md` 참조. `KIS smoke (autonomous)` 워크플로우는 활성 상태이며 매일 03:00 UTC + main push 시 자동 실행.
 
-## 현재 main 상태 (2026-05-23 기준)
+## 현재 main 상태 (누적 출시 이력 — 최신 기준은 위 한눈 요약표)
 
 * **헌법 v3.1.0** (v3.0.0 2026-05-14 도입 머지 커밋 `f849fab`; v3.1.0 머지 커밋 `e949451`, 원칙 X 측정 기반 자율 성장 추가). 원칙 IX.D — 운영자 자율 수행 보장. PR 생성과 머지는 모두 자동 워크플로우의 일부. Kernel 터치도 머지를 막지 않음. 안전 경계는 **생산 배포 단계**(스펙 007 하드닝 캐너리)에서 지킴.
 * **스펙 001 (미국 주식 자동 거래 MVP)** — 출시 완료 (2026-05-04). 실제 KIS 브로커 검증 완료. **후속(2026-05-27, PR #75 `4319535`)**: P2 사용자 스토리 "조용한 상태 드리프트 방지"의 미배선 부분(T050 자동 호출 + T052 워커 테스트)을 완성. 정합성 검증(로컬 장부↔브로커 보유 대조, 불일치 시 halt)은 구현(T049)·테스트(T048)는 됐으나 자동 호출 배선이 없어 테스트 스위트만 호출하던 상태였음. 이제 워커가 장 마감 전이마다 자동 대조(라이브 전용, 인-틱, 오류 격리) + `auto-invest reconcile` 수동 명령. Kernel 터치 0건. 자세히는 `HANDOFF-021-RECONCILE-AT-CLOSE.md`.
@@ -5460,9 +5517,9 @@ K4 추가-전용 터치 2건(forensic 주의, K-meta 아님): `458a0d8`(`LIVE_PE
 * **스펙 027 (디플레이티드 샤프 비율 — 다중검정 보정)** — **출시 완료** (2026-05-30, PR #114 `ec1d040`). 백테스트·워크포워드 샤프를 표본 길이·비정규성·시도 개수로 보정(PSR·MinTRL·DSR). 새 모듈 `backtest/significance.py`(scipy 없이 `Φ`/`Φ⁻¹` 구현). 워크포워드에 표본 외 풀 트랙 유의성 배선 + CLI `--num-trials`·`--trial-sharpe-std`·`--min-psr`·`--min-dsr`. **Kernel 터치 0건. 오프라인·읽기 전용. 기본값 byte 동일(옵트인 게이트).** 신규 테스트 32건. 자세히는 `HANDOFF-037-SPEC-027-DEFLATED-SHARPE.md`.
 * **스펙 028 (체결 품질 정밀 측정 — arrival 기준 구현격차 + 체결 지연)** — **출시 완료** (2026-05-30, PR #116 `1dd665e`, K4 커밋 `589187a`). 매수/매도가 의사결정 순간 시세(arrival)에서 얼마나 벗어나(정확)·얼마나 늦게(실시간) 체결됐는지 시장가 주문까지 포함해 측정. `ORDER_INTENT`에 arrival 시세·호가 기록(K4 추가-전용), 라이브 슬리피지 기준가 arrival 우선(→지정가 폴백), `compute_fill_latency`(평균·중앙·p95·최대 초), `performance --slippage` 출력 + `LIVE_PERFORMANCE_SNAPSHOT` 지연 요약. **측정 전용 — 주문 경로(게이트 K1·사이징·브로커) 무변경. 안전 경계 무변경.** 신규 테스트 +10. 자세히는 `HANDOFF-038-SPEC-028-EXECUTION-QUALITY.md`.
 * **라이브 worker** — dry-run(모의) 모드로 가동 중 (2026-05-23 시작). 실주문 미발생. `AUTO_INVEST_MODE=live` 명시 토글 전까지 돈은 움직이지 않음 (운영자 명시 지시 필요). **주의: 스펙 026 선택 1번으로 라이브 캐너리 무장됨(자본 $12k, 축소 룰셋) — `HANDOFF-035`·`HANDOFF-036` 참조.**
-* **KIS smoke 자율 감시** — 활성 상태. main push 시 `KIS smoke (autonomous)` 워크플로우 자동 실행. 매일 03:00 UTC cron. 진단은 `automation/kis-smoke-last-run` 사이드카 브랜치에 force-push (`git show origin/automation/kis-smoke-last-run:LAST_RUN.md` 한 줄로 조회). 최신 실행 정상 (`smoke_state=success`, `key_valid=true`).
-* **main의 테스트**: 1250 통과, 4 스킵 (라이브 KIS 스모크 4건은 `KIS_LIVE_TEST=1` 환경변수로 게이트).
-* **린트**: `uv run ruff check src tests` 깨끗.
+* **KIS smoke 자율 감시** — 활성 상태. main push 시 `KIS smoke (autonomous)` 워크플로우 자동 실행. 매일 03:00 UTC cron. 진단은 `automation/kis-smoke-last-run` 사이드카 브랜치에 force-push (`git show origin/automation/kis-smoke-last-run:LAST_RUN.md` 한 줄로 조회). 최신 실행은 schedule run `28774422030`, commit `6843ac7`, `smoke_state=success`, `key_valid=true`다. 이는 KIS 키와 smoke 건강 상태 참고 증거이며 #483 배포 직접 증거는 아니다.
+* **main의 테스트**: #483 머지 전·머지 직전 `uv run pytest` 2491 통과, 4 스킵. HANDOFF 갱신 전 `uv run pytest -q`는 낡은 HANDOFF 때문에 하네스 2건만 실패했고, 이 handoff 갱신 뒤 2491 통과, 4 스킵으로 복구됐다.
+* **린트**: 최신 인계 브랜치 기준 `uv run ruff check src tests` 깨끗.
 * **라이브 브로커 검증**: 운영자(mason)가 2026-05-04에 본인 실제 KIS 계좌에서 `scripts/live_smoke.py` 실행 — 검증 완료.
 
 ## 운영자 사용성 — 지금 바로 가능한 것
@@ -5598,6 +5655,7 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 
 ## 과거 인수인계 파일 (참고용)
 
+- `HANDOFF-102-DATA-EVIDENCE-FRONTIER-MAP.md` — 스펙 098 데이터 증거 frontier 지도와 공개 데이터 입력 품질 후보 전진
 - `HANDOFF-101-COST-ADJUSTED-EDGE-EXPERIMENT.md` — 스펙 097 비용 차감 no-live 엣지 실험 계약
 - `HANDOFF-100-SIGNAL-DIVERSIFICATION-EDGE-EXPERIMENT.md` — 스펙 096 신호 다변화 no-live 엣지 실험 계약
 - `HANDOFF-099-FORWARD-REGIME-EDGE-EXPERIMENT.md` — 스펙 095 forward 레짐 엣지 no-live 실험 계약
