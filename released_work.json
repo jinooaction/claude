@@ -1,5 +1,5 @@
 {
-  "commit": "48314cd8c622340f4a7879a92d48a1cbb0e25ed5",
+  "commit": "304d3cd0f6b8eedeee2cfc59b36f49deffdc1300",
   "overall_status": "OK",
   "released_work": [
     {
@@ -165,6 +165,15 @@
       "status": "released"
     },
     {
+      "candidate_id": "candidate-regime-timeline-coverage-contract",
+      "entry_id": "released-9e8289ff71d3",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/100-regime-timeline-coverage-contract/spec.md",
+      "spec_id": "100-regime-timeline-coverage-contract",
+      "status": "released"
+    },
+    {
       "candidate_id": "candidate-signal-diversification-edge-experiment",
       "entry_id": "released-9d0121aa91c7",
       "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
@@ -183,7 +192,7 @@
       "status": "released"
     }
   ],
-  "run_id": "28799231124",
+  "run_id": "28800075110",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -244,7 +253,8 @@
     "096-signal-diversification-edge-experiment",
     "097-cost-adjusted-edge-experiment",
     "098-data-evidence-frontier-map",
-    "099-public-data-input-quality-contract"
+    "099-public-data-input-quality-contract",
+    "100-regime-timeline-coverage-contract"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -423,11 +433,7 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "072-candidate-evidence-diagnostics"
-    },
-    {
-      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "100-regime-timeline-coverage-contract"
     }
   ],
-  "timestamp_utc": "2026-07-06T14:31:07.711582Z"
+  "timestamp_utc": "2026-07-06T14:43:51.679917Z"
 }
