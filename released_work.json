@@ -1,5 +1,5 @@
 {
-  "commit": "df8cc23902373f67f4e87f582850cf8af58790ad",
+  "commit": "49c4331aefc3cbe0f1fff3c412c1f926bbd27cfe",
   "overall_status": "OK",
   "released_work": [
     {
@@ -36,6 +36,15 @@
       "source_field": "completed_candidate_id",
       "source_file": "specs/091-autonomous-growth-objective-calibration/contracts/autonomous-growth-objective-calibration.md",
       "spec_id": "091-autonomous-growth-objective-calibration",
+      "status": "released"
+    },
+    {
+      "candidate_id": "candidate-cost-adjusted-edge-experiment",
+      "entry_id": "released-790c63af196e",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/097-cost-adjusted-edge-experiment/data-model.md",
+      "spec_id": "097-cost-adjusted-edge-experiment",
       "status": "released"
     },
     {
@@ -156,7 +165,7 @@
       "status": "released"
     }
   ],
-  "run_id": "28740023261",
+  "run_id": "28784829439",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -214,7 +223,8 @@
     "093-macro-candidate-map-regenerator",
     "094-investment-edge-frontier-map",
     "095-forward-regime-edge-experiment",
-    "096-signal-diversification-edge-experiment"
+    "096-signal-diversification-edge-experiment",
+    "097-cost-adjusted-edge-experiment"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -395,5 +405,5 @@
       "spec_id": "072-candidate-evidence-diagnostics"
     }
   ],
-  "timestamp_utc": "2026-07-05T11:59:36.909953Z"
+  "timestamp_utc": "2026-07-06T10:25:19.262144Z"
 }
