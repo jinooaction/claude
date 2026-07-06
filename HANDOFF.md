@@ -33,15 +33,15 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `c3803cd` — Merge pull request #485 from jinooaction/Codex/099-public-data-input-quality-contract |
-| main 테스트 | PR #485 머지 전 `uv run pytest` → 2500 passed, 4 skipped. 머지 직전 재실행 `uv run pytest` → 2500 passed, 4 skipped. 인계 브랜치에서 HANDOFF 갱신 전 `uv run pytest -q`는 낡은 HANDOFF 때문에 하네스 2건만 실패했고, 이 handoff 갱신 후 재실행 기준은 2500 passed, 4 skipped. |
+| 마지막 main 커밋 | `48314cd` — Merge pull request #487 from jinooaction/Codex/100-regime-timeline-coverage-contract |
+| main 테스트 | PR #487 머지 전 `uv run pytest` → 2512 passed, 4 skipped. 머지 직전 재실행 `uv run pytest` → 2512 passed, 4 skipped. 이 handoff 갱신 후 인계 브랜치 기준 `uv run pytest -q` → 2512 passed, 4 skipped. |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
 | 열린 PR | 없음. |
-| 출시 완료 스펙 | 최신 추가: 099(공개 데이터 입력 품질 계약과 레짐 타임라인 커버리지 후보 전진), 098(데이터 증거 frontier 지도와 공개 데이터 입력 품질 후보 전진), 097(비용 차감 no-live 엣지 실험 계약과 비용 기준 대기 분리), 096(신호 다변화 no-live 엣지 실험 계약과 낮은 겹침 후보 분리), 095(forward 레짐 엣지 no-live 실험 계약과 관측 대기 판정), 094(투자 엣지 frontier 지도와 no-live 실험 후보 전진), 093(거시 후보 지도와 후보 재생성 루프), 092(자율 후보 고갈 뒤 frontier 발굴 후보 폐쇄), 091(자율 성장 목적 함수와 탐색 예산 보정), 090(source diversification 산출 후보 완료 폐쇄), 089(정적 후보 템플릿 밖 증거 기반 후보 공간 확장), 088(거시 자율 성장 후보 발굴기), 087(학습 장부로 폐기·보류 후보 재발굴 차단), 086(자율 루프 sidecar와 HANDOFF 생존성 완료 후보 폐쇄), 085(공개 데이터 수집·교차 검증 확장), 084(오래된 증거와 성과 실패 분리), 083(주문 거부·체결 품질 손익 관측), 082(레짐·성과 후보 점수화), 081(자율 루프 품질 폐쇄), 080(운영자 대시보드와 모바일 알림 루프), 079(완료 후보 소비 장부), 078(돈 경로 게이트 정렬 루프), 077(자율 작업 실행 루프), 076(자본 경로 준비도 루프), 075(전략 실패 학습), 074(후보 가격 이력 지원), 073(후보 pending next action 보정), 072(후보 증거 진단), 071(후보 결과 실행기), 070(후보 구현 공장), 069(자율 승격 실행 루프), 068(자율 승격 루프 자동 분류), 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
-| 골격 스펙 | 없음. `.specify/feature.json`은 최신 출시 스펙 `specs/099-public-data-input-quality-contract`를 가리킨다. 스펙 099는 #485로 main에 들어갔다. |
-| 최근 출시 작업 | #485 스펙 099 공개 데이터 입력 품질 계약. #484 스펙 098 인계. #483 스펙 098 데이터 증거 frontier 지도. #482 스펙 097 인계. #481 스펙 097 비용 차감 no-live 엣지 실험 계약. |
-| 활성 작업 | 열린 PR 없음. 최신 released-work sidecar run `28791708832`는 `candidate-public-data-input-quality-contract`를 스펙 099 완료 후보로 released 처리했다. 최신 autonomous-work sidecar run `28791708758`는 다음 후보 `candidate-regime-timeline-coverage-contract`를 `EXECUTION_READY`, 위험 등급 2, 안전 영향 없음으로 선택했다. 데이터 증거 frontier 지도는 공개 데이터 입력 품질을 released, 레짐 타임라인 커버리지와 데이터 증거 생존성을 open으로 보여준다. 공개 데이터 입력 품질 계약은 최신 sidecar 재현에서 `CONTRACT_READY`, public-data 11/11 발행, 교차검증 5개 PASS, regime timeline 2372행, stratified return 751일, liveness OK로 판정됐다. 돈 경로는 `PREVIEW_ONLY`, readiness `LIVE_BLOCKED`이며 실주문은 불가하다. |
-| 안전 경계 | #485는 등급 2 공개 데이터 입력 품질 계약과 work packet 전진 보정이다. sidecar 읽기 전용이며 주문, 자본 증액, 자본 배분, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, live sentinel, 브로커 주문, K1/K2/K4/K5/K6, 헌법, 커널 목록, 비밀값, 외부 유료 서비스는 변경하지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`다. |
+| 출시 완료 스펙 | 최신 추가: 100(레짐 타임라인 커버리지 계약과 데이터 증거 생존성 후보 전진), 099(공개 데이터 입력 품질 계약과 레짐 타임라인 커버리지 후보 전진), 098(데이터 증거 frontier 지도와 공개 데이터 입력 품질 후보 전진), 097(비용 차감 no-live 엣지 실험 계약과 비용 기준 대기 분리), 096(신호 다변화 no-live 엣지 실험 계약과 낮은 겹침 후보 분리), 095(forward 레짐 엣지 no-live 실험 계약과 관측 대기 판정), 094(투자 엣지 frontier 지도와 no-live 실험 후보 전진), 093(거시 후보 지도와 후보 재생성 루프), 092(자율 후보 고갈 뒤 frontier 발굴 후보 폐쇄), 091(자율 성장 목적 함수와 탐색 예산 보정), 090(source diversification 산출 후보 완료 폐쇄), 089(정적 후보 템플릿 밖 증거 기반 후보 공간 확장), 088(거시 자율 성장 후보 발굴기), 087(학습 장부로 폐기·보류 후보 재발굴 차단), 086(자율 루프 sidecar와 HANDOFF 생존성 완료 후보 폐쇄), 085(공개 데이터 수집·교차 검증 확장), 084(오래된 증거와 성과 실패 분리), 083(주문 거부·체결 품질 손익 관측), 082(레짐·성과 후보 점수화), 081(자율 루프 품질 폐쇄), 080(운영자 대시보드와 모바일 알림 루프), 079(완료 후보 소비 장부), 078(돈 경로 게이트 정렬 루프), 077(자율 작업 실행 루프), 076(자본 경로 준비도 루프), 075(전략 실패 학습), 074(후보 가격 이력 지원), 073(후보 pending next action 보정), 072(후보 증거 진단), 071(후보 결과 실행기), 070(후보 구현 공장), 069(자율 승격 실행 루프), 068(자율 승격 루프 자동 분류), 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
+| 골격 스펙 | 없음. `.specify/feature.json`은 최신 출시 스펙 `specs/100-regime-timeline-coverage-contract`를 가리킨다. 스펙 100은 #487로 main에 들어갔다. |
+| 최근 출시 작업 | #487 스펙 100 레짐 타임라인 커버리지 계약. #486 스펙 099 인계. #485 스펙 099 공개 데이터 입력 품질 계약. #484 스펙 098 인계. #483 스펙 098 데이터 증거 frontier 지도. |
+| 활성 작업 | 열린 PR 없음. #487 code main push의 released-work run `28799231124`와 autonomous-work run `28799231156`은 성공했지만, 코드 PR 시점에는 T018/T023이 아직 인계 전 미완료라 remote sidecar가 스펙 100을 완료 후보로 읽지 않았다. 이 handoff는 T018/T023을 완료로 닫았고, 로컬 `released_work_probe.py --repo-root .` 재현은 `candidate-regime-timeline-coverage-contract` released, 로컬 `autonomous_work_execution_probe.py --repo-root .` 재현은 다음 후보 `candidate-data-evidence-liveness-contract`를 `EXECUTION_READY`, 위험 등급 2, 안전 영향 없음으로 선택했다. 레짐 타임라인 계약 최신 재현은 `OBSERVATION_WAIT`, timeline 2372행, label coverage PASS, forward join PASS, rare `RISK_OFF` observation floor WAIT다. 돈 경로는 `PREVIEW_ONLY`, readiness `LIVE_BLOCKED`이며 실주문은 불가하다. |
+| 안전 경계 | #487은 등급 2 레짐 타임라인 커버리지 계약과 work packet 전진 보정이다. sidecar 읽기 전용이며 주문, 자본 증액, 자본 배분, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, live sentinel, 브로커 주문, K1/K2/K4/K5/K6, 헌법, 커널 목록, 비밀값, 외부 유료 서비스는 변경하지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`다. |
 
 ## 돈 경로 상태 판독 규칙 (필수 — 스펙 062)
 
@@ -80,6 +80,53 @@ uv run python scripts/money_path_probe.py --manifest | while IFS=$'\t' read -r k
 done
 uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.live_money_state'
 ```
+
+## 최근 관찰 — 2026-07-06 KST (스펙 100 레짐 타임라인 커버리지 계약)
+
+현재 `main` 최신 코드 머지는 `48314cd`(#487, 스펙 100 레짐 타임라인 커버리지 계약)이다.
+기능 커밋은 `7a2ba58`이고, 직전 main은 `9ed61b8`(#486, 스펙 099 인계)이다.
+
+- **문제 정의**: 스펙 099는 다음 후보를 `candidate-regime-timeline-coverage-contract`로 열었다.
+  레짐 층화는 public-data 타임라인에 의존하지만, 라벨 결측, 희귀 레짐 관측 수, d+1 전망적 조인 품질을
+  별도 계약으로 닫지 않으면 다음 데이터 후보가 같은 입력 품질 판단을 반복하게 된다.
+- **구현 상태**: `regime_timeline_coverage.py`와 `scripts/regime_timeline_coverage_probe.py`가
+  새 읽기 전용 보고서 계약을 만든다. 보고서는 `regime_timeline.csv`, `regime-stratify`,
+  `pipeline-liveness`, `released-work` 증거를 읽어 `CONTRACT_READY`, `OBSERVATION_WAIT`, `BLOCKED`를
+  분리한다. 스펙 100은 `completed_candidate_id: candidate-regime-timeline-coverage-contract` 완료
+  마커를 남겼다.
+- **현재 계약 판정**: 최신 sidecar 재현에서 `overall_status=OBSERVATION_WAIT`다.
+  타임라인은 2372행, 2017-01-03~2026-07-02, canonical label은
+  `RISK_ON=1414`, `CAUTION=894`, `RISK_OFF=64`로 모두 존재한다.
+  timeline shape, label coverage, forward join quality, sidecar liveness는 PASS다.
+  `GLOBAL-TREND...:RISK_OFF`와 `GLOBAL-TREND-WIDE...:RISK_OFF` joined return 관측이 7일이라
+  stratified observation floor만 WAIT다.
+- **post-merge 실행**: #487 main push 뒤 `Deploy on merge to main` run `28799231896`,
+  `Released work ledger` run `28799231124`, `Autonomous work execution loop` run `28799231156`이 success였다.
+- **sidecar 확인**: #487 코드 PR 시점에는 T018/T023이 아직 인계 전 미완료라 remote released-work가
+  스펙 100을 완료 후보로 읽지 않았다. 이 handoff는 T018/T023을 완료로 닫았고, 로컬 released-work 재현은
+  `candidate-regime-timeline-coverage-contract`를 spec `100-regime-timeline-coverage-contract`의 released
+  후보로 기록한다. 같은 상태의 autonomous-work 로컬 재현은
+  `candidate-data-evidence-liveness-contract`를 `EXECUTION_READY`, risk grade 2, safety impact 없음으로
+  선택한다.
+- **배포 확인**: main commit의 `Deploy on merge to main` 체크에서 deploy run은 success다.
+  컨테이너에서 GitHub run 상태와 check-run 성공은 확인했다. 서버 audit_log는 직접 확인하지 못한다.
+  KIS smoke sidecar 최신 run은 #487 commit 직접 증거가 아니라 이전 schedule 실행 증거이므로 #487 배포
+  근거로 쓰지 않는다. 이 배포는 dry-run worker 코드 반영이며 실거래 전환이 아니다.
+- **안전 경계**: 등급 2 데이터 품질 계약 추가다. sidecar 읽기 전용 보고서와 probe만 추가했다.
+  실제 주문, 브로커 실주문 API, 자본 증액, 자본 배분, whitelist/caps 확대, live 전략 교체, live sentinel,
+  헌법, 커널 목록, K1/K2/K4/K5/K6, 비밀값, 외부 유료 서비스 변경 없음. 현재 돈 경로는 계속
+  `PREVIEW_ONLY`다.
+- **검증**: PR #487 머지 전 focused pytest 36 통과, 최신 sidecar replay에서
+  스펙 100 probe `overall_status=OBSERVATION_WAIT`, timeline 2372행, label coverage PASS,
+  forward join PASS, observation floor WAIT 확인, `uv run pytest` 2512 통과·4 스킵,
+  `uv run ruff check src tests` 통과, `uv run python scripts/agent_harness_probe.py --strict` OK(14/14),
+  `uv run python scripts/check_handoff_facts.py` OK, PR 품질 관문 성공,
+  머지 직전 `uv run pytest` 2512 통과·4 스킵 및 ruff 재통과,
+  post-merge deploy·released-work·autonomous-work run 성공 확인 완료. 인계 브랜치에서는
+  released-work 로컬 재현으로 스펙 100 released 확인, autonomous-work 로컬 재현으로
+  `candidate-data-evidence-liveness-contract` 전진 확인,
+  `uv run pytest -q` 2512 통과·4 스킵, ruff, HANDOFF 사실 검증, strict harness를 재확인했다.
+- **상세 인계**: `HANDOFF-104-REGIME-TIMELINE-COVERAGE-CONTRACT.md`.
 
 ## 최근 관찰 — 2026-07-06 KST (스펙 099 공개 데이터 입력 품질 계약)
 
@@ -1889,6 +1936,24 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
   통과, `uv run python scripts/agent_harness_probe.py --strict` `OK (14/14)`,
   `uv run python scripts/check_handoff_facts.py` 통과, PR 품질 관문 통과. 머지 직전 전체 테스트와
   린트를 다시 실행해 같은 결과를 확인했다.
+
+## 최근 마일스톤 — 2026-07-06 KST (스펙 100 레짐 타임라인 커버리지 계약)
+
+- main 코드 베이스라인: `48314cd`(PR #487). 기능 커밋: `7a2ba58`.
+- regime timeline coverage probe가 `regime_timeline.csv`, regime-stratify, pipeline-liveness,
+  released-work를 함께 읽어 레짐 타임라인 커버리지를 판정한다.
+- 최신 sidecar 재현은 `OBSERVATION_WAIT`, timeline 2372행, label coverage PASS,
+  forward join quality PASS, rare `RISK_OFF` observation floor WAIT다.
+- `candidate-regime-timeline-coverage-contract`는 스펙 100 completed marker로 released-work 장부에 들어갈 수 있고,
+  이 handoff 브랜치 로컬 재현에서 released 확인됐다.
+- 같은 상태의 autonomous-work 로컬 재현은 `candidate-data-evidence-liveness-contract`를
+  `EXECUTION_READY`, 위험 등급 2, 안전 영향 없음으로 선택했다.
+- post-merge runs: deploy `28799231896`, released-work `28799231124`, autonomous-work
+  `28799231156` success. 코드 PR 시점 remote sidecar는 T018/T023 미완료 때문에 아직 스펙 100을 released로
+  읽지 않았고, 이 handoff가 그 완료 체크를 닫았다.
+- 안전 경계: 등급 2 읽기 전용 데이터 품질 계약이다. 주문, 자본, live 전략, whitelist/caps, 헌법, 커널,
+  비밀값, 외부 유료 서비스 변경 없음.
+- 상세: `HANDOFF-104-REGIME-TIMELINE-COVERAGE-CONTRACT.md`.
 
 ## 최근 마일스톤 — 2026-07-06 KST (스펙 099 공개 데이터 입력 품질 계약)
 
