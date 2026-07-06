@@ -48,6 +48,9 @@ def test_manifest_matches_contract(capsys):
         ),
         "edge-autoarm\tautomation/edge-autoarm-last-run\tLAST_RUN.md",
         "money-path\tautomation/money-path-last-run\tLAST_RUN.md",
+        "execution-quality\tautomation/execution-quality-last-run\tLAST_RUN.md",
+        "kis-smoke\tautomation/kis-smoke-last-run\tLAST_RUN.md",
+        "rebalance-micro-gtaa\tautomation/rebalance-micro-gtaa-last-run\tLAST_RUN.md",
         "public-data\tautomation/public-data\tLAST_RUN.md",
         "regime-stratify\tautomation/regime-stratify-last-run\tLAST_RUN.md",
         "released-work\tautomation/released-work-last-run\treleased_work.json",
@@ -99,6 +102,24 @@ def test_probe_writes_json_and_markdown(tmp_path, capsys):
         ),
         encoding="utf-8",
     )
+    (tmp_path / "execution-quality.md").write_text(
+        (
+            "# 실행 품질 패키지\n\n"
+            "## 결정 JSON\n\n"
+            "```json\n"
+            "{\"overall_status\":\"OBSERVE\",\"broker_rejections\":{\"rejected_orders\":2}}\n"
+            "```\n"
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "kis-smoke.md").write_text(
+        "# KIS smoke\n\n| smoke_state | success |\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "rebalance-micro-gtaa.md").write_text(
+        "## 라이브 전 전략 의도 게이트\n```json\n{\"latest_signal\":\"INTENT_LOSS\"}\n```\n",
+        encoding="utf-8",
+    )
 
     json_out = tmp_path / "autonomous_work_execution.json"
     summary_out = tmp_path / "LAST_RUN.md"
@@ -146,17 +167,25 @@ def test_probe_writes_json_and_markdown(tmp_path, capsys):
         written["data_evidence_frontier_map"][0]["recommended_candidate_id"]
         == "candidate-public-data-input-quality-contract"
     )
+    assert (
+        written["execution_quality_frontier_map"][0]["recommended_candidate_id"]
+        == "candidate-broker-rejection-taxonomy-contract"
+    )
     assert written["run_id"] == "123"
     assert written["commit"] == "abc123"
     surfaces = {surface["key"]: surface for surface in written["evidence_surfaces"]}
     assert surfaces["public-data"]["parse_status"] == "ok"
     assert surfaces["regime-stratify"]["parse_status"] == "ok"
+    assert surfaces["execution-quality"]["parse_status"] == "ok"
+    assert surfaces["kis-smoke"]["parse_status"] == "ok"
+    assert surfaces["rebalance-micro-gtaa"]["parse_status"] == "ok"
     summary = summary_out.read_text(encoding="utf-8")
     assert "자율 작업 실행 루프" in summary
     assert "## 목적 함수 보정" in summary
     assert "## 거시 후보 지도" in summary
     assert "## 투자 엣지 frontier 지도" in summary
     assert "## 데이터 증거 frontier 지도" in summary
+    assert "## 체결 품질 frontier 지도" in summary
 
 
 def test_probe_repo_root_released_work_overrides_sidecar_lag(tmp_path, capsys):

@@ -9,10 +9,12 @@ from auto_invest.analytics.autonomous_work_execution import (
     AUTONOMY_CLOSED_RELEASED,
     AUTONOMY_CODEX_START,
     AUTONOMY_OPERATOR_APPROVAL,
+    BROKER_REJECTION_TAXONOMY_CANDIDATE_ID,
     CODEX_COMPLETION_GATES,
     COST_ADJUSTED_EDGE_EXPERIMENT_CANDIDATE_ID,
     DATA_EVIDENCE_FRONTIER_CANDIDATE_ID,
     DATA_EVIDENCE_LIVENESS_CANDIDATE_ID,
+    EXECUTION_COST_BASIS_CANDIDATE_ID,
     EXECUTION_QUALITY_FRONTIER_CANDIDATE_ID,
     FORWARD_REGIME_EDGE_EXPERIMENT_CANDIDATE_ID,
     FRONTIER_DISCOVERY_CANDIDATE_ID,
@@ -1192,6 +1194,195 @@ def test_released_data_evidence_liveness_advances_to_execution_quality_frontier(
     assert report.selected_work.risk_grade == 2
     data_map = {entry.frontier_key: entry for entry in report.data_evidence_frontier_map}
     assert data_map["data_evidence_liveness"].coverage_status == "released"
+    execution_map = {
+        entry.frontier_key: entry for entry in report.execution_quality_frontier_map
+    }
+    assert execution_map["broker_rejection_taxonomy"].coverage_status == "open"
+    assert (
+        execution_map["broker_rejection_taxonomy"].recommended_candidate_id
+        == BROKER_REJECTION_TAXONOMY_CANDIDATE_ID
+    )
+
+
+def test_execution_quality_frontier_map_is_deterministic_and_rendered():
+    evidence = {
+        "capital-path-readiness": _json(
+            {
+                "priority_candidates": [
+                    {
+                        "candidate_id": "candidate-fd04772a23c5",
+                        "domain_key": "live_readiness",
+                        "status": "new",
+                        "score": 597,
+                    }
+                ]
+            }
+        ),
+        "execution-quality": _json(
+            {
+                "overall_status": "OBSERVE",
+                "broker_rejections": {"rejected_orders": 2},
+            }
+        ),
+        "kis-smoke": "smoke_state | success",
+        "rebalance-micro-gtaa": _json(
+            {
+                "verdict": "INSUFFICIENT_DATA",
+                "latest_signal": "INTENT_LOSS",
+            }
+        ),
+        "money-path": _json(
+            {
+                "overall_status": "OK",
+                "live_money_state": {"status": "PREVIEW_ONLY"},
+            }
+        ),
+        "released-work": _released_work(
+            "candidate-fd04772a23c5",
+            MACRO_GROWTH_DISCOVERY_CANDIDATE_ID,
+            MACRO_GROWTH_SOURCE_DIVERSIFICATION_CANDIDATE_ID,
+            MACRO_GROWTH_OBJECTIVE_CALIBRATION_CANDIDATE_ID,
+            FRONTIER_DISCOVERY_CANDIDATE_ID,
+            MACRO_CANDIDATE_MAP_REGENERATOR_ID,
+            INVESTMENT_EDGE_FRONTIER_CANDIDATE_ID,
+            FORWARD_REGIME_EDGE_EXPERIMENT_CANDIDATE_ID,
+            SIGNAL_DIVERSIFICATION_EDGE_EXPERIMENT_CANDIDATE_ID,
+            COST_ADJUSTED_EDGE_EXPERIMENT_CANDIDATE_ID,
+            DATA_EVIDENCE_FRONTIER_CANDIDATE_ID,
+            PUBLIC_DATA_INPUT_QUALITY_CANDIDATE_ID,
+            REGIME_TIMELINE_COVERAGE_CANDIDATE_ID,
+            DATA_EVIDENCE_LIVENESS_CANDIDATE_ID,
+        ),
+        "pipeline-liveness": _liveness(),
+    }
+
+    first = build_autonomous_work_execution(evidence, now=NOW).to_dict()
+    second = build_autonomous_work_execution(evidence, now=NOW).to_dict()
+
+    assert first["execution_quality_frontier_map"] == second[
+        "execution_quality_frontier_map"
+    ]
+    assert (
+        first["execution_quality_frontier_map"][0]["recommended_candidate_id"]
+        == BROKER_REJECTION_TAXONOMY_CANDIDATE_ID
+    )
+    assert first["execution_quality_frontier_map"][0]["coverage_status"] == "open"
+    assert (
+        first["selected_work"]["candidate_id"]
+        == EXECUTION_QUALITY_FRONTIER_CANDIDATE_ID
+    )
+
+    markdown = build_autonomous_work_execution(evidence, now=NOW).as_markdown()
+    assert "## 체결 품질 frontier 지도" in markdown
+    assert BROKER_REJECTION_TAXONOMY_CANDIDATE_ID in markdown
+
+
+def test_released_execution_quality_frontier_emits_broker_rejection_candidate():
+    report = build_autonomous_work_execution(
+        {
+            "capital-path-readiness": _json(
+                {
+                    "priority_candidates": [
+                        {
+                            "candidate_id": "candidate-fd04772a23c5",
+                            "domain_key": "live_readiness",
+                            "status": "new",
+                            "score": 597,
+                        }
+                    ]
+                }
+            ),
+            "execution-quality": _json({"overall_status": "OBSERVE"}),
+            "kis-smoke": "smoke_state | success",
+            "rebalance-micro-gtaa": _json({"latest_signal": "INTENT_LOSS"}),
+            "money-path": _json({"live_money_state": {"status": "PREVIEW_ONLY"}}),
+            "released-work": _released_work(
+                "candidate-fd04772a23c5",
+                MACRO_GROWTH_DISCOVERY_CANDIDATE_ID,
+                MACRO_GROWTH_SOURCE_DIVERSIFICATION_CANDIDATE_ID,
+                MACRO_GROWTH_OBJECTIVE_CALIBRATION_CANDIDATE_ID,
+                FRONTIER_DISCOVERY_CANDIDATE_ID,
+                MACRO_CANDIDATE_MAP_REGENERATOR_ID,
+                INVESTMENT_EDGE_FRONTIER_CANDIDATE_ID,
+                FORWARD_REGIME_EDGE_EXPERIMENT_CANDIDATE_ID,
+                SIGNAL_DIVERSIFICATION_EDGE_EXPERIMENT_CANDIDATE_ID,
+                COST_ADJUSTED_EDGE_EXPERIMENT_CANDIDATE_ID,
+                DATA_EVIDENCE_FRONTIER_CANDIDATE_ID,
+                PUBLIC_DATA_INPUT_QUALITY_CANDIDATE_ID,
+                REGIME_TIMELINE_COVERAGE_CANDIDATE_ID,
+                DATA_EVIDENCE_LIVENESS_CANDIDATE_ID,
+                EXECUTION_QUALITY_FRONTIER_CANDIDATE_ID,
+            ),
+            "pipeline-liveness": _liveness(),
+        },
+        now=NOW,
+    )
+
+    assert report.overall_status == STATUS_EXECUTION_READY
+    assert report.selected_work is not None
+    assert report.selected_work.candidate_id == BROKER_REJECTION_TAXONOMY_CANDIDATE_ID
+    assert report.selected_work.status == STATUS_EXECUTION_READY
+    assert report.selected_work.domain_key == "execution_quality"
+    assert report.selected_work.risk_grade == 2
+    assert report.selected_work.safety_impact == ()
+    assert "브로커 거부" in report.selected_work.next_action_ko
+    assert set(report.selected_work.required_inputs) >= {
+        "automation/execution-quality-last-run:LAST_RUN.md",
+        "automation/kis-smoke-last-run:LAST_RUN.md",
+        "automation/rebalance-micro-gtaa-last-run:LAST_RUN.md",
+        "automation/money-path-last-run:LAST_RUN.md",
+        "automation/pipeline-liveness-last-run:LAST_RUN.md",
+        "automation/released-work-last-run:released_work.json",
+        "automation/capital-path-readiness-last-run:capital_path_readiness.json",
+    }
+
+
+def test_released_broker_rejection_advances_to_execution_cost_basis():
+    report = build_autonomous_work_execution(
+        {
+            "capital-path-readiness": _json(
+                {
+                    "priority_candidates": [
+                        {
+                            "candidate_id": "candidate-fd04772a23c5",
+                            "domain_key": "live_readiness",
+                            "status": "new",
+                            "score": 597,
+                        }
+                    ]
+                }
+            ),
+            "execution-quality": _json({"overall_status": "OBSERVE"}),
+            "released-work": _released_work(
+                "candidate-fd04772a23c5",
+                MACRO_GROWTH_DISCOVERY_CANDIDATE_ID,
+                MACRO_GROWTH_SOURCE_DIVERSIFICATION_CANDIDATE_ID,
+                MACRO_GROWTH_OBJECTIVE_CALIBRATION_CANDIDATE_ID,
+                FRONTIER_DISCOVERY_CANDIDATE_ID,
+                MACRO_CANDIDATE_MAP_REGENERATOR_ID,
+                INVESTMENT_EDGE_FRONTIER_CANDIDATE_ID,
+                FORWARD_REGIME_EDGE_EXPERIMENT_CANDIDATE_ID,
+                SIGNAL_DIVERSIFICATION_EDGE_EXPERIMENT_CANDIDATE_ID,
+                COST_ADJUSTED_EDGE_EXPERIMENT_CANDIDATE_ID,
+                DATA_EVIDENCE_FRONTIER_CANDIDATE_ID,
+                PUBLIC_DATA_INPUT_QUALITY_CANDIDATE_ID,
+                REGIME_TIMELINE_COVERAGE_CANDIDATE_ID,
+                DATA_EVIDENCE_LIVENESS_CANDIDATE_ID,
+                EXECUTION_QUALITY_FRONTIER_CANDIDATE_ID,
+                BROKER_REJECTION_TAXONOMY_CANDIDATE_ID,
+            ),
+            "pipeline-liveness": _liveness(),
+        },
+        now=NOW,
+    )
+
+    assert report.selected_work is not None
+    assert report.selected_work.candidate_id == EXECUTION_COST_BASIS_CANDIDATE_ID
+    execution_map = {
+        entry.frontier_key: entry for entry in report.execution_quality_frontier_map
+    }
+    assert execution_map["broker_rejection_taxonomy"].coverage_status == "released"
+    assert execution_map["execution_cost_basis"].coverage_status == "open"
 
 
 def test_macro_candidate_map_is_deterministic_and_rendered():
