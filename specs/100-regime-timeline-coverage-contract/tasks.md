@@ -76,7 +76,7 @@
 **Independent Test**: Run autonomous-work unit tests with released-work evidence that includes the completed marker and verify the selected candidate advances to `candidate-data-evidence-liveness-contract`.
 
 - [x] T017 [US4] Add autonomous-work unit coverage in `tests/unit/test_autonomous_work_execution.py` for advancement from `candidate-regime-timeline-coverage-contract` to `candidate-data-evidence-liveness-contract`.
-- [ ] T018 [US4] Re-run `scripts/released_work_probe.py` and `scripts/autonomous_work_execution_probe.py` locally to confirm the completion marker is detected and the next candidate is selected.
+- [x] T018 [US4] Re-run `scripts/released_work_probe.py` and `scripts/autonomous_work_execution_probe.py` locally to confirm the completion marker is detected and the next candidate is selected.
 
 **Checkpoint**: User Story 4 is independently functional.
 
@@ -90,7 +90,7 @@
 - [x] T020 Run full validation: `uv run pytest` and `uv run ruff check src tests`.
 - [x] T021 Run grade-2 operational checks: `uv run python scripts/agent_harness_probe.py --strict` and `uv run python scripts/check_handoff_facts.py`.
 - [x] T022 Validate PR quality body with `uv run python scripts/check_pr_quality_gate.py`.
-- [ ] T023 Update `HANDOFF.md` after merge-level truth is known and run handoff verification again.
+- [x] T023 Update `HANDOFF.md` after merge-level truth is known and run handoff verification again.
 
 ---
 
