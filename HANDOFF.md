@@ -33,15 +33,15 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `6aa85c6` — Merge pull request #483 from jinooaction/Codex/098-data-evidence-frontier-map |
-| main 테스트 | PR #483 머지 전 `uv run pytest` → 2491 passed, 4 skipped. 머지 직전 재실행 `uv run pytest` → 2491 passed, 4 skipped. 인계 브랜치에서 HANDOFF 갱신 전 `uv run pytest -q`는 낡은 HANDOFF 때문에 하네스 2건만 실패했고, 이 handoff 갱신 후 재실행 기준은 2491 passed, 4 skipped. |
+| 마지막 main 커밋 | `c3803cd` — Merge pull request #485 from jinooaction/Codex/099-public-data-input-quality-contract |
+| main 테스트 | PR #485 머지 전 `uv run pytest` → 2500 passed, 4 skipped. 머지 직전 재실행 `uv run pytest` → 2500 passed, 4 skipped. 인계 브랜치에서 HANDOFF 갱신 전 `uv run pytest -q`는 낡은 HANDOFF 때문에 하네스 2건만 실패했고, 이 handoff 갱신 후 재실행 기준은 2500 passed, 4 skipped. |
 | main 린트 | `uv run ruff check src tests` → All checks passed |
 | 열린 PR | 없음. |
-| 출시 완료 스펙 | 최신 추가: 098(데이터 증거 frontier 지도와 공개 데이터 입력 품질 후보 전진), 097(비용 차감 no-live 엣지 실험 계약과 비용 기준 대기 분리), 096(신호 다변화 no-live 엣지 실험 계약과 낮은 겹침 후보 분리), 095(forward 레짐 엣지 no-live 실험 계약과 관측 대기 판정), 094(투자 엣지 frontier 지도와 no-live 실험 후보 전진), 093(거시 후보 지도와 후보 재생성 루프), 092(자율 후보 고갈 뒤 frontier 발굴 후보 폐쇄), 091(자율 성장 목적 함수와 탐색 예산 보정), 090(source diversification 산출 후보 완료 폐쇄), 089(정적 후보 템플릿 밖 증거 기반 후보 공간 확장), 088(거시 자율 성장 후보 발굴기), 087(학습 장부로 폐기·보류 후보 재발굴 차단), 086(자율 루프 sidecar와 HANDOFF 생존성 완료 후보 폐쇄), 085(공개 데이터 수집·교차 검증 확장), 084(오래된 증거와 성과 실패 분리), 083(주문 거부·체결 품질 손익 관측), 082(레짐·성과 후보 점수화), 081(자율 루프 품질 폐쇄), 080(운영자 대시보드와 모바일 알림 루프), 079(완료 후보 소비 장부), 078(돈 경로 게이트 정렬 루프), 077(자율 작업 실행 루프), 076(자본 경로 준비도 루프), 075(전략 실패 학습), 074(후보 가격 이력 지원), 073(후보 pending next action 보정), 072(후보 증거 진단), 071(후보 결과 실행기), 070(후보 구현 공장), 069(자율 승격 실행 루프), 068(자율 승격 루프 자동 분류), 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
-| 골격 스펙 | 없음. `.specify/feature.json`은 최신 출시 스펙 `specs/098-data-evidence-frontier-map`을 가리킨다. 스펙 098은 #483으로 main에 들어갔다. |
-| 최근 출시 작업 | #483 스펙 098 데이터 증거 frontier 지도. #482 스펙 097 인계. #481 스펙 097 비용 차감 no-live 엣지 실험 계약. #480 스펙 096 인계. #479 스펙 096 신호 다변화 no-live 엣지 실험 계약. |
-| 활성 작업 | 열린 PR 없음. 최신 released-work sidecar run `28786862491`는 `candidate-data-evidence-frontier-map`을 스펙 098 완료 후보로 released 처리했다. 최신 autonomous-work sidecar run `28786862604`는 다음 후보 `candidate-public-data-input-quality-contract`를 `EXECUTION_READY`, 위험 등급 2, 안전 영향 없음으로 선택했다. 데이터 증거 frontier 지도는 공개 데이터 입력 품질, 레짐 타임라인 커버리지, 데이터 증거 생존성 3개 영역을 open으로 보여주며, 첫 후보 required inputs는 public-data summary/regime/timeline, regime-stratify, pipeline-liveness, released-work, capital-path-readiness다. public-data 파싱은 `overall_ok=True, published=11`, regime-stratify 파싱은 `total_return_days=751`이다. 돈 경로는 `PREVIEW_ONLY`, stage `BLOCKED`이며 실주문은 불가하다. |
-| 안전 경계 | #483은 등급 2 데이터 품질 후보 지도와 work packet 보고서 확장이다. sidecar 읽기 전용이며 주문, 자본 증액, 자본 배분, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, live sentinel, 브로커 주문, K1/K2/K4/K5/K6, 헌법, 커널 목록, 비밀값, 외부 유료 서비스는 변경하지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`다. |
+| 출시 완료 스펙 | 최신 추가: 099(공개 데이터 입력 품질 계약과 레짐 타임라인 커버리지 후보 전진), 098(데이터 증거 frontier 지도와 공개 데이터 입력 품질 후보 전진), 097(비용 차감 no-live 엣지 실험 계약과 비용 기준 대기 분리), 096(신호 다변화 no-live 엣지 실험 계약과 낮은 겹침 후보 분리), 095(forward 레짐 엣지 no-live 실험 계약과 관측 대기 판정), 094(투자 엣지 frontier 지도와 no-live 실험 후보 전진), 093(거시 후보 지도와 후보 재생성 루프), 092(자율 후보 고갈 뒤 frontier 발굴 후보 폐쇄), 091(자율 성장 목적 함수와 탐색 예산 보정), 090(source diversification 산출 후보 완료 폐쇄), 089(정적 후보 템플릿 밖 증거 기반 후보 공간 확장), 088(거시 자율 성장 후보 발굴기), 087(학습 장부로 폐기·보류 후보 재발굴 차단), 086(자율 루프 sidecar와 HANDOFF 생존성 완료 후보 폐쇄), 085(공개 데이터 수집·교차 검증 확장), 084(오래된 증거와 성과 실패 분리), 083(주문 거부·체결 품질 손익 관측), 082(레짐·성과 후보 점수화), 081(자율 루프 품질 폐쇄), 080(운영자 대시보드와 모바일 알림 루프), 079(완료 후보 소비 장부), 078(돈 경로 게이트 정렬 루프), 077(자율 작업 실행 루프), 076(자본 경로 준비도 루프), 075(전략 실패 학습), 074(후보 가격 이력 지원), 073(후보 pending next action 보정), 072(후보 증거 진단), 071(후보 결과 실행기), 070(후보 구현 공장), 069(자율 승격 실행 루프), 068(자율 승격 루프 자동 분류), 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
+| 골격 스펙 | 없음. `.specify/feature.json`은 최신 출시 스펙 `specs/099-public-data-input-quality-contract`를 가리킨다. 스펙 099는 #485로 main에 들어갔다. |
+| 최근 출시 작업 | #485 스펙 099 공개 데이터 입력 품질 계약. #484 스펙 098 인계. #483 스펙 098 데이터 증거 frontier 지도. #482 스펙 097 인계. #481 스펙 097 비용 차감 no-live 엣지 실험 계약. |
+| 활성 작업 | 열린 PR 없음. 최신 released-work sidecar run `28791708832`는 `candidate-public-data-input-quality-contract`를 스펙 099 완료 후보로 released 처리했다. 최신 autonomous-work sidecar run `28791708758`는 다음 후보 `candidate-regime-timeline-coverage-contract`를 `EXECUTION_READY`, 위험 등급 2, 안전 영향 없음으로 선택했다. 데이터 증거 frontier 지도는 공개 데이터 입력 품질을 released, 레짐 타임라인 커버리지와 데이터 증거 생존성을 open으로 보여준다. 공개 데이터 입력 품질 계약은 최신 sidecar 재현에서 `CONTRACT_READY`, public-data 11/11 발행, 교차검증 5개 PASS, regime timeline 2372행, stratified return 751일, liveness OK로 판정됐다. 돈 경로는 `PREVIEW_ONLY`, readiness `LIVE_BLOCKED`이며 실주문은 불가하다. |
+| 안전 경계 | #485는 등급 2 공개 데이터 입력 품질 계약과 work packet 전진 보정이다. sidecar 읽기 전용이며 주문, 자본 증액, 자본 배분, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, live sentinel, 브로커 주문, K1/K2/K4/K5/K6, 헌법, 커널 목록, 비밀값, 외부 유료 서비스는 변경하지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`다. |
 
 ## 돈 경로 상태 판독 규칙 (필수 — 스펙 062)
 
@@ -80,6 +80,54 @@ uv run python scripts/money_path_probe.py --manifest | while IFS=$'\t' read -r k
 done
 uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.live_money_state'
 ```
+
+## 최근 관찰 — 2026-07-06 KST (스펙 099 공개 데이터 입력 품질 계약)
+
+현재 `main` 최신 코드 머지는 `c3803cd`(#485, 스펙 099 공개 데이터 입력 품질 계약)이다.
+기능 커밋은 `1425958`이고, 직전 main은 `f29b01f`(#484, 스펙 098 인계)이다.
+
+- **문제 정의**: 스펙 098은 다음 후보를 `candidate-public-data-input-quality-contract`로 열었다.
+  공개 데이터 발행 수, 교차검증, 레짐 지표, 레짐 타임라인, regime-stratify, pipeline-liveness를
+  따로 읽으면 다음 투자 후보 입력이 실제로 준비됐는지 반복 판단해야 한다. 목표는 이 입력 품질을
+  `CONTRACT_READY`, `OBSERVATION_WAIT`, `BLOCKED`로 닫는 기계 판독 계약을 만드는 것이다.
+- **구현 상태**: `public_data_input_quality.py`와 `scripts/public_data_input_quality_probe.py`가
+  새 읽기 전용 보고서 계약을 만든다. 보고서는 public-data summary, regime.json,
+  regime_timeline.csv, regime-stratify, pipeline-liveness, released-work, capital-path readiness를
+  evidence surface와 quality gate로 발행한다. 스펙 099는
+  `completed_candidate_id: candidate-public-data-input-quality-contract` 완료 마커를 남겼다.
+- **현재 입력 품질**: 최신 sidecar 재현에서 `overall_status=CONTRACT_READY`다.
+  public-data는 11/11개 발행, 교차검증 5개 PASS, 최소 overlap 13일이다. 레짐 타임라인은 2372행,
+  regime-stratify는 total return 751일이고, collect-public-data와 regime-stratify liveness는 OK다.
+  capital-path readiness는 `LIVE_BLOCKED`, live money는 `PREVIEW_ONLY`다.
+- **post-merge 실행**: #485 main push 뒤 `Deploy on merge to main` run `28791708696`,
+  `Released work ledger` run `28791708832`, `Autonomous work execution loop` run `28791708758`이 success였다.
+- **sidecar 확인**: 최신 released-work sidecar는 commit `c3803cd`에서
+  `candidate-public-data-input-quality-contract`를 spec `099-public-data-input-quality-contract`의 released
+  후보로 기록했다. 최신 autonomous-work sidecar는 같은 commit에서
+  `candidate-regime-timeline-coverage-contract`를 `EXECUTION_READY`, risk grade 2, safety impact 없음으로
+  선택했다. 데이터 증거 frontier 지도는 `public_data_input_quality=released`,
+  `regime_timeline_coverage=open`, `data_evidence_liveness=open` 상태다.
+- **배포 확인**: main commit의 `Deploy on merge to main` 체크에서 deploy run은 success다.
+  컨테이너에서 GitHub run 상태와 check-run 성공은 확인했다. 서버 audit_log는 직접 확인하지 못한다.
+  KIS smoke sidecar 최신 run은 #485 commit 직접 증거가 아니라 이전 schedule 실행 증거이므로 #485 배포
+  근거로 쓰지 않는다. 이 배포는 dry-run worker 코드 반영이며 실거래 전환이 아니다.
+- **안전 경계**: 등급 2 데이터 품질 계약 추가다. sidecar 읽기 전용 보고서와 probe만 추가했다.
+  실제 주문, 브로커 실주문 API, 자본 증액, 자본 배분, whitelist/caps 확대, live 전략 교체, live sentinel,
+  헌법, 커널 목록, K1/K2/K4/K5/K6, 비밀값, 외부 유료 서비스 변경 없음. 현재 돈 경로는 계속
+  `PREVIEW_ONLY`다.
+- **검증**: PR #485 머지 전 focused pytest 32 통과, 최신 sidecar replay에서
+  스펙 099 probe `overall_status=CONTRACT_READY`, public-data 11/11, 교차검증 5개 PASS,
+  timeline 2372행, stratified return 751일, liveness OK 확인, released-work 로컬 재현에서
+  `candidate-public-data-input-quality-contract` released 확인, autonomous-work 로컬 재현에서
+  `candidate-regime-timeline-coverage-contract` 전진 확인, `uv run pytest` 2500 통과·4 스킵,
+  `uv run ruff check src tests` 통과, `git diff --check` 통과,
+  `uv run python scripts/check_handoff_facts.py` OK,
+  `uv run python scripts/agent_harness_probe.py --strict` OK(14/14), PR 품질 관문 성공,
+  머지 직전 `uv run pytest` 2500 통과·4 스킵 및 ruff 재통과,
+  post-merge deploy·released-work·autonomous-work run 성공 확인 완료. 인계 갱신 전 main 기준
+  `uv run pytest -q`는 낡은 HANDOFF 때문에 하네스 2건만 실패했고, 이 handoff 갱신 뒤
+  `uv run pytest -q`는 2500 통과·4 스킵이다.
+- **상세 인계**: `HANDOFF-103-PUBLIC-DATA-INPUT-QUALITY-CONTRACT.md`.
 
 ## 최근 관찰 — 2026-07-06 KST (스펙 098 데이터 증거 frontier 지도)
 
@@ -1841,6 +1889,22 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
   통과, `uv run python scripts/agent_harness_probe.py --strict` `OK (14/14)`,
   `uv run python scripts/check_handoff_facts.py` 통과, PR 품질 관문 통과. 머지 직전 전체 테스트와
   린트를 다시 실행해 같은 결과를 확인했다.
+
+## 최근 마일스톤 — 2026-07-06 KST (스펙 099 공개 데이터 입력 품질 계약)
+
+- main 코드 베이스라인: `c3803cd`(PR #485). 기능 커밋: `1425958`.
+- public-data input-quality probe가 public-data, regime, regime timeline, regime-stratify,
+  pipeline-liveness, released-work, capital-path readiness를 함께 읽어 공개 데이터 입력 품질을 판정한다.
+- 최신 sidecar 재현은 `CONTRACT_READY`, public-data 11/11 발행, 교차검증 5개 PASS,
+  regime timeline 2372행, stratified return 751일, liveness OK다.
+- `candidate-public-data-input-quality-contract`는 스펙 099 completed marker로 released-work 장부에 들어갔다.
+- 최신 autonomous-work sidecar run `28791708758`은 `candidate-regime-timeline-coverage-contract`를
+  `EXECUTION_READY`, 위험 등급 2, 안전 영향 없음으로 선택했다.
+- post-merge runs: deploy `28791708696`, released-work `28791708832`, autonomous-work
+  `28791708758` success.
+- 안전 경계: 등급 2 읽기 전용 데이터 품질 계약이다. 주문, 자본, live 전략, whitelist/caps, 헌법, 커널,
+  비밀값, 외부 유료 서비스 변경 없음.
+- 상세: `HANDOFF-103-PUBLIC-DATA-INPUT-QUALITY-CONTRACT.md`.
 
 ## 최근 마일스톤 — 2026-07-06 KST (스펙 098 데이터 증거 frontier 지도)
 
@@ -5655,6 +5719,7 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 
 ## 과거 인수인계 파일 (참고용)
 
+- `HANDOFF-103-PUBLIC-DATA-INPUT-QUALITY-CONTRACT.md` — 스펙 099 공개 데이터 입력 품질 계약과 레짐 타임라인 커버리지 후보 전진
 - `HANDOFF-102-DATA-EVIDENCE-FRONTIER-MAP.md` — 스펙 098 데이터 증거 frontier 지도와 공개 데이터 입력 품질 후보 전진
 - `HANDOFF-101-COST-ADJUSTED-EDGE-EXPERIMENT.md` — 스펙 097 비용 차감 no-live 엣지 실험 계약
 - `HANDOFF-100-SIGNAL-DIVERSIFICATION-EDGE-EXPERIMENT.md` — 스펙 096 신호 다변화 no-live 엣지 실험 계약
