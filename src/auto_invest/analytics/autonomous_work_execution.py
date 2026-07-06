@@ -68,6 +68,13 @@ PUBLIC_DATA_INPUT_QUALITY_CANDIDATE_ID = (
 REGIME_TIMELINE_COVERAGE_CANDIDATE_ID = "candidate-regime-timeline-coverage-contract"
 DATA_EVIDENCE_LIVENESS_CANDIDATE_ID = "candidate-data-evidence-liveness-contract"
 EXECUTION_QUALITY_FRONTIER_CANDIDATE_ID = "candidate-execution-quality-frontier-map"
+BROKER_REJECTION_TAXONOMY_CANDIDATE_ID = (
+    "candidate-broker-rejection-taxonomy-contract"
+)
+EXECUTION_COST_BASIS_CANDIDATE_ID = "candidate-execution-cost-basis-contract"
+BROKER_DIAGNOSTIC_LIVENESS_CANDIDATE_ID = (
+    "candidate-broker-diagnostic-liveness-contract"
+)
 AGENT_OPS_FRONTIER_CANDIDATE_ID = "candidate-agent-ops-frontier-map"
 
 _REJECTED_STATUSES = {
@@ -102,6 +109,9 @@ _SOURCE_REFS: dict[str, str] = {
     "rebalance-paper-forward": "automation/rebalance-paper-forward-last-run:LAST_RUN.md",
     "edge-autoarm": "automation/edge-autoarm-last-run:LAST_RUN.md",
     "money-path": "automation/money-path-last-run:LAST_RUN.md",
+    "execution-quality": "automation/execution-quality-last-run:LAST_RUN.md",
+    "kis-smoke": "automation/kis-smoke-last-run:LAST_RUN.md",
+    "rebalance-micro-gtaa": "automation/rebalance-micro-gtaa-last-run:LAST_RUN.md",
     "public-data": "automation/public-data:LAST_RUN.md",
     "regime-stratify": "automation/regime-stratify-last-run:LAST_RUN.md",
     "released-work": "automation/released-work-last-run:released_work.json",
@@ -207,6 +217,19 @@ class InvestmentEdgeFrontierTemplate:
 @dataclass(frozen=True)
 class DataEvidenceFrontierTemplate:
     """데이터 증거 영역 안에서 재생성할 입력 품질 후보."""
+
+    frontier_key: str
+    label_ko: str
+    recommended_candidate_id: str
+    title_ko: str
+    priority_score: int
+    reason_ko: str
+    next_action_ko: str
+
+
+@dataclass(frozen=True)
+class ExecutionQualityFrontierTemplate:
+    """체결 품질 영역 안에서 재생성할 브로커·비용 진단 후보."""
 
     frontier_key: str
     label_ko: str
@@ -351,6 +374,56 @@ _DATA_EVIDENCE_FRONTIER_TEMPLATES: tuple[DataEvidenceFrontierTemplate, ...] = (
         next_action_ko=(
             "pipeline-liveness의 collect-public-data와 regime-stratify 체크를 "
             "데이터 품질 후보의 PASS/WAIT/FAIL 기준으로 분리한다."
+        ),
+    ),
+)
+
+_EXECUTION_QUALITY_FRONTIER_TEMPLATES: tuple[
+    ExecutionQualityFrontierTemplate, ...
+] = (
+    ExecutionQualityFrontierTemplate(
+        frontier_key="broker_rejection_taxonomy",
+        label_ko="브로커 거부 분류",
+        recommended_candidate_id=BROKER_REJECTION_TAXONOMY_CANDIDATE_ID,
+        title_ko="브로커 거부 분류 계약",
+        priority_score=2150,
+        reason_ko=(
+            "execution-quality sidecar는 거부 주문과 KIS 오류 코드를 관측하지만, "
+            "거부 원인 분류와 재발 기준은 별도 후보로 닫혀 있지 않다."
+        ),
+        next_action_ko=(
+            "execution-quality, rebalance-micro-gtaa, kis-smoke 증거를 함께 읽어 "
+            "브로커 거부 코드·원인·재발 가능성을 분류하는 읽기 전용 계약을 만든다."
+        ),
+    ),
+    ExecutionQualityFrontierTemplate(
+        frontier_key="execution_cost_basis",
+        label_ko="체결 비용 기준",
+        recommended_candidate_id=EXECUTION_COST_BASIS_CANDIDATE_ID,
+        title_ko="체결 비용 기준 계약",
+        priority_score=2050,
+        reason_ko=(
+            "비용 차감 엣지 후보는 execution-quality를 읽지만, accepted fill 비용 "
+            "기준의 충분성은 아직 독립 후보로 닫혀 있지 않다."
+        ),
+        next_action_ko=(
+            "execution-quality와 money-path 증거를 읽어 실제 비용 기준이 충분한지와 "
+            "관측 대기 상태를 분리하는 읽기 전용 계약을 만든다."
+        ),
+    ),
+    ExecutionQualityFrontierTemplate(
+        frontier_key="broker_diagnostic_liveness",
+        label_ko="브로커 진단 생존성",
+        recommended_candidate_id=BROKER_DIAGNOSTIC_LIVENESS_CANDIDATE_ID,
+        title_ko="브로커 진단 생존성 계약",
+        priority_score=1950,
+        reason_ko=(
+            "KIS smoke와 execution-quality는 신선도와 성공 상태를 보여주지만, "
+            "체결 품질 후보 관점의 PASS/WAIT/FAIL 계약은 아직 분리돼 있지 않다."
+        ),
+        next_action_ko=(
+            "kis-smoke, execution-quality, pipeline-liveness를 함께 읽어 브로커 "
+            "진단 증거의 생존성 기준을 읽기 전용 계약으로 고정한다."
         ),
     ),
 )
@@ -664,6 +737,34 @@ class DataEvidenceFrontierMapEntry:
 
 
 @dataclass(frozen=True)
+class ExecutionQualityFrontierMapEntry:
+    """체결 품질 영역 안쪽의 브로커·비용 진단 후보 지도 행."""
+
+    frontier_key: str
+    label_ko: str
+    coverage_status: str
+    priority_score: int
+    recommended_candidate_id: str
+    title_ko: str
+    reason_ko: str
+    next_action_ko: str
+    required_inputs: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "frontier_key": self.frontier_key,
+            "label_ko": self.label_ko,
+            "coverage_status": self.coverage_status,
+            "priority_score": self.priority_score,
+            "recommended_candidate_id": self.recommended_candidate_id,
+            "title_ko": self.title_ko,
+            "reason_ko": self.reason_ko,
+            "next_action_ko": self.next_action_ko,
+            "required_inputs": list(self.required_inputs),
+        }
+
+
+@dataclass(frozen=True)
 class ObjectiveCalibration:
     """자율 성장 목적 함수, 예산, 중단 조건, 학습 지표 계약."""
 
@@ -700,6 +801,7 @@ class AutonomousWorkExecutionReport:
     macro_candidate_map: tuple[MacroCandidateMapEntry, ...]
     investment_edge_frontier_map: tuple[InvestmentEdgeFrontierMapEntry, ...]
     data_evidence_frontier_map: tuple[DataEvidenceFrontierMapEntry, ...]
+    execution_quality_frontier_map: tuple[ExecutionQualityFrontierMapEntry, ...]
     evidence_surfaces: tuple[EvidenceSurface, ...]
     safety_invariants: tuple[str, ...]
     objective_calibration: ObjectiveCalibration
@@ -724,6 +826,9 @@ class AutonomousWorkExecutionReport:
             ],
             "data_evidence_frontier_map": [
                 entry.to_dict() for entry in self.data_evidence_frontier_map
+            ],
+            "execution_quality_frontier_map": [
+                entry.to_dict() for entry in self.execution_quality_frontier_map
             ],
             "evidence_surfaces": [surface.to_dict() for surface in self.evidence_surfaces],
             "safety_invariants": list(self.safety_invariants),
@@ -884,6 +989,22 @@ class AutonomousWorkExecutionReport:
         else:
             lines.append("- 데이터 증거 frontier 지도 항목이 없습니다.")
 
+        lines += ["", "## 체결 품질 frontier 지도", ""]
+        if self.execution_quality_frontier_map:
+            lines += [
+                "| 영역 | 상태 | 점수 | 추천 후보 | 이유 |",
+                "|------|------|-----:|-----------|------|",
+            ]
+            for entry in self.execution_quality_frontier_map:
+                lines.append(
+                    f"| {_table(entry.label_ko)} | {entry.coverage_status} | "
+                    f"{entry.priority_score} | "
+                    f"{_table(entry.recommended_candidate_id)} | "
+                    f"{_table(entry.reason_ko)} |"
+                )
+        else:
+            lines.append("- 체결 품질 frontier 지도 항목이 없습니다.")
+
         lines += [
             "",
             "## 입력 증거",
@@ -978,6 +1099,41 @@ def _json_after_marker(text: str | None, marker: str) -> Any | None:
     return parsed
 
 
+def _markdown_table_value(text: str, key: str) -> str | None:
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("|") or "|" not in stripped[1:]:
+            continue
+        cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+        if len(cells) < 2 or cells[0] != key:
+            continue
+        return cells[1]
+    return None
+
+
+def _kis_smoke_markdown(text: str | None) -> dict[str, Any] | None:
+    if not text:
+        return None
+    keys = (
+        "run_id",
+        "commit",
+        "trigger",
+        "timestamp_utc",
+        "secrets_present",
+        "key_valid",
+        "smoke_state",
+        "smoke_exit",
+    )
+    parsed = {
+        key: value
+        for key in keys
+        if (value := _markdown_table_value(text, key)) is not None
+    }
+    if not parsed:
+        return None
+    return parsed
+
+
 def _json_headers_for_key(key: str) -> tuple[str, ...]:
     if key == "public-data":
         return ("summary.json", "결정 JSON", "decision JSON")
@@ -987,6 +1143,11 @@ def _json_headers_for_key(key: str) -> tuple[str, ...]:
 
 
 def _json_for_key(key: str, text: str | None) -> Any | None:
+    if key == "kis-smoke":
+        return _kis_smoke_markdown(text) or _json_any(
+            text,
+            *_json_headers_for_key(key),
+        )
     if key == "regime-stratify":
         return _json_after_marker(text, "stratified json") or _json_any(
             text,
@@ -1335,6 +1496,10 @@ def _summary_for_parsed(parsed: Any) -> str:
         return f"overall_ok={parsed.get('overall_ok')}, published={parsed.get('published')}"
     if parsed.get("total_return_days"):
         return f"total_return_days={parsed.get('total_return_days')}"
+    if parsed.get("smoke_state"):
+        return f"state={parsed.get('smoke_state')}, exit={parsed.get('smoke_exit')}"
+    if parsed.get("latest_signal"):
+        return f"signal={parsed.get('latest_signal')}"
     if parsed.get("readiness_state"):
         return (
             f"readiness={parsed.get('readiness_state')}, "
@@ -1665,6 +1830,18 @@ def _data_evidence_source_refs() -> tuple[str, ...]:
     )
 
 
+def _execution_quality_source_refs() -> tuple[str, ...]:
+    return (
+        _SOURCE_REFS["execution-quality"],
+        _SOURCE_REFS["kis-smoke"],
+        _SOURCE_REFS["rebalance-micro-gtaa"],
+        _SOURCE_REFS["money-path"],
+        _SOURCE_REFS["pipeline-liveness"],
+        _SOURCE_REFS["released-work"],
+        _SOURCE_REFS["capital-path-readiness"],
+    )
+
+
 def _regular_queue_is_closed(
     packets: Sequence[WorkPacket],
     surfaces: Sequence[EvidenceSurface],
@@ -1689,6 +1866,7 @@ def _macro_growth_packets(
     macro_candidate_map: Sequence[MacroCandidateMapEntry],
     investment_edge_frontier_map: Sequence[InvestmentEdgeFrontierMapEntry],
     data_evidence_frontier_map: Sequence[DataEvidenceFrontierMapEntry],
+    execution_quality_frontier_map: Sequence[ExecutionQualityFrontierMapEntry],
 ) -> tuple[WorkPacket, ...]:
     if not _regular_queue_is_closed(packets, surfaces):
         return ()
@@ -1732,6 +1910,7 @@ def _macro_growth_packets(
             macro_candidate_map,
             investment_edge_frontier_map=investment_edge_frontier_map,
             data_evidence_frontier_map=data_evidence_frontier_map,
+            execution_quality_frontier_map=execution_quality_frontier_map,
             released=released,
             existing_ids=existing_ids,
         )
@@ -1884,6 +2063,7 @@ def _regenerated_macro_candidate_packets(
     *,
     investment_edge_frontier_map: Sequence[InvestmentEdgeFrontierMapEntry],
     data_evidence_frontier_map: Sequence[DataEvidenceFrontierMapEntry],
+    execution_quality_frontier_map: Sequence[ExecutionQualityFrontierMapEntry],
     released: Mapping[str, str],
     existing_ids: set[str],
 ) -> tuple[WorkPacket, ...]:
@@ -1900,6 +2080,14 @@ def _regenerated_macro_candidate_packets(
             if entry.recommended_candidate_id == DATA_EVIDENCE_FRONTIER_CANDIDATE_ID:
                 nested = _regenerated_data_evidence_candidate_packets(
                     data_evidence_frontier_map,
+                    released=released,
+                    existing_ids=existing_ids,
+                )
+                if nested:
+                    return nested
+            if entry.recommended_candidate_id == EXECUTION_QUALITY_FRONTIER_CANDIDATE_ID:
+                nested = _regenerated_execution_quality_candidate_packets(
+                    execution_quality_frontier_map,
                     released=released,
                     existing_ids=existing_ids,
                 )
@@ -2047,6 +2235,55 @@ def _packet_from_data_evidence_entry(
     )
 
 
+def _regenerated_execution_quality_candidate_packets(
+    execution_quality_frontier_map: Sequence[ExecutionQualityFrontierMapEntry],
+    *,
+    released: Mapping[str, str],
+    existing_ids: set[str],
+) -> tuple[WorkPacket, ...]:
+    for entry in execution_quality_frontier_map:
+        if entry.recommended_candidate_id in released:
+            continue
+        if entry.recommended_candidate_id in existing_ids:
+            continue
+        return (_packet_from_execution_quality_entry(entry),)
+    return ()
+
+
+def _packet_from_execution_quality_entry(
+    entry: ExecutionQualityFrontierMapEntry,
+) -> WorkPacket:
+    source_refs = entry.required_inputs
+    autonomy_level, start_guidance, completion_gates = _execution_contract(
+        STATUS_EXECUTION_READY,
+        2,
+        (),
+    )
+    reason = (
+        f"체결 품질 frontier 지도에서 {entry.label_ko} 영역이 "
+        f"{entry.coverage_status} 상태다. {entry.reason_ko}"
+    )
+    return WorkPacket(
+        packet_id=_packet_id(entry.recommended_candidate_id, entry.title_ko, source_refs),
+        candidate_id=entry.recommended_candidate_id,
+        domain_key="execution_quality",
+        title_ko=entry.title_ko,
+        work_type=_DOMAIN_WORK_TYPES["execution_quality"],
+        risk_grade=2,
+        safety_impact=(),
+        priority_score=entry.priority_score,
+        status=STATUS_EXECUTION_READY,
+        autonomy_level=autonomy_level,
+        reason_ko=reason,
+        next_action_ko=entry.next_action_ko,
+        start_guidance_ko=start_guidance,
+        completion_gates=completion_gates,
+        required_inputs=source_refs,
+        safety_boundary=SAFETY_INVARIANTS,
+        source_refs=source_refs,
+    )
+
+
 def _macro_candidate_map(
     packets: Sequence[WorkPacket],
 ) -> tuple[MacroCandidateMapEntry, ...]:
@@ -2144,6 +2381,32 @@ def _data_evidence_frontier_map(
             required_inputs=required_inputs,
         )
         for template in _DATA_EVIDENCE_FRONTIER_TEMPLATES
+    ]
+    return tuple(sorted(entries, key=lambda entry: (-entry.priority_score, entry.frontier_key)))
+
+
+def _execution_quality_frontier_map(
+    released_work: Any,
+) -> tuple[ExecutionQualityFrontierMapEntry, ...]:
+    released = _released_candidates(released_work)
+    required_inputs = _execution_quality_source_refs()
+    entries = [
+        ExecutionQualityFrontierMapEntry(
+            frontier_key=template.frontier_key,
+            label_ko=template.label_ko,
+            coverage_status=(
+                "released"
+                if template.recommended_candidate_id in released
+                else "open"
+            ),
+            priority_score=template.priority_score,
+            recommended_candidate_id=template.recommended_candidate_id,
+            title_ko=template.title_ko,
+            reason_ko=template.reason_ko,
+            next_action_ko=template.next_action_ko,
+            required_inputs=required_inputs,
+        )
+        for template in _EXECUTION_QUALITY_FRONTIER_TEMPLATES
     ]
     return tuple(sorted(entries, key=lambda entry: (-entry.priority_score, entry.frontier_key)))
 
@@ -2392,6 +2655,9 @@ def build_autonomous_work_execution(
         parsed.get("released-work")
     )
     data_evidence_frontier_map = _data_evidence_frontier_map(parsed.get("released-work"))
+    execution_quality_frontier_map = _execution_quality_frontier_map(
+        parsed.get("released-work")
+    )
     ordered = _dedupe_packets(
         [
             *ordered,
@@ -2402,6 +2668,7 @@ def build_autonomous_work_execution(
                 macro_candidate_map=macro_candidate_map,
                 investment_edge_frontier_map=investment_edge_frontier_map,
                 data_evidence_frontier_map=data_evidence_frontier_map,
+                execution_quality_frontier_map=execution_quality_frontier_map,
             ),
         ]
     )
@@ -2427,6 +2694,7 @@ def build_autonomous_work_execution(
         macro_candidate_map=macro_candidate_map,
         investment_edge_frontier_map=investment_edge_frontier_map,
         data_evidence_frontier_map=data_evidence_frontier_map,
+        execution_quality_frontier_map=execution_quality_frontier_map,
         evidence_surfaces=surfaces,
         safety_invariants=SAFETY_INVARIANTS,
         objective_calibration=objective_calibration,
@@ -2440,11 +2708,15 @@ __all__ = [
     "AUTONOMY_CODEX_START",
     "AUTONOMY_OPERATOR_APPROVAL",
     "AUTONOMY_RECOVERY_REQUIRED",
+    "BROKER_DIAGNOSTIC_LIVENESS_CANDIDATE_ID",
+    "BROKER_REJECTION_TAXONOMY_CANDIDATE_ID",
     "CODEX_COMPLETION_GATES",
     "COST_ADJUSTED_EDGE_EXPERIMENT_CANDIDATE_ID",
     "DATA_EVIDENCE_LIVENESS_CANDIDATE_ID",
     "DataEvidenceFrontierMapEntry",
     "EvidenceSurface",
+    "EXECUTION_COST_BASIS_CANDIDATE_ID",
+    "ExecutionQualityFrontierMapEntry",
     "FORWARD_REGIME_EDGE_EXPERIMENT_CANDIDATE_ID",
     "FRONTIER_DISCOVERY_CANDIDATE_ID",
     "AGENT_OPS_FRONTIER_CANDIDATE_ID",

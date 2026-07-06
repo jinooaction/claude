@@ -49,6 +49,13 @@ CONSUMED_SIDECARS: list[tuple[str, str, str]] = [
     ("rebalance-paper-forward", "automation/rebalance-paper-forward-last-run", "LAST_RUN.md"),
     ("edge-autoarm", "automation/edge-autoarm-last-run", "LAST_RUN.md"),
     ("money-path", "automation/money-path-last-run", "LAST_RUN.md"),
+    ("execution-quality", "automation/execution-quality-last-run", "LAST_RUN.md"),
+    ("kis-smoke", "automation/kis-smoke-last-run", "LAST_RUN.md"),
+    (
+        "rebalance-micro-gtaa",
+        "automation/rebalance-micro-gtaa-last-run",
+        "LAST_RUN.md",
+    ),
     ("public-data", "automation/public-data", "LAST_RUN.md"),
     ("regime-stratify", "automation/regime-stratify-last-run", "LAST_RUN.md"),
     ("released-work", "automation/released-work-last-run", "released_work.json"),
