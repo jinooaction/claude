@@ -12,6 +12,7 @@ from auto_invest.analytics.autonomous_work_execution import (
     CODEX_COMPLETION_GATES,
     COST_ADJUSTED_EDGE_EXPERIMENT_CANDIDATE_ID,
     DATA_EVIDENCE_FRONTIER_CANDIDATE_ID,
+    DATA_EVIDENCE_LIVENESS_CANDIDATE_ID,
     FORWARD_REGIME_EDGE_EXPERIMENT_CANDIDATE_ID,
     FRONTIER_DISCOVERY_CANDIDATE_ID,
     INVESTMENT_EDGE_FRONTIER_CANDIDATE_ID,
@@ -1096,6 +1097,53 @@ def test_released_public_data_input_quality_advances_to_regime_timeline_candidat
     data_map = {entry.frontier_key: entry for entry in report.data_evidence_frontier_map}
     assert data_map["public_data_input_quality"].coverage_status == "released"
     assert data_map["regime_timeline_coverage"].coverage_status == "open"
+
+
+def test_released_regime_timeline_coverage_advances_to_data_evidence_liveness():
+    report = build_autonomous_work_execution(
+        {
+            "capital-path-readiness": _json(
+                {
+                    "priority_candidates": [
+                        {
+                            "candidate_id": "candidate-fd04772a23c5",
+                            "domain_key": "live_readiness",
+                            "status": "new",
+                            "score": 597,
+                        }
+                    ]
+                }
+            ),
+            "public-data": _json({"overall_ok": True, "published": 11}),
+            "regime-stratify": _json({"overall": "OK", "total_return_days": 751}),
+            "released-work": _released_work(
+                "candidate-fd04772a23c5",
+                MACRO_GROWTH_DISCOVERY_CANDIDATE_ID,
+                MACRO_GROWTH_SOURCE_DIVERSIFICATION_CANDIDATE_ID,
+                MACRO_GROWTH_OBJECTIVE_CALIBRATION_CANDIDATE_ID,
+                FRONTIER_DISCOVERY_CANDIDATE_ID,
+                MACRO_CANDIDATE_MAP_REGENERATOR_ID,
+                INVESTMENT_EDGE_FRONTIER_CANDIDATE_ID,
+                FORWARD_REGIME_EDGE_EXPERIMENT_CANDIDATE_ID,
+                SIGNAL_DIVERSIFICATION_EDGE_EXPERIMENT_CANDIDATE_ID,
+                COST_ADJUSTED_EDGE_EXPERIMENT_CANDIDATE_ID,
+                DATA_EVIDENCE_FRONTIER_CANDIDATE_ID,
+                PUBLIC_DATA_INPUT_QUALITY_CANDIDATE_ID,
+                REGIME_TIMELINE_COVERAGE_CANDIDATE_ID,
+            ),
+            "pipeline-liveness": _liveness(),
+        },
+        now=NOW,
+    )
+
+    assert report.overall_status == STATUS_EXECUTION_READY
+    assert report.selected_work is not None
+    assert report.selected_work.candidate_id == DATA_EVIDENCE_LIVENESS_CANDIDATE_ID
+    assert report.selected_work.domain_key == "data_quality"
+    assert report.selected_work.risk_grade == 2
+    data_map = {entry.frontier_key: entry for entry in report.data_evidence_frontier_map}
+    assert data_map["regime_timeline_coverage"].coverage_status == "released"
+    assert data_map["data_evidence_liveness"].coverage_status == "open"
 
 
 def test_macro_candidate_map_is_deterministic_and_rendered():

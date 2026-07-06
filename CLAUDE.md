@@ -220,7 +220,7 @@ the current worktree. Do not trust prose in this block as the source of truth
 for in-flight work; use the `git_ground_truth` start hook, latest `HANDOFF.md`,
 and `/sync` against `jinooaction/claude` `Codex/*` branches before continuing.
 
-현재 계획 포인터: `specs/099-public-data-input-quality-contract/plan.md` — 공개 데이터, 레짐 층화, 파이프라인 생존성, released-work, 자본 경로 준비도 증거를 함께 읽어 공개 데이터 입력 품질 검증 계약을 기계 판독 보고서로 고정하는 설계.
+현재 계획 포인터: `specs/100-regime-timeline-coverage-contract/plan.md` — 레짐 타임라인 CSV와 regime-stratify 결과를 함께 읽어 라벨 커버리지, 레짐별 관측 수, 전망적 d+1 조인 품질을 기계 판독 보고서로 고정하는 설계.
 
 머지 완료(베이스라인): spec 004 (LLM 판단 지점), 005 (자율 튜너), 006 (배포 자동화), 007 (하드닝 카나리), 008 (백테스트), 009 (paper-run), 010 (자동 룰 설계자), 011 (라이브 성과 측정). **주의: 일부 tasks.md 가 stale 0% 로 표시된 적 있음 — 코드/테스트를 믿을 것.**
 
