@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-07-06T23:01:23.747012Z)
+# 완료 후보 소비 장부 (as of 2026-07-07T03:57:58.221310Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -8,8 +8,8 @@
 | 항목 | 값 |
 |------|-----|
 | overall_status | OK |
-| released_count | 23 |
-| scanned_specs | 53 |
+| released_count | 24 |
+| scanned_specs | 54 |
 
 ## 완료 후보
 
@@ -19,6 +19,7 @@
 | candidate-88a7e7f07361 | released | 086-autonomous-sidecar-handoff-liveness | specs/086-autonomous-sidecar-handoff-liveness/contracts/agent-ops-liveness-closure.md | completed_candidate_id |
 | candidate-autonomous-frontier-discovery | released | 092-frontier-candidate-discovery | specs/092-frontier-candidate-discovery/contracts/frontier-candidate-discovery.md | completed_candidate_id |
 | candidate-autonomous-growth-objective-calibration | released | 091-autonomous-growth-objective-calibration | specs/091-autonomous-growth-objective-calibration/contracts/autonomous-growth-objective-calibration.md | completed_candidate_id |
+| candidate-broker-rejection-taxonomy-contract | released | 103-broker-rejection-taxonomy-contract | specs/103-broker-rejection-taxonomy-contract/spec.md | completed_candidate_id |
 | candidate-cost-adjusted-edge-experiment | released | 097-cost-adjusted-edge-experiment | specs/097-cost-adjusted-edge-experiment/data-model.md | completed_candidate_id |
 | candidate-data-evidence-frontier-map | released | 098-data-evidence-frontier-map | specs/098-data-evidence-frontier-map/spec.md | completed_candidate_id |
 | candidate-data-evidence-liveness-contract | released | 101-data-evidence-liveness-contract | specs/101-data-evidence-liveness-contract/spec.md | completed_candidate_id |
@@ -103,7 +104,7 @@
 
 ```json
 {
-  "commit": "c9755170b8a1972c63e45a1e6d7a30e7fbfc5dd0",
+  "commit": "8492aad72ff1f3d96930c19cea6643046dd7e71f",
   "overall_status": "OK",
   "released_work": [
     {
@@ -140,6 +141,15 @@
       "source_field": "completed_candidate_id",
       "source_file": "specs/091-autonomous-growth-objective-calibration/contracts/autonomous-growth-objective-calibration.md",
       "spec_id": "091-autonomous-growth-objective-calibration",
+      "status": "released"
+    },
+    {
+      "candidate_id": "candidate-broker-rejection-taxonomy-contract",
+      "entry_id": "released-7f2085f78555",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/103-broker-rejection-taxonomy-contract/spec.md",
+      "spec_id": "103-broker-rejection-taxonomy-contract",
       "status": "released"
     },
     {
@@ -314,7 +324,7 @@
       "status": "released"
     }
   ],
-  "run_id": "28829134911",
+  "run_id": "28840419722",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -378,7 +388,8 @@
     "099-public-data-input-quality-contract",
     "100-regime-timeline-coverage-contract",
     "101-data-evidence-liveness-contract",
-    "102-execution-quality-frontier-map"
+    "102-execution-quality-frontier-map",
+    "103-broker-rejection-taxonomy-contract"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -559,6 +570,6 @@
       "spec_id": "072-candidate-evidence-diagnostics"
     }
   ],
-  "timestamp_utc": "2026-07-06T23:01:23.747012Z"
+  "timestamp_utc": "2026-07-07T03:57:58.221310Z"
 }
 ```
