@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-07-07T03:57:58.221310Z)
+# 완료 후보 소비 장부 (as of 2026-07-07T06:59:18.512760Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -8,8 +8,8 @@
 | 항목 | 값 |
 |------|-----|
 | overall_status | OK |
-| released_count | 24 |
-| scanned_specs | 54 |
+| released_count | 25 |
+| scanned_specs | 55 |
 
 ## 완료 후보
 
@@ -26,6 +26,7 @@
 | candidate-dff4f9344b02 | released | 083-rejected-order-execution-quality | specs/083-rejected-order-execution-quality/contracts/execution-quality.md | completed_candidate_id |
 | candidate-e481b0309206 | released | 082-regime-performance-candidate-scoring | specs/082-regime-performance-candidate-scoring/contracts/regime-performance-candidate-scoring.md | completed_candidate_id |
 | candidate-evolution-source-diversification | released | 089-evolution-source-diversification | specs/089-evolution-source-diversification/spec.md | completed_candidate_id |
+| candidate-execution-cost-basis-contract | released | 104-execution-cost-basis-contract | specs/104-execution-cost-basis-contract/spec.md | completed_candidate_id |
 | candidate-execution-quality-frontier-map | released | 102-execution-quality-frontier-map | specs/102-execution-quality-frontier-map/spec.md | completed_candidate_id |
 | candidate-fa66202bf496 | released | 087-learning-ledger-candidate-memory | specs/087-learning-ledger-candidate-memory/spec.md | completed_candidate_id |
 | candidate-facf2fa31834 | released | 085-public-data-cross-validation | specs/085-public-data-cross-validation/contracts/public-data-fred-cross-check.md | completed_candidate_id |
@@ -104,7 +105,7 @@
 
 ```json
 {
-  "commit": "8492aad72ff1f3d96930c19cea6643046dd7e71f",
+  "commit": "fa5b3d9d6afe0aa21f121c8640d0a0d5c78eeb46",
   "overall_status": "OK",
   "released_work": [
     {
@@ -204,6 +205,15 @@
       "source_field": "completed_candidate_id",
       "source_file": "specs/089-evolution-source-diversification/spec.md",
       "spec_id": "089-evolution-source-diversification",
+      "status": "released"
+    },
+    {
+      "candidate_id": "candidate-execution-cost-basis-contract",
+      "entry_id": "released-cef9e1ad5b3e",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/104-execution-cost-basis-contract/spec.md",
+      "spec_id": "104-execution-cost-basis-contract",
       "status": "released"
     },
     {
@@ -324,7 +334,7 @@
       "status": "released"
     }
   ],
-  "run_id": "28840419722",
+  "run_id": "28847751712",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -389,7 +399,8 @@
     "100-regime-timeline-coverage-contract",
     "101-data-evidence-liveness-contract",
     "102-execution-quality-frontier-map",
-    "103-broker-rejection-taxonomy-contract"
+    "103-broker-rejection-taxonomy-contract",
+    "104-execution-cost-basis-contract"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -570,6 +581,6 @@
       "spec_id": "072-candidate-evidence-diagnostics"
     }
   ],
-  "timestamp_utc": "2026-07-07T03:57:58.221310Z"
+  "timestamp_utc": "2026-07-07T06:59:18.512760Z"
 }
 ```
