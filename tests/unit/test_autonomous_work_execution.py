@@ -9,6 +9,7 @@ from auto_invest.analytics.autonomous_work_execution import (
     AUTONOMY_CLOSED_RELEASED,
     AUTONOMY_CODEX_START,
     AUTONOMY_OPERATOR_APPROVAL,
+    BROKER_DIAGNOSTIC_LIVENESS_CANDIDATE_ID,
     BROKER_REJECTION_TAXONOMY_CANDIDATE_ID,
     CODEX_COMPLETION_GATES,
     COST_ADJUSTED_EDGE_EXPERIMENT_CANDIDATE_ID,
@@ -1383,6 +1384,55 @@ def test_released_broker_rejection_advances_to_execution_cost_basis():
     }
     assert execution_map["broker_rejection_taxonomy"].coverage_status == "released"
     assert execution_map["execution_cost_basis"].coverage_status == "open"
+
+
+def test_released_execution_cost_basis_advances_to_broker_diagnostic_liveness():
+    report = build_autonomous_work_execution(
+        {
+            "capital-path-readiness": _json(
+                {
+                    "priority_candidates": [
+                        {
+                            "candidate_id": "candidate-fd04772a23c5",
+                            "domain_key": "live_readiness",
+                            "status": "new",
+                            "score": 597,
+                        }
+                    ]
+                }
+            ),
+            "execution-quality": _json({"overall_status": "OBSERVE"}),
+            "released-work": _released_work(
+                "candidate-fd04772a23c5",
+                MACRO_GROWTH_DISCOVERY_CANDIDATE_ID,
+                MACRO_GROWTH_SOURCE_DIVERSIFICATION_CANDIDATE_ID,
+                MACRO_GROWTH_OBJECTIVE_CALIBRATION_CANDIDATE_ID,
+                FRONTIER_DISCOVERY_CANDIDATE_ID,
+                MACRO_CANDIDATE_MAP_REGENERATOR_ID,
+                INVESTMENT_EDGE_FRONTIER_CANDIDATE_ID,
+                FORWARD_REGIME_EDGE_EXPERIMENT_CANDIDATE_ID,
+                SIGNAL_DIVERSIFICATION_EDGE_EXPERIMENT_CANDIDATE_ID,
+                COST_ADJUSTED_EDGE_EXPERIMENT_CANDIDATE_ID,
+                DATA_EVIDENCE_FRONTIER_CANDIDATE_ID,
+                PUBLIC_DATA_INPUT_QUALITY_CANDIDATE_ID,
+                REGIME_TIMELINE_COVERAGE_CANDIDATE_ID,
+                DATA_EVIDENCE_LIVENESS_CANDIDATE_ID,
+                EXECUTION_QUALITY_FRONTIER_CANDIDATE_ID,
+                BROKER_REJECTION_TAXONOMY_CANDIDATE_ID,
+                EXECUTION_COST_BASIS_CANDIDATE_ID,
+            ),
+            "pipeline-liveness": _liveness(),
+        },
+        now=NOW,
+    )
+
+    assert report.selected_work is not None
+    assert report.selected_work.candidate_id == BROKER_DIAGNOSTIC_LIVENESS_CANDIDATE_ID
+    execution_map = {
+        entry.frontier_key: entry for entry in report.execution_quality_frontier_map
+    }
+    assert execution_map["execution_cost_basis"].coverage_status == "released"
+    assert execution_map["broker_diagnostic_liveness"].coverage_status == "open"
 
 
 def test_macro_candidate_map_is_deterministic_and_rendered():
