@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-07-07T23:01:23.703834Z)
+# 완료 후보 소비 장부 (as of 2026-07-08T01:26:59.168315Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -8,8 +8,8 @@
 | 항목 | 값 |
 |------|-----|
 | overall_status | OK |
-| released_count | 26 |
-| scanned_specs | 56 |
+| released_count | 27 |
+| scanned_specs | 57 |
 
 ## 완료 후보
 
@@ -17,6 +17,7 @@
 |------|------|------|-----------|-----------|
 | candidate-6ee3370e933d | released | 084-stale-evidence-failure-separation | specs/084-stale-evidence-failure-separation/contracts/capital-path-observability.md | completed_candidate_id |
 | candidate-88a7e7f07361 | released | 086-autonomous-sidecar-handoff-liveness | specs/086-autonomous-sidecar-handoff-liveness/contracts/agent-ops-liveness-closure.md | completed_candidate_id |
+| candidate-agent-ops-frontier-map | released | 106-agent-ops-frontier-map | specs/106-agent-ops-frontier-map/spec.md | completed_candidate_id |
 | candidate-autonomous-frontier-discovery | released | 092-frontier-candidate-discovery | specs/092-frontier-candidate-discovery/contracts/frontier-candidate-discovery.md | completed_candidate_id |
 | candidate-autonomous-growth-objective-calibration | released | 091-autonomous-growth-objective-calibration | specs/091-autonomous-growth-objective-calibration/contracts/autonomous-growth-objective-calibration.md | completed_candidate_id |
 | candidate-broker-diagnostic-liveness-contract | released | 105-broker-diagnostic-liveness-contract | specs/105-broker-diagnostic-liveness-contract/spec.md | completed_candidate_id |
@@ -106,7 +107,7 @@
 
 ```json
 {
-  "commit": "8d39235e6bcd7e2fb05ba147b5684256714694ae",
+  "commit": "8a612ff2e6ae1b9dffbc55ac6e56675ddee9afc4",
   "overall_status": "OK",
   "released_work": [
     {
@@ -125,6 +126,15 @@
       "source_field": "completed_candidate_id",
       "source_file": "specs/086-autonomous-sidecar-handoff-liveness/contracts/agent-ops-liveness-closure.md",
       "spec_id": "086-autonomous-sidecar-handoff-liveness",
+      "status": "released"
+    },
+    {
+      "candidate_id": "candidate-agent-ops-frontier-map",
+      "entry_id": "released-909315767dae",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/106-agent-ops-frontier-map/spec.md",
+      "spec_id": "106-agent-ops-frontier-map",
       "status": "released"
     },
     {
@@ -344,7 +354,7 @@
       "status": "released"
     }
   ],
-  "run_id": "28904652098",
+  "run_id": "28910730320",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -411,7 +421,8 @@
     "102-execution-quality-frontier-map",
     "103-broker-rejection-taxonomy-contract",
     "104-execution-cost-basis-contract",
-    "105-broker-diagnostic-liveness-contract"
+    "105-broker-diagnostic-liveness-contract",
+    "106-agent-ops-frontier-map"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -592,6 +603,6 @@
       "spec_id": "072-candidate-evidence-diagnostics"
     }
   ],
-  "timestamp_utc": "2026-07-07T23:01:23.703834Z"
+  "timestamp_utc": "2026-07-08T01:26:59.168315Z"
 }
 ```
