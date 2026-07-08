@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-07-08T01:26:59.168315Z)
+# 완료 후보 소비 장부 (as of 2026-07-08T02:35:11.797187Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -8,8 +8,8 @@
 | 항목 | 값 |
 |------|-----|
 | overall_status | OK |
-| released_count | 27 |
-| scanned_specs | 57 |
+| released_count | 28 |
+| scanned_specs | 58 |
 
 ## 완료 후보
 
@@ -35,6 +35,7 @@
 | candidate-fd04772a23c5 | released | 078-money-gate-alignment-loop | specs/078-money-gate-alignment-loop/contracts/money-gate-alignment.md | selected_work_candidate |
 | candidate-fd04772a23c5 | released | 079-completed-candidate-consumption | specs/079-completed-candidate-consumption/spec.md | selected_work_candidate |
 | candidate-forward-regime-edge-experiment | released | 095-forward-regime-edge-experiment | specs/095-forward-regime-edge-experiment/spec.md | completed_candidate_id |
+| candidate-handoff-truth-liveness-contract | released | 107-handoff-truth-liveness-contract | specs/107-handoff-truth-liveness-contract/spec.md | completed_candidate_id |
 | candidate-investment-edge-frontier-map | released | 094-investment-edge-frontier-map | specs/094-investment-edge-frontier-map/spec.md | completed_candidate_id |
 | candidate-macro-candidate-map-regenerator | released | 093-macro-candidate-map-regenerator | specs/093-macro-candidate-map-regenerator/data-model.md | completed_candidate_id |
 | candidate-macro-growth-discovery | released | 088-autonomous-macro-growth-discovery | specs/088-autonomous-macro-growth-discovery/spec.md | completed_candidate_id |
@@ -107,7 +108,7 @@
 
 ```json
 {
-  "commit": "8a612ff2e6ae1b9dffbc55ac6e56675ddee9afc4",
+  "commit": "1c412d9c8f592c1d7f168346c97f79bb4efce7dc",
   "overall_status": "OK",
   "released_work": [
     {
@@ -291,6 +292,15 @@
       "status": "released"
     },
     {
+      "candidate_id": "candidate-handoff-truth-liveness-contract",
+      "entry_id": "released-b7c3a54cd858",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/107-handoff-truth-liveness-contract/spec.md",
+      "spec_id": "107-handoff-truth-liveness-contract",
+      "status": "released"
+    },
+    {
       "candidate_id": "candidate-investment-edge-frontier-map",
       "entry_id": "released-97875291a77e",
       "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
@@ -354,7 +364,7 @@
       "status": "released"
     }
   ],
-  "run_id": "28910730320",
+  "run_id": "28913334487",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -422,7 +432,8 @@
     "103-broker-rejection-taxonomy-contract",
     "104-execution-cost-basis-contract",
     "105-broker-diagnostic-liveness-contract",
-    "106-agent-ops-frontier-map"
+    "106-agent-ops-frontier-map",
+    "107-handoff-truth-liveness-contract"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -603,6 +614,6 @@
       "spec_id": "072-candidate-evidence-diagnostics"
     }
   ],
-  "timestamp_utc": "2026-07-08T01:26:59.168315Z"
+  "timestamp_utc": "2026-07-08T02:35:11.797187Z"
 }
 ```
