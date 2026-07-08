@@ -76,6 +76,13 @@ BROKER_DIAGNOSTIC_LIVENESS_CANDIDATE_ID = (
     "candidate-broker-diagnostic-liveness-contract"
 )
 AGENT_OPS_FRONTIER_CANDIDATE_ID = "candidate-agent-ops-frontier-map"
+HANDOFF_TRUTH_LIVENESS_CANDIDATE_ID = "candidate-handoff-truth-liveness-contract"
+PR_MERGE_EVIDENCE_LIVENESS_CANDIDATE_ID = (
+    "candidate-pr-merge-evidence-liveness-contract"
+)
+WORKTREE_CONCURRENCY_LIVENESS_CANDIDATE_ID = (
+    "candidate-worktree-concurrency-liveness-contract"
+)
 
 _REJECTED_STATUSES = {
     "reject",
@@ -230,6 +237,19 @@ class DataEvidenceFrontierTemplate:
 @dataclass(frozen=True)
 class ExecutionQualityFrontierTemplate:
     """체결 품질 영역 안에서 재생성할 브로커·비용 진단 후보."""
+
+    frontier_key: str
+    label_ko: str
+    recommended_candidate_id: str
+    title_ko: str
+    priority_score: int
+    reason_ko: str
+    next_action_ko: str
+
+
+@dataclass(frozen=True)
+class AgentOpsFrontierTemplate:
+    """운영 체계 영역 안에서 재생성할 자율 루프 후보."""
 
     frontier_key: str
     label_ko: str
@@ -424,6 +444,57 @@ _EXECUTION_QUALITY_FRONTIER_TEMPLATES: tuple[
         next_action_ko=(
             "kis-smoke, execution-quality, pipeline-liveness를 함께 읽어 브로커 "
             "진단 증거의 생존성 기준을 읽기 전용 계약으로 고정한다."
+        ),
+    ),
+)
+
+_AGENT_OPS_FRONTIER_TEMPLATES: tuple[AgentOpsFrontierTemplate, ...] = (
+    AgentOpsFrontierTemplate(
+        frontier_key="handoff_truth_liveness",
+        label_ko="HANDOFF 사실성 생존성",
+        recommended_candidate_id=HANDOFF_TRUTH_LIVENESS_CANDIDATE_ID,
+        title_ko="HANDOFF 사실성 생존성 계약",
+        priority_score=2150,
+        reason_ko=(
+            "HANDOFF.md와 check_handoff_facts는 최신 main·코드 merge 상태를 "
+            "다음 세션에 전달하지만, stale handoff와 정상 handoff-only 예외를 "
+            "후보 관점에서 분리하는 계약은 아직 없다."
+        ),
+        next_action_ko=(
+            "HANDOFF.md, check_handoff_facts.py, agent_harness_probe.py, "
+            "released-work, autonomous-work 증거를 함께 읽어 stale handoff와 "
+            "정상 handoff-only baseline을 분리하는 읽기 전용 계약을 만든다."
+        ),
+    ),
+    AgentOpsFrontierTemplate(
+        frontier_key="pr_merge_evidence_liveness",
+        label_ko="PR/머지 증거 생존성",
+        recommended_candidate_id=PR_MERGE_EVIDENCE_LIVENESS_CANDIDATE_ID,
+        title_ko="PR/머지 증거 생존성 계약",
+        priority_score=2050,
+        reason_ko=(
+            "PR 품질 관문, merge commit, released-work, deploy 관측은 각각 존재하지만 "
+            "작업 완료 보고가 어느 증거까지 살아 있어야 하는지 후보 단위로 닫혀 있지 않다."
+        ),
+        next_action_ko=(
+            "PR 본문 품질 관문, merge commit, released-work sidecar, deploy-status "
+            "관측을 함께 읽어 머지 뒤 완료 증거의 PASS/WAIT/FAIL 계약을 만든다."
+        ),
+    ),
+    AgentOpsFrontierTemplate(
+        frontier_key="worktree_concurrency_liveness",
+        label_ko="worktree 동시 작업 생존성",
+        recommended_candidate_id=WORKTREE_CONCURRENCY_LIVENESS_CANDIDATE_ID,
+        title_ko="worktree 동시 작업 생존성 계약",
+        priority_score=1950,
+        reason_ko=(
+            "local_concurrency_guard와 session lease는 병렬 Codex 작업을 막지만, "
+            "WARN/BLOCK·isolate·복구 스냅샷 흐름의 생존성은 후보로 닫혀 있지 않다."
+        ),
+        next_action_ko=(
+            "local_concurrency_guard, .codex/state/concurrency 복구 스냅샷, "
+            "pre-commit/pre-push 훅 경로를 읽어 동시 작업 방어의 PASS/WAIT/FAIL "
+            "계약을 만든다."
         ),
     ),
 )
@@ -765,6 +836,34 @@ class ExecutionQualityFrontierMapEntry:
 
 
 @dataclass(frozen=True)
+class AgentOpsFrontierMapEntry:
+    """운영 체계 영역 안쪽의 자율 루프 후보 지도 행."""
+
+    frontier_key: str
+    label_ko: str
+    coverage_status: str
+    priority_score: int
+    recommended_candidate_id: str
+    title_ko: str
+    reason_ko: str
+    next_action_ko: str
+    required_inputs: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "frontier_key": self.frontier_key,
+            "label_ko": self.label_ko,
+            "coverage_status": self.coverage_status,
+            "priority_score": self.priority_score,
+            "recommended_candidate_id": self.recommended_candidate_id,
+            "title_ko": self.title_ko,
+            "reason_ko": self.reason_ko,
+            "next_action_ko": self.next_action_ko,
+            "required_inputs": list(self.required_inputs),
+        }
+
+
+@dataclass(frozen=True)
 class ObjectiveCalibration:
     """자율 성장 목적 함수, 예산, 중단 조건, 학습 지표 계약."""
 
@@ -802,6 +901,7 @@ class AutonomousWorkExecutionReport:
     investment_edge_frontier_map: tuple[InvestmentEdgeFrontierMapEntry, ...]
     data_evidence_frontier_map: tuple[DataEvidenceFrontierMapEntry, ...]
     execution_quality_frontier_map: tuple[ExecutionQualityFrontierMapEntry, ...]
+    agent_ops_frontier_map: tuple[AgentOpsFrontierMapEntry, ...]
     evidence_surfaces: tuple[EvidenceSurface, ...]
     safety_invariants: tuple[str, ...]
     objective_calibration: ObjectiveCalibration
@@ -829,6 +929,9 @@ class AutonomousWorkExecutionReport:
             ],
             "execution_quality_frontier_map": [
                 entry.to_dict() for entry in self.execution_quality_frontier_map
+            ],
+            "agent_ops_frontier_map": [
+                entry.to_dict() for entry in self.agent_ops_frontier_map
             ],
             "evidence_surfaces": [surface.to_dict() for surface in self.evidence_surfaces],
             "safety_invariants": list(self.safety_invariants),
@@ -1004,6 +1107,22 @@ class AutonomousWorkExecutionReport:
                 )
         else:
             lines.append("- 체결 품질 frontier 지도 항목이 없습니다.")
+
+        lines += ["", "## 운영 체계 frontier 지도", ""]
+        if self.agent_ops_frontier_map:
+            lines += [
+                "| 영역 | 상태 | 점수 | 추천 후보 | 이유 |",
+                "|------|------|-----:|-----------|------|",
+            ]
+            for entry in self.agent_ops_frontier_map:
+                lines.append(
+                    f"| {_table(entry.label_ko)} | {entry.coverage_status} | "
+                    f"{entry.priority_score} | "
+                    f"{_table(entry.recommended_candidate_id)} | "
+                    f"{_table(entry.reason_ko)} |"
+                )
+        else:
+            lines.append("- 운영 체계 frontier 지도 항목이 없습니다.")
 
         lines += [
             "",
@@ -1842,6 +1961,18 @@ def _execution_quality_source_refs() -> tuple[str, ...]:
     )
 
 
+def _agent_ops_source_refs() -> tuple[str, ...]:
+    return (
+        "automation/autonomous-work-execution-last-run:LAST_RUN.md",
+        _SOURCE_REFS["released-work"],
+        _SOURCE_REFS["pipeline-liveness"],
+        "HANDOFF.md",
+        "scripts/check_handoff_facts.py",
+        "scripts/agent_harness_probe.py",
+        ".github/workflows/pr-quality-gate.yml",
+    )
+
+
 def _regular_queue_is_closed(
     packets: Sequence[WorkPacket],
     surfaces: Sequence[EvidenceSurface],
@@ -1867,6 +1998,7 @@ def _macro_growth_packets(
     investment_edge_frontier_map: Sequence[InvestmentEdgeFrontierMapEntry],
     data_evidence_frontier_map: Sequence[DataEvidenceFrontierMapEntry],
     execution_quality_frontier_map: Sequence[ExecutionQualityFrontierMapEntry],
+    agent_ops_frontier_map: Sequence[AgentOpsFrontierMapEntry],
 ) -> tuple[WorkPacket, ...]:
     if not _regular_queue_is_closed(packets, surfaces):
         return ()
@@ -1911,6 +2043,7 @@ def _macro_growth_packets(
             investment_edge_frontier_map=investment_edge_frontier_map,
             data_evidence_frontier_map=data_evidence_frontier_map,
             execution_quality_frontier_map=execution_quality_frontier_map,
+            agent_ops_frontier_map=agent_ops_frontier_map,
             released=released,
             existing_ids=existing_ids,
         )
@@ -2064,6 +2197,7 @@ def _regenerated_macro_candidate_packets(
     investment_edge_frontier_map: Sequence[InvestmentEdgeFrontierMapEntry],
     data_evidence_frontier_map: Sequence[DataEvidenceFrontierMapEntry],
     execution_quality_frontier_map: Sequence[ExecutionQualityFrontierMapEntry],
+    agent_ops_frontier_map: Sequence[AgentOpsFrontierMapEntry],
     released: Mapping[str, str],
     existing_ids: set[str],
 ) -> tuple[WorkPacket, ...]:
@@ -2088,6 +2222,14 @@ def _regenerated_macro_candidate_packets(
             if entry.recommended_candidate_id == EXECUTION_QUALITY_FRONTIER_CANDIDATE_ID:
                 nested = _regenerated_execution_quality_candidate_packets(
                     execution_quality_frontier_map,
+                    released=released,
+                    existing_ids=existing_ids,
+                )
+                if nested:
+                    return nested
+            if entry.recommended_candidate_id == AGENT_OPS_FRONTIER_CANDIDATE_ID:
+                nested = _regenerated_agent_ops_candidate_packets(
+                    agent_ops_frontier_map,
                     released=released,
                     existing_ids=existing_ids,
                 )
@@ -2284,6 +2426,53 @@ def _packet_from_execution_quality_entry(
     )
 
 
+def _regenerated_agent_ops_candidate_packets(
+    agent_ops_frontier_map: Sequence[AgentOpsFrontierMapEntry],
+    *,
+    released: Mapping[str, str],
+    existing_ids: set[str],
+) -> tuple[WorkPacket, ...]:
+    for entry in agent_ops_frontier_map:
+        if entry.recommended_candidate_id in released:
+            continue
+        if entry.recommended_candidate_id in existing_ids:
+            continue
+        return (_packet_from_agent_ops_entry(entry),)
+    return ()
+
+
+def _packet_from_agent_ops_entry(entry: AgentOpsFrontierMapEntry) -> WorkPacket:
+    source_refs = entry.required_inputs
+    autonomy_level, start_guidance, completion_gates = _execution_contract(
+        STATUS_EXECUTION_READY,
+        2,
+        (),
+    )
+    reason = (
+        f"운영 체계 frontier 지도에서 {entry.label_ko} 영역이 "
+        f"{entry.coverage_status} 상태다. {entry.reason_ko}"
+    )
+    return WorkPacket(
+        packet_id=_packet_id(entry.recommended_candidate_id, entry.title_ko, source_refs),
+        candidate_id=entry.recommended_candidate_id,
+        domain_key="agent_ops",
+        title_ko=entry.title_ko,
+        work_type=_DOMAIN_WORK_TYPES["agent_ops"],
+        risk_grade=2,
+        safety_impact=(),
+        priority_score=entry.priority_score,
+        status=STATUS_EXECUTION_READY,
+        autonomy_level=autonomy_level,
+        reason_ko=reason,
+        next_action_ko=entry.next_action_ko,
+        start_guidance_ko=start_guidance,
+        completion_gates=completion_gates,
+        required_inputs=source_refs,
+        safety_boundary=SAFETY_INVARIANTS,
+        source_refs=source_refs,
+    )
+
+
 def _macro_candidate_map(
     packets: Sequence[WorkPacket],
 ) -> tuple[MacroCandidateMapEntry, ...]:
@@ -2407,6 +2596,32 @@ def _execution_quality_frontier_map(
             required_inputs=required_inputs,
         )
         for template in _EXECUTION_QUALITY_FRONTIER_TEMPLATES
+    ]
+    return tuple(sorted(entries, key=lambda entry: (-entry.priority_score, entry.frontier_key)))
+
+
+def _agent_ops_frontier_map(
+    released_work: Any,
+) -> tuple[AgentOpsFrontierMapEntry, ...]:
+    released = _released_candidates(released_work)
+    required_inputs = _agent_ops_source_refs()
+    entries = [
+        AgentOpsFrontierMapEntry(
+            frontier_key=template.frontier_key,
+            label_ko=template.label_ko,
+            coverage_status=(
+                "released"
+                if template.recommended_candidate_id in released
+                else "open"
+            ),
+            priority_score=template.priority_score,
+            recommended_candidate_id=template.recommended_candidate_id,
+            title_ko=template.title_ko,
+            reason_ko=template.reason_ko,
+            next_action_ko=template.next_action_ko,
+            required_inputs=required_inputs,
+        )
+        for template in _AGENT_OPS_FRONTIER_TEMPLATES
     ]
     return tuple(sorted(entries, key=lambda entry: (-entry.priority_score, entry.frontier_key)))
 
@@ -2658,6 +2873,7 @@ def build_autonomous_work_execution(
     execution_quality_frontier_map = _execution_quality_frontier_map(
         parsed.get("released-work")
     )
+    agent_ops_frontier_map = _agent_ops_frontier_map(parsed.get("released-work"))
     ordered = _dedupe_packets(
         [
             *ordered,
@@ -2669,6 +2885,7 @@ def build_autonomous_work_execution(
                 investment_edge_frontier_map=investment_edge_frontier_map,
                 data_evidence_frontier_map=data_evidence_frontier_map,
                 execution_quality_frontier_map=execution_quality_frontier_map,
+                agent_ops_frontier_map=agent_ops_frontier_map,
             ),
         ]
     )
@@ -2695,6 +2912,7 @@ def build_autonomous_work_execution(
         investment_edge_frontier_map=investment_edge_frontier_map,
         data_evidence_frontier_map=data_evidence_frontier_map,
         execution_quality_frontier_map=execution_quality_frontier_map,
+        agent_ops_frontier_map=agent_ops_frontier_map,
         evidence_surfaces=surfaces,
         safety_invariants=SAFETY_INVARIANTS,
         objective_calibration=objective_calibration,
@@ -2702,6 +2920,8 @@ def build_autonomous_work_execution(
 
 
 __all__ = [
+    "AgentOpsFrontierMapEntry",
+    "AGENT_OPS_FRONTIER_CANDIDATE_ID",
     "AutonomousWorkExecutionReport",
     "AUTONOMY_CLOSED_RELEASED",
     "AUTONOMY_CLOSED_SUPPRESSED",
@@ -2719,7 +2939,7 @@ __all__ = [
     "ExecutionQualityFrontierMapEntry",
     "FORWARD_REGIME_EDGE_EXPERIMENT_CANDIDATE_ID",
     "FRONTIER_DISCOVERY_CANDIDATE_ID",
-    "AGENT_OPS_FRONTIER_CANDIDATE_ID",
+    "HANDOFF_TRUTH_LIVENESS_CANDIDATE_ID",
     "DATA_EVIDENCE_FRONTIER_CANDIDATE_ID",
     "EXECUTION_QUALITY_FRONTIER_CANDIDATE_ID",
     "INVESTMENT_EDGE_FRONTIER_CANDIDATE_ID",
@@ -2733,6 +2953,7 @@ __all__ = [
     "ObjectiveCandidateScore",
     "ObjectiveExplorationBudget",
     "ObjectiveLearningMetrics",
+    "PR_MERGE_EVIDENCE_LIVENESS_CANDIDATE_ID",
     "PUBLIC_DATA_INPUT_QUALITY_CANDIDATE_ID",
     "REGIME_TIMELINE_COVERAGE_CANDIDATE_ID",
     "SAFETY_INVARIANTS",
@@ -2744,6 +2965,7 @@ __all__ = [
     "STATUS_OPERATOR_APPROVAL_REQUIRED",
     "STATUS_RELEASED",
     "STATUS_SUPPRESSED",
+    "WORKTREE_CONCURRENCY_LIVENESS_CANDIDATE_ID",
     "WorkPacket",
     "build_autonomous_work_execution",
 ]

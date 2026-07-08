@@ -20,11 +20,13 @@ from auto_invest.analytics.autonomous_work_execution import (
     EXECUTION_QUALITY_FRONTIER_CANDIDATE_ID,
     FORWARD_REGIME_EDGE_EXPERIMENT_CANDIDATE_ID,
     FRONTIER_DISCOVERY_CANDIDATE_ID,
+    HANDOFF_TRUTH_LIVENESS_CANDIDATE_ID,
     INVESTMENT_EDGE_FRONTIER_CANDIDATE_ID,
     MACRO_CANDIDATE_MAP_REGENERATOR_ID,
     MACRO_GROWTH_DISCOVERY_CANDIDATE_ID,
     MACRO_GROWTH_OBJECTIVE_CALIBRATION_CANDIDATE_ID,
     MACRO_GROWTH_SOURCE_DIVERSIFICATION_CANDIDATE_ID,
+    PR_MERGE_EVIDENCE_LIVENESS_CANDIDATE_ID,
     PUBLIC_DATA_INPUT_QUALITY_CANDIDATE_ID,
     REGIME_TIMELINE_COVERAGE_CANDIDATE_ID,
     SIGNAL_DIVERSIFICATION_EDGE_EXPERIMENT_CANDIDATE_ID,
@@ -57,6 +59,30 @@ def _released_work(*candidate_ids: str) -> str:
                 for candidate_id in candidate_ids
             ]
         }
+    )
+
+
+def _released_through_broker_diagnostic_liveness(*extra_candidate_ids: str) -> str:
+    return _released_work(
+        "candidate-fd04772a23c5",
+        MACRO_GROWTH_DISCOVERY_CANDIDATE_ID,
+        MACRO_GROWTH_SOURCE_DIVERSIFICATION_CANDIDATE_ID,
+        MACRO_GROWTH_OBJECTIVE_CALIBRATION_CANDIDATE_ID,
+        FRONTIER_DISCOVERY_CANDIDATE_ID,
+        MACRO_CANDIDATE_MAP_REGENERATOR_ID,
+        INVESTMENT_EDGE_FRONTIER_CANDIDATE_ID,
+        FORWARD_REGIME_EDGE_EXPERIMENT_CANDIDATE_ID,
+        SIGNAL_DIVERSIFICATION_EDGE_EXPERIMENT_CANDIDATE_ID,
+        COST_ADJUSTED_EDGE_EXPERIMENT_CANDIDATE_ID,
+        DATA_EVIDENCE_FRONTIER_CANDIDATE_ID,
+        PUBLIC_DATA_INPUT_QUALITY_CANDIDATE_ID,
+        REGIME_TIMELINE_COVERAGE_CANDIDATE_ID,
+        DATA_EVIDENCE_LIVENESS_CANDIDATE_ID,
+        EXECUTION_QUALITY_FRONTIER_CANDIDATE_ID,
+        BROKER_REJECTION_TAXONOMY_CANDIDATE_ID,
+        EXECUTION_COST_BASIS_CANDIDATE_ID,
+        BROKER_DIAGNOSTIC_LIVENESS_CANDIDATE_ID,
+        *extra_candidate_ids,
     )
 
 
@@ -1483,6 +1509,114 @@ def test_released_broker_diagnostic_liveness_advances_to_agent_ops_frontier():
         entry.frontier_key: entry for entry in report.execution_quality_frontier_map
     }
     assert execution_map["broker_diagnostic_liveness"].coverage_status == "released"
+
+
+def test_agent_ops_frontier_map_is_deterministic_and_rendered():
+    evidence = {
+        "capital-path-readiness": _json(
+            {
+                "priority_candidates": [
+                    {
+                        "candidate_id": "candidate-fd04772a23c5",
+                        "domain_key": "live_readiness",
+                        "status": "new",
+                        "score": 597,
+                    }
+                ]
+            }
+        ),
+        "released-work": _released_through_broker_diagnostic_liveness(),
+        "pipeline-liveness": _liveness(),
+    }
+
+    first = build_autonomous_work_execution(evidence, now=NOW).to_dict()
+    second = build_autonomous_work_execution(evidence, now=NOW).to_dict()
+
+    assert first["selected_work"]["candidate_id"] == AGENT_OPS_FRONTIER_CANDIDATE_ID
+    assert first["agent_ops_frontier_map"] == second["agent_ops_frontier_map"]
+    assert (
+        first["agent_ops_frontier_map"][0]["recommended_candidate_id"]
+        == HANDOFF_TRUTH_LIVENESS_CANDIDATE_ID
+    )
+    assert first["agent_ops_frontier_map"][0]["coverage_status"] == "open"
+
+    markdown = build_autonomous_work_execution(evidence, now=NOW).as_markdown()
+    assert "## 운영 체계 frontier 지도" in markdown
+    assert HANDOFF_TRUTH_LIVENESS_CANDIDATE_ID in markdown
+
+
+def test_released_agent_ops_frontier_emits_handoff_truth_candidate():
+    report = build_autonomous_work_execution(
+        {
+            "capital-path-readiness": _json(
+                {
+                    "priority_candidates": [
+                        {
+                            "candidate_id": "candidate-fd04772a23c5",
+                            "domain_key": "live_readiness",
+                            "status": "new",
+                            "score": 597,
+                        }
+                    ]
+                }
+            ),
+            "released-work": _released_through_broker_diagnostic_liveness(
+                AGENT_OPS_FRONTIER_CANDIDATE_ID,
+            ),
+            "pipeline-liveness": _liveness(),
+        },
+        now=NOW,
+    )
+
+    assert report.overall_status == STATUS_EXECUTION_READY
+    assert report.selected_work is not None
+    assert report.selected_work.candidate_id == HANDOFF_TRUTH_LIVENESS_CANDIDATE_ID
+    assert report.selected_work.domain_key == "agent_ops"
+    assert report.selected_work.risk_grade == 2
+    assert report.selected_work.safety_impact == ()
+    assert set(report.selected_work.required_inputs) >= {
+        "automation/autonomous-work-execution-last-run:LAST_RUN.md",
+        "automation/released-work-last-run:released_work.json",
+        "automation/pipeline-liveness-last-run:LAST_RUN.md",
+        "HANDOFF.md",
+        "scripts/check_handoff_facts.py",
+        "scripts/agent_harness_probe.py",
+        ".github/workflows/pr-quality-gate.yml",
+    }
+
+
+def test_released_handoff_truth_advances_to_pr_merge_evidence_candidate():
+    report = build_autonomous_work_execution(
+        {
+            "capital-path-readiness": _json(
+                {
+                    "priority_candidates": [
+                        {
+                            "candidate_id": "candidate-fd04772a23c5",
+                            "domain_key": "live_readiness",
+                            "status": "new",
+                            "score": 597,
+                        }
+                    ]
+                }
+            ),
+            "released-work": _released_through_broker_diagnostic_liveness(
+                AGENT_OPS_FRONTIER_CANDIDATE_ID,
+                HANDOFF_TRUTH_LIVENESS_CANDIDATE_ID,
+            ),
+            "pipeline-liveness": _liveness(),
+        },
+        now=NOW,
+    )
+
+    assert report.selected_work is not None
+    assert (
+        report.selected_work.candidate_id
+        == PR_MERGE_EVIDENCE_LIVENESS_CANDIDATE_ID
+    )
+    agent_ops_map = {entry.frontier_key: entry for entry in report.agent_ops_frontier_map}
+    assert agent_ops_map["handoff_truth_liveness"].coverage_status == "released"
+    assert agent_ops_map["pr_merge_evidence_liveness"].coverage_status == "open"
 
 
 def test_macro_candidate_map_is_deterministic_and_rendered():
