@@ -83,6 +83,9 @@ PR_MERGE_EVIDENCE_LIVENESS_CANDIDATE_ID = (
 WORKTREE_CONCURRENCY_LIVENESS_CANDIDATE_ID = (
     "candidate-worktree-concurrency-liveness-contract"
 )
+AGENT_HARNESS_REGRESSION_LIVENESS_CANDIDATE_ID = (
+    "candidate-agent-harness-regression-liveness-contract"
+)
 
 _REJECTED_STATUSES = {
     "reject",
@@ -495,6 +498,23 @@ _AGENT_OPS_FRONTIER_TEMPLATES: tuple[AgentOpsFrontierTemplate, ...] = (
             "local_concurrency_guard, .codex/state/concurrency 복구 스냅샷, "
             "pre-commit/pre-push 훅 경로를 읽어 동시 작업 방어의 PASS/WAIT/FAIL "
             "계약을 만든다."
+        ),
+    ),
+    AgentOpsFrontierTemplate(
+        frontier_key="agent_harness_regression_liveness",
+        label_ko="agent harness 회귀 생존성",
+        recommended_candidate_id=AGENT_HARNESS_REGRESSION_LIVENESS_CANDIDATE_ID,
+        title_ko="agent harness 회귀 생존성 계약",
+        priority_score=1850,
+        reason_ko=(
+            "evaluation, 첫 판단 품질, redteam 하네스 묶음은 존재하지만, "
+            "strict harness가 무엇을 PASS/WAIT/FAIL로 보존해야 하는지 후보 단위로 "
+            "아직 닫혀 있지 않다."
+        ),
+        next_action_ko=(
+            ".codex/harness/evaluation_tasks.toml, quality_tasks.toml, "
+            "redteam_tasks.toml, scripts/agent_harness_probe.py를 함께 읽어 "
+            "하네스 회귀 증거의 PASS/WAIT/FAIL 계약을 만든다."
         ),
     ),
 )
@@ -1967,6 +1987,14 @@ def _agent_ops_source_refs() -> tuple[str, ...]:
         _SOURCE_REFS["released-work"],
         _SOURCE_REFS["pipeline-liveness"],
         "HANDOFF.md",
+        "scripts/local_concurrency_guard.py",
+        ".codex/hooks.json",
+        ".githooks/pre-commit",
+        ".githooks/pre-push",
+        ".codex/state/concurrency",
+        ".codex/harness/evaluation_tasks.toml",
+        ".codex/harness/quality_tasks.toml",
+        ".codex/harness/redteam_tasks.toml",
         "scripts/check_handoff_facts.py",
         "scripts/agent_harness_probe.py",
         ".github/workflows/pr-quality-gate.yml",
@@ -2920,6 +2948,7 @@ def build_autonomous_work_execution(
 
 
 __all__ = [
+    "AGENT_HARNESS_REGRESSION_LIVENESS_CANDIDATE_ID",
     "AgentOpsFrontierMapEntry",
     "AGENT_OPS_FRONTIER_CANDIDATE_ID",
     "AutonomousWorkExecutionReport",
