@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-07-10T11:55:21.837684Z)
+# 완료 후보 소비 장부 (as of 2026-07-10T13:07:15.490722Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -8,8 +8,8 @@
 | 항목 | 값 |
 |------|-----|
 | overall_status | OK |
-| released_count | 29 |
-| scanned_specs | 59 |
+| released_count | 30 |
+| scanned_specs | 60 |
 
 ## 완료 후보
 
@@ -44,6 +44,7 @@
 | candidate-regime-timeline-coverage-contract | released | 100-regime-timeline-coverage-contract | specs/100-regime-timeline-coverage-contract/spec.md | completed_candidate_id |
 | candidate-signal-diversification-edge-experiment | released | 096-signal-diversification-edge-experiment | specs/096-signal-diversification-edge-experiment/spec.md | completed_candidate_id |
 | candidate-source-diversification-sidecar-bottleneck | released | 090-source-diversification-candidate-closure | specs/090-source-diversification-candidate-closure/contracts/source-diversification-candidate-closure.md | completed_candidate_id |
+| candidate-worktree-concurrency-liveness-contract | released | 109-worktree-concurrency-liveness-contract | specs/109-worktree-concurrency-liveness-contract/spec.md | completed_candidate_id |
 
 ## 제외한 스펙
 
@@ -109,7 +110,7 @@
 
 ```json
 {
-  "commit": "52c5a29b418bd04ab6f32b9efcd26b7d29cd6d73",
+  "commit": "75d7140f85d6e494834234069d8db0438f922ec9",
   "overall_status": "OK",
   "released_work": [
     {
@@ -372,9 +373,18 @@
       "source_file": "specs/090-source-diversification-candidate-closure/contracts/source-diversification-candidate-closure.md",
       "spec_id": "090-source-diversification-candidate-closure",
       "status": "released"
+    },
+    {
+      "candidate_id": "candidate-worktree-concurrency-liveness-contract",
+      "entry_id": "released-05ebdacc7431",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/109-worktree-concurrency-liveness-contract/spec.md",
+      "spec_id": "109-worktree-concurrency-liveness-contract",
+      "status": "released"
     }
   ],
-  "run_id": "29090905352",
+  "run_id": "29094880183",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -444,7 +454,8 @@
     "105-broker-diagnostic-liveness-contract",
     "106-agent-ops-frontier-map",
     "107-handoff-truth-liveness-contract",
-    "108-pr-merge-evidence-liveness-contract"
+    "108-pr-merge-evidence-liveness-contract",
+    "109-worktree-concurrency-liveness-contract"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -625,6 +636,6 @@
       "spec_id": "072-candidate-evidence-diagnostics"
     }
   ],
-  "timestamp_utc": "2026-07-10T11:55:21.837684Z"
+  "timestamp_utc": "2026-07-10T13:07:15.490722Z"
 }
 ```
