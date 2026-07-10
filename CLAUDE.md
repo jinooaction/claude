@@ -220,7 +220,7 @@ the current worktree. Do not trust prose in this block as the source of truth
 for in-flight work; use the `git_ground_truth` start hook, latest `HANDOFF.md`,
 and `/sync` against `jinooaction/claude` `Codex/*` branches before continuing.
 
-현재 계획 포인터: `specs/107-handoff-truth-liveness-contract/plan.md` — HANDOFF 요약표가 실제 `origin/main`과 맞는지, handoff-only 머지의 정상 첫 부모 기준인지, 아니면 실제 stale 상태인지 구분하는 읽기 전용 운영 체계 계약.
+현재 계획 포인터: `specs/108-pr-merge-evidence-liveness-contract/plan.md` — PR 본문 품질 관문, main 머지 커밋, released-work 장부, deploy-status 관측을 함께 읽어 머지 뒤 완료 증거의 PASS/WAIT/FAIL 상태를 구분하는 읽기 전용 운영 체계 계약.
 
 머지 완료(베이스라인): spec 004 (LLM 판단 지점), 005 (자율 튜너), 006 (배포 자동화), 007 (하드닝 카나리), 008 (백테스트), 009 (paper-run), 010 (자동 룰 설계자), 011 (라이브 성과 측정). **주의: 일부 tasks.md 가 stale 0% 로 표시된 적 있음 — 코드/테스트를 믿을 것.**
 
