@@ -33,6 +33,7 @@ from auto_invest.analytics.autonomous_work_execution import (
     STATUS_EXECUTION_READY,
     STATUS_OPERATOR_APPROVAL_REQUIRED,
     STATUS_RELEASED,
+    WORKTREE_CONCURRENCY_LIVENESS_CANDIDATE_ID,
     build_autonomous_work_execution,
 )
 
@@ -1617,6 +1618,44 @@ def test_released_handoff_truth_advances_to_pr_merge_evidence_candidate():
     agent_ops_map = {entry.frontier_key: entry for entry in report.agent_ops_frontier_map}
     assert agent_ops_map["handoff_truth_liveness"].coverage_status == "released"
     assert agent_ops_map["pr_merge_evidence_liveness"].coverage_status == "open"
+
+
+def test_released_pr_merge_evidence_advances_to_worktree_concurrency_candidate():
+    report = build_autonomous_work_execution(
+        {
+            "capital-path-readiness": _json(
+                {
+                    "priority_candidates": [
+                        {
+                            "candidate_id": "candidate-fd04772a23c5",
+                            "domain_key": "live_readiness",
+                            "status": "new",
+                            "score": 597,
+                        }
+                    ]
+                }
+            ),
+            "released-work": _released_through_broker_diagnostic_liveness(
+                AGENT_OPS_FRONTIER_CANDIDATE_ID,
+                HANDOFF_TRUTH_LIVENESS_CANDIDATE_ID,
+                PR_MERGE_EVIDENCE_LIVENESS_CANDIDATE_ID,
+            ),
+            "pipeline-liveness": _liveness(),
+        },
+        now=NOW,
+    )
+
+    assert report.selected_work is not None
+    assert (
+        report.selected_work.candidate_id
+        == WORKTREE_CONCURRENCY_LIVENESS_CANDIDATE_ID
+    )
+    assert report.selected_work.risk_grade == 2
+    assert report.selected_work.safety_impact == ()
+    agent_ops_map = {entry.frontier_key: entry for entry in report.agent_ops_frontier_map}
+    assert agent_ops_map["handoff_truth_liveness"].coverage_status == "released"
+    assert agent_ops_map["pr_merge_evidence_liveness"].coverage_status == "released"
+    assert agent_ops_map["worktree_concurrency_liveness"].coverage_status == "open"
 
 
 def test_macro_candidate_map_is_deterministic_and_rendered():
