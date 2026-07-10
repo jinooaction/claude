@@ -33,15 +33,15 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `7d06550` — Merge pull request #503 from jinooaction/Codex/108-pr-merge-evidence-liveness-contract |
-| main 테스트 | PR #503 머지 전 `uv run pytest` → 2569 passed, 4 skipped. 인계 갱신 전 `uv run pytest -q`는 stale HANDOFF 때문에 하네스 2건만 실패했고, 이 handoff 갱신 뒤 `uv run pytest -q` → 2569 passed, 4 skipped. |
-| main 린트 | PR #503 머지 전 `uv run ruff check src tests` → All checks passed. 이 handoff 갱신 뒤 재실행도 All checks passed. |
+| 마지막 main 커밋 | `75d7140` — Merge pull request #505 from jinooaction/Codex/109-worktree-concurrency-liveness-contract |
+| main 테스트 | PR #505 머지 전 `uv run pytest` → 2577 passed, 4 skipped. 이 handoff 갱신 뒤 `uv run pytest -q` → 2577 passed, 4 skipped. |
+| main 린트 | PR #505 머지 전 `uv run ruff check src tests` → All checks passed. 이 handoff 갱신 뒤 재실행도 All checks passed. |
 | 열린 PR | 없음. |
-| 출시 완료 스펙 | 최신 추가: 108(PR/머지 증거 생존성 계약과 worktree 동시 작업 후보 전진), 107(HANDOFF 사실성 생존성 계약과 PR/머지 증거 후보 전진), 106(운영 체계 frontier 지도와 handoff 사실성 후보 전진), 105(브로커 진단 생존성 계약과 운영 체계 frontier 후보 전진), 104(체결 비용 기준 계약과 브로커 진단 생존성 후보 전진), 103(브로커 거부 분류 계약과 체결 비용 기준 후보 전진), 102(체결 품질 frontier 지도와 브로커 거부 분류 후보 전진), 101(데이터 증거 생존성 계약과 체결 품질 frontier 후보 전진), 100(레짐 타임라인 커버리지 계약과 데이터 증거 생존성 후보 전진), 099(공개 데이터 입력 품질 계약과 레짐 타임라인 커버리지 후보 전진), 098(데이터 증거 frontier 지도와 공개 데이터 입력 품질 후보 전진), 097(비용 차감 no-live 엣지 실험 계약과 비용 기준 대기 분리), 096(신호 다변화 no-live 엣지 실험 계약과 낮은 겹침 후보 분리), 095(forward 레짐 엣지 no-live 실험 계약과 관측 대기 판정), 094(투자 엣지 frontier 지도와 no-live 실험 후보 전진), 093(거시 후보 지도와 후보 재생성 루프), 092(자율 후보 고갈 뒤 frontier 발굴 후보 폐쇄), 091(자율 성장 목적 함수와 탐색 예산 보정), 090(source diversification 산출 후보 완료 폐쇄), 089(정적 후보 템플릿 밖 증거 기반 후보 공간 확장), 088(거시 자율 성장 후보 발굴기), 087(학습 장부로 폐기·보류 후보 재발굴 차단), 086(자율 루프 sidecar와 HANDOFF 생존성 완료 후보 폐쇄), 085(공개 데이터 수집·교차 검증 확장), 084(오래된 증거와 성과 실패 분리), 083(주문 거부·체결 품질 손익 관측), 082(레짐·성과 후보 점수화), 081(자율 루프 품질 폐쇄), 080(운영자 대시보드와 모바일 알림 루프), 079(완료 후보 소비 장부), 078(돈 경로 게이트 정렬 루프), 077(자율 작업 실행 루프), 076(자본 경로 준비도 루프), 075(전략 실패 학습), 074(후보 가격 이력 지원), 073(후보 pending next action 보정), 072(후보 증거 진단), 071(후보 결과 실행기), 070(후보 구현 공장), 069(자율 승격 실행 루프), 068(자율 승격 루프 자동 분류), 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
-| 골격 스펙 | 없음. `.specify/feature.json`은 최신 출시 스펙 `specs/108-pr-merge-evidence-liveness-contract`를 가리킨다. 스펙 108은 #503으로 main에 들어갔다. |
-| 최근 출시 작업 | #503 스펙 108 PR/머지 증거 생존성 계약. #502 스펙 107 인계. #501 스펙 107 HANDOFF 사실성 생존성 계약. #500 스펙 106 인계. #499 스펙 106 운영 체계 frontier 지도. |
-| 활성 작업 | 열린 PR 없음. #503 main push의 deploy run `29076284769`, released-work run `29076284798`, autonomous-work run `29076284765`가 success다. remote released-work sidecar는 `candidate-pr-merge-evidence-liveness-contract`를 released로 읽었고, remote autonomous-work sidecar는 다음 후보 `candidate-worktree-concurrency-liveness-contract`를 `EXECUTION_READY`, 위험 등급 2, 안전 영향 없음으로 선택했다. 돈 경로는 `PREVIEW_ONLY`, readiness `ACCUMULATING_EDGE`이며 실주문은 불가하다. |
-| 안전 경계 | #503은 등급 2 PR/머지 증거 생존성 계약 추가다. PR 본문 품질 관문, main merge commit, released-work 장부, deploy 관측을 읽기 전용 보고서와 probe로 묶고 완료 후보 전진만 바꿨으며 주문, 자본 증액, 자본 배분, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, live sentinel, 브로커 주문, K1/K2/K4/K5/K6, 헌법, 커널 목록, 비밀값, 외부 유료 서비스는 변경하지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`다. |
+| 출시 완료 스펙 | 최신 추가: 109(worktree 동시 작업 생존성 계약과 agent harness 회귀 후보 전진), 108(PR/머지 증거 생존성 계약과 worktree 동시 작업 후보 전진), 107(HANDOFF 사실성 생존성 계약과 PR/머지 증거 후보 전진), 106(운영 체계 frontier 지도와 handoff 사실성 후보 전진), 105(브로커 진단 생존성 계약과 운영 체계 frontier 후보 전진), 104(체결 비용 기준 계약과 브로커 진단 생존성 후보 전진), 103(브로커 거부 분류 계약과 체결 비용 기준 후보 전진), 102(체결 품질 frontier 지도와 브로커 거부 분류 후보 전진), 101(데이터 증거 생존성 계약과 체결 품질 frontier 후보 전진), 100(레짐 타임라인 커버리지 계약과 데이터 증거 생존성 후보 전진), 099(공개 데이터 입력 품질 계약과 레짐 타임라인 커버리지 후보 전진), 098(데이터 증거 frontier 지도와 공개 데이터 입력 품질 후보 전진), 097(비용 차감 no-live 엣지 실험 계약과 비용 기준 대기 분리), 096(신호 다변화 no-live 엣지 실험 계약과 낮은 겹침 후보 분리), 095(forward 레짐 엣지 no-live 실험 계약과 관측 대기 판정), 094(투자 엣지 frontier 지도와 no-live 실험 후보 전진), 093(거시 후보 지도와 후보 재생성 루프), 092(자율 후보 고갈 뒤 frontier 발굴 후보 폐쇄), 091(자율 성장 목적 함수와 탐색 예산 보정), 090(source diversification 산출 후보 완료 폐쇄), 089(정적 후보 템플릿 밖 증거 기반 후보 공간 확장), 088(거시 자율 성장 후보 발굴기), 087(학습 장부로 폐기·보류 후보 재발굴 차단), 086(자율 루프 sidecar와 HANDOFF 생존성 완료 후보 폐쇄), 085(공개 데이터 수집·교차 검증 확장), 084(오래된 증거와 성과 실패 분리), 083(주문 거부·체결 품질 손익 관측), 082(레짐·성과 후보 점수화), 081(자율 루프 품질 폐쇄), 080(운영자 대시보드와 모바일 알림 루프), 079(완료 후보 소비 장부), 078(돈 경로 게이트 정렬 루프), 077(자율 작업 실행 루프), 076(자본 경로 준비도 루프), 075(전략 실패 학습), 074(후보 가격 이력 지원), 073(후보 pending next action 보정), 072(후보 증거 진단), 071(후보 결과 실행기), 070(후보 구현 공장), 069(자율 승격 실행 루프), 068(자율 승격 루프 자동 분류), 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
+| 골격 스펙 | 없음. `.specify/feature.json`은 최신 출시 스펙 `specs/109-worktree-concurrency-liveness-contract`를 가리킨다. 스펙 109는 #505로 main에 들어갔다. |
+| 최근 출시 작업 | #505 스펙 109 worktree 동시 작업 생존성 계약. #504 스펙 108 인계. #503 스펙 108 PR/머지 증거 생존성 계약. #502 스펙 107 인계. #501 스펙 107 HANDOFF 사실성 생존성 계약. |
+| 활성 작업 | 열린 PR 없음. #505 main push의 deploy run `29094880198`, released-work run `29094880183`, autonomous-work run `29094880148`가 success다. remote released-work sidecar는 `candidate-worktree-concurrency-liveness-contract`를 released로 읽었고, remote autonomous-work sidecar는 다음 후보 `candidate-agent-harness-regression-liveness-contract`를 `EXECUTION_READY`, 위험 등급 2, 안전 영향 없음으로 선택했다. 돈 경로는 `PREVIEW_ONLY`, readiness `ACCUMULATING_EDGE`이며 실주문은 불가하다. |
+| 안전 경계 | #505는 등급 2 worktree 동시 작업 생존성 계약 추가다. local concurrency guard, session-start hook, pre-commit/pre-push hook, 복구 스냅샷 표면을 읽기 전용 보고서와 probe로 묶고 완료 뒤 다음 운영 체계 후보를 agent harness 회귀 생존성으로 전진시켰으며 주문, 자본 증액, 자본 배분, 허용 종목, 포지션 한도, 실거래 모드, live 전략 교체, live sentinel, 브로커 주문, K1/K2/K4/K5/K6, 헌법, 커널 목록, 비밀값, 외부 유료 서비스는 변경하지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`다. |
 
 ## 돈 경로 상태 판독 규칙 (필수 — 스펙 062)
 
@@ -80,6 +80,53 @@ uv run python scripts/money_path_probe.py --manifest | while IFS=$'\t' read -r k
 done
 uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.live_money_state'
 ```
+
+## 최근 관찰 — 2026-07-10 KST (스펙 109 worktree 동시 작업 생존성 계약)
+
+현재 `main` 최신 코드 머지는 `75d7140`(#505, 스펙 109 worktree 동시 작업 생존성 계약)이다.
+기능 커밋은 `34e4942`이고, 직전 main은 `52c5a29`(#504, 스펙 108 인계)이다.
+
+- **문제 정의**: 스펙 108은 다음 후보를 `candidate-worktree-concurrency-liveness-contract`로 열었다.
+  `local_concurrency_guard.py`, session-start hook, pre-commit/pre-push hook, 복구 스냅샷은 있었지만,
+  정상 `WARN`, 쓰기 전 `BLOCK`, 격리 안내, 복구 스냅샷 표면이 후보 단위의 `PASS`/`WAIT`/`FAIL`
+  계약으로 닫혀 있지 않았다. 구현 전 재현에서는 109까지 released로 닫으면 새 실행 후보 대신 닫힌
+  `candidate-fd04772a23c5`가 `RELEASED` selected_work처럼 보이는 전진성 구멍도 확인했다.
+- **구현 상태**: `worktree_concurrency_liveness.py`와
+  `scripts/worktree_concurrency_liveness_probe.py`가 `.codex/hooks.json`, `.githooks/pre-commit`,
+  `.githooks/pre-push`, `scripts/local_concurrency_guard.py`, optional guard output,
+  released-work completion, 안전 경계를 읽어 `CONTRACT_READY`, `OBSERVATION_WAIT`, `BLOCKED`를
+  보고한다. synthetic guard 평가로 clean check `OK`, conflict check `WARN`, conflict pre-commit/pre-push
+  `BLOCK`, main 직접 commit/push `BLOCK`을 고정한다. 스펙 109는
+  `completed_candidate_id: candidate-worktree-concurrency-liveness-contract`와
+  `next_candidate_id: candidate-agent-harness-regression-liveness-contract`를 명시했다.
+- **post-merge 실행**: #505 main push 뒤 `Deploy on merge to main` run `29094880198`,
+  `Released work ledger` run `29094880183`, `Autonomous work execution loop` run `29094880148`가
+  success였다.
+- **sidecar 확인**: 최신 released-work sidecar는 `commit=75d7140`, `overall_status=OK`이며
+  `candidate-worktree-concurrency-liveness-contract`를 spec `109-worktree-concurrency-liveness-contract`의
+  released 후보로 기록했다. 최신 autonomous-work sidecar는 같은 commit에서
+  `candidate-agent-harness-regression-liveness-contract`를 `EXECUTION_READY`, risk grade 2,
+  safety impact 없음으로 선택했다. 운영 체계 frontier 지도에서 handoff 사실성, PR/머지 증거,
+  worktree 동시 작업은 released이고 agent harness 회귀 생존성은 open이다.
+- **배포 확인**: main commit의 `Deploy on merge to main` workflow run `29094880198`과 deploy job은
+  success다. 컨테이너에서 GitHub run 상태와 job step 성공은 확인했다. 서버 audit_log는 직접 확인하지
+  못한다. 이 배포는 dry-run worker 코드 반영이며 실거래 전환이 아니다.
+- **안전 경계**: 등급 2 읽기 전용 worktree 동시 작업 생존성 계약 추가다. 기존 local guard와 훅,
+  복구 스냅샷 source surface를 읽고 보고서와 probe만 추가했다. 실제 주문, 브로커 실주문 API,
+  주문 재시도, 자본 증액, 자본 배분, whitelist/caps 확대, live 전략 교체, live sentinel, 헌법,
+  커널 목록, K1/K2/K4/K5/K6, 비밀값, 외부 유료 서비스 변경 없음. 현재 돈 경로는 계속
+  `PREVIEW_ONLY`다.
+- **검증**: PR #505 머지 전 focused pytest 43 통과, `worktree_concurrency_liveness_probe.py` local run에서
+  static/hook/synthetic/runtime/safety gates PASS 및 pre-release released-work gate WAIT 확인,
+  tasks 완료 상태의 released-work 로컬 재현에서 `candidate-worktree-concurrency-liveness-contract`
+  released 확인, autonomous-work 로컬 재현에서 `candidate-agent-harness-regression-liveness-contract`
+  전진 확인, `uv run pytest` 2577 통과·4 스킵, `uv run ruff check src tests` 통과,
+  `uv run python scripts/agent_harness_probe.py --strict` OK(14/14),
+  `uv run python scripts/check_handoff_facts.py` OK, `git diff --check` 통과, PR 품질 관문 성공,
+  post-merge deploy·released-work·autonomous-work run 성공 확인 완료. 이 handoff 갱신 뒤
+  `uv run pytest -q` 2577 통과·4 스킵, ruff 통과, HANDOFF 사실 검증 OK, strict harness OK(14/14),
+  `git diff --check` 통과를 확인했다.
+- **상세 인계**: `HANDOFF-113-WORKTREE-CONCURRENCY-LIVENESS-CONTRACT.md`.
 
 ## 최근 관찰 — 2026-07-10 KST (스펙 108 PR/머지 증거 생존성 계약)
 
