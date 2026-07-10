@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-07-10T13:07:15.490722Z)
+# 완료 후보 소비 장부 (as of 2026-07-10T15:18:26.663035Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -8,8 +8,8 @@
 | 항목 | 값 |
 |------|-----|
 | overall_status | OK |
-| released_count | 30 |
-| scanned_specs | 60 |
+| released_count | 31 |
+| scanned_specs | 61 |
 
 ## 완료 후보
 
@@ -17,6 +17,7 @@
 |------|------|------|-----------|-----------|
 | candidate-6ee3370e933d | released | 084-stale-evidence-failure-separation | specs/084-stale-evidence-failure-separation/contracts/capital-path-observability.md | completed_candidate_id |
 | candidate-88a7e7f07361 | released | 086-autonomous-sidecar-handoff-liveness | specs/086-autonomous-sidecar-handoff-liveness/contracts/agent-ops-liveness-closure.md | completed_candidate_id |
+| candidate-agent-harness-regression-liveness-contract | released | 110-agent-harness-regression-liveness-contract | specs/110-agent-harness-regression-liveness-contract/spec.md | completed_candidate_id |
 | candidate-agent-ops-frontier-map | released | 106-agent-ops-frontier-map | specs/106-agent-ops-frontier-map/spec.md | completed_candidate_id |
 | candidate-autonomous-frontier-discovery | released | 092-frontier-candidate-discovery | specs/092-frontier-candidate-discovery/contracts/frontier-candidate-discovery.md | completed_candidate_id |
 | candidate-autonomous-growth-objective-calibration | released | 091-autonomous-growth-objective-calibration | specs/091-autonomous-growth-objective-calibration/contracts/autonomous-growth-objective-calibration.md | completed_candidate_id |
@@ -110,7 +111,7 @@
 
 ```json
 {
-  "commit": "75d7140f85d6e494834234069d8db0438f922ec9",
+  "commit": "b364c168151eb6acd954006f785a128b90451a54",
   "overall_status": "OK",
   "released_work": [
     {
@@ -129,6 +130,15 @@
       "source_field": "completed_candidate_id",
       "source_file": "specs/086-autonomous-sidecar-handoff-liveness/contracts/agent-ops-liveness-closure.md",
       "spec_id": "086-autonomous-sidecar-handoff-liveness",
+      "status": "released"
+    },
+    {
+      "candidate_id": "candidate-agent-harness-regression-liveness-contract",
+      "entry_id": "released-d06c5fb97081",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/110-agent-harness-regression-liveness-contract/spec.md",
+      "spec_id": "110-agent-harness-regression-liveness-contract",
       "status": "released"
     },
     {
@@ -384,7 +394,7 @@
       "status": "released"
     }
   ],
-  "run_id": "29094880183",
+  "run_id": "29103143824",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -455,7 +465,8 @@
     "106-agent-ops-frontier-map",
     "107-handoff-truth-liveness-contract",
     "108-pr-merge-evidence-liveness-contract",
-    "109-worktree-concurrency-liveness-contract"
+    "109-worktree-concurrency-liveness-contract",
+    "110-agent-harness-regression-liveness-contract"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -636,6 +647,6 @@
       "spec_id": "072-candidate-evidence-diagnostics"
     }
   ],
-  "timestamp_utc": "2026-07-10T13:07:15.490722Z"
+  "timestamp_utc": "2026-07-10T15:18:26.663035Z"
 }
 ```
