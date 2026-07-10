@@ -1,5 +1,5 @@
 {
-  "commit": "e4035f56238af3c10caeb2e5fad196077dccbd20",
+  "commit": "7d065501eb2dd7d51fbc736e68e19bd1575fd379",
   "overall_status": "OK",
   "released_work": [
     {
@@ -219,6 +219,15 @@
       "status": "released"
     },
     {
+      "candidate_id": "candidate-pr-merge-evidence-liveness-contract",
+      "entry_id": "released-c0e85509ee97",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/108-pr-merge-evidence-liveness-contract/spec.md",
+      "spec_id": "108-pr-merge-evidence-liveness-contract",
+      "status": "released"
+    },
+    {
       "candidate_id": "candidate-public-data-input-quality-contract",
       "entry_id": "released-1504784b2cf3",
       "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
@@ -255,7 +264,7 @@
       "status": "released"
     }
   ],
-  "run_id": "29017128716",
+  "run_id": "29076284798",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -324,7 +333,8 @@
     "104-execution-cost-basis-contract",
     "105-broker-diagnostic-liveness-contract",
     "106-agent-ops-frontier-map",
-    "107-handoff-truth-liveness-contract"
+    "107-handoff-truth-liveness-contract",
+    "108-pr-merge-evidence-liveness-contract"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -505,5 +515,5 @@
       "spec_id": "072-candidate-evidence-diagnostics"
     }
   ],
-  "timestamp_utc": "2026-07-09T12:08:22.279868Z"
+  "timestamp_utc": "2026-07-10T07:18:44.851762Z"
 }

@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-07-09T12:08:22.279868Z)
+# 완료 후보 소비 장부 (as of 2026-07-10T07:18:44.851762Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -8,8 +8,8 @@
 | 항목 | 값 |
 |------|-----|
 | overall_status | OK |
-| released_count | 28 |
-| scanned_specs | 58 |
+| released_count | 29 |
+| scanned_specs | 59 |
 
 ## 완료 후보
 
@@ -39,6 +39,7 @@
 | candidate-investment-edge-frontier-map | released | 094-investment-edge-frontier-map | specs/094-investment-edge-frontier-map/spec.md | completed_candidate_id |
 | candidate-macro-candidate-map-regenerator | released | 093-macro-candidate-map-regenerator | specs/093-macro-candidate-map-regenerator/data-model.md | completed_candidate_id |
 | candidate-macro-growth-discovery | released | 088-autonomous-macro-growth-discovery | specs/088-autonomous-macro-growth-discovery/spec.md | completed_candidate_id |
+| candidate-pr-merge-evidence-liveness-contract | released | 108-pr-merge-evidence-liveness-contract | specs/108-pr-merge-evidence-liveness-contract/spec.md | completed_candidate_id |
 | candidate-public-data-input-quality-contract | released | 099-public-data-input-quality-contract | specs/099-public-data-input-quality-contract/spec.md | completed_candidate_id |
 | candidate-regime-timeline-coverage-contract | released | 100-regime-timeline-coverage-contract | specs/100-regime-timeline-coverage-contract/spec.md | completed_candidate_id |
 | candidate-signal-diversification-edge-experiment | released | 096-signal-diversification-edge-experiment | specs/096-signal-diversification-edge-experiment/spec.md | completed_candidate_id |
@@ -108,7 +109,7 @@
 
 ```json
 {
-  "commit": "e4035f56238af3c10caeb2e5fad196077dccbd20",
+  "commit": "7d065501eb2dd7d51fbc736e68e19bd1575fd379",
   "overall_status": "OK",
   "released_work": [
     {
@@ -328,6 +329,15 @@
       "status": "released"
     },
     {
+      "candidate_id": "candidate-pr-merge-evidence-liveness-contract",
+      "entry_id": "released-c0e85509ee97",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/108-pr-merge-evidence-liveness-contract/spec.md",
+      "spec_id": "108-pr-merge-evidence-liveness-contract",
+      "status": "released"
+    },
+    {
       "candidate_id": "candidate-public-data-input-quality-contract",
       "entry_id": "released-1504784b2cf3",
       "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
@@ -364,7 +374,7 @@
       "status": "released"
     }
   ],
-  "run_id": "29017128716",
+  "run_id": "29076284798",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -433,7 +443,8 @@
     "104-execution-cost-basis-contract",
     "105-broker-diagnostic-liveness-contract",
     "106-agent-ops-frontier-map",
-    "107-handoff-truth-liveness-contract"
+    "107-handoff-truth-liveness-contract",
+    "108-pr-merge-evidence-liveness-contract"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -614,6 +625,6 @@
       "spec_id": "072-candidate-evidence-diagnostics"
     }
   ],
-  "timestamp_utc": "2026-07-09T12:08:22.279868Z"
+  "timestamp_utc": "2026-07-10T07:18:44.851762Z"
 }
 ```
