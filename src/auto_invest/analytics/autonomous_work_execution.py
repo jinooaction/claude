@@ -86,6 +86,7 @@ WORKTREE_CONCURRENCY_LIVENESS_CANDIDATE_ID = (
 AGENT_HARNESS_REGRESSION_LIVENESS_CANDIDATE_ID = (
     "candidate-agent-harness-regression-liveness-contract"
 )
+OPERATOR_REPORT_LIVENESS_CANDIDATE_ID = "candidate-operator-report-liveness-contract"
 
 _REJECTED_STATUSES = {
     "reject",
@@ -515,6 +516,23 @@ _AGENT_OPS_FRONTIER_TEMPLATES: tuple[AgentOpsFrontierTemplate, ...] = (
             ".codex/harness/evaluation_tasks.toml, quality_tasks.toml, "
             "redteam_tasks.toml, scripts/agent_harness_probe.py를 함께 읽어 "
             "하네스 회귀 증거의 PASS/WAIT/FAIL 계약을 만든다."
+        ),
+    ),
+    AgentOpsFrontierTemplate(
+        frontier_key="operator_report_liveness",
+        label_ko="운영자 이해 가능 보고 생존성",
+        recommended_candidate_id=OPERATOR_REPORT_LIVENESS_CANDIDATE_ID,
+        title_ko="운영자 이해 가능 보고 생존성 계약",
+        priority_score=1750,
+        reason_ko=(
+            "AGENTS.md, quality gate, PR 템플릿, 첫 판단 품질 과제는 완료 보고의 "
+            "의미 전달을 요구하지만, 최종 보고가 실제 운영 상태 변화·검증·남은 위험을 "
+            "후보 단위로 보존하는 계약은 아직 닫혀 있지 않다."
+        ),
+        next_action_ko=(
+            "AGENTS.md 보고 기준, .codex/quality-gate.md, PR 템플릿, "
+            "QUALITY-006, HANDOFF와 released-work 증거를 함께 읽어 운영자가 다시 "
+            "묻지 않아도 되는 완료 보고의 PASS/WAIT/FAIL 계약을 만든다."
         ),
     ),
 )
@@ -1986,7 +2004,10 @@ def _agent_ops_source_refs() -> tuple[str, ...]:
         "automation/autonomous-work-execution-last-run:LAST_RUN.md",
         _SOURCE_REFS["released-work"],
         _SOURCE_REFS["pipeline-liveness"],
+        "AGENTS.md",
+        "CLAUDE.md",
         "HANDOFF.md",
+        ".codex/quality-gate.md",
         "scripts/local_concurrency_guard.py",
         ".codex/hooks.json",
         ".githooks/pre-commit",
@@ -1997,6 +2018,7 @@ def _agent_ops_source_refs() -> tuple[str, ...]:
         ".codex/harness/redteam_tasks.toml",
         "scripts/check_handoff_facts.py",
         "scripts/agent_harness_probe.py",
+        ".github/pull_request_template.md",
         ".github/workflows/pr-quality-gate.yml",
     )
 

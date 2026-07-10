@@ -27,6 +27,7 @@ from auto_invest.analytics.autonomous_work_execution import (
     MACRO_GROWTH_DISCOVERY_CANDIDATE_ID,
     MACRO_GROWTH_OBJECTIVE_CALIBRATION_CANDIDATE_ID,
     MACRO_GROWTH_SOURCE_DIVERSIFICATION_CANDIDATE_ID,
+    OPERATOR_REPORT_LIVENESS_CANDIDATE_ID,
     PR_MERGE_EVIDENCE_LIVENESS_CANDIDATE_ID,
     PUBLIC_DATA_INPUT_QUALITY_CANDIDATE_ID,
     REGIME_TIMELINE_COVERAGE_CANDIDATE_ID,
@@ -1707,6 +1708,50 @@ def test_released_worktree_concurrency_advances_to_agent_harness_candidate():
     agent_ops_map = {entry.frontier_key: entry for entry in report.agent_ops_frontier_map}
     assert agent_ops_map["worktree_concurrency_liveness"].coverage_status == "released"
     assert agent_ops_map["agent_harness_regression_liveness"].coverage_status == "open"
+
+
+def test_released_agent_harness_advances_to_operator_report_candidate():
+    report = build_autonomous_work_execution(
+        {
+            "capital-path-readiness": _json(
+                {
+                    "priority_candidates": [
+                        {
+                            "candidate_id": "candidate-fd04772a23c5",
+                            "domain_key": "live_readiness",
+                            "status": "new",
+                            "score": 597,
+                        }
+                    ]
+                }
+            ),
+            "released-work": _released_through_broker_diagnostic_liveness(
+                AGENT_OPS_FRONTIER_CANDIDATE_ID,
+                HANDOFF_TRUTH_LIVENESS_CANDIDATE_ID,
+                PR_MERGE_EVIDENCE_LIVENESS_CANDIDATE_ID,
+                WORKTREE_CONCURRENCY_LIVENESS_CANDIDATE_ID,
+                AGENT_HARNESS_REGRESSION_LIVENESS_CANDIDATE_ID,
+            ),
+            "pipeline-liveness": _liveness(),
+        },
+        now=NOW,
+    )
+
+    assert report.overall_status == STATUS_EXECUTION_READY
+    assert report.selected_work is not None
+    assert report.selected_work.candidate_id == OPERATOR_REPORT_LIVENESS_CANDIDATE_ID
+    assert report.selected_work.domain_key == "agent_ops"
+    assert report.selected_work.risk_grade == 2
+    assert report.selected_work.safety_impact == ()
+    assert set(report.selected_work.required_inputs) >= {
+        "AGENTS.md",
+        ".codex/quality-gate.md",
+        ".github/pull_request_template.md",
+        ".codex/harness/quality_tasks.toml",
+    }
+    agent_ops_map = {entry.frontier_key: entry for entry in report.agent_ops_frontier_map}
+    assert agent_ops_map["agent_harness_regression_liveness"].coverage_status == "released"
+    assert agent_ops_map["operator_report_liveness"].coverage_status == "open"
 
 
 def test_macro_candidate_map_is_deterministic_and_rendered():
