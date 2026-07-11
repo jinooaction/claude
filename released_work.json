@@ -1,5 +1,5 @@
 {
-  "commit": "b364c168151eb6acd954006f785a128b90451a54",
+  "commit": "e9f9f98ea5787780a26c3833189b17b5b39cb7d5",
   "overall_status": "OK",
   "released_work": [
     {
@@ -282,7 +282,7 @@
       "status": "released"
     }
   ],
-  "run_id": "29103143824",
+  "run_id": "29149104539",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -535,5 +535,5 @@
       "spec_id": "072-candidate-evidence-diagnostics"
     }
   ],
-  "timestamp_utc": "2026-07-10T15:18:26.663035Z"
+  "timestamp_utc": "2026-07-11T10:17:32.640996Z"
 }
