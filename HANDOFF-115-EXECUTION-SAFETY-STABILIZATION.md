@@ -2,7 +2,7 @@
 
 ## 한 줄 결론
 
-현재 저장소의 가장 큰 위험은 투자 전략의 부족보다 **실거래 실행 권한과 계좌 상태가 여러 경로에 분산돼 있다는 점**이다. `specs/111-live-entrypoint-containment`와 `specs/112-order-submission-uncertainty-recovery`는 main에 들어갔고, 현재 이어받은 구현 단위는 `specs/113-atomic-fill-ledger`다.
+현재 저장소의 가장 큰 위험은 투자 전략의 부족보다 **실거래 실행 권한과 계좌 상태가 여러 경로에 분산돼 있다는 점**이다. `specs/111-live-entrypoint-containment`, `specs/112-order-submission-uncertainty-recovery`, `specs/113-atomic-fill-ledger`, `specs/114-account-exposure-reservation`는 main에 들어갔고, 다음 구현 단위는 `specs/115-degraded-execution-state`다.
 
 ## 운영자 지시 해석
 
@@ -25,11 +25,11 @@
 
 ## 기준 상태
 
-- 기준 `main`: `8a01baf9e957ebb8f640b4f88cb0c98bb6bf16ec` — PR #512 스펙 112 인계 갱신 머지
+- 기준 `main`: `692cdffb5863a3deebf5080b55c350445298cbd4` — PR #515 스펙 114 계좌 노출 예약 머지
 - 확인 시점: 2026-07-13 KST
 - 열린 풀 리퀘스트: 작업 시작 시 없음
-- 기존 활성 스펙 포인터: `specs/112-order-submission-uncertainty-recovery`
-- 새 작업 브랜치: `Codex/113-atomic-fill-ledger`
+- 기존 활성 스펙 포인터: `specs/114-account-exposure-reservation`
+- 최근 완료 브랜치: `Codex/114-account-exposure-reservation`
 - 주요 저장소 선언 상태:
   - 돈 경로: `PREVIEW_ONLY`
   - 마이크로 GTAA 센티넬: `automation/rebalance-micro-gtaa.request`의 `armed: false`
@@ -286,10 +286,10 @@ README는 여전히 LLM을 호출하지 않고 스펙 004·005가 미구현이�
 
 목표:
 
-- 보유와 열린 주문을 합친 예약 노출
-- 주문 묶음 전체 사전 검증
-- 계좌별 실행 잠금
-- 동시 워커·동시 리밸런싱 방지
+- 보유와 열린 BUY 주문을 합친 예약 노출 — 스펙 114에서 완료
+- 주문 묶음 안의 앞선 BUY 예약 반영 — 스펙 114에서 완료
+- 계좌별 실행 잠금 — 단일 실행 권한 단계로 이월
+- 동시 워커·동시 리밸런싱 방지 — 단일 실행 권한 단계로 이월
 
 ### 5단계 — 저하 상태와 단일 실행 권한
 
@@ -302,18 +302,18 @@ README는 여전히 LLM을 호출하지 않고 스펙 004·005가 미구현이�
 
 ## 코덱스가 지금 바로 할 일
 
-1. `Codex/113-atomic-fill-ledger` 브랜치를 이어받는다.
+1. `origin/main` 최신이 `692cdff` 이후인지 확인하고 열린 PR이 없으면 새 브랜치에서 `115-degraded-execution-state`를 시작한다.
 2. 다음 파일을 순서대로 읽는다.
    - `AGENTS.md`
    - 이 문서
-   - `specs/113-atomic-fill-ledger/spec.md`
-   - `specs/113-atomic-fill-ledger/plan.md`
-   - `specs/113-atomic-fill-ledger/tasks.md`
-   - `src/auto_invest/execution/fill_sync.py`
-   - `src/auto_invest/persistence/positions.py`
-   - `tests/integration/test_fill_sync.py`
-3. 체결 적용 원자성, 중복 체결 무시, 롤백 회귀 테스트를 우선 확인한다.
-4. 노출 예약, `SUBMISSION_UNKNOWN` 자동 복구, 저하 상태, 단일 실행 권한은 같은 PR에 섞지 않는다.
+   - `specs/114-account-exposure-reservation/spec.md`
+   - `specs/114-account-exposure-reservation/plan.md`
+   - `specs/114-account-exposure-reservation/tasks.md`
+   - `src/auto_invest/execution/exposure_reservation.py`
+   - `src/auto_invest/execution/order_router.py`
+   - `src/auto_invest/execution/rebalancer.py`
+3. 체결·보유·순자산·손실 상태가 불명확할 때 신규 BUY를 차단하는 저하 상태기계 범위를 먼저 명확히 한다.
+4. cross-process 계좌 잠금과 단일 실행 권한 통합은 같은 PR에 섞지 않는다.
 5. `automation/*.request`, `.env`, 배포 포트폴리오, 헌법, 커널 목록은 수정하지 않는다.
 6. 전체 검증 후 풀 리퀘스트를 준비 상태로 바꾸고 자동 머지 규칙을 따른다.
 7. 머지 뒤 실제 서버나 KIS 계좌 상태를 추측하지 말고 저장소 기준 안전 상태와 미확인 영역을 분리해 보고한다.
@@ -500,24 +500,70 @@ README는 여전히 LLM을 호출하지 않고 스펙 004·005가 미구현이�
 - 시작 시 원장·캐시 자동 검증 및 재구축은 후속 체결 건강성 작업으로 남겼다.
 - 다음 실행 안전성 수동 후보는 `114-account-exposure-reservation`이다.
 
+## 스펙 114 구현 결과
+
+PR #515에서 저장소 기준 계좌 노출 예약 계산을 보수화했다.
+
+구현한 내용:
+
+- `src/auto_invest/execution/exposure_reservation.py`
+  - `INTENT`, `SUBMITTED`, `PARTIALLY_FILLED`, `SUBMISSION_UNKNOWN` BUY 주문을 열린 예약 노출로 합산한다.
+  - 현재 게이트 평가 중인 correlation id는 제외해 현재 주문을 두 번 세지 않는다.
+  - 가격을 알 수 없는 열린 BUY는 보수적으로 신규 BUY를 막는 방향으로 처리한다.
+- `src/auto_invest/execution/order_router.py`
+  - 기존 K1 gate 체인은 유지하고, per-symbol/global exposure 입력에 열린 BUY 예약 노출을 더한다.
+  - `SUBMISSION_UNKNOWN`도 실제 접수 가능성을 배제할 수 없으므로 열린 BUY로 취급한다.
+- `src/auto_invest/execution/rebalancer.py`
+  - paper/test router처럼 durable `orders` row가 없는 경로에서도 한 실행 안의 성공한 BUY notional을 다음 BUY의 exposure 입력에 반영한다.
+  - 열린 SELL 또는 방금 제출된 SELL은 fill 전까지 노출 감소로 쓰지 않는다.
+- `tests/integration/test_order_router.py`
+  - 기존 열린 `SUBMITTED`와 `SUBMISSION_UNKNOWN` BUY가 새 BUY의 global cap을 소모하는 회귀 테스트를 추가했다.
+- `tests/integration/test_spec_032_live_rebalancer.py`
+  - 한 리밸런싱 안에서 첫 BUY가 통과한 뒤 두 번째 BUY가 stale global snapshot으로 같이 통과하던 결함을 회귀 테스트로 고정했다.
+- `specs/114-account-exposure-reservation/`
+  - 스펙, 계획, 연구, 데이터 모델, 계약, quickstart, 체크리스트, 작업표를 추가했다.
+
+검증 증거:
+
+- 구현 전 focused regression:
+  - 열린 BUY 예약 테스트는 기존 코드가 `SUBMITTED`로 통과해 실패
+  - 리밸런싱 묶음 테스트는 두 BUY가 모두 `PAPER_FILLED`로 통과해 실패
+- 구현 후 focused regression: `2 passed`
+- 라우터·리밸런서 focused suite: `28 passed`
+- 인접 risk/paper/lifecycle 테스트: `43 passed`
+- 전체 테스트: `2612 passed, 4 skipped`
+- 린트: `uv run ruff check src tests` 통과
+- 형식: `git diff --check` 통과
+- HANDOFF 사실 검증: `uv run python scripts/check_handoff_facts.py` 통과
+- strict 하네스: `uv run python scripts/agent_harness_probe.py --strict` 통과
+- post-merge workflow: deploy `29250744546`, released-work `29250744535`, autonomous-work `29250744399` success
+- 보호 범위: live sentinel, capital, whitelist/caps 값, loss budget, 헌법, kernel manifest, 비밀값 변경 없음
+
+남은 미확인·후속 사항:
+
+- 실제 KIS 계좌의 열린 주문, 보유, 서버 프로세스는 조회하지 않았다.
+- cross-process 계좌 잠금은 아직 없다. 단일 `ExecutionAuthority` 단계에서 닫아야 한다.
+- 체결·보유·순자산·손실 신선도가 불명확할 때 신규 BUY를 자동 차단하는 저하 상태기계는 아직 없다.
+- 다음 실행 안전성 수동 후보는 `115-degraded-execution-state`다.
+
 ## 필수 검증
 
 ```bash
-uv run pytest tests/integration/test_fill_sync.py tests/integration/test_worker_fill_sync.py
-uv run pytest tests/unit/test_positions.py tests/unit/test_audit.py tests/unit/test_performance_engine.py tests/unit/test_performance_slippage.py tests/unit/test_performance_latency.py
+uv run pytest tests/integration/test_order_router.py tests/integration/test_spec_032_live_rebalancer.py
+uv run pytest tests/unit/test_risk_gates.py tests/integration/test_paper_order_router.py tests/integration/test_worker_order_lifecycle.py
 
 uv run pytest
 uv run ruff check src tests
 git diff --check
 uv run python scripts/check_handoff_facts.py
 uv run python scripts/agent_harness_probe.py --strict
-python3 scripts/check_pr_quality_gate.py /tmp/pr-body-113.md
+python3 scripts/check_pr_quality_gate.py /tmp/pr-body-114.md
 ```
 
 위험 동작 부재도 별도로 확인한다.
 
 ```bash
-rg -n "BEGIN IMMEDIATE|kis_fill_id|apply_fill_plan|atomic-fill-ledger" src tests specs/113-atomic-fill-ledger
+rg -n "open_buy_order_reservations|reserves_open_buy_orders|account-exposure-reservation" src tests specs/114-account-exposure-reservation
 git diff --name-only | rg 'automation/.*\\.request|deploy/.*portfolio|whitelist|caps|constitution|kernel' && exit 1 || true
 ```
 
