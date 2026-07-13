@@ -45,9 +45,9 @@
 - [x] T021 Run `git diff --check`
 - [x] T022 Run `uv run python scripts/check_handoff_facts.py`
 - [x] T023 Run `uv run python scripts/agent_harness_probe.py --strict`
-- [ ] T024 Create PR with risk grade, safety boundary, validation, and handoff evidence
-- [ ] T025 Merge when clean
-- [ ] T026 Refresh `HANDOFF.md` after merge and validate it
+- [x] T024 Create PR with risk grade, safety boundary, validation, and handoff evidence
+- [x] T025 Merge when clean
+- [x] T026 Refresh `HANDOFF.md` after merge and validate it
 
 ## Dependencies
 
