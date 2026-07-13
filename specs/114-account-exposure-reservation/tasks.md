@@ -53,8 +53,8 @@
 - [x] T016 Run `uv run python scripts/check_handoff_facts.py`
 - [x] T017 Run `uv run python scripts/agent_harness_probe.py --strict`
 - [x] T018 Update PR body with risk grade, safety boundary, validation, and handoff evidence
-- [ ] T019 Merge when tests, lint, PR quality gate, and mergeability are clean
-- [ ] T020 Refresh `HANDOFF.md` after merge and validate it
+- [x] T019 Merge when tests, lint, PR quality gate, and mergeability are clean
+- [x] T020 Refresh `HANDOFF.md` after merge and validate it
 
 ## Dependencies & Execution Order
 
