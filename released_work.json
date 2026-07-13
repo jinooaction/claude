@@ -1,5 +1,5 @@
 {
-  "commit": "34f804bf14185f0cb2156a3fcadc0079a4699fee",
+  "commit": "121a236d3f06941378703bed78b16b4c2a645ee4",
   "overall_status": "OK",
   "released_work": [
     {
@@ -291,7 +291,7 @@
       "status": "released"
     }
   ],
-  "run_id": "29251308162",
+  "run_id": "29254832106",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -552,7 +552,11 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "113-atomic-fill-ledger"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "115-degraded-execution-state"
     }
   ],
-  "timestamp_utc": "2026-07-13T12:49:32.580193Z"
+  "timestamp_utc": "2026-07-13T13:42:47.077687Z"
 }
