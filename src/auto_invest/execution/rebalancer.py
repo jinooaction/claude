@@ -188,6 +188,12 @@ def _cash_required(notional: Decimal, buffer_pct: Decimal) -> Decimal:
     return (notional * (Decimal("1") + buffer_pct)).quantize(_CENT)
 
 
+def _router_reserves_open_orders(router: object) -> bool:
+    return bool(getattr(router, "reserves_open_buy_orders", False)) and not bool(
+        getattr(router, "paper_mode", False)
+    )
+
+
 async def execute_rebalance(
     *,
     config: PortfolioRebalanceConfig,
@@ -304,6 +310,9 @@ async def execute_rebalance(
         sym: Decimal(qty) * prices[sym] for sym, qty in holdings.items() if sym in prices
     }
     global_exposure = sum(symbol_exposure.values(), Decimal("0"))
+    local_symbol_reservations = dict(symbol_exposure)
+    local_global_reservation = global_exposure
+    router_handles_reservations = _router_reserves_open_orders(router)
 
     # 6. Route SELLs first (free cash), then BUYs; each already symbol-sorted.
     for planned in plan:
@@ -433,16 +442,35 @@ async def execute_rebalance(
         # 라우터가 설정된 기본 거래소로 폴백(회귀 0). 검증된 멀티에셋 유니버스의 라이브 주문이
         # 종목별로 올바른 거래소로 가게 하는 마지막 고리.
         order_exchange = order_exchange_for_quote_market(quote.resolved_market)
+        current_symbol_exposure_usd = (
+            symbol_exposure.get(planned.symbol, Decimal("0"))
+            if router_handles_reservations
+            else local_symbol_reservations.get(planned.symbol, Decimal("0"))
+        )
+        current_global_exposure_usd = (
+            global_exposure
+            if router_handles_reservations
+            else local_global_reservation
+        )
         outcome: OrderOutcome = await router.submit_order(
             rule=rule,
             quote_price_usd=quote.last_price_usd,
             quote_ask_usd=quote.ask_usd,
             quote_bid_usd=quote.bid_usd,
             total_capital_usd=total_capital_usd,
-            current_symbol_exposure_usd=symbol_exposure.get(planned.symbol, Decimal("0")),
-            current_global_exposure_usd=global_exposure,
+            current_symbol_exposure_usd=current_symbol_exposure_usd,
+            current_global_exposure_usd=current_global_exposure_usd,
             order_exchange=order_exchange,
         )
+        if (
+            planned.side == "BUY"
+            and not router_handles_reservations
+            and outcome.state in {"PAPER_FILLED", "SUBMITTED", "SUBMISSION_UNKNOWN"}
+        ):
+            local_symbol_reservations[planned.symbol] = (
+                local_symbol_reservations.get(planned.symbol, Decimal("0")) + notional
+            )
+            local_global_reservation += notional
         results.append(
             RebalanceOrderResult(
                 symbol=planned.symbol,

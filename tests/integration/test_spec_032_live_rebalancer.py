@@ -198,6 +198,31 @@ async def test_large_order_clamped_to_per_trade_cap(conn, tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_rebalance_reserves_successful_buys_before_next_buy(conn, tmp_path):
+    _seed_bars(conn, "AAA", [100 * (1.01**i) for i in range(40)])
+    _seed_bars(conn, "BBB", [100 * (1.009**i) for i in range(40)])
+    universe = ("AAA", "BBB")
+    caps = _caps(per_trade="50", per_symbol="50", glob="50")
+    router = _paper_router(conn, tmp_path, _whitelist(universe), caps)
+
+    out = await execute_rebalance(
+        config=_cfg(universe, top_n=2, invested_fraction=Decimal("0.6")),
+        router=router,
+        conn=conn,
+        quote_provider=_quote_provider({"AAA": "100", "BBB": "100"}),
+        total_capital_usd=Decimal("100000"),
+        caps=caps,
+    )
+
+    buy_states = [r.state for r in out.results if r.side == "BUY"]
+    assert buy_states.count("PAPER_FILLED") == 1
+    assert buy_states.count("REJECTED_BY_GATE") == 1
+    rejected = next(r for r in out.results if r.state == "REJECTED_BY_GATE")
+    assert rejected.reason is not None
+    assert "global exposure" in rejected.reason
+
+
+@pytest.mark.asyncio
 async def test_rebalance_deterministic(conn, tmp_path):
     _seed_bars(conn, "AAA", [100 + i * 0.5 for i in range(40)])
     _seed_bars(conn, "BBB", [100 + i * 0.3 for i in range(40)])

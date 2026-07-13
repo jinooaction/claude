@@ -318,6 +318,50 @@ async def test_submit_order_rejected_by_per_trade_cap(tmp_path: Path):
         assert order_row["state"] == "REJECTED_BY_GATE"
 
 
+@pytest.mark.parametrize("open_state", ["SUBMITTED", "SUBMISSION_UNKNOWN"])
+@pytest.mark.asyncio
+async def test_submit_order_counts_open_buy_orders_as_reserved_global_exposure(
+    tmp_path: Path,
+    open_state: str,
+):
+    async with _router(tmp_path) as router:
+        router.conn.execute(
+            """
+            INSERT INTO orders
+                (correlation_id, rule_id, symbol, side, order_type, qty,
+                 limit_price_usd, state)
+            VALUES ('ord-open-buy', 'open-rule', 'MSFT', 'BUY', 'LIMIT', 79,
+                    '100.00', ?)
+            """,
+            (open_state,),
+        )
+        with respx.mock(base_url=BASE, assert_all_called=False) as mock:
+            placed = mock.post("/uapi/overseas-stock/v1/trading/order").mock(
+                return_value=httpx.Response(200, json={"output": {"ODNO": "x"}})
+            )
+
+            # Existing open BUY reserves $7,900. New BUY is only $200, but the
+            # combined exposure exceeds the global cap: 80% of $10,000 = $8,000.
+            outcome = await router.submit_order(
+                rule=_rule(qty=2, limit_price="100.00"),
+                quote_price_usd=Decimal("100"),
+                total_capital_usd=Decimal("10000"),
+                current_symbol_exposure_usd=Decimal("0"),
+                current_global_exposure_usd=Decimal("0"),
+            )
+
+        assert outcome.state == "REJECTED_BY_GATE"
+        assert outcome.gate == "global_exposure_gate"
+        assert placed.call_count == 0
+
+        rejected = next(
+            r for r in audit.read_all(router.conn)
+            if r["event_type"] == "ORDER_REJECTED_BY_GATE"
+        )
+        payload = audit.parse_payload(rejected)
+        assert payload["metadata"]["would_become_usd"] == "8100.00"
+
+
 @pytest.mark.asyncio
 async def test_submit_order_blocked_by_halt(tmp_path: Path):
     async with _router(tmp_path, halt_set=True) as router:
