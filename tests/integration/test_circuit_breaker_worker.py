@@ -14,6 +14,7 @@ from pathlib import Path
 
 import httpx
 import pytest
+import respx
 
 from auto_invest.broker.client import (
     AsyncTokenBucket,
@@ -21,8 +22,9 @@ from auto_invest.broker.client import (
     ResilientClient,
 )
 from auto_invest.config.caps import SizingCaps
+from auto_invest.config.enums import OrderType, Side, StrategyStage
 from auto_invest.config.loader import LoadedConfig
-from auto_invest.config.rules import TradingRule
+from auto_invest.config.rules import Action, PriceTrigger, TradingRule
 from auto_invest.config.whitelist import Whitelist
 from auto_invest.persistence import audit
 from auto_invest.persistence.audit import OrderPaperFilledPayload, PaperRunStartedPayload
@@ -32,6 +34,7 @@ from auto_invest.worker.loop import Worker, WorkerSettings
 BASE = "https://api.example"
 ACCOUNT = "1234567801"
 NOW = datetime(2026, 5, 26, 15, 0, tzinfo=UTC)
+QUOTE = "/uapi/overseas-price/v1/quotations/price"
 
 
 def _caps(*, enabled: bool = True, daily: str = "10", drawdown: str = "20") -> SizingCaps:
@@ -45,6 +48,18 @@ def _caps(*, enabled: bool = True, daily: str = "10", drawdown: str = "20") -> S
         circuit_breaker_enabled=enabled,
         daily_loss_limit_pct=Decimal(daily),
         max_total_drawdown_pct=Decimal(drawdown),
+    )
+
+
+def _buy_rule() -> TradingRule:
+    return TradingRule(
+        id="buy-aapl",
+        symbol="AAPL",
+        stage=StrategyStage.CANARY,
+        priority=10,
+        enabled=True,
+        trigger=PriceTrigger(direction="<=", threshold=Decimal("99999"), cooldown_seconds=0),
+        action=Action(side=Side.BUY, order_type=OrderType.LIMIT, qty=1, limit_price="100.00"),
     )
 
 
@@ -164,6 +179,38 @@ async def test_tick_disabled_breaker_skips(tmp_path: Path):
         report = await worker.tick(NOW)
         assert report.skipped_reason is None
         assert not is_halted(worker.settings.halt_path)
+
+
+@pytest.mark.asyncio
+async def test_missing_loss_marks_block_new_buy_without_halt(tmp_path: Path):
+    """미실현 손익 마크가 없으면 브레이커가 halt 하지 않아도 신규 BUY는 보류한다."""
+    async with _worker(tmp_path, rules=[_buy_rule()], caps=_caps()) as worker:
+        sid = _session(worker)
+        _seed_paper_fill(
+            worker,
+            side="BUY",
+            qty=1,
+            price="100",
+            ts="2026-05-26T10:00:00.000Z",
+            sid=sid,
+        )
+        with respx.mock(base_url=BASE) as mock:
+            mock.get(QUOTE).mock(return_value=httpx.Response(
+                200,
+                json={"output": {"last": "100.00", "bidp": "99.99", "askp": "100.01"}},
+            ))
+
+            report = await worker.tick(NOW)
+
+        assert not is_halted(worker.settings.halt_path)
+        assert report.rules_fired == 1
+        assert report.outcomes[0].state == "REJECTED_BY_GATE"
+        assert report.outcomes[0].gate == "execution_state_gate"
+        paper_events = [
+            r for r in audit.read_all(worker.conn)
+            if r["event_type"] == "ORDER_PAPER_FILLED"
+        ]
+        assert len(paper_events) == 1
 
 
 @pytest.mark.asyncio

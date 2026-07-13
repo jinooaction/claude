@@ -26,7 +26,7 @@ import json
 import re
 import sqlite3
 import uuid
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
@@ -40,6 +40,11 @@ from auto_invest.config.caps import SizingCaps
 from auto_invest.config.enums import OrderType, Side, StrategyStage
 from auto_invest.config.rules import TradingRule
 from auto_invest.config.whitelist import Whitelist
+from auto_invest.execution.execution_state import (
+    ExecutionState,
+    evaluate_execution_state,
+    execution_state_gate,
+)
 from auto_invest.execution.exposure_reservation import open_buy_order_reservations
 from auto_invest.execution.lifecycle import marketable_limit_price
 from auto_invest.judgment.points.news_screen import should_block_buy
@@ -350,6 +355,7 @@ class OrderRouter:
     quote_market: str = "NAS"
     paper_mode: bool = False
     paper_session_id: int | None = None
+    execution_state_provider: Callable[[], ExecutionState] | None = None
     # Spec 017 slice 2b: inverse-vol risk-parity group membership, built by the
     # worker from the static rule set (build_sizing_groups). None/empty -> no
     # grouping -> sizing is byte-equal to slices 1/2.
@@ -729,11 +735,17 @@ class OrderRouter:
             current_global_exposure_usd
             + open_buy_reservation.global_exposure_usd
         )
+        execution_state = (
+            self.execution_state_provider()
+            if self.execution_state_provider is not None
+            else evaluate_execution_state(self.conn)
+        )
 
         # Run gate chain.
         gate_chain: tuple[tuple[Any, dict[str, Any]], ...] = (
             (whitelist_gate, {"whitelist": self.whitelist}),
             (halt_gate, {"halt_path": self.halt_path}),
+            (execution_state_gate, {"state": execution_state}),
             (
                 per_trade_cap_gate,
                 {

@@ -41,6 +41,7 @@ def _rule(
     *,
     rule_id: str = "spy-rule",
     symbol: str = "AAPL",
+    side: Side = Side.BUY,
     qty: int = 5,
     limit_price: str = "100.00",
     stage: StrategyStage = StrategyStage.CANARY,
@@ -56,12 +57,7 @@ def _rule(
             threshold=Decimal("100"),
             cooldown_seconds=60,
         ),
-        action=Action(
-            side=Side.BUY,
-            order_type=OrderType.LIMIT,
-            qty=qty,
-            limit_price=limit_price,
-        ),
+        action=Action(side=side, order_type=OrderType.LIMIT, qty=qty, limit_price=limit_price),
     )
 
 
@@ -318,7 +314,7 @@ async def test_submit_order_rejected_by_per_trade_cap(tmp_path: Path):
         assert order_row["state"] == "REJECTED_BY_GATE"
 
 
-@pytest.mark.parametrize("open_state", ["SUBMITTED", "SUBMISSION_UNKNOWN"])
+@pytest.mark.parametrize("open_state", ["SUBMITTED", "PARTIALLY_FILLED"])
 @pytest.mark.asyncio
 async def test_submit_order_counts_open_buy_orders_as_reserved_global_exposure(
     tmp_path: Path,
@@ -360,6 +356,114 @@ async def test_submit_order_counts_open_buy_orders_as_reserved_global_exposure(
         )
         payload = audit.parse_payload(rejected)
         assert payload["metadata"]["would_become_usd"] == "8100.00"
+
+
+@pytest.mark.asyncio
+async def test_submit_order_blocks_buy_when_execution_state_degraded(tmp_path: Path):
+    from auto_invest.execution.execution_state import (
+        ExecutionState,
+        ExecutionStateReason,
+    )
+
+    async with _router(tmp_path) as router:
+        router.execution_state_provider = lambda: ExecutionState.degraded(
+            [
+                ExecutionStateReason(
+                    code="fill_sync_error",
+                    detail="fill sync failed while open orders exist",
+                )
+            ]
+        )
+        with respx.mock(base_url=BASE, assert_all_called=False) as mock:
+            placed = mock.post("/uapi/overseas-stock/v1/trading/order").mock(
+                return_value=httpx.Response(200, json={"output": {"ODNO": "x"}})
+            )
+
+            outcome = await router.submit_order(
+                rule=_rule(side=Side.BUY),
+                quote_price_usd=Decimal("99"),
+                total_capital_usd=Decimal("10000"),
+                current_symbol_exposure_usd=Decimal("0"),
+                current_global_exposure_usd=Decimal("0"),
+            )
+
+        assert outcome.state == "REJECTED_BY_GATE"
+        assert outcome.gate == "execution_state_gate"
+        assert placed.call_count == 0
+
+        rejected = next(
+            r for r in audit.read_all(router.conn)
+            if r["event_type"] == "ORDER_REJECTED_BY_GATE"
+        )
+        payload = audit.parse_payload(rejected)
+        assert payload["metadata"]["status"] == "DEGRADED_SELL_ONLY"
+        assert payload["metadata"]["reason_codes"] == ["fill_sync_error"]
+
+
+@pytest.mark.asyncio
+async def test_submit_order_blocks_buy_when_submission_unknown_buy_exists(
+    tmp_path: Path,
+):
+    async with _router(tmp_path) as router:
+        router.conn.execute(
+            """
+            INSERT INTO orders
+                (correlation_id, rule_id, symbol, side, order_type, qty,
+                 limit_price_usd, state)
+            VALUES ('ord-unknown-buy', 'unknown-rule', 'AAPL', 'BUY', 'LIMIT', 1,
+                    '100.00', 'SUBMISSION_UNKNOWN')
+            """
+        )
+        with respx.mock(base_url=BASE, assert_all_called=False) as mock:
+            placed = mock.post("/uapi/overseas-stock/v1/trading/order").mock(
+                return_value=httpx.Response(200, json={"output": {"ODNO": "x"}})
+            )
+
+            outcome = await router.submit_order(
+                rule=_rule(side=Side.BUY),
+                quote_price_usd=Decimal("99"),
+                total_capital_usd=Decimal("10000"),
+                current_symbol_exposure_usd=Decimal("0"),
+                current_global_exposure_usd=Decimal("0"),
+            )
+
+        assert outcome.state == "REJECTED_BY_GATE"
+        assert outcome.gate == "execution_state_gate"
+        assert placed.call_count == 0
+
+
+@pytest.mark.asyncio
+async def test_submit_order_allows_sell_when_execution_state_degraded(tmp_path: Path):
+    from auto_invest.execution.execution_state import (
+        ExecutionState,
+        ExecutionStateReason,
+    )
+
+    async with _router(tmp_path) as router:
+        router.execution_state_provider = lambda: ExecutionState.degraded(
+            [
+                ExecutionStateReason(
+                    code="reconciliation_inconclusive",
+                    detail="latest reconciliation could not read broker state",
+                )
+            ]
+        )
+        with respx.mock(base_url=BASE) as mock:
+            placed = mock.post("/uapi/overseas-stock/v1/trading/order").mock(
+                return_value=httpx.Response(200, json={"output": {"ODNO": "K-SELL"}})
+            )
+
+            outcome = await router.submit_order(
+                rule=_rule(side=Side.SELL),
+                quote_price_usd=Decimal("99"),
+                total_capital_usd=Decimal("10000"),
+                current_symbol_exposure_usd=Decimal("500"),
+                current_global_exposure_usd=Decimal("500"),
+            )
+
+        assert outcome.state == "SUBMITTED"
+        assert outcome.kis_order_id == "K-SELL"
+        assert placed.call_count == 1
 
 
 @pytest.mark.asyncio
