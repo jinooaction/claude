@@ -1382,7 +1382,8 @@ def _design_check_summary(db_path: Path) -> None:
         ).fetchone()["n"]
         errors = conn.execute(
             "SELECT COUNT(*) AS n FROM audit_log "
-            "WHERE event_type IN ('ERROR', 'ORDER_REJECTED_BY_BROKER') AND seq > ?",
+            "WHERE event_type IN ('ERROR', 'ORDER_REJECTED_BY_BROKER', "
+            "'ORDER_SUBMISSION_UNKNOWN') AND seq > ?",
             (live_session_id,),
         ).fetchone()["n"]
 
@@ -2354,7 +2355,8 @@ def status(
                 SELECT event_type, COUNT(*) FROM audit_log
                 WHERE substr(ts_utc, 1, 10) = ?
                   AND event_type IN ('ORDER_INTENT','ORDER_SUBMITTED',
-                                     'ORDER_REJECTED_BY_GATE','FILL')
+                                     'ORDER_REJECTED_BY_GATE',
+                                     'ORDER_SUBMISSION_UNKNOWN','FILL')
                 GROUP BY event_type
                 """,
                 (today,),

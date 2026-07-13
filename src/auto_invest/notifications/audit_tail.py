@@ -24,6 +24,7 @@ DEFAULT_EVENT_TYPES = (
     "ORDER_SUBMITTED",
     "ORDER_REJECTED_BY_GATE",
     "ORDER_REJECTED_BY_BROKER",
+    "ORDER_SUBMISSION_UNKNOWN",
     "FILL",
     "CANCEL",
     "CIRCUIT_BREAKER_TRIPPED",
@@ -209,6 +210,7 @@ def format_alert(row: sqlite3.Row, *, source_label: str = "auto-invest") -> str:
         "ORDER_SUBMITTED": "주문 접수",
         "ORDER_REJECTED_BY_GATE": "게이트 거부",
         "ORDER_REJECTED_BY_BROKER": "브로커 거부",
+        "ORDER_SUBMISSION_UNKNOWN": "주문 접수 여부 불명확",
         "FILL": "체결",
         "CANCEL": "취소",
         "CIRCUIT_BREAKER_TRIPPED": "손실 브레이커",
@@ -225,6 +227,9 @@ def format_alert(row: sqlite3.Row, *, source_label: str = "auto-invest") -> str:
             "내부 안전 게이트가 주문을 막았습니다. 브로커에는 제출되지 않았습니다."
         ),
         "ORDER_REJECTED_BY_BROKER": "브로커가 주문을 거부했습니다. 접수/체결 0건으로 봅니다.",
+        "ORDER_SUBMISSION_UNKNOWN": (
+            "브로커 접수 여부를 확인할 수 없습니다. 자동 재시도 없이 주문/체결 조회가 필요합니다."
+        ),
         "FILL": "체결 기록이 들어왔습니다.",
         "CANCEL": "주문 취소 이벤트가 들어왔습니다.",
         "CIRCUIT_BREAKER_TRIPPED": "손실 브레이커가 동작했습니다.",
@@ -289,6 +294,28 @@ def format_alert(row: sqlite3.Row, *, source_label: str = "auto-invest") -> str:
         if request_summary:
             lines.append(f"요청: {request_summary}")
         lines.append("판단: 주문은 브로커에서 거부되어 접수·체결되지 않았습니다.")
+    elif event == "ORDER_SUBMISSION_UNKNOWN":
+        diagnostics = payload.get("diagnostics") or {}
+        diag = diagnostics if isinstance(diagnostics, dict) else {}
+        lines.append(
+            "진단: "
+            + _join_parts(
+                _line("broker", payload.get("broker_code")),
+                _line("message", payload.get("broker_message")),
+                _line("http", diag.get("http_status")),
+                _line("msg_cd", diag.get("kis_msg_cd")),
+                _line("msg", diag.get("kis_msg1")),
+            )
+        )
+        request_summary = _kis_request_summary(diag)
+        if request_summary:
+            lines.append(f"요청: {request_summary}")
+        lines.append(
+            "판단: 주문 접수 여부가 불명확합니다. 브로커 주문/체결 내역 확인 전 자동 재시도 금지."
+        )
+        next_action = payload.get("next_action")
+        if next_action:
+            lines.append(f"다음 행동: {next_action}")
     elif event in {"FILL", "ORDER_PAPER_FILLED"}:
         lines.append(
             "체결: "

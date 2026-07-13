@@ -25,13 +25,13 @@ ACCOUNT = "1234567801"
 
 
 @asynccontextmanager
-async def _client() -> AsyncIterator[ResilientClient]:
+async def _client(*, max_retries: int = 1) -> AsyncIterator[ResilientClient]:
     async with httpx.AsyncClient(base_url=BASE) as inner:
         yield ResilientClient(
             inner,
             rate_limiter=AsyncTokenBucket(rate_per_sec=100.0, capacity=10.0),
             breaker=CircuitBreaker(failure_threshold=3, cooldown_seconds=10.0),
-            max_retries=1,
+            max_retries=max_retries,
         )
 
 
@@ -149,6 +149,54 @@ async def test_place_order_http_error_preserves_masked_kis_diagnostics():
     assert "12345678" not in diagnostics["response_body_preview"]
     assert "tok" not in json.dumps(diagnostics, ensure_ascii=False)
     assert body["ORD_SVR_DVSN_CD"] == "0"
+
+
+@pytest.mark.asyncio
+async def test_place_order_http_5xx_does_not_auto_retry():
+    async with _client(max_retries=4) as client:
+        with respx.mock(base_url=BASE) as mock:
+            route = mock.post("/uapi/overseas-stock/v1/trading/order").mock(
+                side_effect=[
+                    httpx.Response(500, json={"err": "maybe accepted"}),
+                    httpx.Response(200, json={"output": {"ODNO": "DUPLICATE"}}),
+                ]
+            )
+            with pytest.raises(KisOrderError) as raised:
+                await place_order(
+                    client,
+                    access_token="tok",
+                    app_key="app",
+                    app_secret="sec",
+                    request=_order(Side.BUY),
+                    market="NASD",
+                )
+
+    assert route.call_count == 1
+    assert raised.value.diagnostics["http_status"] == 500
+
+
+@pytest.mark.asyncio
+async def test_place_order_transport_error_does_not_auto_retry():
+    async with _client(max_retries=4) as client:
+        with respx.mock(base_url=BASE) as mock:
+            route = mock.post("/uapi/overseas-stock/v1/trading/order").mock(
+                side_effect=[
+                    httpx.ConnectError("wire dropped"),
+                    httpx.Response(200, json={"output": {"ODNO": "DUPLICATE"}}),
+                ]
+            )
+            with pytest.raises(KisOrderError) as raised:
+                await place_order(
+                    client,
+                    access_token="tok",
+                    app_key="app",
+                    app_secret="sec",
+                    request=_order(Side.BUY),
+                    market="NASD",
+                )
+
+    assert route.call_count == 1
+    assert raised.value.diagnostics["exception_type"] == "ConnectError"
 
 
 @pytest.mark.asyncio
@@ -294,15 +342,16 @@ async def test_order_router_persists_broker_diagnostics_in_audit_payload(
             current_global_exposure_usd=Decimal("0"),
         )
 
-    assert outcome.state == "REJECTED_BY_BROKER"
+    assert outcome.state == "SUBMISSION_UNKNOWN"
     assert outcome.reason is not None
     assert json.loads(outcome.reason)["kis_msg_cd"] == "APBK0000"
 
     row = conn.execute(
-        "SELECT payload_json FROM audit_log WHERE event_type = 'ORDER_REJECTED_BY_BROKER'"
+        "SELECT payload_json FROM audit_log WHERE event_type = 'ORDER_SUBMISSION_UNKNOWN'"
     ).fetchone()
     payload = json.loads(row["payload_json"])
     assert payload["broker_code"] == "BrokerBoom"
     assert payload["diagnostics"]["kis_msg1"] == "주문 가능 시간이 아닙니다"
     assert payload["diagnostics"]["request_summary"]["body"]["CANO"] == "******78"
+    assert "자동 재시도하지" in payload["next_action"]
     conn.close()

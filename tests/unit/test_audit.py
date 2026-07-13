@@ -15,6 +15,7 @@ from auto_invest.persistence.audit import (
     HaltSetPayload,
     OrderIntentPayload,
     OrderRejectedByGatePayload,
+    OrderSubmissionUnknownPayload,
     OrderSubmittedPayload,
     SecretsLoadedPayload,
     WorkerStartedPayload,
@@ -120,6 +121,29 @@ def test_append_payload_round_trips_through_json(conn: sqlite3.Connection):
     payload = audit.parse_payload(row)
     assert payload["gate"] == "per_trade_cap_gate"
     assert payload["metadata"]["would_become_pct"] == "5.4"
+
+
+def test_order_submission_unknown_payload_round_trips(conn: sqlite3.Connection):
+    audit.append(
+        conn,
+        OrderSubmissionUnknownPayload(
+            broker_code="KisOrderError",
+            broker_message="submission status unknown",
+            diagnostics={
+                "http_status": 500,
+                "request_summary": {"body": {"CANO": "******78", "PDNO": "IEF"}},
+            },
+        ),
+        rule_id="r1",
+        symbol="IEF",
+        correlation_id="ord-unknown",
+    )
+    [row] = audit.read_all(conn)
+    payload = audit.parse_payload(row)
+    assert row["event_type"] == "ORDER_SUBMISSION_UNKNOWN"
+    assert payload["broker_code"] == "KisOrderError"
+    assert payload["diagnostics"]["http_status"] == 500
+    assert "자동 재시도하지" in payload["next_action"]
 
 
 # ------------------------------------------------------------ payload validation

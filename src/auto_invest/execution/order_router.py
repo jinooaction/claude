@@ -10,8 +10,9 @@ For each fired trigger the router:
      Deny short-circuits with an ORDER_REJECTED_BY_GATE audit row and
      the order's state moves to REJECTED_BY_GATE.
   5. Submits to the broker via `broker/overseas.place_order`.
-     Broker errors transition the order to REJECTED_BY_BROKER and
-     surface an OrderRejectedByBroker audit row.
+     Explicit broker rejections transition to REJECTED_BY_BROKER.
+     Ambiguous write failures transition to SUBMISSION_UNKNOWN so the
+     same order is not blindly replayed.
   6. On success, writes ORDER_SUBMITTED and stores the broker id.
 
 The router also exposes `verify_stage_uniqueness` for the worker to
@@ -51,6 +52,7 @@ from auto_invest.persistence.audit import (
     OrderPaperFilledPayload,
     OrderRejectedByBrokerPayload,
     OrderRejectedByGatePayload,
+    OrderSubmissionUnknownPayload,
     OrderSubmittedPayload,
 )
 from auto_invest.risk.gates import (
@@ -241,6 +243,58 @@ def _set_order_routing(
         """,
         (correlation_id, order_exchange),
     )
+
+
+_TRANSPORT_EXCEPTION_TYPES = {
+    "ConnectError",
+    "ConnectTimeout",
+    "NetworkError",
+    "PoolTimeout",
+    "ProtocolError",
+    "ReadError",
+    "ReadTimeout",
+    "RemoteProtocolError",
+    "TimeoutException",
+    "TransportError",
+    "WriteError",
+    "WriteTimeout",
+}
+
+
+def _diagnostic_http_status(diagnostics: Mapping[str, Any]) -> int | None:
+    raw = diagnostics.get("http_status")
+    if raw is None:
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def _is_kis_business_rejection(diagnostics: Mapping[str, Any]) -> bool:
+    rt_cd = diagnostics.get("kis_rt_cd")
+    if rt_cd not in (None, "", "0"):
+        return True
+    status = _diagnostic_http_status(diagnostics)
+    return status is not None and 400 <= status < 500
+
+
+def _is_submission_unknown(diagnostics: object) -> bool:
+    if not isinstance(diagnostics, Mapping):
+        return False
+    if _is_kis_business_rejection(diagnostics):
+        return False
+    status = _diagnostic_http_status(diagnostics)
+    if status is not None:
+        if 500 <= status < 600:
+            return True
+        if 200 <= status < 300 and diagnostics.get("exception_type") in {
+            "JSONDecodeError",
+            "KisOrderResponseError",
+        }:
+            return True
+    exception_type = str(diagnostics.get("exception_type") or "")
+    return exception_type in _TRANSPORT_EXCEPTION_TYPES
 
 
 # ----------------------------------------------------------- stage uniqueness
@@ -772,6 +826,30 @@ class OrderRouter:
                 if isinstance(diagnostics, dict)
                 else str(exc)
             )
+            if _is_submission_unknown(diagnostics):
+                audit.append(
+                    self.conn,
+                    OrderSubmissionUnknownPayload(
+                        broker_code=type(exc).__name__,
+                        broker_message=broker_message,
+                        diagnostics=diagnostics if isinstance(diagnostics, dict) else None,
+                    ),
+                    rule_id=rule.id,
+                    symbol=rule.symbol,
+                    correlation_id=correlation_id,
+                )
+                _record_transition(
+                    self.conn,
+                    correlation_id,
+                    "INTENT",
+                    "SUBMISSION_UNKNOWN",
+                    broker_message,
+                )
+                return OrderOutcome(
+                    state="SUBMISSION_UNKNOWN",
+                    correlation_id=correlation_id,
+                    reason=broker_message,
+                )
             audit.append(
                 self.conn,
                 OrderRejectedByBrokerPayload(

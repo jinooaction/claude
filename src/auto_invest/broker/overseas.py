@@ -343,6 +343,7 @@ async def place_order(
         response = await client.request(
             "POST",
             endpoint,
+            retry_transient=False,
             headers=_kis_headers(
                 access_token=access_token,
                 app_key=app_key,
