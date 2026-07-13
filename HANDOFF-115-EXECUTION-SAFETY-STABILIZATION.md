@@ -2,7 +2,7 @@
 
 ## 한 줄 결론
 
-현재 저장소의 가장 큰 위험은 투자 전략의 부족보다 **실거래 실행 권한과 계좌 상태가 여러 경로에 분산돼 있다는 점**이다. `specs/111-live-entrypoint-containment`, `specs/112-order-submission-uncertainty-recovery`, `specs/113-atomic-fill-ledger`, `specs/114-account-exposure-reservation`는 main에 들어갔고, 다음 구현 단위는 `specs/115-degraded-execution-state`다.
+현재 저장소의 가장 큰 위험은 투자 전략의 부족보다 **실거래 실행 권한과 계좌 상태가 여러 경로에 분산돼 있다는 점**이다. `specs/111-live-entrypoint-containment`, `specs/112-order-submission-uncertainty-recovery`, `specs/113-atomic-fill-ledger`, `specs/114-account-exposure-reservation`, `specs/115-degraded-execution-state`는 main에 들어갔고, 다음 구현 단위는 `specs/116-single-execution-authority`다.
 
 ## 운영자 지시 해석
 
@@ -25,11 +25,11 @@
 
 ## 기준 상태
 
-- 기준 `main`: `692cdffb5863a3deebf5080b55c350445298cbd4` — PR #515 스펙 114 계좌 노출 예약 머지
+- 기준 `main`: `121a236d3f06941378703bed78b16b4c2a645ee4` — PR #517 스펙 115 저하 상태 신규 BUY 차단 머지
 - 확인 시점: 2026-07-13 KST
-- 열린 풀 리퀘스트: 작업 시작 시 없음
-- 기존 활성 스펙 포인터: `specs/114-account-exposure-reservation`
-- 최근 완료 브랜치: `Codex/114-account-exposure-reservation`
+- 열린 풀 리퀘스트: handoff 갱신 전 없음
+- 기존 활성 스펙 포인터: `specs/115-degraded-execution-state`
+- 최근 완료 브랜치: `codex/115-degraded-execution-state`
 - 주요 저장소 선언 상태:
   - 돈 경로: `PREVIEW_ONLY`
   - 마이크로 GTAA 센티넬: `automation/rebalance-micro-gtaa.request`의 `armed: false`
@@ -295,25 +295,26 @@ README는 여전히 LLM을 호출하지 않고 스펙 004·005가 미구현이�
 
 목표:
 
-- `HEALTHY`, `DEGRADED_SELL_ONLY`, `HALTED` 상태기계
-- 체결·보유·순자산 신선도 계약
+- `HEALTHY`, `DEGRADED_SELL_ONLY`, `HALTED` 상태기계 — 스펙 115에서 완료
+- 체결·보유·순자산·손실 신선도 계약 — 스펙 115에서 신규 BUY 차단으로 완료
 - 모든 실거래 경로를 하나의 `ExecutionAuthority`로 통합
 - GitHub Actions의 정책 로직을 Python으로 이동
 
 ## 코덱스가 지금 바로 할 일
 
-1. `origin/main` 최신이 `692cdff` 이후인지 확인하고 열린 PR이 없으면 새 브랜치에서 `115-degraded-execution-state`를 시작한다.
+1. `origin/main` 최신이 `121a236` 이후인지 확인하고 열린 PR이 없으면 새 브랜치에서 `116-single-execution-authority`를 시작한다.
 2. 다음 파일을 순서대로 읽는다.
    - `AGENTS.md`
    - 이 문서
-   - `specs/114-account-exposure-reservation/spec.md`
-   - `specs/114-account-exposure-reservation/plan.md`
-   - `specs/114-account-exposure-reservation/tasks.md`
-   - `src/auto_invest/execution/exposure_reservation.py`
+   - `specs/115-degraded-execution-state/spec.md`
+   - `specs/115-degraded-execution-state/plan.md`
+   - `specs/115-degraded-execution-state/tasks.md`
+   - `src/auto_invest/execution/execution_state.py`
    - `src/auto_invest/execution/order_router.py`
+   - `src/auto_invest/worker/loop.py`
    - `src/auto_invest/execution/rebalancer.py`
-3. 체결·보유·순자산·손실 상태가 불명확할 때 신규 BUY를 차단하는 저하 상태기계 범위를 먼저 명확히 한다.
-4. cross-process 계좌 잠금과 단일 실행 권한 통합은 같은 PR에 섞지 않는다.
+3. cross-process 계좌 잠금과 단일 실행 권한 통합 범위를 먼저 명확히 한다.
+4. `SUBMISSION_UNKNOWN` 자동 broker lookup 복구는 단일 authority와 섞을지 별도 복구 PR로 분리할지 먼저 판단한다.
 5. `automation/*.request`, `.env`, 배포 포트폴리오, 헌법, 커널 목록은 수정하지 않는다.
 6. 전체 검증 후 풀 리퀘스트를 준비 상태로 바꾸고 자동 머지 규칙을 따른다.
 7. 머지 뒤 실제 서버나 KIS 계좌 상태를 추측하지 말고 저장소 기준 안전 상태와 미확인 영역을 분리해 보고한다.
@@ -546,10 +547,64 @@ PR #515에서 저장소 기준 계좌 노출 예약 계산을 보수화했다.
 - 체결·보유·순자산·손실 신선도가 불명확할 때 신규 BUY를 자동 차단하는 저하 상태기계는 아직 없다.
 - 다음 실행 안전성 수동 후보는 `115-degraded-execution-state`다.
 
+## 스펙 115 구현 결과
+
+PR #517에서 저장소 기준 저하 상태 신규 BUY 차단을 구현했다.
+
+구현한 내용:
+
+- `src/auto_invest/execution/execution_state.py`
+  - `HEALTHY`, `DEGRADED_SELL_ONLY`, `HALTED` 상태와 stable reason code를 정의했다.
+  - `SUBMISSION_UNKNOWN` BUY와 최신 `INCONCLUSIVE` reconciliation을 persisted blocker로 평가한다.
+  - `execution_state_gate`는 degraded 상태의 BUY를 `ORDER_REJECTED_BY_GATE`로 거부하고 SELL은 통과시킨다.
+- `src/auto_invest/execution/order_router.py`
+  - 기존 gate chain 안에 `execution_state_gate`를 추가했다.
+  - provider가 없으면 DB persisted blocker만 평가하고, Worker는 runtime blocker provider를 주입한다.
+- `src/auto_invest/worker/loop.py`
+  - live fill sync 실패, NAV refresh 실패, circuit breaker mark 결측을 runtime blocker로 저장한다.
+  - 다음 성공 관측에서 각 blocker를 해제한다.
+  - 이 blocker들은 신규 BUY에만 작동하고 기존 halt, whitelist, K1 cap, SELL 경로는 유지된다.
+- `tests/unit/test_execution_state.py`
+  - `SUBMISSION_UNKNOWN` BUY와 최신 `INCONCLUSIVE` reconciliation이 degraded 상태를 만드는지 검증한다.
+  - `SUBMISSION_UNKNOWN` SELL은 새 노출이 아니므로 degraded blocker가 아님을 검증한다.
+- `tests/integration/test_order_router.py`
+  - degraded 상태 BUY가 broker 주문 endpoint 호출 전 `execution_state_gate`에서 거부되는지 검증한다.
+  - degraded 상태 SELL은 정상 제출될 수 있음을 검증한다.
+- `tests/integration/test_worker_fill_sync.py`
+  - open order가 있는 live fill sync 실패 후 같은 tick의 신규 BUY가 broker submission 전 차단되는지 검증한다.
+- `tests/integration/test_worker_capital_tracking.py`
+  - capital tracking NAV 조회 실패 후 신규 BUY가 차단되는지 검증한다.
+- `tests/integration/test_circuit_breaker_worker.py`
+  - 손실 평가에 필요한 mark가 없으면 circuit breaker가 halt하지 않아도 신규 BUY가 보류되는지 검증한다.
+- `specs/115-degraded-execution-state/`
+  - 스펙, 계획, 연구, 데이터 모델, 계약, quickstart, 체크리스트, 작업표를 추가했다.
+  - `completed_candidate_id: candidate-degraded-execution-state`
+  - `next_candidate_id: candidate-single-execution-authority`
+
+검증 증거:
+
+- 구현 전 focused regression: `auto_invest.execution.execution_state` 부재로 신규 보호 경로 없음 확인
+- 구현 후 focused regression: `8 passed`
+- 인접 router/fill sync/capital/circuit breaker/lifecycle/paper/risk suite: `88 passed`
+- 전체 테스트: `2621 passed, 4 skipped`
+- 린트: `uv run ruff check src tests` 통과
+- 형식: `git diff --check` 통과
+- HANDOFF 사실 검증: `uv run python scripts/check_handoff_facts.py` 통과
+- strict 하네스: `uv run python scripts/agent_harness_probe.py --strict` 통과
+- post-merge workflow: deploy `29254832101`, released-work `29254832106`, autonomous-work `29254832523` success
+- 보호 범위: live sentinel, capital, whitelist/caps 값, loss budget, 헌법, kernel manifest, 비밀값 변경 없음
+
+남은 미확인·후속 사항:
+
+- 실제 KIS 계좌의 열린 주문, 보유, 서버 프로세스는 조회하지 않았다.
+- `SUBMISSION_UNKNOWN` 자동 broker order/execution lookup 복구는 아직 없다.
+- cross-process 계좌 잠금은 아직 없다.
+- 모든 실거래 경로를 하나로 모으는 단일 `ExecutionAuthority`가 다음 실행 안전성 수동 후보인 `116-single-execution-authority`다.
+
 ## 필수 검증
 
 ```bash
-uv run pytest tests/integration/test_order_router.py tests/integration/test_spec_032_live_rebalancer.py
+uv run pytest tests/unit/test_execution_state.py tests/integration/test_order_router.py tests/integration/test_worker_fill_sync.py tests/integration/test_worker_capital_tracking.py tests/integration/test_circuit_breaker_worker.py
 uv run pytest tests/unit/test_risk_gates.py tests/integration/test_paper_order_router.py tests/integration/test_worker_order_lifecycle.py
 
 uv run pytest
@@ -557,13 +612,13 @@ uv run ruff check src tests
 git diff --check
 uv run python scripts/check_handoff_facts.py
 uv run python scripts/agent_harness_probe.py --strict
-python3 scripts/check_pr_quality_gate.py /tmp/pr-body-114.md
+python3 scripts/check_pr_quality_gate.py /tmp/pr-body-115.md
 ```
 
 위험 동작 부재도 별도로 확인한다.
 
 ```bash
-rg -n "open_buy_order_reservations|reserves_open_buy_orders|account-exposure-reservation" src tests specs/114-account-exposure-reservation
+rg -n "execution_state_gate|DEGRADED_SELL_ONLY|candidate-degraded-execution-state" src tests specs/115-degraded-execution-state
 git diff --name-only | rg 'automation/.*\\.request|deploy/.*portfolio|whitelist|caps|constitution|kernel' && exit 1 || true
 ```
 
@@ -573,7 +628,7 @@ git diff --name-only | rg 'automation/.*\\.request|deploy/.*portfolio|whitelist|
 - 주문 재시도와 주문 상태기계는 별도 PR이다.
 - 체결 원장과 포지션 캐시는 별도 PR이다.
 - 노출 예약과 계좌 잠금은 별도 PR이다.
-- 저하 상태와 단일 실행 권한은 앞 단계 완료 후 진행한다.
+- 저하 상태와 단일 실행 권한은 별도 PR이다. 스펙 115는 저하 상태만 닫았고, 단일 실행 권한은 스펙 116에서 진행한다.
 
 각 PR은 독립적으로 안전성을 높이고, 중간 상태에서도 기존보다 위험해지지 않아야 한다.
 

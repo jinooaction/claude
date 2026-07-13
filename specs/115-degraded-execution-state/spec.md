@@ -92,3 +92,8 @@ As the operator, I need this PR to close degraded-state BUY blocking without mix
 - `SUBMISSION_UNKNOWN` automated broker lookup recovery remains a later repair; this feature blocks new BUY while the uncertainty remains.
 - Cross-process account locks and a single `ExecutionAuthority` are intentionally deferred to spec 116.
 - No real broker order, server process inspection, KIS account lookup, or live sentinel update is part of this work.
+
+## Release Ledger
+
+completed_candidate_id: candidate-degraded-execution-state
+next_candidate_id: candidate-single-execution-authority
