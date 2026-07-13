@@ -33,15 +33,15 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `121a236` — Merge pull request #517 from jinooaction/codex/115-degraded-execution-state |
-| main 테스트 | PR #517 머지 전과 머지 직전 `uv run pytest -q` → 2621 passed, 4 skipped. 이 handoff 갱신 뒤 재실행도 2621 passed, 4 skipped. |
-| main 린트 | PR #517 머지 전과 머지 직전 `uv run ruff check src tests` → All checks passed. 이 handoff 갱신 뒤 재실행도 All checks passed. |
+| 마지막 main 커밋 | `8b0cfac` — Merge pull request #519 from jinooaction/codex/116-single-execution-authority |
+| main 테스트 | PR #519 머지 전과 머지 직전 `uv run pytest -q` → 2626 passed, 4 skipped. |
+| main 린트 | PR #519 머지 전과 머지 직전 `uv run ruff check src tests` → All checks passed. |
 | 열린 PR | 없음. |
-| 출시 완료 스펙 | 최신 추가: 115(계좌 상태 불명확 시 신규 BUY 차단과 sell-only 저하 상태), 114(열린 BUY 주문과 리밸런싱 묶음의 계좌 노출 예약), 113(체결 원장 적용 원자화와 중복 체결 캐시 재반영 차단), 112(주문 제출 `POST` 자동 재시도 제거와 `SUBMISSION_UNKNOWN` 상태), 111(operator-design 평행 실거래 진입점 격리와 주문 제출 불확실성 회복 후보 전진), 110(agent harness 회귀 생존성 계약과 운영자 이해 가능 보고 후보 전진), 109(worktree 동시 작업 생존성 계약과 agent harness 회귀 후보 전진), 108(PR/머지 증거 생존성 계약과 worktree 동시 작업 후보 전진), 107(HANDOFF 사실성 생존성 계약과 PR/머지 증거 후보 전진), 106(운영 체계 frontier 지도와 handoff 사실성 후보 전진), 105(브로커 진단 생존성 계약과 운영 체계 frontier 후보 전진), 104(체결 비용 기준 계약과 브로커 진단 생존성 후보 전진), 103(브로커 거부 분류 계약과 체결 비용 기준 후보 전진), 102(체결 품질 frontier 지도와 브로커 거부 분류 후보 전진), 101(데이터 증거 생존성 계약과 체결 품질 frontier 후보 전진), 100(레짐 타임라인 커버리지 계약과 데이터 증거 생존성 후보 전진), 099(공개 데이터 입력 품질 계약과 레짐 타임라인 커버리지 후보 전진), 098(데이터 증거 frontier 지도와 공개 데이터 입력 품질 후보 전진), 097(비용 차감 no-live 엣지 실험 계약과 비용 기준 대기 분리), 096(신호 다변화 no-live 엣지 실험 계약과 낮은 겹침 후보 분리), 095(forward 레짐 엣지 no-live 실험 계약과 관측 대기 판정), 094(투자 엣지 frontier 지도와 no-live 실험 후보 전진), 093(거시 후보 지도와 후보 재생성 루프), 092(자율 후보 고갈 뒤 frontier 발굴 후보 폐쇄), 091(자율 성장 목적 함수와 탐색 예산 보정), 090(source diversification 산출 후보 완료 폐쇄), 089(정적 후보 템플릿 밖 증거 기반 후보 공간 확장), 088(거시 자율 성장 후보 발굴기), 087(학습 장부로 폐기·보류 후보 재발굴 차단), 086(자율 루프 sidecar와 HANDOFF 생존성 완료 후보 폐쇄), 085(공개 데이터 수집·교차 검증 확장), 084(오래된 증거와 성과 실패 분리), 083(주문 거부·체결 품질 손익 관측), 082(레짐·성과 후보 점수화), 081(자율 루프 품질 폐쇄), 080(운영자 대시보드와 모바일 알림 루프), 079(완료 후보 소비 장부), 078(돈 경로 게이트 정렬 루프), 077(자율 작업 실행 루프), 076(자본 경로 준비도 루프), 075(전략 실패 학습), 074(후보 가격 이력 지원), 073(후보 pending next action 보정), 072(후보 증거 진단), 071(후보 결과 실행기), 070(후보 구현 공장), 069(자율 승격 실행 루프), 068(자율 승격 루프 자동 분류), 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
-| 골격 스펙 | 없음. `.specify/feature.json`은 최신 출시 스펙 `specs/115-degraded-execution-state`를 가리킨다. 스펙 115는 #517로 main에 들어갔다. |
-| 최근 출시 작업 | #517 스펙 115 저하 상태 신규 BUY 차단. #515 스펙 114 계좌 노출 예약. #513 스펙 113 체결 원장 적용 원자화. #511 스펙 112 주문 제출 불확실성 회복. #509 스펙 111 operator-design 평행 실거래 진입점 격리. |
-| 활성 작업 | 열린 PR 없음. #517 main push의 deploy run `29254832101`, released-work run `29254832106`, autonomous-work run `29254832523`가 success다. 실행 안전성 프로그램의 다음 수동 후보는 `116-single-execution-authority`다. `SUBMISSION_UNKNOWN` 자동 broker lookup 복구와 cross-process 계좌 잠금도 후속 범위다. 돈 경로는 `PREVIEW_ONLY`, readiness `ACCUMULATING_EDGE`이며 실주문은 불가하다. |
-| 안전 경계 | #517은 등급 4 돈 경로 주문 허용 조건 축소다. `SUBMISSION_UNKNOWN` BUY, 최신 `INCONCLUSIVE` 정합성, live 체결 동기화 실패, NAV 조회 실패, 손실 평가 시세 결측이 있으면 신규 BUY를 `execution_state_gate`에서 거부하고 SELL은 기존 게이트 체인을 계속 통과시킨다. 실제 주문, 취소, 실거래 재무장, 자본 증액, 자본 배분, 허용 종목, 포지션 한도값, 손실 예산, live sentinel, K1/K2/K4/K5/K6 파일, 헌법, 커널 목록, 비밀값, 외부 유료 서비스는 변경하지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`다. |
+| 출시 완료 스펙 | 최신 추가: 116(단일 `ExecutionAuthority`와 계좌별 broker-write 잠금), 115(계좌 상태 불명확 시 신규 BUY 차단과 sell-only 저하 상태), 114(열린 BUY 주문과 리밸런싱 묶음의 계좌 노출 예약), 113(체결 원장 적용 원자화와 중복 체결 캐시 재반영 차단), 112(주문 제출 `POST` 자동 재시도 제거와 `SUBMISSION_UNKNOWN` 상태), 111(operator-design 평행 실거래 진입점 격리와 주문 제출 불확실성 회복 후보 전진), 110(agent harness 회귀 생존성 계약과 운영자 이해 가능 보고 후보 전진), 109(worktree 동시 작업 생존성 계약과 agent harness 회귀 후보 전진), 108(PR/머지 증거 생존성 계약과 worktree 동시 작업 후보 전진), 107(HANDOFF 사실성 생존성 계약과 PR/머지 증거 후보 전진), 106(운영 체계 frontier 지도와 handoff 사실성 후보 전진), 105(브로커 진단 생존성 계약과 운영 체계 frontier 후보 전진), 104(체결 비용 기준 계약과 브로커 진단 생존성 후보 전진), 103(브로커 거부 분류 계약과 체결 비용 기준 후보 전진), 102(체결 품질 frontier 지도와 브로커 거부 분류 후보 전진), 101(데이터 증거 생존성 계약과 체결 품질 frontier 후보 전진), 100(레짐 타임라인 커버리지 계약과 데이터 증거 생존성 후보 전진), 099(공개 데이터 입력 품질 계약과 레짐 타임라인 커버리지 후보 전진), 098(데이터 증거 frontier 지도와 공개 데이터 입력 품질 후보 전진), 097(비용 차감 no-live 엣지 실험 계약과 비용 기준 대기 분리), 096(신호 다변화 no-live 엣지 실험 계약과 낮은 겹침 후보 분리), 095(forward 레짐 엣지 no-live 실험 계약과 관측 대기 판정), 094(투자 엣지 frontier 지도와 no-live 실험 후보 전진), 093(거시 후보 지도와 후보 재생성 루프), 092(자율 후보 고갈 뒤 frontier 발굴 후보 폐쇄), 091(자율 성장 목적 함수와 탐색 예산 보정), 090(source diversification 산출 후보 완료 폐쇄), 089(정적 후보 템플릿 밖 증거 기반 후보 공간 확장), 088(거시 자율 성장 후보 발굴기), 087(학습 장부로 폐기·보류 후보 재발굴 차단), 086(자율 루프 sidecar와 HANDOFF 생존성 완료 후보 폐쇄), 085(공개 데이터 수집·교차 검증 확장), 084(오래된 증거와 성과 실패 분리), 083(주문 거부·체결 품질 손익 관측), 082(레짐·성과 후보 점수화), 081(자율 루프 품질 폐쇄), 080(운영자 대시보드와 모바일 알림 루프), 079(완료 후보 소비 장부), 078(돈 경로 게이트 정렬 루프), 077(자율 작업 실행 루프), 076(자본 경로 준비도 루프), 075(전략 실패 학습), 074(후보 가격 이력 지원), 073(후보 pending next action 보정), 072(후보 증거 진단), 071(후보 결과 실행기), 070(후보 구현 공장), 069(자율 승격 실행 루프), 068(자율 승격 루프 자동 분류), 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
+| 골격 스펙 | 없음. `.specify/feature.json`은 최신 출시 스펙 `specs/116-single-execution-authority`를 가리킨다. 스펙 116은 #519로 main에 들어갔다. |
+| 최근 출시 작업 | #519 스펙 116 단일 실행 권한과 계좌별 broker-write 잠금. #517 스펙 115 저하 상태 신규 BUY 차단. #515 스펙 114 계좌 노출 예약. #513 스펙 113 체결 원장 적용 원자화. #511 스펙 112 주문 제출 불확실성 회복. #509 스펙 111 operator-design 평행 실거래 진입점 격리. |
+| 활성 작업 | 열린 PR 없음. #519 main push의 deploy run `29256471036`, released-work run `29256471028`, autonomous-work run `29256471114`가 success다. 실행 안전성 프로그램의 111~116 저장소 코드 단계는 main에 들어갔다. 남은 실행 안전성 확인 지점은 실제 서버 프로세스·KIS 열린 주문·비밀값 보호 상태 전수 확인과 `SUBMISSION_UNKNOWN` broker lookup 복구 후보다. 자율 루프의 다음 일반 후보는 `candidate-operator-report-liveness-contract`다. 돈 경로는 `PREVIEW_ONLY`, readiness `ACCUMULATING_EDGE`이며 실주문은 불가하다. |
+| 안전 경계 | #519는 등급 4 돈 경로 broker-write 권한 축소다. `place_order`와 `cancel_order` 직접 호출은 `src/auto_invest/execution/authority.py`만 허용되고, live 주문은 계좌별 `execution_authority_locks`를 획득한 뒤 열린 주문 예약·게이트·브로커 제출을 평가한다. 실제 주문, 실거래 재무장, 자본 증액, 자본 배분, 허용 종목, 포지션 한도값, 손실 예산, live sentinel, K1/K2/K4/K5/K6 파일, 헌법, 커널 목록, 비밀값, 외부 유료 서비스는 변경하지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`다. |
 
 ## 돈 경로 상태 판독 규칙 (필수 — 스펙 062)
 
@@ -81,6 +81,40 @@ done
 uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.live_money_state'
 ```
 
+## 최근 관찰 — 2026-07-13 KST (스펙 116 단일 실행 권한)
+
+현재 `main` 최신 코드 머지는 `8b0cfac`(#519, 스펙 116 single execution authority)이다.
+기능 커밋은 `5897b8d`이고, 직전 main은 `e95016e`(#518, 스펙 115 인계)이다.
+
+- **문제 정의**: 스펙 114와 115로 열린 BUY 예약 노출과 상태 불명확 신규 BUY 차단은 닫혔지만,
+  worker, `rebalance-once`, lifecycle cancel/requote가 서로 다른 프로세스에서 같은 계좌의 broker write를
+  동시에 평가할 수 있었다. 특히 lock 없이 `place_order` 호출 직전 게이트를 통과하면 두 프로세스가 같은
+  오래된 계좌 스냅숏을 근거로 주문을 제출할 수 있었다.
+- **구현 상태**: `src/auto_invest/execution/authority.py`가 유일한 broker write 권한이다.
+  `place_order`와 `cancel_order` 직접 호출은 이 파일 안에만 남았다. `execution_authority_locks` DB 테이블은
+  계좌별 owner, context, 획득 시각, 만료 시각을 기록한다. `OrderRouter.submit_order`는 live일 때 이 잠금을
+  획득한 뒤 열린 BUY 예약, `execution_state_gate`, K1 cap gate, broker submission을 평가한다. 잠금이 이미
+  잡혀 있으면 broker endpoint에 닿기 전에 `execution_authority_lock` gate rejection으로 남긴다. Worker의
+  TTL cancel과 requote cancel도 같은 authority를 사용한다. paper mode와 dry-run preview는 broker write와
+  authority lock을 만들지 않는다.
+- **post-merge 실행**: #519 main push 뒤 `Deploy on merge to main` run `29256471036`,
+  `Released work ledger` run `29256471028`, `Autonomous work execution loop` run `29256471114`가 success다.
+  #519 직후 released-work sidecar는 post-merge tasks T024~T026이 아직 닫히기 전이라 스펙 116을 완료 후보로
+  소비하지 않았다. 이 handoff PR은 T024~T026 완료 상태를 남겨 다음 장부가
+  `candidate-single-execution-authority`를 released로 읽게 한다.
+- **안전 경계**: 등급 4 돈 경로 권한 축소다. 실제 주문·취소·실거래 재무장·자본 증액·자본 배분·
+  whitelist/caps 확대·손실 예산·live sentinel·K1/K2/K4/K5/K6·헌법·커널 목록·비밀값·외부 유료 서비스
+  변경 없음. 현재 돈 경로는 계속 `PREVIEW_ONLY`다.
+- **검증**: 구현 전 focused regression은 `ExecutionAuthority` 부재로 실패했고, 구현 후 focused regression
+  7 통과, 인접 authority/router/lifecycle/rebalancer suite 50 통과, `uv run pytest -q` 2626 통과·4 스킵,
+  `uv run ruff check src tests` 통과, `git diff --check` 통과, `uv run python scripts/check_handoff_facts.py`
+  OK, `uv run python scripts/agent_harness_probe.py --strict` OK(14/14), PR 본문 품질 관문 통과. 머지 직전
+  전체 테스트와 린트를 재실행해 같은 결과를 확인했다.
+- **남은 위험**: 실제 서버에서 동시에 떠 있는 오래된 live worker나 분리 프로세스, KIS 계좌의 열린 주문,
+  GitHub Actions 비밀값과 Environment 보호 규칙은 이 저장소 작업만으로 확인하지 않았다. `SUBMISSION_UNKNOWN`
+  상태를 broker order/execution 조회로 자동 해소하는 복구 후보도 별도다.
+- **상세 인계**: `HANDOFF-115-EXECUTION-SAFETY-STABILIZATION.md`.
+
 ## 최근 관찰 — 2026-07-13 KST (스펙 115 저하 상태 신규 BUY 차단)
 
 현재 `main` 최신 코드 머지는 `121a236`(#517, 스펙 115 degraded execution state)이다.
@@ -111,8 +145,8 @@ uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.
   `uv run ruff check src tests` 통과, `git diff --check` 통과, `uv run python scripts/check_handoff_facts.py`
   OK, `uv run python scripts/agent_harness_probe.py --strict` OK(14/14), PR 본문 품질 관문 통과. 머지 직전
   전체 테스트와 린트를 재실행해 같은 결과를 확인했다.
-- **남은 위험**: `SUBMISSION_UNKNOWN` 자동 broker order/execution lookup 복구, cross-process 계좌 잠금,
-  모든 실거래 경로를 하나로 모으는 단일 `ExecutionAuthority`는 아직 남아 있다. 실제 KIS 계좌의 열린 주문,
+- **남은 위험**: `SUBMISSION_UNKNOWN` 자동 broker order/execution lookup 복구는 아직 남아 있다.
+  cross-process 계좌 잠금과 단일 `ExecutionAuthority`는 스펙 116에서 닫혔다. 실제 KIS 계좌의 열린 주문,
   보유, 서버 프로세스, GitHub Actions 비밀값은 조회하지 않았다.
 - **상세 인계**: `HANDOFF-115-EXECUTION-SAFETY-STABILIZATION.md`.
 
@@ -144,9 +178,9 @@ uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.
   `uv run ruff check src tests` 통과, `git diff --check` 통과, `uv run python scripts/check_handoff_facts.py`
   OK, `uv run python scripts/agent_harness_probe.py --strict` OK(14/14), PR 본문 품질 관문 통과. 머지 직전
   전체 테스트와 린트를 재실행해 같은 결과를 확인했다.
-- **남은 위험**: cross-process 계좌 잠금과 모든 실거래 경로를 하나의 실행 권한으로 통합하는 작업은 아직
-  남아 있다. 체결·보유·순자산 신선도가 불명확할 때 신규 매수를 차단하는 `115-degraded-execution-state`가
-  다음 수동 후보이며, 단일 `ExecutionAuthority` 통합은 그 뒤 단계다.
+- **남은 위험**: 이 역사 문단 작성 당시 남아 있던 `115-degraded-execution-state`와 단일
+  `ExecutionAuthority` 통합은 각각 #517과 #519에서 닫혔다. 현재 남은 저장소 후속 후보는
+  `SUBMISSION_UNKNOWN` broker lookup 복구이고, 실제 서버·KIS 계좌 상태는 별도 확인이 필요하다.
 - **상세 인계**: `HANDOFF-115-EXECUTION-SAFETY-STABILIZATION.md`.
 
 ## 최근 관찰 — 2026-07-13 KST (스펙 113 원자적 체결 원장)
@@ -240,7 +274,8 @@ uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.
   candidate-order-submission-uncertainty-recovery`를 닫아 다음 released-work 장부가 스펙 111을
   완료로 읽게 한다. autonomous-work sidecar는 일반 운영 체계 후보
   `candidate-operator-report-liveness-contract`를 `EXECUTION_READY`, 위험 등급 2, 안전 영향 없음으로
-  선택했다. 실행 안전성 프로그램의 다음 수동 후보는 `112-order-submission-uncertainty-recovery`다.
+  선택했다. 이 문단 작성 당시 다음 실행 안전성 수동 후보였던 `112-order-submission-uncertainty-recovery`는
+  #511에서 닫혔다.
 - **안전 경계**: 등급 4 돈 경로 축소다. 실제 주문, 실거래 재무장, 자본 증액, 자본 배분,
   whitelist/caps 확대, 손실 예산, live sentinel, 브로커 주문, K1/K2/K4/K5/K6, 헌법, 커널 목록,
   비밀값, 외부 유료 서비스 변경 없음. KIS smoke는 post-merge 읽기 전용 live smoke 4건을 수행했지만
@@ -2558,8 +2593,8 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
 이제 `SUBMITTED`와 `SUBMISSION_UNKNOWN` BUY는 새 BUY가 사용할 수 있는 global cap 여유를 줄이고,
 paper/test 경로에서도 한 실행 안의 두 BUY가 같은 stale snapshot을 재사용하지 못한다. 등급 4 돈 경로
 노출 안전성 축소지만 실제 주문·취소·실거래 재무장·자본·whitelist/caps·헌법·커널·비밀값 변경은 없다.
-다음 실행 안전성 수동 후보는 `115-degraded-execution-state`이고, cross-process 계좌 잠금과 단일
-`ExecutionAuthority` 통합은 그 뒤 단계로 남아 있다. 상세는
+이 역사 문단 작성 당시 다음 후보였던 `115-degraded-execution-state`와 단일 `ExecutionAuthority`
+통합은 각각 #517과 #519에서 닫혔다. 상세는
 `HANDOFF-115-EXECUTION-SAFETY-STABILIZATION.md`.
 
 ## 최근 마일스톤 — 2026-07-10 KST (스펙 108 PR/머지 증거 생존성 계약)
