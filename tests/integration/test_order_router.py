@@ -340,10 +340,10 @@ async def test_submit_order_blocked_by_halt(tmp_path: Path):
 
 
 @pytest.mark.asyncio
-async def test_submit_order_rejected_by_broker_5xx(tmp_path: Path):
+async def test_submit_order_submission_unknown_on_broker_5xx(tmp_path: Path):
     async with _router(tmp_path) as router:
         with respx.mock(base_url=BASE) as mock:
-            mock.post("/uapi/overseas-stock/v1/trading/order").mock(
+            route = mock.post("/uapi/overseas-stock/v1/trading/order").mock(
                 return_value=httpx.Response(500, json={"err": "x"})
             )
 
@@ -355,12 +355,78 @@ async def test_submit_order_rejected_by_broker_5xx(tmp_path: Path):
                 current_global_exposure_usd=Decimal("0"),
             )
 
-        assert outcome.state == "REJECTED_BY_BROKER"
+        assert outcome.state == "SUBMISSION_UNKNOWN"
+        assert route.call_count == 1
         events = [r["event_type"] for r in audit.read_all(router.conn)]
-        assert "ORDER_REJECTED_BY_BROKER" in events
+        assert "ORDER_SUBMISSION_UNKNOWN" in events
+        assert "ORDER_REJECTED_BY_BROKER" not in events
 
         order_row = router.conn.execute("SELECT state FROM orders").fetchone()
-        assert order_row["state"] == "REJECTED_BY_BROKER"
+        assert order_row["state"] == "SUBMISSION_UNKNOWN"
+        unknown_payload = next(
+            audit.parse_payload(r)
+            for r in audit.read_all(router.conn)
+            if r["event_type"] == "ORDER_SUBMISSION_UNKNOWN"
+        )
+        assert "자동 재시도하지" in unknown_payload["next_action"]
+
+
+@pytest.mark.asyncio
+async def test_submit_order_submission_unknown_on_transport_error(tmp_path: Path):
+    async with _router(tmp_path) as router:
+        with respx.mock(base_url=BASE) as mock:
+            route = mock.post("/uapi/overseas-stock/v1/trading/order").mock(
+                side_effect=httpx.ConnectError("wire dropped")
+            )
+
+            outcome = await router.submit_order(
+                rule=_rule(),
+                quote_price_usd=Decimal("99"),
+                total_capital_usd=Decimal("10000"),
+                current_symbol_exposure_usd=Decimal("0"),
+                current_global_exposure_usd=Decimal("0"),
+            )
+
+        assert outcome.state == "SUBMISSION_UNKNOWN"
+        assert route.call_count == 1
+        events = [r["event_type"] for r in audit.read_all(router.conn)]
+        assert events == ["ORDER_INTENT", "ORDER_SUBMISSION_UNKNOWN"]
+
+        order_row = router.conn.execute("SELECT state, kis_order_id FROM orders").fetchone()
+        assert order_row["state"] == "SUBMISSION_UNKNOWN"
+        assert order_row["kis_order_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_submit_order_keeps_kis_business_rejection_as_broker_rejection(
+    tmp_path: Path,
+):
+    async with _router(tmp_path) as router:
+        with respx.mock(base_url=BASE) as mock:
+            route = mock.post("/uapi/overseas-stock/v1/trading/order").mock(
+                return_value=httpx.Response(
+                    200,
+                    json={
+                        "rt_cd": "1",
+                        "msg_cd": "APBK1234",
+                        "msg1": "주문 가능 금액 부족",
+                    },
+                )
+            )
+
+            outcome = await router.submit_order(
+                rule=_rule(),
+                quote_price_usd=Decimal("99"),
+                total_capital_usd=Decimal("10000"),
+                current_symbol_exposure_usd=Decimal("0"),
+                current_global_exposure_usd=Decimal("0"),
+            )
+
+        assert outcome.state == "REJECTED_BY_BROKER"
+        assert route.call_count == 1
+        events = [r["event_type"] for r in audit.read_all(router.conn)]
+        assert "ORDER_REJECTED_BY_BROKER" in events
+        assert "ORDER_SUBMISSION_UNKNOWN" not in events
 
 
 @pytest.mark.asyncio

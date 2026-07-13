@@ -7,6 +7,7 @@ Wraps `httpx.AsyncClient` with three layers of resilience:
   2. `tenacity` retry    — exponential backoff with jitter on transient
      failures (network errors, 5xx responses); 4xx propagates
      immediately because retrying a "Bad Request" achieves nothing.
+     Broker writes can opt out per request when replay is unsafe.
   3. `CircuitBreaker`    — opens after `failure_threshold` consecutive
      transient failures, blocks new requests for `cooldown_seconds`,
      then transitions to half-open for a probe attempt.
@@ -131,10 +132,17 @@ class ResilientClient:
         self,
         method: str,
         url: str,
+        *,
+        retry_transient: bool = True,
         **kwargs: Any,
     ) -> httpx.Response:
         try:
-            response = await self._do_with_retries(method, url, **kwargs)
+            response = await self._do_with_retries(
+                method,
+                url,
+                retry_transient=retry_transient,
+                **kwargs,
+            )
         except (httpx.HTTPStatusError, httpx.TransportError) as exc:
             if _is_transient(exc):
                 self._breaker.record_failure()
@@ -146,8 +154,17 @@ class ResilientClient:
         self,
         method: str,
         url: str,
+        *,
+        retry_transient: bool = True,
         **kwargs: Any,
     ) -> httpx.Response:
+        if not retry_transient:
+            self._breaker.before_request()
+            await self._rate_limiter.acquire()
+            response = await self._client.request(method, url, **kwargs)
+            response.raise_for_status()
+            return response
+
         async for attempt in AsyncRetrying(
             stop=stop_after_attempt(self._max_retries),
             wait=wait_exponential_jitter(initial=0.1, max=2.0, jitter=0.1),

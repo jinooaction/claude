@@ -83,6 +83,23 @@ async def test_retries_5xx_then_succeeds():
 
 
 @pytest.mark.asyncio
+async def test_can_disable_transient_retries_per_request_for_5xx():
+    async with _make_client(max_retries=4) as client:
+        with respx.mock(base_url=BASE) as mock:
+            route = mock.post("/write").mock(
+                side_effect=[
+                    httpx.Response(500, json={"err": "maybe accepted"}),
+                    httpx.Response(200, json={"ok": True}),
+                ]
+            )
+            with pytest.raises(httpx.HTTPStatusError) as excinfo:
+                await client.request("POST", "/write", retry_transient=False)
+            assert excinfo.value.response.status_code == 500
+            assert route.call_count == 1
+            assert client._breaker.consecutive_failures == 1
+
+
+@pytest.mark.asyncio
 async def test_no_retry_on_4xx():
     async with _make_client(max_retries=4) as client:
         with respx.mock(base_url=BASE) as mock:
@@ -108,6 +125,22 @@ async def test_retries_on_transport_error_then_succeeds():
             response = await client.request("GET", "/flaky-net")
             assert response.status_code == 200
             assert route.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_can_disable_transient_retries_per_request_for_transport_error():
+    async with _make_client(max_retries=4) as client:
+        with respx.mock(base_url=BASE) as mock:
+            route = mock.post("/flaky-write").mock(
+                side_effect=[
+                    httpx.ConnectError("wire dropped"),
+                    httpx.Response(200, json={"ok": True}),
+                ]
+            )
+            with pytest.raises(httpx.ConnectError):
+                await client.request("POST", "/flaky-write", retry_transient=False)
+            assert route.call_count == 1
+            assert client._breaker.consecutive_failures == 1
 
 
 @pytest.mark.asyncio

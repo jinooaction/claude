@@ -25,6 +25,7 @@ EventType = Literal[
     "ORDER_SUBMITTED",
     "ORDER_REJECTED_BY_GATE",
     "ORDER_REJECTED_BY_BROKER",
+    "ORDER_SUBMISSION_UNKNOWN",
     "FILL",
     "CANCEL",
     "ERROR",
@@ -142,6 +143,16 @@ class OrderRejectedByBrokerPayload(AuditPayload):
     broker_code: str
     broker_message: str
     diagnostics: dict[str, Any] | None = None
+
+
+class OrderSubmissionUnknownPayload(AuditPayload):
+    event_type: Literal["ORDER_SUBMISSION_UNKNOWN"] = "ORDER_SUBMISSION_UNKNOWN"
+    broker_code: str
+    broker_message: str
+    diagnostics: dict[str, Any] | None = None
+    next_action: str = (
+        "브로커 주문/체결 내역으로 접수 여부를 확인하기 전까지 자동 재시도하지 마세요."
+    )
 
 
 class FillPayload(AuditPayload):
@@ -879,6 +890,7 @@ AnyPayload = (
     | OrderSubmittedPayload
     | OrderRejectedByGatePayload
     | OrderRejectedByBrokerPayload
+    | OrderSubmissionUnknownPayload
     | FillPayload
     | CancelPayload
     | ErrorPayload

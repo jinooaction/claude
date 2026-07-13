@@ -2,7 +2,7 @@
 
 ## 한 줄 결론
 
-현재 저장소의 가장 큰 위험은 투자 전략의 부족보다 **실거래 실행 권한과 계좌 상태가 여러 경로에 분산돼 있다는 점**이다. 다음 자동 후보인 운영자 보고 개선보다 실행 안전성을 우선하며, 첫 구현 단위는 `specs/111-live-entrypoint-containment`로 고정한다.
+현재 저장소의 가장 큰 위험은 투자 전략의 부족보다 **실거래 실행 권한과 계좌 상태가 여러 경로에 분산돼 있다는 점**이다. `specs/111-live-entrypoint-containment`는 main에 들어갔고, 현재 이어받은 구현 단위는 `specs/112-order-submission-uncertainty-recovery`다.
 
 ## 운영자 지시 해석
 
@@ -25,11 +25,11 @@
 
 ## 기준 상태
 
-- 기준 `main`: `e9f9f98ea5787780a26c3833189b17b5b39cb7d5` — PR #508 머지
+- 기준 `main`: `c9976f7f61dacf08005f8949a36847795d0275dd` — PR #510 인계 갱신 머지
 - 확인 시점: 2026-07-13 KST
-- 열린 풀 리퀘스트: PR #509 `Codex/111-live-entrypoint-containment`
-- 기존 활성 스펙 포인터: `specs/110-agent-harness-regression-liveness-contract`
-- 새 작업 브랜치: `Codex/111-live-entrypoint-containment`
+- 열린 풀 리퀘스트: 작업 시작 시 없음
+- 기존 활성 스펙 포인터: `specs/111-live-entrypoint-containment`
+- 새 작업 브랜치: `Codex/112-order-submission-uncertainty-recovery`
 - 주요 저장소 선언 상태:
   - 돈 경로: `PREVIEW_ONLY`
   - 마이크로 GTAA 센티넬: `automation/rebalance-micro-gtaa.request`의 `armed: false`
@@ -268,9 +268,10 @@ README는 여전히 LLM을 호출하지 않고 스펙 004·005가 미구현이�
 목표:
 
 - 주문 `POST` 자동 재시도 제거
-- `SUBMISSION_UNKNOWN` 상태 추가
-- 주문·체결 조회를 통한 확인 후 재시도
-- 불명확 상태에서 신규 매수 차단
+- `SUBMISSION_UNKNOWN` 상태와 `ORDER_SUBMISSION_UNKNOWN` 감사 이벤트 추가
+- 명시적 KIS 업무 거부와 접수 여부 불명확 실패 분리
+- 운영 알림과 읽기 전용 요약에 불명확 상태 노출
+- 주문·체결 조회를 통한 자동 확인 후 재시도와 불명확 상태 신규 매수 차단은 후속 복구·저하 상태 스펙으로 남김
 
 ### 3단계 — 원자적 체결 원장
 
@@ -301,24 +302,23 @@ README는 여전히 LLM을 호출하지 않고 스펙 004·005가 미구현이�
 
 ## 코덱스가 지금 바로 할 일
 
-1. `Codex/111-live-entrypoint-containment` 브랜치를 이어받는다.
+1. `Codex/112-order-submission-uncertainty-recovery` 브랜치를 이어받는다.
 2. 다음 파일을 순서대로 읽는다.
    - `AGENTS.md`
    - 이 문서
-   - `specs/111-live-entrypoint-containment/spec.md`
-   - `specs/111-live-entrypoint-containment/plan.md`
-   - `specs/111-live-entrypoint-containment/tasks.md`
-   - `.github/workflows/operator-design.yml`
-   - `scripts/operator_design.sh`
-   - `src/auto_invest/design/verifier.py`
-   - `src/auto_invest/design/deploy.py`
-   - `src/auto_invest/cli.py`의 `design` 명령
-   - `src/auto_invest/safety/command_registry.py`
-3. 현재 동작을 고정하는 실패 테스트를 먼저 추가한다.
-4. 스펙 111 범위만 구현한다. 주문 재시도, 체결 원장, 노출 예약은 같은 PR에 섞지 않는다.
+   - `specs/112-order-submission-uncertainty-recovery/spec.md`
+   - `specs/112-order-submission-uncertainty-recovery/plan.md`
+   - `specs/112-order-submission-uncertainty-recovery/tasks.md`
+   - `src/auto_invest/broker/client.py`
+   - `src/auto_invest/broker/overseas.py`
+   - `src/auto_invest/execution/order_router.py`
+   - `src/auto_invest/persistence/audit.py`
+   - `src/auto_invest/notifications/audit_tail.py`
+3. 주문 재시도, 불명확 상태 전이, 운영 알림 회귀 테스트를 우선 확인한다.
+4. 체결 원장, 노출 예약, 단일 실행 권한은 같은 PR에 섞지 않는다.
 5. `automation/*.request`, `.env`, 배포 포트폴리오, 헌법, 커널 목록은 수정하지 않는다.
 6. 전체 검증 후 풀 리퀘스트를 준비 상태로 바꾸고 자동 머지 규칙을 따른다.
-7. 머지 뒤 실제 서버가 아니라 저장소·워크플로 기준으로만 안전 상태를 보고한다. 실서버 확인이 필요하면 미확인으로 남긴다.
+7. 머지 뒤 실제 서버나 KIS 계좌 상태를 추측하지 말고 저장소 기준 안전 상태와 미확인 영역을 분리해 보고한다.
 
 ## 스펙 111 완료 기준
 
@@ -396,43 +396,87 @@ README는 여전히 LLM을 호출하지 않고 스펙 004·005가 미구현이�
 - GitHub Actions 비밀값과 Environment 보호 규칙은 저장소 변경만으로 확인하지 않았다.
 - KIS 계좌의 현재 열린 주문과 실제 보유 상태는 조회하지 않았다.
 
+## 스펙 112 완료 기준
+
+다음 조건이 모두 충족돼야 한다.
+
+- 신규 주문 제출 `POST /uapi/overseas-stock/v1/trading/order`는 전송 오류나 5xx에서 자동 재시도하지 않는다.
+- 읽기 전용 요청의 기존 재시도 동작은 유지된다.
+- 전송 오류, 5xx, 비정상 응답처럼 접수 여부가 불명확한 주문 제출 실패는 `SUBMISSION_UNKNOWN`으로 남는다.
+- `SUBMISSION_UNKNOWN`은 `ORDER_SUBMISSION_UNKNOWN` 감사 이벤트와 같은 correlation id로 연결된다.
+- 명시적 KIS 업무 거부는 기존 `REJECTED_BY_BROKER`와 `ORDER_REJECTED_BY_BROKER`로 남는다.
+- 운영 알림은 불명확 제출을 브로커 거부로 표현하지 않고, 주문·체결 조회 전 자동 재시도 금지를 말한다.
+- 실제 주문, 취소, 실거래 전환, 자본·whitelist·caps·loss budget·live sentinel·헌법·kernel 변경이 없다.
+- 관련 테스트, 전체 테스트, 린트, 하네스, HANDOFF 검증, PR 품질 관문이 통과한다.
+
+## 스펙 112 구현 결과
+
+현재 `Codex/112-order-submission-uncertainty-recovery` 브랜치는 주문 제출 불확실성을 저장소 코드 기준으로 명시 상태로 보존한다.
+
+구현한 내용:
+
+- `src/auto_invest/broker/client.py`
+  - `ResilientClient.request(..., retry_transient=False)` 요청별 정책을 추가했다.
+  - 기본값은 기존과 같아 읽기 전용 `GET`의 5xx·전송 오류 재시도는 유지된다.
+  - no-retry 요청도 rate limiter와 circuit breaker preflight를 통과하며, transient 실패는 breaker failure로 기록된다.
+- `src/auto_invest/broker/overseas.py`
+  - 신규 주문 제출 `place_order`의 KIS `POST /trading/order` 호출에 `retry_transient=False`를 적용했다.
+  - 성공 주문번호 파싱과 마스킹된 진단 생성은 유지했다.
+- `src/auto_invest/execution/order_router.py`
+  - HTTP 5xx, 전송 오류, 주문번호 없는 불명확 응답을 `SUBMISSION_UNKNOWN`으로 분류한다.
+  - `INTENT -> SUBMISSION_UNKNOWN` 상태 전이와 `ORDER_SUBMISSION_UNKNOWN` 감사 이벤트를 남긴다.
+  - `rt_cd != 0` 같은 KIS 업무 거부는 기존 `REJECTED_BY_BROKER`로 유지한다.
+  - `SUBMISSION_UNKNOWN`에는 `kis_order_id`를 설정하지 않는다.
+- `src/auto_invest/persistence/audit.py`
+  - `OrderSubmissionUnknownPayload`를 추가했다.
+  - payload에는 broker code, masked diagnostics, operator next action이 들어간다.
+- `src/auto_invest/notifications/audit_tail.py`
+  - 기본 알림 이벤트에 `ORDER_SUBMISSION_UNKNOWN`을 포함했다.
+  - 알림 문구는 "접수 여부 불명확"과 "주문/체결 조회 전 자동 재시도 금지"를 말한다.
+- `src/auto_invest/cli.py`
+  - 읽기 전용 오류 카운트에 `ORDER_SUBMISSION_UNKNOWN`을 포함했다.
+
+검증 증거:
+
+- focused broker/order/audit/notification tests: `62 passed`
+- 전체 테스트: `2607 passed, 4 skipped`
+- 린트: `uv run ruff check src tests` 통과
+- 형식: `git diff --check` 통과
+- HANDOFF 사실 검증: `uv run python scripts/check_handoff_facts.py` 통과
+- strict 하네스: `uv run python scripts/agent_harness_probe.py --strict` 통과
+- 보호 범위: `automation/*.request`, live portfolio configs, whitelist/caps, loss budget, 헌법, kernel manifest 변경 없음
+
+남은 미확인·후속 사항:
+
+- 실제 KIS 계좌의 열린 주문, 보유, 서버 프로세스는 조회하지 않았다.
+- `SUBMISSION_UNKNOWN`을 자동으로 broker order/execution lookup으로 해소하는 복구 경로는 아직 없다.
+- 불명확 상태에서 신규 매수를 계좌 단위로 자동 차단하는 저하 상태기계는 `115-degraded-execution-state` 또는 단일 실행 권한 단계에서 닫아야 한다.
+- 다음 실행 안전성 수동 후보는 `113-atomic-fill-ledger`다.
+
 ## 필수 검증
 
 ```bash
-uv run pytest tests/unit/test_operator_design_boundary.py \
-  tests/unit/test_design_verifier.py \
-  tests/unit/test_design_deploy.py \
-  tests/integration/test_design_cli.py \
-  tests/unit/test_safety_command_registry.py
+uv run pytest \
+  tests/integration/test_broker_client.py \
+  tests/integration/test_broker_order_diagnostics.py \
+  tests/integration/test_order_router.py \
+  tests/unit/test_audit.py \
+  tests/unit/test_telegram_alerts.py
 
 uv run pytest
 uv run ruff check src tests
 git diff --check
 uv run python scripts/check_handoff_facts.py
 uv run python scripts/agent_harness_probe.py --strict
-python3 scripts/check_pr_quality_gate.py /tmp/pr-body-111.md
+python3 scripts/check_pr_quality_gate.py /tmp/pr-body-112.md
 ```
 
-워크플로 문법과 위험 동작 부재도 별도로 확인한다.
+위험 동작 부재도 별도로 확인한다.
 
 ```bash
-python3 - <<'PY'
-from pathlib import Path
-import yaml
-
-path = Path('.github/workflows/operator-design.yml')
-data = yaml.safe_load(path.read_text(encoding='utf-8'))
-assert 'schedule' not in (data.get('on') or {})
-PY
-
-rg -n "AUTO_OK|start_live_worker|auto_ok|schedule:" \
-  .github/workflows/operator-design.yml \
-  scripts/operator_design.sh \
-  src/auto_invest/design \
-  src/auto_invest/cli.py
+rg -n "retry_transient=False|SUBMISSION_UNKNOWN|ORDER_SUBMISSION_UNKNOWN" src tests specs/112-order-submission-uncertainty-recovery
+git diff --name-only | rg 'automation/.*\\.request|deploy/.*portfolio|whitelist|caps|constitution|kernel' && exit 1 || true
 ```
-
-`PyYAML`이 개발 의존성에 없다면 저장소의 기존 YAML 검증 방법을 사용하고, 새 런타임 의존성을 추가하지 않는다.
 
 ## 풀 리퀘스트 분할 원칙
 

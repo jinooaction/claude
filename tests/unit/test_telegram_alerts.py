@@ -21,6 +21,7 @@ from auto_invest.persistence.audit import (
     ErrorPayload,
     FillPayload,
     OrderRejectedByBrokerPayload,
+    OrderSubmissionUnknownPayload,
     OrderSubmittedPayload,
 )
 
@@ -89,6 +90,46 @@ def test_format_broker_rejection_alert_masks_sensitive_values(tmp_path: Path) ->
     assert "msg_cd=APBK001" in message
     assert "요청: pdno=IEF qty=3 limit=95.08" in message
     assert "IEF" in message
+    assert "12345678" not in message
+    assert "secret-token" not in message
+
+
+def test_format_submission_unknown_alert_requires_lookup_without_retry(tmp_path: Path) -> None:
+    db_path = _db(tmp_path)
+    conn = db.get_connection(db_path)
+    try:
+        seq = audit.append(
+            conn,
+            OrderSubmissionUnknownPayload(
+                broker_code="KisOrderError",
+                broker_message="server status unknown",
+                diagnostics={
+                    "http_status": 500,
+                    "request_summary": {
+                        "body": {
+                            "CANO": "12345678",
+                            "ACNT_PRDT_CD": "01",
+                            "PDNO": "IEF",
+                            "ORD_QTY": "3",
+                            "OVRS_ORD_UNPR": "95.08",
+                            "appkey": "secret-token",
+                        }
+                    },
+                },
+            ),
+            symbol="IEF",
+            correlation_id="cid-unknown",
+        )
+        row = conn.execute("SELECT * FROM audit_log WHERE seq = ?", (seq,)).fetchone()
+    finally:
+        conn.close()
+
+    message = format_alert(row, source_label="test")
+    assert "주문 접수 여부 불명확" in message
+    assert "자동 재시도 없이 주문/체결 조회가 필요합니다" in message
+    assert "판단: 주문 접수 여부가 불명확합니다" in message
+    assert "브로커에서 거부되어 접수·체결되지 않았습니다" not in message
+    assert "요청: pdno=IEF qty=3 limit=95.08" in message
     assert "12345678" not in message
     assert "secret-token" not in message
 
