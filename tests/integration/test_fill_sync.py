@@ -50,7 +50,7 @@ def _seed_order(
     conn,
     *,
     corr: str = "ord-1",
-    kis: str = "K1",
+    kis: str | None = "K1",
     symbol: str = "AAPL",
     side: str = "BUY",
     qty: int = 100,
@@ -80,6 +80,14 @@ def _seed_order(
 
 def _ccnl(rows: list[dict]) -> httpx.Response:
     return httpx.Response(200, json={"output": rows})
+
+
+def _recovered_events(conn, corr: str) -> list[dict]:
+    return [
+        audit.parse_payload(r)
+        for r in audit.read_by_correlation(conn, corr)
+        if r["event_type"] == "ORDER_SUBMISSION_RECOVERED"
+    ]
 
 
 async def _sync(client, conn):
@@ -290,6 +298,130 @@ async def test_no_open_orders_skips_broker(tmp_path: Path) -> None:
             res = await _sync(client, conn)
         assert res.polled is False
         assert route.called is False
+
+
+@pytest.mark.asyncio
+async def test_submission_unknown_unique_full_fill_recovers_and_applies_fill(
+    tmp_path: Path,
+) -> None:
+    async with _broker(tmp_path) as (client, conn):
+        _seed_order(conn, corr="ord-unknown", kis=None, qty=100, state="SUBMISSION_UNKNOWN")
+        with respx.mock(base_url=BASE) as mock:
+            route = mock.get(CCNL).mock(
+                return_value=_ccnl(
+                    [
+                        {
+                            "odno": "K-REC",
+                            "pdno": "AAPL",
+                            "sll_buy_dvsn_cd": "02",
+                            "ft_ccld_qty": "100",
+                            "ft_ccld_unpr3": "150",
+                        }
+                    ]
+                )
+            )
+            res = await _sync(client, conn)
+
+        assert route.called
+        assert res.submission_unknown_recovered == 1
+        assert res.fills_applied == 1
+        assert _state(conn, "ord-unknown") == "FILLED"
+        assert _fills_total(conn, "ord-unknown") == 100
+        row = conn.execute(
+            "SELECT kis_order_id FROM orders WHERE correlation_id='ord-unknown'"
+        ).fetchone()
+        assert row["kis_order_id"] == "K-REC"
+        events = _recovered_events(conn, "ord-unknown")
+        assert len(events) == 1
+        assert events[0]["kis_order_id"] == "K-REC"
+
+
+@pytest.mark.asyncio
+async def test_submission_unknown_unique_unfilled_order_recovers_to_submitted(
+    tmp_path: Path,
+) -> None:
+    async with _broker(tmp_path) as (client, conn):
+        _seed_order(conn, corr="ord-unfilled", kis=None, qty=100, state="SUBMISSION_UNKNOWN")
+        with respx.mock(base_url=BASE) as mock:
+            mock.get(CCNL).mock(
+                return_value=_ccnl(
+                    [
+                        {
+                            "odno": "K-OPEN",
+                            "pdno": "AAPL",
+                            "sll_buy_dvsn_cd": "02",
+                            "ft_ccld_qty": "0",
+                            "nccs_qty": "100",
+                        }
+                    ]
+                )
+            )
+            res = await _sync(client, conn)
+
+        assert res.submission_unknown_recovered == 1
+        assert res.fills_applied == 0
+        assert _state(conn, "ord-unfilled") == "SUBMITTED"
+        row = conn.execute(
+            "SELECT kis_order_id FROM orders WHERE correlation_id='ord-unfilled'"
+        ).fetchone()
+        assert row["kis_order_id"] == "K-OPEN"
+
+
+@pytest.mark.asyncio
+async def test_submission_unknown_ambiguous_matches_stay_unresolved(
+    tmp_path: Path,
+) -> None:
+    async with _broker(tmp_path) as (client, conn):
+        _seed_order(conn, corr="ord-ambiguous", kis=None, qty=100, state="SUBMISSION_UNKNOWN")
+        with respx.mock(base_url=BASE) as mock:
+            mock.get(CCNL).mock(
+                return_value=_ccnl(
+                    [
+                        {
+                            "odno": "K-A",
+                            "pdno": "AAPL",
+                            "sll_buy_dvsn_cd": "02",
+                            "ft_ccld_qty": "0",
+                            "nccs_qty": "100",
+                        },
+                        {
+                            "odno": "K-B",
+                            "pdno": "AAPL",
+                            "sll_buy_dvsn_cd": "02",
+                            "ft_ccld_qty": "100",
+                            "ft_ccld_unpr3": "150",
+                        },
+                    ]
+                )
+            )
+            res = await _sync(client, conn)
+
+        assert res.submission_unknown_recovered == 0
+        assert _state(conn, "ord-ambiguous") == "SUBMISSION_UNKNOWN"
+        row = conn.execute(
+            "SELECT kis_order_id FROM orders WHERE correlation_id='ord-ambiguous'"
+        ).fetchone()
+        assert row["kis_order_id"] is None
+        assert _recovered_events(conn, "ord-ambiguous") == []
+
+
+@pytest.mark.asyncio
+async def test_submission_unknown_lookup_failure_does_not_mutate_order(
+    tmp_path: Path,
+) -> None:
+    async with _broker(tmp_path) as (client, conn):
+        _seed_order(conn, corr="ord-failed", kis=None, qty=100, state="SUBMISSION_UNKNOWN")
+        with respx.mock(base_url=BASE) as mock:
+            mock.get(CCNL).mock(return_value=httpx.Response(503, json={"err": "x"}))
+            res = await _sync(client, conn)
+
+        assert res.error is not None
+        assert _state(conn, "ord-failed") == "SUBMISSION_UNKNOWN"
+        row = conn.execute(
+            "SELECT kis_order_id FROM orders WHERE correlation_id='ord-failed'"
+        ).fetchone()
+        assert row["kis_order_id"] is None
+        assert _recovered_events(conn, "ord-failed") == []
 
 
 @pytest.mark.asyncio

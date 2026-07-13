@@ -79,3 +79,4 @@ class BrokerExecution(BaseModel):
     unfilled_qty: int | None = None
     side: Side | None = None
     terminal: bool = False
+    market: str | None = None

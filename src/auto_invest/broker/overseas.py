@@ -863,7 +863,7 @@ async def get_order_executions(
     rows = body.get("output") or body.get("output1") or []
     if isinstance(rows, dict):
         rows = [rows]
-    return _parse_executions(rows)
+    return [ex.model_copy(update={"market": market}) for ex in _parse_executions(rows)]
 
 
 def _merge_executions(
