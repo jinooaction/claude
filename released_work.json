@@ -1,5 +1,5 @@
 {
-  "commit": "6c0565ef4eca0963459a673f3642b806c7dfa2a0",
+  "commit": "62a585e620edfd83c703e0495757320746e5ea2f",
   "overall_status": "OK",
   "released_work": [
     {
@@ -36,6 +36,15 @@
       "source_field": "completed_candidate_id",
       "source_file": "specs/106-agent-ops-frontier-map/spec.md",
       "spec_id": "106-agent-ops-frontier-map",
+      "status": "released"
+    },
+    {
+      "candidate_id": "candidate-atomic-fill-ledger",
+      "entry_id": "released-4e1c1cdad469",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/113-atomic-fill-ledger/spec.md",
+      "spec_id": "113-atomic-fill-ledger",
       "status": "released"
     },
     {
@@ -246,6 +255,15 @@
       "status": "released"
     },
     {
+      "candidate_id": "candidate-order-submission-uncertainty-recovery",
+      "entry_id": "released-fd75a8bbc7ed",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/112-order-submission-uncertainty-recovery/spec.md",
+      "spec_id": "112-order-submission-uncertainty-recovery",
+      "status": "released"
+    },
+    {
       "candidate_id": "candidate-pr-merge-evidence-liveness-contract",
       "entry_id": "released-c0e85509ee97",
       "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
@@ -318,7 +336,7 @@
       "status": "released"
     }
   ],
-  "run_id": "29258957140",
+  "run_id": "29259488568",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -392,6 +410,8 @@
     "109-worktree-concurrency-liveness-contract",
     "110-agent-harness-regression-liveness-contract",
     "111-live-entrypoint-containment",
+    "112-order-submission-uncertainty-recovery",
+    "113-atomic-fill-ledger",
     "114-account-exposure-reservation",
     "115-degraded-execution-state",
     "116-single-execution-authority",
@@ -574,15 +594,7 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "072-candidate-evidence-diagnostics"
-    },
-    {
-      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "112-order-submission-uncertainty-recovery"
-    },
-    {
-      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "113-atomic-fill-ledger"
     }
   ],
-  "timestamp_utc": "2026-07-13T14:40:41.816865Z"
+  "timestamp_utc": "2026-07-13T14:48:13.953916Z"
 }
