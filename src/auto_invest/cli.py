@@ -590,8 +590,8 @@ def design(
         False,
         "--check",
         help=(
-            "최근 design 결과로 시작된 라이브 worker의 현재 상태를 한글로 요약 "
-            "(intent 입력 없어도 됨)."
+            "과거 design 배포 기록이 남긴 라이브 worker 상태를 읽기 전용으로 요약 "
+            "(새 design 실행은 라이브를 시작하지 않음)."
         ),
     ),
     repo_path: Path = typer.Option(
@@ -608,12 +608,12 @@ def design(
 ) -> None:
     """Spec 010 — 자동 룰 설계자.
 
-    운영자가 자연어 한 줄로 의도를 적으면 시스템이 룰을 자동 생성하고
-    정적 검증한 뒤 운영자 OK 한 줄을 받아 라이브 시작. 본 PR에서는 KIS
-    주문 API는 단 한 번도 호출하지 않습니다 (잔고 조회 quote 제외).
+    운영자가 자연어 한 줄로 의도를 적으면 시스템이 룰을 자동 생성하고 정적
+    검증한 뒤 후보 파일과 검증 상태만 남긴다. 이 명령은 PROPOSAL_ONLY이며
+    라이브 worker를 시작하거나 KIS 주문 API를 호출하지 않는다.
 
-    `--check` 옵션으로 호출하면 가장 최근 RULE_DESIGN_DEPLOYED의 라이브 worker
-    현재 상태(시그널·체결·차단 카운트)를 한글 요약으로 출력하고 즉시 종료.
+    `--check` 옵션은 과거 RULE_DESIGN_DEPLOYED 기록이 있는 DB를 읽기 전용으로
+    요약하는 역사 호환 모드다. 새 design 실행은 해당 이벤트를 만들지 않는다.
     """
     # 모든 상대 경로를 --repo 기준으로 절대화. sudo -u auto-invest 가 콘솔의
     # cwd=/root 를 그대로 물려주면 .env / db / config 가 /root/ 아래에서
@@ -650,7 +650,6 @@ def design(
     from auto_invest.persistence import db as _db
     from auto_invest.persistence.audit import (
         RuleDesignCompletedPayload,
-        RuleDesignDeployedPayload,
         RuleDesignRejectedPayload,
         RuleDesignRequestedPayload,
     )
@@ -710,7 +709,7 @@ def design(
     typer.echo(verifier.availability_notice())
 
     # 4. RULE_DESIGN_REQUESTED 기록.
-    design_session_id = _audit.append(
+    _audit.append(
         conn,
         RuleDesignRequestedPayload(
             intent=intent,
@@ -722,14 +721,14 @@ def design(
     )
 
     # 5. Claude 호출 + 검증 루프 (최대 max_retries).
-    # 자본은 항상 KIS 잔고를 사용 — "의도 자본" 별도 입력 정책은 제거됨.
-    intent_capital = balance.cash_usd
+    # design은 후보만 만들며 live 자본 배분을 수행하지 않는다.
     retry_context: dict | None = None
     generated_toml: str | None = None
     completed_payload: RuleDesignCompletedPayload | None = None
+    verification_result: verifier.VerifyResult | None = None
 
     async def _design_loop():
-        nonlocal retry_context, generated_toml, completed_payload
+        nonlocal retry_context, generated_toml, completed_payload, verification_result
         async with httpx.AsyncClient(timeout=60.0) as _:
             # anthropic SDK 클라이언트 — async 버전.
             import anthropic
@@ -804,12 +803,16 @@ def design(
                     typer.echo(f"Claude 응답 오류: {parsed.error}", err=True)
                     return False
 
-                # 정적 + 백테스트(가용 시) 검증.
+                # 정적 검증 + fail-closed 동적 검증 상태 산출.
                 vr = verifier.verify_rules(
                     parsed.rules_toml,
                     kis_balance_usd=balance.cash_usd,
                 )
-                if not vr.ok:
+                static_passed = (
+                    vr.static_result is not None
+                    and vr.static_result.status == "PASS"
+                )
+                if not static_passed or vr.overall_status == "BLOCKED":
                     _audit.append(
                         conn,
                         RuleDesignRejectedPayload(
@@ -826,7 +829,7 @@ def design(
                     }
                     continue
 
-                # 통과 — COMPLETED 기록 + 생성된 TOML 보관.
+                # 후보 생성 완료. 동적 증거가 없으면 PROPOSAL_ONLY 대기 상태로 남긴다.
                 completed_payload = RuleDesignCompletedPayload(
                     intent=intent,
                     interpretation=parsed.interpretation,
@@ -840,6 +843,7 @@ def design(
                 )
                 _audit.append(conn, completed_payload)
                 generated_toml = parsed.rules_toml
+                verification_result = vr
                 return True
 
         return False
@@ -865,77 +869,75 @@ def design(
         conn.close()
         _exit(1)
 
-    # 6. 운영자 OK prompt + 라이브 시작 (stub).
+    # 6. 후보 파일 저장 + proposal-only 보고.
     assert completed_payload is not None
     assert generated_toml is not None
-    typer.echo("\n=== 검증 통과 — 생성된 룰 요약 ===")
-    typer.echo(f"  해석: {_json.dumps(completed_payload.interpretation, ensure_ascii=False)}")
-    typer.echo(f"  KIS 예수금: ${balance.cash_usd} / 총 평가: ${balance.total_value_usd}")
-    typer.echo(generated_toml[:500] + ("..." if len(generated_toml) > 500 else ""))
-    typer.echo("")
+    assert verification_result is not None
 
-    ok = deploy.prompt_operator_ok()
-    if not ok:
-        _audit.append(
-            conn,
-            RuleDesignRejectedPayload(
-                reason="operator_declined",
-                detail="운영자가 OK를 답하지 않거나 60초 안에 응답 없음.",
-            ),
-        )
-        typer.echo("라이브 시작 거부됨. 생성된 룰은 audit_log에 보관됨.")
-        conn.close()
-        return  # exit 0 (정상 종료)
-
-    # 라이브 worker subprocess 자동 시작.
     config_dir = db_path.parent / ".." / "config"
     rules_path = deploy.write_auto_rules_file(
         generated_toml, config_dir=config_dir.resolve(),
     )
-    typer.echo(f"\n생성된 룰을 저장: {rules_path}")
-    typer.echo("라이브 worker subprocess 시작 중...")
-
-    live_session_id = deploy.start_live_worker(
+    stage_payloads = [
+        {
+            "stage": stage.stage,
+            "status": stage.status,
+            "reason_code": stage.reason_code,
+            "reason_ko": stage.reason_ko,
+            "candidate_fingerprint": stage.candidate_fingerprint,
+            "evidence_ref": stage.evidence_ref,
+            "observed_at_utc": stage.observed_at_utc,
+            "fresh_until_utc": stage.fresh_until_utc,
+            "metrics": stage.metrics,
+        }
+        for stage in (
+            verification_result.static_result,
+            verification_result.backtest_result,
+            verification_result.paper_result,
+        )
+        if stage is not None
+    ]
+    report_path = deploy.write_proposal_report(
+        {
+            "authority": "PROPOSAL_ONLY",
+            "candidate_fingerprint": verification_result.candidate_fingerprint,
+            "rules_path": str(rules_path),
+            "verification": {
+                "ok": verification_result.ok,
+                "overall_status": verification_result.overall_status,
+                "blocking_reasons": list(verification_result.blocking_reasons),
+                "evidence_refs": list(verification_result.evidence_refs),
+                "stages": stage_payloads,
+            },
+            "next_action": "submit_to_existing_validation_pipeline",
+        },
         rules_path=rules_path,
-        capital_usd=intent_capital,
-        db_path=db_path,
-        halt_path=db_path.parent / "halt.flag",
-        env_file=env_file,
-        base_url=base_url,
-        prices_path=prices_path,
-        conn=conn,
     )
-    if live_session_id is None:
-        _audit.append(
-            conn,
-            RuleDesignRejectedPayload(
-                reason="claude_api_error",  # 가장 가까운 reason — 후속 PR에서 새 reason 추가 가능
-                detail=(
-                    "라이브 worker subprocess가 30초 안에 WORKER_STARTED audit row를 "
-                    "남기지 않았습니다. 로그를 확인해주세요."
-                ),
-            ),
-        )
-        typer.echo(
-            "라이브 worker 시작 실패: 30초 안에 worker가 audit_log에 등록되지 않음. "
-            "로그 디렉토리를 확인해주세요.",
-            err=True,
-        )
-        conn.close()
-        _exit(1)
 
-    _audit.append(
-        conn,
-        RuleDesignDeployedPayload(
-            design_session_id=design_session_id,
-            live_session_id=live_session_id,
-            deployed_at_utc=_d_iso_now(),
-            total_capital_usd=str(intent_capital),
-        ),
+    typer.echo("\n=== PROPOSAL_ONLY — 생성된 룰 후보 ===")
+    typer.echo(f"  해석: {_json.dumps(completed_payload.interpretation, ensure_ascii=False)}")
+    typer.echo(f"  KIS 예수금: ${balance.cash_usd} / 총 평가: ${balance.total_value_usd}")
+    typer.echo(f"  후보 파일: {rules_path}")
+    typer.echo(f"  검증 보고서: {report_path}")
+    typer.echo(f"  후보 지문: {verification_result.candidate_fingerprint}")
+    typer.echo(f"  검증 상태: {verification_result.overall_status}")
+    typer.echo("  단계별 검증:")
+    for stage in (
+        verification_result.static_result,
+        verification_result.backtest_result,
+        verification_result.paper_result,
+    ):
+        if stage is None:
+            continue
+        typer.echo(f"    - {stage.stage}: {stage.status} ({stage.reason_code})")
+    typer.echo(generated_toml[:500] + ("..." if len(generated_toml) > 500 else ""))
+    typer.echo("")
+    typer.echo(
+        "룰 후보를 만들었습니다. 라이브 worker는 시작하지 않았고 실제 주문은 0건입니다."
     )
     typer.echo(
-        f"\n라이브 worker 시작됨. WORKER_STARTED seq={live_session_id}, "
-        f"자본 ${intent_capital}. design 명령은 종료. worker는 background에서 계속 실행."
+        "다음 단계: 후보를 기존 검증 경로"
+        "(backtest -> paper/forward -> canary -> 승인된 live)에 제출하세요."
     )
     conn.close()
 

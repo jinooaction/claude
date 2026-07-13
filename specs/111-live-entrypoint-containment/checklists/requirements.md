@@ -71,10 +71,10 @@
 
 아래는 구현 시작 시 코드 검색으로 답해야 하며, 스펙 모호성은 아니다.
 
-- [ ] CHK043 `start_live_worker`의 현재 production call site 전체를 확인했다.
-- [ ] CHK044 기존 `design` CLI의 후보 파일 저장과 audit emission 순서를 확인했다.
-- [ ] CHK045 실제 재사용 가능한 backtest/paper validator API를 확인했다.
-- [ ] CHK046 operator-design 관련 문서와 테스트 fixture의 `AUTO_OK` 참조를 전수 확인했다.
-- [ ] CHK047 workflow input transport를 테스트할 기존 셸 테스트 패턴을 확인했다.
+- [x] CHK043 `start_live_worker`의 현재 production call site 전체를 확인했다.
+- [x] CHK044 기존 `design` CLI의 후보 파일 저장과 audit emission 순서를 확인했다.
+- [x] CHK045 실제 재사용 가능한 backtest/paper validator API를 확인했다.
+- [x] CHK046 operator-design 관련 문서와 테스트 fixture의 `AUTO_OK` 참조를 전수 확인했다.
+- [x] CHK047 workflow input transport를 테스트할 기존 셸 테스트 패턴을 확인했다.
 
 이 다섯 항목은 Phase 0 탐색에서 체크하고, 결과를 PR 본문 `## 탐색 근거`에 남긴다.

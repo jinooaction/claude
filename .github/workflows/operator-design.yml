@@ -1,6 +1,6 @@
 name: Operator design (auto-invest)
 
-# 운영자가 GitHub UI에서 한 번 클릭으로 design 실행.
+# 운영자가 GitHub UI에서 한 번 클릭으로 proposal-only design 실행.
 #
 # 워크플로우가 SSH로 운영자 인스턴스(Vultr 등)에 접속해 operator_design.sh
 # 를 실행하고 결과를 워크플로우 로그 + Summary에 출력.
@@ -29,8 +29,8 @@ name: Operator design (auto-invest)
 #   Actions 탭 → "Operator design (auto-invest)" → Run workflow → intent 입력 → Run.
 #
 # 결과:
-#   워크플로우 로그에 KIS 잔고 / Claude 응답 / 검증 결과 / 라이브 시작 여부 출력.
-#   AUTO_OK=true (기본) 면 검증 통과 즉시 라이브 worker 자동 시작.
+#   워크플로우 로그에 KIS 잔고 / Claude 응답 / 후보 파일 / 검증 상태 출력.
+#   이 경로는 PROPOSAL_ONLY이며 실거래 프로세스를 시작하지 않는다.
 
 on:
   workflow_dispatch:
@@ -40,18 +40,6 @@ on:
         required: true
         default: "자본 100달러, 미국 대형주 분산, 매주 월요일 적립, 위험 보통"
         type: string
-      auto_ok:
-        description: "검증 통과 후 OK 자동 입력 (true=라이브 즉시 시작, false=룰만 출력하고 종료)"
-        required: true
-        default: true
-        type: boolean
-  # 매주 월요일 UTC 04:00 (KST 13:00, 미국 시장 외 시간) 자동 실행.
-  # 운영자가 UI 클릭조차 안 해도 정기적으로 design 호출.
-  # schedule 트리거는 inputs 를 못 받으므로 의도는 아래 jobs.design.env.DEFAULT_INTENT
-  # 에 고정. 의도 변경하려면 이 파일을 GitHub UI 에서 한 줄만 수정 후 commit.
-  # 멈추려면 이 줄들을 삭제하거나 주석 처리.
-  schedule:
-    - cron: "0 4 * * 1"
 
 permissions:
   contents: read
@@ -119,32 +107,32 @@ jobs:
           HOST: ${{ secrets.VULTR_SSH_HOST }}
           USER: ${{ secrets.VULTR_SSH_USER }}
           PORT: ${{ secrets.VULTR_SSH_PORT }}
-          # workflow_dispatch 시 inputs.intent 를 사용, schedule 트리거 시 비어있으므로
-          # 아래 디폴트 의도로 fallback. 의도를 바꾸려면 이 default 줄을 GitHub UI 에서
-          # 수정하거나, workflow_dispatch 로 다른 의도를 입력하세요.
-          INTENT: ${{ inputs.intent || '자본 100달러, 미국 대형주 분산, 매주 월요일 적립, 위험 보통' }}
-          # schedule 트리거에서는 inputs.auto_ok 가 비어있으므로 기본 true 처리.
-          AUTO_OK: ${{ (inputs.auto_ok == false) && '0' || '1' }}
+          INTENT: ${{ inputs.intent }}
         run: |
           set -euo pipefail
           port="${PORT:-22}"
+          intent_b64="$(printf '%s' "${INTENT}" | base64 | tr -d '\n')"
+          intent_sha="$(printf '%s' "${INTENT}" | sha256sum | awk '{print $1}')"
           echo "============================================================"
-          echo "운영자 의도: ${INTENT}"
-          echo "AUTO_OK: ${AUTO_OK} (1=검증 통과 즉시 라이브 시작, 0=룰만 보기)"
+          echo "운영자 의도 길이: ${#INTENT}자"
+          echo "운영자 의도 지문: ${intent_sha}"
+          echo "권한: PROPOSAL_ONLY (실거래 프로세스 시작 없음)"
           echo "트리거: ${GITHUB_EVENT_NAME}"
           echo "대상 인스턴스: ${USER}@${HOST}:${port}"
           echo "============================================================"
           # operator_design.sh 가 인스턴스의 /opt/auto-invest/scripts/ 에 있어야 함.
           # 처음 실행이라 없을 수도 있으므로, curl 로 main 의 최신본을 직접 가져와 실행.
           # (인스턴스가 main 을 받지 않은 상태에서도 동작 보장.)
+          set +e
           ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
               -p "${port}" \
               -i ~/.ssh/id_ed25519 \
               "${USER}@${HOST}" \
-              "AUTO_OK='${AUTO_OK}' bash -s -- '${INTENT}'" \
+              "INTENT_B64='${intent_b64}' bash -s" \
               < scripts/operator_design.sh \
               2>&1 | tee /tmp/design_output.log
           design_exit=${PIPESTATUS[0]}
+          set -e
           echo "DESIGN_EXIT=${design_exit}" >> "$GITHUB_ENV"
           # exit code 를 그대로 전파 (workflow 실패 표시).
           exit "${design_exit}"
@@ -153,10 +141,10 @@ jobs:
         if: always()
         env:
           INTENT: ${{ inputs.intent }}
-          AUTO_OK: ${{ inputs.auto_ok }}
         run: |
           set -euo pipefail
           exit_code="${DESIGN_EXIT:-?}"
+          intent_sha="$(printf '%s' "${INTENT}" | sha256sum | awk '{print $1}')"
           if [[ "${exit_code}" == "0" ]]; then
               status="✅ 정상 종료"
           else
@@ -167,22 +155,20 @@ jobs:
 
           | 항목 | 값 |
           |------|-----|
-          | 의도 | ${INTENT} |
-          | AUTO_OK | ${AUTO_OK} |
+          | 의도 길이 | ${#INTENT}자 |
+          | 의도 지문 | ${intent_sha} |
+          | 권한 | PROPOSAL_ONLY |
           | 결과 | ${status} |
 
           ## 실행 로그
 
           전체 로그는 위의 "Run operator_design.sh on instance" 스텝에서 확인하세요.
-          (KIS 잔고 / Claude 호출 / 검증 결과 / 라이브 worker 시작 여부)
+          (KIS 잔고 / Claude 호출 / 후보 파일 / 검증 상태)
 
           ## 다음 단계
 
-          - **AUTO_OK=true 였고 정상 종료**: 라이브 worker subprocess 가 시작됐습니다.
-            인스턴스 콘솔(또는 다음 workflow 실행) 에서 \`auto-invest design --check\` 로
-            상태 확인 가능.
-          - **AUTO_OK=false 였고 정상 종료**: 룰이 검증을 통과해 audit_log 에 기록됐습니다.
-            룰을 검토한 뒤 만족하면 AUTO_OK=true 로 다시 실행하세요 (Claude 비용 ~\$0.02 추가).
+          - **정상 종료**: 룰 후보와 검증 상태가 생성됐습니다. 실거래 프로세스는 시작하지 않았습니다.
+            후보는 기존 backtest → paper/forward → canary → 승인된 live 경로로만 승격하세요.
           - **실패**: 위 로그의 마지막 5~10 줄을 확인. 자주 발생하는 원인:
             - KIS API 인증 실패: KIS_APP_KEY / KIS_APP_SECRET / KIS_ACCOUNT_NO 확인
             - Anthropic API 실패: ANTHROPIC_API_KEY 확인

@@ -9,10 +9,16 @@ KIS 잔고 조회·Claude 호출 mock이 필요한 end-to-end는 후속 PR에서
 
 from __future__ import annotations
 
+import json
+from decimal import Decimal
+from types import SimpleNamespace
+
 import pytest
 from typer.testing import CliRunner
 
+import auto_invest.cli as cli_module
 from auto_invest.cli import app
+from auto_invest.design import claude_client, deploy
 from auto_invest.persistence import audit, db
 from auto_invest.persistence.audit import RuleDesignRequestedPayload
 
@@ -177,3 +183,109 @@ def test_repo_anchors_env_when_called_from_foreign_cwd(
         f"stdout: {result.stdout}\n"
         f"stderr: {result.stderr if hasattr(result, 'stderr') else '-'}"
     )
+
+
+def test_design_generates_proposal_only_without_live_start(
+    runner, workspace, tmp_path, monkeypatch
+):
+    """스펙 111: design은 후보 파일을 만들지만 라이브 worker를 시작하지 않는다."""
+    db_path = tmp_path / "data" / "auto_invest.db"
+    db_path.parent.mkdir()
+    conn = db.get_connection(db_path)
+    db.migrate(conn)
+    conn.close()
+
+    async def fake_fetch_kis_account_state(**kwargs):  # noqa: ANN003, ARG001
+        balance = SimpleNamespace(
+            cash_usd=Decimal("102.45"),
+            total_value_usd=Decimal("102.45"),
+        )
+        return balance, []
+
+    async def fake_call_rule_design(*args, **kwargs):  # noqa: ANN002, ANN003, ARG001
+        return claude_client.ClaudeDesignResponse(
+            text="""
+# INTERPRETATION: {"max_drawdown_pct": 5, "universe": ["VOO"]}
+
+[caps]
+per_trade_pct = 5
+per_symbol_pct = 20
+global_exposure_pct = 80
+canary_capital_pct = 5
+canary_min_duration_days = 10
+canary_acceptance_drawdown_pct = 3
+
+[whitelist]
+symbols = ["VOO"]
+accounts = ["1234567801"]
+order_types = ["MARKET", "LIMIT"]
+sessions = ["REGULAR"]
+
+[[rules]]
+id = "rule_voo_buy"
+symbol = "VOO"
+stage = "CANARY"
+priority = 10
+enabled = true
+
+[rules.trigger]
+kind = "price"
+direction = "<="
+threshold = 999999
+cooldown_seconds = 60
+
+[rules.action]
+side = "BUY"
+order_type = "MARKET"
+qty = 1
+limit_price = "0"
+""".strip(),
+            model_id="claude-opus-4-7",
+            tokens_input=100,
+            tokens_output=50,
+            cost_usd=Decimal("0.01"),
+            cost_exceeded=False,
+        )
+
+    def fail_if_live_prompt(*args, **kwargs):  # noqa: ANN002, ANN003, ARG001
+        raise AssertionError("design must not ask for live-start OK")
+
+    def fail_if_live_worker(*args, **kwargs):  # noqa: ANN002, ANN003, ARG001
+        raise AssertionError("design must not start a live worker")
+
+    monkeypatch.setattr(cli_module, "_fetch_kis_account_state", fake_fetch_kis_account_state)
+    monkeypatch.setattr(claude_client, "call_rule_design", fake_call_rule_design)
+    monkeypatch.setattr(deploy, "prompt_operator_ok", fail_if_live_prompt)
+    monkeypatch.setattr(deploy, "start_live_worker", fail_if_live_worker)
+
+    result = runner.invoke(
+        app,
+        [
+            "design",
+            "--intent", "자본 100달러, 미국 대형주 분산",
+            "--db", str(db_path),
+            "--env-file", str(workspace["env"]),
+            "--prices", str(workspace["prices"]),
+            "--repo", str(tmp_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.stdout
+    assert "PROPOSAL_ONLY" in result.stdout
+    assert "라이브 worker는 시작하지 않았고 실제 주문은 0건입니다" in result.stdout
+    rules_files = list((tmp_path / "config").glob("rules_auto_*.toml"))
+    assert len(rules_files) == 1
+    assert "rule_voo_buy" in rules_files[0].read_text(encoding="utf-8")
+    report_files = list((tmp_path / "config").glob("rules_auto_*.proposal.json"))
+    assert len(report_files) == 1
+    report = json.loads(report_files[0].read_text(encoding="utf-8"))
+    assert report["authority"] == "PROPOSAL_ONLY"
+    assert report["verification"]["overall_status"] == "WAIT_DYNAMIC_VALIDATION"
+    assert report["verification"]["ok"] is False
+
+    conn = db.get_connection(db_path)
+    rows = list(conn.execute("SELECT event_type FROM audit_log ORDER BY seq"))
+    conn.close()
+    event_types = [row["event_type"] for row in rows]
+    assert "RULE_DESIGN_COMPLETED" in event_types
+    assert "RULE_DESIGN_DEPLOYED" not in event_types

@@ -27,7 +27,7 @@
 
 - 기준 `main`: `e9f9f98ea5787780a26c3833189b17b5b39cb7d5` — PR #508 머지
 - 확인 시점: 2026-07-13 KST
-- 열린 풀 리퀘스트: 없음
+- 열린 풀 리퀘스트: PR #509 `Codex/111-live-entrypoint-containment`
 - 기존 활성 스펙 포인터: `specs/110-agent-harness-regression-liveness-contract`
 - 새 작업 브랜치: `Codex/111-live-entrypoint-containment`
 - 주요 저장소 선언 상태:
@@ -337,10 +337,70 @@ README는 여전히 LLM을 호출하지 않고 스펙 004·005가 미구현이�
 - 기존 주요 실거래 센티넬의 내용은 바뀌지 않는다.
 - 관련 테스트, 전체 테스트, 린트, 하네스, HANDOFF 검증, PR 품질 관문이 통과한다.
 
+## 스펙 111 구현 결과
+
+현재 PR #509에서 저장소 기준 평행 실거래 진입점은 후보 생성 전용 경로로 축소됐다.
+
+제거·축소한 경로:
+
+- `.github/workflows/operator-design.yml`
+  - 예약 실행을 제거했다.
+  - `auto_ok` 입력과 기본 true 의미를 제거했다.
+  - 자연어 intent 원문을 원격 셸 인자로 넣지 않고 `INTENT_B64` 데이터로 전달한다.
+  - Summary는 `PROPOSAL_ONLY`와 실거래 프로세스 시작 없음만 보고한다.
+  - 실행 로그와 Summary에는 intent 원문 대신 길이와 SHA-256 지문만 남긴다.
+- `.github/workflows/trigger-design.yml`
+  - `.trigger/design-now.txt` push 자동 실행을 제거했다.
+  - 수동 실행만 남기고 동일하게 `INTENT_B64`로 intent를 전달한다.
+  - `.verify/last_design.md`에는 intent 원문 대신 길이와 SHA-256 지문만 남긴다.
+- `scripts/operator_design.sh`
+  - 자동 `OK` 주입과 live 상태 확인을 제거했다.
+  - 콘솔 인자, 표준입력, `INTENT_B64`를 후보 생성용 데이터로만 읽는다.
+  - helper 콘솔 출력도 intent 원문 대신 길이만 보고한다.
+- `src/auto_invest/cli.py`
+  - `design` 명령에서 `prompt_operator_ok()`, `start_live_worker()`,
+    `RULE_DESIGN_DEPLOYED` emission을 제거했다.
+  - 정적 검증 통과 후보는 `config/rules_auto_<timestamp>.toml`과
+    `config/rules_auto_<timestamp>.proposal.json`으로 남긴다.
+  - 출력은 후보 파일, 검증 보고서, 후보 지문, 단계별 검증 상태와
+    `PROPOSAL_ONLY`를 명시한다.
+- `src/auto_invest/design/verifier.py`
+  - `VerificationStageResult`와 fail-closed aggregate 결과를 도입했다.
+  - 동적 백테스트·paper 증거가 없으면 `WAIT_DYNAMIC_VALIDATION`, `ok=False`다.
+  - 실제 stage 증거가 모두 같은 후보 지문에 묶인 경우에만 `ok=True`다.
+- `src/auto_invest/design/deploy.py`
+  - 후보 파일과 proposal JSON 저장만 남겼다.
+  - 과거 live-start 함수명은 즉시 `LiveActivationBoundaryError`를 내는 호환 껍데기다.
+- `src/auto_invest/safety/command_registry.py`
+  - `design`을 `A2 / proposal`로 낮추고 주문·live config·자본·재지정 권한을 모두 false로 맞췄다.
+
+남긴 기능과 대체 경로:
+
+- 자연어 설계, KIS 읽기 전용 계좌 문맥, Claude 호출, 정적 검증, 후보 TOML 저장은 유지한다.
+- 후보의 다음 경로는 `candidate → backtest → paper/forward → canary → approved live`다.
+- 과거 `RULE_DESIGN_DEPLOYED` 이벤트와 `design --check` 읽기 전용 요약은 역사 호환으로 남긴다.
+
+검증 증거:
+
+- focused design 주변 테스트: `70 passed`
+- 전체 테스트: `2599 passed, 4 skipped`
+- 린트: `uv run ruff check src tests` 통과
+- 형식: `git diff --check` 통과
+- HANDOFF 사실 검증: `uv run python scripts/check_handoff_facts.py` 통과
+- strict 하네스: `uv run python scripts/agent_harness_probe.py --strict` 통과
+- 보호 파일 해시: live sentinels, 헌법, kernel manifest, caps, whitelist 모두 작업 전과 동일
+
+남은 미확인 사항:
+
+- 실제 운영 서버에 과거 design-driven 프로세스가 남아 있는지는 확인하지 않았다.
+- GitHub Actions 비밀값과 Environment 보호 규칙은 저장소 변경만으로 확인하지 않았다.
+- KIS 계좌의 현재 열린 주문과 실제 보유 상태는 조회하지 않았다.
+
 ## 필수 검증
 
 ```bash
-uv run pytest tests/unit/test_design_verifier.py \
+uv run pytest tests/unit/test_operator_design_boundary.py \
+  tests/unit/test_design_verifier.py \
   tests/unit/test_design_deploy.py \
   tests/integration/test_design_cli.py \
   tests/unit/test_safety_command_registry.py
