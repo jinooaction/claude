@@ -1,5 +1,5 @@
 {
-  "commit": "692cdffb5863a3deebf5080b55c350445298cbd4",
+  "commit": "34f804bf14185f0cb2156a3fcadc0079a4699fee",
   "overall_status": "OK",
   "released_work": [
     {
@@ -291,7 +291,7 @@
       "status": "released"
     }
   ],
-  "run_id": "29250744535",
+  "run_id": "29251308162",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -364,7 +364,8 @@
     "108-pr-merge-evidence-liveness-contract",
     "109-worktree-concurrency-liveness-contract",
     "110-agent-harness-regression-liveness-contract",
-    "111-live-entrypoint-containment"
+    "111-live-entrypoint-containment",
+    "114-account-exposure-reservation"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -551,11 +552,7 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "113-atomic-fill-ledger"
-    },
-    {
-      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "114-account-exposure-reservation"
     }
   ],
-  "timestamp_utc": "2026-07-13T12:40:40.360628Z"
+  "timestamp_utc": "2026-07-13T12:49:32.580193Z"
 }
