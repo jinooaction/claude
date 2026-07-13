@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from decimal import Decimal
 from pathlib import Path
 
 import httpx
@@ -11,7 +12,15 @@ import pytest
 import respx
 
 from auto_invest.broker.client import AsyncTokenBucket, CircuitBreaker, ResilientClient
-from auto_invest.execution.fill_sync import sync_fills
+from auto_invest.config.enums import Side
+from auto_invest.execution import fill_sync as fill_sync_mod
+from auto_invest.execution.fill_sync import (
+    FillPlan,
+    PlannedFill,
+    PlannedTransition,
+    apply_fill_plan,
+    sync_fills,
+)
 from auto_invest.persistence import audit, db
 from auto_invest.persistence import positions as positions_mod
 
@@ -92,10 +101,44 @@ def _fills_total(conn, corr: str) -> int:
     return int(row["t"])
 
 
+def _fill_audit_count(conn, corr: str) -> int:
+    row = conn.execute(
+        """
+        SELECT COUNT(*) AS c
+        FROM audit_log
+        WHERE event_type='FILL' AND correlation_id=?
+        """,
+        (corr,),
+    ).fetchone()
+    return int(row["c"])
+
+
 def _state(conn, corr: str) -> str:
     return conn.execute(
         "SELECT state FROM orders WHERE correlation_id=?", (corr,)
     ).fetchone()["state"]
+
+
+def _planned_fill(
+    *,
+    corr: str = "ord-1",
+    kis: str = "K1",
+    symbol: str = "AAPL",
+    side: str = "BUY",
+    qty: int = 100,
+    price: str = "150",
+    fill_id: str = "K1:100",
+) -> PlannedFill:
+    return PlannedFill(
+        correlation_id=corr,
+        kis_order_id=kis,
+        symbol=symbol,
+        side=side,
+        rule_id="r1",
+        qty=qty,
+        price_usd=Decimal(price),
+        kis_fill_id=fill_id,
+    )
 
 
 @pytest.mark.asyncio
@@ -157,6 +200,85 @@ async def test_idempotent_resync(tmp_path: Path) -> None:
         assert res2.fills_applied == 0
         assert _fills_total(conn, "ord-1") == 100
         assert positions_mod.get_position(conn, "AAPL").qty == 100
+
+
+def test_apply_plan_skips_duplicate_fill_without_cache_or_audit(tmp_path: Path) -> None:
+    conn = db.get_connection(tmp_path / "t.db")
+    db.migrate(conn)
+    try:
+        _seed_order(conn, qty=100)
+        conn.execute(
+            """
+            INSERT INTO fills
+                (order_correlation_id, kis_fill_id, qty, price_usd, executed_at_utc)
+            VALUES ('ord-1', 'K1:100', 100, '150', '2026-05-26T15:00:00.000Z')
+            """
+        )
+        positions_mod.update_from_fill(
+            conn,
+            symbol="AAPL",
+            side=Side.BUY,
+            qty=100,
+            price_usd=Decimal("150"),
+            ts_utc="2026-05-26T15:00:00.000Z",
+        )
+
+        fills_applied, qty_applied, transitions = apply_fill_plan(
+            conn,
+            FillPlan(fills=[_planned_fill()]),
+            ts_iso="2026-05-26T15:00:01.000Z",
+        )
+
+        assert (fills_applied, qty_applied, transitions) == (0, 0, 0)
+        assert _fills_total(conn, "ord-1") == 100
+        assert _fill_audit_count(conn, "ord-1") == 0
+        pos = positions_mod.get_position(conn, "AAPL")
+        assert pos is not None and pos.qty == 100
+    finally:
+        conn.close()
+
+
+def test_apply_plan_rolls_back_fill_and_audit_on_position_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    conn = db.get_connection(tmp_path / "t.db")
+    db.migrate(conn)
+    try:
+        _seed_order(conn, qty=100)
+
+        def _boom(*_args, **_kwargs):
+            raise RuntimeError("position cache failed")
+
+        monkeypatch.setattr(fill_sync_mod.positions_mod, "update_from_fill", _boom)
+        plan = FillPlan(
+            fills=[_planned_fill()],
+            transitions=[
+                PlannedTransition(
+                    correlation_id="ord-1",
+                    from_state="SUBMITTED",
+                    to_state="FILLED",
+                    reason="filled 100/100",
+                )
+            ],
+        )
+
+        with pytest.raises(RuntimeError, match="position cache failed"):
+            apply_fill_plan(conn, plan, ts_iso="2026-05-26T15:00:00.000Z")
+
+        assert _fills_total(conn, "ord-1") == 0
+        assert _fill_audit_count(conn, "ord-1") == 0
+        assert positions_mod.get_position(conn, "AAPL") is None
+        assert _state(conn, "ord-1") == "SUBMITTED"
+        history = conn.execute(
+            """
+            SELECT COUNT(*) AS c
+            FROM order_state_history
+            WHERE order_correlation_id='ord-1' AND to_state='FILLED'
+            """
+        ).fetchone()
+        assert int(history["c"]) == 0
+    finally:
+        conn.close()
 
 
 @pytest.mark.asyncio

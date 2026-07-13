@@ -223,8 +223,24 @@ def _recorded_qty_by_corr(
     return {r["corr"]: int(r["total"]) for r in rows}
 
 
-def _apply_fill(conn: sqlite3.Connection, fill: PlannedFill, ts_iso: str) -> None:
-    """한 FILL 적용: 감사 이벤트 + fills row(멱등) + 보유 캐시 갱신."""
+def _apply_fill(conn: sqlite3.Connection, fill: PlannedFill, ts_iso: str) -> bool:
+    """Apply one FILL inside the caller's transaction.
+
+    Returns True only when the fill row was newly inserted. Duplicate
+    `kis_fill_id` rows are already represented in the ledger, so they must not
+    append another audit event or move the rebuildable position cache.
+    """
+    cursor = conn.execute(
+        """
+        INSERT OR IGNORE INTO fills
+            (order_correlation_id, kis_fill_id, qty, price_usd, executed_at_utc)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (fill.correlation_id, fill.kis_fill_id, fill.qty, str(fill.price_usd), ts_iso),
+    )
+    if cursor.rowcount == 0:
+        return False
+
     audit.append(
         conn,
         FillPayload(
@@ -238,14 +254,6 @@ def _apply_fill(conn: sqlite3.Connection, fill: PlannedFill, ts_iso: str) -> Non
         correlation_id=fill.correlation_id,
         ts_utc=ts_iso,
     )
-    conn.execute(
-        """
-        INSERT OR IGNORE INTO fills
-            (order_correlation_id, kis_fill_id, qty, price_usd, executed_at_utc)
-        VALUES (?, ?, ?, ?, ?)
-        """,
-        (fill.correlation_id, fill.kis_fill_id, fill.qty, str(fill.price_usd), ts_iso),
-    )
     positions_mod.update_from_fill(
         conn,
         symbol=fill.symbol,
@@ -254,6 +262,7 @@ def _apply_fill(conn: sqlite3.Connection, fill: PlannedFill, ts_iso: str) -> Non
         price_usd=fill.price_usd,
         ts_utc=ts_iso,
     )
+    return True
 
 
 def _iso_ms(dt: datetime) -> str:
@@ -268,19 +277,34 @@ def apply_fill_plan(
     `ts_iso` 는 체결·전이의 기록 시각이다. 워커가 틱의 논리적 시각을 넘겨
     감사 로그 시각이 결정론적이게 한다(미지정 시 현재 UTC)."""
     ts_iso = ts_iso or _utcnow_iso_ms()
+    if not plan.fills and not plan.transitions:
+        return 0, 0, 0
+
+    # Autocommit connections make each statement atomic by default. Fill
+    # application spans multiple tables, so this path owns an explicit writer
+    # transaction: either all ledger/cache/state effects land together or none do.
+    conn.execute("BEGIN IMMEDIATE")
     qty_applied = 0
-    for fill in plan.fills:
-        _apply_fill(conn, fill, ts_iso)
-        qty_applied += fill.qty
-    for tr in plan.transitions:
-        _record_transition(conn, tr.correlation_id, tr.from_state, tr.to_state, tr.reason)
-        if tr.audit_cancel:
-            audit.append(
-                conn,
-                CancelPayload(reason=tr.reason),
-                correlation_id=tr.correlation_id,
-            )
-    return len(plan.fills), qty_applied, len(plan.transitions)
+    fills_applied = 0
+    try:
+        for fill in plan.fills:
+            if _apply_fill(conn, fill, ts_iso):
+                fills_applied += 1
+                qty_applied += fill.qty
+        for tr in plan.transitions:
+            _record_transition(conn, tr.correlation_id, tr.from_state, tr.to_state, tr.reason)
+            if tr.audit_cancel:
+                audit.append(
+                    conn,
+                    CancelPayload(reason=tr.reason),
+                    correlation_id=tr.correlation_id,
+                )
+        conn.commit()
+    except Exception:
+        if conn.in_transaction:
+            conn.rollback()
+        raise
+    return fills_applied, qty_applied, len(plan.transitions)
 
 
 async def sync_fills(
