@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-07-13T14:31:01.310674Z)
+# 완료 후보 소비 장부 (as of 2026-07-13T14:40:41.816865Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -8,8 +8,8 @@
 | 항목 | 값 |
 |------|-----|
 | overall_status | OK |
-| released_count | 34 |
-| scanned_specs | 65 |
+| released_count | 35 |
+| scanned_specs | 66 |
 
 ## 완료 후보
 
@@ -48,6 +48,7 @@
 | candidate-signal-diversification-edge-experiment | released | 096-signal-diversification-edge-experiment | specs/096-signal-diversification-edge-experiment/spec.md | completed_candidate_id |
 | candidate-single-execution-authority | released | 116-single-execution-authority | specs/116-single-execution-authority/spec.md | completed_candidate_id |
 | candidate-source-diversification-sidecar-bottleneck | released | 090-source-diversification-candidate-closure | specs/090-source-diversification-candidate-closure/contracts/source-diversification-candidate-closure.md | completed_candidate_id |
+| candidate-submission-unknown-broker-lookup | released | 117-submission-unknown-broker-lookup | specs/117-submission-unknown-broker-lookup/spec.md | completed_candidate_id |
 | candidate-worktree-concurrency-liveness-contract | released | 109-worktree-concurrency-liveness-contract | specs/109-worktree-concurrency-liveness-contract/spec.md | completed_candidate_id |
 
 ## 제외한 스펙
@@ -100,7 +101,6 @@
 | 072-candidate-evidence-diagnostics | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 112-order-submission-uncertainty-recovery | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 113-atomic-fill-ledger | 체크박스 작업이 없거나 완료되지 않았습니다. |
-| 117-submission-unknown-broker-lookup | 체크박스 작업이 없거나 완료되지 않았습니다. |
 
 ## 안전 경계
 
@@ -117,7 +117,7 @@
 
 ```json
 {
-  "commit": "8fd6b90b7c0003104065b88ba0149e0002254953",
+  "commit": "6c0565ef4eca0963459a673f3642b806c7dfa2a0",
   "overall_status": "OK",
   "released_work": [
     {
@@ -418,6 +418,15 @@
       "status": "released"
     },
     {
+      "candidate_id": "candidate-submission-unknown-broker-lookup",
+      "entry_id": "released-0f1155c78a14",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/117-submission-unknown-broker-lookup/spec.md",
+      "spec_id": "117-submission-unknown-broker-lookup",
+      "status": "released"
+    },
+    {
       "candidate_id": "candidate-worktree-concurrency-liveness-contract",
       "entry_id": "released-05ebdacc7431",
       "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
@@ -427,7 +436,7 @@
       "status": "released"
     }
   ],
-  "run_id": "29258261111",
+  "run_id": "29258957140",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -503,7 +512,8 @@
     "111-live-entrypoint-containment",
     "114-account-exposure-reservation",
     "115-degraded-execution-state",
-    "116-single-execution-authority"
+    "116-single-execution-authority",
+    "117-submission-unknown-broker-lookup"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -690,12 +700,8 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "113-atomic-fill-ledger"
-    },
-    {
-      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "117-submission-unknown-broker-lookup"
     }
   ],
-  "timestamp_utc": "2026-07-13T14:31:01.310674Z"
+  "timestamp_utc": "2026-07-13T14:40:41.816865Z"
 }
 ```
