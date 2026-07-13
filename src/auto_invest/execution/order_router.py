@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from auto_invest.broker.client import ResilientClient
 from auto_invest.broker.models import OrderRequest
@@ -40,6 +40,7 @@ from auto_invest.config.caps import SizingCaps
 from auto_invest.config.enums import OrderType, Side, StrategyStage
 from auto_invest.config.rules import TradingRule
 from auto_invest.config.whitelist import Whitelist
+from auto_invest.execution.exposure_reservation import open_buy_order_reservations
 from auto_invest.execution.lifecycle import marketable_limit_price
 from auto_invest.judgment.points.news_screen import should_block_buy
 from auto_invest.judgment.points.volatility import apply_volatility_advisory
@@ -353,6 +354,7 @@ class OrderRouter:
     # worker from the static rule set (build_sizing_groups). None/empty -> no
     # grouping -> sizing is byte-equal to slices 1/2.
     sizing_groups: Mapping[str, Sequence[SizingGroupMember]] | None = None
+    reserves_open_buy_orders: ClassVar[bool] = True
 
     def _group_scale(self, rule: TradingRule) -> Decimal:
         """Down-only group weight for ``rule`` — inverse_vol (slice 2b) or ERC (spec 020).
@@ -714,6 +716,20 @@ class OrderRouter:
                 request=request,
             )
 
+        open_buy_reservation = open_buy_order_reservations(
+            self.conn,
+            quote_prices={rule.symbol: quote_price_usd},
+            exclude_correlation_ids=(correlation_id,),
+        )
+        reserved_symbol_exposure_usd = (
+            current_symbol_exposure_usd
+            + open_buy_reservation.symbol_exposure_usd.get(rule.symbol, Decimal("0"))
+        )
+        reserved_global_exposure_usd = (
+            current_global_exposure_usd
+            + open_buy_reservation.global_exposure_usd
+        )
+
         # Run gate chain.
         gate_chain: tuple[tuple[Any, dict[str, Any]], ...] = (
             (whitelist_gate, {"whitelist": self.whitelist}),
@@ -732,7 +748,7 @@ class OrderRouter:
                     "caps": self.caps,
                     "total_capital_usd": total_capital_usd,
                     "quote_price_usd": quote_price_usd,
-                    "current_symbol_exposure_usd": current_symbol_exposure_usd,
+                    "current_symbol_exposure_usd": reserved_symbol_exposure_usd,
                 },
             ),
             (
@@ -741,7 +757,7 @@ class OrderRouter:
                     "caps": self.caps,
                     "total_capital_usd": total_capital_usd,
                     "quote_price_usd": quote_price_usd,
-                    "current_global_exposure_usd": current_global_exposure_usd,
+                    "current_global_exposure_usd": reserved_global_exposure_usd,
                 },
             ),
         )
