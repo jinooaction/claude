@@ -2,7 +2,7 @@
 
 ## 한 줄 결론
 
-현재 저장소의 가장 큰 위험은 투자 전략의 부족보다 **실거래 실행 권한과 계좌 상태가 여러 경로에 분산돼 있다는 점**이다. `specs/111-live-entrypoint-containment`는 main에 들어갔고, 현재 이어받은 구현 단위는 `specs/112-order-submission-uncertainty-recovery`다.
+현재 저장소의 가장 큰 위험은 투자 전략의 부족보다 **실거래 실행 권한과 계좌 상태가 여러 경로에 분산돼 있다는 점**이다. `specs/111-live-entrypoint-containment`와 `specs/112-order-submission-uncertainty-recovery`는 main에 들어갔고, 현재 이어받은 구현 단위는 `specs/113-atomic-fill-ledger`다.
 
 ## 운영자 지시 해석
 
@@ -25,11 +25,11 @@
 
 ## 기준 상태
 
-- 기준 `main`: `c9976f7f61dacf08005f8949a36847795d0275dd` — PR #510 인계 갱신 머지
+- 기준 `main`: `8a01baf9e957ebb8f640b4f88cb0c98bb6bf16ec` — PR #512 스펙 112 인계 갱신 머지
 - 확인 시점: 2026-07-13 KST
 - 열린 풀 리퀘스트: 작업 시작 시 없음
-- 기존 활성 스펙 포인터: `specs/111-live-entrypoint-containment`
-- 새 작업 브랜치: `Codex/112-order-submission-uncertainty-recovery`
+- 기존 활성 스펙 포인터: `specs/112-order-submission-uncertainty-recovery`
+- 새 작업 브랜치: `Codex/113-atomic-fill-ledger`
 - 주요 저장소 선언 상태:
   - 돈 경로: `PREVIEW_ONLY`
   - 마이크로 GTAA 센티넬: `automation/rebalance-micro-gtaa.request`의 `armed: false`
@@ -279,8 +279,8 @@ README는 여전히 LLM을 호출하지 않고 스펙 004·005가 미구현이�
 
 - 체결, 감사, 상태 전이, 포지션 캐시를 하나의 트랜잭션으로 처리
 - 체결 삽입 성공 여부에 따른 캐시 갱신
-- 음수 포지션 금지
-- 시작 시 원장과 캐시 검증 및 재구축
+- 중복 `kis_fill_id`가 포지션 캐시를 다시 움직이지 않게 함
+- 음수 포지션 DB 제약과 시작 시 원장·캐시 검증은 외부 보유 청산 의미를 확인한 뒤 후속으로 분리
 
 ### 4단계 — 계좌 단위 노출 예약
 
@@ -302,20 +302,18 @@ README는 여전히 LLM을 호출하지 않고 스펙 004·005가 미구현이�
 
 ## 코덱스가 지금 바로 할 일
 
-1. `Codex/112-order-submission-uncertainty-recovery` 브랜치를 이어받는다.
+1. `Codex/113-atomic-fill-ledger` 브랜치를 이어받는다.
 2. 다음 파일을 순서대로 읽는다.
    - `AGENTS.md`
    - 이 문서
-   - `specs/112-order-submission-uncertainty-recovery/spec.md`
-   - `specs/112-order-submission-uncertainty-recovery/plan.md`
-   - `specs/112-order-submission-uncertainty-recovery/tasks.md`
-   - `src/auto_invest/broker/client.py`
-   - `src/auto_invest/broker/overseas.py`
-   - `src/auto_invest/execution/order_router.py`
-   - `src/auto_invest/persistence/audit.py`
-   - `src/auto_invest/notifications/audit_tail.py`
-3. 주문 재시도, 불명확 상태 전이, 운영 알림 회귀 테스트를 우선 확인한다.
-4. 체결 원장, 노출 예약, 단일 실행 권한은 같은 PR에 섞지 않는다.
+   - `specs/113-atomic-fill-ledger/spec.md`
+   - `specs/113-atomic-fill-ledger/plan.md`
+   - `specs/113-atomic-fill-ledger/tasks.md`
+   - `src/auto_invest/execution/fill_sync.py`
+   - `src/auto_invest/persistence/positions.py`
+   - `tests/integration/test_fill_sync.py`
+3. 체결 적용 원자성, 중복 체결 무시, 롤백 회귀 테스트를 우선 확인한다.
+4. 노출 예약, `SUBMISSION_UNKNOWN` 자동 복구, 저하 상태, 단일 실행 권한은 같은 PR에 섞지 않는다.
 5. `automation/*.request`, `.env`, 배포 포트폴리오, 헌법, 커널 목록은 수정하지 않는다.
 6. 전체 검증 후 풀 리퀘스트를 준비 상태로 바꾸고 자동 머지 규칙을 따른다.
 7. 머지 뒤 실제 서버나 KIS 계좌 상태를 추측하지 말고 저장소 기준 안전 상태와 미확인 영역을 분리해 보고한다.
@@ -453,28 +451,73 @@ README는 여전히 LLM을 호출하지 않고 스펙 004·005가 미구현이�
 - 불명확 상태에서 신규 매수를 계좌 단위로 자동 차단하는 저하 상태기계는 `115-degraded-execution-state` 또는 단일 실행 권한 단계에서 닫아야 한다.
 - 다음 실행 안전성 수동 후보는 `113-atomic-fill-ledger`다.
 
+## 스펙 113 완료 기준
+
+다음 조건이 모두 충족돼야 한다.
+
+- 체결 계획 적용은 `BEGIN IMMEDIATE` 트랜잭션 안에서 실행된다.
+- 새 `fills` row 삽입, `FILL` 감사 이벤트, `current_positions` 갱신, 주문 상태 전이는 함께 커밋되거나 함께 롤백된다.
+- `fills.kis_fill_id` 중복으로 row가 삽입되지 않으면 `FILL` 감사 이벤트와 포지션 캐시 갱신도 실행하지 않는다.
+- `fills_applied`와 `qty_applied`는 실제 삽입된 체결만 센다.
+- 기존 정상 체결, 부분 체결, 거래소 스윕, 브로커 조회 실패 격리 동작은 유지된다.
+- 실제 주문, 취소, 실거래 전환, 자본·whitelist·caps·loss budget·live sentinel·헌법·kernel 변경이 없다.
+- 관련 테스트, 전체 테스트, 린트, 하네스, HANDOFF 검증, PR 품질 관문이 통과한다.
+
+## 스펙 113 구현 결과
+
+현재 `Codex/113-atomic-fill-ledger` 브랜치는 체결 원장 적용을 저장소 코드 기준으로 원자화한다.
+
+구현한 내용:
+
+- `src/auto_invest/execution/fill_sync.py`
+  - `apply_fill_plan`이 빈 계획이 아니면 `BEGIN IMMEDIATE` 트랜잭션으로 체결·감사·포지션·상태 전이를 묶는다.
+  - `_apply_fill`은 `fills` 삽입을 먼저 시도하고, `rowcount == 0`이면 `FILL` 감사와 포지션 캐시 갱신을 건너뛴다.
+  - `fills_applied`와 `qty_applied`는 실제 삽입된 체결 row만 센다.
+  - 체결 적용 중 예외가 발생하면 트랜잭션을 롤백한다.
+- `tests/integration/test_fill_sync.py`
+  - 이미 존재하는 `kis_fill_id`가 다시 계획돼도 포지션과 감사가 움직이지 않는 회귀 테스트를 추가했다.
+  - 포지션 캐시 갱신 실패를 주입해 `fills`, `FILL` 감사, 포지션, 주문 상태가 모두 롤백되는지 검증했다.
+- `specs/113-atomic-fill-ledger/`
+  - 스펙, 계획, 연구, 데이터 모델, 계약, quickstart, 체크리스트, 작업표를 추가했다.
+
+검증 증거:
+
+- 구현 전 focused test: `tests/integration/test_fill_sync.py`에서 중복 체결과 롤백 테스트 2건 실패 확인
+- focused fill sync: `uv run pytest tests/integration/test_fill_sync.py -q` → `9 passed`
+- worker fill sync: `uv run pytest tests/integration/test_worker_fill_sync.py -q` → `3 passed`
+- 관련 포지션·감사·성과 테스트: `63 passed`
+- 전체 테스트: `2609 passed, 4 skipped`
+- 린트: `uv run ruff check src tests` 통과
+- 형식: `git diff --check` 통과
+- HANDOFF 사실 검증: `uv run python scripts/check_handoff_facts.py` 통과
+- strict 하네스: `uv run python scripts/agent_harness_probe.py --strict` 통과
+- 보호 범위: live sentinel, capital, whitelist/caps, loss budget, 헌법, kernel manifest 변경 없음
+
+남은 미확인·후속 사항:
+
+- 실제 KIS 계좌의 열린 주문, 보유, 서버 프로세스는 조회하지 않았다.
+- 외부 보유 청산 경로 때문에 음수 포지션 DB 제약은 이번 PR에 넣지 않았다.
+- 시작 시 원장·캐시 자동 검증 및 재구축은 후속 체결 건강성 작업으로 남겼다.
+- 다음 실행 안전성 수동 후보는 `114-account-exposure-reservation`이다.
+
 ## 필수 검증
 
 ```bash
-uv run pytest \
-  tests/integration/test_broker_client.py \
-  tests/integration/test_broker_order_diagnostics.py \
-  tests/integration/test_order_router.py \
-  tests/unit/test_audit.py \
-  tests/unit/test_telegram_alerts.py
+uv run pytest tests/integration/test_fill_sync.py tests/integration/test_worker_fill_sync.py
+uv run pytest tests/unit/test_positions.py tests/unit/test_audit.py tests/unit/test_performance_engine.py tests/unit/test_performance_slippage.py tests/unit/test_performance_latency.py
 
 uv run pytest
 uv run ruff check src tests
 git diff --check
 uv run python scripts/check_handoff_facts.py
 uv run python scripts/agent_harness_probe.py --strict
-python3 scripts/check_pr_quality_gate.py /tmp/pr-body-112.md
+python3 scripts/check_pr_quality_gate.py /tmp/pr-body-113.md
 ```
 
 위험 동작 부재도 별도로 확인한다.
 
 ```bash
-rg -n "retry_transient=False|SUBMISSION_UNKNOWN|ORDER_SUBMISSION_UNKNOWN" src tests specs/112-order-submission-uncertainty-recovery
+rg -n "BEGIN IMMEDIATE|kis_fill_id|apply_fill_plan|atomic-fill-ledger" src tests specs/113-atomic-fill-ledger
 git diff --name-only | rg 'automation/.*\\.request|deploy/.*portfolio|whitelist|caps|constitution|kernel' && exit 1 || true
 ```
 
@@ -498,18 +541,18 @@ git diff --name-only | rg 'automation/.*\\.request|deploy/.*portfolio|whitelist|
 - KIS 계좌의 현재 열린 주문과 실제 보유 상태
 - `operator-design` 최근 예약 실행 여부와 결과
 
-스펙 111은 위 상태를 추측하지 않고, 코드상 평행 진입점을 제거하는 데 집중한다.
+각 실행 안전성 스펙은 위 상태를 추측하지 않고, 저장소 코드상 확인 가능한 안전 불변식만 닫는다.
 
 ## 최종 보고 형식
 
 코덱스는 완료 시 다음 순서로 보고한다.
 
 1. 핵심 결론
-2. 제거한 실거래 진입점
-3. 남긴 설계 기능과 대체 승격 경로
+2. 닫은 실행 안전성 위험
+3. 일부러 남긴 후속 위험과 대체 경로
 4. 테스트와 하네스 결과
 5. 안전 경계와 돈 경로 영향
 6. 실행하지 않은 실제 돈 검증
 7. 다음 스펙 후보와 우선순위
 
-“안전해졌다”라고만 말하지 말고, **어떤 호출 경로가 사라졌고 어떤 테스트가 그 부재를 증명하는지**를 적는다.
+“안전해졌다”라고만 말하지 말고, **어떤 실패 모드가 사라졌고 어떤 테스트가 그 부재를 증명하는지**를 적는다.
