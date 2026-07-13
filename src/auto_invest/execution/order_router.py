@@ -9,7 +9,7 @@ For each fired trigger the router:
   4. Runs the gates from `risk/gates.py` in declared order; the first
      Deny short-circuits with an ORDER_REJECTED_BY_GATE audit row and
      the order's state moves to REJECTED_BY_GATE.
-  5. Submits to the broker via `broker/overseas.place_order`.
+  5. Submits to the broker via `execution/authority.ExecutionAuthority`.
      Explicit broker rejections transition to REJECTED_BY_BROKER.
      Ambiguous write failures transition to SUBMISSION_UNKNOWN so the
      same order is not blindly replayed.
@@ -35,11 +35,11 @@ from typing import Any, ClassVar
 
 from auto_invest.broker.client import ResilientClient
 from auto_invest.broker.models import OrderRequest
-from auto_invest.broker.overseas import place_order
 from auto_invest.config.caps import SizingCaps
 from auto_invest.config.enums import OrderType, Side, StrategyStage
 from auto_invest.config.rules import TradingRule
 from auto_invest.config.whitelist import Whitelist
+from auto_invest.execution.authority import ExecutionAuthority, ExecutionAuthorityBusy
 from auto_invest.execution.execution_state import (
     ExecutionState,
     evaluate_execution_state,
@@ -335,8 +335,8 @@ def verify_stage_uniqueness(rules: list[TradingRule]) -> list[GateDecision]:
 class OrderRouter:
     """Stateless-ish router: holds configuration handles, no per-call state.
 
-    spec 009: `paper_mode=True`로 만들면 broker 주문 호출(line 347 부근의
-    `place_order(self.broker, ...)`) 직전에 단일 차단 지점에서 시뮬 체결로
+    spec 009: `paper_mode=True`로 만들면 authority broker-write 호출 직전에
+    단일 차단 지점에서 시뮬 체결로
     분기한다. 게이트 체인은 live와 동일 코드로 평가되며, paper 모드는
     `orders`/`order_transitions` 테이블에 row를 추가하지 않아 SC-006을
     만족한다.
@@ -355,12 +355,27 @@ class OrderRouter:
     quote_market: str = "NAS"
     paper_mode: bool = False
     paper_session_id: int | None = None
+    execution_authority: ExecutionAuthority | None = None
+    authority_lock_timeout_seconds: float = 5.0
     execution_state_provider: Callable[[], ExecutionState] | None = None
     # Spec 017 slice 2b: inverse-vol risk-parity group membership, built by the
     # worker from the static rule set (build_sizing_groups). None/empty -> no
     # grouping -> sizing is byte-equal to slices 1/2.
     sizing_groups: Mapping[str, Sequence[SizingGroupMember]] | None = None
     reserves_open_buy_orders: ClassVar[bool] = True
+
+    def __post_init__(self) -> None:
+        if self.paper_mode or self.execution_authority is not None:
+            return
+        self.execution_authority = ExecutionAuthority(
+            conn=self.conn,
+            broker=self.broker,
+            access_token=self.access_token,
+            app_key=self.app_key,
+            app_secret=self.app_secret,
+            account_no=self.account_no,
+            lock_timeout_seconds=self.authority_lock_timeout_seconds,
+        )
 
     def _group_scale(self, rule: TradingRule) -> Decimal:
         """Down-only group weight for ``rule`` — inverse_vol (slice 2b) or ERC (spec 020).
@@ -722,6 +737,95 @@ class OrderRouter:
                 request=request,
             )
 
+        authority_context = (
+            f"submit:{self.account_no}:{rule.id}:{rule.symbol}:{request.side.value}"
+        )
+        if not self.paper_mode and self.execution_authority is not None:
+            try:
+                async with self.execution_authority.account_lock(authority_context):
+                    return await self._submit_after_authority_lock(
+                        correlation_id=correlation_id,
+                        rule=rule,
+                        request=request,
+                        effective_qty=effective_qty,
+                        quote_price_usd=quote_price_usd,
+                        quote_ask_usd=quote_ask_usd,
+                        quote_bid_usd=quote_bid_usd,
+                        total_capital_usd=total_capital_usd,
+                        current_symbol_exposure_usd=current_symbol_exposure_usd,
+                        current_global_exposure_usd=current_global_exposure_usd,
+                        order_exchange=order_exchange,
+                    )
+            except ExecutionAuthorityBusy as exc:
+                decision = GateDecision(
+                    allow=False,
+                    gate="execution_authority_lock",
+                    reason="account execution authority is busy",
+                    metadata={
+                        "account_no": exc.account_no,
+                        "context": exc.context,
+                    },
+                )
+                audit.append(
+                    self.conn,
+                    OrderRejectedByGatePayload(
+                        gate=decision.gate,
+                        reason=decision.reason or "no reason",
+                        metadata=decision.metadata,
+                    ),
+                    rule_id=rule.id,
+                    symbol=rule.symbol,
+                    correlation_id=correlation_id,
+                )
+                _record_transition(
+                    self.conn,
+                    correlation_id,
+                    "INTENT",
+                    "REJECTED_BY_GATE",
+                    decision.reason,
+                )
+                return OrderOutcome(
+                    state="REJECTED_BY_GATE",
+                    correlation_id=correlation_id,
+                    gate=decision.gate,
+                    reason=decision.reason,
+                )
+
+        return await self._submit_after_authority_lock(
+            correlation_id=correlation_id,
+            rule=rule,
+            request=request,
+            effective_qty=effective_qty,
+            quote_price_usd=quote_price_usd,
+            quote_ask_usd=quote_ask_usd,
+            quote_bid_usd=quote_bid_usd,
+            total_capital_usd=total_capital_usd,
+            current_symbol_exposure_usd=current_symbol_exposure_usd,
+            current_global_exposure_usd=current_global_exposure_usd,
+            order_exchange=order_exchange,
+        )
+
+    async def _submit_after_authority_lock(
+        self,
+        *,
+        correlation_id: str,
+        rule: TradingRule,
+        request: OrderRequest,
+        effective_qty: int,
+        quote_price_usd: Decimal,
+        quote_ask_usd: Decimal | None,
+        quote_bid_usd: Decimal | None,
+        total_capital_usd: Decimal,
+        current_symbol_exposure_usd: Decimal,
+        current_global_exposure_usd: Decimal,
+        order_exchange: str | None,
+    ) -> OrderOutcome:
+        """Continue a submission after acquiring the live authority lock.
+
+        Paper mode also uses this helper, but without a lock. Live callers enter
+        here only while holding the account lock, so open-order reservations and
+        the gate chain observe the latest committed state.
+        """
         open_buy_reservation = open_buy_order_reservations(
             self.conn,
             quote_prices={rule.symbol: quote_price_usd},
@@ -839,11 +943,9 @@ class OrderRouter:
 
         # Submit to broker.
         try:
-            result = await place_order(
-                self.broker,
-                access_token=self.access_token,
-                app_key=self.app_key,
-                app_secret=self.app_secret,
+            if self.execution_authority is None:
+                raise RuntimeError("live order submission requires ExecutionAuthority")
+            result = await self.execution_authority.submit_broker_order(
                 request=request,
                 market=order_exchange or self.market,
             )

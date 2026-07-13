@@ -29,6 +29,7 @@ from auto_invest.config.rules import (
     TradingRule,
 )
 from auto_invest.config.whitelist import Whitelist
+from auto_invest.execution.authority import ExecutionAuthority
 from auto_invest.execution.order_router import OrderRouter
 from auto_invest.persistence import audit, db
 from auto_invest.worker.loop import Worker, WorkerSettings
@@ -154,6 +155,27 @@ def _empty_ccnl() -> httpx.Response:
 
 
 # ------------------------------------------------------ SC-030-06 TTL cancel
+
+
+@pytest.mark.asyncio
+async def test_ttl_cancel_respects_execution_authority_lock(tmp_path: Path) -> None:
+    """계좌 권한 잠금이 잡힌 동안 TTL 취소도 브로커에 도달하지 않고 로컬 상태를 보존한다."""
+    rule = _rule(lifecycle=OrderLifecycleConfig(ttl_seconds=60))
+    async with _worker(tmp_path, (rule,)) as worker:
+        assert isinstance(worker.execution_authority, ExecutionAuthority)
+        _seed_order(worker, corr="ord-locked", kis="K1", age_seconds=120)
+        with respx.mock(base_url=BASE, assert_all_called=False) as mock:
+            mock.get(CCNL).mock(return_value=_empty_ccnl())
+            cancel_route = mock.post(CANCEL).mock(
+                return_value=httpx.Response(200, json={"output": {}})
+            )
+            async with worker.execution_authority.account_lock("external writer"):
+                report = await worker.tick(NOW)
+
+        assert report.skipped_reason is None
+        assert cancel_route.called is False
+        assert _state(worker, "ord-locked") == "SUBMITTED"
+        assert _events(worker, "ORDER_TTL_CANCELLED") == []
 
 
 @pytest.mark.asyncio

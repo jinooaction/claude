@@ -24,6 +24,7 @@ from auto_invest.config.rules import (
     TradingRule,
 )
 from auto_invest.config.whitelist import Whitelist
+from auto_invest.execution.authority import ExecutionAuthority
 from auto_invest.execution.order_router import (
     LimitPriceExprError,
     OrderRouter,
@@ -74,6 +75,10 @@ def _caps() -> SizingCaps:
         canary_min_duration_days=10,
         canary_acceptance_drawdown_pct=Decimal("3"),
     )
+
+
+def _authority_lock_count(conn) -> int:
+    return conn.execute("SELECT COUNT(*) FROM execution_authority_locks").fetchone()[0]
 
 
 @asynccontextmanager
@@ -181,6 +186,43 @@ def test_verify_stage_uniqueness_denies_lower_when_higher_active():
 
 
 @pytest.mark.asyncio
+async def test_submit_order_rejected_when_execution_authority_locked(tmp_path: Path):
+    async with _router(tmp_path) as router:
+        router.execution_authority = ExecutionAuthority(
+            conn=router.conn,
+            broker=router.broker,
+            access_token=router.access_token,
+            app_key=router.app_key,
+            app_secret=router.app_secret,
+            account_no=router.account_no,
+            lock_timeout_seconds=0,
+        )
+        with respx.mock(base_url=BASE, assert_all_called=False) as mock:
+            placed = mock.post("/uapi/overseas-stock/v1/trading/order").mock(
+                return_value=httpx.Response(200, json={"output": {"ODNO": "x"}})
+            )
+            async with router.execution_authority.account_lock("already routing"):
+                outcome = await router.submit_order(
+                    rule=_rule(),
+                    quote_price_usd=Decimal("99"),
+                    total_capital_usd=Decimal("10000"),
+                    current_symbol_exposure_usd=Decimal("0"),
+                    current_global_exposure_usd=Decimal("0"),
+                )
+
+        assert outcome.state == "REJECTED_BY_GATE"
+        assert outcome.gate == "execution_authority_lock"
+        assert placed.call_count == 0
+
+        rejected = next(
+            r for r in audit.read_all(router.conn)
+            if r["event_type"] == "ORDER_REJECTED_BY_GATE"
+        )
+        payload = audit.parse_payload(rejected)
+        assert payload["metadata"]["account_no"] == ACCOUNT
+
+
+@pytest.mark.asyncio
 async def test_submit_order_happy_path(tmp_path: Path):
     async with _router(tmp_path) as router:
         with respx.mock(base_url=BASE) as mock:
@@ -204,6 +246,7 @@ async def test_submit_order_happy_path(tmp_path: Path):
         order_row = router.conn.execute("SELECT state, kis_order_id FROM orders").fetchone()
         assert order_row["state"] == "SUBMITTED"
         assert order_row["kis_order_id"] == "K-001"
+        assert _authority_lock_count(router.conn) == 0
 
 
 @pytest.mark.asyncio
@@ -312,6 +355,7 @@ async def test_submit_order_rejected_by_per_trade_cap(tmp_path: Path):
 
         order_row = router.conn.execute("SELECT state FROM orders").fetchone()
         assert order_row["state"] == "REJECTED_BY_GATE"
+        assert _authority_lock_count(router.conn) == 0
 
 
 @pytest.mark.parametrize("open_state", ["SUBMITTED", "PARTIALLY_FILLED"])
@@ -517,6 +561,7 @@ async def test_submit_order_submission_unknown_on_broker_5xx(tmp_path: Path):
             if r["event_type"] == "ORDER_SUBMISSION_UNKNOWN"
         )
         assert "자동 재시도하지" in unknown_payload["next_action"]
+        assert _authority_lock_count(router.conn) == 0
 
 
 @pytest.mark.asyncio

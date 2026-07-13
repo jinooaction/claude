@@ -8,10 +8,10 @@ SRC = ROOT / "src" / "auto_invest"
 
 BROKER_MUTATION_ALLOWLIST = {
     "place_order": {
-        Path("src/auto_invest/execution/order_router.py"),
+        Path("src/auto_invest/execution/authority.py"),
     },
     "cancel_order": {
-        Path("src/auto_invest/worker/loop.py"),
+        Path("src/auto_invest/execution/authority.py"),
     },
 }
 
@@ -54,5 +54,11 @@ def test_live_broker_mutations_are_only_called_from_canonical_paths():
 
 def test_live_order_submission_remains_order_router_only():
     assert BROKER_MUTATION_ALLOWLIST["place_order"] == {
-        Path("src/auto_invest/execution/order_router.py")
+        Path("src/auto_invest/execution/authority.py")
+    }
+
+
+def test_live_broker_cancellation_remains_execution_authority_only():
+    assert BROKER_MUTATION_ALLOWLIST["cancel_order"] == {
+        Path("src/auto_invest/execution/authority.py")
     }
