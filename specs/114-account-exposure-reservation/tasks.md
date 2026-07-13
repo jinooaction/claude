@@ -52,7 +52,7 @@
 - [x] T015 Run `git diff --check`
 - [x] T016 Run `uv run python scripts/check_handoff_facts.py`
 - [x] T017 Run `uv run python scripts/agent_harness_probe.py --strict`
-- [ ] T018 Update PR body with risk grade, safety boundary, validation, and handoff evidence
+- [x] T018 Update PR body with risk grade, safety boundary, validation, and handoff evidence
 - [ ] T019 Merge when tests, lint, PR quality gate, and mergeability are clean
 - [ ] T020 Refresh `HANDOFF.md` after merge and validate it
 
