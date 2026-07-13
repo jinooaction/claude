@@ -157,6 +157,9 @@
 - This implementation is risk grade 4 because it changes a money-path capability, even though it only removes authority and does not execute live actions.
 - The operator's current instruction authorizes implementation and merge of this safety contraction, but not actual live activation or orders.
 
+completed_candidate_id: candidate-live-entrypoint-containment
+next_candidate_id: candidate-order-submission-uncertainty-recovery
+
 ## Non-Goals
 
 - Fixing broker order retry semantics

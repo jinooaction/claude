@@ -129,10 +129,10 @@
 
 - [x] T063 Update `HANDOFF-115-EXECUTION-SAFETY-STABILIZATION.md` with actual code paths removed, test evidence, and unresolved risks
 - [x] T064 Mark this task file complete only after all required gates pass
-- [ ] T065 Merge using repository `merge` policy when automatic merge conditions are satisfied
-- [ ] T066 Verify the `main` merge commit and relevant post-merge workflows
-- [ ] T067 Refresh root `HANDOFF.md` in the repository-standard follow-up PR
-- [ ] T068 Name `112-order-submission-uncertainty-recovery` as the next execution-safety work item unless new evidence changes priority
+- [x] T065 Merge using repository `merge` policy when automatic merge conditions are satisfied
+- [x] T066 Verify the `main` merge commit and relevant post-merge workflows
+- [x] T067 Refresh root `HANDOFF.md` in the repository-standard follow-up PR
+- [x] T068 Name `112-order-submission-uncertainty-recovery` as the next execution-safety work item unless new evidence changes priority
 
 ## Dependencies & Execution Order
 
