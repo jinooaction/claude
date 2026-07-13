@@ -17,7 +17,9 @@ import respx
 
 from auto_invest.broker.client import AsyncTokenBucket, CircuitBreaker, ResilientClient
 from auto_invest.config.caps import SizingCaps
+from auto_invest.config.enums import OrderType, Side, StrategyStage
 from auto_invest.config.loader import LoadedConfig
+from auto_invest.config.rules import Action, PriceTrigger, TradingRule
 from auto_invest.config.whitelist import Whitelist
 from auto_invest.persistence import audit
 from auto_invest.persistence import positions as positions_mod
@@ -29,6 +31,20 @@ BASE = "https://api.example"
 ACCOUNT = "1234567801"
 NOW = datetime(2026, 5, 26, 15, 0, tzinfo=UTC)
 CCNL = "/uapi/overseas-stock/v1/trading/inquire-ccnl"
+QUOTE = "/uapi/overseas-price/v1/quotations/price"
+ORDER = "/uapi/overseas-stock/v1/trading/order"
+
+
+def _buy_rule() -> TradingRule:
+    return TradingRule(
+        id="buy-aapl",
+        symbol="AAPL",
+        stage=StrategyStage.CANARY,
+        priority=10,
+        enabled=True,
+        trigger=PriceTrigger(direction="<=", threshold=Decimal("99999"), cooldown_seconds=0),
+        action=Action(side=Side.BUY, order_type=OrderType.LIMIT, qty=1, limit_price="100.00"),
+    )
 
 
 def _caps(*, breaker: bool = False) -> SizingCaps:
@@ -47,13 +63,17 @@ def _caps(*, breaker: bool = False) -> SizingCaps:
 
 @asynccontextmanager
 async def _worker(
-    tmp_path: Path, *, paper_mode: bool, breaker: bool = False
+    tmp_path: Path,
+    *,
+    paper_mode: bool,
+    breaker: bool = False,
+    rules: tuple[TradingRule, ...] = (),
 ) -> AsyncIterator[Worker]:
     settings = WorkerSettings(
         config=LoadedConfig(
             caps=_caps(breaker=breaker),
             whitelist=Whitelist(symbols={"AAPL"}, accounts={ACCOUNT}),
-            rules=(),
+            rules=rules,
         ),
         db_path=tmp_path / "t.db",
         halt_path=tmp_path / "halt.flag",
@@ -164,3 +184,27 @@ async def test_fill_sync_activates_live_breaker(tmp_path: Path) -> None:
                 if r["event_type"] == "CIRCUIT_BREAKER_TRIPPED"]
         assert len(rows) == 1
         assert audit.parse_payload(rows[0])["mode"] == "live"
+
+
+@pytest.mark.asyncio
+async def test_fill_sync_failure_blocks_new_buy_before_broker_submission(
+    tmp_path: Path,
+) -> None:
+    async with _worker(tmp_path, paper_mode=False, rules=(_buy_rule(),)) as worker:
+        _seed_order(worker, corr="ord-open", kis="KOPEN", symbol="AAPL", side="BUY", qty=1)
+        with respx.mock(base_url=BASE, assert_all_called=False) as mock:
+            mock.get(CCNL).mock(return_value=httpx.Response(500, json={"err": "down"}))
+            mock.get(QUOTE).mock(return_value=httpx.Response(
+                200,
+                json={"output": {"last": "100.00", "bidp": "99.99", "askp": "100.01"}},
+            ))
+            placed = mock.post(ORDER).mock(
+                return_value=httpx.Response(200, json={"output": {"ODNO": "K-BUY"}})
+            )
+
+            report = await worker.tick(NOW)
+
+        assert report.rules_fired == 1
+        assert report.outcomes[0].state == "REJECTED_BY_GATE"
+        assert report.outcomes[0].gate == "execution_state_gate"
+        assert placed.call_count == 0

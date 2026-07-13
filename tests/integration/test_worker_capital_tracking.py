@@ -302,3 +302,28 @@ async def test_nav_fetch_failure_keeps_previous(tmp_path: Path):
             # tick이 예외로 깨지지 않아야 한다.
             await worker.tick(OPEN)
         assert worker._effective_capital_usd == Decimal("10000")
+
+
+@pytest.mark.asyncio
+async def test_nav_fetch_failure_blocks_new_buy_before_broker_submission(tmp_path: Path):
+    async with _worker(
+        tmp_path, rules=[_rule(qty=1)], starting_capital="10000", tracking=True
+    ) as worker:
+        with respx.mock(base_url=BASE, assert_all_called=False) as mock:
+            mock.get(BALANCE).mock(return_value=httpx.Response(500, json={}))
+            mock.get(PSAMOUNT).mock(return_value=httpx.Response(500, json={}))
+            mock.get(QUOTE).mock(return_value=httpx.Response(
+                200,
+                json={"output": {"last": "500.00", "bidp": "499.99", "askp": "500.01"}},
+            ))
+            placed = mock.post(ORDER).mock(
+                return_value=httpx.Response(200, json={"output": {"ODNO": "K-1"}})
+            )
+
+            report = await worker.tick(OPEN)
+
+        assert worker._effective_capital_usd == Decimal("10000")
+        assert report.rules_fired == 1
+        assert report.outcomes[0].state == "REJECTED_BY_GATE"
+        assert report.outcomes[0].gate == "execution_state_gate"
+        assert placed.call_count == 0

@@ -33,6 +33,11 @@ from auto_invest.broker.overseas import (
 from auto_invest.broker.realtime import RealtimeQuoteSource
 from auto_invest.config.loader import LoadedConfig
 from auto_invest.config.rules import IndicatorTrigger, OrderLifecycleConfig, TradingRule
+from auto_invest.execution.execution_state import (
+    ExecutionState,
+    ExecutionStateReason,
+    evaluate_execution_state,
+)
 from auto_invest.execution.fill_sync import sync_fills
 from auto_invest.execution.lifecycle import (
     LifecycleAction,
@@ -220,6 +225,7 @@ class Worker:
         self._last_lifecycle_at: datetime | None = None
         # Spec 033: 일봉 백필 cadence 추적(None = 첫 기회에 1회). backfill_enabled 옵트인.
         self._last_backfill_at: datetime | None = None
+        self._runtime_execution_blockers: dict[str, ExecutionStateReason] = {}
         self._lifecycle_configs: dict[str, OrderLifecycleConfig] = {
             r.id: r.lifecycle
             for r in settings.config.rules
@@ -248,6 +254,7 @@ class Worker:
             paper_mode=settings.paper_mode,
             # Spec 017 slice 2b: inverse-vol risk-parity groups from the rule set.
             sizing_groups=build_sizing_groups(settings.config.rules),
+            execution_state_provider=self._execution_state_snapshot,
         )
 
     # ---------------------------------------------- lifecycle audit
@@ -512,6 +519,23 @@ class Worker:
             total += Decimal(pos.qty) * price
         return total
 
+    # ------------------------------------ degraded execution state (spec 115)
+
+    def _execution_state_snapshot(self) -> ExecutionState:
+        return evaluate_execution_state(
+            self.conn,
+            runtime_reasons=self._runtime_execution_blockers.values(),
+        )
+
+    def _set_runtime_execution_blocker(self, code: str, detail: str) -> None:
+        self._runtime_execution_blockers[code] = ExecutionStateReason(
+            code=code,
+            detail=detail,
+        )
+
+    def _clear_runtime_execution_blocker(self, code: str) -> None:
+        self._runtime_execution_blockers.pop(code, None)
+
     # ------------------------------------ effective capital (spec 029 slice 2)
 
     def _should_eval_capital(self, now: datetime) -> bool:
@@ -547,7 +571,12 @@ class Worker:
             nav = balance.total_value_usd
         except Exception:  # noqa: BLE001 — NAV 조회 실패는 직전 유효 자본 유지(무중단).
             logger.warning("effective-capital NAV fetch failed", exc_info=True)
+            self._set_runtime_execution_blocker(
+                "nav_refresh_error",
+                "capital tracking NAV refresh failed; block new BUY until NAV is fresh",
+            )
             return
+        self._clear_runtime_execution_blocker("nav_refresh_error")
 
         new_effective = effective_capital(
             starting,
@@ -605,7 +634,7 @@ class Worker:
         sync_fills 가 모든 예외를 격리하므로 여기서 추가 try 는 불필요하지만,
         방어적으로 한 번 더 감싸 어떤 경우에도 틱이 깨지지 않게 한다(SC-005)."""
         try:
-            await sync_fills(
+            result = await sync_fills(
                 self.conn,
                 self.broker,
                 access_token=self.access_token,
@@ -617,8 +646,19 @@ class Worker:
                 # 않게(sync_fills 기본 markets=US_ORDER_EXCHANGES).
                 now=now,
             )
+            if result.error:
+                self._set_runtime_execution_blocker(
+                    "fill_sync_error",
+                    "live fill sync failed while open orders exist; block new BUY",
+                )
+            else:
+                self._clear_runtime_execution_blocker("fill_sync_error")
         except Exception:  # pragma: no cover — 이중 안전망(거래 무중단).
             logger.warning("fill sync raised unexpectedly", exc_info=True)
+            self._set_runtime_execution_blocker(
+                "fill_sync_error",
+                "live fill sync raised unexpectedly; block new BUY",
+            )
 
     # ------------------------------------ daily bar backfill (spec 033)
 
@@ -854,7 +894,7 @@ class Worker:
         if not caps.circuit_breaker_enabled:
             return None
         mode = "paper" if self.settings.paper_mode else "live"
-        return evaluate_from_audit(
+        decision = evaluate_from_audit(
             self.conn,
             mode=mode,
             starting_capital=self.settings.total_capital_usd,
@@ -862,6 +902,15 @@ class Worker:
             now=now,
             marks=self._assemble_marks(),
         )
+        unmarked = decision.metadata.get("unmarked_symbols")
+        if unmarked:
+            self._set_runtime_execution_blocker(
+                "loss_marks_missing",
+                f"loss breaker could not mark open position(s): {unmarked}",
+            )
+        else:
+            self._clear_runtime_execution_blocker("loss_marks_missing")
+        return decision
 
     def _trip_circuit_breaker(self, decision: BreakerDecision, now: datetime) -> None:
         """트립 부수효과: halt 플래그 세팅 + CIRCUIT_BREAKER_TRIPPED 감사 append.
