@@ -1,5 +1,5 @@
 {
-  "commit": "66df71d998e04ce38635cf51048a0ac089cb41d2",
+  "commit": "c9976f7f61dacf08005f8949a36847795d0275dd",
   "overall_status": "OK",
   "released_work": [
     {
@@ -210,6 +210,15 @@
       "status": "released"
     },
     {
+      "candidate_id": "candidate-live-entrypoint-containment",
+      "entry_id": "released-256b272e66b4",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/111-live-entrypoint-containment/spec.md",
+      "spec_id": "111-live-entrypoint-containment",
+      "status": "released"
+    },
+    {
       "candidate_id": "candidate-macro-candidate-map-regenerator",
       "entry_id": "released-ccdf37bcad1e",
       "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
@@ -282,7 +291,7 @@
       "status": "released"
     }
   ],
-  "run_id": "29239614377",
+  "run_id": "29240160261",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -354,7 +363,8 @@
     "107-handoff-truth-liveness-contract",
     "108-pr-merge-evidence-liveness-contract",
     "109-worktree-concurrency-liveness-contract",
-    "110-agent-harness-regression-liveness-contract"
+    "110-agent-harness-regression-liveness-contract",
+    "111-live-entrypoint-containment"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -533,11 +543,7 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "072-candidate-evidence-diagnostics"
-    },
-    {
-      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "111-live-entrypoint-containment"
     }
   ],
-  "timestamp_utc": "2026-07-13T09:34:29.883280Z"
+  "timestamp_utc": "2026-07-13T09:43:28.893039Z"
 }

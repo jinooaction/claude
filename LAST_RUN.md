@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-07-13T09:34:29.883280Z)
+# 완료 후보 소비 장부 (as of 2026-07-13T09:43:28.893039Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -8,8 +8,8 @@
 | 항목 | 값 |
 |------|-----|
 | overall_status | OK |
-| released_count | 31 |
-| scanned_specs | 61 |
+| released_count | 32 |
+| scanned_specs | 62 |
 
 ## 완료 후보
 
@@ -38,6 +38,7 @@
 | candidate-forward-regime-edge-experiment | released | 095-forward-regime-edge-experiment | specs/095-forward-regime-edge-experiment/spec.md | completed_candidate_id |
 | candidate-handoff-truth-liveness-contract | released | 107-handoff-truth-liveness-contract | specs/107-handoff-truth-liveness-contract/spec.md | completed_candidate_id |
 | candidate-investment-edge-frontier-map | released | 094-investment-edge-frontier-map | specs/094-investment-edge-frontier-map/spec.md | completed_candidate_id |
+| candidate-live-entrypoint-containment | released | 111-live-entrypoint-containment | specs/111-live-entrypoint-containment/spec.md | completed_candidate_id |
 | candidate-macro-candidate-map-regenerator | released | 093-macro-candidate-map-regenerator | specs/093-macro-candidate-map-regenerator/data-model.md | completed_candidate_id |
 | candidate-macro-growth-discovery | released | 088-autonomous-macro-growth-discovery | specs/088-autonomous-macro-growth-discovery/spec.md | completed_candidate_id |
 | candidate-pr-merge-evidence-liveness-contract | released | 108-pr-merge-evidence-liveness-contract | specs/108-pr-merge-evidence-liveness-contract/spec.md | completed_candidate_id |
@@ -95,7 +96,6 @@
 | 070-candidate-implementation-factory | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 071-candidate-result-executor | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 072-candidate-evidence-diagnostics | 체크박스 작업이 없거나 완료되지 않았습니다. |
-| 111-live-entrypoint-containment | 체크박스 작업이 없거나 완료되지 않았습니다. |
 
 ## 안전 경계
 
@@ -112,7 +112,7 @@
 
 ```json
 {
-  "commit": "66df71d998e04ce38635cf51048a0ac089cb41d2",
+  "commit": "c9976f7f61dacf08005f8949a36847795d0275dd",
   "overall_status": "OK",
   "released_work": [
     {
@@ -323,6 +323,15 @@
       "status": "released"
     },
     {
+      "candidate_id": "candidate-live-entrypoint-containment",
+      "entry_id": "released-256b272e66b4",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/111-live-entrypoint-containment/spec.md",
+      "spec_id": "111-live-entrypoint-containment",
+      "status": "released"
+    },
+    {
       "candidate_id": "candidate-macro-candidate-map-regenerator",
       "entry_id": "released-ccdf37bcad1e",
       "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
@@ -395,7 +404,7 @@
       "status": "released"
     }
   ],
-  "run_id": "29239614377",
+  "run_id": "29240160261",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -467,7 +476,8 @@
     "107-handoff-truth-liveness-contract",
     "108-pr-merge-evidence-liveness-contract",
     "109-worktree-concurrency-liveness-contract",
-    "110-agent-harness-regression-liveness-contract"
+    "110-agent-harness-regression-liveness-contract",
+    "111-live-entrypoint-containment"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -646,12 +656,8 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "072-candidate-evidence-diagnostics"
-    },
-    {
-      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "111-live-entrypoint-containment"
     }
   ],
-  "timestamp_utc": "2026-07-13T09:34:29.883280Z"
+  "timestamp_utc": "2026-07-13T09:43:28.893039Z"
 }
 ```
