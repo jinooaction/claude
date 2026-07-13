@@ -1,5 +1,5 @@
 {
-  "commit": "e9f9f98ea5787780a26c3833189b17b5b39cb7d5",
+  "commit": "66df71d998e04ce38635cf51048a0ac089cb41d2",
   "overall_status": "OK",
   "released_work": [
     {
@@ -282,7 +282,7 @@
       "status": "released"
     }
   ],
-  "run_id": "29189406665",
+  "run_id": "29239614377",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -533,7 +533,11 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "072-candidate-evidence-diagnostics"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "111-live-entrypoint-containment"
     }
   ],
-  "timestamp_utc": "2026-07-12T10:37:52.845216Z"
+  "timestamp_utc": "2026-07-13T09:34:29.883280Z"
 }
