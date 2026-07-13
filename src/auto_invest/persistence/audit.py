@@ -26,6 +26,7 @@ EventType = Literal[
     "ORDER_REJECTED_BY_GATE",
     "ORDER_REJECTED_BY_BROKER",
     "ORDER_SUBMISSION_UNKNOWN",
+    "ORDER_SUBMISSION_RECOVERED",
     "FILL",
     "CANCEL",
     "ERROR",
@@ -153,6 +154,15 @@ class OrderSubmissionUnknownPayload(AuditPayload):
     next_action: str = (
         "브로커 주문/체결 내역으로 접수 여부를 확인하기 전까지 자동 재시도하지 마세요."
     )
+
+
+class OrderSubmissionRecoveredPayload(AuditPayload):
+    event_type: Literal["ORDER_SUBMISSION_RECOVERED"] = "ORDER_SUBMISSION_RECOVERED"
+    kis_order_id: str
+    match_reason: str
+    broker_filled_qty: int
+    broker_unfilled_qty: int | None = None
+    broker_terminal: bool = False
 
 
 class FillPayload(AuditPayload):

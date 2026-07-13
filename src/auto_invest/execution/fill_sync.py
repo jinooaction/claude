@@ -33,10 +33,20 @@ from auto_invest.broker.overseas import (
     get_order_executions_resolving_market,
 )
 from auto_invest.config.enums import Side
-from auto_invest.execution.order_router import _record_transition, _utcnow_iso_ms
+from auto_invest.execution.order_router import (
+    _record_transition,
+    _set_kis_order_id,
+    _set_order_routing,
+    _utcnow_iso_ms,
+)
 from auto_invest.persistence import audit
 from auto_invest.persistence import positions as positions_mod
-from auto_invest.persistence.audit import CancelPayload, ErrorPayload, FillPayload
+from auto_invest.persistence.audit import (
+    CancelPayload,
+    ErrorPayload,
+    FillPayload,
+    OrderSubmissionRecoveredPayload,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +64,36 @@ class OpenOrder:
     rule_id: str
     ordered_qty: int
     state: str
+
+
+@dataclass(frozen=True)
+class UnknownSubmission:
+    """Local order whose broker acceptance is still unresolved."""
+
+    correlation_id: str
+    rule_id: str
+    symbol: str
+    side: str
+    ordered_qty: int
+
+
+@dataclass(frozen=True)
+class PlannedSubmissionRecovery:
+    correlation_id: str
+    rule_id: str
+    symbol: str
+    kis_order_id: str
+    order_exchange: str
+    filled_qty: int
+    unfilled_qty: int | None
+    terminal: bool
+    reason: str
+
+
+@dataclass(frozen=True)
+class SubmissionRecoveryPlan:
+    recoveries: list[PlannedSubmissionRecovery] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -97,6 +137,8 @@ class FillSyncResult:
     fills_applied: int
     qty_applied: int
     transitions: int
+    submission_unknown_orders: int = 0
+    submission_unknown_recovered: int = 0
     warnings: list[str] = field(default_factory=list)
     error: str | None = None
 
@@ -205,6 +247,26 @@ def _load_open_orders(conn: sqlite3.Connection) -> list[OpenOrder]:
     ]
 
 
+def _load_unknown_submissions(conn: sqlite3.Connection) -> list[UnknownSubmission]:
+    rows = conn.execute(
+        """
+        SELECT correlation_id, rule_id, symbol, side, qty
+        FROM orders
+        WHERE state = 'SUBMISSION_UNKNOWN' AND kis_order_id IS NULL
+        """
+    ).fetchall()
+    return [
+        UnknownSubmission(
+            correlation_id=r["correlation_id"],
+            rule_id=r["rule_id"],
+            symbol=r["symbol"],
+            side=r["side"],
+            ordered_qty=int(r["qty"]),
+        )
+        for r in rows
+    ]
+
+
 def _recorded_qty_by_corr(
     conn: sqlite3.Connection, correlation_ids: list[str]
 ) -> dict[str, int]:
@@ -221,6 +283,133 @@ def _recorded_qty_by_corr(
         correlation_ids,
     ).fetchall()
     return {r["corr"]: int(r["total"]) for r in rows}
+
+
+def _norm_symbol(symbol: str) -> str:
+    return symbol.strip().upper()
+
+
+def _execution_total_qty(execution: BrokerExecution) -> int | None:
+    if execution.unfilled_qty is not None:
+        return execution.filled_qty + execution.unfilled_qty
+    if execution.filled_qty > 0:
+        return execution.filled_qty
+    return None
+
+
+def _strong_submission_match(
+    unknown: UnknownSubmission,
+    execution: BrokerExecution,
+) -> bool:
+    if _norm_symbol(execution.symbol) != _norm_symbol(unknown.symbol):
+        return False
+    if execution.side is not None and execution.side.value != unknown.side:
+        return False
+    return _execution_total_qty(execution) == unknown.ordered_qty
+
+
+def plan_submission_unknown_recovery(
+    unknowns: list[UnknownSubmission],
+    executions: list[BrokerExecution],
+    *,
+    fallback_market: str,
+) -> SubmissionRecoveryPlan:
+    """Plan fail-closed recovery from local unknown submission to broker id."""
+    plan = SubmissionRecoveryPlan()
+    candidates_by_corr: dict[str, list[BrokerExecution]] = {}
+    usage_by_order_id: dict[str, int] = {}
+
+    for unknown in unknowns:
+        candidates = [ex for ex in executions if _strong_submission_match(unknown, ex)]
+        candidates_by_corr[unknown.correlation_id] = candidates
+        for candidate in candidates:
+            usage_by_order_id[candidate.kis_order_id] = (
+                usage_by_order_id.get(candidate.kis_order_id, 0) + 1
+            )
+
+    for unknown in unknowns:
+        candidates = candidates_by_corr[unknown.correlation_id]
+        if not candidates:
+            continue
+        if len(candidates) != 1:
+            plan.warnings.append(
+                f"{unknown.correlation_id}: ambiguous broker matches "
+                f"{[c.kis_order_id for c in candidates]}"
+            )
+            continue
+        candidate = candidates[0]
+        if usage_by_order_id.get(candidate.kis_order_id, 0) != 1:
+            plan.warnings.append(
+                f"{unknown.correlation_id}: broker order {candidate.kis_order_id} "
+                "also matches another unknown submission"
+            )
+            continue
+        plan.recoveries.append(
+            PlannedSubmissionRecovery(
+                correlation_id=unknown.correlation_id,
+                rule_id=unknown.rule_id,
+                symbol=unknown.symbol,
+                kis_order_id=candidate.kis_order_id,
+                order_exchange=candidate.market or fallback_market,
+                filled_qty=candidate.filled_qty,
+                unfilled_qty=candidate.unfilled_qty,
+                terminal=candidate.terminal,
+                reason="unique broker execution lookup match",
+            )
+        )
+
+    return plan
+
+
+def apply_submission_recovery_plan(
+    conn: sqlite3.Connection,
+    plan: SubmissionRecoveryPlan,
+    *,
+    ts_iso: str,
+) -> int:
+    if not plan.recoveries:
+        return 0
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        for recovery in plan.recoveries:
+            _set_kis_order_id(
+                conn,
+                recovery.correlation_id,
+                recovery.kis_order_id,
+                ts_iso,
+            )
+            _set_order_routing(
+                conn,
+                recovery.correlation_id,
+                recovery.order_exchange,
+            )
+            _record_transition(
+                conn,
+                recovery.correlation_id,
+                "SUBMISSION_UNKNOWN",
+                "SUBMITTED",
+                recovery.reason,
+            )
+            audit.append(
+                conn,
+                OrderSubmissionRecoveredPayload(
+                    kis_order_id=recovery.kis_order_id,
+                    match_reason=recovery.reason,
+                    broker_filled_qty=recovery.filled_qty,
+                    broker_unfilled_qty=recovery.unfilled_qty,
+                    broker_terminal=recovery.terminal,
+                ),
+                rule_id=recovery.rule_id,
+                symbol=recovery.symbol,
+                correlation_id=recovery.correlation_id,
+                ts_utc=ts_iso,
+            )
+        conn.commit()
+    except Exception:
+        if conn.in_transaction:
+            conn.rollback()
+        raise
+    return len(plan.recoveries)
 
 
 def _apply_fill(conn: sqlite3.Connection, fill: PlannedFill, ts_iso: str) -> bool:
@@ -330,7 +519,8 @@ async def sync_fills(
     대칭 버그). 주문번호로 중복 제거하므로 KIS 동작과 무관하게 정확·멱등."""
     moment = now or datetime.now(UTC)
     open_orders = _load_open_orders(conn)
-    if not open_orders:
+    unknown_submissions = _load_unknown_submissions(conn)
+    if not open_orders and not unknown_submissions:
         return FillSyncResult(
             polled=False, open_orders=0, fills_applied=0, qty_applied=0, transitions=0
         )
@@ -361,9 +551,24 @@ async def sync_fills(
             fills_applied=0,
             qty_applied=0,
             transitions=0,
+            submission_unknown_orders=len(unknown_submissions),
             error=str(exc),
         )
 
+    recovery_plan = plan_submission_unknown_recovery(
+        unknown_submissions,
+        executions,
+        fallback_market=markets[0] if markets else US_ORDER_EXCHANGES[0],
+    )
+    recovered = apply_submission_recovery_plan(
+        conn,
+        recovery_plan,
+        ts_iso=_iso_ms(moment),
+    )
+    for w in recovery_plan.warnings:
+        audit.append(conn, ErrorPayload(where="submission_unknown_recovery", message=w))
+
+    open_orders = _load_open_orders(conn)
     recorded = _recorded_qty_by_corr(conn, [o.correlation_id for o in open_orders])
     plan = plan_fill_ingestion(open_orders, executions, recorded)
     fills_applied, qty_applied, transitions = apply_fill_plan(
@@ -379,5 +584,7 @@ async def sync_fills(
         fills_applied=fills_applied,
         qty_applied=qty_applied,
         transitions=transitions,
-        warnings=plan.warnings,
+        submission_unknown_orders=len(unknown_submissions),
+        submission_unknown_recovered=recovered,
+        warnings=[*recovery_plan.warnings, *plan.warnings],
     )
