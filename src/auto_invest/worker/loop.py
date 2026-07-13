@@ -26,13 +26,13 @@ from typing import Any
 from auto_invest.broker.client import ResilientClient
 from auto_invest.broker.models import Quote
 from auto_invest.broker.overseas import (
-    cancel_order,
     get_balance_resolving_market,
     get_quote,
 )
 from auto_invest.broker.realtime import RealtimeQuoteSource
 from auto_invest.config.loader import LoadedConfig
 from auto_invest.config.rules import IndicatorTrigger, OrderLifecycleConfig, TradingRule
+from auto_invest.execution.authority import ExecutionAuthority
 from auto_invest.execution.execution_state import (
     ExecutionState,
     ExecutionStateReason,
@@ -238,6 +238,18 @@ class Worker:
         self._paused_rules: set[str] = {
             r.id for r in settings.config.rules if restore_pause_status(self.conn, r.id)
         }
+        self.execution_authority = (
+            None
+            if settings.paper_mode
+            else ExecutionAuthority(
+                conn=self.conn,
+                broker=broker,
+                access_token=access_token,
+                app_key=app_key,
+                app_secret=app_secret,
+                account_no=account_no,
+            )
+        )
 
         self.router = OrderRouter(
             conn=self.conn,
@@ -255,6 +267,7 @@ class Worker:
             # Spec 017 slice 2b: inverse-vol risk-parity groups from the rule set.
             sizing_groups=build_sizing_groups(settings.config.rules),
             execution_state_provider=self._execution_state_snapshot,
+            execution_authority=self.execution_authority,
         )
 
     # ---------------------------------------------- lifecycle audit
@@ -782,12 +795,9 @@ class Worker:
         # KIS 정정취소는 OVRS_EXCG_CD 가 원주문 거래소와 일치해야 한다. 제출 시점에
         # 기록된 거래소(order_routing)를 쓰고, 기록 없는 과거 주문만 기본값 폴백 —
         # SPY·GLD(AMEX) 같은 비기본 거래소 주문의 취소가 오라우팅되지 않게 한다.
-        await cancel_order(
-            self.broker,
-            access_token=self.access_token,
-            app_key=self.app_key,
-            app_secret=self.app_secret,
-            account=self.account_no,
+        if self.execution_authority is None:
+            return
+        await self.execution_authority.cancel_broker_order(
             kis_order_id=o.kis_order_id,
             market=o.order_exchange or self.settings.market_order,
         )

@@ -280,7 +280,7 @@ async def test_order_router_persists_broker_diagnostics_in_audit_payload(
     async def fake_place_order(*args, **kwargs):
         raise BrokerBoom()
 
-    monkeypatch.setattr("auto_invest.execution.order_router.place_order", fake_place_order)
+    monkeypatch.setattr("auto_invest.execution.authority.place_order", fake_place_order)
 
     conn = db.get_connection(tmp_path / "orders.db")
     db.migrate(conn)
