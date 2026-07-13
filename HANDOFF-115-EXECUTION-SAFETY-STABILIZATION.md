@@ -2,7 +2,7 @@
 
 ## 한 줄 결론
 
-현재 저장소의 가장 큰 위험은 투자 전략의 부족보다 **실거래 실행 권한과 계좌 상태가 여러 경로에 분산돼 있다는 점**이었다. `specs/111-live-entrypoint-containment`, `specs/112-order-submission-uncertainty-recovery`, `specs/113-atomic-fill-ledger`, `specs/114-account-exposure-reservation`, `specs/115-degraded-execution-state`, `specs/116-single-execution-authority`는 main에 들어갔다. 저장소 코드 기준 실행 안전성 안정화 프로그램의 111~116 단계는 완료됐고, 남은 것은 실제 서버·KIS 계좌 운영 상태 확인과 `SUBMISSION_UNKNOWN` broker lookup 복구 후보다.
+현재 저장소의 가장 큰 위험은 투자 전략의 부족보다 **실거래 실행 권한과 계좌 상태가 여러 경로에 분산돼 있다는 점**이었다. `specs/111-live-entrypoint-containment`, `specs/112-order-submission-uncertainty-recovery`, `specs/113-atomic-fill-ledger`, `specs/114-account-exposure-reservation`, `specs/115-degraded-execution-state`, `specs/116-single-execution-authority`, `specs/117-submission-unknown-broker-lookup`은 main에 들어갔다. 저장소 코드 기준 실행 안전성 안정화 프로그램의 111~117 단계는 완료됐고, 남은 것은 실제 서버·KIS 계좌 운영 상태 확인이다.
 
 ## 운영자 지시 해석
 
@@ -25,11 +25,11 @@
 
 ## 기준 상태
 
-- 기준 `main`: `8b0cfac8c37474aee86408f5f696d95dd1d20fec` — PR #519 스펙 116 단일 실행 권한 머지
+- 기준 `main`: `8fd6b90b7c0003104065b88ba0149e0002254953` — PR #521 스펙 117 `SUBMISSION_UNKNOWN` broker lookup 복구 머지
 - 확인 시점: 2026-07-13 KST
 - 열린 풀 리퀘스트: handoff 갱신 전 없음
-- 기존 활성 스펙 포인터: `specs/116-single-execution-authority`
-- 최근 완료 브랜치: `codex/116-single-execution-authority`
+- 기존 활성 스펙 포인터: `specs/117-submission-unknown-broker-lookup`
+- 최근 완료 브랜치: `codex/117-submission-unknown-broker-lookup`
 - 주요 저장소 선언 상태:
   - 돈 경로: `PREVIEW_ONLY`
   - 마이크로 GTAA 센티넬: `automation/rebalance-micro-gtaa.request`의 `armed: false`
