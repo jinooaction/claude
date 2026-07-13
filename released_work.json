@@ -291,7 +291,7 @@
       "status": "released"
     }
   ],
-  "run_id": "29248728751",
+  "run_id": "29248767181",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -553,5 +553,5 @@
       "spec_id": "113-atomic-fill-ledger"
     }
   ],
-  "timestamp_utc": "2026-07-13T12:08:42.064911Z"
+  "timestamp_utc": "2026-07-13T12:09:14.759806Z"
 }
