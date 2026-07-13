@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-07-13T13:42:47.077687Z)
+# 완료 후보 소비 장부 (as of 2026-07-13T13:50:09.751548Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -8,8 +8,8 @@
 | 항목 | 값 |
 |------|-----|
 | overall_status | OK |
-| released_count | 32 |
-| scanned_specs | 63 |
+| released_count | 33 |
+| scanned_specs | 64 |
 
 ## 완료 후보
 
@@ -26,6 +26,7 @@
 | candidate-cost-adjusted-edge-experiment | released | 097-cost-adjusted-edge-experiment | specs/097-cost-adjusted-edge-experiment/data-model.md | completed_candidate_id |
 | candidate-data-evidence-frontier-map | released | 098-data-evidence-frontier-map | specs/098-data-evidence-frontier-map/spec.md | completed_candidate_id |
 | candidate-data-evidence-liveness-contract | released | 101-data-evidence-liveness-contract | specs/101-data-evidence-liveness-contract/spec.md | completed_candidate_id |
+| candidate-degraded-execution-state | released | 115-degraded-execution-state | specs/115-degraded-execution-state/spec.md | completed_candidate_id |
 | candidate-dff4f9344b02 | released | 083-rejected-order-execution-quality | specs/083-rejected-order-execution-quality/contracts/execution-quality.md | completed_candidate_id |
 | candidate-e481b0309206 | released | 082-regime-performance-candidate-scoring | specs/082-regime-performance-candidate-scoring/contracts/regime-performance-candidate-scoring.md | completed_candidate_id |
 | candidate-evolution-source-diversification | released | 089-evolution-source-diversification | specs/089-evolution-source-diversification/spec.md | completed_candidate_id |
@@ -98,7 +99,6 @@
 | 072-candidate-evidence-diagnostics | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 112-order-submission-uncertainty-recovery | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 113-atomic-fill-ledger | 체크박스 작업이 없거나 완료되지 않았습니다. |
-| 115-degraded-execution-state | 체크박스 작업이 없거나 완료되지 않았습니다. |
 
 ## 안전 경계
 
@@ -115,7 +115,7 @@
 
 ```json
 {
-  "commit": "121a236d3f06941378703bed78b16b4c2a645ee4",
+  "commit": "e95016e430c52b016ea559f326eb0d1a6a67848f",
   "overall_status": "OK",
   "released_work": [
     {
@@ -215,6 +215,15 @@
       "source_field": "completed_candidate_id",
       "source_file": "specs/101-data-evidence-liveness-contract/spec.md",
       "spec_id": "101-data-evidence-liveness-contract",
+      "status": "released"
+    },
+    {
+      "candidate_id": "candidate-degraded-execution-state",
+      "entry_id": "released-bea2dbabce1e",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/115-degraded-execution-state/spec.md",
+      "spec_id": "115-degraded-execution-state",
       "status": "released"
     },
     {
@@ -407,7 +416,7 @@
       "status": "released"
     }
   ],
-  "run_id": "29254832106",
+  "run_id": "29255356282",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -481,7 +490,8 @@
     "109-worktree-concurrency-liveness-contract",
     "110-agent-harness-regression-liveness-contract",
     "111-live-entrypoint-containment",
-    "114-account-exposure-reservation"
+    "114-account-exposure-reservation",
+    "115-degraded-execution-state"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -668,12 +678,8 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "113-atomic-fill-ledger"
-    },
-    {
-      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "115-degraded-execution-state"
     }
   ],
-  "timestamp_utc": "2026-07-13T13:42:47.077687Z"
+  "timestamp_utc": "2026-07-13T13:50:09.751548Z"
 }
 ```
