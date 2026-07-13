@@ -79,11 +79,11 @@
 
 - [x] T047 Update `HANDOFF-115-EXECUTION-SAFETY-STABILIZATION.md` with spec 112 result and remaining risks
 - [x] T048 Mark this task file complete only after all required gates pass
-- [ ] T049 Push branch and open PR
-- [ ] T050 Merge using repository `merge` policy when automatic merge conditions are satisfied
-- [ ] T051 Verify the `main` merge commit and relevant post-merge workflows
-- [ ] T052 Refresh root `HANDOFF.md` in the repository-standard follow-up PR
-- [ ] T053 Name `113-atomic-fill-ledger` as the next execution-safety work item unless new evidence changes priority
+- [x] T049 Push branch and open PR
+- [x] T050 Merge using repository `merge` policy when automatic merge conditions are satisfied
+- [x] T051 Verify the `main` merge commit and relevant post-merge workflows
+- [x] T052 Refresh root `HANDOFF.md` in the repository-standard follow-up PR
+- [x] T053 Name `113-atomic-fill-ledger` as the next execution-safety work item unless new evidence changes priority
 
 ## Dependencies & Execution Order
 

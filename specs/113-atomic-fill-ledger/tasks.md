@@ -49,11 +49,11 @@
 
 - [x] T026 Update `HANDOFF-115-EXECUTION-SAFETY-STABILIZATION.md` with spec 113 result and remaining risks
 - [x] T027 Mark this task file complete only after all required gates pass
-- [ ] T028 Push branch and open PR
-- [ ] T029 Merge using repository `merge` policy when automatic merge conditions are satisfied
-- [ ] T030 Verify the `main` merge commit and relevant post-merge workflows
-- [ ] T031 Refresh root `HANDOFF.md` in the repository-standard follow-up PR if main operating truth changed
-- [ ] T032 Name `114-account-exposure-reservation` as the next execution-safety work item unless new evidence changes priority
+- [x] T028 Push branch and open PR
+- [x] T029 Merge using repository `merge` policy when automatic merge conditions are satisfied
+- [x] T030 Verify the `main` merge commit and relevant post-merge workflows
+- [x] T031 Refresh root `HANDOFF.md` in the repository-standard follow-up PR if main operating truth changed
+- [x] T032 Name `114-account-exposure-reservation` as the next execution-safety work item unless new evidence changes priority
 
 ## Dependencies & Execution Order
 
