@@ -128,10 +128,9 @@ COMMAND_POLICIES: dict[str, CommandPolicy] = {
     ),
     "design": _p(
         "design",
-        AutonomyLevel.BOUNDED_LIVE,
-        "Use LLM-assisted rule design and optionally start a live worker after operator OK.",
-        can_place_order=True,
-        can_change_live_config=True,
+        AutonomyLevel.PROPOSAL,
+        "Use LLM-assisted rule design to create proposal-only candidates; "
+        "broker use is read-only account context and never order placement.",
         writes_db=True,
         uses_broker=True,
         uses_llm=True,

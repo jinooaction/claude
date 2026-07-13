@@ -48,6 +48,13 @@ def test_safety_commands_json_cli():
     commands = {row["name"]: row for row in payload["commands"]}
     assert commands["run"]["level"] == "A3"
     assert commands["run"]["can_place_order"] is True
+    assert commands["design"]["level"] == "A2"
+    assert commands["design"]["level_label"] == "proposal"
+    assert commands["design"]["can_place_order"] is False
+    assert commands["design"]["can_change_live_config"] is False
+    assert commands["design"]["can_scale_capital"] is False
+    assert commands["design"]["can_reassign_strategy"] is False
+    assert commands["design"]["uses_llm"] is True
     assert commands["status"]["level"] == "A0"
     assert commands["status"]["can_place_order"] is False
     assert commands["telegram-alerts"]["level"] == "A2"

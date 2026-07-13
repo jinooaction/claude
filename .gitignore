@@ -1,6 +1,7 @@
 # Python
 __pycache__/
 *.py[cod]
+*.pyc
 *$py.class
 *.egg-info/
 .pytest_cache/
@@ -24,6 +25,7 @@ credentials.json
 .vscode/
 .idea/
 .DS_Store
+*.tmp
 
 # Claude Code agent folder may contain auth tokens; per spec-kit guidance.
 # Keep skills/commands committed but ignore anything sensitive.

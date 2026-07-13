@@ -1,72 +1,70 @@
-# 자동 룰 설계자 (auto-invest design) 운영자 사용법
+# 자동 룰 설계자 (`auto-invest design`) 운영자 사용법
 
-**전제**: Vultr 인스턴스가 이미 가동 중 (`auto-invest.service` systemd로 24시간 도는 중). KIS 키는 이미 `set_secrets.sh`로 입력 완료. Anthropic API 키만 추가 입력 + design 명령 실행하면 끝.
+`auto-invest design`은 자연어 의도에서 룰 후보를 만들고 검증 상태를 남기는
+제안 전용 명령입니다. 이 명령은 실거래 프로세스를 시작하지 않고 실제 주문도 내지
+않습니다.
 
-## 한 줄로 정리한 절차
+## 전제
 
-### 1단계 — Anthropic API 키 추가 (한 번만)
+- Vultr 인스턴스가 가동 중입니다.
+- KIS 키와 Anthropic API 키가 `.env`에 입력돼 있습니다.
+- KIS 계좌 정보는 후보 설계 문맥을 읽기 위해 사용됩니다. 주문 쓰기 권한으로
+  사용하지 않습니다.
 
-Vultr 웹 콘솔에서 인스턴스 "View Console" 클릭 → root 로그인 → 다음 한 줄:
-
-```bash
-sudo /opt/auto-invest/scripts/set_secrets.sh
-```
-
-prompt가 KIS 키 3개를 다시 물어봅니다 (그냥 같은 값을 다시 입력하거나, Enter 누르면 기존 값 유지 안 됨 — KIS 키는 다시 입력 필요).
-
-마지막 prompt에 ANTHROPIC_API_KEY 한 번 붙여넣기. 이후 자동 진행 — 워커 재시작 + 다음 절차 안내.
-
-### 2단계 — 자동 룰 설계 실행 (한 줄)
-
-Anthropic 키 입력 후 같은 콘솔에서:
+## 콘솔에서 실행
 
 ```bash
 sudo -u auto-invest /usr/local/bin/uv run --project /opt/auto-invest \
   auto-invest design --intent "자본 100달러, 미국 대형주 분산, 매주 월요일 적립, 위험 보통"
 ```
 
-시스템이 자동으로 진행하는 단계:
+시스템이 수행하는 일:
 
-1. KIS 계좌 잔고 조회.
-2. Claude API가 룰 자동 생성 (~수 초).
-3. 정적 검증 5종 (cap·whitelist·자본 한도·종목 형식).
-4. 검증 통과 시 한글 요약 + `OK` 입력 prompt.
-5. 운영자가 `OK` 입력 → 새 라이브 worker subprocess 자동 시작.
-6. 자동 생성된 `config/rules_auto_<timestamp>.toml`이 main으로 commit되어 deploy timer 통해 다음 30분 안에 적용.
+1. KIS 계좌 잔고와 보유 종목을 읽습니다.
+2. Claude API로 룰 후보를 생성합니다.
+3. 정적 검증을 수행합니다.
+4. 동적 백테스트와 paper/모의 검증 증거가 없으면 `WAIT_DYNAMIC_VALIDATION`으로
+   남깁니다.
+5. `config/rules_auto_<timestamp>.toml` 후보 파일, 같은 이름의
+   `.proposal.json` 검증 보고서, 감사 기록을 남깁니다.
 
-### 3단계 — 라이브 worker 상태 확인 (언제든)
+정상 종료는 “후보 생성 완료”를 뜻합니다. 라이브 승격은 별도 경로입니다.
+
+```text
+candidate rules
+→ static validation
+→ backtest
+→ paper/forward validation
+→ hardened canary
+→ approved live path
+```
+
+## GitHub Actions에서 실행
+
+Actions 탭에서 `Operator design (auto-invest)`를 수동 실행하고 `intent`를 입력합니다.
+예약 실행과 자동 확인 입력은 제거됐습니다.
+
+## 과거 상태 확인
 
 ```bash
 sudo -u auto-invest /usr/local/bin/uv run --project /opt/auto-invest \
   auto-invest design --check
 ```
 
-가장 최근 design 결과의 라이브 worker가 한글로 요약:
-
-- 실행 상태 (실행 중 / 종료됨)
-- 라이브 시작 이후 시그널·체결·차단·오류 카운트
-- 운영자 원본 의도 + Claude 해석 매개변수
-
-## 의도 변경
-
-한 달 후 룰을 바꾸고 싶으면 2단계만 다시 실행 (다른 의도 텍스트로):
-
-```bash
-sudo -u auto-invest /usr/local/bin/uv run --project /opt/auto-invest \
-  auto-invest design --intent "자본 200달러, 미국 대형주 + ETF 분산, 위험 낮음"
-```
-
-기존 라이브 worker는 자동 종료, 새 worker가 새 룰로 시작.
+`--check`는 과거에 남아 있는 `RULE_DESIGN_DEPLOYED` 기록을 읽기 전용으로 요약하는
+역사 호환 모드입니다. 새 `design` 실행은 그 이벤트를 만들지 않습니다.
 
 ## 막혔을 때
 
-- **"ANTHROPIC_API_KEY가 없습니다"**: 1단계 다시 실행 (Anthropic 키 입력 추가).
-- **"KIS 잔고 조회 실패"**: KIS 키가 만료됐을 수 있음. 1단계 다시 실행.
-- **"잔고 부족"**: KIS 계좌에 입금 후 다시 시도.
-- **"Claude API 오류"**: Anthropic 계정에 결제 카드 등록 되어 있는지 확인.
-- 그 외: `journalctl -u auto-invest.service -n 50`으로 로그 확인.
+- **"ANTHROPIC_API_KEY가 없습니다"**: `set_secrets.sh`를 다시 실행해 Anthropic 키를
+  입력합니다.
+- **"KIS 잔고 조회 실패"**: KIS 키 또는 계좌번호를 확인합니다.
+- **"WAIT_DYNAMIC_VALIDATION"**: 후보는 생성됐지만 백테스트와 paper/모의 증거가
+  아직 없다는 뜻입니다. 기존 검증·승격 경로로 후보를 넘깁니다.
+- 그 외: `journalctl -u auto-invest.service -n 50`으로 로그를 확인합니다.
 
-## 주의
+## 금지
 
-- design 명령은 운영자가 인스턴스 콘솔에서 직접 실행해야 합니다. systemd timer로 자동화는 별도 스펙 (spec 005 autonomous tuner) 후속.
-- 라이브 시작 후 24시간 정도 관찰하고 시그널·체결이 너무 적거나 너무 많으면 의도를 좀 더 구체적으로 다시 시도.
+- `design` 결과를 곧바로 실거래 설정으로 적용하지 않습니다.
+- 후보 파일을 만들었다는 이유만으로 `AUTO_INVEST_MODE=live`, live sentinel,
+  자본 사다리, whitelist, caps를 바꾸지 않습니다.
