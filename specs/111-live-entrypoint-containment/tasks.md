@@ -120,7 +120,7 @@
 - [x] T058 Run `uv run python scripts/check_handoff_facts.py`
 - [x] T059 Run `uv run python scripts/agent_harness_probe.py --strict`
 - [x] T060 Prepare the PR body and run `python3 scripts/check_pr_quality_gate.py /tmp/pr-body-111.md`
-- [ ] T061 Confirm the PR is mergeable, not draft when complete, and has no hold marker
+- [x] T061 Confirm the PR is mergeable, not draft when complete, and has no hold marker
 - [x] T062 Confirm no actual KIS, Anthropic, SSH, live workflow dispatch, or server command was executed during validation
 
 ---
@@ -128,7 +128,7 @@
 ## Phase 9: Merge and Handoff
 
 - [x] T063 Update `HANDOFF-115-EXECUTION-SAFETY-STABILIZATION.md` with actual code paths removed, test evidence, and unresolved risks
-- [ ] T064 Mark this task file complete only after all required gates pass
+- [x] T064 Mark this task file complete only after all required gates pass
 - [ ] T065 Merge using repository `merge` policy when automatic merge conditions are satisfied
 - [ ] T066 Verify the `main` merge commit and relevant post-merge workflows
 - [ ] T067 Refresh root `HANDOFF.md` in the repository-standard follow-up PR
