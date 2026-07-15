@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-07-15T12:21:34.204914Z)
+# 완료 후보 소비 장부 (as of 2026-07-15T12:33:02.397135Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -8,8 +8,8 @@
 | 항목 | 값 |
 |------|-----|
 | overall_status | OK |
-| released_count | 37 |
-| scanned_specs | 68 |
+| released_count | 38 |
+| scanned_specs | 69 |
 
 ## 완료 후보
 
@@ -43,6 +43,7 @@
 | candidate-live-entrypoint-containment | released | 111-live-entrypoint-containment | specs/111-live-entrypoint-containment/spec.md | completed_candidate_id |
 | candidate-macro-candidate-map-regenerator | released | 093-macro-candidate-map-regenerator | specs/093-macro-candidate-map-regenerator/data-model.md | completed_candidate_id |
 | candidate-macro-growth-discovery | released | 088-autonomous-macro-growth-discovery | specs/088-autonomous-macro-growth-discovery/spec.md | completed_candidate_id |
+| candidate-operator-report-liveness-contract | released | 118-operator-report-liveness-contract | specs/118-operator-report-liveness-contract/spec.md | completed_candidate_id |
 | candidate-order-submission-uncertainty-recovery | released | 112-order-submission-uncertainty-recovery | specs/112-order-submission-uncertainty-recovery/spec.md | completed_candidate_id |
 | candidate-pr-merge-evidence-liveness-contract | released | 108-pr-merge-evidence-liveness-contract | specs/108-pr-merge-evidence-liveness-contract/spec.md | completed_candidate_id |
 | candidate-public-data-input-quality-contract | released | 099-public-data-input-quality-contract | specs/099-public-data-input-quality-contract/spec.md | completed_candidate_id |
@@ -101,7 +102,6 @@
 | 070-candidate-implementation-factory | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 071-candidate-result-executor | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 072-candidate-evidence-diagnostics | 체크박스 작업이 없거나 완료되지 않았습니다. |
-| 118-operator-report-liveness-contract | 체크박스 작업이 없거나 완료되지 않았습니다. |
 
 ## 안전 경계
 
@@ -118,7 +118,7 @@
 
 ```json
 {
-  "commit": "158052add91cc059b4d61a18ea1e5efad508185b",
+  "commit": "01386464f03231b8867ca85da11853587777c4c2",
   "overall_status": "OK",
   "released_work": [
     {
@@ -374,6 +374,15 @@
       "status": "released"
     },
     {
+      "candidate_id": "candidate-operator-report-liveness-contract",
+      "entry_id": "released-0d42144d7ef8",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/118-operator-report-liveness-contract/spec.md",
+      "spec_id": "118-operator-report-liveness-contract",
+      "status": "released"
+    },
+    {
       "candidate_id": "candidate-order-submission-uncertainty-recovery",
       "entry_id": "released-fd75a8bbc7ed",
       "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
@@ -455,7 +464,7 @@
       "status": "released"
     }
   ],
-  "run_id": "29414899929",
+  "run_id": "29415623889",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -534,7 +543,8 @@
     "114-account-exposure-reservation",
     "115-degraded-execution-state",
     "116-single-execution-authority",
-    "117-submission-unknown-broker-lookup"
+    "117-submission-unknown-broker-lookup",
+    "118-operator-report-liveness-contract"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -713,12 +723,8 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "072-candidate-evidence-diagnostics"
-    },
-    {
-      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "118-operator-report-liveness-contract"
     }
   ],
-  "timestamp_utc": "2026-07-15T12:21:34.204914Z"
+  "timestamp_utc": "2026-07-15T12:33:02.397135Z"
 }
 ```
