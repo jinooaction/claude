@@ -45,8 +45,8 @@
 - [x] T021 Run `uv run python scripts/check_handoff_facts.py`
 - [x] T022 Run `uv run python scripts/agent_harness_probe.py --strict`
 - [x] T023 Create PR with risk grade, safety boundary, validation, and handoff evidence
-- [ ] T024 Merge when tests, lint, PR quality gate, and mergeability are clean
-- [ ] T025 Refresh `HANDOFF.md` after merge and validate it
+- [x] T024 Merge when tests, lint, PR quality gate, and mergeability are clean
+- [x] T025 Refresh `HANDOFF.md` after merge and validate it
 
 ## Dependencies
 
