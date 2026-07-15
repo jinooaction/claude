@@ -1754,6 +1754,44 @@ def test_released_agent_harness_advances_to_operator_report_candidate():
     assert agent_ops_map["operator_report_liveness"].coverage_status == "open"
 
 
+def test_released_operator_report_candidate_is_not_reselected():
+    report = build_autonomous_work_execution(
+        {
+            "capital-path-readiness": _json(
+                {
+                    "priority_candidates": [
+                        {
+                            "candidate_id": "candidate-fd04772a23c5",
+                            "domain_key": "live_readiness",
+                            "status": "new",
+                            "score": 597,
+                        }
+                    ]
+                }
+            ),
+            "released-work": _released_through_broker_diagnostic_liveness(
+                AGENT_OPS_FRONTIER_CANDIDATE_ID,
+                HANDOFF_TRUTH_LIVENESS_CANDIDATE_ID,
+                PR_MERGE_EVIDENCE_LIVENESS_CANDIDATE_ID,
+                WORKTREE_CONCURRENCY_LIVENESS_CANDIDATE_ID,
+                AGENT_HARNESS_REGRESSION_LIVENESS_CANDIDATE_ID,
+                OPERATOR_REPORT_LIVENESS_CANDIDATE_ID,
+            ),
+            "pipeline-liveness": _liveness(),
+        },
+        now=NOW,
+    )
+
+    agent_ops_map = {entry.frontier_key: entry for entry in report.agent_ops_frontier_map}
+    assert agent_ops_map["operator_report_liveness"].coverage_status == "released"
+    assert all(
+        packet.candidate_id != OPERATOR_REPORT_LIVENESS_CANDIDATE_ID
+        for packet in report.ranked_work
+    )
+    if report.selected_work is not None:
+        assert report.selected_work.candidate_id != OPERATOR_REPORT_LIVENESS_CANDIDATE_ID
+
+
 def test_macro_candidate_map_is_deterministic_and_rendered():
     evidence = {
         "capital-path-readiness": _json(
