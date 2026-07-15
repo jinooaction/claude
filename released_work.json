@@ -1,5 +1,5 @@
 {
-  "commit": "7be7bde71d6bd3cddcbff55735fdde1bc113300f",
+  "commit": "158052add91cc059b4d61a18ea1e5efad508185b",
   "overall_status": "OK",
   "released_work": [
     {
@@ -336,7 +336,7 @@
       "status": "released"
     }
   ],
-  "run_id": "29409702726",
+  "run_id": "29414899929",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -594,7 +594,11 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "072-candidate-evidence-diagnostics"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "118-operator-report-liveness-contract"
     }
   ],
-  "timestamp_utc": "2026-07-15T10:53:44.361034Z"
+  "timestamp_utc": "2026-07-15T12:21:34.204914Z"
 }
