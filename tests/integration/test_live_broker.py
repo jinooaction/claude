@@ -7,6 +7,7 @@ Verifies that the overseas-equity adapter shapes match the real broker:
   - fetch USD purchasable cash (회귀: KIS 잔고 0원 표시 버그)
   - fetch positions snapshot (회귀: 보유 포트폴리오 stub)
   - fetch combined balance (cash + 평가금액 합)
+  - fetch recent order/execution rows and fail on open unfilled orders
 
 Places NO orders. Read-only endpoints only.
 
@@ -18,7 +19,7 @@ GitHub Actions의 `KIS smoke (autonomous)` workflow가 매 main push와 매일
 거치지 않고 즉시 잡힘 (자율 수행 정책 v3.0.0 IX.D).
 
 토큰 발급은 module-scoped fixture로 1회만 수행. KIS OAuth API 는 짧은
-시간 내 중복 토큰 발급에 대해 403 Forbidden 을 반환하므로, 4개 테스트
+시간 내 중복 토큰 발급에 대해 403 Forbidden 을 반환하므로, 5개 테스트
 가 각자 토큰을 발급하면 첫 번째는 성공해도 나머지는 throttle 에 막힘.
 """
 
@@ -26,6 +27,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import httpx
@@ -39,6 +41,7 @@ from auto_invest.broker.client import (
 )
 from auto_invest.broker.overseas import (
     get_balance,
+    get_order_executions_resolving_market,
     get_positions,
     get_purchasable_cash_usd,
     get_quote,
@@ -233,3 +236,55 @@ async def test_live_kis_combined_balance(kis_token_bundle: dict) -> None:
         f"\nLive KIS balance: cash=${balance.cash_usd}, "
         f"total=${balance.total_value_usd}"
     )
+
+
+@pytest.mark.asyncio
+async def test_live_kis_recent_orders_have_no_open_unfilled(
+    kis_token_bundle: dict,
+) -> None:
+    """회귀 방어: 최근 KIS 주문/체결 조회에서 열린 미체결 주문이 없어야 한다.
+
+    `inquire-ccnl`은 읽기 전용 주문체결내역 조회다. 최근 7일을 확인해
+    오래 남은 미체결 주문이 다음 자동화 판단을 오염시키지 않는지 확인한다.
+    """
+    access_token = kis_token_bundle["access_token"]
+    app_key = kis_token_bundle["app_key"]
+    app_secret = kis_token_bundle["app_secret"]
+    account_no = _required_env("KIS_ACCOUNT_NO")
+
+    today = datetime.now(UTC).date()
+    executions = []
+    async with httpx.AsyncClient(base_url=KIS_BASE_URL, timeout=30.0) as inner:
+        broker = _make_broker(inner)
+        for offset in range(7):
+            order_date = (today - timedelta(days=offset)).strftime("%Y%m%d")
+            executions.extend(
+                await get_order_executions_resolving_market(
+                    broker,
+                    access_token=access_token,
+                    app_key=app_key,
+                    app_secret=app_secret,
+                    account=account_no,
+                    order_date_yyyymmdd=order_date,
+                )
+            )
+
+    by_id = {execution.kis_order_id: execution for execution in executions}
+    open_orders = [
+        execution
+        for execution in by_id.values()
+        if (execution.unfilled_qty or 0) > 0 and not execution.terminal
+    ]
+
+    print(
+        "\nLive KIS recent order/execution rows: "
+        f"{len(by_id)}개, open_unfilled={len(open_orders)}개"
+    )
+    for execution in open_orders:
+        print(
+            "  - open "
+            f"{execution.kis_order_id} {execution.symbol} "
+            f"{execution.side} unfilled={execution.unfilled_qty}"
+        )
+
+    assert open_orders == []
