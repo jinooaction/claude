@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-07-15T14:17:58.786562Z)
+# 완료 후보 소비 장부 (as of 2026-07-16T11:03:10.364765Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -118,7 +118,7 @@
 
 ```json
 {
-  "commit": "2b9fe8583019ee3459ecce443bd9d0442178f335",
+  "commit": "bc03e859d39bd07042b2748c7d6b39e416e3bdf3",
   "overall_status": "OK",
   "released_work": [
     {
@@ -464,7 +464,7 @@
       "status": "released"
     }
   ],
-  "run_id": "29422911779",
+  "run_id": "29493002528",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -725,6 +725,6 @@
       "spec_id": "072-candidate-evidence-diagnostics"
     }
   ],
-  "timestamp_utc": "2026-07-15T14:17:58.786562Z"
+  "timestamp_utc": "2026-07-16T11:03:10.364765Z"
 }
 ```
