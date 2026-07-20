@@ -146,6 +146,20 @@ def test_verify_operator_setup_does_not_fail_when_result_files_are_ignored():
     assert "git add -f .verify/" not in workflow
 
 
+def test_verify_operator_setup_only_fails_manual_verification():
+    workflow = (WORKFLOWS / "verify-operator-setup.yml").read_text(encoding="utf-8")
+
+    assert (
+        "github.event_name == 'push' && steps.overall.outputs.status != 'all_ok'"
+        in workflow
+    )
+    assert (
+        "github.event_name == 'workflow_dispatch' && "
+        "steps.overall.outputs.status != 'all_ok'"
+        in workflow
+    )
+
+
 def test_public_sidecar_redactor_masks_sensitive_fields():
     raw = """
 | account_no | 1234567801 |

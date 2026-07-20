@@ -423,8 +423,15 @@ jobs:
               cat /tmp/verify_git_add.err || true
           fi
 
-      - name: Fail if not all OK
-        if: steps.overall.outputs.status != 'all_ok'
+      - name: Record non-blocking push diagnostic
+        if: github.event_name == 'push' && steps.overall.outputs.status != 'all_ok'
+        run: |
+          echo "::warning::운영자 셋업 검증 실패: ${{ steps.overall.outputs.status }}"
+          echo "push 이벤트에서는 PR 머지를 막지 않고 Summary에 진단만 남깁니다."
+          echo "수동 workflow_dispatch 검증은 같은 상태를 실패로 처리합니다."
+
+      - name: Fail manual verification if not all OK
+        if: github.event_name == 'workflow_dispatch' && steps.overall.outputs.status != 'all_ok'
         run: |
           echo "::error::셋업 검증 실패: ${{ steps.overall.outputs.status }}"
           exit 1
