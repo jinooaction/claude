@@ -22,4 +22,4 @@
    uv run python scripts/check_pr_quality_gate.py /tmp/pr-body.md
    ```
 
-4. Operator-side follow-up after merge: rotate any previously configured GitHub root SSH key, remove that key from server `authorized_keys`, and provision a non-root forced-command deploy identity.
+4. Operator-side follow-up after merge: the GitHub-held root SSH user/private-key secrets have been removed. Remove the old public key from server `authorized_keys`, then provision a non-root forced-command deploy identity and set fresh `VULTR_SSH_USER`/`VULTR_SSH_PRIVATE_KEY` secrets for that identity.

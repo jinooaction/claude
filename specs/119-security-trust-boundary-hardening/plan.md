@@ -2,7 +2,7 @@
 
 ## Summary
 
-Harden the trust boundary around public GitHub workflows, remote server execution, canary promotion, deploy locking, token caching, order recovery, exposure-reducing sells, and public sidecar evidence. The implementation keeps the system read-only/dry-run from this session, blocks newly identified fail-open paths, and leaves rotation of real production secrets as an operator action.
+Harden the trust boundary around public GitHub workflows, remote server execution, canary promotion, deploy locking, token caching, order recovery, exposure-reducing sells, and public sidecar evidence. The implementation keeps the system read-only/dry-run from this session, blocks newly identified fail-open paths, removes the GitHub-held root SSH user/private-key secrets, and leaves server-side `authorized_keys` cleanup plus non-root deploy-user provisioning as the remaining operator action.
 
 ## Technical Context
 
@@ -49,4 +49,4 @@ Harden the trust boundary around public GitHub workflows, remote server executio
 
 ## Rollback
 
-Revert the feature PR. This restores the previous workflow behavior, canary gate, lock, cache, and order-risk behavior. Production secret rotation and server key cleanup are intentionally operator-side and are not performed by this PR.
+Revert the feature PR. This restores the previous workflow behavior, canary gate, lock, cache, and order-risk behavior. The GitHub-held root SSH user/private-key secrets were intentionally removed outside git and would need an explicit operator decision to recreate as non-root deploy credentials. Server key cleanup remains operator-side.
