@@ -138,6 +138,14 @@ def test_provision_capital_input_is_validated_before_userdata_interpolation():
     )
 
 
+def test_verify_operator_setup_does_not_fail_when_result_files_are_ignored():
+    workflow = (WORKFLOWS / "verify-operator-setup.yml").read_text(encoding="utf-8")
+
+    assert "if git add .verify/ 2>/tmp/verify_git_add.err; then" in workflow
+    assert "branch-local 결과 commit 을 건너뜁니다" in workflow
+    assert "git add -f .verify/" not in workflow
+
+
 def test_public_sidecar_redactor_masks_sensitive_fields():
     raw = """
 | account_no | 1234567801 |

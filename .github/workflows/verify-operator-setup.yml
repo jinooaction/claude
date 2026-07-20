@@ -405,16 +405,22 @@ jobs:
 
           git config user.email "github-actions@github.com"
           git config user.name  "github-actions[bot]"
-          git add .verify/
-          # 이전 commit 과 동일한 내용이면 commit 안 함 (loop 방지).
-          if git diff --cached --quiet; then
-              echo "변경 없음 — commit skip"
+          # .verify/ 는 main 누적을 막기 위해 gitignore 된다. 과거 branch-local
+          # 결과 파일을 커밋할 수 있는 상태면 커밋하고, 무시 경로라면 Summary만 남긴다.
+          if git add .verify/ 2>/tmp/verify_git_add.err; then
+              # 이전 commit 과 동일한 내용이면 commit 안 함 (loop 방지).
+              if git diff --cached --quiet; then
+                  echo "변경 없음 — commit skip"
+              else
+                  # [skip ci] 로 자기 자신 재트리거 방지.
+                  git commit -m "verify: ${STATUS:-unknown} [skip ci]"
+                  # push 가 실패해도 workflow 전체는 그대로 결과 status 유지 (이미 결정됨).
+                  git push origin HEAD:"${GITHUB_REF#refs/heads/}" || \
+                      echo "::warning::push 실패 — 결과는 workflow logs 또는 step summary 에서 확인하세요."
+              fi
           else
-              # [skip ci] 로 자기 자신 재트리거 방지.
-              git commit -m "verify: ${STATUS:-unknown} [skip ci]"
-              # push 가 실패해도 workflow 전체는 그대로 결과 status 유지 (이미 결정됨).
-              git push origin HEAD:"${GITHUB_REF#refs/heads/}" || \
-                  echo "::warning::push 실패 — 결과는 workflow logs 또는 step summary 에서 확인하세요."
+              echo "::notice::.verify/ 는 gitignore 상태라 branch-local 결과 commit 을 건너뜁니다."
+              cat /tmp/verify_git_add.err || true
           fi
 
       - name: Fail if not all OK

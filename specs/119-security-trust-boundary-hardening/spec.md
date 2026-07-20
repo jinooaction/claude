@@ -1,7 +1,7 @@
 # Feature Specification: Security Trust Boundary Hardening
 
-**Feature Branch**: `Codex/isolated-20260720-223826-019f81ac-523b-7f`  
-**Created**: 2026-07-21  
+**Feature Branch**: `codex/security-trust-boundary-hardening`
+**Created**: 2026-07-21
 **Input**: External vulnerability review of GitHub Actions, deployment, broker auth, order routing, and public sidecar paths.
 
 ## User Scenarios & Testing
