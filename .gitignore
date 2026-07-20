@@ -61,6 +61,10 @@ config/rules.toml
 config/rules_auto_*.toml
 reports/
 
+# Local collect-public-data output. The published sidecar lives on the
+# automation/public-data branch after redaction, not in the main worktree.
+public-data/
+
 # Automation result/trigger files written by .github/workflows/ (verify-operator-setup.yml,
 # trigger-design.yml). 결과 파일이라 main 누적 X. workflow가 실행된 branch 에만 남음.
 .verify/

@@ -22,7 +22,10 @@
 #
 # 사용법 (인스턴스 콘솔에서 root로):
 #
-#   curl -sSL https://raw.githubusercontent.com/jinooaction/claude/main/scripts/apply_rules_polkit_fix.sh | sudo bash
+#   curl -fsSL https://raw.githubusercontent.com/jinooaction/claude/main/scripts/apply_rules_polkit_fix.sh \
+#     -o /tmp/apply_rules_polkit_fix.sh
+#   less /tmp/apply_rules_polkit_fix.sh
+#   sudo bash /tmp/apply_rules_polkit_fix.sh
 #
 # 또는 로컬에서:
 #

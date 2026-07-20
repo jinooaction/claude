@@ -35,7 +35,7 @@ from auto_invest.broker.models import (
     PositionSnapshot,
     Quote,
 )
-from auto_invest.config.enums import Side
+from auto_invest.config.enums import OrderType, Side
 
 # KIS Developers TR_IDs (real-account, overseas-equity v1 endpoints).
 TR_ID_QUOTE = "HHDFS00000300"
@@ -745,6 +745,67 @@ def _exec_side(row: dict) -> Side | None:
     return None
 
 
+def _exec_order_type(row: dict) -> OrderType | None:
+    """Parse KIS order-type fields: 00/LIMIT=limit, 01/MARKET=market."""
+    raw = _first_str(
+        row,
+        "ord_dvsn",
+        "ORD_DVSN",
+        "ord_dvsn_cd",
+        "ORD_DVSN_CD",
+        "ord_dvsn_name",
+        "ORD_DVSN_NAME",
+    )
+    if raw is None:
+        return None
+    value = raw.strip().upper()
+    if value in {"00", "0", "LIMIT", "LMT"} or "지정" in raw:
+        return OrderType.LIMIT
+    if value in {"01", "1", "MARKET", "MKT"} or "시장" in raw:
+        return OrderType.MARKET
+    return None
+
+
+def _exec_order_price(row: dict) -> Decimal | None:
+    price = _opt_price(
+        _first_str(
+            row,
+            "ord_unpr",
+            "ORD_UNPR",
+            "ovrs_ord_unpr",
+            "OVRS_ORD_UNPR",
+            "ft_ord_unpr3",
+            "FT_ORD_UNPR3",
+        )
+    )
+    if price is None or price <= 0:
+        return None
+    return price
+
+
+def _exec_ordered_at_utc(row: dict) -> datetime | None:
+    raw_date = _first_str(row, "ord_dt", "ORD_DT")
+    raw_time = _first_str(row, "ord_tmd", "ORD_TMD", "ord_time", "ORD_TIME")
+    if raw_date is None or raw_time is None:
+        return None
+    date_part = "".join(ch for ch in raw_date if ch.isdigit())
+    time_part = "".join(ch for ch in raw_time if ch.isdigit())
+    if len(date_part) != 8 or len(time_part) < 6:
+        return None
+    try:
+        return datetime(
+            int(date_part[:4]),
+            int(date_part[4:6]),
+            int(date_part[6:8]),
+            int(time_part[:2]),
+            int(time_part[2:4]),
+            int(time_part[4:6]),
+            tzinfo=UTC,
+        )
+    except ValueError:
+        return None
+
+
 _TERMINAL_MARKERS = ("취소", "거부", "거절", "만료", "cancel", "reject", "expire")
 
 
@@ -779,6 +840,9 @@ def _parse_executions(rows: list[dict]) -> list[BrokerExecution]:
         price = Decimal(price_str) if price_str else Decimal("0")
         side = _exec_side(row)
         terminal = _exec_terminal(row)
+        order_type = _exec_order_type(row)
+        order_price = _exec_order_price(row)
+        ordered_at = _exec_ordered_at_utc(row)
 
         agg = by_order.setdefault(
             odno,
@@ -789,6 +853,9 @@ def _parse_executions(rows: list[dict]) -> list[BrokerExecution]:
                 "unfilled": None,
                 "side": None,
                 "terminal": False,
+                "order_type": None,
+                "order_price": None,
+                "ordered_at": None,
             },
         )
         if symbol and not agg["symbol"]:
@@ -800,6 +867,12 @@ def _parse_executions(rows: list[dict]) -> list[BrokerExecution]:
         if side is not None:
             agg["side"] = side
         agg["terminal"] = agg["terminal"] or terminal
+        if order_type is not None:
+            agg["order_type"] = order_type
+        if order_price is not None:
+            agg["order_price"] = order_price
+        if ordered_at is not None:
+            agg["ordered_at"] = ordered_at
 
     executions: list[BrokerExecution] = []
     for odno, agg in by_order.items():
@@ -814,6 +887,9 @@ def _parse_executions(rows: list[dict]) -> list[BrokerExecution]:
                 unfilled_qty=agg["unfilled"],
                 side=agg["side"],
                 terminal=agg["terminal"],
+                order_type=agg["order_type"],
+                order_price_usd=agg["order_price"],
+                ordered_at_utc=agg["ordered_at"],
             )
         )
     return executions

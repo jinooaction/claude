@@ -6,14 +6,15 @@
 
 ## 사전 준비
 
-GitHub Actions Secret 4개가 필요합니다.
+GitHub Actions Secret 5개가 필요합니다.
 
 | Name | 용도 |
 |------|------|
 | `VULTR_SSH_HOST` | 운영 인스턴스 주소 |
-| `VULTR_SSH_USER` | SSH 사용자 |
+| `VULTR_SSH_USER` | 제한된 deploy SSH 사용자(root 금지) |
 | `VULTR_SSH_PORT` | SSH 포트 |
 | `VULTR_SSH_PRIVATE_KEY` | Actions에서 임시로 사용할 SSH 개인키 |
+| `VULTR_SSH_KNOWN_HOSTS` | 서버 SSH host key 고정값 |
 
 인스턴스의 `.env`에는 KIS 키와 `ANTHROPIC_API_KEY`가 이미 있어야 합니다.
 
@@ -45,6 +46,8 @@ base64 데이터로 바꾼 뒤 원격 도우미가 다시 디코딩합니다.
 ## 보안 메모
 
 - GitHub Secrets 값은 로그에 출력하지 않습니다.
+- GitHub에는 서버 root 개인키를 넣지 않습니다. root 접속 사용자는 워크플로에서 거부됩니다.
+- SSH host key는 `VULTR_SSH_KNOWN_HOSTS`와 `StrictHostKeyChecking=yes`로 고정합니다.
 - repo가 public이면 실행 로그도 노출될 수 있습니다. 워크플로는 의도 원문 대신
   길이와 SHA-256 지문만 남기지만, 생성 룰과 검증 결과에 민감한 계좌 정보나
   비밀값을 넣지 않습니다.

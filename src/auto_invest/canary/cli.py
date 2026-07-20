@@ -200,6 +200,7 @@ def run_cmd(
         out_root=out_root,
         audit_db_path=db_path,
         replay_inputs=replay_inputs,
+        ruleset_sha256=replay_inputs.ruleset_sha256,
         shock_inputs=shock_inputs,
         canary_run_id=run_id_uuid,
         hypothesis_seed=hypothesis_seed,

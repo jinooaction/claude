@@ -19,7 +19,8 @@ def test_kis_smoke_uses_isolated_checkout_instead_of_live_repo() -> None:
     assert 'git -C "${SMOKE_REPO}" checkout --quiet --detach "${TARGET_SHA}"' in body
     assert 'cd "${SMOKE_REPO}"' in body
     assert '/usr/local/bin/uv run --project "${SMOKE_REPO}" pytest' in body
-    assert 'source "${LIVE_REPO}/.env"' in body
+    assert 'read_env_value()' in body
+    assert 'source "${LIVE_REPO}/.env"' not in body
 
     forbidden_fragments = [
         'git reset --hard origin/main',

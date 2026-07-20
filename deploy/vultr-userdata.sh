@@ -36,6 +36,8 @@ exec > >(tee /var/log/auto-invest-cloud-init.log) 2>&1
 # CONFIGURE_ME -- only this line. KIS keys go in via set_secrets.sh.
 # =====================================================================
 AUTO_INVEST_CAPITAL="100"
+UV_VERSION="${UV_VERSION:-0.11.8}"
+UV_INSTALLER_SHA256="${UV_INSTALLER_SHA256:-f633daff5c2a1b5e550d5dab074f21ab2d5fda2d147babf4525844ff1276e57e}"
 # =====================================================================
 
 echo "[1/8] apt update + base tools"
@@ -52,8 +54,16 @@ if ! id auto-invest >/dev/null 2>&1; then
     useradd --system --create-home --home-dir /var/lib/auto-invest --shell /bin/bash auto-invest
 fi
 
-echo "[4/8] install uv (system PATH)"
-curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh
+install_uv() {
+    tmp_installer="$(mktemp)"
+    trap 'rm -f "$tmp_installer"' RETURN
+    curl -fsSL https://astral.sh/uv/install.sh -o "$tmp_installer"
+    printf '%s  %s\n' "$UV_INSTALLER_SHA256" "$tmp_installer" | sha256sum -c -
+    UV_INSTALL_DIR=/usr/local/bin UV_VERSION="$UV_VERSION" sh "$tmp_installer"
+}
+
+echo "[4/8] install uv ${UV_VERSION} (system PATH)"
+install_uv
 ln -sf /usr/local/bin/uv /usr/bin/uv
 
 echo "[5/9] clone repo (target must be empty) + create data/logs after + uv sync"

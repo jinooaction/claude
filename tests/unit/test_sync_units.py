@@ -123,6 +123,14 @@ def test_sync_units_installs_sudoers_with_visudo_validation():
     assert "install -m 0440" in code   # sudoers must be 0440
 
 
+def test_sync_units_uses_private_random_tmpdir_not_predictable_tmp_files():
+    code = _code()
+    assert "mktemp -d" in code
+    assert "/run/auto-invest-deploy" in code
+    assert '"/tmp/${u}.new"' not in code
+    assert "/tmp/ai-deploy.sudoers.new" not in code
+
+
 def test_deploy_service_has_no_new_privileges_disabled():
     """The deploy oneshot must NOT set NoNewPrivileges=true — it blocks sudo
     (setuid), which the worker-control path now relies on."""

@@ -29,7 +29,7 @@ jobs:
     timeout-minutes: 25
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Read promotion forward registry
         id: registry
@@ -53,10 +53,24 @@ jobs:
         if: steps.registry.outputs.track_count != '0'
         env:
           KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.VULTR_SSH_KNOWN_HOSTS }}
+          SSH_USER: ${{ secrets.VULTR_SSH_USER }}
         run: |
           mkdir -p ~/.ssh && chmod 700 ~/.ssh
           echo "${KEY}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
+          ssh_user="${SSH_USER:-${USER:-${VULTR_SSH_USER:-}}}"
+          if [[ "${ssh_user}" == "root" ]]; then
+            echo "::error::VULTR_SSH_USER=root is refused. Use a restricted deploy user."
+            exit 2
+          fi
+          known_hosts="${KNOWN_HOSTS:-${VULTR_SSH_KNOWN_HOSTS:-}}"
+          if [[ -z "${known_hosts}" ]]; then
+            echo "::error::missing VULTR_SSH_KNOWN_HOSTS"
+            exit 2
+          fi
+          printf '%s\n' "${known_hosts}" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
 
       - name: Run registered promotion forward tracks
         if: steps.registry.outputs.track_count != '0'
@@ -76,10 +90,11 @@ jobs:
             db_path="$(jq -r '.db_path' <<<"${row}")"
             halt_path="$(jq -r '.halt_path' <<<"${row}")"
             capital="$(jq -r '.capital_usd' <<<"${row}")"
+            ./scripts/ci_validate_decimal.sh capital "${capital}" || exit $?
             max_symbols="$(jq -r '.max_symbols' <<<"${row}")"
             min_bars="$(jq -r '.min_bars' <<<"${row}")"
             log="/tmp/promotion_forward_${track_key}.log"
-            ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+            ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
                 -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
                 "cd /opt/auto-invest && \
                    /usr/local/bin/uv run auto-invest backfill-bars \
@@ -157,6 +172,7 @@ jobs:
           git config user.name "promotion-forward-bot"
           git config user.email "promotion-forward-bot@noreply.github.com"
           git checkout --orphan publish -q
+          python3 "${GITHUB_WORKSPACE}/scripts/redact_public_sidecar.py" . 2>/dev/null || true
           git add LAST_RUN.md promotion-forward-registry.json promotion_forward_results.json
           git commit -q -m "promotion-forward run ${GITHUB_RUN_ID}"
           git push --force \

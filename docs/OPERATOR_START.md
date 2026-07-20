@@ -6,7 +6,7 @@
 ## 0. 준비물 한 줄
 
 - Ubuntu 22+ / Debian 12+ 같은 systemd 기반 리눅스 호스트.
-- `uv`(파이썬 환경/실행기). 없으면 `curl -LsSf https://astral.sh/uv/install.sh | sh`.
+- `uv`(파이썬 환경/실행기). 없으면 설치 스크립트를 파일로 받은 뒤 버전(`UV_VERSION=0.11.8`)과 SHA-256을 확인해 실행합니다.
 - KIS Developers 계정 + 미국 주식 거래 가능한 계좌 + 발급된 `KIS_APP_KEY` / `KIS_APP_SECRET` / `KIS_ACCOUNT_NO`.
 - 운영자(root 권한 보유) 본인.
 

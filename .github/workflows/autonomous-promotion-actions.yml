@@ -34,12 +34,10 @@ jobs:
     timeout-minutes: 12
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Install uv
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86
 
       - name: Read latest promotion summary (read-only sidecar)
         run: |
@@ -109,6 +107,7 @@ jobs:
           git config user.name "promotion-actions-bot"
           git config user.email "promotion-actions-bot@noreply.github.com"
           git checkout --orphan publish -q
+          python3 "${GITHUB_WORKSPACE}/scripts/redact_public_sidecar.py" . 2>/dev/null || true
           git add LAST_RUN.md promotion_actions.json promotion-forward-registry.next.json \
             promotion-canary-submissions.next.json
           git commit -q -m "autonomous-promotion-actions run ${GITHUB_RUN_ID}"

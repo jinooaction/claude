@@ -123,6 +123,7 @@ def _passed() -> CanaryPassedPayload:
     return CanaryPassedPayload(
         canary_run_id="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
         candidate_rev="a" * 40,
+        ruleset_sha256="c" * 64,
         baseline_rev="b" * 40,
         tier="L2",
         finished_at="2026-05-14T08:42:17.412Z",

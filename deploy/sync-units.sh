@@ -22,6 +22,7 @@ set -euo pipefail
 
 REPO=/opt/auto-invest
 REF=origin/main
+TMP_ROOT=/run/auto-invest-deploy
 UNITS=(
     auto-invest.service
     auto-invest-deploy.service
@@ -31,6 +32,13 @@ UNITS=(
     auto-invest-telegram-alerts.service
 )
 
+if install -d -m 0700 -o root -g root "$TMP_ROOT" 2>/dev/null; then
+    tmpdir="$(mktemp -d "${TMP_ROOT}/sync-units.XXXXXX")"
+else
+    tmpdir="$(mktemp -d)"
+fi
+trap 'rm -rf "$tmpdir"' EXIT
+
 echo "[sync-units] fetching ${REF} (read-only, no checkout)"
 if ! sudo -u auto-invest git -C "$REPO" fetch origin main --quiet; then
     echo "[sync-units] WARN: git fetch failed — using whatever ${REF} the server already has" >&2
@@ -38,9 +46,9 @@ fi
 
 installed=0
 for u in "${UNITS[@]}"; do
-    if sudo -u auto-invest git -C "$REPO" show "${REF}:deploy/${u}" > "/tmp/${u}.new" 2>/dev/null; then
-        install -m 0644 "/tmp/${u}.new" "/etc/systemd/system/${u}"
-        rm -f "/tmp/${u}.new"
+    unit_tmp="${tmpdir}/${u}.new"
+    if sudo -u auto-invest git -C "$REPO" show "${REF}:deploy/${u}" > "$unit_tmp" 2>/dev/null; then
+        install -m 0644 "$unit_tmp" "/etc/systemd/system/${u}"
         echo "[sync-units] installed ${u}"
         installed=$((installed + 1))
     else
@@ -56,15 +64,14 @@ echo "[sync-units] daemon-reload done (${installed} unit file(s) installed)"
 # (polkit 대체). **반드시 visudo 로 검증 후 설치** — 잘못된 /etc/sudoers.d 파일은 서버의 모든
 # sudo(이 스크립트의 sudo 포함)를 깨뜨린다. 검증 실패 시 설치하지 않는다(안전). 멱등.
 if sudo -u auto-invest git -C "$REPO" show "${REF}:deploy/auto-invest-deploy.sudoers" \
-        > /tmp/ai-deploy.sudoers.new 2>/dev/null; then
-    if visudo -cf /tmp/ai-deploy.sudoers.new >/dev/null 2>&1; then
-        install -m 0440 -o root -g root /tmp/ai-deploy.sudoers.new \
+        > "${tmpdir}/ai-deploy.sudoers.new" 2>/dev/null; then
+    if visudo -cf "${tmpdir}/ai-deploy.sudoers.new" >/dev/null 2>&1; then
+        install -m 0440 -o root -g root "${tmpdir}/ai-deploy.sudoers.new" \
             /etc/sudoers.d/auto-invest-deploy
         echo "[sync-units] installed sudoers auto-invest-deploy (visudo-validated)"
     else
         echo "[sync-units] WARN: sudoers validation failed — NOT installing (sudo safety)" >&2
     fi
-    rm -f /tmp/ai-deploy.sudoers.new
 else
     echo "[sync-units] skip (not in ${REF}): deploy/auto-invest-deploy.sudoers"
 fi

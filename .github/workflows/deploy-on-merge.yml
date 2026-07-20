@@ -46,16 +46,30 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout (to pipe deploy/sync-units.sh over SSH)
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Install SSH key
         env:
           KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.VULTR_SSH_KNOWN_HOSTS }}
+          SSH_USER: ${{ secrets.VULTR_SSH_USER }}
         run: |
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
           echo "${KEY}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
+          ssh_user="${SSH_USER:-${USER:-${VULTR_SSH_USER:-}}}"
+          if [[ "${ssh_user}" == "root" ]]; then
+            echo "::error::VULTR_SSH_USER=root is refused. Use a restricted deploy user."
+            exit 2
+          fi
+          known_hosts="${KNOWN_HOSTS:-${VULTR_SSH_KNOWN_HOSTS:-}}"
+          if [[ -z "${known_hosts}" ]]; then
+            echo "::error::missing VULTR_SSH_KNOWN_HOSTS"
+            exit 2
+          fi
+          printf '%s\n' "${known_hosts}" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
 
       # 멈춘 배포 1회 풀어주기 (닭-달걀): 서버의 옛 배포 상태기계는 추적 안 된 생성 파일
       # (튜너 룰 스냅샷 config/rules_auto_*.toml, reports/)에도 "working tree dirty" 로 배포를
@@ -73,7 +87,7 @@ jobs:
         run: |
           set +e
           port="${PORT:-22}"
-          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
               -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" '
             cd /opt/auto-invest || exit 0
             if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
@@ -107,7 +121,7 @@ jobs:
           # 않으므로 그 빈틈을 메운다. 특히 sudoers(auto-invest-deploy.sudoers)가 없으면 배포가
           # stop_worker 에서 `sudo` 인가를 못 받는다 → 먼저 깔아야 같은 실행의 배포가 워커를
           # 교체할 수 있다. 워커는 재시작하지 않고 git show 로 작업트리도 안 건드리므로 장중에도 안전.
-          ssh -o StrictHostKeyChecking=accept-new \
+          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts \
               -o ConnectTimeout=15 \
               -p "${port}" \
               -i ~/.ssh/id_ed25519 \
@@ -131,7 +145,7 @@ jobs:
           # oneshot 서비스라 systemctl start 는 완료까지 블록하고 배포 결과 코드를
           # 그대로 돌려준다. 이어 journal 마지막 120줄을 수집한다. (sudoers 는 위 units
           # 스텝에서 이미 설치됐으므로 stop_worker/start_worker 가 sudo 로 인가된다.)
-          ssh -o StrictHostKeyChecking=accept-new \
+          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts \
               -o ConnectTimeout=15 \
               -p "${port}" \
               -i ~/.ssh/id_ed25519 \
@@ -139,7 +153,7 @@ jobs:
               "sudo systemctl start auto-invest-deploy.service" \
               > /tmp/deploy_start.txt 2>&1
           start_exit=$?
-          ssh -o StrictHostKeyChecking=accept-new \
+          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts \
               -o ConnectTimeout=15 \
               -p "${port}" \
               -i ~/.ssh/id_ed25519 \

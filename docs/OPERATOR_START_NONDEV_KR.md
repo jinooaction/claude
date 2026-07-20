@@ -55,8 +55,12 @@
 apt update && apt upgrade -y
 apt install -y git curl nano build-essential
 timedatectl set-timezone UTC
-curl -LsSf https://astral.sh/uv/install.sh | sh
-source $HOME/.local/bin/env
+tmp_installer="$(mktemp)"
+curl -fsSL https://astral.sh/uv/install.sh -o "$tmp_installer"
+printf '%s  %s\n' 'f633daff5c2a1b5e550d5dab074f21ab2d5fda2d147babf4525844ff1276e57e' "$tmp_installer" | sha256sum -c -
+UV_VERSION=0.11.8 sh "$tmp_installer"
+rm -f "$tmp_installer"
+source "$HOME/.local/bin/env"
 uv --version
 ```
 

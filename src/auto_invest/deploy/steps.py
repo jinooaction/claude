@@ -291,47 +291,46 @@ def canary_gate(
 
     if not ruleset_sha256:
         return CanaryGateResult(ok=False, detail="ruleset_sha256 missing")
+    if not code_sha256:
+        return CanaryGateResult(ok=False, detail="code_sha256 missing")
     now_fn = now_fn or (lambda: datetime.now(UTC))
     conn = dbmod.get_connection(db_path)
     try:
         rows = list(
             conn.execute(
                 "SELECT seq, ts_utc, payload_json FROM audit_log "
-                "WHERE event_type = 'CANARY_PASSED' ORDER BY seq DESC LIMIT 1"
+                "WHERE event_type = 'CANARY_PASSED' ORDER BY seq DESC LIMIT 100"
             )
         )
         if not rows:
             return CanaryGateResult(ok=False, detail="no CANARY_PASSED row found")
-        row = rows[0]
-        payload = json.loads(row["payload_json"])
-        # spec 007 CanaryPassedPayload doesn't carry ruleset/code shas in v1;
-        # we look for an extension field if present, otherwise we accept the
-        # row if its candidate_rev matches code_sha256.
-        candidate_rev = payload.get("candidate_rev", "")
-        row_ruleset = payload.get("ruleset_sha256") or payload.get("ruleset_hash") or ""
-        if candidate_rev and candidate_rev != code_sha256:
+        stale_match_age: int | None = None
+        for row in rows:
+            try:
+                payload = json.loads(row["payload_json"])
+            except (TypeError, json.JSONDecodeError):
+                continue
+            candidate_rev = payload.get("candidate_rev", "")
+            row_ruleset = payload.get("ruleset_sha256") or payload.get("ruleset_hash") or ""
+            if candidate_rev != code_sha256 or row_ruleset != ruleset_sha256:
+                continue
+            ts = datetime.fromisoformat(row["ts_utc"].replace("Z", "+00:00"))
+            age = (now_fn() - ts).total_seconds()
+            if age > max_age_seconds:
+                stale_match_age = int(age)
+                continue
+            return CanaryGateResult(ok=True, matched_row_seq=int(row["seq"]))
+        if stale_match_age is not None:
             return CanaryGateResult(
                 ok=False,
                 detail=(
-                    f"CANARY_PASSED candidate_rev={candidate_rev!r} != "
-                    f"deploy code sha={code_sha256!r}"
+                    f"matching CANARY_PASSED is {stale_match_age}s old "
+                    f"(>{max_age_seconds}s)"
                 ),
             )
-        if row_ruleset and row_ruleset != ruleset_sha256:
-            return CanaryGateResult(
-                ok=False,
-                detail=(
-                    f"CANARY_PASSED ruleset={row_ruleset!r} != "
-                    f"--ruleset-sha256={ruleset_sha256!r}"
-                ),
-            )
-        ts = datetime.fromisoformat(row["ts_utc"].replace("Z", "+00:00"))
-        age = (now_fn() - ts).total_seconds()
-        if age > max_age_seconds:
-            return CanaryGateResult(
-                ok=False,
-                detail=f"CANARY_PASSED is {int(age)}s old (>{max_age_seconds}s)",
-            )
-        return CanaryGateResult(ok=True, matched_row_seq=int(row["seq"]))
+        return CanaryGateResult(
+            ok=False,
+            detail="no CANARY_PASSED row matches candidate_rev and ruleset_sha256",
+        )
     finally:
         conn.close()

@@ -58,7 +58,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Verify Vultr token
         env:
@@ -104,6 +104,7 @@ jobs:
           CAPITAL: ${{ inputs.capital_usd }}
         run: |
           set -euo pipefail
+          ./scripts/ci_validate_decimal.sh capital "$CAPITAL"
           # vultr-userdata.sh의 AUTO_INVEST_CAPITAL 줄을 사용자 입력으로 교체.
           sed "s|^AUTO_INVEST_CAPITAL=.*|AUTO_INVEST_CAPITAL=\"${CAPITAL}\"|" \
               deploy/vultr-userdata.sh > /tmp/userdata.sh

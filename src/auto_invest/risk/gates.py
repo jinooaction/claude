@@ -19,7 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from auto_invest.broker.models import OrderRequest
 from auto_invest.config.caps import SizingCaps
@@ -42,6 +42,13 @@ _STAGE_RANK: dict[StrategyStage, int] = {
     StrategyStage.FULL_LIVE: 2,
 }
 
+ExposureEffect = Literal[
+    "INCREASE_EXPOSURE",
+    "REDUCE_ONLY",
+    "OVERSOLD",
+    "UNKNOWN_REDUCTION",
+]
+
 
 def _allow(gate: str) -> GateDecision:
     return GateDecision(allow=True, gate=gate)
@@ -61,6 +68,21 @@ def _effective_price(request: OrderRequest, quote_price_usd: Decimal) -> Decimal
 def _signed_qty(request: OrderRequest) -> Decimal:
     """Positive for BUY (exposure increases), negative for SELL."""
     return Decimal(request.qty) if request.side is Side.BUY else -Decimal(request.qty)
+
+
+def exposure_effect(
+    request: OrderRequest,
+    *,
+    current_position_qty: int | None = None,
+) -> ExposureEffect:
+    """Classify whether an order increases exposure or only reduces a known holding."""
+    if request.side is Side.BUY:
+        return "INCREASE_EXPOSURE"
+    if current_position_qty is None:
+        return "UNKNOWN_REDUCTION"
+    if request.qty > current_position_qty:
+        return "OVERSOLD"
+    return "REDUCE_ONLY"
 
 
 def whitelist_gate(
@@ -91,10 +113,26 @@ def halt_gate(
     request: OrderRequest,
     *,
     halt_path: Path,
+    current_position_qty: int | None = None,
 ) -> GateDecision:
-    """Reject when the operator halt flag is set."""
+    """Reject when halted, except verified reduce-only sells."""
     name = "halt_gate"
     if is_halted(halt_path):
+        effect = exposure_effect(request, current_position_qty=current_position_qty)
+        if effect == "REDUCE_ONLY":
+            return GateDecision(
+                allow=True,
+                gate=name,
+                metadata={"exposure_effect": effect},
+            )
+        if effect == "OVERSOLD":
+            return _deny(
+                name,
+                "halt flag is set and sell qty exceeds current position",
+                exposure_effect=effect,
+                current_position_qty=current_position_qty,
+                order_qty=request.qty,
+            )
         return _deny(name, "halt flag is set; new orders are blocked")
     return _allow(name)
 
@@ -105,13 +143,33 @@ def per_trade_cap_gate(
     caps: SizingCaps,
     total_capital_usd: Decimal,
     quote_price_usd: Decimal,
+    current_position_qty: int | None = None,
 ) -> GateDecision:
-    """Reject when notional (price * qty) exceeds the per-trade cap."""
+    """Reject over-cap exposure increases while allowing verified reduce-only sells."""
     name = "per_trade_cap_gate"
     price = _effective_price(request, quote_price_usd)
     notional = price * Decimal(request.qty)
     cap_value = total_capital_usd * caps.per_trade_pct / Decimal(100)
     if notional > cap_value:
+        effect = exposure_effect(request, current_position_qty=current_position_qty)
+        if effect == "REDUCE_ONLY":
+            return GateDecision(
+                allow=True,
+                gate=name,
+                metadata={
+                    "exposure_effect": effect,
+                    "notional_usd": str(notional),
+                    "cap_usd": str(cap_value),
+                },
+            )
+        if effect == "OVERSOLD":
+            return _deny(
+                name,
+                f"sell qty {request.qty} exceeds current position {current_position_qty}",
+                exposure_effect=effect,
+                current_position_qty=current_position_qty,
+                order_qty=request.qty,
+            )
         return _deny(
             name,
             f"notional ${notional} exceeds per-trade cap ${cap_value}",
@@ -129,6 +187,7 @@ def per_symbol_cap_gate(
     total_capital_usd: Decimal,
     quote_price_usd: Decimal,
     current_symbol_exposure_usd: Decimal,
+    current_position_qty: int | None = None,
 ) -> GateDecision:
     """Reject when symbol exposure after fill exceeds the per-symbol cap.
 
@@ -140,6 +199,15 @@ def per_symbol_cap_gate(
     price = _effective_price(request, quote_price_usd)
     delta = price * _signed_qty(request)
     if delta <= 0:
+        effect = exposure_effect(request, current_position_qty=current_position_qty)
+        if effect == "OVERSOLD":
+            return _deny(
+                name,
+                f"sell qty {request.qty} exceeds current position {current_position_qty}",
+                exposure_effect=effect,
+                current_position_qty=current_position_qty,
+                order_qty=request.qty,
+            )
         return _allow(name)
     new_exposure = current_symbol_exposure_usd + delta
     cap_value = total_capital_usd * caps.per_symbol_pct / Decimal(100)
@@ -161,6 +229,7 @@ def global_exposure_gate(
     total_capital_usd: Decimal,
     quote_price_usd: Decimal,
     current_global_exposure_usd: Decimal,
+    current_position_qty: int | None = None,
 ) -> GateDecision:
     """Reject when total deployed capital after fill exceeds the global cap.
 
@@ -170,6 +239,15 @@ def global_exposure_gate(
     price = _effective_price(request, quote_price_usd)
     delta = price * _signed_qty(request)
     if delta <= 0:
+        effect = exposure_effect(request, current_position_qty=current_position_qty)
+        if effect == "OVERSOLD":
+            return _deny(
+                name,
+                f"sell qty {request.qty} exceeds current position {current_position_qty}",
+                exposure_effect=effect,
+                current_position_qty=current_position_qty,
+                order_qty=request.qty,
+            )
         return _allow(name)
     new_exposure = current_global_exposure_usd + delta
     cap_value = total_capital_usd * caps.global_exposure_pct / Decimal(100)

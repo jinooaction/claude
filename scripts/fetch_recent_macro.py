@@ -22,7 +22,8 @@ read-only 공개 데이터. 돈 안 움직임.
 사용:
     python scripts/fetch_recent_macro.py --out data/history_csv_macro
     auto-invest ingest-history --from-dir data/history_csv_macro
-    auto-invest portfolio-walk-forward --portfolio specs/032-portfolio-rebalancing/macro-portfolio.toml \
+    auto-invest portfolio-walk-forward \
+        --portfolio specs/032-portfolio-rebalancing/macro-portfolio.toml \
         --trailing-years 5 --segment-days 365 --num-trials 1
 """
 

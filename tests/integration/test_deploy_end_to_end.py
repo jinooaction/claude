@@ -377,6 +377,8 @@ def test_health_check_timeout_triggers_rollback(repo_setup, monkeypatch):
 
 # ---------------- T027 canary-gate scenarios ----------------
 
+RULESET_SHA = "c" * 64
+
 
 def test_auto_tuner_missing_canary_passed_refuses(repo_setup, monkeypatch):
     _push_new_commit(repo_setup["sibling"], {"src/f.py": "w = 6\n"}, "f")
@@ -391,7 +393,7 @@ def test_auto_tuner_missing_canary_passed_refuses(repo_setup, monkeypatch):
         db_path=repo_setup["db_path"],
         branch="main",
         triggered_by="auto-tuner",
-        ruleset_sha256="abc",
+        ruleset_sha256=RULESET_SHA,
         pid_path=repo_setup["db_path"].parent / "lock.pid",
     )
     r = DeployRunner(config=cfg, supervisor=DryRunSupervisor())
@@ -420,6 +422,7 @@ def test_auto_tuner_stale_canary_refuses(repo_setup, monkeypatch):
             conn,
             audit.CanaryPassedPayload(
                 canary_run_id="cr1", candidate_rev=sha_after, baseline_rev="x",
+                ruleset_sha256=RULESET_SHA,
                 tier="L2", finished_at=stale_ts, artefact_path="/x",
             ),
             ts_utc=stale_ts,
@@ -432,7 +435,7 @@ def test_auto_tuner_stale_canary_refuses(repo_setup, monkeypatch):
         db_path=repo_setup["db_path"],
         branch="main",
         triggered_by="auto-tuner",
-        ruleset_sha256="abc",
+        ruleset_sha256=RULESET_SHA,
         pid_path=repo_setup["db_path"].parent / "lock.pid",
     )
     r = DeployRunner(config=cfg, supervisor=DryRunSupervisor())
@@ -457,6 +460,7 @@ def test_auto_tuner_matching_canary_proceeds(repo_setup, monkeypatch):
             conn,
             audit.CanaryPassedPayload(
                 canary_run_id="cr1", candidate_rev=sha_after, baseline_rev="x",
+                ruleset_sha256=RULESET_SHA,
                 tier="L2",
                 finished_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.000Z"),
                 artefact_path="/x",
@@ -471,7 +475,7 @@ def test_auto_tuner_matching_canary_proceeds(repo_setup, monkeypatch):
         branch="main",
         dry_run=True,  # short-circuit before stop/start so we don't need worker
         triggered_by="auto-tuner",
-        ruleset_sha256="abc",
+        ruleset_sha256=RULESET_SHA,
         pid_path=repo_setup["db_path"].parent / "lock.pid",
     )
     r = DeployRunner(config=cfg, supervisor=DryRunSupervisor())
