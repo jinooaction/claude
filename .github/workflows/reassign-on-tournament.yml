@@ -48,20 +48,32 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout (fresh main — correct configs + live sentinel for the decision)
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Install uv
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86
 
       - name: Install SSH key
         env:
           KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.VULTR_SSH_KNOWN_HOSTS }}
+          SSH_USER: ${{ secrets.VULTR_SSH_USER }}
         run: |
           mkdir -p ~/.ssh && chmod 700 ~/.ssh
           echo "${KEY}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
+          ssh_user="${SSH_USER:-${USER:-${VULTR_SSH_USER:-}}}"
+          if [[ "${ssh_user}" == "root" ]]; then
+            echo "::error::VULTR_SSH_USER=root is refused. Use a restricted deploy user."
+            exit 2
+          fi
+          known_hosts="${KNOWN_HOSTS:-${VULTR_SSH_KNOWN_HOSTS:-}}"
+          if [[ -z "${known_hosts}" ]]; then
+            echo "::error::missing VULTR_SSH_KNOWN_HOSTS"
+            exit 2
+          fi
+          printf '%s\n' "${known_hosts}" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
 
       - name: Read published tournament leaderboard JSON (read-only)
         id: board
@@ -124,7 +136,7 @@ jobs:
           # --bars-db: 라이브/페이퍼 워커가 backfill-bars 로 채운 price_bars(SPY·IEF·GLD 일봉)를
           # 그대로 읽는다 — 토너먼트·라이브와 같은 바. 별도 CSV ingest 불필요(폐회로가 인스턴스
           # 데이터로 실제로 닫힌다). 감사는 격리 DB(canary_reassign.db)로 라이브 audit 무오염.
-          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
               -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
               "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest canary-portfolio \
                  --portfolio ${CHALLENGER} \
@@ -308,6 +320,7 @@ jobs:
             echo '```'
           } > LAST_RUN.md
           git checkout --orphan publish
+          python3 "${GITHUB_WORKSPACE}/scripts/redact_public_sidecar.py" . 2>/dev/null || true
           git add LAST_RUN.md
           git commit -q -m "reassign-on-tournament run ${GITHUB_RUN_ID} (${ACTION:-unknown})"
           git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "publish:${BRANCH}"

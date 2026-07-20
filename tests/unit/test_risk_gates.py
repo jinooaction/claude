@@ -21,6 +21,7 @@ from auto_invest.config.caps import SizingCaps
 from auto_invest.config.enums import OrderType, Side, StrategyStage
 from auto_invest.config.whitelist import Whitelist
 from auto_invest.risk.gates import (
+    exposure_effect,
     global_exposure_gate,
     halt_gate,
     per_symbol_cap_gate,
@@ -114,6 +115,30 @@ def test_halt_gate_denies_when_flag_set(tmp_path: Path):
     assert "halt" in decision.reason.lower()
 
 
+def test_halt_gate_allows_verified_reduce_only_sell(tmp_path: Path):
+    flag = tmp_path / "halt.flag"
+    set_halt(flag, "investigating")
+    decision = halt_gate(
+        _request(side=Side.SELL, qty=3, limit_price=Decimal("100")),
+        halt_path=flag,
+        current_position_qty=5,
+    )
+    assert decision.allow is True
+    assert decision.metadata["exposure_effect"] == "REDUCE_ONLY"
+
+
+def test_halt_gate_denies_oversell_even_for_sell(tmp_path: Path):
+    flag = tmp_path / "halt.flag"
+    set_halt(flag, "investigating")
+    decision = halt_gate(
+        _request(side=Side.SELL, qty=6, limit_price=Decimal("100")),
+        halt_path=flag,
+        current_position_qty=5,
+    )
+    assert decision.allow is False
+    assert decision.metadata["exposure_effect"] == "OVERSOLD"
+
+
 # ---------------------------------------------------------- per_trade_cap_gate
 
 
@@ -168,6 +193,30 @@ def test_per_trade_cap_uses_quote_when_market_order():
     assert decision.allow is False
 
 
+def test_per_trade_cap_allows_over_cap_verified_reduce_only_sell():
+    decision = per_trade_cap_gate(
+        _request(side=Side.SELL, qty=10, limit_price=Decimal("100")),
+        caps=CAPS,
+        total_capital_usd=CAPITAL,
+        quote_price_usd=Decimal("100"),
+        current_position_qty=10,
+    )
+    assert decision.allow is True
+    assert decision.metadata["exposure_effect"] == "REDUCE_ONLY"
+
+
+def test_per_trade_cap_denies_over_cap_oversell():
+    decision = per_trade_cap_gate(
+        _request(side=Side.SELL, qty=11, limit_price=Decimal("100")),
+        caps=CAPS,
+        total_capital_usd=CAPITAL,
+        quote_price_usd=Decimal("100"),
+        current_position_qty=10,
+    )
+    assert decision.allow is False
+    assert decision.metadata["exposure_effect"] == "OVERSOLD"
+
+
 # ---------------------------------------------------------- per_symbol_cap_gate
 
 
@@ -219,6 +268,18 @@ def test_per_symbol_cap_sell_always_allowed():
     assert decision.allow is True
 
 
+def test_per_symbol_cap_denies_known_oversell():
+    decision = per_symbol_cap_gate(
+        _request(side=Side.SELL, qty=6, limit_price=Decimal("100")),
+        caps=CAPS,
+        total_capital_usd=CAPITAL,
+        quote_price_usd=Decimal("100"),
+        current_symbol_exposure_usd=Decimal("9999"),
+        current_position_qty=5,
+    )
+    assert decision.allow is False
+
+
 # ---------------------------------------------------------- global_exposure_gate
 
 
@@ -266,6 +327,29 @@ def test_global_exposure_sell_always_allowed():
         current_global_exposure_usd=Decimal("8000"),
     )
     assert decision.allow is True
+
+
+def test_global_exposure_denies_known_oversell():
+    decision = global_exposure_gate(
+        _request(side=Side.SELL, qty=6, limit_price=Decimal("100")),
+        caps=CAPS,
+        total_capital_usd=CAPITAL,
+        quote_price_usd=Decimal("100"),
+        current_global_exposure_usd=Decimal("8000"),
+        current_position_qty=5,
+    )
+    assert decision.allow is False
+
+
+def test_exposure_effect_classifies_sell_safety():
+    assert (
+        exposure_effect(_request(side=Side.SELL, qty=5), current_position_qty=5)
+        == "REDUCE_ONLY"
+    )
+    assert (
+        exposure_effect(_request(side=Side.SELL, qty=6), current_position_qty=5)
+        == "OVERSOLD"
+    )
 
 
 # ---------------------------------------------------------- stage_uniqueness_gate

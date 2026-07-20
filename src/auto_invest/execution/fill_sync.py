@@ -74,7 +74,11 @@ class UnknownSubmission:
     rule_id: str
     symbol: str
     side: str
+    order_type: str
     ordered_qty: int
+    limit_price_usd: Decimal | None = None
+    order_exchange: str | None = None
+    intent_at_utc: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -250,9 +254,18 @@ def _load_open_orders(conn: sqlite3.Connection) -> list[OpenOrder]:
 def _load_unknown_submissions(conn: sqlite3.Connection) -> list[UnknownSubmission]:
     rows = conn.execute(
         """
-        SELECT correlation_id, rule_id, symbol, side, qty
-        FROM orders
-        WHERE state = 'SUBMISSION_UNKNOWN' AND kis_order_id IS NULL
+        SELECT
+            o.correlation_id, o.rule_id, o.symbol, o.side, o.order_type, o.qty,
+            o.limit_price_usd, r.order_exchange, MAX(h.ts_utc) AS intent_at_utc
+        FROM orders o
+        LEFT JOIN order_routing r ON r.correlation_id = o.correlation_id
+        LEFT JOIN order_state_history h
+          ON h.order_correlation_id = o.correlation_id
+         AND h.to_state IN ('INTENT', 'SUBMITTING', 'SUBMISSION_UNKNOWN')
+        WHERE o.state = 'SUBMISSION_UNKNOWN' AND o.kis_order_id IS NULL
+        GROUP BY
+            o.correlation_id, o.rule_id, o.symbol, o.side, o.order_type, o.qty,
+            o.limit_price_usd, r.order_exchange
         """
     ).fetchall()
     return [
@@ -261,7 +274,19 @@ def _load_unknown_submissions(conn: sqlite3.Connection) -> list[UnknownSubmissio
             rule_id=r["rule_id"],
             symbol=r["symbol"],
             side=r["side"],
+            order_type=r["order_type"],
             ordered_qty=int(r["qty"]),
+            limit_price_usd=(
+                Decimal(str(r["limit_price_usd"]))
+                if r["limit_price_usd"] not in (None, "")
+                else None
+            ),
+            order_exchange=r["order_exchange"],
+            intent_at_utc=(
+                datetime.fromisoformat(str(r["intent_at_utc"]).replace("Z", "+00:00"))
+                if r["intent_at_utc"]
+                else None
+            ),
         )
         for r in rows
     ]
@@ -303,9 +328,29 @@ def _strong_submission_match(
 ) -> bool:
     if _norm_symbol(execution.symbol) != _norm_symbol(unknown.symbol):
         return False
-    if execution.side is not None and execution.side.value != unknown.side:
+    if execution.side is None or execution.side.value != unknown.side:
         return False
-    return _execution_total_qty(execution) == unknown.ordered_qty
+    if _execution_total_qty(execution) != unknown.ordered_qty:
+        return False
+    if execution.order_type is None or execution.order_type.value != unknown.order_type:
+        return False
+    if unknown.limit_price_usd is not None:
+        if execution.order_price_usd is None:
+            return False
+        if execution.order_price_usd != unknown.limit_price_usd:
+            return False
+    if (
+        unknown.order_exchange
+        and execution.market
+        and unknown.order_exchange.strip().upper() != execution.market.strip().upper()
+    ):
+        return False
+    if unknown.intent_at_utc is not None and execution.ordered_at_utc is not None:
+        unknown_ts = unknown.intent_at_utc.astimezone(UTC)
+        execution_ts = execution.ordered_at_utc.astimezone(UTC)
+        if abs((execution_ts - unknown_ts).total_seconds()) > 15 * 60:
+            return False
+    return True
 
 
 def plan_submission_unknown_recovery(
@@ -354,7 +399,7 @@ def plan_submission_unknown_recovery(
                 filled_qty=candidate.filled_qty,
                 unfilled_qty=candidate.unfilled_qty,
                 terminal=candidate.terminal,
-                reason="unique broker execution lookup match",
+                reason="unique strong broker execution lookup match",
             )
         )
 

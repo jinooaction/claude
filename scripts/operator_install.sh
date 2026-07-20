@@ -63,13 +63,28 @@ if ! [[ "$capital" =~ ^[0-9]+$ ]] || [[ "$capital" -lt 100 ]]; then
 fi
 echo "  OK (KIS_* present; AUTO_INVEST_CAPITAL=$capital)"
 
-# Export .env so child processes (worker, deploy) inherit the secrets.
-# `uv run` activates the venv but does NOT auto-load .env; in production
-# systemd does this via EnvironmentFile=, so we mirror that here.
-set -a
-# shellcheck disable=SC1091
-source .env
-set +a
+read_env_value() {
+    local key="$1"
+    local line value
+    line="$(grep -E "^${key}=" .env | tail -1 || true)"
+    value="${line#*=}"
+    value="${value%$'\r'}"
+    value="${value#"${value%%[![:space:]]*}"}"
+    value="${value%"${value##*[![:space:]]}"}"
+    if [[ "${value}" == \"*\" && "${value}" == *\" ]]; then
+        value="${value:1:${#value}-2}"
+    elif [[ "${value}" == \'*\' && "${value}" == *\' ]]; then
+        value="${value:1:${#value}-2}"
+    fi
+    printf '%s' "$value"
+}
+
+# Export only allowlisted .env values. Do not `source .env`: the file is data,
+# not shell code.
+export KIS_APP_KEY="$(read_env_value KIS_APP_KEY)"
+export KIS_APP_SECRET="$(read_env_value KIS_APP_SECRET)"
+export KIS_ACCOUNT_NO="$(read_env_value KIS_ACCOUNT_NO)"
+export AUTO_INVEST_CAPITAL="$(read_env_value AUTO_INVEST_CAPITAL)"
 echo
 
 # ---- 3. DB migrations -------------------------------------------------------

@@ -45,20 +45,32 @@ jobs:
     timeout-minutes: 25
     steps:
       - name: Checkout (fresh main — correct configs + sentinel for the decision)
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Install uv
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86
 
       - name: Install SSH key
         env:
           KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.VULTR_SSH_KNOWN_HOSTS }}
+          SSH_USER: ${{ secrets.VULTR_SSH_USER }}
         run: |
           mkdir -p ~/.ssh && chmod 700 ~/.ssh
           echo "${KEY}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
+          ssh_user="${SSH_USER:-${USER:-${VULTR_SSH_USER:-}}}"
+          if [[ "${ssh_user}" == "root" ]]; then
+            echo "::error::VULTR_SSH_USER=root is refused. Use a restricted deploy user."
+            exit 2
+          fi
+          known_hosts="${KNOWN_HOSTS:-${VULTR_SSH_KNOWN_HOSTS:-}}"
+          if [[ -z "${known_hosts}" ]]; then
+            echo "::error::missing VULTR_SSH_KNOWN_HOSTS"
+            exit 2
+          fi
+          printf '%s\n' "${known_hosts}" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
 
       - name: Read ladder state from sentinel (for the live evidence query)
         id: state
@@ -80,7 +92,7 @@ jobs:
         run: |
           set +e
           port="${PORT:-22}"
-          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
               -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
               "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest forward-verdict \
                  --mode paper --portfolio deploy/global-trend-portfolio.toml \
@@ -101,7 +113,7 @@ jobs:
         run: |
           set +e
           port="${PORT:-22}"
-          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
               -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
               "cd /opt/auto-invest && \
                  wrk=/tmp/autoarm_anchored_global && \
@@ -139,7 +151,7 @@ jobs:
           port="${PORT:-22}"
           # 실계좌 NAV (사이징 기준 — 운영자 위임 "기준은 계좌 잔고"). 실패 = 빈 파일 =
           # ladder-decide 가 BLOCKED(상태 무변경, fail-closed).
-          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
               -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
               "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest account-nav \
                  --env-file .env --db data/auto_invest.db --json" \
@@ -148,7 +160,7 @@ jobs:
           # 라이브 트랙 실적(현재 단 진입 이후) — 승격/강등 증거. since 가 없으면 전체.
           since_arg=""
           if [[ -n "${ENTERED}" ]]; then since_arg="--since ${ENTERED}"; fi
-          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
               -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
               "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest growth \
                  --mode live ${since_arg} --db data/auto_invest.db --format json" \
@@ -323,6 +335,7 @@ jobs:
             echo '```'
           } > LAST_RUN.md
           git checkout --orphan publish
+          python3 "${GITHUB_WORKSPACE}/scripts/redact_public_sidecar.py" . 2>/dev/null || true
           git add LAST_RUN.md
           git commit -q -m "capital-ladder run ${GITHUB_RUN_ID} (${ACTION:-unknown})"
           git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "publish:${BRANCH}"

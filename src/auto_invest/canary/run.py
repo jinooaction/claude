@@ -94,6 +94,7 @@ class CanaryOptions:
     out_root: Path = Path("data/canary")
     audit_db_path: Path = Path("data/auto_invest.db")
     replay_inputs: ReplayWindowInputs | None = None  # injected by CLI
+    ruleset_sha256: str = ""
     shock_inputs: ShockInputs | None = None  # if None: shock pass skipped
     repo_root: Path | None = None  # default: cwd
     canary_run_id: uuid.UUID | None = None  # default: uuid4
@@ -374,6 +375,7 @@ def run_canary(
             CanaryPassedPayload(
                 canary_run_id=str(canary_run_id),
                 candidate_rev=candidate_rev,
+                ruleset_sha256=options.ruleset_sha256 or None,
                 baseline_rev=baseline_rev,
                 tier=options.tier,
                 finished_at=finished_iso,

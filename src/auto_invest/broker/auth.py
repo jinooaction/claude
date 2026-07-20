@@ -11,6 +11,8 @@ moment it is parsed so the actual token never appears in logs.
 
 from __future__ import annotations
 
+import contextlib
+import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -42,6 +44,8 @@ def _utcnow() -> datetime:
 
 def load_cached_token(cache_path: Path) -> AccessToken | None:
     """Return the cached token if present and parseable, else None."""
+    if cache_path.is_symlink():
+        return None
     if not cache_path.exists():
         return None
     try:
@@ -51,9 +55,27 @@ def load_cached_token(cache_path: Path) -> AccessToken | None:
 
 
 def save_token(cache_path: Path, token: AccessToken) -> None:
-    """Write the token to disk; creates parent directories on demand."""
-    cache_path.parent.mkdir(parents=True, exist_ok=True)
-    cache_path.write_text(token.model_dump_json(), encoding="utf-8")
+    """Write the token to disk with private permissions and atomic replace."""
+    parent = cache_path.parent
+    parent.mkdir(parents=True, mode=0o700, exist_ok=True)
+    parent.chmod(0o700)
+    if cache_path.is_symlink():
+        raise OSError(f"refusing to overwrite symlink token cache: {cache_path}")
+
+    tmp_path = parent / f".{cache_path.name}.{os.getpid()}.tmp"
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    fd = os.open(tmp_path, flags, 0o600)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(token.model_dump_json())
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp_path, cache_path)
+        cache_path.chmod(0o600)
+    except Exception:
+        with contextlib.suppress(FileNotFoundError):
+            tmp_path.unlink()
+        raise
 
 
 async def issue_token(

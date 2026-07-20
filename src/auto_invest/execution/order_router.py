@@ -52,6 +52,7 @@ from auto_invest.judgment.points.volatility import apply_volatility_advisory
 from auto_invest.judgment.schemas import NewsAdvisory, VolatilityAdvisory
 from auto_invest.market_data.store import get_bars, get_latest_bar
 from auto_invest.persistence import audit
+from auto_invest.persistence import positions as positions_mod
 from auto_invest.persistence.audit import (
     JudgmentAdvisoryAppliedPayload,
     OrderIntentPayload,
@@ -842,13 +843,26 @@ class OrderRouter:
         execution_state = (
             self.execution_state_provider()
             if self.execution_state_provider is not None
-            else evaluate_execution_state(self.conn)
+            else evaluate_execution_state(
+                self.conn,
+                exclude_correlation_ids=(correlation_id,),
+            )
         )
+        current_position_qty = None
+        if not self.paper_mode:
+            position = positions_mod.get_position(self.conn, rule.symbol)
+            current_position_qty = position.qty if position is not None else 0
 
         # Run gate chain.
         gate_chain: tuple[tuple[Any, dict[str, Any]], ...] = (
             (whitelist_gate, {"whitelist": self.whitelist}),
-            (halt_gate, {"halt_path": self.halt_path}),
+            (
+                halt_gate,
+                {
+                    "halt_path": self.halt_path,
+                    "current_position_qty": current_position_qty,
+                },
+            ),
             (execution_state_gate, {"state": execution_state}),
             (
                 per_trade_cap_gate,
@@ -856,6 +870,7 @@ class OrderRouter:
                     "caps": self.caps,
                     "total_capital_usd": total_capital_usd,
                     "quote_price_usd": quote_price_usd,
+                    "current_position_qty": current_position_qty,
                 },
             ),
             (
@@ -865,6 +880,7 @@ class OrderRouter:
                     "total_capital_usd": total_capital_usd,
                     "quote_price_usd": quote_price_usd,
                     "current_symbol_exposure_usd": reserved_symbol_exposure_usd,
+                    "current_position_qty": current_position_qty,
                 },
             ),
             (
@@ -874,6 +890,7 @@ class OrderRouter:
                     "total_capital_usd": total_capital_usd,
                     "quote_price_usd": quote_price_usd,
                     "current_global_exposure_usd": reserved_global_exposure_usd,
+                    "current_position_qty": current_position_qty,
                 },
             ),
         )
@@ -941,7 +958,10 @@ class OrderRouter:
                 correlation_id=correlation_id,
             )
 
-        # Submit to broker.
+        # Submit to broker. Record SUBMITTING before the network call so a crash
+        # after broker acceptance but before local SUBMITTED persistence is
+        # treated as stale uncertainty on the next tick.
+        _record_transition(self.conn, correlation_id, "INTENT", "SUBMITTING", None)
         try:
             if self.execution_authority is None:
                 raise RuntimeError("live order submission requires ExecutionAuthority")
@@ -971,7 +991,7 @@ class OrderRouter:
                 _record_transition(
                     self.conn,
                     correlation_id,
-                    "INTENT",
+                    "SUBMITTING",
                     "SUBMISSION_UNKNOWN",
                     broker_message,
                 )
@@ -994,7 +1014,7 @@ class OrderRouter:
             _record_transition(
                 self.conn,
                 correlation_id,
-                "INTENT",
+                "SUBMITTING",
                 "REJECTED_BY_BROKER",
                 broker_message,
             )
@@ -1016,7 +1036,7 @@ class OrderRouter:
             symbol=rule.symbol,
             correlation_id=correlation_id,
         )
-        _record_transition(self.conn, correlation_id, "INTENT", "SUBMITTED", None)
+        _record_transition(self.conn, correlation_id, "SUBMITTING", "SUBMITTED", None)
         _set_kis_order_id(self.conn, correlation_id, result.kis_order_id, submitted_at)
         _set_order_routing(self.conn, correlation_id, order_exchange or self.market)
         return OrderOutcome(

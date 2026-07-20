@@ -428,6 +428,7 @@ class CanaryPassedPayload(AuditPayload):
     event_type: Literal["CANARY_PASSED"] = "CANARY_PASSED"
     canary_run_id: str
     candidate_rev: str
+    ruleset_sha256: str | None = Field(default=None, min_length=64, max_length=64)
     baseline_rev: str
     tier: Literal["L2", "L3"]
     finished_at: str

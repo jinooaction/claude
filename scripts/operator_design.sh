@@ -3,13 +3,13 @@
 #
 # Console use:
 #
-#   sudo bash /opt/auto-invest/scripts/operator_design.sh \
+#   bash /opt/auto-invest/scripts/operator_design.sh \
 #     "자본 100달러, 미국 대형주 분산, 매주 월요일 적립, 위험 보통"
 #
 # GitHub Actions use:
 #
 #   INTENT_B64="$(printf '%s' "$INTENT" | base64 | tr -d '\n')" \
-#     sudo env INTENT_B64="$INTENT_B64" bash /opt/auto-invest/scripts/operator_design.sh
+#     env INTENT_B64="$INTENT_B64" bash /opt/auto-invest/scripts/operator_design.sh
 #
 # The helper updates the repo, checks required local secrets, and runs
 # `auto-invest design`. The command now creates an inert candidate and
@@ -43,10 +43,10 @@ fi
 if [[ -z "${INTENT}" ]]; then
     cat >&2 <<HELP
 사용법:
-    sudo bash $0 "<자연어 의도>"
+    bash $0 "<자연어 의도>"
 
 또는:
-    printf '%s' "<자연어 의도>" | sudo bash $0
+    printf '%s' "<자연어 의도>" | bash $0
 
 옵션 (환경변수):
     INSTALL_DIR    auto-invest 설치 디렉토리 (기본 /opt/auto-invest)
@@ -60,10 +60,13 @@ HELP
     exit 2
 fi
 
-if [[ "$(id -u)" -ne 0 ]]; then
-    echo "ERROR: 이 스크립트는 sudo 또는 root 로 실행하세요." >&2
-    exit 1
-fi
+run_as_auto_invest() {
+    if [[ "$(id -un)" == "auto-invest" ]]; then
+        "$@"
+    else
+        sudo -n -u auto-invest "$@"
+    fi
+}
 
 if [[ ! -d "${INSTALL_DIR}" ]]; then
     echo "ERROR: ${INSTALL_DIR} 디렉토리가 없습니다. cloud-init 또는 repair_install.sh 먼저 실행하세요." >&2
@@ -79,7 +82,7 @@ echo "============================================================"
 
 echo
 echo "[1/4] main 최신 pull (auto-invest 사용자)"
-sudo -u auto-invest sh -c "
+run_as_auto_invest sh -c "
     cd '${INSTALL_DIR}' && \
     git fetch origin main && \
     git checkout main && \
@@ -89,12 +92,8 @@ sudo -u auto-invest sh -c "
 }
 
 echo
-echo "[2/4] polkit / config/rules.toml 멱등 fix"
-if [[ -x "${INSTALL_DIR}/scripts/apply_rules_polkit_fix.sh" ]]; then
-    bash "${INSTALL_DIR}/scripts/apply_rules_polkit_fix.sh"
-else
-    echo "  apply_rules_polkit_fix.sh 가 없음 — git pull 이 실패했거나 구버전. skip."
-fi
+echo "[2/4] 권한 보정 자동 실행 없음"
+echo "  proposal-only design은 root 보정 스크립트를 실행하지 않습니다."
 
 echo
 echo "[3/4] .env 의 읽기/설계용 키 검증"
@@ -113,13 +112,8 @@ else
 fi
 
 if [[ "${need_set_secrets}" -eq 1 ]]; then
-    if [[ -x "${INSTALL_DIR}/scripts/set_secrets.sh" ]]; then
-        echo "  set_secrets.sh 호출 — KIS 3개 + ANTHROPIC 키 prompt 가 차례로 뜹니다."
-        bash "${INSTALL_DIR}/scripts/set_secrets.sh"
-    else
-        echo "ERROR: ${INSTALL_DIR}/scripts/set_secrets.sh 가 없습니다." >&2
-        exit 3
-    fi
+    echo "ERROR: 필요한 비밀값이 없습니다. 서버 콘솔에서 set_secrets.sh를 직접 실행한 뒤 다시 시도하세요." >&2
+    exit 3
 else
     echo "  KIS 키 3개 모두 입력됨 — set_secrets.sh skip."
 fi
@@ -141,7 +135,7 @@ echo "  --env-file ${ENV_PATH}"
 echo "  --db ${DB_PATH}"
 echo "  --prices ${PRICES_PATH}"
 echo
-sudo -u auto-invest /usr/local/bin/uv run --project "${INSTALL_DIR}" \
+run_as_auto_invest /usr/local/bin/uv run --project "${INSTALL_DIR}" \
     auto-invest design \
         --intent "${INTENT}" \
         --env-file "${ENV_PATH}" \

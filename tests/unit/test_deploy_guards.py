@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fcntl
 import os
 import subprocess
 from datetime import UTC, datetime
@@ -160,16 +161,22 @@ def test_lock_stale_pid_overwritten(tmp_path, monkeypatch):
         handle.release()
 
 
-def test_lock_contention_when_pid_alive_and_auto_invest(tmp_path, monkeypatch):
+def test_lock_contention_when_file_descriptor_lock_is_held(tmp_path, monkeypatch):
     pid_path = tmp_path / "deploy.pid"
-    pid_path.write_text("12345\n")
+    fd = os.open(pid_path, os.O_RDWR | os.O_CREAT, 0o644)
+    os.write(fd, b"12345\n")
+    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
     monkeypatch.setattr(
         "auto_invest.deploy.guards._process_alive",
         lambda pid: (True, "uv run auto-invest deploy"),
     )
-    with pytest.raises(LockContention) as excinfo:
-        acquire_lock(pid_path)
-    assert excinfo.value.pid == 12345
+    try:
+        with pytest.raises(LockContention) as excinfo:
+            acquire_lock(pid_path)
+        assert excinfo.value.pid == 12345
+    finally:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        os.close(fd)
 
 
 def test_lock_pid_alive_but_not_auto_invest_is_stale(tmp_path, monkeypatch):

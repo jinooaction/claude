@@ -118,9 +118,10 @@ spec 006 배포 상태기계 (안전 단계 전부 통과해야 워커 교체)
 ## 사전 조건 (이미 충족되어 있어야 함)
 
 - 저장소 시크릿: `VULTR_SSH_PRIVATE_KEY`, `VULTR_SSH_HOST`, `VULTR_SSH_USER`,
-  `VULTR_SSH_PORT` (trigger-design.yml 이 쓰는 것과 동일).
+  `VULTR_SSH_KNOWN_HOSTS`, `VULTR_SSH_PORT` (trigger-design.yml 이 쓰는 것과
+  동일).
 - 인스턴스에 `auto-invest-deploy.service` 설치 + SSH 사용자가 `sudo systemctl
-  start` 권한 보유(operator_design.sh 가 이미 `sudo` 로 동작하므로 충족).
+  start auto-invest-deploy.service` 같은 제한된 명령 권한 보유.
 
 ## 이 파이프라인이 하지 않는 것
 

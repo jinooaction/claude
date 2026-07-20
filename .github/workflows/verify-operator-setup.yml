@@ -6,7 +6,8 @@ name: Verify operator setup
 # 결과를 이 워크플로우가 들어있는 PR 또는 commit 에 자동 댓글로 보고한다.
 #
 # 검증 항목:
-#   1. GitHub Secrets 4개 등록 여부 (VULTR_SSH_HOST/USER/PRIVATE_KEY/PORT)
+#   1. GitHub Secrets 5개 등록 여부
+#      (VULTR_SSH_HOST/USER/PRIVATE_KEY/PORT/KNOWN_HOSTS)
 #   2. 키 형식 (개인키 BEGIN/END 마커)
 #   3. SSH 접속 시도 (echo OK + hostname)
 #   4. 인스턴스 안에 operator_design.sh 존재 여부 + git 상태
@@ -32,7 +33,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Checkout (필수 — 결과 commit 위해)
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           # 이후 push 가 같은 ref 에 가능하도록 fetch-depth 0 + token 보존.
           fetch-depth: 0
@@ -44,6 +45,8 @@ jobs:
           HOST: ${{ secrets.VULTR_SSH_HOST }}
           USER: ${{ secrets.VULTR_SSH_USER }}
           KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.VULTR_SSH_KNOWN_HOSTS }}
+          SSH_USER: ${{ secrets.VULTR_SSH_USER }}
           PORT: ${{ secrets.VULTR_SSH_PORT }}
         run: |
           set +e  # 실패해도 다음 step 진행 (결과 보고 위해)
@@ -51,6 +54,7 @@ jobs:
           [[ -z "${HOST:-}" ]] && missing+=("VULTR_SSH_HOST")
           [[ -z "${USER:-}" ]] && missing+=("VULTR_SSH_USER")
           [[ -z "${KEY:-}"  ]] && missing+=("VULTR_SSH_PRIVATE_KEY")
+          [[ -z "${KNOWN_HOSTS:-}" ]] && missing+=("VULTR_SSH_KNOWN_HOSTS")
           [[ -z "${PORT:-}" ]] && missing+=("VULTR_SSH_PORT")
           if [[ ${#missing[@]} -gt 0 ]]; then
               echo "secrets_status=missing" >> "$GITHUB_OUTPUT"
@@ -67,7 +71,7 @@ jobs:
           elif echo "${KEY}" | head -n1 | grep -qE "^(ssh-(rsa|ed25519|dss)|ecdsa-)"; then
               # 공개키를 잘못 등록한 경우 — 마커 추가해도 동작 안 함.
               echo "secrets_status=public_key_registered" >> "$GITHUB_OUTPUT"
-              echo "secrets_detail=VULTR_SSH_PRIVATE_KEY 에 공개키(ssh-ed25519 ...)가 등록됨. 개인키 파일(/root/.ssh/auto_invest_gh, .pub 없음)로 교체 필요." >> "$GITHUB_OUTPUT"
+              echo "secrets_detail=VULTR_SSH_PRIVATE_KEY 에 공개키(ssh-ed25519 ...)가 등록됨. 제한된 deploy 사용자용 개인키 전체 내용(.pub 아님)으로 교체 필요." >> "$GITHUB_OUTPUT"
               exit 0
           else
               # base64 본문만 등록된 경우 — 마커 자동 추가 시도.
@@ -82,7 +86,7 @@ jobs:
               # 다음 step 에서 cat /tmp/ssh_key_wrapped 로 사용.
           fi
           echo "secrets_status=ok" >> "$GITHUB_OUTPUT"
-          echo "secrets_detail=4개 등록됨, 키 형식=${key_form}" >> "$GITHUB_OUTPUT"
+          echo "secrets_detail=5개 등록됨, 키 형식=${key_form}" >> "$GITHUB_OUTPUT"
           echo "key_form=${key_form}" >> "$GITHUB_OUTPUT"
           echo "  host=${HOST}"
           echo "  user=${USER}"
@@ -93,6 +97,8 @@ jobs:
         if: steps.check_secrets.outputs.secrets_status == 'ok'
         env:
           KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.VULTR_SSH_KNOWN_HOSTS }}
+          SSH_USER: ${{ secrets.VULTR_SSH_USER }}
           KEY_FORM: ${{ steps.check_secrets.outputs.key_form }}
         run: |
           mkdir -p ~/.ssh
@@ -105,6 +111,18 @@ jobs:
               echo "${KEY}" > ~/.ssh/id_ed25519
           fi
           chmod 600 ~/.ssh/id_ed25519
+          ssh_user="${SSH_USER:-${USER:-${VULTR_SSH_USER:-}}}"
+          if [[ "${ssh_user}" == "root" ]]; then
+            echo "::error::VULTR_SSH_USER=root is refused. Use a restricted deploy user."
+            exit 2
+          fi
+          known_hosts="${KNOWN_HOSTS:-${VULTR_SSH_KNOWN_HOSTS:-}}"
+          if [[ -z "${known_hosts}" ]]; then
+            echo "::error::missing VULTR_SSH_KNOWN_HOSTS"
+            exit 2
+          fi
+          printf '%s\n' "${known_hosts}" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
 
           # 검증 1: 그대로 동작?
           if ssh-keygen -y -f ~/.ssh/id_ed25519 >/dev/null 2>&1; then
@@ -145,6 +163,18 @@ jobs:
           chmod 600 /tmp/ssh_key_fixed
           cp /tmp/ssh_key_fixed ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
+          ssh_user="${SSH_USER:-${USER:-${VULTR_SSH_USER:-}}}"
+          if [[ "${ssh_user}" == "root" ]]; then
+            echo "::error::VULTR_SSH_USER=root is refused. Use a restricted deploy user."
+            exit 2
+          fi
+          known_hosts="${KNOWN_HOSTS:-${VULTR_SSH_KNOWN_HOSTS:-}}"
+          if [[ -z "${known_hosts}" ]]; then
+            echo "::error::missing VULTR_SSH_KNOWN_HOSTS"
+            exit 2
+          fi
+          printf '%s\n' "${known_hosts}" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
 
           # 검증 2: 복구 후 동작?
           if ssh-keygen -y -f ~/.ssh/id_ed25519 >/dev/null 2>&1; then
@@ -155,7 +185,7 @@ jobs:
           fi
 
           # 3) 세 번째 시도: 운영자가 base64 로 한 번 더 인코딩한 한 줄 등록 가능성.
-          # 콘솔에서 `base64 -w0 /root/.ssh/auto_invest_gh` 출력을 secret 으로 등록한 경우.
+          # 콘솔에서 제한된 deploy 사용자용 개인키를 base64 한 줄로 등록한 경우.
           # 브라우저가 추가한 invisible 문자(CR, NBSP, BOM, etc) 자동 제거 — base64 문자만 남김.
           KEY_BASE64_ONLY=$(printf '%s' "${KEY}" | tr -d '[:space:]\000-\037\177-\377' | sed 's/[^A-Za-z0-9+/=]//g')
           echo "  KEY 원본 길이: ${#KEY}"
@@ -168,6 +198,18 @@ jobs:
               if ssh-keygen -y -f /tmp/ssh_key_decoded >/dev/null 2>&1; then
                   cp /tmp/ssh_key_decoded ~/.ssh/id_ed25519
                   chmod 600 ~/.ssh/id_ed25519
+          ssh_user="${SSH_USER:-${USER:-${VULTR_SSH_USER:-}}}"
+          if [[ "${ssh_user}" == "root" ]]; then
+            echo "::error::VULTR_SSH_USER=root is refused. Use a restricted deploy user."
+            exit 2
+          fi
+          known_hosts="${KNOWN_HOSTS:-${VULTR_SSH_KNOWN_HOSTS:-}}"
+          if [[ -z "${known_hosts}" ]]; then
+            echo "::error::missing VULTR_SSH_KNOWN_HOSTS"
+            exit 2
+          fi
+          printf '%s\n' "${known_hosts}" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
                   echo "  base64 단일 디코드 후 OK ✅"
                   ssh-keygen -y -f ~/.ssh/id_ed25519 | head -c 50
                   echo
@@ -247,7 +289,7 @@ jobs:
           set +e
           port="${PORT:-22}"
           ssh_out=$(ssh \
-              -o StrictHostKeyChecking=accept-new \
+              -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts \
               -o ConnectTimeout=10 \
               -o BatchMode=yes \
               -p "${port}" \
@@ -363,20 +405,33 @@ jobs:
 
           git config user.email "github-actions@github.com"
           git config user.name  "github-actions[bot]"
-          git add .verify/
-          # 이전 commit 과 동일한 내용이면 commit 안 함 (loop 방지).
-          if git diff --cached --quiet; then
-              echo "변경 없음 — commit skip"
+          # .verify/ 는 main 누적을 막기 위해 gitignore 된다. 과거 branch-local
+          # 결과 파일을 커밋할 수 있는 상태면 커밋하고, 무시 경로라면 Summary만 남긴다.
+          if git add .verify/ 2>/tmp/verify_git_add.err; then
+              # 이전 commit 과 동일한 내용이면 commit 안 함 (loop 방지).
+              if git diff --cached --quiet; then
+                  echo "변경 없음 — commit skip"
+              else
+                  # [skip ci] 로 자기 자신 재트리거 방지.
+                  git commit -m "verify: ${STATUS:-unknown} [skip ci]"
+                  # push 가 실패해도 workflow 전체는 그대로 결과 status 유지 (이미 결정됨).
+                  git push origin HEAD:"${GITHUB_REF#refs/heads/}" || \
+                      echo "::warning::push 실패 — 결과는 workflow logs 또는 step summary 에서 확인하세요."
+              fi
           else
-              # [skip ci] 로 자기 자신 재트리거 방지.
-              git commit -m "verify: ${STATUS:-unknown} [skip ci]"
-              # push 가 실패해도 workflow 전체는 그대로 결과 status 유지 (이미 결정됨).
-              git push origin HEAD:"${GITHUB_REF#refs/heads/}" || \
-                  echo "::warning::push 실패 — 결과는 workflow logs 또는 step summary 에서 확인하세요."
+              echo "::notice::.verify/ 는 gitignore 상태라 branch-local 결과 commit 을 건너뜁니다."
+              cat /tmp/verify_git_add.err || true
           fi
 
-      - name: Fail if not all OK
-        if: steps.overall.outputs.status != 'all_ok'
+      - name: Record non-blocking push diagnostic
+        if: github.event_name == 'push' && steps.overall.outputs.status != 'all_ok'
+        run: |
+          echo "::warning::운영자 셋업 검증 실패: ${{ steps.overall.outputs.status }}"
+          echo "push 이벤트에서는 PR 머지를 막지 않고 Summary에 진단만 남깁니다."
+          echo "수동 workflow_dispatch 검증은 같은 상태를 실패로 처리합니다."
+
+      - name: Fail manual verification if not all OK
+        if: github.event_name == 'workflow_dispatch' && steps.overall.outputs.status != 'all_ok'
         run: |
           echo "::error::셋업 검증 실패: ${{ steps.overall.outputs.status }}"
           exit 1

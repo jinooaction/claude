@@ -80,3 +80,6 @@ class BrokerExecution(BaseModel):
     side: Side | None = None
     terminal: bool = False
     market: str | None = None
+    order_type: OrderType | None = None
+    order_price_usd: Decimal | None = None
+    ordered_at_utc: datetime | None = None

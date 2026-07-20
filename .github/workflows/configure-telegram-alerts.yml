@@ -16,7 +16,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Check required secrets
         env:
@@ -25,6 +25,8 @@ jobs:
           VULTR_SSH_HOST: ${{ secrets.VULTR_SSH_HOST }}
           VULTR_SSH_USER: ${{ secrets.VULTR_SSH_USER }}
           VULTR_SSH_PRIVATE_KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+          VULTR_SSH_KNOWN_HOSTS: ${{ secrets.VULTR_SSH_KNOWN_HOSTS }}
+          SSH_USER: ${{ secrets.VULTR_SSH_USER }}
           VULTR_SSH_PORT: ${{ secrets.VULTR_SSH_PORT }}
         run: |
           set -euo pipefail
@@ -45,12 +47,26 @@ jobs:
       - name: Install SSH key
         env:
           VULTR_SSH_PRIVATE_KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+          VULTR_SSH_KNOWN_HOSTS: ${{ secrets.VULTR_SSH_KNOWN_HOSTS }}
+          SSH_USER: ${{ secrets.VULTR_SSH_USER }}
         run: |
           set -euo pipefail
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
           printf '%s\n' "${VULTR_SSH_PRIVATE_KEY}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
+          ssh_user="${SSH_USER:-${USER:-${VULTR_SSH_USER:-}}}"
+          if [[ "${ssh_user}" == "root" ]]; then
+            echo "::error::VULTR_SSH_USER=root is refused. Use a restricted deploy user."
+            exit 2
+          fi
+          known_hosts="${KNOWN_HOSTS:-${VULTR_SSH_KNOWN_HOSTS:-}}"
+          if [[ -z "${known_hosts}" ]]; then
+            echo "::error::missing VULTR_SSH_KNOWN_HOSTS"
+            exit 2
+          fi
+          printf '%s\n' "${known_hosts}" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
 
       - name: Configure server Telegram alerts
         env:
@@ -69,7 +85,7 @@ jobs:
           echo "::add-mask::${chat_b64}"
           port="${VULTR_SSH_PORT:-22}"
 
-          ssh -o StrictHostKeyChecking=accept-new \
+          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts \
               -o ConnectTimeout=15 \
               -p "${port}" \
               -i ~/.ssh/id_ed25519 \

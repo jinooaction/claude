@@ -178,6 +178,7 @@ def submit_to_canary(
                 candidate_rev=candidate_rev,
                 baseline_rev=head_rev,
                 replay_inputs=replay_inputs,
+                ruleset_sha256=getattr(replay_inputs, "ruleset_sha256", ""),
                 repo_root=repo_root,
             ),
             audit_conn=audit_conn,

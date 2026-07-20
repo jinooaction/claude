@@ -12,7 +12,9 @@ real KIS credentials and to drop `--dry-run`.
 ## Prerequisites
 
 - Python 3.11
-- `uv` package manager (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
+- `uv` package manager. Install it through the pinned project installer or a
+  package manager path that verifies the downloaded artifact; do not pipe a
+  remote installer directly into a shell.
 - A Korea Investment & Securities account with OpenAPI access enabled
   for **overseas equities**, plus an issued app key/secret.
 

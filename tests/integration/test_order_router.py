@@ -246,6 +246,21 @@ async def test_submit_order_happy_path(tmp_path: Path):
         order_row = router.conn.execute("SELECT state, kis_order_id FROM orders").fetchone()
         assert order_row["state"] == "SUBMITTED"
         assert order_row["kis_order_id"] == "K-001"
+        transitions = [
+            (r["from_state"], r["to_state"])
+            for r in router.conn.execute(
+                """
+                SELECT from_state, to_state
+                FROM order_state_history
+                ORDER BY seq
+                """
+            ).fetchall()
+        ]
+        assert transitions == [
+            (None, "INTENT"),
+            ("INTENT", "SUBMITTING"),
+            ("SUBMITTING", "SUBMITTED"),
+        ]
         assert _authority_lock_count(router.conn) == 0
 
 
@@ -492,6 +507,12 @@ async def test_submit_order_allows_sell_when_execution_state_degraded(tmp_path: 
                 )
             ]
         )
+        router.conn.execute(
+            """
+            INSERT INTO current_positions(symbol, qty, avg_cost_usd, last_updated_utc)
+            VALUES ('AAPL', 5, '100.00', '2026-07-21T00:00:00.000Z')
+            """
+        )
         with respx.mock(base_url=BASE) as mock:
             placed = mock.post("/uapi/overseas-stock/v1/trading/order").mock(
                 return_value=httpx.Response(200, json={"output": {"ODNO": "K-SELL"}})
@@ -555,6 +576,18 @@ async def test_submit_order_submission_unknown_on_broker_5xx(tmp_path: Path):
 
         order_row = router.conn.execute("SELECT state FROM orders").fetchone()
         assert order_row["state"] == "SUBMISSION_UNKNOWN"
+        transition = router.conn.execute(
+            """
+            SELECT from_state, to_state
+            FROM order_state_history
+            ORDER BY seq DESC
+            LIMIT 1
+            """
+        ).fetchone()
+        assert (transition["from_state"], transition["to_state"]) == (
+            "SUBMITTING",
+            "SUBMISSION_UNKNOWN",
+        )
         unknown_payload = next(
             audit.parse_payload(r)
             for r in audit.read_all(router.conn)

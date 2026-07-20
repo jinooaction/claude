@@ -55,14 +55,16 @@ def _seed_order(
     side: str = "BUY",
     qty: int = 100,
     state: str = "SUBMITTED",
+    limit_price_usd: str | None = None,
 ) -> None:
     conn.execute(
         """
         INSERT INTO orders
-            (correlation_id, rule_id, symbol, side, order_type, qty, state, kis_order_id)
-        VALUES (?, 'r1', ?, ?, 'LIMIT', ?, ?, ?)
+            (correlation_id, rule_id, symbol, side, order_type, qty,
+             limit_price_usd, state, kis_order_id)
+        VALUES (?, 'r1', ?, ?, 'LIMIT', ?, ?, ?, ?)
         """,
-        (corr, symbol, side, qty, state, kis),
+        (corr, symbol, side, qty, limit_price_usd, state, kis),
     )
     # spec 011 라이브 FILL 조인을 위해 ORDER_INTENT 도 남긴다.
     from auto_invest.persistence.audit import OrderIntentPayload
@@ -314,6 +316,7 @@ async def test_submission_unknown_unique_full_fill_recovers_and_applies_fill(
                             "odno": "K-REC",
                             "pdno": "AAPL",
                             "sll_buy_dvsn_cd": "02",
+                            "ord_dvsn": "00",
                             "ft_ccld_qty": "100",
                             "ft_ccld_unpr3": "150",
                         }
@@ -350,6 +353,7 @@ async def test_submission_unknown_unique_unfilled_order_recovers_to_submitted(
                             "odno": "K-OPEN",
                             "pdno": "AAPL",
                             "sll_buy_dvsn_cd": "02",
+                            "ord_dvsn": "00",
                             "ft_ccld_qty": "0",
                             "nccs_qty": "100",
                         }
@@ -381,6 +385,7 @@ async def test_submission_unknown_ambiguous_matches_stay_unresolved(
                             "odno": "K-A",
                             "pdno": "AAPL",
                             "sll_buy_dvsn_cd": "02",
+                            "ord_dvsn": "00",
                             "ft_ccld_qty": "0",
                             "nccs_qty": "100",
                         },
@@ -388,6 +393,7 @@ async def test_submission_unknown_ambiguous_matches_stay_unresolved(
                             "odno": "K-B",
                             "pdno": "AAPL",
                             "sll_buy_dvsn_cd": "02",
+                            "ord_dvsn": "00",
                             "ft_ccld_qty": "100",
                             "ft_ccld_unpr3": "150",
                         },
@@ -403,6 +409,67 @@ async def test_submission_unknown_ambiguous_matches_stay_unresolved(
         ).fetchone()
         assert row["kis_order_id"] is None
         assert _recovered_events(conn, "ord-ambiguous") == []
+
+
+@pytest.mark.asyncio
+async def test_submission_unknown_without_order_type_stays_unresolved(
+    tmp_path: Path,
+) -> None:
+    async with _broker(tmp_path) as (client, conn):
+        _seed_order(conn, corr="ord-weak", kis=None, qty=100, state="SUBMISSION_UNKNOWN")
+        with respx.mock(base_url=BASE) as mock:
+            mock.get(CCNL).mock(
+                return_value=_ccnl(
+                    [
+                        {
+                            "odno": "K-WEAK",
+                            "pdno": "AAPL",
+                            "sll_buy_dvsn_cd": "02",
+                            "ft_ccld_qty": "100",
+                            "ft_ccld_unpr3": "150",
+                        }
+                    ]
+                )
+            )
+            res = await _sync(client, conn)
+
+        assert res.submission_unknown_recovered == 0
+        assert _state(conn, "ord-weak") == "SUBMISSION_UNKNOWN"
+
+
+@pytest.mark.asyncio
+async def test_submission_unknown_limit_price_mismatch_stays_unresolved(
+    tmp_path: Path,
+) -> None:
+    async with _broker(tmp_path) as (client, conn):
+        _seed_order(
+            conn,
+            corr="ord-price",
+            kis=None,
+            qty=100,
+            state="SUBMISSION_UNKNOWN",
+            limit_price_usd="151",
+        )
+        with respx.mock(base_url=BASE) as mock:
+            mock.get(CCNL).mock(
+                return_value=_ccnl(
+                    [
+                        {
+                            "odno": "K-PRICE",
+                            "pdno": "AAPL",
+                            "sll_buy_dvsn_cd": "02",
+                            "ord_dvsn": "00",
+                            "ord_unpr": "150",
+                            "ft_ccld_qty": "100",
+                            "ft_ccld_unpr3": "150",
+                        }
+                    ]
+                )
+            )
+            res = await _sync(client, conn)
+
+        assert res.submission_unknown_recovered == 0
+        assert _state(conn, "ord-price") == "SUBMISSION_UNKNOWN"
 
 
 @pytest.mark.asyncio

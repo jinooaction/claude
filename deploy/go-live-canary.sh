@@ -18,11 +18,31 @@
 # 마지막 줄에 `GO_LIVE_RESULT=<상태>` 를 출력한다(워크플로우가 파싱):
 #   armed_live_canary | deferred_market_open | reverted_dry_run
 
-set -uo pipefail
+set -euo pipefail
 
 ENV_FILE=/opt/auto-invest/.env
 APP_DIR=/opt/auto-invest
 UV=/usr/local/bin/uv
+EXPECTED_SHA="${EXPECTED_SHA:-}"
+tmp_env=""
+
+cleanup() {
+    if [[ -n "${tmp_env:-}" && -f "$tmp_env" ]]; then
+        rm -f "$tmp_env"
+    fi
+}
+trap cleanup EXIT
+
+set_env_value() {
+    local file="$1"
+    local key="$2"
+    local value="$3"
+    if grep -qE "^${key}=" "$file"; then
+        sed -i "s#^${key}=.*#${key}=${value}#" "$file"
+    else
+        printf '%s=%s\n' "$key" "$value" >> "$file"
+    fi
+}
 
 if [[ ! -f "$ENV_FILE" ]]; then
     echo "[go-live] $ENV_FILE 없음 — 인스턴스가 프로비저닝되지 않았습니다." >&2
@@ -35,9 +55,23 @@ fi
 cd "$APP_DIR" 2>/dev/null || { echo "GO_LIVE_RESULT=no_app_dir"; exit 1; }
 git config --global --add safe.directory "$APP_DIR" 2>/dev/null || true
 sudo -u auto-invest git config --global --add safe.directory "$APP_DIR" 2>/dev/null || true
-sudo -u auto-invest git fetch --quiet origin main 2>/dev/null || git fetch --quiet origin main 2>/dev/null || true
-sudo -u auto-invest git reset --hard origin/main 2>/dev/null || git reset --hard origin/main 2>/dev/null || true
-echo "[go-live] server repo @ $(git rev-parse --short HEAD 2>/dev/null || echo '?')"
+if ! sudo -u auto-invest git fetch --quiet origin main 2>/dev/null; then
+    echo "[go-live] origin/main fetch 실패 — 검증 불능 상태라 전환 중단." >&2
+    echo "GO_LIVE_RESULT=repo_sync_failed"
+    exit 1
+fi
+if ! sudo -u auto-invest git reset --hard origin/main 2>/dev/null; then
+    echo "[go-live] origin/main reset 실패 — 어떤 코드가 실행될지 확정할 수 없어 전환 중단." >&2
+    echo "GO_LIVE_RESULT=repo_sync_failed"
+    exit 1
+fi
+current_sha="$(git rev-parse HEAD)"
+echo "[go-live] server repo @ ${current_sha}"
+if [[ -n "$EXPECTED_SHA" && "$current_sha" != "$EXPECTED_SHA" ]]; then
+    echo "[go-live] GITHUB_SHA(${EXPECTED_SHA}) 와 서버 HEAD(${current_sha}) 불일치 — 전환 중단." >&2
+    echo "GO_LIVE_RESULT=revision_mismatch"
+    exit 1
+fi
 
 # 0b) 센티넬에서 원하는 자본/룰셋 읽기(선택 — 운영자 선택 1번 "포지션 축소 + 중간 자본").
 #     없으면 .env 기존값을 유지한다(모드만 바뀜).
@@ -48,6 +82,23 @@ if [[ -f "$REQ_FILE" ]]; then
     want_capital="$(grep -E '^capital_usd:' "$REQ_FILE" | head -1 | awk '{print $2}' || true)"
     want_rules="$(grep -E '^rules_path:' "$REQ_FILE" | head -1 | awk '{print $2}' || true)"
 fi
+if [[ -n "$want_capital" && ! "$want_capital" =~ ^[0-9]+([.][0-9]{1,2})?$ ]]; then
+    echo "[go-live] invalid capital_usd=${want_capital@Q} — 전환 중단." >&2
+    echo "GO_LIVE_RESULT=invalid_request"
+    exit 1
+fi
+if [[ -n "$want_rules" ]]; then
+    if [[ ! "$want_rules" =~ ^config/[A-Za-z0-9._/-]+[.]toml$ || "$want_rules" == *".."* ]]; then
+        echo "[go-live] invalid rules_path=${want_rules@Q} — 전환 중단." >&2
+        echo "GO_LIVE_RESULT=invalid_request"
+        exit 1
+    fi
+    if [[ ! -f "$APP_DIR/$want_rules" ]]; then
+        echo "[go-live] requested rules_path not found: ${want_rules}" >&2
+        echo "GO_LIVE_RESULT=invalid_request"
+        exit 1
+    fi
+fi
 
 # 1) 장중 가드 (헌법 VIII.A). XNYS 정규장이 열려 있으면 전환 보류.
 market_state="$(
@@ -57,7 +108,7 @@ import datetime as dt
 try:
     import exchange_calendars as ec
     cal = ec.get_calendar("XNYS")
-    now = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M")
+    now = dt.datetime.now(dt.timezone.utc)
     print("OPEN" if cal.is_open_on_minute(now) else "CLOSED")
 except Exception:
     print("UNKNOWN")
@@ -71,37 +122,36 @@ if [[ "$market_state" == "OPEN" ]]; then
     echo "GO_LIVE_RESULT=deferred_market_open"
     exit 0
 fi
+if [[ "$market_state" != "CLOSED" ]]; then
+    echo "[go-live] 시장 상태가 CLOSED 로 확인되지 않음(${market_state}) — 전환 중단."
+    echo "GO_LIVE_RESULT=market_state_unknown"
+    exit 1
+fi
 
 # 2) 현재 모드 스냅샷 + 백업.
 current_mode="$(grep -E '^AUTO_INVEST_MODE=' "$ENV_FILE" | head -1 | cut -d= -f2- || true)"
 cp -a "$ENV_FILE" "${ENV_FILE}.pre-golive.bak"
 echo "[go-live] 현재 AUTO_INVEST_MODE=${current_mode:-unset} → live 로 전환(캐너리 룰셋·자본 유지)."
 
-# 3) live 로 전환 (모드 한 줄).
-if grep -qE '^AUTO_INVEST_MODE=' "$ENV_FILE"; then
-    sed -i 's/^AUTO_INVEST_MODE=.*/AUTO_INVEST_MODE=live/' "$ENV_FILE"
-else
-    echo 'AUTO_INVEST_MODE=live' >> "$ENV_FILE"
-fi
+# 3) live 로 전환할 .env 후보를 먼저 완성한 뒤 같은 파일시스템에서 원자 교체.
+tmp_env="$(mktemp "$(dirname "$ENV_FILE")/.env.golive.XXXXXX")"
+cp "$ENV_FILE" "$tmp_env"
+chown --reference="$ENV_FILE" "$tmp_env"
+chmod --reference="$ENV_FILE" "$tmp_env"
+set_env_value "$tmp_env" AUTO_INVEST_MODE live
 
 # 3b) 캐너리 자본/룰셋 적용 (센티넬에 지정된 경우만 — 운영자 선택 1번).
 #     per-trade 캡(룰셋 caps)과 자본이 함께 노출 상한을 정한다. 룰셋은 CANARY 스테이지.
 if [[ -n "$want_capital" ]]; then
-    if grep -qE '^AUTO_INVEST_CAPITAL=' "$ENV_FILE"; then
-        sed -i "s/^AUTO_INVEST_CAPITAL=.*/AUTO_INVEST_CAPITAL=${want_capital}/" "$ENV_FILE"
-    else
-        echo "AUTO_INVEST_CAPITAL=${want_capital}" >> "$ENV_FILE"
-    fi
+    set_env_value "$tmp_env" AUTO_INVEST_CAPITAL "$want_capital"
     echo "[go-live] AUTO_INVEST_CAPITAL=${want_capital} 적용(중간 자본)."
 fi
 if [[ -n "$want_rules" ]]; then
-    if grep -qE '^AUTO_INVEST_RULES=' "$ENV_FILE"; then
-        sed -i "s#^AUTO_INVEST_RULES=.*#AUTO_INVEST_RULES=${want_rules}#" "$ENV_FILE"
-    else
-        echo "AUTO_INVEST_RULES=${want_rules}" >> "$ENV_FILE"
-    fi
+    set_env_value "$tmp_env" AUTO_INVEST_RULES "$want_rules"
     echo "[go-live] AUTO_INVEST_RULES=${want_rules} 적용(포지션 축소 룰셋)."
 fi
+mv -f "$tmp_env" "$ENV_FILE"
+tmp_env=""
 
 # 4) 워커 재시작 (EnvironmentFile=.env 를 다시 읽어 live 반영).
 restart_epoch="$(date +%s)"
@@ -134,9 +184,9 @@ if [[ "$active" == "active" && "${fatal:-0}" -eq 0 ]]; then
     exit 0
 fi
 
-# 6) 실패 → dry-run 자동 복구.
-echo "[go-live] ❌ 헬스체크 실패 — dry-run 으로 자동 복구."
-sed -i 's/^AUTO_INVEST_MODE=.*/AUTO_INVEST_MODE=dry-run/' "$ENV_FILE"
+# 6) 실패 → .env 전체 자동 복구.
+echo "[go-live] ❌ 헬스체크 실패 — 전환 전 .env 전체 백업으로 자동 복구."
+cp -a "${ENV_FILE}.pre-golive.bak" "$ENV_FILE"
 systemctl restart auto-invest.service
 echo "GO_LIVE_RESULT=reverted_dry_run"
 exit 1

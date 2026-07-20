@@ -7,6 +7,7 @@ the runner so emission order is centralised.
 
 from __future__ import annotations
 
+import fcntl
 import os
 import subprocess
 from dataclasses import dataclass
@@ -147,10 +148,17 @@ class LockHandle:
 
     pid_path: Path
     pid: int
+    fd: int | None = None
 
     def release(self) -> None:
         import contextlib
 
+        if self.fd is not None:
+            with contextlib.suppress(OSError):
+                fcntl.flock(self.fd, fcntl.LOCK_UN)
+            with contextlib.suppress(OSError):
+                os.close(self.fd)
+            self.fd = None
         with contextlib.suppress(FileNotFoundError):
             self.pid_path.unlink()
 
@@ -176,24 +184,52 @@ def _process_alive(pid: int) -> tuple[bool, str]:
 def acquire_lock(pid_path: Path | None = None) -> LockHandle:
     """Acquire the deploy lock; raise `LockContention` if another deploy is live.
 
-    Stale-pid detection per R-D3: if the recorded pid is dead or its
-    cmdline does not include `auto-invest`, treat the lock as stale and
-    overwrite.
+    The lock is an open file descriptor protected with ``flock``. This avoids
+    the old check-then-write PID-file race where two deploys could both decide
+    the lock was free before either wrote its PID. Stale files are harmless:
+    when the old process exits, the kernel releases the lock.
     """
     path = pid_path or DEFAULT_PID_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
-    if path.exists():
+    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o644)
+    try:
         try:
-            recorded = int(path.read_text().strip() or "0")
-        except (ValueError, OSError):
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
             recorded = 0
-        if recorded > 0:
-            alive, cmdline = _process_alive(recorded)
-            if alive and "auto-invest" in cmdline:
-                raise LockContention(pid=recorded, cmdline=cmdline)
-    my_pid = os.getpid()
-    path.write_text(f"{my_pid}\n")
-    return LockHandle(pid_path=path, pid=my_pid)
+            with os.fdopen(os.dup(fd), "r", encoding="utf-8", errors="replace") as fh:
+                try:
+                    recorded = int((fh.read().strip() or "0").splitlines()[0])
+                except (IndexError, ValueError):
+                    recorded = 0
+            alive, cmdline = _process_alive(recorded) if recorded > 0 else (True, "")
+            raise LockContention(
+                pid=recorded,
+                cmdline=cmdline if alive else "locked by unknown deploy process",
+            ) from exc
+
+        my_pid = os.getpid()
+        os.ftruncate(fd, 0)
+        os.write(fd, f"{my_pid}\n".encode())
+        os.fsync(fd)
+        return LockHandle(pid_path=path, pid=my_pid, fd=fd)
+    except Exception:
+        os.close(fd)
+        raise
+
+
+def _recorded_pid_is_live_auto_invest(path: Path) -> tuple[bool, int, str]:
+    """Compatibility helper retained for old diagnostics and tests."""
+    if not path.exists():
+        return False, 0, ""
+    try:
+        recorded = int(path.read_text().strip() or "0")
+    except (ValueError, OSError):
+        recorded = 0
+    if recorded > 0:
+        alive, cmdline = _process_alive(recorded)
+        return alive and "auto-invest" in cmdline, recorded, cmdline
+    return False, recorded, ""
 
 
 @dataclass(frozen=True)

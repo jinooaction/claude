@@ -46,7 +46,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Read arming sentinel (armed flag + capital, ladder-authority guard)
         id: gate
@@ -68,6 +68,7 @@ jobs:
           #     손 편집으로는 소액 이상을 무장할 수 없다.
           rung="$(grep -E '^ladder_rung:' "$REQ" 2>/dev/null | head -1 | awk '{print $2}' || true)"
           nav="$(grep -E '^account_nav_usd:' "$REQ" 2>/dev/null | head -1 | awk '{print $2}' || true)"
+          ./scripts/ci_validate_decimal.sh capital "$capital" || exit $?
           blocked=false
           if [[ -n "$rung" && -n "$nav" ]]; then
             if (( $(printf '%.0f' "$capital") > $(printf '%.0f' "$nav") )); then
@@ -89,10 +90,24 @@ jobs:
         if: steps.gate.outputs.blocked != 'true'
         env:
           KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.VULTR_SSH_KNOWN_HOSTS }}
+          SSH_USER: ${{ secrets.VULTR_SSH_USER }}
         run: |
           mkdir -p ~/.ssh && chmod 700 ~/.ssh
           echo "${KEY}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
+          ssh_user="${SSH_USER:-${USER:-${VULTR_SSH_USER:-}}}"
+          if [[ "${ssh_user}" == "root" ]]; then
+            echo "::error::VULTR_SSH_USER=root is refused. Use a restricted deploy user."
+            exit 2
+          fi
+          known_hosts="${KNOWN_HOSTS:-${VULTR_SSH_KNOWN_HOSTS:-}}"
+          if [[ -z "${known_hosts}" ]]; then
+            echo "::error::missing VULTR_SSH_KNOWN_HOSTS"
+            exit 2
+          fi
+          printf '%s\n' "${known_hosts}" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
 
       - name: Backfill live universe daily bars (read-only quotes, no orders)
         if: steps.gate.outputs.blocked != 'true'
@@ -107,7 +122,7 @@ jobs:
           # 깊이 → 같은 신호). 기본(한 페이지 ≈100봉)은 전략이 요구하는 이력(추세 앙상블
           # 최대 252봉·역변동성 200봉·모멘텀 120봉)에 못 미쳐 on_insufficient=cash 로
           # target_weights={} 가 된다 — 무장돼도 현금만 들고 거래 0건(2026-06-10 실측).
-          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
               -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
               "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest backfill-bars \
                  --portfolio deploy/canary-live-portfolio.toml --min-bars 1000 \
@@ -127,7 +142,7 @@ jobs:
           set +e
           port="${PORT:-22}"
           # --dry-run: 계획만 산출, 라우터 미호출(주문 0건). 현재 보유 대비 무엇을 사고팔지.
-          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
               -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
               "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest rebalance-once \
                  --portfolio deploy/canary-live-portfolio.toml --dry-run \
@@ -155,7 +170,7 @@ jobs:
           set +e
           port="${PORT:-22}"
           echo "⚠ ARMED — placing REAL orders (capital=${CAP})."
-          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
               -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
               "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest rebalance-once \
                  --portfolio deploy/canary-live-portfolio.toml \
@@ -179,7 +194,7 @@ jobs:
           port="${PORT:-22}"
           # --capital: NAV 에 장부 현금(자본 + 순현금흐름)을 포함 — 매수/매도 자금 흐름이
           # 수익률로 오인되는 오염을 막는다(페이퍼 forward 트랙과 같은 측정 기준).
-          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
               -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
               "cd /opt/auto-invest && \
                  /usr/local/bin/uv run auto-invest nav-snapshot --mode live --capital ${CAP} --db data/auto_invest.db --env-file .env --snapshot --format json; \
@@ -245,6 +260,7 @@ jobs:
             echo '```'
           } > LAST_RUN.md
           git checkout --orphan publish
+          python3 "${GITHUB_WORKSPACE}/scripts/redact_public_sidecar.py" . 2>/dev/null || true
           git add LAST_RUN.md
           git commit -q -m "rebalance-live-canary run ${GITHUB_RUN_ID} (armed=${ARMED:-?})"
           git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "publish:${BRANCH}"
