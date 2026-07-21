@@ -29,19 +29,19 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 상세 규칙은 Codex 세션에서는 `AGENTS.md`, Claude 세션에서는 `CLAUDE.md` 본문 참조.
 
-## 한눈 요약표 — 2026-07-15 KST 최신 코드 main 기준
+## 한눈 요약표 — 2026-07-21 KST 최신 코드 main 기준
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `2b9fe85` — Merge pull request #527 from jinooaction/codex/handoff-close-operator-report-risks |
-| main 테스트 | PR #527 머지 직전 및 handoff 갱신 기준 `uv run pytest -q` → 2638 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
-| main 린트 | PR #527 머지 직전 및 handoff 갱신 기준 `uv run ruff check src tests` → All checks passed. |
+| 마지막 main 커밋 | `6a46735` — Merge pull request #529 from jinooaction/codex/security-trust-boundary-hardening |
+| main 테스트 | #529 merge 뒤 handoff 갱신 전에는 `HANDOFF.md` stale 때문에 하네스 테스트 2개가 실패했다. 이 handoff 갱신 후 `uv run pytest -q` 기준은 2669 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
+| main 린트 | #529 merge 뒤 handoff 갱신 기준 `uv run ruff check src tests` → All checks passed. |
 | 열린 PR | 없음. |
-| 출시 완료 스펙 | 최신 추가: 118(운영자가 이해 가능한 최종 보고 생존성 계약), 117(`SUBMISSION_UNKNOWN` broker lookup 복구), 116(단일 `ExecutionAuthority`와 계좌별 broker-write 잠금), 115(계좌 상태 불명확 시 신규 BUY 차단과 sell-only 저하 상태), 114(열린 BUY 주문과 리밸런싱 묶음의 계좌 노출 예약), 113(체결 원장 적용 원자화와 중복 체결 캐시 재반영 차단), 112(주문 제출 `POST` 자동 재시도 제거와 `SUBMISSION_UNKNOWN` 상태), 111(operator-design 평행 실거래 진입점 격리와 주문 제출 불확실성 회복 후보 전진), 110(agent harness 회귀 생존성 계약과 운영자 이해 가능 보고 후보 전진), 109(worktree 동시 작업 생존성 계약과 agent harness 회귀 후보 전진), 108(PR/머지 증거 생존성 계약과 worktree 동시 작업 후보 전진), 107(HANDOFF 사실성 생존성 계약과 PR/머지 증거 후보 전진), 106(운영 체계 frontier 지도와 handoff 사실성 후보 전진), 105(브로커 진단 생존성 계약과 운영 체계 frontier 후보 전진), 104(체결 비용 기준 계약과 브로커 진단 생존성 후보 전진), 103(브로커 거부 분류 계약과 체결 비용 기준 후보 전진), 102(체결 품질 frontier 지도와 브로커 거부 분류 후보 전진), 101(데이터 증거 생존성 계약과 체결 품질 frontier 후보 전진), 100(레짐 타임라인 커버리지 계약과 데이터 증거 생존성 후보 전진), 099(공개 데이터 입력 품질 계약과 레짐 타임라인 커버리지 후보 전진), 098(데이터 증거 frontier 지도와 공개 데이터 입력 품질 후보 전진), 097(비용 차감 no-live 엣지 실험 계약과 비용 기준 대기 분리), 096(신호 다변화 no-live 엣지 실험 계약과 낮은 겹침 후보 분리), 095(forward 레짐 엣지 no-live 실험 계약과 관측 대기 판정), 094(투자 엣지 frontier 지도와 no-live 실험 후보 전진), 093(거시 후보 지도와 후보 재생성 루프), 092(자율 후보 고갈 뒤 frontier 발굴 후보 폐쇄), 091(자율 성장 목적 함수와 탐색 예산 보정), 090(source diversification 산출 후보 완료 폐쇄), 089(정적 후보 템플릿 밖 증거 기반 후보 공간 확장), 088(거시 자율 성장 후보 발굴기), 087(학습 장부로 폐기·보류 후보 재발굴 차단), 086(자율 루프 sidecar와 HANDOFF 생존성 완료 후보 폐쇄), 085(공개 데이터 수집·교차 검증 확장), 084(오래된 증거와 성과 실패 분리), 083(주문 거부·체결 품질 손익 관측), 082(레짐·성과 후보 점수화), 081(자율 루프 품질 폐쇄), 080(운영자 대시보드와 모바일 알림 루프), 079(완료 후보 소비 장부), 078(돈 경로 게이트 정렬 루프), 077(자율 작업 실행 루프), 076(자본 경로 준비도 루프), 075(전략 실패 학습), 074(후보 가격 이력 지원), 073(후보 pending next action 보정), 072(후보 증거 진단), 071(후보 결과 실행기), 070(후보 구현 공장), 069(자율 승격 실행 루프), 068(자율 승격 루프 자동 분류), 067(영구 자율 성장 루프 구현), 066(전략 검토 관측 품질 오판 보정), 065(micro GTAA 손실 의도 실주문 차단), 064(거부 주문 누적 평가와 자율 재지정 피드백 루프), 063(계좌 전체 micro GTAA 자율 재배치), 062(money-path 실제 돈 최상위 상태), 061(Telegram 서버 연결 자동화), 060(Telegram 모바일 주문 알림; #390에서 거부 주문 기회손익과 가독성 보강), 059(KIS 주문 전제 확인과 진단 보존), 058(마이크로 GTAA 실거래 캐너리) |
-| 골격 스펙 | 없음. `.specify/feature.json`은 최신 출시 스펙 `specs/118-operator-report-liveness-contract`를 가리킨다. 스펙 118은 #525로 main에 들어갔다. |
-| 최근 출시 작업 | #527 KIS live smoke에 최근 7일 주문/체결 조회와 열린 미체결 주문 0건 검사를 추가했다. #525 스펙 118 운영자 이해 가능 보고 생존성 계약. #523 released-work 장부 백필로 스펙 112·113 완료 체크 누락 보정. #521 스펙 117 `SUBMISSION_UNKNOWN` broker lookup 복구. #519 스펙 116 단일 실행 권한과 계좌별 broker-write 잠금. #517 스펙 115 저하 상태 신규 BUY 차단. |
-| 활성 작업 | 열린 PR 없음. #527 main push KIS smoke run `29422806756`은 success이며 `5 passed`, 최근 주문/체결 행 0개, 열린 미체결 주문 0개다. Deploy run `29422806870`은 미국 장중 배포 금지로 `2026-07-15T20:00:00Z` 이후 자동 재배포 대기 상태이며, 이는 안전장치 동작이다. released-work run `29422911779`는 `overall_status=OK`, `released_count=38`이고 스펙 118 후보를 released로 읽는다. execution-quality run `29422841373`은 KIS smoke 5개를 반영해 `overall_status=OBSERVE`, `tests_total=5`, `tests_failed=0`이다. autonomous-work run `29422962267`은 `overall_status=RELEASED`이며 현재 실행 가능한 안전 후보가 없다. 돈 경로는 `PREVIEW_ONLY`, readiness `ACCUMULATING_EDGE`이며 실주문은 불가하다. |
-| 안전 경계 | #527은 등급 2 읽기 전용 운영 smoke 보강이다. KIS `inquire-ccnl` 주문/체결 조회를 smoke에 추가했지만 실제 주문·취소·실거래 재무장·자본 배분·whitelist/caps·손실 예산·헌법·커널·비밀값은 바꾸지 않았다. #525의 운영 보고 계약도 계속 읽기 전용이다. `place_order`와 `cancel_order` 직접 호출은 계속 `src/auto_invest/execution/authority.py`만 허용된다. 현재 돈 경로는 `PREVIEW_ONLY`다. |
+| 출시 완료 스펙 | 최신 추가: 119(보안 신뢰 경계 강화: GitHub root SSH secret 제거, strict known_hosts, go-live fail-closed, canary hash 필수화, 배포 락·토큰 캐시·주문 불확실성·reduce-only·sidecar redaction 보강), 118(운영자가 이해 가능한 최종 보고 생존성 계약), 117(`SUBMISSION_UNKNOWN` broker lookup 복구), 116(단일 `ExecutionAuthority`와 계좌별 broker-write 잠금), 115(계좌 상태 불명확 시 신규 BUY 차단과 sell-only 저하 상태). 이전 스펙 058~114는 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
+| 골격 스펙 | 없음. `.specify/feature.json`은 최신 출시 스펙 `specs/119-security-trust-boundary-hardening`를 가리킨다. 스펙 119는 #529로 main에 들어갔다. |
+| 최근 출시 작업 | #529 보안 신뢰 경계 강화. #527 KIS live smoke에 최근 7일 주문/체결 조회와 열린 미체결 주문 0건 검사를 추가. #525 스펙 118 운영자 이해 가능 보고 생존성 계약. #523 released-work 장부 백필. #521 스펙 117 `SUBMISSION_UNKNOWN` broker lookup 복구. |
+| 활성 작업 | 열린 PR 없음. #529 main push에서 `Deploy on merge to main` run `29788767866`은 failure다. 이는 `VULTR_SSH_PRIVATE_KEY`와 `VULTR_SSH_USER`를 삭제해 GitHub root SSH 경로를 끊었기 때문에 원격 SSH가 exit 255로 멈춘 안전 중단이다. `Verify operator setup` run `29788767789`는 success이지만 push 진단만 통과했고, 수동 검증은 secrets가 다시 채워질 때까지 실패해야 정상이다. KIS smoke sidecar는 commit `6a46735`, `secrets_present=false`, `smoke_state=(unset)`로 원격 smoke에 진입하지 않았다. released-work run `29788767774`는 `overall_status=OK`, `released_count=38`이고 119는 아직 released 장부에 소비되지 않았다. autonomous-work run `29788767874`는 현재 실행 가능한 안전 후보가 없다고 본다. 돈 경로는 `PREVIEW_ONLY`, readiness `ACCUMULATING_EDGE`이며 실주문은 불가하다. |
+| 안전 경계 | #529는 등급 3 안전 경계 변경이다. K1 포지션 한도/주문 제한(`src/auto_invest/risk/gates.py`)과 K4 감사 로그(`src/auto_invest/persistence/audit.py`)를 강화했다. 실제 주문·취소·실거래 재무장·자본 배분·whitelist/caps 확대·손실 예산·헌법·kernel manifest는 바꾸지 않았다. GitHub-held root SSH user/private-key secrets는 제거됐다. 서버 `/root/.ssh/authorized_keys`의 기존 공개키 제거와 non-root forced-command deploy identity 설치는 운영자/서버 접근이 필요한 남은 조치다. 현재 돈 경로는 `PREVIEW_ONLY`다. |
 
 ## 돈 경로 상태 판독 규칙 (필수 — 스펙 062)
 
@@ -80,6 +80,49 @@ uv run python scripts/money_path_probe.py --manifest | while IFS=$'\t' read -r k
 done
 uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.live_money_state'
 ```
+
+## 최근 관찰 — 2026-07-21 KST (스펙 119 보안 신뢰 경계 강화)
+
+현재 `main` 최신 코드 머지는 `6a46735`(#529, 보안 신뢰 경계 강화)이다.
+기능 커밋은 `5e90f3c`이고, 후속 보정 커밋은 `0d91c4b`, `b77885f`, `46d5982`다.
+
+- **문제 정의**: 외부 보안 리뷰는 GitHub Actions, 저장소 secret, 서버 root SSH, mutable server code,
+  실거래 주문 경로가 한 줄로 이어지는 구조를 P0로 지적했다. 핵심 목표는 GitHub가 서버 root 개인키를
+  들고 실거래 경계까지 바로 닿는 상태를 끊고, canary/go-live/주문/sidecar 경로의 fail-open 지점을
+  fail-closed로 바꾸는 것이었다.
+- **구현 상태**: #529는 third-party Action SHA pin, `StrictHostKeyChecking=yes`와
+  `VULTR_SSH_KNOWN_HOSTS` 필수화, `VULTR_SSH_USER=root` 거부, `capital` decimal 검증,
+  `.env` allowlist parser, `go-live-canary.sh` expected SHA/시장상태 `CLOSED`/원자 env/전체 rollback,
+  canary code+ruleset hash 필수화, `fcntl.flock` 배포 락, token cache 권한/원자 저장, 주문
+  `SUBMITTING` 상태와 stale BUY 차단, 강한 unknown-order 매칭, verified reduce-only/oversell 판단,
+  공개 sidecar redaction을 추가했다.
+- **외부 secret 상태**: `VULTR_SSH_KNOWN_HOSTS`는 로컬 `known_hosts`와 keyscan이 일치한
+  `202.182.125.132` ed25519 host key로 등록했다. GitHub-held root SSH user/private-key secrets인
+  `VULTR_SSH_USER`와 `VULTR_SSH_PRIVATE_KEY`는 삭제했다. 따라서 GitHub에서 서버 root로 들어가는
+  기존 길은 끊겼다.
+- **post-merge 실행**: PR #529는 2026-07-20T23:55:50Z에 merge됐고 merge commit은
+  `6a4673527a9947d29f2a594808c5f036f0a3b2ec`다. main push에서 `Verify operator setup`
+  run `29788767789`는 success다. `Deploy on merge to main` run `29788767866`은 failure이며,
+  SSH exit 255로 원격 배포 재료가 없어 멈췄다. 이것은 이번 보안 작업의 의도된 안전 중단이고
+  worker는 직전 good SHA를 유지한다. `KIS smoke (autonomous)` run `29788767839`는 workflow success지만
+  sidecar상 `secrets_present=false`, `smoke_state=(unset)`라 브로커 read-only smoke에는 진입하지 않았다.
+- **자동화 상태**: 같은 main 커밋 기준 `Released work ledger` run `29788767774`는 success,
+  `overall_status=OK`, `released_count=38`이다. 스펙 119는 아직 released 장부에 소비되지 않았다.
+  `Autonomous work execution loop` run `29788767874`는 success이며 현재 실행 가능한 안전 후보가 없다.
+  `Execution quality package` run `29788777678`은 success, `overall_status=OBSERVE`이고 KIS smoke는
+  secret 부재로 `(unset)`이다. money-path는 계속 `PREVIEW_ONLY`라 실주문은 불가하다.
+- **검증**: #529 최종 브랜치에서 `uv run pytest -q` 2669 passed, 5 skipped,
+  `uv run ruff check src tests scripts` 통과, `git diff --check` 통과, shell `bash -n` 통과,
+  workflow YAML parse 통과, `uv run python scripts/agent_harness_probe.py --strict` OK(14/14),
+  `uv run python scripts/check_handoff_facts.py` OK, PR 본문 품질 관문 통과. #529 merge 직후 main에서는
+  `HANDOFF.md` stale 때문에 하네스 관련 테스트 2개가 실패했고, 이 handoff 갱신이 그 원인을 바로잡는다.
+- **안전 경계**: 등급 3 안전 경계 변경이다. K1 포지션 한도/주문 제한과 K4 감사 로그 경계를 강화했다.
+  실제 주문·취소·실거래 재무장·자본 증액·자본 배분·whitelist/caps 확대·손실 예산·헌법·kernel manifest는
+  바꾸지 않았다.
+- **남은 위험**: 서버 `/root/.ssh/authorized_keys`에서 기존 공개키가 제거됐는지, 제한 deploy 사용자와
+  forced-command gateway가 설치됐는지는 이 세션에서 확인하지 못했다. 원격 배포/KIS smoke는 새 non-root
+  `VULTR_SSH_USER`/`VULTR_SSH_PRIVATE_KEY`가 생기기 전까지 진입하지 않아야 정상이다.
+- **상세 인계**: `HANDOFF-119-SECURITY-TRUST-BOUNDARY-HARDENING.md`.
 
 ## 최근 관찰 — 2026-07-15 KST (스펙 118 마무리와 KIS 열린 주문 smoke 보강)
 
@@ -6573,6 +6616,8 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 
 ## 과거 인수인계 파일 (참고용)
 
+- `HANDOFF-119-SECURITY-TRUST-BOUNDARY-HARDENING.md` — 스펙 119 보안 신뢰 경계 강화와 GitHub root SSH secret 제거 상태
+- `HANDOFF-118-KIS-OPEN-ORDER-SMOKE.md` — KIS 열린 주문 smoke와 스펙 118 마무리
 - `HANDOFF-117-OPERATOR-REPORT-LIVENESS-CONTRACT.md` — 스펙 118 운영자 이해 가능 보고 생존성 계약과 다음 후보 없음 상태
 - `HANDOFF-116-SUBMISSION-UNKNOWN-BROKER-LOOKUP.md` — 스펙 117 `SUBMISSION_UNKNOWN` broker lookup 복구와 실행 안전성 111~117 폐쇄
 - `HANDOFF-115-EXECUTION-SAFETY-STABILIZATION.md` — 스펙 111 operator-design 평행 실거래 진입점 격리, 스펙 112 주문 제출 불확실성 회복, 스펙 113 원자적 체결 원장, 스펙 114 계좌 노출 예약, 실행 안전성 후속 순서
