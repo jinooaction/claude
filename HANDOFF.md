@@ -33,15 +33,15 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `6a46735` — Merge pull request #529 from jinooaction/codex/security-trust-boundary-hardening |
-| main 테스트 | #529 merge 뒤 handoff 갱신 전에는 `HANDOFF.md` stale 때문에 하네스 테스트 2개가 실패했다. 이 handoff 갱신 후 `uv run pytest -q` 기준은 2669 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
-| main 린트 | #529 merge 뒤 handoff 갱신 기준 `uv run ruff check src tests` → All checks passed. |
+| 마지막 main 커밋 | `82296aa` — Merge pull request #531 from jinooaction/codex/resolve-security-server-residual |
+| main 테스트 | #531 merge 전 최종 검증 기준 `uv run pytest -q` → 2679 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
+| main 린트 | #531 merge 전 최종 검증 기준 `uv run ruff check src tests scripts` → All checks passed. |
 | 열린 PR | 없음. |
-| 출시 완료 스펙 | 최신 추가: 119(보안 신뢰 경계 강화: GitHub root SSH secret 제거, strict known_hosts, go-live fail-closed, canary hash 필수화, 배포 락·토큰 캐시·주문 불확실성·reduce-only·sidecar redaction 보강), 118(운영자가 이해 가능한 최종 보고 생존성 계약), 117(`SUBMISSION_UNKNOWN` broker lookup 복구), 116(단일 `ExecutionAuthority`와 계좌별 broker-write 잠금), 115(계좌 상태 불명확 시 신규 BUY 차단과 sell-only 저하 상태). 이전 스펙 058~114는 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
-| 골격 스펙 | 없음. `.specify/feature.json`은 최신 출시 스펙 `specs/119-security-trust-boundary-hardening`를 가리킨다. 스펙 119는 #529로 main에 들어갔다. |
-| 최근 출시 작업 | #529 보안 신뢰 경계 강화. #527 KIS live smoke에 최근 7일 주문/체결 조회와 열린 미체결 주문 0건 검사를 추가. #525 스펙 118 운영자 이해 가능 보고 생존성 계약. #523 released-work 장부 백필. #521 스펙 117 `SUBMISSION_UNKNOWN` broker lookup 복구. |
-| 활성 작업 | 열린 PR 없음. #529 main push에서 `Deploy on merge to main` run `29788767866`은 failure다. 이는 `VULTR_SSH_PRIVATE_KEY`와 `VULTR_SSH_USER`를 삭제해 GitHub root SSH 경로를 끊었기 때문에 원격 SSH가 exit 255로 멈춘 안전 중단이다. `Verify operator setup` run `29788767789`는 success이지만 push 진단만 통과했고, 수동 검증은 secrets가 다시 채워질 때까지 실패해야 정상이다. KIS smoke sidecar는 commit `6a46735`, `secrets_present=false`, `smoke_state=(unset)`로 원격 smoke에 진입하지 않았다. released-work run `29788767774`는 `overall_status=OK`, `released_count=38`이고 119는 아직 released 장부에 소비되지 않았다. autonomous-work run `29788767874`는 현재 실행 가능한 안전 후보가 없다고 본다. 돈 경로는 `PREVIEW_ONLY`, readiness `ACCUMULATING_EDGE`이며 실주문은 불가하다. |
-| 안전 경계 | #529는 등급 3 안전 경계 변경이다. K1 포지션 한도/주문 제한(`src/auto_invest/risk/gates.py`)과 K4 감사 로그(`src/auto_invest/persistence/audit.py`)를 강화했다. 실제 주문·취소·실거래 재무장·자본 배분·whitelist/caps 확대·손실 예산·헌법·kernel manifest는 바꾸지 않았다. GitHub-held root SSH user/private-key secrets는 제거됐다. 서버 `/root/.ssh/authorized_keys`의 기존 공개키 제거와 non-root forced-command deploy identity 설치는 운영자/서버 접근이 필요한 남은 조치다. 현재 돈 경로는 `PREVIEW_ONLY`다. |
+| 출시 완료 스펙 | 최신 추가: 119(보안 신뢰 경계 강화와 후속 SSH boundary repair: GitHub root SSH secret 제거, strict known_hosts, go-live fail-closed, canary hash 필수화, 배포 락·토큰 캐시·주문 불확실성·reduce-only·sidecar redaction, root key retire repair script, forced-command deploy gateway), 118(운영자가 이해 가능한 최종 보고 생존성 계약), 117(`SUBMISSION_UNKNOWN` broker lookup 복구), 116(단일 `ExecutionAuthority`와 계좌별 broker-write 잠금), 115(계좌 상태 불명확 시 신규 BUY 차단과 sell-only 저하 상태). 이전 스펙 058~114는 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
+| 골격 스펙 | 없음. `.specify/feature.json`은 최신 출시 스펙 `specs/119-security-trust-boundary-hardening`를 가리킨다. 스펙 119는 #529와 후속 #531로 main에 들어갔다. |
+| 최근 출시 작업 | #531 SSH boundary repair 후속 보강. #529 보안 신뢰 경계 강화. #527 KIS live smoke에 최근 7일 주문/체결 조회와 열린 미체결 주문 0건 검사 추가. #525 스펙 118 운영자 이해 가능 보고 생존성 계약. |
+| 활성 작업 | 열린 PR 없음. #531 main push에서 `Deploy on merge to main` run `29794726091`은 failure다. 이는 `VULTR_SSH_PRIVATE_KEY`와 `VULTR_SSH_USER`가 여전히 없어 gateway에 접속하지 못한 안전 중단이다. `Verify operator setup` run `29794726171`은 success이지만 push 진단은 non-blocking이며, missing secrets 때문에 수동 검증은 실패해야 정상이다. KIS smoke sidecar는 아직 commit `6a46735`, `secrets_present=false`, `smoke_state=(unset)`다. released-work run `29794726161`은 `overall_status=OK`, `released_count=38`이다. autonomous-work run `29794726117`은 현재 실행 가능한 안전 후보가 없다고 본다. 돈 경로는 `PREVIEW_ONLY`, `can_submit_real_orders=false`이며 실주문은 불가하다. |
+| 안전 경계 | #531은 등급 3 안전 경계 후속 변경이다. 서버 deploy SSH 경계와 배포 워크플로의 원격 실행 방식을 좁혔다. K1 주문 제한, K4 감사 로그, 헌법, kernel manifest는 이번 후속 PR에서 바꾸지 않았다. 실제 주문·취소·실거래 재무장·자본 배분·whitelist/caps 확대·손실 예산·비밀값은 바꾸지 않았다. 서버 실제 `/root/.ssh/authorized_keys` cleanup은 이 세션에서 SSH/API 권한이 없어 직접 수행하지 못했지만, `deploy/repair-ssh-boundary.sh`가 main에 들어갔다. 현재 돈 경로는 `PREVIEW_ONLY`다. |
 
 ## 돈 경로 상태 판독 규칙 (필수 — 스펙 062)
 
@@ -80,6 +80,47 @@ uv run python scripts/money_path_probe.py --manifest | while IFS=$'\t' read -r k
 done
 uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.live_money_state'
 ```
+
+## 최근 관찰 — 2026-07-21 KST (스펙 119 후속 SSH boundary repair)
+
+현재 `main` 최신 코드 머지는 `82296aa`(#531, SSH boundary repair 후속 보강)이다.
+기능 커밋은 `19052de`다.
+
+- **문제 정의**: #529는 GitHub-held root SSH secret을 제거했지만, 서버의 legacy root key retire와
+  non-root forced-command deploy identity 설치는 실제 서버 접근이 필요한 남은 조치였다. 이 세션에서는
+  로컬 SSH `root`, `auto-invest`, `gh-deploy`가 모두 `Permission denied`였고 GitHub/Vultr API secret도
+  없었다. 따라서 인증 경계를 우회하지 않고, repo 안에 검증 가능한 서버 repair 경로를 만드는 것이
+  가능한 최대 조치였다.
+- **구현 상태**: #531은 `deploy/repair-ssh-boundary.sh`를 추가했다. 이 스크립트는 fresh
+  `DEPLOY_PUBLIC_KEY`를 요구하고 private-key material을 거부하며, 기본 `gh-deploy` 사용자의
+  `authorized_keys`에 forced-command gateway만 설치한다. gateway는 `status`, `sync-units`,
+  `start-deploy`, `deploy-journal`만 허용하고 나머지는 거부한다. sudoers는 `visudo -cf`로 검증한 뒤
+  root-owned sync helper, deploy service start, deploy journal 조회만 허용한다. root key retire는
+  `github-actions@auto-invest`와 `/root/.ssh/auto_invest_gh`에 한정하며 unrelated root key를 지우지 않는다.
+- **워크플로 변화**: `deploy-on-merge.yml`은 원격 `sudo bash -s` 파이프와 one-off untracked quarantine
+  shell을 제거하고 gateway 고정 명령만 호출한다. `verify-operator-setup.yml`은 원격 임의 상태 조회 shell
+  대신 gateway `status`만 호출한다.
+- **post-merge 실행**: PR #531은 2026-07-21T02:01:39Z에 merge됐고 merge commit은
+  `82296aa86aa45be6050770a73ea19fccd61452b8`다. `Deploy on merge to main` run `29794726091`은
+  failure다. 이는 `VULTR_SSH_PRIVATE_KEY`와 `VULTR_SSH_USER`가 아직 없어서 gateway 접속 자체가
+  불가능한 안전 중단이다. `Verify operator setup` run `29794726171`은 push 이벤트의 non-blocking
+  diagnostic으로 success지만, missing secrets 때문에 수동 검증은 실패해야 정상이다.
+- **자동화 상태**: `Released work ledger` run `29794726161`은 success, `overall_status=OK`,
+  `released_count=38`이다. `Autonomous work execution loop` run `29794726117`은 success이며 현재 실행 가능한
+  안전 후보가 없다. KIS smoke sidecar는 #531에서 새로 갱신되지 않았고, 최신 기록은 commit `6a46735`,
+  `secrets_present=false`, `smoke_state=(unset)`다. money-path는 `PREVIEW_ONLY`,
+  `can_submit_real_orders=false`다.
+- **검증**: #531 최종 브랜치에서 `uv run pytest -q` 2679 passed, 5 skipped,
+  `uv run ruff check src tests scripts` 통과, `bash -n` 통과, workflow YAML parse 통과,
+  `git diff --check` 통과, 좁은 보안 회귀 36 passed, `uv run python scripts/agent_harness_probe.py --strict`
+  OK(14/14), `uv run python scripts/check_handoff_facts.py` OK, PR 본문 품질 관문 통과.
+- **안전 경계**: 등급 3 안전 경계 후속 변경이다. 서버 deploy SSH 경계와 배포 워크플로 원격 실행 방식을
+  좁혔다. K1 주문 제한, K4 감사 로그, 헌법, kernel manifest, 실거래 모드, 자본, 주문, KIS secret,
+  whitelist/caps, 손실 예산은 바꾸지 않았다.
+- **남은 현실**: 실제 서버에서 `repair-ssh-boundary.sh`를 실행하지 못했다. 다음 서버 접근 가능 세션은
+  root 콘솔 또는 검증된 out-of-band root SSH에서 이 스크립트를 실행한 뒤 GitHub에 non-root
+  `VULTR_SSH_USER`/`VULTR_SSH_PRIVATE_KEY`를 등록하고 수동 `Verify operator setup`을 돌리면 된다.
+- **상세 인계**: `HANDOFF-120-SSH-BOUNDARY-REPAIR.md`.
 
 ## 최근 관찰 — 2026-07-21 KST (스펙 119 보안 신뢰 경계 강화)
 
@@ -6616,6 +6657,7 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 
 ## 과거 인수인계 파일 (참고용)
 
+- `HANDOFF-120-SSH-BOUNDARY-REPAIR.md` — 스펙 119 후속 SSH boundary repair와 forced-command deploy gateway 경로
 - `HANDOFF-119-SECURITY-TRUST-BOUNDARY-HARDENING.md` — 스펙 119 보안 신뢰 경계 강화와 GitHub root SSH secret 제거 상태
 - `HANDOFF-118-KIS-OPEN-ORDER-SMOKE.md` — KIS 열린 주문 smoke와 스펙 118 마무리
 - `HANDOFF-117-OPERATOR-REPORT-LIVENESS-CONTRACT.md` — 스펙 118 운영자 이해 가능 보고 생존성 계약과 다음 후보 없음 상태
