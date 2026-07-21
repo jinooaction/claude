@@ -42,6 +42,7 @@ concurrency:
 jobs:
   release-halt:
     runs-on: ubuntu-latest
+    environment: production
     timeout-minutes: 10
     steps:
       - name: Validate confirmation (workflow_dispatch only)
