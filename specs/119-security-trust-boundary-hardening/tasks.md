@@ -17,3 +17,5 @@
 - [x] T015 Add a server-side SSH boundary repair script for root key retirement,
   forced-command deploy identity provisioning, and gateway-only deploy workflow
   calls.
+- [x] T016 Require the GitHub `production` environment for live mode, real-order,
+  and halt-release workflows.

@@ -17,6 +17,8 @@ As the operator, I need GitHub-triggered remote operations to refuse unsafe SSH,
 - Server repair provisions a non-root deploy user behind a forced-command
   gateway and removes the legacy `github-actions@auto-invest` root key entry
   without deleting unrelated root keys.
+- Live-money and halt-release workflows require the GitHub `production`
+  environment before the job starts.
 - Workflow dispatch numeric values used in remote commands are validated before use.
 - go-live only proceeds when market state is explicitly closed and the target revision matches.
 
@@ -63,6 +65,8 @@ As the operator, I need local token cache and deploy locks to be written atomica
   key, reject private-key material, install a forced-command gateway for a
   non-root deploy user, validate narrow sudoers before installation, and retire
   only the legacy GitHub root key entry or key files.
+- **FR-013**: GitHub workflows that can switch live mode, place real orders, or
+  release halt must declare the protected `production` environment.
 
 ## Non-Goals
 

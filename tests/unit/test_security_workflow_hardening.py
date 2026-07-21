@@ -181,6 +181,18 @@ def test_deploy_workflow_invokes_only_gateway_commands():
     assert "sudo journalctl -u auto-invest-deploy.service" not in workflow
 
 
+def test_live_money_workflows_require_production_environment():
+    protected = (
+        "go-live-canary.yml",
+        "rebalance-live-canary.yml",
+        "rebalance-micro-gtaa-canary.yml",
+        "release-halt.yml",
+    )
+    for name in protected:
+        workflow = (WORKFLOWS / name).read_text(encoding="utf-8")
+        assert "\n    environment: production\n" in workflow
+
+
 def test_public_sidecar_redactor_masks_sensitive_fields():
     raw = """
 | account_no | 1234567801 |
