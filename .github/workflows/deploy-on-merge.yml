@@ -51,22 +51,10 @@ jobs:
           KNOWN_HOSTS: ${{ secrets.VULTR_SSH_KNOWN_HOSTS }}
           SSH_USER: ${{ secrets.VULTR_SSH_USER }}
         run: |
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          echo "${KEY}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh_user="${SSH_USER:-${USER:-${VULTR_SSH_USER:-}}}"
-          if [[ "${ssh_user}" == "root" ]]; then
-            echo "::error::VULTR_SSH_USER=root is refused. Use a restricted deploy user."
-            exit 2
-          fi
-          known_hosts="${KNOWN_HOSTS:-${VULTR_SSH_KNOWN_HOSTS:-}}"
-          if [[ -z "${known_hosts}" ]]; then
-            echo "::error::missing VULTR_SSH_KNOWN_HOSTS"
-            exit 2
-          fi
-          printf '%s\n' "${known_hosts}" > ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/known_hosts
+          VULTR_SSH_PRIVATE_KEY="${KEY:-}" \
+          VULTR_SSH_KNOWN_HOSTS="${KNOWN_HOSTS:-}" \
+          VULTR_SSH_USER="${SSH_USER:-}" \
+          ./scripts/ci_secure_ssh.sh
 
       - name: Sync systemd units + sudoers (install/refresh + enable timers)
         id: units

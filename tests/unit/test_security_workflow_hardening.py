@@ -55,9 +55,51 @@ def test_ssh_workflows_refuse_root_user():
     violations = [
         path.name
         for path, text in _workflow_texts().items()
-        if "VULTR_SSH_USER" in text and "VULTR_SSH_USER=root is refused" not in text
+        if "VULTR_SSH_USER" in text
+        and "VULTR_SSH_USER=root is refused" not in text
+        and "./scripts/ci_secure_ssh.sh" not in text
     ]
     assert violations == []
+
+
+def test_ssh_install_steps_use_shared_secret_validator():
+    violations: list[str] = []
+    for path, text in _workflow_texts().items():
+        if path.name == "verify-operator-setup.yml":
+            continue  # 이 워크플로는 키 줄바꿈 복구 자체를 검증하는 특수 경로다.
+        if "name: Install SSH key" in text and "./scripts/ci_secure_ssh.sh" not in text:
+            violations.append(path.name)
+    assert violations == []
+
+
+def test_shared_ssh_helper_rejects_missing_user_and_key(tmp_path, monkeypatch):
+    script = REPO_ROOT / "scripts" / "ci_secure_ssh.sh"
+    monkeypatch.setenv("HOME", str(tmp_path))
+    missing_user = subprocess.run(
+        [str(script)],
+        env={
+            "VULTR_SSH_PRIVATE_KEY": "key",
+            "VULTR_SSH_KNOWN_HOSTS": "host key",
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    missing_key = subprocess.run(
+        [str(script)],
+        env={
+            "VULTR_SSH_USER": "gh-deploy",
+            "VULTR_SSH_KNOWN_HOSTS": "host key",
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert missing_user.returncode == 2
+    assert "missing VULTR_SSH_USER" in missing_user.stderr
+    assert missing_key.returncode == 2
+    assert "missing VULTR_SSH_PRIVATE_KEY" in missing_key.stderr
 
 
 def test_go_live_script_fails_closed_and_restores_full_env():

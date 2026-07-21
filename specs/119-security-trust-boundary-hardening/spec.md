@@ -19,6 +19,8 @@ As the operator, I need GitHub-triggered remote operations to refuse unsafe SSH,
   without deleting unrelated root keys.
 - Live-money and halt-release workflows require the GitHub `production`
   environment before the job starts.
+- SSH workflows fail before any `ssh` command when deploy user, private key, or
+  known-host material is absent.
 - Workflow dispatch numeric values used in remote commands are validated before use.
 - go-live only proceeds when market state is explicitly closed and the target revision matches.
 
@@ -67,6 +69,9 @@ As the operator, I need local token cache and deploy locks to be written atomica
   only the legacy GitHub root key entry or key files.
 - **FR-013**: GitHub workflows that can switch live mode, place real orders, or
   release halt must declare the protected `production` environment.
+- **FR-014**: GitHub SSH setup must use the shared secret validator and fail
+  clearly when `VULTR_SSH_USER`, `VULTR_SSH_PRIVATE_KEY`, or
+  `VULTR_SSH_KNOWN_HOSTS` is missing.
 
 ## Non-Goals
 
