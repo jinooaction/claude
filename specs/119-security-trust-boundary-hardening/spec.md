@@ -14,6 +14,9 @@ As the operator, I need GitHub-triggered remote operations to refuse unsafe SSH,
 - Workflows pin third-party Actions by full commit SHA.
 - SSH workflows require a pre-provisioned host key and do not accept a new host key silently.
 - Workflows reject root SSH users at runtime.
+- Server repair provisions a non-root deploy user behind a forced-command
+  gateway and removes the legacy `github-actions@auto-invest` root key entry
+  without deleting unrelated root keys.
 - Workflow dispatch numeric values used in remote commands are validated before use.
 - go-live only proceeds when market state is explicitly closed and the target revision matches.
 
@@ -56,11 +59,18 @@ As the operator, I need local token cache and deploy locks to be written atomica
 - **FR-009**: Broker unknown-submission recovery must compare order type, price when known, and submit-time proximity when broker data supports it.
 - **FR-010**: Halt and per-trade caps must distinguish exposure-increasing orders from verified reduce-only orders.
 - **FR-011**: Missing current marks for open positions must block new BUY risk.
+- **FR-012**: Server-side SSH boundary repair must require a fresh deploy public
+  key, reject private-key material, install a forced-command gateway for a
+  non-root deploy user, validate narrow sudoers before installation, and retire
+  only the legacy GitHub root key entry or key files.
 
 ## Non-Goals
 
 - Do not place real orders or change live capital allocation.
 - Do not rotate production secrets from this repository-only session.
+- Do not bypass out-of-band server authentication; if SSH, Vultr API, or console
+  access is unavailable, ship the verified repair script rather than weakening
+  the boundary.
 - Do not delete public history already published before this feature.
 - Do not change the constitution or kernel manifest.
 

@@ -84,12 +84,13 @@ def test_runs_git_as_repo_owner_not_root():
     assert "sudo -u auto-invest git" in body
 
 
-def test_workflow_pipes_script_and_checks_out():
+def test_workflow_uses_gateway_sync_command():
     wf = (REPO_ROOT / ".github" / "workflows" / "deploy-on-merge.yml").read_text(
         encoding="utf-8"
     )
-    assert "actions/checkout" in wf, "runner must check out to pipe the script"
-    assert "'sudo bash -s' < deploy/sync-units.sh" in wf
+    assert "actions/checkout" in wf
+    assert '"sync-units"' in wf
+    assert "'sudo bash -s' < deploy/sync-units.sh" not in wf
     # Unit-sync result is surfaced but independent of the code-deploy exit.
     assert "units_exit" in wf
 
@@ -153,3 +154,13 @@ def test_deploy_workflow_syncs_units_before_deploy():
     units_idx = wf.index("id: units")
     deploy_idx = wf.index("id: deploy")
     assert units_idx < deploy_idx, "units/sudoers sync must precede the deploy step"
+
+
+def test_deploy_workflow_uses_gateway_deploy_commands():
+    wf = (REPO_ROOT / ".github" / "workflows" / "deploy-on-merge.yml").read_text(
+        encoding="utf-8"
+    )
+    assert '"start-deploy"' in wf
+    assert '"deploy-journal"' in wf
+    assert "sudo systemctl start auto-invest-deploy.service" not in wf
+    assert "sudo journalctl -u auto-invest-deploy.service" not in wf
