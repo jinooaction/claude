@@ -2,7 +2,7 @@
 
 ## Summary
 
-Harden the trust boundary around public GitHub workflows, remote server execution, canary promotion, deploy locking, token caching, order recovery, exposure-reducing sells, and public sidecar evidence. The implementation keeps the system read-only/dry-run from this session, blocks newly identified fail-open paths, removes the GitHub-held root SSH user/private-key secrets, and leaves server-side `authorized_keys` cleanup plus non-root deploy-user provisioning as the remaining operator action.
+Harden the trust boundary around public GitHub workflows, remote server execution, canary promotion, deploy locking, token caching, order recovery, exposure-reducing sells, and public sidecar evidence. The implementation keeps the system read-only/dry-run from this session, blocks newly identified fail-open paths, removes the GitHub-held root SSH user/private-key secrets, and adds a root-run server repair script for retiring the old root key while provisioning a non-root forced-command deploy identity.
 
 ## Technical Context
 
@@ -31,6 +31,10 @@ Harden the trust boundary around public GitHub workflows, remote server executio
 8. Strengthen unknown-order broker recovery matching with type, price, and timing evidence.
 9. Add reduce-only classification to risk gates and pass current position quantity from the order router.
 10. Treat missing marks for open positions as degraded risk for new BUY orders.
+11. Install a server-side repair script that creates the non-root deploy user,
+    installs a root-owned deploy gateway, validates narrow sudoers with
+    `visudo`, retires the old `github-actions@auto-invest` root key entry, and
+    moves deploy-on-merge/verify workflows to fixed gateway commands.
 
 ## Validation
 
@@ -41,6 +45,7 @@ Harden the trust boundary around public GitHub workflows, remote server executio
 - `uv run pytest tests/unit/test_fill_sync.py -q`
 - `uv run pytest tests/unit/test_risk_gates.py -q`
 - `uv run pytest tests/unit/test_security_workflow_hardening.py -q`
+- `uv run pytest tests/unit/test_ssh_boundary_repair.py -q`
 - `uv run pytest -q`
 - `uv run ruff check src tests`
 - `git diff --check`
@@ -49,4 +54,4 @@ Harden the trust boundary around public GitHub workflows, remote server executio
 
 ## Rollback
 
-Revert the feature PR. This restores the previous workflow behavior, canary gate, lock, cache, and order-risk behavior. The GitHub-held root SSH user/private-key secrets were intentionally removed outside git and would need an explicit operator decision to recreate as non-root deploy credentials. Server key cleanup remains operator-side.
+Revert the feature PR. This restores the previous workflow behavior, canary gate, lock, cache, and order-risk behavior. The GitHub-held root SSH user/private-key secrets were intentionally removed outside git and would need an explicit operator decision to recreate as non-root deploy credentials. If the server repair script has already been run, remove the `gh-deploy` authorized key, `/usr/local/sbin/auto-invest-deploy-gateway`, `/usr/local/sbin/auto-invest-sync-units`, and `/etc/sudoers.d/auto-invest-gh-deploy` through the same out-of-band root channel.

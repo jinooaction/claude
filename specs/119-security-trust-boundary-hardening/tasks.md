@@ -14,3 +14,6 @@
 - [x] T012 Add focused regression tests and workflow scanners.
 - [x] T013 Run focused and full validation.
 - [x] T014 Prepare the PR body, commit, push, open PR, and merge if gates allow.
+- [x] T015 Add a server-side SSH boundary repair script for root key retirement,
+  forced-command deploy identity provisioning, and gateway-only deploy workflow
+  calls.

@@ -20,5 +20,9 @@ echo "  - VULTR_SSH_USER 는 root 가 아니어야 합니다."
 echo "  - VULTR_SSH_KNOWN_HOSTS 에 서버의 고정 SSH host key 를 등록해야 합니다."
 echo "  - 서버에는 제한된 deploy 사용자와 root 소유 고정 명령 게이트를 별도 구성해야 합니다."
 echo "  - 기존 GitHub용 root 키는 폐기하고 /root/.ssh/authorized_keys 에서 제거하세요."
+echo
+echo "대체 경로:"
+echo "  fresh deploy 공개키를 만든 뒤 root 콘솔 또는 검증된 out-of-band SSH 에서"
+echo "  deploy/repair-ssh-boundary.sh 를 DEPLOY_PUBLIC_KEY 와 함께 실행하세요."
 echo "============================================================"
 exit 2

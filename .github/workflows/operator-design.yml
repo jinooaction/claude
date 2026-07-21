@@ -10,10 +10,11 @@ name: Operator design (auto-invest)
 #
 # 사전 준비 (운영자가 한 번만, 자세한 가이드는 docs/OPERATOR_GITHUB_ACTIONS_DESIGN.md):
 #
-#   1. 인스턴스에 SSH 접속용 공개키 등록:
+#   1. 인스턴스에 제한 SSH 경계 설치:
 #      - 운영자 노트북에서 ssh-keygen -t ed25519 -f ~/.ssh/auto_invest_gh
-#      - 공개키(~/.ssh/auto_invest_gh.pub)를 제한된 deploy 사용자의
-#        ~/.ssh/authorized_keys 에 append (한 번만). root 사용자는 금지.
+#      - root 콘솔 또는 검증된 out-of-band SSH 에서 deploy/repair-ssh-boundary.sh 를
+#        DEPLOY_PUBLIC_KEY 와 함께 실행한다. 이 스크립트가 제한 deploy 사용자와
+#        forced-command gateway 를 설치한다. root 사용자는 금지.
 #
 #   2. GitHub Secrets 5개 등록 (Settings → Secrets and variables → Actions):
 #        Name: VULTR_SSH_HOST          Value: 202.182.125.132 (또는 인스턴스 IP)

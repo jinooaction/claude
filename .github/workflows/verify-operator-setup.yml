@@ -9,8 +9,8 @@ name: Verify operator setup
 #   1. GitHub Secrets 5개 등록 여부
 #      (VULTR_SSH_HOST/USER/PRIVATE_KEY/PORT/KNOWN_HOSTS)
 #   2. 키 형식 (개인키 BEGIN/END 마커)
-#   3. SSH 접속 시도 (echo OK + hostname)
-#   4. 인스턴스 안에 operator_design.sh 존재 여부 + git 상태
+#   3. SSH 접속 시도 (forced-command gateway 의 status 명령)
+#   4. gateway 가 root 소유 고정 명령 경계로 설치됐는지 확인
 #
 # design 명령은 호출하지 않음 (Anthropic API 비용 0 — 셋업 검증만).
 
@@ -295,14 +295,7 @@ jobs:
               -p "${port}" \
               -i ~/.ssh/id_ed25519 \
               "${USER}@${HOST}" \
-              "echo SSH_OK; hostname; uname -srm; \
-               echo INSTALL_DIR_EXISTS=\$(test -d /opt/auto-invest && echo yes || echo no); \
-               echo OPERATOR_DESIGN_SH=\$(test -x /opt/auto-invest/scripts/operator_design.sh && echo yes || echo no); \
-               echo CONFIG_RULES_TOML=\$(test -f /opt/auto-invest/config/rules.toml && echo yes || echo no); \
-               echo POLKIT_RULE=\$(test -f /etc/polkit-1/rules.d/50-auto-invest.rules && echo yes || echo no); \
-               echo ENV_KIS_KEY_SET=\$(grep -c '^KIS_APP_KEY=[^ ]' /opt/auto-invest/.env 2>/dev/null || echo 0); \
-               echo ENV_ANTHROPIC_KEY_SET=\$(grep -c '^ANTHROPIC_API_KEY=[^ ]' /opt/auto-invest/.env 2>/dev/null || echo 0); \
-               echo MAIN_SHA=\$(cd /opt/auto-invest && git rev-parse HEAD 2>/dev/null || echo unknown)" 2>&1)
+              "status" 2>&1)
           ssh_exit=$?
           {
               echo "ssh_exit=${ssh_exit}"

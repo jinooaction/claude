@@ -6,13 +6,10 @@ name: Deploy on merge to main
 # 뿐이다. 같은 서비스를 `auto-invest-deploy.timer` 가 30분마다(장중 제외) 돌리므로,
 # 이 워크플로우가 실패하거나 머지가 장중에 일어나도 타이머가 안전망으로 받는다.
 #
-# 배포 *전에* deploy/sync-units.sh 를 서버 sudo bash 에 파이프해 systemd 유닛
-# (.service/.timer) + sudoers 드롭인(auto-invest-deploy.sudoers)을 설치한다. 배포 상태기계는
-# '새 유닛/sudoers 설치'를 하지 않으므로 그 빈틈을 메운다 — 특히 sudoers 가 없으면 배포가
-# phase=stop_worker 에서 워커를 `sudo` 로 못 멈춰 롤백하므로, 반드시 배포 *앞*에서 동기화해야
-# 같은 실행에서 워커 교체가 성공한다. 유닛 동기화는 워커를 재시작하지 않고(주문 라우팅 무관)
-# git show 로 작업트리도 안 건드리므로 장중에도 안전 — 배포가 "장중 연기"여도 유닛/타이머/
-# sudoers 는 이번 실행에서 갱신된다.
+# 배포 *전에* 서버에 설치된 forced-command gateway 의 `sync-units` 고정 명령을
+# 호출해 systemd 유닛(.service/.timer) + sudoers 드롭인을 설치한다. GitHub runner 는
+# 더 이상 임의 원격 셸이나 `sudo bash -s` 를 밀어 넣지 않는다. 서버 쪽 gateway 설치는
+# deploy/repair-ssh-boundary.sh 가 담당한다.
 #
 # 안전 속성 (자세한 설계는 deploy/AUTO-DEPLOY.md):
 #   - 워커는 dry-run 모드 — 배포는 코드 교체+재시작이며 실주문을 내지 않는다.
@@ -45,7 +42,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Checkout (to pipe deploy/sync-units.sh over SSH)
+      - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Install SSH key
@@ -71,43 +68,6 @@ jobs:
           printf '%s\n' "${known_hosts}" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
-      # 멈춘 배포 1회 풀어주기 (닭-달걀): 서버의 옛 배포 상태기계는 추적 안 된 생성 파일
-      # (튜너 룰 스냅샷 config/rules_auto_*.toml, reports/)에도 "working tree dirty" 로 배포를
-      # 거부해 서버가 옛 SHA 에 묶여 있었다. git reset --hard 는 추적 안 된 파일을 건드리지
-      # 않으므로 이 파일들을 안전하게 격리(삭제 아님 — data/ 는 gitignore 라 더티 유발 안 함)해
-      # 멈춘 배포를 풀어준다. 이 커밋이 새 가드(--untracked-files=no)를 서버에 올리고 나면
-      # 이후엔 추적 안 된 파일이 배포를 막지 못한다(이 스텝은 그 뒤로 무해한 no-op).
-      # 추적된(=실제 작업) 변경이 있으면 절대 격리하지 않고 건너뛴다(운영자 수동 검토).
-      - name: Unblock stuck deploy (quarantine untracked artifacts on server)
-        id: unblock
-        env:
-          HOST: ${{ secrets.VULTR_SSH_HOST }}
-          USER: ${{ secrets.VULTR_SSH_USER }}
-          PORT: ${{ secrets.VULTR_SSH_PORT }}
-        run: |
-          set +e
-          port="${PORT:-22}"
-          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
-              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" '
-            cd /opt/auto-invest || exit 0
-            if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
-              echo "[unblock] tracked changes present — skipping quarantine (manual review):"
-              git status --porcelain --untracked-files=no
-              exit 0
-            fi
-            n=$(git ls-files --others --exclude-standard | wc -l)
-            if [ "$n" -eq 0 ]; then echo "[unblock] working tree already clean — no-op"; exit 0; fi
-            q="data/deploy-quarantine/$(date -u +%Y%m%dT%H%M%SZ)"
-            mkdir -p "$q"
-            git ls-files --others --exclude-standard | while IFS= read -r p; do
-              mkdir -p "$q/$(dirname "$p")"; mv "$p" "$q/$p"
-            done
-            echo "[unblock] quarantined $n untracked file(s) to $q (non-destructive)"
-            git status --porcelain
-          ' > /tmp/unblock.txt 2>&1
-          echo "unblock_exit=$?" >> "$GITHUB_OUTPUT"
-          cat /tmp/unblock.txt
-
       - name: Sync systemd units + sudoers (install/refresh + enable timers)
         id: units
         env:
@@ -117,16 +77,13 @@ jobs:
         run: |
           set +e
           port="${PORT:-22}"
-          # 배포 *앞*에서 실행한다(중요): 배포 상태기계는 새 systemd 유닛/sudoers 를 설치하지
-          # 않으므로 그 빈틈을 메운다. 특히 sudoers(auto-invest-deploy.sudoers)가 없으면 배포가
-          # stop_worker 에서 `sudo` 인가를 못 받는다 → 먼저 깔아야 같은 실행의 배포가 워커를
-          # 교체할 수 있다. 워커는 재시작하지 않고 git show 로 작업트리도 안 건드리므로 장중에도 안전.
+          # 배포 *앞*에서 실행한다(중요): 서버 gateway 의 고정 `sync-units` 명령만 호출한다.
           ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts \
               -o ConnectTimeout=15 \
               -p "${port}" \
               -i ~/.ssh/id_ed25519 \
               "${USER}@${HOST}" \
-              'sudo bash -s' < deploy/sync-units.sh \
+              "sync-units" \
               > /tmp/units_sync.txt 2>&1
           units_exit=$?
           cat /tmp/units_sync.txt
@@ -142,15 +99,14 @@ jobs:
         run: |
           set +e
           port="${PORT:-22}"
-          # oneshot 서비스라 systemctl start 는 완료까지 블록하고 배포 결과 코드를
-          # 그대로 돌려준다. 이어 journal 마지막 120줄을 수집한다. (sudoers 는 위 units
-          # 스텝에서 이미 설치됐으므로 stop_worker/start_worker 가 sudo 로 인가된다.)
+          # oneshot 서비스라 start-deploy 는 완료까지 블록하고 배포 결과 코드를
+          # 그대로 돌려준다. 이어 journal 마지막 120줄을 수집한다.
           ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts \
               -o ConnectTimeout=15 \
               -p "${port}" \
               -i ~/.ssh/id_ed25519 \
               "${USER}@${HOST}" \
-              "sudo systemctl start auto-invest-deploy.service" \
+              "start-deploy" \
               > /tmp/deploy_start.txt 2>&1
           start_exit=$?
           ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts \
@@ -158,7 +114,7 @@ jobs:
               -p "${port}" \
               -i ~/.ssh/id_ed25519 \
               "${USER}@${HOST}" \
-              "sudo journalctl -u auto-invest-deploy.service -n 120 --no-pager" \
+              "deploy-journal" \
               > /tmp/deploy_journal.txt 2>&1
           cat /tmp/deploy_start.txt
           cat /tmp/deploy_journal.txt

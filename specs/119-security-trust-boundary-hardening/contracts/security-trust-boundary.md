@@ -12,6 +12,11 @@
 - Candidate deployment requires exact local and remote revision agreement where the workflow provides an expected SHA.
 - Canary promotion requires a recent `CANARY_PASSED` row whose candidate and ruleset hashes both match.
 - Deploy lock acquisition must be atomic and process-bound.
+- Server SSH repair must provision a non-root deploy user with an
+  `authorized_keys` forced command, root-owned gateway commands, and
+  `visudo`-validated sudoers limited to deploy sync/start/journal actions.
+- Deploy and operator setup verification workflows must call fixed gateway
+  commands instead of sending arbitrary remote shell scripts.
 
 ## Trading Safety Contract
 

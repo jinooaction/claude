@@ -119,9 +119,10 @@ spec 006 배포 상태기계 (안전 단계 전부 통과해야 워커 교체)
 
 - 저장소 시크릿: `VULTR_SSH_PRIVATE_KEY`, `VULTR_SSH_HOST`, `VULTR_SSH_USER`,
   `VULTR_SSH_KNOWN_HOSTS`, `VULTR_SSH_PORT` (trigger-design.yml 이 쓰는 것과
-  동일).
-- 인스턴스에 `auto-invest-deploy.service` 설치 + SSH 사용자가 `sudo systemctl
-  start auto-invest-deploy.service` 같은 제한된 명령 권한 보유.
+  동일). `VULTR_SSH_USER`는 root가 아니어야 한다.
+- 인스턴스에 `deploy/repair-ssh-boundary.sh`로 forced-command deploy gateway가
+  설치되어 있어야 한다. GitHub Actions는 gateway의 `sync-units`,
+  `start-deploy`, `deploy-journal` 고정 명령만 호출한다.
 
 ## 이 파이프라인이 하지 않는 것
 

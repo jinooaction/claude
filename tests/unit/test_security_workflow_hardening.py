@@ -160,6 +160,27 @@ def test_verify_operator_setup_only_fails_manual_verification():
     )
 
 
+def test_verify_operator_setup_uses_gateway_status_command():
+    workflow = (WORKFLOWS / "verify-operator-setup.yml").read_text(encoding="utf-8")
+    ssh_step = workflow.split("- name: Test SSH connection", 1)[1]
+
+    assert '"status" 2>&1)' in ssh_step
+    assert "AUTO_INVEST_GATEWAY_OK" not in workflow  # marker is emitted by the server gateway
+    assert "echo SSH_OK" not in ssh_step
+    assert "grep -c '^KIS_APP_KEY" not in ssh_step
+
+
+def test_deploy_workflow_invokes_only_gateway_commands():
+    workflow = (WORKFLOWS / "deploy-on-merge.yml").read_text(encoding="utf-8")
+
+    assert '"sync-units"' in workflow
+    assert '"start-deploy"' in workflow
+    assert '"deploy-journal"' in workflow
+    assert "'sudo bash -s'" not in workflow
+    assert "sudo systemctl start auto-invest-deploy.service" not in workflow
+    assert "sudo journalctl -u auto-invest-deploy.service" not in workflow
+
+
 def test_public_sidecar_redactor_masks_sensitive_fields():
     raw = """
 | account_no | 1234567801 |
