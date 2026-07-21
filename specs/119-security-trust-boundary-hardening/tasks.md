@@ -19,3 +19,5 @@
   calls.
 - [x] T016 Require the GitHub `production` environment for live mode, real-order,
   and halt-release workflows.
+- [x] T017 Route SSH workflow setup through the shared secret validator so
+  missing deploy user, private key, or known-host material fails before `ssh`.

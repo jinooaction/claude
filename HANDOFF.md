@@ -29,19 +29,19 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 상세 규칙은 Codex 세션에서는 `AGENTS.md`, Claude 세션에서는 `CLAUDE.md` 본문 참조.
 
-## 한눈 요약표 — 2026-07-21 KST 최신 코드 main 기준
+## 한눈 요약표 — 2026-07-22 KST 최신 코드 main 기준
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `82296aa` — Merge pull request #531 from jinooaction/codex/resolve-security-server-residual |
-| main 테스트 | #531 merge 전 최종 검증 기준 `uv run pytest -q` → 2679 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
-| main 린트 | #531 merge 전 최종 검증 기준 `uv run ruff check src tests scripts` → All checks passed. |
-| 열린 PR | 없음. |
-| 출시 완료 스펙 | 최신 추가: 119(보안 신뢰 경계 강화와 후속 SSH boundary repair: GitHub root SSH secret 제거, strict known_hosts, go-live fail-closed, canary hash 필수화, 배포 락·토큰 캐시·주문 불확실성·reduce-only·sidecar redaction, root key retire repair script, forced-command deploy gateway), 118(운영자가 이해 가능한 최종 보고 생존성 계약), 117(`SUBMISSION_UNKNOWN` broker lookup 복구), 116(단일 `ExecutionAuthority`와 계좌별 broker-write 잠금), 115(계좌 상태 불명확 시 신규 BUY 차단과 sell-only 저하 상태). 이전 스펙 058~114는 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
-| 골격 스펙 | 없음. `.specify/feature.json`은 최신 출시 스펙 `specs/119-security-trust-boundary-hardening`를 가리킨다. 스펙 119는 #529와 후속 #531로 main에 들어갔다. |
-| 최근 출시 작업 | #531 SSH boundary repair 후속 보강. #529 보안 신뢰 경계 강화. #527 KIS live smoke에 최근 7일 주문/체결 조회와 열린 미체결 주문 0건 검사 추가. #525 스펙 118 운영자 이해 가능 보고 생존성 계약. |
-| 활성 작업 | 열린 PR 없음. #531 main push에서 `Deploy on merge to main` run `29794726091`은 failure다. 이는 `VULTR_SSH_PRIVATE_KEY`와 `VULTR_SSH_USER`가 여전히 없어 gateway에 접속하지 못한 안전 중단이다. `Verify operator setup` run `29794726171`은 success이지만 push 진단은 non-blocking이며, missing secrets 때문에 수동 검증은 실패해야 정상이다. KIS smoke sidecar는 아직 commit `6a46735`, `secrets_present=false`, `smoke_state=(unset)`다. released-work run `29794726161`은 `overall_status=OK`, `released_count=38`이다. autonomous-work run `29794726117`은 현재 실행 가능한 안전 후보가 없다고 본다. 돈 경로는 `PREVIEW_ONLY`, `can_submit_real_orders=false`이며 실주문은 불가하다. |
-| 안전 경계 | #531은 등급 3 안전 경계 후속 변경이다. 서버 deploy SSH 경계와 배포 워크플로의 원격 실행 방식을 좁혔다. K1 주문 제한, K4 감사 로그, 헌법, kernel manifest는 이번 후속 PR에서 바꾸지 않았다. 실제 주문·취소·실거래 재무장·자본 배분·whitelist/caps 확대·손실 예산·비밀값은 바꾸지 않았다. 서버 실제 `/root/.ssh/authorized_keys` cleanup은 이 세션에서 SSH/API 권한이 없어 직접 수행하지 못했지만, `deploy/repair-ssh-boundary.sh`가 main에 들어갔다. 현재 돈 경로는 `PREVIEW_ONLY`다. |
+| 마지막 main 커밋 | `2fe873e` — Merge pull request #533 from jinooaction/codex/security-production-environment |
+| main 테스트 | #533 merge 전 최종 검증 기준 `uv run pytest` → 2680 passed, 5 skipped. 현재 `codex/ssh-secret-fail-closed` 브랜치에서 stale HANDOFF 보정과 SSH secret fail-closed 보강을 포함해 `uv run pytest` → 2682 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
+| main 린트 | #533 merge 전 최종 검증 기준 및 현재 보강 브랜치 기준 `uv run ruff check src tests` → All checks passed. |
+| 열린 PR | 없음(이 문서 편집 시점). 현재 로컬 브랜치 `codex/ssh-secret-fail-closed`에서 SSH 비밀값 누락 조기 차단 보강을 준비 중이다. |
+| 출시 완료 스펙 | 최신 추가: 119(보안 신뢰 경계 강화와 후속 SSH boundary repair 및 live-money workflow 보호 환경: GitHub root SSH secret 제거, strict known_hosts, go-live fail-closed, canary hash 필수화, 배포 락·토큰 캐시·주문 불확실성·reduce-only·sidecar redaction, root key retire repair script, forced-command deploy gateway, `production` 보호 환경), 118(운영자가 이해 가능한 최종 보고 생존성 계약), 117(`SUBMISSION_UNKNOWN` broker lookup 복구), 116(단일 `ExecutionAuthority`와 계좌별 broker-write 잠금), 115(계좌 상태 불명확 시 신규 BUY 차단과 sell-only 저하 상태). 이전 스펙 058~114는 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
+| 골격 스펙 | 없음. `.specify/feature.json`은 최신 출시 스펙 `specs/119-security-trust-boundary-hardening`를 가리킨다. 스펙 119는 #529, 후속 #531, #533으로 main에 들어갔다. |
+| 최근 출시 작업 | #533 live-money 및 halt-release workflow에 GitHub `production` 보호 환경 적용. #531 SSH boundary repair 후속 보강. #529 보안 신뢰 경계 강화. #527 KIS live smoke에 최근 7일 주문/체결 조회와 열린 미체결 주문 0건 검사 추가. |
+| 활성 작업 | 열린 PR 없음. 현재 로컬 브랜치 `codex/ssh-secret-fail-closed`는 20개 SSH workflow의 키 설치 단계를 공통 `scripts/ci_secure_ssh.sh` 검증기로 모아, deploy user·private key·known_hosts가 없으면 첫 SSH 호출 전에 실패하게 만드는 중이다. #533 main push에서 `Deploy on merge to main` run `29844922160`은 failure다. 이는 `VULTR_SSH_USER`와 `VULTR_SSH_PRIVATE_KEY`가 없어 SSH exit 255로 멈춘 안전 중단이다. released-work run `29844922286`, money-path run `29844922301`, autonomous-work run `29844922349`은 success다. KIS smoke sidecar는 아직 commit `f337b67`, `secrets_present=false`, `smoke_state=(unset)`다. 돈 경로는 `PREVIEW_ONLY`, `can_submit_real_orders=false`이며 실주문은 불가하다. |
+| 안전 경계 | #533과 현재 보강은 등급 3 안전 경계 변경이다. 보호 환경과 SSH 비밀값 검증으로 GitHub Actions에서 서버·실거래 경계로 들어가는 길을 좁힌다. K1 주문 제한, K4 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 실제 주문·취소·실거래 재무장·자본 배분·whitelist/caps 확대·손실 예산·비밀값은 바꾸지 않았다. 서버 실제 `/root/.ssh/authorized_keys` cleanup은 이 세션에서 SSH/API 권한이 없어 직접 수행하지 못했지만, `deploy/repair-ssh-boundary.sh`가 main에 들어갔다. 현재 돈 경로는 `PREVIEW_ONLY`다. |
 
 ## 돈 경로 상태 판독 규칙 (필수 — 스펙 062)
 
@@ -80,6 +80,49 @@ uv run python scripts/money_path_probe.py --manifest | while IFS=$'\t' read -r k
 done
 uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.live_money_state'
 ```
+
+## 최근 관찰 — 2026-07-22 KST (스펙 119 production 환경과 SSH secret fail-closed 보강 진행)
+
+현재 `main` 최신 코드 머지는 `2fe873e`(#533, live-money workflow `production` 보호 환경 적용)이다.
+기능 커밋은 `099dc22`다.
+
+- **문제 정의**: 보안 감사의 남은 P0 경계 중 GitHub Actions 수동 실행이 live-money workflow를 바로
+  시작할 수 있는 면을 더 좁혀야 했다. 또한 #533 post-merge deploy가 SSH secret 부재로 안전하게
+  실패했지만, 기존 공통 helper 밖 workflow들은 deploy user나 private key가 비어도 첫 단계에서 명확히
+  멈추지 않고 뒤의 SSH 호출에서 exit 255로 터질 수 있었다.
+- **구현 상태**: #533은 `go-live-canary`, `rebalance-live-canary`,
+  `rebalance-micro-gtaa-canary`, `release-halt` job에 GitHub `production` environment를 선언했다.
+  GitHub API 기준 `production` environment는 `main` branch만 허용하고 `jinooaction` required reviewer를
+  요구한다. 현재 로컬 브랜치 `codex/ssh-secret-fail-closed`는 20개 SSH workflow의 키 설치 단계를
+  `scripts/ci_secure_ssh.sh`로 통합해 `VULTR_SSH_USER`, `VULTR_SSH_PRIVATE_KEY`,
+  `VULTR_SSH_KNOWN_HOSTS`가 없으면 첫 SSH 호출 전에 exit 2와 명확한 오류 메시지로 멈추게 만든다.
+- **post-merge 실행**: PR #533은 2026-07-21T15:38:23Z에 merge됐고 merge commit은
+  `2fe873e9177d1473df3d50be3d316268df88ae23`다. `Deploy on merge to main` run `29844922160`은
+  failure이며 `START_EXIT=255`, `UNITS_EXIT=255`다. 이는 non-root deploy SSH secret이 아직 없어서
+  gateway 접속 전 단계에서 멈춘 안전 중단이다. `Released work ledger` run `29844922286`,
+  `Money-path readiness` run `29844922301`, `Autonomous work execution loop` run `29844922349`은 success다.
+- **자동화 상태**: released-work sidecar는 commit `2fe873e`, `overall_status=OK`, `released_count=38`이다.
+  autonomous-work sidecar도 commit `2fe873e`에서 현재 실행 가능한 안전 후보가 없다고 본다. KIS smoke
+  sidecar는 commit `f337b67`, `secrets_present=false`, `smoke_state=(unset)`로 남아 있으며 SSH secret이
+  없어서 원격 smoke 단계에 진입하지 못한다. money-path는 `PREVIEW_ONLY`,
+  `can_submit_real_orders=false`다.
+- **검증**: #533 브랜치에서 `uv run pytest` 2680 passed, 5 skipped,
+  `uv run ruff check src tests` 통과, focused security workflow 테스트 35 passed,
+  `uv run python scripts/agent_harness_probe.py --strict` OK(14/14),
+  `uv run python scripts/check_handoff_facts.py` OK, PR 본문 품질 관문 통과. 현재
+  `codex/ssh-secret-fail-closed` 브랜치에서는 focused SSH/workflow 테스트 28 passed,
+  `uv run pytest` 2682 passed, 5 skipped, `uv run ruff check src tests` 통과,
+  `uv run python scripts/agent_harness_probe.py --strict` OK(14/14),
+  `uv run python scripts/check_handoff_facts.py` OK, `git diff --check` 통과,
+  `bash -n scripts/ci_secure_ssh.sh` 통과를 확인했다. #533 merge 뒤에는 이 `HANDOFF.md`가
+  `82296aa`를 가리켜 하네스 관련 테스트 2개가 실패했고, 현재 보강 브랜치가 이 stale handoff를 같이
+  보정한다.
+- **안전 경계**: 등급 3 안전 경계 변경이다. GitHub Environment 승인과 SSH secret 검증을 강화한다.
+  K1 주문 제한, K4 감사 로그, 헌법, kernel manifest, 실거래 모드, 자본, 주문, KIS secret,
+  whitelist/caps, 손실 예산은 바꾸지 않았다.
+- **남은 현실**: 서버 실제 `repair-ssh-boundary.sh` 실행과 non-root deploy private key 등록은 아직
+  서버 접근 권한이 없어 직접 완료하지 못했다. 그 전까지 deploy/KIS smoke가 원격 단계에 들어가지
+  못하는 것은 정상 안전 중단이다.
 
 ## 최근 관찰 — 2026-07-21 KST (스펙 119 후속 SSH boundary repair)
 
