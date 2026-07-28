@@ -33,15 +33,15 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `d7a214d` — Merge pull request #536 from jinooaction/codex/money-path-intent-loss-block |
-| main 테스트 | #536 merge 전 최종 검증 기준 `uv run pytest` → 2684 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
-| main 린트 | #536 merge 전 최종 검증 기준 `uv run ruff check src tests` → All checks passed. |
+| 마지막 main 커밋 | `1f38d26` — Merge pull request #538 from jinooaction/codex/money-path-intent-gate-visible |
+| main 테스트 | #538 merge 전 최종 검증 기준 `uv run pytest` → 2685 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
+| main 린트 | #538 merge 전 최종 검증 기준 `uv run ruff check src tests` → All checks passed. |
 | 열린 PR | 없음(이 문서 편집 시점). |
 | 출시 완료 스펙 | 최신 추가: 119(보안 신뢰 경계 강화와 후속 SSH boundary repair 및 live-money workflow 보호 환경: GitHub root SSH secret 제거, strict known_hosts, go-live fail-closed, canary hash 필수화, 배포 락·토큰 캐시·주문 불확실성·reduce-only·sidecar redaction, root key retire repair script, forced-command deploy gateway, `production` 보호 환경), 118(운영자가 이해 가능한 최종 보고 생존성 계약), 117(`SUBMISSION_UNKNOWN` broker lookup 복구), 116(단일 `ExecutionAuthority`와 계좌별 broker-write 잠금), 115(계좌 상태 불명확 시 신규 BUY 차단과 sell-only 저하 상태). 이전 스펙 058~114는 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
-| 골격 스펙 | 없음. `.specify/feature.json`은 최신 출시 스펙 `specs/119-security-trust-boundary-hardening`를 가리킨다. 스펙 119는 #529, 후속 #531, #533, #534로 main에 들어갔다. #536은 새 스펙이 아니라 money-path 안전 보고 보정이다. |
-| 최근 출시 작업 | #536 micro GTAA 전략 의도 게이트 실패(`latest_intent_loss`)를 money-path 최상위 `BLOCKED` 상태로 드러내는 보정. #534 20개 SSH workflow의 secret 누락 조기 차단 공통화. #533 live-money 및 halt-release workflow에 GitHub `production` 보호 환경 적용. |
+| 골격 스펙 | 없음. `.specify/feature.json`은 최신 출시 스펙 `specs/119-security-trust-boundary-hardening`를 가리킨다. 스펙 119는 #529, 후속 #531, #533, #534로 main에 들어갔다. #536/#538은 새 스펙이 아니라 money-path 안전 보고 보정이다. |
+| 최근 출시 작업 | #538 money-path 사람이 읽는 표에 마지막 전략 의도 게이트 ok/reason 표시. #536 micro GTAA 전략 의도 게이트 실패(`latest_intent_loss`)를 money-path 최상위 `BLOCKED` 상태로 드러내는 보정. #534 20개 SSH workflow의 secret 누락 조기 차단 공통화. |
 | 활성 작업 | 열린 PR 없음. 2026-07-28T16:15Z 최신 sidecar 기준 pipeline-liveness는 OK이고 money-path는 `PREVIEW_ONLY`/자본 사다리 `BLOCKED`다. micro GTAA 최신 sidecar run `30287251205`는 `armed=false`, `LIVE 스텝=skipped`, strategy-intent gate `ok=false`, `reason=latest_intent_loss`, `cumulative_pnl_usd=-1.14`다. `VULTR_SSH_USER`/`VULTR_SSH_PRIVATE_KEY`가 GitHub secrets에 없어 forward/edge/server SSH 단계는 계속 안전 중단된다. |
-| 안전 경계 | #536은 등급 3 안전 보고 보정이다. 새 주문 허용이 아니라 손실 의도 게이트 실패를 실주문 차단 상태로 더 명확히 드러냈다. #533/#534는 GitHub Actions에서 서버·실거래 경계로 들어가는 길을 보호 환경과 SSH 비밀값 검증으로 좁혔다. K1 주문 제한, K4 감사 로그, 헌법, kernel manifest, 실제 주문·취소·실거래 재무장·자본 배분·whitelist/caps 확대·손실 예산·비밀값은 바꾸지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`라 실주문 불가다. |
+| 안전 경계 | #536/#538은 등급 3 안전 보고 보정이다. 새 주문 허용이 아니라 손실 의도 게이트 실패를 실주문 차단 상태와 표 본문에 더 명확히 드러냈다. #533/#534는 GitHub Actions에서 서버·실거래 경계로 들어가는 길을 보호 환경과 SSH 비밀값 검증으로 좁혔다. K1 주문 제한, K4 감사 로그, 헌법, kernel manifest, 실제 주문·취소·실거래 재무장·자본 배분·whitelist/caps 확대·손실 예산·비밀값은 바꾸지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`라 실주문 불가다. |
 
 ## 돈 경로 상태 판독 규칙 (필수 — 스펙 062)
 
@@ -83,8 +83,9 @@ uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.
 
 ## 최근 관찰 — 2026-07-29 KST (money-path 전략 의도 게이트 차단 표시)
 
-현재 `main` 최신 코드 머지는 `d7a214d`(#536, micro intent loss money-path 차단 표시)이다.
-기능 커밋은 `52bbc1a`다.
+현재 `main` 최신 코드 머지는 `1f38d26`(#538, money-path intent gate 표 표시)이다.
+직전 기능 머지는 `d7a214d`(#536, micro intent loss money-path 차단 표시)이고,
+#538 기능 커밋은 `08d1c6c`, #536 기능 커밋은 `52bbc1a`다.
 
 - **문제 정의**: 운영자가 "왜 실제 거래가 안 나가느냐"고 물었을 때, 최신 micro GTAA sidecar에는
   strategy-intent gate `ok=false`, `reason=latest_intent_loss`가 있었지만 money-path 최상위 상태는
@@ -92,7 +93,8 @@ uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.
 - **구현 상태**: #536은 `scripts/money_path_probe.py`가 `## 라이브 전 전략 의도 게이트` JSON을 읽게
   하고, `src/auto_invest/analytics/money_path.py`의 micro GTAA 최상위 상태가 `armed:true`라도 최신 intent
   gate `ok=false`면 `BLOCKED`, `can_submit_real_orders=false`로 떨어지게 했다. 기존 오래된 LAST_RUN 형식과
-  `armed:false` 미리보기 차단은 유지했다.
+  `armed:false` 미리보기 차단은 유지했다. #538은 사람이 읽는 money-path 표에
+  `마지막 전략 의도 게이트 | ok=..., reason=...` 행을 추가해 JSON을 열지 않아도 같은 사유가 보이게 했다.
 - **운영 상태**: 2026-07-28T16:13~16:15Z에 승인한 `armed:false` 진단 run들은 주문 0건으로 끝났고
   sidecar를 새로 남겼다. pipeline-liveness는 OK다. 최신 money-path는 `PREVIEW_ONLY`, 자본 사다리
   `BLOCKED`이고, 최신 micro GTAA run `30287251205`는 `LIVE 스텝=skipped`, intent gate
@@ -102,7 +104,7 @@ uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.
   `VULTR_SSH_USER`/`VULTR_SSH_PRIVATE_KEY` 부재 때문에 forward/edge/server SSH 계열도 판단 JSON을 못
   만든다. 서버에서 `deploy/repair-ssh-boundary.sh` 실행과 non-root deploy key 등록이 끝나기 전까지
   이 SSH 실패는 정상 안전 중단이다.
-- **검증**: #536 브랜치에서 `uv run pytest` 2684 passed, 5 skipped,
+- **검증**: #538 브랜치에서 `uv run pytest` 2685 passed, 5 skipped,
   `uv run ruff check src tests` 통과, `uv run python scripts/agent_harness_probe.py --strict` OK(14/14),
   `uv run python scripts/check_handoff_facts.py` OK, `git diff --check` 통과,
   PR 본문 품질 관문과 PR check `pr-quality-gate` 통과를 확인했다.
