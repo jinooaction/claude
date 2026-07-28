@@ -166,6 +166,21 @@ def test_live_money_state_micro_armed_intent_loss_blocks_orders():
     assert state.last_run.intent_gate_reason == "latest_intent_loss"
 
 
+def test_money_path_report_surfaces_intent_gate_reason():
+    report = assess_money_path(
+        ladder=_ladder(),
+        forward_verdict=_verdict(n_obs=1),
+        micro_request=_micro_request(),
+        micro_last_run=_micro_last_run_with_intent_loss(),
+        now=MONDAY_BEFORE_MICRO_SCHEDULE,
+    )
+
+    text = report.as_text()
+
+    assert "마지막 전략 의도 게이트" in text
+    assert "ok=False, reason=latest_intent_loss" in text
+
+
 def test_live_money_state_micro_disarmed_is_preview_only():
     state = assess_live_money_state(
         micro_request=_micro_request(armed="false"),
