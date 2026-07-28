@@ -815,6 +815,26 @@ def _edge_reassign_issues(
     return issues
 
 
+def _money_path_blocked_issue(money: Mapping[str, Any] | None) -> GateAlignmentIssue | None:
+    if not money:
+        return None
+    live_status = _money_live_status(money)
+    stage = _money_stage(money)
+    if live_status != "BLOCKED" and stage != "BLOCKED":
+        return None
+
+    blocker = _money_blocking_gate(money) or "money-path reports blocked"
+    return _issue(
+        SEVERITY_BLOCKED,
+        "money-path",
+        "orders gated until existing blockers clear",
+        blocker,
+        "money-path 자체가 실주문 불가 또는 자본 사다리 차단을 보고한다.",
+        blocker,
+        (SOURCE_REFS["money-path"],),
+    )
+
+
 def _waiting_issue(
     money: Mapping[str, Any] | None,
     edge_forward: Mapping[str, Any] | None,
@@ -941,6 +961,9 @@ def build_money_gate_alignment(
     issues.extend(_pipeline_issues(liveness))
     issues.extend(_compare_core_fields(money, capital))
     issues.extend(_edge_reassign_issues(money, edge, edge_forward, reassign))
+    blocked = _money_path_blocked_issue(money)
+    if blocked is not None:
+        issues.append(blocked)
 
     if not any(issue.severity in {SEVERITY_BLOCKED, SEVERITY_MISALIGNED} for issue in issues):
         skew = _snapshot_skew_issue(money, edge_forward, forward)

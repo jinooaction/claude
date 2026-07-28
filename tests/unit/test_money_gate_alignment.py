@@ -255,6 +255,31 @@ def test_pipeline_critical_blocks_alignment():
     assert "workflow" in report.next_action_ko
 
 
+def test_money_path_blocked_blocks_alignment_even_when_surfaces_agree():
+    blocker = (
+        "자본 사다리 결정=None (전진 판정 JSON 없음) — "
+        "정합성 불일치·NAV 조회 불능·킬스위치 가능."
+    )
+    report = build_money_gate_alignment(
+        _evidence(
+            **{
+                "money-path": _money_path(stage="BLOCKED", blocker=blocker),
+                "capital-path-readiness": _capital(stage="BLOCKED", blocker=blocker),
+                "edge-autoarm": _fenced("결정 JSON", {}),
+                "rebalance-paper-forward": _forward(max_n_obs=0),
+            }
+        ),
+        now=NOW,
+    )
+
+    assert report.overall_status == STATUS_BLOCKED
+    assert report.blocking_gate == blocker
+    assert report.next_action_ko == blocker
+    issue = next(issue for issue in report.alignment_issues if issue.gate_key == "money-path")
+    assert issue.severity == SEVERITY_BLOCKED
+    assert issue.observed == blocker
+
+
 def test_missing_money_path_fails_closed():
     report = build_money_gate_alignment(_evidence(**{"money-path": None}), now=NOW)
 
