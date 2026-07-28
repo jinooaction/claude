@@ -33,15 +33,15 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `e60072b` — Merge pull request #540 from jinooaction/codex/money-gate-alignment-blocked-state |
-| main 테스트 | #540 handoff 갱신 후 `uv run pytest -q` → 2686 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
-| main 린트 | #540 handoff 갱신 기준 `uv run ruff check src tests` → All checks passed. |
+| 마지막 main 커밋 | `ea7994a` — Merge pull request #542 from jinooaction/codex/money-path-actionable-blockers |
+| main 테스트 | #542 money-gate KIS blocker 보정 후 `uv run pytest` → 2687 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
+| main 린트 | #542 money-gate KIS blocker 보정 기준 `uv run ruff check src tests` → All checks passed. |
 | 열린 PR | 없음(이 문서 편집 시점). |
 | 출시 완료 스펙 | 최신 추가: 119(보안 신뢰 경계 강화와 후속 SSH boundary repair 및 live-money workflow 보호 환경: GitHub root SSH secret 제거, strict known_hosts, go-live fail-closed, canary hash 필수화, 배포 락·토큰 캐시·주문 불확실성·reduce-only·sidecar redaction, root key retire repair script, forced-command deploy gateway, `production` 보호 환경), 118(운영자가 이해 가능한 최종 보고 생존성 계약), 117(`SUBMISSION_UNKNOWN` broker lookup 복구), 116(단일 `ExecutionAuthority`와 계좌별 broker-write 잠금), 115(계좌 상태 불명확 시 신규 BUY 차단과 sell-only 저하 상태). 이전 스펙 058~114는 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
 | 골격 스펙 | 없음. `.specify/feature.json`은 최신 출시 스펙 `specs/119-security-trust-boundary-hardening`를 가리킨다. 스펙 119는 #529, 후속 #531, #533, #534로 main에 들어갔다. #536/#538/#540은 새 스펙이 아니라 money-path와 money-gate-alignment 안전 보고 보정이다. |
-| 최근 출시 작업 | #540 money-gate-alignment가 money-path 차단을 `UNKNOWN`으로 흘리지 않고 `BLOCKED`로 닫게 했다. #538 money-path 사람이 읽는 표에 마지막 전략 의도 게이트 ok/reason 표시. #536 micro GTAA 전략 의도 게이트 실패(`latest_intent_loss`)를 money-path 최상위 `BLOCKED` 상태로 드러내는 보정. |
-| 활성 작업 | 열린 PR 없음. 2026-07-28T16:55Z 최신 operator-status run `30380480508`은 `ACTION_REQUIRED`이고 money-gate-alignment를 `BLOCKED`로 읽는다. money-path는 `PREVIEW_ONLY`/자본 사다리 `BLOCKED`, micro GTAA 최신 run은 `armed=false`, `LIVE 스텝=skipped`, strategy-intent gate `ok=false`, `reason=latest_intent_loss`, `cumulative_pnl_usd=-1.14`다. `VULTR_SSH_USER`/`VULTR_SSH_PRIVATE_KEY`가 GitHub secrets에 없어 forward/edge/server SSH 단계는 계속 안전 중단된다. |
-| 안전 경계 | #536/#538/#540은 등급 3 안전 보고 보정이다. 새 주문 허용이 아니라 손실 의도 게이트와 자본 사다리 차단을 실주문 불가 상태로 더 명확히 드러냈다. #533/#534는 GitHub Actions에서 서버·실거래 경계로 들어가는 길을 보호 환경과 SSH 비밀값 검증으로 좁혔다. K1 주문 제한, K4 감사 로그, 헌법, kernel manifest, 실제 주문·취소·실거래 재무장·자본 배분·whitelist/caps 확대·손실 예산·비밀값은 바꾸지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`라 실주문 불가다. |
+| 최근 출시 작업 | #542 money-gate-alignment가 KIS smoke의 `secrets_present=false`를 `UNKNOWN`으로 숨기지 않고 `MISSING_SECRETS` 차단으로 드러내게 했다. #540은 money-path 차단을 `BLOCKED`로 닫았고, #538은 마지막 전략 의도 게이트 ok/reason을 사람이 읽는 표에 표시했으며, #536은 micro GTAA 전략 의도 게이트 실패(`latest_intent_loss`)를 실주문 불가 상태로 드러냈다. |
+| 활성 작업 | 열린 PR 없음. 2026-07-28T17:15Z 최신 operator-status run `30382028042`는 `ACTION_REQUIRED`다. money-gate-alignment 최신 run `30381944358`은 main `ea7994a` 기준 `BLOCKED`이고, KIS smoke를 `MISSING_SECRETS`로 읽는다. money-path는 `PREVIEW_ONLY`/자본 사다리 `BLOCKED`, micro GTAA 최신 run은 `armed=false`, `LIVE 스텝=skipped`, strategy-intent gate `ok=false`, `reason=latest_intent_loss`, `cumulative_pnl_usd=-1.14`다. `VULTR_SSH_USER`/`VULTR_SSH_PRIVATE_KEY`가 GitHub secrets에 없어 forward/edge/server SSH 단계는 계속 안전 중단된다. |
+| 안전 경계 | #536/#538/#540/#542는 등급 3 안전 보고 보정이다. 새 주문 허용이 아니라 손실 의도 게이트, 자본 사다리 차단, KIS 서버 접속 비밀값 누락을 실주문 불가 상태로 더 명확히 드러냈다. #533/#534는 GitHub Actions에서 서버·실거래 경계로 들어가는 길을 보호 환경과 SSH 비밀값 검증으로 좁혔다. K1 주문 제한, K4 감사 로그, 헌법, kernel manifest, 실제 주문·취소·실거래 재무장·자본 배분·whitelist/caps 확대·손실 예산·비밀값은 바꾸지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`라 실주문 불가다. |
 
 ## 돈 경로 상태 판독 규칙 (필수 — 스펙 062)
 
@@ -52,7 +52,7 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 3. 현재 live 의도 원본은 `automation/rebalance-micro-gtaa.request`다. 마지막 실행 증거는 `origin/automation/rebalance-micro-gtaa-last-run:LAST_RUN.md`다. KIS smoke 현금값은 preflight 입력일 뿐, `armed` 상태나 다음 live 가능 여부의 대체 근거가 아니다.
 4. `live_money_state.status`가 `PREVIEW_ONLY`이면 "실주문 불가"로 답한다. `BLOCKED`이면 "안전 게이트가 실주문을 막고 있음"으로 답하고 `detail`과 `last_run.intent_gate_reason`을 같이 읽는다. `REAL_ORDER_PATH_ARMED`이면 "실제 돈 경로가 켜져 있음"으로 답한다. 단, 이것은 비-push 실행이 미국 정규장, KIS 매수가능 현금 1% 버퍼, micro 손실 브레이커, K1 한도와 K2 허용 종목을 통과하면 실주문 단계에 도달할 수 있다는 뜻이지 접수·체결 보장이 아니다.
 5. 스펙 063 이후 micro GTAA live canary는 계좌 전체 preview를 만든다. 기존 보유 `BHP`, `MRK`, `ORANY`, `RELX`는 목표 유니버스가 아니라 청산 전용이다. 현금이 목표 매수와 1% 완충금을 충족하지 못하고 청산 전용 매도 후보가 있으면 이번 주기는 `effective_side=sell`로 매도만 실행하고, 매수는 다음 fresh KIS 현금 조회가 충분할 때까지 보류한다.
-6. 현재 기준(2026-07-28T16:55Z operator-status, 16:39Z money-path): micro GTAA는 `armed:false`, money-path `live_money_state.status=PREVIEW_ONLY`, 최신 micro sidecar는 `event=schedule`, `LIVE 스텝=skipped`, strategy-intent gate `ok=false`, `reason=latest_intent_loss`, `cumulative_pnl_usd=-1.14`다. money-gate-alignment 최신 run `30380265569`는 이 상태를 `UNKNOWN`이 아니라 `BLOCKED`로 보고한다. 스펙 062의 2026-06-22 `armed:true` 기록은 역사이며 현재 상태 근거로 쓰지 않는다.
+6. 현재 기준(2026-07-28T17:15Z operator-status, 16:39Z money-path): micro GTAA는 `armed:false`, money-path `live_money_state.status=PREVIEW_ONLY`, 최신 micro sidecar는 `event=schedule`, `LIVE 스텝=skipped`, strategy-intent gate `ok=false`, `reason=latest_intent_loss`, `cumulative_pnl_usd=-1.14`다. money-gate-alignment 최신 run `30381944358`은 이 상태를 `UNKNOWN`이 아니라 `BLOCKED`로 보고하며, KIS smoke 비밀값 누락을 `MISSING_SECRETS`로 따로 표시한다. 스펙 062의 2026-06-22 `armed:true` 기록은 역사이며 현재 상태 근거로 쓰지 않는다.
 7. PR #398 이후 `latest_signal=INTENT_LOSS`인데 verdict가 아직 `INSUFFICIENT_DATA`인 경우, "다음 micro GTAA 실행에서 live 표본이 자동으로 더 쌓인다"고 말하지 않는다. live gate가 실주문을 막으므로 새 live 표본은 자동 누적되지 않는다. 다음 행동은 forward 토너먼트·재지정 증거를 기다리거나 별도 전략 검토 후 재무장 여부를 판단하는 것이다.
 
 ## 전략 검토 상태 판독 규칙 (필수 — 스펙 066)
@@ -81,28 +81,36 @@ done
 uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.live_money_state'
 ```
 
-## 최근 관찰 — 2026-07-29 KST (돈 경로 차단 상태를 BLOCKED로 정렬)
+## 최근 관찰 — 2026-07-29 KST (돈 경로 차단과 KIS 비밀값 누락을 BLOCKED로 정렬)
 
-현재 `main` 최신 코드 머지는 `e60072b`(#540, money-gate-alignment blocked-state 보정)이다.
-직전 기능 머지는 `1f38d26`(#538, money-path intent gate 표 표시)이고,
-#540 기능 커밋은 `2587573`, #538 기능 커밋은 `08d1c6c`, #536 기능 커밋은 `52bbc1a`다.
+현재 `main` 최신 코드 머지는 `ea7994a`(#542, money-gate-alignment KIS secret blocker 보정)이다.
+직전 기능 머지는 `e60072b`(#540, money-gate-alignment blocked-state 보정)이고,
+#542 기능 커밋은 `07ecc29`, #540 기능 커밋은 `2587573`, #538 기능 커밋은 `08d1c6c`,
+#536 기능 커밋은 `52bbc1a`다.
 
 - **문제 정의**: 운영자가 "왜 실제 거래가 안 나가느냐"고 물었을 때, 최신 micro GTAA sidecar에는
   strategy-intent gate `ok=false`, `reason=latest_intent_loss`가 있었지만 money-path 최상위 상태는
   `armed:false` 또는 자본 사다리 차단만 먼저 보여서 손실 의도 게이트 실패를 곧바로 재현하기 어려웠다.
   또한 money-path와 capital-path-readiness가 둘 다 차단을 말해도 money-gate-alignment가 `UNKNOWN`으로
-  내려가 운영자 상태판의 다음 행동이 헛돌았다.
-- **구현 상태**: #540은 `src/auto_invest/analytics/money_gate_alignment.py`가 money-path live 상태나
+  내려가 운영자 상태판의 다음 행동이 헛돌았다. #542 전에는 KIS smoke가 `secrets_present=false`를
+  보고해도 정렬 표면이 단순 `(unset)`으로 보일 수 있어 서버 접속 비밀값 누락이 첫 복구 행동으로
+  드러나지 않았다.
+- **구현 상태**: #542는 `src/auto_invest/analytics/money_gate_alignment.py`가 KIS smoke 표의
+  `secrets_present=false`를 `MISSING_SECRETS`, `key_valid=false`를 `INVALID_KEY`로 판정하게 했다.
+  돈 경로 blocker와 KIS blocker가 동시에 있으면 next action은 서버의 제한 deploy gateway 설치,
+  GitHub Actions의 non-root `VULTR_SSH_USER`/`VULTR_SSH_PRIVATE_KEY` 등록, KIS smoke 재실행을 먼저
+  말한 뒤 자본 사다리 blocker를 보게 한다. #540은 `src/auto_invest/analytics/money_gate_alignment.py`가 money-path live 상태나
   자본 사다리 단계가 `BLOCKED`일 때 `money-path` 차단 이슈를 만들게 했다. 그래서 sidecar들이 이미
   차단을 말하면 정렬 루프도 fail-closed로 `BLOCKED`를 낸다. #536은 `scripts/money_path_probe.py`가
   `## 라이브 전 전략 의도 게이트` JSON을 읽게 하고, `src/auto_invest/analytics/money_path.py`의 micro
   GTAA 최상위 상태가 `armed:true`라도 최신 intent gate `ok=false`면 `BLOCKED`,
   `can_submit_real_orders=false`로 떨어지게 했다. #538은 사람이 읽는 money-path 표에
   `마지막 전략 의도 게이트 | ok=..., reason=...` 행을 추가했다.
-- **운영 상태**: #540 main push 뒤 money-gate-alignment run `30380265569`는 commit `e60072b` 기준
+- **운영 상태**: #542 main push 뒤 money-gate-alignment run `30381944358`은 commit `ea7994a` 기준
   `overall_status=BLOCKED`, `live_money_status=PREVIEW_ONLY`, `readiness_state=LIVE_BLOCKED`,
-  `capital_ladder_stage=BLOCKED`를 발행했다. 이어 operator-mobile-alerts run `30380480508`도
-  success였고 operator-status는 `ACTION_REQUIRED`, money-gate-alignment `BLOCKED`로 갱신됐다.
+  `capital_ladder_stage=BLOCKED`, `kis-smoke=MISSING_SECRETS`를 발행했다. 이어 operator-mobile-alerts
+  run `30382028042`도 success였고 operator-status는 `ACTION_REQUIRED`, money-gate-alignment
+  `BLOCKED`로 갱신됐다.
   최신 money-path는 `PREVIEW_ONLY`, 자본 사다리 `BLOCKED`이고, 최신 micro GTAA run은
   `LIVE 스텝=skipped`, intent gate `latest_intent_loss`, 누적 의도 손익 `-1.14 USD`다.
 - **남은 현실**: 실제 돈이 아직 움직이지 않는 직접 이유는 하나가 아니다. `rebalance-micro-gtaa.request`가
@@ -110,11 +118,11 @@ uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.
   `VULTR_SSH_USER`/`VULTR_SSH_PRIVATE_KEY` 부재 때문에 forward/edge/server SSH 계열도 판단 JSON을 못
   만든다. 서버에서 `deploy/repair-ssh-boundary.sh` 실행과 non-root deploy key 등록이 끝나기 전까지
   이 SSH 실패는 정상 안전 중단이다.
-- **검증**: #540 브랜치에서 `uv run pytest` 2686 passed, 5 skipped,
+- **검증**: #542 브랜치에서 `uv run pytest` 2687 passed, 5 skipped,
   `uv run ruff check src tests` 통과, `uv run python scripts/agent_harness_probe.py --strict` OK(14/14),
   `uv run python scripts/check_handoff_facts.py` OK, `git diff --check` 통과,
-  원격 automation sidecar 재현에서 `overall_status=BLOCKED`를 확인했다. PR 본문 품질 관문과
-  PR check `pr-quality-gate` 통과 뒤 #540을 merge 방식으로 main에 넣었다.
+  원격 automation sidecar 재현에서 `overall_status=BLOCKED`와 `kis-smoke=MISSING_SECRETS`를 확인했다.
+  PR 본문 품질 관문과 PR check `pr-quality-gate` 통과 뒤 #542를 merge 방식으로 main에 넣었다.
 - **안전 경계**: 등급 3 안전 보고 보정이다. 실제 주문, 실거래 전환, 자본 배분, 라이브 전략 교체,
   whitelist/caps, 손실 예산, KIS secret, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다.
 

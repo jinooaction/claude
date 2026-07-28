@@ -64,6 +64,15 @@ SOURCE_REFS: dict[str, str] = {
     "released-work": "automation/released-work-last-run:released_work.json",
 }
 
+NEXT_ACTION_SURFACE_PRIORITY: dict[str, int] = {
+    "pipeline-liveness": 0,
+    "money-gate-alignment": 1,
+    "money-path": 2,
+    "capital-path-readiness": 3,
+    "autonomous-work-execution": 4,
+    "released-work": 5,
+}
+
 CONSUMED_SIDECARS: tuple[tuple[str, str, str], ...] = (
     ("pipeline-liveness", "automation/pipeline-liveness-last-run", "LAST_RUN.md"),
     ("money-path", "automation/money-path-last-run", "LAST_RUN.md"),
@@ -549,10 +558,7 @@ def _headline(overall: str, surfaces: Sequence[OperatorSurface]) -> str:
 def _next_action(overall: str, surfaces: Sequence[OperatorSurface]) -> str:
     if overall == STATUS_OK:
         return "대시보드만 확인하면 됩니다. 별도 개입은 필요 없습니다."
-    target = _first_by_severity(
-        surfaces,
-        (SEVERITY_CRITICAL, SEVERITY_ACTION, SEVERITY_ATTENTION),
-    )
+    target = _next_action_target(surfaces)
     if target and target.next_action_ko:
         return target.next_action_ko
     if target:
@@ -743,6 +749,24 @@ def _first_by_severity(
     if not candidates:
         return None
     return sorted(candidates, key=lambda surface: severity_rank[surface.severity])[0]
+
+
+def _next_action_target(surfaces: Sequence[OperatorSurface]) -> OperatorSurface | None:
+    severity_rank = {
+        SEVERITY_CRITICAL: 0,
+        SEVERITY_ACTION: 1,
+        SEVERITY_ATTENTION: 2,
+    }
+    candidates = [surface for surface in surfaces if surface.severity in severity_rank]
+    if not candidates:
+        return None
+    return sorted(
+        candidates,
+        key=lambda surface: (
+            severity_rank[surface.severity],
+            NEXT_ACTION_SURFACE_PRIORITY.get(surface.key, 99),
+        ),
+    )[0]
 
 
 __all__ = [

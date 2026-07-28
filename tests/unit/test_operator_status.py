@@ -121,6 +121,39 @@ def test_money_gate_blocked_is_action_required() -> None:
     assert "pipeline-liveness workflow를 복구한다" in report.next_action_ko
 
 
+def test_alignment_next_action_is_prioritized_over_raw_money_blocker() -> None:
+    raw_blocker = "자본 사다리 결정=None (전진 판정 JSON 없음)"
+    alignment_action = (
+        "서버에서 deploy/repair-ssh-boundary.sh로 제한 deploy gateway를 설치한 뒤 "
+        "GitHub Actions에 non-root VULTR_SSH_USER와 VULTR_SSH_PRIVATE_KEY를 등록한다."
+    )
+    report = build_operator_status(
+        _evidence(
+            **{
+                "money-path": _fenced(
+                    {
+                        "stage": "BLOCKED",
+                        "blocking_gate": raw_blocker,
+                        "live_money_state": {"status": "PREVIEW_ONLY"},
+                    }
+                ),
+                "money-gate-alignment": json.dumps(
+                    {
+                        "overall_status": "BLOCKED",
+                        "next_action_ko": alignment_action,
+                    },
+                    ensure_ascii=False,
+                ),
+            }
+        ),
+        now=NOW,
+    )
+
+    assert report.overall_status == STATUS_ACTION_REQUIRED
+    assert report.next_action_ko == alignment_action
+    assert alignment_action in report.alert_decision.message_ko
+
+
 def test_missing_core_sidecar_is_action_required() -> None:
     report = build_operator_status(_evidence(**{"money-path": None}), now=NOW)
 
