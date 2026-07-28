@@ -513,6 +513,17 @@ def _selected_work_candidate(work: Mapping[str, Any] | None) -> str | None:
     return None
 
 
+def _kis_smoke_status(raw: str | None) -> str:
+    secrets_present = (_table_value(raw, "secrets_present") or "").lower()
+    key_valid = (_table_value(raw, "key_valid") or "").lower()
+    smoke_state = _table_value(raw, "smoke_state")
+    if secrets_present == "false":
+        return "MISSING_SECRETS"
+    if key_valid == "false":
+        return "INVALID_KEY"
+    return smoke_state or "UNKNOWN"
+
+
 def _surface_for(
     key: str,
     raw: str | None,
@@ -578,7 +589,7 @@ def _status_for_surface(
     if key == "autonomous-work-execution" and isinstance(parsed, Mapping):
         return _str_field(parsed, "overall_status", "UNKNOWN")
     if key == "kis-smoke":
-        return _table_value(raw, "smoke_state") or "UNKNOWN"
+        return _kis_smoke_status(raw)
     return "UNKNOWN"
 
 
@@ -633,6 +644,7 @@ def _summary_for_surface(
         return f"selected={_selected_work_candidate(parsed) or '(없음)'}"
     if key == "kis-smoke":
         return (
+            f"secrets_present={_table_value(raw, 'secrets_present') or 'UNKNOWN'}, "
             f"smoke_state={_table_value(raw, 'smoke_state') or 'UNKNOWN'}, "
             f"key_valid={_table_value(raw, 'key_valid') or 'UNKNOWN'}"
         )
@@ -835,6 +847,40 @@ def _money_path_blocked_issue(money: Mapping[str, Any] | None) -> GateAlignmentI
     )
 
 
+def _kis_smoke_blocked_issue(raw: str | None) -> GateAlignmentIssue | None:
+    if raw is None:
+        return None
+    status = _kis_smoke_status(raw)
+    if status == "MISSING_SECRETS":
+        return _issue(
+            SEVERITY_BLOCKED,
+            "kis-smoke",
+            "server and broker evidence available",
+            "secrets_present=false",
+            "KIS smoke가 서버 접속 비밀값 부재로 브로커 사전 점검까지 도달하지 못한다.",
+            (
+                "서버에서 deploy/repair-ssh-boundary.sh로 제한 deploy gateway를 설치한 뒤 "
+                "GitHub Actions에 non-root VULTR_SSH_USER와 VULTR_SSH_PRIVATE_KEY를 등록하고 "
+                "KIS smoke를 다시 실행한다."
+            ),
+            (SOURCE_REFS["kis-smoke"],),
+        )
+    if status == "INVALID_KEY":
+        return _issue(
+            SEVERITY_BLOCKED,
+            "kis-smoke",
+            "valid SSH deploy key",
+            "key_valid=false",
+            "KIS smoke가 유효하지 않은 SSH 키 때문에 브로커 사전 점검까지 도달하지 못한다.",
+            (
+                "VULTR_SSH_PRIVATE_KEY를 ed25519 개인키 전체 형식으로 다시 등록하고 "
+                "KIS smoke를 다시 실행한다."
+            ),
+            (SOURCE_REFS["kis-smoke"],),
+        )
+    return None
+
+
 def _waiting_issue(
     money: Mapping[str, Any] | None,
     edge_forward: Mapping[str, Any] | None,
@@ -890,6 +936,13 @@ def _overall_status(issues: Sequence[GateAlignmentIssue]) -> str:
 
 def _next_action(status: str, issues: Sequence[GateAlignmentIssue]) -> str:
     if status in {STATUS_BLOCKED, STATUS_MISALIGNED}:
+        blocked = [issue for issue in issues if issue.severity == SEVERITY_BLOCKED]
+        by_gate = {issue.gate_key: issue for issue in blocked}
+        if "kis-smoke" in by_gate and "money-path" in by_gate:
+            return (
+                f"{by_gate['kis-smoke'].next_action_ko} 그 뒤 "
+                f"{by_gate['money-path'].next_action_ko}"
+            )
         ordered = sorted(
             issues,
             key=lambda issue: (
@@ -964,6 +1017,9 @@ def build_money_gate_alignment(
     blocked = _money_path_blocked_issue(money)
     if blocked is not None:
         issues.append(blocked)
+    kis_blocked = _kis_smoke_blocked_issue(evidence_texts.get("kis-smoke"))
+    if kis_blocked is not None:
+        issues.append(kis_blocked)
 
     if not any(issue.severity in {SEVERITY_BLOCKED, SEVERITY_MISALIGNED} for issue in issues):
         skew = _snapshot_skew_issue(money, edge_forward, forward)

@@ -158,9 +158,22 @@ def _work(candidate_id: str = "candidate-fd04772a23c5") -> str:
 
 def _kis_smoke() -> str:
     return (
+        "| secrets_present | true |\n"
         "| timestamp_utc | 2026-07-01T14:13:22Z |\n"
         "| smoke_state | success |\n"
         "| key_valid | true |\n"
+    )
+
+
+def _kis_smoke_missing_secrets() -> str:
+    return (
+        "| secrets_present | false |\n"
+        "| timestamp_utc | 2026-07-01T14:13:22Z |\n"
+        "| smoke_state | (unset) |\n"
+        "| key_valid | (unset) |\n"
+        "\n"
+        "- Vultr SSH 시크릿 미등록. GitHub Settings → Secrets and variables → "
+        "Actions 에서 VULTR_SSH_HOST/USER/PRIVATE_KEY 등록.\n"
     )
 
 
@@ -294,6 +307,37 @@ def test_kis_table_sidecar_counts_as_parseable_status():
 
     assert kis.parse_status == "ok"
     assert kis.status == "success"
+    assert "secrets_present=true" in kis.summary_ko
+
+
+def test_kis_missing_secrets_blocks_with_actionable_next_step():
+    blocker = (
+        "자본 사다리 결정=None (전진 판정 JSON 없음) — "
+        "정합성 불일치·NAV 조회 불능·킬스위치 가능."
+    )
+    report = build_money_gate_alignment(
+        _evidence(
+            **{
+                "money-path": _money_path(stage="BLOCKED", blocker=blocker),
+                "capital-path-readiness": _capital(stage="BLOCKED", blocker=blocker),
+                "edge-autoarm": _fenced("결정 JSON", {}),
+                "rebalance-paper-forward": _forward(max_n_obs=0),
+                "kis-smoke": _kis_smoke_missing_secrets(),
+            }
+        ),
+        now=NOW,
+    )
+
+    kis = [surface for surface in report.gate_surfaces if surface.key == "kis-smoke"][0]
+    assert kis.parse_status == "ok"
+    assert kis.status == "MISSING_SECRETS"
+    assert "secrets_present=false" in kis.summary_ko
+    issue = next(issue for issue in report.alignment_issues if issue.gate_key == "kis-smoke")
+    assert issue.severity == SEVERITY_BLOCKED
+    assert issue.observed == "secrets_present=false"
+    assert "VULTR_SSH_USER" in report.next_action_ko
+    assert "VULTR_SSH_PRIVATE_KEY" in report.next_action_ko
+    assert blocker in report.next_action_ko
 
 
 def test_deterministic_for_same_inputs():
