@@ -489,6 +489,8 @@ class MoneyPathReport:
             f"{run.run_id or '(불명)'} / {run.timestamp_utc or '(시각 불명)'} / "
             f"event={run.event or '(불명)'} |",
             f"| 마지막 LIVE 스텝 | {live_step} |",
+            "| 마지막 전략 의도 게이트 | "
+            f"ok={run.intent_gate_ok}, reason={run.intent_gate_reason or '(불명)'} |",
             f"| 마지막 preflight | ok={run.preflight_ok}, reason={run.preflight_reason} |",
             f"| 마지막 손실 브레이커 | {run.breaker_reason or '(불명)'} |",
             f"| 마지막 주문 상태 | {states} |",
