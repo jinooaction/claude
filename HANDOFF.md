@@ -29,19 +29,19 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 상세 규칙은 Codex 세션에서는 `AGENTS.md`, Claude 세션에서는 `CLAUDE.md` 본문 참조.
 
-## 한눈 요약표 — 2026-07-22 KST 최신 코드 main 기준
+## 한눈 요약표 — 2026-07-29 KST 최신 코드 main 기준
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `e5f8292` — Merge pull request #534 from jinooaction/codex/ssh-secret-fail-closed |
-| main 테스트 | #534 merge 전 최종 검증 기준 `uv run pytest` → 2682 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
-| main 린트 | #534 merge 전 최종 검증 기준 `uv run ruff check src tests` → All checks passed. |
+| 마지막 main 커밋 | `d7a214d` — Merge pull request #536 from jinooaction/codex/money-path-intent-loss-block |
+| main 테스트 | #536 merge 전 최종 검증 기준 `uv run pytest` → 2684 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
+| main 린트 | #536 merge 전 최종 검증 기준 `uv run ruff check src tests` → All checks passed. |
 | 열린 PR | 없음(이 문서 편집 시점). |
 | 출시 완료 스펙 | 최신 추가: 119(보안 신뢰 경계 강화와 후속 SSH boundary repair 및 live-money workflow 보호 환경: GitHub root SSH secret 제거, strict known_hosts, go-live fail-closed, canary hash 필수화, 배포 락·토큰 캐시·주문 불확실성·reduce-only·sidecar redaction, root key retire repair script, forced-command deploy gateway, `production` 보호 환경), 118(운영자가 이해 가능한 최종 보고 생존성 계약), 117(`SUBMISSION_UNKNOWN` broker lookup 복구), 116(단일 `ExecutionAuthority`와 계좌별 broker-write 잠금), 115(계좌 상태 불명확 시 신규 BUY 차단과 sell-only 저하 상태). 이전 스펙 058~114는 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
-| 골격 스펙 | 없음. `.specify/feature.json`은 최신 출시 스펙 `specs/119-security-trust-boundary-hardening`를 가리킨다. 스펙 119는 #529, 후속 #531, #533, #534로 main에 들어갔다. |
-| 최근 출시 작업 | #534 20개 SSH workflow의 secret 누락 조기 차단 공통화. #533 live-money 및 halt-release workflow에 GitHub `production` 보호 환경 적용. #531 SSH boundary repair 후속 보강. #529 보안 신뢰 경계 강화. |
-| 활성 작업 | 열린 PR 없음. #534 main push에서 `Deploy on merge to main` run `29846134323`, `Forward anchored verdict` run `29846134390`, `Regime-stratified strategy performance` run `29846134311`은 failure다. 세 실패 모두 `VULTR_SSH_USER`/`VULTR_SSH_PRIVATE_KEY` 부재를 공통 SSH 검증기가 앞단에서 드러낸 안전 중단이다. released-work run `29846134307`, money-path run `29846134317`, KIS smoke run `29846134420`, autonomous-work run `29846134298`, execution-quality run `29846151715`은 success다. KIS smoke sidecar는 commit `e5f8292`, `secrets_present=false`, `smoke_state=(unset)`다. 돈 경로는 `PREVIEW_ONLY`, `can_submit_real_orders=false`이며 실주문은 불가하다. |
-| 안전 경계 | #533과 #534는 등급 3 안전 경계 변경이다. 보호 환경과 SSH 비밀값 검증으로 GitHub Actions에서 서버·실거래 경계로 들어가는 길을 좁혔다. K1 주문 제한, K4 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 실제 주문·취소·실거래 재무장·자본 배분·whitelist/caps 확대·손실 예산·비밀값은 바꾸지 않았다. 서버 실제 `/root/.ssh/authorized_keys` cleanup은 이 세션에서 SSH/API 권한이 없어 직접 수행하지 못했지만, `deploy/repair-ssh-boundary.sh`가 main에 들어갔다. 현재 돈 경로는 `PREVIEW_ONLY`다. |
+| 골격 스펙 | 없음. `.specify/feature.json`은 최신 출시 스펙 `specs/119-security-trust-boundary-hardening`를 가리킨다. 스펙 119는 #529, 후속 #531, #533, #534로 main에 들어갔다. #536은 새 스펙이 아니라 money-path 안전 보고 보정이다. |
+| 최근 출시 작업 | #536 micro GTAA 전략 의도 게이트 실패(`latest_intent_loss`)를 money-path 최상위 `BLOCKED` 상태로 드러내는 보정. #534 20개 SSH workflow의 secret 누락 조기 차단 공통화. #533 live-money 및 halt-release workflow에 GitHub `production` 보호 환경 적용. |
+| 활성 작업 | 열린 PR 없음. 2026-07-28T16:15Z 최신 sidecar 기준 pipeline-liveness는 OK이고 money-path는 `PREVIEW_ONLY`/자본 사다리 `BLOCKED`다. micro GTAA 최신 sidecar run `30287251205`는 `armed=false`, `LIVE 스텝=skipped`, strategy-intent gate `ok=false`, `reason=latest_intent_loss`, `cumulative_pnl_usd=-1.14`다. `VULTR_SSH_USER`/`VULTR_SSH_PRIVATE_KEY`가 GitHub secrets에 없어 forward/edge/server SSH 단계는 계속 안전 중단된다. |
+| 안전 경계 | #536은 등급 3 안전 보고 보정이다. 새 주문 허용이 아니라 손실 의도 게이트 실패를 실주문 차단 상태로 더 명확히 드러냈다. #533/#534는 GitHub Actions에서 서버·실거래 경계로 들어가는 길을 보호 환경과 SSH 비밀값 검증으로 좁혔다. K1 주문 제한, K4 감사 로그, 헌법, kernel manifest, 실제 주문·취소·실거래 재무장·자본 배분·whitelist/caps 확대·손실 예산·비밀값은 바꾸지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`라 실주문 불가다. |
 
 ## 돈 경로 상태 판독 규칙 (필수 — 스펙 062)
 
@@ -50,9 +50,9 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 1. `git fetch origin '+refs/heads/automation/*:refs/remotes/origin/automation/*'`로 자동화 사이드카를 갱신한다.
 2. 우선 `git show origin/automation/money-path-last-run:LAST_RUN.md`에서 `## 실제 돈 최상위 상태`를 확인한다. 그 섹션이 없으면 아직 스펙 062 money-path가 한 번도 발행되지 않은 상태이므로 아래 원본 증거를 직접 읽거나 `scripts/money_path_probe.py`를 로컬 재현한다.
 3. 현재 live 의도 원본은 `automation/rebalance-micro-gtaa.request`다. 마지막 실행 증거는 `origin/automation/rebalance-micro-gtaa-last-run:LAST_RUN.md`다. KIS smoke 현금값은 preflight 입력일 뿐, `armed` 상태나 다음 live 가능 여부의 대체 근거가 아니다.
-4. `live_money_state.status`가 `PREVIEW_ONLY`이면 "실주문 불가"로 답한다. `REAL_ORDER_PATH_ARMED`이면 "실제 돈 경로가 켜져 있음"으로 답한다. 단, 이것은 비-push 실행이 미국 정규장, KIS 매수가능 현금 1% 버퍼, micro 손실 브레이커, K1 한도와 K2 허용 종목을 통과하면 실주문 단계에 도달할 수 있다는 뜻이지 접수·체결 보장이 아니다.
+4. `live_money_state.status`가 `PREVIEW_ONLY`이면 "실주문 불가"로 답한다. `BLOCKED`이면 "안전 게이트가 실주문을 막고 있음"으로 답하고 `detail`과 `last_run.intent_gate_reason`을 같이 읽는다. `REAL_ORDER_PATH_ARMED`이면 "실제 돈 경로가 켜져 있음"으로 답한다. 단, 이것은 비-push 실행이 미국 정규장, KIS 매수가능 현금 1% 버퍼, micro 손실 브레이커, K1 한도와 K2 허용 종목을 통과하면 실주문 단계에 도달할 수 있다는 뜻이지 접수·체결 보장이 아니다.
 5. 스펙 063 이후 micro GTAA live canary는 계좌 전체 preview를 만든다. 기존 보유 `BHP`, `MRK`, `ORANY`, `RELX`는 목표 유니버스가 아니라 청산 전용이다. 현금이 목표 매수와 1% 완충금을 충족하지 못하고 청산 전용 매도 후보가 있으면 이번 주기는 `effective_side=sell`로 매도만 실행하고, 매수는 다음 fresh KIS 현금 조회가 충분할 때까지 보류한다.
-6. 스펙 065 이후 현재 기준(2026-06-27T01:34Z): micro GTAA는 `armed:false`, money-path `live_money_state.status=PREVIEW_ONLY`, 최신 micro sidecar run `28274580272`는 `event=push`, `LIVE 스텝=skipped`, strategy-intent gate `ok=false`, `reason=latest_intent_loss`다. 스펙 062의 2026-06-22 `armed:true` 기록은 역사이며 현재 상태 근거로 쓰지 않는다.
+6. 현재 기준(2026-07-28T16:15Z): micro GTAA는 `armed:false`, money-path `live_money_state.status=PREVIEW_ONLY`, 최신 micro sidecar run `30287251205`는 `event=schedule`, `LIVE 스텝=skipped`, strategy-intent gate `ok=false`, `reason=latest_intent_loss`, `cumulative_pnl_usd=-1.14`다. 스펙 062의 2026-06-22 `armed:true` 기록은 역사이며 현재 상태 근거로 쓰지 않는다.
 7. PR #398 이후 `latest_signal=INTENT_LOSS`인데 verdict가 아직 `INSUFFICIENT_DATA`인 경우, "다음 micro GTAA 실행에서 live 표본이 자동으로 더 쌓인다"고 말하지 않는다. live gate가 실주문을 막으므로 새 live 표본은 자동 누적되지 않는다. 다음 행동은 forward 토너먼트·재지정 증거를 기다리거나 별도 전략 검토 후 재무장 여부를 판단하는 것이다.
 
 ## 전략 검토 상태 판독 규칙 (필수 — 스펙 066)
@@ -80,6 +80,34 @@ uv run python scripts/money_path_probe.py --manifest | while IFS=$'\t' read -r k
 done
 uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.live_money_state'
 ```
+
+## 최근 관찰 — 2026-07-29 KST (money-path 전략 의도 게이트 차단 표시)
+
+현재 `main` 최신 코드 머지는 `d7a214d`(#536, micro intent loss money-path 차단 표시)이다.
+기능 커밋은 `52bbc1a`다.
+
+- **문제 정의**: 운영자가 "왜 실제 거래가 안 나가느냐"고 물었을 때, 최신 micro GTAA sidecar에는
+  strategy-intent gate `ok=false`, `reason=latest_intent_loss`가 있었지만 money-path 최상위 상태는
+  `armed:false` 또는 자본 사다리 차단만 먼저 보여서 손실 의도 게이트 실패를 곧바로 재현하기 어려웠다.
+- **구현 상태**: #536은 `scripts/money_path_probe.py`가 `## 라이브 전 전략 의도 게이트` JSON을 읽게
+  하고, `src/auto_invest/analytics/money_path.py`의 micro GTAA 최상위 상태가 `armed:true`라도 최신 intent
+  gate `ok=false`면 `BLOCKED`, `can_submit_real_orders=false`로 떨어지게 했다. 기존 오래된 LAST_RUN 형식과
+  `armed:false` 미리보기 차단은 유지했다.
+- **운영 상태**: 2026-07-28T16:13~16:15Z에 승인한 `armed:false` 진단 run들은 주문 0건으로 끝났고
+  sidecar를 새로 남겼다. pipeline-liveness는 OK다. 최신 money-path는 `PREVIEW_ONLY`, 자본 사다리
+  `BLOCKED`이고, 최신 micro GTAA run `30287251205`는 `LIVE 스텝=skipped`, intent gate
+  `latest_intent_loss`, 누적 의도 손익 `-1.14 USD`다.
+- **남은 현실**: 실제 돈이 아직 움직이지 않는 직접 이유는 하나가 아니다. `rebalance-micro-gtaa.request`가
+  `armed:false`이고, intent gate가 `latest_intent_loss`로 막고 있으며, GitHub secrets
+  `VULTR_SSH_USER`/`VULTR_SSH_PRIVATE_KEY` 부재 때문에 forward/edge/server SSH 계열도 판단 JSON을 못
+  만든다. 서버에서 `deploy/repair-ssh-boundary.sh` 실행과 non-root deploy key 등록이 끝나기 전까지
+  이 SSH 실패는 정상 안전 중단이다.
+- **검증**: #536 브랜치에서 `uv run pytest` 2684 passed, 5 skipped,
+  `uv run ruff check src tests` 통과, `uv run python scripts/agent_harness_probe.py --strict` OK(14/14),
+  `uv run python scripts/check_handoff_facts.py` OK, `git diff --check` 통과,
+  PR 본문 품질 관문과 PR check `pr-quality-gate` 통과를 확인했다.
+- **안전 경계**: 등급 3 안전 보고 보정이다. 실제 주문, 실거래 전환, 자본 배분, 라이브 전략 교체,
+  whitelist/caps, 손실 예산, KIS secret, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다.
 
 ## 최근 관찰 — 2026-07-22 KST (스펙 119 production 환경과 SSH secret fail-closed 완료)
 
