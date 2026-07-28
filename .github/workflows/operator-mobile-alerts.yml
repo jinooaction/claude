@@ -76,6 +76,8 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_TIMEOUT_SECONDS: "20"
+          TELEGRAM_MAX_RETRIES: "3"
         run: |
           set -uo pipefail
           echo "::add-mask::${TELEGRAM_BOT_TOKEN:-}"
@@ -118,7 +120,8 @@ jobs:
                   bot_token=token,
                   chat_id=chat_id,
                   source_label="auto-invest operator-status",
-                  max_retries=1,
+                  timeout_seconds=float(os.environ.get("TELEGRAM_TIMEOUT_SECONDS", "20")),
+                  max_retries=max(0, int(os.environ.get("TELEGRAM_MAX_RETRIES", "3"))),
               )
               asyncio.run(TelegramNotifier(cfg).send_message(str(decision["message_ko"])))
               send_status_path.write_text(SEND_SENT + "\n", encoding="utf-8")
