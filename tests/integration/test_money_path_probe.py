@@ -97,6 +97,32 @@ _MICRO_SIDECAR_OLD_FORMAT = (
     "```\n"
 )
 
+_MICRO_SIDECAR_INTENT_LOSS = (
+    "# 마이크로 GTAA 라이브 캐너리 — 최신 실행\n\n"
+    "| 항목 | 값 |\n|------|-----|\n"
+    "| run_id | 30287251205 |\n"
+    "| timestamp_utc | 2026-07-28T16:14:45Z |\n"
+    "| armed | true |\n"
+    "| capital_usd | 1000 |\n"
+    "| blocked | true |\n"
+    "| event | workflow_dispatch |\n"
+    "| LIVE 스텝 | skipped |\n\n"
+    + _block(
+        "라이브 전 전략 의도 게이트",
+        {
+            "schema_version": 1,
+            "ok": False,
+            "reason": "latest_intent_loss",
+            "blocking_reasons": ["latest_intent_loss"],
+            "latest_signal": "INTENT_LOSS",
+        },
+    )
+    + _block(
+        "라이브 전 손실 브레이커",
+        {"reason": "within loss limits", "tripped": False},
+    )
+)
+
 _MICRO_REQUEST_ARMED = """armed: true
 capital_usd: 1000
 requested_by: mason
@@ -249,6 +275,34 @@ def test_probe_micro_armed_state_is_top_level_json(tmp_path, capsys):
     assert live["last_run"]["broker_rejected_count"] == 2
     assert live["last_run"]["accepted_or_filled_count"] == 0
     assert live["last_run"]["preflight_reason"] == "preflight evidence absent"
+
+
+def test_probe_micro_intent_loss_blocks_live_money_state(tmp_path, capsys):
+    req = tmp_path / "micro.request"
+    req.write_text(_MICRO_REQUEST_ARMED, encoding="utf-8")
+    _write(tmp_path, "edge-autoarm", _edge_sidecar())
+    _write(tmp_path, "rebalance-live-canary", _CANARY_SIDECAR)
+    _write(tmp_path, "rebalance-micro-gtaa", _MICRO_SIDECAR_INTENT_LOSS)
+    rc = probe_main(
+        [
+            "--sidecar-dir",
+            str(tmp_path),
+            "--micro-request",
+            str(req),
+            "--json",
+            "--now",
+            "2026-07-28T16:20:00Z",
+        ]
+    )
+    assert rc == 0
+    out = json.loads(capsys.readouterr().out)
+    live = out["live_money_state"]
+    assert live["status"] == "BLOCKED"
+    assert live["can_submit_real_orders"] is False
+    assert live["next_scheduled_live_utc"] is None
+    assert "latest_intent_loss" in live["detail"]
+    assert live["last_run"]["intent_gate_ok"] is False
+    assert live["last_run"]["intent_gate_reason"] == "latest_intent_loss"
 
 
 def test_probe_micro_disarmed_state_is_preview_only_text(tmp_path, capsys):

@@ -94,6 +94,7 @@ MICRO_GTAA_PATH = "micro-gtaa-live-canary"
 MICRO_MAX_CAPITAL_USD = 1000
 MICRO_SCHEDULE_HOUR_UTC = 15
 MICRO_REQUIRED_GATES = (
+    "strategy intent gate clear",
     "non-push workflow event",
     "US regular session",
     "KIS purchasable cash >= planned buys + 1% buffer",
@@ -256,6 +257,8 @@ class MicroGtaaRunEvidence:
     timestamp_utc: str | None
     event: str | None
     live_step: str | None
+    intent_gate_ok: bool | None
+    intent_gate_reason: str | None
     preflight_ok: bool | None
     preflight_reason: str
     breaker_reason: str | None
@@ -269,6 +272,8 @@ class MicroGtaaRunEvidence:
             "timestamp_utc": self.timestamp_utc,
             "event": self.event,
             "live_step": self.live_step,
+            "intent_gate_ok": self.intent_gate_ok,
+            "intent_gate_reason": self.intent_gate_reason,
             "preflight_ok": self.preflight_ok,
             "preflight_reason": self.preflight_reason,
             "breaker_reason": self.breaker_reason,
@@ -772,6 +777,16 @@ def _micro_run_evidence(data: dict | None) -> MicroGtaaRunEvidence | None:
         preflight_ok = None
         preflight_reason = "preflight evidence absent"
 
+    intent_gate = data.get("intent_gate")
+    if isinstance(intent_gate, dict):
+        intent_gate_ok = (
+            intent_gate.get("ok") if isinstance(intent_gate.get("ok"), bool) else None
+        )
+        intent_gate_reason = str(intent_gate.get("reason") or "intent gate reason absent")
+    else:
+        intent_gate_ok = None
+        intent_gate_reason = None
+
     breaker = data.get("breaker")
     breaker_reason = (
         str(breaker.get("reason")) if isinstance(breaker, dict) and breaker.get("reason") else None
@@ -784,6 +799,8 @@ def _micro_run_evidence(data: dict | None) -> MicroGtaaRunEvidence | None:
         ),
         event=None if data.get("event") is None else str(data.get("event")),
         live_step=None if data.get("live_step") is None else str(data.get("live_step")),
+        intent_gate_ok=intent_gate_ok,
+        intent_gate_reason=intent_gate_reason,
         preflight_ok=preflight_ok,
         preflight_reason=preflight_reason,
         breaker_reason=breaker_reason,
@@ -847,6 +864,18 @@ def assess_live_money_state(
             capital_usd=capital,
             next_scheduled_live_utc=None,
             detail="armed:false — push/스케줄 모두 미리보기만, 실주문 0건.",
+            **base,
+        )
+    if last_run and last_run.intent_gate_ok is False:
+        return LiveMoneyState(
+            status=LIVE_STATUS_BLOCKED,
+            can_submit_real_orders=False,
+            capital_usd=capital,
+            next_scheduled_live_utc=None,
+            detail=(
+                "armed:true 이지만 최신 전략 의도 게이트가 실주문을 차단함: "
+                f"{last_run.intent_gate_reason or 'reason absent'}."
+            ),
             **base,
         )
 

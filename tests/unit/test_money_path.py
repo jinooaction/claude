@@ -118,6 +118,18 @@ def _micro_last_run(preflight=None):
     }
 
 
+def _micro_last_run_with_intent_loss():
+    payload = _micro_last_run()
+    payload["intent_gate"] = {
+        "schema_version": 1,
+        "ok": False,
+        "reason": "latest_intent_loss",
+        "blocking_reasons": ["latest_intent_loss"],
+        "latest_signal": "INTENT_LOSS",
+    }
+    return payload
+
+
 # ── 스펙 062: 실제 돈 최상위 상태(micro GTAA) ──
 
 
@@ -136,6 +148,22 @@ def test_live_money_state_micro_armed_surfaces_real_order_path():
     assert state.last_run.accepted_or_filled_count == 0
     assert state.last_run.broker_rejected_count == 2
     assert state.last_run.preflight_reason == "preflight evidence absent"
+
+
+def test_live_money_state_micro_armed_intent_loss_blocks_orders():
+    state = assess_live_money_state(
+        micro_request=_micro_request(),
+        micro_last_run=_micro_last_run_with_intent_loss(),
+        now=MONDAY_BEFORE_MICRO_SCHEDULE,
+    )
+
+    assert state.status == LIVE_STATUS_BLOCKED
+    assert state.can_submit_real_orders is False
+    assert state.next_scheduled_live_utc is None
+    assert "latest_intent_loss" in state.detail
+    assert state.last_run is not None
+    assert state.last_run.intent_gate_ok is False
+    assert state.last_run.intent_gate_reason == "latest_intent_loss"
 
 
 def test_live_money_state_micro_disarmed_is_preview_only():
