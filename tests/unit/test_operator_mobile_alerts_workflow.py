@@ -33,6 +33,15 @@ def test_operator_mobile_alerts_workflow_skips_missing_telegram_secrets() -> Non
     assert "::add-mask::${TELEGRAM_CHAT_ID" in text
 
 
+def test_operator_mobile_alerts_workflow_retries_transient_telegram_timeouts() -> None:
+    text = _workflow_text()
+
+    assert 'TELEGRAM_TIMEOUT_SECONDS: "20"' in text
+    assert 'TELEGRAM_MAX_RETRIES: "3"' in text
+    assert 'timeout_seconds=float(os.environ.get("TELEGRAM_TIMEOUT_SECONDS", "20"))' in text
+    assert 'max_retries=max(0, int(os.environ.get("TELEGRAM_MAX_RETRIES", "3")))' in text
+
+
 def test_operator_mobile_alerts_workflow_stays_read_only() -> None:
     text = _workflow_text()
 
