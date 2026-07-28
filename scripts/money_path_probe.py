@@ -119,6 +119,7 @@ def parse_micro_sidecar(text: str | None) -> dict | None:
         "timestamp_utc": rows.get("timestamp_utc"),
         "event": rows.get("event"),
         "live_step": _live_step(rows.get("LIVE 스텝")),
+        "intent_gate": extract_json_after_header(text, "라이브 전 전략 의도 게이트"),
         "preflight": extract_json_after_header(text, "라이브 전 주문 전제 확인"),
         "breaker": extract_json_after_header(text, "라이브 전 손실 브레이커"),
         "live_result": extract_json_after_header(text, "라이브 재조정 결과"),
