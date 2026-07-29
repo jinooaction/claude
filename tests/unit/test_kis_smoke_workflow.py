@@ -35,3 +35,12 @@ def test_kis_smoke_uses_isolated_checkout_instead_of_live_repo() -> None:
         r"git\s+-C\s+\"\$\{LIVE_REPO\}\"[^\n]*\b(fetch|checkout|pull|reset)\b",
         body,
     )
+
+
+def test_kis_smoke_classifies_ssh_setup_failures_without_red_x() -> None:
+    body = WORKFLOW.read_text()
+
+    assert "set +e\n          ssh -o StrictHostKeyChecking=yes" in body
+    assert 'smoke_pipe_status=("${PIPESTATUS[@]}")' in body
+    assert "set -e\n          smoke_exit=${smoke_pipe_status[0]:-1}" in body
+    assert "smoke_state=setup_pending" in body

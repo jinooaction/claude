@@ -129,7 +129,10 @@ jobs:
           echo "대상 인스턴스: ${USER}@${HOST}:${port}"
           echo "============================================================"
 
-          # set -e 없이 ssh 의 exit code 를 명시적으로 처리.
+          # GitHub Actions 의 기본 shell 은 bash -e 이다. SSH 인증 실패(255)
+          # 같은 셋업 보류 상태에서도 아래 분류 로직까지 내려가야 하므로,
+          # 원격 smoke 파이프라인 동안만 errexit 을 끄고 종료 코드를 직접 판정한다.
+          set +e
           ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
               -o BatchMode=yes \
               -p "${port}" \
@@ -251,7 +254,9 @@ jobs:
           # pytest 통과/실패가 진짜 회귀 신호 — exit code 그대로 propagate.
           exit "${pytest_exit}"
           REMOTE_SCRIPT
-          smoke_exit=${PIPESTATUS[0]}
+          smoke_pipe_status=("${PIPESTATUS[@]}")
+          set -e
+          smoke_exit=${smoke_pipe_status[0]:-1}
           echo "smoke_exit=${smoke_exit}"
           echo "smoke_exit=${smoke_exit}" >> "$GITHUB_OUTPUT"
 
