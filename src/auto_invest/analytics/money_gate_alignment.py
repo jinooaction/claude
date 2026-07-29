@@ -517,6 +517,8 @@ def _kis_smoke_status(raw: str | None) -> str:
     secrets_present = (_table_value(raw, "secrets_present") or "").lower()
     key_valid = (_table_value(raw, "key_valid") or "").lower()
     smoke_state = _table_value(raw, "smoke_state")
+    if (smoke_state or "").lower() in {"(unset)", "unset"}:
+        smoke_state = None
     if secrets_present == "false":
         return "MISSING_SECRETS"
     if key_valid == "false":
@@ -875,6 +877,19 @@ def _kis_smoke_blocked_issue(raw: str | None) -> GateAlignmentIssue | None:
             (
                 "VULTR_SSH_PRIVATE_KEY를 ed25519 개인키 전체 형식으로 다시 등록하고 "
                 "KIS smoke를 다시 실행한다."
+            ),
+            (SOURCE_REFS["kis-smoke"],),
+        )
+    if status.lower() == "setup_pending":
+        return _issue(
+            SEVERITY_BLOCKED,
+            "kis-smoke",
+            "server and broker evidence available",
+            "smoke_state=setup_pending",
+            "KIS smoke가 SSH 또는 원격 서버 셋업 미완료로 브로커 사전 점검까지 도달하지 못한다.",
+            (
+                "서버에서 deploy/repair-ssh-boundary.sh에 새 deploy 공개키를 설치하고 "
+                "forced-command gateway 상태를 확인한 뒤 KIS smoke를 다시 실행한다."
             ),
             (SOURCE_REFS["kis-smoke"],),
         )

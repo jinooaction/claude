@@ -177,6 +177,18 @@ def _kis_smoke_missing_secrets() -> str:
     )
 
 
+def _kis_smoke_setup_pending() -> str:
+    return (
+        "| secrets_present | true |\n"
+        "| timestamp_utc | 2026-07-01T14:13:22Z |\n"
+        "| smoke_state | setup_pending |\n"
+        "| smoke_exit | 255 |\n"
+        "| key_valid | true |\n"
+        "\n"
+        "gh-deploy@[REDACTED_HOST]: Permission denied (publickey,password).\n"
+    )
+
+
 def _evidence(**overrides: str | None) -> dict[str, str | None]:
     base: dict[str, str | None] = {
         "money-path": _money_path(),
@@ -337,6 +349,34 @@ def test_kis_missing_secrets_blocks_with_actionable_next_step():
     assert issue.observed == "secrets_present=false"
     assert "VULTR_SSH_USER" in report.next_action_ko
     assert "VULTR_SSH_PRIVATE_KEY" in report.next_action_ko
+    assert blocker in report.next_action_ko
+
+
+def test_kis_setup_pending_blocks_with_server_repair_next_step():
+    blocker = (
+        "자본 사다리 결정=None (전진 판정 JSON 없음) — "
+        "정합성 불일치·NAV 조회 불능·킬스위치 가능."
+    )
+    report = build_money_gate_alignment(
+        _evidence(
+            **{
+                "money-path": _money_path(stage="BLOCKED", blocker=blocker),
+                "capital-path-readiness": _capital(stage="BLOCKED", blocker=blocker),
+                "edge-autoarm": _fenced("결정 JSON", {}),
+                "rebalance-paper-forward": _forward(max_n_obs=0),
+                "kis-smoke": _kis_smoke_setup_pending(),
+            }
+        ),
+        now=NOW,
+    )
+
+    kis = [surface for surface in report.gate_surfaces if surface.key == "kis-smoke"][0]
+    assert kis.parse_status == "ok"
+    assert kis.status == "setup_pending"
+    issue = next(issue for issue in report.alignment_issues if issue.gate_key == "kis-smoke")
+    assert issue.severity == SEVERITY_BLOCKED
+    assert issue.observed == "smoke_state=setup_pending"
+    assert "repair-ssh-boundary.sh" in report.next_action_ko
     assert blocker in report.next_action_ko
 
 
