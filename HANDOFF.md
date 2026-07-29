@@ -33,15 +33,15 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `f395e5a` — Merge pull request #545 from jinooaction/codex/operator-alert-retry |
-| main 테스트 | #545 operator Telegram alert retry 보강 기준 `uv run pytest -q` → 2689 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
-| main 린트 | #545 operator Telegram alert retry 보강 기준 `uv run ruff check src tests` → All checks passed. |
+| 마지막 main 커밋 | `d3d1117` — Merge pull request #547 from jinooaction/codex/kis-smoke-ssh-setup-pending |
+| main 테스트 | #547 KIS smoke setup-pending 분류 보강 기준 `uv run pytest -q` → 2691 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
+| main 린트 | #547 KIS smoke setup-pending 분류 보강 기준 `uv run ruff check src tests` → All checks passed. |
 | 열린 PR | 없음(이 문서 편집 시점). |
 | 출시 완료 스펙 | 최신 추가: 119(보안 신뢰 경계 강화와 후속 SSH boundary repair 및 live-money workflow 보호 환경: GitHub root SSH secret 제거, strict known_hosts, go-live fail-closed, canary hash 필수화, 배포 락·토큰 캐시·주문 불확실성·reduce-only·sidecar redaction, root key retire repair script, forced-command deploy gateway, `production` 보호 환경), 118(운영자가 이해 가능한 최종 보고 생존성 계약), 117(`SUBMISSION_UNKNOWN` broker lookup 복구), 116(단일 `ExecutionAuthority`와 계좌별 broker-write 잠금), 115(계좌 상태 불명확 시 신규 BUY 차단과 sell-only 저하 상태). 이전 스펙 058~114는 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
-| 골격 스펙 | 없음. `.specify/feature.json`은 최신 출시 스펙 `specs/119-security-trust-boundary-hardening`를 가리킨다. 스펙 119는 #529, 후속 #531, #533, #534로 main에 들어갔다. #536/#538/#540/#542/#543/#545는 새 스펙이 아니라 money-path, money-gate-alignment, operator-status 안전 보고·알림 보정이다. |
-| 최근 출시 작업 | #545는 operator-status Telegram 알림이 일시적 `ReadTimeout`에 20초씩 최대 3회 재시도하도록 보강했다. #543은 operator-status 최상위 다음 행동으로 money-gate-alignment의 구체적 복구 순서를 우선 표시하게 했다. #542는 KIS smoke의 `secrets_present=false`를 `MISSING_SECRETS` 차단으로 드러냈고, #540은 money-path 차단을 `BLOCKED`로 닫았으며, #538/#536은 전략 의도 게이트 실패(`latest_intent_loss`)를 실주문 불가 상태로 드러냈다. |
-| 활성 작업 | 열린 PR 없음. 2026-07-28T22:44Z operator-status run `30405646357`는 main `f395e5a` 기준 workflow success지만 Telegram send는 20초 타임아웃/3회 재시도 뒤에도 `ReadTimeout`으로 `send_status=FAILED`다. 그래도 sidecar와 모바일 상태판은 발행됐다. pipeline-liveness run `30405755092`는 success다. deploy-on-merge run `30405646377`은 `missing VULTR_SSH_USER/SSH_USER`로 실패했는데, 앞서 돈 경로에서 확인한 SSH 비밀값 미등록과 같은 fail-closed 안전 중단이다. money-gate-alignment run `30404997993`은 `BLOCKED`이고 KIS smoke를 `MISSING_SECRETS`로 읽는다. money-path run `30404941885`는 `PREVIEW_ONLY`/자본 사다리 `BLOCKED`, micro GTAA 최신 run은 `armed=false`, `LIVE 스텝=skipped`, strategy-intent gate `ok=false`, `reason=latest_intent_loss`, `cumulative_pnl_usd=-1.14`다. |
-| 안전 경계 | #545는 등급 2 운영 알림 보강이다. 주문, 자본, live 설정, 서버 SSH, 비밀값 저장을 건드리지 않고 Telegram 전송 재시도 예산만 늘렸다. #536/#538/#540/#542/#543은 등급 3 안전 보고 보정이다. 새 주문 허용이 아니라 손실 의도 게이트, 자본 사다리 차단, KIS 서버 접속 비밀값 누락, 운영자 알림의 다음 행동 순서를 실주문 불가 상태에 맞게 더 명확히 드러냈다. #533/#534는 GitHub Actions에서 서버·실거래 경계로 들어가는 길을 보호 환경과 SSH 비밀값 검증으로 좁혔다. K1 주문 제한, K4 감사 로그, 헌법, kernel manifest, 실제 주문·취소·실거래 재무장·자본 배분·whitelist/caps 확대·손실 예산·비밀값은 바꾸지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`라 실주문 불가다. |
+| 골격 스펙 | 없음. `.specify/feature.json`은 최신 출시 스펙 `specs/119-security-trust-boundary-hardening`를 가리킨다. 스펙 119는 #529, 후속 #531, #533, #534로 main에 들어갔다. #536/#538/#540/#542/#543/#545/#547은 새 스펙이 아니라 money-path, money-gate-alignment, operator-status, KIS smoke 안전 보고·알림 보정이다. |
+| 최근 출시 작업 | #547은 KIS smoke가 SSH exit 255에서 멈춰 상태를 못 남기던 문제를 고쳐 `setup_pending`을 sidecar에 남기게 했다. money-gate-alignment도 이 상태를 `BLOCKED` KIS 이슈로 읽고 "서버에 새 deploy 공개키 설치 후 KIS smoke 재실행"을 다음 행동으로 낸다. #545는 operator-status Telegram 알림 재시도를 보강했고, #543/#542/#540/#538/#536은 돈 경로 차단·KIS secret 누락·전략 의도 게이트 실패를 사람이 읽을 수 있게 드러냈다. |
+| 활성 작업 | 열린 PR 없음. GitHub repo secret 목록에는 `VULTR_SSH_USER`(2026-07-29T14:18:16Z)와 `VULTR_SSH_PRIVATE_KEY`(2026-07-29T14:18:17Z)가 등록돼 있다(값은 출력·커밋 금지). KIS smoke run `30461091999`는 main `d3d1117` push 기준 workflow success이며 sidecar는 `secrets_present=true`, `key_valid=true`, `smoke_state=setup_pending`, `smoke_exit=255`다. `gh-deploy@[REDACTED_HOST]` SSH는 `Permission denied (publickey,password)`로 거부됐다. money-gate-alignment run `30461180149`는 `BLOCKED`이고 다음 행동은 서버에서 `deploy/repair-ssh-boundary.sh`에 새 deploy 공개키를 설치한 뒤 KIS smoke를 다시 실행하는 것이다. deploy-on-merge run `30461091918`도 같은 서버 SSH 거부로 실패했다. money-path run은 `30404941885` 기준 `PREVIEW_ONLY`/자본 사다리 `BLOCKED`, micro GTAA 최신 run은 `armed=false`, `LIVE 스텝=skipped`, strategy-intent gate `ok=false`, `reason=latest_intent_loss`, `cumulative_pnl_usd=-1.14`다. |
+| 안전 경계 | #547은 등급 2 운영 진단 보정이다. SSH 실패를 성공으로 꾸미지 않고 `setup_pending`으로 정확히 남긴다. 이번 세션에서 GitHub repo secret 두 개는 등록했지만 secret 값은 출력·커밋하지 않았고, 브로커 호출·주문·자본 배분·live 재무장·전략 교체·whitelist/caps 확대·손실 예산·KIS secret·감사 로그·헌법·kernel manifest는 바꾸지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`라 실주문 불가다. |
 
 ## 돈 경로 상태 판독 규칙 (필수 — 스펙 062)
 
@@ -52,7 +52,7 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 3. 현재 live 의도 원본은 `automation/rebalance-micro-gtaa.request`다. 마지막 실행 증거는 `origin/automation/rebalance-micro-gtaa-last-run:LAST_RUN.md`다. KIS smoke 현금값은 preflight 입력일 뿐, `armed` 상태나 다음 live 가능 여부의 대체 근거가 아니다.
 4. `live_money_state.status`가 `PREVIEW_ONLY`이면 "실주문 불가"로 답한다. `BLOCKED`이면 "안전 게이트가 실주문을 막고 있음"으로 답하고 `detail`과 `last_run.intent_gate_reason`을 같이 읽는다. `REAL_ORDER_PATH_ARMED`이면 "실제 돈 경로가 켜져 있음"으로 답한다. 단, 이것은 비-push 실행이 미국 정규장, KIS 매수가능 현금 1% 버퍼, micro 손실 브레이커, K1 한도와 K2 허용 종목을 통과하면 실주문 단계에 도달할 수 있다는 뜻이지 접수·체결 보장이 아니다.
 5. 스펙 063 이후 micro GTAA live canary는 계좌 전체 preview를 만든다. 기존 보유 `BHP`, `MRK`, `ORANY`, `RELX`는 목표 유니버스가 아니라 청산 전용이다. 현금이 목표 매수와 1% 완충금을 충족하지 못하고 청산 전용 매도 후보가 있으면 이번 주기는 `effective_side=sell`로 매도만 실행하고, 매수는 다음 fresh KIS 현금 조회가 충분할 때까지 보류한다.
-6. 현재 기준(2026-07-28T22:44Z operator-status, 22:33Z money-path): micro GTAA는 `armed:false`, money-path `live_money_state.status=PREVIEW_ONLY`, 최신 micro sidecar는 `event=schedule`, `LIVE 스텝=skipped`, strategy-intent gate `ok=false`, `reason=latest_intent_loss`, `cumulative_pnl_usd=-1.14`다. money-gate-alignment 최신 run `30404997993`은 이 상태를 `UNKNOWN`이 아니라 `BLOCKED`로 보고하며, KIS smoke 비밀값 누락을 `MISSING_SECRETS`로 따로 표시한다. operator-status 최신 run `30405646357`은 다음 행동을 SSH 비밀값 복구와 KIS smoke 재실행부터 말한다. 스펙 062의 2026-06-22 `armed:true` 기록은 역사이며 현재 상태 근거로 쓰지 않는다.
+6. 현재 기준(2026-07-29T14:30Z money-gate-alignment, 14:29Z KIS smoke, 10:35Z money-path): micro GTAA는 `armed:false`, money-path `live_money_state.status=PREVIEW_ONLY`, 최신 micro sidecar는 `event=schedule`, `LIVE 스텝=skipped`, strategy-intent gate `ok=false`, `reason=latest_intent_loss`, `cumulative_pnl_usd=-1.14`다. money-gate-alignment 최신 run `30461180149`은 `BLOCKED`이고 KIS smoke를 `setup_pending`으로 읽는다. GitHub repo secrets는 등록됐지만 서버가 아직 새 deploy 공개키를 받아들이지 않아 `Permission denied (publickey,password)`로 막힌다. 다음 행동은 서버에서 `deploy/repair-ssh-boundary.sh`로 forced-command gateway를 설치하고 KIS smoke를 다시 실행한 뒤 자본 사다리와 전략 의도 게이트를 다시 읽는 것이다. 스펙 062의 2026-06-22 `armed:true` 기록은 역사이며 현재 상태 근거로 쓰지 않는다.
 7. PR #398 이후 `latest_signal=INTENT_LOSS`인데 verdict가 아직 `INSUFFICIENT_DATA`인 경우, "다음 micro GTAA 실행에서 live 표본이 자동으로 더 쌓인다"고 말하지 않는다. live gate가 실주문을 막으므로 새 live 표본은 자동 누적되지 않는다. 다음 행동은 forward 토너먼트·재지정 증거를 기다리거나 별도 전략 검토 후 재무장 여부를 판단하는 것이다.
 
 ## 전략 검토 상태 판독 규칙 (필수 — 스펙 066)
@@ -81,70 +81,55 @@ done
 uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.live_money_state'
 ```
 
-## 최근 관찰 — 2026-07-29 KST (돈 경로 차단, SSH 비밀값 누락, 운영자 알림 재시도 보강)
+## 최근 관찰 — 2026-07-29 KST (KIS smoke setup_pending 분류와 서버 공개키 설치 대기)
 
-현재 `main` 최신 코드 머지는 `f395e5a`(#545, operator Telegram alert retry 보강)이다.
-#545 기능 커밋은 `5c766d0`이다. 직전 기능 머지는 `3cd4591`(#543, operator-status alignment action 우선순위 보정)이고,
-#543 기능 커밋은 `9192898`, #542 기능 커밋은 `07ecc29`, #540 기능 커밋은 `2587573`,
-#538 기능 커밋은 `08d1c6c`, #536 기능 커밋은 `52bbc1a`다.
+현재 `main` 최신 코드 머지는 `d3d1117`(#547, KIS smoke setup-pending 분류 보강)이다.
+#547 기능 커밋은 `83c1a5e`다. 직전 기능 머지는 `f395e5a`(#545, operator Telegram alert retry 보강)이고,
+#545 기능 커밋은 `5c766d0`, #543 기능 커밋은 `9192898`, #542 기능 커밋은 `07ecc29`,
+#540 기능 커밋은 `2587573`, #538 기능 커밋은 `08d1c6c`, #536 기능 커밋은 `52bbc1a`다.
 
 - **문제 정의**: 운영자가 "왜 실제 거래가 안 나가느냐"고 물었을 때, 최신 micro GTAA sidecar에는
-  strategy-intent gate `ok=false`, `reason=latest_intent_loss`가 있었지만 money-path 최상위 상태는
-  `armed:false` 또는 자본 사다리 차단만 먼저 보여서 손실 의도 게이트 실패를 곧바로 재현하기 어려웠다.
-  또한 money-path와 capital-path-readiness가 둘 다 차단을 말해도 money-gate-alignment가 `UNKNOWN`으로
-  내려가 운영자 상태판의 다음 행동이 헛돌았다. #542 전에는 KIS smoke가 `secrets_present=false`를
-  보고해도 정렬 표면이 단순 `(unset)`으로 보일 수 있어 서버 접속 비밀값 누락이 첫 복구 행동으로
-  드러나지 않았다. #543 전에는 정렬 보고서가 올바른 다음 행동을 계산해도 operator-status 최상위
-  `next_action_ko`와 Telegram 본문이 입력 순서상 money-path blocker만 먼저 보여줬다. #545 전에는
-  Telegram API의 일시적 `ReadTimeout`에 operator-status 알림이 짧은 예산으로 실패할 수 있었다.
-- **구현 상태**: #545는 `.github/workflows/operator-mobile-alerts.yml`의 Telegram 전송 단계에
-  `TELEGRAM_TIMEOUT_SECONDS=20`, `TELEGRAM_MAX_RETRIES=3`을 명시했고, 인라인 Python이 이 값으로
-  `TelegramConfig`를 구성하게 했다. #543은 `src/auto_invest/analytics/operator_status.py`가 개입 필요 표면을 고를 때
-  `pipeline-liveness` 다음으로 `money-gate-alignment`를 우선하도록 했다. 그래서 운영자 알림의
-  "다음 행동"은 통합 진단이 계산한 SSH 비밀값 복구 순서를 먼저 말한다. #542는
-  `src/auto_invest/analytics/money_gate_alignment.py`가 KIS smoke 표의
-  `secrets_present=false`를 `MISSING_SECRETS`, `key_valid=false`를 `INVALID_KEY`로 판정하게 했다.
-  돈 경로 blocker와 KIS blocker가 동시에 있으면 next action은 서버의 제한 deploy gateway 설치,
-  GitHub Actions의 non-root `VULTR_SSH_USER`/`VULTR_SSH_PRIVATE_KEY` 등록, KIS smoke 재실행을 먼저
-  말한 뒤 자본 사다리 blocker를 보게 한다. #540은 `src/auto_invest/analytics/money_gate_alignment.py`가 money-path live 상태나
-  자본 사다리 단계가 `BLOCKED`일 때 `money-path` 차단 이슈를 만들게 했다. 그래서 sidecar들이 이미
-  차단을 말하면 정렬 루프도 fail-closed로 `BLOCKED`를 낸다. #536은 `scripts/money_path_probe.py`가
-  `## 라이브 전 전략 의도 게이트` JSON을 읽게 하고, `src/auto_invest/analytics/money_path.py`의 micro
-  GTAA 최상위 상태가 `armed:true`라도 최신 intent gate `ok=false`면 `BLOCKED`,
-  `can_submit_real_orders=false`로 떨어지게 했다. #538은 사람이 읽는 money-path 표에
-  `마지막 전략 의도 게이트 | ok=..., reason=...` 행을 추가했다.
-- **운영 상태**: #545 main push 뒤 operator-mobile-alerts run `30405646357`는 commit `f395e5a` 기준
-  workflow success였고 operator-status는 `ACTION_REQUIRED`다. 알림 단계 로그에서 새 설정
-  `TELEGRAM_TIMEOUT_SECONDS=20`, `TELEGRAM_MAX_RETRIES=3`이 적용됐지만, Telegram API는 네 번 모두
-  `ReadTimeout`으로 끝나 sidecar `send_status=FAILED`를 남겼다. 최상위 `next_action_ko`와 모바일
-  상태판 본문에는 서버 `deploy/repair-ssh-boundary.sh`, GitHub Actions
-  `VULTR_SSH_USER`/`VULTR_SSH_PRIVATE_KEY` 등록, KIS smoke 재실행이 포함된다.
-  pipeline-liveness run `30405755092`는 success다. `Deploy on merge to main` run `30405646377`은
-  `Install SSH key` 단계에서 `missing VULTR_SSH_USER/SSH_USER`로 실패했다. 이는 #545 회귀가 아니라
-  서버 deploy gateway 비밀값 미등록으로 인한 의도된 fail-closed 안전 중단이다. money-gate-alignment
-  run `30404997993`은 commit `490645d` 기준
-  `overall_status=BLOCKED`, `live_money_status=PREVIEW_ONLY`, `readiness_state=LIVE_BLOCKED`,
-  `capital_ladder_stage=BLOCKED`, `kis-smoke=MISSING_SECRETS`를 발행했다.
-  최신 money-path는 `PREVIEW_ONLY`, 자본 사다리 `BLOCKED`이고, 최신 micro GTAA run은
-  `LIVE 스텝=skipped`, intent gate `latest_intent_loss`, 누적 의도 손익 `-1.14 USD`다.
-- **남은 현실**: 실제 돈이 아직 움직이지 않는 직접 이유는 하나가 아니다. `rebalance-micro-gtaa.request`가
-  `armed:false`이고, intent gate가 `latest_intent_loss`로 막고 있으며, GitHub secrets
-  `VULTR_SSH_USER`/`VULTR_SSH_PRIVATE_KEY` 부재 때문에 forward/edge/server SSH 계열도 판단 JSON을 못
-  만든다. 서버에서 `deploy/repair-ssh-boundary.sh` 실행과 non-root deploy key 등록이 끝나기 전까지
-  이 SSH 실패는 정상 안전 중단이다. 또한 Telegram 전송 실패는 운영자 알림 표면의 외부 API 문제이고,
-  주문·자본·live 경로의 차단 원인은 아니다.
-- **검증**: #545 브랜치에서 `uv run pytest` 2689 passed, 5 skipped,
-  `uv run ruff check src tests` 통과, `uv run python scripts/agent_harness_probe.py --strict` OK(14/14),
+  strategy-intent gate `ok=false`, `reason=latest_intent_loss`가 있었고 money-path도 `PREVIEW_ONLY`와
+  자본 사다리 `BLOCKED`를 보고했다. 그 위에 서버 SSH 경로도 막혀 있었다. 이번 세션에서 fresh deploy
+  key를 만들고 GitHub repo secrets `VULTR_SSH_USER`/`VULTR_SSH_PRIVATE_KEY`를 등록한 뒤 KIS smoke를
+  다시 돌리자, 비밀값 누락은 해소됐지만 서버가 새 키를 아직 받아들이지 않아 `Permission denied`가 났다.
+  그런데 #547 전 KIS smoke workflow는 `bash -e` 때문에 SSH exit 255에서 바로 종료되어 sidecar에
+  `setup_pending`을 남기지 못했고, 정렬 루프가 "서버 공개키 설치 대기"와 "원인 미상"을 구분하기 어려웠다.
+- **구현 상태**: #547은 `.github/workflows/kis-smoke.yml`의 원격 smoke 실행을 `set +e`와
+  `PIPESTATUS` 캡처로 감싸 SSH exit 255도 의도한 분류 단계까지 흐르게 했다. 그래서 KIS smoke sidecar는
+  `secrets_present=true`, `key_valid=true`, `smoke_state=setup_pending`, `smoke_exit=255`를 남긴다.
+  `src/auto_invest/analytics/money_gate_alignment.py`는 `(unset)`/`unset`을 `UNKNOWN`으로 정규화하고,
+  `setup_pending`을 KIS `BLOCKED` 이슈로 읽어 "서버에 deploy 공개키 설치 후 KIS smoke 재실행"을
+  다음 행동으로 낸다. 회귀 테스트는 `tests/unit/test_kis_smoke_workflow.py`와
+  `tests/unit/test_money_gate_alignment.py`에 추가했다. #545는 Telegram 일시 타임아웃 재시도를 보강했고,
+  #543/#542/#540/#538/#536은 돈 경로 차단·KIS secret 누락·전략 의도 게이트 실패를 사람이 읽을 수 있게 드러냈다.
+- **운영 상태**: GitHub repo secret 목록에는 `VULTR_SSH_USER`와 `VULTR_SSH_PRIVATE_KEY`가 2026-07-29T14:18Z
+  기준 등록돼 있다(값은 출력하지 않았다). `Verify operator setup` run `30460226078`은 secret과 key
+  형식 검증을 지나 `ssh_failed`로 실패했다. #547 머지 뒤 KIS smoke run `30461091999`는 workflow success이고
+  sidecar는 main `d3d1117`, `setup_pending`, `smoke_exit=255`, `Permission denied (publickey,password)`를
+  기록한다. money-gate-alignment 수동 run `30461180149`는 main `d3d1117` 기준 success지만 종합 판정은
+  `BLOCKED`다. 입력 증거는 `live_money_status=PREVIEW_ONLY`, `readiness_state=LIVE_BLOCKED`,
+  `capital_ladder_stage=BLOCKED`, `kis-smoke=setup_pending`이고, 다음 행동은 서버에서
+  `deploy/repair-ssh-boundary.sh`에 새 deploy 공개키를 설치하고 KIS smoke를 다시 실행하는 것이다.
+  deploy-on-merge run `30461091918`도 같은 서버 SSH 거부로 실패했다. 이는 배포가 열린 것이 아니라
+  서버 경계가 아직 fail-closed로 닫혀 있다는 증거다.
+- **남은 현실**: 실제 돈이 아직 움직이지 않는 이유는 세 겹이다. 첫째, 서버가 새 deploy 공개키를
+  `gh-deploy` forced-command gateway에 아직 설치하지 않아 KIS smoke와 deploy가 서버 안쪽으로 못 들어간다.
+  이 부분은 root 콘솔이나 검증된 out-of-band root SSH 같은 서버 접근이 있어야 끝난다. 둘째, money-path는
+  계속 `PREVIEW_ONLY`이고 자본 사다리는 `BLOCKED`다. 셋째, micro GTAA 최신 실행은 `armed=false`,
+  `LIVE 스텝=skipped`, 전략 의도 게이트 `latest_intent_loss`, 누적 의도 손익 `-1.14 USD`라 실주문을
+  허용하지 않는다. 서버 공개키 설치 뒤 KIS smoke가 통과하면 그 다음에는 자본 사다리 JSON과 전략 의도
+  게이트를 다시 읽어야 한다. 실제 주문·재무장·자본 배분은 이 게이트들이 통과하기 전에는 하지 않는다.
+- **검증**: #547 브랜치에서 `uv run pytest tests/unit/test_kis_smoke_workflow.py tests/unit/test_money_gate_alignment.py -q`
+  12 passed, `uv run pytest` 2691 passed, 5 skipped, `uv run ruff check src tests` 통과,
+  `uv run python scripts/agent_harness_probe.py --strict` OK(14/14),
   `uv run python scripts/check_handoff_facts.py` OK, PR 본문 품질 관문과 PR check `pr-quality-gate` 통과를
-  확인했다. 머지 직전에도 `uv run pytest` 2689 passed, 5 skipped와
-  `uv run ruff check src tests` 통과를 다시 확인했다. #545 머지 뒤 main 기준 `uv run pytest -q`는
-  이 HANDOFF 갱신 전 `마지막 main 커밋` 행이 stale이라 하네스 관련 2개만 실패했고, 이 갱신이 그 원인을
-  바로잡는다. #543에서는 원격 automation sidecar 재현에서 operator-status 최상위 `next_action_ko`와
-  알림 본문에 SSH 비밀값 복구 순서가 들어가는지 확인했다. #542에서는 원격 automation sidecar 재현으로
-  `overall_status=BLOCKED`와 `kis-smoke=MISSING_SECRETS`를 확인했다.
-- **안전 경계**: #545는 등급 2 운영 알림 보강이고, #536/#538/#540/#542/#543은 등급 3 안전 보고 보정이다.
-  실제 주문, 실거래 전환, 자본 배분, 라이브 전략 교체, whitelist/caps, 손실 예산, KIS secret,
-  감사 로그, 헌법, kernel manifest는 바꾸지 않았다.
+  확인했다. #547 merge 뒤 main push KIS smoke run `30461091999`와 money-gate-alignment run `30461180149`도
+  읽어 상태 전환을 확인했다. 이 HANDOFF 갱신 전 `uv run pytest -q`는 `마지막 main 커밋` 행이 stale이라
+  하네스 관련 2개만 실패했고, 이 갱신이 그 원인을 바로잡는다.
+- **안전 경계**: #547은 등급 2 운영 진단 보정이다. 이번 세션에서 GitHub repo secret은 등록했지만
+  secret 값은 출력·커밋하지 않았다. 실제 주문, 실거래 전환, 자본 배분, 라이브 전략 교체, whitelist/caps,
+  손실 예산, KIS secret, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다.
 
 ## 최근 관찰 — 2026-07-22 KST (스펙 119 production 환경과 SSH secret fail-closed 완료)
 
