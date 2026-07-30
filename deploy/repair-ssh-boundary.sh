@@ -129,6 +129,9 @@ case "${cmd}" in
         echo "refused command: ${cmd}" >&2
         exit 126
         ;;
+    observe\ promote-readiness)
+        exec sudo -n /usr/local/sbin/auto-invest-observe promote-readiness
+        ;;
     start-deploy)
         exec sudo -n /usr/bin/systemctl start auto-invest-deploy.service
         ;;

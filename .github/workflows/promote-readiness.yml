@@ -50,10 +50,7 @@ jobs:
           port="${PORT:-22}"
           ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
               -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
-              'cd /opt/auto-invest && /usr/local/bin/uv run auto-invest promote-check \
-                 --db data/auto_invest.db \
-                 --rules deploy/canary-live-rules.toml \
-                 --capital 12000 --format json' \
+              "observe promote-readiness" \
               > /tmp/readiness.json 2>/tmp/readiness.err
           ssh_exit=$?
           echo "ssh_exit=${ssh_exit}" >> "$GITHUB_OUTPUT"
