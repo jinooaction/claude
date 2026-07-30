@@ -87,6 +87,9 @@ AGENT_HARNESS_REGRESSION_LIVENESS_CANDIDATE_ID = (
     "candidate-agent-harness-regression-liveness-contract"
 )
 OPERATOR_REPORT_LIVENESS_CANDIDATE_ID = "candidate-operator-report-liveness-contract"
+EVIDENCE_SOURCE_DIVERSIFICATION_VALIDATION_FAILURES_CANDIDATE_ID = (
+    "candidate-evidence-source-diversification-validation-failures"
+)
 
 _REJECTED_STATUSES = {
     "reject",
@@ -629,6 +632,56 @@ class EvidenceSurface:
 
 
 @dataclass(frozen=True)
+class BlockedPackageRef:
+    """검증 실패가 막힌 후보 패키지를 재현하는 최소 참조."""
+
+    candidate_id: str
+    package_id: str
+    package_kind: str
+    status: str
+    retryable: bool
+    diagnostic_codes: tuple[str, ...]
+    next_action_codes: tuple[str, ...]
+    safe_to_auto_run: bool
+    source_ref: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "candidate_id": self.candidate_id,
+            "package_id": self.package_id,
+            "package_kind": self.package_kind,
+            "status": self.status,
+            "retryable": self.retryable,
+            "diagnostic_codes": list(self.diagnostic_codes),
+            "next_action_codes": list(self.next_action_codes),
+            "safe_to_auto_run": self.safe_to_auto_run,
+            "source_ref": self.source_ref,
+        }
+
+
+@dataclass(frozen=True)
+class ValidationFailureGroup:
+    """동일 진단 코드로 묶인 막힌 검증 패키지 집계."""
+
+    reason_code: str
+    summary_ko: str
+    package_count: int
+    retryable_count: int
+    safe_action_codes: tuple[str, ...]
+    package_refs: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "reason_code": self.reason_code,
+            "summary_ko": self.summary_ko,
+            "package_count": self.package_count,
+            "retryable_count": self.retryable_count,
+            "safe_action_codes": list(self.safe_action_codes),
+            "package_refs": list(self.package_refs),
+        }
+
+
+@dataclass(frozen=True)
 class WorkPacket:
     """다음 Codex 작업으로 넘길 최소 실행 단위."""
 
@@ -649,6 +702,8 @@ class WorkPacket:
     required_inputs: tuple[str, ...]
     safety_boundary: tuple[str, ...]
     source_refs: tuple[str, ...]
+    blocked_package_refs: tuple[BlockedPackageRef, ...] = ()
+    validation_failure_groups: tuple[ValidationFailureGroup, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -669,6 +724,12 @@ class WorkPacket:
             "required_inputs": list(self.required_inputs),
             "safety_boundary": list(self.safety_boundary),
             "source_refs": list(self.source_refs),
+            "blocked_package_refs": [
+                package.to_dict() for package in self.blocked_package_refs
+            ],
+            "validation_failure_groups": [
+                group.to_dict() for group in self.validation_failure_groups
+            ],
         }
 
 
@@ -1006,6 +1067,39 @@ class AutonomousWorkExecutionReport:
             if packet.completion_gates:
                 gates = "; ".join(packet.completion_gates)
                 lines.append(f"| completion_gates | {_table(gates)} |")
+
+            if packet.validation_failure_groups:
+                lines += [
+                    "",
+                    "## 검증 실패 그룹",
+                    "",
+                    "| 진단 | 패키지 | 재시도 가능 | 안전 다음 행동 | 요약 |",
+                    "|------|-------:|-----------:|----------------|------|",
+                ]
+                for group in packet.validation_failure_groups:
+                    actions = ", ".join(group.safe_action_codes) or "-"
+                    lines.append(
+                        f"| {_table(group.reason_code)} | {group.package_count} | "
+                        f"{group.retryable_count} | {_table(actions)} | "
+                        f"{_table(group.summary_ko)} |"
+                    )
+
+            if packet.blocked_package_refs:
+                lines += [
+                    "",
+                    "## 막힌 검증 패키지",
+                    "",
+                    "| 후보 | 패키지 | 종류 | 진단 | 안전 다음 행동 | 출처 |",
+                    "|------|--------|------|------|----------------|------|",
+                ]
+                for package in packet.blocked_package_refs:
+                    diagnostics = ", ".join(package.diagnostic_codes) or "-"
+                    actions = ", ".join(package.next_action_codes) or "-"
+                    lines.append(
+                        f"| {_table(package.candidate_id)} | {_table(package.package_id)} | "
+                        f"{_table(package.package_kind)} | {_table(diagnostics)} | "
+                        f"{_table(actions)} | {_table(package.source_ref)} |"
+                    )
 
         lines += ["", "## 실행 가능 후보", ""]
         if self.ranked_work:
@@ -1458,6 +1552,33 @@ def _required_inputs(item: Mapping[str, Any], source_ref: str) -> tuple[str, ...
     return tuple(deduped)
 
 
+def _truthy(raw: Any) -> bool:
+    if isinstance(raw, bool):
+        return raw
+    if isinstance(raw, (int, float)):
+        return raw != 0
+    if isinstance(raw, str):
+        return raw.strip().lower() in {"1", "true", "yes", "y"}
+    return False
+
+
+def _mapping_sequence(raw: Any) -> tuple[Mapping[str, Any], ...]:
+    if isinstance(raw, Mapping):
+        return (raw,)
+    if isinstance(raw, Sequence) and not isinstance(raw, (str, bytes, bytearray)):
+        return tuple(item for item in raw if isinstance(item, Mapping))
+    return ()
+
+
+def _unique_strings(values: Sequence[str]) -> tuple[str, ...]:
+    deduped: list[str] = []
+    for value in values:
+        cleaned = _clean(value)
+        if cleaned and cleaned not in deduped:
+            deduped.append(cleaned)
+    return tuple(deduped)
+
+
 def _status_for_candidate(
     source_status: str,
     risk_grade: int,
@@ -1850,6 +1971,304 @@ def _candidate_packets(parsed: dict[str, Any]) -> list[WorkPacket]:
             )
         )
     return packets
+
+
+def _blocked_package_candidate_id(item: Mapping[str, Any]) -> str:
+    return _clean(
+        item.get("candidate_id")
+        or item.get("candidate")
+        or item.get("candidate_key")
+    )
+
+
+def _blocked_package_id(item: Mapping[str, Any]) -> str:
+    return _clean(
+        item.get("package_id")
+        or item.get("package")
+        or item.get("id")
+        or item.get("result_id")
+    )
+
+
+def _diagnostic_items(item: Mapping[str, Any]) -> tuple[Mapping[str, Any], ...]:
+    return _mapping_sequence(item.get("diagnostics"))
+
+
+def _next_action_items(item: Mapping[str, Any]) -> tuple[Mapping[str, Any], ...]:
+    actions: list[Mapping[str, Any]] = list(_mapping_sequence(item.get("next_actions")))
+    for diagnostic in _diagnostic_items(item):
+        actions.extend(_mapping_sequence(diagnostic.get("next_actions")))
+    return tuple(actions)
+
+
+def _diagnostic_codes(item: Mapping[str, Any]) -> tuple[str, ...]:
+    return _unique_strings(
+        [
+            _clean(diagnostic.get("code"))
+            for diagnostic in _diagnostic_items(item)
+        ]
+    )
+
+
+def _next_action_codes(item: Mapping[str, Any]) -> tuple[str, ...]:
+    return _unique_strings(
+        [
+            _clean(action.get("action_code") or action.get("code"))
+            for action in _next_action_items(item)
+        ]
+    )
+
+
+def _retryable_validation_failure(item: Mapping[str, Any]) -> bool:
+    if _truthy(item.get("retryable")):
+        return True
+    return any(_truthy(diagnostic.get("retryable")) for diagnostic in _diagnostic_items(item))
+
+
+def _safe_validation_next_action(item: Mapping[str, Any]) -> bool:
+    actions = _next_action_items(item)
+    return bool(actions) and all(_truthy(action.get("safe_to_auto_run")) for action in actions)
+
+
+def _blocked_package_ref_from_item(
+    item: Mapping[str, Any],
+    *,
+    source_key: str,
+) -> BlockedPackageRef | None:
+    source_status = _candidate_status(item)
+    if source_status.lower() not in _BLOCKED_STATUSES:
+        return None
+    candidate_id = _blocked_package_candidate_id(item)
+    package_id = _blocked_package_id(item)
+    if not candidate_id or not package_id:
+        return None
+    retryable = _retryable_validation_failure(item)
+    safe_to_auto_run = _safe_validation_next_action(item)
+    if not retryable or not safe_to_auto_run:
+        return None
+    diagnostic_codes = _diagnostic_codes(item) or ("execution_failed",)
+    next_action_codes = _next_action_codes(item)
+    if not next_action_codes:
+        return None
+    return BlockedPackageRef(
+        candidate_id=candidate_id,
+        package_id=package_id,
+        package_kind=_clean(item.get("package_kind") or item.get("kind") or "unknown"),
+        status=source_status.lower(),
+        retryable=retryable,
+        diagnostic_codes=diagnostic_codes,
+        next_action_codes=next_action_codes,
+        safe_to_auto_run=safe_to_auto_run,
+        source_ref=_clean(item.get("source_ref") or _SOURCE_REFS[source_key]),
+    )
+
+
+def _retryable_blocked_package_refs(parsed: Mapping[str, Any]) -> tuple[BlockedPackageRef, ...]:
+    source_items = (
+        (
+            "candidate-result-executor",
+            _items(parsed.get("candidate-result-executor"), ("results", "candidate_results")),
+        ),
+        ("candidate-packages", _items(parsed.get("candidate-packages"), ("packages",))),
+        (
+            "candidate-implementation-factory",
+            _items(parsed.get("candidate-implementation-factory"), ("packages",)),
+        ),
+    )
+    refs: list[BlockedPackageRef] = []
+    seen: set[tuple[str, str]] = set()
+    for source_key, items in source_items:
+        for item in items:
+            ref = _blocked_package_ref_from_item(item, source_key=source_key)
+            if ref is None:
+                continue
+            key = (ref.candidate_id, ref.package_id)
+            if key in seen:
+                continue
+            refs.append(ref)
+            seen.add(key)
+    return tuple(sorted(refs, key=lambda ref: (ref.candidate_id, ref.package_id)))
+
+
+def _validation_failure_groups(
+    refs: Sequence[BlockedPackageRef],
+) -> tuple[ValidationFailureGroup, ...]:
+    grouped: dict[str, list[BlockedPackageRef]] = {}
+    for ref in refs:
+        for code in ref.diagnostic_codes or ("blocked_validation_failure",):
+            grouped.setdefault(code, []).append(ref)
+
+    groups: list[ValidationFailureGroup] = []
+    for code, packages in grouped.items():
+        safe_actions = _unique_strings(
+            sorted(
+                {
+                    action
+                    for package in packages
+                    for action in package.next_action_codes
+                }
+            )
+        )
+        package_refs = tuple(sorted(package.package_id for package in packages))
+        retryable_count = sum(package.retryable for package in packages)
+        groups.append(
+            ValidationFailureGroup(
+                reason_code=code,
+                summary_ko=(
+                    f"{code} 진단으로 막힌 검증 패키지 {len(packages)}개를 "
+                    "같은 원인으로 묶었다."
+                ),
+                package_count=len(packages),
+                retryable_count=retryable_count,
+                safe_action_codes=safe_actions,
+                package_refs=package_refs,
+            )
+        )
+    return tuple(sorted(groups, key=lambda group: group.reason_code))
+
+
+def _source_diversification_refs() -> tuple[str, ...]:
+    return (
+        _SOURCE_REFS["released-work"],
+        _SOURCE_REFS["evolution-backlog"],
+        _SOURCE_REFS["evolution-ledger"],
+        _SOURCE_REFS["candidate-implementation-factory"],
+        _SOURCE_REFS["candidate-packages"],
+        _SOURCE_REFS["candidate-result-executor"],
+        _SOURCE_REFS["money-path"],
+        _SOURCE_REFS["edge-autoarm"],
+        _SOURCE_REFS["pipeline-liveness"],
+    )
+
+
+def _nested_clean(mapping: Any, *keys: str) -> str:
+    current = mapping
+    for key in keys:
+        if not isinstance(current, Mapping):
+            return ""
+        current = current.get(key)
+    return _clean(current)
+
+
+def _verdict_from_text(*values: object) -> str:
+    text = " ".join(_clean(value) for value in values)
+    for token in ("NO_EDGE", "EDGE_CONFIRMED", "INTENT_LOSS", "INTENT_GAIN"):
+        if token in text:
+            return token
+    return ""
+
+
+def _money_and_edge_context(parsed: Mapping[str, Any]) -> tuple[str, str, str, str]:
+    money = parsed.get("money-path")
+    edge = parsed.get("edge-autoarm")
+    live_status = "미확인"
+    ladder_stage = "미확인"
+    edge_status = "미확인"
+    forward_verdict = "미확인"
+    if isinstance(money, Mapping):
+        live_status = (
+            _nested_clean(money, "live_money_state", "status")
+            or _clean(money.get("live_money_status"))
+            or _clean(money.get("overall_status"))
+            or live_status
+        )
+        ladder_stage = (
+            _clean(money.get("stage"))
+            or _clean(money.get("capital_ladder_stage"))
+            or _clean(money.get("readiness_state"))
+            or ladder_stage
+        )
+    if isinstance(edge, Mapping):
+        edge_status = (
+            _clean(edge.get("overall_status"))
+            or _clean(edge.get("status"))
+            or _clean(edge.get("action"))
+            or edge_status
+        )
+        forward_verdict = (
+            _clean(edge.get("current_signal"))
+            or _clean(edge.get("forward_verdict"))
+            or _clean(edge.get("verdict"))
+            or _verdict_from_text(edge.get("reason"))
+            or forward_verdict
+        )
+    return live_status, ladder_stage, edge_status, forward_verdict
+
+
+def _evidence_source_diversification_packet(
+    packets: Sequence[WorkPacket],
+    parsed: Mapping[str, Any],
+) -> WorkPacket | None:
+    if any(packet.status == STATUS_EXECUTION_READY for packet in packets):
+        return None
+    if any(packet.status == STATUS_OPERATOR_APPROVAL_REQUIRED for packet in packets):
+        return None
+    released = _released_candidates(parsed.get("released-work"))
+    if EVIDENCE_SOURCE_DIVERSIFICATION_VALIDATION_FAILURES_CANDIDATE_ID in released:
+        return None
+
+    blocked_refs = _retryable_blocked_package_refs(parsed)
+    if not blocked_refs:
+        return None
+
+    source_refs = _source_diversification_refs()
+    groups = _validation_failure_groups(blocked_refs)
+    autonomy_level, start_guidance, completion_gates = _execution_contract(
+        STATUS_EXECUTION_READY,
+        2,
+        (),
+    )
+    closed_count = sum(packet.status in _CLOSED_QUEUE_STATUSES for packet in packets)
+    blocked_count = sum(packet.status == STATUS_BLOCKED for packet in packets)
+    live_status, ladder_stage, edge_status, forward_verdict = _money_and_edge_context(
+        parsed
+    )
+    diagnostic_summary = ", ".join(group.reason_code for group in groups) or "blocked"
+    title = "막힌 검증 패키지 기반 후보 소스 다변화"
+    reason = (
+        f"실행 가능한 일반 후보는 없고 닫힌 후보 {closed_count}개가 남아 있다. "
+        f"일반 큐에서 해석된 막힘은 {blocked_count}개지만, 후보 결과 실행기 "
+        f"증거에는 자동으로 원인을 좁혀볼 수 있는 막힌 검증 패키지 "
+        f"{len(blocked_refs)}개가 있으며 주요 진단은 {diagnostic_summary}이다. "
+        f"money-path는 {live_status}/{ladder_stage}, edge-autoarm은 "
+        f"{edge_status}/{forward_verdict}이므로 "
+        "이 후보는 PREVIEW_ONLY/NO_EDGE_YET 상태에서 실제 주문이나 live 재무장을 "
+        "허용하지 않는 읽기 전용 작업이다."
+    )
+    next_action = (
+        "candidate-result-executor의 종료 코드와 제한된 출력만 읽어 "
+        "strategy_backtest·portfolio_backtest 검증 실패 원인을 좁히고, "
+        "후보 공장 입력 또는 no-live 검증 계약을 보정하는 SDD 작업으로 연결한다."
+    )
+    safety_boundary = (
+        *SAFETY_INVARIANTS,
+        "실제 주문, live 재무장, 자본 배분을 승인하지 않음",
+    )
+    return WorkPacket(
+        packet_id=_packet_id(
+            EVIDENCE_SOURCE_DIVERSIFICATION_VALIDATION_FAILURES_CANDIDATE_ID,
+            title,
+            source_refs,
+        ),
+        candidate_id=EVIDENCE_SOURCE_DIVERSIFICATION_VALIDATION_FAILURES_CANDIDATE_ID,
+        domain_key="agent_ops",
+        title_ko=title,
+        work_type=_DOMAIN_WORK_TYPES["agent_ops"],
+        risk_grade=2,
+        safety_impact=(),
+        priority_score=2650,
+        status=STATUS_EXECUTION_READY,
+        autonomy_level=autonomy_level,
+        reason_ko=reason,
+        next_action_ko=next_action,
+        start_guidance_ko=start_guidance,
+        completion_gates=completion_gates,
+        required_inputs=source_refs,
+        safety_boundary=safety_boundary,
+        source_refs=source_refs,
+        blocked_package_refs=blocked_refs,
+        validation_failure_groups=groups,
+    )
 
 
 def _ledger_rejections(ledger: Any) -> dict[str, str]:
@@ -2913,6 +3332,12 @@ def build_autonomous_work_execution(
     packets.extend(_candidate_packets(parsed))
     packets = list(_apply_ledger_rejections(packets, parsed.get("evolution-ledger")))
     packets = list(_apply_released_work(packets, parsed.get("released-work")))
+    source_diversification_packet = _evidence_source_diversification_packet(
+        packets,
+        parsed,
+    )
+    if source_diversification_packet is not None:
+        packets.append(source_diversification_packet)
 
     ordered = _dedupe_packets(packets)
     macro_candidate_map = _macro_candidate_map(ordered)
@@ -2979,6 +3404,7 @@ __all__ = [
     "AUTONOMY_CODEX_START",
     "AUTONOMY_OPERATOR_APPROVAL",
     "AUTONOMY_RECOVERY_REQUIRED",
+    "BlockedPackageRef",
     "BROKER_DIAGNOSTIC_LIVENESS_CANDIDATE_ID",
     "BROKER_REJECTION_TAXONOMY_CANDIDATE_ID",
     "CODEX_COMPLETION_GATES",
@@ -2986,6 +3412,7 @@ __all__ = [
     "DATA_EVIDENCE_LIVENESS_CANDIDATE_ID",
     "DataEvidenceFrontierMapEntry",
     "EvidenceSurface",
+    "EVIDENCE_SOURCE_DIVERSIFICATION_VALIDATION_FAILURES_CANDIDATE_ID",
     "EXECUTION_COST_BASIS_CANDIDATE_ID",
     "ExecutionQualityFrontierMapEntry",
     "FORWARD_REGIME_EDGE_EXPERIMENT_CANDIDATE_ID",
@@ -3016,6 +3443,7 @@ __all__ = [
     "STATUS_OPERATOR_APPROVAL_REQUIRED",
     "STATUS_RELEASED",
     "STATUS_SUPPRESSED",
+    "ValidationFailureGroup",
     "WORKTREE_CONCURRENCY_LIVENESS_CANDIDATE_ID",
     "WorkPacket",
     "build_autonomous_work_execution",
