@@ -220,7 +220,7 @@ the current worktree. Do not trust prose in this block as the source of truth
 for in-flight work; use the `git_ground_truth` start hook, latest `HANDOFF.md`,
 and `/sync` against `jinooaction/claude` `Codex/*` branches before continuing.
 
-현재 계획 포인터: `specs/119-security-trust-boundary-hardening/plan.md` — GitHub Actions, SSH, go-live, 배포 락, 캐너리 승인, 토큰 캐시, 주문 불확실성, reduce-only 안전 주문, 공개 sidecar 노출을 함께 다루는 보안 신뢰 경계 하드닝.
+현재 계획 포인터: `specs/120-evidence-based-candidate-source-diversification/plan.md` — `PREVIEW_ONLY`/`NO_EDGE_YET`를 우회하지 않고, released/suppressed 후보 반복과 blocked validation package 병목을 새 증거 기반 후보 작업으로 바꾸는 자율 작업 루프 보강.
 
 머지 완료(베이스라인): spec 004 (LLM 판단 지점), 005 (자율 튜너), 006 (배포 자동화), 007 (하드닝 카나리), 008 (백테스트), 009 (paper-run), 010 (자동 룰 설계자), 011 (라이브 성과 측정). **주의: 일부 tasks.md 가 stale 0% 로 표시된 적 있음 — 코드/테스트를 믿을 것.**
 

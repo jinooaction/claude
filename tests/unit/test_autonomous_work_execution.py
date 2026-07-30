@@ -17,6 +17,7 @@ from auto_invest.analytics.autonomous_work_execution import (
     COST_ADJUSTED_EDGE_EXPERIMENT_CANDIDATE_ID,
     DATA_EVIDENCE_FRONTIER_CANDIDATE_ID,
     DATA_EVIDENCE_LIVENESS_CANDIDATE_ID,
+    EVIDENCE_SOURCE_DIVERSIFICATION_VALIDATION_FAILURES_CANDIDATE_ID,
     EXECUTION_COST_BASIS_CANDIDATE_ID,
     EXECUTION_QUALITY_FRONTIER_CANDIDATE_ID,
     FORWARD_REGIME_EDGE_EXPERIMENT_CANDIDATE_ID,
@@ -86,6 +87,64 @@ def _released_through_broker_diagnostic_liveness(*extra_candidate_ids: str) -> s
         EXECUTION_COST_BASIS_CANDIDATE_ID,
         BROKER_DIAGNOSTIC_LIVENESS_CANDIDATE_ID,
         *extra_candidate_ids,
+    )
+
+
+def _retryable_blocked_candidate_results() -> str:
+    next_action = {
+        "action_code": "inspect_validation_failure",
+        "summary_ko": "종료 코드와 제한된 출력을 바탕으로 실패 원인을 더 좁힌다.",
+        "owner": "automation",
+        "safe_to_auto_run": True,
+    }
+    return _json(
+        {
+            "schema_version": "1.0",
+            "results": [
+                {
+                    "candidate_id": "candidate-1ed634d8bf6d",
+                    "package_id": "pkg-c9a284fa4235",
+                    "package_kind": "strategy_backtest",
+                    "status": "blocked",
+                    "source_ref": "candidate-result-executor:pkg-c9a284fa4235",
+                    "block_reason_ko": "검증 명령이 비정상 종료했다.",
+                    "diagnostics": [
+                        {
+                            "code": "execution_failed",
+                            "severity": "warning",
+                            "retryable": True,
+                            "summary_ko": "검증 명령이 비정상 종료했다.",
+                            "evidence_source": "package",
+                            "next_actions": [next_action],
+                            "details": {"exit_code": 1},
+                        }
+                    ],
+                    "next_actions": [next_action],
+                    "retryable": True,
+                },
+                {
+                    "candidate_id": "candidate-cc96b35062da",
+                    "package_id": "pkg-8aae8cb99874",
+                    "package_kind": "portfolio_backtest",
+                    "status": "blocked",
+                    "source_ref": "candidate-result-executor:pkg-8aae8cb99874",
+                    "block_reason_ko": "검증 명령이 비정상 종료했다.",
+                    "diagnostics": [
+                        {
+                            "code": "execution_failed",
+                            "severity": "warning",
+                            "retryable": True,
+                            "summary_ko": "검증 명령이 비정상 종료했다.",
+                            "evidence_source": "package",
+                            "next_actions": [next_action],
+                            "details": {"exit_code": 2},
+                        }
+                    ],
+                    "next_actions": [next_action],
+                    "retryable": True,
+                },
+            ],
+        }
     )
 
 
@@ -473,6 +532,139 @@ def test_released_source_diversification_output_advances_to_objective_calibratio
     released = {packet.candidate_id: packet for packet in report.suppressed_work}
     assert released[source_output_candidate_id].status == STATUS_RELEASED
     assert "다시 착수하지 않는다" in released[source_output_candidate_id].start_guidance_ko
+
+
+def test_retryable_blocked_validation_packages_emit_source_diversification_candidate():
+    source_output_candidate_id = "candidate-source-diversification-sidecar-bottleneck"
+    report = build_autonomous_work_execution(
+        {
+            "capital-path-readiness": _json(
+                {
+                    "readiness_state": "ACCUMULATING_EDGE",
+                    "live_money_status": "PREVIEW_ONLY",
+                    "priority_candidates": [
+                        {
+                            "candidate_id": "candidate-fd04772a23c5",
+                            "domain_key": "live_readiness",
+                            "status": "new",
+                            "score": 597,
+                            "title_ko": "돈 경로 준비도와 기존 게이트 정렬",
+                        }
+                    ],
+                }
+            ),
+            "evolution-backlog": _json(
+                {
+                    "candidates": [
+                        {
+                            "candidate_id": source_output_candidate_id,
+                            "domain_key": "agent_ops",
+                            "status": "new",
+                            "score": 600,
+                            "title_ko": "증거 기반 후보 소스 다변화",
+                            "next_action_ko": "후보 생성 입력을 확장한다.",
+                            "safety_impact": [],
+                            "risk_grade": 2,
+                        }
+                    ]
+                }
+            ),
+            "candidate-result-executor": _retryable_blocked_candidate_results(),
+            "money-path": _json(
+                {
+                    "overall_status": "PREVIEW_ONLY",
+                    "live_money_state": {"status": "PREVIEW_ONLY"},
+                    "stage": "NO_EDGE_YET",
+                }
+            ),
+            "edge-autoarm": _json(
+                {
+                    "action": "WAIT_EDGE",
+                    "current_rung": 0,
+                    "reason": "단 0 + forward 판정='NO_EDGE' — EDGE_CONFIRMED 아님.",
+                    "target_rung": 0,
+                }
+            ),
+            "released-work": _released_work(
+                "candidate-fd04772a23c5",
+                MACRO_GROWTH_DISCOVERY_CANDIDATE_ID,
+                MACRO_GROWTH_SOURCE_DIVERSIFICATION_CANDIDATE_ID,
+                source_output_candidate_id,
+            ),
+            "pipeline-liveness": _liveness(),
+        },
+        now=NOW,
+    )
+
+    assert report.overall_status == STATUS_EXECUTION_READY
+    assert report.selected_work is not None
+    assert (
+        report.selected_work.candidate_id
+        == EVIDENCE_SOURCE_DIVERSIFICATION_VALIDATION_FAILURES_CANDIDATE_ID
+    )
+    assert report.selected_work.status == STATUS_EXECUTION_READY
+    assert report.selected_work.autonomy_level == AUTONOMY_CODEX_START
+    assert report.selected_work.risk_grade == 2
+    assert report.selected_work.safety_impact == ()
+    assert "PREVIEW_ONLY" in report.selected_work.reason_ko
+    assert "NO_EDGE_YET" in report.selected_work.reason_ko
+    assert "WAIT_EDGE" in report.selected_work.reason_ko
+    assert "NO_EDGE" in report.selected_work.reason_ko
+    assert "실제 주문" in " ".join(report.selected_work.safety_boundary)
+
+    selected = report.selected_work.to_dict()
+    assert selected["blocked_package_refs"] == [
+        {
+            "candidate_id": "candidate-1ed634d8bf6d",
+            "package_id": "pkg-c9a284fa4235",
+            "package_kind": "strategy_backtest",
+            "status": "blocked",
+            "retryable": True,
+            "diagnostic_codes": ["execution_failed"],
+            "next_action_codes": ["inspect_validation_failure"],
+            "safe_to_auto_run": True,
+            "source_ref": "candidate-result-executor:pkg-c9a284fa4235",
+        },
+        {
+            "candidate_id": "candidate-cc96b35062da",
+            "package_id": "pkg-8aae8cb99874",
+            "package_kind": "portfolio_backtest",
+            "status": "blocked",
+            "retryable": True,
+            "diagnostic_codes": ["execution_failed"],
+            "next_action_codes": ["inspect_validation_failure"],
+            "safe_to_auto_run": True,
+            "source_ref": "candidate-result-executor:pkg-8aae8cb99874",
+        },
+    ]
+    assert selected["validation_failure_groups"] == [
+        {
+            "reason_code": "execution_failed",
+            "summary_ko": (
+                "execution_failed 진단으로 막힌 검증 패키지 2개를 "
+                "같은 원인으로 묶었다."
+            ),
+            "package_count": 2,
+            "retryable_count": 2,
+            "safe_action_codes": ["inspect_validation_failure"],
+            "package_refs": ["pkg-8aae8cb99874", "pkg-c9a284fa4235"],
+        }
+    ]
+    assert set(selected["required_inputs"]) >= {
+        "automation/candidate-implementation-results:candidate_results.json",
+        "automation/candidate-implementation-factory-last-run:candidate_factory.json",
+        "automation/candidate-implementation-factory-last-run:candidate_packages.json",
+        "automation/money-path-last-run:LAST_RUN.md",
+        "automation/edge-autoarm-last-run:LAST_RUN.md",
+        "automation/released-work-last-run:released_work.json",
+    }
+    assert selected["source_refs"] == selected["required_inputs"]
+
+    markdown = report.as_markdown()
+    assert "## 막힌 검증 패키지" in markdown
+    assert "pkg-c9a284fa4235" in markdown
+    assert "pkg-8aae8cb99874" in markdown
+    assert "inspect_validation_failure" in markdown
 
 
 def test_objective_calibration_tracks_selected_work_deterministically():
