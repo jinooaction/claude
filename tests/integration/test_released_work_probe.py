@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import importlib.util
 import json
+from datetime import UTC, datetime
 from pathlib import Path
+
+from auto_invest.analytics.released_work import scan_released_work
 
 _ROOT = Path(__file__).resolve().parents[2]
 _PROBE_PATH = _ROOT / "scripts" / "released_work_probe.py"
@@ -81,3 +84,19 @@ def test_workflow_stays_read_only_safety_contract():
     assert "${GITHUB_TOKEN}" not in workflow
     assert "automation/released-work-last-run" in workflow
     assert "scripts/released_work_probe.py" in workflow
+
+
+def test_current_evidence_source_diversification_candidate_is_released():
+    report = scan_released_work(
+        _ROOT,
+        now=datetime(2026, 7, 30, 22, 30, 0, tzinfo=UTC),
+        run_id="test",
+        commit="test",
+    )
+
+    assert any(
+        entry.candidate_id == "candidate-evidence-source-diversification-validation-failures"
+        and entry.spec_id == "120-evidence-based-candidate-source-diversification"
+        and entry.source_field == "completed_candidate_id"
+        for entry in report.released_work
+    )

@@ -100,3 +100,8 @@ As the operator, I need the system to improve the route toward a verified edge w
 - The useful next work is to improve evidence generation and validation flow so future forward tournaments have better candidates.
 - Existing public sidecar branches remain the operator-visible evidence surface.
 - Existing SDD, PR quality, and HANDOFF rules remain mandatory for completion.
+
+## Release Ledger
+
+completed_candidate_id: candidate-evidence-source-diversification-validation-failures
+next_candidate_id: none
