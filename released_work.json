@@ -1,5 +1,5 @@
 {
-  "commit": "2d6790a4dbaba43d2bed29cadc76a1dbc7ded7b5",
+  "commit": "97c1f873dafdf53bb6c6e579c62b7ad64b42ce88",
   "overall_status": "OK",
   "released_work": [
     {
@@ -345,7 +345,7 @@
       "status": "released"
     }
   ],
-  "run_id": "30556228103",
+  "run_id": "30586209776",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -426,7 +426,8 @@
     "116-single-execution-authority",
     "117-submission-unknown-broker-lookup",
     "118-operator-report-liveness-contract",
-    "119-security-trust-boundary-hardening"
+    "119-security-trust-boundary-hardening",
+    "120-evidence-based-candidate-source-diversification"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -607,5 +608,5 @@
       "spec_id": "072-candidate-evidence-diagnostics"
     }
   ],
-  "timestamp_utc": "2026-07-30T15:21:07.904846Z"
+  "timestamp_utc": "2026-07-30T22:11:00.760244Z"
 }
