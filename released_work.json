@@ -1,5 +1,5 @@
 {
-  "commit": "97c1f873dafdf53bb6c6e579c62b7ad64b42ce88",
+  "commit": "aee5d4302dabec0e9e2f611dfa3bcdd7a3fbbd16",
   "overall_status": "OK",
   "released_work": [
     {
@@ -135,6 +135,15 @@
       "source_field": "completed_candidate_id",
       "source_file": "specs/082-regime-performance-candidate-scoring/contracts/regime-performance-candidate-scoring.md",
       "spec_id": "082-regime-performance-candidate-scoring",
+      "status": "released"
+    },
+    {
+      "candidate_id": "candidate-evidence-source-diversification-validation-failures",
+      "entry_id": "released-1c5deb2c4597",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/120-evidence-based-candidate-source-diversification/spec.md",
+      "spec_id": "120-evidence-based-candidate-source-diversification",
       "status": "released"
     },
     {
@@ -345,7 +354,7 @@
       "status": "released"
     }
   ],
-  "run_id": "30586209776",
+  "run_id": "30587962825",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -608,5 +617,5 @@
       "spec_id": "072-candidate-evidence-diagnostics"
     }
   ],
-  "timestamp_utc": "2026-07-30T22:11:00.760244Z"
+  "timestamp_utc": "2026-07-30T22:40:42.925301Z"
 }
