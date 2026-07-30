@@ -24,8 +24,10 @@ LEGACY_ROOT_KEY_COMMENT="${LEGACY_ROOT_KEY_COMMENT:-github-actions@auto-invest}"
 LEGACY_ROOT_KEY_PATH="${LEGACY_ROOT_KEY_PATH:-/root/.ssh/auto_invest_gh}"
 GATEWAY_PATH="${GATEWAY_PATH:-/usr/local/sbin/auto-invest-deploy-gateway}"
 SYNC_HELPER_PATH="${SYNC_HELPER_PATH:-/usr/local/sbin/auto-invest-sync-units}"
+KIS_SMOKE_HELPER_PATH="${KIS_SMOKE_HELPER_PATH:-/usr/local/sbin/auto-invest-kis-smoke}"
 SUDOERS_PATH="${SUDOERS_PATH:-/etc/sudoers.d/auto-invest-gh-deploy}"
 REPO_SYNC_UNITS="${REPO_SYNC_UNITS:-/opt/auto-invest/deploy/sync-units.sh}"
+REPO_KIS_SMOKE_HELPER="${REPO_KIS_SMOKE_HELPER:-/opt/auto-invest/deploy/kis-smoke-on-instance.sh}"
 
 die() {
     echo "ERROR: $*" >&2
@@ -68,6 +70,17 @@ case "${cmd}" in
     sync-units)
         exec sudo -n /usr/local/sbin/auto-invest-sync-units
         ;;
+    kis-smoke)
+        exec sudo -n /usr/local/sbin/auto-invest-kis-smoke
+        ;;
+    kis-smoke\ *)
+        smoke_sha="${cmd#kis-smoke }"
+        if [[ "${smoke_sha}" =~ ^[0-9a-f]{40}$ ]]; then
+            exec sudo -n /usr/local/sbin/auto-invest-kis-smoke "${smoke_sha}"
+        fi
+        echo "refused command: ${cmd}" >&2
+        exit 126
+        ;;
     start-deploy)
         exec sudo -n /usr/bin/systemctl start auto-invest-deploy.service
         ;;
@@ -89,6 +102,13 @@ install_sync_helper() {
         die "missing ${REPO_SYNC_UNITS}; deploy current main before running repair"
     fi
     install -m 0755 -o root -g root "${REPO_SYNC_UNITS}" "${SYNC_HELPER_PATH}"
+}
+
+install_kis_smoke_helper() {
+    if [[ ! -f "${REPO_KIS_SMOKE_HELPER}" ]]; then
+        die "missing ${REPO_KIS_SMOKE_HELPER}; deploy current main before running repair"
+    fi
+    install -m 0755 -o root -g root "${REPO_KIS_SMOKE_HELPER}" "${KIS_SMOKE_HELPER_PATH}"
 }
 
 install_deploy_user() {
@@ -126,7 +146,7 @@ install_sudoers() {
     tmp_file="$(mktemp)"
     cat > "${tmp_file}" <<EOF_SUDOERS
 # auto-invest deploy gateway: ${DEPLOY_USER} may run only fixed root-owned commands.
-${DEPLOY_USER} ALL=(root) NOPASSWD: ${SYNC_HELPER_PATH}, /usr/bin/systemctl start auto-invest-deploy.service, /usr/bin/journalctl -u auto-invest-deploy.service -n 120 --no-pager
+${DEPLOY_USER} ALL=(root) NOPASSWD: ${SYNC_HELPER_PATH}, ${KIS_SMOKE_HELPER_PATH}, /usr/bin/systemctl start auto-invest-deploy.service, /usr/bin/journalctl -u auto-invest-deploy.service -n 120 --no-pager
 EOF_SUDOERS
     visudo -cf "${tmp_file}" >/dev/null
     install -m 0440 -o root -g root "${tmp_file}" "${SUDOERS_PATH}"
@@ -187,6 +207,7 @@ main() {
     validate_inputs
     install_gateway
     install_sync_helper
+    install_kis_smoke_helper
     install_deploy_user
     install_authorized_key
     install_sudoers
@@ -196,6 +217,7 @@ main() {
     echo "deploy_user=${DEPLOY_USER}"
     echo "gateway=${GATEWAY_PATH}"
     echo "sync_helper=${SYNC_HELPER_PATH}"
+    echo "kis_smoke_helper=${KIS_SMOKE_HELPER_PATH}"
 }
 
 main "$@"

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# auto-invest — systemd 유닛 동기화 (deploy-on-merge.yml 이 SSH 로 'sudo bash -s' 에 파이프).
+# auto-invest — systemd 유닛 동기화 (forced-command gateway 의 'sync-units' 고정 명령).
 #
 # 목적: deploy/ 의 systemd 유닛(.service/.timer)을 서버 /etc/systemd/system 에 설치하고
 # 타이머를 활성화한다. 또 sudoers 드롭인(deploy/auto-invest-deploy.sudoers)을 동기화한다
