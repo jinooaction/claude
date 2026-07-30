@@ -69,7 +69,10 @@ As the operator, I need local token cache and deploy locks to be written atomica
   only the legacy GitHub root key entry or key files. The gateway may expose
   fixed root-owned helper commands for deploy operations and KIS read-only
   smoke, but KIS smoke must accept only an `origin/main`-reachable commit SHA
-  rather than arbitrary shell text.
+  rather than arbitrary shell text. Money-path observation workflows may expose
+  only fixed `observe ...` helper commands for paper forward tracks, account
+  NAV reads, and live-growth reads; they must not regain arbitrary shell text,
+  live arming, live order placement, capital allocation, or live config writes.
 - **FR-013**: GitHub workflows that can switch live mode, place real orders, or
   release halt must declare the protected `production` environment.
 - **FR-014**: GitHub SSH setup must use the shared secret validator and fail

@@ -11,21 +11,28 @@ from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _WORKFLOW = _REPO_ROOT / ".github" / "workflows" / "forward-edge-autoarm.yml"
+_HELPER = _REPO_ROOT / "deploy" / "observe-on-instance.sh"
 
 
 def _text() -> str:
     return _WORKFLOW.read_text(encoding="utf-8")
 
 
+def _helper_text() -> str:
+    return _HELPER.read_text(encoding="utf-8")
+
+
 def test_autoarm_computes_anchored_verdict_read_only() -> None:
     text = _text()
+    helper = _helper_text()
     assert "Compute anchored verdict on instance" in text
-    assert "bars-export" in text
-    assert "ingest-history" in text
-    assert "forward-verdict-anchored" in text
-    assert "--trailing-years 5" in text
-    assert "--min-forward-obs 5" in text
-    assert "/tmp/autoarm_anchored_global" in text
+    assert "observe ladder-anchored-verdict" in text
+    assert "bars-export" in helper
+    assert "ingest-history" in helper
+    assert "forward-verdict-anchored" in helper
+    assert "--trailing-years 5" in helper
+    assert "--min-forward-obs 5" in helper
+    assert "/tmp/autoarm_anchored_global" in helper
     assert "/tmp/anchored_global.json" in text
 
 

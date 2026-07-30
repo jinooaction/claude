@@ -16,6 +16,7 @@ from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _WORKFLOW = _REPO_ROOT / ".github" / "workflows" / "rebalance-paper-forward.yml"
+_HELPER = _REPO_ROOT / "deploy" / "observe-on-instance.sh"
 
 # 페이퍼 트랙 — 전용 DB 와 전용 halt 깃발이 짝으로 선언되어야 한다(globalfixed=재지정 후보).
 _TRACKS = ("trend", "notrend", "rmbeta", "multiasset", "global", "globalfixed", "wide")
@@ -25,54 +26,54 @@ def _workflow_text() -> str:
     return _WORKFLOW.read_text(encoding="utf-8")
 
 
+def _helper_text() -> str:
+    return _HELPER.read_text(encoding="utf-8")
+
+
 def test_every_track_declares_paired_db_and_halt_flag():
-    text = _workflow_text()
+    text = _helper_text()
     for track in _TRACKS:
-        assert f'dbf="data/forward_{track}.db"' in text, (
+        assert f'TRACK_DB="data/forward_{track}.db"' in text, (
             f"{track} 트랙의 전용 DB 선언이 사라짐"
         )
-        assert f'hlt="data/forward_{track}.halt.flag"' in text, (
+        assert f'TRACK_HALT="data/forward_{track}.halt.flag"' in text, (
             f"{track} 트랙의 전용 halt 깃발 선언이 사라짐 — 기본값 data/halt.flag "
             "공유로 회귀하면 라이브 깃발 하나가 전 트랙 주문을 막는다"
         )
 
 
 def test_every_paper_rebalance_uses_isolated_halt_path():
-    lines = [ln for ln in _workflow_text().splitlines() if "rebalance-once" in ln]
-    # 주석/사용법이 아니라 실제 호출 라인만(uv run 포함).
-    calls = [ln for ln in lines if "uv run" in ln]
-    assert len(calls) == len(_TRACKS), (
-        f"rebalance-once 호출이 {len(calls)}개 — 트랙 수({len(_TRACKS)})와 다름. "
-        "트랙을 추가/삭제했다면 이 테스트와 halt 격리를 함께 갱신할 것."
-    )
-    for call in calls:
-        assert "--mode paper" in call, f"PAPER 전용 워크플로에 비페이퍼 호출: {call}"
-        assert "--halt-path ${hlt}" in call, (
-            f"rebalance-once 가 전용 halt 깃발 없이 호출됨(기본 data/halt.flag 공유 "
-            f"회귀 — 라이브 킬스위치가 페이퍼 검증을 막는다): {call}"
-        )
-        assert "data/halt.flag" not in call, (
-            f"페이퍼 트랙이 라이브 halt 깃발을 직접 참조: {call}"
-        )
+    workflow = _workflow_text()
+    helper = _helper_text()
+    for track in _TRACKS:
+        assert f"observe paper-track-run {track} " in workflow
+    assert "rebalance-once" in helper
+    assert "--mode paper" in helper
+    assert '--halt-path "${TRACK_HALT}"' in helper
+    assert '"data/halt.flag"' not in helper.split("paper_track_run()", 1)[1].split(
+        "paper_track_verdict()", 1
+    )[0]
 
 
 def test_workflow_is_paper_only():
     # 안전 경계: 이 워크플로는 절대 실주문을 내지 않는다(라이브는 별도 채널).
-    # 주석·설명 문구가 아니라 실제 명령 라인(uv run)만 검사한다.
-    calls = [ln for ln in _workflow_text().splitlines() if "uv run" in ln]
-    for call in calls:
-        assert "--mode live" not in call, f"PAPER 전용 워크플로에 라이브 호출: {call}"
+    assert "observe live" not in _workflow_text()
+    paper_section = _helper_text().split("paper_track_run()", 1)[1].split(
+        "paper_track_verdict()", 1
+    )[0]
+    assert "--mode paper" in paper_section
+    assert "--mode live" not in paper_section
 
 
 def test_halt_diagnostic_is_read_only_and_reports_live_flag():
     text = _workflow_text()
+    helper = _helper_text()
     # 진단 스텝이 라이브 깃발(data/halt.flag)을 *보고*한다 — 무장 후 실주문이 묵은
     # 깃발에 조용히 거부되지 않게 운영자 가시성을 보장.
     assert "halt_status" in text
-    assert "data/halt.flag" in text
+    assert "observe halt-status" in text
+    assert "data/halt.flag" in helper
     # 읽기 전용: 어떤 명령 라인도 halt 깃발을 만들거나 지우지 않는다(설명 문구 제외).
-    for line in text.splitlines():
-        if "uv run" in line:
-            assert "resume" not in line, f"halt 해제 명령이 워크플로에 들어옴: {line}"
+    for line in (text + "\n" + helper).splitlines():
         if "halt.flag" in line:
             assert "rm " not in line, f"halt 깃발 삭제 명령이 워크플로에 들어옴: {line}"
