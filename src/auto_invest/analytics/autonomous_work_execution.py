@@ -41,6 +41,7 @@ AUTONOMY_OPERATOR_APPROVAL = "OPERATOR_APPROVAL_REQUIRED"
 AUTONOMY_RECOVERY_REQUIRED = "RECOVERY_REQUIRED"
 AUTONOMY_CLOSED_RELEASED = "CLOSED_RELEASED"
 AUTONOMY_CLOSED_SUPPRESSED = "CLOSED_SUPPRESSED"
+AUTONOMY_OBSERVATION_WAIT = "OBSERVATION_WAIT"
 
 MACRO_GROWTH_DISCOVERY_CANDIDATE_ID = "candidate-macro-growth-discovery"
 MACRO_GROWTH_SOURCE_DIVERSIFICATION_CANDIDATE_ID = (
@@ -90,6 +91,7 @@ OPERATOR_REPORT_LIVENESS_CANDIDATE_ID = "candidate-operator-report-liveness-cont
 EVIDENCE_SOURCE_DIVERSIFICATION_VALIDATION_FAILURES_CANDIDATE_ID = (
     "candidate-evidence-source-diversification-validation-failures"
 )
+WAIT_FOR_FRESH_EVIDENCE_CANDIDATE_ID = "wait-for-fresh-evidence"
 
 _REJECTED_STATUSES = {
     "reject",
@@ -1641,6 +1643,12 @@ def _execution_contract(
             ),
             ("learning ledger 억제 사유 유지",),
         )
+    if status == STATUS_OBSERVATION_WAIT:
+        return (
+            AUTONOMY_OBSERVATION_WAIT,
+            "현재는 새 코드 작업을 시작하지 말고 다음 sidecar 갱신 증거를 기다린다.",
+            ("새 sidecar 증거 수집", "released-work/autonomous-work 재실행"),
+        )
     return (
         AUTONOMY_RECOVERY_REQUIRED,
         "상태를 해석할 수 없으므로 입력 증거를 먼저 복구한다.",
@@ -2519,6 +2527,65 @@ def _macro_growth_packets(
     return (frontier,)
 
 
+def _observation_wait_packet(
+    packets: Sequence[WorkPacket],
+    surfaces: Sequence[EvidenceSurface],
+) -> WorkPacket | None:
+    if any(
+        packet.status
+        in {
+            STATUS_EXECUTION_READY,
+            STATUS_OPERATOR_APPROVAL_REQUIRED,
+            STATUS_BLOCKED,
+        }
+        for packet in packets
+    ):
+        return None
+    if all(surface.parse_status == PARSE_MISSING for surface in surfaces):
+        return None
+
+    present_refs = tuple(
+        surface.source_ref for surface in surfaces if surface.present and surface.source_ref
+    )
+    source_refs = present_refs or tuple(_SOURCE_REFS.values())
+    autonomy_level, start_guidance, completion_gates = _execution_contract(
+        STATUS_OBSERVATION_WAIT,
+        0,
+        (),
+    )
+    released_count = sum(packet.status == STATUS_RELEASED for packet in packets)
+    suppressed_count = sum(packet.status == STATUS_SUPPRESSED for packet in packets)
+    reason = (
+        "실행 가능한 후보, 운영자 승인 필요 후보, 복구 우선 후보가 없습니다. "
+        f"현재 보이는 후보는 완료 {released_count}개와 억제 {suppressed_count}개뿐이므로 "
+        "완료 후보를 다시 선택하지 않고 새 sidecar 증거를 기다립니다."
+    )
+    next_action = (
+        "다음 scheduled sidecar 갱신 뒤 released-work와 autonomous-work를 다시 읽어 "
+        "새 EXECUTION_READY 후보가 생겼는지 확인합니다."
+    )
+    title = "새 증거 대기"
+    return WorkPacket(
+        packet_id=_packet_id(WAIT_FOR_FRESH_EVIDENCE_CANDIDATE_ID, title, source_refs),
+        candidate_id=WAIT_FOR_FRESH_EVIDENCE_CANDIDATE_ID,
+        domain_key="agent_ops",
+        title_ko=title,
+        work_type=_DOMAIN_WORK_TYPES["agent_ops"],
+        risk_grade=0,
+        safety_impact=(),
+        priority_score=0,
+        status=STATUS_OBSERVATION_WAIT,
+        autonomy_level=autonomy_level,
+        reason_ko=reason,
+        next_action_ko=next_action,
+        start_guidance_ko=start_guidance,
+        completion_gates=completion_gates,
+        required_inputs=source_refs,
+        safety_boundary=SAFETY_INVARIANTS,
+        source_refs=source_refs,
+    )
+
+
 def _macro_growth_packet(
     template: MacroGrowthCandidateTemplate,
     *,
@@ -3109,8 +3176,9 @@ def _packet_sort_key(packet: WorkPacket) -> tuple[int, int, str]:
         STATUS_EXECUTION_READY: 0,
         STATUS_OPERATOR_APPROVAL_REQUIRED: 1,
         STATUS_BLOCKED: 2,
-        STATUS_RELEASED: 3,
-        STATUS_SUPPRESSED: 4,
+        STATUS_OBSERVATION_WAIT: 3,
+        STATUS_RELEASED: 4,
+        STATUS_SUPPRESSED: 5,
     }.get(packet.status, 5)
     return (status_rank, -packet.priority_score, packet.candidate_id)
 
@@ -3364,6 +3432,9 @@ def build_autonomous_work_execution(
             ),
         ]
     )
+    wait_packet = _observation_wait_packet(ordered, surfaces)
+    if wait_packet is not None:
+        ordered = _dedupe_packets([*ordered, wait_packet])
     ranked = tuple(
         packet for packet in ordered if packet.status == STATUS_EXECUTION_READY
     )[:MAX_RANKED_CANDIDATES]
@@ -3402,6 +3473,7 @@ __all__ = [
     "AUTONOMY_CLOSED_RELEASED",
     "AUTONOMY_CLOSED_SUPPRESSED",
     "AUTONOMY_CODEX_START",
+    "AUTONOMY_OBSERVATION_WAIT",
     "AUTONOMY_OPERATOR_APPROVAL",
     "AUTONOMY_RECOVERY_REQUIRED",
     "BlockedPackageRef",
@@ -3444,6 +3516,7 @@ __all__ = [
     "STATUS_RELEASED",
     "STATUS_SUPPRESSED",
     "ValidationFailureGroup",
+    "WAIT_FOR_FRESH_EVIDENCE_CANDIDATE_ID",
     "WORKTREE_CONCURRENCY_LIVENESS_CANDIDATE_ID",
     "WorkPacket",
     "build_autonomous_work_execution",

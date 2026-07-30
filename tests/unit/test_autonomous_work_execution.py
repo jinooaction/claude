@@ -10,6 +10,7 @@ from auto_invest.analytics.autonomous_work_execution import (
     AGENT_OPS_FRONTIER_CANDIDATE_ID,
     AUTONOMY_CLOSED_RELEASED,
     AUTONOMY_CODEX_START,
+    AUTONOMY_OBSERVATION_WAIT,
     AUTONOMY_OPERATOR_APPROVAL,
     BROKER_DIAGNOSTIC_LIVENESS_CANDIDATE_ID,
     BROKER_REJECTION_TAXONOMY_CANDIDATE_ID,
@@ -34,8 +35,10 @@ from auto_invest.analytics.autonomous_work_execution import (
     REGIME_TIMELINE_COVERAGE_CANDIDATE_ID,
     SIGNAL_DIVERSIFICATION_EDGE_EXPERIMENT_CANDIDATE_ID,
     STATUS_EXECUTION_READY,
+    STATUS_OBSERVATION_WAIT,
     STATUS_OPERATOR_APPROVAL_REQUIRED,
     STATUS_RELEASED,
+    WAIT_FOR_FRESH_EVIDENCE_CANDIDATE_ID,
     WORKTREE_CONCURRENCY_LIVENESS_CANDIDATE_ID,
     build_autonomous_work_execution,
 )
@@ -1982,6 +1985,66 @@ def test_released_operator_report_candidate_is_not_reselected():
     )
     if report.selected_work is not None:
         assert report.selected_work.candidate_id != OPERATOR_REPORT_LIVENESS_CANDIDATE_ID
+
+
+def test_all_released_candidates_emit_observation_wait_instead_of_reselecting_closed_candidate():
+    report = build_autonomous_work_execution(
+        {
+            "capital-path-readiness": _json(
+                {
+                    "priority_candidates": [
+                        {
+                            "candidate_id": "candidate-fd04772a23c5",
+                            "domain_key": "live_readiness",
+                            "status": "new",
+                            "score": 597,
+                        }
+                    ]
+                }
+            ),
+            "candidate-result-executor": _retryable_blocked_candidate_results(),
+            "evolution-ledger": _json(
+                {
+                    "entries": [
+                        {
+                            "candidate_id": "candidate-1ed634d8bf6d",
+                            "status": "rejected",
+                            "reason_ko": "검증 실패로 승격하지 않는다.",
+                        },
+                        {
+                            "candidate_id": "candidate-cc96b35062da",
+                            "status": "rejected",
+                            "reason_ko": "검증 실패로 승격하지 않는다.",
+                        },
+                    ]
+                }
+            ),
+            "released-work": _released_through_broker_diagnostic_liveness(
+                AGENT_OPS_FRONTIER_CANDIDATE_ID,
+                HANDOFF_TRUTH_LIVENESS_CANDIDATE_ID,
+                PR_MERGE_EVIDENCE_LIVENESS_CANDIDATE_ID,
+                WORKTREE_CONCURRENCY_LIVENESS_CANDIDATE_ID,
+                AGENT_HARNESS_REGRESSION_LIVENESS_CANDIDATE_ID,
+                OPERATOR_REPORT_LIVENESS_CANDIDATE_ID,
+                EVIDENCE_SOURCE_DIVERSIFICATION_VALIDATION_FAILURES_CANDIDATE_ID,
+            ),
+            "pipeline-liveness": _liveness(),
+        },
+        now=NOW,
+    )
+
+    assert report.selected_work is not None
+    assert report.selected_work.candidate_id == WAIT_FOR_FRESH_EVIDENCE_CANDIDATE_ID
+    assert report.selected_work.status == STATUS_OBSERVATION_WAIT
+    assert report.selected_work.autonomy_level == AUTONOMY_OBSERVATION_WAIT
+    assert report.overall_status == STATUS_OBSERVATION_WAIT
+    assert report.ranked_work == ()
+    suppressed = {packet.candidate_id: packet for packet in report.suppressed_work}
+    assert suppressed["candidate-fd04772a23c5"].status == STATUS_RELEASED
+    assert (
+        EVIDENCE_SOURCE_DIVERSIFICATION_VALIDATION_FAILURES_CANDIDATE_ID
+        not in {packet.candidate_id for packet in report.ranked_work}
+    )
 
 
 def test_macro_candidate_map_is_deterministic_and_rendered():
