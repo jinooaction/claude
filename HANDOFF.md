@@ -29,30 +29,30 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 상세 규칙은 Codex 세션에서는 `AGENTS.md`, Claude 세션에서는 `CLAUDE.md` 본문 참조.
 
-## 한눈 요약표 — 2026-07-31 KST 최신 코드 main + PR #555 기준
+## 한눈 요약표 — 2026-07-31 KST 최신 코드 main 기준
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `c501f62` — Merge pull request #554 from jinooaction/codex/handoff-after-observe-gateway |
-| main 테스트 | PR #555 브랜치 기준 `uv run pytest` → 2696 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. #554는 handoff-only merge라 #553 코드 검증을 계승한다. |
-| main 린트 | PR #555 브랜치 기준 `uv run ruff check src tests` → All checks passed. |
-| 열린 PR | #555 `codex/evidence-based-candidate-source-diversification-guarded` — retryable blocked validation package 2개를 새 증거 기반 자율 작업 후보로 승격하는 등급 2 운영 루프 보강. |
-| 출시 완료 스펙 | 최신 main 출시: 119(보안 신뢰 경계 강화와 후속 SSH boundary repair 및 live-money workflow 보호 환경), 118(운영자가 이해 가능한 최종 보고 생존성 계약), 117(`SUBMISSION_UNKNOWN` broker lookup 복구), 116(단일 `ExecutionAuthority`와 계좌별 broker-write 잠금), 115(계좌 상태 불명확 시 신규 BUY 차단과 sell-only 저하 상태). 이전 스펙 058~114는 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
-| 골격 스펙 | PR #555 브랜치에서 `.specify/feature.json`은 `specs/120-evidence-based-candidate-source-diversification`를 가리킨다. main은 #555 머지 전까지 스펙 119 기준이다. |
-| 최근 출시 작업 | #552는 Vultr console로 서버 root 접근을 회복하고 KIS smoke를 `kis-smoke <main SHA>` 고정 명령으로 복구했다. #553은 KIS 뒤에 막힌 돈 경로 읽기 관측을 `observe ...` 고정 helper로 복구했다. #554는 그 상태를 HANDOFF에 반영한 handoff-only merge다. |
-| 활성 작업 | PR #555는 `candidate-result-executor`의 retryable `execution_failed` 패키지 2개를 읽어 `candidate-evidence-source-diversification-validation-failures`를 selected_work로 낸다. 최신 money-path는 `PREVIEW_ONLY`/`NO_EDGE_YET`, edge-autoarm은 `WAIT_EDGE`/`NO_EDGE`라 실주문은 여전히 불가다. |
+| 마지막 main 커밋 | `97c1f87` — Merge pull request #555 from jinooaction/codex/evidence-based-candidate-source-diversification-guarded |
+| main 테스트 | #555 브랜치 기준 `uv run pytest` → 2696 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
+| main 린트 | #555 브랜치 기준 `uv run ruff check src tests` → All checks passed. |
+| 열린 PR | 없음(이 문서 편집 시점). |
+| 출시 완료 스펙 | 최신 추가: 120(증거 기반 후보 소스 다변화: retryable blocked validation package 2개를 새 자율 작업 후보로 승격), 119(보안 신뢰 경계 강화와 후속 SSH boundary repair 및 live-money workflow 보호 환경), 118(운영자가 이해 가능한 최종 보고 생존성 계약), 117(`SUBMISSION_UNKNOWN` broker lookup 복구), 116(단일 `ExecutionAuthority`와 계좌별 broker-write 잠금), 115(계좌 상태 불명확 시 신규 BUY 차단과 sell-only 저하 상태). 이전 스펙 058~114는 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
+| 골격 스펙 | 없음. `.specify/feature.json`은 최신 출시 스펙 `specs/120-evidence-based-candidate-source-diversification`를 가리킨다. |
+| 최근 출시 작업 | #555는 `candidate-result-executor`의 retryable `execution_failed` 패키지 2개를 읽어 `candidate-evidence-source-diversification-validation-failures`를 selected_work로 내게 했다. #552는 Vultr console로 서버 root 접근을 회복하고 KIS smoke를 고정 명령으로 복구했고, #553은 KIS 뒤에 막힌 돈 경로 읽기 관측을 `observe ...` 고정 helper로 복구했다. |
+| 활성 작업 | 열린 PR 없음. 최신 money-path는 `PREVIEW_ONLY`/`NO_EDGE_YET`, edge-autoarm은 `WAIT_EDGE`/`NO_EDGE`라 실주문은 여전히 불가다. 다음 no-live 작업 후보는 막힌 검증 패키지 원인 축소와 후보 공장 입력 보정이다. |
 | 안전 경계 | #555는 등급 2 운영 루프 보강이다. 실제 주문, 실거래 전환, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps 확대, 손실 예산, KIS secret, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`라 실주문 불가다. |
 
-## 최근 관찰 — 2026-07-31 KST (PR #555 증거 기반 후보 소스 다변화)
+## 최근 관찰 — 2026-07-31 KST (#555 증거 기반 후보 소스 다변화)
 
-현재 `main` 최신 코드 머지는 `c501f62`(#554, observe gateway 뒤 HANDOFF 갱신)다.
-PR #555의 기능 커밋은 이 PR의 현재 head다.
+현재 `main` 최신 코드 머지는 `97c1f87`(#555, evidence-based candidate source diversification)다.
+기능 커밋은 `457a648`이다.
 
 - **문제 정의**: 실제 돈이 아직 움직이지 않는 직접 이유는 서버/KIS 접속이 아니라
   `PREVIEW_ONLY`/`NO_EDGE_YET`다. 동시에 자율 작업 실행 루프는 완료·억제된 후보와
   retryable blocked validation package 증거를 다음 작업 후보로 충분히 바꾸지 못해,
   “다음 no-live 개선”을 고르는 비용이 반복됐다.
-- **구현 상태**: PR #555는 `candidate-evidence-source-diversification-validation-failures`
+- **구현 상태**: #555는 `candidate-evidence-source-diversification-validation-failures`
   후보를 추가한다. 일반 실행 가능 후보가 없고 운영자 승인이 필요한 위험 후보도 없으며,
   `candidate-result-executor`에 자동으로 원인을 좁혀도 되는 blocked package가 있으면
   해당 후보를 `CODEX_AUTONOMOUS_START` 작업으로 선택한다. 출력 JSON과 Markdown에는
@@ -63,7 +63,7 @@ PR #555의 기능 커밋은 이 PR의 현재 head다.
   `candidate-evidence-source-diversification-validation-failures`, blocked refs는 2개,
   group은 `execution_failed`다. money-path는 `PREVIEW_ONLY`/`NO_EDGE_YET`,
   edge-autoarm은 `WAIT_EDGE`/`NO_EDGE`로 읽힌다.
-- **검증 상태**: PR #555 브랜치에서 `uv run pytest` 2696 passed, 5 skipped,
+- **검증 상태**: #555 브랜치에서 `uv run pytest` 2696 passed, 5 skipped,
   `uv run ruff check src tests` 통과, `uv run python scripts/agent_harness_probe.py --strict`
   OK(14/14), `uv run python scripts/check_handoff_facts.py` OK, `git diff --check` 통과,
   SDD prerequisites check 통과, PR quality gate 통과를 확인했다.
