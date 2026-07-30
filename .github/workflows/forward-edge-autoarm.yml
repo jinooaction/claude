@@ -83,9 +83,7 @@ jobs:
           port="${PORT:-22}"
           ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
               -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
-              "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest forward-verdict \
-                 --mode paper --portfolio deploy/global-trend-portfolio.toml \
-                 --db data/forward_global.db --format json" \
+              "observe ladder-forward-verdict" \
               > /tmp/verdict_global.json 2>/tmp/verdict_global.err
           echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
           echo "--- verdict ---"; cat /tmp/verdict_global.json
@@ -104,24 +102,7 @@ jobs:
           port="${PORT:-22}"
           ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
               -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
-              "cd /opt/auto-invest && \
-                 wrk=/tmp/autoarm_anchored_global && \
-                 rm -rf \${wrk} && mkdir -p \${wrk} && \
-                 /usr/local/bin/uv run auto-invest bars-export \
-                   --portfolio deploy/global-trend-portfolio.toml \
-                   --db data/forward_global.db --out-dir \${wrk}/bars --json \
-                   > \${wrk}/bars-export.json && \
-                 /usr/local/bin/uv run auto-invest ingest-history \
-                   --from-dir \${wrk}/bars --out-dir \${wrk}/hist \
-                   > \${wrk}/ingest.log && \
-                 /usr/local/bin/uv run auto-invest forward-verdict-anchored \
-                   --portfolio deploy/global-trend-portfolio.toml \
-                   --db data/forward_global.db \
-                   --history-root \${wrk}/hist \
-                   --trailing-years 5 \
-                   --mode paper \
-                   --min-forward-obs 5 \
-                   --format json" \
+              "observe ladder-anchored-verdict" \
               > /tmp/anchored_global.json 2>/tmp/anchored_global.err
           echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
           echo "--- anchored verdict ---"; cat /tmp/anchored_global.json
@@ -142,17 +123,15 @@ jobs:
           # ladder-decide 가 BLOCKED(상태 무변경, fail-closed).
           ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
               -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
-              "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest account-nav \
-                 --env-file .env --db data/auto_invest.db --json" \
+              "observe account-nav" \
               > /tmp/account_nav.json 2>/tmp/account_nav.err
           echo "--- account NAV ---"; cat /tmp/account_nav.json; cat /tmp/account_nav.err
           # 라이브 트랙 실적(현재 단 진입 이후) — 승격/강등 증거. since 가 없으면 전체.
           since_arg=""
-          if [[ -n "${ENTERED}" ]]; then since_arg="--since ${ENTERED}"; fi
+          if [[ -n "${ENTERED}" ]]; then since_arg=" ${ENTERED}"; fi
           ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
               -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
-              "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest growth \
-                 --mode live ${since_arg} --db data/auto_invest.db --format json" \
+              "observe live-growth${since_arg}" \
               > /tmp/live_growth.json 2>/tmp/live_growth.err
           echo "--- live growth ---"; cat /tmp/live_growth.json; cat /tmp/live_growth.err
 

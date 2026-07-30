@@ -123,8 +123,11 @@ spec 006 배포 상태기계 (안전 단계 전부 통과해야 워커 교체)
 - 인스턴스에 `deploy/repair-ssh-boundary.sh`로 forced-command deploy gateway가
   설치되어 있어야 한다. GitHub Actions는 gateway의 `sync-units`,
   `start-deploy`, `deploy-journal`, KIS 조회 smoke 전용 `kis-smoke` 고정 명령만
-  호출한다. `kis-smoke`는 40자리 커밋 SHA만 인자로 받고, 서버의 root 소유 helper가
-  격리 checkout에서 읽기 테스트를 실행한다.
+  호출한다. 돈 경로 관측 워크플로는 `observe ...` 고정 명령만 호출한다. 여기에는
+  페이퍼 전용 forward 트랙 실행·판정, 정지 깃발 조회, 계좌 NAV 조회, live growth
+  읽기만 포함되며, live 무장·실주문·자본 변경 명령은 없다. `kis-smoke`는 40자리
+  커밋 SHA만 인자로 받고, 서버의 root 소유 helper가 격리 checkout에서 읽기 테스트를
+  실행한다.
 
 ## 이 파이프라인이 하지 않는 것
 

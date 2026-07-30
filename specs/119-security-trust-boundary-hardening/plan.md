@@ -34,7 +34,10 @@ Harden the trust boundary around public GitHub workflows, remote server executio
 11. Install a server-side repair script that creates the non-root deploy user,
     installs a root-owned deploy gateway, validates narrow sudoers with
     `visudo`, retires the old `github-actions@auto-invest` root key entry, and
-    moves deploy-on-merge/verify/KIS smoke workflows to fixed gateway commands.
+    moves deploy-on-merge/verify/KIS smoke/money-path observation workflows to
+    fixed gateway commands. The observation helper covers only paper forward
+    evidence, account NAV reads, and live-growth reads; it does not provide
+    live arming, live order placement, capital allocation, or arbitrary shell.
 
 ## Validation
 
@@ -54,4 +57,4 @@ Harden the trust boundary around public GitHub workflows, remote server executio
 
 ## Rollback
 
-Revert the feature PR. This restores the previous workflow behavior, canary gate, lock, cache, and order-risk behavior. The GitHub-held root SSH user/private-key secrets were intentionally removed outside git and would need an explicit operator decision to recreate as non-root deploy credentials. If the server repair script has already been run, remove the `gh-deploy` authorized key, `/usr/local/sbin/auto-invest-deploy-gateway`, `/usr/local/sbin/auto-invest-sync-units`, `/usr/local/sbin/auto-invest-kis-smoke`, and `/etc/sudoers.d/auto-invest-gh-deploy` through the same out-of-band root channel.
+Revert the feature PR. This restores the previous workflow behavior, canary gate, lock, cache, and order-risk behavior. The GitHub-held root SSH user/private-key secrets were intentionally removed outside git and would need an explicit operator decision to recreate as non-root deploy credentials. If the server repair script has already been run, remove the `gh-deploy` authorized key, `/usr/local/sbin/auto-invest-deploy-gateway`, `/usr/local/sbin/auto-invest-sync-units`, `/usr/local/sbin/auto-invest-kis-smoke`, `/usr/local/sbin/auto-invest-observe`, and `/etc/sudoers.d/auto-invest-gh-deploy` through the same out-of-band root channel.

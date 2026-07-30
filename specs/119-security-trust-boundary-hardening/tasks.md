@@ -23,3 +23,7 @@
   missing deploy user, private key, or known-host material fails before `ssh`.
 - [x] T018 Route KIS smoke through a fixed `kis-smoke` gateway helper that
   rejects arbitrary shell text and only runs `origin/main`-reachable commits.
+- [x] T019 Route money-path observation workflows through fixed `observe ...`
+  gateway helpers for paper forward evidence, account NAV reads, and live
+  growth reads without reopening arbitrary shell execution or live order
+  commands.

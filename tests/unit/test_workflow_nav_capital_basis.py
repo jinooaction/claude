@@ -12,35 +12,50 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _FORWARD = _REPO_ROOT / ".github" / "workflows" / "rebalance-paper-forward.yml"
 _LIVE = _REPO_ROOT / ".github" / "workflows" / "rebalance-live-canary.yml"
+_OBSERVE_HELPER = _REPO_ROOT / "deploy" / "observe-on-instance.sh"
 
 # forward 워크플로의 페이퍼 트랙 수(6 트랙 + globalfixed 재지정 후보 = 7).
 _FORWARD_TRACKS = 7
 
 
 def _calls(path: Path) -> list[str]:
+    joined = re.sub(r"\\\s*\n\s*", " ", path.read_text(encoding="utf-8"))
     return [
         ln
-        for ln in path.read_text(encoding="utf-8").splitlines()
+        for ln in joined.splitlines()
         if "nav-snapshot" in ln and "uv run" in ln
     ]
 
 
 def test_forward_paper_nav_snapshots_pass_capital():
-    calls = _calls(_FORWARD)
-    assert len(calls) == _FORWARD_TRACKS, (
-        f"forward nav-snapshot 호출이 {len(calls)}개 — 트랙 수({_FORWARD_TRACKS})와"
-        " 다름. 트랙을 추가/삭제했다면 이 테스트와 자본 베이시스를 함께 갱신할 것."
+    workflow = _FORWARD.read_text(encoding="utf-8")
+    for track in (
+        "trend",
+        "notrend",
+        "rmbeta",
+        "multiasset",
+        "global",
+        "globalfixed",
+        "wide",
+    ):
+        assert f"observe paper-track-run {track} " in workflow
+
+    helper = re.sub(
+        r"\\\s*\n\s*",
+        " ",
+        _OBSERVE_HELPER.read_text(encoding="utf-8"),
     )
-    for call in calls:
-        assert "--capital ${CAPITAL}" in call, (
-            "nav-snapshot 이 --capital 없이 호출됨 — 장부 현금 0 회귀로 자금 흐름이"
-            f" 수익률로 오인된다(판정 오염): {call}"
-        )
+    assert "nav-snapshot" in helper
+    assert '--capital "${capital}"' in helper, (
+        "nav-snapshot 이 --capital 없이 호출됨 — 장부 현금 0 회귀로 자금 흐름이"
+        " 수익률로 오인된다(판정 오염)."
+    )
 
 
 def test_live_canary_nav_snapshot_passes_capital():

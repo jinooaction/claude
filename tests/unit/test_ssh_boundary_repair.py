@@ -8,6 +8,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "deploy" / "repair-ssh-boundary.sh"
 KIS_SMOKE_HELPER = REPO_ROOT / "deploy" / "kis-smoke-on-instance.sh"
+OBSERVE_HELPER = REPO_ROOT / "deploy" / "observe-on-instance.sh"
 
 
 def _body() -> str:
@@ -25,6 +26,8 @@ def test_repair_script_exists_and_is_executable():
     assert SCRIPT.stat().st_mode & 0o111
     assert KIS_SMOKE_HELPER.is_file()
     assert KIS_SMOKE_HELPER.stat().st_mode & 0o111
+    assert OBSERVE_HELPER.is_file()
+    assert OBSERVE_HELPER.stat().st_mode & 0o111
 
 
 def test_requires_root_and_public_key_not_private_key():
@@ -60,6 +63,15 @@ def test_gateway_allows_only_fixed_commands_without_eval():
     assert re.search(r'kis-smoke\\ \*\)', code)
     assert r"^[0-9a-f]{40}$" in code
     assert "/usr/local/sbin/auto-invest-kis-smoke" in code
+    assert re.search(r'observe\\ halt-status\)', code)
+    assert re.search(r'observe\\ paper-track-run\\ \*\)', code)
+    assert re.search(r'observe\\ paper-track-verdict\\ \*\)', code)
+    assert re.search(r'observe\\ ladder-forward-verdict\)', code)
+    assert re.search(r'observe\\ ladder-anchored-verdict\)', code)
+    assert re.search(r'observe\\ account-nav\)', code)
+    assert re.search(r'observe\\ live-growth\)', code)
+    assert r"^(trend|notrend|rmbeta|multiasset|global|globalfixed|wide)$" in code
+    assert "/usr/local/sbin/auto-invest-observe" in code
     assert re.search(r'\bstart-deploy\)', code)
     assert re.search(r'\bdeploy-journal\)', code)
     assert "refused command" in code
@@ -76,6 +88,7 @@ def test_sudoers_is_narrow_and_visudo_validated():
     assert "NOPASSWD: ALL" not in body
     assert "/usr/local/sbin/auto-invest-sync-units" in body
     assert "/usr/local/sbin/auto-invest-kis-smoke" in body
+    assert "/usr/local/sbin/auto-invest-observe" in body
     assert "/usr/bin/systemctl start auto-invest-deploy.service" in body
     assert "/usr/bin/journalctl -u auto-invest-deploy.service -n 120 --no-pager" in body
 
@@ -98,3 +111,23 @@ def test_script_does_not_change_live_money_or_worker_state():
     assert "AUTO_INVEST_CAPITAL" not in body
     assert "systemctl restart auto-invest.service" not in body
     assert "systemctl start auto-invest.service" not in body
+
+
+def test_observe_helper_exposes_only_observation_and_paper_commands():
+    body = OBSERVE_HELPER.read_text(encoding="utf-8")
+
+    assert "paper-track-run" in body
+    assert "paper-track-verdict" in body
+    assert "ladder-forward-verdict" in body
+    assert "ladder-anchored-verdict" in body
+    assert "account-nav" in body
+    assert "live-growth" in body
+    assert "--mode paper" in body
+    assert "--mode live" in body  # growth is read-only live evidence.
+    assert "rebalance-once" in body
+    assert "submit" not in body.lower()
+    assert "systemctl" not in body
+    assert "AUTO_INVEST_MODE=live" not in body
+    assert "AUTO_INVEST_CAPITAL" not in body
+    assert "eval " not in body
+    assert "bash -c" not in body

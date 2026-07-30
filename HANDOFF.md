@@ -33,15 +33,15 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `7faa902` — Merge pull request #550 from jinooaction/codex/handoff-after-userless-server-blocker-audit-isolated (`HANDOFF.md`만 바꾼 인수인계 머지; 최신 코드 변경 머지는 `d3d1117` #547) |
-| main 테스트 | #550 handoff refresh 기준 `uv run pytest -q` → 2691 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
-| main 린트 | #550 handoff refresh 기준 `uv run ruff check src tests` → All checks passed. |
+| 마지막 main 커밋 | `d43ce6a` — Merge pull request #552 from jinooaction/codex/kis-smoke-fixed-gateway |
+| main 테스트 | #552 코드 브랜치 기준 `uv run pytest` → 2692 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. 이 인계/observe 보강 브랜치는 HANDOFF 갱신 전 전체 테스트에서 stale HANDOFF 하네스 2개와 워크플로 위치 가정 테스트 5개가 실패했고, 테스트 보정 뒤 재실행 대상이다. |
+| main 린트 | #552 코드 브랜치 기준 `uv run ruff check src tests` → All checks passed. 이 인계/observe 보강 브랜치도 `uv run ruff check src tests` 재실행 대상이다. |
 | 열린 PR | 없음(이 문서 편집 시점). |
 | 출시 완료 스펙 | 최신 추가: 119(보안 신뢰 경계 강화와 후속 SSH boundary repair 및 live-money workflow 보호 환경: GitHub root SSH secret 제거, strict known_hosts, go-live fail-closed, canary hash 필수화, 배포 락·토큰 캐시·주문 불확실성·reduce-only·sidecar redaction, root key retire repair script, forced-command deploy gateway, `production` 보호 환경), 118(운영자가 이해 가능한 최종 보고 생존성 계약), 117(`SUBMISSION_UNKNOWN` broker lookup 복구), 116(단일 `ExecutionAuthority`와 계좌별 broker-write 잠금), 115(계좌 상태 불명확 시 신규 BUY 차단과 sell-only 저하 상태). 이전 스펙 058~114는 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
-| 골격 스펙 | 없음. `.specify/feature.json`은 최신 출시 스펙 `specs/119-security-trust-boundary-hardening`를 가리킨다. 스펙 119는 #529, 후속 #531, #533, #534로 main에 들어갔다. #536/#538/#540/#542/#543/#545/#547은 새 스펙이 아니라 money-path, money-gate-alignment, operator-status, KIS smoke 안전 보고·알림 보정이다. |
-| 최근 출시 작업 | #550은 #549 이후의 사용자 무개입 서버 수리 경로 점검 결과를 `HANDOFF.md`에 반영한 인수인계 갱신이다. #547은 KIS smoke가 SSH exit 255에서 멈춰 상태를 못 남기던 문제를 고쳐 `setup_pending`을 sidecar에 남기게 했다. money-gate-alignment도 이 상태를 `BLOCKED` KIS 이슈로 읽고 "서버에 새 deploy 공개키 설치 후 KIS smoke 재실행"을 다음 행동으로 낸다. #545는 operator-status Telegram 알림 재시도를 보강했고, #543/#542/#540/#538/#536은 돈 경로 차단·KIS secret 누락·전략 의도 게이트 실패를 사람이 읽을 수 있게 드러냈다. |
-| 활성 작업 | 열린 PR 없음. GitHub repo secret 목록에는 `VULTR_SSH_HOST`/`PORT`/`KNOWN_HOSTS`와 `VULTR_SSH_USER`(2026-07-29T14:18:16Z), `VULTR_SSH_PRIVATE_KEY`(2026-07-29T14:18:17Z)가 등록돼 있다(값은 출력·커밋 금지). 2026-07-30 KST PC 제어 재점검에서 Orca computer runtime은 실행 후 `ready`가 됐고 Chrome 접근성 트리도 읽혔다. Chrome으로 `https://console.vultr.com/`를 열었지만 Vultr는 로그인 화면이며 이메일/비밀번호 칸은 자동 채움처럼 보였고 `reCAPTCHA` 미확인 때문에 `Log in` 버튼은 비활성화됐다. Codex는 reCAPTCHA를 대신 풀지 않았고 비밀번호 관리자·저장 비밀번호·쿠키를 읽지 않았다. `ssh macbookair`는 `192.168.219.122:22 Operation timed out`으로 닿지 않았다. 로컬 history 대상 검색에도 `VULTR_API_KEY`/Vultr API/서버 수리 힌트는 없었다. KIS smoke 최신 sidecar는 commit `7faa902`, timestamp `2026-07-30T05:41:52Z`, `secrets_present=true`, `key_valid=true`, `smoke_state=setup_pending`, `smoke_exit=255`다. money-path 최신 run은 `2026-07-30T10:22:18Z` 기준 `PREVIEW_ONLY`/자본 사다리 `BLOCKED`, money-gate-alignment는 `2026-07-30T11:22:58Z` 기준 `BLOCKED`, operator-status는 `2026-07-30T11:23:11Z` 기준 `ACTION_REQUIRED`/Telegram `SENT`다. 최신 다음 행동은 서버에서 `deploy/repair-ssh-boundary.sh`에 새 deploy 공개키를 설치한 뒤 KIS smoke를 다시 실행하는 것이다. #550은 문서-only라 deploy-on-merge 트리거가 없고, 직전 코드 머지 #547 deploy-on-merge run `30461091918`은 같은 서버 SSH 거부로 실패했다. micro GTAA 최신 run은 `armed=false`, `LIVE 스텝=skipped`, strategy-intent gate `ok=false`, `reason=latest_intent_loss`, `cumulative_pnl_usd=-1.14`다. |
-| 안전 경계 | #547은 등급 2 운영 진단 보정이고 #548/#549/#550 및 이 갱신은 등급 2 인수인계 갱신이다. SSH 실패를 성공으로 꾸미지 않고 `setup_pending`으로 정확히 남긴다. GitHub repo secret 값은 출력·커밋하지 않았다. 이번 재검증은 PC 제어, 로컬 SSH, GitHub read-only 진단, 로컬 credential 존재 여부 확인, 상태판 갱신만 수행했고, reCAPTCHA 우회·비밀번호/쿠키 열람·브로커 호출·주문·자본 배분·live 재무장·전략 교체·whitelist/caps 확대·손실 예산·KIS secret·감사 로그·헌법·kernel manifest 변경은 하지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`라 실주문 불가다. |
+| 골격 스펙 | 없음. `.specify/feature.json`은 최신 출시 스펙 `specs/119-security-trust-boundary-hardening`를 가리킨다. 스펙 119는 #529, 후속 #531, #533, #534, #552로 main에 들어갔다. #536/#538/#540/#542/#543/#545/#547은 새 스펙이 아니라 money-path, money-gate-alignment, operator-status, KIS smoke 안전 보고·알림 보정이다. |
+| 최근 출시 작업 | #552는 Vultr console로 서버 root 접근을 회복한 뒤 `gh-deploy` forced-command gateway를 실제 서버에 설치하고, KIS smoke를 원격 임의 `bash -s`가 아니라 `kis-smoke <main SHA>` 고정 명령으로 바꿨다. KIS smoke 최신 sidecar는 commit `d43ce6a`, timestamp `2026-07-30T14:56:51Z`, `secrets_present=true`, `key_valid=true`, `smoke_state=success`, `smoke_exit=0`이다. |
+| 활성 작업 | 열린 PR 없음(이 문서 편집 시점). #552 뒤 deploy/KIS setup 차단은 해소됐지만, 돈 경로는 아직 `PREVIEW_ONLY`/`LIVE_BLOCKED`다. 최신 money-path(`2026-07-30T14:57:57Z`)와 money-gate-alignment(`2026-07-30T14:59:25Z`)는 자본 사다리 `BLOCKED`를 보고한다. 직접 점검 결과 새 gateway가 KIS 외 읽기 전용 돈 경로 관측 명령(`account-nav`, forward paper 등)을 `refused command`로 거부했다. 현재 브랜치 `codex/read-only-observe-gateway`는 arbitrary shell을 다시 열지 않고 `observe ...` 고정 헬퍼로 페이퍼 forward, account NAV, live growth 읽기만 복구하는 작업이다. |
+| 안전 경계 | #552와 현재 observe 보강은 등급 3 안전 경계 변경이다. 비밀번호·쿠키·브라우저 세션 저장소·private key 값은 읽거나 출력하지 않았다. 실제 주문, 실거래 전환, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps 확대, 손실 예산, KIS secret, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`라 실주문 불가다. |
 
 ## 돈 경로 상태 판독 규칙 (필수 — 스펙 062)
 
@@ -52,7 +52,7 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 3. 현재 live 의도 원본은 `automation/rebalance-micro-gtaa.request`다. 마지막 실행 증거는 `origin/automation/rebalance-micro-gtaa-last-run:LAST_RUN.md`다. KIS smoke 현금값은 preflight 입력일 뿐, `armed` 상태나 다음 live 가능 여부의 대체 근거가 아니다.
 4. `live_money_state.status`가 `PREVIEW_ONLY`이면 "실주문 불가"로 답한다. `BLOCKED`이면 "안전 게이트가 실주문을 막고 있음"으로 답하고 `detail`과 `last_run.intent_gate_reason`을 같이 읽는다. `REAL_ORDER_PATH_ARMED`이면 "실제 돈 경로가 켜져 있음"으로 답한다. 단, 이것은 비-push 실행이 미국 정규장, KIS 매수가능 현금 1% 버퍼, micro 손실 브레이커, K1 한도와 K2 허용 종목을 통과하면 실주문 단계에 도달할 수 있다는 뜻이지 접수·체결 보장이 아니다.
 5. 스펙 063 이후 micro GTAA live canary는 계좌 전체 preview를 만든다. 기존 보유 `BHP`, `MRK`, `ORANY`, `RELX`는 목표 유니버스가 아니라 청산 전용이다. 현금이 목표 매수와 1% 완충금을 충족하지 못하고 청산 전용 매도 후보가 있으면 이번 주기는 `effective_side=sell`로 매도만 실행하고, 매수는 다음 fresh KIS 현금 조회가 충분할 때까지 보류한다.
-6. 현재 기준(2026-07-30T11:23Z operator-status, 11:22Z money-gate-alignment, 10:22Z money-path, 05:41Z KIS smoke): micro GTAA는 `armed:false`, money-path `live_money_state.status=PREVIEW_ONLY`, 최신 micro sidecar는 `event=schedule`, `LIVE 스텝=skipped`, strategy-intent gate `ok=false`, `reason=latest_intent_loss`, `cumulative_pnl_usd=-1.14`다. money-gate-alignment 최신 보고는 `BLOCKED`이고 KIS smoke를 `setup_pending`으로 읽는다. GitHub repo secrets는 등록됐지만 서버가 아직 새 deploy 공개키를 받아들이지 않아 `Permission denied (publickey,password)`로 막힌다. PC 제어로 Vultr 로그인 화면까지 열었지만 reCAPTCHA/로그인 경계에서 멈췄고, `macbookair` SSH도 타임아웃이라 사용자를 거치지 않는 수리 경로는 이 세션에서 발견되지 않았다. 다음 행동은 서버에서 `deploy/repair-ssh-boundary.sh`로 forced-command gateway를 설치하고 KIS smoke를 다시 실행한 뒤 자본 사다리와 전략 의도 게이트를 다시 읽는 것이다. 스펙 062의 2026-06-22 `armed:true` 기록은 역사이며 현재 상태 근거로 쓰지 않는다.
+6. 현재 기준(2026-07-30T15:02Z operator-status/pipeline-liveness, 14:59Z money-gate-alignment, 14:58Z capital-path-readiness, 14:57Z money-path, 14:56Z KIS smoke): KIS smoke는 `success`/`smoke_exit=0`이고 핵심 사이드카 생존 감시는 `OK`다. 하지만 money-path는 `live_money_state.status=PREVIEW_ONLY`, 자본 사다리 `BLOCKED`, capital-path-readiness는 `LIVE_BLOCKED`, money-gate-alignment는 `BLOCKED`, operator-status는 `ACTION_REQUIRED`다. 현재 직접 확인한 추가 원인은 #552 gateway가 `kis-smoke`는 허용하지만 돈 경로 관측용 원격 명령(`account-nav`, forward paper 등)을 다시 `refused command`로 막는다는 점이다. 다음 행동은 current branch의 `observe ...` 고정 헬퍼를 main에 넣고 서버에 설치한 뒤, forward paper와 capital ladder를 다시 돌려 진짜 자본 사다리 판정을 읽는 것이다. 스펙 062의 2026-06-22 `armed:true` 기록은 역사이며 현재 상태 근거로 쓰지 않는다.
 7. PR #398 이후 `latest_signal=INTENT_LOSS`인데 verdict가 아직 `INSUFFICIENT_DATA`인 경우, "다음 micro GTAA 실행에서 live 표본이 자동으로 더 쌓인다"고 말하지 않는다. live gate가 실주문을 막으므로 새 live 표본은 자동 누적되지 않는다. 다음 행동은 forward 토너먼트·재지정 증거를 기다리거나 별도 전략 검토 후 재무장 여부를 판단하는 것이다.
 
 ## 전략 검토 상태 판독 규칙 (필수 — 스펙 066)
@@ -80,6 +80,38 @@ uv run python scripts/money_path_probe.py --manifest | while IFS=$'\t' read -r k
 done
 uv run python scripts/money_path_probe.py --sidecar-dir "$tmpdir" --json | jq '.live_money_state'
 ```
+
+## 최근 관찰 — 2026-07-30 KST (Vultr 서버 경계 수리, KIS smoke 성공, observe gateway 보강 필요)
+
+현재 `main` 최신 코드 머지는 `d43ce6a`(#552, KIS smoke fixed gateway)다. 기능 커밋은
+`7f5c1d1`이다.
+
+- **문제 정의**: 서버가 새 deploy 공개키를 받아들이지 않아 KIS smoke와 deploy가 `Permission denied`에서
+  멈췄다. 운영자가 Vultr 웹 로그인을 완료한 뒤, Codex는 Chrome/Vultr console을 사용해 서버 root 접근을
+  회복하고 non-root `gh-deploy` forced-command gateway를 실제 서버에 설치했다. 비밀번호 값, 쿠키,
+  브라우저 세션 저장소, private key 값은 읽거나 출력하지 않았다.
+- **구현 상태**: #552는 KIS smoke workflow의 원격 `bash -s`를 제거하고 `kis-smoke <40hex SHA>` 고정
+  gateway 명령만 쓰게 했다. 서버에는 `/usr/local/sbin/auto-invest-kis-smoke` helper가 설치됐고,
+  `gh-deploy` gateway 상태 확인과 직접 KIS smoke가 통과했다. deploy-on-merge run `30553851306`은
+  성공했지만 미국 장중 배포 연기 때문에 서버 repo HEAD는 한동안 이전 코드였고, helper는 root console
+  경로로 먼저 설치했다.
+- **검증 상태**: KIS smoke run `30554208213`은 commit `d43ce6a`, timestamp `2026-07-30T14:56:51Z`,
+  `secrets_present=true`, `key_valid=true`, `smoke_state=success`, `smoke_exit=0`이다. money-path run
+  `30554295404`, capital-path-readiness run `30554349481`, money-gate-alignment run `30554410017`,
+  operator-mobile-alerts run `30554641281`, pipeline-liveness run `30554687472`는 모두 workflow success다.
+  그러나 판정은 각각 `PREVIEW_ONLY`/`LIVE_BLOCKED`/`BLOCKED`/`ACTION_REQUIRED`이고, 핵심 생존 감시는
+  `OK`다.
+- **새로 드러난 차단**: #552 gateway는 KIS smoke만 복구했고, 기존 forward paper·capital ladder workflow가
+  쓰던 임의 원격 명령은 의도대로 거부한다. 직접 확인한 `account-nav` 형태 명령은 `refused command`로
+  exit 126이 났다. 그래서 latest money-path는 자본 사다리 `BLOCKED`를 계속 보고하고, 원천 edge-autoarm
+  sidecar는 서버 수리 전 실행분이라 `account_nav_usd=null`이다.
+- **현재 브랜치 조치**: `codex/read-only-observe-gateway`는 arbitrary shell을 되살리지 않고
+  `deploy/observe-on-instance.sh`와 gateway `observe ...` 고정 명령을 추가한다. 허용 범위는 페이퍼
+  forward 트랙 실행·판정, 정지 깃발 읽기, account NAV 읽기, live growth 읽기뿐이다. live 무장,
+  실주문, 자본 배분, live 설정 변경 명령은 추가하지 않는다.
+- **남은 현실**: 이 observe 보강이 main에 들어가고 서버에 설치된 뒤, forward paper와 capital ladder를
+  다시 돌려야 진짜 남은 돈 경로 판정이 나온다. 그 전까지 "KIS가 됐으니 곧바로 돈 번다"고 말하면 안 된다.
+  현재 확인된 운영 상태는 `PREVIEW_ONLY`이며 실주문 불가다.
 
 ## 최근 관찰 — 2026-07-29 KST (KIS smoke setup_pending 분류와 서버 공개키 설치 대기)
 
