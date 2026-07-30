@@ -66,7 +66,10 @@ As the operator, I need local token cache and deploy locks to be written atomica
 - **FR-012**: Server-side SSH boundary repair must require a fresh deploy public
   key, reject private-key material, install a forced-command gateway for a
   non-root deploy user, validate narrow sudoers before installation, and retire
-  only the legacy GitHub root key entry or key files.
+  only the legacy GitHub root key entry or key files. The gateway may expose
+  fixed root-owned helper commands for deploy operations and KIS read-only
+  smoke, but KIS smoke must accept only an `origin/main`-reachable commit SHA
+  rather than arbitrary shell text.
 - **FR-013**: GitHub workflows that can switch live mode, place real orders, or
   release halt must declare the protected `production` environment.
 - **FR-014**: GitHub SSH setup must use the shared secret validator and fail

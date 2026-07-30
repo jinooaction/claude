@@ -7,6 +7,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "deploy" / "repair-ssh-boundary.sh"
+KIS_SMOKE_HELPER = REPO_ROOT / "deploy" / "kis-smoke-on-instance.sh"
 
 
 def _body() -> str:
@@ -22,6 +23,8 @@ def _code() -> str:
 def test_repair_script_exists_and_is_executable():
     assert SCRIPT.is_file()
     assert SCRIPT.stat().st_mode & 0o111
+    assert KIS_SMOKE_HELPER.is_file()
+    assert KIS_SMOKE_HELPER.stat().st_mode & 0o111
 
 
 def test_requires_root_and_public_key_not_private_key():
@@ -53,6 +56,10 @@ def test_gateway_allows_only_fixed_commands_without_eval():
     assert 'cmd="${SSH_ORIGINAL_COMMAND:-status}"' in code
     assert re.search(r'\bstatus\)', code)
     assert re.search(r'\bsync-units\)', code)
+    assert re.search(r'\bkis-smoke\)', code)
+    assert re.search(r'kis-smoke\\ \*\)', code)
+    assert r"^[0-9a-f]{40}$" in code
+    assert "/usr/local/sbin/auto-invest-kis-smoke" in code
     assert re.search(r'\bstart-deploy\)', code)
     assert re.search(r'\bdeploy-journal\)', code)
     assert "refused command" in code
@@ -68,6 +75,7 @@ def test_sudoers_is_narrow_and_visudo_validated():
     assert "NOPASSWD:" in body
     assert "NOPASSWD: ALL" not in body
     assert "/usr/local/sbin/auto-invest-sync-units" in body
+    assert "/usr/local/sbin/auto-invest-kis-smoke" in body
     assert "/usr/bin/systemctl start auto-invest-deploy.service" in body
     assert "/usr/bin/journalctl -u auto-invest-deploy.service -n 120 --no-pager" in body
 

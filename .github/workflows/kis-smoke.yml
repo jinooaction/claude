@@ -129,131 +129,20 @@ jobs:
           echo "대상 인스턴스: ${USER}@${HOST}:${port}"
           echo "============================================================"
 
-          # GitHub Actions 의 기본 shell 은 bash -e 이다. SSH 인증 실패(255)
-          # 같은 셋업 보류 상태에서도 아래 분류 로직까지 내려가야 하므로,
-          # 원격 smoke 파이프라인 동안만 errexit 을 끄고 종료 코드를 직접 판정한다.
+          # GitHub Actions 의 기본 shell 은 bash -e 이다. SSH/원격 셋업 보류
+          # 상태에서도 아래 분류 로직까지 내려가야 하므로, 원격 smoke 호출
+          # 동안만 errexit 을 끄고 종료 코드를 직접 판정한다.
+          #
+          # 서버 forced-command gateway 는 임의 bash 를 받지 않는다. 안전 경계를
+          # 유지하려고 `kis-smoke <40자리 commit SHA>` 고정 명령만 호출한다.
           set +e
           ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
               -o BatchMode=yes \
               -p "${port}" \
               -i ~/.ssh/id_ed25519 \
               "${USER}@${HOST}" \
-              "TARGET_SHA='${GITHUB_SHA}' FALLBACK_REMOTE_URL='https://github.com/${GITHUB_REPOSITORY}.git' bash -s" \
-              <<'REMOTE_SCRIPT' 2>&1 | tee /tmp/smoke_output.log
-          set -uo pipefail
-          LIVE_REPO=/opt/auto-invest
-          TARGET_SHA="${TARGET_SHA:-origin/main}"
-          FALLBACK_REMOTE_URL="${FALLBACK_REMOTE_URL:-https://github.com/jinooaction/claude.git}"
-          if [[ ! -d "${LIVE_REPO}" ]]; then
-              echo "::warning::${LIVE_REPO} 가 인스턴스에 없습니다 — provision-vultr.yml 미실행 (셋업 보류)."
-              exit 100
-          fi
-          echo "--- smoke 전용 checkout 준비 ---"
-          echo "운영 repo: ${LIVE_REPO} (읽기 전용: .env/remote URL 확인만)"
-          echo "대상 commit: ${TARGET_SHA}"
-
-          # smoke 는 운영 워커가 쓰는 /opt/auto-invest 작업트리를 절대 checkout/reset 하지 않는다.
-          # 배포 상태기계만 운영 repo 를 갱신해야 deploy no-op/worker 미재시작 경쟁이 사라진다.
-          git config --global --add safe.directory "${LIVE_REPO}" 2>/dev/null || true
-          sudo -u auto-invest git config --global --add safe.directory "${LIVE_REPO}" 2>/dev/null || true
-          remote_url="$(git -C "${LIVE_REPO}" config --get remote.origin.url 2>/dev/null || true)"
-          remote_url="${remote_url:-${FALLBACK_REMOTE_URL}}"
-
-          smoke_parent=/tmp/auto-invest-kis-smoke
-          mkdir -p "${smoke_parent}"
-          chmod 1777 "${smoke_parent}" 2>/dev/null || true
-          SMOKE_REPO="$(sudo -u auto-invest mktemp -d "${smoke_parent}/repo.XXXXXX" 2>/dev/null || mktemp -d "${smoke_parent}/repo.XXXXXX")"
-          trap 'sudo rm -rf "${SMOKE_REPO:-}" 2>/dev/null || rm -rf "${SMOKE_REPO:-}"' EXIT
-
-          if ! sudo -u auto-invest git clone --quiet --no-checkout "${remote_url}" "${SMOKE_REPO}" 2>/dev/null; then
-              rm -rf "${SMOKE_REPO:?}/"* "${SMOKE_REPO}/".[^.]* 2>/dev/null || true
-              clone_url="${FALLBACK_REMOTE_URL}"
-              sudo -u auto-invest git clone --quiet --no-checkout "${clone_url}" "${SMOKE_REPO}" 2>/dev/null || git clone --quiet --no-checkout "${clone_url}" "${SMOKE_REPO}"
-              chown -R auto-invest:auto-invest "${SMOKE_REPO}" 2>/dev/null || true
-          fi
-          git config --global --add safe.directory "${SMOKE_REPO}" 2>/dev/null || true
-          sudo -u auto-invest git config --global --add safe.directory "${SMOKE_REPO}" 2>/dev/null || true
-          sudo -u auto-invest git -C "${SMOKE_REPO}" fetch --quiet origin main
-          sudo -u auto-invest git -C "${SMOKE_REPO}" checkout --quiet --detach "${TARGET_SHA}"
-          echo "smoke HEAD: $(git -C "${SMOKE_REPO}" rev-parse --short HEAD) ($(git -C "${SMOKE_REPO}" log -1 --pretty=%s))"
-          echo
-          echo "--- .env 확인 (KIS 키만 ✓ 표시, 값 노출 안 함) ---"
-          if [[ ! -f "${LIVE_REPO}/.env" ]]; then
-              echo "::warning::${LIVE_REPO}/.env 파일이 없습니다 — scripts/set_secrets.sh 미실행 (셋업 보류)."
-              exit 100
-          fi
-          missing_env=()
-          for k in KIS_APP_KEY KIS_APP_SECRET KIS_ACCOUNT_NO; do
-              if grep -qE "^${k}=[^[:space:]]" "${LIVE_REPO}/.env"; then
-                  echo "  ${k}: ✓ 설정됨"
-              else
-                  missing_env+=("${k}")
-              fi
-          done
-          if [[ ${#missing_env[@]} -gt 0 ]]; then
-              echo "::warning::.env 에 다음 KIS 키 누락: ${missing_env[*]} (셋업 보류)."
-              exit 100
-          fi
-          echo
-          echo "--- KIS_LIVE_TEST=1 라이브 smoke 실행 ---"
-          read_env_value() {
-              local key="$1"
-              local line value
-              line="$(grep -E "^${key}=" "${LIVE_REPO}/.env" | tail -1 || true)"
-              value="${line#*=}"
-              value="${value%$'\r'}"
-              value="${value#"${value%%[![:space:]]*}"}"
-              value="${value%"${value##*[![:space:]]}"}"
-              if [[ "${value}" == \"*\" && "${value}" == *\" ]]; then
-                  value="${value:1:${#value}-2}"
-              elif [[ "${value}" == \'*\' && "${value}" == *\' ]]; then
-                  value="${value:1:${#value}-2}"
-              fi
-              printf '%s' "$value"
-          }
-          KIS_APP_KEY="$(read_env_value KIS_APP_KEY)"
-          KIS_APP_SECRET="$(read_env_value KIS_APP_SECRET)"
-          KIS_ACCOUNT_NO="$(read_env_value KIS_ACCOUNT_NO)"
-          # sudo -E 가 root 의 HOME=/root 로 남으면서 auto-invest 가 root 의
-          # ~/.cache/uv 에 접근 시도 → permission denied. UV_CACHE_DIR /
-          # HOME 을 명시 전달로 우회. PATH 도 함께 보존.
-          #
-          # `-p no:cacheprovider` : /opt/auto-invest/.pytest_cache 가 root 소유
-          # (provision-vultr 시점 흔적) 라 auto-invest 가 못 씀 → 매 run 마다
-          # PytestCacheWarning 2 건. 4 테스트짜리 smoke 는 lastfailed/lf 가
-          # 의미 없으니 cache provider 자체를 끄는 게 chown 보다 깔끔.
-          AUTO_INVEST_HOME=$(getent passwd auto-invest 2>/dev/null | cut -d: -f6 || echo /tmp)
-          cd "${SMOKE_REPO}"
-          KIS_LIVE_TEST=1 sudo -E -u auto-invest \
-              env "PATH=$PATH" \
-                  "HOME=${AUTO_INVEST_HOME}" \
-                  "UV_CACHE_DIR=${AUTO_INVEST_HOME}/.cache/uv" \
-                  "KIS_LIVE_TEST=1" \
-                  "KIS_APP_KEY=$KIS_APP_KEY" \
-                  "KIS_APP_SECRET=$KIS_APP_SECRET" \
-                  "KIS_ACCOUNT_NO=$KIS_ACCOUNT_NO" \
-              /usr/local/bin/uv run --project "${SMOKE_REPO}" pytest \
-                  tests/integration/test_live_broker.py -v -s \
-                  -p no:cacheprovider 2>&1
-          pytest_exit=$?
-          if [[ "${pytest_exit}" -ne 0 ]]; then
-              # sudo / uv 경로 차이 자동 fallback. root 환경에서 직접 실행.
-              echo "  (재시도: 직접 uv 호출 — root 환경)"
-              cd "${SMOKE_REPO}"
-              env "PATH=$PATH" \
-                  "HOME=${HOME:-/tmp}" \
-                  "KIS_LIVE_TEST=1" \
-                  "KIS_APP_KEY=$KIS_APP_KEY" \
-                  "KIS_APP_SECRET=$KIS_APP_SECRET" \
-                  "KIS_ACCOUNT_NO=$KIS_ACCOUNT_NO" \
-                  uv run pytest \
-                  tests/integration/test_live_broker.py -v -s \
-                  -p no:cacheprovider
-              pytest_exit=$?
-          fi
-          # pytest 통과/실패가 진짜 회귀 신호 — exit code 그대로 propagate.
-          exit "${pytest_exit}"
-          REMOTE_SCRIPT
+              "kis-smoke ${GITHUB_SHA}" \
+              2>&1 | tee /tmp/smoke_output.log
           smoke_pipe_status=("${PIPESTATUS[@]}")
           set -e
           smoke_exit=${smoke_pipe_status[0]:-1}

@@ -21,3 +21,5 @@
   and halt-release workflows.
 - [x] T017 Route SSH workflow setup through the shared secret validator so
   missing deploy user, private key, or known-host material fails before `ssh`.
+- [x] T018 Route KIS smoke through a fixed `kis-smoke` gateway helper that
+  rejects arbitrary shell text and only runs `origin/main`-reachable commits.

@@ -65,8 +65,10 @@ base64 데이터로 바꾼 뒤 원격 도우미가 다시 디코딩합니다.
 
 - GitHub Secrets 값은 로그에 출력하지 않습니다.
 - GitHub에는 서버 root 개인키를 넣지 않습니다. root 접속 사용자는 워크플로에서 거부됩니다.
-- deploy-on-merge와 셋업 검증은 서버 gateway의 `sync-units`, `start-deploy`,
-  `deploy-journal`, `status` 같은 고정 명령만 호출합니다.
+- deploy-on-merge, KIS smoke, 셋업 검증은 서버 gateway의 `sync-units`,
+  `start-deploy`, `deploy-journal`, `status`, `kis-smoke` 같은 고정 명령만
+  호출합니다. `kis-smoke`는 `origin/main`에 포함된 커밋의 읽기 전용 KIS smoke만
+  실행합니다.
 - SSH host key는 `VULTR_SSH_KNOWN_HOSTS`와 `StrictHostKeyChecking=yes`로 고정합니다.
 - repo가 public이면 실행 로그도 노출될 수 있습니다. 워크플로는 의도 원문 대신
   길이와 SHA-256 지문만 남기지만, 생성 룰과 검증 결과에 민감한 계좌 정보나

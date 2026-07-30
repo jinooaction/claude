@@ -5,17 +5,19 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "kis-smoke.yml"
+HELPER = ROOT / "deploy" / "kis-smoke-on-instance.sh"
 
 
-def test_kis_smoke_uses_isolated_checkout_instead_of_live_repo() -> None:
-    body = WORKFLOW.read_text()
+def test_kis_smoke_helper_uses_isolated_checkout_instead_of_live_repo() -> None:
+    body = HELPER.read_text()
 
-    assert "LIVE_REPO=/opt/auto-invest" in body
+    assert 'LIVE_REPO="${LIVE_REPO:-/opt/auto-invest}"' in body
     assert 'SMOKE_REPO="$(sudo -u auto-invest mktemp -d "${smoke_parent}/repo.XXXXXX"' in body
     assert 'clone_url="${FALLBACK_REMOTE_URL}"' in body
     assert 'git config --global --add safe.directory "${SMOKE_REPO}"' in body
     assert 'sudo -u auto-invest git config --global --add safe.directory "${SMOKE_REPO}"' in body
     assert 'git -C "${SMOKE_REPO}" fetch --quiet origin main' in body
+    assert 'merge-base --is-ancestor "${TARGET_SHA}" origin/main' in body
     assert 'git -C "${SMOKE_REPO}" checkout --quiet --detach "${TARGET_SHA}"' in body
     assert 'cd "${SMOKE_REPO}"' in body
     assert '/usr/local/bin/uv run --project "${SMOKE_REPO}" pytest' in body
@@ -35,6 +37,14 @@ def test_kis_smoke_uses_isolated_checkout_instead_of_live_repo() -> None:
         r"git\s+-C\s+\"\$\{LIVE_REPO\}\"[^\n]*\b(fetch|checkout|pull|reset)\b",
         body,
     )
+
+
+def test_kis_smoke_workflow_uses_fixed_gateway_command_not_remote_bash() -> None:
+    body = WORKFLOW.read_text()
+
+    assert '"kis-smoke ${GITHUB_SHA}"' in body
+    assert "bash -s" not in body
+    assert "REMOTE_SCRIPT" not in body
 
 
 def test_kis_smoke_classifies_ssh_setup_failures_without_red_x() -> None:
