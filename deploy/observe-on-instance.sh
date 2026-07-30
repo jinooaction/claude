@@ -225,6 +225,15 @@ live_growth() {
     run_cli "${args[@]}"
 }
 
+promote_readiness() {
+    require_repo
+    run_cli promote-check \
+        --db data/auto_invest.db \
+        --rules deploy/canary-live-rules.toml \
+        --capital 12000 \
+        --format json
+}
+
 main() {
     local cmd="${1:-}"
     shift || true
@@ -260,6 +269,10 @@ main() {
         live-growth)
             [[ "$#" -le 1 ]] || die "live-growth takes at most one since arg"
             live_growth "${1:-}"
+            ;;
+        promote-readiness)
+            [[ "$#" -eq 0 ]] || die "promote-readiness takes no args"
+            promote_readiness
             ;;
         *)
             die "unknown observe command: ${cmd:-missing}"
