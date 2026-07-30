@@ -33,15 +33,42 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `97c1f87` — Merge pull request #555 from jinooaction/codex/evidence-based-candidate-source-diversification-guarded |
-| main 테스트 | #555 브랜치 기준 `uv run pytest` → 2696 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
-| main 린트 | #555 브랜치 기준 `uv run ruff check src tests` → All checks passed. |
+| 마지막 main 커밋 | `aee5d43` — Merge pull request #557 from jinooaction/codex/released-work-candidate-120-consumption |
+| main 테스트 | #557 브랜치 기준 `uv run pytest` → 2698 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
+| main 린트 | #557 브랜치 기준 `uv run ruff check src tests` → All checks passed. |
 | 열린 PR | 없음(이 문서 편집 시점). |
-| 출시 완료 스펙 | 최신 추가: 120(증거 기반 후보 소스 다변화: retryable blocked validation package 2개를 새 자율 작업 후보로 승격), 119(보안 신뢰 경계 강화와 후속 SSH boundary repair 및 live-money workflow 보호 환경), 118(운영자가 이해 가능한 최종 보고 생존성 계약), 117(`SUBMISSION_UNKNOWN` broker lookup 복구), 116(단일 `ExecutionAuthority`와 계좌별 broker-write 잠금), 115(계좌 상태 불명확 시 신규 BUY 차단과 sell-only 저하 상태). 이전 스펙 058~114는 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
+| 출시 완료 스펙 | 최신 추가: 120(증거 기반 후보 소스 다변화 + released-work 완료 소비: retryable blocked validation package 2개를 새 자율 작업 후보로 승격했고, #557 뒤 같은 후보는 released 처리되어 재선택되지 않음), 119(보안 신뢰 경계 강화와 후속 SSH boundary repair 및 live-money workflow 보호 환경), 118(운영자가 이해 가능한 최종 보고 생존성 계약), 117(`SUBMISSION_UNKNOWN` broker lookup 복구), 116(단일 `ExecutionAuthority`와 계좌별 broker-write 잠금), 115(계좌 상태 불명확 시 신규 BUY 차단과 sell-only 저하 상태). 이전 스펙 058~114는 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
 | 골격 스펙 | 없음. `.specify/feature.json`은 최신 출시 스펙 `specs/120-evidence-based-candidate-source-diversification`를 가리킨다. |
-| 최근 출시 작업 | #555는 `candidate-result-executor`의 retryable `execution_failed` 패키지 2개를 읽어 `candidate-evidence-source-diversification-validation-failures`를 selected_work로 내게 했다. #552는 Vultr console로 서버 root 접근을 회복하고 KIS smoke를 고정 명령으로 복구했고, #553은 KIS 뒤에 막힌 돈 경로 읽기 관측을 `observe ...` 고정 helper로 복구했다. |
-| 활성 작업 | 열린 PR 없음. 최신 money-path는 `PREVIEW_ONLY`/`NO_EDGE_YET`, edge-autoarm은 `WAIT_EDGE`/`NO_EDGE`라 실주문은 여전히 불가다. 다음 no-live 작업 후보는 막힌 검증 패키지 원인 축소와 후보 공장 입력 보정이다. |
-| 안전 경계 | #555는 등급 2 운영 루프 보강이다. 실제 주문, 실거래 전환, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps 확대, 손실 예산, KIS secret, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`라 실주문 불가다. |
+| 최근 출시 작업 | #557은 스펙 120 완료 후보를 released-work 장부로 소비하고, 실행 가능한 새 후보가 없을 때 autonomous-work가 완료 후보를 다시 selected_work로 올리지 않고 `wait-for-fresh-evidence` / `OBSERVATION_WAIT`를 내게 했다. #555는 retryable `execution_failed` 패키지 2개를 새 후보로 승격했다. #552/#553은 Vultr/KIS 관측 경로를 복구했다. |
+| 활성 작업 | 열린 PR 없음. 최신 released-work run `30587962825`는 스펙 120 후보를 released로 소비했고, autonomous-work run `30587962855`는 selected_work=`wait-for-fresh-evidence`, status=`OBSERVATION_WAIT`, ranked_count=0이다. 최신 money-path는 `PREVIEW_ONLY`/`NO_EDGE_YET`라 실주문은 여전히 불가다. |
+| 안전 경계 | #557은 등급 2 운영 루프 보강이다. 실제 주문, 실거래 전환, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps 확대, 손실 예산, KIS secret, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`라 실주문 불가다. |
+
+## 최근 관찰 — 2026-07-31 KST (#557 완료 후보 소비와 관찰 대기)
+
+현재 `main` 최신 코드 머지는 `aee5d43`(#557, released-work candidate 120 consumption)다.
+기능 커밋은 `7551107`이다.
+
+- **문제 정의**: #555로 `candidate-evidence-source-diversification-validation-failures` 후보가 구현됐지만,
+  스펙 120 문서에는 released-work가 읽는 `completed_candidate_id` 완료 마커가 없었다. 그래서 자동화
+  sidecar가 방금 끝낸 후보를 다음 실행 후보로 다시 보여줄 수 있었다.
+- **구현 상태**: #557은 스펙 120에 `completed_candidate_id:
+  candidate-evidence-source-diversification-validation-failures`를 추가했다. 또한 `autonomous-work`가
+  실행 가능 후보 없이 완료·억제 후보만 남은 경우, 완료 후보를 대표 후보로 다시 올리지 않고
+  `wait-for-fresh-evidence` / `OBSERVATION_WAIT`를 선택하게 했다. 실행 가능 후보, 운영자 승인 필요 후보,
+  복구 우선 후보가 있으면 기존 선택 순서는 유지한다.
+- **post-merge 자동화**: `Released work ledger` run `30587962825`는 commit `aee5d43` 기준 success이고
+  `released_count=39`, 스펙 120 후보 `candidate-evidence-source-diversification-validation-failures`를
+  `completed_candidate_id`로 소비한다. `Autonomous work execution loop` run `30587962855`는 commit
+  `aee5d43` 기준 success이고 `overall_status=OBSERVATION_WAIT`, selected_work=`wait-for-fresh-evidence`,
+  ranked_count=0, 반복 후보 ranked count=0이다. `Deploy on merge to main` run `30587962839`도 success다.
+- **검증 상태**: #557 브랜치에서 `uv run pytest` 2698 passed, 5 skipped,
+  `uv run ruff check src tests` 통과, `uv run python scripts/agent_harness_probe.py --strict` OK(14/14),
+  `uv run python scripts/check_handoff_facts.py` OK, `git diff --check` 통과, PR quality gate 통과를 확인했다.
+  이 HANDOFF 갱신 전 `uv run pytest -q`는 `마지막 main 커밋` 행이 stale이라 하네스 관련 2개만 실패했고,
+  이 갱신이 그 원인을 바로잡는다.
+- **안전 경계**: 이 변경은 돈 경로를 열지 않는다. 실제 주문, live 재무장, 자본 배분, whitelist/caps,
+  손실 예산, 비밀값, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 최신 money-path는 계속
+  `PREVIEW_ONLY`/`NO_EDGE_YET`라 실주문은 불가다.
 
 ## 최근 관찰 — 2026-07-31 KST (#555 증거 기반 후보 소스 다변화)
 
@@ -6806,6 +6833,7 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 
 ## 과거 인수인계 파일 (참고용)
 
+- `HANDOFF-122-RELEASED-WORK-CANDIDATE-120-CONSUMPTION.md` — 스펙 120 완료 후보 released-work 소비와 autonomous-work 관찰 대기 상태
 - `HANDOFF-121-SSH-SECRET-FAIL-CLOSED.md` — 스펙 119 후속 production 환경과 SSH secret 누락 조기 차단 완료 상태
 - `HANDOFF-120-SSH-BOUNDARY-REPAIR.md` — 스펙 119 후속 SSH boundary repair와 forced-command deploy gateway 경로
 - `HANDOFF-119-SECURITY-TRUST-BOUNDARY-HARDENING.md` — 스펙 119 보안 신뢰 경계 강화와 GitHub root SSH secret 제거 상태
