@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-07-31T01:40:00.717138Z)
+# 완료 후보 소비 장부 (as of 2026-07-31T01:57:02.764023Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -8,8 +8,8 @@
 | 항목 | 값 |
 |------|-----|
 | overall_status | OK |
-| released_count | 40 |
-| scanned_specs | 72 |
+| released_count | 41 |
+| scanned_specs | 73 |
 
 ## 완료 후보
 
@@ -38,6 +38,7 @@
 | candidate-facf2fa31834 | released | 085-public-data-cross-validation | specs/085-public-data-cross-validation/contracts/public-data-fred-cross-check.md | completed_candidate_id |
 | candidate-fd04772a23c5 | released | 078-money-gate-alignment-loop | specs/078-money-gate-alignment-loop/contracts/money-gate-alignment.md | selected_work_candidate |
 | candidate-fd04772a23c5 | released | 079-completed-candidate-consumption | specs/079-completed-candidate-consumption/spec.md | selected_work_candidate |
+| candidate-forward-paper-db-writability | released | 122-forward-paper-db-writability | specs/122-forward-paper-db-writability/spec.md | completed_candidate_id |
 | candidate-forward-regime-edge-experiment | released | 095-forward-regime-edge-experiment | specs/095-forward-regime-edge-experiment/spec.md | completed_candidate_id |
 | candidate-handoff-truth-liveness-contract | released | 107-handoff-truth-liveness-contract | specs/107-handoff-truth-liveness-contract/spec.md | completed_candidate_id |
 | candidate-investment-edge-frontier-map | released | 094-investment-edge-frontier-map | specs/094-investment-edge-frontier-map/spec.md | completed_candidate_id |
@@ -104,7 +105,6 @@
 | 070-candidate-implementation-factory | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 071-candidate-result-executor | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 072-candidate-evidence-diagnostics | 체크박스 작업이 없거나 완료되지 않았습니다. |
-| 122-forward-paper-db-writability | 체크박스 작업이 없거나 완료되지 않았습니다. |
 
 ## 안전 경계
 
@@ -121,7 +121,7 @@
 
 ```json
 {
-  "commit": "1643410b88a422402dccb4ba7e3742d54cc61e86",
+  "commit": "3a6339988ec5fb5ae0050107c1d55e9c2c97012a",
   "overall_status": "OK",
   "released_work": [
     {
@@ -329,6 +329,15 @@
       "source_field": "selected_work_candidate",
       "source_file": "specs/079-completed-candidate-consumption/spec.md",
       "spec_id": "079-completed-candidate-consumption",
+      "status": "released"
+    },
+    {
+      "candidate_id": "candidate-forward-paper-db-writability",
+      "entry_id": "released-7a299b33507e",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/122-forward-paper-db-writability/spec.md",
+      "spec_id": "122-forward-paper-db-writability",
       "status": "released"
     },
     {
@@ -568,7 +577,8 @@
     "118-operator-report-liveness-contract",
     "119-security-trust-boundary-hardening",
     "120-evidence-based-candidate-source-diversification",
-    "121-promote-readiness-observe-gateway"
+    "121-promote-readiness-observe-gateway",
+    "122-forward-paper-db-writability"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -747,12 +757,8 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "072-candidate-evidence-diagnostics"
-    },
-    {
-      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "122-forward-paper-db-writability"
     }
   ],
-  "timestamp_utc": "2026-07-31T01:40:00.717138Z"
+  "timestamp_utc": "2026-07-31T01:57:02.764023Z"
 }
 ```
