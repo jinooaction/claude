@@ -31,6 +31,8 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/regime-stratify.yml"
+      - "deploy/observe-on-instance.sh"
+      - "deploy/repair-ssh-boundary.sh"
       - "src/auto_invest/analytics/regime_stratified.py"
       - "src/auto_invest/backtest/portfolio_replay.py"
 
@@ -56,27 +58,20 @@ jobs:
           VULTR_SSH_USER="${SSH_USER:-}" \
           ./scripts/ci_secure_ssh.sh
 
-      - name: "레짐 타임라인 가져와 서버로 (공개 데이터 채널 → /tmp)"
+      - name: "레짐 타임라인 입력 확인 (공개 데이터 채널)"
         id: stratify_prep
-        env:
-          HOST: ${{ secrets.VULTR_SSH_HOST }}
-          USER: ${{ secrets.VULTR_SSH_USER }}
-          PORT: ${{ secrets.VULTR_SSH_PORT }}
         run: |
           set +e
-          port="${PORT:-22}"
-          git fetch --depth 1 origin automation/public-data 2>/dev/null \
-            && git show FETCH_HEAD:regime_timeline.csv > /tmp/regime_timeline.csv 2>/dev/null
+          git fetch --depth 1 origin \
+            automation/public-data:refs/remotes/origin/automation/public-data 2>/dev/null \
+            && git show origin/automation/public-data:regime_timeline.csv > /tmp/regime_timeline.csv 2>/dev/null
           if [ ! -s /tmp/regime_timeline.csv ]; then
             echo "(레짐 타임라인 없음 — 층화 불가. collect-public-data 사이드카 확인)"
             echo "prep_exit=1" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           wc -l /tmp/regime_timeline.csv
-          scp -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
-              -P "${port}" -i ~/.ssh/id_ed25519 \
-              /tmp/regime_timeline.csv "${USER}@${HOST}:/tmp/regime_timeline.csv"
-          echo "prep_exit=$?" >> "$GITHUB_OUTPUT"
+          echo "prep_exit=0" >> "$GITHUB_OUTPUT"
 
       # 트랙별 체인 — 서버 쓰기는 전부 ${wrk}(/tmp) 아래. forward DB 는 bars-export 가
       # 읽기만 한다(쓰기·마이그레이션 0). set +e + if:always() 라 한 트랙이 실패해도
@@ -91,18 +86,22 @@ jobs:
         run: |
           set +e
           port="${PORT:-22}"
-          cfg="deploy/global-trend-portfolio.toml"; dbf="data/forward_global.db"; wrk="/tmp/stratify_global"
-          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
-              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
-              "cd /opt/auto-invest && \
-                 rm -rf ${wrk} && mkdir -p ${wrk} && \
-                 /usr/local/bin/uv run auto-invest bars-export --portfolio ${cfg} --db ${dbf} --out-dir ${wrk}/bars --json && \
-                 /usr/local/bin/uv run auto-invest ingest-history --from-dir ${wrk}/bars --out-dir ${wrk}/hist && \
-                 /usr/local/bin/uv run auto-invest backtest-portfolio --portfolio ${cfg} --from $(date -u -d '3 years ago' +%Y-%m-%d) --to $(date -u +%Y-%m-%d) --history-root ${wrk}/hist --db ${wrk}/audit.db --halt-path ${wrk}/halt.flag --capital 12000 --equity-out ${wrk}/equity.csv --json && \
-                 /usr/local/bin/uv run auto-invest regime-stratify --returns-csv ${wrk}/equity.csv --timeline-csv /tmp/regime_timeline.csv --out ${wrk}/stratified.json && \
-                 echo '--- stratified json ---' && cat ${wrk}/stratified.json" \
-              > /tmp/stratify_global.log 2>&1
-          echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
+          for attempt in 1 2 3 4; do
+            ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
+                -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+                "observe regime-stratify global" \
+                > /tmp/stratify_global.log 2>&1
+            ssh_exit=$?
+            if ! grep -q "refused command: observe regime-stratify" /tmp/stratify_global.log; then
+              break
+            fi
+            if [ "${attempt}" = "4" ]; then
+              break
+            fi
+            echo "gateway not refreshed yet (attempt ${attempt}); waiting before retry"
+            sleep 90
+          done
+          echo "ssh_exit=${ssh_exit}" >> "$GITHUB_OUTPUT"
           cat /tmp/stratify_global.log
 
       - name: "레짐 층화 — GLOBAL-TREND-WIDE (11 슬리브, 계획 ③ 후보)"
@@ -115,18 +114,22 @@ jobs:
         run: |
           set +e
           port="${PORT:-22}"
-          cfg="deploy/global-trend-wide-portfolio.toml"; dbf="data/forward_wide.db"; wrk="/tmp/stratify_wide"
-          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
-              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
-              "cd /opt/auto-invest && \
-                 rm -rf ${wrk} && mkdir -p ${wrk} && \
-                 /usr/local/bin/uv run auto-invest bars-export --portfolio ${cfg} --db ${dbf} --out-dir ${wrk}/bars --json && \
-                 /usr/local/bin/uv run auto-invest ingest-history --from-dir ${wrk}/bars --out-dir ${wrk}/hist && \
-                 /usr/local/bin/uv run auto-invest backtest-portfolio --portfolio ${cfg} --from $(date -u -d '3 years ago' +%Y-%m-%d) --to $(date -u +%Y-%m-%d) --history-root ${wrk}/hist --db ${wrk}/audit.db --halt-path ${wrk}/halt.flag --capital 12000 --equity-out ${wrk}/equity.csv --json && \
-                 /usr/local/bin/uv run auto-invest regime-stratify --returns-csv ${wrk}/equity.csv --timeline-csv /tmp/regime_timeline.csv --out ${wrk}/stratified.json && \
-                 echo '--- stratified json ---' && cat ${wrk}/stratified.json" \
-              > /tmp/stratify_wide.log 2>&1
-          echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
+          for attempt in 1 2 3 4; do
+            ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
+                -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+                "observe regime-stratify wide" \
+                > /tmp/stratify_wide.log 2>&1
+            ssh_exit=$?
+            if ! grep -q "refused command: observe regime-stratify" /tmp/stratify_wide.log; then
+              break
+            fi
+            if [ "${attempt}" = "4" ]; then
+              break
+            fi
+            echo "gateway not refreshed yet (attempt ${attempt}); waiting before retry"
+            sleep 90
+          done
+          echo "ssh_exit=${ssh_exit}" >> "$GITHUB_OUTPUT"
           cat /tmp/stratify_wide.log
 
       - name: Publish to sidecar branch
