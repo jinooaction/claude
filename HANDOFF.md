@@ -33,15 +33,53 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `f1f2eab` — Merge pull request #559 from jinooaction/codex/promote-readiness-observe-gateway |
-| main 테스트 | #559 브랜치 기준 `uv run pytest` → 2699 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
-| main 린트 | #559 브랜치 기준 `uv run ruff check src tests` → All checks passed. |
+| 마지막 main 커밋 | `85584ed` — Merge pull request #560 from jinooaction/codex/promote-readiness-gateway-self-refresh |
+| main 테스트 | #560 브랜치 기준 `uv run pytest` → 2703 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
+| main 린트 | #560 브랜치 기준 `uv run ruff check src tests` → All checks passed. |
 | 열린 PR | 없음(이 문서 편집 시점). |
-| 출시 완료 스펙 | 최신 추가: 120(증거 기반 후보 소스 다변화 + released-work 완료 소비: retryable blocked validation package 2개를 새 자율 작업 후보로 승격했고, #557 뒤 같은 후보는 released 처리되어 재선택되지 않음), 119(보안 신뢰 경계 강화와 후속 SSH boundary repair 및 live-money workflow 보호 환경), 118(운영자가 이해 가능한 최종 보고 생존성 계약), 117(`SUBMISSION_UNKNOWN` broker lookup 복구), 116(단일 `ExecutionAuthority`와 계좌별 broker-write 잠금), 115(계좌 상태 불명확 시 신규 BUY 차단과 sell-only 저하 상태). 이전 스펙 058~114는 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
-| 골격 스펙 | `specs/121-promote-readiness-observe-gateway`가 활성 포인터다. #559는 1차 observe gateway를 머지했지만, post-merge 관찰에서 서버 설치본 helper drift가 남아 스펙 121 후속이 진행 중이다. |
-| 최근 출시 작업 | #559는 `promote-readiness` workflow를 raw SSH가 아니라 fixed `observe promote-readiness` 명령으로 바꿨고, gateway/helper에 report-only 경로를 추가했다. #557은 스펙 120 완료 후보를 released-work 장부로 소비했다. #552/#553은 Vultr/KIS 관측 경로를 복구했다. |
-| 활성 작업 | 열린 PR 없음. 최신 promote-readiness run `30591552556`은 commit `f1f2eab` 기준 workflow success였지만 sidecar는 `ssh_exit=126`/`refused command: observe promote-readiness`다. 남은 no-live 작업은 서버의 root-owned gateway/helper 설치본을 deploy 때 `origin/main` 기준으로 자동 갱신하게 하는 것이다. 최신 released-work run `30591520091`은 released_count=39이고, autonomous-work run `30591520113`은 selected_work=`wait-for-fresh-evidence`, status=`OBSERVATION_WAIT`, ranked_count=0이다. 최신 money-path는 `PREVIEW_ONLY`/`NO_EDGE_YET`라 실주문은 여전히 불가다. |
-| 안전 경계 | #559와 진행 중인 스펙 121 후속은 등급 3 SSH 안전 경계 관찰 보정이다. 실제 주문, 실거래 전환, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps 확대, 손실 예산, KIS secret, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`라 실주문 불가다. |
+| 출시 완료 스펙 | 최신 추가: 121(`promote-readiness` 관측 경로 복구 + 서버 root-owned gateway/helper self-refresh: #559가 raw SSH command drift를 닫고 #560이 설치본 drift를 닫음), 120(증거 기반 후보 소스 다변화 + released-work 완료 소비), 119(보안 신뢰 경계 강화와 후속 SSH boundary repair 및 live-money workflow 보호 환경), 118(운영자가 이해 가능한 최종 보고 생존성 계약), 117(`SUBMISSION_UNKNOWN` broker lookup 복구), 116(단일 `ExecutionAuthority`와 계좌별 broker-write 잠금). 이전 스펙 058~115는 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
+| 골격 스펙 | 없음. `.specify/feature.json`은 최신 완료 스펙 `specs/121-promote-readiness-observe-gateway`를 가리킨다. |
+| 최근 출시 작업 | #560은 deploy service가 root-owned SSH gateway/helper/sudoers를 `origin/main` 기준으로 먼저 갱신하게 했다. #559는 `promote-readiness` workflow를 raw SSH가 아니라 fixed `observe promote-readiness` 명령으로 바꿨고, gateway/helper에 report-only 경로를 추가했다. #557은 스펙 120 완료 후보를 released-work 장부로 소비했다. |
+| 활성 작업 | 열린 PR 없음. 최신 `promote-readiness` run `30592627513`은 commit `85584ed` 기준 workflow success이고 sidecar는 `ssh_exit=1`, READY=false, stderr empty다. 즉 서버 거부(126)는 해소됐고, 지금은 평가가 정상 실행된 뒤 헌법 VI 게이트가 아직 not-ready라고 말하는 상태다. 최신 released-work run `30592573343`은 이 HANDOFF 전 commit `85584ed` 기준 released_count=39이며 스펙 121은 T024 미완료라 제외됐다. 이 HANDOFF PR이 T024를 닫으므로 다음 released-work가 121을 소비해야 한다. autonomous-work run `30592573408`은 selected_work=`wait-for-fresh-evidence`, status=`OBSERVATION_WAIT`, ranked_count=0이다. 최신 money-path는 `PREVIEW_ONLY`/`NO_EDGE_YET`라 실주문은 여전히 불가다. |
+| 안전 경계 | #559/#560은 등급 3 SSH 안전 경계 관찰 보정이다. 실제 주문, 실거래 전환, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps 확대, 손실 예산, KIS secret, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`라 실주문 불가다. |
+
+## 최근 관찰 — 2026-07-31 KST (#560 서버 helper self-refresh와 promote-readiness 복구)
+
+현재 `main` 최신 코드 머지는 `85584ed`(#560, promote-readiness gateway self-refresh)다.
+기능 커밋은 `3aa45c4`이다.
+
+- **문제 정의**: #559가 workflow를 fixed `observe promote-readiness`로 고쳤지만, 실제 서버는 여전히
+  `ssh_exit=126`, `refused command: observe promote-readiness`를 냈다. 원인은 코드가 아니라
+  서버에 이미 설치된 root-owned gateway/helper 파일이 자동 배포 때 갱신되지 않는 설치본 drift였다.
+- **구현 상태**: #560은 `deploy/auto-invest-deploy.service`에 root-only `ExecStartPre=+...`를 추가해
+  정상 unprivileged deploy state machine 실행 전에 `origin/main`의
+  `deploy/refresh-ssh-boundary-helpers.sh`를 읽어 실행한다. 새 refresh helper는 다시
+  `origin/main:deploy/repair-ssh-boundary.sh`를 읽고 `REFRESH_HELPERS_ONLY=1`로 gateway, sync helper,
+  KIS smoke helper, observe helper, gateway sudoers만 설치한다. deploy 사용자/키, root key retirement,
+  worker 상태, live-money 설정은 건드리지 않는다.
+- **post-merge 배포 확인**: `Deploy on merge to main` run `30592573381`은 commit `85584ed` 기준 success다.
+  로그에서 `AUTO_INVEST_SSH_BOUNDARY_HELPERS_REFRESHED`와
+  `gateway=/usr/local/sbin/auto-invest-deploy-gateway`,
+  `observe_helper=/usr/local/sbin/auto-invest-observe`가 확인됐다. 같은 로그에서 `origin/main`의
+  refresh/repair/sync/KIS/observe helper 파일을 서버가 읽은 것도 확인했다. 배포 correlation id는
+  `5536b51bdfb7ab625add5f1becbf557b`다.
+- **promote-readiness 확인**: 수동 `Promote readiness` run `30592627513`은 commit `85584ed` 기준 success다.
+  최신 sidecar는 `ssh_exit=1`, READY=false, stderr empty다. 이것은 더 이상 SSH gateway setup 오류가
+  아니고, 승격 준비도 평가가 정상 실행된 뒤 "아직 준비 안 됨"을 보고한 정상 not-ready 상태다.
+  JSON 사유는 라이브 기간 0/10일 미달, 청산 거래 0건 미달, 낙폭/수익률 측정 불가, 정합성 불일치 이력이다.
+- **released/autonomous 상태**: #560 직후 `Released work ledger` run `30592573343`은 success,
+  released_count=39였고 스펙 121은 T024 미완료라 제외됐다. 이 HANDOFF 갱신이 T024를 닫으므로 다음
+  released-work run에서 121이 완료 후보로 소비되어야 한다. `Autonomous work execution loop`
+  run `30592573408`은 success, selected_work=`wait-for-fresh-evidence`, status=`OBSERVATION_WAIT`,
+  ranked_count=0이다.
+- **검증 상태**: #560 브랜치에서 focused test 32 passed, `bash -n` 3개 helper 통과,
+  `uv run pytest` 2703 passed/5 skipped, `uv run ruff check src tests` 통과,
+  `uv run python scripts/check_handoff_facts.py` OK, `uv run python scripts/agent_harness_probe.py --strict`
+  OK(14/14), `git diff --check` 통과, PR quality gate 통과, `mergeStateStatus=CLEAN` 확인 뒤 merge했다.
+- **안전 경계**: 이 변경은 돈 경로를 열지 않는다. 실제 주문, live 재무장, 자본 배분, whitelist/caps,
+  손실 예산, 비밀값, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 최신 money-path는 계속
+  `PREVIEW_ONLY`/`NO_EDGE_YET`라 실주문은 불가다. 지금 돈을 못 버는 직접 이유는 서버 거부가 아니라
+  엣지/승격 게이트가 아직 통과되지 않았기 때문이다.
 
 ## 최근 관찰 — 2026-07-31 KST (#559 promote-readiness observe gateway와 설치본 helper drift)
 
@@ -2977,6 +3015,15 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
   통과, `uv run python scripts/agent_harness_probe.py --strict` `OK (14/14)`,
   `uv run python scripts/check_handoff_facts.py` 통과, PR 품질 관문 통과. 머지 직전 전체 테스트와
   린트를 다시 실행해 같은 결과를 확인했다.
+
+## 최근 마일스톤 — 2026-07-31 KST (스펙 121 promote-readiness 관측 복구)
+
+#559/#560으로 헌법 VI(라이브 트랙레코드) 승격 준비도 관측 경로를 복구했다. raw SSH command는
+fixed `observe promote-readiness`로 대체됐고, 서버에 설치된 root-owned gateway/helper가 낡아지는
+문제는 deploy service의 root-only helper refresh pre-step으로 닫았다. 수동 `promote-readiness`
+run `30592627513`은 commit `85584ed` 기준 success, sidecar `ssh_exit=1`, READY=false, stderr empty다.
+즉 SSH setup 오류는 해소됐고, 현재 상태는 정상 not-ready 판정이다. 상세는
+`HANDOFF-123-PROMOTE-READINESS-OBSERVE-GATEWAY.md`.
 
 ## 최근 마일스톤 — 2026-07-15 KST (스펙 118 마무리와 KIS 열린 주문 smoke 보강)
 
@@ -6864,6 +6911,7 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 
 ## 과거 인수인계 파일 (참고용)
 
+- `HANDOFF-123-PROMOTE-READINESS-OBSERVE-GATEWAY.md` — 스펙 121 promote-readiness 관측 복구와 서버 root-owned helper self-refresh 완료 상태
 - `HANDOFF-122-RELEASED-WORK-CANDIDATE-120-CONSUMPTION.md` — 스펙 120 완료 후보 released-work 소비와 autonomous-work 관찰 대기 상태
 - `HANDOFF-121-SSH-SECRET-FAIL-CLOSED.md` — 스펙 119 후속 production 환경과 SSH secret 누락 조기 차단 완료 상태
 - `HANDOFF-120-SSH-BOUNDARY-REPAIR.md` — 스펙 119 후속 SSH boundary repair와 forced-command deploy gateway 경로
