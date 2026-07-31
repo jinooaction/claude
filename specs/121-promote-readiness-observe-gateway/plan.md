@@ -5,7 +5,7 @@
 
 ## Summary
 
-The latest `promote-readiness` sidecar is failing with `ssh_exit=126` because the workflow still sends a raw remote `promote-check` shell command, while the production server now correctly accepts only fixed forced-command gateway verbs. This feature routes the promotion readiness report through `observe promote-readiness`, adds the matching read-only helper path, and proves that no live order, arming, capital, whitelist/caps, secret, audit-log, or promotion action is opened.
+The latest `promote-readiness` sidecar initially failed with `ssh_exit=126` because the workflow sent a raw remote `promote-check` shell command, while the production server correctly accepts only fixed forced-command gateway verbs. The first repair routed the report through `observe promote-readiness`, but post-merge verification showed the installed root-owned gateway/helpers on the server were still stale. This feature now also refreshes those fixed-command files from `origin/main` during deploy, while proving that no live order, arming, capital, whitelist/caps, secret, audit-log, or promotion action is opened.
 
 ## Technical Context
 
@@ -17,7 +17,7 @@ The latest `promote-readiness` sidecar is failing with `ssh_exit=126` because th
 **Project Type**: Trading automation repository with server-side deployment helpers
 **Performance Goals**: Promotion readiness sidecar should publish within the existing 10-minute workflow timeout
 **Constraints**: No broker order submission, no live arming, no capital allocation, no whitelist/caps changes, no secret reads or writes, no arbitrary shell through SSH
-**Scale/Scope**: One workflow, one forced-command gateway allowlist entry, one observation helper command, focused tests, and handoff update
+**Scale/Scope**: One workflow, one forced-command gateway allowlist entry, one observation helper command, one deploy pre-step for helper refresh, focused tests, and handoff update
 
 ## Constitution Check
 
@@ -61,17 +61,20 @@ specs/121-promote-readiness-observe-gateway/
 └── promote-readiness.yml
 
 deploy/
+├── auto-invest-deploy.service
 ├── repair-ssh-boundary.sh
+├── refresh-ssh-boundary-helpers.sh
 └── observe-on-instance.sh
 
 tests/unit/
 ├── test_observation_gateway_workflows.py
 ├── test_ssh_boundary_repair.py
+├── test_sync_units.py
 └── test_spec_026_readiness.py
 ```
 
-**Structure Decision**: Keep the repair inside the existing workflow and forced-command helper files. Do not introduce a second SSH path or a privileged workflow.
+**Structure Decision**: Keep the repair inside the existing workflow, deploy unit, and forced-command helper files. Do not introduce a second SSH path or a privileged workflow.
 
 ## Complexity Tracking
 
-No constitution violation is required. The only added complexity is one fixed observation command; it is justified because the existing raw SSH command is now correctly refused by the hardened server boundary.
+No constitution violation is required. The added complexity is one fixed observation command plus a deploy-time refresh of root-owned helper files; it is justified because the existing raw SSH command and then stale installed gateway were both correctly refused by the hardened server boundary.

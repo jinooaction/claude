@@ -9,6 +9,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "deploy" / "repair-ssh-boundary.sh"
 KIS_SMOKE_HELPER = REPO_ROOT / "deploy" / "kis-smoke-on-instance.sh"
 OBSERVE_HELPER = REPO_ROOT / "deploy" / "observe-on-instance.sh"
+REFRESH_HELPER = REPO_ROOT / "deploy" / "refresh-ssh-boundary-helpers.sh"
 
 
 def _body() -> str:
@@ -28,6 +29,8 @@ def test_repair_script_exists_and_is_executable():
     assert KIS_SMOKE_HELPER.stat().st_mode & 0o111
     assert OBSERVE_HELPER.is_file()
     assert OBSERVE_HELPER.stat().st_mode & 0o111
+    assert REFRESH_HELPER.is_file()
+    assert REFRESH_HELPER.stat().st_mode & 0o111
 
 
 def test_requires_root_and_public_key_not_private_key():
@@ -113,6 +116,61 @@ def test_script_does_not_change_live_money_or_worker_state():
     assert "AUTO_INVEST_CAPITAL" not in body
     assert "systemctl restart auto-invest.service" not in body
     assert "systemctl start auto-invest.service" not in body
+
+
+def test_refresh_helpers_only_mode_reinstalls_boundary_without_key_rotation():
+    body = _body()
+    main_body = body[body.index("main() {") :]
+    refresh_block = main_body[
+        main_body.index('if [[ "${REFRESH_HELPERS_ONLY}" == "1" ]]') :
+        main_body.index("validate_inputs")
+    ]
+
+    assert 'REFRESH_HELPERS_ONLY="${REFRESH_HELPERS_ONLY:-0}"' in body
+    assert 'REPO="${REPO:-/opt/auto-invest}"' in body
+    assert 'REPO_REF="${REPO_REF:-origin/main}"' in body
+    assert "install_gateway" in refresh_block
+    assert "install_sync_helper" in refresh_block
+    assert "install_kis_smoke_helper" in refresh_block
+    assert "install_observe_helper" in refresh_block
+    assert "install_sudoers" in refresh_block
+    assert "AUTO_INVEST_SSH_BOUNDARY_HELPERS_REFRESHED" in refresh_block
+    assert "install_deploy_user" not in refresh_block
+    assert "install_authorized_key" not in refresh_block
+    assert "retire_legacy_root_key" not in refresh_block
+
+
+def test_repair_installs_helper_files_from_current_main_when_available():
+    body = _body()
+
+    assert "install_repo_file()" in body
+    assert 'sudo -u "${REPO_OWNER}" git -C "${REPO}" show' in body
+    assert '"${REPO_REF}:${repo_path}"' in body
+    assert 'install -m 0755 -o root -g root "${tmp_file}" "${destination}"' in body
+    assert '"deploy/sync-units.sh"' in body
+    assert '"deploy/kis-smoke-on-instance.sh"' in body
+    assert '"deploy/observe-on-instance.sh"' in body
+
+
+def test_refresh_boundary_helper_is_narrow_and_main_sourced():
+    assert REFRESH_HELPER.is_file()
+    assert REFRESH_HELPER.stat().st_mode & 0o111
+    body = REFRESH_HELPER.read_text(encoding="utf-8")
+    code = "\n".join(
+        line for line in body.splitlines() if not line.lstrip().startswith("#")
+    )
+
+    assert 'REF="${REF:-origin/main}"' in body
+    assert 'git -C "${REPO}" fetch origin main --quiet' in body
+    assert 'git -C "${REPO}" show "${REF}:deploy/repair-ssh-boundary.sh"' in body
+    assert "REFRESH_HELPERS_ONLY=1" in body
+    assert "DEPLOY_PUBLIC_KEY" not in code
+    assert "authorized_keys" not in code
+    assert "systemctl" not in code
+    assert "AUTO_INVEST_MODE=live" not in body
+    assert "AUTO_INVEST_CAPITAL" not in body
+    assert "rebalance" not in body.lower()
+    assert "submit" not in body.lower()
 
 
 def test_observe_helper_exposes_only_observation_and_paper_commands():

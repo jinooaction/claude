@@ -3,9 +3,10 @@
 ## Focused Validation
 
 ```bash
-uv run pytest tests/unit/test_observation_gateway_workflows.py tests/unit/test_ssh_boundary_repair.py tests/unit/test_spec_026_readiness.py -q
+uv run pytest tests/unit/test_observation_gateway_workflows.py tests/unit/test_ssh_boundary_repair.py tests/unit/test_sync_units.py tests/unit/test_spec_026_readiness.py -q
 bash -n deploy/repair-ssh-boundary.sh
 bash -n deploy/observe-on-instance.sh
+bash -n deploy/refresh-ssh-boundary-helpers.sh
 ```
 
 ## Current Sidecar Check
@@ -15,7 +16,7 @@ git fetch origin '+refs/heads/automation/*:refs/remotes/origin/automation/*'
 git show origin/automation/promote-readiness-last-run:LAST_RUN.md
 ```
 
-Before this feature is deployed on the server, a stale sidecar may show `ssh_exit=126` and `refused command`. After the server has the updated gateway/helper, the sidecar should publish either READY true with exit 0 or READY false with exit 1.
+Before this feature is deployed on the server, a stale sidecar may show `ssh_exit=126` and `refused command`. After the server has the updated gateway/helper refresh path and the deploy service has run, the sidecar should publish either READY true with exit 0 or READY false with exit 1.
 
 ## Full Validation Before Merge
 
