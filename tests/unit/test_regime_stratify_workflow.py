@@ -17,6 +17,7 @@ from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _WORKFLOW = _REPO_ROOT / ".github" / "workflows" / "regime-stratify.yml"
+_OBSERVE_HELPER = _REPO_ROOT / "deploy" / "observe-on-instance.sh"
 
 _STRATIFY_TRACKS = ("global", "wide")
 
@@ -25,91 +26,96 @@ def _workflow_text() -> str:
     return _WORKFLOW.read_text(encoding="utf-8")
 
 
+def _observe_text() -> str:
+    return _OBSERVE_HELPER.read_text(encoding="utf-8")
+
+
+def _regime_helper_block() -> str:
+    body = _observe_text()
+    return body.split("regime_stratify_track()", 1)[1].split("main()", 1)[0]
+
+
 def test_stratify_lives_outside_trading_workflows():
     """전용 워크플로 존재 + 거래 행위 0 — 재조정/무장/실주문 *명령*이 없다.
 
-    설명 주석이 아니라 실제 명령 라인(uv run)만 검사한다(다른 워크플로 불변식과
-    동일 접근).
+    워크플로는 forced-command gateway의 고정 observe 명령만 부른다. 실제
+    bars-export → backtest → regime-stratify 체인은 서버 헬퍼 안에 고정한다.
     """
     text = _workflow_text()
     assert "id: stratify_prep" in text
-    calls = [ln for ln in text.splitlines() if "uv run" in ln]
-    assert calls, "uv run 명령이 하나도 없음 — 층화 체인이 사라짐"
-    for call in calls:
-        for banned in ("rebalance-once", "--mode", "go-live", "armed"):
-            assert banned not in call, (
-                f"연구 전용 워크플로에 거래 표면이 들어옴: {banned!r} — 층화는 "
-                f"측정이지 거래가 아니다: {call}"
-            )
+    assert "observe regime-stratify global" in text
+    assert "observe regime-stratify wide" in text
+    assert "scp " not in text
+    assert "cd /opt/auto-invest" not in text
+    assert "/usr/local/bin/uv run" not in text
+
+    helper_block = _regime_helper_block()
+    for banned in ("rebalance-once", "--mode live", "go-live", "armed"):
+        assert banned not in helper_block, (
+            f"연구 전용 층화 헬퍼에 거래 표면이 들어옴: {banned!r} — 층화는 "
+            f"측정이지 거래가 아니다."
+        )
 
 
 def test_stratify_steps_exist_for_both_tracks():
     text = _workflow_text()
     for track in _STRATIFY_TRACKS:
         assert f"id: stratify_{track}" in text, f"{track} 층화 스텝이 사라짐"
-        assert f'wrk="/tmp/stratify_{track}"' in text, (
-            f"{track} 층화 작업 디렉터리가 /tmp 밖으로 이동 — 격리 위반 위험"
-        )
+        assert f"observe regime-stratify {track}" in text
+
+    helper = _observe_text()
+    assert "global|wide" in helper
+    assert 'local wrk="/tmp/stratify_${track}"' in helper
 
 
 def test_stratify_backtest_writes_only_under_tmp():
     """backtest-portfolio 의 쓰기 표면(--db/--halt-path/--equity-out)은 전부 ${wrk}(/tmp)."""
-    lines = [
-        ln
-        for ln in _workflow_text().splitlines()
-        if "uv run" in ln and "backtest-portfolio" in ln
-    ]
-    assert len(lines) == len(_STRATIFY_TRACKS), (
-        f"backtest-portfolio 호출이 {len(lines)}개 — 층화 트랙 수와 다름. "
-        "트랙을 추가/삭제했다면 이 테스트를 함께 갱신할 것."
-    )
-    for call in lines:
-        assert "--db ${wrk}/audit.db" in call, (
-            f"백테스트 감사 DB 가 /tmp 작업 디렉터리를 벗어남(forward DB 오염 위험): {call}"
-        )
-        assert "--halt-path ${wrk}/halt.flag" in call, (
-            f"백테스트 halt 깃발이 /tmp 를 벗어남(라이브/트랙 깃발 공유 회귀): {call}"
-        )
-        assert "--equity-out ${wrk}/equity.csv" in call, (
-            f"자본 곡선 출력이 누락/이동 — regime-stratify 입력이 끊긴다: {call}"
-        )
-        assert "data/" not in call.replace("deploy/", ""), (
-            f"백테스트 호출이 data/ 경로를 직접 참조(쓰기 오염 위험): {call}"
-        )
+    helper_block = _regime_helper_block()
+    assert helper_block.count("run_cli backtest-portfolio") == 1
+    call = helper_block.split("run_cli backtest-portfolio", 1)[1].split(
+        "run_cli regime-stratify", 1
+    )[0]
+
+    assert '--db "${wrk}/audit.db"' in call
+    assert '--halt-path "${wrk}/halt.flag"' in call
+    assert '--equity-out "${wrk}/equity.csv"' in call
+    assert '"${TRACK_DB}"' not in call
 
 
 def test_stratify_bars_export_reads_forward_dbs():
     """bars-export 는 forward 트랙 DB 를 *읽기만* 한다(전용 DB 격리 원칙과 정합)."""
-    text = _workflow_text()
+    text = _observe_text()
     for track in _STRATIFY_TRACKS:
-        assert f'dbf="data/forward_{track}.db"' in text
-    lines = [
-        ln
-        for ln in text.splitlines()
-        if "uv run" in ln and "bars-export" in ln
-    ]
-    assert len(lines) == len(_STRATIFY_TRACKS)
-    for call in lines:
-        assert "--db ${dbf}" in call, f"bars-export 가 forward DB 를 안 읽음: {call}"
-        assert "--out-dir ${wrk}/bars" in call, (
-            f"bars-export 출력이 /tmp 작업 디렉터리를 벗어남: {call}"
-        )
+        assert f'TRACK_DB="data/forward_{track}.db"' in text
+
+    helper_block = _regime_helper_block()
+    assert helper_block.count("run_cli bars-export") == 1
+    call = helper_block.split("run_cli bars-export", 1)[1].split(
+        "run_cli ingest-history", 1
+    )[0]
+    assert '--db "${TRACK_DB}"' in call
+    assert '--out-dir "${wrk}/bars"' in call
 
 
 def test_stratify_consumes_public_data_timeline():
     """타임라인은 공개 데이터 채널 사이드카에서 온다 — 다른(미검증) 소스로 바꾸지 말 것."""
     text = _workflow_text()
-    assert "origin automation/public-data" in text
+    assert "automation/public-data:refs/remotes/origin/automation/public-data" in text
     assert "regime_timeline.csv" in text
-    lines = [
-        ln
-        for ln in text.splitlines()
-        if "uv run" in ln and "regime-stratify" in ln
-    ]
-    assert len(lines) == len(_STRATIFY_TRACKS)
-    for call in lines:
-        assert "--returns-csv ${wrk}/equity.csv" in call
-        assert "--timeline-csv /tmp/regime_timeline.csv" in call
+
+    helper = _observe_text()
+    assert "origin/automation/public-data:regime_timeline.csv" in helper
+    assert 'local timeline="/tmp/regime_timeline.csv"' in helper
+    helper_block = _regime_helper_block()
+    assert '--returns-csv "${wrk}/equity.csv"' in helper_block
+    assert '--timeline-csv "${timeline}"' in helper_block
+
+
+def test_stratify_retries_if_gateway_has_not_refreshed_yet():
+    """머지 직후 deploy-on-merge와 경합해도 새 observe 명령을 짧게 재시도한다."""
+    text = _workflow_text()
+    assert "refused command: observe regime-stratify" in text
+    assert "sleep 90" in text
 
 
 def test_stratify_publishes_own_sidecar():
@@ -125,6 +131,8 @@ def test_stratify_push_paths_cover_chain_files():
     text = _workflow_text()
     for path in (
         ".github/workflows/regime-stratify.yml",
+        "deploy/observe-on-instance.sh",
+        "deploy/repair-ssh-boundary.sh",
         "src/auto_invest/analytics/regime_stratified.py",
         "src/auto_invest/backtest/portfolio_replay.py",
     ):

@@ -159,6 +159,14 @@ case "${cmd}" in
     observe\ promote-readiness)
         exec sudo -n /usr/local/sbin/auto-invest-observe promote-readiness
         ;;
+    observe\ regime-stratify\ *)
+        track="${cmd#observe regime-stratify }"
+        if [[ "${track}" =~ ^(global|wide)$ ]]; then
+            exec sudo -n /usr/local/sbin/auto-invest-observe regime-stratify "${track}"
+        fi
+        echo "refused command: ${cmd}" >&2
+        exit 126
+        ;;
     start-deploy)
         exec sudo -n /usr/bin/systemctl start auto-invest-deploy.service
         ;;

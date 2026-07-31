@@ -254,6 +254,83 @@ promote_readiness() {
         --format json
 }
 
+refresh_regime_timeline() {
+    local timeline="${1:-}"
+    [[ -n "${timeline}" ]] || die "missing timeline path"
+    require_repo
+
+    if ! sudo -u "${APP_USER}" git -C "${REPO}" fetch --depth 1 origin \
+        automation/public-data:refs/remotes/origin/automation/public-data --quiet; then
+        echo "WARN: public-data sidecar fetch failed; using existing origin/automation/public-data" >&2
+    fi
+
+    local tmp_file
+    tmp_file="$(mktemp)"
+    if ! sudo -u "${APP_USER}" git -C "${REPO}" show \
+        origin/automation/public-data:regime_timeline.csv > "${tmp_file}"; then
+        rm -f "${tmp_file}"
+        die "missing public-data regime_timeline.csv"
+    fi
+    [[ -s "${tmp_file}" ]] || {
+        rm -f "${tmp_file}"
+        die "empty public-data regime_timeline.csv"
+    }
+    install -m 0644 -o "${APP_USER}" -g "${APP_USER}" "${tmp_file}" "${timeline}"
+    rm -f "${tmp_file}"
+}
+
+regime_stratify_track() {
+    local track="${1:-}"
+    case "${track}" in
+        global|wide)
+            ;;
+        *)
+            die "regime-stratify supports only global or wide"
+            ;;
+    esac
+
+    track_config "${track}"
+    require_repo
+
+    local wrk="/tmp/stratify_${track}"
+    local timeline="/tmp/regime_timeline.csv"
+    local from_date
+    local to_date
+    from_date="$(date -u -d '3 years ago' +%Y-%m-%d)"
+    to_date="$(date -u +%Y-%m-%d)"
+
+    rm -rf "${wrk}"
+    install -d -m 0750 -o "${APP_USER}" -g "${APP_USER}" "${wrk}"
+    refresh_regime_timeline "${timeline}"
+
+    run_cli bars-export \
+        --portfolio "${TRACK_PORTFOLIO}" \
+        --db "${TRACK_DB}" \
+        --out-dir "${wrk}/bars" \
+        --json \
+        > "${wrk}/bars-export.json"
+    run_cli ingest-history \
+        --from-dir "${wrk}/bars" \
+        --out-dir "${wrk}/hist" \
+        > "${wrk}/ingest.log"
+    run_cli backtest-portfolio \
+        --portfolio "${TRACK_PORTFOLIO}" \
+        --from "${from_date}" \
+        --to "${to_date}" \
+        --history-root "${wrk}/hist" \
+        --db "${wrk}/audit.db" \
+        --halt-path "${wrk}/halt.flag" \
+        --capital 12000 \
+        --equity-out "${wrk}/equity.csv" \
+        --json
+    run_cli regime-stratify \
+        --returns-csv "${wrk}/equity.csv" \
+        --timeline-csv "${timeline}" \
+        --out "${wrk}/stratified.json"
+    echo "--- stratified json ---"
+    cat "${wrk}/stratified.json"
+}
+
 main() {
     local cmd="${1:-}"
     shift || true
@@ -293,6 +370,10 @@ main() {
         promote-readiness)
             [[ "$#" -eq 0 ]] || die "promote-readiness takes no args"
             promote_readiness
+            ;;
+        regime-stratify)
+            [[ "$#" -eq 1 ]] || die "regime-stratify requires track"
+            regime_stratify_track "$1"
             ;;
         *)
             die "unknown observe command: ${cmd:-missing}"
