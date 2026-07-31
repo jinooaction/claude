@@ -33,15 +33,53 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `1643410` — Merge pull request #562 from jinooaction/codex/122-forward-paper-db-writability |
-| main 테스트 | handoff 갱신 브랜치 기준 `uv run pytest -q` → 2705 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
+| 마지막 main 커밋 | `5fb249c` — Merge pull request #564 from jinooaction/codex/regime-stratify-observe-command |
+| main 테스트 | handoff 갱신 브랜치 기준 `uv run pytest -q` → 2706 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
 | main 린트 | handoff 갱신 브랜치 기준 `uv run ruff check src tests` → All checks passed. |
 | 열린 PR | 없음(이 handoff 작성 시점). |
 | 출시 완료 스펙 | 최신 추가: 122(forward paper DB writability: 읽기 전용 DB 권한 drift를 종이거래 저장소로만 좁게 복구), 121(`promote-readiness` 관측 경로 복구 + 서버 root-owned gateway/helper self-refresh), 120(증거 기반 후보 소스 다변화 + released-work 완료 소비), 119(보안 신뢰 경계 강화와 후속 SSH boundary repair 및 live-money workflow 보호 환경), 118(운영자가 이해 가능한 최종 보고 생존성 계약). 이전 스펙 058~117은 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
 | 골격 스펙 | 없음. `.specify/feature.json`은 최신 완료 스펙 `specs/122-forward-paper-db-writability`를 가리킨다. |
-| 최근 출시 작업 | #562는 `observe paper-track-run`이 forward paper DB/WAL/SHM/트랙 halt flag의 소유권·쓰기 권한만 복구하게 했다. #560은 deploy service가 root-owned SSH helper를 `origin/main` 기준으로 갱신하게 했고, #559는 `promote-readiness`를 fixed observe 명령으로 바꿨다. |
-| 활성 작업 | 열린 PR 없음. #562 배포 run `30596929563`은 success이고 로그에서 `observe_helper=/usr/local/sbin/auto-invest-observe` 갱신을 확인했다. 수동 `rebalance-paper-forward.yml` run `30596973332`는 commit `1643410` 기준 success이며 모든 prep/verdict `ssh_exit=0`, readonly DB 오류 문자열 없음이다. 최신 edge-autoarm run `30597184383`은 `WAIT_EDGE`, money-path run `30597231376`은 `PREVIEW_ONLY`/`NO_EDGE_YET`, capital-path-readiness run `30597231465`은 `ACCUMULATING_EDGE`, autonomous-work run `30597261537`은 `wait-for-fresh-evidence`/`OBSERVATION_WAIT`다. 이 handoff가 스펙 122의 후속 체크박스를 닫으므로 다음 released-work run이 122를 소비해야 한다. |
-| 안전 경계 | #562는 등급 3 안전 경계 인접 관찰 보정이다. 실제 주문, 실거래 전환, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps 확대, 손실 예산, KIS secret, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`라 실주문 불가다. |
+| 최근 출시 작업 | #564는 `regime-stratify` 연구 관측을 fixed `observe regime-stratify <track>` gateway로 옮겨 raw `scp`와 inline SSH 명령 거부를 제거했다. #562는 `observe paper-track-run`이 forward paper DB/WAL/SHM/트랙 halt flag의 소유권·쓰기 권한만 복구하게 했다. #560은 deploy service가 root-owned SSH helper를 `origin/main` 기준으로 갱신하게 했다. |
+| 활성 작업 | 열린 PR 없음. #564 배포 run `30630190101`은 success이고 로그에서 `AUTO_INVEST_SSH_BOUNDARY_HELPERS_REFRESHED`, `observe_helper=/usr/local/sbin/auto-invest-observe`, worker stop/start, deploy correlation id `1cfa275ddd763bb0211ccc627ba45756`을 확인했다. `regime-stratify.yml` run `30630190081`은 commit `5fb249c` 기준 success이며 sidecar timestamp `2026-07-31T12:20:10Z`, 타임라인 prep exit 0, GLOBAL/WIDE 모두 `ssh_exit=0`과 `schema_version=1.0` JSON을 남겼다. 최신 edge-autoarm은 `WAIT_EDGE`, money-path는 `PREVIEW_ONLY`/`NO_EDGE_YET`, capital-path-readiness는 `ACCUMULATING_EDGE`, autonomous-work는 `wait-for-fresh-evidence`/`OBSERVATION_WAIT`다. |
+| 안전 경계 | #564는 등급 2 운영 관측 경로 보정이다. 실제 주문, 실거래 전환, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps 확대, 손실 예산, KIS secret, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`라 실주문 불가다. |
+
+## 최근 관찰 — 2026-07-31 KST (#564 regime-stratify observe gateway 복구)
+
+현재 `main` 최신 코드 머지는 `5fb249c`(#564, regime-stratify observe gateway)다.
+기능 커밋은 `e3c39bc`이다.
+
+- **문제 정의**: 최신 돈 경로는 `PREVIEW_ONLY`/`NO_EDGE_YET`라 실주문을 막고 있었다. 동시에
+  `regime-stratify` sidecar는 workflow success처럼 보였지만 실제 내용은 `ssh_exit=126`,
+  `refused command: cd /opt/auto-invest && rm -rf ... uv run ...`, 타임라인 prep exit 255였다. 즉 돈을
+  바로 켤 안전 증거는 없고, 전략이 어떤 거시 레짐에서 벌고 잃는지 보는 연구 관측도 서버 보안 gateway에
+  막혀 있었다.
+- **구현 상태**: #564는 `regime-stratify.yml`에서 raw `scp`와 임의 inline SSH 명령을 없애고,
+  `observe regime-stratify global` / `observe regime-stratify wide` 고정 명령만 쓰게 했다.
+  서버 helper는 `origin/automation/public-data:regime_timeline.csv`를 `/tmp/regime_timeline.csv`로
+  읽고, `/tmp/stratify_<track>` 작업공간에서 bars export, history ingest, portfolio backtest,
+  regime-stratify를 순서대로 실행한다. 허용 트랙은 `global|wide`뿐이다.
+- **post-merge 배포 확인**: `Deploy on merge to main` run `30630190101`은 commit `5fb249c` 기준 success다.
+  로그에서 `AUTO_INVEST_SSH_BOUNDARY_HELPERS_REFRESHED`, `observe_helper=/usr/local/sbin/auto-invest-observe`,
+  worker stop/start, deploy correlation id `1cfa275ddd763bb0211ccc627ba45756`을 확인했다.
+- **regime-stratify 확인**: `regime-stratify.yml` run `30630190081`은 success다. 최신 sidecar timestamp는
+  `2026-07-31T12:20:10Z`이고 타임라인 prep exit 0, GLOBAL-TREND `ssh_exit=0`,
+  GLOBAL-TREND-WIDE `ssh_exit=0`이다. 두 출력 모두 `--- stratified json ---`와
+  `"schema_version": "1.0"`을 포함한다. GLOBAL 전체는 752일, 총수익 42.97%, 최대낙폭 10.48%,
+  샤프 1.30이고, WIDE 전체는 752일, 총수익 22.54%, 최대낙폭 5.78%, 샤프 1.11이다.
+- **최신 돈 경로**: money-path timestamp `2026-07-31T10:35:43Z`는 `PREVIEW_ONLY`/`NO_EDGE_YET`다.
+  관측은 28회로 최소 관측을 넘었지만 PSR `0.400049 < 0.95`, 칼마 벤치마크 미달이다. edge-autoarm은
+  `WAIT_EDGE`, capital-path-readiness는 `ACCUMULATING_EDGE`, autonomous-work는
+  `wait-for-fresh-evidence` / `OBSERVATION_WAIT`다.
+- **검증 상태**: #564 브랜치에서 focused tests 20 passed, adjacent tests 56 passed,
+  `bash -n deploy/observe-on-instance.sh deploy/repair-ssh-boundary.sh` 통과,
+  `uv run pytest` 2706 passed/5 skipped, `uv run ruff check src tests` 통과,
+  `uv run python scripts/agent_harness_probe.py --strict` OK(14/14),
+  `uv run python scripts/check_handoff_facts.py` OK, `git diff --check` 통과, PR quality gate 통과,
+  `mergeStateStatus=CLEAN` 확인 뒤 merge했다. 이 handoff 갱신 전 `uv run pytest -q`는
+  `HANDOFF.md`가 아직 `1643410`을 가리켜 하네스 관련 2개만 실패했고, 이 갱신이 그 원인을 바로잡는다.
+- **안전 경계**: 연구 관측 파이프만 복구했다. 실제 주문, live 재무장, 자본 배분, whitelist/caps,
+  손실 예산, 비밀값, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 지금 돈을 못 버는 직접 이유는
+  서버 명령 거부가 아니라 `NO_EDGE`: 전진 성과가 아직 벤치마크와 유의성 기준을 넘지 못했기 때문이다.
 
 ## 최근 관찰 — 2026-07-31 KST (#562 forward paper DB writability 복구)
 
@@ -3051,6 +3089,15 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
   통과, `uv run python scripts/agent_harness_probe.py --strict` `OK (14/14)`,
   `uv run python scripts/check_handoff_facts.py` 통과, PR 품질 관문 통과. 머지 직전 전체 테스트와
   린트를 다시 실행해 같은 결과를 확인했다.
+
+## 최근 마일스톤 — 2026-07-31 KST (#564 regime-stratify observe gateway 복구)
+
+#564로 `regime-stratify` 연구 sidecar가 raw `scp`와 inline SSH 대신 fixed
+`observe regime-stratify global|wide` gateway를 쓰게 됐다. 배포 run `30630190101`은 success이고 서버
+observe helper 갱신과 worker 재시작을 로그로 확인했다. `regime-stratify.yml` run `30630190081`은
+타임라인 prep exit 0, 두 트랙 모두 `ssh_exit=0`, `schema_version=1.0` JSON을 남겼다. 최신 money-path는
+계속 `PREVIEW_ONLY`/`NO_EDGE_YET`라 실주문은 안전 게이트 뒤에 있다. 상세는
+`HANDOFF-125-REGIME-STRATIFY-OBSERVE-GATEWAY.md`.
 
 ## 최근 마일스톤 — 2026-07-31 KST (스펙 122 forward paper DB writability 복구)
 
@@ -6956,6 +7003,8 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 
 ## 과거 인수인계 파일 (참고용)
 
+- `HANDOFF-125-REGIME-STRATIFY-OBSERVE-GATEWAY.md` — #564 regime-stratify 관측 gateway 복구와 post-merge sidecar 성공 상태
+- `HANDOFF-124-FORWARD-PAPER-DB-WRITABILITY.md` — 스펙 122 forward paper DB writability 복구와 post-merge forward 관측 성공 상태
 - `HANDOFF-123-PROMOTE-READINESS-OBSERVE-GATEWAY.md` — 스펙 121 promote-readiness 관측 복구와 서버 root-owned helper self-refresh 완료 상태
 - `HANDOFF-122-RELEASED-WORK-CANDIDATE-120-CONSUMPTION.md` — 스펙 120 완료 후보 released-work 소비와 autonomous-work 관찰 대기 상태
 - `HANDOFF-121-SSH-SECRET-FAIL-CLOSED.md` — 스펙 119 후속 production 환경과 SSH secret 누락 조기 차단 완료 상태
