@@ -32,3 +32,13 @@
 **Alternatives considered**:
 - Only wait for the next scheduled sidecar: rejected because it would detect the issue late and would not prove the boundary.
 - Add a live server smoke in unit tests: rejected because local tests must not depend on secrets or the production host.
+
+## Decision: Refresh root-owned gateway/helpers from `origin/main` during deploy
+
+**Rationale**: Post-merge verification showed the repository fix was deployed, but the server still refused `observe promote-readiness`. The installed gateway and observation helper are root-owned files created by the SSH boundary repair script, while the normal deploy state machine runs unprivileged. A root-only deploy pre-step can install the latest fixed-command gateway/helpers from `origin/main` before the normal deploy starts, closing this drift without reintroducing raw remote shell access.
+
+**Alternatives considered**:
+- Manually repair the server through the provider console: rejected as the primary path because the same drift would recur after future allowlist changes.
+- Add raw SSH fallback to the workflow: rejected because it would bypass the forced-command gateway.
+- Move all deploy work to root: rejected because the current unprivileged deploy state machine is the safer default and should remain the main path.
+- Refresh from the working tree after deploy: rejected because the gateway must be current before the workflow relies on it, and the clean-tree deploy state machine should not be responsible for root-owned helper installation.

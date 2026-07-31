@@ -145,6 +145,30 @@ def test_deploy_service_has_no_new_privileges_disabled():
     assert "NoNewPrivileges=true" not in active
 
 
+def test_deploy_service_refreshes_root_owned_gateway_helpers_before_deploy():
+    """The deployed server may still have an older root-owned gateway/helper set.
+    Refresh those fixed-command files from main before the unprivileged deploy
+    state machine runs."""
+    unit = (REPO_ROOT / "deploy" / "auto-invest-deploy.service").read_text(
+        encoding="utf-8"
+    )
+    active = "\n".join(
+        ln for ln in unit.splitlines() if not ln.lstrip().startswith("#")
+    )
+
+    refresh_idx = active.index("ExecStartPre=+/bin/bash -lc")
+    deploy_idx = active.index(
+        "ExecStart=/usr/local/bin/uv run auto-invest deploy --branch main"
+    )
+    assert refresh_idx < deploy_idx
+    assert "origin/main:deploy/refresh-ssh-boundary-helpers.sh" in active
+    assert "/run/auto-invest-deploy/refresh-ssh-boundary-helpers.sh" in active
+    assert "sudo -u auto-invest git -C /opt/auto-invest fetch origin main --quiet" in active
+    assert "systemctl start auto-invest.service" not in active
+    assert "AUTO_INVEST_MODE=live" not in active
+    assert "AUTO_INVEST_CAPITAL" not in active
+
+
 def test_deploy_workflow_syncs_units_before_deploy():
     """The unit/sudoers sync step MUST run before the deploy step: the deploy state
     machine's stop_worker needs the sudoers drop-in already installed to succeed."""

@@ -44,6 +44,21 @@
   - The helper does not control system services.
   - The helper does not print secret values.
 
+## Gateway Helper Refresh Step
+
+- **Represents**: The deploy-time root pre-step that refreshes the installed SSH gateway, sync helper, KIS smoke helper, observation helper, and gateway sudoers file from `origin/main`.
+- **Fields**:
+  - `repo`: Fixed production repository path.
+  - `ref`: Default source reference, `origin/main`.
+  - `repair_script`: `deploy/repair-ssh-boundary.sh` read from the source reference.
+  - `mode`: Helper-only refresh mode.
+- **Validation rules**:
+  - The step runs before the unprivileged deploy command.
+  - The step does not require or install a deploy public key.
+  - The step does not create deploy users or retire root keys.
+  - The step does not start, stop, or restart the worker.
+  - The step does not arm live trading, submit orders, change capital, or edit secrets.
+
 ## Safety Boundary
 
 - **Represents**: The unchanged protections around real money.

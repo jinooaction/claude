@@ -25,6 +25,7 @@
 - [x] T005 Add or update tests proving `promote-readiness.yml` uses only `observe promote-readiness`.
 - [x] T006 Add or update tests proving the forced-command gateway allows exactly `observe promote-readiness`.
 - [x] T007 Add or update tests proving the observation helper exposes promotion readiness without unsafe live-money behavior.
+- [x] T007a Add or update tests proving deploy refreshes root-owned gateway/helper files from `origin/main` before the deploy state machine runs.
 
 **Checkpoint**: Tests describe the boundary before implementation.
 
@@ -68,7 +69,15 @@
 - [x] T013 Update `CLAUDE.md` active plan pointer to `specs/121-promote-readiness-observe-gateway/plan.md`.
 - [x] T014 Run focused tests and shell syntax checks from `quickstart.md`.
 - [x] T015 Run full validation: `uv run pytest`, `uv run ruff check src tests`, `uv run python scripts/check_handoff_facts.py`, `uv run python scripts/agent_harness_probe.py --strict`, and `git diff --check`.
-- [ ] T016 Refresh `HANDOFF.md` and add a numbered HANDOFF note after merge-ready validation.
+- [x] T016 Merge the first observe-gateway repair and verify the post-merge `promote-readiness` sidecar.
+- [x] T017 Diagnose the remaining `ssh_exit=126` as installed root-owned gateway/helper drift rather than a workflow command drift.
+- [x] T018 Update `deploy/auto-invest-deploy.service` to run a root pre-step that refreshes boundary helpers from `origin/main`.
+- [x] T019 Add `deploy/refresh-ssh-boundary-helpers.sh` for helper-only boundary refresh.
+- [x] T020 Update `deploy/repair-ssh-boundary.sh` so helper-only refresh installs gateway/helpers/sudoers from the selected repo ref without key rotation.
+- [x] T021 Add tests for deploy pre-step ordering, helper-only refresh mode, and no live-money side effects.
+- [x] T022 Run focused tests and shell syntax checks from the updated `quickstart.md`.
+- [x] T023 Run full validation: `uv run pytest`, `uv run ruff check src tests`, `uv run python scripts/check_handoff_facts.py`, `uv run python scripts/agent_harness_probe.py --strict`, and `git diff --check`.
+- [ ] T024 Refresh `HANDOFF.md` and add a numbered HANDOFF note after merge-ready validation.
 
 ---
 
@@ -85,7 +94,7 @@
 ### Parallel Opportunities
 
 - T002 and T003 can run in parallel.
-- T005, T006, and T007 touch different assertions but should be committed with the implementation.
+- T005, T006, T007, and T007a touch different assertions but should be committed with the implementation.
 - Focused tests and shell syntax checks can run in parallel.
 
 ## Implementation Strategy
@@ -100,5 +109,6 @@
 
 1. Complete T010-T012 for the server boundary.
 2. Run focused tests and shell syntax checks.
-3. Run full validation.
-4. Open PR, pass quality gate, merge, then refresh HANDOFF and verify sidecars.
+3. Complete T017-T021 for deploy-time helper refresh if post-merge sidecar still reports a refused fixed command.
+4. Run full validation.
+5. Open PR, pass quality gate, merge, then refresh HANDOFF and verify sidecars.

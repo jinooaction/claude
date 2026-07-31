@@ -33,15 +33,46 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `aee5d43` — Merge pull request #557 from jinooaction/codex/released-work-candidate-120-consumption |
-| main 테스트 | #557 브랜치 기준 `uv run pytest` → 2698 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
-| main 린트 | #557 브랜치 기준 `uv run ruff check src tests` → All checks passed. |
+| 마지막 main 커밋 | `f1f2eab` — Merge pull request #559 from jinooaction/codex/promote-readiness-observe-gateway |
+| main 테스트 | #559 브랜치 기준 `uv run pytest` → 2699 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
+| main 린트 | #559 브랜치 기준 `uv run ruff check src tests` → All checks passed. |
 | 열린 PR | 없음(이 문서 편집 시점). |
 | 출시 완료 스펙 | 최신 추가: 120(증거 기반 후보 소스 다변화 + released-work 완료 소비: retryable blocked validation package 2개를 새 자율 작업 후보로 승격했고, #557 뒤 같은 후보는 released 처리되어 재선택되지 않음), 119(보안 신뢰 경계 강화와 후속 SSH boundary repair 및 live-money workflow 보호 환경), 118(운영자가 이해 가능한 최종 보고 생존성 계약), 117(`SUBMISSION_UNKNOWN` broker lookup 복구), 116(단일 `ExecutionAuthority`와 계좌별 broker-write 잠금), 115(계좌 상태 불명확 시 신규 BUY 차단과 sell-only 저하 상태). 이전 스펙 058~114는 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
-| 골격 스펙 | 없음. `.specify/feature.json`은 최신 출시 스펙 `specs/120-evidence-based-candidate-source-diversification`를 가리킨다. |
-| 최근 출시 작업 | #557은 스펙 120 완료 후보를 released-work 장부로 소비하고, 실행 가능한 새 후보가 없을 때 autonomous-work가 완료 후보를 다시 selected_work로 올리지 않고 `wait-for-fresh-evidence` / `OBSERVATION_WAIT`를 내게 했다. #555는 retryable `execution_failed` 패키지 2개를 새 후보로 승격했다. #552/#553은 Vultr/KIS 관측 경로를 복구했다. |
-| 활성 작업 | 열린 PR 없음. 최신 released-work run `30587962825`는 스펙 120 후보를 released로 소비했고, autonomous-work run `30587962855`는 selected_work=`wait-for-fresh-evidence`, status=`OBSERVATION_WAIT`, ranked_count=0이다. 최신 money-path는 `PREVIEW_ONLY`/`NO_EDGE_YET`라 실주문은 여전히 불가다. |
-| 안전 경계 | #557은 등급 2 운영 루프 보강이다. 실제 주문, 실거래 전환, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps 확대, 손실 예산, KIS secret, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`라 실주문 불가다. |
+| 골격 스펙 | `specs/121-promote-readiness-observe-gateway`가 활성 포인터다. #559는 1차 observe gateway를 머지했지만, post-merge 관찰에서 서버 설치본 helper drift가 남아 스펙 121 후속이 진행 중이다. |
+| 최근 출시 작업 | #559는 `promote-readiness` workflow를 raw SSH가 아니라 fixed `observe promote-readiness` 명령으로 바꿨고, gateway/helper에 report-only 경로를 추가했다. #557은 스펙 120 완료 후보를 released-work 장부로 소비했다. #552/#553은 Vultr/KIS 관측 경로를 복구했다. |
+| 활성 작업 | 열린 PR 없음. 최신 promote-readiness run `30591552556`은 commit `f1f2eab` 기준 workflow success였지만 sidecar는 `ssh_exit=126`/`refused command: observe promote-readiness`다. 남은 no-live 작업은 서버의 root-owned gateway/helper 설치본을 deploy 때 `origin/main` 기준으로 자동 갱신하게 하는 것이다. 최신 released-work run `30591520091`은 released_count=39이고, autonomous-work run `30591520113`은 selected_work=`wait-for-fresh-evidence`, status=`OBSERVATION_WAIT`, ranked_count=0이다. 최신 money-path는 `PREVIEW_ONLY`/`NO_EDGE_YET`라 실주문은 여전히 불가다. |
+| 안전 경계 | #559와 진행 중인 스펙 121 후속은 등급 3 SSH 안전 경계 관찰 보정이다. 실제 주문, 실거래 전환, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps 확대, 손실 예산, KIS secret, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`라 실주문 불가다. |
+
+## 최근 관찰 — 2026-07-31 KST (#559 promote-readiness observe gateway와 설치본 helper drift)
+
+현재 `main` 최신 코드 머지는 `f1f2eab`(#559, promote-readiness observe gateway)다.
+기능 커밋은 `19c65cb`이다.
+
+- **문제 정의**: `promote-readiness` sidecar는 raw SSH 명령
+  `cd /opt/auto-invest && /usr/local/bin/uv run auto-invest promote-check ...`를 보내고 있었고,
+  서버의 forced-command gateway가 이를 `ssh_exit=126`으로 거부했다. 이 거부 자체는 보안 경계가
+  정상 작동한 증거였지만, 헌법 VI(라이브 트랙레코드) 승격 준비 보고가 보이지 않는 문제가 남았다.
+- **구현 상태**: #559는 workflow 명령을 fixed `observe promote-readiness`로 바꿨고,
+  `deploy/repair-ssh-boundary.sh` gateway allowlist와 `deploy/observe-on-instance.sh` helper에
+  report-only `promote-check --db data/auto_invest.db --rules deploy/canary-live-rules.toml
+  --capital 12000 --format json` 경로를 추가했다. caller-provided argument는 받지 않는다.
+- **post-merge 관찰**: `Deploy on merge to main` run `30591520066`, `Released work ledger`
+  run `30591520091`, `Autonomous work execution loop` run `30591520113`은 모두 success다.
+  그러나 수동 `promote-readiness` run `30591552556`은 workflow success이면서 sidecar에
+  `ssh_exit=126`, `refused command: observe promote-readiness`를 남겼다. 코드의 workflow drift는
+  닫혔지만, 실제 서버에 설치된 root-owned gateway/helper 파일이 자동 갱신되지 않는 설치본 drift가
+  남은 것이다.
+- **검증 상태**: #559 브랜치에서 focused test, shell syntax, `uv run pytest` 2699 passed/5 skipped,
+  `uv run ruff check src tests`, `uv run python scripts/check_handoff_facts.py`,
+  `uv run python scripts/agent_harness_probe.py --strict`, `git diff --check`, PR quality gate를 통과했다.
+  이 HANDOFF 갱신 전 현재 후속 브랜치의 전체 테스트는 `마지막 main 커밋` 행이 stale이라 하네스 관련
+  2개만 실패했고, 이 갱신이 그 원인을 바로잡는다.
+- **다음 행동**: 스펙 121 후속은 deploy service가 정상 배포 상태기계 실행 전에 root-only pre-step으로
+  `origin/main`의 gateway/helper/sudoers를 다시 설치하게 만들어야 한다. 이 후속도 관찰 경로 보정일 뿐,
+  실제 주문·live 재무장·자본 배분을 열면 안 된다.
+- **안전 경계**: 실제 주문, 실거래 전환, live 재무장, 자본 배분, whitelist/caps, 손실 예산, 비밀값,
+  감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 최신 money-path는 계속
+  `PREVIEW_ONLY`/`NO_EDGE_YET`라 실주문은 불가다.
 
 ## 최근 관찰 — 2026-07-31 KST (#557 완료 후보 소비와 관찰 대기)
 

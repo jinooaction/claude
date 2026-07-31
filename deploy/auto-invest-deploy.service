@@ -11,6 +11,11 @@ WorkingDirectory=/opt/auto-invest
 EnvironmentFile=/opt/auto-invest/.env
 # Share uv cache with auto-invest.service so both reuse the same lockfile/wheel store.
 Environment=UV_CACHE_DIR=/opt/auto-invest/.cache/uv
+# Keep the root-owned forced-command gateway/helpers in sync with origin/main
+# before the unprivileged deploy state machine runs. The gateway still accepts
+# only fixed commands; this pre-step installs those fixed-command files from
+# main and does not touch worker state or live-money settings.
+ExecStartPre=+/bin/bash -lc 'set -euo pipefail; install -d -m 0700 -o root -g root /run/auto-invest-deploy; sudo -u auto-invest git -C /opt/auto-invest fetch origin main --quiet || true; sudo -u auto-invest git -C /opt/auto-invest show origin/main:deploy/refresh-ssh-boundary-helpers.sh > /run/auto-invest-deploy/refresh-ssh-boundary-helpers.sh; chmod 0700 /run/auto-invest-deploy/refresh-ssh-boundary-helpers.sh; /bin/bash /run/auto-invest-deploy/refresh-ssh-boundary-helpers.sh'
 ExecStart=/usr/local/bin/uv run auto-invest deploy --branch main
 StandardOutput=journal
 StandardError=journal

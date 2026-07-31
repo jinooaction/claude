@@ -69,6 +69,12 @@ spec 006 배포 상태기계 (안전 단계 전부 통과해야 워커 교체)
   "장중 연기"여도 유닛/타이머는 이번 실행에서 갱신된다. 코드 배포와 독립이라 유닛
   동기화가 실패해도(예: 서버 sudo 범위 제한) 배포 결과를 가리지 않고 Summary 에 별도
   표시된다.
+- **forced-command helper 자동 갱신**: `auto-invest-deploy.service`는 배포 상태기계 실행
+  직전에 root 전용 `ExecStartPre=+...`로 `origin/main`의
+  `deploy/refresh-ssh-boundary-helpers.sh`를 읽어 실행한다. 이 pre-step은 기존 deploy
+  사용자와 키를 바꾸지 않고, root-owned gateway/helper 파일과 sudoers만 main 기준으로
+  새로 설치한다. GitHub runner가 임의 셸을 보내는 것이 아니라, main에 머지된 고정
+  helper만 서버가 가져와 적용하는 방식이다.
 
 ## (B) 안전망 타이머 — `auto-invest-deploy.timer` (이미 설치됨)
 
@@ -121,7 +127,8 @@ spec 006 배포 상태기계 (안전 단계 전부 통과해야 워커 교체)
   `VULTR_SSH_KNOWN_HOSTS`, `VULTR_SSH_PORT` (trigger-design.yml 이 쓰는 것과
   동일). `VULTR_SSH_USER`는 root가 아니어야 한다.
 - 인스턴스에 `deploy/repair-ssh-boundary.sh`로 forced-command deploy gateway가
-  설치되어 있어야 한다. GitHub Actions는 gateway의 `sync-units`,
+  최초 설치되어 있어야 한다. 이후 helper/gateway 내용은 deploy service의
+  `refresh-ssh-boundary-helpers.sh` pre-step이 main 기준으로 갱신한다. GitHub Actions는 gateway의 `sync-units`,
   `start-deploy`, `deploy-journal`, KIS 조회 smoke 전용 `kis-smoke` 고정 명령만
   호출한다. 돈 경로 관측 워크플로는 `observe ...` 고정 명령만 호출한다. 여기에는
   페이퍼 전용 forward 트랙 실행·판정, 정지 깃발 조회, 계좌 NAV 조회, live growth

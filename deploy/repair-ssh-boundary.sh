@@ -19,6 +19,10 @@ set -euo pipefail
 DEPLOY_USER="${DEPLOY_USER:-gh-deploy}"
 DEPLOY_HOME="${DEPLOY_HOME:-/var/lib/${DEPLOY_USER}}"
 DEPLOY_PUBLIC_KEY="${DEPLOY_PUBLIC_KEY:-}"
+REFRESH_HELPERS_ONLY="${REFRESH_HELPERS_ONLY:-0}"
+REPO="${REPO:-/opt/auto-invest}"
+REPO_REF="${REPO_REF:-origin/main}"
+REPO_OWNER="${REPO_OWNER:-auto-invest}"
 ROOT_AUTHORIZED_KEYS="${ROOT_AUTHORIZED_KEYS:-/root/.ssh/authorized_keys}"
 LEGACY_ROOT_KEY_COMMENT="${LEGACY_ROOT_KEY_COMMENT:-github-actions@auto-invest}"
 LEGACY_ROOT_KEY_PATH="${LEGACY_ROOT_KEY_PATH:-/root/.ssh/auto_invest_gh}"
@@ -52,6 +56,29 @@ validate_inputs() {
             <<<"${DEPLOY_PUBLIC_KEY}"; then
         die "DEPLOY_PUBLIC_KEY is not an OpenSSH public key"
     fi
+}
+
+install_repo_file() {
+    local repo_path="$1"
+    local fallback_path="$2"
+    local destination="$3"
+    local tmp_file
+    tmp_file="$(mktemp)"
+
+    if [[ -d "${REPO}/.git" ]] \
+        && id "${REPO_OWNER}" >/dev/null 2>&1 \
+        && sudo -u "${REPO_OWNER}" git -C "${REPO}" show "${REPO_REF}:${repo_path}" \
+            > "${tmp_file}" 2>/dev/null; then
+        install -m 0755 -o root -g root "${tmp_file}" "${destination}"
+        rm -f "${tmp_file}"
+        return
+    fi
+
+    rm -f "${tmp_file}"
+    if [[ ! -f "${fallback_path}" ]]; then
+        die "missing ${fallback_path}; deploy current main before running repair"
+    fi
+    install -m 0755 -o root -g root "${fallback_path}" "${destination}"
 }
 
 install_gateway() {
@@ -149,24 +176,21 @@ EOF_GATEWAY
 }
 
 install_sync_helper() {
-    if [[ ! -f "${REPO_SYNC_UNITS}" ]]; then
-        die "missing ${REPO_SYNC_UNITS}; deploy current main before running repair"
-    fi
-    install -m 0755 -o root -g root "${REPO_SYNC_UNITS}" "${SYNC_HELPER_PATH}"
+    install_repo_file "deploy/sync-units.sh" "${REPO_SYNC_UNITS}" "${SYNC_HELPER_PATH}"
 }
 
 install_kis_smoke_helper() {
-    if [[ ! -f "${REPO_KIS_SMOKE_HELPER}" ]]; then
-        die "missing ${REPO_KIS_SMOKE_HELPER}; deploy current main before running repair"
-    fi
-    install -m 0755 -o root -g root "${REPO_KIS_SMOKE_HELPER}" "${KIS_SMOKE_HELPER_PATH}"
+    install_repo_file \
+        "deploy/kis-smoke-on-instance.sh" \
+        "${REPO_KIS_SMOKE_HELPER}" \
+        "${KIS_SMOKE_HELPER_PATH}"
 }
 
 install_observe_helper() {
-    if [[ ! -f "${REPO_OBSERVE_HELPER}" ]]; then
-        die "missing ${REPO_OBSERVE_HELPER}; deploy current main before running repair"
-    fi
-    install -m 0755 -o root -g root "${REPO_OBSERVE_HELPER}" "${OBSERVE_HELPER_PATH}"
+    install_repo_file \
+        "deploy/observe-on-instance.sh" \
+        "${REPO_OBSERVE_HELPER}" \
+        "${OBSERVE_HELPER_PATH}"
 }
 
 install_deploy_user() {
@@ -262,6 +286,20 @@ retire_legacy_root_key() {
 
 main() {
     require_root
+    if [[ "${REFRESH_HELPERS_ONLY}" == "1" ]]; then
+        install_gateway
+        install_sync_helper
+        install_kis_smoke_helper
+        install_observe_helper
+        install_sudoers
+        echo "AUTO_INVEST_SSH_BOUNDARY_HELPERS_REFRESHED"
+        echo "deploy_user=${DEPLOY_USER}"
+        echo "gateway=${GATEWAY_PATH}"
+        echo "sync_helper=${SYNC_HELPER_PATH}"
+        echo "kis_smoke_helper=${KIS_SMOKE_HELPER_PATH}"
+        echo "observe_helper=${OBSERVE_HELPER_PATH}"
+        exit 0
+    fi
     validate_inputs
     install_gateway
     install_sync_helper
