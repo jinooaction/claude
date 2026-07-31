@@ -77,7 +77,7 @@
 - [x] T021 Add tests for deploy pre-step ordering, helper-only refresh mode, and no live-money side effects.
 - [x] T022 Run focused tests and shell syntax checks from the updated `quickstart.md`.
 - [x] T023 Run full validation: `uv run pytest`, `uv run ruff check src tests`, `uv run python scripts/check_handoff_facts.py`, `uv run python scripts/agent_harness_probe.py --strict`, and `git diff --check`.
-- [ ] T024 Refresh `HANDOFF.md` and add a numbered HANDOFF note after merge-ready validation.
+- [x] T024 Refresh `HANDOFF.md` and add a numbered HANDOFF note after merge-ready validation.
 
 ---
 
