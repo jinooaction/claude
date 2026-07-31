@@ -33,15 +33,51 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `85584ed` — Merge pull request #560 from jinooaction/codex/promote-readiness-gateway-self-refresh |
-| main 테스트 | #560 브랜치 기준 `uv run pytest` → 2703 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
-| main 린트 | #560 브랜치 기준 `uv run ruff check src tests` → All checks passed. |
-| 열린 PR | 없음(이 문서 편집 시점). |
-| 출시 완료 스펙 | 최신 추가: 121(`promote-readiness` 관측 경로 복구 + 서버 root-owned gateway/helper self-refresh: #559가 raw SSH command drift를 닫고 #560이 설치본 drift를 닫음), 120(증거 기반 후보 소스 다변화 + released-work 완료 소비), 119(보안 신뢰 경계 강화와 후속 SSH boundary repair 및 live-money workflow 보호 환경), 118(운영자가 이해 가능한 최종 보고 생존성 계약), 117(`SUBMISSION_UNKNOWN` broker lookup 복구), 116(단일 `ExecutionAuthority`와 계좌별 broker-write 잠금). 이전 스펙 058~115는 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
-| 골격 스펙 | 없음. `.specify/feature.json`은 최신 완료 스펙 `specs/121-promote-readiness-observe-gateway`를 가리킨다. |
-| 최근 출시 작업 | #560은 deploy service가 root-owned SSH gateway/helper/sudoers를 `origin/main` 기준으로 먼저 갱신하게 했다. #559는 `promote-readiness` workflow를 raw SSH가 아니라 fixed `observe promote-readiness` 명령으로 바꿨고, gateway/helper에 report-only 경로를 추가했다. #557은 스펙 120 완료 후보를 released-work 장부로 소비했다. |
-| 활성 작업 | 열린 PR 없음. 최신 `promote-readiness` run `30592627513`은 commit `85584ed` 기준 workflow success이고 sidecar는 `ssh_exit=1`, READY=false, stderr empty다. 즉 서버 거부(126)는 해소됐고, 지금은 평가가 정상 실행된 뒤 헌법 VI 게이트가 아직 not-ready라고 말하는 상태다. 최신 released-work run `30592573343`은 이 HANDOFF 전 commit `85584ed` 기준 released_count=39이며 스펙 121은 T024 미완료라 제외됐다. 이 HANDOFF PR이 T024를 닫으므로 다음 released-work가 121을 소비해야 한다. autonomous-work run `30592573408`은 selected_work=`wait-for-fresh-evidence`, status=`OBSERVATION_WAIT`, ranked_count=0이다. 최신 money-path는 `PREVIEW_ONLY`/`NO_EDGE_YET`라 실주문은 여전히 불가다. |
-| 안전 경계 | #559/#560은 등급 3 SSH 안전 경계 관찰 보정이다. 실제 주문, 실거래 전환, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps 확대, 손실 예산, KIS secret, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`라 실주문 불가다. |
+| 마지막 main 커밋 | `1643410` — Merge pull request #562 from jinooaction/codex/122-forward-paper-db-writability |
+| main 테스트 | handoff 갱신 브랜치 기준 `uv run pytest -q` → 2705 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
+| main 린트 | handoff 갱신 브랜치 기준 `uv run ruff check src tests` → All checks passed. |
+| 열린 PR | 없음(이 handoff 작성 시점). |
+| 출시 완료 스펙 | 최신 추가: 122(forward paper DB writability: 읽기 전용 DB 권한 drift를 종이거래 저장소로만 좁게 복구), 121(`promote-readiness` 관측 경로 복구 + 서버 root-owned gateway/helper self-refresh), 120(증거 기반 후보 소스 다변화 + released-work 완료 소비), 119(보안 신뢰 경계 강화와 후속 SSH boundary repair 및 live-money workflow 보호 환경), 118(운영자가 이해 가능한 최종 보고 생존성 계약). 이전 스펙 058~117은 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
+| 골격 스펙 | 없음. `.specify/feature.json`은 최신 완료 스펙 `specs/122-forward-paper-db-writability`를 가리킨다. |
+| 최근 출시 작업 | #562는 `observe paper-track-run`이 forward paper DB/WAL/SHM/트랙 halt flag의 소유권·쓰기 권한만 복구하게 했다. #560은 deploy service가 root-owned SSH helper를 `origin/main` 기준으로 갱신하게 했고, #559는 `promote-readiness`를 fixed observe 명령으로 바꿨다. |
+| 활성 작업 | 열린 PR 없음. #562 배포 run `30596929563`은 success이고 로그에서 `observe_helper=/usr/local/sbin/auto-invest-observe` 갱신을 확인했다. 수동 `rebalance-paper-forward.yml` run `30596973332`는 commit `1643410` 기준 success이며 모든 prep/verdict `ssh_exit=0`, readonly DB 오류 문자열 없음이다. 최신 edge-autoarm run `30597184383`은 `WAIT_EDGE`, money-path run `30597231376`은 `PREVIEW_ONLY`/`NO_EDGE_YET`, capital-path-readiness run `30597231465`은 `ACCUMULATING_EDGE`, autonomous-work run `30597261537`은 `wait-for-fresh-evidence`/`OBSERVATION_WAIT`다. 이 handoff가 스펙 122의 후속 체크박스를 닫으므로 다음 released-work run이 122를 소비해야 한다. |
+| 안전 경계 | #562는 등급 3 안전 경계 인접 관찰 보정이다. 실제 주문, 실거래 전환, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps 확대, 손실 예산, KIS secret, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`라 실주문 불가다. |
+
+## 최근 관찰 — 2026-07-31 KST (#562 forward paper DB writability 복구)
+
+현재 `main` 최신 코드 머지는 `1643410`(#562, forward paper DB writability)다.
+기능 커밋은 `67ed8c1`이다.
+
+- **문제 정의**: 최신 money-path는 `PREVIEW_ONLY`/`NO_EDGE_YET`라 실주문을 막고 있었고,
+  `rebalance-paper-forward` sidecar는 모든 forward paper prep step에서
+  `OperationalError: attempt to write a readonly database`를 남겼다. 즉 실제 돈이 안 나가는 직접
+  이유는 "엣지 없음"이지만, 그 엣지를 새로 판정할 관측 DB도 권한 drift 때문에 증거를 못 쌓고 있었다.
+- **구현 상태**: #562는 `deploy/observe-on-instance.sh`에 `ensure_paper_track_storage`를 추가해
+  `observe paper-track-run <track> <capital>` 직전에 `data/forward_*.db`, `-wal`, `-shm`,
+  `data/forward_*.halt.flag`만 `APP_USER`가 쓸 수 있게 복구한다. `data/auto_invest.db`,
+  `data/halt.flag`, 비밀값, live 설정, 자본, 주문 경로는 대상에서 제외된다. 예상 밖 경로나 symlink는
+  fail-closed다.
+- **post-merge 배포 확인**: `Deploy on merge to main` run `30596929563`은 commit `1643410` 기준 success다.
+  로그에서 `origin/main:deploy/observe-on-instance.sh`를 서버가 읽고
+  `AUTO_INVEST_SSH_BOUNDARY_HELPERS_REFRESHED`, `observe_helper=/usr/local/sbin/auto-invest-observe`가
+  확인됐다.
+- **forward paper 확인**: 수동 `rebalance-paper-forward.yml` run `30596973332`는 commit `1643410` 기준
+  success다. 최신 sidecar timestamp는 `2026-07-31T01:44:16Z`이고 7개 트랙 모두 prep/verdict
+  `ssh_exit=0`이다. `OperationalError` / `attempt to write a readonly database` 문자열은 최신 sidecar에
+  없다. 관측 품질은 `OK`, 모든 후보는 최소 관측을 충족하지만 전체 판정은 여전히 `NO_EDGE`다.
+- **최신 돈 경로**: edge-autoarm run `30597184383`은 `WAIT_EDGE`; money-path run `30597231376`은
+  `PREVIEW_ONLY`/`NO_EDGE_YET`, forward 관측 28회, PSR `0.400049 < 0.95`, 칼마도 벤치마크 미달이다.
+  capital-path-readiness run `30597231465`은 `ACCUMULATING_EDGE`이고 우선 후보 없음. autonomous-work run
+  `30597261537`은 `wait-for-fresh-evidence` / `OBSERVATION_WAIT`다.
+- **검증 상태**: #562 브랜치에서 focused helper tests 17 passed, helper shell syntax 통과,
+  `uv run pytest` 2705 passed/5 skipped, `uv run ruff check src tests` 통과,
+  `uv run python scripts/check_handoff_facts.py` OK, `uv run python scripts/agent_harness_probe.py --strict`
+  OK(14/14), `git diff --cached --check` 통과, PR quality gate 통과, `mergeStateStatus=CLEAN` 확인 뒤 merge했다.
+  이 handoff 갱신 전 `uv run pytest -q`는 `HANDOFF.md`가 아직 `85584ed`를 가리켜 하네스 관련 2개만 실패했고,
+  이 갱신이 그 원인을 바로잡는다.
+- **안전 경계**: 관측 파이프만 복구했다. 실제 주문, live 재무장, 자본 배분, whitelist/caps, 손실 예산,
+  비밀값, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 지금 돈을 못 버는 직접 이유는 서버 권한 오류가
+  아니라 `NO_EDGE`: 전진 성과가 아직 벤치마크와 유의성 기준을 넘지 못했기 때문이다.
 
 ## 최근 관찰 — 2026-07-31 KST (#560 서버 helper self-refresh와 promote-readiness 복구)
 
@@ -3015,6 +3051,15 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
   통과, `uv run python scripts/agent_harness_probe.py --strict` `OK (14/14)`,
   `uv run python scripts/check_handoff_facts.py` 통과, PR 품질 관문 통과. 머지 직전 전체 테스트와
   린트를 다시 실행해 같은 결과를 확인했다.
+
+## 최근 마일스톤 — 2026-07-31 KST (스펙 122 forward paper DB writability 복구)
+
+#562로 forward paper 관측 DB의 읽기 전용 권한 drift를 종이거래 저장소 안에서만 복구했다.
+배포 run `30596929563`은 success이고 서버 observe helper 갱신을 로그로 확인했다. 수동
+`rebalance-paper-forward.yml` run `30596973332`는 모든 prep/verdict `ssh_exit=0`이며 최신 sidecar에
+readonly DB 오류 문자열이 없다. 최신 money-path는 `PREVIEW_ONLY`/`NO_EDGE_YET`, edge-autoarm은
+`WAIT_EDGE`라 실주문은 여전히 안전 게이트 뒤에 있다. 상세는
+`HANDOFF-124-FORWARD-PAPER-DB-WRITABILITY.md`.
 
 ## 최근 마일스톤 — 2026-07-31 KST (스펙 121 promote-readiness 관측 복구)
 

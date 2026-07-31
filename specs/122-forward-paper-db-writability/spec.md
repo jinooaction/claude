@@ -2,7 +2,7 @@
 
 **Feature Branch**: `codex/122-forward-paper-db-writability`
 **Created**: 2026-07-31
-**Status**: Draft
+**Status**: Complete
 **Input**: User description: "빨리 돈벌게해줘" after live money surfaces showed `PREVIEW_ONLY` / `NO_EDGE_YET`, while the latest forward paper run showed every `paper-track-run` prep step failing with `OperationalError: attempt to write a readonly database`.
 
 ## User Scenarios & Testing
