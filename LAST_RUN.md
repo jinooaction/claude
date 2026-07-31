@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-07-31T00:07:01.032621Z)
+# 완료 후보 소비 장부 (as of 2026-07-31T00:15:30.603317Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -8,8 +8,8 @@
 | 항목 | 값 |
 |------|-----|
 | overall_status | OK |
-| released_count | 39 |
-| scanned_specs | 71 |
+| released_count | 40 |
+| scanned_specs | 72 |
 
 ## 완료 후보
 
@@ -47,6 +47,7 @@
 | candidate-operator-report-liveness-contract | released | 118-operator-report-liveness-contract | specs/118-operator-report-liveness-contract/spec.md | completed_candidate_id |
 | candidate-order-submission-uncertainty-recovery | released | 112-order-submission-uncertainty-recovery | specs/112-order-submission-uncertainty-recovery/spec.md | completed_candidate_id |
 | candidate-pr-merge-evidence-liveness-contract | released | 108-pr-merge-evidence-liveness-contract | specs/108-pr-merge-evidence-liveness-contract/spec.md | completed_candidate_id |
+| candidate-promote-readiness-observe-gateway | released | 121-promote-readiness-observe-gateway | specs/121-promote-readiness-observe-gateway/spec.md | completed_candidate_id |
 | candidate-public-data-input-quality-contract | released | 099-public-data-input-quality-contract | specs/099-public-data-input-quality-contract/spec.md | completed_candidate_id |
 | candidate-regime-timeline-coverage-contract | released | 100-regime-timeline-coverage-contract | specs/100-regime-timeline-coverage-contract/spec.md | completed_candidate_id |
 | candidate-signal-diversification-edge-experiment | released | 096-signal-diversification-edge-experiment | specs/096-signal-diversification-edge-experiment/spec.md | completed_candidate_id |
@@ -103,7 +104,6 @@
 | 070-candidate-implementation-factory | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 071-candidate-result-executor | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 072-candidate-evidence-diagnostics | 체크박스 작업이 없거나 완료되지 않았습니다. |
-| 121-promote-readiness-observe-gateway | 체크박스 작업이 없거나 완료되지 않았습니다. |
 
 ## 안전 경계
 
@@ -120,7 +120,7 @@
 
 ```json
 {
-  "commit": "85584eddcf2efb7ab246350ca1b7f97d4bc36ee3",
+  "commit": "18bc6e63d795207b816b52c34c6bf6da67bc8972",
   "overall_status": "OK",
   "released_work": [
     {
@@ -412,6 +412,15 @@
       "status": "released"
     },
     {
+      "candidate_id": "candidate-promote-readiness-observe-gateway",
+      "entry_id": "released-cc96b400554f",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/121-promote-readiness-observe-gateway/spec.md",
+      "spec_id": "121-promote-readiness-observe-gateway",
+      "status": "released"
+    },
+    {
       "candidate_id": "candidate-public-data-input-quality-contract",
       "entry_id": "released-1504784b2cf3",
       "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
@@ -557,7 +566,8 @@
     "117-submission-unknown-broker-lookup",
     "118-operator-report-liveness-contract",
     "119-security-trust-boundary-hardening",
-    "120-evidence-based-candidate-source-diversification"
+    "120-evidence-based-candidate-source-diversification",
+    "121-promote-readiness-observe-gateway"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -736,12 +746,8 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "072-candidate-evidence-diagnostics"
-    },
-    {
-      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "121-promote-readiness-observe-gateway"
     }
   ],
-  "timestamp_utc": "2026-07-31T00:07:01.032621Z"
+  "timestamp_utc": "2026-07-31T00:15:30.603317Z"
 }
 ```

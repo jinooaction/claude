@@ -1,5 +1,5 @@
 {
-  "commit": "85584eddcf2efb7ab246350ca1b7f97d4bc36ee3",
+  "commit": "18bc6e63d795207b816b52c34c6bf6da67bc8972",
   "overall_status": "OK",
   "released_work": [
     {
@@ -291,6 +291,15 @@
       "status": "released"
     },
     {
+      "candidate_id": "candidate-promote-readiness-observe-gateway",
+      "entry_id": "released-cc96b400554f",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/121-promote-readiness-observe-gateway/spec.md",
+      "spec_id": "121-promote-readiness-observe-gateway",
+      "status": "released"
+    },
+    {
       "candidate_id": "candidate-public-data-input-quality-contract",
       "entry_id": "released-1504784b2cf3",
       "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
@@ -354,7 +363,7 @@
       "status": "released"
     }
   ],
-  "run_id": "30592573343",
+  "run_id": "30593012788",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -436,7 +445,8 @@
     "117-submission-unknown-broker-lookup",
     "118-operator-report-liveness-contract",
     "119-security-trust-boundary-hardening",
-    "120-evidence-based-candidate-source-diversification"
+    "120-evidence-based-candidate-source-diversification",
+    "121-promote-readiness-observe-gateway"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -615,11 +625,7 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "072-candidate-evidence-diagnostics"
-    },
-    {
-      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "121-promote-readiness-observe-gateway"
     }
   ],
-  "timestamp_utc": "2026-07-31T00:07:01.032621Z"
+  "timestamp_utc": "2026-07-31T00:15:30.603317Z"
 }
