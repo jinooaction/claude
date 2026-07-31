@@ -55,6 +55,30 @@ def test_every_paper_rebalance_uses_isolated_halt_path():
     )[0]
 
 
+def test_paper_track_run_repairs_only_forward_storage_writability():
+    helper = _helper_text()
+    repair_section = helper.split("ensure_paper_track_storage()", 1)[1].split(
+        "paper_track_run()", 1
+    )[0]
+    paper_section = helper.split("paper_track_run()", 1)[1].split(
+        "paper_track_verdict()", 1
+    )[0]
+
+    assert "ensure_paper_track_storage" in paper_section
+    assert 'install -d -m 0750 -o "${APP_USER}" -g "${APP_USER}" data' in repair_section
+    assert '"${TRACK_DB}" "${TRACK_DB}-wal" "${TRACK_DB}-shm" "${TRACK_HALT}"' in repair_section
+    assert "data/forward_*.db" in repair_section
+    assert "data/forward_*.db-wal" in repair_section
+    assert "data/forward_*.db-shm" in repair_section
+    assert "data/forward_*.halt.flag" in repair_section
+    assert '[[ ! -L data ]] || die "unsafe data directory symlink"' in repair_section
+    assert '[[ ! -L "${path}" && -f "${path}" ]]' in repair_section
+    assert 'chown "${APP_USER}:${APP_USER}" "${path}"' in repair_section
+    assert "chmod u+rw,go-rwx" in repair_section
+    assert "data/auto_invest.db" not in repair_section
+    assert "data/halt.flag" not in repair_section
+
+
 def test_workflow_is_paper_only():
     # 안전 경계: 이 워크플로는 절대 실주문을 내지 않는다(라이브는 별도 채널).
     assert "observe live" not in _workflow_text()

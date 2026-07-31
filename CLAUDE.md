@@ -220,7 +220,7 @@ the current worktree. Do not trust prose in this block as the source of truth
 for in-flight work; use the `git_ground_truth` start hook, latest `HANDOFF.md`,
 and `/sync` against `jinooaction/claude` `Codex/*` branches before continuing.
 
-현재 계획 포인터: `specs/121-promote-readiness-observe-gateway/plan.md` — `promote-readiness` 승격 준비도 보고가 hardened SSH forced-command 경계에서 raw command로 거부되지 않도록, 고정 `observe promote-readiness` 관측 명령 하나만 추가하는 보안 경계 보정.
+현재 계획 포인터: `specs/122-forward-paper-db-writability/plan.md` — forward 페이퍼 트랙의 전용 DB가 읽기 전용 권한으로 굳어 관측 누적이 멈추지 않도록, `observe paper-track-run` helper가 페이퍼 전용 저장소만 좁게 복구하는 보안 경계 보정.
 
 머지 완료(베이스라인): spec 004 (LLM 판단 지점), 005 (자율 튜너), 006 (배포 자동화), 007 (하드닝 카나리), 008 (백테스트), 009 (paper-run), 010 (자동 룰 설계자), 011 (라이브 성과 측정). **주의: 일부 tasks.md 가 stale 0% 로 표시된 적 있음 — 코드/테스트를 믿을 것.**
 

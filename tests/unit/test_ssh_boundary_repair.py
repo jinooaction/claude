@@ -196,3 +196,22 @@ def test_observe_helper_exposes_only_observation_and_paper_commands():
     assert "AUTO_INVEST_CAPITAL" not in body
     assert "eval " not in body
     assert "bash -c" not in body
+
+
+def test_observe_helper_repairs_only_forward_paper_storage():
+    body = OBSERVE_HELPER.read_text(encoding="utf-8")
+    repair_block = body.split("ensure_paper_track_storage()", 1)[1].split(
+        "paper_track_run()", 1
+    )[0]
+
+    assert 'install -d -m 0750 -o "${APP_USER}" -g "${APP_USER}" data' in repair_block
+    assert 'chown "${APP_USER}:${APP_USER}" "${path}"' in repair_block
+    assert "chmod u+rw,go-rwx" in repair_block
+    assert "data/forward_*.db" in repair_block
+    assert "data/forward_*.db-wal" in repair_block
+    assert "data/forward_*.db-shm" in repair_block
+    assert "data/forward_*.halt.flag" in repair_block
+    assert '[[ ! -L data ]] || die "unsafe data directory symlink"' in repair_block
+    assert '[[ ! -L "${path}" && -f "${path}" ]]' in repair_block
+    assert "data/auto_invest.db" not in repair_block
+    assert "data/halt.flag" not in repair_block
