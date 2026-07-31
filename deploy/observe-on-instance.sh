@@ -81,12 +81,32 @@ track_config() {
     esac
 }
 
+ensure_paper_track_storage() {
+    local path
+    [[ ! -L data ]] || die "unsafe data directory symlink"
+    install -d -m 0750 -o "${APP_USER}" -g "${APP_USER}" data
+    for path in "${TRACK_DB}" "${TRACK_DB}-wal" "${TRACK_DB}-shm" "${TRACK_HALT}"; do
+        [[ -e "${path}" ]] || continue
+        case "${path}" in
+            data/forward_*.db|data/forward_*.db-wal|data/forward_*.db-shm|data/forward_*.halt.flag)
+                ;;
+            *)
+                die "unsafe paper storage path: ${path}"
+                ;;
+        esac
+        [[ ! -L "${path}" && -f "${path}" ]] || die "unsafe paper storage file type: ${path}"
+        chown "${APP_USER}:${APP_USER}" "${path}"
+        chmod u+rw,go-rwx "${path}"
+    done
+}
+
 paper_track_run() {
     local track="${1:-}"
     local capital="${2:-}"
     validate_capital "${capital}"
     track_config "${track}"
     require_repo
+    ensure_paper_track_storage
 
     run_cli backfill-bars \
         --portfolio "${TRACK_PORTFOLIO}" \
