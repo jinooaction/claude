@@ -56,11 +56,11 @@
 - [x] T011 Run focused tests and shell syntax checks from `quickstart.md`.
 - [x] T012 Run full validation: `uv run pytest`, `uv run ruff check src tests`, `uv run python scripts/check_handoff_facts.py`, `uv run python scripts/agent_harness_probe.py --strict`, and `git diff --check`.
 - [x] T013 Update PR body with risk grade 3, problem definition, safety boundary, validation, and handoff facts.
-- [ ] T014 Merge after required checks pass and PR is mergeable.
-- [ ] T015 Verify deploy helper refresh installs the updated observe helper on the server.
-- [ ] T016 Rerun `rebalance-paper-forward.yml` and confirm the readonly database failure is gone.
-- [ ] T017 Refresh `money-path`, `capital-path-readiness`, and `autonomous-work-execution` sidecars after forward evidence refresh.
-- [ ] T018 Refresh `HANDOFF.md` if the operating truth changes.
+- [x] T014 Merge after required checks pass and PR is mergeable.
+- [x] T015 Verify deploy helper refresh installs the updated observe helper on the server.
+- [x] T016 Rerun `rebalance-paper-forward.yml` and confirm the readonly database failure is gone.
+- [x] T017 Refresh `money-path`, `capital-path-readiness`, and `autonomous-work-execution` sidecars after forward evidence refresh.
+- [x] T018 Refresh `HANDOFF.md` if the operating truth changes.
 
 ## Dependencies & Execution Order
 
