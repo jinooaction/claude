@@ -1,5 +1,5 @@
 {
-  "commit": "f1f2eab070da2faccb4ba55af07b9d08bb7fa60c",
+  "commit": "85584eddcf2efb7ab246350ca1b7f97d4bc36ee3",
   "overall_status": "OK",
   "released_work": [
     {
@@ -354,7 +354,7 @@
       "status": "released"
     }
   ],
-  "run_id": "30591520091",
+  "run_id": "30592573343",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -621,5 +621,5 @@
       "spec_id": "121-promote-readiness-observe-gateway"
     }
   ],
-  "timestamp_utc": "2026-07-30T23:46:10.980323Z"
+  "timestamp_utc": "2026-07-31T00:07:01.032621Z"
 }
