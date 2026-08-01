@@ -198,6 +198,43 @@ async def test_large_order_clamped_to_per_trade_cap(conn, tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_paper_rebalance_uses_audit_positions_on_next_run(conn, tmp_path):
+    """Paper fills live only in audit_log, so the next paper run must rebuild them.
+
+    Without this, forward-paper tracks treat every scheduled run as a fresh account
+    and keep adding BUYs, which corrupts the NAV series used by the money gate.
+    """
+    _seed_bars(conn, "AAA", [100 * (1.01**i) for i in range(40)])
+    _seed_bars(conn, "BBB", [100 * (1.001**i) for i in range(40)])
+    universe = ("AAA", "BBB")
+    caps = _caps(per_trade="100", per_symbol="100", glob="100")
+    router = _paper_router(conn, tmp_path, _whitelist(universe), caps)
+    kwargs = dict(
+        config=_cfg(universe, top_n=1, invested_fraction=Decimal("0.5")),
+        router=router,
+        conn=conn,
+        quote_provider=_quote_provider({"AAA": "100", "BBB": "100"}),
+        total_capital_usd=Decimal("100000"),
+        caps=caps,
+    )
+
+    first = await execute_rebalance(**kwargs)
+    assert [(r.symbol, r.side, r.state) for r in first.results] == [
+        ("AAA", "BUY", "PAPER_FILLED")
+    ]
+
+    # current_positions remains a live/cache table; paper state is reconstructed
+    # from ORDER_PAPER_FILLED instead.
+    assert positions_mod.get_all_positions(conn) == []
+    second = await execute_rebalance(**kwargs)
+    assert second.results == []
+    filled_count = conn.execute(
+        "SELECT COUNT(*) FROM audit_log WHERE event_type = 'ORDER_PAPER_FILLED'"
+    ).fetchone()[0]
+    assert filled_count == 1
+
+
+@pytest.mark.asyncio
 async def test_rebalance_reserves_successful_buys_before_next_buy(conn, tmp_path):
     _seed_bars(conn, "AAA", [100 * (1.01**i) for i in range(40)])
     _seed_bars(conn, "BBB", [100 * (1.009**i) for i in range(40)])

@@ -35,7 +35,7 @@ import logging
 import sqlite3
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import ROUND_FLOOR, Decimal
 
 from auto_invest.broker.models import Quote
@@ -194,6 +194,34 @@ def _router_reserves_open_orders(router: object) -> bool:
     )
 
 
+def _paper_holdings_from_audit(conn: sqlite3.Connection) -> dict[str, int] | None:
+    """Rebuild virtual paper holdings from append-only paper fill events."""
+    from auto_invest.performance.engine import read_fills, reconstruct
+
+    fills = read_fills(
+        conn,
+        mode="paper",
+        since=datetime(1970, 1, 1, tzinfo=UTC),
+        until=datetime(9999, 12, 31, tzinfo=UTC),
+    )
+    if not fills:
+        return None
+    positions, _, _, _ = reconstruct(fills)
+    return {symbol: position.qty for symbol, position in positions.items() if position.qty > 0}
+
+
+def _cached_holdings(conn: sqlite3.Connection) -> dict[str, int]:
+    return {p.symbol: p.qty for p in positions_mod.get_all_positions(conn) if p.qty}
+
+
+def _rebalance_holdings(conn: sqlite3.Connection, *, paper_mode: bool) -> dict[str, int]:
+    if paper_mode:
+        paper_holdings = _paper_holdings_from_audit(conn)
+        if paper_holdings is not None:
+            return paper_holdings
+    return _cached_holdings(conn)
+
+
 async def execute_rebalance(
     *,
     config: PortfolioRebalanceConfig,
@@ -261,7 +289,7 @@ async def execute_rebalance(
     raw_holdings = (
         dict(account_holdings)
         if account_holdings is not None
-        else {p.symbol: p.qty for p in positions_mod.get_all_positions(conn) if p.qty}
+        else _rebalance_holdings(conn, paper_mode=bool(getattr(router, "paper_mode", False)))
     )
     holdings: dict[str, int] = {}
     withheld: list[RebalanceWithheldOrder] = []
