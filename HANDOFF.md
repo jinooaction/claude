@@ -29,19 +29,54 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 상세 규칙은 Codex 세션에서는 `AGENTS.md`, Claude 세션에서는 `CLAUDE.md` 본문 참조.
 
-## 한눈 요약표 — 2026-07-31 KST 최신 코드 main 기준
+## 한눈 요약표 — 2026-08-01 KST 최신 코드 main 기준
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `5fb249c` — Merge pull request #564 from jinooaction/codex/regime-stratify-observe-command |
-| main 테스트 | handoff 갱신 브랜치 기준 `uv run pytest -q` → 2706 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
+| 마지막 main 커밋 | `f15f87d` — Merge pull request #566 from jinooaction/codex/forward-paper-economic-anchor |
+| main 테스트 | handoff 갱신 브랜치 기준 `uv run pytest -q` → 2707 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
 | main 린트 | handoff 갱신 브랜치 기준 `uv run ruff check src tests` → All checks passed. |
 | 열린 PR | 없음(이 handoff 작성 시점). |
-| 출시 완료 스펙 | 최신 추가: 122(forward paper DB writability: 읽기 전용 DB 권한 drift를 종이거래 저장소로만 좁게 복구), 121(`promote-readiness` 관측 경로 복구 + 서버 root-owned gateway/helper self-refresh), 120(증거 기반 후보 소스 다변화 + released-work 완료 소비), 119(보안 신뢰 경계 강화와 후속 SSH boundary repair 및 live-money workflow 보호 환경), 118(운영자가 이해 가능한 최종 보고 생존성 계약). 이전 스펙 058~117은 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
+| 출시 완료 스펙 | 최신 추가: #566(forward paper 경제 장부 보정: 종이거래 리밸런서가 audit fill 보유를 재구성해 반복 매수를 멈춤), 122(forward paper DB writability: 읽기 전용 DB 권한 drift를 종이거래 저장소로만 좁게 복구), 121(`promote-readiness` 관측 경로 복구 + 서버 root-owned gateway/helper self-refresh), 120(증거 기반 후보 소스 다변화 + released-work 완료 소비), 119(보안 신뢰 경계 강화와 후속 SSH boundary repair 및 live-money workflow 보호 환경), 118(운영자가 이해 가능한 최종 보고 생존성 계약). 이전 스펙 058~117은 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
 | 골격 스펙 | 없음. `.specify/feature.json`은 최신 완료 스펙 `specs/122-forward-paper-db-writability`를 가리킨다. |
-| 최근 출시 작업 | #564는 `regime-stratify` 연구 관측을 fixed `observe regime-stratify <track>` gateway로 옮겨 raw `scp`와 inline SSH 명령 거부를 제거했다. #562는 `observe paper-track-run`이 forward paper DB/WAL/SHM/트랙 halt flag의 소유권·쓰기 권한만 복구하게 했다. #560은 deploy service가 root-owned SSH helper를 `origin/main` 기준으로 갱신하게 했다. |
-| 활성 작업 | 열린 PR 없음. #564 배포 run `30630190101`은 success이고 로그에서 `AUTO_INVEST_SSH_BOUNDARY_HELPERS_REFRESHED`, `observe_helper=/usr/local/sbin/auto-invest-observe`, worker stop/start, deploy correlation id `1cfa275ddd763bb0211ccc627ba45756`을 확인했다. `regime-stratify.yml` run `30630190081`은 commit `5fb249c` 기준 success이며 sidecar timestamp `2026-07-31T12:20:10Z`, 타임라인 prep exit 0, GLOBAL/WIDE 모두 `ssh_exit=0`과 `schema_version=1.0` JSON을 남겼다. 최신 edge-autoarm은 `WAIT_EDGE`, money-path는 `PREVIEW_ONLY`/`NO_EDGE_YET`, capital-path-readiness는 `ACCUMULATING_EDGE`, autonomous-work는 `wait-for-fresh-evidence`/`OBSERVATION_WAIT`다. |
-| 안전 경계 | #564는 등급 2 운영 관측 경로 보정이다. 실제 주문, 실거래 전환, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps 확대, 손실 예산, KIS secret, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`라 실주문 불가다. |
+| 최근 출시 작업 | #566은 종이거래 리밸런서가 `ORDER_PAPER_FILLED` 감사 로그에서 가상 보유를 재구성하게 해, `current_positions`가 비어 있다는 이유로 매번 새로 사던 경제 장부 오류를 막았다. #564는 `regime-stratify` 연구 관측을 fixed `observe regime-stratify <track>` gateway로 옮겼고, #562는 forward paper DB 쓰기 권한 drift를 좁게 복구했다. |
+| 활성 작업 | 열린 PR 없음. #566 배포 run `30674990967` success. `rebalance-paper-forward.yml` run `30675023375` success, sidecar timestamp `2026-08-01T00:17:37Z`, commit `f15f87d`, 7개 트랙 prep/verdict `ssh_exit=0`, `planned_buy_notional_usd=0.00`와 `SELL PAPER_FILLED`로 보유 인식 복구 확인. `money-path` run `30675222849`는 `PREVIEW_ONLY`/`NO_EDGE_YET`, `capital-path-readiness` run `30675223926`는 `ACCUMULATING_EDGE`와 우선 후보 없음. |
+| 안전 경계 | #566은 등급 2 운영·돈 경로 관측 보정이다. 실제 주문, 실거래 전환, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps 확대, 손실 예산, KIS secret, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`라 실주문 불가다. |
+
+## 최근 관찰 — 2026-08-01 KST (#566 forward paper 경제 장부 보정)
+
+현재 `main` 최신 코드 머지는 `f15f87d`(#566, forward paper economic anchor)다.
+기능 커밋은 `3db8940`이다.
+
+- **문제 정의**: 최신 돈 경로는 `PREVIEW_ONLY`/`NO_EDGE_YET`라 실주문을 막고 있었다. 동시에
+  `rebalance-paper-forward`는 성공처럼 보였지만, 종이거래 리밸런서가 이전 종이 체결 보유를
+  `current_positions`에서만 읽었다. 종이 라우터는 의도적으로 `current_positions`를 쓰지 않고
+  `ORDER_PAPER_FILLED` 감사 로그만 남기므로, 다음 실행 때 리밸런서가 보유를 0으로 착각해 반복 매수했고
+  종이 장부 현금이 크게 음수로 왜곡됐다. 즉 엣지를 판단하는 전진 성과 증거가 경제적으로 오염됐다.
+- **구현 상태**: #566은 `src/auto_invest/execution/rebalancer.py`에 paper-only 보유 재구성 경로를
+  추가했다. paper mode에서 감사 로그의 `ORDER_PAPER_FILLED`를 `performance.engine.reconstruct`로
+  되살려 현재 가상 보유로 쓰고, 종이 fill이 전혀 없을 때만 기존 `current_positions` fallback을 유지한다.
+  live/non-paper 경로와 명시적 `account_holdings` 입력은 바꾸지 않았다.
+- **post-merge 배포 확인**: `Deploy on merge to main` run `30674990967`은 commit `f15f87d` 기준 success다.
+- **forward paper 확인**: 수동 `rebalance-paper-forward.yml` run `30675023375`는 success다. 최신 sidecar는
+  commit `f15f87d`, timestamp `2026-08-01T00:17:37Z`, 7개 트랙 prep/verdict `ssh_exit=0`이다.
+  로그에는 예전처럼 목표 보유를 다시 사는 출력이 아니라 `planned_buy_notional_usd: 0.00`과
+  `planned_sell_notional_usd`, `SELL`/`PAPER_FILLED`가 남는다. 과거 반복 매수로 생긴 음수 현금은
+  한 번에 사라지지 않고 per-trade cap 범위에서 점진적으로 정리된다.
+- **최신 돈 경로**: `money-path` run `30675222849`는 commit `f15f87d`, timestamp
+  `2026-08-01T00:19:07Z`, `PREVIEW_ONLY`/`NO_EDGE_YET`다. micro GTAA 최상위 live money 상태는
+  `PREVIEW_ONLY`, 마지막 전략 의도 게이트는 `latest_intent_loss`다. 기존 자본 사다리는 관측 28회,
+  PSR `0.400049 < 0.95`, 칼마 벤치마크 미달로 첫 자본을 넣지 않는다. `capital-path-readiness`
+  run `30675223926`은 commit `f15f87d`, timestamp `2026-08-01T00:19:09Z`,
+  `ACCUMULATING_EDGE`, 우선 후보 없음이다.
+- **검증 상태**: #566 브랜치에서 focused rebalancer tests 9 passed, adjacent tests 81 passed,
+  `uv run pytest -q` 2707 passed/5 skipped, `uv run ruff check src tests` 통과,
+  `uv run python scripts/agent_harness_probe.py --strict` OK(14/14),
+  `uv run python scripts/check_handoff_facts.py` OK, `git diff --check` 통과,
+  PR quality gate 통과, `mergeStateStatus=CLEAN` 확인 뒤 merge했다.
+- **안전 경계**: 종이거래 경제 장부만 고쳤다. 실제 주문, live 재무장, 자본 배분, whitelist/caps,
+  손실 예산, 비밀값, 감사 로그 삭제, 헌법, kernel manifest는 바꾸지 않았다. 지금 돈을 못 버는 직접 이유는
+  반복 매수 버그가 아니라 여전히 `NO_EDGE`: 전진 성과가 아직 벤치마크와 유의성 기준을 넘지 못했기 때문이다.
 
 ## 최근 관찰 — 2026-07-31 KST (#564 regime-stratify observe gateway 복구)
 
@@ -3089,6 +3124,16 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
   통과, `uv run python scripts/agent_harness_probe.py --strict` `OK (14/14)`,
   `uv run python scripts/check_handoff_facts.py` 통과, PR 품질 관문 통과. 머지 직전 전체 테스트와
   린트를 다시 실행해 같은 결과를 확인했다.
+
+## 최근 마일스톤 — 2026-08-01 KST (#566 forward paper 경제 장부 보정)
+
+#566으로 forward paper 리밸런서가 종이 체결 감사 로그(`ORDER_PAPER_FILLED`)에서 가상 보유를
+재구성하게 됐다. 배포 run `30674990967`은 success다. `rebalance-paper-forward.yml` run
+`30675023375`는 commit `f15f87d`, timestamp `2026-08-01T00:17:37Z`, 7개 트랙 prep/verdict
+`ssh_exit=0`이며, 최신 sidecar에는 `planned_buy_notional_usd=0.00`과 `SELL PAPER_FILLED`가 남아
+반복 매수 병목이 닫혔음을 보여준다. `money-path` run `30675222849`는 여전히
+`PREVIEW_ONLY`/`NO_EDGE_YET`, `capital-path-readiness` run `30675223926`은 `ACCUMULATING_EDGE`와
+우선 후보 없음이다. 상세는 `HANDOFF-126-FORWARD-PAPER-ECONOMIC-ANCHOR.md`.
 
 ## 최근 마일스톤 — 2026-07-31 KST (#564 regime-stratify observe gateway 복구)
 
@@ -7003,6 +7048,7 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 
 ## 과거 인수인계 파일 (참고용)
 
+- `HANDOFF-126-FORWARD-PAPER-ECONOMIC-ANCHOR.md` — #566 forward paper 경제 장부 보정과 post-merge forward/money-path/capital-path sidecar 상태
 - `HANDOFF-125-REGIME-STRATIFY-OBSERVE-GATEWAY.md` — #564 regime-stratify 관측 gateway 복구와 post-merge sidecar 성공 상태
 - `HANDOFF-124-FORWARD-PAPER-DB-WRITABILITY.md` — 스펙 122 forward paper DB writability 복구와 post-merge forward 관측 성공 상태
 - `HANDOFF-123-PROMOTE-READINESS-OBSERVE-GATEWAY.md` — 스펙 121 promote-readiness 관측 복구와 서버 root-owned helper self-refresh 완료 상태
