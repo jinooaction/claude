@@ -1,5 +1,5 @@
 {
-  "commit": "5a561172907206b51469b2591bbfe90b574af224",
+  "commit": "530f0f3d541e7b9c341f3b4ba71469caf3dc823d",
   "overall_status": "OK",
   "released_work": [
     {
@@ -246,6 +246,15 @@
       "status": "released"
     },
     {
+      "candidate_id": "candidate-live-canary-sidecar-gate",
+      "entry_id": "released-8f02ec3a27ba",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/123-live-canary-sidecar-gate/spec.md",
+      "spec_id": "123-live-canary-sidecar-gate",
+      "status": "released"
+    },
+    {
       "candidate_id": "candidate-live-entrypoint-containment",
       "entry_id": "released-256b272e66b4",
       "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
@@ -372,7 +381,7 @@
       "status": "released"
     }
   ],
-  "run_id": "30777301749",
+  "run_id": "30777796880",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -456,7 +465,8 @@
     "119-security-trust-boundary-hardening",
     "120-evidence-based-candidate-source-diversification",
     "121-promote-readiness-observe-gateway",
-    "122-forward-paper-db-writability"
+    "122-forward-paper-db-writability",
+    "123-live-canary-sidecar-gate"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -635,11 +645,7 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "072-candidate-evidence-diagnostics"
-    },
-    {
-      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "123-live-canary-sidecar-gate"
     }
   ],
-  "timestamp_utc": "2026-08-03T01:37:29.359748Z"
+  "timestamp_utc": "2026-08-03T01:49:51.016485Z"
 }

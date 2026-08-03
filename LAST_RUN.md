@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-08-03T01:37:29.359748Z)
+# 완료 후보 소비 장부 (as of 2026-08-03T01:49:51.016485Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -8,8 +8,8 @@
 | 항목 | 값 |
 |------|-----|
 | overall_status | OK |
-| released_count | 41 |
-| scanned_specs | 73 |
+| released_count | 42 |
+| scanned_specs | 74 |
 
 ## 완료 후보
 
@@ -42,6 +42,7 @@
 | candidate-forward-regime-edge-experiment | released | 095-forward-regime-edge-experiment | specs/095-forward-regime-edge-experiment/spec.md | completed_candidate_id |
 | candidate-handoff-truth-liveness-contract | released | 107-handoff-truth-liveness-contract | specs/107-handoff-truth-liveness-contract/spec.md | completed_candidate_id |
 | candidate-investment-edge-frontier-map | released | 094-investment-edge-frontier-map | specs/094-investment-edge-frontier-map/spec.md | completed_candidate_id |
+| candidate-live-canary-sidecar-gate | released | 123-live-canary-sidecar-gate | specs/123-live-canary-sidecar-gate/spec.md | completed_candidate_id |
 | candidate-live-entrypoint-containment | released | 111-live-entrypoint-containment | specs/111-live-entrypoint-containment/spec.md | completed_candidate_id |
 | candidate-macro-candidate-map-regenerator | released | 093-macro-candidate-map-regenerator | specs/093-macro-candidate-map-regenerator/data-model.md | completed_candidate_id |
 | candidate-macro-growth-discovery | released | 088-autonomous-macro-growth-discovery | specs/088-autonomous-macro-growth-discovery/spec.md | completed_candidate_id |
@@ -105,7 +106,6 @@
 | 070-candidate-implementation-factory | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 071-candidate-result-executor | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 072-candidate-evidence-diagnostics | 체크박스 작업이 없거나 완료되지 않았습니다. |
-| 123-live-canary-sidecar-gate | 체크박스 작업이 없거나 완료되지 않았습니다. |
 
 ## 안전 경계
 
@@ -122,7 +122,7 @@
 
 ```json
 {
-  "commit": "5a561172907206b51469b2591bbfe90b574af224",
+  "commit": "530f0f3d541e7b9c341f3b4ba71469caf3dc823d",
   "overall_status": "OK",
   "released_work": [
     {
@@ -369,6 +369,15 @@
       "status": "released"
     },
     {
+      "candidate_id": "candidate-live-canary-sidecar-gate",
+      "entry_id": "released-8f02ec3a27ba",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/123-live-canary-sidecar-gate/spec.md",
+      "spec_id": "123-live-canary-sidecar-gate",
+      "status": "released"
+    },
+    {
       "candidate_id": "candidate-live-entrypoint-containment",
       "entry_id": "released-256b272e66b4",
       "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
@@ -579,7 +588,8 @@
     "119-security-trust-boundary-hardening",
     "120-evidence-based-candidate-source-diversification",
     "121-promote-readiness-observe-gateway",
-    "122-forward-paper-db-writability"
+    "122-forward-paper-db-writability",
+    "123-live-canary-sidecar-gate"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -758,12 +768,8 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "072-candidate-evidence-diagnostics"
-    },
-    {
-      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "123-live-canary-sidecar-gate"
     }
   ],
-  "timestamp_utc": "2026-08-03T01:37:29.359748Z"
+  "timestamp_utc": "2026-08-03T01:49:51.016485Z"
 }
 ```
