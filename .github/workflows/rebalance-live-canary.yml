@@ -41,10 +41,13 @@ permissions:
   contents: write  # 사이드카 브랜치 force-push 용.
 
 jobs:
-  live-portfolio-canary:
+  live_portfolio_canary_preview:
     runs-on: ubuntu-latest
-    environment: production
     timeout-minutes: 15
+    outputs:
+      armed: ${{ steps.gate.outputs.armed }}
+      capital: ${{ steps.gate.outputs.capital }}
+      blocked: ${{ steps.gate.outputs.blocked }}
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -142,38 +145,11 @@ jobs:
           echo "--- preview ---"; cat /tmp/live_preview.json
           echo "--- stderr ---"; cat /tmp/live_preview.err
 
-      - name: LIVE rebalance — REAL ORDERS (armed + schedule/dispatch only, never on arm-push)
-        id: live
-        # 실주문 조건: 센티넬 armed=true + 자본 한도 통과 + **push 이벤트 아님**.
-        # 무장 머지(push)는 미리보기만 — 실주문은 시장시간 스케줄(또는 수동 dispatch)에서만
-        # 나가, 장 마감 시간대 무장 머지가 실주문을 내는 일을 막는다.
-        if: >-
-          steps.gate.outputs.armed == 'true' &&
-          steps.gate.outputs.blocked != 'true' &&
-          github.event_name != 'push'
-        env:
-          HOST: ${{ secrets.VULTR_SSH_HOST }}
-          USER: ${{ secrets.VULTR_SSH_USER }}
-          PORT: ${{ secrets.VULTR_SSH_PORT }}
-          CAP: ${{ steps.gate.outputs.capital }}
-        run: |
-          set +e
-          port="${PORT:-22}"
-          echo "⚠ ARMED — placing REAL orders (capital=${CAP})."
-          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
-              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
-              "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest rebalance-once \
-                 --portfolio deploy/canary-live-portfolio.toml \
-                 --mode live --confirm-live \
-                 --capital ${CAP} --db data/auto_invest.db --env-file .env --json" \
-              > /tmp/live_rebal.json 2>/tmp/live_rebal.err
-          echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
-          echo "--- live rebalance ---"; cat /tmp/live_rebal.json
-          echo "--- stderr ---"; cat /tmp/live_rebal.err
-
       - name: Measure live track (NAV snapshot + forward-verdict --mode live)
         id: measure
-        if: steps.gate.outputs.blocked != 'true'
+        if: >-
+          steps.gate.outputs.blocked != 'true' &&
+          steps.gate.outputs.armed != 'true'
         env:
           HOST: ${{ secrets.VULTR_SSH_HOST }}
           USER: ${{ secrets.VULTR_SSH_USER }}
@@ -199,7 +175,6 @@ jobs:
           ARMED: ${{ steps.gate.outputs.armed }}
           CAP: ${{ steps.gate.outputs.capital }}
           BLOCKED: ${{ steps.gate.outputs.blocked }}
-          LIVE_OUTCOME: ${{ steps.live.outcome }}  # success=주문 실행 / skipped=미실행
           EVENT: ${{ github.event_name }}
         run: |
           set -o pipefail  # 의도적으로 -u 제외: 발행은 문자열 포맷팅뿐 — 사소한 미설정
@@ -217,21 +192,18 @@ jobs:
             echo "| timestamp_utc | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
             echo "| armed (무장 여부) | ${ARMED:-?} |"
             echo "| capital_usd | ${CAP:-?} |"
-            echo "| blocked (자본 1000불 초과 거부) | ${BLOCKED:-?} |"
+            echo "| blocked (자본 가드 거부) | ${BLOCKED:-?} |"
             echo "| event | ${EVENT:-?} |"
-            echo "| LIVE 스텝 | ${LIVE_OUTCOME:-skipped} (success=실주문 실행 / skipped=미실행) |"
+            echo "| LIVE 스텝 | preview-job-skipped (실주문은 production-gated job 전용) |"
             echo ""
             if [[ "${ARMED:-false}" != "true" ]]; then
               echo "> 🛡 **드라이런 미리보기만** (armed=false) — 실주문 0건. 아래는 *무장 시* 실거래가"
               echo "> 무엇을 사고팔지 보여준다. 무장하려면 automation/rebalance-live.request 의"
               echo "> armed: true 로 머지(룰 워커 충돌 먼저 해소)."
-            elif [[ "${LIVE_OUTCOME:-skipped}" == "success" ]]; then
-              echo "> ⚠ **무장 + 실주문 실행** (armed=true, 시장시간 스케줄) — 실주문이 나갔다."
-              echo "> 아래 라이브 재조정 결과를 확인하라."
             else
-              echo "> 🟡 **무장됨이나 이번 실행은 미리보기만** (armed=true, event=${EVENT:-?})."
-              echo "> 실주문은 *시장시간 스케줄*(15:00 UTC 평일)에서만 나간다 — 무장 머지(push)는"
-              echo "> 미리보기뿐, **실주문 0건**. 다음 스케줄에서 실거래된다."
+              echo "> 🟡 **무장됨이나 이 job 은 미리보기만** (armed=true, event=${EVENT:-?})."
+              echo "> 실주문은 별도 production-gated job 이 운영자 승인 뒤에만 실행한다."
+              echo "> 이 preview/sidecar job 자체는 **실주문 0건**이다."
             fi
             echo ""
             echo "## 드라이런 미리보기 — 무장 시 거래할 내역 (주문 0건)"
@@ -241,7 +213,7 @@ jobs:
             echo ""
             echo "## 라이브 재조정 결과 (armed=true 일 때만)"
             echo '```json'
-            cat /tmp/live_rebal.json 2>/dev/null || echo '(미무장 — 실행 안 함)'
+            echo '(preview job — 실주문은 production-gated job 이 승인 뒤 별도 발행)'
             echo '```'
             echo ""
             echo "## 라이브 트랙 측정 (NAV 스냅샷 + forward-verdict --mode live + 칼마)"
@@ -253,5 +225,147 @@ jobs:
           python3 "${GITHUB_WORKSPACE}/scripts/redact_public_sidecar.py" . 2>/dev/null || true
           git add LAST_RUN.md
           git commit -q -m "rebalance-live-canary run ${GITHUB_RUN_ID} (armed=${ARMED:-?})"
+          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "publish:${BRANCH}"
+          echo "Published to ${BRANCH}."
+
+  live_portfolio_canary_real_orders:
+    needs: live_portfolio_canary_preview
+    if: >-
+      needs.live_portfolio_canary_preview.outputs.armed == 'true' &&
+      needs.live_portfolio_canary_preview.outputs.blocked != 'true' &&
+      github.event_name != 'push'
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Validate production live gate outputs
+        id: gate
+        run: |
+          set -uo pipefail
+          armed="${{ needs.live_portfolio_canary_preview.outputs.armed }}"
+          capital="${{ needs.live_portfolio_canary_preview.outputs.capital }}"
+          blocked="${{ needs.live_portfolio_canary_preview.outputs.blocked }}"
+          if [[ "${armed}" != "true" ]]; then
+            echo "preview job did not arm live orders; refusing production job" >&2
+            exit 1
+          fi
+          if [[ "${blocked}" == "true" ]]; then
+            echo "preview job marked capital gate blocked; refusing production job" >&2
+            exit 1
+          fi
+          ./scripts/ci_validate_decimal.sh capital "${capital}" || exit $?
+          echo "armed=${armed}" >> "$GITHUB_OUTPUT"
+          echo "capital=${capital}" >> "$GITHUB_OUTPUT"
+          echo "blocked=${blocked}" >> "$GITHUB_OUTPUT"
+          echo "production live gate: armed=${armed} capital=${capital} blocked=${blocked}"
+
+      - name: Install SSH key
+        env:
+          KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.VULTR_SSH_KNOWN_HOSTS }}
+          SSH_USER: ${{ secrets.VULTR_SSH_USER }}
+        run: |
+          VULTR_SSH_PRIVATE_KEY="${KEY:-}" \
+          VULTR_SSH_KNOWN_HOSTS="${KNOWN_HOSTS:-}" \
+          VULTR_SSH_USER="${SSH_USER:-}" \
+          ./scripts/ci_secure_ssh.sh
+
+      - name: LIVE rebalance — REAL ORDERS (production approval required)
+        id: live
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+          CAP: ${{ steps.gate.outputs.capital }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          echo "⚠ ARMED — placing REAL orders (capital=${CAP})."
+          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest rebalance-once \
+                 --portfolio deploy/canary-live-portfolio.toml \
+                 --mode live --confirm-live \
+                 --capital ${CAP} --db data/auto_invest.db --env-file .env --json" \
+              > /tmp/live_rebal.json 2>/tmp/live_rebal.err
+          echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
+          echo "--- live rebalance ---"; cat /tmp/live_rebal.json
+          echo "--- stderr ---"; cat /tmp/live_rebal.err
+
+      - name: Measure live track after real orders
+        id: measure
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+          CAP: ${{ steps.gate.outputs.capital }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "cd /opt/auto-invest && \
+                 /usr/local/bin/uv run auto-invest nav-snapshot --mode live --capital ${CAP} --db data/auto_invest.db --env-file .env --snapshot --format json; \
+                 /usr/local/bin/uv run auto-invest forward-verdict --mode live --portfolio deploy/canary-live-portfolio.toml --db data/auto_invest.db --format json" \
+              > /tmp/live_measure.log 2>&1
+          echo "exit=$?"; cat /tmp/live_measure.log
+
+      - name: Publish production live canary result to sidecar branch
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ARMED: ${{ steps.gate.outputs.armed }}
+          CAP: ${{ steps.gate.outputs.capital }}
+          BLOCKED: ${{ steps.gate.outputs.blocked }}
+          LIVE_OUTCOME: ${{ steps.live.outcome }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -o pipefail
+          BRANCH=automation/rebalance-live-canary-last-run
+          tmpdir=$(mktemp -d); cd "${tmpdir}"; git init -q
+          git config user.name "rebalance-live-bot"
+          git config user.email "rebalance-live-bot@noreply.github.com"
+          {
+            echo "# 라이브 캐너리 포트폴리오 — 최신 실행 (가드형 실거래 채널)"
+            echo ""
+            echo "| 항목 | 값 |"
+            echo "|------|-----|"
+            echo "| run_id | ${GITHUB_RUN_ID} |"
+            echo "| timestamp_utc | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
+            echo "| armed (무장 여부) | ${ARMED:-?} |"
+            echo "| capital_usd | ${CAP:-?} |"
+            echo "| blocked (자본 가드 거부) | ${BLOCKED:-?} |"
+            echo "| event | ${EVENT:-?} |"
+            echo "| LIVE 스텝 | ${LIVE_OUTCOME:-skipped} (success=실주문 실행 / skipped=미실행) |"
+            echo ""
+            if [[ "${LIVE_OUTCOME:-skipped}" == "success" ]]; then
+              echo "> ⚠ **무장 + production 승인 + 실주문 실행** — 실주문 job 이 실행됐다."
+              echo "> 아래 라이브 재조정 결과를 확인하라."
+            else
+              echo "> 🟡 **무장됐지만 실주문 job 이 완료되지 않음** — 아래 stderr/로그 확인."
+            fi
+            echo ""
+            echo "## 드라이런 미리보기 — 무장 시 거래할 내역 (주문 0건)"
+            echo '```json'
+            echo '(preview job 이 직전 sidecar에 발행함)'
+            echo '```'
+            echo ""
+            echo "## 라이브 재조정 결과 (armed=true 일 때만)"
+            echo '```json'
+            cat /tmp/live_rebal.json 2>/dev/null || echo '(실주문 결과 없음)'
+            echo '```'
+            echo ""
+            echo "## 라이브 트랙 측정 (NAV 스냅샷 + forward-verdict --mode live + 칼마)"
+            echo '```'
+            cat /tmp/live_measure.log 2>/dev/null || echo '(none)'
+            echo '```'
+          } > LAST_RUN.md
+          git checkout --orphan publish
+          python3 "${GITHUB_WORKSPACE}/scripts/redact_public_sidecar.py" . 2>/dev/null || true
+          git add LAST_RUN.md
+          git commit -q -m "rebalance-live-canary production run ${GITHUB_RUN_ID} (armed=${ARMED:-?})"
           git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "publish:${BRANCH}"
           echo "Published to ${BRANCH}."
