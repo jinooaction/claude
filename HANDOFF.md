@@ -33,15 +33,52 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `3076dd1` — Merge pull request #568 from jinooaction/codex/live-canary-sidecar-before-production-gate |
-| main 테스트 | #568 브랜치 기준 `uv run pytest` → 2709 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
-| main 린트 | #568 브랜치 기준 `uv run ruff check src tests` → All checks passed. |
+| 마지막 main 커밋 | `5a56117` — Merge pull request #569 from jinooaction/codex/live-canary-observe-gateway |
+| main 테스트 | #569/handoff 갱신 브랜치 기준 `uv run pytest -q` → 2710 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
+| main 린트 | #569/handoff 갱신 브랜치 기준 `uv run ruff check src tests` → All checks passed. |
 | 열린 PR | 없음(이 handoff 작성 시점). |
-| 출시 완료 스펙 | 최신 추가: #568(live canary sidecar gate: 미무장 상태에서도 production 승인 대기 없이 sidecar freshness를 회복하되 실주문은 별도 production-gated job에 유지), #566(forward paper 경제 장부 보정), 122(forward paper DB writability), 121(`promote-readiness` 관측 경로 복구 + 서버 root-owned gateway/helper self-refresh), 120(증거 기반 후보 소스 다변화 + released-work 완료 소비), 119(보안 신뢰 경계 강화와 후속 SSH boundary repair 및 live-money workflow 보호 환경). 이전 스펙 058~118은 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
-| 골격 스펙 | 없음. `.specify/feature.json`은 최신 완료/진행 스펙 `specs/123-live-canary-sidecar-gate`를 가리킨다. |
-| 최근 출시 작업 | #568은 `rebalance-live-canary.yml`을 preview/status job과 production real-order job으로 나눠 sidecar timestamp가 approval queue에 막히지 않게 했다. 실주문 명령 `--mode live --confirm-live`는 production-gated job에만 남아 있고, main 수동 run `30776611321`에서 preview job success, real-order job skipped를 확인했다. |
-| 활성 작업 | #568 후속 검증에서 최신 sidecar는 `2026-08-03T01:20:06Z`, `armed=false`, `preview-job-skipped`로 fresh가 됐지만, preview/backfill/measure 원격 명령은 `refused command`로 비어 있었다. 현재 후속 브랜치가 raw SSH preview/status 명령을 fixed `observe live-canary-*` gateway로 옮기는 중이다. |
-| 안전 경계 | #568은 등급 3 live-money workflow boundary 보정이다. production approval은 preview/status에서만 제거했고 실주문 job에는 유지했다. 실제 주문, 실거래 전환, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps 확대, 손실 예산, KIS secret, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`라 실주문 불가다. |
+| 출시 완료 스펙 | 최신 추가: 123/live canary sidecar gate(#568 preview/status와 real-order job 분리, #569 fixed `observe live-canary-*` gateway로 preview/status 내용 복구), #566(forward paper 경제 장부 보정), 122(forward paper DB writability), 121(`promote-readiness` 관측 경로 복구 + 서버 root-owned gateway/helper self-refresh), 120(증거 기반 후보 소스 다변화 + released-work 완료 소비), 119(보안 신뢰 경계 강화와 후속 SSH boundary repair 및 live-money workflow 보호 환경). 이전 스펙 058~118은 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
+| 골격 스펙 | 없음. `.specify/feature.json`은 최신 완료 스펙 `specs/123-live-canary-sidecar-gate`를 가리키고, `tasks.md`는 T001~T023 완료 상태다. |
+| 최근 출시 작업 | #568은 `rebalance-live-canary.yml`을 preview/status job과 production real-order job으로 나눠 sidecar timestamp가 approval queue에 막히지 않게 했다. #569는 preview/status의 raw SSH 명령을 fixed `observe live-canary-backfill|preview|measure` gateway로 옮겨 `refused command` 빈 sidecar를 닫았다. post-merge main run `30777338028`은 preview job success, real-order job skipped, sidecar timestamp `2026-08-03T01:38:34Z`다. |
+| 활성 작업 | 없음. pipeline-liveness run `30777384529`는 종합 `OK`이고 `rebalance-live-canary`도 `OK`/0.0h다. money-path run `30777446988`는 `PREVIEW_ONLY`/`NO_EDGE_YET`, capital-path-readiness run `30777476105`는 `ACCUMULATING_EDGE`, 우선 후보 없음이다. |
+| 안전 경계 | #568/#569는 등급 3 live-money workflow boundary 보정이다. production approval은 preview/status에서만 제거했고, 실주문 job에는 유지했다. 새 observe gateway 명령 3개는 backfill, dry-run preview, NAV/forward-verdict 측정만 하며 `--confirm-live`를 노출하지 않는다. 실제 주문, 실거래 전환, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps 확대, 손실 예산, KIS secret, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`라 실주문 불가다. |
+
+## 최근 관찰 — 2026-08-03 KST (#568/#569 live canary sidecar gate와 observe gateway 복구)
+
+현재 `main` 최신 코드 머지는 `5a56117`(#569, live canary observe gateway)다.
+기능 커밋은 #568 `95f2cd6`과 #569 `791aef7`/`48842c6`이다.
+
+- **문제 정의**: `pipeline-liveness`가 critical sidecar인 `rebalance-live-canary`를 `LATE`로 보고했다.
+  원인은 live canary workflow 전체가 production approval 환경에 묶여, `armed=false`인 미리보기 상태조차
+  sidecar를 갱신하지 못한 것이다. #568이 job을 나눠 freshness는 회복했지만, post-merge sidecar 내용은
+  preview/backfill/measure 원격 명령이 서버 forced-command SSH gateway에 거부되어 `refused command`로 비어 있었다.
+- **구현 상태**: #568은 preview/status job과 production real-order job을 분리했다. #569는 preview/status job의
+  raw `cd /opt/auto-invest && uv run ...` 원격 shell을 없애고 fixed `observe live-canary-backfill`,
+  `observe live-canary-preview <capital>`, `observe live-canary-measure <capital>`만 쓰게 했다. 서버 gateway/helper는
+  이 세 명령을 capital validation 뒤 실행하며, backfill, dry-run preview, NAV snapshot, forward-verdict만 수행한다.
+  `--mode live --confirm-live`는 production-gated real-order job에만 남아 있고 observe helper에는 없다.
+- **post-merge 배포 확인**: #569 `Deploy on merge to main` run `30777301767`은 success다. 로그에서
+  `AUTO_INVEST_SSH_BOUNDARY_HELPERS_REFRESHED`와 `observe_helper=/usr/local/sbin/auto-invest-observe`를 확인했다.
+- **live canary 확인**: main 수동 run `30777338028`은 success다. preview job은 backfill/dry-run/measure 모두 exit 0,
+  real-order job은 skipped다. 최신 sidecar timestamp는 `2026-08-03T01:38:34Z`, `armed=false`,
+  `preview-job-skipped`다. sidecar 본문에는 `refused command`가 없고, 드라이런 결과는
+  `planned_buy_notional_usd=0.00`, `planned_sell_notional_usd=222.82`, `target_weights={"SPY":"0.235870"}`를 남겼다.
+  live track 측정은 NAV snapshot seq `16214`, `total_nav_usd=500.0`, forward verdict `INSUFFICIENT_DATA`
+  (`n_obs=14 < min_obs_required=20`)다.
+- **pipeline/money path 확인**: pipeline-liveness run `30777384529`는 종합 `OK`이고 `rebalance-live-canary`는
+  `OK`, 나이 0.0h다. money-path run `30777446988`는 `PREVIEW_ONLY`/`NO_EDGE_YET`다. 기존 자본 사다리는
+  관측 30회, 칼마 PASS, PSR `0.547840 < 0.95` FAIL이라 첫 자본을 배치하지 않는다. capital-path-readiness
+  run `30777476105`는 `ACCUMULATING_EDGE`, 우선 후보 없음, pipeline-liveness 입력 `overall=OK`다.
+- **검증 상태**: #569 브랜치에서 focused workflow/security/backfill/NAV tests 25 passed, SSH boundary/observe
+  tests 16 passed, pipeline/readiness tests 42 passed, `bash -n` helper syntax 통과, workflow YAML parse `yaml-ok`,
+  `uv run pytest` 2710 passed/5 skipped, `uv run ruff check src tests` 통과,
+  `uv run python scripts/agent_harness_probe.py --strict` OK(14/14),
+  `uv run python scripts/check_handoff_facts.py` OK, `git diff --check` 통과, PR quality gate 통과,
+  `mergeStateStatus=CLEAN` 확인 뒤 merge했다.
+- **안전 경계**: 관측·미리보기 경계만 복구했다. 실제 주문, live 재무장, 자본 배분, whitelist/caps,
+  손실 예산, 비밀값, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 지금 돈을 못 버는 직접 이유는
+  sidecar 지각이나 SSH 거부가 아니라 `NO_EDGE`: 전진 성과의 엣지 신뢰도(PSR)가 아직 0.95 기준을 넘지 못했기 때문이다.
+- **상세 인계**: `HANDOFF-127-LIVE-CANARY-OBSERVE-GATEWAY.md`.
 
 ## 최근 관찰 — 2026-08-01 KST (#566 forward paper 경제 장부 보정)
 
@@ -3124,6 +3161,17 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
   통과, `uv run python scripts/agent_harness_probe.py --strict` `OK (14/14)`,
   `uv run python scripts/check_handoff_facts.py` 통과, PR 품질 관문 통과. 머지 직전 전체 테스트와
   린트를 다시 실행해 같은 결과를 확인했다.
+
+## 최근 마일스톤 — 2026-08-03 KST (#568/#569 live canary sidecar gate와 observe gateway 복구)
+
+#568로 live canary workflow를 preview/status job과 production real-order job으로 나눴고, #569로 preview/status
+원격 실행을 fixed `observe live-canary-*` gateway 명령으로 옮겼다. 배포 run `30777301767`은 success이고
+서버 helper refresh 표식을 확인했다. main live canary run `30777338028`은 `armed=false`, preview job success,
+real-order job skipped, sidecar timestamp `2026-08-03T01:38:34Z`다. 최신 sidecar에는 `refused command`가 없고
+드라이런 결과와 NAV/forward-verdict 결과가 들어 있다. pipeline-liveness run `30777384529`는 종합 `OK`,
+`rebalance-live-canary` `OK`/0.0h다. money-path run `30777446988`는 여전히 `PREVIEW_ONLY`/`NO_EDGE_YET`,
+capital-path-readiness run `30777476105`는 `ACCUMULATING_EDGE`, 우선 후보 없음이다. 상세는
+`HANDOFF-127-LIVE-CANARY-OBSERVE-GATEWAY.md`.
 
 ## 최근 마일스톤 — 2026-08-01 KST (#566 forward paper 경제 장부 보정)
 
@@ -7048,6 +7096,7 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 
 ## 과거 인수인계 파일 (참고용)
 
+- `HANDOFF-127-LIVE-CANARY-OBSERVE-GATEWAY.md` — #568/#569 live canary sidecar freshness와 fixed observe gateway 복구, post-merge pipeline/money-path/capital-path 상태
 - `HANDOFF-126-FORWARD-PAPER-ECONOMIC-ANCHOR.md` — #566 forward paper 경제 장부 보정과 post-merge forward/money-path/capital-path sidecar 상태
 - `HANDOFF-125-REGIME-STRATIFY-OBSERVE-GATEWAY.md` — #564 regime-stratify 관측 gateway 복구와 post-merge sidecar 성공 상태
 - `HANDOFF-124-FORWARD-PAPER-DB-WRITABILITY.md` — 스펙 122 forward paper DB writability 복구와 post-merge forward 관측 성공 상태
