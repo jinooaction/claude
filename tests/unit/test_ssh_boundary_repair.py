@@ -73,6 +73,9 @@ def test_gateway_allows_only_fixed_commands_without_eval():
     assert re.search(r'observe\\ ladder-anchored-verdict\)', code)
     assert re.search(r'observe\\ account-nav\)', code)
     assert re.search(r'observe\\ live-growth\)', code)
+    assert re.search(r'observe\\ live-canary-backfill\)', code)
+    assert re.search(r'observe\\ live-canary-preview\\ \*\)', code)
+    assert re.search(r'observe\\ live-canary-measure\\ \*\)', code)
     assert re.search(r'observe\\ promote-readiness\)', code)
     assert not re.search(r'observe\\ promote-readiness\\ \*\)', code)
     assert re.search(r'observe\\ regime-stratify\\ \*\)', code)
@@ -184,6 +187,9 @@ def test_observe_helper_exposes_only_observation_and_paper_commands():
     assert "ladder-anchored-verdict" in body
     assert "account-nav" in body
     assert "live-growth" in body
+    assert "live-canary-backfill" in body
+    assert "live-canary-preview" in body
+    assert "live-canary-measure" in body
     assert "promote-readiness" in body
     assert "promote-check" in body
     assert "regime-stratify" in body
@@ -195,6 +201,8 @@ def test_observe_helper_exposes_only_observation_and_paper_commands():
     assert "--mode paper" in body
     assert "--mode live" in body  # growth is read-only live evidence.
     assert "rebalance-once" in body
+    assert "--dry-run" in body
+    assert "--confirm-live" not in body
     assert "submit" not in body.lower()
     assert "systemctl" not in body
     assert "AUTO_INVEST_MODE=live" not in body
@@ -220,3 +228,37 @@ def test_observe_helper_repairs_only_forward_paper_storage():
     assert '[[ ! -L "${path}" && -f "${path}" ]]' in repair_block
     assert "data/auto_invest.db" not in repair_block
     assert "data/halt.flag" not in repair_block
+
+
+def test_live_canary_observe_commands_are_preview_only():
+    body = OBSERVE_HELPER.read_text(encoding="utf-8")
+    backfill_block = body.split("live_canary_backfill()", 1)[1].split(
+        "live_canary_preview()", 1
+    )[0]
+    preview_block = body.split("live_canary_preview()", 1)[1].split(
+        "live_canary_measure()", 1
+    )[0]
+    measure_block = body.split("live_canary_measure()", 1)[1].split(
+        "promote_readiness()", 1
+    )[0]
+
+    assert "--portfolio deploy/canary-live-portfolio.toml" in backfill_block
+    assert "--db data/auto_invest.db" in backfill_block
+    assert "--dry-run" not in backfill_block
+    assert "rebalance-once" not in backfill_block
+    assert "--confirm-live" not in backfill_block
+
+    assert "rebalance-once" in preview_block
+    assert "--portfolio deploy/canary-live-portfolio.toml" in preview_block
+    assert "--dry-run" in preview_block
+    assert '--capital "${capital}"' in preview_block
+    assert "--db data/auto_invest.db" in preview_block
+    assert "--mode live" not in preview_block
+    assert "--confirm-live" not in preview_block
+
+    assert "nav-snapshot" in measure_block
+    assert "forward-verdict" in measure_block
+    assert "--mode live" in measure_block
+    assert '--capital "${capital}"' in measure_block
+    assert "--portfolio deploy/canary-live-portfolio.toml" in measure_block
+    assert "--confirm-live" not in measure_block

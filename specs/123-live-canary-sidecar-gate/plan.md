@@ -5,18 +5,18 @@
 
 ## Summary
 
-Split the live canary workflow into a preview/status job and a real-order job. The preview/status job can refresh the latest sidecar while unarmed without waiting for production approval, and the real-order job remains the only path with `--mode live --confirm-live`, guarded by `armed=true`, capital validation, non-push events, and production approval.
+Split the live canary workflow into a preview/status job and a real-order job. The preview/status job can refresh the latest sidecar while unarmed without waiting for production approval, and it enters the server only through fixed observe gateway verbs. The real-order job remains the only path with `--mode live --confirm-live`, guarded by `armed=true`, capital validation, non-push events, and production approval.
 
 ## Technical Context
 
 **Language/Version**: GitHub Actions YAML, Bash, Python 3.11 tests
-**Primary Dependencies**: Existing `uv`, `auto-invest` CLI, GitHub Actions environments, sidecar branch publication
+**Primary Dependencies**: Existing `uv`, `auto-invest` CLI, forced-command SSH gateway, GitHub Actions environments, sidecar branch publication
 **Storage**: Git sidecar branch `automation/rebalance-live-canary-last-run`; existing server SQLite data is read by current live-canary commands
 **Testing**: `pytest`, `ruff`, static workflow boundary tests, YAML parse check, post-merge sidecar dispatch
 **Target Platform**: GitHub Actions runner plus existing production instance over the established SSH boundary
 **Project Type**: Trading automation operations workflow
 **Performance Goals**: Keep the live canary workflow within the existing 15 minute timeout
-**Constraints**: No real orders outside production approval; no capital ladder change; no whitelist/caps change; no strategy reassignment; no secrets or audit-log change
+**Constraints**: No real orders outside production approval; preview/status server entry must use fixed observe commands; no capital ladder change; no whitelist/caps change; no strategy reassignment; no secrets or audit-log change
 **Scale/Scope**: One guarded workflow, one sidecar branch, and local tests for workflow structure
 
 ## Constitution Check
@@ -59,12 +59,17 @@ specs/123-live-canary-sidecar-gate/
 .github/workflows/
 └── rebalance-live-canary.yml
 
+deploy/
+├── observe-on-instance.sh
+└── repair-ssh-boundary.sh
+
 tests/unit/
+├── test_ssh_boundary_repair.py
 ├── test_live_canary_workflow.py
 └── test_workflow_nav_capital_basis.py
 ```
 
-**Structure Decision**: Keep the workflow in the existing live-canary file because it already owns the sentinel, dry-run preview, live command, and sidecar branch. Tests stay as static workflow boundary tests because the safety contract is which job owns the real-order command and production approval gate.
+**Structure Decision**: Keep the workflow in the existing live-canary file because it already owns the sentinel, dry-run preview, live command, and sidecar branch. Add narrow observe-helper verbs instead of raw remote shell for preview/status because the production SSH gateway is intentionally fixed-command. Tests stay as static workflow/gateway boundary tests because the safety contract is which command surface owns preview/status and which job owns the real-order command and production approval gate.
 
 ## Complexity Tracking
 
@@ -72,3 +77,4 @@ tests/unit/
 |-----------|------------|-------------------------------------|
 | Split one live-money workflow into two jobs | Sidecar freshness must not wait for production approval when no real orders can run | Keeping one job requires production approval for unarmed status refreshes, which leaves liveness stale |
 | Keep production sidecar overwrite after real orders | A production-approved real run must replace preview-only evidence with actual execution evidence | Leaving only preview evidence after a real run could hide whether orders executed |
+| Add fixed observe verbs for live-canary preview/status | The server gateway refuses raw SSH commands after hardening | Reopening arbitrary remote shell would undo the SSH boundary repair |

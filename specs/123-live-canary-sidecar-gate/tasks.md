@@ -58,6 +58,7 @@
 
 - [x] T012 [US3] Add preview sidecar wording that names the production-gated real-order job.
 - [x] T013 [US3] Add production sidecar wording that reports actual real-order job outcome.
+- [x] T014 [US3] Detect post-merge `refused command` logs from raw SSH preview/status commands.
 
 ---
 
@@ -65,20 +66,22 @@
 
 **Purpose**: Validate, merge, refresh sidecars, and update handoff truth.
 
-- [x] T014 Run focused workflow and liveness tests from `quickstart.md`.
-- [x] T015 Run full validation: `uv run pytest`, `uv run ruff check src tests`, `uv run python scripts/check_handoff_facts.py`, `uv run python scripts/agent_harness_probe.py --strict`, and `git diff --check`.
-- [ ] T016 Update PR body with risk grade 3, problem definition, safety boundary, validation, SDD, and handoff facts.
-- [ ] T017 Merge after required checks pass and PR is mergeable.
-- [ ] T018 Run main-branch `rebalance-live-canary.yml` while `armed=false` and verify the sidecar refreshes without real orders.
-- [ ] T019 Refresh `pipeline-liveness` and verify `rebalance-live-canary` is no longer late.
-- [ ] T020 Refresh `HANDOFF.md` if the operating truth changes.
+- [x] T015 Add fixed observe gateway/helper commands for live-canary backfill, dry-run preview, and measure.
+- [x] T016 Route the preview/status job through fixed observe commands with short gateway-refresh retry.
+- [x] T017 Run focused workflow, SSH-boundary, shell syntax, YAML, and liveness tests from `quickstart.md`.
+- [x] T018 Run full validation: `uv run pytest`, `uv run ruff check src tests`, `uv run python scripts/check_handoff_facts.py`, `uv run python scripts/agent_harness_probe.py --strict`, and `git diff --check`.
+- [ ] T019 Update PR body with risk grade 3, problem definition, safety boundary, validation, SDD, and handoff facts.
+- [ ] T020 Merge after required checks pass and PR is mergeable.
+- [ ] T021 Run main-branch `rebalance-live-canary.yml` while `armed=false` and verify the sidecar refreshes without real orders or `refused command`.
+- [ ] T022 Refresh `pipeline-liveness` and verify `rebalance-live-canary` is no longer late.
+- [ ] T023 Refresh `HANDOFF.md` if the operating truth changes.
 
 ## Dependencies & Execution Order
 
 - T001-T004 establish current truth and SDD.
 - T005-T006 guard the workflow before relying on T007-T013.
-- T007-T013 can be reviewed as one workflow-boundary change.
-- T015-T020 must run in order because merge and sidecar refresh depend on successful local validation.
+- T007-T016 can be reviewed as one workflow/gateway-boundary change.
+- T017-T023 must run in order because merge and sidecar refresh depend on successful local validation.
 
 ## Implementation Strategy
 

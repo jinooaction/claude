@@ -10,9 +10,15 @@
 
 ## Entity: PreviewStatusJob
 
-- **authority**: May read sentinel state, run dry-run preview, run unarmed live-track measurement, and publish the sidecar.
+- **authority**: May read sentinel state, call fixed live-canary observe commands, run dry-run preview, run unarmed live-track measurement, and publish the sidecar.
 - **forbidden_actions**: Must not run live order commands or report real-order execution.
 - **sidecar_status**: Publishes `preview-job-skipped` as the live step.
+
+## Entity: LiveCanaryObserveCommand
+
+- **verbs**: `live-canary-backfill`, `live-canary-preview <capital>`, `live-canary-measure <capital>`.
+- **allowed_actions**: Live universe backfill, dry-run preview, NAV snapshot, and forward verdict.
+- **forbidden_actions**: Live order submission, live arming, capital ladder mutation, whitelist/caps mutation, arbitrary shell evaluation, and service control.
 
 ## Entity: RealOrderJob
 
@@ -29,11 +35,12 @@
 ## State Transitions
 
 1. Workflow starts and reads the sentinel.
-2. Preview/status job publishes dry-run status and sidecar evidence.
-3. If `armed=false`, `blocked=true`, or event is `push`, the real-order job does not start.
-4. If `armed=true`, `blocked=false`, and event is not `push`, the real-order job waits for production approval.
-5. If approved, the real-order job runs the live command, measures after orders, and publishes the production sidecar.
-6. Pipeline liveness consumes the sidecar timestamp and status.
+2. Preview/status job calls fixed observe commands through the SSH gateway.
+3. Preview/status job publishes dry-run status and sidecar evidence.
+4. If `armed=false`, `blocked=true`, or event is `push`, the real-order job does not start.
+5. If `armed=true`, `blocked=false`, and event is not `push`, the real-order job waits for production approval.
+6. If approved, the real-order job runs the live command, measures after orders, and publishes the production sidecar.
+7. Pipeline liveness consumes the sidecar timestamp and status.
 
 ## Explicit Non-Entities
 

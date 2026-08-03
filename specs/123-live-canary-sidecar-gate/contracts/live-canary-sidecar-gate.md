@@ -8,6 +8,7 @@ The workflow must expose two distinct jobs:
 
 1. Preview/status job
    - Reads the live sentinel and capital guard.
+   - Calls only fixed observe commands for preview/status server work.
    - Runs dry-run preview only.
    - Publishes `automation/rebalance-live-canary-last-run`.
    - Has no production environment approval.
@@ -42,6 +43,18 @@ The sidecar must include:
 
 Preview/status sidecars must say real orders are skipped in the preview job and owned by the production-gated job. Production sidecars must report the actual live rebalance result or the actual production failure.
 
+## Forced-Command Gateway Contract
+
+The gateway may expose these preview/status commands:
+
+```text
+observe live-canary-backfill
+observe live-canary-preview <capital>
+observe live-canary-measure <capital>
+```
+
+`<capital>` must be a decimal number. These commands must map to fixed helper functions; no caller-controlled portfolio path, DB path, mode, order flag, or shell fragment is allowed.
+
 ## Safety Contract
 
 This feature must not:
@@ -53,3 +66,4 @@ This feature must not:
 - Approve a production environment job.
 - Arm live trading.
 - Commit or print secrets.
+- Reopen arbitrary SSH command execution.

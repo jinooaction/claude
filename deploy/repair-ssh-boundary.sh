@@ -156,6 +156,25 @@ case "${cmd}" in
         echo "refused command: ${cmd}" >&2
         exit 126
         ;;
+    observe\ live-canary-backfill)
+        exec sudo -n /usr/local/sbin/auto-invest-observe live-canary-backfill
+        ;;
+    observe\ live-canary-preview\ *)
+        capital="${cmd#observe live-canary-preview }"
+        if [[ "${capital}" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+            exec sudo -n /usr/local/sbin/auto-invest-observe live-canary-preview "${capital}"
+        fi
+        echo "refused command: ${cmd}" >&2
+        exit 126
+        ;;
+    observe\ live-canary-measure\ *)
+        capital="${cmd#observe live-canary-measure }"
+        if [[ "${capital}" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+            exec sudo -n /usr/local/sbin/auto-invest-observe live-canary-measure "${capital}"
+        fi
+        echo "refused command: ${cmd}" >&2
+        exit 126
+        ;;
     observe\ promote-readiness)
         exec sudo -n /usr/local/sbin/auto-invest-observe promote-readiness
         ;;

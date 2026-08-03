@@ -245,6 +245,47 @@ live_growth() {
     run_cli "${args[@]}"
 }
 
+live_canary_backfill() {
+    require_repo
+    run_cli backfill-bars \
+        --portfolio deploy/canary-live-portfolio.toml \
+        --min-bars 1000 \
+        --db data/auto_invest.db \
+        --env-file .env \
+        --json
+}
+
+live_canary_preview() {
+    local capital="${1:-}"
+    validate_capital "${capital}"
+    require_repo
+    run_cli rebalance-once \
+        --portfolio deploy/canary-live-portfolio.toml \
+        --dry-run \
+        --capital "${capital}" \
+        --db data/auto_invest.db \
+        --env-file .env \
+        --json
+}
+
+live_canary_measure() {
+    local capital="${1:-}"
+    validate_capital "${capital}"
+    require_repo
+    run_cli nav-snapshot \
+        --mode live \
+        --capital "${capital}" \
+        --db data/auto_invest.db \
+        --env-file .env \
+        --snapshot \
+        --format json
+    run_cli forward-verdict \
+        --mode live \
+        --portfolio deploy/canary-live-portfolio.toml \
+        --db data/auto_invest.db \
+        --format json
+}
+
 promote_readiness() {
     require_repo
     run_cli promote-check \
@@ -366,6 +407,18 @@ main() {
         live-growth)
             [[ "$#" -le 1 ]] || die "live-growth takes at most one since arg"
             live_growth "${1:-}"
+            ;;
+        live-canary-backfill)
+            [[ "$#" -eq 0 ]] || die "live-canary-backfill takes no args"
+            live_canary_backfill
+            ;;
+        live-canary-preview)
+            [[ "$#" -eq 1 ]] || die "live-canary-preview requires capital"
+            live_canary_preview "$1"
+            ;;
+        live-canary-measure)
+            [[ "$#" -eq 1 ]] || die "live-canary-measure requires capital"
+            live_canary_measure "$1"
             ;;
         promote-readiness)
             [[ "$#" -eq 0 ]] || die "promote-readiness takes no args"
