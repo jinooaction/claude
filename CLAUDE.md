@@ -220,7 +220,7 @@ the current worktree. Do not trust prose in this block as the source of truth
 for in-flight work; use the `git_ground_truth` start hook, latest `HANDOFF.md`,
 and `/sync` against `jinooaction/claude` `Codex/*` branches before continuing.
 
-현재 계획 포인터: `specs/122-forward-paper-db-writability/plan.md` — forward 페이퍼 트랙의 전용 DB가 읽기 전용 권한으로 굳어 관측 누적이 멈추지 않도록, `observe paper-track-run` helper가 페이퍼 전용 저장소만 좁게 복구하는 보안 경계 보정.
+현재 계획 포인터: `specs/123-live-canary-sidecar-gate/plan.md` — `rebalance-live-canary`가 미무장 상태에서도 production 승인 대기 때문에 최신 sidecar를 못 쓰는 문제를 고치되, 실주문 명령은 별도 production-gated job에 그대로 남기는 보안 경계 보정.
 
 머지 완료(베이스라인): spec 004 (LLM 판단 지점), 005 (자율 튜너), 006 (배포 자동화), 007 (하드닝 카나리), 008 (백테스트), 009 (paper-run), 010 (자동 룰 설계자), 011 (라이브 성과 측정). **주의: 일부 tasks.md 가 stale 0% 로 표시된 적 있음 — 코드/테스트를 믿을 것.**
 

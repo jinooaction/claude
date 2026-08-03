@@ -60,10 +60,9 @@ def test_forward_paper_nav_snapshots_pass_capital():
 
 def test_live_canary_nav_snapshot_passes_capital():
     calls = _calls(_LIVE)
-    assert len(calls) == 1, (
-        f"라이브 캐너리 nav-snapshot 호출이 {len(calls)}개 — 측정 스텝 구조가 바뀜."
-    )
-    assert "--capital ${CAP}" in calls[0], (
-        "라이브 측정 nav-snapshot 이 --capital 없이 호출됨 — 페이퍼 forward 와 측정"
-        f" 기준이 어긋난다: {calls[0]}"
-    )
+    assert calls, "라이브 캐너리 nav-snapshot 호출이 없음 — live NAV 측정이 끊겼다."
+    for call in calls:
+        assert "--capital ${CAP}" in call, (
+            "라이브 측정 nav-snapshot 이 --capital 없이 호출됨 — 페이퍼 forward 와 측정"
+            f" 기준이 어긋난다: {call}"
+        )
