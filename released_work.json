@@ -1,5 +1,5 @@
 {
-  "commit": "3076dd11e86113d044fb1f05ff582532e32ac2da",
+  "commit": "5a561172907206b51469b2591bbfe90b574af224",
   "overall_status": "OK",
   "released_work": [
     {
@@ -372,7 +372,7 @@
       "status": "released"
     }
   ],
-  "run_id": "30776594528",
+  "run_id": "30777301749",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -641,5 +641,5 @@
       "spec_id": "123-live-canary-sidecar-gate"
     }
   ],
-  "timestamp_utc": "2026-08-03T01:19:29.041114Z"
+  "timestamp_utc": "2026-08-03T01:37:29.359748Z"
 }
