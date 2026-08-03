@@ -36,3 +36,13 @@
 
 - Stop after local tests: rejected because it would not prove the actual sidecar freshness problem is fixed.
 - Dispatch a production-approved real-order job: rejected because the user did not approve real orders and the current sentinel is unarmed.
+
+## Decision: Route preview/status through fixed observe commands
+
+**Rationale**: Post-merge verification of PR #568 proved the sidecar timestamp refreshed, but the live canary backfill, dry-run preview, and live-track measurement all returned `refused command` because the hardened SSH gateway no longer accepts raw remote shell command strings. Adding fixed observe verbs keeps the gateway narrow while allowing the preview/status job to produce meaningful sidecar content.
+
+**Alternatives considered**:
+
+- Reopen raw SSH command execution: rejected because it would undo the SSH trust-boundary repair and widen the server command surface.
+- Add a live-order observe verb now: rejected because actual real-order gateway enablement is a separate money-path change and is not needed while `armed=false`.
+- Publish fresh sidecars with refused-command logs: rejected because it makes liveness fresh but not useful for operator judgment.

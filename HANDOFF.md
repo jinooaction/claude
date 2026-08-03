@@ -29,19 +29,19 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 상세 규칙은 Codex 세션에서는 `AGENTS.md`, Claude 세션에서는 `CLAUDE.md` 본문 참조.
 
-## 한눈 요약표 — 2026-08-01 KST 최신 코드 main 기준
+## 한눈 요약표 — 2026-08-03 KST 최신 코드 main 기준
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `f15f87d` — Merge pull request #566 from jinooaction/codex/forward-paper-economic-anchor |
-| main 테스트 | handoff 갱신 브랜치 기준 `uv run pytest -q` → 2707 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
-| main 린트 | handoff 갱신 브랜치 기준 `uv run ruff check src tests` → All checks passed. |
+| 마지막 main 커밋 | `3076dd1` — Merge pull request #568 from jinooaction/codex/live-canary-sidecar-before-production-gate |
+| main 테스트 | #568 브랜치 기준 `uv run pytest` → 2709 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
+| main 린트 | #568 브랜치 기준 `uv run ruff check src tests` → All checks passed. |
 | 열린 PR | 없음(이 handoff 작성 시점). |
-| 출시 완료 스펙 | 최신 추가: #566(forward paper 경제 장부 보정: 종이거래 리밸런서가 audit fill 보유를 재구성해 반복 매수를 멈춤), 122(forward paper DB writability: 읽기 전용 DB 권한 drift를 종이거래 저장소로만 좁게 복구), 121(`promote-readiness` 관측 경로 복구 + 서버 root-owned gateway/helper self-refresh), 120(증거 기반 후보 소스 다변화 + released-work 완료 소비), 119(보안 신뢰 경계 강화와 후속 SSH boundary repair 및 live-money workflow 보호 환경), 118(운영자가 이해 가능한 최종 보고 생존성 계약). 이전 스펙 058~117은 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
-| 골격 스펙 | 없음. `.specify/feature.json`은 최신 완료 스펙 `specs/122-forward-paper-db-writability`를 가리킨다. |
-| 최근 출시 작업 | #566은 종이거래 리밸런서가 `ORDER_PAPER_FILLED` 감사 로그에서 가상 보유를 재구성하게 해, `current_positions`가 비어 있다는 이유로 매번 새로 사던 경제 장부 오류를 막았다. #564는 `regime-stratify` 연구 관측을 fixed `observe regime-stratify <track>` gateway로 옮겼고, #562는 forward paper DB 쓰기 권한 drift를 좁게 복구했다. |
-| 활성 작업 | 열린 PR 없음. #566 배포 run `30674990967` success. `rebalance-paper-forward.yml` run `30675023375` success, sidecar timestamp `2026-08-01T00:17:37Z`, commit `f15f87d`, 7개 트랙 prep/verdict `ssh_exit=0`, `planned_buy_notional_usd=0.00`와 `SELL PAPER_FILLED`로 보유 인식 복구 확인. `money-path` run `30675222849`는 `PREVIEW_ONLY`/`NO_EDGE_YET`, `capital-path-readiness` run `30675223926`는 `ACCUMULATING_EDGE`와 우선 후보 없음. |
-| 안전 경계 | #566은 등급 2 운영·돈 경로 관측 보정이다. 실제 주문, 실거래 전환, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps 확대, 손실 예산, KIS secret, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`라 실주문 불가다. |
+| 출시 완료 스펙 | 최신 추가: #568(live canary sidecar gate: 미무장 상태에서도 production 승인 대기 없이 sidecar freshness를 회복하되 실주문은 별도 production-gated job에 유지), #566(forward paper 경제 장부 보정), 122(forward paper DB writability), 121(`promote-readiness` 관측 경로 복구 + 서버 root-owned gateway/helper self-refresh), 120(증거 기반 후보 소스 다변화 + released-work 완료 소비), 119(보안 신뢰 경계 강화와 후속 SSH boundary repair 및 live-money workflow 보호 환경). 이전 스펙 058~118은 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
+| 골격 스펙 | 없음. `.specify/feature.json`은 최신 완료/진행 스펙 `specs/123-live-canary-sidecar-gate`를 가리킨다. |
+| 최근 출시 작업 | #568은 `rebalance-live-canary.yml`을 preview/status job과 production real-order job으로 나눠 sidecar timestamp가 approval queue에 막히지 않게 했다. 실주문 명령 `--mode live --confirm-live`는 production-gated job에만 남아 있고, main 수동 run `30776611321`에서 preview job success, real-order job skipped를 확인했다. |
+| 활성 작업 | #568 후속 검증에서 최신 sidecar는 `2026-08-03T01:20:06Z`, `armed=false`, `preview-job-skipped`로 fresh가 됐지만, preview/backfill/measure 원격 명령은 `refused command`로 비어 있었다. 현재 후속 브랜치가 raw SSH preview/status 명령을 fixed `observe live-canary-*` gateway로 옮기는 중이다. |
+| 안전 경계 | #568은 등급 3 live-money workflow boundary 보정이다. production approval은 preview/status에서만 제거했고 실주문 job에는 유지했다. 실제 주문, 실거래 전환, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps 확대, 손실 예산, KIS secret, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`라 실주문 불가다. |
 
 ## 최근 관찰 — 2026-08-01 KST (#566 forward paper 경제 장부 보정)
 

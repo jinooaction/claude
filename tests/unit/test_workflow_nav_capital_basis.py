@@ -66,3 +66,11 @@ def test_live_canary_nav_snapshot_passes_capital():
             "라이브 측정 nav-snapshot 이 --capital 없이 호출됨 — 페이퍼 forward 와 측정"
             f" 기준이 어긋난다: {call}"
         )
+
+    helper = _OBSERVE_HELPER.read_text(encoding="utf-8")
+    measure_block = helper.split("live_canary_measure()", 1)[1].split(
+        "promote_readiness()", 1
+    )[0]
+    assert "nav-snapshot" in measure_block
+    assert "--mode live" in measure_block
+    assert '--capital "${capital}"' in measure_block

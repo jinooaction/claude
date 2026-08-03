@@ -4,6 +4,8 @@
 
 ```bash
 uv run pytest tests/unit/test_live_canary_workflow.py tests/unit/test_security_workflow_hardening.py tests/unit/test_workflow_backfill_depth.py tests/unit/test_workflow_nav_capital_basis.py -q
+uv run pytest tests/unit/test_ssh_boundary_repair.py tests/unit/test_observation_gateway_workflows.py -q
+bash -n deploy/repair-ssh-boundary.sh deploy/observe-on-instance.sh
 ruby -e 'require "yaml"; YAML.load_file(".github/workflows/rebalance-live-canary.yml"); puts "yaml-ok"'
 uv run pytest tests/unit/test_pipeline_liveness.py tests/integration/test_pipeline_liveness_probe.py tests/unit/test_capital_path_readiness.py tests/integration/test_capital_path_readiness_probe.py -q
 ```
@@ -35,6 +37,8 @@ git show origin/automation/rebalance-live-canary-last-run:LAST_RUN.md
 ```
 
 Expected result while `armed=false`: the sidecar timestamp is fresh, `LIVE 스텝` says `preview-job-skipped`, the text says real orders are owned by the production-gated job, and no production real-order job is approved or executed.
+
+The backfill, preview, and live-track measurement sections should not contain `refused command`. If they briefly refuse right after merge, rerun after deploy-on-merge refreshes the root-owned gateway/helper.
 
 Then refresh pipeline liveness:
 

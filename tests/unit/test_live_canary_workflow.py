@@ -30,6 +30,11 @@ def test_live_canary_preview_job_publishes_sidecar_without_production_gate() -> 
     assert "Publish live canary result to sidecar branch" in preview
     assert "preview-job-skipped" in preview
     assert "production-gated job" in preview
+    assert "observe live-canary-backfill" in preview
+    assert "observe live-canary-preview ${CAP}" in preview
+    assert "observe live-canary-measure ${CAP}" in preview
+    assert "refused command: observe live-canary" in preview
+    assert "cd /opt/auto-invest" not in preview
     assert "--mode live --confirm-live" not in preview
     assert "LIVE rebalance — REAL ORDERS" not in preview
     measure = preview.split("Measure live track", 1)[1].split("\n      - name:", 1)[0]

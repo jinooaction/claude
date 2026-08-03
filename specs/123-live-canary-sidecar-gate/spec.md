@@ -20,6 +20,7 @@ As the operator, I need the live canary workflow to publish a fresh dry-run prev
 1. **Given** the live sentinel is `armed=false`, **When** the live canary workflow runs on schedule or manual dispatch, **Then** it publishes a fresh sidecar showing dry-run preview only and zero real orders.
 2. **Given** production approval is not granted, **When** the workflow is unarmed, **Then** the status sidecar still refreshes instead of remaining late.
 3. **Given** the dry-run preview fails because of an external read or SSH problem, **When** the workflow publishes the sidecar, **Then** the failure is visible in the sidecar instead of being hidden behind a pending approval job.
+4. **Given** the production SSH gateway only allows fixed observe commands, **When** the preview/status job runs, **Then** it uses the fixed live-canary observe commands instead of raw remote shell commands.
 
 ---
 
@@ -59,6 +60,7 @@ As the operator or next Codex session, I need the sidecar to distinguish "previe
 - If the event is `push`, real orders must remain skipped even when the sentinel text says `armed=true`.
 - If a production-approved real-order job fails, the production sidecar must make the failure visible instead of leaving only the preview sidecar.
 - If the workflow YAML is edited later, tests must fail if a real-order command reappears in the preview/status job.
+- If the server has not yet refreshed the root-owned gateway/helper after merge, the preview/status job should retry the new observe commands briefly before publishing a refused-command sidecar.
 
 ## Requirements
 
@@ -73,11 +75,14 @@ As the operator or next Codex session, I need the sidecar to distinguish "previe
 - **FR-007**: The change MUST NOT alter capital ladder authority, whitelist/caps, strategy fingerprint gates, live sentinel semantics, secrets, audit logs, broker order code, or account capital allocation.
 - **FR-008**: Automated tests MUST prove the preview/status path is not production-gated, the real-order path is production-gated, and the real-order command exists only in the real-order path.
 - **FR-009**: Post-merge verification MUST refresh the live canary sidecar while `armed=false` and then refresh pipeline liveness or equivalent evidence to confirm `rebalance-live-canary` is no longer late.
+- **FR-010**: The preview/status path MUST use fixed forced-command gateway verbs for live canary backfill, dry-run preview, and live-track measurement; it MUST NOT send raw remote shell command strings for those preview/status operations.
+- **FR-011**: The gateway/helper verbs for live canary preview/status MUST remain non-ordering: backfill, dry-run preview, NAV snapshot, and forward verdict only; no `--confirm-live` command may be exposed through these verbs.
 
 ### Key Entities
 
 - **LiveCanaryPreviewRun**: A workflow run segment that reads the live sentinel, runs dry-run preview/status checks, and publishes the latest sidecar without placing real orders.
 - **RealOrderGate**: The separate production-approved workflow segment that is the only place where live order commands may run.
+- **LiveCanaryObserveCommand**: A fixed gateway command for live-canary backfill, dry-run preview, or live-track measurement. It narrows the server action to one known command shape.
 - **LiveCanarySidecar**: The `automation/rebalance-live-canary-last-run` report that records whether the latest run was preview-only or production-approved real execution.
 - **Arming Sentinel**: The existing request file that says whether live canary orders are armed and how much capital is authorized.
 
@@ -90,6 +95,7 @@ As the operator or next Codex session, I need the sidecar to distinguish "previe
 - **SC-003**: Full local validation passes: focused tests, pipeline-liveness/readiness tests, full `pytest`, `ruff`, strict harness, HANDOFF fact check, and diff whitespace check.
 - **SC-004**: After merge, a main-branch live canary run refreshes the sidecar with `armed=false`, preview-only wording, and zero real orders.
 - **SC-005**: After sidecar refresh, pipeline liveness no longer reports `rebalance-live-canary` as late unless a new unrelated freshness threshold has failed.
+- **SC-006**: Post-merge sidecar content shows real live-canary preview/measurement output, or a non-refused external failure, rather than `refused command`.
 
 ## Assumptions
 

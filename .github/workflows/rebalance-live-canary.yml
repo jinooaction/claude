@@ -115,13 +115,22 @@ jobs:
           # 깊이 → 같은 신호). 기본(한 페이지 ≈100봉)은 전략이 요구하는 이력(추세 앙상블
           # 최대 252봉·역변동성 200봉·모멘텀 120봉)에 못 미쳐 on_insufficient=cash 로
           # target_weights={} 가 된다 — 무장돼도 현금만 들고 거래 0건(2026-06-10 실측).
-          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
-              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
-              "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest backfill-bars \
-                 --portfolio deploy/canary-live-portfolio.toml --min-bars 1000 \
-                 --db data/auto_invest.db --env-file .env --json" \
-              > /tmp/live_backfill.log 2>&1
-          echo "exit=$?"; cat /tmp/live_backfill.log
+          for attempt in 1 2 3 4; do
+            ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
+                -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+                "observe live-canary-backfill" \
+                > /tmp/live_backfill.log 2>&1
+            ssh_exit=$?
+            if ! grep -q "refused command: observe live-canary-backfill" /tmp/live_backfill.log; then
+              break
+            fi
+            if [ "${attempt}" = "4" ]; then
+              break
+            fi
+            echo "gateway not refreshed yet (attempt ${attempt}); waiting before retry"
+            sleep 90
+          done
+          echo "exit=${ssh_exit}"; cat /tmp/live_backfill.log
 
       - name: DRY-RUN preview — what would the live strategy trade? (no orders)
         id: preview
@@ -135,13 +144,22 @@ jobs:
           set +e
           port="${PORT:-22}"
           # --dry-run: 계획만 산출, 라우터 미호출(주문 0건). 현재 보유 대비 무엇을 사고팔지.
-          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
-              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
-              "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest rebalance-once \
-                 --portfolio deploy/canary-live-portfolio.toml --dry-run \
-                 --capital ${CAP} --db data/auto_invest.db --env-file .env --json" \
-              > /tmp/live_preview.json 2>/tmp/live_preview.err
-          echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
+          for attempt in 1 2 3 4; do
+            ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
+                -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+                "observe live-canary-preview ${CAP}" \
+                > /tmp/live_preview.json 2>/tmp/live_preview.err
+            ssh_exit=$?
+            if ! grep -q "refused command: observe live-canary-preview" /tmp/live_preview.json /tmp/live_preview.err; then
+              break
+            fi
+            if [ "${attempt}" = "4" ]; then
+              break
+            fi
+            echo "gateway not refreshed yet (attempt ${attempt}); waiting before retry"
+            sleep 90
+          done
+          echo "ssh_exit=${ssh_exit}" >> "$GITHUB_OUTPUT"
           echo "--- preview ---"; cat /tmp/live_preview.json
           echo "--- stderr ---"; cat /tmp/live_preview.err
 
@@ -160,13 +178,22 @@ jobs:
           port="${PORT:-22}"
           # --capital: NAV 에 장부 현금(자본 + 순현금흐름)을 포함 — 매수/매도 자금 흐름이
           # 수익률로 오인되는 오염을 막는다(페이퍼 forward 트랙과 같은 측정 기준).
-          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
-              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
-              "cd /opt/auto-invest && \
-                 /usr/local/bin/uv run auto-invest nav-snapshot --mode live --capital ${CAP} --db data/auto_invest.db --env-file .env --snapshot --format json; \
-                 /usr/local/bin/uv run auto-invest forward-verdict --mode live --portfolio deploy/canary-live-portfolio.toml --db data/auto_invest.db --format json" \
-              > /tmp/live_measure.log 2>&1
-          echo "exit=$?"; cat /tmp/live_measure.log
+          for attempt in 1 2 3 4; do
+            ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
+                -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+                "observe live-canary-measure ${CAP}" \
+                > /tmp/live_measure.log 2>&1
+            ssh_exit=$?
+            if ! grep -q "refused command: observe live-canary-measure" /tmp/live_measure.log; then
+              break
+            fi
+            if [ "${attempt}" = "4" ]; then
+              break
+            fi
+            echo "gateway not refreshed yet (attempt ${attempt}); waiting before retry"
+            sleep 90
+          done
+          echo "exit=${ssh_exit}"; cat /tmp/live_measure.log
 
       - name: Publish live canary result to sidecar branch
         if: always()

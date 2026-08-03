@@ -62,16 +62,27 @@ def _backfill_calls(path: Path) -> list[str]:
     ]
 
 
+def _helper_block(start: str, end: str) -> str:
+    body = _OBSERVE_HELPER.read_text(encoding="utf-8")
+    return body.split(start, 1)[1].split(end, 1)[0]
+
+
 def _min_bars(call: str) -> int:
     m = re.search(r"--min-bars\s+(\d+)", call)
     return int(m.group(1)) if m else 0
 
 
 def test_live_canary_backfill_depth_covers_strategy_lookbacks():
-    calls = _backfill_calls(_LIVE)
+    workflow = _LIVE.read_text(encoding="utf-8")
+    assert "observe live-canary-backfill" in workflow
+
+    block = _helper_block("live_canary_backfill()", "live_canary_preview()")
+    calls = _backfill_calls(_OBSERVE_HELPER)
+    calls = [call for call in calls if "deploy/canary-live-portfolio.toml" in call]
     assert len(calls) == 1, (
         f"라이브 캐너리 backfill-bars 호출이 {len(calls)}개 — 준비 스텝 구조가 바뀜."
     )
+    assert "backfill-bars" in block
     need = _required_bars(_LIVE_PORTFOLIO)
     got = _min_bars(calls[0])
     assert got >= need, (
@@ -97,8 +108,11 @@ def test_forward_backfills_keep_deep_history():
     for portfolio in _FORWARD_PORTFOLIOS:
         assert portfolio.name in helper
 
+    paper_block = _helper_block("paper_track_run()", "paper_track_verdict()")
     calls = _backfill_calls(_OBSERVE_HELPER)
+    calls = [call for call in calls if '"${TRACK_PORTFOLIO}"' in call]
     assert len(calls) == 1, "forward backfill-bars moved into a single fixed helper call"
+    assert "backfill-bars" in paper_block
     need = max(_required_bars(p) for p in _FORWARD_PORTFOLIOS)
     got = _min_bars(calls[0])
     assert got >= need, (
