@@ -79,7 +79,9 @@ def test_gateway_allows_only_fixed_commands_without_eval():
     assert re.search(r'observe\\ promote-readiness\)', code)
     assert not re.search(r'observe\\ promote-readiness\\ \*\)', code)
     assert re.search(r'observe\\ regime-stratify\\ \*\)', code)
+    assert re.search(r'observe\\ candidate-history\\ \*\)', code)
     assert r"^(global|wide)$" in code
+    assert r"^(micro-gtaa|global-trend-wide|multi-asset-trend)$" in code
     assert r"^(trend|notrend|rmbeta|multiasset|global|globalfixed|wide)$" in code
     assert "/usr/local/sbin/auto-invest-observe" in code
     assert re.search(r'\bstart-deploy\)', code)
@@ -193,6 +195,12 @@ def test_observe_helper_exposes_only_observation_and_paper_commands():
     assert "promote-readiness" in body
     assert "promote-check" in body
     assert "regime-stratify" in body
+    assert "candidate-history" in body
+    assert "candidate_history_dataset()" in body
+    assert "CANDIDATE_HISTORY_ARCHIVE_BEGIN" in body
+    assert "micro-gtaa" in body
+    assert "global-trend-wide" in body
+    assert "multi-asset-trend" in body
     assert "origin/automation/public-data:regime_timeline.csv" in body
     assert "backtest-portfolio" in body
     assert "--db data/auto_invest.db" in body

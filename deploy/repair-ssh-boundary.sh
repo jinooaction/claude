@@ -186,6 +186,14 @@ case "${cmd}" in
         echo "refused command: ${cmd}" >&2
         exit 126
         ;;
+    observe\ candidate-history\ *)
+        dataset="${cmd#observe candidate-history }"
+        if [[ "${dataset}" =~ ^(micro-gtaa|global-trend-wide|multi-asset-trend)$ ]]; then
+            exec sudo -n /usr/local/sbin/auto-invest-observe candidate-history "${dataset}"
+        fi
+        echo "refused command: ${cmd}" >&2
+        exit 126
+        ;;
     start-deploy)
         exec sudo -n /usr/bin/systemctl start auto-invest-deploy.service
         ;;

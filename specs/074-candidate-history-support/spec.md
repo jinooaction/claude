@@ -95,5 +95,5 @@
 ## Assumptions
 
 - Server DB paths already used by existing read-only workflows are the safest current price sources: `data/auto_invest.db`, `data/forward_wide.db`, and `data/forward_multiasset.db`.
-- This feature is risk grade 2 because it changes workflow support inputs and candidate command generation. It does not change the safety perimeter or money path.
+- The original feature was risk grade 2. This follow-up repair touches the SSH forced-command safety perimeter by adding only `observe candidate-history <known key>`, so it is handled as risk grade 3 while still leaving live orders, capital, sentinels, and live strategy state unchanged.
 - Historical data quality is judged by existing `ingest-history`, recency guard, and `portfolio-walk-forward` semantics; this feature does not relax pass criteria.

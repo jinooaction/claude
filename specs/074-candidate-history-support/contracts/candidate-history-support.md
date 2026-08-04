@@ -51,11 +51,12 @@ The candidate result executor workflow may:
 
 - read existing server DB files through `bars-export`
 - write temporary bars and ingested datasets under remote `/tmp`
-- copy a compressed `/tmp` dataset archive back to the GitHub runner
+- stream a compressed `/tmp` dataset archive back to the GitHub runner through the fixed `observe candidate-history <key>` gateway command
 - extract the archive under `/tmp/candidate_result_history`
 
 The workflow must not:
 
+- use `scp`, raw remote `bash`, or direct remote `uv run auto-invest ...`
 - call broker backfill commands
 - place orders
 - use `--mode live`

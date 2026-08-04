@@ -26,6 +26,8 @@ on:
       - 'deploy/public-data.toml'
       - 'src/auto_invest/cli.py'
       - 'src/auto_invest/safety/command_registry.py'
+      - 'deploy/observe-on-instance.sh'
+      - 'deploy/repair-ssh-boundary.sh'
       - '.github/workflows/candidate-result-executor.yml'
       - '.github/workflows/candidate-implementation-factory.yml'
       - '.github/workflows/collect-public-data.yml'
@@ -133,96 +135,77 @@ jobs:
 
           uv run python scripts/candidate_history_support_probe.py --manifest \
             > /tmp/candidate_result_inputs/candidate_history_manifest.tsv
+          manifest=/tmp/candidate_result_inputs/candidate_history_manifest.tsv
 
           if [[ "${CANDIDATE_HISTORY_SSH:-false}" != "true" || -z "${HOST:-}" || -z "${USER:-}" ]]; then
             echo "candidate history SSH unavailable; strategy candidates may remain pending"
             exit 0
           fi
 
-          set +e
           port="${PORT:-22}"
-          remote_root="/tmp/candidate_result_history_${GITHUB_RUN_ID}"
-          remote_manifest="/tmp/candidate_history_manifest_${GITHUB_RUN_ID}.tsv"
-          remote_archive="/tmp/candidate_result_history_${GITHUB_RUN_ID}.tgz"
-          local_archive="/tmp/candidate_result_history.tgz"
-
-          scp -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
-              -P "${port}" -i ~/.ssh/id_ed25519 \
-              /tmp/candidate_result_inputs/candidate_history_manifest.tsv \
-              "${USER}@${HOST}:${remote_manifest}"
-          if [[ "$?" -ne 0 ]]; then
-            echo "candidate history manifest upload failed; strategy candidates may remain pending"
-            exit 0
-          fi
-
-          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
-              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
-              "bash -s" -- "${remote_root}" "${remote_manifest}" "${remote_archive}" <<'REMOTE'
           set +e
-          remote_root="$1"
-          manifest="$2"
-          archive="$3"
-          cd /opt/auto-invest || exit 0
-          rm -rf "${remote_root}"
-          mkdir -p "${remote_root}"
-
           while IFS=$'\t' read -r key portfolio db_path history_root; do
             [[ -n "${key}" ]] || continue
-            work="${remote_root}/${key}"
-            bars_dir="${work}/bars"
-            hist_dir="${work}/hist"
-            mkdir -p "${bars_dir}" "${hist_dir}"
-            echo "candidate history export: ${key} (${portfolio} <- ${db_path})"
+            case "${key}" in
+              micro-gtaa|global-trend-wide|multi-asset-trend)
+                ;;
+              *)
+                echo "candidate history unsupported dataset: ${key}"
+                continue
+                ;;
+            esac
 
-            /usr/local/bin/uv run auto-invest bars-export \
-              --portfolio "${portfolio}" \
-              --db "${db_path}" \
-              --out-dir "${bars_dir}" \
-              --json \
-              > "${work}/bars-export.json" \
-              2> "${work}/bars-export.err"
-            export_exit=$?
-            if [[ "${export_exit}" -ne 0 ]]; then
-              echo "candidate history bars-export failed: ${key} exit=${export_exit}"
-              cat "${work}/bars-export.err" 2>/dev/null || true
+            echo "candidate history observe: ${key} (${portfolio} <- ${db_path})"
+            out="/tmp/candidate_history_${key}.out"
+            err="/tmp/candidate_history_${key}.err"
+            archive_b64="/tmp/candidate_history_${key}.tgz.b64"
+            archive="/tmp/candidate_history_${key}.tgz"
+            ssh_exit=1
+            for attempt in 1 2 3 4; do
+              ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
+                  -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+                  "observe candidate-history ${key}" \
+                  > "${out}" 2> "${err}"
+              ssh_exit=$?
+              if ! grep -q "refused command: observe candidate-history" "${out}" "${err}" 2>/dev/null; then
+                break
+              fi
+              if [[ "${attempt}" == "4" ]]; then
+                break
+              fi
+              echo "gateway not refreshed yet (attempt ${attempt}); waiting before retry"
+              sleep 90
+            done
+
+            if [[ "${ssh_exit}" -ne 0 ]]; then
+              echo "candidate history observe failed: ${key} exit=${ssh_exit}; strategy candidates may remain pending"
+              cat "${err}" 2>/dev/null || true
               continue
             fi
 
-            /usr/local/bin/uv run auto-invest ingest-history \
-              --from-dir "${bars_dir}" \
-              --out-dir "${hist_dir}" \
-              > "${work}/ingest.log" \
-              2>&1
-            ingest_exit=$?
-            if [[ "${ingest_exit}" -ne 0 ]]; then
-              echo "candidate history ingest-history failed: ${key} exit=${ingest_exit}"
-              cat "${work}/ingest.log" 2>/dev/null || true
+            awk -v key="${key}" '
+              $0 == "CANDIDATE_HISTORY_ARCHIVE_BEGIN " key {capture=1; next}
+              $0 == "CANDIDATE_HISTORY_ARCHIVE_END " key {capture=0; found_end=1; next}
+              capture {print}
+              END {if (!found_end) exit 1}
+            ' "${out}" > "${archive_b64}"
+            if [[ "$?" -ne 0 || ! -s "${archive_b64}" ]]; then
+              echo "candidate history archive missing: ${key}; strategy candidates may remain pending"
+              cat "${out}" 2>/dev/null || true
+              cat "${err}" 2>/dev/null || true
               continue
             fi
-            echo "candidate history ready: ${key} -> ${history_root}"
+
+            dataset_root="/tmp/candidate_result_history/${key}"
+            mkdir -p "${dataset_root}"
+            if base64 -d "${archive_b64}" > "${archive}" \
+                && tar -C "${dataset_root}" -xzf "${archive}"; then
+              echo "candidate history ready: ${key} -> ${history_root}"
+            else
+              echo "candidate history archive extract failed: ${key}; strategy candidates may remain pending"
+            fi
           done < "${manifest}"
-
-          tar -C "${remote_root}" -czf "${archive}" .
-          REMOTE
-          if [[ "$?" -ne 0 ]]; then
-            echo "candidate history remote staging failed; strategy candidates may remain pending"
-            exit 0
-          fi
-
-          scp -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
-              -P "${port}" -i ~/.ssh/id_ed25519 \
-              "${USER}@${HOST}:${remote_archive}" "${local_archive}"
-          if [[ "$?" -ne 0 || ! -s "${local_archive}" ]]; then
-            echo "candidate history archive download failed; strategy candidates may remain pending"
-            exit 0
-          fi
-
-          tar -C /tmp/candidate_result_history -xzf "${local_archive}"
-          find /tmp/candidate_result_history -maxdepth 3 -type f | sort | head -50
-
-          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
-              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
-              "rm -rf '${remote_root}' '${remote_manifest}' '${remote_archive}'" || true
+          find /tmp/candidate_result_history -maxdepth 4 -type f | sort | head -50
 
       - name: Execute candidate validation packages
         run: |

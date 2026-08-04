@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[2]
 PAPER_WORKFLOW = ROOT / ".github" / "workflows" / "rebalance-paper-forward.yml"
 LADDER_WORKFLOW = ROOT / ".github" / "workflows" / "forward-edge-autoarm.yml"
 PROMOTE_WORKFLOW = ROOT / ".github" / "workflows" / "promote-readiness.yml"
+RESULT_WORKFLOW = ROOT / ".github" / "workflows" / "candidate-result-executor.yml"
 
 
 def test_paper_forward_uses_fixed_observe_gateway_commands() -> None:
@@ -51,3 +52,16 @@ def test_promote_readiness_uses_fixed_observe_gateway_command() -> None:
     assert "cd /opt/auto-invest" not in body
     assert "/usr/local/bin/uv run auto-invest" not in body
     assert "bash -s" not in body
+
+
+def test_candidate_result_history_uses_fixed_observe_gateway_command() -> None:
+    body = RESULT_WORKFLOW.read_text(encoding="utf-8")
+
+    assert "observe candidate-history" in body
+    assert "candidate_history_support_probe.py --manifest" in body
+    assert "/tmp/candidate_result_history" in body
+    assert "CANDIDATE_HISTORY_ARCHIVE_BEGIN" in body
+    assert "scp " not in body
+    assert "bash -s" not in body
+    assert "cd /opt/auto-invest" not in body
+    assert "/usr/local/bin/uv run auto-invest" not in body
