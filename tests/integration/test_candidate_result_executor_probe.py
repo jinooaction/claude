@@ -13,6 +13,7 @@ _PROBE_PATH = _REPO_ROOT / "scripts" / "candidate_result_executor_probe.py"
 _FIXTURES = _REPO_ROOT / "tests" / "fixtures" / "candidate_factory" / "fresh"
 _RESULT_WORKFLOW = _REPO_ROOT / ".github" / "workflows" / "candidate-result-executor.yml"
 _FACTORY_WORKFLOW = _REPO_ROOT / ".github" / "workflows" / "candidate-implementation-factory.yml"
+_OBSERVE_HELPER = _REPO_ROOT / "deploy" / "observe-on-instance.sh"
 
 _spec = importlib.util.spec_from_file_location("candidate_result_executor_probe", _PROBE_PATH)
 assert _spec and _spec.loader
@@ -95,8 +96,14 @@ def test_result_executor_workflow_publishes_sidecar_without_order_or_broker_path
     assert "candidate_history_support_probe.py --manifest" in text
     assert "candidate_history_manifest.tsv" in text
     assert "/tmp/candidate_result_history" in text
-    assert "bars-export" in text
-    assert "ingest-history" in text
+    assert "observe candidate-history" in text
+    assert "CANDIDATE_HISTORY_ARCHIVE_BEGIN" in text
+    assert "scp " not in text
+    assert "bash -s" not in text
+    helper = _OBSERVE_HELPER.read_text(encoding="utf-8")
+    assert "candidate_history_dataset()" in helper
+    assert "bars-export" in helper
+    assert "ingest-history" in helper
     assert "automation/candidate-implementation-results" in text
     assert "candidate_result_executor_probe.py" in text
     assert "candidate_results.json" in text
@@ -104,7 +111,7 @@ def test_result_executor_workflow_publishes_sidecar_without_order_or_broker_path
     assert "VULTR_SSH_PRIVATE_KEY" in text
     assert "VULTR_SSH_HOST" in text
     assert "VULTR_SSH_USER" in text
-    assert "ssh " in text and "scp " in text
+    assert "ssh " in text
     assert "--mode live" not in text
     assert "--confirm-live" not in text
     assert "rebalance-live.request" not in text

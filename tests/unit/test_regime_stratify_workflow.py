@@ -32,7 +32,9 @@ def _observe_text() -> str:
 
 def _regime_helper_block() -> str:
     body = _observe_text()
-    return body.split("regime_stratify_track()", 1)[1].split("main()", 1)[0]
+    return body.split("regime_stratify_track()", 1)[1].split(
+        "candidate_history_dataset()", 1
+    )[0]
 
 
 def test_stratify_lives_outside_trading_workflows():

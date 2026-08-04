@@ -81,6 +81,27 @@ track_config() {
     esac
 }
 
+candidate_history_config() {
+    local dataset="${1:-}"
+    case "${dataset}" in
+        micro-gtaa)
+            CANDIDATE_HISTORY_PORTFOLIO="deploy/micro-gtaa-live-portfolio.toml"
+            CANDIDATE_HISTORY_DB="data/auto_invest.db"
+            ;;
+        global-trend-wide)
+            CANDIDATE_HISTORY_PORTFOLIO="deploy/global-trend-wide-portfolio.toml"
+            CANDIDATE_HISTORY_DB="data/forward_wide.db"
+            ;;
+        multi-asset-trend)
+            CANDIDATE_HISTORY_PORTFOLIO="deploy/multi-asset-trend-portfolio.toml"
+            CANDIDATE_HISTORY_DB="data/forward_multiasset.db"
+            ;;
+        *)
+            die "candidate-history supports only micro-gtaa, global-trend-wide, or multi-asset-trend"
+            ;;
+    esac
+}
+
 ensure_paper_track_storage() {
     local path
     [[ ! -L data ]] || die "unsafe data directory symlink"
@@ -372,6 +393,46 @@ regime_stratify_track() {
     cat "${wrk}/stratified.json"
 }
 
+candidate_history_dataset() {
+    local dataset="${1:-}"
+    candidate_history_config "${dataset}"
+    require_repo
+
+    local wrk="/tmp/candidate_history_${dataset}"
+    rm -rf "${wrk}"
+    install -d -m 0750 -o "${APP_USER}" -g "${APP_USER}" \
+        "${wrk}" "${wrk}/bars" "${wrk}/hist"
+
+    echo "candidate history export: ${dataset} (${CANDIDATE_HISTORY_PORTFOLIO} <- ${CANDIDATE_HISTORY_DB})" >&2
+    if ! run_cli bars-export \
+        --portfolio "${CANDIDATE_HISTORY_PORTFOLIO}" \
+        --db "${CANDIDATE_HISTORY_DB}" \
+        --out-dir "${wrk}/bars" \
+        --json \
+        > "${wrk}/bars-export.json" \
+        2> "${wrk}/bars-export.err"; then
+        echo "candidate history bars-export failed: ${dataset}" >&2
+        cat "${wrk}/bars-export.err" >&2 2>/dev/null || true
+        return 1
+    fi
+
+    if ! run_cli ingest-history \
+        --from-dir "${wrk}/bars" \
+        --out-dir "${wrk}/hist" \
+        > "${wrk}/ingest.log" \
+        2>&1; then
+        echo "candidate history ingest-history failed: ${dataset}" >&2
+        cat "${wrk}/ingest.log" >&2 2>/dev/null || true
+        return 1
+    fi
+
+    echo "candidate history ready: ${dataset}" >&2
+    echo "CANDIDATE_HISTORY_ARCHIVE_BEGIN ${dataset}"
+    tar -C "${wrk}" -czf - hist | base64 | tr -d '\n'
+    echo
+    echo "CANDIDATE_HISTORY_ARCHIVE_END ${dataset}"
+}
+
 main() {
     local cmd="${1:-}"
     shift || true
@@ -427,6 +488,10 @@ main() {
         regime-stratify)
             [[ "$#" -eq 1 ]] || die "regime-stratify requires track"
             regime_stratify_track "$1"
+            ;;
+        candidate-history)
+            [[ "$#" -eq 1 ]] || die "candidate-history requires dataset"
+            candidate_history_dataset "$1"
             ;;
         *)
             die "unknown observe command: ${cmd:-missing}"
