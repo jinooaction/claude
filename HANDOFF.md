@@ -29,19 +29,56 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 상세 규칙은 Codex 세션에서는 `AGENTS.md`, Claude 세션에서는 `CLAUDE.md` 본문 참조.
 
-## 한눈 요약표 — 2026-08-04 KST 최신 코드 main 기준
+## 한눈 요약표 — 2026-08-05 KST 최신 코드 main 기준
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `85d88f9` — Merge PR #574: candidate history stdin fix |
-| main 테스트 | handoff 갱신 브랜치 기준 `uv run pytest -q` → 2713 passed, 5 skipped. 이 handoff 갱신 전 같은 명령은 `HANDOFF.md`가 `71f70f9`를 가리켜 하네스 관련 2개만 실패했다. |
+| 마지막 main 커밋 | `9bbe288` — Merge pull request #576 from jinooaction/codex/forward-anchored-observe-gateway |
+| main 테스트 | handoff 갱신 브랜치 기준 `uv run pytest -q` → 2714 passed, 5 skipped. 이 handoff 갱신 전 같은 명령은 `HANDOFF.md`가 `85d88f9`를 가리켜 하네스 관련 2개만 실패했다. |
 | main 린트 | handoff 갱신 브랜치 기준 `uv run ruff check src tests` → All checks passed. |
-| 열린 PR | 없음(이 handoff 작성 시점; #574는 merge 완료). |
-| 출시 완료 스펙 | 최신 추가: #573/#574(스펙 074 후보 가격 이력 지원 후속: candidate result workflow의 `scp`/remote `bash` 제거, fixed `observe candidate-history` gateway + `ssh -n` loop 보정으로 세 history dataset 준비 성공), #571(스펙 071 후보 결과 실행기 후속: retryable factory-blocked 후보의 안전 검증 명령 실행과 진단 복구), 123/live canary sidecar gate(#568 preview/status와 real-order job 분리, #569 fixed `observe live-canary-*` gateway로 preview/status 내용 복구), #566(forward paper 경제 장부 보정), 122(forward paper DB writability), 121(`promote-readiness` 관측 경로 복구 + 서버 root-owned gateway/helper self-refresh), 120(증거 기반 후보 소스 다변화 + released-work 완료 소비), 119(보안 신뢰 경계 강화와 후속 SSH boundary repair 및 live-money workflow 보호 환경). 이전 스펙 058~118은 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
+| 열린 PR | 없음(이 handoff 작성 시점; #576은 merge 완료). |
+| 출시 완료 스펙 | 최신 운영 보정: #576(`forward-anchored-verdict`의 raw SSH 명령을 fixed `observe ladder-anchored-verdict` gateway로 교체해 앵커드 엣지 sidecar 복구). 직전 추가: #573/#574(스펙 074 후보 가격 이력 지원 후속: candidate result workflow의 `scp`/remote `bash` 제거, fixed `observe candidate-history` gateway + `ssh -n` loop 보정으로 세 history dataset 준비 성공), #571(스펙 071 후보 결과 실행기 후속: retryable factory-blocked 후보의 안전 검증 명령 실행과 진단 복구), 123/live canary sidecar gate(#568 preview/status와 real-order job 분리, #569 fixed `observe live-canary-*` gateway로 preview/status 내용 복구), #566(forward paper 경제 장부 보정), 122(forward paper DB writability), 121(`promote-readiness` 관측 경로 복구 + 서버 root-owned gateway/helper self-refresh), 120(증거 기반 후보 소스 다변화 + released-work 완료 소비), 119(보안 신뢰 경계 강화와 후속 SSH boundary repair 및 live-money workflow 보호 환경). 이전 스펙 058~118은 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
 | 골격 스펙 | 없음. `.specify/feature.json`은 최신 완료 스펙 `specs/123-live-canary-sidecar-gate`를 가리키고, `tasks.md`는 T001~T023 완료 상태다. |
-| 최근 출시 작업 | #574는 #573의 fixed candidate-history gateway가 manifest loop 전체를 처리하도록 `ssh -n`을 추가했다. post-merge `candidate-implementation-results` sidecar는 commit `85d88f9`, timestamp `2026-08-04T14:51:58Z`, `blocked=0`, `fail=2`, `pending=0`, `diagnostic_counts={}`다. 수동 후보 공장 run `30921243355`는 최신 결과를 소비해 `pending=0`, `blocked=2`로 닫았다. |
-| 활성 작업 | 없음. 수동 자율 작업 루프 run `30921330987`은 `OBSERVATION_WAIT` / `wait-for-fresh-evidence`다. 최신 `money-path`는 `PREVIEW_ONLY`/`NO_EDGE_YET`, PSR `0.706071 < 0.95`, 자본 배치 0달러라 실주문 게이트는 아직 닫혀 있다. |
-| 안전 경계 | #573은 등급 3 SSH forced-command safety boundary 보정이고, #574는 등급 2 workflow stdin 보정이다. 허용 범위는 알려진 세 candidate-history dataset의 읽기 전용 `bars-export -> ingest-history`뿐이다. 실제 주문, 실거래 전환, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps 확대, 손실 예산, KIS secret, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`라 실주문 불가다. |
+| 최근 출시 작업 | #576은 `Forward anchored verdict` run `30960153902`의 `refused command`/`ssh_exit=126`을 고쳤다. merge 뒤 자동 실행 run `30960522122`는 success, sidecar commit `9bbe288`, timestamp `2026-08-04T23:36:16Z`, `GLOBAL-TREND ssh_exit=0`이다. |
+| 활성 작업 | 없음. 열린 PR 없음. 최신 forward paper sidecar는 timestamp `2026-08-04T23:36:11Z`, 7개 트랙 모두 `NO_EDGE`다. 가장 가까운 `globalfixed`는 PSR `0.945953 < 0.95`, 라이브 검증 지문 `global`은 PSR `0.773542 < 0.95`다. 최신 `money-path`는 아직 `PREVIEW_ONLY`/`NO_EDGE_YET`, 자본 배치 0달러라 실주문 게이트는 닫혀 있다. |
+| 안전 경계 | #576은 등급 2 workflow 보정이다. 기존 forced-command 경계를 우회하지 않고 이미 허용된 `observe ladder-anchored-verdict`를 재사용했다. 실제 주문, 실거래 전환, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps 확대, 손실 예산, KIS secret, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`라 실주문 불가다. |
+
+## 최근 관찰 — 2026-08-05 KST (#576 forward anchored observe gateway 복구)
+
+현재 `main` 최신 코드 머지는 `9bbe288`(#576, forward anchored observe gateway)다.
+기능 커밋은 `1631ac3`이다.
+
+- **문제 정의**: 운영자의 "엣지 신뢰도를 높이면 해결되는 문제 아니냐"는 판단은 방향이 맞다.
+  자본 사다리를 여는 직접 조건은 전진 성과의 엣지 신뢰도(PSR)가 기준 `0.95`를 넘는 것이다.
+  다만 기준을 낮추거나 숫자만 다시 계산해 올리는 것은 해결이 아니다. 안전한 경로는 새 관측과
+  검증된 후보가 우연이 아닌 성과 증거를 벌게 하는 것이다.
+- **이번 세션에서 적용한 안전한 개선**: `Rebalance forward paper validation` run `30959892734`를
+  수동 실행해 최신 forward 페이퍼 관측을 추가했다. 그 결과 `globalfixed`는 한때 PSR
+  `0.947063`까지 근접했고, 최종 최신 sidecar(timestamp `2026-08-04T23:36:11Z`)에서는
+  `0.945953 < 0.95`로 아직 기준 미달이다. 라이브 검증 지문 `global`은 `0.773542 < 0.95`다.
+  즉 신뢰도는 좋아졌지만 실거래를 열 수 있는 `EDGE_CONFIRMED`는 아니다.
+- **발견한 운영 병목**: 별도 `Forward anchored verdict` workflow run `30960153902`는 GitHub
+  job 자체는 success였지만, sidecar 안의 GLOBAL-TREND 단계가 raw SSH 명령 때문에 forced-command
+  gateway에서 `refused command`, `ssh_exit=126`으로 막혔다. 그래서 깊은 OOS + 짧은 forward 지속성
+  앵커드 증거가 독립 sidecar로 정상 발행되지 않았다.
+- **구현 상태**: #576은 `.github/workflows/forward-anchored-verdict.yml`에서 raw
+  `cd /opt/auto-invest && /usr/local/bin/uv run ...` 원격 명령을 제거하고, 이미 서버 allowlist에
+  있는 `observe ladder-anchored-verdict`만 호출하게 했다. `tests/unit/test_observation_gateway_workflows.py`
+  에 forward anchored workflow 회귀 테스트를 추가해 raw SSH 명령이 다시 들어오지 못하게 했다.
+- **post-merge 확인**: #576 main push로 자동 실행된 `Forward anchored verdict` run `30960522122`는
+  success다. 최신 `forward-anchored-verdict` sidecar는 commit `9bbe288`, timestamp
+  `2026-08-04T23:36:16Z`, `GLOBAL-TREND ssh_exit=0`이고 JSON 판정을 발행했다. 판정 자체는
+  `INSUFFICIENT_DATA`이며 `forward_n_obs=36`, walk-forward 요약은 "강건한 엣지 없음"이다.
+- **돈 경로 상태**: 이번 변경은 돈을 열지 않는다. 최신 `money-path`는 아직
+  `PREVIEW_ONLY`/`NO_EDGE_YET`, 배치 자본 `$0`다. `edge-autoarm`는 자본 사다리 PR을 만들 수 있는
+  경로라 이번 승인 범위에서 실행하지 않았다. 실주문, 자본 배분, live 전략 교체는 하지 않았다.
+- **검증 상태**: #576 브랜치에서 focused observation gateway tests 22 passed, `git diff --check`,
+  `uv run pytest` 2714 passed/5 skipped, `uv run ruff check src tests` 통과,
+  `uv run python scripts/check_handoff_facts.py` OK, `uv run python scripts/agent_harness_probe.py --strict`
+  OK(14/14), PR quality gate 통과, `mergeStateStatus=CLEAN` 확인 뒤 merge했다. 이 handoff 갱신 전
+  `uv run pytest -q`는 `HANDOFF.md`가 #574를 가리켜 하네스 관련 2개만 실패했고, 이 갱신이 그
+  원인을 바로잡는다.
+- **상세 인계**: `HANDOFF-129-FORWARD-ANCHORED-OBSERVE-GATEWAY.md`.
 
 ## 최근 관찰 — 2026-08-04 KST (#573/#574 후보 history observe gateway 완료)
 
