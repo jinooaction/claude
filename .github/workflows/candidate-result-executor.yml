@@ -162,7 +162,7 @@ jobs:
             archive="/tmp/candidate_history_${key}.tgz"
             ssh_exit=1
             for attempt in 1 2 3 4; do
-              ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
+              ssh -n -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
                   -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
                   "observe candidate-history ${key}" \
                   > "${out}" 2> "${err}"
