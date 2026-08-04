@@ -29,19 +29,56 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 상세 규칙은 Codex 세션에서는 `AGENTS.md`, Claude 세션에서는 `CLAUDE.md` 본문 참조.
 
-## 한눈 요약표 — 2026-08-03 KST 최신 코드 main 기준
+## 한눈 요약표 — 2026-08-04 KST 최신 코드 main 기준
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `5a56117` — Merge pull request #569 from jinooaction/codex/live-canary-observe-gateway |
-| main 테스트 | #569/handoff 갱신 브랜치 기준 `uv run pytest -q` → 2710 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
-| main 린트 | #569/handoff 갱신 브랜치 기준 `uv run ruff check src tests` → All checks passed. |
-| 열린 PR | 없음(이 handoff 작성 시점). |
-| 출시 완료 스펙 | 최신 추가: 123/live canary sidecar gate(#568 preview/status와 real-order job 분리, #569 fixed `observe live-canary-*` gateway로 preview/status 내용 복구), #566(forward paper 경제 장부 보정), 122(forward paper DB writability), 121(`promote-readiness` 관측 경로 복구 + 서버 root-owned gateway/helper self-refresh), 120(증거 기반 후보 소스 다변화 + released-work 완료 소비), 119(보안 신뢰 경계 강화와 후속 SSH boundary repair 및 live-money workflow 보호 환경). 이전 스펙 058~118은 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
+| 마지막 main 커밋 | `5d181e7` — Merge pull request #571 from jinooaction/codex/candidate-result-retryable-blocked-diagnostics |
+| main 테스트 | handoff 갱신 브랜치 기준 `uv run pytest -q` → 2712 passed, 5 skipped. 이 handoff 갱신 전 `uv run pytest -q`는 `HANDOFF.md`가 `5a56117`을 가리켜 하네스 관련 2개만 실패했다. |
+| main 린트 | #571/handoff 갱신 브랜치 기준 `uv run ruff check src tests` → All checks passed. |
+| 열린 PR | 없음(이 handoff 작성 시점; #571은 merge 완료). |
+| 출시 완료 스펙 | 최신 추가: #571(스펙 071 후보 결과 실행기 후속: retryable factory-blocked 후보의 안전 검증 명령 실행과 진단 복구), 123/live canary sidecar gate(#568 preview/status와 real-order job 분리, #569 fixed `observe live-canary-*` gateway로 preview/status 내용 복구), #566(forward paper 경제 장부 보정), 122(forward paper DB writability), 121(`promote-readiness` 관측 경로 복구 + 서버 root-owned gateway/helper self-refresh), 120(증거 기반 후보 소스 다변화 + released-work 완료 소비), 119(보안 신뢰 경계 강화와 후속 SSH boundary repair 및 live-money workflow 보호 환경). 이전 스펙 058~118은 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
 | 골격 스펙 | 없음. `.specify/feature.json`은 최신 완료 스펙 `specs/123-live-canary-sidecar-gate`를 가리키고, `tasks.md`는 T001~T023 완료 상태다. |
-| 최근 출시 작업 | #568은 `rebalance-live-canary.yml`을 preview/status job과 production real-order job으로 나눠 sidecar timestamp가 approval queue에 막히지 않게 했다. #569는 preview/status의 raw SSH 명령을 fixed `observe live-canary-backfill|preview|measure` gateway로 옮겨 `refused command` 빈 sidecar를 닫았다. post-merge main run `30777338028`은 preview job success, real-order job skipped, sidecar timestamp `2026-08-03T01:38:34Z`다. |
-| 활성 작업 | 없음. pipeline-liveness run `30777384529`는 종합 `OK`이고 `rebalance-live-canary`도 `OK`/0.0h다. money-path run `30777446988`는 `PREVIEW_ONLY`/`NO_EDGE_YET`, capital-path-readiness run `30777476105`는 `ACCUMULATING_EDGE`, 우선 후보 없음이다. |
-| 안전 경계 | #568/#569는 등급 3 live-money workflow boundary 보정이다. production approval은 preview/status에서만 제거했고, 실주문 job에는 유지했다. 새 observe gateway 명령 3개는 backfill, dry-run preview, NAV/forward-verdict 측정만 하며 `--confirm-live`를 노출하지 않는다. 실제 주문, 실거래 전환, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps 확대, 손실 예산, KIS secret, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`라 실주문 불가다. |
+| 최근 출시 작업 | #571은 후보 구현 공장이 retryable blocked로 낸 후보 패키지를 후보 결과 실행기가 무조건 중단하지 않고, 안전 allowlist 안의 no-live 검증 명령을 실행해 진짜 다음 원인을 좁히게 했다. post-merge `candidate-implementation-results` sidecar는 commit `5d181e7`, timestamp `2026-08-04T01:10:24Z`, `blocked=0`, `pending=2`, `diagnostic_counts.data_history_missing=2`다. |
+| 활성 작업 | 없음. 최신 `rebalance-paper-forward` sidecar는 7개 트랙 모두 `NO_EDGE`다. 돈 경로는 `PREVIEW_ONLY`/`NO_EDGE_YET`, 자본 배치 0달러다. 가장 가까운 후보 `globalfixed` PSR은 `0.922697 < 0.95`, 현재 라이브 검증 지문 `global` PSR은 `0.706071`이라 실주문 게이트는 아직 닫혀 있다. |
+| 안전 경계 | #571은 등급 2 no-live 운영 자동화 진단 복구다. 실제 주문, 실거래 전환, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps 확대, 손실 예산, KIS secret, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`라 실주문 불가다. |
+
+## 최근 관찰 — 2026-08-04 KST (#571 후보 결과 실행기 retryable blocked 진단 복구)
+
+현재 `main` 최신 코드 머지는 `5d181e7`(#571, candidate result retryable blocked diagnostics)다.
+기능 커밋은 `a99ac8e`이다.
+
+- **문제 정의**: 운영자의 "엣지 신뢰도를 높이면 해결되는 문제 아니냐"는 판단은 절반은 맞다.
+  자본 사다리를 여는 직접 조건은 전진 성과의 엣지 신뢰도(PSR)가 기준 `0.95`를 넘는 것이다.
+  하지만 기준을 낮추거나 같은 증거를 재사용해 숫자를 올리는 것은 해결이 아니다. 실제로 더 나은 후보를
+  안전하게 검증해, 우연이 아닌 성과 증거를 새로 벌어야 한다.
+- **현재 돈 경로**: `money-path` sidecar timestamp는 `2026-08-03T21:37:56Z`이고
+  `PREVIEW_ONLY`/`NO_EDGE_YET`다. 실계좌 NAV는 `$1466.62`, 배치 자본은 `$0`, 자본 사다리 PSR은
+  `0.703355 < 0.95`다. `rebalance-paper-forward` sidecar timestamp는 `2026-08-03T23:39:40Z`이고
+  7개 트랙 모두 `NO_EDGE`다. 가장 가까운 후보는 `globalfixed`로 PSR `0.922697 < 0.95`,
+  현재 라이브 검증 지문 `global`은 PSR `0.706071`이다.
+- **발견한 병목**: 후보 구현 공장은 PSR을 높일 수 있는 후보 패키지 2개를 만들었지만, 패키지 상태가
+  `blocked`이면 후보 결과 실행기가 곧바로 멈췄다. 그래서 안전한 no-live 검증 명령이 있어도 실제
+  실패 원인을 좁히지 못했고, 자동화는 `blocked`라는 큰 라벨만 반복해서 봤다.
+- **구현 상태**: `candidate_result_executor.py`가 `promotion_patch.factory_retryable == True` 또는
+  retryable factory diagnostic이 붙은 blocked 패키지는 안전성 검사를 먼저 통과한 뒤 allowlist no-live
+  검증 명령을 실행한다. non-retryable blocked 패키지, unsafe command, unsupported command, missing command는
+  계속 막는다.
+- **post-merge 자동화 확인**: `candidate-implementation-results` sidecar는 commit `5d181e7`,
+  timestamp `2026-08-04T01:10:24Z`, `overall_status=degraded`, `pass=0`, `fail=0`,
+  `pending=2`, `blocked=0`이다. 진단 집계는 `data_history_missing=2`, `execution_failed=1`이다.
+  즉 이번 패치는 후보를 통과로 위조하지 않고, "다음에 안전한 이력 데이터 준비 경로를 만들어야 한다"까지
+  원인을 좁혔다.
+- **검증 상태**: #571 브랜치에서 focused candidate-result tests 13 passed, 관련 후보 공장/통합 tests
+  26 passed, `uv run pytest` 2712 passed/5 skipped, `uv run ruff check src tests` 통과,
+  `uv run python scripts/check_handoff_facts.py` OK, `uv run python scripts/agent_harness_probe.py --strict`
+  OK(14/14), PR quality gate 통과, `mergeStateStatus=CLEAN` 확인 뒤 merge했다. 이 handoff 갱신 전
+  `uv run pytest -q`는 `HANDOFF.md`가 아직 `5a56117`을 가리켜 하네스 관련 2개만 실패했고,
+  이 갱신이 그 원인을 바로잡는다.
+- **안전 경계**: 이번 변경은 돈 경로를 열지 않는다. 주문, live 재무장, 자본 배분, whitelist/caps,
+  손실 예산, 비밀값, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 지금 실주문이 안 나가는 직접 이유는
+  계속 `NO_EDGE`: 기준을 거의 넘은 후보는 있지만 아직 `0.95`를 넘지 못했다.
+- **상세 인계**: `HANDOFF-128-CANDIDATE-RESULT-RETRYABLE-BLOCKED.md`.
 
 ## 최근 관찰 — 2026-08-03 KST (#568/#569 live canary sidecar gate와 observe gateway 복구)
 
@@ -321,7 +358,7 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 3. 현재 live 의도 원본은 `automation/rebalance-micro-gtaa.request`다. 마지막 실행 증거는 `origin/automation/rebalance-micro-gtaa-last-run:LAST_RUN.md`다. KIS smoke 현금값은 preflight 입력일 뿐, `armed` 상태나 다음 live 가능 여부의 대체 근거가 아니다.
 4. `live_money_state.status`가 `PREVIEW_ONLY`이면 "실주문 불가"로 답한다. `BLOCKED`이면 "안전 게이트가 실주문을 막고 있음"으로 답하고 `detail`과 `last_run.intent_gate_reason`을 같이 읽는다. `REAL_ORDER_PATH_ARMED`이면 "실제 돈 경로가 켜져 있음"으로 답한다. 단, 이것은 비-push 실행이 미국 정규장, KIS 매수가능 현금 1% 버퍼, micro 손실 브레이커, K1 한도와 K2 허용 종목을 통과하면 실주문 단계에 도달할 수 있다는 뜻이지 접수·체결 보장이 아니다.
 5. 스펙 063 이후 micro GTAA live canary는 계좌 전체 preview를 만든다. 기존 보유 `BHP`, `MRK`, `ORANY`, `RELX`는 목표 유니버스가 아니라 청산 전용이다. 현금이 목표 매수와 1% 완충금을 충족하지 못하고 청산 전용 매도 후보가 있으면 이번 주기는 `effective_side=sell`로 매도만 실행하고, 매수는 다음 fresh KIS 현금 조회가 충분할 때까지 보류한다.
-6. 현재 기준(2026-07-30T15:28Z operator-status/pipeline-liveness, 15:27Z money-gate-alignment/capital-path-readiness, 15:25Z money-path, 15:23Z edge-autoarm, 14:56Z KIS smoke): KIS smoke는 `success`/`smoke_exit=0`이고 핵심 사이드카 생존 감시는 `OK`다. money-path는 `live_money_state.status=PREVIEW_ONLY`, 자본 사다리 단계 `NO_EDGE_YET`, capital-path-readiness는 `ACCUMULATING_EDGE`, money-gate-alignment는 `ALIGNED_WAITING`, operator-status는 `ATTENTION`이다. 실주문이 아직 안 나가는 직접 이유는 서버나 KIS가 아니라 forward 판정 `NO_EDGE`다. 관측 27회로 최소 관측은 채웠지만, 벤치마크 대비 칼마와 PSR 기준을 넘지 못했다. 다음 행동은 전진 관측을 계속 누적하고 후보 전략은 기존 라이브 지문을 덮지 말고 토너먼트에 추가해 검증하는 것이다. 스펙 062의 2026-06-22 `armed:true` 기록은 역사이며 현재 상태 근거로 쓰지 않는다.
+6. 현재 기준(2026-08-03T21:37:56Z money-path, 2026-08-03T23:39:40Z rebalance-paper-forward, 2026-08-04T01:10:24Z candidate-implementation-results): money-path는 `live_money_state.status=PREVIEW_ONLY`, 자본 사다리 단계 `NO_EDGE_YET`, 실계좌 NAV `$1466.62`, 배치 자본 `$0`이다. 실주문이 아직 안 나가는 직접 이유는 서버나 KIS가 아니라 forward 판정 `NO_EDGE`다. 자본 사다리 PSR은 `0.703355 < 0.95`, 가장 가까운 후보 `globalfixed`도 `0.922697 < 0.95`다. #571 이후 후보 결과 실행기는 retryable blocked 후보 2개를 안전 검증해 `blocked=0`, `pending=2`, `data_history_missing=2`까지 원인을 좁혔다. 다음 행동은 전진 관측을 계속 누적하고, 후보 전략은 기존 라이브 지문을 덮지 말고 토너먼트/후보 검증에 추가하며, 안전한 이력 데이터 준비 경로를 만들어 pending 후보의 통과/실패 증거를 얻는 것이다. 스펙 062의 2026-06-22 `armed:true` 기록은 역사이며 현재 상태 근거로 쓰지 않는다.
 7. PR #398 이후 `latest_signal=INTENT_LOSS`인데 verdict가 아직 `INSUFFICIENT_DATA`인 경우, "다음 micro GTAA 실행에서 live 표본이 자동으로 더 쌓인다"고 말하지 않는다. live gate가 실주문을 막으므로 새 live 표본은 자동 누적되지 않는다. 다음 행동은 forward 토너먼트·재지정 증거를 기다리거나 별도 전략 검토 후 재무장 여부를 판단하는 것이다.
 
 ## 전략 검토 상태 판독 규칙 (필수 — 스펙 066)
@@ -3161,6 +3198,15 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
   통과, `uv run python scripts/agent_harness_probe.py --strict` `OK (14/14)`,
   `uv run python scripts/check_handoff_facts.py` 통과, PR 품질 관문 통과. 머지 직전 전체 테스트와
   린트를 다시 실행해 같은 결과를 확인했다.
+
+## 최근 마일스톤 — 2026-08-04 KST (#571 후보 결과 실행기 retryable blocked 진단 복구)
+
+#571로 후보 결과 실행기가 retryable factory-blocked 패키지를 안전한 no-live 검증까지 진행하게 됐다.
+post-merge `candidate-implementation-results` sidecar는 commit `5d181e7`, timestamp `2026-08-04T01:10:24Z`,
+`blocked=0`, `pending=2`, `diagnostic_counts.data_history_missing=2`다. 이것은 PSR 기준을 낮춘 변경이 아니라,
+PSR을 높일 수 있는 후보의 실제 검증 병목을 `blocked`에서 "과거 가격 데이터 준비 필요"로 좁힌 변경이다.
+돈 경로는 여전히 `PREVIEW_ONLY`/`NO_EDGE_YET`이고, 가장 가까운 `globalfixed` 후보 PSR은
+`0.922697 < 0.95`다. 상세는 `HANDOFF-128-CANDIDATE-RESULT-RETRYABLE-BLOCKED.md`.
 
 ## 최근 마일스톤 — 2026-08-03 KST (#568/#569 live canary sidecar gate와 observe gateway 복구)
 
@@ -7096,6 +7142,7 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 
 ## 과거 인수인계 파일 (참고용)
 
+- `HANDOFF-128-CANDIDATE-RESULT-RETRYABLE-BLOCKED.md` — #571 후보 결과 실행기가 retryable factory-blocked 후보를 안전 no-live 검증까지 진행하고, post-merge 결과 sidecar가 `blocked=0`, `pending=2`, `data_history_missing=2`를 남긴 상태
 - `HANDOFF-127-LIVE-CANARY-OBSERVE-GATEWAY.md` — #568/#569 live canary sidecar freshness와 fixed observe gateway 복구, post-merge pipeline/money-path/capital-path 상태
 - `HANDOFF-126-FORWARD-PAPER-ECONOMIC-ANCHOR.md` — #566 forward paper 경제 장부 보정과 post-merge forward/money-path/capital-path sidecar 상태
 - `HANDOFF-125-REGIME-STRATIFY-OBSERVE-GATEWAY.md` — #564 regime-stratify 관측 gateway 복구와 post-merge sidecar 성공 상태
