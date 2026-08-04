@@ -54,9 +54,8 @@ jobs:
           VULTR_SSH_USER="${SSH_USER:-}" \
           ./scripts/ci_secure_ssh.sh
 
-      # 라이브 지정(incumbent) 트랙 — GLOBAL-TREND. 서버 쓰기는 전부 ${wrk}(/tmp) 아래.
-      # bars-export 는 forward DB 를 읽기만(쓰기·마이그레이션 0). forward-verdict-anchored 는
-      # 그 DB 의 NAV 스냅샷(라이브 forward)도 읽기 전용으로 본다.
+      # 라이브 지정(incumbent) 트랙 — GLOBAL-TREND. 서버의 forced-command 경계는
+      # observe gateway 만 허용하므로, capital ladder 와 같은 고정 관측 명령을 쓴다.
       - name: "앵커드 판정 — GLOBAL-TREND (라이브 지정 전략)"
         id: anchored_global
         if: always()
@@ -67,18 +66,15 @@ jobs:
         run: |
           set +e
           port="${PORT:-22}"
-          cfg="deploy/global-trend-portfolio.toml"; dbf="data/forward_global.db"; wrk="/tmp/anchored_global"
-          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
-              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
-              "cd /opt/auto-invest && \
-                 rm -rf ${wrk} && mkdir -p ${wrk} && \
-                 /usr/local/bin/uv run auto-invest bars-export --portfolio ${cfg} --db ${dbf} --out-dir ${wrk}/bars --json && \
-                 /usr/local/bin/uv run auto-invest ingest-history --from-dir ${wrk}/bars --out-dir ${wrk}/hist && \
-                 /usr/local/bin/uv run auto-invest forward-verdict-anchored --portfolio ${cfg} --db ${dbf} --history-root ${wrk}/hist --trailing-years 5 --mode paper --min-forward-obs 5 --format json && \
-                 echo '--- anchored verdict (text) ---' && \
-                 /usr/local/bin/uv run auto-invest forward-verdict-anchored --portfolio ${cfg} --db ${dbf} --history-root ${wrk}/hist --trailing-years 5 --mode paper --min-forward-obs 5 --format text" \
-              > /tmp/anchored_global.log 2>&1
-          echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
+          {
+            echo "--- anchored verdict (json via observe gateway) ---"
+            ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
+                -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+                "observe ladder-anchored-verdict"
+            status=$?
+            echo "--- ssh_exit=${status} ---"
+          } > /tmp/anchored_global.log 2>&1
+          echo "ssh_exit=${status:-1}" >> "$GITHUB_OUTPUT"
           cat /tmp/anchored_global.log
 
       - name: Publish to sidecar branch
