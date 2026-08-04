@@ -427,14 +427,6 @@ def _execute_package(
             source_ref=source_ref,
             reason=f"지원하지 않는 패키지 종류({kind})라 자동 실행하지 않는다.",
         )
-    if str(package.get("status") or "") == STATUS_BLOCKED:
-        return _blocked_result(
-            candidate_id=candidate_id,
-            package_id=package_id,
-            kind=kind,
-            source_ref=source_ref,
-            reason="후보 구현 공장에서 이미 blocked 상태로 표시한 패키지다.",
-        )
     unsafe_reason = _unsafe_reason(kind, commands)
     if unsafe_reason:
         return _blocked_result(
@@ -443,6 +435,17 @@ def _execute_package(
             kind=kind,
             source_ref=source_ref,
             reason=unsafe_reason,
+        )
+    if (
+        str(package.get("status") or "") == STATUS_BLOCKED
+        and not _retryable_factory_block(package)
+    ):
+        return _blocked_result(
+            candidate_id=candidate_id,
+            package_id=package_id,
+            kind=kind,
+            source_ref=source_ref,
+            reason="후보 구현 공장에서 이미 blocked 상태로 표시한 패키지다.",
         )
 
     executions: list[CommandExecution] = []
@@ -516,6 +519,19 @@ def _blocked_result(
         executions=(),
         diagnostics=(_blocked_diagnostic(kind=kind, reason=reason),),
     )
+
+
+def _retryable_factory_block(package: Mapping[str, Any]) -> bool:
+    """공장이 blocked로 표시해도 재시도 가능한 안전 명령이면 원인을 좁힌다."""
+    patch = package.get("promotion_patch")
+    if not isinstance(patch, Mapping):
+        return False
+    if patch.get("factory_retryable") is True:
+        return True
+    diagnostics = patch.get("factory_diagnostics")
+    if not isinstance(diagnostics, list):
+        return False
+    return any(isinstance(item, Mapping) and item.get("retryable") is True for item in diagnostics)
 
 
 def _strategy_result(

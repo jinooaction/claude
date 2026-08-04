@@ -226,6 +226,111 @@ def test_strategy_history_root_command_is_allowed_and_can_pass() -> None:
     assert run.results[0].status == STATUS_PASS
 
 
+def test_retryable_blocked_strategy_package_runs_safe_command_for_diagnostics() -> None:
+    seen: list[tuple[str, ...]] = []
+
+    def runner(command: list[str] | tuple[str, ...], timeout: int) -> CommandExecution:
+        seen.append(tuple(command))
+        return CommandExecution(
+            command=tuple(command),
+            exit_code=64,
+            stdout="",
+            stderr="no ingested datasets; run `auto-invest ingest-history`",
+        )
+
+    run = build_candidate_result_executor_run(
+        package_plan={
+            "schema_version": "1.0",
+            "packages": [
+                {
+                    "package_id": "pkg-retry",
+                    "candidate_id": "candidate-retry",
+                    "package_kind": "strategy_backtest",
+                    "status": "blocked",
+                    "commands": [
+                        "uv run auto-invest portfolio-walk-forward "
+                        "--portfolio deploy/micro-gtaa-live-portfolio.toml "
+                        "--trailing-years 5 "
+                        "--history-root /tmp/candidate_result_history/micro-gtaa/hist "
+                        "--db data/candidate-factory/candidate-retry.db "
+                        "--halt-path data/candidate-factory/candidate-retry.halt.flag "
+                        "--json"
+                    ],
+                    "promotion_patch": {
+                        "factory_status": "blocked",
+                        "factory_retryable": True,
+                    },
+                }
+            ],
+        },
+        now=NOW,
+        runner=runner,
+    )
+
+    assert seen == [
+        (
+            "uv",
+            "run",
+            "auto-invest",
+            "portfolio-walk-forward",
+            "--portfolio",
+            "deploy/micro-gtaa-live-portfolio.toml",
+            "--trailing-years",
+            "5",
+            "--history-root",
+            "/tmp/candidate_result_history/micro-gtaa/hist",
+            "--db",
+            "data/candidate-factory/candidate-retry.db",
+            "--halt-path",
+            "data/candidate-factory/candidate-retry.halt.flag",
+            "--json",
+        )
+    ]
+    result = run.results[0]
+    assert result.status == STATUS_PENDING
+    assert result.to_dict()["diagnostics"][0]["code"] == DIAG_DATA_HISTORY_MISSING
+
+
+def test_non_retryable_blocked_package_stays_blocked_without_execution() -> None:
+    calls: list[tuple[str, ...]] = []
+
+    def runner(command: list[str] | tuple[str, ...], timeout: int) -> CommandExecution:
+        calls.append(tuple(command))
+        return CommandExecution(command=tuple(command), exit_code=0, stdout="{}", stderr="")
+
+    run = build_candidate_result_executor_run(
+        package_plan={
+            "schema_version": "1.0",
+            "packages": [
+                {
+                    "package_id": "pkg-blocked",
+                    "candidate_id": "candidate-blocked",
+                    "package_kind": "strategy_backtest",
+                    "status": "blocked",
+                    "commands": [
+                        "uv run auto-invest portfolio-walk-forward "
+                        "--portfolio deploy/micro-gtaa-live-portfolio.toml "
+                        "--trailing-years 5 "
+                        "--history-root /tmp/candidate_result_history/micro-gtaa/hist "
+                        "--db data/candidate-factory/candidate-blocked.db "
+                        "--halt-path data/candidate-factory/candidate-blocked.halt.flag "
+                        "--json"
+                    ],
+                    "promotion_patch": {
+                        "factory_status": "blocked",
+                        "factory_retryable": False,
+                    },
+                }
+            ],
+        },
+        now=NOW,
+        runner=runner,
+    )
+
+    assert run.results[0].status == STATUS_BLOCKED
+    assert calls == []
+
+
 def test_unsafe_command_is_blocked_without_execution() -> None:
     calls: list[tuple[str, ...]] = []
 
