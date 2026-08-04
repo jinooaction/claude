@@ -58,6 +58,7 @@ def test_candidate_result_history_uses_fixed_observe_gateway_command() -> None:
     body = RESULT_WORKFLOW.read_text(encoding="utf-8")
 
     assert "observe candidate-history" in body
+    assert "ssh -n -o StrictHostKeyChecking=yes" in body
     assert "candidate_history_support_probe.py --manifest" in body
     assert "/tmp/candidate_result_history" in body
     assert "CANDIDATE_HISTORY_ARCHIVE_BEGIN" in body

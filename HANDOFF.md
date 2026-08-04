@@ -33,15 +33,51 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `5d181e7` — Merge pull request #571 from jinooaction/codex/candidate-result-retryable-blocked-diagnostics |
-| main 테스트 | handoff 갱신 브랜치 기준 `uv run pytest -q` → 2712 passed, 5 skipped. 이 handoff 갱신 전 `uv run pytest -q`는 `HANDOFF.md`가 `5a56117`을 가리켜 하네스 관련 2개만 실패했다. |
-| main 린트 | #571/handoff 갱신 브랜치 기준 `uv run ruff check src tests` → All checks passed. |
-| 열린 PR | 없음(이 handoff 작성 시점; #571은 merge 완료). |
-| 출시 완료 스펙 | 최신 추가: #571(스펙 071 후보 결과 실행기 후속: retryable factory-blocked 후보의 안전 검증 명령 실행과 진단 복구), 123/live canary sidecar gate(#568 preview/status와 real-order job 분리, #569 fixed `observe live-canary-*` gateway로 preview/status 내용 복구), #566(forward paper 경제 장부 보정), 122(forward paper DB writability), 121(`promote-readiness` 관측 경로 복구 + 서버 root-owned gateway/helper self-refresh), 120(증거 기반 후보 소스 다변화 + released-work 완료 소비), 119(보안 신뢰 경계 강화와 후속 SSH boundary repair 및 live-money workflow 보호 환경). 이전 스펙 058~118은 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
+| 마지막 main 커밋 | `71f70f9` — Merge PR #573: candidate history observe gateway |
+| main 테스트 | 후속 stdin 보정 브랜치 기준 `uv run pytest -q` → 2713 passed, 5 skipped. 이 handoff 갱신 전 같은 명령은 `HANDOFF.md`가 `5d181e7`을 가리켜 하네스 관련 2개만 실패했다. |
+| main 린트 | 후속 stdin 보정 브랜치 기준 `uv run ruff check src tests` → All checks passed. |
+| 열린 PR | 없음(이 handoff 작성 시점; #573은 merge 완료). |
+| 출시 완료 스펙 | 최신 추가: #573(스펙 074 후보 가격 이력 지원 후속: candidate result workflow의 `scp`/remote `bash` 제거, fixed `observe candidate-history` gateway로 micro-gtaa 이력 수집 성공), #571(스펙 071 후보 결과 실행기 후속: retryable factory-blocked 후보의 안전 검증 명령 실행과 진단 복구), 123/live canary sidecar gate(#568 preview/status와 real-order job 분리, #569 fixed `observe live-canary-*` gateway로 preview/status 내용 복구), #566(forward paper 경제 장부 보정), 122(forward paper DB writability), 121(`promote-readiness` 관측 경로 복구 + 서버 root-owned gateway/helper self-refresh), 120(증거 기반 후보 소스 다변화 + released-work 완료 소비), 119(보안 신뢰 경계 강화와 후속 SSH boundary repair 및 live-money workflow 보호 환경). 이전 스펙 058~118은 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
 | 골격 스펙 | 없음. `.specify/feature.json`은 최신 완료 스펙 `specs/123-live-canary-sidecar-gate`를 가리키고, `tasks.md`는 T001~T023 완료 상태다. |
-| 최근 출시 작업 | #571은 후보 구현 공장이 retryable blocked로 낸 후보 패키지를 후보 결과 실행기가 무조건 중단하지 않고, 안전 allowlist 안의 no-live 검증 명령을 실행해 진짜 다음 원인을 좁히게 했다. post-merge `candidate-implementation-results` sidecar는 commit `5d181e7`, timestamp `2026-08-04T01:10:24Z`, `blocked=0`, `pending=2`, `diagnostic_counts.data_history_missing=2`다. |
-| 활성 작업 | 없음. 최신 `rebalance-paper-forward` sidecar는 7개 트랙 모두 `NO_EDGE`다. 돈 경로는 `PREVIEW_ONLY`/`NO_EDGE_YET`, 자본 배치 0달러다. 가장 가까운 후보 `globalfixed` PSR은 `0.922697 < 0.95`, 현재 라이브 검증 지문 `global` PSR은 `0.706071`이라 실주문 게이트는 아직 닫혀 있다. |
-| 안전 경계 | #571은 등급 2 no-live 운영 자동화 진단 복구다. 실제 주문, 실거래 전환, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps 확대, 손실 예산, KIS secret, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`라 실주문 불가다. |
+| 최근 출시 작업 | #573은 candidate result workflow가 서버 forced-command SSH gateway를 우회하지 않고 fixed `observe candidate-history <known key>`만 쓰게 했다. post-merge `candidate-implementation-results` sidecar는 commit `71f70f9`, timestamp `2026-08-04T14:43:54Z`, `blocked=0`, `fail=1`, `pending=1`, `diagnostic_counts.data_history_missing=1`이다. |
+| 활성 작업 | 현재 후속 브랜치에서 `ssh -n` 보정 중이다. #573 post-merge에서 SSH 관문은 성공했고 micro-gtaa history는 준비됐지만, `ssh`가 manifest loop의 표준 입력을 소비해 global-trend-wide/multi-asset-trend 두 줄을 건너뛰었다. 후속 보정은 이 입력 소비를 막아 세 dataset을 모두 준비하게 한다. |
+| 안전 경계 | #573은 등급 3 SSH forced-command safety boundary 보정이다. 허용 범위는 알려진 세 candidate-history dataset의 읽기 전용 `bars-export -> ingest-history`뿐이다. 실제 주문, 실거래 전환, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps 확대, 손실 예산, KIS secret, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`라 실주문 불가다. |
+
+## 최근 관찰 — 2026-08-04 KST (#573 후보 history observe gateway와 stdin 후속 보정)
+
+현재 `main` 최신 코드 머지는 `71f70f9`(#573, candidate history observe gateway)다.
+기능 커밋은 `ebf906e`이다.
+
+- **문제 정의**: 후보 결과 실행기는 가격 이력 데이터가 없어 `data_history_missing`으로 멈췄다.
+  기존 workflow는 서버에 manifest를 `scp`로 올리고 remote `bash -s`로 `bars-export -> ingest-history`를
+  실행하려 했지만, production SSH는 forced-command gateway라서 `scp: Connection closed`로 막혔다.
+- **구현 상태**: #573은 candidate result workflow에서 `scp`, remote `bash -s`, remote cleanup shell을
+  제거했다. 서버 helper에는 `candidate-history` observe 명령을 추가했고, gateway는
+  `micro-gtaa`, `global-trend-wide`, `multi-asset-trend` 세 key만 allowlist로 전달한다. helper는 서버
+  `/tmp`에서 읽기 전용 `bars-export -> ingest-history`를 실행한 뒤 archive를 stdout으로 stream한다.
+- **post-merge 배포 확인**: #573 `Deploy on merge to main` run `30920407159`은 success다.
+  같은 main push의 `Candidate result executor` run `30920407082`, `Candidate implementation factory`
+  run `30920407005`, `Released work ledger` run `30920407302`, `Autonomous work execution loop`
+  run `30920406938`도 success다.
+- **post-merge 후보 결과**: 최신 `candidate-implementation-results` sidecar는 commit `71f70f9`,
+  timestamp `2026-08-04T14:43:54Z`, `overall_status=degraded`, `pass=0`, `fail=1`, `pending=1`,
+  `blocked=0`, `diagnostic_counts.data_history_missing=1`이다. micro-gtaa history는 실제로 준비되어
+  strategy 후보가 실행됐고, 결과는 `strategy_psr=0.999423`이어도 구간 과반 실패와 평균 샤프 열세 때문에
+  `강건한 엣지 없음`으로 fail 처리됐다. 즉 통과 위조 없이 엣지 없는 후보를 걸러냈다.
+- **남은 보정**: post-merge 로그에서 `candidate history ready: micro-gtaa`만 보였고,
+  global-trend-wide/multi-asset-trend는 돌지 않았다. 원인은 `while read` 루프 안의 `ssh`가 stdin을
+  가져가 manifest 나머지 줄을 소비한 것이다. 현재 후속 브랜치는 `ssh -n`을 추가하고 회귀 테스트가
+  이 조건을 요구하게 했다.
+- **검증 상태**: #573 브랜치에서 focused tests 31 passed, `uv run pytest` 2713 passed/5 skipped,
+  `uv run ruff check src tests` 통과, YAML parse, `bash -n`, `git diff --check`, PR quality gate,
+  strict agent harness, HANDOFF fact check를 통과하고 merge했다. 후속 stdin 보정 브랜치에서는 focused
+  candidate-result workflow tests 7 passed, `uv run pytest -q` 2713 passed/5 skipped,
+  `uv run ruff check src tests` 통과, shell/YAML 검증 통과, strict agent harness OK(14/14),
+  HANDOFF fact check OK다. 이 handoff 갱신 전 전체 `uv run pytest -q`는 HANDOFF stale 때문에
+  하네스 관련 2개만 실패했다.
+- **안전 경계**: 이번 경로는 후보 검증용 history staging만 바꾼다. 주문, live 재무장, 자본 배분,
+  whitelist/caps, 손실 예산, 비밀값, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 지금 실주문
+  불가는 계속 `NO_EDGE_YET`: 기준을 낮춘 것이 아니라 더 정확한 후보 검증 증거를 얻는 단계다.
 
 ## 최근 관찰 — 2026-08-04 KST (#571 후보 결과 실행기 retryable blocked 진단 복구)
 

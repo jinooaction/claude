@@ -97,6 +97,7 @@ def test_result_executor_workflow_publishes_sidecar_without_order_or_broker_path
     assert "candidate_history_manifest.tsv" in text
     assert "/tmp/candidate_result_history" in text
     assert "observe candidate-history" in text
+    assert "ssh -n -o StrictHostKeyChecking=yes" in text
     assert "CANDIDATE_HISTORY_ARCHIVE_BEGIN" in text
     assert "scp " not in text
     assert "bash -s" not in text
