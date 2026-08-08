@@ -1,0 +1,936 @@
+{
+  "candidates": [
+    {
+      "breakthrough_type": "capital_path",
+      "candidate_id": "candidate-fd04772a23c5",
+      "capability_compounding": 78,
+      "capital_path_alignment": 95,
+      "composite_score": 597,
+      "confidence": "high",
+      "domain_key": "live_readiness",
+      "evidence_confidence": 86,
+      "evidence_dependency": "none",
+      "evidence_refs": [
+        "money-path",
+        "edge-autoarm",
+        "reassign"
+      ],
+      "expected_benefit": "risk_reduction",
+      "expires_at_utc": null,
+      "growth_leverage": 82,
+      "learning_velocity": 78,
+      "next_action_ko": "released-work 장부가 이 후보를 완료 처리했다: 완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "problem_ko": "실제 돈 경로는 기존 money-path, 스펙 055 재지정, 스펙 050 자본 사다리 밖에서 열면 안 된다.",
+      "recheck_condition": null,
+      "repeatability": 82,
+      "risk_grade": 2,
+      "safety_impact": [],
+      "safety_preservation": 96,
+      "status": "released",
+      "title_ko": "돈 경로 준비도와 기존 게이트 정렬"
+    },
+    {
+      "breakthrough_type": "operator_leverage",
+      "candidate_id": "candidate-source-diversification-sidecar-bottleneck",
+      "capability_compounding": 94,
+      "capital_path_alignment": 58,
+      "composite_score": 594,
+      "confidence": "high",
+      "domain_key": "agent_ops",
+      "evidence_confidence": 84,
+      "evidence_dependency": "none",
+      "evidence_refs": [
+        "released-work",
+        "pipeline-liveness",
+        "capital-path-readiness",
+        "promotion-summary"
+      ],
+      "expected_benefit": "operator_leverage",
+      "expires_at_utc": null,
+      "growth_leverage": 76,
+      "learning_velocity": 92,
+      "next_action_ko": "학습 장부, released-work, pipeline-liveness, capital-path-readiness sidecar를 정적 템플릿 밖 후보 생성 입력으로 승격하고, 반복 실패와 관찰 병목을 다음 SDD 후보로 결정론적으로 변환한다.",
+      "problem_ko": "정적 후보 9개가 모두 완료·거절·보류로 닫혔다. released-work 완료 41건, 학습 장부 결정 evidence_dependent 3건, rejected 2건, promotion failure 2건, 관찰 병목 8건, 신선도 확인 필요 1건이 새 후보 소스 확장을 요구한다.",
+      "recheck_condition": null,
+      "repeatability": 94,
+      "risk_grade": 2,
+      "safety_impact": [],
+      "safety_preservation": 96,
+      "status": "new",
+      "title_ko": "증거 기반 후보 소스 다변화"
+    },
+    {
+      "breakthrough_type": "profit_power",
+      "candidate_id": "candidate-cc96b35062da",
+      "capability_compounding": 82,
+      "capital_path_alignment": 78,
+      "composite_score": 574,
+      "confidence": "high",
+      "domain_key": "portfolio_design",
+      "evidence_confidence": 86,
+      "evidence_dependency": "market_observation",
+      "evidence_refs": [
+        "reassign",
+        "rebalance-paper-forward"
+      ],
+      "expected_benefit": "profit",
+      "expires_at_utc": null,
+      "growth_leverage": 84,
+      "learning_velocity": 74,
+      "next_action_ko": "learning_ledger.json 결정으로 자동 후보 재활성화를 보류한다. 사유: 기계 판독 검증 결과에 실패가 있어 승격 증거로 병합하지 않는다. 근거 패키지: autonomous-promotion:28504209238",
+      "problem_ko": "비교 가능한 후보가 부족하면 재지정을 앞당기지 말고 후보 비교와 증거 누적 품질을 높인다.",
+      "recheck_condition": null,
+      "repeatability": 80,
+      "risk_grade": 2,
+      "safety_impact": [],
+      "safety_preservation": 90,
+      "status": "rejected",
+      "title_ko": "비상관 포트폴리오 후보 비교력 강화"
+    },
+    {
+      "breakthrough_type": "profit_power",
+      "candidate_id": "candidate-1ed634d8bf6d",
+      "capability_compounding": 86,
+      "capital_path_alignment": 88,
+      "composite_score": 574,
+      "confidence": "low",
+      "domain_key": "strategy_design",
+      "evidence_confidence": 42,
+      "evidence_dependency": "new_experiment",
+      "evidence_refs": [
+        "money-path",
+        "rebalance-micro-gtaa",
+        "rebalance-paper-forward"
+      ],
+      "expected_benefit": "profit",
+      "expires_at_utc": null,
+      "growth_leverage": 92,
+      "learning_velocity": 88,
+      "next_action_ko": "learning_ledger.json 결정으로 자동 후보 재활성화를 보류한다. 사유: 기계 판독 검증 결과에 실패가 있어 승격 증거로 병합하지 않는다. 근거 패키지: autonomous-promotion:28504209238",
+      "problem_ko": "현재 돈 경로가 PREVIEW_ONLY 또는 latest_intent_loss에 묶여 있으므로, 실주문 재개가 아니라 전략 증거 재검토와 대체 후보 연구가 먼저다.",
+      "recheck_condition": null,
+      "repeatability": 86,
+      "risk_grade": 2,
+      "safety_impact": [],
+      "safety_preservation": 92,
+      "status": "rejected",
+      "title_ko": "micro GTAA 의도 손익 재검토와 대체 전략 연구"
+    },
+    {
+      "breakthrough_type": "operator_leverage",
+      "candidate_id": "candidate-88a7e7f07361",
+      "capability_compounding": 88,
+      "capital_path_alignment": 60,
+      "composite_score": 568,
+      "confidence": "high",
+      "domain_key": "agent_ops",
+      "evidence_confidence": 86,
+      "evidence_dependency": "none",
+      "evidence_refs": [
+        "pipeline-liveness",
+        "handoff"
+      ],
+      "expected_benefit": "operator_time",
+      "expires_at_utc": null,
+      "growth_leverage": 55,
+      "learning_velocity": 92,
+      "next_action_ko": "released-work 장부가 이 후보를 완료 처리했다: 완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "problem_ko": "자동 성장 루프가 멈추거나 handoff가 stale이면 다음 세션이 같은 판단을 반복한다.",
+      "recheck_condition": null,
+      "repeatability": 92,
+      "risk_grade": 2,
+      "safety_impact": [],
+      "safety_preservation": 95,
+      "status": "released",
+      "title_ko": "자율 루프 sidecar와 handoff 생존성"
+    },
+    {
+      "breakthrough_type": "learning_velocity",
+      "candidate_id": "candidate-e481b0309206",
+      "capability_compounding": 80,
+      "capital_path_alignment": 58,
+      "composite_score": 560,
+      "confidence": "high",
+      "domain_key": "analysis",
+      "evidence_confidence": 86,
+      "evidence_dependency": "none",
+      "evidence_refs": [
+        "regime-stratify",
+        "public-data",
+        "promote-readiness"
+      ],
+      "expected_benefit": "profit",
+      "expires_at_utc": null,
+      "growth_leverage": 74,
+      "learning_velocity": 88,
+      "next_action_ko": "released-work 장부가 이 후보를 완료 처리했다: 완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "problem_ko": "분석 결과가 대화에 머물지 않고 후보 점수화의 증거 신뢰도와 성장 레버리지로 들어가야 한다.",
+      "recheck_condition": null,
+      "repeatability": 82,
+      "risk_grade": 2,
+      "safety_impact": [],
+      "safety_preservation": 92,
+      "status": "released",
+      "title_ko": "레짐·성과 분석을 후보 점수화 입력으로 승격"
+    },
+    {
+      "breakthrough_type": "operator_leverage",
+      "candidate_id": "candidate-fa66202bf496",
+      "capability_compounding": 92,
+      "capital_path_alignment": 55,
+      "composite_score": 559,
+      "confidence": "high",
+      "domain_key": "review",
+      "evidence_confidence": 82,
+      "evidence_dependency": "none",
+      "evidence_refs": [
+        "handoff",
+        "pipeline-liveness"
+      ],
+      "expected_benefit": "operator_time",
+      "expires_at_utc": null,
+      "growth_leverage": 50,
+      "learning_velocity": 90,
+      "next_action_ko": "released-work 장부가 이 후보를 완료 처리했다: 완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "problem_ko": "반복 조사 비용을 줄이려면 채택·폐기·증거 의존 상태를 구조화해야 한다.",
+      "recheck_condition": null,
+      "repeatability": 95,
+      "risk_grade": 2,
+      "safety_impact": [],
+      "safety_preservation": 95,
+      "status": "released",
+      "title_ko": "학습 장부로 폐기·보류 후보 재발굴 차단"
+    },
+    {
+      "breakthrough_type": "execution_quality",
+      "candidate_id": "candidate-dff4f9344b02",
+      "capability_compounding": 65,
+      "capital_path_alignment": 70,
+      "composite_score": 527,
+      "confidence": "high",
+      "domain_key": "execution_quality",
+      "evidence_confidence": 86,
+      "evidence_dependency": "none",
+      "evidence_refs": [
+        "execution-quality",
+        "rebalance-micro-gtaa",
+        "kis-smoke"
+      ],
+      "expected_benefit": "risk_reduction",
+      "expires_at_utc": null,
+      "growth_leverage": 70,
+      "learning_velocity": 74,
+      "next_action_ko": "released-work 장부가 이 후보를 완료 처리했다: 완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "problem_ko": "최근 주문 거부가 있으므로 체결 품질과 기회손익을 읽기 전용으로 분석해야 한다.",
+      "recheck_condition": null,
+      "repeatability": 72,
+      "risk_grade": 2,
+      "safety_impact": [],
+      "safety_preservation": 90,
+      "status": "released",
+      "title_ko": "주문 거부·체결 품질 손익 관측"
+    },
+    {
+      "breakthrough_type": "evidence_quality",
+      "candidate_id": "candidate-6ee3370e933d",
+      "capability_compounding": 82,
+      "capital_path_alignment": 45,
+      "composite_score": 510,
+      "confidence": "medium",
+      "domain_key": "data_quality",
+      "evidence_confidence": 70,
+      "evidence_dependency": "none",
+      "evidence_refs": [
+        "rebalance-micro-gtaa"
+      ],
+      "expected_benefit": "reliability",
+      "expires_at_utc": null,
+      "growth_leverage": 58,
+      "learning_velocity": 72,
+      "next_action_ko": "released-work 장부가 이 후보를 완료 처리했다: 완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "problem_ko": "누락·stale 증거를 전략 실패로 오해하지 않게 증거 출처와 생산 커밋을 먼저 분리한다.",
+      "recheck_condition": null,
+      "repeatability": 88,
+      "risk_grade": 2,
+      "safety_impact": [],
+      "safety_preservation": 95,
+      "status": "released",
+      "title_ko": "오래된 증거와 성과 실패 분리"
+    },
+    {
+      "breakthrough_type": "evidence_quality",
+      "candidate_id": "candidate-facf2fa31834",
+      "capability_compounding": 75,
+      "capital_path_alignment": 35,
+      "composite_score": 494,
+      "confidence": "high",
+      "domain_key": "data_collection",
+      "evidence_confidence": 86,
+      "evidence_dependency": "none",
+      "evidence_refs": [
+        "public-data"
+      ],
+      "expected_benefit": "evidence_quality",
+      "expires_at_utc": null,
+      "growth_leverage": 62,
+      "learning_velocity": 68,
+      "next_action_ko": "released-work 장부가 이 후보를 완료 처리했다: 완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "problem_ko": "공개 데이터 채널은 존재하므로 교차 검증과 레짐 입력을 후보 점수화에 더 잘 연결할 수 있다.",
+      "recheck_condition": null,
+      "repeatability": 78,
+      "risk_grade": 2,
+      "safety_impact": [],
+      "safety_preservation": 90,
+      "status": "released",
+      "title_ko": "공개 데이터 수집·교차 검증 확장"
+    }
+  ],
+  "commit": "758dda2534af38f444ac75361295fb49b489e234",
+  "domains": [
+    {
+      "default_priority": 10,
+      "description": "가격·거시·브로커·sidecar 입력 수집 경로",
+      "key": "data_collection",
+      "label_ko": "데이터 수집",
+      "safety_notes": "새 외부 비용 또는 비밀값은 운영자 검토"
+    },
+    {
+      "default_priority": 20,
+      "description": "신선도·출처·교차 검증",
+      "key": "data_quality",
+      "label_ko": "데이터 품질",
+      "safety_notes": "오래된 증거는 성과 실패로 보지 않음"
+    },
+    {
+      "default_priority": 30,
+      "description": "레짐·성과·강건성 분석",
+      "key": "analysis",
+      "label_ko": "분석",
+      "safety_notes": "측정 전용, 거래 변경 금지"
+    },
+    {
+      "default_priority": 40,
+      "description": "후보 전략과 엣지 검증",
+      "key": "strategy_design",
+      "label_ko": "전략 설계",
+      "safety_notes": "live 전략 교체는 스펙 055만"
+    },
+    {
+      "default_priority": 50,
+      "description": "비상관·자산 배분·재지정 후보",
+      "key": "portfolio_design",
+      "label_ko": "포트폴리오 설계",
+      "safety_notes": "whitelist/caps 확대 금지"
+    },
+    {
+      "default_priority": 60,
+      "description": "주문 거부·체결 품질·브로커 오류",
+      "key": "execution_quality",
+      "label_ko": "실행 품질",
+      "safety_notes": "주문 재시도/취소 직접 실행 금지"
+    },
+    {
+      "default_priority": 70,
+      "description": "money-path·무장·게이트 상태",
+      "key": "live_readiness",
+      "label_ko": "실시간 매매 준비도",
+      "safety_notes": "자본 사다리 우회 금지"
+    },
+    {
+      "default_priority": 80,
+      "description": "학습 장부·폐기 조건·재검토 조건",
+      "key": "review",
+      "label_ko": "회고",
+      "safety_notes": "감사 로그 삭제 금지"
+    },
+    {
+      "default_priority": 90,
+      "description": "handoff·하네스·자동화 생존",
+      "key": "agent_ops",
+      "label_ko": "에이전트 운영 품질",
+      "safety_notes": "운영 체계 변경은 등급 2 이상"
+    }
+  ],
+  "evidence_dependencies": {
+    "market_observation": [
+      "candidate-cc96b35062da"
+    ],
+    "new_experiment": [
+      "candidate-1ed634d8bf6d"
+    ]
+  },
+  "evidence_surfaces": [
+    {
+      "freshness_status": "fresh",
+      "key": "money-path",
+      "kind": "sidecar",
+      "machine_payload": {
+        "signals": [
+          "latest_intent_loss",
+          "preview_only"
+        ]
+      },
+      "observed_at_utc": "2026-08-08T08:36:56Z",
+      "producer_commit": "758dda2534af38f444ac75361295fb49b489e234",
+      "source_ref": "automation/money-path-last-run:LAST_RUN.md",
+      "summary_ko": "money-path: fresh, latest_intent_loss, preview_only, 4485 chars"
+    },
+    {
+      "freshness_status": "stale",
+      "key": "rebalance-micro-gtaa",
+      "kind": "sidecar",
+      "machine_payload": {
+        "signals": [
+          "degraded",
+          "hold",
+          "insufficient_data",
+          "latest_intent_loss",
+          "rejected_order"
+        ]
+      },
+      "observed_at_utc": "2026-07-28T16:14:45Z",
+      "producer_commit": null,
+      "source_ref": "automation/rebalance-micro-gtaa-last-run:LAST_RUN.md",
+      "summary_ko": "rebalance-micro-gtaa: stale, degraded, hold, insufficient_data, latest_intent_loss, rejected_order, 4189 chars"
+    },
+    {
+      "freshness_status": "fresh",
+      "key": "kis-smoke",
+      "kind": "sidecar",
+      "machine_payload": {
+        "signals": [
+          "broker_smoke_success"
+        ]
+      },
+      "observed_at_utc": "2026-08-08T04:10:45Z",
+      "producer_commit": "758dda2534af38f444ac75361295fb49b489e234",
+      "source_ref": "automation/kis-smoke-last-run:LAST_RUN.md",
+      "summary_ko": "kis-smoke: fresh, state=success, 2755 chars"
+    },
+    {
+      "freshness_status": "fresh",
+      "key": "execution-quality",
+      "kind": "sidecar-json",
+      "machine_payload": {
+        "signals": [
+          "broker_rejection_error",
+          "broker_smoke_success",
+          "insufficient_data",
+          "latest_intent_loss",
+          "rejected_order"
+        ]
+      },
+      "observed_at_utc": "2026-08-08T04:10:45Z",
+      "producer_commit": "758dda2534af38f444ac75361295fb49b489e234",
+      "source_ref": "automation/execution-quality-last-run:execution_quality.json",
+      "summary_ko": "execution-quality: fresh, status=OBSERVE, verdict=INSUFFICIENT_DATA, broker_errors=2"
+    },
+    {
+      "freshness_status": "fresh",
+      "key": "reassign",
+      "kind": "sidecar",
+      "machine_payload": {
+        "signals": [
+          "hold",
+          "insufficient_data",
+          "latest_intent_loss",
+          "premature",
+          "rejected_order"
+        ]
+      },
+      "observed_at_utc": "2026-08-08T02:24:12Z",
+      "producer_commit": null,
+      "source_ref": "automation/reassign-last-run:LAST_RUN.md",
+      "summary_ko": "reassign: fresh, hold, insufficient_data, latest_intent_loss, premature, rejected_order, 9127 chars"
+    },
+    {
+      "freshness_status": "fresh",
+      "key": "pipeline-liveness",
+      "kind": "sidecar",
+      "machine_payload": {
+        "signals": [
+          "autonomous_evolution_liveness_ok",
+          "degraded",
+          "rejected_order"
+        ]
+      },
+      "observed_at_utc": "2026-08-08T08:06:03Z",
+      "producer_commit": "758dda2534af38f444ac75361295fb49b489e234",
+      "source_ref": "automation/pipeline-liveness-last-run:LAST_RUN.md",
+      "summary_ko": "pipeline-liveness: fresh, autonomous_evolution_liveness_ok, degraded, rejected_order, 6753 chars"
+    },
+    {
+      "freshness_status": "fresh",
+      "key": "capital-path-readiness",
+      "kind": "sidecar-json",
+      "machine_payload": {
+        "observability_issue_count": 8,
+        "signals": [
+          "preview_only",
+          "rejected_order"
+        ]
+      },
+      "observed_at_utc": "2026-08-08T08:57:18Z",
+      "producer_commit": "758dda2534af38f444ac75361295fb49b489e234",
+      "source_ref": "automation/capital-path-readiness-last-run:capital_path_readiness.json",
+      "summary_ko": "capital-path-readiness: fresh, preview_only, rejected_order, 9598 chars"
+    },
+    {
+      "freshness_status": "fresh",
+      "key": "released-work",
+      "kind": "sidecar-json",
+      "machine_payload": {
+        "released_count": 41,
+        "signals": [
+          "degraded"
+        ]
+      },
+      "observed_at_utc": "2026-08-07T10:03:31.526789Z",
+      "producer_commit": "758dda2534af38f444ac75361295fb49b489e234",
+      "source_ref": "automation/released-work-last-run:released_work.json",
+      "summary_ko": "released-work: fresh, degraded, 24690 chars"
+    },
+    {
+      "freshness_status": "fresh",
+      "key": "rebalance-paper-forward",
+      "kind": "sidecar",
+      "machine_payload": {
+        "signals": [
+          "edge_confirmed",
+          "hold",
+          "insufficient_data",
+          "premature"
+        ]
+      },
+      "observed_at_utc": "2026-08-07T23:09:50Z",
+      "producer_commit": "758dda2534af38f444ac75361295fb49b489e234",
+      "source_ref": "automation/rebalance-paper-forward-last-run:LAST_RUN.md",
+      "summary_ko": "rebalance-paper-forward: fresh, edge_confirmed, hold, insufficient_data, premature, 42728 chars"
+    },
+    {
+      "freshness_status": "fresh",
+      "key": "edge-autoarm",
+      "kind": "sidecar",
+      "machine_payload": {
+        "signals": [
+          "edge_confirmed",
+          "hold",
+          "insufficient_data"
+        ]
+      },
+      "observed_at_utc": "2026-08-08T00:32:12Z",
+      "producer_commit": null,
+      "source_ref": "automation/edge-autoarm-last-run:LAST_RUN.md",
+      "summary_ko": "edge-autoarm: fresh, edge_confirmed, hold, insufficient_data, 3493 chars"
+    },
+    {
+      "freshness_status": "fresh",
+      "key": "public-data",
+      "kind": "sidecar",
+      "machine_payload": {
+        "signals": [
+          "degraded"
+        ]
+      },
+      "observed_at_utc": "2026-08-08T03:07:01Z",
+      "producer_commit": "758dda2534af38f444ac75361295fb49b489e234",
+      "source_ref": "automation/public-data:LAST_RUN.md",
+      "summary_ko": "public-data: fresh, degraded, 8339 chars"
+    },
+    {
+      "freshness_status": "fresh",
+      "key": "regime-stratify",
+      "kind": "sidecar",
+      "machine_payload": {
+        "signals": []
+      },
+      "observed_at_utc": "2026-08-08T00:00:10Z",
+      "producer_commit": "758dda2534af38f444ac75361295fb49b489e234",
+      "source_ref": "automation/regime-stratify-last-run:LAST_RUN.md",
+      "summary_ko": "regime-stratify: fresh, 특이 신호 없음, 5279 chars"
+    },
+    {
+      "freshness_status": "fresh",
+      "key": "promote-readiness",
+      "kind": "sidecar",
+      "machine_payload": {
+        "signals": [
+          "performance_not_ready"
+        ]
+      },
+      "observed_at_utc": "2026-08-07T23:02:11Z",
+      "producer_commit": "758dda2534af38f444ac75361295fb49b489e234",
+      "source_ref": "automation/promote-readiness-last-run:LAST_RUN.md",
+      "summary_ko": "promote-readiness: fresh, performance_not_ready, 898 chars"
+    },
+    {
+      "freshness_status": "fresh",
+      "key": "promotion-summary",
+      "kind": "sidecar-json",
+      "machine_payload": {
+        "signals": [
+          "degraded",
+          "rejected_order"
+        ]
+      },
+      "observed_at_utc": "2026-08-07T09:43:00Z",
+      "producer_commit": "758dda2534af38f444ac75361295fb49b489e234",
+      "source_ref": "automation/autonomous-promotion-last-run:promotion_summary.json",
+      "summary_ko": "promotion-summary: fresh, degraded, rejected_order, 22008 chars"
+    },
+    {
+      "freshness_status": "unknown",
+      "key": "handoff",
+      "kind": "manual_note",
+      "machine_payload": {
+        "signals": [
+          "degraded",
+          "edge_confirmed",
+          "handoff_entrypoint_ok",
+          "hold",
+          "insufficient_data",
+          "latest_intent_loss",
+          "premature",
+          "preview_only",
+          "real_order_path_armed",
+          "rejected_order"
+        ]
+      },
+      "observed_at_utc": null,
+      "producer_commit": "30960153902",
+      "source_ref": "handoff:handoff.md",
+      "summary_ko": "handoff: unknown, degraded, edge_confirmed, handoff_entrypoint_ok, hold, insufficient_data, latest_intent_loss, premature, preview_only, real_order_path_armed, rejected_order, 496998 chars"
+    },
+    {
+      "freshness_status": "unknown",
+      "key": "spec-067",
+      "kind": "manual_note",
+      "machine_payload": {
+        "signals": [
+          "degraded",
+          "latest_intent_loss",
+          "preview_only"
+        ]
+      },
+      "observed_at_utc": null,
+      "producer_commit": null,
+      "source_ref": "spec-067:spec-067.md",
+      "summary_ko": "spec-067: unknown, degraded, latest_intent_loss, preview_only, 11508 chars"
+    }
+  ],
+  "experiment_plans": [
+    {
+      "affected_paths": [
+        "src/auto_invest/analytics/evolution_loop.py"
+      ],
+      "allowed_stage": "backtest",
+      "candidate_id": "candidate-fd04772a23c5",
+      "experiment_id": "exp-73ba1abde934",
+      "failure_criteria": [
+        "표본 부족 또는 기준선 대비 우위 없음",
+        "안전 경계가 필요하면 자동 승격 중단"
+      ],
+      "goal_ko": "돈 경로 준비도와 기존 게이트 정렬가 장기 성장 능력을 높이는지 검증한다.",
+      "non_goals_ko": "실주문, 자본 증액, 허용 종목 확대, 한도 완화, live 전략 교체는 비목표다.",
+      "required_data": [
+        "money-path",
+        "edge-autoarm",
+        "reassign"
+      ],
+      "rollback_or_discard_ko": "기준 미달이면 학습 장부에 폐기 또는 증거 의존 상태로 남긴다.",
+      "success_metrics": [
+        "사전 선언한 비교 기준 대비 개선",
+        "증거 출처와 한계가 evidence package에 기록됨",
+        "주문·자본·whitelist·caps·live 전략 직접 변경 없음"
+      ]
+    },
+    {
+      "affected_paths": [
+        "src/auto_invest/analytics/evolution_loop.py"
+      ],
+      "allowed_stage": "read_only",
+      "candidate_id": "candidate-source-diversification-sidecar-bottleneck",
+      "experiment_id": "exp-5d0e8b353daf",
+      "failure_criteria": [
+        "표본 부족 또는 기준선 대비 우위 없음",
+        "안전 경계가 필요하면 자동 승격 중단"
+      ],
+      "goal_ko": "증거 기반 후보 소스 다변화가 장기 성장 능력을 높이는지 검증한다.",
+      "non_goals_ko": "실주문, 자본 증액, 허용 종목 확대, 한도 완화, live 전략 교체는 비목표다.",
+      "required_data": [
+        "released-work",
+        "pipeline-liveness",
+        "capital-path-readiness",
+        "promotion-summary"
+      ],
+      "rollback_or_discard_ko": "기준 미달이면 학습 장부에 폐기 또는 증거 의존 상태로 남긴다.",
+      "success_metrics": [
+        "사전 선언한 비교 기준 대비 개선",
+        "증거 출처와 한계가 evidence package에 기록됨",
+        "주문·자본·whitelist·caps·live 전략 직접 변경 없음"
+      ]
+    },
+    {
+      "affected_paths": [
+        "src/auto_invest/analytics/evolution_loop.py"
+      ],
+      "allowed_stage": "read_only",
+      "candidate_id": "candidate-cc96b35062da",
+      "experiment_id": "exp-0eaf33493251",
+      "failure_criteria": [
+        "표본 부족 또는 기준선 대비 우위 없음",
+        "안전 경계가 필요하면 자동 승격 중단",
+        "추가 관측 전에는 변경 계획으로 승격하지 않음"
+      ],
+      "goal_ko": "비상관 포트폴리오 후보 비교력 강화가 장기 성장 능력을 높이는지 검증한다.",
+      "non_goals_ko": "실주문, 자본 증액, 허용 종목 확대, 한도 완화, live 전략 교체는 비목표다.",
+      "required_data": [
+        "reassign",
+        "rebalance-paper-forward"
+      ],
+      "rollback_or_discard_ko": "기준 미달이면 학습 장부에 폐기 또는 증거 의존 상태로 남긴다.",
+      "success_metrics": [
+        "사전 선언한 비교 기준 대비 개선",
+        "증거 출처와 한계가 evidence package에 기록됨",
+        "주문·자본·whitelist·caps·live 전략 직접 변경 없음"
+      ]
+    },
+    {
+      "affected_paths": [
+        "src/auto_invest/analytics/evolution_loop.py"
+      ],
+      "allowed_stage": "backtest",
+      "candidate_id": "candidate-1ed634d8bf6d",
+      "experiment_id": "exp-e13eced4ca82",
+      "failure_criteria": [
+        "표본 부족 또는 기준선 대비 우위 없음",
+        "안전 경계가 필요하면 자동 승격 중단"
+      ],
+      "goal_ko": "micro GTAA 의도 손익 재검토와 대체 전략 연구가 장기 성장 능력을 높이는지 검증한다.",
+      "non_goals_ko": "실주문, 자본 증액, 허용 종목 확대, 한도 완화, live 전략 교체는 비목표다.",
+      "required_data": [
+        "money-path",
+        "rebalance-micro-gtaa",
+        "rebalance-paper-forward"
+      ],
+      "rollback_or_discard_ko": "기준 미달이면 학습 장부에 폐기 또는 증거 의존 상태로 남긴다.",
+      "success_metrics": [
+        "사전 선언한 비교 기준 대비 개선",
+        "증거 출처와 한계가 evidence package에 기록됨",
+        "주문·자본·whitelist·caps·live 전략 직접 변경 없음"
+      ]
+    },
+    {
+      "affected_paths": [
+        "src/auto_invest/analytics/evolution_loop.py"
+      ],
+      "allowed_stage": "read_only",
+      "candidate_id": "candidate-88a7e7f07361",
+      "experiment_id": "exp-b2cf8a8d50cb",
+      "failure_criteria": [
+        "표본 부족 또는 기준선 대비 우위 없음",
+        "안전 경계가 필요하면 자동 승격 중단"
+      ],
+      "goal_ko": "자율 루프 sidecar와 handoff 생존성가 장기 성장 능력을 높이는지 검증한다.",
+      "non_goals_ko": "실주문, 자본 증액, 허용 종목 확대, 한도 완화, live 전략 교체는 비목표다.",
+      "required_data": [
+        "pipeline-liveness",
+        "handoff"
+      ],
+      "rollback_or_discard_ko": "기준 미달이면 학습 장부에 폐기 또는 증거 의존 상태로 남긴다.",
+      "success_metrics": [
+        "사전 선언한 비교 기준 대비 개선",
+        "증거 출처와 한계가 evidence package에 기록됨",
+        "주문·자본·whitelist·caps·live 전략 직접 변경 없음"
+      ]
+    },
+    {
+      "affected_paths": [
+        "src/auto_invest/analytics/evolution_loop.py"
+      ],
+      "allowed_stage": "read_only",
+      "candidate_id": "candidate-e481b0309206",
+      "experiment_id": "exp-4135c1380a7f",
+      "failure_criteria": [
+        "표본 부족 또는 기준선 대비 우위 없음",
+        "안전 경계가 필요하면 자동 승격 중단"
+      ],
+      "goal_ko": "레짐·성과 분석을 후보 점수화 입력으로 승격가 장기 성장 능력을 높이는지 검증한다.",
+      "non_goals_ko": "실주문, 자본 증액, 허용 종목 확대, 한도 완화, live 전략 교체는 비목표다.",
+      "required_data": [
+        "regime-stratify",
+        "public-data",
+        "promote-readiness"
+      ],
+      "rollback_or_discard_ko": "기준 미달이면 학습 장부에 폐기 또는 증거 의존 상태로 남긴다.",
+      "success_metrics": [
+        "사전 선언한 비교 기준 대비 개선",
+        "증거 출처와 한계가 evidence package에 기록됨",
+        "주문·자본·whitelist·caps·live 전략 직접 변경 없음"
+      ]
+    },
+    {
+      "affected_paths": [
+        "src/auto_invest/analytics/evolution_loop.py"
+      ],
+      "allowed_stage": "read_only",
+      "candidate_id": "candidate-fa66202bf496",
+      "experiment_id": "exp-1b18e81a968e",
+      "failure_criteria": [
+        "표본 부족 또는 기준선 대비 우위 없음",
+        "안전 경계가 필요하면 자동 승격 중단"
+      ],
+      "goal_ko": "학습 장부로 폐기·보류 후보 재발굴 차단가 장기 성장 능력을 높이는지 검증한다.",
+      "non_goals_ko": "실주문, 자본 증액, 허용 종목 확대, 한도 완화, live 전략 교체는 비목표다.",
+      "required_data": [
+        "handoff",
+        "pipeline-liveness"
+      ],
+      "rollback_or_discard_ko": "기준 미달이면 학습 장부에 폐기 또는 증거 의존 상태로 남긴다.",
+      "success_metrics": [
+        "사전 선언한 비교 기준 대비 개선",
+        "증거 출처와 한계가 evidence package에 기록됨",
+        "주문·자본·whitelist·caps·live 전략 직접 변경 없음"
+      ]
+    },
+    {
+      "affected_paths": [
+        "src/auto_invest/analytics/evolution_loop.py"
+      ],
+      "allowed_stage": "read_only",
+      "candidate_id": "candidate-dff4f9344b02",
+      "experiment_id": "exp-f0be5f52d848",
+      "failure_criteria": [
+        "표본 부족 또는 기준선 대비 우위 없음",
+        "안전 경계가 필요하면 자동 승격 중단"
+      ],
+      "goal_ko": "주문 거부·체결 품질 손익 관측가 장기 성장 능력을 높이는지 검증한다.",
+      "non_goals_ko": "실주문, 자본 증액, 허용 종목 확대, 한도 완화, live 전략 교체는 비목표다.",
+      "required_data": [
+        "execution-quality",
+        "rebalance-micro-gtaa",
+        "kis-smoke"
+      ],
+      "rollback_or_discard_ko": "기준 미달이면 학습 장부에 폐기 또는 증거 의존 상태로 남긴다.",
+      "success_metrics": [
+        "사전 선언한 비교 기준 대비 개선",
+        "증거 출처와 한계가 evidence package에 기록됨",
+        "주문·자본·whitelist·caps·live 전략 직접 변경 없음"
+      ]
+    },
+    {
+      "affected_paths": [
+        "src/auto_invest/analytics/evolution_loop.py"
+      ],
+      "allowed_stage": "read_only",
+      "candidate_id": "candidate-6ee3370e933d",
+      "experiment_id": "exp-7d6b2b7e1a5f",
+      "failure_criteria": [
+        "표본 부족 또는 기준선 대비 우위 없음",
+        "안전 경계가 필요하면 자동 승격 중단"
+      ],
+      "goal_ko": "오래된 증거와 성과 실패 분리가 장기 성장 능력을 높이는지 검증한다.",
+      "non_goals_ko": "실주문, 자본 증액, 허용 종목 확대, 한도 완화, live 전략 교체는 비목표다.",
+      "required_data": [
+        "rebalance-micro-gtaa"
+      ],
+      "rollback_or_discard_ko": "기준 미달이면 학습 장부에 폐기 또는 증거 의존 상태로 남긴다.",
+      "success_metrics": [
+        "사전 선언한 비교 기준 대비 개선",
+        "증거 출처와 한계가 evidence package에 기록됨",
+        "주문·자본·whitelist·caps·live 전략 직접 변경 없음"
+      ]
+    },
+    {
+      "affected_paths": [
+        "src/auto_invest/analytics/evolution_loop.py"
+      ],
+      "allowed_stage": "read_only",
+      "candidate_id": "candidate-facf2fa31834",
+      "experiment_id": "exp-88c0deb0a704",
+      "failure_criteria": [
+        "표본 부족 또는 기준선 대비 우위 없음",
+        "안전 경계가 필요하면 자동 승격 중단"
+      ],
+      "goal_ko": "공개 데이터 수집·교차 검증 확장가 장기 성장 능력을 높이는지 검증한다.",
+      "non_goals_ko": "실주문, 자본 증액, 허용 종목 확대, 한도 완화, live 전략 교체는 비목표다.",
+      "required_data": [
+        "public-data"
+      ],
+      "rollback_or_discard_ko": "기준 미달이면 학습 장부에 폐기 또는 증거 의존 상태로 남긴다.",
+      "success_metrics": [
+        "사전 선언한 비교 기준 대비 개선",
+        "증거 출처와 한계가 evidence package에 기록됨",
+        "주문·자본·whitelist·caps·live 전략 직접 변경 없음"
+      ]
+    }
+  ],
+  "learning_ledger": [
+    {
+      "candidate_id": "candidate-cc96b35062da",
+      "created_at_utc": "2026-06-28T17:18:21Z",
+      "decision": "evidence_dependent",
+      "entry_id": "ledger-f6440fc15f37",
+      "evidence_package_id": null,
+      "next_recheck_condition": "후보가 COMPARABLE 관측 수에 도달하면 재검토",
+      "reason_ko": "후보별 전진 관측·상관·낙폭을 같은 기준으로 묶는 실험을 설계한다."
+    },
+    {
+      "candidate_id": "candidate-1ed634d8bf6d",
+      "created_at_utc": "2026-07-01T09:30:35Z",
+      "decision": "rejected",
+      "entry_id": "ledger-5b69ce7cd6b0",
+      "evidence_package_id": "autonomous-promotion:28504209238",
+      "next_recheck_condition": null,
+      "reason_ko": "기계 판독 검증 결과에 실패가 있어 승격 증거로 병합하지 않는다."
+    },
+    {
+      "candidate_id": "candidate-cc96b35062da",
+      "created_at_utc": "2026-07-01T09:30:35Z",
+      "decision": "rejected",
+      "entry_id": "ledger-87e07600d9b6",
+      "evidence_package_id": "autonomous-promotion:28504209238",
+      "next_recheck_condition": null,
+      "reason_ko": "기계 판독 검증 결과에 실패가 있어 승격 증거로 병합하지 않는다."
+    },
+    {
+      "candidate_id": "candidate-6ee3370e933d",
+      "created_at_utc": "2026-07-02T07:29:35Z",
+      "decision": "evidence_dependent",
+      "entry_id": "ledger-53e39189cf6f",
+      "evidence_package_id": null,
+      "next_recheck_condition": null,
+      "reason_ko": "stale evidence 목록을 후보와 별도 관측 이슈로 보고한다."
+    },
+    {
+      "candidate_id": "candidate-dff4f9344b02",
+      "created_at_utc": "2026-07-02T07:29:35Z",
+      "decision": "evidence_dependent",
+      "entry_id": "ledger-9e7f4ffc34c4",
+      "evidence_package_id": null,
+      "next_recheck_condition": null,
+      "reason_ko": "execution-quality sidecar 신선도를 회복한 뒤 거부 주문 기회손익과 브로커 오류율을 읽기 전용으로 증거 패키징한다."
+    }
+  ],
+  "operator_review": [],
+  "overall_status": "degraded",
+  "run_id": "31249862085",
+  "safe_high_leverage_work": [
+    "candidate-source-diversification-sidecar-bottleneck"
+  ],
+  "schema_version": "1.0",
+  "stale_evidence": [
+    "rebalance-micro-gtaa"
+  ],
+  "timestamp_utc": "2026-08-08T09:06:55Z",
+  "top_breakthrough_candidates": [
+    "candidate-fd04772a23c5",
+    "candidate-source-diversification-sidecar-bottleneck",
+    "candidate-cc96b35062da",
+    "candidate-1ed634d8bf6d",
+    "candidate-88a7e7f07361",
+    "candidate-e481b0309206",
+    "candidate-fa66202bf496",
+    "candidate-dff4f9344b02"
+  ]
+}
