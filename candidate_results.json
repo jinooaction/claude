@@ -1,0 +1,154 @@
+{
+  "results": [
+    {
+      "block_reason_ko": "전략 검증 출력이 엣지 없음 또는 실패를 보고했다.",
+      "candidate_id": "candidate-cc96b35062da",
+      "executions": [
+        {
+          "command": [
+            "uv",
+            "run",
+            "auto-invest",
+            "portfolio-walk-forward",
+            "--portfolio",
+            "deploy/global-trend-wide-portfolio.toml",
+            "--trailing-years",
+            "5",
+            "--history-root",
+            "/tmp/candidate_result_history/global-trend-wide/hist",
+            "--db",
+            "data/candidate-factory/candidate-cc96b35062da-wide.db",
+            "--halt-path",
+            "data/candidate-factory/candidate-cc96b35062da.halt.flag",
+            "--json"
+          ],
+          "exit_code": 0,
+          "stderr_excerpt": "",
+          "stdout_excerpt": "{\"dataset_version\": \"ebeab4ed52e2fa3c34ea18a8991805a15f7b4bd63a297bf9b23f1496cd5eb649\", \"data_newest_session\": \"2026-08-07\", \"data_age_days\": 1, \"data_staleness\": \"fresh\", \"eval_window\": [\"2022-06-16\", \"2026-08-07\"], \"n_segments\": 3, \"segments_strategy_wins\": 1, \"mean_strategy_sharpe\": \"1.106973\", \"mean_benchmark_sharpe\": \"1.361360\", \"pooled_strategy_sharpe_annual\": \"1.264117\", \"num_trials\": 1, \"strategy_psr\": \"0.984746\", \"strategy_dsr\": \"0.984746\", \"verdict\": \"\\uac15\\uac74\\ud55c \\uc5e3\\uc9c0 \\uc5c6\\uc74c: \\uad6c\\uac04 \\uacfc\\ubc18 \\uc2e4\\ud328(1/3); \\ud3c9\\uade0 \\uc0e4\\ud504\\uac00 \\ub2e8\\uc21c \\ubcf4\\uc720 \\uc774\\ud558. \\ub77c\\uc774\\ube0c \\ubc30\\ud3ec \\uc815\\ub2f9\\ud654 \\uc548 \\ub428.\"}",
+          "timed_out": false
+        },
+        {
+          "command": [
+            "uv",
+            "run",
+            "auto-invest",
+            "portfolio-walk-forward",
+            "--portfolio",
+            "deploy/multi-asset-trend-portfolio.toml",
+            "--trailing-years",
+            "5",
+            "--history-root",
+            "/tmp/candidate_result_history/multi-asset-trend/hist",
+            "--db",
+            "data/candidate-factory/candidate-cc96b35062da-multi.db",
+            "--halt-path",
+            "data/candidate-factory/candidate-cc96b35062da.halt.flag",
+            "--json"
+          ],
+          "exit_code": 0,
+          "stderr_excerpt": "",
+          "stdout_excerpt": "{\"dataset_version\": \"8c14d8d510925ea414754bea133a6055fce9914868260f6f4dcf55221463d04c\", \"data_newest_session\": \"2026-08-07\", \"data_age_days\": 1, \"data_staleness\": \"fresh\", \"eval_window\": [\"2022-06-10\", \"2026-08-07\"], \"n_segments\": 3, \"segments_strategy_wins\": 0, \"mean_strategy_sharpe\": \"1.182496\", \"mean_benchmark_sharpe\": \"1.435841\", \"pooled_strategy_sharpe_annual\": \"1.102943\", \"num_trials\": 1, \"strategy_psr\": \"0.972404\", \"strategy_dsr\": \"0.972404\", \"verdict\": \"\\uac15\\uac74\\ud55c \\uc5e3\\uc9c0 \\uc5c6\\uc74c: \\uad6c\\uac04 \\uacfc\\ubc18 \\uc2e4\\ud328(0/3); \\ud3c9\\uade0 \\uc0e4\\ud504\\uac00 \\ub2e8\\uc21c \\ubcf4\\uc720 \\uc774\\ud558. \\ub77c\\uc774\\ube0c \\ubc30\\ud3ec \\uc815\\ub2f9\\ud654 \\uc548 \\ub428.\"}",
+          "timed_out": false
+        }
+      ],
+      "historical_backtest": "fail",
+      "output_summary_ko": "검증 결과가 전략 엣지 실패를 보고했다.",
+      "package_id": "pkg-8aae8cb99874",
+      "package_kind": "portfolio_backtest",
+      "raw_metrics": {
+        "data_age_days": 1,
+        "data_newest_session": "2026-08-07",
+        "data_staleness": "fresh",
+        "dataset_version": "ebeab4ed52e2fa3c34ea18a8991805a15f7b4bd63a297bf9b23f1496cd5eb649",
+        "eval_window": [
+          "2022-06-16",
+          "2026-08-07"
+        ],
+        "mean_benchmark_sharpe": "1.361360",
+        "mean_strategy_sharpe": "1.106973",
+        "n_segments": 3,
+        "num_trials": 1,
+        "pooled_strategy_sharpe_annual": "1.264117",
+        "segments_strategy_wins": 1,
+        "strategy_dsr": "0.984746",
+        "strategy_psr": "0.984746",
+        "verdict": "강건한 엣지 없음: 구간 과반 실패(1/3); 평균 샤프가 단순 보유 이하. 라이브 배포 정당화 안 됨."
+      },
+      "recent_oos": "fail",
+      "source_ref": "candidate-result-executor:pkg-8aae8cb99874",
+      "status": "fail",
+      "walk_forward": "fail"
+    },
+    {
+      "block_reason_ko": "전략 검증 출력이 엣지 없음 또는 실패를 보고했다.",
+      "candidate_id": "candidate-1ed634d8bf6d",
+      "executions": [
+        {
+          "command": [
+            "uv",
+            "run",
+            "auto-invest",
+            "portfolio-walk-forward",
+            "--portfolio",
+            "deploy/micro-gtaa-live-portfolio.toml",
+            "--trailing-years",
+            "5",
+            "--history-root",
+            "/tmp/candidate_result_history/micro-gtaa/hist",
+            "--db",
+            "data/candidate-factory/candidate-1ed634d8bf6d.db",
+            "--halt-path",
+            "data/candidate-factory/candidate-1ed634d8bf6d.halt.flag",
+            "--json"
+          ],
+          "exit_code": 0,
+          "stderr_excerpt": "",
+          "stdout_excerpt": "{\"dataset_version\": \"7f5d205ae1574fa501d755b80ec4d453e6a45e50b65f43848e219504652aefbb\", \"data_newest_session\": \"2026-08-07\", \"data_age_days\": 1, \"data_staleness\": \"fresh\", \"eval_window\": [\"2022-06-16\", \"2026-08-07\"], \"n_segments\": 3, \"segments_strategy_wins\": 1, \"mean_strategy_sharpe\": \"1.725878\", \"mean_benchmark_sharpe\": \"1.971776\", \"pooled_strategy_sharpe_annual\": \"1.940645\", \"num_trials\": 1, \"strategy_psr\": \"0.999423\", \"strategy_dsr\": \"0.999423\", \"verdict\": \"\\uac15\\uac74\\ud55c \\uc5e3\\uc9c0 \\uc5c6\\uc74c: \\uad6c\\uac04 \\uacfc\\ubc18 \\uc2e4\\ud328(1/3); \\ud3c9\\uade0 \\uc0e4\\ud504\\uac00 \\ub2e8\\uc21c \\ubcf4\\uc720 \\uc774\\ud558. \\ub77c\\uc774\\ube0c \\ubc30\\ud3ec \\uc815\\ub2f9\\ud654 \\uc548 \\ub428.\"}",
+          "timed_out": false
+        },
+        {
+          "command": [
+            "uv",
+            "run",
+            "python",
+            "scripts/deep_walk_forward_probe.py",
+            "--segment-months",
+            "60"
+          ],
+          "exit_code": 0,
+          "stderr_excerpt": "내려받기 https://raw.githubusercontent.com/datasets/s-and-p-500/main/data/data.csv …\n내려받기 https://raw.githubusercontent.com/datasets/gold-prices/main/data/monthly.csv …\n  1971~: 주식·채권 667개월 (1971-01-01 … 2026-07-01)",
+          "stdout_excerpt": "깊은 OOS walk-forward — 추세 후보 vs 등가중 3자산 단순 보유 (주식·채권·금 1/3씩, 추세 게이트 없음)\n  추세 SMA 10개월 · 구간 60개월 · 총 666개월 · 11개 구간\n\n후보                                 판정              전체샤프    전체칼마    전체낙폭%     구간샤프승     구간방어승    최악구간%\n-----------------------------------------------------------------------------------------------------\n(벤치마크) 등가중 단순보유                    기준              1.22    0.45     20.7         —         —      3.9\n주식 추세만 (스펙 042)                    — 엣지 없음         1.37    0.66     18.9    6/11      3/11        7.7\n2자산 분산 추세 주+채 (스펙 043)             🏆 수익 엣지         1.78    1.49      6.6    9/11      6/11        6.1\n3자산 고정가중 추세 +금 (스펙 047)            🏆 수익 엣지         1.77    1.18      9.5   10/11      8/11        5.7\n3자산 역변동성 추세 +금 (스펙 047, 라이브)       🏆 수익 엣지         1.81    1.75      5.3   11/11      8/11        4.8\n-----------------------------------------------------------------------------------------------------\n\n챔피언: 3자산 역변동성 추세 +금 (스펙 047, 라이브) — 🏆 수익 엣지\n  방어 + 샤프·CAGR 까지 초과; 낙폭",
+          "timed_out": false
+        }
+      ],
+      "historical_backtest": "fail",
+      "output_summary_ko": "검증 결과가 전략 엣지 실패를 보고했다.",
+      "package_id": "pkg-c9a284fa4235",
+      "package_kind": "strategy_backtest",
+      "raw_metrics": {
+        "data_age_days": 1,
+        "data_newest_session": "2026-08-07",
+        "data_staleness": "fresh",
+        "dataset_version": "7f5d205ae1574fa501d755b80ec4d453e6a45e50b65f43848e219504652aefbb",
+        "eval_window": [
+          "2022-06-16",
+          "2026-08-07"
+        ],
+        "mean_benchmark_sharpe": "1.971776",
+        "mean_strategy_sharpe": "1.725878",
+        "n_segments": 3,
+        "num_trials": 1,
+        "pooled_strategy_sharpe_annual": "1.940645",
+        "segments_strategy_wins": 1,
+        "strategy_dsr": "0.999423",
+        "strategy_psr": "0.999423",
+        "verdict": "강건한 엣지 없음: 구간 과반 실패(1/3); 평균 샤프가 단순 보유 이하. 라이브 배포 정당화 안 됨."
+      },
+      "recent_oos": "fail",
+      "source_ref": "candidate-result-executor:pkg-c9a284fa4235",
+      "status": "fail",
+      "walk_forward": "fail"
+    }
+  ],
+  "schema_version": "1.0"
+}
