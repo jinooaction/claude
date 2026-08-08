@@ -1,0 +1,85 @@
+{
+  "queue": [
+    {
+      "allowed_next_action": "released-work 장부가 완료한 후보이므로 승격하지 않는다.",
+      "candidate_id": "candidate-fd04772a23c5",
+      "next_gate": null,
+      "priority_score": 597,
+      "stage": "DISCARD",
+      "title_ko": "돈 경로 준비도와 기존 게이트 정렬"
+    },
+    {
+      "allowed_next_action": "released-work 장부가 완료한 후보이므로 승격하지 않는다.",
+      "candidate_id": "candidate-source-diversification-sidecar-bottleneck",
+      "next_gate": null,
+      "priority_score": 594,
+      "stage": "DISCARD",
+      "title_ko": "증거 기반 후보 소스 다변화"
+    },
+    {
+      "allowed_next_action": "학습 장부에서 폐기된 후보로 유지한다.",
+      "candidate_id": "candidate-1ed634d8bf6d",
+      "next_gate": null,
+      "priority_score": 574,
+      "stage": "DISCARD",
+      "title_ko": "micro GTAA 의도 손익 재검토와 대체 전략 연구"
+    },
+    {
+      "allowed_next_action": "학습 장부에서 폐기된 후보로 유지한다.",
+      "candidate_id": "candidate-cc96b35062da",
+      "next_gate": null,
+      "priority_score": 574,
+      "stage": "DISCARD",
+      "title_ko": "비상관 포트폴리오 후보 비교력 강화"
+    },
+    {
+      "allowed_next_action": "released-work 장부가 완료한 후보이므로 승격하지 않는다.",
+      "candidate_id": "candidate-88a7e7f07361",
+      "next_gate": null,
+      "priority_score": 568,
+      "stage": "DISCARD",
+      "title_ko": "자율 루프 sidecar와 handoff 생존성"
+    },
+    {
+      "allowed_next_action": "released-work 장부가 완료한 후보이므로 승격하지 않는다.",
+      "candidate_id": "candidate-e481b0309206",
+      "next_gate": null,
+      "priority_score": 560,
+      "stage": "DISCARD",
+      "title_ko": "레짐·성과 분석을 후보 점수화 입력으로 승격"
+    },
+    {
+      "allowed_next_action": "released-work 장부가 완료한 후보이므로 승격하지 않는다.",
+      "candidate_id": "candidate-fa66202bf496",
+      "next_gate": null,
+      "priority_score": 559,
+      "stage": "DISCARD",
+      "title_ko": "학습 장부로 폐기·보류 후보 재발굴 차단"
+    },
+    {
+      "allowed_next_action": "released-work 장부가 완료한 후보이므로 승격하지 않는다.",
+      "candidate_id": "candidate-dff4f9344b02",
+      "next_gate": null,
+      "priority_score": 527,
+      "stage": "DISCARD",
+      "title_ko": "주문 거부·체결 품질 손익 관측"
+    },
+    {
+      "allowed_next_action": "released-work 장부가 완료한 후보이므로 승격하지 않는다.",
+      "candidate_id": "candidate-6ee3370e933d",
+      "next_gate": null,
+      "priority_score": 510,
+      "stage": "DISCARD",
+      "title_ko": "오래된 증거와 성과 실패 분리"
+    },
+    {
+      "allowed_next_action": "released-work 장부가 완료한 후보이므로 승격하지 않는다.",
+      "candidate_id": "candidate-facf2fa31834",
+      "next_gate": null,
+      "priority_score": 494,
+      "stage": "DISCARD",
+      "title_ko": "공개 데이터 수집·교차 검증 확장"
+    }
+  ],
+  "schema_version": "1.0"
+}
