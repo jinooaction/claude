@@ -1,0 +1,115 @@
+{
+  "alert_decision": {
+    "alert_level": "ATTENTION_ONLY",
+    "message_ko": "auto-invest 운영자 알림: ATTENTION\n자율 작업 실행 상태는 OBSERVATION_WAIT입니다.\n\n다음 행동: 다음 scheduled sidecar 갱신 뒤 released-work와 autonomous-work를 다시 읽어 새 EXECUTION_READY 후보가 생겼는지 확인합니다.\n\n상태판: https://jinooaction.github.io/claude/status.html\n\n읽기 전용 알림입니다. 주문, 자본, live 설정은 변경하지 않았습니다.",
+    "reason_ko": "보조 확인 항목만 있어 모바일 알림은 보내지 않습니다.",
+    "send_status": "NOT_ATTEMPTED",
+    "should_send": false
+  },
+  "commit": "758dda2534af38f444ac75361295fb49b489e234",
+  "dashboard_sections": [
+    {
+      "body_ko": "실제 돈 경로는 PREVIEW_ONLY, 진행 단계는 NO_EDGE_YET입니다.",
+      "key": "money",
+      "status": "PREVIEW_ONLY",
+      "title_ko": "실제 돈 경로"
+    },
+    {
+      "body_ko": "자율 작업 실행 상태는 OBSERVATION_WAIT입니다.",
+      "key": "autonomous-work",
+      "status": "OBSERVATION_WAIT",
+      "title_ko": "다음 자율 작업"
+    },
+    {
+      "body_ko": "돈 경로 정렬 상태는 ALIGNED_WAITING입니다.",
+      "key": "alignment",
+      "status": "ALIGNED_WAITING",
+      "title_ko": "돈 경로 정렬"
+    },
+    {
+      "body_ko": "개입 필요 항목이 없습니다.",
+      "key": "action-needed",
+      "status": "OK",
+      "title_ko": "개입 필요"
+    }
+  ],
+  "dashboard_url": "https://jinooaction.github.io/claude/status.html",
+  "headline_ko": "자율 작업 실행 상태는 OBSERVATION_WAIT입니다.",
+  "next_action_ko": "다음 scheduled sidecar 갱신 뒤 released-work와 autonomous-work를 다시 읽어 새 EXECUTION_READY 후보가 생겼는지 확인합니다.",
+  "overall_status": "ATTENTION",
+  "run_id": "31251700936",
+  "safety_invariants": [
+    "no broker API call",
+    "no orders",
+    "no capital allocation",
+    "no live strategy change",
+    "no whitelist/caps change",
+    "no server SSH",
+    "no secret persistence",
+    "operator visibility only"
+  ],
+  "schema_version": "1.0",
+  "surfaces": [
+    {
+      "key": "pipeline-liveness",
+      "next_action_ko": "",
+      "parse_status": "ok",
+      "present": true,
+      "severity": "info",
+      "source_ref": "automation/pipeline-liveness-last-run:LAST_RUN.md",
+      "status": "OK",
+      "summary_ko": "핵심 자동화 생존 감시는 정상입니다."
+    },
+    {
+      "key": "money-path",
+      "next_action_ko": "엣지 미확정: 전진 성과가 벤치마크/유의 기준을 넘지 못함.",
+      "parse_status": "ok",
+      "present": true,
+      "severity": "info",
+      "source_ref": "automation/money-path-last-run:LAST_RUN.md",
+      "status": "PREVIEW_ONLY",
+      "summary_ko": "실제 돈 경로는 PREVIEW_ONLY, 진행 단계는 NO_EDGE_YET입니다."
+    },
+    {
+      "key": "capital-path-readiness",
+      "next_action_ko": "엣지 미확정: 전진 성과가 벤치마크/유의 기준을 넘지 못함.",
+      "parse_status": "ok",
+      "present": true,
+      "severity": "info",
+      "source_ref": "automation/capital-path-readiness-last-run:capital_path_readiness.json",
+      "status": "ACCUMULATING_EDGE",
+      "summary_ko": "자본 준비도는 ACCUMULATING_EDGE, 실제 돈 상태는 PREVIEW_ONLY입니다."
+    },
+    {
+      "key": "money-gate-alignment",
+      "next_action_ko": "전진 관측을 계속 누적하고, 최소 관측 이후 기존 자본 사다리로만 승격한다.",
+      "parse_status": "ok",
+      "present": true,
+      "severity": "info",
+      "source_ref": "automation/money-gate-alignment-last-run:money_gate_alignment.json",
+      "status": "ALIGNED_WAITING",
+      "summary_ko": "돈 경로 정렬 상태는 ALIGNED_WAITING입니다."
+    },
+    {
+      "key": "autonomous-work-execution",
+      "next_action_ko": "다음 scheduled sidecar 갱신 뒤 released-work와 autonomous-work를 다시 읽어 새 EXECUTION_READY 후보가 생겼는지 확인합니다.",
+      "parse_status": "ok",
+      "present": true,
+      "severity": "attention",
+      "source_ref": "automation/autonomous-work-execution-last-run:autonomous_work_execution.json",
+      "status": "OBSERVATION_WAIT",
+      "summary_ko": "자율 작업 실행 상태는 OBSERVATION_WAIT입니다."
+    },
+    {
+      "key": "released-work",
+      "next_action_ko": "",
+      "parse_status": "ok",
+      "present": true,
+      "severity": "info",
+      "source_ref": "automation/released-work-last-run:released_work.json",
+      "status": "OK",
+      "summary_ko": "완료 후보 장부 상태는 OK, 완료 후보 42개입니다."
+    }
+  ],
+  "timestamp_utc": "2026-08-08T09:57:16.439244Z"
+}
