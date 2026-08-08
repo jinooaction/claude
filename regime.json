@@ -1,0 +1,51 @@
+{
+  "schema_version": "1.0",
+  "as_of": "2026-08-08",
+  "indicators": {
+    "yield_curve": {
+      "status": "OK",
+      "state": "FLAT",
+      "latest": "0.46",
+      "latest_date": "2026-08-07",
+      "inverted_days_252": 0,
+      "stress": false,
+      "source": "treasury/UST10Y2Y.csv"
+    },
+    "vix": {
+      "status": "OK",
+      "state": "CALM",
+      "latest": "14.900000",
+      "latest_date": "2026-08-07",
+      "history_percentile": "31.4",
+      "history_obs": 9246,
+      "stress": false,
+      "source": "cboe/VIX.csv"
+    },
+    "inflation": {
+      "status": "OK",
+      "state": "HIGH",
+      "yoy_pct": "3.53",
+      "latest_date": "2026-06-01",
+      "stress": true,
+      "source": "bls/CUUR0000SA0.csv"
+    },
+    "sahm": {
+      "status": "OK",
+      "state": "QUIET",
+      "sahm_value_pp": "0.00",
+      "current_ma3": "4.20",
+      "latest_date": "2026-07-01",
+      "stress": false,
+      "source": "bls/LNS14000000.csv"
+    }
+  },
+  "overall": {
+    "label": "CAUTION",
+    "stress_flags": [
+      "inflation"
+    ],
+    "available_indicators": 4,
+    "total_indicators": 4,
+    "note": "연구 전용 — 라이브 매매 신호 아님 (라이브 신호는 KIS 데이터만)"
+  }
+}
