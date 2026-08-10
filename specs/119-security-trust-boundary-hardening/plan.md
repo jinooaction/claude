@@ -38,6 +38,9 @@ Harden the trust boundary around public GitHub workflows, remote server executio
     fixed gateway commands. The observation helper covers only paper forward
     evidence, account NAV reads, and live-growth reads; it does not provide
     live arming, live order placement, capital allocation, or arbitrary shell.
+12. Keep KIS smoke failure evidence single-pass and public-safe by redacting
+    pytest fixture representations and Python dict-style sidecar tracebacks,
+    while preserving fail-closed status when a read-only broker endpoint fails.
 
 ## Validation
 
@@ -49,6 +52,7 @@ Harden the trust boundary around public GitHub workflows, remote server executio
 - `uv run pytest tests/unit/test_risk_gates.py -q`
 - `uv run pytest tests/unit/test_security_workflow_hardening.py -q`
 - `uv run pytest tests/unit/test_ssh_boundary_repair.py -q`
+- `uv run pytest tests/unit/test_kis_smoke_workflow.py tests/unit/test_security_workflow_hardening.py -q`
 - `uv run pytest -q`
 - `uv run ruff check src tests`
 - `git diff --check`

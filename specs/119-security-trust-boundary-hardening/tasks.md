@@ -27,3 +27,6 @@
   gateway helpers for paper forward evidence, account NAV reads, and live
   growth reads without reopening arbitrary shell execution or live order
   commands.
+- [x] T020 Keep KIS smoke failure evidence single-pass and public-safe by
+  redacting pytest fixture representations/Python dict-style sidecar tracebacks
+  and removing immediate full-suite retry after a token-bearing attempt.

@@ -115,17 +115,6 @@ KIS_LIVE_TEST=1 sudo -E -u auto-invest \
         -p no:cacheprovider 2>&1
 pytest_exit=$?
 if [[ "${pytest_exit}" -ne 0 ]]; then
-    echo "  (재시도: 직접 uv 호출 — root 환경)"
-    cd "${SMOKE_REPO}"
-    env "PATH=$PATH" \
-        "HOME=${HOME:-/tmp}" \
-        "KIS_LIVE_TEST=1" \
-        "KIS_APP_KEY=$KIS_APP_KEY" \
-        "KIS_APP_SECRET=$KIS_APP_SECRET" \
-        "KIS_ACCOUNT_NO=$KIS_ACCOUNT_NO" \
-        uv run pytest \
-        tests/integration/test_live_broker.py -v -s \
-        -p no:cacheprovider
-    pytest_exit=$?
+    echo "::warning::KIS smoke failed after one token issue; not retrying full live tests to avoid KIS OAuth throttle and duplicate live-read noise."
 fi
 exit "${pytest_exit}"

@@ -30,8 +30,12 @@ SENSITIVE_JSON_KEYS = {
     "account_no",
     "acntprdcd",
     "acnt_prdt_cd",
+    "accesstoken",
+    "access_token",
     "appkey",
+    "app_key",
     "appsecret",
+    "app_secret",
     "brokeraccount",
     "capital",
     "capitalusd",
@@ -68,6 +72,15 @@ PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
             rf"(?im)^(\|\s*(?:{'|'.join(TABLE_KEYS)})\s*\|\s*)[^|\n]+(\|?)"
         ),
         r"\1[REDACTED]\2",
+    ),
+    (
+        re.compile(
+            r"(?i)(['\"]?\b(?:KIS_ACCOUNT_NO|ACCOUNT_NO|CANO|ACNT_PRDT_CD|"
+            r"KIS_APP_KEY|KIS_APP_SECRET|APPSECRET|APPKEY|APP_KEY|APP_SECRET|"
+            r"ACCESS_TOKEN|ACCESS-TOKEN|TOKEN|access_token|app_key|app_secret)"
+            r"\b['\"]?\s*[:=]\s*)['\"]?[^,'\"\s)}\]]+['\"]?"
+        ),
+        r"\1[REDACTED]",
     ),
     (
         re.compile(

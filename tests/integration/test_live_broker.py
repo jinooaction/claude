@@ -56,6 +56,20 @@ pytestmark = pytest.mark.skipif(
 KIS_BASE_URL = os.environ.get("KIS_BASE_URL", "https://openapi.koreainvestment.com:9443")
 
 
+class _KisTokenBundle(dict[str, str]):
+    """Dict-like fixture value with a secret-safe repr for pytest tracebacks."""
+
+    _REDACTED_KEYS = {"access_token", "app_key", "app_secret"}
+
+    def __repr__(self) -> str:
+        return repr(
+            {
+                key: "[REDACTED]" if key in self._REDACTED_KEYS else value
+                for key, value in self.items()
+            }
+        )
+
+
 def _required_env(name: str) -> str:
     val = os.environ.get(name)
     if not val:
@@ -89,12 +103,14 @@ def kis_token_bundle() -> dict:
             )
 
     token = asyncio.run(_issue())
-    return {
-        "access_token": token.access_token,
-        "token_type": token.token_type,
-        "app_key": app_key,
-        "app_secret": app_secret,
-    }
+    return _KisTokenBundle(
+        {
+            "access_token": token.access_token,
+            "token_type": token.token_type,
+            "app_key": app_key,
+            "app_secret": app_secret,
+        }
+    )
 
 
 def _make_broker(client: httpx.AsyncClient) -> ResilientClient:
