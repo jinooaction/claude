@@ -241,12 +241,21 @@ def test_public_sidecar_redactor_masks_sensitive_fields():
 | capital_usd | 12000 |
 KIS_APP_SECRET=super-secret-value
 bearer abcdefghijklmnopqrstuvwxyz.abcdefghijklmnopqrstuvwxyz.abcdefghijklmnopqrstuvwxyz
+kis_token_bundle = {
+  'access_token': 'eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ0b2tlbiJ9.signature=',
+  'token_type': 'Bearer',
+  'app_key': 'PS1234567890',
+  'app_secret': 'another-secret-value',
+}
 host=203.0.113.10
 """
     redacted = _REDACTOR.redact(raw)
     assert "1234567801" not in redacted
     assert "12000" not in redacted
     assert "super-secret-value" not in redacted
+    assert "eyJhbGciOiJIUzUxMiJ9" not in redacted
+    assert "PS1234567890" not in redacted
+    assert "another-secret-value" not in redacted
     assert "203.0.113.10" not in redacted
     assert "[REDACTED" in redacted
 

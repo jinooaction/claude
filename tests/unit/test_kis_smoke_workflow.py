@@ -1,11 +1,13 @@
 """Regression tests for the KIS smoke workflow's deploy isolation."""
 
+import importlib.util
 import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "kis-smoke.yml"
 HELPER = ROOT / "deploy" / "kis-smoke-on-instance.sh"
+LIVE_BROKER = ROOT / "tests" / "integration" / "test_live_broker.py"
 
 
 def test_kis_smoke_helper_uses_isolated_checkout_instead_of_live_repo() -> None:
@@ -54,3 +56,36 @@ def test_kis_smoke_classifies_ssh_setup_failures_without_red_x() -> None:
     assert 'smoke_pipe_status=("${PIPESTATUS[@]}")' in body
     assert "set -e\n          smoke_exit=${smoke_pipe_status[0]:-1}" in body
     assert "smoke_state=setup_pending" in body
+
+
+def test_kis_smoke_helper_does_not_retry_full_live_tests_after_failure() -> None:
+    body = HELPER.read_text()
+
+    assert "재시도: 직접 uv 호출" not in body
+    assert "not retrying full live tests" in body
+    assert body.count("tests/integration/test_live_broker.py -v -s") == 1
+
+
+def test_live_broker_token_bundle_repr_masks_fixture_secrets() -> None:
+    spec = importlib.util.spec_from_file_location("live_broker_smoke", LIVE_BROKER)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    bundle = module._KisTokenBundle(
+        {
+            "access_token": "token-secret",
+            "token_type": "Bearer",
+            "app_key": "app-key-secret",
+            "app_secret": "app-secret-value",
+        }
+    )
+
+    rendered = repr(bundle)
+
+    assert "token-secret" not in rendered
+    assert "app-key-secret" not in rendered
+    assert "app-secret-value" not in rendered
+    assert rendered.count("[REDACTED]") == 3
+    assert "Bearer" in rendered

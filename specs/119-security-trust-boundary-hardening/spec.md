@@ -41,6 +41,12 @@ As the operator, I need public sidecar branches to keep proof of operation witho
 **Acceptance**:
 - Public sidecar writers redact sensitive account, token, NAV, capital, order, and host patterns before publishing.
 - Tests prove representative public logs are redacted.
+- KIS smoke pytest fixture representations and public sidecar tracebacks redact
+  token/app-key/app-secret values even when failures print Python dict-style
+  values.
+- KIS smoke does not immediately rerun the full live test suite after one token
+  issuance has already happened; a failed read remains fail-closed instead of
+  creating a second OAuth throttle failure.
 
 ### Story 4 - Make Local Secret and Deploy State Atomic (Priority: P1)
 
@@ -78,6 +84,10 @@ As the operator, I need local token cache and deploy locks to be written atomica
 - **FR-014**: GitHub SSH setup must use the shared secret validator and fail
   clearly when `VULTR_SSH_USER`, `VULTR_SSH_PRIVATE_KEY`, or
   `VULTR_SSH_KNOWN_HOSTS` is missing.
+- **FR-015**: KIS smoke failure evidence must remain public-safe and
+  single-pass: pytest fixture reprs and sidecar text redact token/key material,
+  and the server helper must not immediately rerun the full live smoke after an
+  initial token-bearing attempt fails.
 
 ## Non-Goals
 
