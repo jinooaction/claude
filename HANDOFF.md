@@ -33,20 +33,20 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `758dda2` — Merge pull request #577 from jinooaction/codex/handoff-after-forward-anchored-observe-gateway |
-| main 테스트 | 이 갱신 브랜치 기준 `uv run pytest -q` → 2716 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
+| 마지막 main 커밋 | `5d043e7` — Merge pull request #578 from jinooaction/codex/kis-smoke-single-pass-redaction |
+| main 테스트 | #578 검증 기준 `uv run pytest -q` → 2716 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
 | main 린트 | 이 갱신 브랜치 기준 `uv run ruff check src tests` → All checks passed. |
-| 열린 PR | 없음(이 문서 편집 시점; #577은 merge 완료). |
-| 출시 완료 스펙 | 최신 운영 보정: #577(#576 뒤 HANDOFF main 기준 갱신), #576(`forward-anchored-verdict`의 raw SSH 명령을 fixed `observe ladder-anchored-verdict` gateway로 교체해 앵커드 엣지 sidecar 복구). 직전 추가: #573/#574(스펙 074 후보 가격 이력 지원 후속: candidate result workflow의 `scp`/remote `bash` 제거, fixed `observe candidate-history` gateway + `ssh -n` loop 보정으로 세 history dataset 준비 성공), #571(스펙 071 후보 결과 실행기 후속: retryable factory-blocked 후보의 안전 검증 명령 실행과 진단 복구), 123/live canary sidecar gate(#568 preview/status와 real-order job 분리, #569 fixed `observe live-canary-*` gateway로 preview/status 내용 복구), #566(forward paper 경제 장부 보정), 122(forward paper DB writability), 121(`promote-readiness` 관측 경로 복구 + 서버 root-owned gateway/helper self-refresh), 120(증거 기반 후보 소스 다변화 + released-work 완료 소비), 119(보안 신뢰 경계 강화와 후속 SSH boundary repair 및 live-money workflow 보호 환경). 이전 스펙 058~118은 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
+| 열린 PR | 없음(이 문서 편집 시점; #578은 merge 완료). |
+| 출시 완료 스펙 | 최신 운영 보정: #578(KIS smoke 실패를 한 번만 fail-closed로 남기고 public sidecar/pytest traceback 민감값을 정화), #577(#576 뒤 HANDOFF main 기준 갱신), #576(`forward-anchored-verdict`의 raw SSH 명령을 fixed `observe ladder-anchored-verdict` gateway로 교체해 앵커드 엣지 sidecar 복구). 직전 추가: #573/#574(스펙 074 후보 가격 이력 지원 후속: candidate result workflow의 `scp`/remote `bash` 제거, fixed `observe candidate-history` gateway + `ssh -n` loop 보정으로 세 history dataset 준비 성공), #571(스펙 071 후보 결과 실행기 후속: retryable factory-blocked 후보의 안전 검증 명령 실행과 진단 복구), 123/live canary sidecar gate(#568 preview/status와 real-order job 분리, #569 fixed `observe live-canary-*` gateway로 preview/status 내용 복구), #566(forward paper 경제 장부 보정), 122(forward paper DB writability), 121(`promote-readiness` 관측 경로 복구 + 서버 root-owned gateway/helper self-refresh), 120(증거 기반 후보 소스 다변화 + released-work 완료 소비), 119(보안 신뢰 경계 강화와 후속 SSH boundary repair 및 live-money workflow 보호 환경). 이전 스펙 058~118은 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
 | 골격 스펙 | 없음. `.specify/feature.json`은 최신 완료 스펙 `specs/123-live-canary-sidecar-gate`를 가리키고, `tasks.md`는 T001~T023 완료 상태다. |
-| 최근 출시 작업 | #576은 `Forward anchored verdict` run `30960153902`의 `refused command`/`ssh_exit=126`을 고쳤고, #577은 그 뒤 HANDOFF를 main 기준으로 갱신했다. 현재 후속 보정은 KIS smoke 실패 로그의 민감값 노출 위험과 즉시 전체 재시도 노이즈를 줄이는 등급 3 안전 보정이다. |
-| 활성 작업 | 없음. 열린 PR 없음. 최신 money-path(`2026-08-09T08:38:46Z`)는 `PREVIEW_ONLY`/`NO_EDGE_YET`, capital-path-readiness(`2026-08-09T08:59:47Z`)는 `ACCUMULATING_EDGE`, money-gate-alignment(`2026-08-09T09:59:00Z`)는 `ALIGNED_WAITING`, autonomous-work(`2026-08-09T09:53:23Z`)는 `OBSERVATION_WAIT`이다. 최신 KIS smoke(`2026-08-10T04:38:32Z`)는 read-only 4개 조회 통과 뒤 최근 체결 조회에서 KIS 500으로 실패했고, 현재 main helper는 즉시 재시도해 OAuth 403까지 만든다. |
+| 최근 출시 작업 | #578은 KIS smoke 실패 로그의 민감값 노출 위험과 즉시 전체 재시도 노이즈를 줄이는 등급 3 안전 보정이다. post-merge 수동 KIS smoke run `31357160707`은 최신 `5d043e7`에서 5개 read-only live smoke를 모두 통과했다. 다만 `Deploy on merge to main` run `31357030954`는 helper refresh 후 worker health check `WORKER_STARTED` 대기 시간 초과로 실패했다. |
+| 활성 작업 | 없음. 열린 PR 없음. 최신 money-path(`2026-08-09T08:38:46Z`)는 `PREVIEW_ONLY`/`NO_EDGE_YET`, capital-path-readiness(`2026-08-09T08:59:47Z`)는 `ACCUMULATING_EDGE`, money-gate-alignment(`2026-08-09T09:59:00Z`)는 `ALIGNED_WAITING`, autonomous-work(`2026-08-09T09:53:23Z`)는 `OBSERVATION_WAIT`이다. 최신 KIS smoke(`2026-08-10T04:59:01Z`)는 workflow_dispatch run `31357160707`에서 `smoke_state=success`, `smoke_exit=0`, `key_valid=true`다. |
 | 안전 경계 | 이번 갱신은 등급 3 안전 경계 보정과 등급 2 인계 갱신이다. 실제 주문, 실거래 전환, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps 확대, 손실 예산, KIS secret 값, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`라 실주문 불가이고, 직접 자본 차단은 PSR `0.567128 < 0.95`인 `NO_EDGE_YET`이다. |
 
-## 최근 관찰 — 2026-08-10 KST (KIS smoke 실패 증거 안전화와 HANDOFF main 기준 갱신)
+## 최근 관찰 — 2026-08-10 KST (#578 KIS smoke 실패 증거 안전화와 post-merge 확인)
 
-현재 `main` 최신 코드 머지는 `758dda2`(#577, forward anchored gateway 뒤 HANDOFF 갱신)다.
-#576 기능 커밋은 `1631ac3`이고, #577 handoff 커밋은 `bcf7f31`이다.
+현재 `main` 최신 코드 머지는 `5d043e7`(#578, KIS smoke single-pass/redaction 보정)다.
+#578 기능 커밋은 `98da56f`이다.
 
 - **문제 정의**: 운영자가 "당장 돈 벌기 위해 다음 해야 할 것"을 요청했지만, 최신 money-path와
   edge-autoarm은 여전히 `PREVIEW_ONLY`/`NO_EDGE_YET`이다. 직접 돈 차단은 forward 관측 39회 기준
@@ -58,15 +58,21 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
   public sidecar redactor가 Python dict-style traceback(`'access_token': '...'`)도 정화하게 했다.
   서버 helper의 "직접 uv 호출 — root 환경" 즉시 전체 재시도는 제거해 한 번 토큰을 발급한 뒤 다시
   전체 live smoke를 돌리며 OAuth throttle을 맞는 경로를 끊었다.
-- **검증 상태**: 이 갱신 브랜치에서 focused 검증 `uv run pytest tests/unit/test_kis_smoke_workflow.py tests/unit/test_security_workflow_hardening.py -q`
+- **검증 상태**: #578 브랜치에서 focused 검증 `uv run pytest tests/unit/test_kis_smoke_workflow.py tests/unit/test_security_workflow_hardening.py -q`
   24 passed, `bash -n deploy/kis-smoke-on-instance.sh` 통과, `git diff --check` 통과,
   `uv run ruff check src tests` 통과, `uv run python scripts/check_handoff_facts.py` OK,
   `uv run python scripts/agent_harness_probe.py --strict` OK(14/14), `uv run pytest -q`
-  2716 passed/5 skipped를 확인했다.
+  2716 passed/5 skipped를 확인했다. #578 merge 뒤 `KIS smoke (autonomous)` push run `31357030935`는
+  서버 helper 갱신 전 실패했지만, 배포 run `31357030954`가 helper를 refresh한 뒤 수동 재실행한
+  KIS smoke run `31357160707`은 최신 commit `5d043e7`에서 5개 read-only live smoke 모두 통과했다.
+  최신 sidecar는 `smoke_state=success`, `smoke_exit=0`, `key_valid=true`이고, 출력에 `access_token`,
+  `app_key`, `app_secret`, JWT 모양 토큰, 403/500 재시도 노이즈가 남지 않았다.
 - **남은 현실**: 이 보정은 돈을 움직이지 않는다. 실제 주문, live 재무장, 자본 배분, 라이브 전략 교체,
   whitelist/caps, 손실 예산, KIS secret 값, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다.
-  돈 경로가 열리려면 먼저 `NO_EDGE_YET`가 해소되어야 하고, KIS 최근 체결 조회 500은 다음 KIS smoke
-  실행에서 외부 브로커 상태가 회복되는지 다시 봐야 한다.
+  돈 경로가 열리려면 먼저 `NO_EDGE_YET`가 해소되어야 한다. `Deploy on merge to main` run
+  `31357030954`는 helper refresh까지는 수행했지만 worker health check에서 `WORKER_STARTED` 대기
+  시간 초과로 실패했다. 컨테이너에서 확인한 증거는 GitHub run과 KIS sidecar까지이며, 실제 서버
+  `audit_log`의 `DEPLOY_*` 행은 운영자 또는 SSH 가능한 세션이 correlation id로 추가 확인해야 한다.
 
 ## 최근 관찰 — 2026-08-05 KST (#576 forward anchored observe gateway 복구)
 
