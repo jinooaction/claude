@@ -687,6 +687,11 @@ def _unsafe_reason(kind: str, commands: Sequence[str]) -> str | None:
     return None
 
 
+def validation_command_safety_reason(kind: str, commands: Sequence[str]) -> str | None:
+    """Return why validation commands are not replay-safe, or None when allowed."""
+    return _unsafe_reason(kind, commands)
+
+
 def _run_command(tokens: Sequence[str], timeout_seconds: int) -> CommandExecution:
     try:
         completed = subprocess.run(

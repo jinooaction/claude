@@ -220,7 +220,7 @@ the current worktree. Do not trust prose in this block as the source of truth
 for in-flight work; use the `git_ground_truth` start hook, latest `HANDOFF.md`,
 and `/sync` against `jinooaction/claude` `Codex/*` branches before continuing.
 
-현재 계획 포인터: `specs/126-broad-validation-failure-frontier/plan.md` — 검증 실패 parent 후보가 완료된 뒤 `wait-for-fresh-evidence`로 멈추지 않고, 명령 재현·데이터 준비도·전략/포트폴리오 패키지 분리·승격 재검토 조건으로 이어지는 no-live 검증 실패 frontier 지도와 자동 선택 규칙을 고정하는 운영 보정.
+현재 계획 포인터: `specs/127-validation-failure-command-replay/plan.md` — 검증 실패 child 후보 `candidate-broad-validation-failure-command-replay-contract`를 닫기 위해 candidate-packages와 candidate-results를 읽어 명령, 안전 재현 범위, 종료 코드 증거 상태, 제한 출력 요약, 다음 진단 action을 no-live 계약으로 고정하는 운영 보정.
 
 머지 완료(베이스라인): spec 004 (LLM 판단 지점), 005 (자율 튜너), 006 (배포 자동화), 007 (하드닝 카나리), 008 (백테스트), 009 (paper-run), 010 (자동 룰 설계자), 011 (라이브 성과 측정). **주의: 일부 tasks.md 가 stale 0% 로 표시된 적 있음 — 코드/테스트를 믿을 것.**
 
