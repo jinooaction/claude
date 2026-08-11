@@ -39,16 +39,16 @@
 
 ### User Story 3 - 후보 완료 뒤 다음 broad no-edge 후보로 전진한다 (Priority: P3)
 
-운영자는 이번 자산군 회전 후보가 완료된 뒤 같은 후보를 다시 받지 않고, broad no-edge frontier의 다음 후보인 다중 보유 기간·신호군 실험으로 이동한다.
+운영자는 이번 자산군 회전 후보가 완료된 뒤 같은 broad 후보를 다시 받지 않고, broad no-edge frontier 안에서 다음 후보인 다중 보유 기간·신호군 실험이 열린 상태로 이동한다. 단, 전체 autonomous-work 선택은 다른 더 높은 우선순위의 복구·검증 후보가 있으면 그 후보를 먼저 고를 수 있다.
 
 **Why this priority**: 완료 후보를 released-work가 읽을 수 있게 닫아야 자율 작업 루프가 같은 후보를 반복하지 않는다.
 
-**Independent Test**: released-work 로컬 재현에 `candidate-broad-no-edge-asset-universe-rotation-experiment`가 나타나고, autonomous-work 로컬 재현이 `candidate-broad-no-edge-multi-horizon-signal-experiment`를 선택하는지 확인한다.
+**Independent Test**: released-work 로컬 재현에 `candidate-broad-no-edge-asset-universe-rotation-experiment`가 나타나고, autonomous-work 로컬 재현의 `broad_no_edge_frontier_map`에서 이 후보의 `coverage_status`가 `released`, `candidate-broad-no-edge-multi-horizon-signal-experiment`의 `coverage_status`가 `open`인지 확인한다. 전체 `selected_work`는 현재 sidecar의 더 높은 우선순위 후보가 있을 때 달라질 수 있다.
 
 **Acceptance Scenarios**:
 
 1. **Given** 스펙 125가 완료된 상태, **When** released-work가 스펙을 스캔하면, **Then** `candidate-broad-no-edge-asset-universe-rotation-experiment`가 released 후보로 기록된다.
-2. **Given** 이 후보가 released됨, **When** autonomous-work 보고서를 생성하면, **Then** 다음 broad no-edge 후보는 `candidate-broad-no-edge-multi-horizon-signal-experiment`다.
+2. **Given** 이 후보가 released됨, **When** autonomous-work 보고서를 생성하면, **Then** broad no-edge frontier의 다음 열린 후보는 `candidate-broad-no-edge-multi-horizon-signal-experiment`다.
 
 ### Edge Cases
 
@@ -96,7 +96,7 @@
 - **SC-004**: Missing or malformed critical evidence produces `BLOCKED` and a failing validation gate.
 - **SC-005**: Focused unit and integration tests for the new report and probe pass.
 - **SC-006**: Full `uv run pytest`, `uv run ruff check src tests`, `git diff --check`, `check_handoff_facts.py`, strict agent harness, and PR quality gate pass before merge.
-- **SC-007**: After completion marker is scanned, autonomous-work local replay advances to `candidate-broad-no-edge-multi-horizon-signal-experiment`.
+- **SC-007**: After completion marker is scanned, autonomous-work local replay marks this candidate `coverage_status=released` in `broad_no_edge_frontier_map` and exposes `candidate-broad-no-edge-multi-horizon-signal-experiment` as the next `coverage_status=open` broad no-edge candidate.
 
 ## Assumptions
 
