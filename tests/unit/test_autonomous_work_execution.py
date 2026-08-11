@@ -10,12 +10,13 @@ from auto_invest.analytics.autonomous_work_execution import (
     AGENT_OPS_FRONTIER_CANDIDATE_ID,
     AUTONOMY_CLOSED_RELEASED,
     AUTONOMY_CODEX_START,
-    AUTONOMY_OBSERVATION_WAIT,
     AUTONOMY_OPERATOR_APPROVAL,
     BROAD_FRONTIER_EXPANSION_NO_EDGE_CANDIDATE_PREFIX,
     BROAD_FRONTIER_EXPANSION_VALIDATION_FAILURES_CANDIDATE_PREFIX,
     BROAD_NO_EDGE_ASSET_UNIVERSE_ROTATION_CANDIDATE_ID,
     BROAD_NO_EDGE_MULTI_HORIZON_SIGNAL_CANDIDATE_ID,
+    BROAD_VALIDATION_FAILURE_COMMAND_REPLAY_CANDIDATE_ID,
+    BROAD_VALIDATION_FAILURE_DATA_READINESS_CANDIDATE_ID,
     BROKER_DIAGNOSTIC_LIVENESS_CANDIDATE_ID,
     BROKER_REJECTION_TAXONOMY_CANDIDATE_ID,
     CODEX_COMPLETION_GATES,
@@ -39,10 +40,8 @@ from auto_invest.analytics.autonomous_work_execution import (
     REGIME_TIMELINE_COVERAGE_CANDIDATE_ID,
     SIGNAL_DIVERSIFICATION_EDGE_EXPERIMENT_CANDIDATE_ID,
     STATUS_EXECUTION_READY,
-    STATUS_OBSERVATION_WAIT,
     STATUS_OPERATOR_APPROVAL_REQUIRED,
     STATUS_RELEASED,
-    WAIT_FOR_FRESH_EVIDENCE_CANDIDATE_ID,
     WORKTREE_CONCURRENCY_LIVENESS_CANDIDATE_ID,
     build_autonomous_work_execution,
 )
@@ -2126,10 +2125,112 @@ def test_all_released_candidates_emit_broad_frontier_expansion_before_waiting():
     assert repeated_report.selected_work is not None
     assert (
         repeated_report.selected_work.candidate_id
-        == WAIT_FOR_FRESH_EVIDENCE_CANDIDATE_ID
+        == BROAD_VALIDATION_FAILURE_COMMAND_REPLAY_CANDIDATE_ID
     )
-    assert repeated_report.selected_work.status == STATUS_OBSERVATION_WAIT
-    assert repeated_report.selected_work.autonomy_level == AUTONOMY_OBSERVATION_WAIT
+    assert repeated_report.selected_work.status == STATUS_EXECUTION_READY
+    assert repeated_report.selected_work.autonomy_level == AUTONOMY_CODEX_START
+    assert "명령 재현" in repeated_report.selected_work.title_ko
+    assert "실제 주문" in " ".join(repeated_report.selected_work.safety_boundary)
+    assert len(repeated_report.selected_work.blocked_package_refs) == 2
+
+    payload = repeated_report.to_dict()
+    validation_map = payload["broad_validation_failure_frontier_map"]
+    assert (
+        validation_map[0]["recommended_candidate_id"]
+        == BROAD_VALIDATION_FAILURE_COMMAND_REPLAY_CANDIDATE_ID
+    )
+    assert validation_map[0]["coverage_status"] == "open"
+    assert validation_map[0]["package_count"] == 2
+    assert "검증 실패 frontier 지도" in repeated_report.as_markdown()
+
+
+def test_released_validation_failure_entry_advances_to_next_entry():
+    base_evidence = {
+        "capital-path-readiness": _json(
+            {
+                "priority_candidates": [
+                    {
+                        "candidate_id": "candidate-fd04772a23c5",
+                        "domain_key": "live_readiness",
+                        "status": "new",
+                        "score": 597,
+                    }
+                ]
+            }
+        ),
+        "candidate-result-executor": _retryable_blocked_candidate_results(),
+        "evolution-ledger": _json(
+            {
+                "entries": [
+                    {
+                        "candidate_id": "candidate-1ed634d8bf6d",
+                        "status": "rejected",
+                        "reason_ko": "검증 실패로 승격하지 않는다.",
+                    },
+                    {
+                        "candidate_id": "candidate-cc96b35062da",
+                        "status": "rejected",
+                        "reason_ko": "검증 실패로 승격하지 않는다.",
+                    },
+                ]
+            }
+        ),
+        "released-work": _released_through_broker_diagnostic_liveness(
+            AGENT_OPS_FRONTIER_CANDIDATE_ID,
+            HANDOFF_TRUTH_LIVENESS_CANDIDATE_ID,
+            PR_MERGE_EVIDENCE_LIVENESS_CANDIDATE_ID,
+            WORKTREE_CONCURRENCY_LIVENESS_CANDIDATE_ID,
+            AGENT_HARNESS_REGRESSION_LIVENESS_CANDIDATE_ID,
+            OPERATOR_REPORT_LIVENESS_CANDIDATE_ID,
+            EVIDENCE_SOURCE_DIVERSIFICATION_VALIDATION_FAILURES_CANDIDATE_ID,
+        ),
+        "money-path": _json(
+            {
+                "overall_status": "PREVIEW_ONLY",
+                "live_money_state": {"status": "PREVIEW_ONLY"},
+                "stage": "NO_EDGE_YET",
+            }
+        ),
+        "edge-autoarm": _json(
+            {
+                "action": "WAIT_EDGE",
+                "reason": "forward 판정='NO_EDGE'",
+            }
+        ),
+        "pipeline-liveness": _liveness(),
+    }
+    parent_report = build_autonomous_work_execution(base_evidence, now=NOW)
+    assert parent_report.selected_work is not None
+    parent_id = parent_report.selected_work.candidate_id
+
+    report = build_autonomous_work_execution(
+        {
+            **base_evidence,
+            "released-work": _released_through_broker_diagnostic_liveness(
+                AGENT_OPS_FRONTIER_CANDIDATE_ID,
+                HANDOFF_TRUTH_LIVENESS_CANDIDATE_ID,
+                PR_MERGE_EVIDENCE_LIVENESS_CANDIDATE_ID,
+                WORKTREE_CONCURRENCY_LIVENESS_CANDIDATE_ID,
+                AGENT_HARNESS_REGRESSION_LIVENESS_CANDIDATE_ID,
+                OPERATOR_REPORT_LIVENESS_CANDIDATE_ID,
+                EVIDENCE_SOURCE_DIVERSIFICATION_VALIDATION_FAILURES_CANDIDATE_ID,
+                parent_id,
+                BROAD_VALIDATION_FAILURE_COMMAND_REPLAY_CANDIDATE_ID,
+            ),
+        },
+        now=NOW,
+    )
+
+    assert report.selected_work is not None
+    assert (
+        report.selected_work.candidate_id
+        == BROAD_VALIDATION_FAILURE_DATA_READINESS_CANDIDATE_ID
+    )
+    validation_map = {
+        entry.frontier_key: entry for entry in report.broad_validation_failure_frontier_map
+    }
+    assert validation_map["command_replay_contract"].coverage_status == "released"
+    assert validation_map["data_readiness_contract"].coverage_status == "open"
 
 
 def test_all_released_no_edge_context_emits_broad_frontier_expansion():

@@ -97,6 +97,18 @@ BROAD_FRONTIER_EXPANSION_VALIDATION_FAILURES_CANDIDATE_PREFIX = (
 BROAD_FRONTIER_EXPANSION_NO_EDGE_CANDIDATE_PREFIX = (
     "candidate-broad-frontier-expansion-no-edge"
 )
+BROAD_VALIDATION_FAILURE_COMMAND_REPLAY_CANDIDATE_ID = (
+    "candidate-broad-validation-failure-command-replay-contract"
+)
+BROAD_VALIDATION_FAILURE_DATA_READINESS_CANDIDATE_ID = (
+    "candidate-broad-validation-failure-data-readiness-contract"
+)
+BROAD_VALIDATION_FAILURE_PACKAGE_KIND_CANDIDATE_ID = (
+    "candidate-broad-validation-failure-package-kind-expansion-contract"
+)
+BROAD_VALIDATION_FAILURE_PROMOTION_RECHECK_CANDIDATE_ID = (
+    "candidate-broad-validation-failure-promotion-recheck-contract"
+)
 BROAD_NO_EDGE_ASSET_UNIVERSE_ROTATION_CANDIDATE_ID = (
     "candidate-broad-no-edge-asset-universe-rotation-experiment"
 )
@@ -299,6 +311,23 @@ class BroadNoEdgeFrontierTemplate:
     priority_score: int
     reason_ko: str
     next_action_ko: str
+    review_axes: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class BroadValidationFailureFrontierTemplate:
+    """검증 실패 parent 후보 뒤 재생성할 구체 no-live 검증 후보."""
+
+    frontier_key: str
+    label_ko: str
+    work_domain_key: str
+    recommended_candidate_id: str
+    title_ko: str
+    priority_score: int
+    reason_ko: str
+    next_action_ko: str
+    failure_codes: tuple[str, ...]
+    package_kinds: tuple[str, ...]
     review_axes: tuple[str, ...]
 
 
@@ -572,6 +601,94 @@ _AGENT_OPS_FRONTIER_TEMPLATES: tuple[AgentOpsFrontierTemplate, ...] = (
             "QUALITY-006, HANDOFF와 released-work 증거를 함께 읽어 운영자가 다시 "
             "묻지 않아도 되는 완료 보고의 PASS/WAIT/FAIL 계약을 만든다."
         ),
+    ),
+)
+
+_BROAD_VALIDATION_FAILURE_FRONTIER_TEMPLATES: tuple[
+    BroadValidationFailureFrontierTemplate, ...
+] = (
+    BroadValidationFailureFrontierTemplate(
+        frontier_key="command_replay_contract",
+        label_ko="검증 명령 재현 계약",
+        work_domain_key="agent_ops",
+        recommended_candidate_id=BROAD_VALIDATION_FAILURE_COMMAND_REPLAY_CANDIDATE_ID,
+        title_ko="검증 실패 명령 재현 계약",
+        priority_score=2480,
+        reason_ko=(
+            "현재 막힌 패키지는 모두 `execution_failed` 진단이며, 실패 명령·종료 "
+            "코드·제한 출력이 다음 후보 발굴의 병목이다. 같은 패키지를 막연히 "
+            "재시도하지 말고 재현 가능한 실패 지문 계약으로 먼저 닫아야 한다."
+        ),
+        next_action_ko=(
+            "candidate-result-executor와 candidate-packages 증거를 읽어 실패 명령, "
+            "허용된 읽기 전용 재현 범위, 종료 코드, stdout/stderr 요약, 다음 "
+            "진단 action을 기계 판독 계약으로 만든다."
+        ),
+        failure_codes=("execution_failed",),
+        package_kinds=("strategy_backtest", "portfolio_backtest"),
+        review_axes=("validation_command", "exit_code", "safe_replay", "output_digest"),
+    ),
+    BroadValidationFailureFrontierTemplate(
+        frontier_key="data_readiness_contract",
+        label_ko="검증 데이터 준비도",
+        work_domain_key="data_quality",
+        recommended_candidate_id=BROAD_VALIDATION_FAILURE_DATA_READINESS_CANDIDATE_ID,
+        title_ko="검증 실패 데이터 준비도 계약",
+        priority_score=2380,
+        reason_ko=(
+            "두 패키지 모두 후보 history root와 포트폴리오 입력을 요구한다. 실행 "
+            "실패가 전략 아이디어의 실패인지 데이터 준비 결함인지 분리하지 못하면 "
+            "엣지 탐색 폭이 실제보다 좁아진다."
+        ),
+        next_action_ko=(
+            "candidate history support, portfolio TOML, public-data, regime-stratify "
+            "증거를 함께 읽어 history root, 관측 기간, 데이터 결측 원인을 "
+            "검증 패키지별 PASS/WAIT/FAIL로 분리한다."
+        ),
+        failure_codes=("execution_failed",),
+        package_kinds=("strategy_backtest", "portfolio_backtest"),
+        review_axes=("history_root", "portfolio_toml", "market_history_coverage"),
+    ),
+    BroadValidationFailureFrontierTemplate(
+        frontier_key="package_kind_expansion",
+        label_ko="전략·포트폴리오 패키지 분리",
+        work_domain_key="strategy_design",
+        recommended_candidate_id=BROAD_VALIDATION_FAILURE_PACKAGE_KIND_CANDIDATE_ID,
+        title_ko="검증 실패 패키지 종류별 frontier 확장",
+        priority_score=2280,
+        reason_ko=(
+            "막힌 패키지는 전략 백테스트와 포트폴리오 백테스트가 섞여 있다. 둘을 "
+            "같은 실패로 취급하면 전략군, 포트폴리오 구성, 보유 기간, 산출 증거를 "
+            "넓히는 순서가 흐려진다."
+        ),
+        next_action_ko=(
+            "strategy_backtest와 portfolio_backtest 실패를 나눠 전략군, 포트폴리오 "
+            "구성, 보유 기간, 산출 증거별 no-live 후보 축을 재정렬한다."
+        ),
+        failure_codes=("execution_failed",),
+        package_kinds=("strategy_backtest", "portfolio_backtest"),
+        review_axes=("strategy_family", "portfolio_design", "holding_period"),
+    ),
+    BroadValidationFailureFrontierTemplate(
+        frontier_key="promotion_recheck_contract",
+        label_ko="승격 재검토 조건",
+        work_domain_key="review",
+        recommended_candidate_id=BROAD_VALIDATION_FAILURE_PROMOTION_RECHECK_CANDIDATE_ID,
+        title_ko="검증 실패 승격 재검토 계약",
+        priority_score=2180,
+        reason_ko=(
+            "learning ledger가 실패 후보를 억제한 뒤 재검토 조건이 없으면, 실패가 "
+            "고쳐져도 후보가 닫힌 채 남을 수 있다. 억제 기억은 필요하지만 새 증거가 "
+            "생겼을 때 되살리는 조건도 필요하다."
+        ),
+        next_action_ko=(
+            "learning ledger, autonomous-promotion, candidate-result evidence를 "
+            "함께 읽어 어떤 실패 지문 변화가 후보 재검토를 허용하는지 결정론적 "
+            "계약으로 만든다."
+        ),
+        failure_codes=("execution_failed",),
+        package_kinds=("strategy_backtest", "portfolio_backtest"),
+        review_axes=("learning_ledger", "promotion_evidence", "recheck_condition"),
     ),
 )
 
@@ -1105,6 +1222,46 @@ class BroadNoEdgeFrontierMapEntry:
 
 
 @dataclass(frozen=True)
+class BroadValidationFailureFrontierMapEntry:
+    """검증 실패 parent 뒤 광역 no-live 검증 후보 지도 행."""
+
+    frontier_key: str
+    label_ko: str
+    work_domain_key: str
+    coverage_status: str
+    priority_score: int
+    recommended_candidate_id: str
+    title_ko: str
+    reason_ko: str
+    next_action_ko: str
+    failure_codes: tuple[str, ...]
+    package_kinds: tuple[str, ...]
+    review_axes: tuple[str, ...]
+    package_count: int
+    retryable_count: int
+    required_inputs: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "frontier_key": self.frontier_key,
+            "label_ko": self.label_ko,
+            "work_domain_key": self.work_domain_key,
+            "coverage_status": self.coverage_status,
+            "priority_score": self.priority_score,
+            "recommended_candidate_id": self.recommended_candidate_id,
+            "title_ko": self.title_ko,
+            "reason_ko": self.reason_ko,
+            "next_action_ko": self.next_action_ko,
+            "failure_codes": list(self.failure_codes),
+            "package_kinds": list(self.package_kinds),
+            "review_axes": list(self.review_axes),
+            "package_count": self.package_count,
+            "retryable_count": self.retryable_count,
+            "required_inputs": list(self.required_inputs),
+        }
+
+
+@dataclass(frozen=True)
 class ObjectiveCalibration:
     """자율 성장 목적 함수, 예산, 중단 조건, 학습 지표 계약."""
 
@@ -1143,6 +1300,9 @@ class AutonomousWorkExecutionReport:
     data_evidence_frontier_map: tuple[DataEvidenceFrontierMapEntry, ...]
     execution_quality_frontier_map: tuple[ExecutionQualityFrontierMapEntry, ...]
     agent_ops_frontier_map: tuple[AgentOpsFrontierMapEntry, ...]
+    broad_validation_failure_frontier_map: tuple[
+        BroadValidationFailureFrontierMapEntry, ...
+    ]
     broad_no_edge_frontier_map: tuple[BroadNoEdgeFrontierMapEntry, ...]
     evidence_surfaces: tuple[EvidenceSurface, ...]
     safety_invariants: tuple[str, ...]
@@ -1174,6 +1334,9 @@ class AutonomousWorkExecutionReport:
             ],
             "agent_ops_frontier_map": [
                 entry.to_dict() for entry in self.agent_ops_frontier_map
+            ],
+            "broad_validation_failure_frontier_map": [
+                entry.to_dict() for entry in self.broad_validation_failure_frontier_map
             ],
             "broad_no_edge_frontier_map": [
                 entry.to_dict() for entry in self.broad_no_edge_frontier_map
@@ -1401,6 +1564,23 @@ class AutonomousWorkExecutionReport:
                 )
         else:
             lines.append("- 운영 체계 frontier 지도 항목이 없습니다.")
+
+        lines += ["", "## 검증 실패 frontier 지도", ""]
+        if self.broad_validation_failure_frontier_map:
+            lines += [
+                "| 영역 | 상태 | 패키지 | 점수 | 추천 후보 | 검토 축 | 이유 |",
+                "|------|------|-------:|-----:|-----------|---------|------|",
+            ]
+            for entry in self.broad_validation_failure_frontier_map:
+                axes = ", ".join(entry.review_axes)
+                lines.append(
+                    f"| {_table(entry.label_ko)} | {entry.coverage_status} | "
+                    f"{entry.package_count} | {entry.priority_score} | "
+                    f"{_table(entry.recommended_candidate_id)} | "
+                    f"{_table(axes)} | {_table(entry.reason_ko)} |"
+                )
+        else:
+            lines.append("- 검증 실패 frontier 지도 항목이 없습니다.")
 
         lines += ["", "## 광역 no-edge frontier 지도", ""]
         if self.broad_no_edge_frontier_map:
@@ -2521,6 +2701,12 @@ def _is_broad_no_edge_parent_candidate(candidate_id: str) -> bool:
     )
 
 
+def _is_broad_validation_failure_parent_candidate(candidate_id: str) -> bool:
+    return candidate_id.startswith(
+        f"{BROAD_FRONTIER_EXPANSION_VALIDATION_FAILURES_CANDIDATE_PREFIX}-"
+    )
+
+
 def _is_broad_no_edge_release(candidate_id: str) -> bool:
     return _is_broad_no_edge_parent_candidate(candidate_id) or candidate_id.startswith(
         "candidate-broad-no-edge-"
@@ -2848,6 +3034,10 @@ def _agent_ops_source_refs() -> tuple[str, ...]:
 
 
 def _broad_no_edge_source_refs() -> tuple[str, ...]:
+    return _broad_frontier_expansion_refs()
+
+
+def _broad_validation_failure_source_refs() -> tuple[str, ...]:
     return _broad_frontier_expansion_refs()
 
 
@@ -3410,6 +3600,115 @@ def _packet_from_agent_ops_entry(entry: AgentOpsFrontierMapEntry) -> WorkPacket:
     )
 
 
+def _broad_validation_failure_frontier_packets(
+    packets: Sequence[WorkPacket],
+    parsed: Mapping[str, Any],
+    surfaces: Sequence[EvidenceSurface],
+    broad_validation_failure_frontier_map: Sequence[
+        BroadValidationFailureFrontierMapEntry
+    ],
+) -> tuple[WorkPacket, ...]:
+    if any(packet.status == STATUS_EXECUTION_READY for packet in packets):
+        return ()
+    if any(packet.status == STATUS_OPERATOR_APPROVAL_REQUIRED for packet in packets):
+        return ()
+    if any(packet.status == STATUS_BLOCKED for packet in packets):
+        return ()
+    if all(surface.parse_status == PARSE_MISSING for surface in surfaces):
+        return ()
+
+    released = _released_candidates(parsed.get("released-work"))
+    if not any(
+        _is_broad_validation_failure_parent_candidate(candidate_id)
+        for candidate_id in released
+    ):
+        return ()
+
+    blocked_refs = _retryable_blocked_package_refs(parsed)
+    if not blocked_refs:
+        return ()
+    groups = _validation_failure_groups(blocked_refs)
+    existing_ids = {packet.candidate_id for packet in packets}
+
+    for entry in broad_validation_failure_frontier_map:
+        if entry.recommended_candidate_id in released:
+            continue
+        if entry.recommended_candidate_id in existing_ids:
+            continue
+        if entry.package_count <= 0:
+            continue
+        return (
+            _packet_from_broad_validation_failure_entry(
+                entry,
+                blocked_refs=blocked_refs,
+                groups=groups,
+                parsed=parsed,
+            ),
+        )
+    return ()
+
+
+def _packet_from_broad_validation_failure_entry(
+    entry: BroadValidationFailureFrontierMapEntry,
+    *,
+    blocked_refs: Sequence[BlockedPackageRef],
+    groups: Sequence[ValidationFailureGroup],
+    parsed: Mapping[str, Any],
+) -> WorkPacket:
+    source_refs = entry.required_inputs
+    autonomy_level, start_guidance, completion_gates = _execution_contract(
+        STATUS_EXECUTION_READY,
+        2,
+        (),
+    )
+    live_status, ladder_stage, edge_status, forward_verdict = _money_and_edge_context(
+        parsed
+    )
+    axes = ", ".join(entry.review_axes)
+    diagnostic_summary = ", ".join(group.reason_code for group in groups) or "blocked"
+    reason = (
+        f"검증 실패 frontier 지도에서 {entry.label_ko} 영역이 "
+        f"{entry.coverage_status} 상태다. 현재 retryable 검증 실패 패키지 "
+        f"{entry.package_count}개가 {diagnostic_summary} 지문으로 남아 있고, "
+        f"검토 축은 {axes}이다. {entry.reason_ko} "
+        f"money-path는 {live_status}/{ladder_stage}, edge-autoarm은 "
+        f"{edge_status}/{forward_verdict}이므로 실제 주문이나 live 재무장은 "
+        "여전히 허용하지 않는다."
+    )
+    safety_boundary = (
+        *SAFETY_INVARIANTS,
+        "검증 실패 지문 분석과 no-live 후보 설계만 허용",
+        "브로커 API 호출 금지",
+        "실제 주문 금지",
+        "live 재무장 금지",
+        "자본 배분 금지",
+    )
+    return WorkPacket(
+        packet_id=_packet_id(entry.recommended_candidate_id, entry.title_ko, source_refs),
+        candidate_id=entry.recommended_candidate_id,
+        domain_key=entry.work_domain_key,
+        title_ko=entry.title_ko,
+        work_type=_DOMAIN_WORK_TYPES.get(
+            entry.work_domain_key,
+            "autonomous_improvement",
+        ),
+        risk_grade=2,
+        safety_impact=(),
+        priority_score=entry.priority_score,
+        status=STATUS_EXECUTION_READY,
+        autonomy_level=autonomy_level,
+        reason_ko=reason,
+        next_action_ko=entry.next_action_ko,
+        start_guidance_ko=start_guidance,
+        completion_gates=completion_gates,
+        required_inputs=source_refs,
+        safety_boundary=safety_boundary,
+        source_refs=source_refs,
+        blocked_package_refs=tuple(blocked_refs),
+        validation_failure_groups=tuple(groups),
+    )
+
+
 def _broad_no_edge_frontier_packets(
     packets: Sequence[WorkPacket],
     parsed: Mapping[str, Any],
@@ -3693,6 +3992,55 @@ def _broad_no_edge_frontier_map(
     return tuple(sorted(entries, key=lambda entry: (-entry.priority_score, entry.frontier_key)))
 
 
+def _broad_validation_failure_frontier_map(
+    released_work: Any,
+    blocked_refs: Sequence[BlockedPackageRef],
+) -> tuple[BroadValidationFailureFrontierMapEntry, ...]:
+    released = _released_candidates(released_work)
+    required_inputs = _broad_validation_failure_source_refs()
+    entries: list[BroadValidationFailureFrontierMapEntry] = []
+    for template in _BROAD_VALIDATION_FAILURE_FRONTIER_TEMPLATES:
+        matching = _matching_validation_failure_refs(template, blocked_refs)
+        entries.append(
+            BroadValidationFailureFrontierMapEntry(
+                frontier_key=template.frontier_key,
+                label_ko=template.label_ko,
+                work_domain_key=template.work_domain_key,
+                coverage_status=(
+                    "released"
+                    if template.recommended_candidate_id in released
+                    else "open"
+                ),
+                priority_score=template.priority_score,
+                recommended_candidate_id=template.recommended_candidate_id,
+                title_ko=template.title_ko,
+                reason_ko=template.reason_ko,
+                next_action_ko=template.next_action_ko,
+                failure_codes=template.failure_codes,
+                package_kinds=template.package_kinds,
+                review_axes=template.review_axes,
+                package_count=len(matching),
+                retryable_count=sum(ref.retryable for ref in matching),
+                required_inputs=required_inputs,
+            )
+        )
+    return tuple(sorted(entries, key=lambda entry: (-entry.priority_score, entry.frontier_key)))
+
+
+def _matching_validation_failure_refs(
+    template: BroadValidationFailureFrontierTemplate,
+    blocked_refs: Sequence[BlockedPackageRef],
+) -> tuple[BlockedPackageRef, ...]:
+    failure_codes = set(template.failure_codes)
+    package_kinds = set(template.package_kinds)
+    return tuple(
+        ref
+        for ref in blocked_refs
+        if ref.package_kind in package_kinds
+        and any(code in failure_codes for code in ref.diagnostic_codes)
+    )
+
+
 def _dedupe_packets(packets: Sequence[WorkPacket]) -> tuple[WorkPacket, ...]:
     by_candidate: dict[str, WorkPacket] = {}
     for packet in packets:
@@ -3948,6 +4296,11 @@ def build_autonomous_work_execution(
         parsed.get("released-work")
     )
     agent_ops_frontier_map = _agent_ops_frontier_map(parsed.get("released-work"))
+    retryable_blocked_refs = _retryable_blocked_package_refs(parsed)
+    broad_validation_failure_frontier_map = _broad_validation_failure_frontier_map(
+        parsed.get("released-work"),
+        retryable_blocked_refs,
+    )
     broad_no_edge_frontier_map = _broad_no_edge_frontier_map(
         parsed.get("released-work")
     )
@@ -3973,6 +4326,17 @@ def build_autonomous_work_execution(
     )
     if broad_frontier_packet is not None:
         ordered = _dedupe_packets([*ordered, broad_frontier_packet])
+    ordered = _dedupe_packets(
+        [
+            *ordered,
+            *_broad_validation_failure_frontier_packets(
+                ordered,
+                parsed,
+                surfaces,
+                broad_validation_failure_frontier_map,
+            ),
+        ]
+    )
     ordered = _dedupe_packets(
         [
             *ordered,
@@ -4011,6 +4375,7 @@ def build_autonomous_work_execution(
         data_evidence_frontier_map=data_evidence_frontier_map,
         execution_quality_frontier_map=execution_quality_frontier_map,
         agent_ops_frontier_map=agent_ops_frontier_map,
+        broad_validation_failure_frontier_map=broad_validation_failure_frontier_map,
         broad_no_edge_frontier_map=broad_no_edge_frontier_map,
         evidence_surfaces=surfaces,
         safety_invariants=SAFETY_INVARIANTS,
@@ -4034,6 +4399,11 @@ __all__ = [
     "BROAD_NO_EDGE_DATA_GAP_AUDIT_CANDIDATE_ID",
     "BROAD_NO_EDGE_MULTI_HORIZON_SIGNAL_CANDIDATE_ID",
     "BROAD_NO_EDGE_REGIME_COST_ROBUSTNESS_CANDIDATE_ID",
+    "BROAD_VALIDATION_FAILURE_COMMAND_REPLAY_CANDIDATE_ID",
+    "BROAD_VALIDATION_FAILURE_DATA_READINESS_CANDIDATE_ID",
+    "BROAD_VALIDATION_FAILURE_PACKAGE_KIND_CANDIDATE_ID",
+    "BROAD_VALIDATION_FAILURE_PROMOTION_RECHECK_CANDIDATE_ID",
+    "BroadValidationFailureFrontierMapEntry",
     "BroadNoEdgeFrontierMapEntry",
     "BROKER_DIAGNOSTIC_LIVENESS_CANDIDATE_ID",
     "BROKER_REJECTION_TAXONOMY_CANDIDATE_ID",
