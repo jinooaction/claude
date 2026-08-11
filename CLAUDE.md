@@ -220,7 +220,7 @@ the current worktree. Do not trust prose in this block as the source of truth
 for in-flight work; use the `git_ground_truth` start hook, latest `HANDOFF.md`,
 and `/sync` against `jinooaction/claude` `Codex/*` branches before continuing.
 
-현재 계획 포인터: `specs/123-live-canary-sidecar-gate/plan.md` — `rebalance-live-canary`가 미무장 상태에서도 production 승인 대기 때문에 최신 sidecar를 못 쓰는 문제를 고치되, 실주문 명령은 별도 production-gated job에 그대로 남기는 보안 경계 보정.
+현재 계획 포인터: `specs/125-broad-no-edge-asset-universe/plan.md` — `NO_EDGE_YET`가 계속되는 상황에서 이미 실패한 단순 wide 확장을 반복하지 않고, 현금성·단기채·인플레 방어·통화 방어 같은 no-live 자산군 방어 회전 후보와 제외 기준을 기계 판독 계약으로 고정하는 운영 보정.
 
 머지 완료(베이스라인): spec 004 (LLM 판단 지점), 005 (자율 튜너), 006 (배포 자동화), 007 (하드닝 카나리), 008 (백테스트), 009 (paper-run), 010 (자동 룰 설계자), 011 (라이브 성과 측정). **주의: 일부 tasks.md 가 stale 0% 로 표시된 적 있음 — 코드/테스트를 믿을 것.**
 
