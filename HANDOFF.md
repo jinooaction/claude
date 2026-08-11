@@ -33,15 +33,37 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `5d043e7` — Merge pull request #578 from jinooaction/codex/kis-smoke-single-pass-redaction |
-| main 테스트 | #578 검증 기준 `uv run pytest -q` → 2716 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
+| 마지막 main 커밋 | `fff75f9` — Merge pull request #580 from jinooaction/codex/handoff-after-deploy-retry-success |
+| main 테스트 | 이 갱신 브랜치 기준 `uv run pytest -q` → 2716 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
 | main 린트 | 이 갱신 브랜치 기준 `uv run ruff check src tests` → All checks passed. |
-| 열린 PR | 없음(이 문서 편집 시점; #578은 merge 완료). |
-| 출시 완료 스펙 | 최신 운영 보정: #578(KIS smoke 실패를 한 번만 fail-closed로 남기고 public sidecar/pytest traceback 민감값을 정화), #577(#576 뒤 HANDOFF main 기준 갱신), #576(`forward-anchored-verdict`의 raw SSH 명령을 fixed `observe ladder-anchored-verdict` gateway로 교체해 앵커드 엣지 sidecar 복구). 직전 추가: #573/#574(스펙 074 후보 가격 이력 지원 후속: candidate result workflow의 `scp`/remote `bash` 제거, fixed `observe candidate-history` gateway + `ssh -n` loop 보정으로 세 history dataset 준비 성공), #571(스펙 071 후보 결과 실행기 후속: retryable factory-blocked 후보의 안전 검증 명령 실행과 진단 복구), 123/live canary sidecar gate(#568 preview/status와 real-order job 분리, #569 fixed `observe live-canary-*` gateway로 preview/status 내용 복구), #566(forward paper 경제 장부 보정), 122(forward paper DB writability), 121(`promote-readiness` 관측 경로 복구 + 서버 root-owned gateway/helper self-refresh), 120(증거 기반 후보 소스 다변화 + released-work 완료 소비), 119(보안 신뢰 경계 강화와 후속 SSH boundary repair 및 live-money workflow 보호 환경). 이전 스펙 058~118은 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
+| 열린 PR | 없음(이 문서 편집 시점; #580은 merge 완료). |
+| 출시 완료 스펙 | 최신 운영 보정: #580(#578 뒤 dry-run deploy 재시도 성공 인계), #579(#578 뒤 KIS smoke 성공과 deploy 실패 경계 인계), #578(KIS smoke 실패를 한 번만 fail-closed로 남기고 public sidecar/pytest traceback 민감값을 정화), #577(#576 뒤 HANDOFF main 기준 갱신), #576(`forward-anchored-verdict`의 raw SSH 명령을 fixed `observe ladder-anchored-verdict` gateway로 교체해 앵커드 엣지 sidecar 복구). 직전 추가: #573/#574(스펙 074 후보 가격 이력 지원 후속: candidate result workflow의 `scp`/remote `bash` 제거, fixed `observe candidate-history` gateway + `ssh -n` loop 보정으로 세 history dataset 준비 성공), #571(스펙 071 후보 결과 실행기 후속: retryable factory-blocked 후보의 안전 검증 명령 실행과 진단 복구), 123/live canary sidecar gate(#568 preview/status와 real-order job 분리, #569 fixed `observe live-canary-*` gateway로 preview/status 내용 복구), #566(forward paper 경제 장부 보정), 122(forward paper DB writability), 121(`promote-readiness` 관측 경로 복구 + 서버 root-owned gateway/helper self-refresh), 120(증거 기반 후보 소스 다변화 + released-work 완료 소비), 119(보안 신뢰 경계 강화와 후속 SSH boundary repair 및 live-money workflow 보호 환경). 이전 스펙 058~118은 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
 | 골격 스펙 | 없음. `.specify/feature.json`은 최신 완료 스펙 `specs/123-live-canary-sidecar-gate`를 가리키고, `tasks.md`는 T001~T023 완료 상태다. |
 | 최근 출시 작업 | #578은 KIS smoke 실패 로그의 민감값 노출 위험과 즉시 전체 재시도 노이즈를 줄이는 등급 3 안전 보정이다. post-merge 수동 KIS smoke run `31357160707`은 최신 `5d043e7`에서 5개 read-only live smoke를 모두 통과했다. 첫 `Deploy on merge to main` run `31357030954`는 health check timeout으로 실패했지만, 수동 dry-run 배포 재시도 run `31357670471`은 최신 main `cf17589`에서 성공했다(`START_EXIT=0`, `UNITS_EXIT=0`). |
-| 활성 작업 | 없음. 열린 PR 없음. 최신 money-path(`2026-08-09T08:38:46Z`)는 `PREVIEW_ONLY`/`NO_EDGE_YET`, capital-path-readiness(`2026-08-09T08:59:47Z`)는 `ACCUMULATING_EDGE`, money-gate-alignment(`2026-08-09T09:59:00Z`)는 `ALIGNED_WAITING`, autonomous-work(`2026-08-09T09:53:23Z`)는 `OBSERVATION_WAIT`이다. 최신 KIS smoke(`2026-08-10T04:59:01Z`)는 workflow_dispatch run `31357160707`에서 `smoke_state=success`, `smoke_exit=0`, `key_valid=true`다. |
-| 안전 경계 | 이번 갱신은 등급 3 안전 경계 보정과 등급 2 인계 갱신이다. 실제 주문, 실거래 전환, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps 확대, 손실 예산, KIS secret 값, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`라 실주문 불가이고, 직접 자본 차단은 PSR `0.567128 < 0.95`인 `NO_EDGE_YET`이다. |
+| 활성 작업 | 없음. 열린 PR 없음. 2026-08-11 KST 수동 read-only refresh 기준 pipeline-liveness(`2026-08-11T02:08:00Z`)는 `OK`, money-path(`2026-08-11T02:08:08Z`)는 `PREVIEW_ONLY`/`NO_EDGE_YET`, capital-path-readiness(`2026-08-11T02:08:08Z`)는 `ACCUMULATING_EDGE`, money-gate-alignment(`2026-08-11T02:08:12Z`)는 `ALIGNED_WAITING`, autonomous-work(`2026-08-11T02:08:14Z`)는 `OBSERVATION_WAIT`/`wait-for-fresh-evidence`다. edge-autoarm(`2026-08-11T00:35:17Z`)는 `WAIT_EDGE`/`NO_EDGE`, rebalance-paper-forward(`2026-08-10T23:10:02Z`)는 7개 비교 가능 트랙 모두 `NO_EDGE`다. 최신 KIS smoke(`2026-08-10T04:59:01Z`)는 `smoke_state=success`, `smoke_exit=0`, `key_valid=true`다. |
+| 안전 경계 | 이번 갱신은 등급 2 인계 갱신이다. 실제 주문, 실거래 전환, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps 확대, 손실 예산, KIS secret 값, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`라 실주문 불가이고, 직접 자본 차단은 PSR `0.531698 < 0.95`인 `NO_EDGE_YET`이다. |
+
+## 최근 관찰 — 2026-08-11 KST (돈 경로 read-only refresh와 실행 후보 없음 확인)
+
+현재 `main` 최신 코드는 `fff75f9`(#580, #578 뒤 dry-run deploy 재시도 성공 인계)다.
+이번 세션은 코드 동작을 바꾸지 않고, 돈 0 이동의 읽기 전용 루프만 최신 `main`에서 수동 재실행했다.
+
+- **문제 정의**: 운영자가 "수단과 방법을 가리지 말고 당장 돈 벌기"를 요청했다. 허용 가능한 해석은
+  안전장치를 우회하는 것이 아니라, 최신 증거 기준으로 실주문을 열 수 있는지 끝까지 확인하고,
+  운영자 승인 없는 실주문·자본 변경 없이 가능한 가장 빠른 안전 조치를 적용하는 것이다.
+- **실행한 조치**: `pipeline-liveness.yml` run `31451430443`, `money-path.yml` run `31451433886`,
+  `capital-path-readiness.yml` run `31451437371`, `money-gate-alignment.yml` run `31451441131`,
+  `autonomous-work-execution.yml` run `31451444854`를 모두 `workflow_dispatch`로 실행했다. 이 다섯 루프는
+  보고용 sidecar만 갱신하며 주문, 자본 배분, live 설정 변경, 코드/PR 자동 생성, 외부 유료 서비스를 하지 않는다.
+- **최신 돈 경로 판정**: money-path는 `PREVIEW_ONLY`/`NO_EDGE_YET`, 실계좌 NAV는 `$1466.14680000`,
+  PSR은 `0.531698 < 0.95`, 전진 관측은 40회다. edge-autoarm도 `WAIT_EDGE`/`NO_EDGE`이며 자본은 0 이동이다.
+  rebalance-paper-forward 최신 결과는 7개 비교 가능 트랙 모두 `NO_EDGE`다.
+- **최신 자동 작업 판정**: autonomous-work는 `OBSERVATION_WAIT`이고 선택 후보는 `wait-for-fresh-evidence`다.
+  실행 가능한 안전 후보, 운영자 승인 필요 후보, 복구 우선 후보가 없으며, 보이는 후보는 완료 8개와 억제 2개뿐이다.
+- **남은 현실**: 지금 당장 돈을 움직이는 합법·안전 경로는 열리지 않았다. 다음 관찰 지점은 새 scheduled sidecar가
+  쌓인 뒤 `money-path`, `edge-autoarm`, `capital-path-readiness`, `autonomous-work`를 다시 읽어
+  `NO_EDGE_YET` 또는 `OBSERVATION_WAIT`가 바뀌었는지 확인하는 것이다. 기준을 낮추거나 사다리를 강제로 열면
+  우연한 성과를 실거래로 착각하는 실패가 되므로 하지 않는다.
 
 ## 최근 관찰 — 2026-08-10 KST (#578 KIS smoke 실패 증거 안전화와 post-merge 확인)
 
