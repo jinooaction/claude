@@ -12,6 +12,8 @@ from auto_invest.analytics.autonomous_work_execution import (
     AUTONOMY_CODEX_START,
     AUTONOMY_OBSERVATION_WAIT,
     AUTONOMY_OPERATOR_APPROVAL,
+    BROAD_FRONTIER_EXPANSION_NO_EDGE_CANDIDATE_PREFIX,
+    BROAD_FRONTIER_EXPANSION_VALIDATION_FAILURES_CANDIDATE_PREFIX,
     BROKER_DIAGNOSTIC_LIVENESS_CANDIDATE_ID,
     BROKER_REJECTION_TAXONOMY_CANDIDATE_ID,
     CODEX_COMPLETION_GATES,
@@ -1987,11 +1989,111 @@ def test_released_operator_report_candidate_is_not_reselected():
         assert report.selected_work.candidate_id != OPERATOR_REPORT_LIVENESS_CANDIDATE_ID
 
 
-def test_all_released_candidates_emit_observation_wait_instead_of_reselecting_closed_candidate():
+def test_all_released_candidates_emit_broad_frontier_expansion_before_waiting():
+    base_evidence = {
+        "capital-path-readiness": _json(
+            {
+                "priority_candidates": [
+                    {
+                        "candidate_id": "candidate-fd04772a23c5",
+                        "domain_key": "live_readiness",
+                        "status": "new",
+                        "score": 597,
+                    }
+                ]
+            }
+        ),
+        "candidate-result-executor": _retryable_blocked_candidate_results(),
+        "evolution-ledger": _json(
+            {
+                "entries": [
+                    {
+                        "candidate_id": "candidate-1ed634d8bf6d",
+                        "status": "rejected",
+                        "reason_ko": "검증 실패로 승격하지 않는다.",
+                    },
+                    {
+                        "candidate_id": "candidate-cc96b35062da",
+                        "status": "rejected",
+                        "reason_ko": "검증 실패로 승격하지 않는다.",
+                    },
+                ]
+            }
+        ),
+        "released-work": _released_through_broker_diagnostic_liveness(
+            AGENT_OPS_FRONTIER_CANDIDATE_ID,
+            HANDOFF_TRUTH_LIVENESS_CANDIDATE_ID,
+            PR_MERGE_EVIDENCE_LIVENESS_CANDIDATE_ID,
+            WORKTREE_CONCURRENCY_LIVENESS_CANDIDATE_ID,
+            AGENT_HARNESS_REGRESSION_LIVENESS_CANDIDATE_ID,
+            OPERATOR_REPORT_LIVENESS_CANDIDATE_ID,
+            EVIDENCE_SOURCE_DIVERSIFICATION_VALIDATION_FAILURES_CANDIDATE_ID,
+        ),
+        "money-path": _json(
+            {
+                "overall_status": "PREVIEW_ONLY",
+                "live_money_state": {"status": "PREVIEW_ONLY"},
+                "stage": "NO_EDGE_YET",
+            }
+        ),
+        "edge-autoarm": _json(
+            {
+                "action": "WAIT_EDGE",
+                "reason": "forward 판정='NO_EDGE'",
+            }
+        ),
+        "pipeline-liveness": _liveness(),
+    }
+    report = build_autonomous_work_execution(base_evidence, now=NOW)
+
+    assert report.selected_work is not None
+    assert report.selected_work.candidate_id.startswith(
+        f"{BROAD_FRONTIER_EXPANSION_VALIDATION_FAILURES_CANDIDATE_PREFIX}-"
+    )
+    assert report.selected_work.status == STATUS_EXECUTION_READY
+    assert report.selected_work.autonomy_level == AUTONOMY_CODEX_START
+    assert report.overall_status == STATUS_EXECUTION_READY
+    assert report.ranked_work == (report.selected_work,)
+    assert "정적 템플릿 밖" in report.selected_work.reason_ko
+    assert "no-live" in report.selected_work.next_action_ko
+    assert "실제 주문" in " ".join(report.selected_work.safety_boundary)
+    assert len(report.selected_work.blocked_package_refs) == 2
+    assert (
+        EVIDENCE_SOURCE_DIVERSIFICATION_VALIDATION_FAILURES_CANDIDATE_ID
+        not in {packet.candidate_id for packet in report.ranked_work}
+    )
+
+    repeated_evidence = {
+        **base_evidence,
+        "released-work": _released_through_broker_diagnostic_liveness(
+            AGENT_OPS_FRONTIER_CANDIDATE_ID,
+            HANDOFF_TRUTH_LIVENESS_CANDIDATE_ID,
+            PR_MERGE_EVIDENCE_LIVENESS_CANDIDATE_ID,
+            WORKTREE_CONCURRENCY_LIVENESS_CANDIDATE_ID,
+            AGENT_HARNESS_REGRESSION_LIVENESS_CANDIDATE_ID,
+            OPERATOR_REPORT_LIVENESS_CANDIDATE_ID,
+            EVIDENCE_SOURCE_DIVERSIFICATION_VALIDATION_FAILURES_CANDIDATE_ID,
+            report.selected_work.candidate_id,
+        ),
+    }
+    repeated_report = build_autonomous_work_execution(repeated_evidence, now=NOW)
+
+    assert repeated_report.selected_work is not None
+    assert (
+        repeated_report.selected_work.candidate_id
+        == WAIT_FOR_FRESH_EVIDENCE_CANDIDATE_ID
+    )
+    assert repeated_report.selected_work.status == STATUS_OBSERVATION_WAIT
+    assert repeated_report.selected_work.autonomy_level == AUTONOMY_OBSERVATION_WAIT
+
+
+def test_all_released_no_edge_context_emits_broad_frontier_expansion():
     report = build_autonomous_work_execution(
         {
             "capital-path-readiness": _json(
                 {
+                    "readiness_state": "ACCUMULATING_EDGE",
+                    "live_money_status": "PREVIEW_ONLY",
                     "priority_candidates": [
                         {
                             "candidate_id": "candidate-fd04772a23c5",
@@ -1999,24 +2101,7 @@ def test_all_released_candidates_emit_observation_wait_instead_of_reselecting_cl
                             "status": "new",
                             "score": 597,
                         }
-                    ]
-                }
-            ),
-            "candidate-result-executor": _retryable_blocked_candidate_results(),
-            "evolution-ledger": _json(
-                {
-                    "entries": [
-                        {
-                            "candidate_id": "candidate-1ed634d8bf6d",
-                            "status": "rejected",
-                            "reason_ko": "검증 실패로 승격하지 않는다.",
-                        },
-                        {
-                            "candidate_id": "candidate-cc96b35062da",
-                            "status": "rejected",
-                            "reason_ko": "검증 실패로 승격하지 않는다.",
-                        },
-                    ]
+                    ],
                 }
             ),
             "released-work": _released_through_broker_diagnostic_liveness(
@@ -2028,23 +2113,35 @@ def test_all_released_candidates_emit_observation_wait_instead_of_reselecting_cl
                 OPERATOR_REPORT_LIVENESS_CANDIDATE_ID,
                 EVIDENCE_SOURCE_DIVERSIFICATION_VALIDATION_FAILURES_CANDIDATE_ID,
             ),
+            "money-path": _json(
+                {
+                    "overall_status": "PREVIEW_ONLY",
+                    "live_money_state": {"status": "PREVIEW_ONLY"},
+                    "stage": "NO_EDGE_YET",
+                }
+            ),
+            "edge-autoarm": _json(
+                {
+                    "action": "WAIT_EDGE",
+                    "reason": "forward 판정='NO_EDGE'",
+                }
+            ),
             "pipeline-liveness": _liveness(),
         },
         now=NOW,
     )
 
     assert report.selected_work is not None
-    assert report.selected_work.candidate_id == WAIT_FOR_FRESH_EVIDENCE_CANDIDATE_ID
-    assert report.selected_work.status == STATUS_OBSERVATION_WAIT
-    assert report.selected_work.autonomy_level == AUTONOMY_OBSERVATION_WAIT
-    assert report.overall_status == STATUS_OBSERVATION_WAIT
-    assert report.ranked_work == ()
-    suppressed = {packet.candidate_id: packet for packet in report.suppressed_work}
-    assert suppressed["candidate-fd04772a23c5"].status == STATUS_RELEASED
-    assert (
-        EVIDENCE_SOURCE_DIVERSIFICATION_VALIDATION_FAILURES_CANDIDATE_ID
-        not in {packet.candidate_id for packet in report.ranked_work}
+    assert report.selected_work.candidate_id.startswith(
+        f"{BROAD_FRONTIER_EXPANSION_NO_EDGE_CANDIDATE_PREFIX}-"
     )
+    assert report.selected_work.status == STATUS_EXECUTION_READY
+    assert report.selected_work.title_ko == "NO_EDGE_YET 기반 광역 투자 frontier 확장"
+    assert report.selected_work.blocked_package_refs == ()
+    assert "투자 엣지 탐색 축 자체" in report.selected_work.reason_ko
+    assert "NO_EDGE_YET" in report.selected_work.reason_ko
+    assert "전략군" in report.selected_work.next_action_ko
+    assert "주문" in " ".join(report.selected_work.safety_boundary)
 
 
 def test_macro_candidate_map_is_deterministic_and_rendered():

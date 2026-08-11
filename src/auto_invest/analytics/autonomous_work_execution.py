@@ -91,6 +91,12 @@ OPERATOR_REPORT_LIVENESS_CANDIDATE_ID = "candidate-operator-report-liveness-cont
 EVIDENCE_SOURCE_DIVERSIFICATION_VALIDATION_FAILURES_CANDIDATE_ID = (
     "candidate-evidence-source-diversification-validation-failures"
 )
+BROAD_FRONTIER_EXPANSION_VALIDATION_FAILURES_CANDIDATE_PREFIX = (
+    "candidate-broad-frontier-expansion-validation-failures"
+)
+BROAD_FRONTIER_EXPANSION_NO_EDGE_CANDIDATE_PREFIX = (
+    "candidate-broad-frontier-expansion-no-edge"
+)
 WAIT_FOR_FRESH_EVIDENCE_CANDIDATE_ID = "wait-for-fresh-evidence"
 
 _REJECTED_STATUSES = {
@@ -2149,6 +2155,26 @@ def _source_diversification_refs() -> tuple[str, ...]:
     )
 
 
+def _broad_frontier_expansion_refs() -> tuple[str, ...]:
+    return tuple(
+        dict.fromkeys(
+            [
+                *_source_diversification_refs(),
+                _SOURCE_REFS["rebalance-paper-forward"],
+                _SOURCE_REFS["capital-path-readiness"],
+                _SOURCE_REFS["public-data"],
+                "automation/public-data:summary.json",
+                "automation/public-data:regime.json",
+                "automation/public-data:regime_timeline.csv",
+                _SOURCE_REFS["regime-stratify"],
+                _SOURCE_REFS["execution-quality"],
+                _SOURCE_REFS["kis-smoke"],
+                _SOURCE_REFS["rebalance-micro-gtaa"],
+            ]
+        )
+    )
+
+
 def _nested_clean(mapping: Any, *keys: str) -> str:
     current = mapping
     for key in keys:
@@ -2265,6 +2291,205 @@ def _evidence_source_diversification_packet(
         risk_grade=2,
         safety_impact=(),
         priority_score=2650,
+        status=STATUS_EXECUTION_READY,
+        autonomy_level=autonomy_level,
+        reason_ko=reason,
+        next_action_ko=next_action,
+        start_guidance_ko=start_guidance,
+        completion_gates=completion_gates,
+        required_inputs=source_refs,
+        safety_boundary=safety_boundary,
+        source_refs=source_refs,
+        blocked_package_refs=blocked_refs,
+        validation_failure_groups=groups,
+    )
+
+
+def _broad_frontier_expansion_candidate_id(
+    blocked_refs: Sequence[BlockedPackageRef],
+    groups: Sequence[ValidationFailureGroup],
+) -> str:
+    digest_source = {
+        "groups": [
+            {
+                "reason_code": group.reason_code,
+                "package_refs": sorted(group.package_refs),
+                "safe_action_codes": sorted(group.safe_action_codes),
+            }
+            for group in groups
+        ],
+        "packages": [
+            {
+                "candidate_id": package.candidate_id,
+                "package_id": package.package_id,
+                "package_kind": package.package_kind,
+                "diagnostic_codes": sorted(package.diagnostic_codes),
+                "next_action_codes": sorted(package.next_action_codes),
+            }
+            for package in blocked_refs
+        ],
+    }
+    digest = hashlib.sha256(
+        json.dumps(digest_source, ensure_ascii=True, sort_keys=True).encode("utf-8")
+    ).hexdigest()[:12]
+    return f"{BROAD_FRONTIER_EXPANSION_VALIDATION_FAILURES_CANDIDATE_PREFIX}-{digest}"
+
+
+def _no_edge_context(
+    live_status: str,
+    ladder_stage: str,
+    edge_status: str,
+    forward_verdict: str,
+) -> bool:
+    text = " ".join(
+        value.upper()
+        for value in (live_status, ladder_stage, edge_status, forward_verdict)
+        if value
+    )
+    if "EDGE_CONFIRMED" in text:
+        return False
+    return any(
+        token in text
+        for token in (
+            "NO_EDGE",
+            "NO_EDGE_YET",
+            "WAIT_EDGE",
+            "ACCUMULATING_EDGE",
+            "PREVIEW_ONLY",
+        )
+    )
+
+
+def _broad_no_edge_candidate_id(
+    *,
+    released: Mapping[str, str],
+    live_status: str,
+    ladder_stage: str,
+    edge_status: str,
+    forward_verdict: str,
+) -> str:
+    digest_source = {
+        "edge_context": {
+            "live_status": live_status,
+            "ladder_stage": ladder_stage,
+            "edge_status": edge_status,
+            "forward_verdict": forward_verdict,
+        },
+        "released_candidates": sorted(released),
+    }
+    digest = hashlib.sha256(
+        json.dumps(digest_source, ensure_ascii=True, sort_keys=True).encode("utf-8")
+    ).hexdigest()[:12]
+    return f"{BROAD_FRONTIER_EXPANSION_NO_EDGE_CANDIDATE_PREFIX}-{digest}"
+
+
+def _broad_frontier_expansion_packet(
+    packets: Sequence[WorkPacket],
+    parsed: Mapping[str, Any],
+    surfaces: Sequence[EvidenceSurface],
+) -> WorkPacket | None:
+    if any(packet.status == STATUS_EXECUTION_READY for packet in packets):
+        return None
+    if any(packet.status == STATUS_OPERATOR_APPROVAL_REQUIRED for packet in packets):
+        return None
+    if any(packet.status == STATUS_BLOCKED for packet in packets):
+        return None
+    if all(surface.parse_status == PARSE_MISSING for surface in surfaces):
+        return None
+
+    released = _released_candidates(parsed.get("released-work"))
+    if EVIDENCE_SOURCE_DIVERSIFICATION_VALIDATION_FAILURES_CANDIDATE_ID not in released:
+        return None
+
+    blocked_refs = _retryable_blocked_package_refs(parsed)
+    groups = _validation_failure_groups(blocked_refs) if blocked_refs else ()
+    live_status, ladder_stage, edge_status, forward_verdict = _money_and_edge_context(
+        parsed
+    )
+    if blocked_refs:
+        candidate_id = _broad_frontier_expansion_candidate_id(blocked_refs, groups)
+        title = "검증 실패 지문 기반 광역 frontier 확장"
+        diagnostic_summary = ", ".join(group.reason_code for group in groups) or "blocked"
+        reason_focus = (
+            f"현재 증거에는 아직 안전하게 분석 가능한 막힌 검증 패키지 "
+            f"{len(blocked_refs)}개가 있다. 주요 진단은 {diagnostic_summary}이다. "
+            "이 패키지 지문을 기준으로 정적 템플릿 밖의 투자 엣지·데이터·체결 "
+            "품질 frontier를 다시 넓힌다."
+        )
+        next_action_focus = (
+            "candidate-result-executor의 막힌 패키지와 rebalance-paper-forward, "
+            "public-data, regime-stratify, execution-quality 증거를 함께 읽어 "
+            "기존 후보 템플릿 밖의 no-live 실험 축을 SDD로 정의한다."
+        )
+        priority_score = 2550
+    else:
+        if not _no_edge_context(
+            live_status,
+            ladder_stage,
+            edge_status,
+            forward_verdict,
+        ):
+            return None
+        candidate_id = _broad_no_edge_candidate_id(
+            released=released,
+            live_status=live_status,
+            ladder_stage=ladder_stage,
+            edge_status=edge_status,
+            forward_verdict=forward_verdict,
+        )
+        title = "NO_EDGE_YET 기반 광역 투자 frontier 확장"
+        reason_focus = (
+            "현재 retryable 검증 패키지는 남아 있지 않지만, 알려진 macro·frontier·"
+            "중첩 후보가 모두 닫힌 뒤에도 돈 경로가 엣지 확정으로 올라가지 못했다. "
+            "따라서 새 sidecar만 기다리지 말고 정적 후보 목록 밖에서 투자 엣지 "
+            "탐색 축 자체를 다시 넓힌다."
+        )
+        next_action_focus = (
+            "rebalance-paper-forward, money-path, edge-autoarm, public-data, "
+            "regime-stratify, execution-quality 증거를 함께 읽어 기존 후보 "
+            "템플릿 밖의 no-live 실험 후보군을 SDD로 정의한다."
+        )
+        priority_score = 2525
+
+    if candidate_id in released:
+        return None
+
+    source_refs = _broad_frontier_expansion_refs()
+    autonomy_level, start_guidance, completion_gates = _execution_contract(
+        STATUS_EXECUTION_READY,
+        2,
+        (),
+    )
+    released_count = sum(packet.status == STATUS_RELEASED for packet in packets)
+    suppressed_count = sum(packet.status == STATUS_SUPPRESSED for packet in packets)
+    reason = (
+        "기존 후보 소스 다변화 후보는 released-work에서 완료됐다. "
+        f"닫힌 후보는 완료 {released_count}개와 억제 {suppressed_count}개이고, "
+        f"{reason_focus} 같은 좁은 후보 목록 안에서 "
+        "새 증거만 기다리면 PREVIEW_ONLY/NO_EDGE_YET 상태가 반복되므로, "
+        f"money-path는 {live_status}/{ladder_stage}, edge-autoarm은 "
+        f"{edge_status}/{forward_verdict}이므로 실제 주문이나 live 재무장은 "
+        "여전히 허용하지 않는다."
+    )
+    next_action = (
+        f"{next_action_focus} "
+        "검토 축은 전략군, 신호군, 보유 기간, 자산군, 레짐 구간, 비용 민감도, "
+        "데이터 결측 원인을 모두 포함하되 브로커 호출·주문·자본 배분은 하지 않는다."
+    )
+    safety_boundary = (
+        *SAFETY_INVARIANTS,
+        "증거 지문 기반 후보 발행만 허용",
+        "실제 주문, live 재무장, 자본 배분을 승인하지 않음",
+    )
+    return WorkPacket(
+        packet_id=_packet_id(candidate_id, title, source_refs),
+        candidate_id=candidate_id,
+        domain_key="strategy_design",
+        title_ko=title,
+        work_type=_DOMAIN_WORK_TYPES["strategy_design"],
+        risk_grade=2,
+        safety_impact=(),
+        priority_score=priority_score,
         status=STATUS_EXECUTION_READY,
         autonomy_level=autonomy_level,
         reason_ko=reason,
@@ -3432,6 +3657,13 @@ def build_autonomous_work_execution(
             ),
         ]
     )
+    broad_frontier_packet = _broad_frontier_expansion_packet(
+        ordered,
+        parsed,
+        surfaces,
+    )
+    if broad_frontier_packet is not None:
+        ordered = _dedupe_packets([*ordered, broad_frontier_packet])
     wait_packet = _observation_wait_packet(ordered, surfaces)
     if wait_packet is not None:
         ordered = _dedupe_packets([*ordered, wait_packet])
@@ -3479,6 +3711,8 @@ __all__ = [
     "BlockedPackageRef",
     "BROKER_DIAGNOSTIC_LIVENESS_CANDIDATE_ID",
     "BROKER_REJECTION_TAXONOMY_CANDIDATE_ID",
+    "BROAD_FRONTIER_EXPANSION_NO_EDGE_CANDIDATE_PREFIX",
+    "BROAD_FRONTIER_EXPANSION_VALIDATION_FAILURES_CANDIDATE_PREFIX",
     "CODEX_COMPLETION_GATES",
     "COST_ADJUSTED_EDGE_EXPERIMENT_CANDIDATE_ID",
     "DATA_EVIDENCE_LIVENESS_CANDIDATE_ID",
