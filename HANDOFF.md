@@ -29,19 +29,33 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 상세 규칙은 Codex 세션에서는 `AGENTS.md`, Claude 세션에서는 `CLAUDE.md` 본문 참조.
 
-## 한눈 요약표 — 2026-08-11 KST 최신 코드 main 기준
+## 한눈 요약표 — 2026-08-12 KST 최신 코드 main 기준
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `25b1962` — Merge pull request #589 from jinooaction/codex/broad-validation-failure-frontier |
-| main 테스트 | 이 HANDOFF 갱신 브랜치 기준 `uv run pytest -q` → 2728 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
+| 마지막 main 커밋 | `dcf2fc8` — Merge pull request #591 from jinooaction/codex/validation-failure-command-replay-contract |
+| main 테스트 | 이 HANDOFF 갱신 브랜치 기준 `uv run pytest -q` → 2733 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
 | main 린트 | 이 HANDOFF 갱신 브랜치 기준 `uv run ruff check src tests` → All checks passed. |
-| 열린 PR | 없음(#589는 merge 완료, 이 HANDOFF 갱신 전 확인 기준). |
-| 출시 완료 스펙 | 최신 운영 보정: #589(스펙 126, 검증 실패 parent 완료 뒤 첫 no-live 후속 후보 자동 전개), #587(스펙 125, 광역 자산군 방어 회전 no-live 계약과 released-work 완료), #585(스펙 124 completion marker와 released-work closeout), #584(스펙 124, broad no-edge parent 반복 억제와 `broad_no_edge_frontier_map` 후속 no-live 후보 전개), #582(`NO_EDGE_YET` 고갈 뒤 `wait-for-fresh-evidence` 대신 broad no-live frontier 후보 발행), #581(#580 뒤 돈 경로 sidecar truth 인계), #580(#578 뒤 dry-run deploy 재시도 성공 인계), #579(#578 뒤 KIS smoke 성공과 deploy 실패 경계 인계), #578(KIS smoke 실패 증거 안전화), #576(`forward-anchored-verdict` observe gateway 복구). 직전 추가: 123/live canary sidecar gate, #566(forward paper 경제 장부 보정), 122(forward paper DB writability), 121(`promote-readiness` 관측 경로 복구), 120(증거 기반 후보 소스 다변화 + released-work 완료 소비), 119(보안 신뢰 경계 강화). 이전 스펙 058~118은 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
-| 골격 스펙 | 없음. `.specify/feature.json`은 최신 완료 스펙 `specs/126-broad-validation-failure-frontier`를 가리키고, `tasks.md`는 T001~T019 완료 상태다. |
-| 최근 출시 작업 | #589는 `candidate-broad-frontier-expansion-validation-failures-22f38b8629eb`를 스펙 126으로 완료 처리하고, 검증 실패 parent가 닫힌 뒤 `wait-for-fresh-evidence`로 물러서지 않게 했다. 최신 autonomous-work는 첫 후속 후보 `candidate-broad-validation-failure-command-replay-contract`를 선택한다. released-work run `31501059269`는 commit `25b1962`에서 released_count 45와 스펙 126 완료를 확인했다. |
-| 활성 작업 | 열린 PR 없음. 최신 autonomous-work run `31501059038`은 `candidate-broad-validation-failure-command-replay-contract`를 `EXECUTION_READY`로 골랐다. 막힌 검증 패키지는 2개이고 둘 다 `execution_failed`라, 다음 작업은 candidate-result-executor와 candidate-packages 증거를 읽어 실패 명령·종료 코드·안전 재현 범위·출력 요약을 기계 판독 계약으로 만드는 것이다. 최신 money-path는 `PREVIEW_ONLY`/`NO_EDGE_YET`, edge-autoarm은 `WAIT_EDGE`/`NO_EDGE`라 실제 주문, live 재무장, 자본 배분은 아직 금지다. |
-| 안전 경계 | 이번 갱신은 등급 2 운영 보고와 인계 보정이다. #589도 no-live work packet 확장만 했고 실제 주문, 실거래 전환, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps 확대, 손실 예산, KIS secret 값, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`라 실주문 불가이고, 직접 자본 차단은 `NO_EDGE_YET`이다. |
+| 열린 PR | 없음(#591은 merge 완료, 이 HANDOFF 갱신 전 확인 기준). |
+| 출시 완료 스펙 | 최신 운영 보정: #591(스펙 127, 검증 실패 명령 재현 계약과 completed candidate 소비), #589(스펙 126, 검증 실패 parent 완료 뒤 첫 no-live 후속 후보 자동 전개), #587(스펙 125, 광역 자산군 방어 회전 no-live 계약과 released-work 완료), #585(스펙 124 completion marker와 released-work closeout), #584(스펙 124, broad no-edge parent 반복 억제와 `broad_no_edge_frontier_map` 후속 no-live 후보 전개), #582(`NO_EDGE_YET` 고갈 뒤 `wait-for-fresh-evidence` 대신 broad no-live frontier 후보 발행), #581/#580/#579/#578/#576. 직전 추가: 123/live canary sidecar gate, #566(forward paper 경제 장부 보정), 122(forward paper DB writability), 121(`promote-readiness` 관측 경로 복구), 120(증거 기반 후보 소스 다변화 + released-work 완료 소비), 119(보안 신뢰 경계 강화). 이전 스펙 058~118은 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
+| 골격 스펙 | 없음. `.specify/feature.json`은 최신 완료 스펙 `specs/127-validation-failure-command-replay`를 가리키고, `tasks.md`는 T001~T020 완료 상태다. |
+| 최근 출시 작업 | #591은 `candidate-broad-validation-failure-command-replay-contract`를 스펙 127로 완료 처리했다. 새 probe는 candidate-packages와 candidate-results를 읽어 패키지 2개, 명령 4개의 안전 재현 범위와 실행 증거를 계약으로 만든다. released-work run `31504787462`는 commit `dcf2fc8`에서 released_count 46과 스펙 127 완료를 확인했다. |
+| 활성 작업 | 열린 PR 없음. 최신 autonomous-work run `31504787388`은 `candidate-broad-validation-failure-data-readiness-contract`를 `EXECUTION_READY`로 골랐다. 막힌 검증 패키지는 2개이고 post-merge candidate-result-executor run `31504787411`이 각 패키지의 명령 2개씩 실행 증거를 남겼다. 다음 작업은 history root, portfolio TOML, 시장 이력 커버리지를 패키지별 PASS/WAIT/FAIL로 나누는 데이터 준비도 계약이다. |
+| 안전 경계 | 이번 갱신은 등급 2 운영 보고와 인계 보정이다. #591도 no-live 읽기 전용 계약만 추가했고 실제 주문, 실거래 전환, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps 확대, 손실 예산, KIS secret 값, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 현재 money-path는 `PREVIEW_ONLY`/`NO_EDGE_YET`, edge-autoarm은 `WAIT_EDGE`/`NO_EDGE`라 실주문과 자본 배분은 여전히 금지다. |
+
+## 최근 관찰 — 2026-08-12 KST (#591 검증 실패 명령 재현 계약 완료)
+
+현재 `main` 최신 머지는 `dcf2fc8`(#591, validation failure command replay contract)다.
+기능 커밋은 `5bbf0e8`이다.
+
+- **문제 정의**: 스펙 126이 검증 실패 parent 뒤 첫 child 후보를 골랐지만, 그 child를 닫지 않으면 같은 실패 명령과 증거 상태를 다음 세션이 다시 해석해야 했다. 안전한 해결은 명령을 무작정 다시 실행하는 것이 아니라, 실패 명령·안전 재현 범위·실행 증거·다음 진단 action을 기계 판독 계약으로 고정하는 것이다.
+- **구현 상태**: 스펙 127을 추가했고, `validation_failure_command_replay.py`와 `validation_failure_command_replay_probe.py`가 candidate-packages와 candidate-results를 읽어 no-live 명령 재현 계약을 발행한다. 계약은 명령을 실행하지 않고, 기존 candidate-result-executor 안전 판정을 재사용한다. `completed_candidate_id: candidate-broad-validation-failure-command-replay-contract` 마커와 완료된 tasks.md 덕분에 released-work가 이번 child를 소비한다.
+- **post-merge 자동화 확인**: #591 merge 뒤 `Released work ledger` run `31504787462`, `Autonomous work execution loop` run `31504787388`, `Candidate implementation factory` run `31504787427`, `Candidate result executor` run `31504787411`, `Deploy on merge to main` run `31504787391`이 모두 success다. released-work는 commit `dcf2fc8`, released_count 46이고 스펙 127 후보를 released로 포함한다. 최신 autonomous-work sidecar는 commit `dcf2fc8`, timestamp `2026-08-11T15:01:47Z`, selected_work `candidate-broad-validation-failure-data-readiness-contract`, status `EXECUTION_READY`, risk_grade 2다.
+- **최신 검증 실패 증거**: post-merge candidate-result-executor는 패키지 2개를 `fail`로 기록했고, 각 패키지에 실행 증거 2개씩을 남겼다. 새 command replay probe를 최신 sidecar에 다시 돌리면 `CONTRACT_READY`, package_count 2, command_count 4, replay_safe_count 4, missing_execution_count 0, unsafe_command_count 0이다. 즉 이제 실패 명령은 “증거 없음”이 아니라 “안전하게 읽을 수 있는 실패 실행 증거 있음” 상태다.
+- **검증 상태**: #591 브랜치에서 `uv run pytest` 2733 passed/5 skipped, `uv run ruff check src tests` 통과, `git diff --check` 통과, `uv run python scripts/check_handoff_facts.py` OK, `uv run python scripts/agent_harness_probe.py --strict` OK(14/14), PR quality gate 2회 통과, current sidecar replay와 released-work/autonomous-work local replay를 확인하고 merge했다.
+- **안전 경계**: 이 변경은 검증 실패 증거를 읽기 쉽게 고정하는 no-live 운영 보정이다. 브로커 API 호출, 실제 주문, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps, 손실 예산, KIS secret 값, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. money-path는 `PREVIEW_ONLY`/`NO_EDGE_YET`, edge-autoarm은 `WAIT_EDGE`/`NO_EDGE`다.
+- **다음 작업 후보**: `candidate-broad-validation-failure-data-readiness-contract`다. candidate history support, portfolio TOML, public-data, regime-stratify 증거를 함께 읽어 history root, 관측 기간, 데이터 결측 원인을 검증 패키지별 PASS/WAIT/FAIL로 분리해야 한다. 같은 패키지를 무작정 재시도하거나 실거래를 여는 작업이 아니다.
+- **상세 인계**: `HANDOFF-134-VALIDATION-FAILURE-COMMAND-REPLAY.md`.
 
 ## 최근 관찰 — 2026-08-11 KST (#589 검증 실패 frontier 후속 후보 전개)
 
@@ -3383,6 +3397,18 @@ OOS(2022~2026, 748관측)로 돌려 "단순 보유 못 이김(3구간 0승)·라
   통과, `uv run python scripts/agent_harness_probe.py --strict` `OK (14/14)`,
   `uv run python scripts/check_handoff_facts.py` 통과, PR 품질 관문 통과. 머지 직전 전체 테스트와
   린트를 다시 실행해 같은 결과를 확인했다.
+
+## 최근 마일스톤 — 2026-08-12 KST (#591 검증 실패 명령 재현 계약)
+
+#591로 스펙 127이 main에 들어갔다. `validation_failure_command_replay_probe.py`는 candidate-packages와
+candidate-results를 읽어 막힌 패키지 2개, 명령 4개의 안전 재현 가능 여부, 실행 증거, 제한 출력,
+다음 진단 action을 no-live 계약으로 발행한다. released-work run `31504787462`는 commit `dcf2fc8`에서
+released_count 46과 `candidate-broad-validation-failure-command-replay-contract` 완료를 확인했다.
+최신 autonomous-work run `31504787388`은 다음 후보로
+`candidate-broad-validation-failure-data-readiness-contract`를 골랐다. post-merge candidate-result-executor
+run `31504787411`도 success이고, 최신 command replay 재현은 `CONTRACT_READY`, command_count 4,
+missing_execution_count 0이다. 돈 경로는 계속 `PREVIEW_ONLY`/`NO_EDGE_YET`라 실주문은 불가다. 상세는
+`HANDOFF-134-VALIDATION-FAILURE-COMMAND-REPLAY.md`.
 
 ## 최근 마일스톤 — 2026-08-11 KST (#587 broad no-edge 자산군 방어 회전 계약)
 
@@ -7338,6 +7364,9 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 
 ## 과거 인수인계 파일 (참고용)
 
+- `HANDOFF-134-VALIDATION-FAILURE-COMMAND-REPLAY.md` — #591이 검증 실패 명령 재현 계약을 출시하고, released-work가 `candidate-broad-validation-failure-command-replay-contract`를 소비해 다음 후보가 `candidate-broad-validation-failure-data-readiness-contract`로 전진한 상태
+- `HANDOFF-133-VALIDATION-FAILURE-FRONTIER.md` — #589가 검증 실패 parent 완료 뒤 첫 no-live child 후보 `candidate-broad-validation-failure-command-replay-contract`를 자동 선택하게 한 상태
+- `HANDOFF-132-BROAD-ASSET-UNIVERSE.md` — #587이 broad no-edge 자산군 방어 회전 계약을 출시하고, released-work가 `candidate-broad-no-edge-asset-universe-rotation-experiment`를 소비한 상태
 - `HANDOFF-131-BROAD-NO-EDGE-FRONTIER.md` — #584가 broad no-edge parent 반복 억제와 `broad_no_edge_frontier_map`을 출시하고, completion marker 포함 시 다음 후보가 `candidate-broad-no-edge-asset-universe-rotation-experiment`로 전진하는 상태
 - `HANDOFF-130-BROAD-FRONTIER-EXPANSION.md` — #582가 `NO_EDGE_YET` 고갈 뒤 `wait-for-fresh-evidence` 대신 broad no-live frontier 후보 `candidate-broad-frontier-expansion-no-edge-58298dfc172c`를 발행하게 한 상태
 - `HANDOFF-129-FORWARD-ANCHORED-OBSERVE-GATEWAY.md` — #576 forward anchored verdict raw SSH 경로를 fixed observe gateway로 복구하고 post-merge sidecar가 `ssh_exit=0`으로 정상 발행된 상태
