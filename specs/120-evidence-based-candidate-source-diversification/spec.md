@@ -60,6 +60,9 @@ As the operator, I need the system to improve the route toward a verified edge w
 - Blocked validation packages have no diagnostics: report `INSPECT_VALIDATION_FAILURE` with package IDs and mark the package as retryable only when evidence says so.
 - A protected live-money workflow is pending: classify it as an approval boundary, not as an invitation to approve live money.
 - Candidate evidence includes account values, host details, or tokens: keep them out of public summaries.
+- The first evidence-source-diversification candidate is already released but the same sidecar chain still shows retryable blocked validation packages: generate a deterministic broad-frontier candidate from the package/diagnostic fingerprint instead of falling straight to `WAIT_FOR_FRESH_EVIDENCE`.
+- The first evidence-source-diversification candidate is already released, no retryable blocked package remains, but money-path and edge-autoarm still say `PREVIEW_ONLY` / `NO_EDGE_YET` / `WAIT_EDGE`: generate a deterministic no-edge broad-frontier candidate instead of passively waiting.
+- The same broad-frontier fingerprint is already released: do not loop on it; wait for a changed evidence fingerprint or a new sidecar bottleneck.
 
 ## Requirements
 
@@ -75,6 +78,10 @@ As the operator, I need the system to improve the route toward a verified edge w
 - **FR-008**: The system MUST NOT change live arming, capital allocation, position caps, whitelist, drawdown budget, KIS secrets, audit log semantics, or production environment approvals.
 - **FR-009**: The system MUST keep public reports free of account-scale, token, host, or private-key values.
 - **FR-010**: The system MUST produce deterministic output for the same sidecar inputs so regressions can be tested from fixtures.
+- **FR-011**: The system MUST emit a deterministic `candidate-broad-frontier-expansion-validation-failures-<fingerprint>` packet when all known candidates are closed, the original evidence-source-diversification candidate is released, and current retryable blocked validation packages remain actionable.
+- **FR-012**: The system MUST emit a deterministic `candidate-broad-frontier-expansion-no-edge-<fingerprint>` packet when all known candidates are closed, no retryable blocked validation package remains, and money-path / edge-autoarm still indicate `NO_EDGE_YET`, `NO_EDGE`, `WAIT_EDGE`, `ACCUMULATING_EDGE`, or `PREVIEW_ONLY`.
+- **FR-013**: The broad-frontier packet MUST widen the no-live review scope across strategy families, signal families, holding periods, asset universes, regime windows, cost sensitivity, data coverage, and execution-quality evidence while preserving the same read-only money safety boundary.
+- **FR-014**: The system MUST NOT re-emit a broad-frontier packet whose exact fingerprint already appears in released-work.
 
 ### Key Entities
 
@@ -93,6 +100,8 @@ As the operator, I need the system to improve the route toward a verified edge w
 - **SC-003**: The selected work report includes an explicit statement that real-money execution remains unavailable when money-path is `PREVIEW_ONLY` or forward verdict is `NO_EDGE`.
 - **SC-004**: Existing release-ledger, autonomous-work, candidate-factory, and candidate-result tests continue to pass with no increase in skipped live-broker tests.
 - **SC-005**: Full validation before merge passes: test suite, lint, HANDOFF fact check, strict harness, and PR quality gate.
+- **SC-006**: A focused fixture with every known candidate released and two retryable blocked validation packages selects a broad-frontier expansion packet before waiting, and the same fingerprint falls back to wait only after released-work records it.
+- **SC-007**: A focused fixture with every known candidate released, no retryable blocked validation package, and `PREVIEW_ONLY` / `NO_EDGE_YET` evidence selects a no-edge broad-frontier packet before waiting.
 
 ## Assumptions
 

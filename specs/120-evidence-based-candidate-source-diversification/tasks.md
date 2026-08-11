@@ -97,6 +97,20 @@
 
 ---
 
+## Phase 7: Follow-up - Broaden Scope After Candidate Exhaustion (Priority: P1)
+
+**Purpose**: Prevent the loop from treating released source-diversification work as the end of exploration when current retryable validation failures still exist.
+
+- [x] T020 Add broad-frontier acceptance criteria to `specs/120-evidence-based-candidate-source-diversification/spec.md`.
+- [x] T021 Extend the evidence-source-diversification contract with fingerprinted broad-frontier output.
+- [x] T022 Add autonomous-work unit coverage for all known candidates released plus retryable blocked validation packages.
+- [x] T023 Implement deterministic `candidate-broad-frontier-expansion-validation-failures-<fingerprint>` generation before `WAIT_FOR_FRESH_EVIDENCE`.
+- [x] T024 Verify the same released fingerprint falls back to wait instead of looping.
+- [x] T025 Add autonomous-work unit coverage for all known candidates released plus `PREVIEW_ONLY` / `NO_EDGE_YET` without retryable blocked packages.
+- [x] T026 Implement deterministic `candidate-broad-frontier-expansion-no-edge-<fingerprint>` generation before `WAIT_FOR_FRESH_EVIDENCE`.
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
