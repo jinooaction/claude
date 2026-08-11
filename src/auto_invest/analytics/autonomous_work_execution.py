@@ -97,6 +97,18 @@ BROAD_FRONTIER_EXPANSION_VALIDATION_FAILURES_CANDIDATE_PREFIX = (
 BROAD_FRONTIER_EXPANSION_NO_EDGE_CANDIDATE_PREFIX = (
     "candidate-broad-frontier-expansion-no-edge"
 )
+BROAD_NO_EDGE_ASSET_UNIVERSE_ROTATION_CANDIDATE_ID = (
+    "candidate-broad-no-edge-asset-universe-rotation-experiment"
+)
+BROAD_NO_EDGE_MULTI_HORIZON_SIGNAL_CANDIDATE_ID = (
+    "candidate-broad-no-edge-multi-horizon-signal-experiment"
+)
+BROAD_NO_EDGE_REGIME_COST_ROBUSTNESS_CANDIDATE_ID = (
+    "candidate-broad-no-edge-regime-cost-robustness-experiment"
+)
+BROAD_NO_EDGE_DATA_GAP_AUDIT_CANDIDATE_ID = (
+    "candidate-broad-no-edge-data-gap-audit"
+)
 WAIT_FOR_FRESH_EVIDENCE_CANDIDATE_ID = "wait-for-fresh-evidence"
 
 _REJECTED_STATUSES = {
@@ -273,6 +285,21 @@ class AgentOpsFrontierTemplate:
     priority_score: int
     reason_ko: str
     next_action_ko: str
+
+
+@dataclass(frozen=True)
+class BroadNoEdgeFrontierTemplate:
+    """NO_EDGE_YET 뒤 정적 후보 목록 밖에서 재생성할 no-live 실험 후보."""
+
+    frontier_key: str
+    label_ko: str
+    work_domain_key: str
+    recommended_candidate_id: str
+    title_ko: str
+    priority_score: int
+    reason_ko: str
+    next_action_ko: str
+    review_axes: tuple[str, ...]
 
 
 _MACRO_GROWTH_CANDIDATES: tuple[MacroGrowthCandidateTemplate, ...] = (
@@ -545,6 +572,81 @@ _AGENT_OPS_FRONTIER_TEMPLATES: tuple[AgentOpsFrontierTemplate, ...] = (
             "QUALITY-006, HANDOFF와 released-work 증거를 함께 읽어 운영자가 다시 "
             "묻지 않아도 되는 완료 보고의 PASS/WAIT/FAIL 계약을 만든다."
         ),
+    ),
+)
+
+_BROAD_NO_EDGE_FRONTIER_TEMPLATES: tuple[BroadNoEdgeFrontierTemplate, ...] = (
+    BroadNoEdgeFrontierTemplate(
+        frontier_key="asset_universe_rotation",
+        label_ko="자산군 확장과 방어 회전",
+        work_domain_key="strategy_design",
+        recommended_candidate_id=BROAD_NO_EDGE_ASSET_UNIVERSE_ROTATION_CANDIDATE_ID,
+        title_ko="광역 자산군 방어 회전 no-live 실험 설계",
+        priority_score=2490,
+        reason_ko=(
+            "기존 비교 트랙이 모두 NO_EDGE라면 같은 자산군 안에서 신호만 바꾸는 "
+            "탐색은 충분히 넓지 않다."
+        ),
+        next_action_ko=(
+            "public-data, rebalance-paper-forward, money-path를 함께 읽어 "
+            "주식·현금성·채권성·방어 자산군 대체 후보의 no-live 후보군과 제외 기준을 "
+            "SDD로 정의한다."
+        ),
+        review_axes=("strategy_family", "asset_universe"),
+    ),
+    BroadNoEdgeFrontierTemplate(
+        frontier_key="multi_horizon_signal",
+        label_ko="다중 보유 기간과 신호군",
+        work_domain_key="strategy_design",
+        recommended_candidate_id=BROAD_NO_EDGE_MULTI_HORIZON_SIGNAL_CANDIDATE_ID,
+        title_ko="다중 보유 기간 신호군 no-live 실험 설계",
+        priority_score=2390,
+        reason_ko=(
+            "단일 보유 기간이나 유사한 momentum 신호만 반복하면 엣지가 없는 구간을 "
+            "계속 같은 방식으로 재측정할 수 있다."
+        ),
+        next_action_ko=(
+            "rebalance-paper-forward와 learning ledger를 읽어 단기·중기·장기 "
+            "보유 기간과 trend·carry·quality·volatility 신호군을 분리한 "
+            "no-live 실험 후보를 만든다."
+        ),
+        review_axes=("signal_family", "holding_period"),
+    ),
+    BroadNoEdgeFrontierTemplate(
+        frontier_key="regime_cost_robustness",
+        label_ko="레짐과 비용 견고성",
+        work_domain_key="strategy_design",
+        recommended_candidate_id=BROAD_NO_EDGE_REGIME_COST_ROBUSTNESS_CANDIDATE_ID,
+        title_ko="레짐·비용 견고성 no-live 실험 설계",
+        priority_score=2290,
+        reason_ko=(
+            "paper 성과가 비용, 슬리피지, 레짐 전환에 약하면 실제 돈 경로로 "
+            "올라갈 수 없다."
+        ),
+        next_action_ko=(
+            "regime-stratify, execution-quality, money-path 증거를 함께 읽어 "
+            "레짐 구간별 통과 기준과 비용 민감도 stress test를 no-live 계약으로 "
+            "정의한다."
+        ),
+        review_axes=("regime_window", "cost_sensitivity"),
+    ),
+    BroadNoEdgeFrontierTemplate(
+        frontier_key="data_gap_causal_audit",
+        label_ko="데이터 결측 원인 감사",
+        work_domain_key="data_quality",
+        recommended_candidate_id=BROAD_NO_EDGE_DATA_GAP_AUDIT_CANDIDATE_ID,
+        title_ko="NO_EDGE 데이터 결측 원인 감사",
+        priority_score=2190,
+        reason_ko=(
+            "엣지가 없다는 결론이 진짜 전략 문제인지, 공개 데이터 범위·조인·레짐 "
+            "라벨 결측 때문인지 분리해야 한다."
+        ),
+        next_action_ko=(
+            "public-data summary, regime.json, regime_timeline.csv를 읽어 데이터 "
+            "결측 원인이 no-edge 판정에 끼친 영향을 분리하는 읽기 전용 감사를 "
+            "정의한다."
+        ),
+        review_axes=("data_missing_cause", "regime_window"),
     ),
 )
 
@@ -971,6 +1073,38 @@ class AgentOpsFrontierMapEntry:
 
 
 @dataclass(frozen=True)
+class BroadNoEdgeFrontierMapEntry:
+    """NO_EDGE_YET 뒤 광역 no-live 실험 후보 지도 행."""
+
+    frontier_key: str
+    label_ko: str
+    work_domain_key: str
+    coverage_status: str
+    priority_score: int
+    recommended_candidate_id: str
+    title_ko: str
+    reason_ko: str
+    next_action_ko: str
+    review_axes: tuple[str, ...]
+    required_inputs: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "frontier_key": self.frontier_key,
+            "label_ko": self.label_ko,
+            "work_domain_key": self.work_domain_key,
+            "coverage_status": self.coverage_status,
+            "priority_score": self.priority_score,
+            "recommended_candidate_id": self.recommended_candidate_id,
+            "title_ko": self.title_ko,
+            "reason_ko": self.reason_ko,
+            "next_action_ko": self.next_action_ko,
+            "review_axes": list(self.review_axes),
+            "required_inputs": list(self.required_inputs),
+        }
+
+
+@dataclass(frozen=True)
 class ObjectiveCalibration:
     """자율 성장 목적 함수, 예산, 중단 조건, 학습 지표 계약."""
 
@@ -1009,6 +1143,7 @@ class AutonomousWorkExecutionReport:
     data_evidence_frontier_map: tuple[DataEvidenceFrontierMapEntry, ...]
     execution_quality_frontier_map: tuple[ExecutionQualityFrontierMapEntry, ...]
     agent_ops_frontier_map: tuple[AgentOpsFrontierMapEntry, ...]
+    broad_no_edge_frontier_map: tuple[BroadNoEdgeFrontierMapEntry, ...]
     evidence_surfaces: tuple[EvidenceSurface, ...]
     safety_invariants: tuple[str, ...]
     objective_calibration: ObjectiveCalibration
@@ -1039,6 +1174,9 @@ class AutonomousWorkExecutionReport:
             ],
             "agent_ops_frontier_map": [
                 entry.to_dict() for entry in self.agent_ops_frontier_map
+            ],
+            "broad_no_edge_frontier_map": [
+                entry.to_dict() for entry in self.broad_no_edge_frontier_map
             ],
             "evidence_surfaces": [surface.to_dict() for surface in self.evidence_surfaces],
             "safety_invariants": list(self.safety_invariants),
@@ -1263,6 +1401,23 @@ class AutonomousWorkExecutionReport:
                 )
         else:
             lines.append("- 운영 체계 frontier 지도 항목이 없습니다.")
+
+        lines += ["", "## 광역 no-edge frontier 지도", ""]
+        if self.broad_no_edge_frontier_map:
+            lines += [
+                "| 영역 | 상태 | 점수 | 추천 후보 | 검토 축 | 이유 |",
+                "|------|------|-----:|-----------|---------|------|",
+            ]
+            for entry in self.broad_no_edge_frontier_map:
+                axes = ", ".join(entry.review_axes)
+                lines.append(
+                    f"| {_table(entry.label_ko)} | {entry.coverage_status} | "
+                    f"{entry.priority_score} | "
+                    f"{_table(entry.recommended_candidate_id)} | "
+                    f"{_table(axes)} | {_table(entry.reason_ko)} |"
+                )
+        else:
+            lines.append("- 광역 no-edge frontier 지도 항목이 없습니다.")
 
         lines += [
             "",
@@ -2360,6 +2515,18 @@ def _no_edge_context(
     )
 
 
+def _is_broad_no_edge_parent_candidate(candidate_id: str) -> bool:
+    return candidate_id.startswith(
+        f"{BROAD_FRONTIER_EXPANSION_NO_EDGE_CANDIDATE_PREFIX}-"
+    )
+
+
+def _is_broad_no_edge_release(candidate_id: str) -> bool:
+    return _is_broad_no_edge_parent_candidate(candidate_id) or candidate_id.startswith(
+        "candidate-broad-no-edge-"
+    )
+
+
 def _broad_no_edge_candidate_id(
     *,
     released: Mapping[str, str],
@@ -2368,6 +2535,11 @@ def _broad_no_edge_candidate_id(
     edge_status: str,
     forward_verdict: str,
 ) -> str:
+    released_fingerprint_inputs = sorted(
+        candidate_id
+        for candidate_id in released
+        if not _is_broad_no_edge_release(candidate_id)
+    )
     digest_source = {
         "edge_context": {
             "live_status": live_status,
@@ -2375,7 +2547,7 @@ def _broad_no_edge_candidate_id(
             "edge_status": edge_status,
             "forward_verdict": forward_verdict,
         },
-        "released_candidates": sorted(released),
+        "released_candidates": released_fingerprint_inputs,
     }
     digest = hashlib.sha256(
         json.dumps(digest_source, ensure_ascii=True, sort_keys=True).encode("utf-8")
@@ -2673,6 +2845,10 @@ def _agent_ops_source_refs() -> tuple[str, ...]:
         ".github/pull_request_template.md",
         ".github/workflows/pr-quality-gate.yml",
     )
+
+
+def _broad_no_edge_source_refs() -> tuple[str, ...]:
+    return _broad_frontier_expansion_refs()
 
 
 def _regular_queue_is_closed(
@@ -3234,6 +3410,108 @@ def _packet_from_agent_ops_entry(entry: AgentOpsFrontierMapEntry) -> WorkPacket:
     )
 
 
+def _broad_no_edge_frontier_packets(
+    packets: Sequence[WorkPacket],
+    parsed: Mapping[str, Any],
+    surfaces: Sequence[EvidenceSurface],
+    broad_no_edge_frontier_map: Sequence[BroadNoEdgeFrontierMapEntry],
+) -> tuple[WorkPacket, ...]:
+    if any(packet.status == STATUS_EXECUTION_READY for packet in packets):
+        return ()
+    if any(packet.status == STATUS_OPERATOR_APPROVAL_REQUIRED for packet in packets):
+        return ()
+    if any(packet.status == STATUS_BLOCKED for packet in packets):
+        return ()
+    if all(surface.parse_status == PARSE_MISSING for surface in surfaces):
+        return ()
+
+    released = _released_candidates(parsed.get("released-work"))
+    if not any(_is_broad_no_edge_parent_candidate(candidate_id) for candidate_id in released):
+        return ()
+
+    live_status, ladder_stage, edge_status, forward_verdict = _money_and_edge_context(
+        parsed
+    )
+    if not _no_edge_context(
+        live_status,
+        ladder_stage,
+        edge_status,
+        forward_verdict,
+    ):
+        return ()
+
+    existing_ids = {packet.candidate_id for packet in packets}
+    for entry in broad_no_edge_frontier_map:
+        if entry.recommended_candidate_id in released:
+            continue
+        if entry.recommended_candidate_id in existing_ids:
+            continue
+        return (
+            _packet_from_broad_no_edge_entry(
+                entry,
+                live_status=live_status,
+                ladder_stage=ladder_stage,
+                edge_status=edge_status,
+                forward_verdict=forward_verdict,
+            ),
+        )
+    return ()
+
+
+def _packet_from_broad_no_edge_entry(
+    entry: BroadNoEdgeFrontierMapEntry,
+    *,
+    live_status: str,
+    ladder_stage: str,
+    edge_status: str,
+    forward_verdict: str,
+) -> WorkPacket:
+    source_refs = entry.required_inputs
+    autonomy_level, start_guidance, completion_gates = _execution_contract(
+        STATUS_EXECUTION_READY,
+        2,
+        (),
+    )
+    axes = ", ".join(entry.review_axes)
+    reason = (
+        f"광역 no-edge frontier 지도에서 {entry.label_ko} 영역이 "
+        f"{entry.coverage_status} 상태다. 검토 축은 {axes}이다. {entry.reason_ko} "
+        f"money-path는 {live_status}/{ladder_stage}, edge-autoarm은 "
+        f"{edge_status}/{forward_verdict}이므로 실제 주문이나 live 재무장은 "
+        "여전히 허용하지 않는다."
+    )
+    safety_boundary = (
+        *SAFETY_INVARIANTS,
+        "no-live 실험 후보 설계만 허용",
+        "브로커 API 호출 금지",
+        "실제 주문 금지",
+        "live 재무장 금지",
+        "자본 배분 금지",
+    )
+    return WorkPacket(
+        packet_id=_packet_id(entry.recommended_candidate_id, entry.title_ko, source_refs),
+        candidate_id=entry.recommended_candidate_id,
+        domain_key=entry.work_domain_key,
+        title_ko=entry.title_ko,
+        work_type=_DOMAIN_WORK_TYPES.get(
+            entry.work_domain_key,
+            "autonomous_improvement",
+        ),
+        risk_grade=2,
+        safety_impact=(),
+        priority_score=entry.priority_score,
+        status=STATUS_EXECUTION_READY,
+        autonomy_level=autonomy_level,
+        reason_ko=reason,
+        next_action_ko=entry.next_action_ko,
+        start_guidance_ko=start_guidance,
+        completion_gates=completion_gates,
+        required_inputs=source_refs,
+        safety_boundary=safety_boundary,
+        source_refs=source_refs,
+    )
+
+
 def _macro_candidate_map(
     packets: Sequence[WorkPacket],
 ) -> tuple[MacroCandidateMapEntry, ...]:
@@ -3383,6 +3661,34 @@ def _agent_ops_frontier_map(
             required_inputs=required_inputs,
         )
         for template in _AGENT_OPS_FRONTIER_TEMPLATES
+    ]
+    return tuple(sorted(entries, key=lambda entry: (-entry.priority_score, entry.frontier_key)))
+
+
+def _broad_no_edge_frontier_map(
+    released_work: Any,
+) -> tuple[BroadNoEdgeFrontierMapEntry, ...]:
+    released = _released_candidates(released_work)
+    required_inputs = _broad_no_edge_source_refs()
+    entries = [
+        BroadNoEdgeFrontierMapEntry(
+            frontier_key=template.frontier_key,
+            label_ko=template.label_ko,
+            work_domain_key=template.work_domain_key,
+            coverage_status=(
+                "released"
+                if template.recommended_candidate_id in released
+                else "open"
+            ),
+            priority_score=template.priority_score,
+            recommended_candidate_id=template.recommended_candidate_id,
+            title_ko=template.title_ko,
+            reason_ko=template.reason_ko,
+            next_action_ko=template.next_action_ko,
+            review_axes=template.review_axes,
+            required_inputs=required_inputs,
+        )
+        for template in _BROAD_NO_EDGE_FRONTIER_TEMPLATES
     ]
     return tuple(sorted(entries, key=lambda entry: (-entry.priority_score, entry.frontier_key)))
 
@@ -3642,6 +3948,9 @@ def build_autonomous_work_execution(
         parsed.get("released-work")
     )
     agent_ops_frontier_map = _agent_ops_frontier_map(parsed.get("released-work"))
+    broad_no_edge_frontier_map = _broad_no_edge_frontier_map(
+        parsed.get("released-work")
+    )
     ordered = _dedupe_packets(
         [
             *ordered,
@@ -3664,6 +3973,17 @@ def build_autonomous_work_execution(
     )
     if broad_frontier_packet is not None:
         ordered = _dedupe_packets([*ordered, broad_frontier_packet])
+    ordered = _dedupe_packets(
+        [
+            *ordered,
+            *_broad_no_edge_frontier_packets(
+                ordered,
+                parsed,
+                surfaces,
+                broad_no_edge_frontier_map,
+            ),
+        ]
+    )
     wait_packet = _observation_wait_packet(ordered, surfaces)
     if wait_packet is not None:
         ordered = _dedupe_packets([*ordered, wait_packet])
@@ -3691,6 +4011,7 @@ def build_autonomous_work_execution(
         data_evidence_frontier_map=data_evidence_frontier_map,
         execution_quality_frontier_map=execution_quality_frontier_map,
         agent_ops_frontier_map=agent_ops_frontier_map,
+        broad_no_edge_frontier_map=broad_no_edge_frontier_map,
         evidence_surfaces=surfaces,
         safety_invariants=SAFETY_INVARIANTS,
         objective_calibration=objective_calibration,
@@ -3709,6 +4030,11 @@ __all__ = [
     "AUTONOMY_OPERATOR_APPROVAL",
     "AUTONOMY_RECOVERY_REQUIRED",
     "BlockedPackageRef",
+    "BROAD_NO_EDGE_ASSET_UNIVERSE_ROTATION_CANDIDATE_ID",
+    "BROAD_NO_EDGE_DATA_GAP_AUDIT_CANDIDATE_ID",
+    "BROAD_NO_EDGE_MULTI_HORIZON_SIGNAL_CANDIDATE_ID",
+    "BROAD_NO_EDGE_REGIME_COST_ROBUSTNESS_CANDIDATE_ID",
+    "BroadNoEdgeFrontierMapEntry",
     "BROKER_DIAGNOSTIC_LIVENESS_CANDIDATE_ID",
     "BROKER_REJECTION_TAXONOMY_CANDIDATE_ID",
     "BROAD_FRONTIER_EXPANSION_NO_EDGE_CANDIDATE_PREFIX",

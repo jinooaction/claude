@@ -14,6 +14,8 @@ from auto_invest.analytics.autonomous_work_execution import (
     AUTONOMY_OPERATOR_APPROVAL,
     BROAD_FRONTIER_EXPANSION_NO_EDGE_CANDIDATE_PREFIX,
     BROAD_FRONTIER_EXPANSION_VALIDATION_FAILURES_CANDIDATE_PREFIX,
+    BROAD_NO_EDGE_ASSET_UNIVERSE_ROTATION_CANDIDATE_ID,
+    BROAD_NO_EDGE_MULTI_HORIZON_SIGNAL_CANDIDATE_ID,
     BROKER_DIAGNOSTIC_LIVENESS_CANDIDATE_ID,
     BROKER_REJECTION_TAXONOMY_CANDIDATE_ID,
     CODEX_COMPLETION_GATES,
@@ -151,6 +153,49 @@ def _retryable_blocked_candidate_results() -> str:
             ],
         }
     )
+
+
+def _all_known_released_no_edge_evidence(*extra_candidate_ids: str) -> dict[str, str]:
+    return {
+        "capital-path-readiness": _json(
+            {
+                "readiness_state": "ACCUMULATING_EDGE",
+                "live_money_status": "PREVIEW_ONLY",
+                "priority_candidates": [
+                    {
+                        "candidate_id": "candidate-fd04772a23c5",
+                        "domain_key": "live_readiness",
+                        "status": "new",
+                        "score": 597,
+                    }
+                ],
+            }
+        ),
+        "released-work": _released_through_broker_diagnostic_liveness(
+            AGENT_OPS_FRONTIER_CANDIDATE_ID,
+            HANDOFF_TRUTH_LIVENESS_CANDIDATE_ID,
+            PR_MERGE_EVIDENCE_LIVENESS_CANDIDATE_ID,
+            WORKTREE_CONCURRENCY_LIVENESS_CANDIDATE_ID,
+            AGENT_HARNESS_REGRESSION_LIVENESS_CANDIDATE_ID,
+            OPERATOR_REPORT_LIVENESS_CANDIDATE_ID,
+            EVIDENCE_SOURCE_DIVERSIFICATION_VALIDATION_FAILURES_CANDIDATE_ID,
+            *extra_candidate_ids,
+        ),
+        "money-path": _json(
+            {
+                "overall_status": "PREVIEW_ONLY",
+                "live_money_state": {"status": "PREVIEW_ONLY"},
+                "stage": "NO_EDGE_YET",
+            }
+        ),
+        "edge-autoarm": _json(
+            {
+                "action": "WAIT_EDGE",
+                "reason": "forward 판정='NO_EDGE'",
+            }
+        ),
+        "pipeline-liveness": _liveness(),
+    }
 
 
 def test_selects_capital_path_priority_candidate():
@@ -2089,45 +2134,7 @@ def test_all_released_candidates_emit_broad_frontier_expansion_before_waiting():
 
 def test_all_released_no_edge_context_emits_broad_frontier_expansion():
     report = build_autonomous_work_execution(
-        {
-            "capital-path-readiness": _json(
-                {
-                    "readiness_state": "ACCUMULATING_EDGE",
-                    "live_money_status": "PREVIEW_ONLY",
-                    "priority_candidates": [
-                        {
-                            "candidate_id": "candidate-fd04772a23c5",
-                            "domain_key": "live_readiness",
-                            "status": "new",
-                            "score": 597,
-                        }
-                    ],
-                }
-            ),
-            "released-work": _released_through_broker_diagnostic_liveness(
-                AGENT_OPS_FRONTIER_CANDIDATE_ID,
-                HANDOFF_TRUTH_LIVENESS_CANDIDATE_ID,
-                PR_MERGE_EVIDENCE_LIVENESS_CANDIDATE_ID,
-                WORKTREE_CONCURRENCY_LIVENESS_CANDIDATE_ID,
-                AGENT_HARNESS_REGRESSION_LIVENESS_CANDIDATE_ID,
-                OPERATOR_REPORT_LIVENESS_CANDIDATE_ID,
-                EVIDENCE_SOURCE_DIVERSIFICATION_VALIDATION_FAILURES_CANDIDATE_ID,
-            ),
-            "money-path": _json(
-                {
-                    "overall_status": "PREVIEW_ONLY",
-                    "live_money_state": {"status": "PREVIEW_ONLY"},
-                    "stage": "NO_EDGE_YET",
-                }
-            ),
-            "edge-autoarm": _json(
-                {
-                    "action": "WAIT_EDGE",
-                    "reason": "forward 판정='NO_EDGE'",
-                }
-            ),
-            "pipeline-liveness": _liveness(),
-        },
+        _all_known_released_no_edge_evidence(),
         now=NOW,
     )
 
@@ -2142,6 +2149,91 @@ def test_all_released_no_edge_context_emits_broad_frontier_expansion():
     assert "NO_EDGE_YET" in report.selected_work.reason_ko
     assert "전략군" in report.selected_work.next_action_ko
     assert "주문" in " ".join(report.selected_work.safety_boundary)
+
+
+def test_released_broad_no_edge_parent_advances_without_hash_loop():
+    parent_report = build_autonomous_work_execution(
+        _all_known_released_no_edge_evidence(),
+        now=NOW,
+    )
+    assert parent_report.selected_work is not None
+    parent_id = parent_report.selected_work.candidate_id
+    assert parent_id.startswith(f"{BROAD_FRONTIER_EXPANSION_NO_EDGE_CANDIDATE_PREFIX}-")
+
+    repeated_report = build_autonomous_work_execution(
+        _all_known_released_no_edge_evidence(parent_id),
+        now=NOW,
+    )
+
+    assert repeated_report.selected_work is not None
+    assert (
+        repeated_report.selected_work.candidate_id
+        == BROAD_NO_EDGE_ASSET_UNIVERSE_ROTATION_CANDIDATE_ID
+    )
+    assert not repeated_report.selected_work.candidate_id.startswith(
+        f"{BROAD_FRONTIER_EXPANSION_NO_EDGE_CANDIDATE_PREFIX}-"
+    )
+    assert repeated_report.selected_work.status == STATUS_EXECUTION_READY
+    assert repeated_report.selected_work.autonomy_level == AUTONOMY_CODEX_START
+    assert repeated_report.selected_work.domain_key == "strategy_design"
+    assert "자산군" in repeated_report.selected_work.next_action_ko
+    assert "실제 주문" in " ".join(repeated_report.selected_work.safety_boundary)
+
+
+def test_broad_no_edge_frontier_map_is_deterministic_and_rendered():
+    parent_report = build_autonomous_work_execution(
+        _all_known_released_no_edge_evidence(),
+        now=NOW,
+    )
+    assert parent_report.selected_work is not None
+    parent_id = parent_report.selected_work.candidate_id
+
+    evidence = _all_known_released_no_edge_evidence(parent_id)
+    first = build_autonomous_work_execution(evidence, now=NOW).to_dict()
+    second = build_autonomous_work_execution(evidence, now=NOW).to_dict()
+
+    assert first["broad_no_edge_frontier_map"] == second[
+        "broad_no_edge_frontier_map"
+    ]
+    assert (
+        first["broad_no_edge_frontier_map"][0]["recommended_candidate_id"]
+        == BROAD_NO_EDGE_ASSET_UNIVERSE_ROTATION_CANDIDATE_ID
+    )
+    assert first["broad_no_edge_frontier_map"][0]["coverage_status"] == "open"
+    assert set(first["broad_no_edge_frontier_map"][0]["review_axes"]) >= {
+        "strategy_family",
+        "asset_universe",
+    }
+
+    markdown = build_autonomous_work_execution(evidence, now=NOW).as_markdown()
+    assert "## 광역 no-edge frontier 지도" in markdown
+    assert BROAD_NO_EDGE_ASSET_UNIVERSE_ROTATION_CANDIDATE_ID in markdown
+
+
+def test_released_broad_no_edge_entry_advances_to_next_entry():
+    parent_report = build_autonomous_work_execution(
+        _all_known_released_no_edge_evidence(),
+        now=NOW,
+    )
+    assert parent_report.selected_work is not None
+    parent_id = parent_report.selected_work.candidate_id
+
+    report = build_autonomous_work_execution(
+        _all_known_released_no_edge_evidence(
+            parent_id,
+            BROAD_NO_EDGE_ASSET_UNIVERSE_ROTATION_CANDIDATE_ID,
+        ),
+        now=NOW,
+    )
+
+    assert report.selected_work is not None
+    assert (
+        report.selected_work.candidate_id
+        == BROAD_NO_EDGE_MULTI_HORIZON_SIGNAL_CANDIDATE_ID
+    )
+    broad_map = {entry.frontier_key: entry for entry in report.broad_no_edge_frontier_map}
+    assert broad_map["asset_universe_rotation"].coverage_status == "released"
+    assert broad_map["multi_horizon_signal"].coverage_status == "open"
 
 
 def test_macro_candidate_map_is_deterministic_and_rendered():
