@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-08-11T09:14:26.588647Z)
+# 완료 후보 소비 장부 (as of 2026-08-11T09:53:55.853528Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -8,8 +8,8 @@
 | 항목 | 값 |
 |------|-----|
 | overall_status | OK |
-| released_count | 43 |
-| scanned_specs | 75 |
+| released_count | 44 |
+| scanned_specs | 76 |
 
 ## 완료 후보
 
@@ -23,6 +23,7 @@
 | candidate-autonomous-frontier-discovery | released | 092-frontier-candidate-discovery | specs/092-frontier-candidate-discovery/contracts/frontier-candidate-discovery.md | completed_candidate_id |
 | candidate-autonomous-growth-objective-calibration | released | 091-autonomous-growth-objective-calibration | specs/091-autonomous-growth-objective-calibration/contracts/autonomous-growth-objective-calibration.md | completed_candidate_id |
 | candidate-broad-frontier-expansion-no-edge-58298dfc172c | released | 124-broad-no-edge-frontier | specs/124-broad-no-edge-frontier/contracts/broad-no-edge-frontier.md | completed_candidate_id |
+| candidate-broad-no-edge-asset-universe-rotation-experiment | released | 125-broad-no-edge-asset-universe | specs/125-broad-no-edge-asset-universe/spec.md | completed_candidate_id |
 | candidate-broker-diagnostic-liveness-contract | released | 105-broker-diagnostic-liveness-contract | specs/105-broker-diagnostic-liveness-contract/spec.md | completed_candidate_id |
 | candidate-broker-rejection-taxonomy-contract | released | 103-broker-rejection-taxonomy-contract | specs/103-broker-rejection-taxonomy-contract/spec.md | completed_candidate_id |
 | candidate-cost-adjusted-edge-experiment | released | 097-cost-adjusted-edge-experiment | specs/097-cost-adjusted-edge-experiment/data-model.md | completed_candidate_id |
@@ -123,7 +124,7 @@
 
 ```json
 {
-  "commit": "f26b86b2431d201e441518c1e7e6906800aca164",
+  "commit": "97019654a92f77bd2ebe09abf7c1b17dbf698573",
   "overall_status": "OK",
   "released_work": [
     {
@@ -196,6 +197,15 @@
       "source_field": "completed_candidate_id",
       "source_file": "specs/124-broad-no-edge-frontier/contracts/broad-no-edge-frontier.md",
       "spec_id": "124-broad-no-edge-frontier",
+      "status": "released"
+    },
+    {
+      "candidate_id": "candidate-broad-no-edge-asset-universe-rotation-experiment",
+      "entry_id": "released-0cf545503cf4",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/125-broad-no-edge-asset-universe/spec.md",
+      "spec_id": "125-broad-no-edge-asset-universe",
       "status": "released"
     },
     {
@@ -600,7 +610,8 @@
     "121-promote-readiness-observe-gateway",
     "122-forward-paper-db-writability",
     "123-live-canary-sidecar-gate",
-    "124-broad-no-edge-frontier"
+    "124-broad-no-edge-frontier",
+    "125-broad-no-edge-asset-universe"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -781,6 +792,6 @@
       "spec_id": "072-candidate-evidence-diagnostics"
     }
   ],
-  "timestamp_utc": "2026-08-11T09:14:26.588647Z"
+  "timestamp_utc": "2026-08-11T09:53:55.853528Z"
 }
 ```

@@ -1,5 +1,5 @@
 {
-  "commit": "f26b86b2431d201e441518c1e7e6906800aca164",
+  "commit": "97019654a92f77bd2ebe09abf7c1b17dbf698573",
   "overall_status": "OK",
   "released_work": [
     {
@@ -72,6 +72,15 @@
       "source_field": "completed_candidate_id",
       "source_file": "specs/124-broad-no-edge-frontier/contracts/broad-no-edge-frontier.md",
       "spec_id": "124-broad-no-edge-frontier",
+      "status": "released"
+    },
+    {
+      "candidate_id": "candidate-broad-no-edge-asset-universe-rotation-experiment",
+      "entry_id": "released-0cf545503cf4",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/125-broad-no-edge-asset-universe/spec.md",
+      "spec_id": "125-broad-no-edge-asset-universe",
       "status": "released"
     },
     {
@@ -390,7 +399,7 @@
       "status": "released"
     }
   ],
-  "run_id": "31476801539",
+  "run_id": "31479754566",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -476,7 +485,8 @@
     "121-promote-readiness-observe-gateway",
     "122-forward-paper-db-writability",
     "123-live-canary-sidecar-gate",
-    "124-broad-no-edge-frontier"
+    "124-broad-no-edge-frontier",
+    "125-broad-no-edge-asset-universe"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -657,5 +667,5 @@
       "spec_id": "072-candidate-evidence-diagnostics"
     }
   ],
-  "timestamp_utc": "2026-08-11T09:14:26.588647Z"
+  "timestamp_utc": "2026-08-11T09:53:55.853528Z"
 }
