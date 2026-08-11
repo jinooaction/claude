@@ -29,19 +29,32 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 상세 규칙은 Codex 세션에서는 `AGENTS.md`, Claude 세션에서는 `CLAUDE.md` 본문 참조.
 
-## 한눈 요약표 — 2026-08-10 KST 최신 코드 main 기준
+## 한눈 요약표 — 2026-08-11 KST 최신 코드 main 기준
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `fff75f9` — Merge pull request #580 from jinooaction/codex/handoff-after-deploy-retry-success |
-| main 테스트 | 이 갱신 브랜치 기준 `uv run pytest -q` → 2716 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
+| 마지막 main 커밋 | `a2c7070` — Merge pull request #582 from jinooaction/codex/broad-frontier-expansion |
+| main 테스트 | 이 갱신 브랜치 기준 `uv run pytest -q` → 2717 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
 | main 린트 | 이 갱신 브랜치 기준 `uv run ruff check src tests` → All checks passed. |
-| 열린 PR | 없음(이 문서 편집 시점; #580은 merge 완료). |
-| 출시 완료 스펙 | 최신 운영 보정: #580(#578 뒤 dry-run deploy 재시도 성공 인계), #579(#578 뒤 KIS smoke 성공과 deploy 실패 경계 인계), #578(KIS smoke 실패를 한 번만 fail-closed로 남기고 public sidecar/pytest traceback 민감값을 정화), #577(#576 뒤 HANDOFF main 기준 갱신), #576(`forward-anchored-verdict`의 raw SSH 명령을 fixed `observe ladder-anchored-verdict` gateway로 교체해 앵커드 엣지 sidecar 복구). 직전 추가: #573/#574(스펙 074 후보 가격 이력 지원 후속: candidate result workflow의 `scp`/remote `bash` 제거, fixed `observe candidate-history` gateway + `ssh -n` loop 보정으로 세 history dataset 준비 성공), #571(스펙 071 후보 결과 실행기 후속: retryable factory-blocked 후보의 안전 검증 명령 실행과 진단 복구), 123/live canary sidecar gate(#568 preview/status와 real-order job 분리, #569 fixed `observe live-canary-*` gateway로 preview/status 내용 복구), #566(forward paper 경제 장부 보정), 122(forward paper DB writability), 121(`promote-readiness` 관측 경로 복구 + 서버 root-owned gateway/helper self-refresh), 120(증거 기반 후보 소스 다변화 + released-work 완료 소비), 119(보안 신뢰 경계 강화와 후속 SSH boundary repair 및 live-money workflow 보호 환경). 이전 스펙 058~118은 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
+| 열린 PR | 없음(이 문서 편집 시점; #582는 merge 완료). |
+| 출시 완료 스펙 | 최신 운영 보정: #582(`NO_EDGE_YET` 고갈 뒤 `wait-for-fresh-evidence` 대신 broad no-live frontier 후보 발행), #581(#580 뒤 돈 경로 sidecar truth 인계), #580(#578 뒤 dry-run deploy 재시도 성공 인계), #579(#578 뒤 KIS smoke 성공과 deploy 실패 경계 인계), #578(KIS smoke 실패를 한 번만 fail-closed로 남기고 public sidecar/pytest traceback 민감값을 정화), #577(#576 뒤 HANDOFF main 기준 갱신), #576(`forward-anchored-verdict`의 raw SSH 명령을 fixed `observe ladder-anchored-verdict` gateway로 교체해 앵커드 엣지 sidecar 복구). 직전 추가: #573/#574(스펙 074 후보 가격 이력 지원 후속), #571(스펙 071 후보 결과 실행기 후속), 123/live canary sidecar gate, #566(forward paper 경제 장부 보정), 122(forward paper DB writability), 121(`promote-readiness` 관측 경로 복구), 120(증거 기반 후보 소스 다변화 + released-work 완료 소비), 119(보안 신뢰 경계 강화). 이전 스펙 058~118은 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
 | 골격 스펙 | 없음. `.specify/feature.json`은 최신 완료 스펙 `specs/123-live-canary-sidecar-gate`를 가리키고, `tasks.md`는 T001~T023 완료 상태다. |
-| 최근 출시 작업 | #578은 KIS smoke 실패 로그의 민감값 노출 위험과 즉시 전체 재시도 노이즈를 줄이는 등급 3 안전 보정이다. post-merge 수동 KIS smoke run `31357160707`은 최신 `5d043e7`에서 5개 read-only live smoke를 모두 통과했다. 첫 `Deploy on merge to main` run `31357030954`는 health check timeout으로 실패했지만, 수동 dry-run 배포 재시도 run `31357670471`은 최신 main `cf17589`에서 성공했다(`START_EXIT=0`, `UNITS_EXIT=0`). |
-| 활성 작업 | 없음. 열린 PR 없음. 2026-08-11 KST 수동 read-only refresh 기준 pipeline-liveness(`2026-08-11T02:08:00Z`)는 `OK`, money-path(`2026-08-11T02:08:08Z`)는 `PREVIEW_ONLY`/`NO_EDGE_YET`, capital-path-readiness(`2026-08-11T02:08:08Z`)는 `ACCUMULATING_EDGE`, money-gate-alignment(`2026-08-11T02:08:12Z`)는 `ALIGNED_WAITING`, autonomous-work(`2026-08-11T02:08:14Z`)는 `OBSERVATION_WAIT`/`wait-for-fresh-evidence`다. edge-autoarm(`2026-08-11T00:35:17Z`)는 `WAIT_EDGE`/`NO_EDGE`, rebalance-paper-forward(`2026-08-10T23:10:02Z`)는 7개 비교 가능 트랙 모두 `NO_EDGE`다. 최신 KIS smoke(`2026-08-10T04:59:01Z`)는 `smoke_state=success`, `smoke_exit=0`, `key_valid=true`다. |
-| 안전 경계 | 이번 갱신은 등급 2 인계 갱신이다. 실제 주문, 실거래 전환, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps 확대, 손실 예산, KIS secret 값, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`라 실주문 불가이고, 직접 자본 차단은 PSR `0.531698 < 0.95`인 `NO_EDGE_YET`이다. |
+| 최근 출시 작업 | #582는 자율 작업 실행 루프가 모든 알려진 후보를 닫은 뒤 `NO_EDGE_YET`이면 passive wait가 아니라 `candidate-broad-frontier-expansion-no-edge-<fingerprint>`를 발행하게 한 등급 2 운영 보정이다. post-merge deploy run `31457946033`은 success이고, autonomous-work run `31457946057`은 `candidate-broad-frontier-expansion-no-edge-58298dfc172c`를 `EXECUTION_READY`로 발행했다. |
+| 활성 작업 | 열린 PR 없음. 다음 자율 후보는 `candidate-broad-frontier-expansion-no-edge-58298dfc172c`다. 2026-08-11 KST post-merge read-only refresh 기준 pipeline-liveness(`2026-08-11T04:19:13Z`)는 `OK`, money-path(`2026-08-11T02:08:08Z`)는 `PREVIEW_ONLY`/`NO_EDGE_YET`, capital-path-readiness(`2026-08-11T02:08:08Z`)는 `ACCUMULATING_EDGE`, released-work(`2026-08-11T04:16:16Z`)는 `OK`, autonomous-work(`2026-08-11T04:16:19Z`)는 `EXECUTION_READY`, money-gate-alignment(`2026-08-11T04:18:18Z`)는 `ALIGNED_WAITING`이며 선택 후보는 broad frontier다. edge-autoarm(`2026-08-11T00:35:17Z`)는 `WAIT_EDGE`/`NO_EDGE`, rebalance-paper-forward(`2026-08-10T23:10:02Z`)는 7개 비교 가능 트랙 모두 `NO_EDGE`다. 최신 KIS smoke(`2026-08-10T04:59:01Z`)는 `smoke_state=success`, `smoke_exit=0`, `key_valid=true`다. |
+| 안전 경계 | 이번 갱신은 등급 2 인계 갱신이다. #582도 실제 주문, 실거래 전환, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps 확대, 손실 예산, KIS secret 값, 감사 로그, 헌법, kernel manifest를 바꾸지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`라 실주문 불가이고, 직접 자본 차단은 PSR `0.531698 < 0.95`인 `NO_EDGE_YET`이다. |
+
+## 최근 관찰 — 2026-08-11 KST (#582 broad frontier expansion after NO_EDGE exhaustion)
+
+현재 `main` 최신 코드 머지는 `a2c7070`(#582, broad frontier expansion after no-edge exhaustion)다.
+기능 커밋은 `2b0bda6`이다.
+
+- **문제 정의**: 운영자가 지적한 핵심은 맞았다. 이전 판단은 `money-path`가 `PREVIEW_ONLY`/`NO_EDGE_YET`인지 확인하는 데는 정확했지만, 모든 알려진 후보가 닫힌 뒤에도 `wait-for-fresh-evidence`로만 물러서 검토 범위가 좁았다. "수단과 방법"의 안전한 해석은 실주문 게이트를 우회하는 것이 아니라, 정적 후보 목록 밖의 no-live 투자 frontier를 더 넓게 자동 발행하는 것이다.
+- **구현 상태**: `autonomous_work_execution.py`가 observation wait 직전에 broad frontier 후보를 합성한다. retryable 검증 실패 패키지가 남으면 `candidate-broad-frontier-expansion-validation-failures-<fingerprint>`, 실패 패키지가 없어도 money-path/edge-autoarm이 `PREVIEW_ONLY`, `NO_EDGE_YET`, `NO_EDGE`, `WAIT_EDGE`, `ACCUMULATING_EDGE`이면 `candidate-broad-frontier-expansion-no-edge-<fingerprint>`를 발행한다. 같은 fingerprint가 released-work에 이미 있으면 반복하지 않는다.
+- **post-merge 자동화 확인**: #582 merge 뒤 deploy run `31457946033`은 success다. released-work run `31457946073`은 commit `a2c7070`, released_count 42다. autonomous-work run `31457946057`은 commit `a2c7070`, timestamp `2026-08-11T04:16:19Z`, selected_work `candidate-broad-frontier-expansion-no-edge-58298dfc172c`, status `EXECUTION_READY`다. money-gate-alignment 수동 run `31458045029`도 이 후보를 `selected_work_candidate`로 읽었다. pipeline-liveness run `31458092515`는 overall `OK`이고, autonomous-work/released-work/money-gate-alignment 모두 신선하다.
+- **돈 경로 상태**: money-path는 여전히 `PREVIEW_ONLY`/`NO_EDGE_YET`, PSR `0.531698 < 0.95`, 전진 관측 40회다. edge-autoarm은 `WAIT_EDGE`/`NO_EDGE`이고 자본 이동은 0이다. rebalance-paper-forward 최신 결과는 7개 비교 가능 트랙 모두 `NO_EDGE`다. 즉 #582는 돈을 바로 움직인 패치가 아니라, 다음 안전 작업이 막연한 대기가 아닌 광역 no-live 탐색 후보가 되게 한 패치다.
+- **검증 상태**: #582 브랜치에서 `uv run pytest` 2717 passed/5 skipped, `uv run ruff check src tests` 통과, `git diff --check` 통과, `uv run python scripts/check_handoff_facts.py` OK, `uv run python scripts/agent_harness_probe.py --strict` OK(14/14), PR quality gate 통과, `mergeable=MERGEABLE` 확인 뒤 merge했다. 이 handoff 갱신 전 main 기준 `uv run pytest -q`는 `HANDOFF.md`가 아직 #580을 가리켜 하네스 관련 2개만 실패했고, 이 갱신이 그 원인을 바로잡는다.
+- **안전 경계**: 실제 주문, live 재무장, 자본 배분, live 전략 교체, whitelist/caps, 손실 예산, KIS secret 값, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 다음 작업은 `candidate-broad-frontier-expansion-no-edge-58298dfc172c`를 no-live SDD로 수행하는 것이다. 검토 축은 전략군, 신호군, 보유 기간, 자산군, 레짐 구간, 비용 민감도, 데이터 결측 원인을 모두 포함해야 한다.
+- **상세 인계**: `HANDOFF-130-BROAD-FRONTIER-EXPANSION.md`.
 
 ## 최근 관찰 — 2026-08-11 KST (돈 경로 read-only refresh와 실행 후보 없음 확인)
 
@@ -7275,6 +7288,8 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 
 ## 과거 인수인계 파일 (참고용)
 
+- `HANDOFF-130-BROAD-FRONTIER-EXPANSION.md` — #582가 `NO_EDGE_YET` 고갈 뒤 `wait-for-fresh-evidence` 대신 broad no-live frontier 후보 `candidate-broad-frontier-expansion-no-edge-58298dfc172c`를 발행하게 한 상태
+- `HANDOFF-129-FORWARD-ANCHORED-OBSERVE-GATEWAY.md` — #576 forward anchored verdict raw SSH 경로를 fixed observe gateway로 복구하고 post-merge sidecar가 `ssh_exit=0`으로 정상 발행된 상태
 - `HANDOFF-128-CANDIDATE-RESULT-RETRYABLE-BLOCKED.md` — #571 후보 결과 실행기가 retryable factory-blocked 후보를 안전 no-live 검증까지 진행하고, post-merge 결과 sidecar가 `blocked=0`, `pending=2`, `data_history_missing=2`를 남긴 상태
 - `HANDOFF-127-LIVE-CANARY-OBSERVE-GATEWAY.md` — #568/#569 live canary sidecar freshness와 fixed observe gateway 복구, post-merge pipeline/money-path/capital-path 상태
 - `HANDOFF-126-FORWARD-PAPER-ECONOMIC-ANCHOR.md` — #566 forward paper 경제 장부 보정과 post-merge forward/money-path/capital-path sidecar 상태
