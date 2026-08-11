@@ -2,6 +2,9 @@
 
 ## Parent Suppression
 
+completed_candidate_id: candidate-broad-frontier-expansion-no-edge-58298dfc172c
+next_candidate_id: candidate-broad-no-edge-asset-universe-rotation-experiment
+
 When all known candidates are closed, no retryable validation package exists, and money/edge evidence still says `PREVIEW_ONLY`, `NO_EDGE_YET`, `NO_EDGE`, `WAIT_EDGE`, or `ACCUMULATING_EDGE`, the report may emit:
 
 ```json

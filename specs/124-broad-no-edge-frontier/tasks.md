@@ -23,7 +23,15 @@
 - [x] T007 [US3] Verify focused autonomous-work tests pass.
 - [x] T008 [US3] Run full pytest and ruff.
 - [x] T009 [US3] Run handoff fact and agent harness probes.
-- [ ] T010 [US3] Create PR with quality gate evidence, merge when eligible, and refresh HANDOFF if needed.
+- [x] T010 [US3] Record the released-work completion marker and close the implementation checklist.
+
+## Operational Closure Outside Released-Work Scan
+
+These are required by repository operating rules, but they are not unchecked Speckit implementation tasks because `released-work` treats any unchecked checkbox as incomplete work.
+
+- PR #584 merged the implementation into main with quality-gate evidence.
+- This follow-up records the released-work completion marker so post-merge autonomous-work can advance to `candidate-broad-no-edge-asset-universe-rotation-experiment`.
+- HANDOFF must be refreshed after the completion-marker merge.
 
 ## Dependencies & Execution Order
 

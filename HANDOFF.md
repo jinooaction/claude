@@ -33,15 +33,27 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `a2c7070` — Merge pull request #582 from jinooaction/codex/broad-frontier-expansion |
-| main 테스트 | 이 갱신 브랜치 기준 `uv run pytest -q` → 2717 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
+| 마지막 main 커밋 | `bd36342` — Merge pull request #584 from jinooaction/codex/broad-no-edge-frontier |
+| main 테스트 | #584 브랜치 기준 `uv run pytest` → 2720 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
 | main 린트 | 이 갱신 브랜치 기준 `uv run ruff check src tests` → All checks passed. |
-| 열린 PR | 없음(이 문서 편집 시점; #582는 merge 완료). |
-| 출시 완료 스펙 | 최신 운영 보정: #582(`NO_EDGE_YET` 고갈 뒤 `wait-for-fresh-evidence` 대신 broad no-live frontier 후보 발행), #581(#580 뒤 돈 경로 sidecar truth 인계), #580(#578 뒤 dry-run deploy 재시도 성공 인계), #579(#578 뒤 KIS smoke 성공과 deploy 실패 경계 인계), #578(KIS smoke 실패를 한 번만 fail-closed로 남기고 public sidecar/pytest traceback 민감값을 정화), #577(#576 뒤 HANDOFF main 기준 갱신), #576(`forward-anchored-verdict`의 raw SSH 명령을 fixed `observe ladder-anchored-verdict` gateway로 교체해 앵커드 엣지 sidecar 복구). 직전 추가: #573/#574(스펙 074 후보 가격 이력 지원 후속), #571(스펙 071 후보 결과 실행기 후속), 123/live canary sidecar gate, #566(forward paper 경제 장부 보정), 122(forward paper DB writability), 121(`promote-readiness` 관측 경로 복구), 120(증거 기반 후보 소스 다변화 + released-work 완료 소비), 119(보안 신뢰 경계 강화). 이전 스펙 058~118은 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
-| 골격 스펙 | 없음. `.specify/feature.json`은 최신 완료 스펙 `specs/123-live-canary-sidecar-gate`를 가리키고, `tasks.md`는 T001~T023 완료 상태다. |
-| 최근 출시 작업 | #582는 자율 작업 실행 루프가 모든 알려진 후보를 닫은 뒤 `NO_EDGE_YET`이면 passive wait가 아니라 `candidate-broad-frontier-expansion-no-edge-<fingerprint>`를 발행하게 한 등급 2 운영 보정이다. post-merge deploy run `31457946033`은 success이고, autonomous-work run `31457946057`은 `candidate-broad-frontier-expansion-no-edge-58298dfc172c`를 `EXECUTION_READY`로 발행했다. |
-| 활성 작업 | 열린 PR 없음. 다음 자율 후보는 `candidate-broad-frontier-expansion-no-edge-58298dfc172c`다. 2026-08-11 KST post-merge read-only refresh 기준 pipeline-liveness(`2026-08-11T04:19:13Z`)는 `OK`, money-path(`2026-08-11T02:08:08Z`)는 `PREVIEW_ONLY`/`NO_EDGE_YET`, capital-path-readiness(`2026-08-11T02:08:08Z`)는 `ACCUMULATING_EDGE`, released-work(`2026-08-11T04:16:16Z`)는 `OK`, autonomous-work(`2026-08-11T04:16:19Z`)는 `EXECUTION_READY`, money-gate-alignment(`2026-08-11T04:18:18Z`)는 `ALIGNED_WAITING`이며 선택 후보는 broad frontier다. edge-autoarm(`2026-08-11T00:35:17Z`)는 `WAIT_EDGE`/`NO_EDGE`, rebalance-paper-forward(`2026-08-10T23:10:02Z`)는 7개 비교 가능 트랙 모두 `NO_EDGE`다. 최신 KIS smoke(`2026-08-10T04:59:01Z`)는 `smoke_state=success`, `smoke_exit=0`, `key_valid=true`다. |
-| 안전 경계 | 이번 갱신은 등급 2 인계 갱신이다. #582도 실제 주문, 실거래 전환, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps 확대, 손실 예산, KIS secret 값, 감사 로그, 헌법, kernel manifest를 바꾸지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`라 실주문 불가이고, 직접 자본 차단은 PSR `0.531698 < 0.95`인 `NO_EDGE_YET`이다. |
+| 열린 PR | 없음(이 문서 편집 시점; #584는 merge 완료). |
+| 출시 완료 스펙 | 최신 운영 보정: #584(스펙 124, broad no-edge parent 반복 억제와 `broad_no_edge_frontier_map` 후속 no-live 후보 전개), #582(`NO_EDGE_YET` 고갈 뒤 `wait-for-fresh-evidence` 대신 broad no-live frontier 후보 발행), #581(#580 뒤 돈 경로 sidecar truth 인계), #580(#578 뒤 dry-run deploy 재시도 성공 인계), #579(#578 뒤 KIS smoke 성공과 deploy 실패 경계 인계), #578(KIS smoke 실패 증거 안전화), #576(`forward-anchored-verdict` observe gateway 복구). 직전 추가: 123/live canary sidecar gate, #566(forward paper 경제 장부 보정), 122(forward paper DB writability), 121(`promote-readiness` 관측 경로 복구), 120(증거 기반 후보 소스 다변화 + released-work 완료 소비), 119(보안 신뢰 경계 강화). 이전 스펙 058~118은 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
+| 골격 스펙 | 없음. `.specify/feature.json`은 최신 완료 스펙 `specs/124-broad-no-edge-frontier`를 가리키고, `tasks.md`는 T001~T010 완료 상태다. |
+| 최근 출시 작업 | #584는 `candidate-broad-frontier-expansion-no-edge-58298dfc172c`가 released-work에 닫힌 뒤 같은 broad parent가 지문만 바뀌어 반복되지 않게 하고, 다음 후보를 `candidate-broad-no-edge-asset-universe-rotation-experiment`로 전진시키는 등급 2 운영 보정이다. post-merge deploy run `31476005233`, released-work run `31476005722`, autonomous-work run `31476005231`은 모두 success다. |
+| 활성 작업 | 열린 PR 없음. #584 post-merge sidecar는 completion marker가 main에 들어오기 전이라 아직 `candidate-broad-frontier-expansion-no-edge-58298dfc172c`를 선택한다. 이 closeout 브랜치의 로컬 재현은 released-work `released_count=43`으로 parent 후보를 완료 처리하고 autonomous-work가 `candidate-broad-no-edge-asset-universe-rotation-experiment`를 다음 `EXECUTION_READY` 후보로 선택함을 확인했다. 최신 money-path는 여전히 `PREVIEW_ONLY`/`NO_EDGE_YET`, edge-autoarm은 `WAIT_EDGE`/`NO_EDGE`, rebalance-paper-forward는 비교 가능 7개 트랙 모두 `NO_EDGE`다. |
+| 안전 경계 | 이번 갱신은 등급 2 운영 루프와 인계 보정이다. 실제 주문, 실거래 전환, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps 확대, 손실 예산, KIS secret 값, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 현재 돈 경로는 `PREVIEW_ONLY`라 실주문 불가이고, 직접 자본 차단은 `NO_EDGE_YET`이다. |
+
+## 최근 관찰 — 2026-08-11 KST (#584 broad no-edge frontier 수행과 parent 반복 억제)
+
+현재 `main` 최신 코드 머지는 `bd36342`(#584, broad no-edge frontier 수행)다.
+기능 커밋은 `b863e0b`이다.
+
+- **문제 정의**: #582가 `NO_EDGE_YET` 고갈 뒤 broad parent 후보 `candidate-broad-frontier-expansion-no-edge-58298dfc172c`를 만들었지만, 이 후보를 완료 처리한 뒤 released-work 변화가 parent 지문에 들어가면 같은 parent가 새 해시로 반복될 수 있었다. 또한 parent 수행 뒤 실제 다음 no-live 실험 축이 보고서에 분리돼 있지 않았다.
+- **구현 상태**: `autonomous_work_execution.py`가 broad no-edge parent와 후속 broad no-edge 후보 release를 parent 지문 입력에서 제외한다. 새 `broad_no_edge_frontier_map`은 자산군·전략군, 신호군·보유 기간, 레짐·비용 견고성, 데이터 결측 원인 감사를 deterministic 순서로 노출한다. parent가 released-work에 닫히고 no-edge 증거가 계속되면 첫 후속 후보는 `candidate-broad-no-edge-asset-universe-rotation-experiment`다.
+- **post-merge 자동화 확인**: #584 merge 뒤 released-work run `31476005722`, autonomous-work run `31476005231`, deploy run `31476005233`은 모두 success다. #584 post-merge autonomous-work는 completion marker가 아직 main에 없어서 parent 후보를 유지하지만, 이 closeout 브랜치 로컬 재현에서 released-work는 `candidate-broad-frontier-expansion-no-edge-58298dfc172c`를 released로 읽고 autonomous-work는 `candidate-broad-no-edge-asset-universe-rotation-experiment`로 전진했다.
+- **검증 상태**: #584 브랜치에서 `uv run pytest` 2720 passed/5 skipped, `uv run ruff check src tests` 통과, `git diff --check` 통과, `uv run python scripts/check_handoff_facts.py` OK, `uv run python scripts/agent_harness_probe.py --strict` OK(14/14), PR quality gate 통과, 실제 sidecar replay 통과를 확인했다. closeout 브랜치에서는 released-work local replay와 autonomous-work local replay가 parent 완료와 다음 후보 전진을 확인했다.
+- **안전 경계**: 실제 주문, live 재무장, 자본 배분, live 전략 교체, whitelist/caps, 손실 예산, KIS secret 값, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 새 후보는 no-live 실험 설계 후보일 뿐이며, 돈 경로는 여전히 `PREVIEW_ONLY`/`NO_EDGE_YET`다.
+- **상세 인계**: `HANDOFF-131-BROAD-NO-EDGE-FRONTIER.md`.
 
 ## 최근 관찰 — 2026-08-11 KST (#582 broad frontier expansion after NO_EDGE exhaustion)
 
@@ -7288,6 +7300,7 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 
 ## 과거 인수인계 파일 (참고용)
 
+- `HANDOFF-131-BROAD-NO-EDGE-FRONTIER.md` — #584가 broad no-edge parent 반복 억제와 `broad_no_edge_frontier_map`을 출시하고, completion marker 포함 시 다음 후보가 `candidate-broad-no-edge-asset-universe-rotation-experiment`로 전진하는 상태
 - `HANDOFF-130-BROAD-FRONTIER-EXPANSION.md` — #582가 `NO_EDGE_YET` 고갈 뒤 `wait-for-fresh-evidence` 대신 broad no-live frontier 후보 `candidate-broad-frontier-expansion-no-edge-58298dfc172c`를 발행하게 한 상태
 - `HANDOFF-129-FORWARD-ANCHORED-OBSERVE-GATEWAY.md` — #576 forward anchored verdict raw SSH 경로를 fixed observe gateway로 복구하고 post-merge sidecar가 `ssh_exit=0`으로 정상 발행된 상태
 - `HANDOFF-128-CANDIDATE-RESULT-RETRYABLE-BLOCKED.md` — #571 후보 결과 실행기가 retryable factory-blocked 후보를 안전 no-live 검증까지 진행하고, post-merge 결과 sidecar가 `blocked=0`, `pending=2`, `data_history_missing=2`를 남긴 상태
