@@ -56,4 +56,10 @@ uv run python scripts/autonomous_work_execution_probe.py \
   --now 2026-08-11T12:00:00Z
 ```
 
-Expected selected candidate: `candidate-broad-no-edge-multi-horizon-signal-experiment`.
+Expected broad frontier state:
+
+- `candidate-broad-no-edge-asset-universe-rotation-experiment` has `coverage_status=released`.
+- `candidate-broad-no-edge-multi-horizon-signal-experiment` has `coverage_status=open`.
+
+The top-level `selected_work` can be a different higher-priority recovery or validation
+candidate if other current sidecars expose one.
