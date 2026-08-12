@@ -33,15 +33,29 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `15719d8` — Merge pull request #601 from jinooaction/codex/broad-no-edge-regime-cost-robustness |
-| main 테스트 | 이 HANDOFF 갱신 브랜치 기준 `uv run pytest -q` → 2769 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
+| 마지막 main 커밋 | `4d39fe8` — Merge pull request #603 from jinooaction/codex/broad-no-edge-data-gap-audit-isolated |
+| main 테스트 | 이 HANDOFF 갱신 브랜치 기준 `uv run pytest -q` → 2777 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
 | main 린트 | 이 HANDOFF 갱신 브랜치 기준 `uv run ruff check src tests` → All checks passed. |
-| 열린 PR | 없음(#601은 merge 완료, 이 HANDOFF 갱신 전 확인 기준). |
-| 출시 완료 스펙 | 최신 운영 보정: #601(스펙 132, 광역 no-edge 레짐·비용 견고성 계약과 completed candidate 소비), #599(스펙 131, 광역 no-edge 다중 보유 기간·신호군 계약과 completed candidate 소비), #597(스펙 130, 검증 실패 승격 재검토 계약과 completed candidate 소비), #595(스펙 129, 검증 실패 패키지 종류별 확장 계약과 completed candidate 소비), #593(스펙 128, 검증 실패 데이터 준비도 계약과 completed candidate 소비), #591(스펙 127, 검증 실패 명령 재현 계약과 completed candidate 소비), #589(스펙 126, 검증 실패 parent 완료 뒤 첫 no-live 후속 후보 자동 전개), #587(스펙 125, 광역 자산군 방어 회전 no-live 계약과 released-work 완료), #585/#584/#582. 직전 추가: 123/live canary sidecar gate, #566(forward paper 경제 장부 보정), 122(forward paper DB writability), 121(`promote-readiness` 관측 경로 복구), 120(증거 기반 후보 소스 다변화 + released-work 완료 소비), 119(보안 신뢰 경계 강화). 이전 스펙 058~118은 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
-| 골격 스펙 | 없음. `.specify/feature.json`은 최신 완료 스펙 `specs/132-broad-no-edge-regime-cost-robustness`를 가리키고, `tasks.md`는 T001~T021 완료 상태다. |
-| 최근 출시 작업 | #601은 `candidate-broad-no-edge-regime-cost-robustness-experiment`를 스펙 132로 완료 처리했다. 새 probe는 `regime-stratify`, `execution-quality`, `money-path`, `edge-autoarm`, `rebalance-paper-forward`, `released-work`, `evolution-ledger`, `pipeline-liveness`를 함께 읽어 레짐별 PASS/WAIT/STRESS와 10/25/50bp 비용 민감도 행을 no-live 계약으로 분리한다. released-work run `31596002387`는 commit `15719d8`에서 released_count 51과 스펙 132 완료를 확인했다. |
-| 활성 작업 | 열린 PR 없음. 최신 autonomous-work run `31596002386`은 `candidate-broad-no-edge-data-gap-audit`를 `EXECUTION_READY`로 골랐다. 다음 작업은 `public-data` summary, `regime.json`, `regime_timeline.csv`를 읽어 데이터 결측 원인이 no-edge 판정에 끼친 영향을 분리하는 읽기 전용 감사를 정의하는 것이다. |
-| 안전 경계 | 이번 갱신은 등급 2 운영 보고와 인계 보정이다. #601도 no-live 읽기 전용 계약과 자율 후보 전진 보정만 추가했고 실제 주문, 실거래 전환, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps 확대, 손실 예산, KIS secret 값, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 최신 money-path는 `PREVIEW_ONLY`/`NO_EDGE_YET`, edge-autoarm은 `WAIT_EDGE`/`NO_EDGE`라 실주문과 자본 배분은 여전히 금지다. |
+| 열린 PR | 없음(#603은 merge 완료, 이 HANDOFF 갱신 전 확인 기준). |
+| 출시 완료 스펙 | 최신 운영 보정: #603(스펙 133, 광역 no-edge 데이터 결측 원인 감사와 completed candidate 소비), #601(스펙 132, 광역 no-edge 레짐·비용 견고성 계약과 completed candidate 소비), #599(스펙 131, 광역 no-edge 다중 보유 기간·신호군 계약과 completed candidate 소비), #597(스펙 130, 검증 실패 승격 재검토 계약과 completed candidate 소비), #595(스펙 129, 검증 실패 패키지 종류별 확장 계약과 completed candidate 소비), #593(스펙 128, 검증 실패 데이터 준비도 계약과 completed candidate 소비), #591(스펙 127, 검증 실패 명령 재현 계약과 completed candidate 소비), #589(스펙 126, 검증 실패 parent 완료 뒤 첫 no-live 후속 후보 자동 전개), #587(스펙 125, 광역 자산군 방어 회전 no-live 계약과 released-work 완료), #585/#584/#582. 직전 추가: 123/live canary sidecar gate, #566(forward paper 경제 장부 보정), 122(forward paper DB writability), 121(`promote-readiness` 관측 경로 복구), 120(증거 기반 후보 소스 다변화 + released-work 완료 소비), 119(보안 신뢰 경계 강화). 이전 스펙 058~118은 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
+| 골격 스펙 | 없음. `.specify/feature.json`은 최신 완료 스펙 `specs/133-broad-no-edge-data-gap-audit`를 가리키고, `tasks.md`는 T001~T021 완료 상태다. |
+| 최근 출시 작업 | #603은 `candidate-broad-no-edge-data-gap-audit`를 스펙 133으로 완료 처리했다. 새 probe는 `public-data` summary, `regime.json`, `regime_timeline.csv`, `regime-stratify`, `rebalance-paper-forward`, `money-path`, `edge-autoarm`, `released-work`, `pipeline-liveness`를 함께 읽어 데이터 결측과 NO_EDGE 판정을 no-live 계약으로 분리한다. released-work run `31605944297`는 commit `4d39fe8`에서 released_count 52와 스펙 133 완료를 확인했다. |
+| 활성 작업 | 열린 PR 없음. 최신 autonomous-work run `31605944292`는 `wait-for-fresh-evidence` / `OBSERVATION_WAIT`를 골랐다. 실행 가능한 안전 후보가 없으므로 지금은 새 scheduled sidecar 증거가 쌓인 뒤 released-work/autonomous-work를 다시 읽는 것이 다음 관찰 지점이다. |
+| 안전 경계 | 이번 갱신은 등급 2 운영 보고와 인계 보정이다. #603도 no-live 읽기 전용 계약과 자율 후보 반복 방지 확인만 추가했고 실제 주문, 실거래 전환, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps 확대, 손실 예산, KIS secret 값, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 최신 money-path는 `PREVIEW_ONLY`/`NO_EDGE_YET`, edge-autoarm은 `WAIT_EDGE`/`NO_EDGE`라 실주문과 자본 배분은 여전히 금지다. |
+
+## 최근 관찰 — 2026-08-12 KST (#603 광역 no-edge 데이터 결측 원인 감사 완료)
+
+현재 `main` 최신 머지는 `4d39fe8`(#603, broad NO_EDGE data gap audit contract)다.
+기능 커밋은 `28ca5fa`이다.
+
+- **문제 정의**: 광역 no-edge 축에서 자산군 확장, 다중 보유 기간·신호군, 레짐·비용 견고성은 닫혔다. 남은 병목은 엣지가 없다는 결론이 진짜 전략 문제인지, 공개 데이터 범위·조인·레짐 라벨 결측 때문에 판정이 흐려진 것인지 분리하는 것이었다.
+- **구현 상태**: 스펙 133을 추가했고, `broad_no_edge_data_gap_audit.py`와 `broad_no_edge_data_gap_audit_probe.py`가 public-data summary, regime.json, regime_timeline.csv, regime-stratify, rebalance-paper-forward, money-path, edge-autoarm, released-work, pipeline-liveness를 함께 읽어 no-live 데이터 결측 감사 계약을 발행한다. `completed_candidate_id: candidate-broad-no-edge-data-gap-audit`와 완료된 tasks.md 덕분에 released-work가 이번 후보를 소비한다.
+- **post-merge 자동화 확인**: #603 merge 뒤 `Deploy on merge to main` run `31605944286`, `Released work ledger` run `31605944297`, `Autonomous work execution loop` run `31605944292`가 모두 success다. released-work는 commit `4d39fe8`, released_count 52이고 스펙 133 후보를 released로 포함한다. 최신 autonomous-work sidecar는 commit `4d39fe8`, selected_work `wait-for-fresh-evidence`, status `OBSERVATION_WAIT`다. 광역 no-edge 지도에서 데이터 결측 감사도 released가 되어 실행 가능한 안전 후보가 남아 있지 않다.
+- **데이터 결측 감사 증거**: 최신 sidecar로 `broad_no_edge_data_gap_audit_probe.py`를 재생하면 `CONTRACT_READY`, `next_candidate_id=wait-for-fresh-evidence`, release gate PASS다. 물질적 공개 데이터 결측은 CPI `CUUR0000SA0` 1개이고, inflation 레짐 지표는 `UNAVAILABLE`/`MEDIUM`이다. `regime_timeline.csv`는 2399행이며 canonical label 누락은 없지만 `inflation_yoy`는 100% 결측이다. stratified sparse label은 `GLOBAL-TREND:RISK_OFF`, `GLOBAL-TREND-WIDE:RISK_OFF` 2개이고, forward paper NO_EDGE 행은 7개다.
+- **검증 상태**: #603 브랜치에서 focused 검증 11 passed/48 deselected, `uv run pytest` 2777 passed/5 skipped, `uv run ruff check src tests` 통과, `git diff --cached --check` 통과, `uv run python scripts/check_handoff_facts.py` OK, `uv run python scripts/agent_harness_probe.py --strict` OK(14/14), PR quality gate 통과, current sidecar replay와 released-work/autonomous-work post-merge sidecar를 확인하고 merge했다.
+- **안전 경계**: 이 변경은 no-live 데이터 감사와 후보 반복 방지 확인이다. 브로커 API 호출, 실제 주문, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps, 손실 예산, KIS secret 값, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. money-path는 `PREVIEW_ONLY`/`NO_EDGE_YET`, edge-autoarm은 `WAIT_EDGE`/`NO_EDGE`다.
+- **다음 판단**: 현재는 새 코드 작업 후보가 없다. 다음 scheduled sidecar 갱신 뒤 released-work와 autonomous-work를 다시 읽어 새 `EXECUTION_READY` 후보가 생겼는지 확인한다. 주문 제출, live 재무장, 자본 배분은 하지 않는다.
+- **상세 인계**: `HANDOFF-140-BROAD-NO-EDGE-DATA-GAP-AUDIT.md`.
 
 ## 최근 관찰 — 2026-08-12 KST (#601 광역 no-edge 레짐·비용 견고성 계약 완료)
 
@@ -7419,6 +7433,7 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 
 ## 과거 인수인계 파일 (참고용)
 
+- `HANDOFF-140-BROAD-NO-EDGE-DATA-GAP-AUDIT.md` — #603이 광역 no-edge 데이터 결측 원인 감사 계약을 출시하고, released-work가 `candidate-broad-no-edge-data-gap-audit`를 소비해 현재 autonomous-work가 `wait-for-fresh-evidence` / `OBSERVATION_WAIT`로 전진한 상태
 - `HANDOFF-139-BROAD-NO-EDGE-REGIME-COST-ROBUSTNESS.md` — #601이 광역 no-edge 레짐·비용 견고성 계약을 출시하고, released-work가 `candidate-broad-no-edge-regime-cost-robustness-experiment`를 소비해 다음 후보가 `candidate-broad-no-edge-data-gap-audit`로 전진한 상태
 - `HANDOFF-138-BROAD-NO-EDGE-MULTI-HORIZON-SIGNAL.md` — #599가 광역 no-edge 다중 보유 기간·신호군 계약을 출시하고, released-work가 `candidate-broad-no-edge-multi-horizon-signal-experiment`를 소비해 다음 후보가 `candidate-broad-no-edge-regime-cost-robustness-experiment`로 전진한 상태
 - `HANDOFF-137-VALIDATION-FAILURE-PROMOTION-RECHECK.md` — #597이 검증 실패 승격 재검토 계약을 출시하고, released-work가 `candidate-broad-validation-failure-promotion-recheck-contract`를 소비해 다음 후보가 `candidate-broad-no-edge-multi-horizon-signal-experiment`로 전진한 상태
