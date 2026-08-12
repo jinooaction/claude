@@ -220,7 +220,7 @@ the current worktree. Do not trust prose in this block as the source of truth
 for in-flight work; use the `git_ground_truth` start hook, latest `HANDOFF.md`,
 and `/sync` against `jinooaction/claude` `Codex/*` branches before continuing.
 
-현재 계획 포인터: `specs/128-validation-failure-data-readiness/plan.md` — 검증 실패 child 후보 `candidate-broad-validation-failure-data-readiness-contract`를 닫기 위해 candidate history support, portfolio TOML, candidate-results, public-data, regime-stratify 증거를 함께 읽어 검증 패키지별 데이터 준비도를 PASS/WAIT/FAIL로 고정하는 운영 보정.
+현재 계획 포인터: `specs/129-validation-failure-package-kind-expansion/plan.md` — 검증 실패 child 후보 `candidate-broad-validation-failure-package-kind-expansion-contract`를 닫기 위해 strategy_backtest와 portfolio_backtest 실패를 나눠 전략군, 포트폴리오 구성, 보유 기간, 산출 증거별 no-live 후보 축을 재정렬하는 운영 보정.
 
 머지 완료(베이스라인): spec 004 (LLM 판단 지점), 005 (자율 튜너), 006 (배포 자동화), 007 (하드닝 카나리), 008 (백테스트), 009 (paper-run), 010 (자동 룰 설계자), 011 (라이브 성과 측정). **주의: 일부 tasks.md 가 stale 0% 로 표시된 적 있음 — 코드/테스트를 믿을 것.**
 

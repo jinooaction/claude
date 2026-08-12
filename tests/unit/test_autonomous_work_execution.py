@@ -18,6 +18,7 @@ from auto_invest.analytics.autonomous_work_execution import (
     BROAD_VALIDATION_FAILURE_COMMAND_REPLAY_CANDIDATE_ID,
     BROAD_VALIDATION_FAILURE_DATA_READINESS_CANDIDATE_ID,
     BROAD_VALIDATION_FAILURE_PACKAGE_KIND_CANDIDATE_ID,
+    BROAD_VALIDATION_FAILURE_PROMOTION_RECHECK_CANDIDATE_ID,
     BROKER_DIAGNOSTIC_LIVENESS_CANDIDATE_ID,
     BROKER_REJECTION_TAXONOMY_CANDIDATE_ID,
     CODEX_COMPLETION_GATES,
@@ -2489,6 +2490,96 @@ def test_nested_factory_retryable_keeps_validation_failure_child_after_fail_resu
     }
     assert validation_map["package_kind_expansion"].package_count == 2
     assert validation_map["package_kind_expansion"].retryable_count == 2
+
+
+def test_released_package_kind_entry_advances_to_promotion_recheck():
+    base_evidence = {
+        "capital-path-readiness": _json(
+            {
+                "priority_candidates": [
+                    {
+                        "candidate_id": "candidate-fd04772a23c5",
+                        "domain_key": "live_readiness",
+                        "status": "new",
+                        "score": 597,
+                    }
+                ]
+            }
+        ),
+        "candidate-result-executor": _retryable_blocked_candidate_results(),
+        "evolution-ledger": _json(
+            {
+                "entries": [
+                    {
+                        "candidate_id": "candidate-1ed634d8bf6d",
+                        "status": "rejected",
+                        "reason_ko": "검증 실패로 승격하지 않는다.",
+                    },
+                    {
+                        "candidate_id": "candidate-cc96b35062da",
+                        "status": "rejected",
+                        "reason_ko": "검증 실패로 승격하지 않는다.",
+                    },
+                ]
+            }
+        ),
+        "released-work": _released_through_broker_diagnostic_liveness(
+            AGENT_OPS_FRONTIER_CANDIDATE_ID,
+            HANDOFF_TRUTH_LIVENESS_CANDIDATE_ID,
+            PR_MERGE_EVIDENCE_LIVENESS_CANDIDATE_ID,
+            WORKTREE_CONCURRENCY_LIVENESS_CANDIDATE_ID,
+            AGENT_HARNESS_REGRESSION_LIVENESS_CANDIDATE_ID,
+            OPERATOR_REPORT_LIVENESS_CANDIDATE_ID,
+            EVIDENCE_SOURCE_DIVERSIFICATION_VALIDATION_FAILURES_CANDIDATE_ID,
+        ),
+        "money-path": _json(
+            {
+                "overall_status": "PREVIEW_ONLY",
+                "live_money_state": {"status": "PREVIEW_ONLY"},
+                "stage": "NO_EDGE_YET",
+            }
+        ),
+        "edge-autoarm": _json(
+            {
+                "action": "WAIT_EDGE",
+                "reason": "forward 판정='NO_EDGE'",
+            }
+        ),
+        "pipeline-liveness": _liveness(),
+    }
+    parent_report = build_autonomous_work_execution(base_evidence, now=NOW)
+    assert parent_report.selected_work is not None
+
+    report = build_autonomous_work_execution(
+        {
+            **base_evidence,
+            "released-work": _released_through_broker_diagnostic_liveness(
+                AGENT_OPS_FRONTIER_CANDIDATE_ID,
+                HANDOFF_TRUTH_LIVENESS_CANDIDATE_ID,
+                PR_MERGE_EVIDENCE_LIVENESS_CANDIDATE_ID,
+                WORKTREE_CONCURRENCY_LIVENESS_CANDIDATE_ID,
+                AGENT_HARNESS_REGRESSION_LIVENESS_CANDIDATE_ID,
+                OPERATOR_REPORT_LIVENESS_CANDIDATE_ID,
+                EVIDENCE_SOURCE_DIVERSIFICATION_VALIDATION_FAILURES_CANDIDATE_ID,
+                parent_report.selected_work.candidate_id,
+                BROAD_VALIDATION_FAILURE_COMMAND_REPLAY_CANDIDATE_ID,
+                BROAD_VALIDATION_FAILURE_DATA_READINESS_CANDIDATE_ID,
+                BROAD_VALIDATION_FAILURE_PACKAGE_KIND_CANDIDATE_ID,
+            ),
+        },
+        now=NOW,
+    )
+
+    assert report.selected_work is not None
+    assert (
+        report.selected_work.candidate_id
+        == BROAD_VALIDATION_FAILURE_PROMOTION_RECHECK_CANDIDATE_ID
+    )
+    validation_map = {
+        entry.frontier_key: entry for entry in report.broad_validation_failure_frontier_map
+    }
+    assert validation_map["package_kind_expansion"].coverage_status == "released"
+    assert validation_map["promotion_recheck_contract"].coverage_status == "open"
 
 
 def test_all_released_no_edge_context_emits_broad_frontier_expansion():
