@@ -1,5 +1,5 @@
 {
-  "commit": "4f4008e5bc074f2ecea88061811377dadeb2464d",
+  "commit": "15719d8438dea3893dfde83f7850a9f336d35866",
   "overall_status": "OK",
   "released_work": [
     {
@@ -99,6 +99,15 @@
       "source_field": "completed_candidate_id",
       "source_file": "specs/131-broad-no-edge-multi-horizon-signal/spec.md",
       "spec_id": "131-broad-no-edge-multi-horizon-signal",
+      "status": "released"
+    },
+    {
+      "candidate_id": "candidate-broad-no-edge-regime-cost-robustness-experiment",
+      "entry_id": "released-934f5ac594e8",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/132-broad-no-edge-regime-cost-robustness/spec.md",
+      "spec_id": "132-broad-no-edge-regime-cost-robustness",
       "status": "released"
     },
     {
@@ -453,7 +462,7 @@
       "status": "released"
     }
   ],
-  "run_id": "31586162649",
+  "run_id": "31596002387",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -546,7 +555,8 @@
     "128-validation-failure-data-readiness",
     "129-validation-failure-package-kind-expansion",
     "130-validation-failure-promotion-recheck",
-    "131-broad-no-edge-multi-horizon-signal"
+    "131-broad-no-edge-multi-horizon-signal",
+    "132-broad-no-edge-regime-cost-robustness"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -727,5 +737,5 @@
       "spec_id": "072-candidate-evidence-diagnostics"
     }
   ],
-  "timestamp_utc": "2026-08-12T10:09:40.087700Z"
+  "timestamp_utc": "2026-08-12T12:21:12.574916Z"
 }
