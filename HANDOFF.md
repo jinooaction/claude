@@ -33,15 +33,29 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `cc7f050` — Merge pull request #597 from jinooaction/Codex/validation-failure-promotion-recheck-contract |
-| main 테스트 | 이 HANDOFF 갱신 브랜치 기준 `uv run pytest` → 2750 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
+| 마지막 main 커밋 | `012cdf0` — Merge pull request #599 from jinooaction/Codex/broad-no-edge-multi-horizon-signal |
+| main 테스트 | 이 HANDOFF 갱신 브랜치 기준 `uv run pytest` → 2759 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
 | main 린트 | 이 HANDOFF 갱신 브랜치 기준 `uv run ruff check src tests` → All checks passed. |
-| 열린 PR | 없음(#597은 merge 완료, 이 HANDOFF 갱신 전 확인 기준). |
-| 출시 완료 스펙 | 최신 운영 보정: #597(스펙 130, 검증 실패 승격 재검토 계약과 completed candidate 소비), #595(스펙 129, 검증 실패 패키지 종류별 확장 계약과 completed candidate 소비), #593(스펙 128, 검증 실패 데이터 준비도 계약과 completed candidate 소비), #591(스펙 127, 검증 실패 명령 재현 계약과 completed candidate 소비), #589(스펙 126, 검증 실패 parent 완료 뒤 첫 no-live 후속 후보 자동 전개), #587(스펙 125, 광역 자산군 방어 회전 no-live 계약과 released-work 완료), #585(스펙 124 completion marker와 released-work closeout), #584(스펙 124, broad no-edge parent 반복 억제와 `broad_no_edge_frontier_map` 후속 no-live 후보 전개), #582(`NO_EDGE_YET` 고갈 뒤 `wait-for-fresh-evidence` 대신 broad no-live frontier 후보 발행), #581/#580/#579/#578/#576. 직전 추가: 123/live canary sidecar gate, #566(forward paper 경제 장부 보정), 122(forward paper DB writability), 121(`promote-readiness` 관측 경로 복구), 120(증거 기반 후보 소스 다변화 + released-work 완료 소비), 119(보안 신뢰 경계 강화). 이전 스펙 058~118은 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
-| 골격 스펙 | 없음. `.specify/feature.json`은 최신 완료 스펙 `specs/130-validation-failure-promotion-recheck`를 가리키고, `tasks.md`는 T001~T020 완료 상태다. |
-| 최근 출시 작업 | #597은 `candidate-broad-validation-failure-promotion-recheck-contract`를 스펙 130으로 완료 처리했다. 새 probe는 learning ledger, autonomous-promotion, candidate-results를 읽어 같은 실패 지문이면 억제를 유지하고, result/pass·promotion/discard 해소·ledger 재검토 조건·failure fingerprint 변화가 있을 때만 재검토를 허용한다. released-work run `31574288078`는 commit `cc7f050`에서 released_count 49와 스펙 130 완료를 확인했다. |
-| 활성 작업 | 열린 PR 없음. 최신 autonomous-work run `31574288096`은 `candidate-broad-no-edge-multi-horizon-signal-experiment`를 `EXECUTION_READY`로 골랐다. 검증 실패 child 4개는 모두 released 상태이므로 다음 작업은 broad no-edge 쪽의 다중 보유 기간·신호군 no-live 실험 설계다. |
-| 안전 경계 | 이번 갱신은 등급 2 운영 보고와 인계 보정이다. #597도 no-live 읽기 전용 계약과 자율 후보 전진 보정만 추가했고 실제 주문, 실거래 전환, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps 확대, 손실 예산, KIS secret 값, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 최신 money-path는 `PREVIEW_ONLY`/`NO_EDGE_YET`, edge-autoarm은 `WAIT_EDGE`/`NO_EDGE`라 실주문과 자본 배분은 여전히 금지다. |
+| 열린 PR | 없음(#599는 merge 완료, 이 HANDOFF 갱신 전 확인 기준). |
+| 출시 완료 스펙 | 최신 운영 보정: #599(스펙 131, 광역 no-edge 다중 보유 기간·신호군 계약과 completed candidate 소비), #597(스펙 130, 검증 실패 승격 재검토 계약과 completed candidate 소비), #595(스펙 129, 검증 실패 패키지 종류별 확장 계약과 completed candidate 소비), #593(스펙 128, 검증 실패 데이터 준비도 계약과 completed candidate 소비), #591(스펙 127, 검증 실패 명령 재현 계약과 completed candidate 소비), #589(스펙 126, 검증 실패 parent 완료 뒤 첫 no-live 후속 후보 자동 전개), #587(스펙 125, 광역 자산군 방어 회전 no-live 계약과 released-work 완료), #585(스펙 124 completion marker와 released-work closeout), #584(스펙 124, broad no-edge parent 반복 억제와 `broad_no_edge_frontier_map` 후속 no-live 후보 전개), #582(`NO_EDGE_YET` 고갈 뒤 `wait-for-fresh-evidence` 대신 broad no-live frontier 후보 발행), #581/#580/#579/#578/#576. 직전 추가: 123/live canary sidecar gate, #566(forward paper 경제 장부 보정), 122(forward paper DB writability), 121(`promote-readiness` 관측 경로 복구), 120(증거 기반 후보 소스 다변화 + released-work 완료 소비), 119(보안 신뢰 경계 강화). 이전 스펙 058~118은 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
+| 골격 스펙 | 없음. `.specify/feature.json`은 최신 완료 스펙 `specs/131-broad-no-edge-multi-horizon-signal`를 가리키고, `tasks.md`는 T001~T021 완료 상태다. |
+| 최근 출시 작업 | #599는 `candidate-broad-no-edge-multi-horizon-signal-experiment`를 스펙 131로 완료 처리했다. 새 probe는 `rebalance-paper-forward`, `money-path`, `edge-autoarm`, `public-data`, `regime-stratify`, `released-work`, `evolution-ledger`, `pipeline-liveness`를 함께 읽어 단기 변동성 돌파, 중기 carry/quality 회전, 장기 trend/quality 확인, 레짐 변동성 carry 필터 후보를 no-live 계약으로 분리한다. released-work run `31578457879`는 commit `012cdf0`에서 released_count 50과 스펙 131 완료를 확인했다. |
+| 활성 작업 | 열린 PR 없음. 최신 autonomous-work run `31578457715`은 `candidate-broad-no-edge-regime-cost-robustness-experiment`를 `EXECUTION_READY`로 골랐다. 다음 작업은 `regime-stratify`, `execution-quality`, `money-path` 증거를 함께 읽어 레짐 구간별 통과 기준과 비용 민감도 stress test를 no-live 계약으로 정의하는 것이다. |
+| 안전 경계 | 이번 갱신은 등급 2 운영 보고와 인계 보정이다. #599도 no-live 읽기 전용 계약과 자율 후보 전진 보정만 추가했고 실제 주문, 실거래 전환, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps 확대, 손실 예산, KIS secret 값, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 최신 money-path는 `PREVIEW_ONLY`/`NO_EDGE_YET`, edge-autoarm은 `WAIT_EDGE`/`NO_EDGE`라 실주문과 자본 배분은 여전히 금지다. |
+
+## 최근 관찰 — 2026-08-12 KST (#599 광역 no-edge 다중 보유 기간·신호군 계약 완료)
+
+현재 `main` 최신 머지는 `012cdf0`(#599, broad no-edge multi-horizon signal contract)다.
+기능 커밋은 `697c4d9`이다.
+
+- **문제 정의**: broad no-edge 축에서 자산군 방어 회전 후보는 닫혔지만, 단일 보유 기간이나 비슷한 momentum 신호만 반복하면 엣지가 없는 구간을 같은 방식으로 재측정할 위험이 있었다. 다음 병목은 보유 기간과 신호군을 단기·중기·장기로 나눠 어떤 no-live 후보를 새로 검증할지 계약으로 고정하는 것이었다.
+- **구현 상태**: 스펙 131을 추가했고, `broad_no_edge_multi_horizon_signal.py`와 `broad_no_edge_multi_horizon_signal_probe.py`가 forward paper, money-path, edge-autoarm, public-data, regime-stratify, released-work, evolution-ledger, pipeline-liveness를 함께 읽어 no-live 다중 horizon 후보 계약을 발행한다. 계약은 단기 변동성 돌파, 중기 carry/quality 회전, 장기 trend/quality 확인, 레짐 변동성 carry 필터를 제안하고, 같은 단일 horizon momentum 반복과 live 재무장·주문 제출을 제외한다. `completed_candidate_id: candidate-broad-no-edge-multi-horizon-signal-experiment`와 완료된 tasks.md 덕분에 released-work가 이번 후보를 소비한다.
+- **post-merge 자동화 확인**: #599 merge 뒤 `Deploy on merge to main` run `31578457648`, `Released work ledger` run `31578457879`, `Autonomous work execution loop` run `31578457715`가 모두 success다. released-work는 commit `012cdf0`, released_count 50이고 스펙 131 후보를 released로 포함한다. 최신 autonomous-work sidecar는 commit `012cdf0`, selected_work `candidate-broad-no-edge-regime-cost-robustness-experiment`, status `EXECUTION_READY`, risk_grade 2다.
+- **다중 horizon 증거**: 최신 sidecar로 `broad_no_edge_multi_horizon_signal_probe.py`를 재생하면 `CONTRACT_READY`, proposed_count 4, waiting_count 0, release_gate PASS, regime_gate PASS다. 즉 이번 후보는 완료 처리됐고, broad no-edge frontier 지도에서는 자산군 확장과 다중 horizon 두 축이 released, 레짐·비용 견고성과 데이터 결측 감사 두 축이 open 상태다.
+- **검증 상태**: #599 브랜치에서 focused 검증 9 passed/49 deselected, `uv run pytest` 2759 passed/5 skipped, `uv run ruff check src tests` 통과, `git diff --check` 통과, `uv run python scripts/check_handoff_facts.py` OK, `uv run python scripts/agent_harness_probe.py --strict` OK(14/14), PR quality gate 통과, current sidecar replay와 released-work/autonomous-work local replay를 확인하고 merge했다.
+- **안전 경계**: 이 변경은 no-live 실험 후보 계약과 다음 자율 후보 전진 보정이다. 브로커 API 호출, 실제 주문, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps, 손실 예산, KIS secret 값, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. money-path는 `PREVIEW_ONLY`/`NO_EDGE_YET`, edge-autoarm은 `WAIT_EDGE`/`NO_EDGE`다.
+- **다음 작업 후보**: `candidate-broad-no-edge-regime-cost-robustness-experiment`다. `regime-stratify`, `execution-quality`, `money-path` 증거를 함께 읽어 레짐 구간별 통과 기준과 비용 민감도 stress test를 no-live 계약으로 정의해야 한다. 주문 제출, live 재무장, 자본 배분은 하지 않는다.
+- **상세 인계**: `HANDOFF-138-BROAD-NO-EDGE-MULTI-HORIZON-SIGNAL.md`.
 
 ## 최근 관찰 — 2026-08-12 KST (#597 검증 실패 승격 재검토 계약 완료)
 
@@ -7405,6 +7419,7 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 
 ## 과거 인수인계 파일 (참고용)
 
+- `HANDOFF-138-BROAD-NO-EDGE-MULTI-HORIZON-SIGNAL.md` — #599가 광역 no-edge 다중 보유 기간·신호군 계약을 출시하고, released-work가 `candidate-broad-no-edge-multi-horizon-signal-experiment`를 소비해 다음 후보가 `candidate-broad-no-edge-regime-cost-robustness-experiment`로 전진한 상태
 - `HANDOFF-137-VALIDATION-FAILURE-PROMOTION-RECHECK.md` — #597이 검증 실패 승격 재검토 계약을 출시하고, released-work가 `candidate-broad-validation-failure-promotion-recheck-contract`를 소비해 다음 후보가 `candidate-broad-no-edge-multi-horizon-signal-experiment`로 전진한 상태
 - `HANDOFF-136-VALIDATION-FAILURE-PACKAGE-KIND.md` — #595가 검증 실패 패키지 종류별 확장 계약을 출시하고, released-work가 `candidate-broad-validation-failure-package-kind-expansion-contract`를 소비해 다음 후보가 `candidate-broad-validation-failure-promotion-recheck-contract`로 전진한 상태
 - `HANDOFF-135-VALIDATION-FAILURE-DATA-READINESS.md` — #593이 검증 실패 데이터 준비도 계약을 출시하고, released-work가 `candidate-broad-validation-failure-data-readiness-contract`를 소비해 다음 후보가 `candidate-broad-validation-failure-package-kind-expansion-contract`로 전진한 상태
