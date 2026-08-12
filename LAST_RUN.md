@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-08-12T12:21:12.574916Z)
+# 완료 후보 소비 장부 (as of 2026-08-12T14:17:27.900542Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -8,8 +8,8 @@
 | 항목 | 값 |
 |------|-----|
 | overall_status | OK |
-| released_count | 51 |
-| scanned_specs | 83 |
+| released_count | 52 |
+| scanned_specs | 84 |
 
 ## 완료 후보
 
@@ -25,6 +25,7 @@
 | candidate-broad-frontier-expansion-no-edge-58298dfc172c | released | 124-broad-no-edge-frontier | specs/124-broad-no-edge-frontier/contracts/broad-no-edge-frontier.md | completed_candidate_id |
 | candidate-broad-frontier-expansion-validation-failures-22f38b8629eb | released | 126-broad-validation-failure-frontier | specs/126-broad-validation-failure-frontier/spec.md | completed_candidate_id |
 | candidate-broad-no-edge-asset-universe-rotation-experiment | released | 125-broad-no-edge-asset-universe | specs/125-broad-no-edge-asset-universe/spec.md | completed_candidate_id |
+| candidate-broad-no-edge-data-gap-audit | released | 133-broad-no-edge-data-gap-audit | specs/133-broad-no-edge-data-gap-audit/spec.md | completed_candidate_id |
 | candidate-broad-no-edge-multi-horizon-signal-experiment | released | 131-broad-no-edge-multi-horizon-signal | specs/131-broad-no-edge-multi-horizon-signal/spec.md | completed_candidate_id |
 | candidate-broad-no-edge-regime-cost-robustness-experiment | released | 132-broad-no-edge-regime-cost-robustness | specs/132-broad-no-edge-regime-cost-robustness/spec.md | completed_candidate_id |
 | candidate-broad-validation-failure-command-replay-contract | released | 127-validation-failure-command-replay | specs/127-validation-failure-command-replay/spec.md | completed_candidate_id |
@@ -131,7 +132,7 @@
 
 ```json
 {
-  "commit": "15719d8438dea3893dfde83f7850a9f336d35866",
+  "commit": "4d39fe8d6b12f6176b22153ef4ec06aa248f7c36",
   "overall_status": "OK",
   "released_work": [
     {
@@ -222,6 +223,15 @@
       "source_field": "completed_candidate_id",
       "source_file": "specs/125-broad-no-edge-asset-universe/spec.md",
       "spec_id": "125-broad-no-edge-asset-universe",
+      "status": "released"
+    },
+    {
+      "candidate_id": "candidate-broad-no-edge-data-gap-audit",
+      "entry_id": "released-dd1f1d5e6510",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/133-broad-no-edge-data-gap-audit/spec.md",
+      "spec_id": "133-broad-no-edge-data-gap-audit",
       "status": "released"
     },
     {
@@ -688,7 +698,8 @@
     "129-validation-failure-package-kind-expansion",
     "130-validation-failure-promotion-recheck",
     "131-broad-no-edge-multi-horizon-signal",
-    "132-broad-no-edge-regime-cost-robustness"
+    "132-broad-no-edge-regime-cost-robustness",
+    "133-broad-no-edge-data-gap-audit"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -869,6 +880,6 @@
       "spec_id": "072-candidate-evidence-diagnostics"
     }
   ],
-  "timestamp_utc": "2026-08-12T12:21:12.574916Z"
+  "timestamp_utc": "2026-08-12T14:17:27.900542Z"
 }
 ```
