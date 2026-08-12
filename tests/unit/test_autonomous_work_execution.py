@@ -15,6 +15,7 @@ from auto_invest.analytics.autonomous_work_execution import (
     BROAD_FRONTIER_EXPANSION_VALIDATION_FAILURES_CANDIDATE_PREFIX,
     BROAD_NO_EDGE_ASSET_UNIVERSE_ROTATION_CANDIDATE_ID,
     BROAD_NO_EDGE_MULTI_HORIZON_SIGNAL_CANDIDATE_ID,
+    BROAD_NO_EDGE_REGIME_COST_ROBUSTNESS_CANDIDATE_ID,
     BROAD_VALIDATION_FAILURE_COMMAND_REPLAY_CANDIDATE_ID,
     BROAD_VALIDATION_FAILURE_DATA_READINESS_CANDIDATE_ID,
     BROAD_VALIDATION_FAILURE_PACKAGE_KIND_CANDIDATE_ID,
@@ -2775,6 +2776,34 @@ def test_released_broad_no_edge_entry_advances_to_next_entry():
     broad_map = {entry.frontier_key: entry for entry in report.broad_no_edge_frontier_map}
     assert broad_map["asset_universe_rotation"].coverage_status == "released"
     assert broad_map["multi_horizon_signal"].coverage_status == "open"
+
+
+def test_released_multi_horizon_signal_advances_to_regime_cost_entry():
+    parent_report = build_autonomous_work_execution(
+        _all_known_released_no_edge_evidence(),
+        now=NOW,
+    )
+    assert parent_report.selected_work is not None
+    parent_id = parent_report.selected_work.candidate_id
+
+    report = build_autonomous_work_execution(
+        _all_known_released_no_edge_evidence(
+            parent_id,
+            BROAD_NO_EDGE_ASSET_UNIVERSE_ROTATION_CANDIDATE_ID,
+            BROAD_NO_EDGE_MULTI_HORIZON_SIGNAL_CANDIDATE_ID,
+        ),
+        now=NOW,
+    )
+
+    broad_map = {entry.frontier_key: entry for entry in report.broad_no_edge_frontier_map}
+    assert broad_map["asset_universe_rotation"].coverage_status == "released"
+    assert broad_map["multi_horizon_signal"].coverage_status == "released"
+    assert broad_map["regime_cost_robustness"].coverage_status == "open"
+    assert report.selected_work is not None
+    assert (
+        report.selected_work.candidate_id
+        == BROAD_NO_EDGE_REGIME_COST_ROBUSTNESS_CANDIDATE_ID
+    )
 
 
 def test_macro_candidate_map_is_deterministic_and_rendered():
