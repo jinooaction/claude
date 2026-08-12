@@ -2340,11 +2340,18 @@ def _blocked_package_id(item: Mapping[str, Any]) -> str:
 
 
 def _diagnostic_items(item: Mapping[str, Any]) -> tuple[Mapping[str, Any], ...]:
-    return _mapping_sequence(item.get("diagnostics"))
+    diagnostics: list[Mapping[str, Any]] = list(_mapping_sequence(item.get("diagnostics")))
+    patch = item.get("promotion_patch")
+    if isinstance(patch, Mapping):
+        diagnostics.extend(_mapping_sequence(patch.get("factory_diagnostics")))
+    return tuple(diagnostics)
 
 
 def _next_action_items(item: Mapping[str, Any]) -> tuple[Mapping[str, Any], ...]:
     actions: list[Mapping[str, Any]] = list(_mapping_sequence(item.get("next_actions")))
+    patch = item.get("promotion_patch")
+    if isinstance(patch, Mapping):
+        actions.extend(_mapping_sequence(patch.get("factory_next_actions")))
     for diagnostic in _diagnostic_items(item):
         actions.extend(_mapping_sequence(diagnostic.get("next_actions")))
     return tuple(actions)
@@ -2370,6 +2377,9 @@ def _next_action_codes(item: Mapping[str, Any]) -> tuple[str, ...]:
 
 def _retryable_validation_failure(item: Mapping[str, Any]) -> bool:
     if _truthy(item.get("retryable")):
+        return True
+    patch = item.get("promotion_patch")
+    if isinstance(patch, Mapping) and _truthy(patch.get("factory_retryable")):
         return True
     return any(_truthy(diagnostic.get("retryable")) for diagnostic in _diagnostic_items(item))
 
