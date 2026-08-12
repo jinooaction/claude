@@ -44,8 +44,10 @@ from auto_invest.analytics.autonomous_work_execution import (
     REGIME_TIMELINE_COVERAGE_CANDIDATE_ID,
     SIGNAL_DIVERSIFICATION_EDGE_EXPERIMENT_CANDIDATE_ID,
     STATUS_EXECUTION_READY,
+    STATUS_OBSERVATION_WAIT,
     STATUS_OPERATOR_APPROVAL_REQUIRED,
     STATUS_RELEASED,
+    WAIT_FOR_FRESH_EVIDENCE_CANDIDATE_ID,
     WORKTREE_CONCURRENCY_LIVENESS_CANDIDATE_ID,
     build_autonomous_work_execution,
 )
@@ -2832,6 +2834,32 @@ def test_released_regime_cost_advances_to_data_gap_entry():
     assert broad_map["data_gap_causal_audit"].coverage_status == "open"
     assert report.selected_work is not None
     assert report.selected_work.candidate_id == BROAD_NO_EDGE_DATA_GAP_AUDIT_CANDIDATE_ID
+
+
+def test_released_data_gap_audit_closes_broad_no_edge_frontier():
+    parent_report = build_autonomous_work_execution(
+        _all_known_released_no_edge_evidence(),
+        now=NOW,
+    )
+    assert parent_report.selected_work is not None
+    parent_id = parent_report.selected_work.candidate_id
+
+    report = build_autonomous_work_execution(
+        _all_known_released_no_edge_evidence(
+            parent_id,
+            BROAD_NO_EDGE_ASSET_UNIVERSE_ROTATION_CANDIDATE_ID,
+            BROAD_NO_EDGE_MULTI_HORIZON_SIGNAL_CANDIDATE_ID,
+            BROAD_NO_EDGE_REGIME_COST_ROBUSTNESS_CANDIDATE_ID,
+            BROAD_NO_EDGE_DATA_GAP_AUDIT_CANDIDATE_ID,
+        ),
+        now=NOW,
+    )
+
+    broad_map = {entry.frontier_key: entry for entry in report.broad_no_edge_frontier_map}
+    assert {entry.coverage_status for entry in broad_map.values()} == {"released"}
+    assert report.selected_work is not None
+    assert report.selected_work.candidate_id == WAIT_FOR_FRESH_EVIDENCE_CANDIDATE_ID
+    assert report.selected_work.status == STATUS_OBSERVATION_WAIT
 
 
 def test_macro_candidate_map_is_deterministic_and_rendered():
