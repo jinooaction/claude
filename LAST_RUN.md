@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-08-11T15:01:46.323916Z)
+# 완료 후보 소비 장부 (as of 2026-08-12T01:37:33.664979Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -8,8 +8,8 @@
 | 항목 | 값 |
 |------|-----|
 | overall_status | OK |
-| released_count | 46 |
-| scanned_specs | 78 |
+| released_count | 47 |
+| scanned_specs | 79 |
 
 ## 완료 후보
 
@@ -26,6 +26,7 @@
 | candidate-broad-frontier-expansion-validation-failures-22f38b8629eb | released | 126-broad-validation-failure-frontier | specs/126-broad-validation-failure-frontier/spec.md | completed_candidate_id |
 | candidate-broad-no-edge-asset-universe-rotation-experiment | released | 125-broad-no-edge-asset-universe | specs/125-broad-no-edge-asset-universe/spec.md | completed_candidate_id |
 | candidate-broad-validation-failure-command-replay-contract | released | 127-validation-failure-command-replay | specs/127-validation-failure-command-replay/spec.md | completed_candidate_id |
+| candidate-broad-validation-failure-data-readiness-contract | released | 128-validation-failure-data-readiness | specs/128-validation-failure-data-readiness/spec.md | completed_candidate_id |
 | candidate-broker-diagnostic-liveness-contract | released | 105-broker-diagnostic-liveness-contract | specs/105-broker-diagnostic-liveness-contract/spec.md | completed_candidate_id |
 | candidate-broker-rejection-taxonomy-contract | released | 103-broker-rejection-taxonomy-contract | specs/103-broker-rejection-taxonomy-contract/spec.md | completed_candidate_id |
 | candidate-cost-adjusted-edge-experiment | released | 097-cost-adjusted-edge-experiment | specs/097-cost-adjusted-edge-experiment/data-model.md | completed_candidate_id |
@@ -126,7 +127,7 @@
 
 ```json
 {
-  "commit": "dcf2fc8704fac000ea675cdcbeb693e3a50cdc25",
+  "commit": "d7e473db729650d0faa3f18dbe1887000a6a5045",
   "overall_status": "OK",
   "released_work": [
     {
@@ -226,6 +227,15 @@
       "source_field": "completed_candidate_id",
       "source_file": "specs/127-validation-failure-command-replay/spec.md",
       "spec_id": "127-validation-failure-command-replay",
+      "status": "released"
+    },
+    {
+      "candidate_id": "candidate-broad-validation-failure-data-readiness-contract",
+      "entry_id": "released-f65a733d9632",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/128-validation-failure-data-readiness/spec.md",
+      "spec_id": "128-validation-failure-data-readiness",
       "status": "released"
     },
     {
@@ -633,7 +643,8 @@
     "124-broad-no-edge-frontier",
     "125-broad-no-edge-asset-universe",
     "126-broad-validation-failure-frontier",
-    "127-validation-failure-command-replay"
+    "127-validation-failure-command-replay",
+    "128-validation-failure-data-readiness"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -814,6 +825,6 @@
       "spec_id": "072-candidate-evidence-diagnostics"
     }
   ],
-  "timestamp_utc": "2026-08-11T15:01:46.323916Z"
+  "timestamp_utc": "2026-08-12T01:37:33.664979Z"
 }
 ```
