@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-08-12T05:35:42.266861Z)
+# 완료 후보 소비 장부 (as of 2026-08-12T07:31:08.214223Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -8,8 +8,8 @@
 | 항목 | 값 |
 |------|-----|
 | overall_status | OK |
-| released_count | 48 |
-| scanned_specs | 80 |
+| released_count | 49 |
+| scanned_specs | 81 |
 
 ## 완료 후보
 
@@ -28,6 +28,7 @@
 | candidate-broad-validation-failure-command-replay-contract | released | 127-validation-failure-command-replay | specs/127-validation-failure-command-replay/spec.md | completed_candidate_id |
 | candidate-broad-validation-failure-data-readiness-contract | released | 128-validation-failure-data-readiness | specs/128-validation-failure-data-readiness/spec.md | completed_candidate_id |
 | candidate-broad-validation-failure-package-kind-expansion-contract | released | 129-validation-failure-package-kind-expansion | specs/129-validation-failure-package-kind-expansion/spec.md | completed_candidate_id |
+| candidate-broad-validation-failure-promotion-recheck-contract | released | 130-validation-failure-promotion-recheck | specs/130-validation-failure-promotion-recheck/spec.md | completed_candidate_id |
 | candidate-broker-diagnostic-liveness-contract | released | 105-broker-diagnostic-liveness-contract | specs/105-broker-diagnostic-liveness-contract/spec.md | completed_candidate_id |
 | candidate-broker-rejection-taxonomy-contract | released | 103-broker-rejection-taxonomy-contract | specs/103-broker-rejection-taxonomy-contract/spec.md | completed_candidate_id |
 | candidate-cost-adjusted-edge-experiment | released | 097-cost-adjusted-edge-experiment | specs/097-cost-adjusted-edge-experiment/data-model.md | completed_candidate_id |
@@ -128,7 +129,7 @@
 
 ```json
 {
-  "commit": "027b34f23b3f3f86d5741c5562d2281f6e244490",
+  "commit": "cc7f0508d033133f074181760553786e45bd89ea",
   "overall_status": "OK",
   "released_work": [
     {
@@ -246,6 +247,15 @@
       "source_field": "completed_candidate_id",
       "source_file": "specs/129-validation-failure-package-kind-expansion/spec.md",
       "spec_id": "129-validation-failure-package-kind-expansion",
+      "status": "released"
+    },
+    {
+      "candidate_id": "candidate-broad-validation-failure-promotion-recheck-contract",
+      "entry_id": "released-b988ce5b4fb8",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/130-validation-failure-promotion-recheck/spec.md",
+      "spec_id": "130-validation-failure-promotion-recheck",
       "status": "released"
     },
     {
@@ -655,7 +665,8 @@
     "126-broad-validation-failure-frontier",
     "127-validation-failure-command-replay",
     "128-validation-failure-data-readiness",
-    "129-validation-failure-package-kind-expansion"
+    "129-validation-failure-package-kind-expansion",
+    "130-validation-failure-promotion-recheck"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -836,6 +847,6 @@
       "spec_id": "072-candidate-evidence-diagnostics"
     }
   ],
-  "timestamp_utc": "2026-08-12T05:35:42.266861Z"
+  "timestamp_utc": "2026-08-12T07:31:08.214223Z"
 }
 ```
