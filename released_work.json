@@ -1,5 +1,5 @@
 {
-  "commit": "d7e473db729650d0faa3f18dbe1887000a6a5045",
+  "commit": "027b34f23b3f3f86d5741c5562d2281f6e244490",
   "overall_status": "OK",
   "released_work": [
     {
@@ -108,6 +108,15 @@
       "source_field": "completed_candidate_id",
       "source_file": "specs/128-validation-failure-data-readiness/spec.md",
       "spec_id": "128-validation-failure-data-readiness",
+      "status": "released"
+    },
+    {
+      "candidate_id": "candidate-broad-validation-failure-package-kind-expansion-contract",
+      "entry_id": "released-ee43d7c5d40d",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/129-validation-failure-package-kind-expansion/spec.md",
+      "spec_id": "129-validation-failure-package-kind-expansion",
       "status": "released"
     },
     {
@@ -426,7 +435,7 @@
       "status": "released"
     }
   ],
-  "run_id": "31554206845",
+  "run_id": "31567052065",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -516,7 +525,8 @@
     "125-broad-no-edge-asset-universe",
     "126-broad-validation-failure-frontier",
     "127-validation-failure-command-replay",
-    "128-validation-failure-data-readiness"
+    "128-validation-failure-data-readiness",
+    "129-validation-failure-package-kind-expansion"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -697,5 +707,5 @@
       "spec_id": "072-candidate-evidence-diagnostics"
     }
   ],
-  "timestamp_utc": "2026-08-12T01:37:33.664979Z"
+  "timestamp_utc": "2026-08-12T05:35:42.266861Z"
 }
