@@ -40,8 +40,8 @@
 - [x] T018 Run focused tests and real public-data replay from `specs/138-profit-evidence-engine/quickstart.md`
 - [x] T019 Run `uv run pytest`, `uv run ruff check src tests`, and `git diff --check`
 - [x] T020 Run `scripts/check_handoff_facts.py`, strict agent harness, and PR quality gate
-- [ ] T021 Commit, push, open the quality-gated PR, merge it, and verify deploy/read-only sidecar workflows
-- [ ] T022 Refresh `HANDOFF.md` and add the milestone handoff through the `handoff` skill
+- [x] T021 Commit, push, open the quality-gated PR, merge it, and verify deploy/read-only sidecar workflows
+- [x] T022 Refresh `HANDOFF.md` and add the milestone handoff through the `handoff` skill
 
 ## Dependencies
 
