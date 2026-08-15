@@ -14,9 +14,12 @@ from auto_invest.analytics.autonomous_work_execution import (
     BROAD_FRONTIER_EXPANSION_NO_EDGE_CANDIDATE_PREFIX,
     BROAD_FRONTIER_EXPANSION_VALIDATION_FAILURES_CANDIDATE_PREFIX,
     BROAD_NO_EDGE_ASSET_UNIVERSE_ROTATION_CANDIDATE_ID,
+    BROAD_NO_EDGE_CROSS_ASSET_RELATIVE_VALUE_CANDIDATE_ID,
     BROAD_NO_EDGE_DATA_GAP_AUDIT_CANDIDATE_ID,
     BROAD_NO_EDGE_MULTI_HORIZON_SIGNAL_CANDIDATE_ID,
     BROAD_NO_EDGE_REGIME_COST_ROBUSTNESS_CANDIDATE_ID,
+    BROAD_NO_EDGE_TAIL_RISK_CONVEXITY_CANDIDATE_ID,
+    BROAD_NO_EDGE_VOL_TARGET_DRAWDOWN_CANDIDATE_ID,
     BROAD_VALIDATION_FAILURE_COMMAND_REPLAY_CANDIDATE_ID,
     BROAD_VALIDATION_FAILURE_DATA_READINESS_CANDIDATE_ID,
     BROAD_VALIDATION_FAILURE_PACKAGE_KIND_CANDIDATE_ID,
@@ -2856,10 +2859,59 @@ def test_released_data_gap_audit_closes_broad_no_edge_frontier():
     )
 
     broad_map = {entry.frontier_key: entry for entry in report.broad_no_edge_frontier_map}
-    assert {entry.coverage_status for entry in broad_map.values()} == {"released"}
+    assert broad_map["data_gap_causal_audit"].coverage_status == "released"
+    assert broad_map["cross_asset_relative_value"].coverage_status == "open"
     assert report.selected_work is not None
-    assert report.selected_work.candidate_id == WAIT_FOR_FRESH_EVIDENCE_CANDIDATE_ID
-    assert report.selected_work.status == STATUS_OBSERVATION_WAIT
+    assert (
+        report.selected_work.candidate_id
+        == BROAD_NO_EDGE_CROSS_ASSET_RELATIVE_VALUE_CANDIDATE_ID
+    )
+    assert report.selected_work.status == STATUS_EXECUTION_READY
+    assert "상대가치" in report.selected_work.title_ko
+    assert "실제 주문" in " ".join(report.selected_work.safety_boundary)
+
+
+def test_second_wave_broad_no_edge_entries_advance_in_order():
+    parent_report = build_autonomous_work_execution(
+        _all_known_released_no_edge_evidence(),
+        now=NOW,
+    )
+    assert parent_report.selected_work is not None
+    parent_id = parent_report.selected_work.candidate_id
+
+    first_wave_releases = (
+        parent_id,
+        BROAD_NO_EDGE_ASSET_UNIVERSE_ROTATION_CANDIDATE_ID,
+        BROAD_NO_EDGE_MULTI_HORIZON_SIGNAL_CANDIDATE_ID,
+        BROAD_NO_EDGE_REGIME_COST_ROBUSTNESS_CANDIDATE_ID,
+        BROAD_NO_EDGE_DATA_GAP_AUDIT_CANDIDATE_ID,
+    )
+    report = build_autonomous_work_execution(
+        _all_known_released_no_edge_evidence(
+            *first_wave_releases,
+            BROAD_NO_EDGE_CROSS_ASSET_RELATIVE_VALUE_CANDIDATE_ID,
+        ),
+        now=NOW,
+    )
+
+    broad_map = {entry.frontier_key: entry for entry in report.broad_no_edge_frontier_map}
+    assert broad_map["cross_asset_relative_value"].coverage_status == "released"
+    assert broad_map["tail_risk_convexity"].coverage_status == "open"
+    assert report.selected_work is not None
+    assert report.selected_work.candidate_id == BROAD_NO_EDGE_TAIL_RISK_CONVEXITY_CANDIDATE_ID
+
+    final_report = build_autonomous_work_execution(
+        _all_known_released_no_edge_evidence(
+            *first_wave_releases,
+            BROAD_NO_EDGE_CROSS_ASSET_RELATIVE_VALUE_CANDIDATE_ID,
+            BROAD_NO_EDGE_TAIL_RISK_CONVEXITY_CANDIDATE_ID,
+            BROAD_NO_EDGE_VOL_TARGET_DRAWDOWN_CANDIDATE_ID,
+        ),
+        now=NOW,
+    )
+    assert final_report.selected_work is not None
+    assert final_report.selected_work.candidate_id == WAIT_FOR_FRESH_EVIDENCE_CANDIDATE_ID
+    assert final_report.selected_work.status == STATUS_OBSERVATION_WAIT
 
 
 def test_macro_candidate_map_is_deterministic_and_rendered():

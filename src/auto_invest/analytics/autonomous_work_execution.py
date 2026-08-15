@@ -121,6 +121,15 @@ BROAD_NO_EDGE_REGIME_COST_ROBUSTNESS_CANDIDATE_ID = (
 BROAD_NO_EDGE_DATA_GAP_AUDIT_CANDIDATE_ID = (
     "candidate-broad-no-edge-data-gap-audit"
 )
+BROAD_NO_EDGE_CROSS_ASSET_RELATIVE_VALUE_CANDIDATE_ID = (
+    "candidate-broad-no-edge-cross-asset-relative-value-experiment"
+)
+BROAD_NO_EDGE_TAIL_RISK_CONVEXITY_CANDIDATE_ID = (
+    "candidate-broad-no-edge-tail-risk-convexity-experiment"
+)
+BROAD_NO_EDGE_VOL_TARGET_DRAWDOWN_CANDIDATE_ID = (
+    "candidate-broad-no-edge-vol-target-drawdown-experiment"
+)
 WAIT_FOR_FRESH_EVIDENCE_CANDIDATE_ID = "wait-for-fresh-evidence"
 
 _REJECTED_STATUSES = {
@@ -764,6 +773,62 @@ _BROAD_NO_EDGE_FRONTIER_TEMPLATES: tuple[BroadNoEdgeFrontierTemplate, ...] = (
             "정의한다."
         ),
         review_axes=("data_missing_cause", "regime_window"),
+    ),
+    BroadNoEdgeFrontierTemplate(
+        frontier_key="cross_asset_relative_value",
+        label_ko="자산 간 상대가치와 현금 대체",
+        work_domain_key="strategy_design",
+        recommended_candidate_id=BROAD_NO_EDGE_CROSS_ASSET_RELATIVE_VALUE_CANDIDATE_ID,
+        title_ko="자산 간 상대가치 no-live 실험 설계",
+        priority_score=2090,
+        reason_ko=(
+            "자산군·신호·레짐·데이터 결측 축을 모두 닫았는데도 NO_EDGE_YET가 "
+            "계속되면, 절대 모멘텀만 보지 말고 자산 간 스프레드와 현금 대체 "
+            "수익률을 함께 비교해야 한다."
+        ),
+        next_action_ko=(
+            "rebalance-paper-forward, public-data, regime-stratify, money-path를 "
+            "함께 읽어 주식·채권·원자재·현금성 자산 간 상대가치 no-live 후보와 "
+            "제외 기준을 SDD로 정의한다."
+        ),
+        review_axes=("relative_value_spread", "cash_proxy_yield", "asset_pair"),
+    ),
+    BroadNoEdgeFrontierTemplate(
+        frontier_key="tail_risk_convexity",
+        label_ko="꼬리위험 방어와 볼록성",
+        work_domain_key="portfolio_design",
+        recommended_candidate_id=BROAD_NO_EDGE_TAIL_RISK_CONVEXITY_CANDIDATE_ID,
+        title_ko="꼬리위험 방어 no-live 실험 설계",
+        priority_score=1990,
+        reason_ko=(
+            "평균 수익률 엣지가 약한 구간에서는 큰 하락장에서 손실을 줄이는 "
+            "볼록성 후보가 자본 사다리의 다음 입력이 될 수 있다."
+        ),
+        next_action_ko=(
+            "regime-stratify, execution-quality, rebalance-paper-forward 증거를 "
+            "함께 읽어 tail-risk 방어 후보, 비용 부담, 레짐별 대기 조건을 no-live "
+            "계약으로 만든다."
+        ),
+        review_axes=("tail_regime", "convexity_proxy", "cost_drag"),
+    ),
+    BroadNoEdgeFrontierTemplate(
+        frontier_key="vol_target_drawdown",
+        label_ko="변동성 목표와 낙폭 제어",
+        work_domain_key="portfolio_design",
+        recommended_candidate_id=BROAD_NO_EDGE_VOL_TARGET_DRAWDOWN_CANDIDATE_ID,
+        title_ko="변동성 목표 낙폭 제어 no-live 실험 설계",
+        priority_score=1890,
+        reason_ko=(
+            "현재 전략은 칼마가 벤치마크보다 낫지만 PSR이 기준 미달이다. "
+            "포지션 진입 신호가 아니라 변동성 목표와 낙폭 제어가 확률 신뢰도를 "
+            "올릴 수 있는지 분리해야 한다."
+        ),
+        next_action_ko=(
+            "money-path, edge-autoarm, forward verdict, live drawdown evidence를 "
+            "함께 읽어 변동성 목표·낙폭 제어 no-live 후보와 자본 사다리로 올릴 수 "
+            "없는 제외 조건을 정의한다."
+        ),
+        review_axes=("volatility_target", "drawdown_control", "psr_sensitivity"),
     ),
 )
 
@@ -2797,6 +2862,8 @@ def _broad_frontier_expansion_packet(
             edge_status,
             forward_verdict,
         ):
+            return None
+        if any(_is_broad_no_edge_parent_candidate(candidate_id) for candidate_id in released):
             return None
         candidate_id = _broad_no_edge_candidate_id(
             released=released,
