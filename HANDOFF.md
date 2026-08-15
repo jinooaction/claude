@@ -33,15 +33,30 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `28c6f74` — Merge pull request #609 from jinooaction/codex/broad-no-edge-tail-risk-convexity |
-| main 테스트 | #609 브랜치 기준 `uv run pytest` → 2792 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
-| main 린트 | #609 브랜치 기준 `uv run ruff check src tests` → All checks passed. |
-| 열린 PR | 없음(#609은 merge 완료, 이 HANDOFF 갱신 전 확인 기준). |
-| 출시 완료 스펙 | 최신 운영 보정: #609(스펙 136, 꼬리위험 방어·볼록성 no-live 계약과 completed candidate 소비), #607(스펙 135, 자산 간 상대가치 no-live 계약과 completed candidate 소비), #605(스펙 134, 광역 no-edge parent 완료 뒤 2차 no-live frontier 자동 전개), #603(스펙 133, 광역 no-edge 데이터 결측 원인 감사와 completed candidate 소비), #601(스펙 132, 광역 no-edge 레짐·비용 견고성 계약과 completed candidate 소비), #599(스펙 131, 광역 no-edge 다중 보유 기간·신호군 계약과 completed candidate 소비), #597(스펙 130, 검증 실패 승격 재검토 계약과 completed candidate 소비), #595(스펙 129, 검증 실패 패키지 종류별 확장 계약과 completed candidate 소비), #593(스펙 128, 검증 실패 데이터 준비도 계약과 completed candidate 소비), #591(스펙 127, 검증 실패 명령 재현 계약과 completed candidate 소비), #589(스펙 126, 검증 실패 parent 완료 뒤 첫 no-live 후속 후보 자동 전개), #587(스펙 125, 광역 자산군 방어 회전 no-live 계약과 released-work 완료), #585/#584/#582. 직전 추가: 123/live canary sidecar gate, #566(forward paper 경제 장부 보정), 122(forward paper DB writability), 121(`promote-readiness` 관측 경로 복구), 120(증거 기반 후보 소스 다변화 + released-work 완료 소비), 119(보안 신뢰 경계 강화). 이전 스펙 058~118은 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
-| 골격 스펙 | 없음. `.specify/feature.json`은 최신 완료 스펙 `specs/136-broad-no-edge-tail-risk-convexity`를 가리키고, `tasks.md`는 T001~T016 완료 상태다. |
-| 최근 출시 작업 | #609는 `candidate-broad-no-edge-tail-risk-convexity-experiment`를 스펙 136으로 완료 처리하고, forward paper·regime-stratify·execution-quality·money-path·edge-autoarm 증거를 읽어 꼬리위험 방어·볼록성 no-live 후보 축 5개를 `PROPOSED`로 열었다. released-work run `31893402757`는 commit `28c6f74`에서 released_count 55와 스펙 136 완료를 확인했다. |
-| 활성 작업 | 열린 PR 없음. 최신 autonomous-work run `31893402789`는 `candidate-broad-no-edge-vol-target-drawdown-experiment` / `EXECUTION_READY`를 골랐다. 다음 작업은 `money-path`, `edge-autoarm`, forward verdict, live drawdown evidence를 함께 읽어 변동성 목표·낙폭 제어 no-live 후보와 자본 사다리로 올릴 수 없는 제외 조건을 정의하는 것이다. |
-| 안전 경계 | 이번 갱신은 등급 2 운영 보고와 인계 보정이다. #609도 no-live 꼬리위험 방어·볼록성 계약만 추가했고 실제 주문, 실거래 전환, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps 확대, 손실 예산, KIS secret 값, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 최신 money-path는 `PREVIEW_ONLY`/`NO_EDGE_YET`, edge-autoarm은 `WAIT_EDGE`/`NO_EDGE`라 실주문과 자본 배분은 여전히 금지다. |
+| 마지막 main 커밋 | `0505e84` — Merge pull request #611 from jinooaction/codex/broad-no-edge-vol-target-drawdown-isolated |
+| main 테스트 | #611 브랜치 기준 `uv run pytest` → 2799 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
+| main 린트 | #611 브랜치 기준 `uv run ruff check src tests` → All checks passed. |
+| 열린 PR | 없음(#611은 merge 완료, 이 HANDOFF 갱신 전 `gh pr list` 확인 기준). |
+| 출시 완료 스펙 | 최신 운영 보정: #611(스펙 137, 변동성 목표·낙폭 제어 no-live 계약과 completed candidate 소비), #609(스펙 136, 꼬리위험 방어·볼록성 no-live 계약과 completed candidate 소비), #607(스펙 135, 자산 간 상대가치 no-live 계약과 completed candidate 소비), #605(스펙 134, 광역 no-edge parent 완료 뒤 2차 no-live frontier 자동 전개), #603(스펙 133, 광역 no-edge 데이터 결측 원인 감사와 completed candidate 소비), #601(스펙 132, 광역 no-edge 레짐·비용 견고성 계약과 completed candidate 소비), #599(스펙 131, 광역 no-edge 다중 보유 기간·신호군 계약과 completed candidate 소비), #597(스펙 130, 검증 실패 승격 재검토 계약과 completed candidate 소비), #595(스펙 129, 검증 실패 패키지 종류별 확장 계약과 completed candidate 소비), #593(스펙 128, 검증 실패 데이터 준비도 계약과 completed candidate 소비), #591(스펙 127, 검증 실패 명령 재현 계약과 completed candidate 소비), #589(스펙 126, 검증 실패 parent 완료 뒤 첫 no-live 후속 후보 자동 전개), #587(스펙 125, 광역 자산군 방어 회전 no-live 계약과 released-work 완료), #585/#584/#582. 직전 추가: 123/live canary sidecar gate, #566(forward paper 경제 장부 보정), 122(forward paper DB writability), 121(`promote-readiness` 관측 경로 복구), 120(증거 기반 후보 소스 다변화 + released-work 완료 소비), 119(보안 신뢰 경계 강화). 이전 스펙 058~118은 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
+| 골격 스펙 | 없음. `.specify/feature.json`은 최신 완료 스펙 `specs/137-broad-no-edge-vol-target-drawdown`을 가리키고, `tasks.md`는 T001~T016 완료 상태다. |
+| 최근 출시 작업 | #611은 `candidate-broad-no-edge-vol-target-drawdown-experiment`를 스펙 137로 완료 처리하고, forward paper·regime-stratify·execution-quality·money-path·edge-autoarm 증거를 읽어 변동성 목표·낙폭 제어 no-live 후보 축 5개를 `PROPOSED`로 열었다. released-work run `31912195901`는 commit `0505e84`에서 released_count 56과 스펙 137 완료를 확인했다. |
+| 활성 작업 | 열린 PR 없음. 최신 autonomous-work run `31912233910`는 `wait-for-fresh-evidence` / `OBSERVATION_WAIT`다. 실행 가능한 후보, 운영자 승인 필요 후보, 복구 우선 후보가 없고, 현재 보이는 후보는 완료 8개와 억제 2개뿐이다. 새 sidecar 증거가 쌓일 때까지 같은 완료 후보를 반복하지 않는다. |
+| 안전 경계 | 이번 갱신은 등급 2 운영 보고와 인계 보정이다. #611도 no-live 변동성 목표·낙폭 제어 계약만 추가했고 실제 주문, 실거래 전환, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps 확대, 손실 예산, KIS secret 값, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 최신 money-path는 `PREVIEW_ONLY`/`NO_EDGE_YET`, edge-autoarm은 `WAIT_EDGE`/`NO_EDGE`라 실주문과 자본 배분은 여전히 금지다. |
+
+## 최근 관찰 — 2026-08-16 KST (#611 변동성 목표·낙폭 제어 no-live 계약 완료)
+
+현재 `main` 최신 머지는 `0505e84`(#611, broad no-edge vol-target drawdown contract)다.
+기능 커밋은 `bae22b3`이다.
+
+- **문제 정의**: 광역 no-edge 2차 후보에서 상대가치와 꼬리위험 방어까지 닫혔지만, `NO_EDGE_YET`는 계속된다. 안전한 해결은 주문 게이트를 여는 것이 아니라, 변동성 목표와 낙폭 제어가 확률 신뢰도를 올릴 수 있는지 no-live 계약으로 분리하고, 자본 사다리로 올릴 수 없는 제외 조건을 고정하는 것이다.
+- **구현 상태**: 스펙 137을 추가했고, `broad_no_edge_vol_target_drawdown.py`와 `broad_no_edge_vol_target_drawdown_probe.py`가 `rebalance-paper-forward`, `regime-stratify`, `execution-quality`, `money-path`, `edge-autoarm`, `released-work`, `pipeline-liveness`를 함께 읽어 변동성 목표·낙폭 제어 계약을 발행한다. 계약은 `volatility_target_scaling`, `drawdown_deleveraging_overlay`, `psr_sensitivity_hurdle`, `live_drawdown_exclusion`, `broad_no_edge_vol_target_context` 5개 lane을 만든다. `completed_candidate_id: candidate-broad-no-edge-vol-target-drawdown-experiment`와 완료된 tasks.md 덕분에 released-work가 이번 후보를 소비한다.
+- **post-merge 자동화 확인**: #611 merge 뒤 `Released work ledger` run `31912195901`, `Deploy on merge to main` run `31912195904`, `Autonomous work execution loop` run `31912195895`가 모두 success다. push 직후 autonomous-work는 released-work와 병렬 실행되어 이전 후보를 한 번 더 봤기 때문에 read-only 수동 재실행 run `31912233910`을 실행했다. 최신 autonomous-work sidecar는 commit `0505e84`, selected_work `wait-for-fresh-evidence`, status `OBSERVATION_WAIT`다.
+- **변동성·낙폭 증거**: 최신 sidecar로 `broad_no_edge_vol_target_drawdown_probe.py`를 재생하면 `CONTRACT_READY`, lane 5개 모두 `PROPOSED`, completed candidate `candidate-broad-no-edge-vol-target-drawdown-experiment`, next candidate `wait-for-fresh-evidence`다. money state는 `PREVIEW_ONLY`, rung은 0, demote threshold는 10, halt threshold는 20, live drawdown은 0이다.
+- **돈 경로 증거**: latest money-path는 `PREVIEW_ONLY`/`NO_EDGE_YET`이고, PSR은 기준 미달이다. edge-autoarm은 `WAIT_EDGE`/`NO_EDGE`라 rung은 0에 머물렀고, latest intent gate는 `latest_intent_loss`다. 즉 돈을 바로 움직일 수 있는 상태가 아니라, no-live 후보 발굴 체인의 2차 후보를 끝까지 닫은 상태다.
+- **검증 상태**: #611 브랜치에서 focused 검증 60 passed, `uv run pytest` 2799 passed/5 skipped, `uv run ruff check src tests` 통과, `git diff --check` 통과, `uv run python scripts/check_handoff_facts.py` OK, `uv run python scripts/agent_harness_probe.py --strict` OK(14/14), PR quality gate 통과, current sidecar replay와 released-work/autonomous-work post-merge sidecar를 확인하고 merge했다.
+- **안전 경계**: 이 변경은 no-live 변동성 목표·낙폭 제어 계약이다. 브로커 API 호출, 실제 주문, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps, 손실 예산, KIS secret 값, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다.
+- **다음 관찰 지점**: 지금은 실행 가능한 신규 후보가 없다. 다음 scheduled sidecar가 쌓인 뒤 `money-path`, `edge-autoarm`, `capital-path-readiness`, `autonomous-work`, `released-work`를 다시 읽어 `NO_EDGE_YET` 또는 `OBSERVATION_WAIT`가 바뀌었는지 확인해야 한다. 주문 제출, live 재무장, 자본 배분은 하지 않는다.
+- **상세 인계**: `HANDOFF-143-BROAD-NO-EDGE-VOL-TARGET-DRAWDOWN.md`.
 
 ## 최근 관찰 — 2026-08-16 KST (#609 꼬리위험 방어·볼록성 no-live 계약 완료)
 
@@ -7476,6 +7491,9 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 
 ## 과거 인수인계 파일 (참고용)
 
+- `HANDOFF-143-BROAD-NO-EDGE-VOL-TARGET-DRAWDOWN.md` — #611이 광역 no-edge 변동성 목표·낙폭 제어 계약을 출시하고, released-work가 `candidate-broad-no-edge-vol-target-drawdown-experiment`를 소비해 현재 autonomous-work가 `wait-for-fresh-evidence` / `OBSERVATION_WAIT`로 전진한 상태
+- `HANDOFF-142-BROAD-NO-EDGE-TAIL-RISK-CONVEXITY.md` — #609가 광역 no-edge 꼬리위험 방어·볼록성 계약을 출시하고, released-work가 `candidate-broad-no-edge-tail-risk-convexity-experiment`를 소비해 다음 후보가 `candidate-broad-no-edge-vol-target-drawdown-experiment`로 전진한 상태
+- `HANDOFF-141-BROAD-NO-EDGE-CROSS-ASSET-RELATIVE-VALUE.md` — #607이 광역 no-edge 자산 간 상대가치 계약을 출시하고, released-work가 `candidate-broad-no-edge-cross-asset-relative-value-experiment`를 소비해 다음 후보가 `candidate-broad-no-edge-tail-risk-convexity-experiment`로 전진한 상태
 - `HANDOFF-140-BROAD-NO-EDGE-DATA-GAP-AUDIT.md` — #603이 광역 no-edge 데이터 결측 원인 감사 계약을 출시하고, released-work가 `candidate-broad-no-edge-data-gap-audit`를 소비해 현재 autonomous-work가 `wait-for-fresh-evidence` / `OBSERVATION_WAIT`로 전진한 상태
 - `HANDOFF-139-BROAD-NO-EDGE-REGIME-COST-ROBUSTNESS.md` — #601이 광역 no-edge 레짐·비용 견고성 계약을 출시하고, released-work가 `candidate-broad-no-edge-regime-cost-robustness-experiment`를 소비해 다음 후보가 `candidate-broad-no-edge-data-gap-audit`로 전진한 상태
 - `HANDOFF-138-BROAD-NO-EDGE-MULTI-HORIZON-SIGNAL.md` — #599가 광역 no-edge 다중 보유 기간·신호군 계약을 출시하고, released-work가 `candidate-broad-no-edge-multi-horizon-signal-experiment`를 소비해 다음 후보가 `candidate-broad-no-edge-regime-cost-robustness-experiment`로 전진한 상태
