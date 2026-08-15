@@ -103,6 +103,8 @@ def test_result_executor_workflow_publishes_sidecar_without_order_or_broker_path
     assert "bash -s" not in text
     helper = _OBSERVE_HELPER.read_text(encoding="utf-8")
     assert "candidate_history_dataset()" in helper
+    assert "global-trend-fixed)" in helper
+    assert 'CANDIDATE_HISTORY_DB="data/forward_globalfixed.db"' in helper
     assert "bars-export" in helper
     assert "ingest-history" in helper
     assert "automation/candidate-implementation-results" in text

@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import shlex
 import subprocess
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
@@ -51,6 +51,7 @@ DIAG_UNSUPPORTED_PACKAGE = "unsupported_package"
 DIAG_MISSING_COMMAND = "missing_command"
 DIAG_EXECUTION_FAILED = "execution_failed"
 DIAG_MISSING_INPUT = "missing_input"
+DIAG_MIXED_HORIZON_EVIDENCE = "mixed_horizon_evidence"
 
 _STRATEGY_KINDS = {KIND_STRATEGY_BACKTEST, KIND_PORTFOLIO_BACKTEST}
 
@@ -454,18 +455,25 @@ def _execute_package(
         executions.append(runner(tokens, timeout_seconds))
 
     if kind in _STRATEGY_KINDS:
-        status, evidence_status, reason, summary, metrics, diagnostics = _strategy_result(
-            executions
-        )
+        (
+            status,
+            historical_status,
+            recent_oos_status,
+            walk_forward_status,
+            reason,
+            summary,
+            metrics,
+            diagnostics,
+        ) = _strategy_result(executions)
         return CandidateResultRow(
             candidate_id=candidate_id,
             package_id=package_id,
             package_kind=kind,
             status=status,
             source_ref=source_ref,
-            historical_backtest=evidence_status,
-            recent_oos=evidence_status,
-            walk_forward=evidence_status,
+            historical_backtest=historical_status,
+            recent_oos=recent_oos_status,
+            walk_forward=walk_forward_status,
             factory_validation=None,
             block_reason_ko=reason,
             output_summary_ko=summary,
@@ -539,6 +547,8 @@ def _strategy_result(
 ) -> tuple[
     str,
     str,
+    str,
+    str,
     str | None,
     str,
     Mapping[str, Any],
@@ -548,6 +558,8 @@ def _strategy_result(
         diagnostics = (_diagnostic(DIAG_MISSING_COMMAND, evidence_source="package"),)
         return (
             STATUS_PENDING,
+            EVIDENCE_PENDING,
+            EVIDENCE_PENDING,
             EVIDENCE_PENDING,
             "실행할 검증 명령이 없다.",
             "검증 명령 부재로 보류했다.",
@@ -559,6 +571,8 @@ def _strategy_result(
         return (
             STATUS_PENDING,
             EVIDENCE_PENDING,
+            EVIDENCE_PENDING,
+            EVIDENCE_PENDING,
             "검증 명령이 시간 초과됐다.",
             "시간 초과로 증거를 확정하지 못했다.",
             _execution_metrics(executions),
@@ -569,54 +583,108 @@ def _strategy_result(
         return (
             STATUS_PENDING,
             EVIDENCE_PENDING,
+            EVIDENCE_PENDING,
+            EVIDENCE_PENDING,
             "검증 명령이 실행됐지만 데이터 또는 환경 부족으로 실패했다.",
             "명령 실패를 통과로 보지 않고 보류했다.",
             _execution_metrics(executions),
             diagnostics,
         )
 
-    combined = "\n".join(f"{execution.stdout}\n{execution.stderr}" for execution in executions)
-    metrics = _extract_json_metrics(executions) or _execution_metrics(executions)
-    verdict_text = _verdict_text(metrics, combined)
-    if _has_verdict_marker(verdict_text, _SUCCESS_VERDICT_MARKERS):
-        return (
-            STATUS_PASS,
-            EVIDENCE_PASS,
-            None,
-            "전략 검증 출력이 강건한 엣지 기준을 통과했다.",
-            metrics,
-            (),
+    classified = tuple(_classify_strategy_execution(execution) for execution in executions)
+    has_deep_history = any(item[0] == "historical_backtest" for item in classified)
+    if has_deep_history:
+        historical = _aggregate_evidence_status(
+            item[1] for item in classified if item[0] == "historical_backtest"
         )
-    if _has_verdict_marker(verdict_text, _FAIL_VERDICT_MARKERS):
-        return (
-            STATUS_FAIL,
-            EVIDENCE_FAIL,
-            "전략 검증 출력이 엣지 없음 또는 실패를 보고했다.",
-            "검증 결과가 전략 엣지 실패를 보고했다.",
-            metrics,
-            (),
+        recent = _aggregate_evidence_status(
+            item[1] for item in classified if item[0] == "recent_oos"
         )
-    if _numeric_dsr_pass(metrics):
-        return (
-            STATUS_PASS,
-            EVIDENCE_PASS,
-            None,
-            "전략 검증의 디플레이티드 샤프가 통과 기준을 넘었다.",
-            metrics,
-            (),
+        walk_forward = recent
+    else:
+        aggregate = _aggregate_evidence_status(item[1] for item in classified)
+        historical = recent = walk_forward = aggregate
+
+    axis_statuses = (historical, recent, walk_forward)
+    if all(status == EVIDENCE_PASS for status in axis_statuses):
+        overall = STATUS_PASS
+        reason = None
+        summary = "장기·최근·전진 검증 증거가 모두 통과했다."
+        diagnostics: tuple[CandidateEvidenceDiagnostic, ...] = ()
+    elif all(status == EVIDENCE_FAIL for status in axis_statuses):
+        overall = STATUS_FAIL
+        reason = "모든 필수 전략 증거 축이 엣지 없음 또는 실패를 보고했다."
+        summary = "장기·최근·전진 검증이 모두 실패했다."
+        diagnostics = ()
+    else:
+        overall = STATUS_PENDING
+        reason = "장기와 최근 전략 증거가 섞여 있어 추가 forward 검증이 필요하다."
+        summary = "통과 증거를 보존하고 실패 축만 대기 상태로 분리했다."
+        pending_diagnostics: tuple[CandidateEvidenceDiagnostic, ...] = ()
+        if any(item[1] == EVIDENCE_PENDING for item in classified):
+            pending_diagnostics = (
+                _diagnostic(DIAG_INSUFFICIENT_PASS_EVIDENCE, evidence_source="output"),
+            )
+        diagnostics = _dedupe_diagnostics(
+            _diagnostics_from_executions(executions)
+            + pending_diagnostics
+            + (_diagnostic(DIAG_MIXED_HORIZON_EVIDENCE, evidence_source="output"),)
         )
-    diagnostics = _dedupe_diagnostics(
-        _diagnostics_from_executions(executions)
-        + (_diagnostic(DIAG_INSUFFICIENT_PASS_EVIDENCE, evidence_source="output"),)
-    )
+    metrics: dict[str, Any] = dict(_extract_json_metrics(executions) or {})
+    metrics["evidence_by_command"] = [
+        {
+            "role": role,
+            "status": evidence_status,
+            "command": list(execution.command),
+            "metrics": dict(command_metrics),
+        }
+        for execution, (role, evidence_status, command_metrics) in zip(
+            executions, classified, strict=True
+        )
+    ]
     return (
-        STATUS_PENDING,
-        EVIDENCE_PENDING,
-        "검증 출력이 충분한 통과 증거를 제공하지 않았다.",
-        "실행은 됐지만 승격용 통과 증거로는 부족하다.",
+        overall,
+        historical,
+        recent,
+        walk_forward,
+        reason,
+        summary,
         metrics,
         diagnostics,
     )
+
+
+def _classify_strategy_execution(
+    execution: CommandExecution,
+) -> tuple[str, str, Mapping[str, Any]]:
+    role = (
+        "historical_backtest"
+        if any("deep_walk_forward_probe.py" in token for token in execution.command)
+        else "recent_oos"
+    )
+    metrics = _extract_json_metrics((execution,)) or _execution_metrics((execution,))
+    if execution.timed_out or execution.exit_code != 0:
+        return role, EVIDENCE_PENDING, metrics
+    combined = f"{execution.stdout}\n{execution.stderr}"
+    verdict_text = _verdict_text(metrics, combined)
+    if _has_verdict_marker(verdict_text, _SUCCESS_VERDICT_MARKERS):
+        return role, EVIDENCE_PASS, metrics
+    if _has_verdict_marker(verdict_text, _FAIL_VERDICT_MARKERS):
+        return role, EVIDENCE_FAIL, metrics
+    if _numeric_dsr_pass(metrics):
+        return role, EVIDENCE_PASS, metrics
+    return role, EVIDENCE_PENDING, metrics
+
+
+def _aggregate_evidence_status(statuses: Iterable[str]) -> str:
+    values = tuple(statuses)
+    if not values:
+        return EVIDENCE_PENDING
+    if all(value == EVIDENCE_PASS for value in values):
+        return EVIDENCE_PASS
+    if all(value == EVIDENCE_FAIL for value in values):
+        return EVIDENCE_FAIL
+    return EVIDENCE_PENDING
 
 
 def _non_strategy_result(
@@ -785,6 +853,9 @@ def _verdict_text(metrics: Mapping[str, Any], combined: str) -> str:
         champ_verdict = champion.get("verdict")
         if champ_verdict is not None:
             return str(champ_verdict)
+    champion_verdict = metrics.get("champion_verdict")
+    if champion_verdict is not None:
+        return str(champion_verdict)
     return combined
 
 
@@ -888,6 +959,9 @@ def _diagnostic(
         DIAG_MISSING_COMMAND: "패키지에 실행 가능한 검증 명령이 없다.",
         DIAG_EXECUTION_FAILED: "검증 명령이 비정상 종료했다.",
         DIAG_MISSING_INPUT: "필수 입력 sidecar 또는 JSON이 없다.",
+        DIAG_MIXED_HORIZON_EVIDENCE: (
+            "장기 통과와 최근 실패 증거가 함께 있어 전진 검증이 더 필요하다."
+        ),
     }
     return CandidateEvidenceDiagnostic(
         code=code,
@@ -953,6 +1027,12 @@ def _next_action_for(code: str) -> CandidateNextAction:
         DIAG_MISSING_INPUT: CandidateNextAction(
             action_code="restore_candidate_package_sidecar",
             summary_ko="후보 패키지 sidecar 수집 경로와 JSON 형식을 복구한다.",
+            owner="automation",
+            safe_to_auto_run=True,
+        ),
+        DIAG_MIXED_HORIZON_EVIDENCE: CandidateNextAction(
+            action_code="continue_forward_validation",
+            summary_ko="통과한 장기 증거를 보존하고 최근 forward 기준이 충족될 때까지 관측한다.",
             owner="automation",
             safe_to_auto_run=True,
         ),

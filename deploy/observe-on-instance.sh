@@ -92,12 +92,16 @@ candidate_history_config() {
             CANDIDATE_HISTORY_PORTFOLIO="deploy/global-trend-wide-portfolio.toml"
             CANDIDATE_HISTORY_DB="data/forward_wide.db"
             ;;
+        global-trend-fixed)
+            CANDIDATE_HISTORY_PORTFOLIO="deploy/global-trend-fixed-portfolio.toml"
+            CANDIDATE_HISTORY_DB="data/forward_globalfixed.db"
+            ;;
         multi-asset-trend)
             CANDIDATE_HISTORY_PORTFOLIO="deploy/multi-asset-trend-portfolio.toml"
             CANDIDATE_HISTORY_DB="data/forward_multiasset.db"
             ;;
         *)
-            die "candidate-history supports only micro-gtaa, global-trend-wide, or multi-asset-trend"
+            die "candidate-history supports only micro-gtaa, global-trend-wide, global-trend-fixed, or multi-asset-trend"
             ;;
     esac
 }

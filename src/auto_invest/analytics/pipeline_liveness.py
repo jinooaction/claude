@@ -438,6 +438,15 @@ def default_specs() -> list[SidecarSpec]:
             first_expected_utc="2026-07-03T15:30:00Z",
         ),
         SidecarSpec(
+            key="profit-evidence-engine",
+            branch="automation/profit-evidence-engine-last-run",
+            filename="LAST_RUN.md",
+            max_age_hours=30.0,
+            critical=False,
+            description="시간 분리·비용 차감 수익 후보 검증(스펙 138, 연구 전용)",
+            first_expected_utc="2026-08-16T09:15:00Z",
+        ),
+        SidecarSpec(
             key="autonomous-evolution",
             branch="automation/autonomous-evolution-last-run",
             filename="LAST_RUN.md",

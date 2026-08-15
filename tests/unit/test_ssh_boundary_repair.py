@@ -81,7 +81,10 @@ def test_gateway_allows_only_fixed_commands_without_eval():
     assert re.search(r'observe\\ regime-stratify\\ \*\)', code)
     assert re.search(r'observe\\ candidate-history\\ \*\)', code)
     assert r"^(global|wide)$" in code
-    assert r"^(micro-gtaa|global-trend-wide|multi-asset-trend)$" in code
+    assert (
+        r"^(micro-gtaa|global-trend-wide|global-trend-fixed|multi-asset-trend)$"
+        in code
+    )
     assert r"^(trend|notrend|rmbeta|multiasset|global|globalfixed|wide)$" in code
     assert "/usr/local/sbin/auto-invest-observe" in code
     assert re.search(r'\bstart-deploy\)', code)

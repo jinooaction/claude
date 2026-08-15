@@ -1,0 +1,74 @@
+name: Profit evidence engine
+
+on:
+  schedule:
+    - cron: '15 9 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/auto_invest/analytics/profit_evidence_engine.py'
+      - 'scripts/profit_evidence_engine_probe.py'
+      - '.github/workflows/profit-evidence-engine.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: profit-evidence-engine
+  cancel-in-progress: false
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86
+
+      - name: Collect current forward evidence
+        run: |
+          set -euo pipefail
+          git fetch --depth=1 origin \
+            '+refs/heads/automation/rebalance-paper-forward-last-run:refs/remotes/origin/automation/rebalance-paper-forward-last-run' \
+            || true
+          if git show origin/automation/rebalance-paper-forward-last-run:leaderboard.json \
+              > /tmp/leaderboard.json 2>/tmp/leaderboard.err; then
+            echo "forward leaderboard collected"
+          else
+            echo '{"schema_version":"1.0","rows":[]}' > /tmp/leaderboard.json
+            echo "forward leaderboard missing; historical result will remain forward validation"
+          fi
+
+      - name: Evaluate held-out profit evidence
+        run: |
+          set -euo pipefail
+          uv run python scripts/profit_evidence_engine_probe.py \
+            --leaderboard /tmp/leaderboard.json \
+            --annual-cost-bps 50 \
+            --holdout-year 2007 \
+            --summary-out /tmp/LAST_RUN.md \
+            --json-out /tmp/profit_evidence.json \
+            --json > /tmp/profit_evidence.stdout.json
+          cat /tmp/LAST_RUN.md
+
+      - name: Publish read-only sidecar
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          branch=automation/profit-evidence-engine-last-run
+          tmpdir=$(mktemp -d)
+          cp /tmp/LAST_RUN.md "${tmpdir}/LAST_RUN.md"
+          cp /tmp/profit_evidence.json "${tmpdir}/profit_evidence.json"
+          git -C "${tmpdir}" init -q
+          git -C "${tmpdir}" config user.name "profit-evidence-bot"
+          git -C "${tmpdir}" config user.email "profit-evidence-bot@noreply.github.com"
+          git -C "${tmpdir}" add LAST_RUN.md profit_evidence.json
+          git -C "${tmpdir}" commit -q -m "profit evidence run ${GITHUB_RUN_ID}"
+          git -C "${tmpdir}" branch -M "${branch}"
+          git -C "${tmpdir}" remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git -C "${tmpdir}" push --force origin "${branch}"
