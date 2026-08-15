@@ -1,5 +1,5 @@
 {
-  "commit": "0505e84b6fb9c7274065a78d7ec92e68b8c52715",
+  "commit": "046d0f8945df00194771bc7ad05517dbb23f67f4",
   "overall_status": "OK",
   "released_work": [
     {
@@ -507,7 +507,7 @@
       "status": "released"
     }
   ],
-  "run_id": "31912195901",
+  "run_id": "31915116841",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -785,7 +785,11 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "072-candidate-evidence-diagnostics"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "138-profit-evidence-engine"
     }
   ],
-  "timestamp_utc": "2026-08-15T22:28:00.585797Z"
+  "timestamp_utc": "2026-08-15T23:35:35.829905Z"
 }
