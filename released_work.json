@@ -1,5 +1,5 @@
 {
-  "commit": "046d0f8945df00194771bc7ad05517dbb23f67f4",
+  "commit": "a2d23cfb156b5d6deb2b0e394444e0b05999bea3",
   "overall_status": "OK",
   "released_work": [
     {
@@ -435,6 +435,15 @@
       "status": "released"
     },
     {
+      "candidate_id": "candidate-profit-evidence-engine-root-redesign",
+      "entry_id": "released-926f91675182",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/138-profit-evidence-engine/spec.md",
+      "spec_id": "138-profit-evidence-engine",
+      "status": "released"
+    },
+    {
       "candidate_id": "candidate-promote-readiness-observe-gateway",
       "entry_id": "released-cc96b400554f",
       "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
@@ -507,7 +516,7 @@
       "status": "released"
     }
   ],
-  "run_id": "31915116841",
+  "run_id": "31915415572",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -606,7 +615,8 @@
     "134-broad-frontier-expansion-no-edge-refresh",
     "135-broad-no-edge-cross-asset-relative-value",
     "136-broad-no-edge-tail-risk-convexity",
-    "137-broad-no-edge-vol-target-drawdown"
+    "137-broad-no-edge-vol-target-drawdown",
+    "138-profit-evidence-engine"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -785,11 +795,7 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "072-candidate-evidence-diagnostics"
-    },
-    {
-      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "138-profit-evidence-engine"
     }
   ],
-  "timestamp_utc": "2026-08-15T23:35:35.829905Z"
+  "timestamp_utc": "2026-08-15T23:42:31.002544Z"
 }

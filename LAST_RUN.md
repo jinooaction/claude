@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-08-15T23:35:35.829905Z)
+# 완료 후보 소비 장부 (as of 2026-08-15T23:42:31.002544Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -8,8 +8,8 @@
 | 항목 | 값 |
 |------|-----|
 | overall_status | OK |
-| released_count | 56 |
-| scanned_specs | 88 |
+| released_count | 57 |
+| scanned_specs | 89 |
 
 ## 완료 후보
 
@@ -63,6 +63,7 @@
 | candidate-operator-report-liveness-contract | released | 118-operator-report-liveness-contract | specs/118-operator-report-liveness-contract/spec.md | completed_candidate_id |
 | candidate-order-submission-uncertainty-recovery | released | 112-order-submission-uncertainty-recovery | specs/112-order-submission-uncertainty-recovery/spec.md | completed_candidate_id |
 | candidate-pr-merge-evidence-liveness-contract | released | 108-pr-merge-evidence-liveness-contract | specs/108-pr-merge-evidence-liveness-contract/spec.md | completed_candidate_id |
+| candidate-profit-evidence-engine-root-redesign | released | 138-profit-evidence-engine | specs/138-profit-evidence-engine/spec.md | completed_candidate_id |
 | candidate-promote-readiness-observe-gateway | released | 121-promote-readiness-observe-gateway | specs/121-promote-readiness-observe-gateway/spec.md | completed_candidate_id |
 | candidate-public-data-input-quality-contract | released | 099-public-data-input-quality-contract | specs/099-public-data-input-quality-contract/spec.md | completed_candidate_id |
 | candidate-regime-timeline-coverage-contract | released | 100-regime-timeline-coverage-contract | specs/100-regime-timeline-coverage-contract/spec.md | completed_candidate_id |
@@ -120,7 +121,6 @@
 | 070-candidate-implementation-factory | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 071-candidate-result-executor | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 072-candidate-evidence-diagnostics | 체크박스 작업이 없거나 완료되지 않았습니다. |
-| 138-profit-evidence-engine | 체크박스 작업이 없거나 완료되지 않았습니다. |
 
 ## 안전 경계
 
@@ -137,7 +137,7 @@
 
 ```json
 {
-  "commit": "046d0f8945df00194771bc7ad05517dbb23f67f4",
+  "commit": "a2d23cfb156b5d6deb2b0e394444e0b05999bea3",
   "overall_status": "OK",
   "released_work": [
     {
@@ -573,6 +573,15 @@
       "status": "released"
     },
     {
+      "candidate_id": "candidate-profit-evidence-engine-root-redesign",
+      "entry_id": "released-926f91675182",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/138-profit-evidence-engine/spec.md",
+      "spec_id": "138-profit-evidence-engine",
+      "status": "released"
+    },
+    {
       "candidate_id": "candidate-promote-readiness-observe-gateway",
       "entry_id": "released-cc96b400554f",
       "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
@@ -744,7 +753,8 @@
     "134-broad-frontier-expansion-no-edge-refresh",
     "135-broad-no-edge-cross-asset-relative-value",
     "136-broad-no-edge-tail-risk-convexity",
-    "137-broad-no-edge-vol-target-drawdown"
+    "137-broad-no-edge-vol-target-drawdown",
+    "138-profit-evidence-engine"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -923,12 +933,8 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "072-candidate-evidence-diagnostics"
-    },
-    {
-      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "138-profit-evidence-engine"
     }
   ],
-  "timestamp_utc": "2026-08-15T23:35:35.829905Z"
+  "timestamp_utc": "2026-08-15T23:42:31.002544Z"
 }
 ```
