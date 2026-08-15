@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-08-15T15:41:02.143854Z)
+# 완료 후보 소비 장부 (as of 2026-08-15T22:28:00.585797Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -8,8 +8,8 @@
 | 항목 | 값 |
 |------|-----|
 | overall_status | OK |
-| released_count | 55 |
-| scanned_specs | 87 |
+| released_count | 56 |
+| scanned_specs | 88 |
 
 ## 완료 후보
 
@@ -31,6 +31,7 @@
 | candidate-broad-no-edge-multi-horizon-signal-experiment | released | 131-broad-no-edge-multi-horizon-signal | specs/131-broad-no-edge-multi-horizon-signal/spec.md | completed_candidate_id |
 | candidate-broad-no-edge-regime-cost-robustness-experiment | released | 132-broad-no-edge-regime-cost-robustness | specs/132-broad-no-edge-regime-cost-robustness/spec.md | completed_candidate_id |
 | candidate-broad-no-edge-tail-risk-convexity-experiment | released | 136-broad-no-edge-tail-risk-convexity | specs/136-broad-no-edge-tail-risk-convexity/spec.md | completed_candidate_id |
+| candidate-broad-no-edge-vol-target-drawdown-experiment | released | 137-broad-no-edge-vol-target-drawdown | specs/137-broad-no-edge-vol-target-drawdown/spec.md | completed_candidate_id |
 | candidate-broad-validation-failure-command-replay-contract | released | 127-validation-failure-command-replay | specs/127-validation-failure-command-replay/spec.md | completed_candidate_id |
 | candidate-broad-validation-failure-data-readiness-contract | released | 128-validation-failure-data-readiness | specs/128-validation-failure-data-readiness/spec.md | completed_candidate_id |
 | candidate-broad-validation-failure-package-kind-expansion-contract | released | 129-validation-failure-package-kind-expansion | specs/129-validation-failure-package-kind-expansion/spec.md | completed_candidate_id |
@@ -135,7 +136,7 @@
 
 ```json
 {
-  "commit": "28c6f747cf309684f8c1d93610accbc44fd0aceb",
+  "commit": "0505e84b6fb9c7274065a78d7ec92e68b8c52715",
   "overall_status": "OK",
   "released_work": [
     {
@@ -280,6 +281,15 @@
       "source_field": "completed_candidate_id",
       "source_file": "specs/136-broad-no-edge-tail-risk-convexity/spec.md",
       "spec_id": "136-broad-no-edge-tail-risk-convexity",
+      "status": "released"
+    },
+    {
+      "candidate_id": "candidate-broad-no-edge-vol-target-drawdown-experiment",
+      "entry_id": "released-cf4c9ea5e219",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/137-broad-no-edge-vol-target-drawdown/spec.md",
+      "spec_id": "137-broad-no-edge-vol-target-drawdown",
       "status": "released"
     },
     {
@@ -732,7 +742,8 @@
     "133-broad-no-edge-data-gap-audit",
     "134-broad-frontier-expansion-no-edge-refresh",
     "135-broad-no-edge-cross-asset-relative-value",
-    "136-broad-no-edge-tail-risk-convexity"
+    "136-broad-no-edge-tail-risk-convexity",
+    "137-broad-no-edge-vol-target-drawdown"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -913,6 +924,6 @@
       "spec_id": "072-candidate-evidence-diagnostics"
     }
   ],
-  "timestamp_utc": "2026-08-15T15:41:02.143854Z"
+  "timestamp_utc": "2026-08-15T22:28:00.585797Z"
 }
 ```

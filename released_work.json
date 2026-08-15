@@ -1,5 +1,5 @@
 {
-  "commit": "28c6f747cf309684f8c1d93610accbc44fd0aceb",
+  "commit": "0505e84b6fb9c7274065a78d7ec92e68b8c52715",
   "overall_status": "OK",
   "released_work": [
     {
@@ -144,6 +144,15 @@
       "source_field": "completed_candidate_id",
       "source_file": "specs/136-broad-no-edge-tail-risk-convexity/spec.md",
       "spec_id": "136-broad-no-edge-tail-risk-convexity",
+      "status": "released"
+    },
+    {
+      "candidate_id": "candidate-broad-no-edge-vol-target-drawdown-experiment",
+      "entry_id": "released-cf4c9ea5e219",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/137-broad-no-edge-vol-target-drawdown/spec.md",
+      "spec_id": "137-broad-no-edge-vol-target-drawdown",
       "status": "released"
     },
     {
@@ -498,7 +507,7 @@
       "status": "released"
     }
   ],
-  "run_id": "31893402757",
+  "run_id": "31912195901",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -596,7 +605,8 @@
     "133-broad-no-edge-data-gap-audit",
     "134-broad-frontier-expansion-no-edge-refresh",
     "135-broad-no-edge-cross-asset-relative-value",
-    "136-broad-no-edge-tail-risk-convexity"
+    "136-broad-no-edge-tail-risk-convexity",
+    "137-broad-no-edge-vol-target-drawdown"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -777,5 +787,5 @@
       "spec_id": "072-candidate-evidence-diagnostics"
     }
   ],
-  "timestamp_utc": "2026-08-15T15:41:02.143854Z"
+  "timestamp_utc": "2026-08-15T22:28:00.585797Z"
 }
