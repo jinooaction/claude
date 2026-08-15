@@ -1,5 +1,5 @@
 {
-  "commit": "007c6bad78bc2413a5e9293b4e7bc2fe6c8c906c",
+  "commit": "8ca65692e249b860949c56744116c6c42bcd5550",
   "overall_status": "OK",
   "released_work": [
     {
@@ -63,6 +63,15 @@
       "source_field": "completed_candidate_id",
       "source_file": "specs/091-autonomous-growth-objective-calibration/contracts/autonomous-growth-objective-calibration.md",
       "spec_id": "091-autonomous-growth-objective-calibration",
+      "status": "released"
+    },
+    {
+      "candidate_id": "candidate-broad-frontier-expansion-no-edge-122eb31c06bd",
+      "entry_id": "released-ee98e8299c14",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/134-broad-frontier-expansion-no-edge-refresh/spec.md",
+      "spec_id": "134-broad-frontier-expansion-no-edge-refresh",
       "status": "released"
     },
     {
@@ -471,7 +480,7 @@
       "status": "released"
     }
   ],
-  "run_id": "31877082901",
+  "run_id": "31885623630",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -566,7 +575,8 @@
     "130-validation-failure-promotion-recheck",
     "131-broad-no-edge-multi-horizon-signal",
     "132-broad-no-edge-regime-cost-robustness",
-    "133-broad-no-edge-data-gap-audit"
+    "133-broad-no-edge-data-gap-audit",
+    "134-broad-frontier-expansion-no-edge-refresh"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -747,5 +757,5 @@
       "spec_id": "072-candidate-evidence-diagnostics"
     }
   ],
-  "timestamp_utc": "2026-08-15T09:28:39.945565Z"
+  "timestamp_utc": "2026-08-15T12:50:42.432429Z"
 }

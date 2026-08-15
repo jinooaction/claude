@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-08-15T09:28:39.945565Z)
+# 완료 후보 소비 장부 (as of 2026-08-15T12:50:42.432429Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -8,8 +8,8 @@
 | 항목 | 값 |
 |------|-----|
 | overall_status | OK |
-| released_count | 52 |
-| scanned_specs | 84 |
+| released_count | 53 |
+| scanned_specs | 85 |
 
 ## 완료 후보
 
@@ -22,6 +22,7 @@
 | candidate-atomic-fill-ledger | released | 113-atomic-fill-ledger | specs/113-atomic-fill-ledger/spec.md | completed_candidate_id |
 | candidate-autonomous-frontier-discovery | released | 092-frontier-candidate-discovery | specs/092-frontier-candidate-discovery/contracts/frontier-candidate-discovery.md | completed_candidate_id |
 | candidate-autonomous-growth-objective-calibration | released | 091-autonomous-growth-objective-calibration | specs/091-autonomous-growth-objective-calibration/contracts/autonomous-growth-objective-calibration.md | completed_candidate_id |
+| candidate-broad-frontier-expansion-no-edge-122eb31c06bd | released | 134-broad-frontier-expansion-no-edge-refresh | specs/134-broad-frontier-expansion-no-edge-refresh/spec.md | completed_candidate_id |
 | candidate-broad-frontier-expansion-no-edge-58298dfc172c | released | 124-broad-no-edge-frontier | specs/124-broad-no-edge-frontier/contracts/broad-no-edge-frontier.md | completed_candidate_id |
 | candidate-broad-frontier-expansion-validation-failures-22f38b8629eb | released | 126-broad-validation-failure-frontier | specs/126-broad-validation-failure-frontier/spec.md | completed_candidate_id |
 | candidate-broad-no-edge-asset-universe-rotation-experiment | released | 125-broad-no-edge-asset-universe | specs/125-broad-no-edge-asset-universe/spec.md | completed_candidate_id |
@@ -132,7 +133,7 @@
 
 ```json
 {
-  "commit": "007c6bad78bc2413a5e9293b4e7bc2fe6c8c906c",
+  "commit": "8ca65692e249b860949c56744116c6c42bcd5550",
   "overall_status": "OK",
   "released_work": [
     {
@@ -196,6 +197,15 @@
       "source_field": "completed_candidate_id",
       "source_file": "specs/091-autonomous-growth-objective-calibration/contracts/autonomous-growth-objective-calibration.md",
       "spec_id": "091-autonomous-growth-objective-calibration",
+      "status": "released"
+    },
+    {
+      "candidate_id": "candidate-broad-frontier-expansion-no-edge-122eb31c06bd",
+      "entry_id": "released-ee98e8299c14",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/134-broad-frontier-expansion-no-edge-refresh/spec.md",
+      "spec_id": "134-broad-frontier-expansion-no-edge-refresh",
       "status": "released"
     },
     {
@@ -699,7 +709,8 @@
     "130-validation-failure-promotion-recheck",
     "131-broad-no-edge-multi-horizon-signal",
     "132-broad-no-edge-regime-cost-robustness",
-    "133-broad-no-edge-data-gap-audit"
+    "133-broad-no-edge-data-gap-audit",
+    "134-broad-frontier-expansion-no-edge-refresh"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -880,6 +891,6 @@
       "spec_id": "072-candidate-evidence-diagnostics"
     }
   ],
-  "timestamp_utc": "2026-08-15T09:28:39.945565Z"
+  "timestamp_utc": "2026-08-15T12:50:42.432429Z"
 }
 ```
