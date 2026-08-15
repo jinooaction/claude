@@ -471,7 +471,7 @@
       "status": "released"
     }
   ],
-  "run_id": "31790793642",
+  "run_id": "31877082901",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -747,5 +747,5 @@
       "spec_id": "072-candidate-evidence-diagnostics"
     }
   ],
-  "timestamp_utc": "2026-08-14T10:05:35.826117Z"
+  "timestamp_utc": "2026-08-15T09:28:39.945565Z"
 }
