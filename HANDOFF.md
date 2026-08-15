@@ -33,15 +33,28 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `0505e84` — Merge pull request #611 from jinooaction/codex/broad-no-edge-vol-target-drawdown-isolated |
-| main 테스트 | #611 브랜치 기준 `uv run pytest` → 2799 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
-| main 린트 | #611 브랜치 기준 `uv run ruff check src tests` → All checks passed. |
-| 열린 PR | 없음(#611은 merge 완료, 이 HANDOFF 갱신 전 `gh pr list` 확인 기준). |
-| 출시 완료 스펙 | 최신 운영 보정: #611(스펙 137, 변동성 목표·낙폭 제어 no-live 계약과 completed candidate 소비), #609(스펙 136, 꼬리위험 방어·볼록성 no-live 계약과 completed candidate 소비), #607(스펙 135, 자산 간 상대가치 no-live 계약과 completed candidate 소비), #605(스펙 134, 광역 no-edge parent 완료 뒤 2차 no-live frontier 자동 전개), #603(스펙 133, 광역 no-edge 데이터 결측 원인 감사와 completed candidate 소비), #601(스펙 132, 광역 no-edge 레짐·비용 견고성 계약과 completed candidate 소비), #599(스펙 131, 광역 no-edge 다중 보유 기간·신호군 계약과 completed candidate 소비), #597(스펙 130, 검증 실패 승격 재검토 계약과 completed candidate 소비), #595(스펙 129, 검증 실패 패키지 종류별 확장 계약과 completed candidate 소비), #593(스펙 128, 검증 실패 데이터 준비도 계약과 completed candidate 소비), #591(스펙 127, 검증 실패 명령 재현 계약과 completed candidate 소비), #589(스펙 126, 검증 실패 parent 완료 뒤 첫 no-live 후속 후보 자동 전개), #587(스펙 125, 광역 자산군 방어 회전 no-live 계약과 released-work 완료), #585/#584/#582. 직전 추가: 123/live canary sidecar gate, #566(forward paper 경제 장부 보정), 122(forward paper DB writability), 121(`promote-readiness` 관측 경로 복구), 120(증거 기반 후보 소스 다변화 + released-work 완료 소비), 119(보안 신뢰 경계 강화). 이전 스펙 058~118은 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
-| 골격 스펙 | 없음. `.specify/feature.json`은 최신 완료 스펙 `specs/137-broad-no-edge-vol-target-drawdown`을 가리키고, `tasks.md`는 T001~T016 완료 상태다. |
-| 최근 출시 작업 | #611은 `candidate-broad-no-edge-vol-target-drawdown-experiment`를 스펙 137로 완료 처리하고, forward paper·regime-stratify·execution-quality·money-path·edge-autoarm 증거를 읽어 변동성 목표·낙폭 제어 no-live 후보 축 5개를 `PROPOSED`로 열었다. released-work run `31912195901`는 commit `0505e84`에서 released_count 56과 스펙 137 완료를 확인했다. |
-| 활성 작업 | 열린 PR 없음. 최신 autonomous-work run `31912233910`는 `wait-for-fresh-evidence` / `OBSERVATION_WAIT`다. 실행 가능한 후보, 운영자 승인 필요 후보, 복구 우선 후보가 없고, 현재 보이는 후보는 완료 8개와 억제 2개뿐이다. 새 sidecar 증거가 쌓일 때까지 같은 완료 후보를 반복하지 않는다. |
-| 안전 경계 | 이번 갱신은 등급 2 운영 보고와 인계 보정이다. #611도 no-live 변동성 목표·낙폭 제어 계약만 추가했고 실제 주문, 실거래 전환, live 재무장, 자본 배분, 라이브 전략 교체, whitelist/caps 확대, 손실 예산, KIS secret 값, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 최신 money-path는 `PREVIEW_ONLY`/`NO_EDGE_YET`, edge-autoarm은 `WAIT_EDGE`/`NO_EDGE`라 실주문과 자본 배분은 여전히 금지다. |
+| 마지막 main 커밋 | `046d0f8` — Merge pull request #613 from jinooaction/codex/profit-engine-redesign-isolated |
+| main 테스트 | #613 최종 커밋 기준 `uv run pytest` → 2807 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
+| main 린트 | #613 최종 커밋 기준 `uv run ruff check src tests` → All checks passed. |
+| 열린 PR | 없음(#613은 merge 완료, 이 HANDOFF 갱신 전 `gh pr list` 확인 기준). |
+| 출시 완료 스펙 | 최신 기능: #613(스펙 138, 시간 분리·비용 차감 수익 증거 엔진과 `globalfixed` 전진 관찰). 직전: #611(스펙 137), #609(스펙 136), #607(스펙 135), #605(스펙 134), #603(스펙 133), #601(스펙 132). 이전 스펙은 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
+| 골격 스펙 | 없음. `.specify/feature.json`은 완료 스펙 `specs/138-profit-evidence-engine`을 가리키고, `tasks.md`는 T001~T022 완료 상태다. |
+| 최근 출시 작업 | #613은 고정된 12개 후보를 2007년 전후로 시간 분리하고 연 50bp 비용을 차감해 `three_asset_fixed-w10`을 찾았다. 2007년 이후 연복리 8.76%, 샤프 1.75, 최대낙폭 4.61%로 벤치마크 8.29%, 1.26, 17.27%보다 우수해 `HOLDOUT_EDGE`다. |
+| 활성 작업 | `globalfixed` 전진 관찰 41회, PSR 0.82727로 기준 0.95 미만이라 `FORWARD_VALIDATION`이다. 기존 money-path는 `PREVIEW_ONLY`/`NO_EDGE_YET`, edge-autoarm은 `WAIT_EDGE`/`NO_EDGE`이므로 실주문은 불가하다. |
+| 안전 경계 | 이번 갱신은 등급 2 인계 보정이다. #613은 후보 발견·검증·읽기 전용 관찰만 바꿨다. 실제 주문, 자본 배분, live 재무장, whitelist/caps, 손실 예산, 비밀값, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 배포 run `31915116844`와 profit-evidence run `31915116859`는 성공했다. 수동 KIS smoke run `31915164816`은 시세·현금·보유·총자산 4개 통과 후 최근 주문 조회 KIS API HTTP 500으로 1개 실패했다. |
+
+## 최근 관찰 — 2026-08-16 KST (#613 시간 분리 수익 증거 엔진 완료)
+
+현재 `main` 최신 기능 머지는 `046d0f8`(#613)이고 기능 커밋은 `015cf4e`다.
+
+- **문제 정의**: 기존 루프는 설명용 no-live 후보 계약을 반복했고, 후보 결과 실행기는 장기 통과와 최근 실패를 하나의 실패로 덮어썼다. 실제 목표는 과거에 맞춘 후보가 아니라 개발 구간과 최종 검증 구간이 분리되고 비용·인접 설정·전진 관찰까지 남는 방법을 찾는 것이다.
+- **찾은 방법**: 고정된 자산배분 3개와 추세 창 4개, 총 12개만 사전등록했다. 1971~2006년 개발 구간에서 `three_asset_fixed-w10`을 선택하고 2007~2026년 7월 최종 검증을 한 번 수행했다. 연 50bp 비용 후 후보는 연복리 8.76%, 샤프 1.75, 최대낙폭 4.61%이고 벤치마크는 8.29%, 1.26, 17.27%다. 8개월·12개월 인접 창도 위험 우위를 유지해 역사 판정은 `HOLDOUT_EDGE`다.
+- **현재 한계**: 실제 `globalfixed` 전진 관찰은 41회, PSR 0.82727, 판정 `NO_EDGE`다. 기준 0.95를 넘기 전 상태는 `FORWARD_VALIDATION`이며 실주문·자본 배분은 불가하다.
+- **구현 상태**: `profit_evidence_engine.py`와 매일 실행되는 읽기 전용 workflow를 추가했다. `candidate_result_executor.py`는 장기 역사·최근 표본 외·전진 분할 증거를 따로 보존한다. `global-trend-fixed` 이력은 명세, workflow, SSH 제한 관문, 서버 관찰 도우미, `data/forward_globalfixed.db`까지 연결됐다.
+- **post-merge 자동화**: deploy run `31915116844`, profit-evidence run `31915116859`, candidate-result run `31915116877`, released-work run `31915116841`이 성공했다. candidate-result는 이력 수집은 성공했지만 upstream 공장이 두 기존 패키지를 blocked로 발행해 결과도 blocked 2개다.
+- **KIS 확인**: 수동 smoke run `31915164816`은 새 커밋에서 키·시세·현금·보유·총자산을 확인했다. 최근 주문내역 조회만 KIS `inquire-ccnl` API의 HTTP 500으로 실패했다. 미체결 주문 없음으로 간주하지 말고 다음 정기 smoke에서 재확인한다.
+- **검증**: focused 67 passed, 전체 2807 passed/5 skipped, ruff, `git diff --check`, HANDOFF 사실 검증, 엄격 하네스 14/14, PR 품질 관문을 통과했다.
+- **상세 인계**: `HANDOFF-144-PROFIT-EVIDENCE-ENGINE.md`.
 
 ## 최근 관찰 — 2026-08-16 KST (#611 변동성 목표·낙폭 제어 no-live 계약 완료)
 
