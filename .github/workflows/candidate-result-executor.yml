@@ -147,7 +147,7 @@ jobs:
           while IFS=$'\t' read -r key portfolio db_path history_root; do
             [[ -n "${key}" ]] || continue
             case "${key}" in
-              micro-gtaa|global-trend-wide|multi-asset-trend)
+              micro-gtaa|global-trend-fixed|global-trend-wide|multi-asset-trend)
                 ;;
               *)
                 echo "candidate history unsupported dataset: ${key}"

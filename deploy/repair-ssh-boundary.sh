@@ -188,7 +188,7 @@ case "${cmd}" in
         ;;
     observe\ candidate-history\ *)
         dataset="${cmd#observe candidate-history }"
-        if [[ "${dataset}" =~ ^(micro-gtaa|global-trend-wide|multi-asset-trend)$ ]]; then
+        if [[ "${dataset}" =~ ^(micro-gtaa|global-trend-wide|global-trend-fixed|multi-asset-trend)$ ]]; then
             exec sudo -n /usr/local/sbin/auto-invest-observe candidate-history "${dataset}"
         fi
         echo "refused command: ${cmd}" >&2

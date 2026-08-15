@@ -28,16 +28,19 @@ def test_candidate_history_manifest_is_deterministic() -> None:
     rows = candidate_history_datasets()
     assert [row.key for row in rows] == [
         "micro-gtaa",
+        "global-trend-fixed",
         "global-trend-wide",
         "multi-asset-trend",
     ]
     assert [row.portfolio_path for row in rows] == [
         "deploy/micro-gtaa-live-portfolio.toml",
+        "deploy/global-trend-fixed-portfolio.toml",
         "deploy/global-trend-wide-portfolio.toml",
         "deploy/multi-asset-trend-portfolio.toml",
     ]
     assert [row.db_path for row in rows] == [
         "data/auto_invest.db",
+        "data/forward_globalfixed.db",
         "data/forward_wide.db",
         "data/forward_multiasset.db",
     ]
@@ -51,6 +54,10 @@ def test_portfolio_lookup_returns_manifest_history_root() -> None:
     assert (
         require_history_root_for_portfolio("deploy/multi-asset-trend-portfolio.toml")
         == "/tmp/candidate_result_history/multi-asset-trend/hist"
+    )
+    assert (
+        require_history_root_for_portfolio("deploy/global-trend-fixed-portfolio.toml")
+        == "/tmp/candidate_result_history/global-trend-fixed/hist"
     )
 
 

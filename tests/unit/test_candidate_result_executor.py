@@ -13,6 +13,7 @@ from auto_invest.analytics.candidate_result_executor import (
     DIAG_INSUFFICIENT_PASS_EVIDENCE,
     DIAG_UNSAFE_COMMAND,
     STATUS_BLOCKED,
+    STATUS_FAIL,
     STATUS_PASS,
     STATUS_PENDING,
     CommandExecution,
@@ -56,6 +57,15 @@ def _passing_runner(command: list[str] | tuple[str, ...], timeout: int) -> Comma
                     "verdict": "강건한 엣지 신호: 다중검정 통과",
                 },
                 ensure_ascii=False,
+            ),
+            stderr="",
+        )
+    if any("deep_walk_forward_probe.py" in token for token in command):
+        return CommandExecution(
+            command=tuple(command),
+            exit_code=0,
+            stdout=json.dumps(
+                {"champion_verdict": "RETURN_EDGE", "champion_key": "trend_3asset_fixed"}
             ),
             stderr="",
         )
@@ -165,6 +175,74 @@ def test_strategy_verdict_is_case_insensitive() -> None:
     )
     assert run.results[0].status == STATUS_PASS
     assert run.results[0].walk_forward == "pass"
+
+
+def test_mixed_long_history_pass_and_recent_failure_is_preserved_as_pending() -> None:
+    plan = {
+        "schema_version": "1.0",
+        "packages": [
+            {
+                "package_id": "pkg-mixed",
+                "candidate_id": "candidate-mixed",
+                "package_kind": "strategy_backtest",
+                "status": "ready",
+                "commands": [
+                    "uv run auto-invest portfolio-walk-forward --portfolio "
+                    "deploy/micro-gtaa-live-portfolio.toml --trailing-years 5 "
+                    "--history-root /tmp/candidate_result_history/micro-gtaa/hist "
+                    "--db data/candidate-factory/mixed.db "
+                    "--halt-path data/candidate-factory/mixed.halt.flag --json",
+                    "uv run python scripts/deep_walk_forward_probe.py --segment-months 60 --json",
+                ],
+            }
+        ],
+    }
+
+    def runner(command: list[str] | tuple[str, ...], timeout: int) -> CommandExecution:
+        if any("deep_walk_forward_probe.py" in token for token in command):
+            payload = {"champion_verdict": "RETURN_EDGE", "champion_key": "trend_3asset_fixed"}
+        else:
+            payload = {"verdict": "강건한 엣지 없음", "strategy_dsr": "0.99"}
+        return CommandExecution(tuple(command), 0, json.dumps(payload, ensure_ascii=False), "")
+
+    result = build_candidate_result_executor_run(
+        package_plan=plan,
+        now=NOW,
+        runner=runner,
+    ).results[0]
+
+    assert result.status == STATUS_PENDING
+    assert result.historical_backtest == "pass"
+    assert result.recent_oos == "fail"
+    assert result.walk_forward == "fail"
+    assert result.raw_metrics["evidence_by_command"]
+
+
+def test_all_strategy_evidence_fail_is_fail() -> None:
+    plan = _package_plan()
+    plan["packages"] = [
+        package
+        for package in plan["packages"]
+        if package["candidate_id"] == "candidate-1ed634d8bf6d"
+    ]
+
+    def runner(command: list[str] | tuple[str, ...], timeout: int) -> CommandExecution:
+        return CommandExecution(
+            tuple(command),
+            0,
+            json.dumps({"verdict": "NO_EDGE"}),
+            "",
+        )
+
+    result = build_candidate_result_executor_run(
+        package_plan=plan,
+        now=NOW,
+        runner=runner,
+    ).results[0]
+    assert result.status == STATUS_FAIL
+    assert result.historical_backtest == "fail"
+    assert result.recent_oos == "fail"
+    assert result.walk_forward == "fail"
 
 
 def test_strategy_history_root_command_is_allowed_and_can_pass() -> None:

@@ -48,6 +48,12 @@ CANDIDATE_HISTORY_DATASETS: tuple[CandidateHistoryDataset, ...] = (
         history_root=_history_root("micro-gtaa"),
     ),
     CandidateHistoryDataset(
+        key="global-trend-fixed",
+        portfolio_path="deploy/global-trend-fixed-portfolio.toml",
+        db_path="data/forward_globalfixed.db",
+        history_root=_history_root("global-trend-fixed"),
+    ),
+    CandidateHistoryDataset(
         key="global-trend-wide",
         portfolio_path="deploy/global-trend-wide-portfolio.toml",
         db_path="data/forward_wide.db",

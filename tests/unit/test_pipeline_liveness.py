@@ -221,7 +221,12 @@ def test_default_specs_registry_sane():
     specs = default_specs()
     keys = {s.key for s in specs}
     # 자율 머니루프의 직접 경로는 반드시 핵심으로 등록돼 있어야 한다.
-    assert {"rebalance-paper-forward", "edge-autoarm", "kis-smoke"} <= keys
+    assert {
+        "rebalance-paper-forward",
+        "edge-autoarm",
+        "kis-smoke",
+        "profit-evidence-engine",
+    } <= keys
     by_key = {s.key: s for s in specs}
     assert by_key["rebalance-paper-forward"].critical is True
     assert by_key["edge-autoarm"].critical is True
