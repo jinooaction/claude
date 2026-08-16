@@ -33,15 +33,25 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `a1b02a5` — Merge pull request #630 from jinooaction/Codex/143-historical-live-fill-recovery |
-| main 테스트 | #630 기능 커밋 기준 `uv run pytest` → 2861 passed, 6 skipped. |
-| main 린트 | #630 기능 커밋 기준 `uv run ruff check src tests` → All checks passed. |
+| 마지막 main 커밋 | `dc5d93e` — Merge pull request #631 from jinooaction/Codex/143-balance-mark-fallback |
+| main 테스트 | #631 기능 커밋 기준 `uv run pytest` → 2863 passed, 6 skipped. |
+| main 린트 | #631 기능 커밋 기준 `uv run ruff check src tests` → All checks passed. |
 | 열린 PR | 없음. |
-| 출시 완료 스펙 | 최신 기능: #630(스펙 143 후속, 과거 KIS 체결 복구·검증된 시작 보유 원가), #628(주문 없는 수동 production preflight), #626(서명 주문 관문·최초 실계좌 수익 증거). |
-| 골격 스펙 | 없음. `.specify/feature.json`은 `specs/143-live-canary-gateway-profit-evidence`를 가리킨다. T021의 체결 복구는 완료됐고, ORANY 현재 평가값까지 포함한 완전한 양의 손익과 멱등 재실행 확인이 남았다. |
-| 최근 출시 작업 | #630은 당일만 조회하던 KIS 체결 동기화를 과거 날짜 범위로 확장하고, 시스템 가동 전 보유 원가를 합성 체결 없이 성과 시작 상태로 연결했다. |
-| 활성 작업 | run `31924111789`이 2026-06-23 매도 체결 3건·수량 10주를 복구해 실현손익 +15.93달러를 확인했다. ORANY 독립 시세가 빠져 현재 판정은 `PNL_INCOMPLETE`이며, KIS 잔고 평가금액 기반 현재가 보완이 `Codex/143-balance-mark-fallback`에서 진행 중이다. |
+| 출시 완료 스펙 | 최신 기능: #631(스펙 143 완료, KIS 잔고 평가값 mark와 최초 양의 손익 확정), #630(과거 KIS 체결 복구·검증된 시작 보유 원가), #628(주문 없는 수동 production preflight). |
+| 골격 스펙 | 없음. `.specify/feature.json`은 완료된 `specs/143-live-canary-gateway-profit-evidence`를 가리킨다. T001~T022가 모두 완료됐다. |
+| 최근 출시 작업 | #631은 독립 시세가 빠진 현재 보유 종목만 KIS 잔고 평가금액 기반 현재가로 보완했다. 일반 시세 우선순위와 결측·경고 0 기준은 유지했다. |
+| 활성 작업 | 없음. run `31924413210`이 체결 3건, 실현 +15.93달러, 미실현 +219.10달러, 총 +235.03달러, 결측 0·경고 0으로 `FIRST_PROFIT_OBSERVED`를 확정했다. 같은 과거 범위 재실행은 새 체결 0건으로 멱등이었다. |
 | 안전 경계 | 헌법 X.4 v7.0.0. 단 1은 실계좌 NAV의 20%인 293달러다. K1/K2, 손실 예산 20%, 정규장, production 승인, 추가-전용 감사 로그를 유지한다. production 개인키는 환경 비밀값에만 있고 서버는 공개키로 검증한다. 과거 복구와 성과 측정은 주문·취소·자본 변경을 하지 않는다. ORANY 28주는 비관리 보유로 자동 매도되지 않는다. |
+
+## 최근 관찰 — 2026-08-16 KST (#631 최초 실계좌 양의 손익 확정)
+
+현재 `main` 최신 머지는 `dc5d93e`(#631)이고 안전 경계 기능 커밋은 `902f02b`이다.
+
+- **완료된 실제 돈 증거**: live-profit run `31924413210`은 KIS가 확인한 live 체결 3건, 실현손익 +15.93달러, ORANY 미실현손익 +219.10달러, 총손익 +235.03달러를 기록했다. 시세 결측 0건, 데이터 경고 0건으로 `FIRST_PROFIT_OBSERVED`를 최초 확정했다.
+- **멱등성**: 같은 `20260623..20260623` 범위를 재실행했을 때 열린 주문 0건으로 새 체결을 추가하지 않았고 기존 세 체결과 손익만 다시 읽었다.
+- **파생 경로**: money-path run `31924433469`은 최초 양의 손익을 받아 `REAL_ORDER_PATH_ARMED`와 `FIRST_PROFIT_OBSERVED`를 함께 발행했다. capital readiness run `31924448815`도 `CAPITAL_ARMABLE`, 단 1, 293달러를 유지했다.
+- **배포·검증**: deploy run `31924378115` 성공. #631은 전체 2863 passed/6 skipped, ruff, diff, HANDOFF 사실 검사, 엄격 하네스 14/14, PR 품질 관문을 통과했다.
+- **안전 경계**: 두 복구 run 모두 주문·취소·자본 변경 0건이다. 최초 수익 판정 기준을 낮추지 않았고 KIS 체결·원가·잔고 평가값만 사용했다. 앞으로의 수익은 변동하며 보장되지 않는다.
 
 ## 최근 관찰 — 2026-08-16 KST (#630 과거 실체결·양의 실현손익 복구)
 
