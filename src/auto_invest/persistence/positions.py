@@ -86,7 +86,10 @@ def rebuild_from_fills(conn: sqlite3.Connection) -> None:
 
     conn.execute("DELETE FROM current_positions")
     for symbol, agg in aggregates.items():
-        if agg["qty"] == 0:
+        # This cache represents current long holdings only. Historical SELL
+        # fills can close positions imported from an external opening basis,
+        # whose original BUY is intentionally not synthesized into `fills`.
+        if agg["qty"] <= 0:
             continue
         conn.execute(
             """
@@ -108,8 +111,8 @@ def update_from_fill(
 ) -> Position | None:
     """Apply a single fill incrementally.
 
-    Returns the updated Position, or None when the new qty is zero
-    (the row is deleted).
+    Returns the updated Position, or None when the new qty is non-positive
+    (the row is deleted or, for an external-lot SELL, never created).
     """
     existing = get_position(conn, symbol)
     old_qty = existing.qty if existing else 0
@@ -126,7 +129,7 @@ def update_from_fill(
         new_qty = old_qty - qty
         new_avg = old_avg
 
-    if new_qty == 0:
+    if new_qty <= 0:
         if existing is not None:
             conn.execute("DELETE FROM current_positions WHERE symbol = ?", (symbol,))
         return None

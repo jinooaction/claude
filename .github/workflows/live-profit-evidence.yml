@@ -6,6 +6,13 @@ name: Live profit evidence (실계좌 체결과 첫 수익 증거)
 
 on:
   workflow_dispatch:
+    inputs:
+      order_start_date:
+        description: "Optional historical fill recovery start date (YYYYMMDD)."
+        required: false
+      order_end_date:
+        description: "Optional historical fill recovery end date (YYYYMMDD)."
+        required: false
   workflow_run:
     workflows:
       - "Live canary portfolio rebalance (guarded, real money)"
@@ -59,11 +66,23 @@ jobs:
           HOST: ${{ secrets.VULTR_SSH_HOST }}
           USER: ${{ secrets.VULTR_SSH_USER }}
           PORT: ${{ secrets.VULTR_SSH_PORT }}
+          ORDER_START_DATE: ${{ inputs.order_start_date || '' }}
+          ORDER_END_DATE: ${{ inputs.order_end_date || '' }}
         run: |
+          set -u
+          remote_command="live-canary-fills"
+          if [[ -n "${ORDER_START_DATE}" || -n "${ORDER_END_DATE}" ]]; then
+            if [[ ! "${ORDER_START_DATE}" =~ ^[0-9]{8}$ \
+                || ! "${ORDER_END_DATE}" =~ ^[0-9]{8}$ ]]; then
+              echo "historical recovery requires valid YYYYMMDD start/end dates" >&2
+              exit 2
+            fi
+            remote_command="live-canary-fills ${ORDER_START_DATE} ${ORDER_END_DATE}"
+          fi
           set +e
           ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts \
             -o ConnectTimeout=15 -p "${PORT:-22}" -i ~/.ssh/id_ed25519 \
-            "${USER}@${HOST}" "live-canary-fills" \
+            "${USER}@${HOST}" "${remote_command}" \
             > /tmp/live_fills.log 2>&1
           code=$?
           echo "exit=${code}" >> "${GITHUB_OUTPUT}"

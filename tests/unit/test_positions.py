@@ -150,6 +150,20 @@ def test_full_sell_deletes_row(conn):
     assert positions.get_position(conn, "AAPL") is None
 
 
+def test_external_lot_sell_does_not_create_negative_position(conn):
+    pos = positions.update_from_fill(
+        conn,
+        symbol="BHP",
+        side=Side.SELL,
+        qty=1,
+        price_usd=Decimal("82.52"),
+        ts_utc="2026-06-23T17:20:16.000Z",
+    )
+
+    assert pos is None
+    assert positions.get_position(conn, "BHP") is None
+
+
 # ----------------------------------------------------------------- rebuild
 
 
@@ -199,6 +213,22 @@ def test_rebuild_drops_fully_closed_positions(conn):
     positions.rebuild_from_fills(conn)
 
     assert positions.get_position(conn, "AAPL") is None
+
+
+def test_rebuild_drops_external_lot_sell_without_synthetic_buy(conn):
+    _seed_order(conn, correlation_id="o1", symbol="BHP", side="SELL", qty=1)
+    _seed_fill(
+        conn,
+        correlation_id="o1",
+        fill_id="f1",
+        qty=1,
+        price="82.52",
+        ts="2026-06-23T17:20:16.000Z",
+    )
+
+    positions.rebuild_from_fills(conn)
+
+    assert positions.get_position(conn, "BHP") is None
 
 
 def test_rebuild_handles_multiple_symbols(conn):

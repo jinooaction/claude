@@ -1521,6 +1521,11 @@ def performance(
         "--env",
         help="KIS 시세 조회용 .env (미실현 손익 mark-to-market). 미지정 시 실현 손익만.",
     ),
+    opening_positions_path: Path | None = typer.Option(
+        None,
+        "--opening-positions",
+        help="시스템 가동 전 KIS 보유의 검증된 수량·평단 TOML. 성과 시작 상태로만 사용.",
+    ),
     base_url: str = typer.Option(
         "https://openapi.koreainvestment.com:9443",
         "--base-url",
@@ -1567,6 +1572,10 @@ def performance(
         render_text,
         snapshot_fields,
     )
+    from auto_invest.performance.opening_positions import (
+        OpeningPositionsError,
+        load_opening_positions,
+    )
 
     if output_format not in ("text", "json"):
         typer.echo("--format must be 'text' or 'json'.", err=True)
@@ -1599,6 +1608,15 @@ def performance(
         _exit(2)
 
     starting_capital = Decimal(str(capital)) if capital is not None and capital > 0 else None
+    try:
+        opening_positions = (
+            load_opening_positions(opening_positions_path)
+            if opening_positions_path is not None
+            else ()
+        )
+    except OpeningPositionsError as exc:
+        typer.echo(f"시작 포지션 오류: {exc}", err=True)
+        _exit(2)
 
     if not db_path.exists():
         typer.echo(f"DB 파일을 찾을 수 없습니다: {db_path}", err=True)
@@ -1609,7 +1627,9 @@ def performance(
         # read-only — PRAGMA query_only로 INSERT/UPDATE/DELETE를 차단.
         conn.execute("PRAGMA query_only = ON")
         fills = read_fills(conn, mode=mode, since=since_dt, until=until_dt)
-        positions, _, _, _ = reconstruct(fills)
+        positions, _, _, _ = reconstruct(
+            fills, opening_positions=opening_positions
+        )
         open_symbols = sorted(s for s, p in positions.items() if p.qty != 0)
         marks: dict = {}
         if open_symbols and not no_marks and env_file is not None:
@@ -1633,6 +1653,7 @@ def performance(
             since=since_dt,
             until=until_dt,
             starting_capital=starting_capital,
+            opening_positions=opening_positions,
         )
     finally:
         conn.close()
@@ -1686,6 +1707,8 @@ async def _run_fill_sync(
     app_secret: str,
     account_no: str,
     db_path: Path,
+    order_start_date_yyyymmdd: str | None = None,
+    order_end_date_yyyymmdd: str | None = None,
 ):
     """Spec 015 — 라이브 열린 주문의 체결을 브로커에서 당겨 장부에 반영.
 
@@ -1715,6 +1738,8 @@ async def _run_fill_sync(
             app_key=app_key,
             app_secret=app_secret,
             account=account_no,
+            order_start_date_yyyymmdd=order_start_date_yyyymmdd,
+            order_end_date_yyyymmdd=order_end_date_yyyymmdd,
         )
 
 
@@ -1735,6 +1760,16 @@ def fills(
         "--base-url",
         help="KIS REST base URL (--sync 체결 조회용).",
     ),
+    order_start_date: str | None = typer.Option(
+        None,
+        "--order-start-date",
+        help="과거 체결 복구 조회 시작일 YYYYMMDD. 미지정 시 오늘.",
+    ),
+    order_end_date: str | None = typer.Option(
+        None,
+        "--order-end-date",
+        help="과거 체결 복구 조회 종료일 YYYYMMDD. 시작일과 함께 사용.",
+    ),
     market: str = typer.Option(
         "NASD",
         "--market",
@@ -1749,7 +1784,24 @@ def fills(
     인자 없이 실행하면 읽기 전용으로 열린 주문·최근 체결 요약만 출력한다.
     종료 코드: 0 정상 / 1 동기화 오류 / 2 오용.
     """
+    from datetime import datetime as _datetime
+
     from auto_invest.persistence import db as _db
+
+    if order_end_date is not None and order_start_date is None:
+        typer.echo("--order-end-date 는 --order-start-date 와 함께 써야 합니다.", err=True)
+        _exit(2)
+    for label, value in (
+        ("--order-start-date", order_start_date),
+        ("--order-end-date", order_end_date),
+    ):
+        if value is None:
+            continue
+        try:
+            _datetime.strptime(value, "%Y%m%d")
+        except ValueError:
+            typer.echo(f"{label} 는 유효한 YYYYMMDD 형식이어야 합니다.", err=True)
+            _exit(2)
 
     if not db_path.exists():
         typer.echo(f"DB 파일이 없습니다: {db_path}", err=True)
@@ -1774,6 +1826,8 @@ def fills(
                     app_secret=secrets["KIS_APP_SECRET"],
                     account_no=secrets["KIS_ACCOUNT_NO"],
                     db_path=db_path,
+                    order_start_date_yyyymmdd=order_start_date,
+                    order_end_date_yyyymmdd=order_end_date,
                 )
             )
             if not result.polled:
@@ -1790,14 +1844,16 @@ def fills(
 
         # 읽기 전용 요약 (항상 출력).
         open_rows = conn.execute(
-            "SELECT correlation_id, symbol, side, qty, state, kis_order_id "
+            "SELECT correlation_id, symbol, side, qty, state, kis_order_id, "
+            "submitted_at_utc "
             "FROM orders WHERE state IN ('SUBMITTED','PARTIALLY_FILLED') ORDER BY seq"
         ).fetchall()
         typer.echo(f"열린 주문: {len(open_rows)}건")
         for r in open_rows:
             typer.echo(
                 f"  {r['correlation_id']}  {r['symbol']} {r['side']} {r['qty']}  "
-                f"[{r['state']}]  kis={r['kis_order_id']}"
+                f"[{r['state']}]  kis={r['kis_order_id']}  "
+                f"submitted={r['submitted_at_utc'] or 'unknown'}"
             )
         fill_rows = conn.execute(
             "SELECT order_correlation_id, qty, price_usd, executed_at_utc "

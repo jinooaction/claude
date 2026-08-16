@@ -15,19 +15,11 @@
 # 출처: KIS smoke run 27405479242 (2026-06-12T08:54Z) 실계좌 조회 —
 #   BHP 1주(평단 $47.97) / MRK 3주($79.09) / ORANY 28주($11.195) /
 #   RELX 6주($54.155). HANDOFF-013(2026-05-22) 시점에도 동일 4종목.
-
-[[holdings]]
-symbol = "BHP"
-qty = 1
-
-[[holdings]]
-symbol = "MRK"
-qty = 3
+#
+# 2026-06-23 live run 28043874590이 BHP·MRK·RELX 매도를 제출했고, 다음 날
+# KIS smoke 28080680155부터 세 종목은 계좌에 없다. 2026-08-16 smoke
+# 31923523309도 ORANY 28주만 확인했다. 따라서 현재 정합 기준선은 ORANY뿐이다.
 
 [[holdings]]
 symbol = "ORANY"
 qty = 28
-
-[[holdings]]
-symbol = "RELX"
-qty = 6

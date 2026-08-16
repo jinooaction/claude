@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
@@ -168,6 +169,51 @@ async def test_full_fill_recorded(tmp_path: Path) -> None:
         assert _state(conn, "ord-1") == "FILLED"
         pos = positions_mod.get_position(conn, "AAPL")
         assert pos is not None and pos.qty == 100
+
+
+@pytest.mark.asyncio
+async def test_historical_window_recovers_fill_with_broker_timestamp(
+    tmp_path: Path,
+) -> None:
+    async with _broker(tmp_path) as (client, conn):
+        _seed_order(conn, qty=1)
+
+        def _historical(request: httpx.Request) -> httpx.Response:
+            assert request.url.params["ORD_STRT_DT"] == "20260623"
+            assert request.url.params["ORD_END_DT"] == "20260623"
+            return _ccnl(
+                [
+                    {
+                        "odno": "K1",
+                        "pdno": "AAPL",
+                        "ft_ccld_qty": "1",
+                        "ft_ccld_unpr3": "150.25",
+                        "ord_dt": "20260623",
+                        "ord_tmd": "172016",
+                    }
+                ]
+            )
+
+        with respx.mock(base_url=BASE) as mock:
+            mock.get(CCNL).mock(side_effect=_historical)
+            result = await sync_fills(
+                conn,
+                client,
+                access_token="t",
+                app_key="k",
+                app_secret="s",
+                account=ACCOUNT,
+                now=datetime(2026, 8, 16, tzinfo=UTC),
+                order_start_date_yyyymmdd="20260623",
+                order_end_date_yyyymmdd="20260623",
+            )
+
+        assert result.fills_applied == 1
+        fill = conn.execute(
+            "SELECT price_usd, executed_at_utc FROM fills WHERE kis_fill_id='K1:1'"
+        ).fetchone()
+        assert fill["price_usd"] == "150.25"
+        assert fill["executed_at_utc"] == "2026-06-23T17:20:16.000Z"
 
 
 @pytest.mark.asyncio
