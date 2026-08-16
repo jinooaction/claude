@@ -52,6 +52,11 @@ CONSUMED_SIDECARS: list[tuple[str, str, str]] = [
         "profit_evidence.json",
     ),
     ("ml-edge-ensemble", "automation/ml-edge-ensemble-last-run", "report.json"),
+    (
+        "daily-cross-asset-ml",
+        "automation/daily-cross-asset-ml-last-run",
+        "report.json",
+    ),
     ("rebalance-paper-forward", "automation/rebalance-paper-forward-last-run", "LAST_RUN.md"),
     ("edge-autoarm", "automation/edge-autoarm-last-run", "LAST_RUN.md"),
     ("money-path", "automation/money-path-last-run", "LAST_RUN.md"),

@@ -449,6 +449,25 @@ candidate_history_dataset() {
     echo "CANDIDATE_HISTORY_ARCHIVE_END ${dataset}"
 }
 
+daily_ml_edge() {
+    require_repo
+    track_config wide
+    ensure_paper_track_storage
+
+    run_cli backfill-bars \
+        --portfolio deploy/global-trend-wide-portfolio.toml \
+        --min-bars 1250 \
+        --order deepen \
+        --db data/forward_wide.db \
+        --env-file .env \
+        --json
+
+    echo "DAILY_ML_EDGE_JSON_BEGIN"
+    sudo -u "${APP_USER}" -H /usr/local/bin/uv run python \
+        scripts/daily_cross_asset_ml_probe.py --db data/forward_wide.db --json
+    echo "DAILY_ML_EDGE_JSON_END"
+}
+
 main() {
     local cmd="${1:-}"
     shift || true
@@ -512,6 +531,10 @@ main() {
         candidate-history)
             [[ "$#" -eq 1 ]] || die "candidate-history requires dataset"
             candidate_history_dataset "$1"
+            ;;
+        daily-ml-edge)
+            [[ "$#" -eq 0 ]] || die "daily-ml-edge takes no args"
+            daily_ml_edge
             ;;
         *)
             die "unknown observe command: ${cmd:-missing}"

@@ -81,6 +81,8 @@ def test_gateway_allows_only_fixed_commands_without_eval():
     assert not re.search(r'observe\\ promote-readiness\\ \*\)', code)
     assert re.search(r'observe\\ regime-stratify\\ \*\)', code)
     assert re.search(r'observe\\ candidate-history\\ \*\)', code)
+    assert re.search(r'observe\\ daily-ml-edge\)', code)
+    assert not re.search(r'observe\\ daily-ml-edge\\ \*\)', code)
     assert r"^(global|wide)$" in code
     assert (
         r"^(micro-gtaa|global-trend-wide|global-trend-fixed|multi-asset-trend)$"

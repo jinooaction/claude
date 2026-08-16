@@ -1,0 +1,108 @@
+name: Daily cross-asset ML research
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "20 4 * * 0"
+  push:
+    branches: [main]
+    paths:
+      - "src/auto_invest/analytics/daily_cross_asset_ml.py"
+      - "scripts/daily_cross_asset_ml_probe.py"
+      - "deploy/observe-on-instance.sh"
+      - "deploy/repair-ssh-boundary.sh"
+      - ".github/workflows/daily-cross-asset-ml.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-cross-asset-ml
+  cancel-in-progress: false
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Install SSH key
+        continue-on-error: true
+        env:
+          KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.VULTR_SSH_KNOWN_HOSTS }}
+          SSH_USER: ${{ secrets.VULTR_SSH_USER }}
+        run: |
+          VULTR_SSH_PRIVATE_KEY="${KEY:-}" \
+          VULTR_SSH_KNOWN_HOSTS="${KNOWN_HOSTS:-}" \
+          VULTR_SSH_USER="${SSH_USER:-}" \
+          ./scripts/ci_secure_ssh.sh
+
+      - name: Run read-only KIS daily ML experiment
+        id: research
+        if: always()
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          set +e
+          mkdir -p /tmp/daily-cross-asset-ml
+          port="${PORT:-22}"
+          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts \
+              -o ConnectTimeout=15 -p "${port}" -i ~/.ssh/id_ed25519 \
+              "${USER}@${HOST}" "observe daily-ml-edge" \
+              > /tmp/daily-cross-asset-ml/remote.log 2>&1
+          status=$?
+          awk '/DAILY_ML_EDGE_JSON_BEGIN/{capture=1;next}/DAILY_ML_EDGE_JSON_END/{capture=0}capture' \
+              /tmp/daily-cross-asset-ml/remote.log > /tmp/daily-cross-asset-ml/report.json
+          if [ "${status}" -ne 0 ] || ! jq -e . /tmp/daily-cross-asset-ml/report.json >/dev/null 2>&1; then
+            reason=$(tail -c 2000 /tmp/daily-cross-asset-ml/remote.log | jq -Rs .)
+            jq -n --argjson reason "${reason}" '{
+              schema_version:"1.0", experiment_id:"daily-cross-asset-ml-v1",
+              verdict:"BLOCKED", reason:$reason,
+              candidate_package:{eligible:false,candidate_id:"candidate-daily-cross-asset-ml-v1",
+                status:"blocked",verdict:"BLOCKED",reason_ko:$reason,live_promotion_authorized:false},
+              safety:{orders_submitted:0,orders_cancelled:0,live_strategy_changed:false,capital_changed:false}
+            }' > /tmp/daily-cross-asset-ml/report.json
+          fi
+          jq '.candidate_package' /tmp/daily-cross-asset-ml/report.json \
+              > /tmp/daily-cross-asset-ml/candidate_package.json
+          {
+            echo "# 일봉 교차자산 AI 후보 최신 실행"
+            echo
+            echo "- run_id: ${GITHUB_RUN_ID}"
+            echo "- commit: ${GITHUB_SHA}"
+            echo "- verdict: $(jq -r '.verdict' /tmp/daily-cross-asset-ml/report.json)"
+            echo "- reason: $(jq -r '.reason' /tmp/daily-cross-asset-ml/report.json)"
+            echo "- orders_submitted: 0"
+          } > /tmp/daily-cross-asset-ml/LAST_RUN.md
+          echo "remote_exit=${status}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish research sidecar
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          branch=automation/daily-cross-asset-ml-last-run
+          worktree=$(mktemp -d)
+          git config user.name "daily-cross-asset-ml-bot"
+          git config user.email "daily-cross-asset-ml-bot@noreply.github.com"
+          if git fetch origin "$branch"; then
+            git worktree add -B "$branch" "$worktree" "origin/$branch"
+          else
+            git worktree add --detach "$worktree" HEAD
+            git -C "$worktree" switch --orphan "$branch"
+            git -C "$worktree" rm -rf . >/dev/null 2>&1 || true
+          fi
+          cp /tmp/daily-cross-asset-ml/LAST_RUN.md "$worktree/LAST_RUN.md"
+          cp /tmp/daily-cross-asset-ml/report.json "$worktree/report.json"
+          cp /tmp/daily-cross-asset-ml/candidate_package.json "$worktree/candidate_package.json"
+          git -C "$worktree" add LAST_RUN.md report.json candidate_package.json
+          git -C "$worktree" commit -m "daily-cross-asset-ml run ${GITHUB_RUN_ID}"
+          git -C "$worktree" push --force-with-lease \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "$branch:$branch"

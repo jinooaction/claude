@@ -201,6 +201,9 @@ case "${cmd}" in
         echo "refused command: ${cmd}" >&2
         exit 126
         ;;
+    observe\ daily-ml-edge)
+        exec sudo -n /usr/local/sbin/auto-invest-observe daily-ml-edge
+        ;;
     live-canary-order\ *)
         read -r action run_id signed_sha capital expires nonce signature extra <<<"${cmd}"
         if [[ "${action:-}" == "live-canary-order" \
