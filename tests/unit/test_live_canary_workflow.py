@@ -53,6 +53,7 @@ def test_live_canary_machine_approval_is_main_only_and_event_explicit() -> None:
     assert "needs: live_portfolio_canary_preview" in approval
     assert "github.event_name == 'schedule'" in approval
     assert "github.event_name == 'workflow_dispatch'" in approval
+    assert "uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262" in approval
     assert '[[ "${REF}" == "refs/heads/main" ]]' in approval
     assert "Validate autonomous production approval evidence" in approval
     assert 'schedule) decision="scheduled-real-order"' in approval

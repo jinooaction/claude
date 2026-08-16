@@ -271,6 +271,9 @@ jobs:
     outputs:
       decision: ${{ steps.approval.outputs.decision }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
       - name: Validate autonomous production approval evidence
         id: approval
         env:
