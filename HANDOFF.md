@@ -33,15 +33,27 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `bb8f200` — Merge pull request #624 from jinooaction/Codex/142-live-money-route-priority |
-| main 테스트 | #624 기능 커밋 기준 `uv run pytest` → 2833 passed, 6 skipped. |
-| main 린트 | #624 기능 커밋 기준 `uv run ruff check src tests` → All checks passed. |
+| 마지막 main 커밋 | `5d20ea8` — Merge pull request #626 from jinooaction/Codex/143-live-canary-gateway-profit-evidence |
+| main 테스트 | #626 기능 커밋 기준 `uv run pytest` → 2853 passed, 6 skipped. |
+| main 린트 | #626 기능 커밋 기준 `uv run ruff check src tests` → All checks passed. |
 | 열린 PR | 없음. |
-| 출시 완료 스펙 | 최신 기능: #624(스펙 142, 실제 주문 가능 경로 우선 표시), #622(스펙 141 후속, 실주문 실패 전파·체결 동기화·사후 증거), #620(스펙 141, 저단가 체결 ETF와 KIS 실제 계좌 원본). |
-| 골격 스펙 | 없음. `.specify/feature.json`은 완료된 `specs/142-live-money-route-priority`를 가리킨다. 스펙 141의 T012 첫 정규장 주문·체결 확인만 외부 시간 조건으로 남았다. |
-| 최근 출시 작업 | #624는 표준 자본 사다리와 micro 경로를 함께 평가해 무장된 경로를 최상위에 표시한다. 센티넬과 최신 sidecar가 다르면 실패 폐쇄하며 주문·자본·안전 관문은 바꾸지 않았다. |
-| 활성 작업 | 최신 money-path는 `REAL_ORDER_PATH_ARMED`, 표준 단 1, 293달러이고 capital-path-readiness는 `CAPITAL_ARMABLE`이다. 다음 미국 정규장 예약 실행에서 production 승인 뒤 주문·체결·잔고·감사 로그를 확인해야 한다. |
-| 안전 경계 | 헌법 X.4 v7.0.0. 단 1은 실계좌 NAV의 20%인 293달러이며 25% 이상은 원래 EDGE_CONFIRMED를 유지한다. K1 캡, 손실 예산 20%, 비밀값, 추가-전용 감사 로그, 정규장, production, 서킷 브레이커를 유지한다. ORANY 28주는 비관리 보유로 보류돼 자동 매도되지 않았고 현재 실주문·체결은 0건이다. |
+| 출시 완료 스펙 | 최신 기능: #626(스펙 143, production 서명 주문 관문·최초 실계좌 수익 증거·자동 재평가), #624(스펙 142, 실제 주문 가능 경로 우선 표시), #622(스펙 141 후속, 실주문 실패 전파·체결 동기화·사후 증거). |
+| 골격 스펙 | 없음. `.specify/feature.json`은 구현·배포가 끝난 `specs/143-live-canary-gateway-profit-evidence`를 가리킨다. T017 실제 주문·체결·양의 손익 확인만 시장 시간·production 승인 조건으로 남았다. |
+| 최근 출시 작업 | #626은 임의 직접 SSH 주문을 제거하고 10분 만료 Ed25519 서명·nonce·센티넬·자본·배포 정합을 검증하는 고정 관문으로 대체했다. 체결·손익 관측은 주문 불가능한 별도 명령이며 최초 양의 손익을 누적 증거로 보존한다. |
+| 활성 작업 | 최신 money-path는 `REAL_ORDER_PATH_ARMED`, 표준 단 1, 293달러이고 capital-path-readiness는 `CAPITAL_ARMABLE`이다. live-profit은 `NO_FILLS_YET`, 체결 0건, 총손익 0달러다. 다음 미국 정규장 예약 실행에서 production 승인 뒤 주문·체결·양의 손익을 추적한다. |
+| 안전 경계 | 헌법 X.4 v7.0.0. 단 1은 실계좌 NAV의 20%인 293달러다. K1/K2, 손실 예산 20%, 정규장, production 승인, 추가-전용 감사 로그를 유지한다. production 개인키는 환경 비밀값에만 있고 서버는 공개키로 검증한다. ORANY 28주는 비관리 보유로 자동 매도되지 않으며 현재 실주문·체결은 0건이다. |
+
+## 최근 관찰 — 2026-08-16 KST (#626 서명 실주문 관문과 최초 수익 증거 출시)
+
+현재 `main` 최신 머지는 `5d20ea8`(#626)이고 안전 경계 기능 커밋은 `86f56b2`다.
+
+- **고친 뿌리 원인**: production 실제 주문 작업이 서버의 forced-command SSH 관문에 없는 임의 직접 셸 명령을 사용해 다음 정규장에 거부될 구조였다. 이제 production 환경 전용 Ed25519 개인키로 run·commit·자본·만료·nonce를 서명하고, 서버 root 소유 helper가 공개키·센티넬·rung·NAV·배포 정합·nonce를 다시 검증한 뒤에만 기존 live CLI를 호출한다.
+- **첫 수익 증거**: 주문 불가능한 `live-canary-fills`와 `live-canary-profit` 고정 명령을 추가했다. 체결 1건 이상, 시세 결측 0, 데이터 경고 0, 총손익 양수일 때만 `FIRST_PROFIT_OBSERVED`로 기록하고 최초 시각·손익은 이후에도 보존한다.
+- **배포·실서버 확인**: deploy run `31922602120`, live-profit run `31922633808`, KIS smoke run `31922634930`이 성공했다. KIS는 5/5, 매수가능현금 934.27달러, NAV 1466.83달러, 최근 주문·열린 미체결 0건이다. live-profit은 체결 0건·총손익 0달러·결측/경고 0으로 `NO_FILLS_YET`를 발행했다.
+- **자동 재평가 확인**: live-profit 완료 뒤 money-path run `31922655716`, 이어 capital readiness run `31922666593`이 자동 성공했다. 현재 `REAL_ORDER_PATH_ARMED`, `CAPITAL_ARMABLE`, 단 1, 293달러이며 다음 예약은 `2026-08-17T15:00:00Z`다.
+- **검증**: 전체 2853 passed/6 skipped, ruff, 셸·YAML·diff, HANDOFF 사실 검사, 엄격 하네스 14/14, PR 품질 관문을 통과했다.
+- **남은 단일 외부 조건**: 다음 예약에서 production reviewer 승인과 모든 기존 preflight를 통과한 뒤 실제 주문·체결·완전한 양의 총손익이 관측돼야 한다. 수익은 보장하거나 기준을 바꾸지 않으며 그 전에는 목표를 완료로 선언하지 않는다.
+- **상세 인계**: `HANDOFF-150-LIVE-CANARY-GATEWAY-PROFIT-EVIDENCE.md`.
 
 ## 최근 관찰 — 2026-08-16 KST (#624 실제 주문 가능 경로 우선 표시 출시)
 
