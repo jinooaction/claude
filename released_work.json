@@ -1,5 +1,5 @@
 {
-  "commit": "a1b02a577581d7b8e9bd87190a670b9d3436e8ea",
+  "commit": "dc5d93e58c014c272c3ca4784d03131614477117",
   "overall_status": "OK",
   "released_work": [
     {
@@ -534,7 +534,7 @@
       "status": "released"
     }
   ],
-  "run_id": "31924079129",
+  "run_id": "31924378117",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -829,5 +829,5 @@
       "spec_id": "143-live-canary-gateway-profit-evidence"
     }
   ],
-  "timestamp_utc": "2026-08-16T03:22:33.079338Z"
+  "timestamp_utc": "2026-08-16T03:30:01.626517Z"
 }
