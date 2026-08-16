@@ -120,6 +120,68 @@ async def test_executions_deduped_if_kis_returns_all_on_any_market() -> None:
     assert execs[0].filled_qty == 2
 
 
+@pytest.mark.asyncio
+async def test_execution_date_range_is_sent_once_per_exchange() -> None:
+    """최근 기간 조회는 날짜별 반복 없이 거래소마다 범위 한 번만 전송한다."""
+    async with _client() as client:
+        with respx.mock(base_url=BASE) as mock:
+            route = mock.get(CCNL).mock(return_value=httpx.Response(200, json={"output": []}))
+            await get_order_executions_resolving_market(
+                client,
+                access_token="t",
+                app_key="k",
+                app_secret="s",
+                account=ACCOUNT,
+                order_date_yyyymmdd="20260810",
+                end_date_yyyymmdd="20260816",
+            )
+
+    assert route.call_count == len(US_ORDER_EXCHANGES)
+    for call in route.calls:
+        assert call.request.url.params["ORD_STRT_DT"] == "20260810"
+        assert call.request.url.params["ORD_END_DT"] == "20260816"
+
+
+@pytest.mark.asyncio
+async def test_execution_date_range_rejects_reverse_dates_before_network() -> None:
+    async with _client() as client:
+        with respx.mock(base_url=BASE, assert_all_called=False) as mock:
+            route = mock.get(CCNL).mock(return_value=httpx.Response(200, json={"output": []}))
+            with pytest.raises(ValueError, match="end_date_yyyymmdd"):
+                await get_order_executions_resolving_market(
+                    client,
+                    access_token="t",
+                    app_key="k",
+                    app_secret="s",
+                    account=ACCOUNT,
+                    order_date_yyyymmdd="20260816",
+                    end_date_yyyymmdd="20260810",
+                )
+    assert route.call_count == 0
+
+
+@pytest.mark.asyncio
+async def test_execution_date_range_remains_fail_closed_per_exchange() -> None:
+    def response_for_market(request: httpx.Request) -> httpx.Response:
+        if request.url.params["OVRS_EXCG_CD"] == "AMEX":
+            return httpx.Response(500, json={"message": "temporary broker failure"})
+        return httpx.Response(200, json={"output": []})
+
+    async with _client() as client:
+        with respx.mock(base_url=BASE) as mock:
+            mock.get(CCNL).mock(side_effect=response_for_market)
+            with pytest.raises(httpx.HTTPStatusError):
+                await get_order_executions_resolving_market(
+                    client,
+                    access_token="t",
+                    app_key="k",
+                    app_secret="s",
+                    account=ACCOUNT,
+                    order_date_yyyymmdd="20260810",
+                    end_date_yyyymmdd="20260816",
+                )
+
+
 # ----------------------------------------------------------- 보유 조회(inquire-balance)
 
 

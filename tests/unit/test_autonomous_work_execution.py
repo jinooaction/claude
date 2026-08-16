@@ -3055,5 +3055,101 @@ def test_deterministic_order_for_same_inputs():
     assert first["selected_work"]["candidate_id"] == "candidate-a"
 
 
+def test_profit_edge_wait_replaces_generic_observation_wait() -> None:
+    evidence = _all_known_released_no_edge_evidence(
+        BROAD_NO_EDGE_ASSET_UNIVERSE_ROTATION_CANDIDATE_ID,
+        BROAD_NO_EDGE_MULTI_HORIZON_SIGNAL_CANDIDATE_ID,
+        BROAD_NO_EDGE_REGIME_COST_ROBUSTNESS_CANDIDATE_ID,
+        BROAD_NO_EDGE_DATA_GAP_AUDIT_CANDIDATE_ID,
+        BROAD_NO_EDGE_CROSS_ASSET_RELATIVE_VALUE_CANDIDATE_ID,
+        BROAD_NO_EDGE_TAIL_RISK_CONVEXITY_CANDIDATE_ID,
+        BROAD_NO_EDGE_VOL_TARGET_DRAWDOWN_CANDIDATE_ID,
+    )
+    evidence["profit-evidence-engine"] = _json(
+        {
+            "status": "FORWARD_VALIDATION",
+            "historical_verdict": "HOLDOUT_EDGE",
+            "selected_candidate": {"candidate_id": "three_asset_fixed-w10"},
+            "forward": {
+                "track_key": "globalfixed",
+                "n_obs": 41,
+                "psr_vs_benchmark": 0.82727,
+                "threshold": 0.95,
+                "passed": False,
+            },
+        }
+    )
+
+    report = build_autonomous_work_execution(evidence, now=NOW)
+
+    assert report.selected_work is not None
+    assert report.selected_work.candidate_id == "wait-for-globalfixed-forward-edge"
+    assert report.selected_work.status == STATUS_OBSERVATION_WAIT
+    assert "41" in report.selected_work.reason_ko
+    assert "0.82727" in report.selected_work.reason_ko
+    assert "0.95" in report.selected_work.reason_ko
+    assert "no orders" in report.selected_work.safety_boundary
+
+
+def test_profit_forward_pass_emits_promotion_recheck_not_order_work() -> None:
+    evidence = _all_known_released_no_edge_evidence(
+        BROAD_NO_EDGE_ASSET_UNIVERSE_ROTATION_CANDIDATE_ID,
+        BROAD_NO_EDGE_MULTI_HORIZON_SIGNAL_CANDIDATE_ID,
+        BROAD_NO_EDGE_REGIME_COST_ROBUSTNESS_CANDIDATE_ID,
+        BROAD_NO_EDGE_DATA_GAP_AUDIT_CANDIDATE_ID,
+        BROAD_NO_EDGE_CROSS_ASSET_RELATIVE_VALUE_CANDIDATE_ID,
+        BROAD_NO_EDGE_TAIL_RISK_CONVEXITY_CANDIDATE_ID,
+        BROAD_NO_EDGE_VOL_TARGET_DRAWDOWN_CANDIDATE_ID,
+    )
+    evidence["profit-evidence-engine"] = _json(
+        {
+            "status": "FORWARD_EDGE_READY",
+            "historical_verdict": "HOLDOUT_EDGE",
+            "selected_candidate": {"candidate_id": "three_asset_fixed-w10"},
+            "forward": {
+                "track_key": "globalfixed",
+                "n_obs": 80,
+                "psr_vs_benchmark": 0.96,
+                "threshold": 0.95,
+                "passed": True,
+            },
+        }
+    )
+
+    report = build_autonomous_work_execution(evidence, now=NOW)
+
+    assert report.selected_work is not None
+    assert report.selected_work.candidate_id == "candidate-globalfixed-promotion-recheck"
+    assert report.selected_work.status == STATUS_EXECUTION_READY
+    assert report.selected_work.risk_grade == 2
+    assert report.selected_work.safety_impact == ()
+    assert "승격" in report.selected_work.next_action_ko
+    assert "주문" not in report.selected_work.next_action_ko
+
+
+def test_profit_forward_status_mismatch_stays_observation_wait() -> None:
+    evidence = _all_known_released_no_edge_evidence()
+    evidence["profit-evidence-engine"] = _json(
+        {
+            "status": "FORWARD_EDGE_READY",
+            "historical_verdict": "HOLDOUT_EDGE",
+            "selected_candidate": {"candidate_id": "three_asset_fixed-w10"},
+            "forward": {
+                "track_key": "globalfixed",
+                "n_obs": 80,
+                "psr_vs_benchmark": 0.96,
+                "threshold": 0.95,
+                "passed": False,
+            },
+        }
+    )
+
+    report = build_autonomous_work_execution(evidence, now=NOW)
+
+    assert report.selected_work is not None
+    assert report.selected_work.candidate_id == "wait-for-globalfixed-forward-edge"
+    assert report.selected_work.status == STATUS_OBSERVATION_WAIT
+
+
 def _source_refs(packet) -> set[str]:
     return set(packet.source_refs)

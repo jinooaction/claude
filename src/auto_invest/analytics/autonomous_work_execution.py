@@ -131,6 +131,8 @@ BROAD_NO_EDGE_VOL_TARGET_DRAWDOWN_CANDIDATE_ID = (
     "candidate-broad-no-edge-vol-target-drawdown-experiment"
 )
 WAIT_FOR_FRESH_EVIDENCE_CANDIDATE_ID = "wait-for-fresh-evidence"
+WAIT_FOR_GLOBALFIXED_FORWARD_EDGE_ID = "wait-for-globalfixed-forward-edge"
+GLOBALFIXED_PROMOTION_RECHECK_ID = "candidate-globalfixed-promotion-recheck"
 
 _REJECTED_STATUSES = {
     "reject",
@@ -160,6 +162,9 @@ _SOURCE_REFS: dict[str, str] = {
     ),
     "candidate-result-executor": (
         "automation/candidate-implementation-results:candidate_results.json"
+    ),
+    "profit-evidence-engine": (
+        "automation/profit-evidence-engine-last-run:profit_evidence.json"
     ),
     "rebalance-paper-forward": "automation/rebalance-paper-forward-last-run:LAST_RUN.md",
     "edge-autoarm": "automation/edge-autoarm-last-run:LAST_RUN.md",
@@ -3254,6 +3259,90 @@ def _observation_wait_packet(
     )
 
 
+def _profit_evidence_packet(payload: Any) -> WorkPacket | None:
+    if not isinstance(payload, Mapping):
+        return None
+    if _clean(payload.get("historical_verdict")).upper() != "HOLDOUT_EDGE":
+        return None
+    forward = payload.get("forward")
+    if not isinstance(forward, Mapping):
+        return None
+
+    selected = payload.get("selected_candidate")
+    selected_id = (
+        _clean(selected.get("candidate_id"), "unknown")
+        if isinstance(selected, Mapping)
+        else "unknown"
+    )
+    track = _clean(forward.get("track_key"), "globalfixed")
+    observations = _clean(forward.get("n_obs"), "unknown")
+    psr = _clean(forward.get("psr_vs_benchmark"), "unknown")
+    threshold = _clean(forward.get("threshold"), "0.95")
+    passed = _truthy(forward.get("passed")) and (
+        _clean(payload.get("status")).upper() == "FORWARD_EDGE_READY"
+    )
+    source_refs = (
+        _SOURCE_REFS["profit-evidence-engine"],
+        _SOURCE_REFS["rebalance-paper-forward"],
+        _SOURCE_REFS["capital-path-readiness"],
+        _SOURCE_REFS["released-work"],
+    )
+
+    if passed:
+        status = STATUS_EXECUTION_READY
+        candidate_id = GLOBALFIXED_PROMOTION_RECHECK_ID
+        title = "globalfixed 승격 관문 재검토"
+        risk_grade = 2
+        priority_score = 9600
+        reason = (
+            f"{selected_id}의 역사 검증과 {track} 전진 기준이 모두 통과했다: "
+            f"관측 {observations}, PSR {psr} >= {threshold}."
+        )
+        next_action = (
+            "다중검정, 전략 지문, hardened canary, 자본 사다리 증거를 다시 계산해 "
+            "승격 가능 여부를 별도 보고한다."
+        )
+    else:
+        status = STATUS_OBSERVATION_WAIT
+        candidate_id = WAIT_FOR_GLOBALFIXED_FORWARD_EDGE_ID
+        title = "globalfixed 전진 엣지 관찰"
+        risk_grade = 0
+        priority_score = 1
+        reason = (
+            f"{selected_id}은 역사 검증을 통과했지만 {track} 전진 기준은 미달이다: "
+            f"관측 {observations}, PSR {psr} < {threshold}."
+        )
+        next_action = (
+            "같은 전략 지문으로 새 독립 forward 관측을 누적하고 profit-evidence와 "
+            "autonomous-work를 다시 평가한다."
+        )
+
+    autonomy_level, start_guidance, completion_gates = _execution_contract(
+        status,
+        risk_grade,
+        (),
+    )
+    return WorkPacket(
+        packet_id=_packet_id(candidate_id, title, source_refs),
+        candidate_id=candidate_id,
+        domain_key="strategy_design",
+        title_ko=title,
+        work_type="forward_edge_watch" if not passed else "promotion_recheck",
+        risk_grade=risk_grade,
+        safety_impact=(),
+        priority_score=priority_score,
+        status=status,
+        autonomy_level=autonomy_level,
+        reason_ko=reason,
+        next_action_ko=next_action,
+        start_guidance_ko=start_guidance,
+        completion_gates=completion_gates,
+        required_inputs=source_refs,
+        safety_boundary=SAFETY_INVARIANTS,
+        source_refs=source_refs,
+    )
+
+
 def _macro_growth_packet(
     template: MacroGrowthCandidateTemplate,
     *,
@@ -4362,6 +4451,9 @@ def build_autonomous_work_execution(
     )
     if source_diversification_packet is not None:
         packets.append(source_diversification_packet)
+    profit_evidence_packet = _profit_evidence_packet(parsed.get("profit-evidence-engine"))
+    if profit_evidence_packet is not None:
+        packets.append(profit_evidence_packet)
 
     ordered = _dedupe_packets(packets)
     macro_candidate_map = _macro_candidate_map(ordered)
@@ -4396,36 +4488,45 @@ def build_autonomous_work_execution(
             ),
         ]
     )
-    broad_frontier_packet = _broad_frontier_expansion_packet(
-        ordered,
-        parsed,
-        surfaces,
+    broad_frontier_packet = (
+        None
+        if profit_evidence_packet is not None
+        else _broad_frontier_expansion_packet(
+            ordered,
+            parsed,
+            surfaces,
+        )
     )
     if broad_frontier_packet is not None:
         ordered = _dedupe_packets([*ordered, broad_frontier_packet])
-    ordered = _dedupe_packets(
-        [
-            *ordered,
-            *_broad_validation_failure_frontier_packets(
-                ordered,
-                parsed,
-                surfaces,
-                broad_validation_failure_frontier_map,
-            ),
-        ]
+    if profit_evidence_packet is None:
+        ordered = _dedupe_packets(
+            [
+                *ordered,
+                *_broad_validation_failure_frontier_packets(
+                    ordered,
+                    parsed,
+                    surfaces,
+                    broad_validation_failure_frontier_map,
+                ),
+            ]
+        )
+        ordered = _dedupe_packets(
+            [
+                *ordered,
+                *_broad_no_edge_frontier_packets(
+                    ordered,
+                    parsed,
+                    surfaces,
+                    broad_no_edge_frontier_map,
+                ),
+            ]
+        )
+    wait_packet = (
+        None
+        if profit_evidence_packet is not None
+        else _observation_wait_packet(ordered, surfaces)
     )
-    ordered = _dedupe_packets(
-        [
-            *ordered,
-            *_broad_no_edge_frontier_packets(
-                ordered,
-                parsed,
-                surfaces,
-                broad_no_edge_frontier_map,
-            ),
-        ]
-    )
-    wait_packet = _observation_wait_packet(ordered, surfaces)
     if wait_packet is not None:
         ordered = _dedupe_packets([*ordered, wait_packet])
     ranked = tuple(
@@ -4517,8 +4618,10 @@ __all__ = [
     "SCHEMA_VERSION",
     "SIGNAL_DIVERSIFICATION_EDGE_EXPERIMENT_CANDIDATE_ID",
     "STATUS_BLOCKED",
+    "GLOBALFIXED_PROMOTION_RECHECK_ID",
     "STATUS_EXECUTION_READY",
     "STATUS_OBSERVATION_WAIT",
+    "WAIT_FOR_GLOBALFIXED_FORWARD_EDGE_ID",
     "STATUS_OPERATOR_APPROVAL_REQUIRED",
     "STATUS_RELEASED",
     "STATUS_SUPPRESSED",

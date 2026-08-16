@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Forward Edge Watch Work Packet",
+  "type": "object",
+  "required": ["candidate_id", "status", "risk_grade", "safety_impact"],
+  "properties": {
+    "candidate_id": {
+      "enum": ["wait-for-globalfixed-forward-edge", "candidate-globalfixed-promotion-recheck"]
+    },
+    "status": {"enum": ["OBSERVATION_WAIT", "EXECUTION_READY"]},
+    "risk_grade": {"type": "integer", "maximum": 2},
+    "safety_impact": {"type": "array", "maxItems": 0}
+  },
+  "additionalProperties": true
+}
