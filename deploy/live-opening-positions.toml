@@ -1,0 +1,25 @@
+# Verified KIS account lots that existed before auto-invest submitted live orders.
+# This file seeds performance reconstruction only. It does not create fills,
+# positions, orders, or broker activity.
+source_run_id = "27405479242"
+observed_at_utc = "2026-06-12T08:54:00Z"
+
+[[positions]]
+symbol = "BHP"
+qty = 1
+avg_cost_usd = "47.9700"
+
+[[positions]]
+symbol = "MRK"
+qty = 3
+avg_cost_usd = "79.0900"
+
+[[positions]]
+symbol = "ORANY"
+qty = 28
+avg_cost_usd = "11.1950"
+
+[[positions]]
+symbol = "RELX"
+qty = 6
+avg_cost_usd = "54.1550"

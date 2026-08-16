@@ -33,6 +33,7 @@ from auto_invest.backtest.metrics import (
     total_return_pct,
     win_loss_stats,
 )
+from auto_invest.performance.opening_positions import OpeningPosition
 
 
 def _fmt_ts(dt: datetime) -> str:
@@ -317,6 +318,8 @@ def _read_live_fills(
 
 def reconstruct(
     fills: list[FillRecord],
+    *,
+    opening_positions: tuple[OpeningPosition, ...] = (),
 ) -> tuple[dict[str, PositionState], dict[str, RulePerformance], Decimal, list[str]]:
     """체결 시퀀스로부터 종목별 포지션·룰별 성과·총 투입액·경고를 재구성.
 
@@ -327,9 +330,23 @@ def reconstruct(
     SELL 수량이 보유를 초과하면(공매도/데이터 품질 문제) 경고를 남기고 보유
     수량까지만 실현 손익을 계산한다(음수 포지션을 만들지 않는다).
     """
-    positions: dict[str, PositionState] = {}
+    positions: dict[str, PositionState] = {
+        opening.symbol: PositionState(
+            opening.symbol,
+            opening.qty,
+            opening.avg_cost_usd,
+            Decimal("0"),
+        )
+        for opening in opening_positions
+    }
     rules: dict[str, RulePerformance] = {}
-    gross_invested = Decimal("0")
+    gross_invested = sum(
+        (
+            opening.avg_cost_usd * Decimal(opening.qty)
+            for opening in opening_positions
+        ),
+        Decimal("0"),
+    )
     warnings: list[str] = []
 
     for f in fills:
@@ -391,7 +408,11 @@ def net_cash_flow_usd(fills: list[FillRecord]) -> Decimal:
 # --------------------------------------------------- risk-adjusted (US2, P2)
 
 
-def realized_trades(fills: list[FillRecord]) -> list[ClosedTrade]:
+def realized_trades(
+    fills: list[FillRecord],
+    *,
+    opening_positions: tuple[OpeningPosition, ...] = (),
+) -> list[ClosedTrade]:
     """체결 시퀀스에서 청산(매도)마다 실현 손익 한 건을 뽑아낸다.
 
     평균단가 재구성은 backtest/metrics.py 의 `realized_closed_trades` 단일 정의에
@@ -399,7 +420,18 @@ def realized_trades(fills: list[FillRecord]) -> list[ClosedTrade]:
     체결 ts_utc 의 날짜 부분을 거래일로 쓴다. 보유 초과 매도는 공용 정의가
     보유분까지만 실현 처리한다(음수 포지션 없음).
     """
-    return realized_closed_trades(
+    opening_fills = [
+        TradeFill(
+            symbol=opening.symbol,
+            side="BUY",
+            qty=opening.qty,
+            price_usd=opening.avg_cost_usd,
+            date="1970-01-01",
+            rule_id="(verified-opening-position)",
+        )
+        for opening in opening_positions
+    ]
+    live_fills = [
         TradeFill(
             symbol=f.symbol,
             side=f.side,
@@ -409,18 +441,22 @@ def realized_trades(fills: list[FillRecord]) -> list[ClosedTrade]:
             rule_id=f.rule_id,
         )
         for f in fills
-    )
+    ]
+    return realized_closed_trades([*opening_fills, *live_fills])
 
 
 def compute_risk_metrics(
-    fills: list[FillRecord], *, starting_capital: Decimal
+    fills: list[FillRecord],
+    *,
+    starting_capital: Decimal,
+    opening_positions: tuple[OpeningPosition, ...] = (),
 ) -> RiskMetrics | None:
     """위험조정 지표를 계산한다. 청산이 한 건도 없으면 None (US2 AC2: 거래 없음 N/A).
 
     샤프·최대낙폭·총수익률은 spec 008 `backtest/metrics.py` 함수를 그대로 호출해
     백테스트·캐너리·라이브가 한 잣대로 비교되도록 한다 (FR-007, SC-002).
     """
-    trades = realized_trades(fills)
+    trades = realized_trades(fills, opening_positions=opening_positions)
     if not trades:
         return None
 
@@ -713,13 +749,16 @@ def compute_performance(
     since: datetime,
     until: datetime,
     starting_capital: Decimal | None = None,
+    opening_positions: tuple[OpeningPosition, ...] = (),
 ) -> PerformanceReport:
     """정규화된 체결 + 시세(marks)로 성과 리포트를 합성한다. 순수 함수.
 
     `starting_capital` 은 위험조정 지표의 자산곡선 기준 자본이다. 미지정 시 기간
     내 총 투입액(gross_invested)을 대용으로 쓴다(투입 자본 대비 실현 수익률 관점).
     """
-    positions, rules, gross_invested, warnings = reconstruct(fills)
+    positions, rules, gross_invested, warnings = reconstruct(
+        fills, opening_positions=opening_positions
+    )
 
     per_symbol: list[SymbolPerformance] = []
     unmarked: list[str] = []
@@ -766,7 +805,11 @@ def compute_performance(
         if starting_capital is not None and starting_capital > 0
         else gross_invested
     )
-    risk = compute_risk_metrics(fills, starting_capital=cap)
+    risk = compute_risk_metrics(
+        fills,
+        starting_capital=cap,
+        opening_positions=opening_positions,
+    )
 
     return PerformanceReport(
         mode=mode,
@@ -794,6 +837,7 @@ def build_performance_report(
     until: datetime,
     marks: dict[str, Decimal] | None = None,
     starting_capital: Decimal | None = None,
+    opening_positions: tuple[OpeningPosition, ...] = (),
 ) -> PerformanceReport:
     """audit_log 에서 체결을 읽어 성과 리포트를 만든다 (read-only 진입점)."""
     fills = read_fills(conn, mode=mode, since=since, until=until)
@@ -804,6 +848,7 @@ def build_performance_report(
         since=since,
         until=until,
         starting_capital=starting_capital,
+        opening_positions=opening_positions,
     )
 
 

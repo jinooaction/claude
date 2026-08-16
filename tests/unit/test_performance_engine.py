@@ -26,6 +26,7 @@ from auto_invest.performance.engine import (
     reconstruct,
     render_text,
 )
+from auto_invest.performance.opening_positions import OpeningPosition
 from auto_invest.persistence import audit, db
 from auto_invest.persistence.audit import (
     FillPayload,
@@ -79,6 +80,26 @@ def test_realized_pnl_on_closed_round() -> None:
     assert rep.total_pnl_usd == Decimal("10")
     # 투입 = 100, 수익률 = 10/100*100 = 10%
     assert rep.return_pct == Decimal("10")
+
+
+def test_verified_opening_position_supports_external_lot_sale() -> None:
+    fills = [_fill("BHP", "SELL", 1, "82.52")]
+    opening = (OpeningPosition("BHP", 1, Decimal("47.97")),)
+
+    rep = compute_performance(
+        fills,
+        {},
+        mode="live",
+        since=SINCE,
+        until=UNTIL,
+        opening_positions=opening,
+    )
+
+    assert rep.fills_count == 1
+    assert rep.gross_invested_usd == Decimal("47.97")
+    assert rep.realized_pnl_usd == Decimal("34.55")
+    assert rep.total_pnl_usd == Decimal("34.55")
+    assert rep.data_quality_warnings == []
 
 
 def test_unrealized_pnl_open_position() -> None:

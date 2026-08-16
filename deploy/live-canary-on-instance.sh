@@ -154,8 +154,16 @@ place_order() {
 }
 
 sync_fills() {
+    local -a date_args=()
+    if [[ "$#" -eq 2 ]]; then
+        [[ "$1" =~ ^[0-9]{8}$ && "$2" =~ ^[0-9]{8}$ ]] \
+            || die "fill recovery dates must use YYYYMMDD"
+        date_args=(--order-start-date "$1" --order-end-date "$2")
+    elif [[ "$#" -ne 0 ]]; then
+        die "fills accepts zero args or start/end dates"
+    fi
     require_repo
-    run_cli fills --sync --db data/auto_invest.db --env .env
+    run_cli fills --sync --db data/auto_invest.db --env .env "${date_args[@]}"
 }
 
 measure_profit() {
@@ -168,6 +176,7 @@ measure_profit() {
         --capital "${capital}" \
         --db data/auto_invest.db \
         --env .env \
+        --opening-positions deploy/live-opening-positions.toml \
         --snapshot \
         --slippage \
         --format json
@@ -186,8 +195,8 @@ main() {
             verify_order_request "$@"
             ;;
         fills)
-            [[ "$#" -eq 0 ]] || die "fills takes no args"
-            sync_fills
+            [[ "$#" -eq 0 || "$#" -eq 2 ]] || die "fills accepts zero args or start/end dates"
+            sync_fills "$@"
             ;;
         profit)
             [[ "$#" -eq 1 ]] || die "profit requires capital"

@@ -236,6 +236,18 @@ case "${cmd}" in
     live-canary-fills)
         exec sudo -n /usr/local/sbin/auto-invest-live-canary fills
         ;;
+    live-canary-fills\ *)
+        read -r action start_date end_date extra <<<"${cmd}"
+        if [[ "${action:-}" == "live-canary-fills" \
+            && -z "${extra:-}" \
+            && "${start_date:-}" =~ ^[0-9]{8}$ \
+            && "${end_date:-}" =~ ^[0-9]{8}$ ]]; then
+            exec sudo -n /usr/local/sbin/auto-invest-live-canary fills \
+                "${start_date}" "${end_date}"
+        fi
+        echo "refused command: ${cmd}" >&2
+        exit 126
+        ;;
     live-canary-profit\ *)
         capital="${cmd#live-canary-profit }"
         if [[ "${capital}" =~ ^[0-9]+([.][0-9]+)?$ ]]; then

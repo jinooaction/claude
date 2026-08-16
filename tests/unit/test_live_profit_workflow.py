@@ -14,6 +14,9 @@ def test_live_profit_workflow_is_fixed_read_only_observation() -> None:
     text = _read("live-profit-evidence.yml")
 
     assert '"live-canary-fills"' in text
+    assert "order_start_date" in text
+    assert "order_end_date" in text
+    assert 'remote_command="live-canary-fills ${ORDER_START_DATE} ${ORDER_END_DATE}"' in text
     assert '"live-canary-profit ${CAP}"' in text
     assert "live-canary-order" not in text
     assert "--confirm-live" not in text
@@ -49,8 +52,10 @@ def test_live_profit_fixed_commands_are_installed_by_ssh_boundary() -> None:
     )
 
     assert "live-canary-fills)" in repair
+    assert "live-canary-fills\\ *)" in repair
     assert "live-canary-profit\\ *)" in repair
     assert "auto-invest-live-canary fills" in repair
     assert "auto-invest-live-canary profit" in repair
     assert "fills --sync" in helper
+    assert "--opening-positions deploy/live-opening-positions.toml" in helper
     assert "performance" in helper

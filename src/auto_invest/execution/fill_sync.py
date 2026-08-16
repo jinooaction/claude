@@ -112,6 +112,7 @@ class PlannedFill:
     qty: int
     price_usd: Decimal
     kis_fill_id: str
+    executed_at_utc: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -193,6 +194,7 @@ def plan_fill_ingestion(
                         qty=delta,
                         price_usd=price,
                         kis_fill_id=f"{order.kis_order_id}:{broker_filled}",
+                        executed_at_utc=execution.ordered_at_utc,
                     )
                 )
 
@@ -464,13 +466,24 @@ def _apply_fill(conn: sqlite3.Connection, fill: PlannedFill, ts_iso: str) -> boo
     `kis_fill_id` rows are already represented in the ledger, so they must not
     append another audit event or move the rebuildable position cache.
     """
+    fill_ts_iso = (
+        _iso_ms(fill.executed_at_utc.astimezone(UTC))
+        if fill.executed_at_utc is not None
+        else ts_iso
+    )
     cursor = conn.execute(
         """
         INSERT OR IGNORE INTO fills
             (order_correlation_id, kis_fill_id, qty, price_usd, executed_at_utc)
         VALUES (?, ?, ?, ?, ?)
         """,
-        (fill.correlation_id, fill.kis_fill_id, fill.qty, str(fill.price_usd), ts_iso),
+        (
+            fill.correlation_id,
+            fill.kis_fill_id,
+            fill.qty,
+            str(fill.price_usd),
+            fill_ts_iso,
+        ),
     )
     if cursor.rowcount == 0:
         return False
@@ -481,12 +494,12 @@ def _apply_fill(conn: sqlite3.Connection, fill: PlannedFill, ts_iso: str) -> boo
             kis_fill_id=fill.kis_fill_id,
             qty=fill.qty,
             price_usd=str(fill.price_usd),
-            executed_at_utc=ts_iso,
+            executed_at_utc=fill_ts_iso,
         ),
         rule_id=fill.rule_id,
         symbol=fill.symbol,
         correlation_id=fill.correlation_id,
-        ts_utc=ts_iso,
+        ts_utc=fill_ts_iso,
     )
     positions_mod.update_from_fill(
         conn,
@@ -494,7 +507,7 @@ def _apply_fill(conn: sqlite3.Connection, fill: PlannedFill, ts_iso: str) -> boo
         side=Side(fill.side),
         qty=fill.qty,
         price_usd=fill.price_usd,
-        ts_utc=ts_iso,
+        ts_utc=fill_ts_iso,
     )
     return True
 
@@ -551,6 +564,8 @@ async def sync_fills(
     account: str,
     markets: Sequence[str] = US_ORDER_EXCHANGES,
     now: datetime | None = None,
+    order_start_date_yyyymmdd: str | None = None,
+    order_end_date_yyyymmdd: str | None = None,
 ) -> FillSyncResult:
     """라이브 열린 주문의 체결을 브로커에서 당겨와 장부에 반영한다(읽기-기반 적재).
 
@@ -571,13 +586,16 @@ async def sync_fills(
         )
 
     try:
+        query_start = order_start_date_yyyymmdd or moment.strftime("%Y%m%d")
+        query_end = order_end_date_yyyymmdd or query_start
         executions = await get_order_executions_resolving_market(
             broker,
             access_token=access_token,
             app_key=app_key,
             app_secret=app_secret,
             account=account,
-            order_date_yyyymmdd=moment.strftime("%Y%m%d"),
+            order_date_yyyymmdd=query_start,
+            end_date_yyyymmdd=query_end,
             markets=markets,
         )
     except Exception as exc:  # noqa: BLE001 — 거래 무중단: 격리해 ERROR 로 기록.

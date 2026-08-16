@@ -53,3 +53,18 @@ def test_sync_without_env_is_usage_error(tmp_path: Path) -> None:
 def test_missing_db_is_error(tmp_path: Path) -> None:
     result = runner.invoke(app, ["fills", "--db", str(tmp_path / "nope.db")])
     assert result.exit_code == 1
+
+
+def test_historical_end_date_requires_valid_start_date(tmp_path: Path) -> None:
+    db_path = _seed_db(tmp_path)
+    missing_start = runner.invoke(
+        app,
+        ["fills", "--db", str(db_path), "--order-end-date", "20260623"],
+    )
+    invalid_start = runner.invoke(
+        app,
+        ["fills", "--db", str(db_path), "--order-start-date", "20260230"],
+    )
+
+    assert missing_start.exit_code == 2
+    assert invalid_start.exit_code == 2

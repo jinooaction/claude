@@ -85,5 +85,5 @@ def test_deployed_baseline_file_is_valid() -> None:
     """
     deployed = REPO_ROOT / "deploy" / "external-holdings.toml"
     holdings = load_external_holdings(deployed)
-    assert holdings, "운영 기준선이 비어 있으면 이 파일을 지우는 게 정직하다"
+    assert holdings == {"ORANY": 28}
     assert all(qty > 0 for qty in holdings.values())
