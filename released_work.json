@@ -1,5 +1,5 @@
 {
-  "commit": "5572f1e46ab658433f35885571402d17b1abf53f",
+  "commit": "9b5346fcd617f8270a2a311095fc4b77c0856ff2",
   "overall_status": "OK",
   "released_work": [
     {
@@ -525,7 +525,7 @@
       "status": "released"
     }
   ],
-  "run_id": "31917061195",
+  "run_id": "31918426045",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -805,7 +805,11 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "072-candidate-evidence-diagnostics"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "140-heldout-exploration-canary"
     }
   ],
-  "timestamp_utc": "2026-08-16T00:22:39.716500Z"
+  "timestamp_utc": "2026-08-16T00:56:59.976777Z"
 }
