@@ -33,15 +33,28 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `046d0f8` — Merge pull request #613 from jinooaction/codex/profit-engine-redesign-isolated |
-| main 테스트 | #613 최종 커밋 기준 `uv run pytest` → 2807 passed, 5 skipped. 5개 skip은 `KIS_LIVE_TEST=1` opt-in live smoke다. |
-| main 린트 | #613 최종 커밋 기준 `uv run ruff check src tests` → All checks passed. |
-| 열린 PR | 없음(#613은 merge 완료, 이 HANDOFF 갱신 전 `gh pr list` 확인 기준). |
-| 출시 완료 스펙 | 최신 기능: #613(스펙 138, 시간 분리·비용 차감 수익 증거 엔진과 `globalfixed` 전진 관찰). 직전: #611(스펙 137), #609(스펙 136), #607(스펙 135), #605(스펙 134), #603(스펙 133), #601(스펙 132). 이전 스펙은 아래 과거 관찰과 개별 HANDOFF 파일을 참고한다. |
-| 골격 스펙 | 없음. `.specify/feature.json`은 완료 스펙 `specs/138-profit-evidence-engine`을 가리키고, `tasks.md`는 T001~T022 완료 상태다. |
-| 최근 출시 작업 | #613은 고정된 12개 후보를 2007년 전후로 시간 분리하고 연 50bp 비용을 차감해 `three_asset_fixed-w10`을 찾았다. 2007년 이후 연복리 8.76%, 샤프 1.75, 최대낙폭 4.61%로 벤치마크 8.29%, 1.26, 17.27%보다 우수해 `HOLDOUT_EDGE`다. |
-| 활성 작업 | `globalfixed` 전진 관찰 41회, PSR 0.82727로 기준 0.95 미만이라 `FORWARD_VALIDATION`이다. 기존 money-path는 `PREVIEW_ONLY`/`NO_EDGE_YET`, edge-autoarm은 `WAIT_EDGE`/`NO_EDGE`이므로 실주문은 불가하다. |
-| 안전 경계 | 이번 갱신은 등급 2 인계 보정이다. #613은 후보 발견·검증·읽기 전용 관찰만 바꿨다. 실제 주문, 자본 배분, live 재무장, whitelist/caps, 손실 예산, 비밀값, 감사 로그, 헌법, kernel manifest는 바꾸지 않았다. 배포 run `31915116844`와 profit-evidence run `31915116859`는 성공했다. 수동 KIS smoke run `31915164816`은 시세·현금·보유·총자산 4개 통과 후 최근 주문 조회 KIS API HTTP 500으로 1개 실패했다. |
+| 마지막 main 커밋 | `fe240a5` — Merge pull request #615 from jinooaction/codex/forward-edge-watch-kis-range |
+| main 테스트 | #615 최종 커밋 기준 `uv run pytest` → 2813 passed, 5 skipped. 머지 후 KIS live smoke 5개는 별도로 모두 통과했다. |
+| main 린트 | #615 최종 커밋 기준 `uv run ruff check src tests` → All checks passed. |
+| 열린 PR | 없음(#615은 merge 완료, 이 HANDOFF 갱신 전 확인 기준). |
+| 출시 완료 스펙 | 최신 기능: #615(스펙 139, `globalfixed` 전진 엣지 자율 추적과 KIS 최근 주문 범위 조회), #613(스펙 138, 시간 분리·비용 차감 수익 증거 엔진). 직전: #611(스펙 137), #609(스펙 136), #607(스펙 135). |
+| 골격 스펙 | 없음. `.specify/feature.json`은 완료 스펙 `specs/139-forward-edge-watch-kis-range`를 가리키고, `tasks.md`는 T001~T011 완료 상태다. |
+| 최근 출시 작업 | #615는 KIS 최근 주문 조회를 최대 21회에서 거래소별 범위 3회로 줄이면서 거래소 하나의 실패도 계속 전체 실패로 처리한다. 자율 작업 루프는 profit-evidence를 읽어 `wait-for-globalfixed-forward-edge`를 직접 선택한다. |
+| 활성 작업 | `three_asset_fixed-w10`은 `HOLDOUT_EDGE`지만 `globalfixed` 전진 관찰 41회, PSR 0.82727 < 0.95라 `OBSERVATION_WAIT`다. 일반 후보를 반복 생성하지 않고 같은 전략 지문의 독립 forward 관측을 기다린다. |
+| 안전 경계 | 실제 주문, 자본 배분, live 재무장, PSR 기준, whitelist/caps, 손실 예산, 비밀값, 감사 로그, 헌법, kernel은 바꾸지 않았다. deploy run `31916736255`, autonomous-work run `31916736280`, KIS smoke run `31916736347`은 모두 성공했다. smoke는 시세·현금·보유·총자산·최근 주문 5/5 통과, 최근 주문 0건·열린 미체결 0건이다. |
+
+## 최근 관찰 — 2026-08-16 KST (#615 전진 엣지 추적과 KIS 범위 조회 완료)
+
+현재 `main` 최신 기능 머지는 `fe240a5`(#615)이고 기능 커밋은 `51f9cbe`다.
+
+- **문제 정의**: 스펙 138이 수익 후보를 찾았지만 autonomous-work는 profit-evidence를 읽지 않아 일반 `wait-for-fresh-evidence`로 돌아갔다. 동시에 KIS smoke는 최근 7일을 날짜별·거래소별 최대 21회 조회해 한 날짜의 외부 500에 노출됐다.
+- **구현 상태**: 주문내역 함수에 시작일~종료일 범위를 추가해 live smoke를 거래소별 3회로 줄였다. NASD·NYSE·AMEX 중 하나라도 실패하면 전체 오류를 전파하는 fail-closed는 유지한다. autonomous-work는 profit-evidence JSON을 읽고 미달이면 `wait-for-globalfixed-forward-edge`, 상태와 forward pass가 모두 참이면 주문이 아닌 `candidate-globalfixed-promotion-recheck`를 발행한다.
+- **현재 선택**: 최신 autonomous-work는 `wait-for-globalfixed-forward-edge` / `OBSERVATION_WAIT`다. 이유는 `three_asset_fixed-w10` 역사 통과, `globalfixed` 관측 41, PSR 0.82727 < 0.95다.
+- **KIS 확인**: merge 뒤 run `31916736347`이 5/5 통과했다. 키 유효, AAPL 시세, 구매 가능 현금 $934.27, 보유 ORANY 28주, 총자산 $1466.83, 최근 주문 0건, 열린 미체결 0건이다.
+- **post-merge 자동화**: deploy `31916736255`, autonomous-work `31916736280`, released-work `31916736259`, KIS smoke `31916736347`이 모두 success다.
+- **검증**: focused 73 passed, 전체 2813 passed/5 skipped, ruff, diff, HANDOFF 사실 검증, 엄격 하네스 14/14, PR 품질 관문을 통과했다.
+- **안전 경계**: 브로커 읽기 호출량만 줄였다. 주문 제출·취소, 자본, 전략 지문, PSR 0.95, 다중검정, hardened canary, 자본 사다리는 그대로다.
+- **상세 인계**: `HANDOFF-145-FORWARD-EDGE-WATCH-KIS-RANGE.md`.
 
 ## 최근 관찰 — 2026-08-16 KST (#613 시간 분리 수익 증거 엔진 완료)
 

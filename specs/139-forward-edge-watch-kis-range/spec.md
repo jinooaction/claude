@@ -2,7 +2,7 @@
 
 **Feature Branch**: `codex/forward-edge-watch-kis-range`
 **Created**: 2026-08-16
-**Status**: Draft
+**Status**: Complete
 
 ## User Scenarios & Testing
 

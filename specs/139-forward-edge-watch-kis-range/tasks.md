@@ -9,5 +9,5 @@
 - [x] T007 현재 sidecar 로컬 재생
 - [x] T008 focused 및 전체 pytest, ruff, diff 검증
 - [x] T009 HANDOFF facts, strict harness, PR quality gate 검증
-- [ ] T010 PR 머지, 배포, KIS smoke, sidecar 확인
-- [ ] T011 HANDOFF 갱신과 released-work 소비 확인
+- [x] T010 PR 머지, 배포, KIS smoke, sidecar 확인
+- [x] T011 HANDOFF 갱신과 released-work 소비 확인
