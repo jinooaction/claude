@@ -39,7 +39,7 @@ def test_protected_paths_are_a6_safety_boundary_changes(
 @pytest.mark.parametrize(
     ("summary", "surface"),
     [
-        ("raise cap from 5 to 10 percent", BoundarySurface.POSITION_CAPS),
+        ("raise position cap from 5 to 10 percent", BoundarySurface.POSITION_CAPS),
         ("add a new whitelist symbol", BoundarySurface.WHITELIST),
         ("change the drawdown budget for the ladder", BoundarySurface.LOSS_BUDGET),
         ("grant AUTO_INVEST_MODE=live authority", BoundarySurface.LIVE_AUTHORITY),
@@ -95,3 +95,17 @@ def test_non_boundary_change_keeps_requested_level_and_can_run() -> None:
     assert decision.surfaces == frozenset()
     assert decision.autonomous_allowed is True
     assert decision.operator_approval_required is False
+
+
+def test_capital_ladder_execution_is_a4_not_a_position_cap_change() -> None:
+    change = ProposedChange(
+        summary="capital ladder write sentinel action=PROMOTE",
+        paths=("automation/rebalance-live.request",),
+        requested_level=AutonomyLevel.CAPITAL_SCALING,
+    )
+
+    decision = assert_autonomous_boundary_allowed(change)
+
+    assert decision.level is AutonomyLevel.CAPITAL_SCALING
+    assert decision.surfaces == frozenset()
+    assert decision.autonomous_allowed is True

@@ -113,3 +113,11 @@ def test_cli_write_boundary_helper_allows_non_boundary_path() -> None:
         paths=("automation/reassign-last-run/LAST_RUN.md",),
         requested_level=AutonomyLevel.PROPOSAL,
     )
+
+
+def test_cli_write_boundary_helper_allows_predeclared_capital_ladder() -> None:
+    _assert_autonomous_write_allowed(
+        summary="capital ladder write sentinel action=PROMOTE",
+        paths=("automation/rebalance-live.request",),
+        requested_level=AutonomyLevel.CAPITAL_SCALING,
+    )
