@@ -32,8 +32,8 @@
 ## Phase 6: Validation and Delivery
 
 - [x] T013 Run focused and full pytest, ruff, YAML, diff, strict harness, and HANDOFF checks.
-- [ ] T014 Refresh HANDOFF, commit, push, open a grade-2 PR, pass quality gate, merge, and verify deployment.
-- [ ] T015 Run the no-live workflow and report the real historical verdict before any live strategy change.
+- [x] T014 Refresh HANDOFF, commit, push, open a grade-2 PR, pass quality gate, merge, and verify deployment.
+- [x] T015 Run the no-live workflow and report the real historical verdict before any live strategy change.
 
 ## Dependencies
 

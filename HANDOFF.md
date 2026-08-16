@@ -33,15 +33,28 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `d28eb71` — Merge pull request #635 from jinooaction/Codex/144-autonomous-production-approval-closeout |
-| main 테스트 | #635 머지 코드 기준 `uv run pytest` → 2864 passed, 6 skipped. |
-| main 린트 | #635 머지 코드 기준 `uv run ruff check src tests` → All checks passed. |
+| 마지막 main 커밋 | `bc33a7f` — Merge pull request #637 from jinooaction/Codex/145-ml-edge-ensemble |
+| main 테스트 | #637 머지 코드 기준 `uv run pytest` → 2870 passed, 6 skipped. |
+| main 린트 | #637 머지 코드 기준 `uv run ruff check src tests` → All checks passed. |
 | 열린 PR | 없음. |
-| 출시 완료 스펙 | 최신 기능: #633/#634(스펙 144, production 사람 승인을 기계 승인으로 대체하고 실서버 주문 없는 검증 완료), #632(스펙 143 첫 양의 실계좌 손익 인계), #631(KIS 잔고 평가값 mark). |
-| 골격 스펙 | 없음. 스펙 144의 T001~T011이 모두 완료됐다. |
-| 최근 출시 작업 | #633은 `main`·이벤트·무장·자본을 검증하는 `autonomous_live_approval` job을 추가했고, #634는 그 job의 저장소 checkout 누락을 고쳤다. |
-| 활성 작업 | 없음. production required reviewer 0명, 허용 branch `main` 하나, 환경 비밀키 유지 상태에서 예약 실행이 모든 기존 게이트를 통과할 때만 자동 실주문한다. |
+| 출시 완료 스펙 | 최신 기능: #637(스펙 145, AI 확신도 기반 추세 앙상블 no-live 자동 연구), #633/#634(스펙 144, production 사람 승인을 기계 승인으로 대체), #632(스펙 143 첫 양의 실계좌 손익 인계). |
+| 골격 스펙 | 없음. 스펙 145의 T001~T015가 모두 완료됐다. |
+| 최근 출시 작업 | #637은 Ridge와 Gradient Boosting의 표본 외 예측을 기존 추세 비중에 확신도만큼 섞고, 매주 비용·통계 관문을 다시 검사하는 sidecar를 추가했다. |
+| 활성 작업 | 없음. AI 후보는 현재 `NO_EDGE`라 live 전략을 교체하지 않았다. 별도로 기존 production 예약 실행은 모든 기존 게이트를 통과할 때만 자동 실주문한다. |
 | 안전 경계 | 헌법 X.4 v7.0.0. 단 1은 실계좌 NAV의 20%인 293달러다. K1/K2, 손실 예산 20%, 정규장, production 기계 승인, 추가-전용 감사 로그를 유지한다. production 개인키는 환경 비밀값에만 있고 서버는 공개키로 검증한다. ORANY 28주는 비관리 보유로 자동 매도되지 않는다. |
+
+## 최근 관찰 — 2026-08-16 KST (#637 AI 확신도 기반 추세 앙상블 출시)
+
+현재 `main` 최신 머지는 `bc33a7f`(#637)이고 기능 커밋은 `1f48d12`다.
+
+- **새 연구 구조**: 기존 3자산 추세 비중을 기본으로 유지하고, 정규화 선형 모델과 얕은 비선형 부스팅 모델이 주식·채권·금의 다음 달 수익을 예측한다. 검증 오차와 모델 불일치가 작을 때만 AI 비중 기울기를 키운다.
+- **자동화**: `ML edge ensemble research`가 매주 공개 자료를 다시 학습·검증해 `automation/ml-edge-ensemble-last-run`에 JSON·Markdown·후보 객체를 발행한다. 모든 관문을 통과한 `eligible=true` 후보만 자율 작업 루프가 읽는다.
+- **실제 판정**: main run `31928435772`는 43개 표본 외 구간, 509개월에서 `NO_EDGE`를 확정했다. 25bp 비용 후 AI 후보는 CAGR 9.55%, Sharpe 2.037, 최대 낙폭 5.14%였고 기존 추세는 9.29%, 2.015, 5.56%였다.
+- **막힌 이유**: Sharpe 우위는 0.022로 기준 0.20에 못 미쳤고, PSR은 0.551로 기준 0.95 미만, 구간 승률은 34.9%로 기준 60% 미만이다. 후보 객체는 `eligible=false`, `status=rejected`, `live_promotion_authorized=false`다.
+- **검증·배포**: 전체 2870 passed/6 skipped, ruff, YAML, diff, 엄격 하네스 14/14, HANDOFF 사실 검사, PR 품질 관문이 통과했다. ML 연구, released-work, autonomous-work, deploy-on-merge 네 workflow가 모두 success다.
+- **안전 경계**: 주문·취소·자본·live 전략·허용 종목·한도 변경은 모두 0건이다. 기존 production 자동매매 경로와 헌법의 `Backtest -> Canary -> Full` 관문은 바꾸지 않았다.
+- **다음 판단**: 이 후보를 실거래로 승격하지 않는다. 새 주간 자료에서 모든 사전 등록 관문이 통과될 때만 독립 no-live 재현과 Canary 검토로 넘어간다.
+- **상세 인계**: `HANDOFF-151-ML-EDGE-ENSEMBLE.md`.
 
 ## 최근 관찰 — 2026-08-16 KST (#633/#634 production 사람 승인 제거 완료)
 
