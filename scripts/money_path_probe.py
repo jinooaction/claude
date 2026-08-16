@@ -40,6 +40,7 @@ CONSUMED_SIDECARS: list[tuple[str, str, str]] = [
 # 사다리 게이트와 같은 두 파일을 읽어야 비교가 정확하다.
 DEFAULT_LIVE_PORTFOLIO = "deploy/canary-live-portfolio.toml"
 DEFAULT_VALIDATED_PORTFOLIO = "deploy/global-trend-fixed-portfolio.toml"
+DEFAULT_LIVE_REQUEST = "automation/rebalance-live.request"
 DEFAULT_MICRO_REQUEST = "automation/rebalance-micro-gtaa.request"
 
 # strategy_fingerprint(autoarm) 튜플 위치 ↔ 사람이 읽는 항목 이름(같은 순서 유지 필수).
@@ -78,6 +79,25 @@ def parse_micro_request(text: str | None) -> dict | None:
         "run_seq",
         "warning_drawdown_pct",
         "hard_stop_drawdown_pct",
+        "note",
+    )
+    return {key: _field(text, key) for key in keys if _field(text, key) is not None}
+
+
+def parse_live_request(text: str | None) -> dict | None:
+    """표준 자본 사다리 live 센티넬을 보수적으로 읽는다(없으면 None)."""
+    if not text:
+        return None
+    keys = (
+        "armed",
+        "capital_usd",
+        "requested_by",
+        "stage",
+        "run_seq",
+        "ladder_rung",
+        "rung_entered",
+        "account_nav_usd",
+        "dd_budget_pct",
         "note",
     )
     return {key: _field(text, key) for key in keys if _field(text, key) is not None}
@@ -260,6 +280,7 @@ def build_report(
     now: datetime,
     live_portfolio: Path | None = None,
     validated_portfolio: Path | None = None,
+    live_request_path: Path | None = None,
     micro_request_path: Path | None = None,
 ):
     edge = _read(sidecar_dir, "edge-autoarm")
@@ -276,6 +297,14 @@ def build_report(
     ) or extract_json_after_header(promote, "JSON")
     canary_armed = parse_canary_armed(canary)
     try:
+        live_request_text = (
+            live_request_path.read_text(encoding="utf-8")
+            if live_request_path is not None
+            else None
+        )
+    except OSError:
+        live_request_text = None
+    try:
         micro_request_text = (
             micro_request_path.read_text(encoding="utf-8")
             if micro_request_path is not None
@@ -283,7 +312,9 @@ def build_report(
         )
     except OSError:
         micro_request_text = None
+    live_request = parse_live_request(live_request_text)
     micro_request = parse_micro_request(micro_request_text)
+    live_last_run = parse_micro_sidecar(canary)
     micro_last_run = parse_micro_sidecar(micro)
     prior = parse_prior(prior_raw)
 
@@ -301,6 +332,8 @@ def build_report(
         fingerprint=fingerprint,
         micro_request=micro_request,
         micro_last_run=micro_last_run,
+        live_request=live_request,
+        live_last_run=live_last_run,
         now=now,
     )
     # 다음 실행의 ETA 실측 + 표본 churn 비교를 위해, 이번 forward 관측 수와 베이시스 제외
@@ -326,6 +359,11 @@ def main(argv: list[str] | None = None) -> int:
         "--validated-portfolio",
         default=DEFAULT_VALIDATED_PORTFOLIO,
         help="전진 페이퍼에서 검증한 설정(전략 지문 비교 대상). 사다리 게이트와 동일.",
+    )
+    ap.add_argument(
+        "--live-request",
+        default=DEFAULT_LIVE_REQUEST,
+        help="표준 자본 사다리 live 무장 센티넬. 최상위 실제 돈 상태의 권위 입력.",
     )
     ap.add_argument(
         "--micro-request",
@@ -355,12 +393,14 @@ def main(argv: list[str] | None = None) -> int:
 
     live_pf = Path(args.live_portfolio) if args.live_portfolio else None
     val_pf = Path(args.validated_portfolio) if args.validated_portfolio else None
+    live_req = Path(args.live_request) if args.live_request else None
     micro_req = Path(args.micro_request) if args.micro_request else None
     report, forward_n_obs, forward_legacy = build_report(
         Path(args.sidecar_dir),
         now,
         live_portfolio=live_pf,
         validated_portfolio=val_pf,
+        live_request_path=live_req,
         micro_request_path=micro_req,
     )
 

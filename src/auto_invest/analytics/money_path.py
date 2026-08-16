@@ -46,7 +46,7 @@ from auto_invest.portfolio.capital_ladder import (
     RUNG_FRACTIONS,
 )
 
-SCHEMA_VERSION = "1.1"
+SCHEMA_VERSION = "1.2"
 
 # 자본 사다리 결정 라벨(capital_ladder 와 동일 — 재사용보다 명시로 결합도 낮춤).
 ACTION_PROMOTE = "PROMOTE"
@@ -91,6 +91,7 @@ LIVE_STATUS_PREVIEW = "PREVIEW_ONLY"
 LIVE_STATUS_BLOCKED = "BLOCKED"
 LIVE_STATUS_UNKNOWN = "UNKNOWN"
 MICRO_GTAA_PATH = "micro-gtaa-live-canary"
+CAPITAL_LADDER_PATH = "capital-ladder-live-canary"
 MICRO_MAX_CAPITAL_USD = 1000
 MICRO_SCHEDULE_HOUR_UTC = 15
 MICRO_REQUIRED_GATES = (
@@ -99,6 +100,14 @@ MICRO_REQUIRED_GATES = (
     "US regular session",
     "KIS purchasable cash >= planned buys + 1% buffer",
     "micro circuit breaker clear",
+    "K1 caps and K2 whitelist",
+)
+CAPITAL_LADDER_REQUIRED_GATES = (
+    "production environment approval",
+    "non-push workflow event",
+    "US regular session",
+    "KIS purchasable cash >= planned buys + 1% buffer",
+    "portfolio circuit breaker clear",
     "K1 caps and K2 whitelist",
 )
 _BROKER_ACCEPTED_STATES = {
@@ -474,7 +483,7 @@ class MoneyPathReport:
             f"| 판정 근거 | {state.detail} |",
         ]
         if state.last_run is None:
-            lines.append("| 마지막 micro GTAA 실행 | (sidecar 없음) |")
+            lines.append("| 마지막 경로 실행 | (sidecar 없음) |")
             return lines
 
         run = state.last_run
@@ -742,8 +751,8 @@ def _bool(value: object) -> bool | None:
     return None
 
 
-def _next_micro_schedule(now: datetime) -> str:
-    """다음 평일 15:00 UTC micro GTAA 예약 live 후보 시각."""
+def _next_live_schedule(now: datetime) -> str:
+    """다음 평일 15:00 UTC live-canary 예약 후보 시각."""
     if now.tzinfo is None:
         now = now.replace(tzinfo=UTC)
     now = now.astimezone(UTC)
@@ -755,6 +764,11 @@ def _next_micro_schedule(now: datetime) -> str:
         while candidate.weekday() >= 5:
             candidate = candidate + timedelta(days=1)
     return candidate.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _next_micro_schedule(now: datetime) -> str:
+    """하위 호환 별칭: 두 live-canary 경로는 같은 평일 15:00 UTC 스케줄을 쓴다."""
+    return _next_live_schedule(now)
 
 
 def _micro_run_evidence(data: dict | None) -> MicroGtaaRunEvidence | None:
@@ -812,7 +826,7 @@ def _micro_run_evidence(data: dict | None) -> MicroGtaaRunEvidence | None:
     )
 
 
-def assess_live_money_state(
+def _assess_micro_live_money_state(
     *,
     micro_request: dict | None,
     micro_last_run: dict | None = None,
@@ -892,6 +906,134 @@ def assess_live_money_state(
         ),
         **base,
     )
+
+
+def _assess_capital_ladder_live_money_state(
+    *,
+    live_request: dict | None,
+    live_last_run: dict | None,
+    canary_armed: bool | None,
+    now: datetime,
+) -> LiveMoneyState:
+    """표준 자본 사다리 live-canary를 권위 센티넬로 평가한다."""
+    last_run = _micro_run_evidence(live_last_run)
+    capital = _int((live_request or {}).get("capital_usd"))
+    account_nav = _dec((live_request or {}).get("account_nav_usd"))
+    base = {
+        "path": CAPITAL_LADDER_PATH,
+        "max_capital_usd": max(capital or 0, 0),
+        "required_gates": CAPITAL_LADDER_REQUIRED_GATES,
+        "last_run": last_run,
+    }
+    if not live_request:
+        return LiveMoneyState(
+            status=LIVE_STATUS_UNKNOWN,
+            can_submit_real_orders=False,
+            capital_usd=None,
+            next_scheduled_live_utc=None,
+            detail="자본 사다리 live 센티넬을 읽지 못함 — 실제 돈 상태 단정 금지.",
+            **base,
+        )
+
+    armed = _bool(live_request.get("armed"))
+    rung = _int(live_request.get("ladder_rung"))
+    if armed is None:
+        return LiveMoneyState(
+            status=LIVE_STATUS_UNKNOWN,
+            can_submit_real_orders=False,
+            capital_usd=capital,
+            next_scheduled_live_utc=None,
+            detail=f"armed 값 파싱 불가: {live_request.get('armed')!r}",
+            **base,
+        )
+    if not armed:
+        return LiveMoneyState(
+            status=LIVE_STATUS_PREVIEW,
+            can_submit_real_orders=False,
+            capital_usd=capital,
+            next_scheduled_live_utc=None,
+            detail="armed:false — 표준 자본 사다리 경로는 미리보기만, 실주문 0건.",
+            **base,
+        )
+    if capital is None or capital < 1 or rung is None or rung < 1:
+        return LiveMoneyState(
+            status=LIVE_STATUS_BLOCKED,
+            can_submit_real_orders=False,
+            capital_usd=capital,
+            next_scheduled_live_utc=None,
+            detail=(
+                "armed:true 이지만 유효한 capital_usd 또는 ladder_rung>=1 증거가 없음: "
+                f"capital={live_request.get('capital_usd')!r}, "
+                f"rung={live_request.get('ladder_rung')!r}."
+            ),
+            **base,
+        )
+    if account_nav is not None and Decimal(capital) > account_nav:
+        return LiveMoneyState(
+            status=LIVE_STATUS_BLOCKED,
+            can_submit_real_orders=False,
+            capital_usd=capital,
+            next_scheduled_live_utc=None,
+            detail=f"capital_usd={capital} > account_nav_usd={account_nav} — 자본 권위 위반.",
+            **base,
+        )
+    if canary_armed is not True:
+        observed = "없음" if canary_armed is None else "false"
+        return LiveMoneyState(
+            status=LIVE_STATUS_BLOCKED,
+            can_submit_real_orders=False,
+            capital_usd=capital,
+            next_scheduled_live_utc=None,
+            detail=(
+                "센티넬은 armed:true 이지만 최신 live-canary sidecar 무장 증거가 "
+                f"{observed} — 불일치/결측 차단."
+            ),
+            **base,
+        )
+
+    return LiveMoneyState(
+        status=LIVE_STATUS_ARMED,
+        can_submit_real_orders=True,
+        capital_usd=capital,
+        next_scheduled_live_utc=_next_live_schedule(now),
+        detail=(
+            f"자본 사다리 단{rung} 센티넬 armed:true + 유효 자본. 다음 비-push 실행은 "
+            "production 승인·정규장·현금·손실 브레이커·K1/K2를 통과하면 실주문 단계에 "
+            "도달한다."
+        ),
+        **base,
+    )
+
+
+def assess_live_money_state(
+    *,
+    micro_request: dict | None,
+    micro_last_run: dict | None = None,
+    live_request: dict | None = None,
+    live_last_run: dict | None = None,
+    canary_armed: bool | None = None,
+    now: datetime,
+) -> LiveMoneyState:
+    """모든 live 경로를 평가하고 실제 주문 가능성이 가장 높은 경로를 선택한다."""
+    standard = _assess_capital_ladder_live_money_state(
+        live_request=live_request,
+        live_last_run=live_last_run,
+        canary_armed=canary_armed,
+        now=now,
+    )
+    micro = _assess_micro_live_money_state(
+        micro_request=micro_request,
+        micro_last_run=micro_last_run,
+        now=now,
+    )
+    rank = {
+        LIVE_STATUS_ARMED: 4,
+        LIVE_STATUS_BLOCKED: 3,
+        LIVE_STATUS_PREVIEW: 2,
+        LIVE_STATUS_UNKNOWN: 1,
+    }
+    # 동률이면 현재 자본 사다리 표준 경로를 우선해 한 화면의 기준을 맞춘다.
+    return standard if rank[standard.status] >= rank[micro.status] else micro
 
 
 def _pct_str(value: Decimal) -> str:
@@ -1019,6 +1161,8 @@ def assess_money_path(
     fingerprint: dict | None = None,
     micro_request: dict | None = None,
     micro_last_run: dict | None = None,
+    live_request: dict | None = None,
+    live_last_run: dict | None = None,
     dd_budget_pct: Decimal = DEFAULT_DD_BUDGET_PCT,
     now: datetime,
 ) -> MoneyPathReport:
@@ -1034,8 +1178,9 @@ def assess_money_path(
         {'match': bool|None, 'diverged': [field...], 'live_path', 'validated_path'}(선택).
         자본 사다리가 지문 불일치면 어떤 단에서도 자본을 배치하지 않으므로(BLOCKED),
         이 입력으로 '엣지를 쌓아도 배포가 막히는' 분기를 미리 진단한다.
-    micro_request/micro_last_run: 스펙 058 micro GTAA 별도 실거래 캐너리의 현재 센티넬과
-        마지막 실행 증거. 기존 자본 사다리와 별개 실제 돈 경로라 최상위 상태로 표면화한다.
+    micro_request/micro_last_run: 스펙 058 micro GTAA 별도 실거래 캐너리의 센티넬·실행 증거.
+    live_request/live_last_run: 표준 자본 사다리 live-canary의 권위 센티넬·실행 증거. 두 경로를
+        함께 평가해 실제 주문 가능한 경로를 최상위 상태로 표면화한다.
     """
     if now.tzinfo is None:
         now = now.replace(tzinfo=UTC)
@@ -1043,6 +1188,9 @@ def assess_money_path(
     live_money_state = assess_live_money_state(
         micro_request=micro_request,
         micro_last_run=micro_last_run,
+        live_request=live_request,
+        live_last_run=live_last_run,
+        canary_armed=canary_armed,
         now=now,
     )
 

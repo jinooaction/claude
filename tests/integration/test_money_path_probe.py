@@ -77,6 +77,10 @@ _CANARY_SIDECAR = (
     "| capital_usd | 500 |\n"
 )
 
+_CANARY_ARMED_SIDECAR = _CANARY_SIDECAR.replace(
+    "armed (무장 여부) | false", "armed (무장 여부) | true"
+)
+
 _MICRO_SIDECAR_OLD_FORMAT = (
     "# 마이크로 GTAA 라이브 캐너리 — 최신 실행\n\n"
     "| 항목 | 값 |\n|------|-----|\n"
@@ -134,6 +138,16 @@ note: "운영자 2026-06-22 명시 승인"
 """
 
 _MICRO_REQUEST_DISARMED = _MICRO_REQUEST_ARMED.replace("armed: true", "armed: false")
+
+_LIVE_REQUEST_ARMED = """armed: true
+capital_usd: 293
+requested_by: spec-050-capital-ladder
+stage: live-canary-portfolio
+run_seq: 6
+ladder_rung: 1
+account_nav_usd: 1466.83000000
+dd_budget_pct: 20.0
+"""
 
 
 def _write(d: Path, key: str, text: str) -> None:
@@ -248,6 +262,37 @@ def test_probe_manifest_lists_consumed_sidecars(capsys):
     assert "money-path\tautomation/money-path-last-run\tLAST_RUN.md" in out
 
 
+def test_probe_prefers_armed_capital_ladder_live_path(tmp_path, capsys):
+    _write(tmp_path, "edge-autoarm", _edge_sidecar())
+    _write(tmp_path, "rebalance-live-canary", _CANARY_ARMED_SIDECAR)
+    live_request = tmp_path / "rebalance-live.request"
+    live_request.write_text(_LIVE_REQUEST_ARMED, encoding="utf-8")
+    micro_request = tmp_path / "rebalance-micro-gtaa.request"
+    micro_request.write_text(_MICRO_REQUEST_DISARMED, encoding="utf-8")
+
+    rc = probe_main(
+        [
+            "--sidecar-dir",
+            str(tmp_path),
+            "--json",
+            "--now",
+            "2026-08-16T02:00:00Z",
+            "--live-request",
+            str(live_request),
+            "--micro-request",
+            str(micro_request),
+        ]
+    )
+
+    assert rc == 0
+    state = json.loads(capsys.readouterr().out)["live_money_state"]
+    assert state["status"] == "REAL_ORDER_PATH_ARMED"
+    assert state["can_submit_real_orders"] is True
+    assert state["path"] == "capital-ladder-live-canary"
+    assert state["capital_usd"] == 293
+    assert state["next_scheduled_live_utc"] == "2026-08-17T15:00:00Z"
+
+
 def test_probe_micro_armed_state_is_top_level_json(tmp_path, capsys):
     req = tmp_path / "micro.request"
     req.write_text(_MICRO_REQUEST_ARMED, encoding="utf-8")
@@ -260,6 +305,8 @@ def test_probe_micro_armed_state_is_top_level_json(tmp_path, capsys):
             str(tmp_path),
             "--micro-request",
             str(req),
+            "--live-request",
+            "",
             "--json",
             "--now",
             "2026-06-22T12:55:00Z",
@@ -289,6 +336,8 @@ def test_probe_micro_intent_loss_blocks_live_money_state(tmp_path, capsys):
             str(tmp_path),
             "--micro-request",
             str(req),
+            "--live-request",
+            "",
             "--json",
             "--now",
             "2026-07-28T16:20:00Z",
@@ -316,6 +365,8 @@ def test_probe_micro_disarmed_state_is_preview_only_text(tmp_path, capsys):
             str(tmp_path),
             "--micro-request",
             str(req),
+            "--live-request",
+            "",
             "--now",
             "2026-06-22T12:55:00Z",
         ]

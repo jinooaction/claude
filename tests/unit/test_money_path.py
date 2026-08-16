@@ -99,6 +99,16 @@ def _micro_request(armed="true", capital="1000"):
     }
 
 
+def _live_request(armed="true", capital="293", rung="1", nav="1466.83"):
+    return {
+        "armed": armed,
+        "capital_usd": capital,
+        "stage": "live-canary-portfolio",
+        "ladder_rung": rung,
+        "account_nav_usd": nav,
+    }
+
+
 def _micro_last_run(preflight=None):
     return {
         "run_id": "27935469561",
@@ -229,6 +239,70 @@ def test_money_path_report_puts_live_money_state_before_ladder_stage():
     assert "preflight 통과 후 실주문 가능" in text
     assert "브로커 접수·체결 0건" in text
     assert text.index("실제 돈 최상위 상태") < text.index("## 기존 자본 사다리 상태")
+
+
+def test_live_money_state_prefers_armed_capital_ladder_over_disarmed_micro():
+    state = assess_live_money_state(
+        live_request=_live_request(),
+        live_last_run=None,
+        canary_armed=True,
+        micro_request=_micro_request(armed="false"),
+        micro_last_run=None,
+        now=NOW,
+    )
+
+    assert state.status == LIVE_STATUS_ARMED
+    assert state.can_submit_real_orders is True
+    assert state.path == "capital-ladder-live-canary"
+    assert state.capital_usd == 293
+    assert state.max_capital_usd == 293
+    assert state.next_scheduled_live_utc == "2026-06-15T15:00:00Z"
+    assert "production environment approval" in state.required_gates
+
+
+def test_live_money_state_blocks_capital_ladder_sidecar_mismatch():
+    state = assess_live_money_state(
+        live_request=_live_request(),
+        live_last_run=None,
+        canary_armed=False,
+        micro_request=_micro_request(armed="false"),
+        micro_last_run=None,
+        now=NOW,
+    )
+
+    assert state.status == LIVE_STATUS_BLOCKED
+    assert state.can_submit_real_orders is False
+    assert state.path == "capital-ladder-live-canary"
+    assert "불일치" in state.detail
+
+
+def test_live_money_state_blocks_when_capital_ladder_sidecar_is_missing():
+    state = assess_live_money_state(
+        live_request=_live_request(),
+        live_last_run=None,
+        canary_armed=None,
+        micro_request=_micro_request(armed="false"),
+        micro_last_run=None,
+        now=NOW,
+    )
+
+    assert state.status == LIVE_STATUS_BLOCKED
+    assert state.can_submit_real_orders is False
+    assert "결측 차단" in state.detail
+
+
+def test_live_money_state_keeps_armed_micro_when_standard_is_inactive():
+    state = assess_live_money_state(
+        live_request=_live_request(armed="false", capital="0", rung="0"),
+        live_last_run=None,
+        canary_armed=False,
+        micro_request=_micro_request(),
+        micro_last_run=_micro_last_run(),
+        now=MONDAY_BEFORE_MICRO_SCHEDULE,
+    )
+
+    assert state.status == LIVE_STATUS_ARMED
+    assert state.path == "micro-gtaa-live-canary"
 
 
 # ── 헬퍼: 거래일 계산 / 추정 도달일 ──
