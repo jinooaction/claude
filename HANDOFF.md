@@ -33,15 +33,26 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `d49143e` — Merge pull request #619 from jinooaction/automation/capital-ladder/promote-31918999775 |
-| main 테스트 | #618 기능 커밋 기준 `uv run pytest` → 2825 passed, 5 skipped. #619는 센티넬만 단 1로 올렸다. |
-| main 린트 | #618 기능 커밋 기준 `uv run ruff check src tests` → All checks passed. |
-| 열린 PR | 없음. 현재 후속 `Codex/141-lot-aware-execution-proxy`에서 소액 정수 주 체결 경로를 구현 중이다. |
-| 출시 완료 스펙 | 최신 기능: #617(스펙 140, 정확 배포전략 장기 홀드아웃+forward+강화 캐너리를 최대 20% 탐색 단에 연결), #615(스펙 139), #613(스펙 138). |
-| 골격 스펙 | 없음. `.specify/feature.json`은 `specs/140-heldout-exploration-canary`를 가리킨다. 기능은 출시됐고 T010~T012 운영 관찰 중이며 A4 오탐 수정 T013은 구현 완료다. |
-| 최근 출시 작업 | #617은 자본 사다리를 0→20% 탐색→25%→50%→100%로 바꾸고, 정확한 균등가중 앙상블의 235개월 홀드아웃·50bp 비용·forward 42관측/PSR 0.829449/Calmar 우위·강화 캐너리 PASS·전략 지문 일치를 첫 진입에 요구한다. |
-| 활성 작업 | #619로 단 1이 머지돼 `armed:true`, 자본 293달러다. 최신 push 미리보기는 고가 SPY/GLD 정수 주 제약으로 주문 0건이었고 내부 모의 보유를 읽는 결함도 드러났다. 후속 스펙 141이 검증 신호는 유지한 채 저가 ETF 체결 매핑과 KIS 실제 보유 원본을 구현 중이다. |
-| 안전 경계 | 헌법 X.4 v7.0.0. 단 1은 실계좌 NAV의 20%인 293달러이며 25% 이상은 원래 EDGE_CONFIRMED를 유지한다. K1 캡, 손실 예산 20%, 비밀값, 감사 로그, 정규장, production, 서킷 브레이커는 유지한다. 현재 실주문·체결은 0건이다. |
+| 마지막 main 커밋 | `2be2d3d` — Merge pull request #620 from jinooaction/Codex/141-lot-aware-execution-proxy |
+| main 테스트 | #620 기능 커밋 기준 `uv run pytest` → 2827 passed, 6 skipped. |
+| main 린트 | #620 기능 커밋 기준 `uv run ruff check src tests` → All checks passed. |
+| 열린 PR | 없음. |
+| 출시 완료 스펙 | 최신 기능: #620(스펙 141, 검증 신호를 저단가 체결 ETF에 매핑하고 실제 KIS 계좌 원본으로 주문 산정), #617(스펙 140), #615(스펙 139). |
+| 골격 스펙 | 없음. `.specify/feature.json`은 `specs/141-lot-aware-execution-proxy`를 가리킨다. T010 배포와 T011 KIS 미리보기는 완료됐고 T012 첫 정규장 주문·체결 확인만 남았다. |
+| 최근 출시 작업 | #620은 검증 신호 `SPY/IEF/GLD`를 그대로 두고 체결만 `SPYM/IEF/GLDM`으로 매핑한다. 미리보기와 실주문은 모두 KIS 실제 보유·현금 원본을 읽으며, 단 1에서 nearest 정수 주를 사용한다. |
+| 활성 작업 | KIS 미리보기 run `31919969616`은 매수가능현금 934.27달러에서 `SPYM` 1주와 `GLDM` 1주, 합계 178.32달러를 계획했다. 2026-08-16은 일요일이라 실주문 단계는 취소했다. 다음 미국 정규장 예약 실행에서 주문·체결·잔고·감사 로그를 확인해야 한다. |
+| 안전 경계 | 헌법 X.4 v7.0.0. 단 1은 실계좌 NAV의 20%인 293달러이며 25% 이상은 원래 EDGE_CONFIRMED를 유지한다. K1 캡, 손실 예산 20%, 비밀값, 감사 로그, 정규장, production, 서킷 브레이커를 유지한다. ORANY 28주는 비관리 보유로 보류돼 자동 매도되지 않았고 현재 실주문·체결은 0건이다. |
+
+## 최근 관찰 — 2026-08-16 KST (#620 소액 정수 주 체결 경로 출시·KIS 미리보기 통과)
+
+현재 `main` 최신 머지는 `2be2d3d`(#620)이고 기능 커밋은 `7643040`이다.
+
+- **고친 원인**: 이전 미리보기는 내부 모의 보유를 실제 보유처럼 읽어 AAPL·AMZN·GOOGL·MSFT·NVDA 매도를 계획했고, 293달러로 고가 `SPY/GLD` 정수 주를 사지 못해 주문이 0건이었다. 검증 신호와 전략 지문은 유지하면서 체결만 `SPY→SPYM`, `IEF→IEF`, `GLD→GLDM`으로 매핑하고, 미리보기와 실주문이 모두 KIS 실제 계좌 스냅샷을 읽게 했다.
+- **실계좌 미리보기**: run `31919969616`은 매수가능현금 934.27달러, 필요 현금 180.10달러, 계획 매수 178.32달러를 기록했다. 주문 계획은 `SPYM` 1주 지정가 91.57달러와 `GLDM` 1주 지정가 86.75달러이며 계획 매도는 0달러다.
+- **비관리 보유 보호**: 실제 보유 `ORANY` 28주는 `unmanaged_holding`으로 보류됐다. 자동 매도하지 않았고 허용 매수 종목도 `SPYM/IEF/GLDM`으로 제한된다.
+- **배포 증거**: deploy run `31919928105`와 KIS smoke run `31919928101`이 성공했다. 전체 검증은 2827 passed/6 skipped, ruff, diff, HANDOFF 사실 검사, 엄격 하네스 14/14, PR 품질 관문을 통과했다.
+- **아직 완료 아님**: 2026-08-16은 일요일이라 미리보기 뒤 production 실주문 작업을 의도적으로 취소했다. 실제 주문·체결·수익은 0이다. 다음 `0 15 * * 1-5` 예약 실행에서 production 환경 승인이 요구되면 승인한 뒤 주문·체결·잔고·감사 로그를 확인해야 한다.
+- **상세 인계**: `HANDOFF-147-LOT-AWARE-EXECUTION-PROXY.md`.
 
 ## 최근 관찰 — 2026-08-16 KST (#617 홀드아웃 탐색 캐너리 출시, A4 오탐 후속 중)
 
