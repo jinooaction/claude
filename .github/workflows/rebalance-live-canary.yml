@@ -40,6 +40,10 @@ on:
 permissions:
   contents: write  # 사이드카 브랜치 force-push 용.
 
+concurrency:
+  group: rebalance-live-canary
+  cancel-in-progress: false
+
 jobs:
   live_portfolio_canary_preview:
     runs-on: ubuntu-latest
@@ -300,13 +304,14 @@ jobs:
           VULTR_SSH_USER="${SSH_USER:-}" \
           ./scripts/ci_secure_ssh.sh
 
-      - name: LIVE rebalance — REAL ORDERS (production approval required)
+      - name: Authorize request — scheduled runs place real orders
         id: live
         env:
           HOST: ${{ secrets.VULTR_SSH_HOST }}
           USER: ${{ secrets.VULTR_SSH_USER }}
           PORT: ${{ secrets.VULTR_SSH_PORT }}
           CAP: ${{ steps.gate.outputs.capital }}
+          EVENT: ${{ github.event_name }}
           LIVE_ORDER_SIGNING_KEY: ${{ secrets.LIVE_ORDER_SIGNING_KEY }}
         run: |
           set -uo pipefail
@@ -329,11 +334,17 @@ jobs:
           openssl pkeyutl -sign -rawin -inkey "${key_file}" \
               -in "${payload_file}" -out "${signature_file}"
           signature="$(base64 < "${signature_file}" | tr -d '\n')"
-          echo "⚠ ARMED — placing REAL orders (capital=${CAP})."
+          gateway_action="live-canary-order"
+          if [[ "${EVENT}" == "workflow_dispatch" ]]; then
+            gateway_action="live-canary-verify-order"
+            echo "Manual production preflight: authorize only, real orders=0."
+          else
+            echo "⚠ SCHEDULED + ARMED — placing REAL orders (capital=${CAP})."
+          fi
           set +e
           ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
               -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
-              "live-canary-order ${GITHUB_RUN_ID} ${GITHUB_SHA} ${CAP} ${expires} ${nonce} ${signature}" \
+              "${gateway_action} ${GITHUB_RUN_ID} ${GITHUB_SHA} ${CAP} ${expires} ${nonce} ${signature}" \
               > /tmp/live_rebal.json 2>/tmp/live_rebal.err
           ssh_exit=$?
           echo "ssh_exit=${ssh_exit}" >> "$GITHUB_OUTPUT"
