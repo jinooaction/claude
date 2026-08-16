@@ -33,14 +33,22 @@ on:
     # 매일 08:00 UTC — 생존 감시(07:30)·전날 밤 자본 사다리 게이트(평일 23:50) 이후.
     - cron: "0 8 * * *"
   workflow_dispatch:
+  workflow_run:
+    workflows:
+      - "Live profit evidence (실계좌 체결과 첫 수익 증거)"
+    types:
+      - completed
   push:
     # 코드/워크플로가 main 에 들어오면 즉시 1회 자가검증(스케줄은 하루 1회뿐).
     # pipeline-liveness 와 같은 패턴 — 자기 파일만 매칭해 일반 머지엔 노이즈 0.
     branches: [main]
     paths:
       - 'src/auto_invest/analytics/money_path.py'
+      - 'src/auto_invest/analytics/live_profit_evidence.py'
       - 'scripts/money_path_probe.py'
+      - 'scripts/live_profit_evidence_probe.py'
       - '.github/workflows/money-path.yml'
+      - '.github/workflows/live-profit-evidence.yml'
       - 'automation/rebalance-micro-gtaa.request'
       - '.github/workflows/rebalance-micro-gtaa-canary.yml'
 

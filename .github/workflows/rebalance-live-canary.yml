@@ -307,17 +307,33 @@ jobs:
           USER: ${{ secrets.VULTR_SSH_USER }}
           PORT: ${{ secrets.VULTR_SSH_PORT }}
           CAP: ${{ steps.gate.outputs.capital }}
+          LIVE_ORDER_SIGNING_KEY: ${{ secrets.LIVE_ORDER_SIGNING_KEY }}
         run: |
-          set +e
+          set -uo pipefail
           port="${PORT:-22}"
+          if [[ -z "${LIVE_ORDER_SIGNING_KEY:-}" ]]; then
+            echo "production LIVE_ORDER_SIGNING_KEY is missing; refusing live order" >&2
+            exit 2
+          fi
+          key_file="$(mktemp)"
+          payload_file="$(mktemp)"
+          signature_file="$(mktemp)"
+          trap 'rm -f "${key_file}" "${payload_file}" "${signature_file}"' EXIT
+          chmod 0600 "${key_file}"
+          printf '%s\n' "${LIVE_ORDER_SIGNING_KEY}" > "${key_file}"
+          openssl pkey -in "${key_file}" -noout >/dev/null
+          expires="$(( $(date +%s) + 600 ))"
+          nonce="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          payload="${GITHUB_REPOSITORY}|rebalance-live-canary.yml|${GITHUB_RUN_ID}|${GITHUB_SHA}|${CAP}|${expires}|${nonce}"
+          printf '%s' "${payload}" > "${payload_file}"
+          openssl pkeyutl -sign -rawin -inkey "${key_file}" \
+              -in "${payload_file}" -out "${signature_file}"
+          signature="$(base64 < "${signature_file}" | tr -d '\n')"
           echo "⚠ ARMED — placing REAL orders (capital=${CAP})."
+          set +e
           ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
               -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
-              "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest rebalance-once \
-                 --portfolio deploy/canary-live-portfolio.toml \
-                 --mode live --confirm-live \
-                 --account-wide \
-                 --capital ${CAP} --db data/auto_invest.db --env-file .env --json" \
+              "live-canary-order ${GITHUB_RUN_ID} ${GITHUB_SHA} ${CAP} ${expires} ${nonce} ${signature}" \
               > /tmp/live_rebal.json 2>/tmp/live_rebal.err
           ssh_exit=$?
           echo "ssh_exit=${ssh_exit}" >> "$GITHUB_OUTPUT"
@@ -343,8 +359,7 @@ jobs:
             echo "--- fill sync attempt ${attempt}/3 ---" >> /tmp/live_fills.log
             ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
                 -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
-                "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest fills \
-                   --sync --db data/auto_invest.db --env .env" \
+                "live-canary-fills" \
                 >> /tmp/live_fills.log 2>&1
             sync_exit=$?
             if [[ "${sync_exit}" != "0" || "${attempt}" == "3" ]]; then
@@ -369,11 +384,27 @@ jobs:
           port="${PORT:-22}"
           ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
               -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
-              "cd /opt/auto-invest && \
-                 /usr/local/bin/uv run auto-invest nav-snapshot --mode live --capital ${CAP} --db data/auto_invest.db --env-file .env --snapshot --format json; \
-                 /usr/local/bin/uv run auto-invest forward-verdict --mode live --portfolio deploy/canary-live-portfolio.toml --db data/auto_invest.db --format json" \
+              "observe live-canary-measure ${CAP}" \
               > /tmp/live_measure.log 2>&1
-          ssh_exit=$?
+          measure_exit=$?
+          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "live-canary-profit ${CAP}" \
+              > /tmp/live_profit.json 2>/tmp/live_profit.err
+          profit_exit=$?
+          ssh_exit="${measure_exit}"
+          [[ "${profit_exit}" == "0" ]] || ssh_exit="${profit_exit}"
+          {
+            echo "--- nav + forward verdict ---"
+            cat /tmp/live_measure.log
+            echo "--- live performance ---"
+            cat /tmp/live_profit.json
+            if [[ -s /tmp/live_profit.err ]]; then
+              echo "--- performance stderr ---"
+              cat /tmp/live_profit.err
+            fi
+          } > /tmp/live_measure_combined.log
+          mv /tmp/live_measure_combined.log /tmp/live_measure.log
           echo "ssh_exit=${ssh_exit}" >> "$GITHUB_OUTPUT"
           echo "exit=${ssh_exit}"; cat /tmp/live_measure.log
           exit "${ssh_exit}"

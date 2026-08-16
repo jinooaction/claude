@@ -26,6 +26,11 @@ CONSUMED_SIDECARS: list[tuple[str, str, str]] = [
     ("edge-autoarm", "automation/edge-autoarm-last-run", "LAST_RUN.md"),
     ("rebalance-live-canary", "automation/rebalance-live-canary-last-run", "LAST_RUN.md"),
     (
+        "live-profit-evidence",
+        "automation/live-profit-evidence-last-run",
+        "profit_evidence.json",
+    ),
+    (
         "rebalance-micro-gtaa",
         "automation/rebalance-micro-gtaa-last-run",
         "LAST_RUN.md",
@@ -286,6 +291,7 @@ def build_report(
     edge = _read(sidecar_dir, "edge-autoarm")
     canary = _read(sidecar_dir, "rebalance-live-canary")
     micro = _read(sidecar_dir, "rebalance-micro-gtaa")
+    live_profit_raw = _read(sidecar_dir, "live-profit-evidence")
     promote = _read(sidecar_dir, "promote-readiness")
     prior_raw = _read(sidecar_dir, "money-path")
 
@@ -317,6 +323,12 @@ def build_report(
     live_last_run = parse_micro_sidecar(canary)
     micro_last_run = parse_micro_sidecar(micro)
     prior = parse_prior(prior_raw)
+    try:
+        live_profit_evidence = json.loads(live_profit_raw) if live_profit_raw else None
+    except json.JSONDecodeError:
+        live_profit_evidence = None
+    if not isinstance(live_profit_evidence, dict):
+        live_profit_evidence = None
 
     fingerprint = None
     if live_portfolio is not None and validated_portfolio is not None:
@@ -334,6 +346,7 @@ def build_report(
         micro_last_run=micro_last_run,
         live_request=live_request,
         live_last_run=live_last_run,
+        live_profit_evidence=live_profit_evidence,
         now=now,
     )
     # 다음 실행의 ETA 실측 + 표본 churn 비교를 위해, 이번 forward 관측 수와 베이시스 제외

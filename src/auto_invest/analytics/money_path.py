@@ -46,7 +46,7 @@ from auto_invest.portfolio.capital_ladder import (
     RUNG_FRACTIONS,
 )
 
-SCHEMA_VERSION = "1.2"
+SCHEMA_VERSION = "1.3"
 
 # 자본 사다리 결정 라벨(capital_ladder 와 동일 — 재사용보다 명시로 결합도 낮춤).
 ACTION_PROMOTE = "PROMOTE"
@@ -339,6 +339,7 @@ class MoneyPathReport:
     deployed_capital_usd: int | None
     canary_armed: bool | None
     live_money_state: LiveMoneyState
+    live_profit_evidence: dict | None
     gates: list[GateCondition]
     eta: EtaProjection
     safety: SafetyBudget | None  # 자본 방어선 예산(내려가는 길) — BLOCKED 면 None
@@ -357,6 +358,7 @@ class MoneyPathReport:
             "deployed_capital_usd": self.deployed_capital_usd,
             "canary_armed": self.canary_armed,
             "live_money_state": self.live_money_state.to_dict(),
+            "live_profit_evidence": self.live_profit_evidence,
             "gates": [g.to_dict() for g in self.gates],
             "eta": self.eta.to_dict(),
             "safety_budget": None if self.safety is None else self.safety.to_dict(),
@@ -380,6 +382,8 @@ class MoneyPathReport:
             "## 실제 돈 최상위 상태",
             "",
             *self._live_money_lines(),
+            "",
+            *self._live_profit_lines(),
             "",
             "## 기존 자본 사다리 상태",
             "",
@@ -506,6 +510,28 @@ class MoneyPathReport:
             f"| 마지막 접수·체결 판단 | {fill_text} |",
         ]
         return lines
+
+    def _live_profit_lines(self) -> list[str]:
+        evidence = self.live_profit_evidence
+        if not evidence:
+            return [
+                "## 실계좌 체결·손익 증거",
+                "",
+                "> 증거 sidecar 없음 — 체결이나 수익을 단정하지 않음.",
+            ]
+        first = "예" if evidence.get("first_profit_observed") is True else "아니오"
+        return [
+            "## 실계좌 체결·손익 증거",
+            "",
+            "| 항목 | 값 |",
+            "|------|-----|",
+            f"| 누적 상태 | {evidence.get('status', 'UNKNOWN')} |",
+            f"| 현재 상태 | {evidence.get('current_status', 'UNKNOWN')} |",
+            f"| 실제 체결 수 | {evidence.get('fills_count', '(불명)')} |",
+            f"| 현재 총손익 USD | {evidence.get('total_pnl_usd', '(불명)')} |",
+            f"| 최초 양의 손익 확인 | {first} |",
+            f"| 최초 확인 시각 | {evidence.get('first_profit_observed_at_utc') or '(없음)'} |",
+        ]
 
     def _armed_text(self) -> str:
         if self.canary_armed is None:
@@ -1163,6 +1189,7 @@ def assess_money_path(
     micro_last_run: dict | None = None,
     live_request: dict | None = None,
     live_last_run: dict | None = None,
+    live_profit_evidence: dict | None = None,
     dd_budget_pct: Decimal = DEFAULT_DD_BUDGET_PCT,
     now: datetime,
 ) -> MoneyPathReport:
@@ -1181,6 +1208,7 @@ def assess_money_path(
     micro_request/micro_last_run: 스펙 058 micro GTAA 별도 실거래 캐너리의 센티넬·실행 증거.
     live_request/live_last_run: 표준 자본 사다리 live-canary의 권위 센티넬·실행 증거. 두 경로를
         함께 평가해 실제 주문 가능한 경로를 최상위 상태로 표면화한다.
+    live_profit_evidence: 체결·결측·손익을 보수적으로 판정한 최초 수익 sidecar.
     """
     if now.tzinfo is None:
         now = now.replace(tzinfo=UTC)
@@ -1578,6 +1606,7 @@ def assess_money_path(
         deployed_capital_usd=deployed_capital,
         canary_armed=canary_armed,
         live_money_state=live_money_state,
+        live_profit_evidence=live_profit_evidence,
         gates=gates,
         eta=eta,
         safety=safety,

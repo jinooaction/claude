@@ -259,7 +259,39 @@ def test_probe_manifest_lists_consumed_sidecars(capsys):
         "rebalance-micro-gtaa\tautomation/rebalance-micro-gtaa-last-run\tLAST_RUN.md"
         in out
     )
+    assert (
+        "live-profit-evidence\tautomation/live-profit-evidence-last-run\t"
+        "profit_evidence.json" in out
+    )
     assert "money-path\tautomation/money-path-last-run\tLAST_RUN.md" in out
+
+
+def test_probe_surfaces_live_profit_evidence(tmp_path, capsys):
+    _write(tmp_path, "edge-autoarm", _edge_sidecar())
+    _write(tmp_path, "rebalance-live-canary", _CANARY_SIDECAR)
+    _write(
+        tmp_path,
+        "live-profit-evidence",
+        json.dumps(
+            {
+                "status": "FIRST_PROFIT_OBSERVED",
+                "current_status": "FIRST_PROFIT_OBSERVED",
+                "fills_count": 2,
+                "total_pnl_usd": "0.42",
+                "first_profit_observed": True,
+                "first_profit_observed_at_utc": "2026-08-18T00:05:00Z",
+            }
+        ),
+    )
+
+    rc = probe_main(
+        ["--sidecar-dir", str(tmp_path), "--json", "--now", "2026-08-18T00:06:00Z"]
+    )
+
+    assert rc == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["live_profit_evidence"]["first_profit_observed"] is True
+    assert out["live_profit_evidence"]["total_pnl_usd"] == "0.42"
 
 
 def test_probe_prefers_armed_capital_ladder_live_path(tmp_path, capsys):
