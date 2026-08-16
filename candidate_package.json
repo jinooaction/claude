@@ -1,0 +1,23 @@
+{
+  "candidate_id": "candidate-ml-edge-ensemble-v1",
+  "data_fingerprint": "sha256:4c3ea731d845ede3f0556b8b99f6e71b618f729647f2bc21ba052954cab2c58e",
+  "domain_key": "investment_edge",
+  "eligible": false,
+  "evidence_refs": [
+    "ml-edge-ensemble",
+    "public-data",
+    "regime-stratify"
+  ],
+  "feature_fingerprint": "sha256:ca5b9398698386e066f1f274d9b363a26d22642d589bb5d023587e8e2cf4cd7a",
+  "kind": "strategy_backtest",
+  "live_promotion_authorized": false,
+  "model_fingerprint": "sha256:98cf5cb8b1f307f5f36e76983aa7af12d26a1a9b9d9838a828db1b2f7e60cd47",
+  "next_action_ko": "독립 no-live 재현 후 Canary 승격 여부를 판단한다.",
+  "priority_score": 700,
+  "reason_ko": "failed gates: sharpe_margin, psr, fold_win_rate",
+  "replay_command": "uv run python scripts/ml_edge_ensemble_probe.py --json",
+  "risk_grade": 2,
+  "status": "rejected",
+  "title_ko": "AI 확신도 기반 추세 앙상블 재현 검증",
+  "verdict": "NO_EDGE"
+}
