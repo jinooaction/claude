@@ -33,15 +33,25 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `dc5d93e` — Merge pull request #631 from jinooaction/Codex/143-balance-mark-fallback |
-| main 테스트 | #631 기능 커밋 기준 `uv run pytest` → 2863 passed, 6 skipped. |
-| main 린트 | #631 기능 커밋 기준 `uv run ruff check src tests` → All checks passed. |
+| 마지막 main 커밋 | `3b9adcb` — Merge pull request #633 from jinooaction/Codex/144-autonomous-production-approval |
+| main 테스트 | #633 기능 커밋 기준 `uv run pytest` → 2864 passed, 6 skipped. |
+| main 린트 | #633 기능 커밋 기준 `uv run ruff check src tests` → All checks passed. |
 | 열린 PR | 없음. |
-| 출시 완료 스펙 | 최신 기능: #631(스펙 143 완료, KIS 잔고 평가값 mark와 최초 양의 손익 확정), #630(과거 KIS 체결 복구·검증된 시작 보유 원가), #628(주문 없는 수동 production preflight). |
-| 골격 스펙 | 없음. `.specify/feature.json`은 완료된 `specs/143-live-canary-gateway-profit-evidence`를 가리킨다. T001~T022가 모두 완료됐다. |
-| 최근 출시 작업 | #631은 독립 시세가 빠진 현재 보유 종목만 KIS 잔고 평가금액 기반 현재가로 보완했다. 일반 시세 우선순위와 결측·경고 0 기준은 유지했다. |
-| 활성 작업 | 없음. run `31924413210`이 체결 3건, 실현 +15.93달러, 미실현 +219.10달러, 총 +235.03달러, 결측 0·경고 0으로 `FIRST_PROFIT_OBSERVED`를 확정했다. 같은 과거 범위 재실행은 새 체결 0건으로 멱등이었다. |
-| 안전 경계 | 헌법 X.4 v7.0.0. 단 1은 실계좌 NAV의 20%인 293달러다. K1/K2, 손실 예산 20%, 정규장, production 승인, 추가-전용 감사 로그를 유지한다. production 개인키는 환경 비밀값에만 있고 서버는 공개키로 검증한다. 과거 복구와 성과 측정은 주문·취소·자본 변경을 하지 않는다. ORANY 28주는 비관리 보유로 자동 매도되지 않는다. |
+| 출시 완료 스펙 | 최신 기능: #633(스펙 144, production 사람 승인을 기계 승인으로 대체), #632(스펙 143 첫 양의 실계좌 손익 인계), #631(KIS 잔고 평가값 mark). |
+| 골격 스펙 | `specs/144-autonomous-production-approval`; production 실서버 주문 없는 사전점검 완료까지 T009~T010이 남았다. |
+| 최근 출시 작업 | #633은 `main`·이벤트·무장·자본을 검증하는 `autonomous_live_approval` job을 production 서명 앞에 추가했다. |
+| 활성 작업 | production required reviewer는 제거됐고 main-only·환경 비밀키는 유지된다. 첫 사전점검 run `31926148633`은 주문 0건으로 끝났으나 기계 승인 job checkout 누락으로 실패해 후속 수정 중이다. |
+| 안전 경계 | 헌법 X.4 v7.0.0. 단 1은 실계좌 NAV의 20%인 293달러다. K1/K2, 손실 예산 20%, 정규장, production 기계 승인, 추가-전용 감사 로그를 유지한다. production 개인키는 환경 비밀값에만 있고 서버는 공개키로 검증한다. ORANY 28주는 비관리 보유로 자동 매도되지 않는다. |
+
+## 최근 관찰 — 2026-08-16 KST (#633 production 사람 승인 제거와 checkout 후속)
+
+현재 `main` 최신 머지는 `3b9adcb`(#633)이고 안전 경계 기능 커밋은 `846426e`이다.
+
+- **자동 승인 출시**: preview 뒤 별도 `autonomous_live_approval` job이 `refs/heads/main`, `schedule/workflow_dispatch`, `armed:true`, 자본 가드를 검증한다. 예약은 실주문 결정, 수동은 주문 없는 사전점검 결정만 출력한다.
+- **GitHub 환경**: production required reviewer를 제거했다. API 재조회에서 보호 규칙은 branch policy 하나, 허용 branch는 `main` 하나, 환경 secret은 화면에서 `LIVE_ORDER_SIGNING_KEY` 한 개로 유지됨을 확인했다.
+- **과거 run 정리**: 검토자 제거 전에 2026-07-21~31의 오래된 waiting 예약 run 8개를 모두 취소했고 waiting 0개를 확인했다.
+- **첫 사전점검**: run `31926148633`은 preview 성공·주문 0건 뒤 기계 승인 job에서 `ci_validate_decimal.sh`를 찾지 못해 실패했다. 원인은 해당 job의 checkout 누락이며 후속 브랜치 `Codex/144-autonomous-production-approval-checkout`에서 고친다.
+- **남은 완료 조건**: 후속을 머지·배포하고 수동 run이 사람 대기 없이 production 서명·서버 검증까지 성공한 뒤 money-path와 capital readiness를 재발행한다.
 
 ## 최근 관찰 — 2026-08-16 KST (#631 최초 실계좌 양의 손익 확정)
 
