@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-08-16T02:59:40.894841Z)
+# 완료 후보 소비 장부 (as of 2026-08-16T03:22:33.079338Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -142,7 +142,7 @@
 
 ```json
 {
-  "commit": "f6b30bef9d2d083707aec5a3d1b62455b5850b0d",
+  "commit": "a1b02a577581d7b8e9bd87190a670b9d3436e8ea",
   "overall_status": "OK",
   "released_work": [
     {
@@ -972,6 +972,6 @@
       "spec_id": "143-live-canary-gateway-profit-evidence"
     }
   ],
-  "timestamp_utc": "2026-08-16T02:59:40.894841Z"
+  "timestamp_utc": "2026-08-16T03:22:33.079338Z"
 }
 ```
