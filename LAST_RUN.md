@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-08-16T03:30:01.626517Z)
+# 완료 후보 소비 장부 (as of 2026-08-16T03:34:44.719959Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -8,8 +8,8 @@
 | 항목 | 값 |
 |------|-----|
 | overall_status | OK |
-| released_count | 59 |
-| scanned_specs | 91 |
+| released_count | 60 |
+| scanned_specs | 92 |
 
 ## 완료 후보
 
@@ -57,6 +57,7 @@
 | candidate-forward-regime-edge-experiment | released | 095-forward-regime-edge-experiment | specs/095-forward-regime-edge-experiment/spec.md | completed_candidate_id |
 | candidate-handoff-truth-liveness-contract | released | 107-handoff-truth-liveness-contract | specs/107-handoff-truth-liveness-contract/spec.md | completed_candidate_id |
 | candidate-investment-edge-frontier-map | released | 094-investment-edge-frontier-map | specs/094-investment-edge-frontier-map/spec.md | completed_candidate_id |
+| candidate-live-canary-gateway-profit-evidence | released | 143-live-canary-gateway-profit-evidence | specs/143-live-canary-gateway-profit-evidence/spec.md | completed_candidate_id |
 | candidate-live-canary-sidecar-gate | released | 123-live-canary-sidecar-gate | specs/123-live-canary-sidecar-gate/spec.md | completed_candidate_id |
 | candidate-live-entrypoint-containment | released | 111-live-entrypoint-containment | specs/111-live-entrypoint-containment/spec.md | completed_candidate_id |
 | candidate-live-money-route-priority | released | 142-live-money-route-priority | specs/142-live-money-route-priority/spec.md | completed_candidate_id |
@@ -125,7 +126,6 @@
 | 072-candidate-evidence-diagnostics | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 140-heldout-exploration-canary | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 141-lot-aware-execution-proxy | 체크박스 작업이 없거나 완료되지 않았습니다. |
-| 143-live-canary-gateway-profit-evidence | 체크박스 작업이 없거나 완료되지 않았습니다. |
 
 ## 안전 경계
 
@@ -142,7 +142,7 @@
 
 ```json
 {
-  "commit": "dc5d93e58c014c272c3ca4784d03131614477117",
+  "commit": "3544206cd7e123e85bd4a325450d96ba7441f156",
   "overall_status": "OK",
   "released_work": [
     {
@@ -524,6 +524,15 @@
       "status": "released"
     },
     {
+      "candidate_id": "candidate-live-canary-gateway-profit-evidence",
+      "entry_id": "released-720d37008b3c",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/143-live-canary-gateway-profit-evidence/spec.md",
+      "spec_id": "143-live-canary-gateway-profit-evidence",
+      "status": "released"
+    },
+    {
       "candidate_id": "candidate-live-canary-sidecar-gate",
       "entry_id": "released-8f02ec3a27ba",
       "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
@@ -779,7 +788,8 @@
     "137-broad-no-edge-vol-target-drawdown",
     "138-profit-evidence-engine",
     "139-forward-edge-watch-kis-range",
-    "142-live-money-route-priority"
+    "142-live-money-route-priority",
+    "143-live-canary-gateway-profit-evidence"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -966,12 +976,8 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "141-lot-aware-execution-proxy"
-    },
-    {
-      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "143-live-canary-gateway-profit-evidence"
     }
   ],
-  "timestamp_utc": "2026-08-16T03:30:01.626517Z"
+  "timestamp_utc": "2026-08-16T03:34:44.719959Z"
 }
 ```
