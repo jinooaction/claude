@@ -14,6 +14,12 @@ def _workflow_text() -> str:
 
 def _preview_job(text: str) -> str:
     return text.split("  live_portfolio_canary_preview:", 1)[1].split(
+        "\n  autonomous_live_approval:", 1
+    )[0]
+
+
+def _approval_job(text: str) -> str:
+    return text.split("  autonomous_live_approval:", 1)[1].split(
         "\n  live_portfolio_canary_real_orders:", 1
     )[0]
 
@@ -41,17 +47,32 @@ def test_live_canary_preview_job_publishes_sidecar_without_production_gate() -> 
     assert "steps.gate.outputs.armed != 'true'" in measure
 
 
-def test_live_canary_real_orders_remain_behind_production_gate() -> None:
+def test_live_canary_machine_approval_is_main_only_and_event_explicit() -> None:
+    approval = _approval_job(_workflow_text())
+
+    assert "needs: live_portfolio_canary_preview" in approval
+    assert "github.event_name == 'schedule'" in approval
+    assert "github.event_name == 'workflow_dispatch'" in approval
+    assert '[[ "${REF}" == "refs/heads/main" ]]' in approval
+    assert "Validate autonomous production approval evidence" in approval
+    assert 'schedule) decision="scheduled-real-order"' in approval
+    assert 'workflow_dispatch) decision="manual-no-order-preflight"' in approval
+    assert "AUTONOMOUS_PRODUCTION_APPROVED" in approval
+    assert "LIVE_ORDER_SIGNING_KEY" not in approval
+    assert "environment: production" not in approval
+
+
+def test_live_canary_real_orders_remain_behind_machine_and_production_gates() -> None:
     text = _workflow_text()
     real_order = _real_order_job(text)
     header = real_order.split("\n    steps:", 1)[0]
 
-    assert "needs: live_portfolio_canary_preview" in header
-    assert "needs.live_portfolio_canary_preview.outputs.armed == 'true'" in header
-    assert "needs.live_portfolio_canary_preview.outputs.blocked != 'true'" in header
-    assert "github.event_name != 'push'" in header
+    assert "needs: [live_portfolio_canary_preview, autonomous_live_approval]" in header
+    assert "needs.autonomous_live_approval.result == 'success'" in header
+    assert "needs.autonomous_live_approval.outputs.decision" in header
     assert "\n    environment: production\n" in real_order
     assert "Validate production live gate outputs" in real_order
+    assert 'decision="${{ needs.autonomous_live_approval.outputs.decision }}"' in real_order
     assert "Authorize request — scheduled runs place real orders" in real_order
     assert "LIVE_ORDER_SIGNING_KEY: ${{ secrets.LIVE_ORDER_SIGNING_KEY }}" in real_order
     assert "openssl pkeyutl -sign -rawin" in real_order

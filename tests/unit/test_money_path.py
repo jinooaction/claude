@@ -257,7 +257,8 @@ def test_live_money_state_prefers_armed_capital_ladder_over_disarmed_micro():
     assert state.capital_usd == 293
     assert state.max_capital_usd == 293
     assert state.next_scheduled_live_utc == "2026-06-15T15:00:00Z"
-    assert "production environment approval" in state.required_gates
+    assert "production environment machine authorization" in state.required_gates
+    assert "production environment approval" not in state.required_gates
 
 
 def test_live_money_state_blocks_capital_ladder_sidecar_mismatch():

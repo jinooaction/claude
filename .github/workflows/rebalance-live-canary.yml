@@ -18,8 +18,9 @@ name: Live canary portfolio rebalance (guarded, real money)
 #   같은 계좌에 canary-live-rules.toml 워커가 돌면 포트폴리오 재조정과 충돌한다. 무장 시
 #   룰 워커를 비활성(disabled 룰셋)으로 먼저 전환한다 — 별도 단계(go-live 채널).
 #
-# 헌법 X.4: 라이브 전환은 운영자 결정. 이 채널은 운영자 지시 하 소액 캐너리 무장 전용,
-# 풀라이브 아님. 결과는 사이드카 automation/rebalance-live-canary-last-run 로 발행.
+# 헌법 X.4의 운영자 위임 아래 소액 캐너리 자본은 증거 기반으로 자동 운용한다. 실제 주문은
+# main 예약 실행 + 기계 승인 + production 환경 서명 + 서버 이중 검증을 모두 통과해야 한다.
+# 결과는 사이드카 automation/rebalance-live-canary-last-run 로 발행한다.
 
 on:
   schedule:
@@ -233,7 +234,7 @@ jobs:
               echo "> armed: true 로 머지(룰 워커 충돌 먼저 해소)."
             else
               echo "> 🟡 **무장됨이나 이 job 은 미리보기만** (armed=true, event=${EVENT:-?})."
-              echo "> 실주문은 별도 production-gated job 이 운영자 승인 뒤에만 실행한다."
+              echo "> 실주문은 별도 production 기계 승인과 서버 이중 검증 뒤에만 실행한다."
               echo "> 이 preview/sidecar job 자체는 **실주문 0건**이다."
             fi
             echo ""
@@ -244,7 +245,7 @@ jobs:
             echo ""
             echo "## 라이브 재조정 결과 (armed=true 일 때만)"
             echo '```json'
-            echo '(preview job — 실주문은 production-gated job 이 승인 뒤 별도 발행)'
+            echo '(preview job — 실주문은 production 기계 승인 뒤 별도 발행)'
             echo '```'
             echo ""
             echo "## 라이브 트랙 측정 (NAV 스냅샷 + forward-verdict --mode live + 칼마)"
@@ -259,12 +260,54 @@ jobs:
           git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "publish:${BRANCH}"
           echo "Published to ${BRANCH}."
 
-  live_portfolio_canary_real_orders:
+  autonomous_live_approval:
     needs: live_portfolio_canary_preview
     if: >-
       needs.live_portfolio_canary_preview.outputs.armed == 'true' &&
       needs.live_portfolio_canary_preview.outputs.blocked != 'true' &&
-      github.event_name != 'push'
+      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      decision: ${{ steps.approval.outputs.decision }}
+    steps:
+      - name: Validate autonomous production approval evidence
+        id: approval
+        env:
+          ARMED: ${{ needs.live_portfolio_canary_preview.outputs.armed }}
+          BLOCKED: ${{ needs.live_portfolio_canary_preview.outputs.blocked }}
+          CAP: ${{ needs.live_portfolio_canary_preview.outputs.capital }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          [[ "${REF}" == "refs/heads/main" ]] || {
+            echo "autonomous approval requires refs/heads/main; got ${REF}" >&2
+            exit 1
+          }
+          [[ "${ARMED}" == "true" ]] || {
+            echo "autonomous approval requires armed=true" >&2
+            exit 1
+          }
+          [[ "${BLOCKED}" != "true" ]] || {
+            echo "autonomous approval refuses a blocked capital gate" >&2
+            exit 1
+          }
+          ./scripts/ci_validate_decimal.sh capital "${CAP}"
+          case "${EVENT}" in
+            schedule) decision="scheduled-real-order" ;;
+            workflow_dispatch) decision="manual-no-order-preflight" ;;
+            *) echo "unsupported autonomous approval event: ${EVENT}" >&2; exit 1 ;;
+          esac
+          echo "decision=${decision}" >> "$GITHUB_OUTPUT"
+          echo "AUTONOMOUS_PRODUCTION_APPROVED event=${EVENT} decision=${decision} capital=${CAP}"
+
+  live_portfolio_canary_real_orders:
+    needs: [live_portfolio_canary_preview, autonomous_live_approval]
+    if: >-
+      needs.autonomous_live_approval.result == 'success' &&
+      (needs.autonomous_live_approval.outputs.decision == 'scheduled-real-order' ||
+       needs.autonomous_live_approval.outputs.decision == 'manual-no-order-preflight')
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 15
@@ -279,6 +322,7 @@ jobs:
           armed="${{ needs.live_portfolio_canary_preview.outputs.armed }}"
           capital="${{ needs.live_portfolio_canary_preview.outputs.capital }}"
           blocked="${{ needs.live_portfolio_canary_preview.outputs.blocked }}"
+          decision="${{ needs.autonomous_live_approval.outputs.decision }}"
           if [[ "${armed}" != "true" ]]; then
             echo "preview job did not arm live orders; refusing production job" >&2
             exit 1
@@ -287,11 +331,15 @@ jobs:
             echo "preview job marked capital gate blocked; refusing production job" >&2
             exit 1
           fi
+          case "${decision}" in
+            scheduled-real-order|manual-no-order-preflight) ;;
+            *) echo "missing or invalid autonomous approval decision: ${decision}" >&2; exit 1 ;;
+          esac
           ./scripts/ci_validate_decimal.sh capital "${capital}" || exit $?
           echo "armed=${armed}" >> "$GITHUB_OUTPUT"
           echo "capital=${capital}" >> "$GITHUB_OUTPUT"
           echo "blocked=${blocked}" >> "$GITHUB_OUTPUT"
-          echo "production live gate: armed=${armed} capital=${capital} blocked=${blocked}"
+          echo "production live gate: autonomous=${decision} armed=${armed} capital=${capital} blocked=${blocked}"
 
       - name: Install SSH key
         env:
@@ -453,7 +501,7 @@ jobs:
             echo "| 사후 측정 | ${MEASURE_OUTCOME:-skipped} |"
             echo ""
             if [[ "${LIVE_OUTCOME:-skipped}" == "success" ]]; then
-              echo "> ⚠ **무장 + production 승인 + 실주문 실행** — 실주문 job 이 실행됐다."
+              echo "> ⚠ **무장 + production 기계 승인 + 실행** — 예약이면 실주문, 수동이면 주문 없는 검증이다."
               echo "> 아래 라이브 재조정 결과를 확인하라."
             else
               echo "> 🟡 **무장됐지만 실주문 job 이 완료되지 않음** — 아래 stderr/로그 확인."

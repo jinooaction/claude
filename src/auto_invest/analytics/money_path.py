@@ -84,7 +84,7 @@ ETA_NOMINAL = "nominal"  # 전진 스케줄 가정(거래일당 ~1 관측)
 ETA_NONE = "n/a"  # 추정 불가/불필요
 
 # 실제 돈 최상위 상태. 기존 money-path 는 자본 사다리의 첫 자본 ETA 를 잘 보여줬지만,
-# 스펙 058 이후 별도 운영자 승인형 micro GTAA live 경로가 생겼다. 이 상태는 첫-자본
+# 스펙 058 이후 별도 micro GTAA live 경로가 생겼다. 이 상태는 첫-자본
 # 사다리보다 먼저 보여야 한다.
 LIVE_STATUS_ARMED = "REAL_ORDER_PATH_ARMED"
 LIVE_STATUS_PREVIEW = "PREVIEW_ONLY"
@@ -103,7 +103,7 @@ MICRO_REQUIRED_GATES = (
     "K1 caps and K2 whitelist",
 )
 CAPITAL_LADDER_REQUIRED_GATES = (
-    "production environment approval",
+    "production environment machine authorization",
     "non-push workflow event",
     "US regular session",
     "KIS purchasable cash >= planned buys + 1% buffer",
@@ -1024,7 +1024,7 @@ def _assess_capital_ladder_live_money_state(
         next_scheduled_live_utc=_next_live_schedule(now),
         detail=(
             f"자본 사다리 단{rung} 센티넬 armed:true + 유효 자본. 다음 비-push 실행은 "
-            "production 승인·정규장·현금·손실 브레이커·K1/K2를 통과하면 실주문 단계에 "
+            "production 기계 승인·정규장·현금·손실 브레이커·K1/K2를 통과하면 실주문 단계에 "
             "도달한다."
         ),
         **base,
