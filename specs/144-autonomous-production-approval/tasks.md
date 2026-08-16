@@ -19,8 +19,8 @@
 - [x] T006 관련·전체 테스트, ruff, 셸·YAML·diff, 엄격 하네스, HANDOFF 사실 검사를 통과한다.
 - [x] T007 안전 경계 커밋·PR·자동 머지와 배포 성공을 확인한다.
 - [x] T008 GitHub production required reviewer를 0명으로 만들고 main-only 정책을 재확인한다.
-- [ ] T009 주문 없는 수동 production 사전점검이 사람 대기 없이 성공하는지 확인한다.
-- [ ] T010 money-path와 capital readiness를 재발행해 자동매매 상태를 확인하고 HANDOFF를 갱신한다.
+- [x] T009 주문 없는 수동 production 사전점검이 사람 대기 없이 성공하는지 확인한다.
+- [x] T010 money-path와 capital readiness를 재발행해 자동매매 상태를 확인하고 HANDOFF를 갱신한다.
 - [x] T011 첫 실서버 사전점검에서 발견한 기계 승인 checkout 누락을 고치고 회귀 테스트를 추가한다.
 
 ## Dependencies
