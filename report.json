@@ -1,20 +1,399 @@
 {
-  "schema_version": "1.0",
-  "experiment_id": "daily-cross-asset-ml-v1",
-  "verdict": "BLOCKED",
-  "reason": "refused command: observe daily-ml-edge\n",
-  "candidate_package": {
-    "eligible": false,
-    "candidate_id": "candidate-daily-cross-asset-ml-v1",
-    "status": "blocked",
-    "verdict": "BLOCKED",
-    "reason_ko": "refused command: observe daily-ml-edge\n",
-    "live_promotion_authorized": false
+  "benchmarks": {
+    "incumbent_wide_trend_25bp": {
+      "cagr_pct": 2.540715,
+      "max_dd_pct": 5.511424,
+      "sharpe": 0.587707,
+      "total_return_pct": 5.603568
+    },
+    "passive_equal_weight_25bp": {
+      "cagr_pct": 14.143136,
+      "max_dd_pct": 5.325597,
+      "sharpe": 1.752912,
+      "total_return_pct": 33.303894
+    }
   },
+  "candidate_package": {
+    "candidate_id": "candidate-daily-cross-asset-ml-v1",
+    "data": "sha256:09d0ee686dda4d82ee1631fac1292522ecdec0cb09fc138cc31eb92d709aeabd",
+    "domain_key": "investment_edge",
+    "eligible": false,
+    "evidence_refs": [
+      "daily-cross-asset-ml",
+      "kis-price-bars",
+      "global-trend-wide"
+    ],
+    "features": "sha256:b718803406484520f8584307a9c467c8339d7d4a9d85af564d768ef64646dfc1",
+    "kind": "strategy_backtest",
+    "live_promotion_authorized": false,
+    "model": "sha256:bc7aa31a0dac31eaa7a648e778f81ab3d07220ab4602f113a8ad53e11f5434af",
+    "next_action_ko": "독립 no-live 재현 뒤 기존 Canary 승격 관문을 적용한다.",
+    "priority_score": 760,
+    "reason_ko": "failed gates: sharpe_margin, psr, dsr, fold_win_rate, max_drawdown, positive_50bp_return",
+    "replay_command": "uv run python scripts/daily_cross_asset_ml_probe.py --db data/forward_wide.db --json",
+    "risk_grade": 2,
+    "status": "rejected",
+    "title_ko": "일봉 교차자산 AI 상대수익 후보 재현 검증",
+    "verdict": "NO_EDGE"
+  },
+  "cost_scenarios": [
+    {
+      "cost_bps": 10,
+      "metrics": {
+        "cagr_pct": 4.33648,
+        "max_dd_pct": 9.452481,
+        "sharpe": 0.50609,
+        "total_return_pct": 9.663786
+      },
+      "turnover": 34.34
+    },
+    {
+      "cost_bps": 25,
+      "metrics": {
+        "cagr_pct": 1.893908,
+        "max_dd_pct": 11.457877,
+        "sharpe": 0.249174,
+        "total_return_pct": 4.161376
+      },
+      "turnover": 34.34
+    },
+    {
+      "cost_bps": 50,
+      "metrics": {
+        "cagr_pct": -2.055845,
+        "max_dd_pct": 14.925532,
+        "sharpe": -0.179008,
+        "total_return_pct": -4.413704
+      },
+      "turnover": 34.34
+    }
+  ],
+  "data": {
+    "common_week_end": "2026-08-14",
+    "common_week_start": "2021-06-11",
+    "common_weeks": 271,
+    "daily_counts": {
+      "DBC": 1300,
+      "EEM": 1300,
+      "EFA": 1300,
+      "GLD": 1300,
+      "IEF": 1300,
+      "LQD": 1300,
+      "QQQ": 1300,
+      "SPY": 1300,
+      "TLT": 1300,
+      "UUP": 1300,
+      "VNQ": 1300
+    },
+    "symbols": [
+      "SPY",
+      "QQQ",
+      "EFA",
+      "EEM",
+      "IEF",
+      "TLT",
+      "LQD",
+      "GLD",
+      "DBC",
+      "VNQ",
+      "UUP"
+    ]
+  },
+  "experiment_id": "daily-cross-asset-ml-v1",
+  "fingerprints": {
+    "data": "sha256:09d0ee686dda4d82ee1631fac1292522ecdec0cb09fc138cc31eb92d709aeabd",
+    "features": "sha256:b718803406484520f8584307a9c467c8339d7d4a9d85af564d768ef64646dfc1",
+    "model": "sha256:bc7aa31a0dac31eaa7a648e778f81ab3d07220ab4602f113a8ad53e11f5434af"
+  },
+  "folds": [
+    {
+      "blended_error_quantile": 0.015682272206675566,
+      "boosting_rmse": 0.01663585175932632,
+      "chronology_ok": true,
+      "fold_id": 1,
+      "ridge_rmse": 0.017114917001771555,
+      "test_end": "2024-08-02",
+      "test_rows": 88,
+      "test_start": "2024-06-14",
+      "train_label_end": "2024-06-07",
+      "train_rows": 1144,
+      "train_start": "2022-06-10"
+    },
+    {
+      "blended_error_quantile": 0.01616000733717626,
+      "boosting_rmse": 0.017009267570976427,
+      "chronology_ok": true,
+      "fold_id": 2,
+      "ridge_rmse": 0.017802439782265235,
+      "test_end": "2024-09-27",
+      "test_rows": 88,
+      "test_start": "2024-08-09",
+      "train_label_end": "2024-08-02",
+      "train_rows": 1232,
+      "train_start": "2022-06-10"
+    },
+    {
+      "blended_error_quantile": 0.017389673296405193,
+      "boosting_rmse": 0.019390566439374795,
+      "chronology_ok": true,
+      "fold_id": 3,
+      "ridge_rmse": 0.020155365518351356,
+      "test_end": "2024-11-22",
+      "test_rows": 88,
+      "test_start": "2024-10-04",
+      "train_label_end": "2024-09-27",
+      "train_rows": 1320,
+      "train_start": "2022-06-10"
+    },
+    {
+      "blended_error_quantile": 0.01771093501863463,
+      "boosting_rmse": 0.019533346127359554,
+      "chronology_ok": true,
+      "fold_id": 4,
+      "ridge_rmse": 0.020254734102395987,
+      "test_end": "2025-01-17",
+      "test_rows": 88,
+      "test_start": "2024-11-29",
+      "train_label_end": "2024-11-22",
+      "train_rows": 1408,
+      "train_start": "2022-06-10"
+    },
+    {
+      "blended_error_quantile": 0.018232228553241244,
+      "boosting_rmse": 0.01988262376321928,
+      "chronology_ok": true,
+      "fold_id": 5,
+      "ridge_rmse": 0.02040437002911151,
+      "test_end": "2025-03-14",
+      "test_rows": 88,
+      "test_start": "2025-01-24",
+      "train_label_end": "2025-01-17",
+      "train_rows": 1496,
+      "train_start": "2022-06-10"
+    },
+    {
+      "blended_error_quantile": 0.017983868174279626,
+      "boosting_rmse": 0.018205519667781056,
+      "chronology_ok": true,
+      "fold_id": 6,
+      "ridge_rmse": 0.01894217937241474,
+      "test_end": "2025-05-09",
+      "test_rows": 88,
+      "test_start": "2025-03-21",
+      "train_label_end": "2025-03-14",
+      "train_rows": 1584,
+      "train_start": "2022-06-10"
+    },
+    {
+      "blended_error_quantile": 0.019829432356576464,
+      "boosting_rmse": 0.02274971706785865,
+      "chronology_ok": true,
+      "fold_id": 7,
+      "ridge_rmse": 0.024602523521781633,
+      "test_end": "2025-07-03",
+      "test_rows": 88,
+      "test_start": "2025-05-16",
+      "train_label_end": "2025-05-09",
+      "train_rows": 1672,
+      "train_start": "2022-06-10"
+    },
+    {
+      "blended_error_quantile": 0.021784065542103725,
+      "boosting_rmse": 0.02363567117343421,
+      "chronology_ok": true,
+      "fold_id": 8,
+      "ridge_rmse": 0.025853085203780806,
+      "test_end": "2025-08-29",
+      "test_rows": 88,
+      "test_start": "2025-07-11",
+      "train_label_end": "2025-07-03",
+      "train_rows": 1760,
+      "train_start": "2022-06-10"
+    },
+    {
+      "blended_error_quantile": 0.019837334360466155,
+      "boosting_rmse": 0.02313000219229075,
+      "chronology_ok": true,
+      "fold_id": 9,
+      "ridge_rmse": 0.02514122503957985,
+      "test_end": "2025-10-24",
+      "test_rows": 88,
+      "test_start": "2025-09-05",
+      "train_label_end": "2025-08-29",
+      "train_rows": 1848,
+      "train_start": "2022-06-10"
+    },
+    {
+      "blended_error_quantile": 0.017568302455603434,
+      "boosting_rmse": 0.018674773407724846,
+      "chronology_ok": true,
+      "fold_id": 10,
+      "ridge_rmse": 0.01851706192910224,
+      "test_end": "2025-12-19",
+      "test_rows": 88,
+      "test_start": "2025-10-31",
+      "train_label_end": "2025-10-24",
+      "train_rows": 1936,
+      "train_start": "2022-06-10"
+    },
+    {
+      "blended_error_quantile": 0.01610187621190549,
+      "boosting_rmse": 0.016945568556009385,
+      "chronology_ok": true,
+      "fold_id": 11,
+      "ridge_rmse": 0.01714313474509445,
+      "test_end": "2026-02-13",
+      "test_rows": 88,
+      "test_start": "2025-12-26",
+      "train_label_end": "2025-12-19",
+      "train_rows": 2024,
+      "train_start": "2022-06-10"
+    },
+    {
+      "blended_error_quantile": 0.015085113831356422,
+      "boosting_rmse": 0.016722914506956628,
+      "chronology_ok": true,
+      "fold_id": 12,
+      "ridge_rmse": 0.016882268431087404,
+      "test_end": "2026-04-10",
+      "test_rows": 88,
+      "test_start": "2026-02-20",
+      "train_label_end": "2026-02-13",
+      "train_rows": 2112,
+      "train_start": "2022-06-10"
+    },
+    {
+      "blended_error_quantile": 0.01804518209604248,
+      "boosting_rmse": 0.0208122484269763,
+      "chronology_ok": true,
+      "fold_id": 13,
+      "ridge_rmse": 0.02166050308191458,
+      "test_end": "2026-06-05",
+      "test_rows": 88,
+      "test_start": "2026-04-17",
+      "train_label_end": "2026-04-10",
+      "train_rows": 2200,
+      "train_start": "2022-06-10"
+    },
+    {
+      "blended_error_quantile": 0.018915984470801304,
+      "boosting_rmse": 0.022651260197183054,
+      "chronology_ok": true,
+      "fold_id": 14,
+      "ridge_rmse": 0.02359014591840875,
+      "test_end": "2026-07-31",
+      "test_rows": 88,
+      "test_start": "2026-06-12",
+      "train_label_end": "2026-06-05",
+      "train_rows": 2288,
+      "train_start": "2022-06-10"
+    },
+    {
+      "blended_error_quantile": 0.021613581119385904,
+      "boosting_rmse": 0.02412922161280591,
+      "chronology_ok": true,
+      "fold_id": 15,
+      "ridge_rmse": 0.02516992183146656,
+      "test_end": "2026-08-07",
+      "test_rows": 11,
+      "test_start": "2026-08-07",
+      "train_label_end": "2026-07-31",
+      "train_rows": 2376,
+      "train_start": "2022-06-10"
+    }
+  ],
+  "gates": [
+    {
+      "actual": 15,
+      "gate_id": "fold_count",
+      "passed": true,
+      "required": ">= 10"
+    },
+    {
+      "actual": 1.893908,
+      "gate_id": "positive_25bp_cagr",
+      "passed": true,
+      "required": "> 0"
+    },
+    {
+      "actual": -1.503738,
+      "gate_id": "sharpe_margin",
+      "passed": false,
+      "required": ">= 0.20 over both benchmarks"
+    },
+    {
+      "actual": 0.013356004569647917,
+      "gate_id": "psr",
+      "passed": false,
+      "required": ">= 0.95"
+    },
+    {
+      "actual": 0.5569669861356094,
+      "gate_id": "dsr",
+      "passed": false,
+      "required": ">= 0.95"
+    },
+    {
+      "actual": 0.2,
+      "gate_id": "fold_win_rate",
+      "passed": false,
+      "required": ">= 0.60"
+    },
+    {
+      "actual": 11.457877,
+      "gate_id": "max_drawdown",
+      "passed": false,
+      "required": "<= 5.325597"
+    },
+    {
+      "actual": -4.413704,
+      "gate_id": "positive_50bp_return",
+      "passed": false,
+      "required": "> 0"
+    }
+  ],
+  "latest_allocation": {
+    "cash_weight": 1.0,
+    "date": "2026-08-07",
+    "weights": {
+      "DBC": 0.0,
+      "EEM": 0.0,
+      "EFA": 0.0,
+      "GLD": 0.0,
+      "IEF": 0.0,
+      "LQD": 0.0,
+      "QQQ": 0.0,
+      "SPY": 0.0,
+      "TLT": 0.0,
+      "UUP": 0.0,
+      "VNQ": 0.0
+    }
+  },
+  "model_metrics": {
+    "boosting_mean_validation_rmse": 0.020007236831285143,
+    "fold_win_rate": 0.2,
+    "fold_wins": 3,
+    "prediction_weeks": 113,
+    "ridge_mean_validation_rmse": 0.020882258367235108,
+    "trial_sharpes_annual": [
+      0.50021,
+      0.593673,
+      0.249174
+    ]
+  },
+  "reason": "failed gates: sharpe_margin, psr, dsr, fold_win_rate, max_drawdown, positive_50bp_return",
   "safety": {
-    "orders_submitted": 0,
-    "orders_cancelled": 0,
+    "capital_changed": false,
+    "caps_changed": false,
     "live_strategy_changed": false,
-    "capital_changed": false
-  }
+    "orders_cancelled": 0,
+    "orders_submitted": 0,
+    "whitelist_changed": false
+  },
+  "schema_version": "1.0",
+  "significance": {
+    "dsr_model_trials": 0.5569669861356094,
+    "psr_vs_better_benchmark": 0.013356004569647917
+  },
+  "verdict": "NO_EDGE"
 }
