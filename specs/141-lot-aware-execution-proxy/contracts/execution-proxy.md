@@ -22,3 +22,8 @@ lot_rounding = "nearest"
 
 JSON 결과는 `signal_target_weights`, `target_weights`, `execution_symbol_map`,
 `account_wide`, `purchasable_cash_usd`, `required_cash_usd`, 주문 결과와 보류 주문을 포함한다.
+
+실주문·체결 동기화·사후 측정의 SSH 종료 코드는 각 단계 결과에 그대로 반영한다. 실주문 뒤
+`fills --sync`를 최대 세 번 실행해 KIS 체결을 추가-전용 장부에 반영하고 열린 주문·최근 체결을
+출력한다. 어느 단계가 실패해도 마지막 sidecar는 `LIVE`, 체결 동기화, 사후 측정 결과와 가용한
+stdout·stderr를 발행한다.
