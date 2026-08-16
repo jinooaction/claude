@@ -30,10 +30,14 @@ GATEWAY_PATH="${GATEWAY_PATH:-/usr/local/sbin/auto-invest-deploy-gateway}"
 SYNC_HELPER_PATH="${SYNC_HELPER_PATH:-/usr/local/sbin/auto-invest-sync-units}"
 KIS_SMOKE_HELPER_PATH="${KIS_SMOKE_HELPER_PATH:-/usr/local/sbin/auto-invest-kis-smoke}"
 OBSERVE_HELPER_PATH="${OBSERVE_HELPER_PATH:-/usr/local/sbin/auto-invest-observe}"
+LIVE_CANARY_HELPER_PATH="${LIVE_CANARY_HELPER_PATH:-/usr/local/sbin/auto-invest-live-canary}"
+LIVE_ORDER_PUBLIC_KEY_PATH="${LIVE_ORDER_PUBLIC_KEY_PATH:-/usr/local/share/auto-invest/live-order-signing-public.pem}"
 SUDOERS_PATH="${SUDOERS_PATH:-/etc/sudoers.d/auto-invest-gh-deploy}"
 REPO_SYNC_UNITS="${REPO_SYNC_UNITS:-/opt/auto-invest/deploy/sync-units.sh}"
 REPO_KIS_SMOKE_HELPER="${REPO_KIS_SMOKE_HELPER:-/opt/auto-invest/deploy/kis-smoke-on-instance.sh}"
 REPO_OBSERVE_HELPER="${REPO_OBSERVE_HELPER:-/opt/auto-invest/deploy/observe-on-instance.sh}"
+REPO_LIVE_CANARY_HELPER="${REPO_LIVE_CANARY_HELPER:-/opt/auto-invest/deploy/live-canary-on-instance.sh}"
+REPO_LIVE_ORDER_PUBLIC_KEY="${REPO_LIVE_ORDER_PUBLIC_KEY:-/opt/auto-invest/deploy/live-order-signing-public.pem}"
 
 die() {
     echo "ERROR: $*" >&2
@@ -197,6 +201,33 @@ case "${cmd}" in
         echo "refused command: ${cmd}" >&2
         exit 126
         ;;
+    live-canary-order\ *)
+        read -r action run_id signed_sha capital expires nonce signature extra <<<"${cmd}"
+        if [[ "${action:-}" == "live-canary-order" \
+            && -z "${extra:-}" \
+            && "${run_id:-}" =~ ^[0-9]+$ \
+            && "${signed_sha:-}" =~ ^[0-9a-f]{40}$ \
+            && "${capital:-}" =~ ^[0-9]+([.][0-9]+)?$ \
+            && "${expires:-}" =~ ^[0-9]+$ \
+            && "${nonce:-}" =~ ^[0-9]+-[0-9]+$ \
+            && "${signature:-}" =~ ^[A-Za-z0-9+/]+={0,2}$ ]]; then
+            exec sudo -n /usr/local/sbin/auto-invest-live-canary order \
+                "${run_id}" "${signed_sha}" "${capital}" "${expires}" "${nonce}" "${signature}"
+        fi
+        echo "refused command: ${cmd}" >&2
+        exit 126
+        ;;
+    live-canary-fills)
+        exec sudo -n /usr/local/sbin/auto-invest-live-canary fills
+        ;;
+    live-canary-profit\ *)
+        capital="${cmd#live-canary-profit }"
+        if [[ "${capital}" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+            exec sudo -n /usr/local/sbin/auto-invest-live-canary profit "${capital}"
+        fi
+        echo "refused command: ${cmd}" >&2
+        exit 126
+        ;;
     start-deploy)
         exec sudo -n /usr/bin/systemctl start auto-invest-deploy.service
         ;;
@@ -229,6 +260,32 @@ install_observe_helper() {
         "deploy/observe-on-instance.sh" \
         "${REPO_OBSERVE_HELPER}" \
         "${OBSERVE_HELPER_PATH}"
+}
+
+install_live_canary_helper() {
+    install_repo_file \
+        "deploy/live-canary-on-instance.sh" \
+        "${REPO_LIVE_CANARY_HELPER}" \
+        "${LIVE_CANARY_HELPER_PATH}"
+}
+
+install_live_order_public_key() {
+    local tmp_file
+    tmp_file="$(mktemp)"
+    if [[ -d "${REPO}/.git" ]] \
+        && id "${REPO_OWNER}" >/dev/null 2>&1 \
+        && sudo -u "${REPO_OWNER}" git -C "${REPO}" show \
+            "${REPO_REF}:deploy/live-order-signing-public.pem" > "${tmp_file}" 2>/dev/null; then
+        :
+    elif [[ -f "${REPO_LIVE_ORDER_PUBLIC_KEY}" ]]; then
+        cp "${REPO_LIVE_ORDER_PUBLIC_KEY}" "${tmp_file}"
+    else
+        rm -f "${tmp_file}"
+        die "missing live order signing public key"
+    fi
+    install -d -m 0755 -o root -g root "$(dirname "${LIVE_ORDER_PUBLIC_KEY_PATH}")"
+    install -m 0644 -o root -g root "${tmp_file}" "${LIVE_ORDER_PUBLIC_KEY_PATH}"
+    rm -f "${tmp_file}"
 }
 
 install_deploy_user() {
@@ -266,7 +323,7 @@ install_sudoers() {
     tmp_file="$(mktemp)"
     cat > "${tmp_file}" <<EOF_SUDOERS
 # auto-invest deploy gateway: ${DEPLOY_USER} may run only fixed root-owned commands.
-${DEPLOY_USER} ALL=(root) NOPASSWD: ${SYNC_HELPER_PATH}, ${KIS_SMOKE_HELPER_PATH}, ${OBSERVE_HELPER_PATH}, /usr/bin/systemctl start auto-invest-deploy.service, /usr/bin/journalctl -u auto-invest-deploy.service -n 120 --no-pager
+${DEPLOY_USER} ALL=(root) NOPASSWD: ${SYNC_HELPER_PATH}, ${KIS_SMOKE_HELPER_PATH}, ${OBSERVE_HELPER_PATH}, ${LIVE_CANARY_HELPER_PATH}, /usr/bin/systemctl start auto-invest-deploy.service, /usr/bin/journalctl -u auto-invest-deploy.service -n 120 --no-pager
 EOF_SUDOERS
     visudo -cf "${tmp_file}" >/dev/null
     install -m 0440 -o root -g root "${tmp_file}" "${SUDOERS_PATH}"
@@ -329,6 +386,8 @@ main() {
         install_sync_helper
         install_kis_smoke_helper
         install_observe_helper
+        install_live_canary_helper
+        install_live_order_public_key
         install_sudoers
         echo "AUTO_INVEST_SSH_BOUNDARY_HELPERS_REFRESHED"
         echo "deploy_user=${DEPLOY_USER}"
@@ -336,6 +395,8 @@ main() {
         echo "sync_helper=${SYNC_HELPER_PATH}"
         echo "kis_smoke_helper=${KIS_SMOKE_HELPER_PATH}"
         echo "observe_helper=${OBSERVE_HELPER_PATH}"
+        echo "live_canary_helper=${LIVE_CANARY_HELPER_PATH}"
+        echo "live_order_public_key=${LIVE_ORDER_PUBLIC_KEY_PATH}"
         exit 0
     fi
     validate_inputs
@@ -343,6 +404,8 @@ main() {
     install_sync_helper
     install_kis_smoke_helper
     install_observe_helper
+    install_live_canary_helper
+    install_live_order_public_key
     install_deploy_user
     install_authorized_key
     install_sudoers
@@ -354,6 +417,8 @@ main() {
     echo "sync_helper=${SYNC_HELPER_PATH}"
     echo "kis_smoke_helper=${KIS_SMOKE_HELPER_PATH}"
     echo "observe_helper=${OBSERVE_HELPER_PATH}"
+    echo "live_canary_helper=${LIVE_CANARY_HELPER_PATH}"
+    echo "live_order_public_key=${LIVE_ORDER_PUBLIC_KEY_PATH}"
 }
 
 main "$@"

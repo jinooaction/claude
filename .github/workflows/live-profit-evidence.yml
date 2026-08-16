@@ -1,0 +1,158 @@
+name: Live profit evidence (실계좌 체결과 첫 수익 증거)
+
+# 스펙 143 — 주문과 분리된 실계좌 체결·손익 관측 채널.
+# 고정 SSH 명령만 사용하며 주문·취소·자본 변경은 할 수 없다. 완전한 live 성과 JSON에서
+# 체결 1건 이상, 시세 결측 0, 데이터 경고 0, 총손익 > 0일 때만 최초 수익을 기록한다.
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - "Live canary portfolio rebalance (guarded, real money)"
+    types:
+      - completed
+  schedule:
+    # 미국 정규장 중 캐너리(15:00 UTC) 뒤 세 차례 재평가한다.
+    - cron: "30 15,17,19 * * 1-5"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: live-profit-evidence
+  cancel-in-progress: false
+
+jobs:
+  observe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86
+
+      - name: Read live capital authority
+        id: capital
+        run: |
+          set -euo pipefail
+          CAP="$(awk '$1 == "capital_usd:" { print $2; exit }' automation/rebalance-live.request)"
+          ./scripts/ci_validate_decimal.sh capital "${CAP}"
+          echo "value=${CAP}" >> "${GITHUB_OUTPUT}"
+
+      - name: Install SSH key
+        env:
+          KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.VULTR_SSH_KNOWN_HOSTS }}
+          SSH_USER: ${{ secrets.VULTR_SSH_USER }}
+        run: |
+          VULTR_SSH_PRIVATE_KEY="${KEY:-}" \
+          VULTR_SSH_KNOWN_HOSTS="${KNOWN_HOSTS:-}" \
+          VULTR_SSH_USER="${SSH_USER:-}" \
+          ./scripts/ci_secure_ssh.sh
+
+      - name: Sync live fills (fixed read path, no orders)
+        id: fills
+        continue-on-error: true
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          set +e
+          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts \
+            -o ConnectTimeout=15 -p "${PORT:-22}" -i ~/.ssh/id_ed25519 \
+            "${USER}@${HOST}" "live-canary-fills" \
+            > /tmp/live_fills.log 2>&1
+          code=$?
+          echo "exit=${code}" >> "${GITHUB_OUTPUT}"
+          cat /tmp/live_fills.log
+          exit "${code}"
+
+      - name: Measure live PnL (fixed read path, no orders)
+        id: performance
+        continue-on-error: true
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+          CAP: ${{ steps.capital.outputs.value }}
+        run: |
+          set +e
+          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts \
+            -o ConnectTimeout=15 -p "${PORT:-22}" -i ~/.ssh/id_ed25519 \
+            "${USER}@${HOST}" "live-canary-profit ${CAP}" \
+            > /tmp/live_performance.json 2>/tmp/live_performance.err
+          code=$?
+          echo "exit=${code}" >> "${GITHUB_OUTPUT}"
+          cat /tmp/live_performance.json
+          cat /tmp/live_performance.err >&2
+          exit "${code}"
+
+      - name: Fetch prior first-profit evidence
+        run: |
+          set +e
+          git fetch --depth=1 origin \
+            automation/live-profit-evidence-last-run:refs/remotes/origin/automation/live-profit-evidence-last-run
+          git show \
+            origin/automation/live-profit-evidence-last-run:profit_evidence.json \
+            > /tmp/prior_profit_evidence.json 2>/dev/null || true
+
+      - name: Build conservative first-profit evidence
+        run: |
+          set -euo pipefail
+          uv run python scripts/live_profit_evidence_probe.py \
+            --performance-json /tmp/live_performance.json \
+            --prior-json /tmp/prior_profit_evidence.json \
+            --json-out /tmp/profit_evidence.json \
+            --summary-out /tmp/LAST_RUN.md \
+            --run-id "${GITHUB_RUN_ID}"
+          cat /tmp/LAST_RUN.md
+
+      - name: Publish evidence sidecar
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FILLS_OUTCOME: ${{ steps.fills.outcome }}
+          FILLS_EXIT: ${{ steps.fills.outputs.exit }}
+          PERFORMANCE_OUTCOME: ${{ steps.performance.outcome }}
+          PERFORMANCE_EXIT: ${{ steps.performance.outputs.exit }}
+        run: |
+          set -euo pipefail
+          BRANCH=automation/live-profit-evidence-last-run
+          tmpdir="$(mktemp -d)"
+          cp /tmp/LAST_RUN.md "${tmpdir}/LAST_RUN.md" 2>/dev/null || {
+            echo "# 실계좌 첫 수익 증거 — 보고 생성 실패" > "${tmpdir}/LAST_RUN.md"
+          }
+          cp /tmp/profit_evidence.json "${tmpdir}/profit_evidence.json" \
+            2>/dev/null || echo '{}' > "${tmpdir}/profit_evidence.json"
+          cp /tmp/live_fills.log "${tmpdir}/fills.log" 2>/dev/null || true
+          cp /tmp/live_performance.err "${tmpdir}/performance.err" 2>/dev/null || true
+          {
+            echo ""
+            echo "## workflow metadata"
+            echo ""
+            echo "| 항목 | 값 |"
+            echo "|------|-----|"
+            echo "| run_id | ${GITHUB_RUN_ID} |"
+            echo "| run_url | https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} |"
+            echo "| commit | ${GITHUB_SHA} |"
+            echo "| trigger | ${GITHUB_EVENT_NAME} |"
+            echo "| fills | ${FILLS_OUTCOME:-unknown} (exit=${FILLS_EXIT:-unknown}) |"
+            echo "| performance | ${PERFORMANCE_OUTCOME:-unknown} (exit=${PERFORMANCE_EXIT:-unknown}) |"
+            echo "| safety | fixed read commands only; no orders, cancels, or capital changes |"
+          } >> "${tmpdir}/LAST_RUN.md"
+
+          cd "${tmpdir}"
+          git init -q
+          git config user.name "live-profit-evidence-bot"
+          git config user.email "live-profit-evidence-bot@noreply.github.com"
+          git checkout --orphan publish -q
+          python3 "${GITHUB_WORKSPACE}/scripts/redact_public_sidecar.py" . 2>/dev/null || true
+          git add .
+          git commit -q -m "live-profit-evidence run ${GITHUB_RUN_ID} @ ${GITHUB_SHA:0:7}"
+          git push --force \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "publish:${BRANCH}"
+          echo "Published to ${BRANCH}."

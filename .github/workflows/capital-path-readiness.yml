@@ -15,6 +15,11 @@ on:
     # 매일 08:10 UTC — money-path(08:00) 직후, 직전 promotion/evolution 결과와 함께 종합.
     - cron: "10 8 * * *"
   workflow_dispatch:
+  workflow_run:
+    workflows:
+      - "Money-path readiness (첫-자본까지의 길 종합)"
+    types:
+      - completed
   push:
     branches: [main]
     paths:
