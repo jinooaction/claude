@@ -77,6 +77,9 @@
 
 ## Requirements *(mandatory)*
 
+> **돈 경로·안전 경계 변경**: 실자본에 닿는 기능은 정확한 배포 지문, 시간 분리 검증,
+> 비용 가정, 단계별 최대 자본, 누락 증거의 fail-closed 동작, 되돌림 조건을 요구사항에 명시한다.
+
 <!--
   ACTION REQUIRED: The content in this section represents placeholders.
   Fill them out with the right functional requirements.

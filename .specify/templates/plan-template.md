@@ -31,6 +31,10 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
+For money-path work, explicitly verify the rung-0 exploration contract, the unchanged
+EDGE_CONFIRMED requirement before capital exceeds 20%, exact strategy fingerprint identity,
+and fail-closed handling of missing holdout, forward, hardened-canary, broker, or NAV evidence.
+
 [Gates determined based on constitution file]
 
 ## Project Structure

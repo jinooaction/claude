@@ -142,6 +142,9 @@ case "${cmd}" in
     observe\ ladder-anchored-verdict)
         exec sudo -n /usr/local/sbin/auto-invest-observe ladder-anchored-verdict
         ;;
+    observe\ exploration-canary)
+        exec sudo -n /usr/local/sbin/auto-invest-observe exploration-canary
+        ;;
     observe\ account-nav)
         exec sudo -n /usr/local/sbin/auto-invest-observe account-nav
         ;;

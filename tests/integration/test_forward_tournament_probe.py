@@ -33,6 +33,7 @@ def _verdict(verdict="INSUFFICIENT_DATA", n_obs=1, calmar=None, universe=("SPY",
         "strategy_total_return_pct": "1.0",
         "strategy_max_drawdown_pct": "0.0",
         "strategy_calmar": calmar,
+        "beats_benchmark_calmar": True,
         "excess_return_pct": None,
         "dsr": None,
         "universe": list(universe),
@@ -79,6 +80,7 @@ def test_verdict_dir_all_premature(tmp_path, capsys):
     assert obj["champion_key"] is None
     assert obj["incumbent_key"] == "global"
     assert len(obj["rows"]) == 7
+    assert all(row["beats_benchmark_calmar"] is True for row in obj["rows"])
     assert "아직 비교 불가" in obj["headline"]
 
 

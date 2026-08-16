@@ -39,7 +39,7 @@ CONSUMED_SIDECARS: list[tuple[str, str, str]] = [
 # 비교하는 바로 그 두 설정(--live-portfolio / --validated-portfolio 기본값과 동일).
 # 사다리 게이트와 같은 두 파일을 읽어야 비교가 정확하다.
 DEFAULT_LIVE_PORTFOLIO = "deploy/canary-live-portfolio.toml"
-DEFAULT_VALIDATED_PORTFOLIO = "deploy/global-trend-portfolio.toml"
+DEFAULT_VALIDATED_PORTFOLIO = "deploy/global-trend-fixed-portfolio.toml"
 DEFAULT_MICRO_REQUEST = "automation/rebalance-micro-gtaa.request"
 
 # strategy_fingerprint(autoarm) 튜플 위치 ↔ 사람이 읽는 항목 이름(같은 순서 유지 필수).

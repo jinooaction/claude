@@ -215,8 +215,8 @@ ladder_forward_verdict() {
     require_repo
     run_cli forward-verdict \
         --mode paper \
-        --portfolio deploy/global-trend-portfolio.toml \
-        --db data/forward_global.db \
+        --portfolio deploy/global-trend-fixed-portfolio.toml \
+        --db data/forward_globalfixed.db \
         --format json
 }
 
@@ -227,8 +227,8 @@ ladder_anchored_verdict() {
     install -d -m 0750 -o "${APP_USER}" -g "${APP_USER}" "${wrk}"
 
     run_cli bars-export \
-        --portfolio deploy/global-trend-portfolio.toml \
-        --db data/forward_global.db \
+        --portfolio deploy/global-trend-fixed-portfolio.toml \
+        --db data/forward_globalfixed.db \
         --out-dir "${wrk}/bars" \
         --json \
         > "${wrk}/bars-export.json"
@@ -237,12 +237,23 @@ ladder_anchored_verdict() {
         --out-dir "${wrk}/hist" \
         > "${wrk}/ingest.log"
     run_cli forward-verdict-anchored \
-        --portfolio deploy/global-trend-portfolio.toml \
-        --db data/forward_global.db \
+        --portfolio deploy/global-trend-fixed-portfolio.toml \
+        --db data/forward_globalfixed.db \
         --history-root "${wrk}/hist" \
         --trailing-years 5 \
         --mode paper \
         --min-forward-obs 5 \
+        --format json
+}
+
+exploration_canary() {
+    require_repo
+    run_cli canary-portfolio \
+        --portfolio deploy/global-trend-fixed-portfolio.toml \
+        --bars-db data/auto_invest.db \
+        --bands-toml config/canary_bands_reassign.toml \
+        --db data/canary_exploration.db \
+        --halt-path data/canary_exploration.halt.flag \
         --format json
 }
 
@@ -464,6 +475,10 @@ main() {
         ladder-anchored-verdict)
             [[ "$#" -eq 0 ]] || die "ladder-anchored-verdict takes no args"
             ladder_anchored_verdict
+            ;;
+        exploration-canary)
+            [[ "$#" -eq 0 ]] || die "exploration-canary takes no args"
+            exploration_canary
             ;;
         account-nav)
             [[ "$#" -eq 0 ]] || die "account-nav takes no args"

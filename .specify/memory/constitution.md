@@ -1,4 +1,17 @@
 <!--
+Sync Impact Report (v6.0.0 -> 7.0.0)
+==================
+Version change: 6.0.0 -> 7.0.0 (MAJOR: X.4 adds a bounded 20% exploration-canary rung before the original 25% rung. Entry requires an exact deployment match, disjoint >=120-month holdout with >=50bp annual cost, >=40 independent forward observations, PSR >=0.80, forward Calmar superiority, hardened-canary PASS, and fingerprint identity. Moving above 20% still requires the original EDGE_CONFIRMED threshold. Missing or contradictory evidence fails closed. this changes the safety perimeter.)
+Migration impact:
+  - Rungs change from 0/25/50/100 to 0/20 exploration/25/50/100.
+  - `globalfixed` evidence must describe the exact deployed 3-6-9-12 month ensemble, not a family or single-window proxy.
+  - Existing rung 0 remains rung 0; a legacy armed sentinel is treated as rung 1 and cannot skip EDGE_CONFIRMED before 25%.
+  - X.5 reassignment still resets to rung 0 and re-earns every rung.
+Templates requiring updates:
+  ✅ .specify/memory/constitution.md and .specify/templates/plan-template.md.
+  ✅ specs/140-heldout-exploration-canary and tested ladder/profit/workflow/config paths.
+  ⚠ .specify/memory/kernel.toml unchanged; constitution is already K-meta.
+
 Sync Impact Report (v5.0.0 -> 6.0.0)
 ==================
 Version change: 5.0.0 -> 6.0.0  (MAJOR: principle X extended with item X.5 — autonomous STRATEGY REASSIGNMENT under a standing operator delegation. Item X.4 governs HOW MUCH capital is deployed (capital ladder); X.5 governs WHICH strategy is deployed: the autonomous forward tournament may reassign the live strategy to a challenger that clears ALL FIVE gates (edge-confirmed, multiplicity-corrected, apples-to-apples vs incumbent, hardened-canary PASS, ladder-reset-to-rung-0-after-reassignment) WITHOUT per-change operator approval. Any gate unmet => HOLD the incumbent (fail-safe). Reassignment changes WHICH strategy is exposed, not HOW MUCH — item 4's ladder + operator-owned 20% drawdown budget + immediate halt still bound the loss surface, which is therefore UNCHANGED from v5.0.0. All trading-safety invariants I-VII and VIII.A preserved unchanged. this changes the safety perimeter.)
@@ -310,8 +323,9 @@ The system's purpose is not merely to trade safely but to **grow itself toward w
 2. **One yardstick.** Live, paper, canary, and backtest performance MUST be computed with the **same metric definitions** (spec 008 `backtest/metrics.py` is the single source). This makes "backtest said X, live did Y" a meaningful comparison and lets the tuner detect strategy decay (e.g., rolling Sharpe 1.2 → 0.8).
 3. **Each completed phase auto-deploys.** A merged change auto-deploys to the running system via the VIII.B-guarded pipeline (`deploy/AUTO-DEPLOY.md`): an immediate on-merge trigger plus the off-hours timer safety net. This keeps the running worker continuously at `main`.
 4. **Deploy ≠ live money; capital sizing is governed by the evidence-gated capital ladder under a standing operator delegation (amended v5.0.0).** Auto-deploy lands code and restarts the worker; it does NOT by itself move the system from dry-run to real orders. Live exposure — both the arming decision and the **amount of capital deployed** — is governed by the **spec 050 capital ladder**, authorised by the operator's standing delegation (mason, 2026-06-11: "1·2·3 모두 세계 최고 수준이 목표. 3번도 나는 자동과 자율에 맡길거야. 기준은 계좌 잔고와 포트폴리오"):
-   - **Rungs**: 0 = 0% (disarmed) → 1 = 25% → 2 = 50% → 3 = 100% of the **measured real account NAV** (KIS balance, multi-exchange sweep). The account balance is the delegation's ceiling; deposits are physically operator-only.
-   - **Entry (rung 0→1)**: forward-paper **EDGE_CONFIRMED** + strategy-fingerprint match between the validated ensemble and the live config (spec 049 conditions, inherited).
+   - **Rungs**: 0 = 0% (disarmed) → 1 = 20% exploration canary → 2 = 25% → 3 = 50% → 4 = 100% of the **measured real account NAV** (KIS balance, multi-exchange sweep). The account balance is the delegation's ceiling; deposits are physically operator-only.
+   - **Entry (rung 0→1)**: either forward-paper **EDGE_CONFIRMED**, or the narrower exploration contract. The exploration contract requires ALL of: the exact live strategy is a pre-existing deploy candidate; development and holdout are time-disjoint; at least 120 holdout months; at least 50bp annual cost drag; holdout CAGR and Sharpe beat the benchmark; holdout drawdown is at most 80% of benchmark; at least 40 independent forward observations; forward PSR ≥ 0.80; forward Calmar superiority; hardened-canary PASS; and strategy-fingerprint identity between validated and live configs. Missing, family-level, approximate, stale, or contradictory evidence NEVER enters. This is a bounded live canary, not confirmed edge.
+   - **Promotion (rung 1→2)**: the original forward-paper **EDGE_CONFIRMED** threshold, plus ALL live evidence below. Exploration evidence alone can never move capital above 20%.
    - **Promotion (rung n→n+1)**: ALL of — ≥ 20 live NAV observations at the current rung, ≥ 27 calendar days at the rung, and drawdown-since-rung-entry < budget/2. Missing or unmeasurable evidence NEVER promotes (fail-safe).
    - **Demotion / halt (immediate, evidence-free downward)**: drawdown ≥ budget/2 drops one rung; drawdown ≥ budget disarms to rung 0; re-entry restarts from forward re-validation. The intra-day fast defence remains the spec 014 loss circuit breaker — the ladder is the slow daily governor above it.
    - **Drawdown budget (20%) is OPERATOR-OWNED.** Changing it is an operator decision, enforced by CI regression. The budget is the maximum new loss surface this delegation enables.
@@ -324,9 +338,9 @@ The system's purpose is not merely to trade safely but to **grow itself toward w
    - **Gate ② multiplicity-corrected** — the challenger survives multiple-testing correction (deflated Sharpe / Bonferroni across the simultaneously-raced tracks); a lucky winner among many tracks does NOT qualify.
    - **Gate ③ apples-to-apples** — the challenger beats the incumbent over a COMPARABLE forward window (both measured on the same period; spec 049 `challenger_key` encodes ① and ③ together).
    - **Gate ④ hardened canary** — the challenger PASSES the spec 007 hardened canary (historical replay + shock + fuzz). This is small-real-money *validation*, not a deploy.
-   - **Gate ⑤ re-validation after reassignment** — reassignment RESETS the item-4 capital ladder to rung 0. The new strategy re-earns capital from 25% upward through item 4's evidence gates. Capital is NEVER carried over to an unproven strategy.
+   - **Gate ⑤ re-validation after reassignment** — reassignment RESETS the item-4 capital ladder to rung 0. The new strategy re-earns the 20% exploration canary and then the original forward-confirmed 25% upward path through item 4's evidence gates. Capital is NEVER carried over to an unproven strategy.
 
-   Any gate missing or unmet ⇒ HOLD the incumbent, never reassign (fail-safe, identical posture to the ladder). The kill switch (`automation/AUTOARM_DISABLED`) halts reassignment too. Reassignment decisions are computed by tested pure code (`portfolio/auto_reassign.py`), executed as config + sentinel PRs through the same gate workflow, and recorded (PR + audit trail). The spec 005 tuner MUST NOT reassign the live strategy outside this gate. **Bounded worst case**: reassignment can only move the live system to a strategy that won a multiplicity-corrected forward race AND passed the hardened canary, and even then capital restarts at rung 0 (25%) under item 4's operator-owned 20% drawdown budget with immediate halt. Reassignment changes WHICH strategy is exposed, not HOW MUCH — the down-fast/up-slow ladder still bounds the amount, so the maximum new loss surface is unchanged from item 4.
+   Any gate missing or unmet ⇒ HOLD the incumbent, never reassign (fail-safe, identical posture to the ladder). The kill switch (`automation/AUTOARM_DISABLED`) halts reassignment too. Reassignment decisions are computed by tested pure code (`portfolio/auto_reassign.py`), executed as config + sentinel PRs through the same gate workflow, and recorded (PR + audit trail). The spec 005 tuner MUST NOT reassign the live strategy outside this gate. **Bounded worst case**: reassignment can only move the live system to a strategy that won a multiplicity-corrected forward race AND passed the hardened canary, and even then capital restarts at rung 0 and first enters at 20% under item 4's operator-owned 20% drawdown budget with immediate halt. Reassignment changes WHICH strategy is exposed, not HOW MUCH — the down-fast/up-slow ladder still bounds the amount.
 
 This DOES NOT relax principles I–VII or VIII.A. The production-money defence remains spec 007's hardened canary (IX.B-2). Measurement-driven growth operates entirely **within** the existing safety perimeter: it adds a *requirement* (evidence before tuning) and a *standing mode* (continuous deploy of merged work to a dry-run worker), neither of which widens the loss surface.
 
@@ -360,4 +374,4 @@ This constitution supersedes all other practices, conventions, and ad-hoc decisi
 
 **Compliance**: every `/speckit-plan` artifact MUST include a Constitution Check section verifying the plan does not violate principles I–X. Violations require explicit, written justification and a sign-off recorded in the audit log.
 
-**Version**: 6.0.0 | **Ratified**: 2026-05-01 | **Last Amended**: 2026-06-16
+**Version**: 7.0.0 | **Ratified**: 2026-05-01 | **Last Amended**: 2026-08-16

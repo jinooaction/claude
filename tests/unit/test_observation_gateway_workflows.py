@@ -39,6 +39,7 @@ def test_capital_ladder_uses_fixed_observe_gateway_commands() -> None:
 
     assert "observe ladder-forward-verdict" in body
     assert "observe ladder-anchored-verdict" in body
+    assert "observe exploration-canary" in body
     assert "observe account-nav" in body
     assert "observe live-growth" in body
     assert "cd /opt/auto-invest" not in body

@@ -18,8 +18,8 @@ def test_smooth_strategy_climbs_and_holds_top_rung() -> None:
     res = simulate_ladder_growth([0.01] * 12, start_rung=1)
     assert res.demotions == 0
     assert res.halts == 0
-    assert res.promotions == 2  # 1→2, 2→3
-    assert res.rung_months[3] == 10  # 3개월차부터 단 3
+    assert res.promotions == 3  # 1→2, 2→3, 3→4
+    assert res.rung_months[4] == 9  # 네 번째 달부터 단 4
     assert res.avg_rung > 2.0
 
 
@@ -96,4 +96,4 @@ def test_deterministic_and_dict_shape() -> None:
 def test_reuses_spec050_rung_fractions() -> None:
     # 사다리 비율은 스펙 050 단일 출처를 재사용(여기서 재정의 안 함).
     assert RUNG_FRACTIONS[MAX_RUNG] == 1
-    assert set(RUNG_FRACTIONS) == {0, 1, 2, 3}
+    assert set(RUNG_FRACTIONS) == {0, 1, 2, 3, 4}
