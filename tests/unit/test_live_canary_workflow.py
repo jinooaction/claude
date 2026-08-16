@@ -54,3 +54,16 @@ def test_live_canary_real_orders_remain_behind_production_gate() -> None:
     assert "Validate production live gate outputs" in real_order
     assert "LIVE rebalance — REAL ORDERS" in real_order
     assert "--mode live --confirm-live" in real_order
+    assert "--account-wide" in real_order
+
+
+def test_live_canary_preview_and_real_orders_use_broker_snapshot() -> None:
+    text = _workflow_text()
+    real_order = _real_order_job(text)
+    observe_helper = (ROOT / "deploy" / "observe-on-instance.sh").read_text(encoding="utf-8")
+
+    preview_fn = observe_helper.split("live_canary_preview()", 1)[1].split(
+        "live_canary_measure()", 1
+    )[0]
+    assert "--account-wide" in preview_fn
+    assert "--account-wide" in real_order

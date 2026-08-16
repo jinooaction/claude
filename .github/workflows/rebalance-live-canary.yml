@@ -316,6 +316,7 @@ jobs:
               "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest rebalance-once \
                  --portfolio deploy/canary-live-portfolio.toml \
                  --mode live --confirm-live \
+                 --account-wide \
                  --capital ${CAP} --db data/auto_invest.db --env-file .env --json" \
               > /tmp/live_rebal.json 2>/tmp/live_rebal.err
           echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"

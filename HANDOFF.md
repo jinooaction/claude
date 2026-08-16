@@ -33,15 +33,15 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `9b5346f` — Merge pull request #617 from jinooaction/codex/140-heldout-exploration-canary |
-| main 테스트 | #617 기능 커밋 기준 `uv run pytest` → 2823 passed, 5 skipped. 후속 A4 오탐 회귀 2개를 더해 HANDOFF 갱신 후 2825 passed/5 skipped를 재확인한다. |
-| main 린트 | #617 기능 커밋 기준 `uv run ruff check src tests` → All checks passed. |
-| 열린 PR | 없음(#617 merge 완료). 후속 `codex/140-capital-keyword-guard`는 아직 PR 생성 전이다. |
+| 마지막 main 커밋 | `d49143e` — Merge pull request #619 from jinooaction/automation/capital-ladder/promote-31918999775 |
+| main 테스트 | #618 기능 커밋 기준 `uv run pytest` → 2825 passed, 5 skipped. #619는 센티넬만 단 1로 올렸다. |
+| main 린트 | #618 기능 커밋 기준 `uv run ruff check src tests` → All checks passed. |
+| 열린 PR | 없음. 현재 후속 `Codex/141-lot-aware-execution-proxy`에서 소액 정수 주 체결 경로를 구현 중이다. |
 | 출시 완료 스펙 | 최신 기능: #617(스펙 140, 정확 배포전략 장기 홀드아웃+forward+강화 캐너리를 최대 20% 탐색 단에 연결), #615(스펙 139), #613(스펙 138). |
 | 골격 스펙 | 없음. `.specify/feature.json`은 `specs/140-heldout-exploration-canary`를 가리킨다. 기능은 출시됐고 T010~T012 운영 관찰 중이며 A4 오탐 수정 T013은 구현 완료다. |
 | 최근 출시 작업 | #617은 자본 사다리를 0→20% 탐색→25%→50%→100%로 바꾸고, 정확한 균등가중 앙상블의 235개월 홀드아웃·50bp 비용·forward 42관측/PSR 0.829449/Calmar 우위·강화 캐너리 PASS·전략 지문 일치를 첫 진입에 요구한다. |
-| 활성 작업 | autoarm run `31918671085`는 수익 증거·forward·앵커드·강화 캐너리·실계좌 NAV까지 통과했지만 `cap` 키워드가 허용된 A4 자본 사다리를 A6 포지션 한도 변경으로 오인해 센티넬 쓰기만 차단했다. 후속 브랜치에서 키워드 오탐을 수정했으며 재머지·재실행이 남았다. |
-| 안전 경계 | 헌법 X.4 v7.0.0. 첫 진입은 기존 25%보다 작은 20% 탐색이고 25% 이상은 원래 EDGE_CONFIRMED를 유지한다. K1 캡, whitelist, 손실 예산 20%, 비밀값, 감사 로그, 정규장, production, 서킷 브레이커는 유지한다. 현재 센티넬은 단 0·실주문 0건이다. |
+| 활성 작업 | #619로 단 1이 머지돼 `armed:true`, 자본 293달러다. 최신 push 미리보기는 고가 SPY/GLD 정수 주 제약으로 주문 0건이었고 내부 모의 보유를 읽는 결함도 드러났다. 후속 스펙 141이 검증 신호는 유지한 채 저가 ETF 체결 매핑과 KIS 실제 보유 원본을 구현 중이다. |
+| 안전 경계 | 헌법 X.4 v7.0.0. 단 1은 실계좌 NAV의 20%인 293달러이며 25% 이상은 원래 EDGE_CONFIRMED를 유지한다. K1 캡, 손실 예산 20%, 비밀값, 감사 로그, 정규장, production, 서킷 브레이커는 유지한다. 현재 실주문·체결은 0건이다. |
 
 ## 최근 관찰 — 2026-08-16 KST (#617 홀드아웃 탐색 캐너리 출시, A4 오탐 후속 중)
 

@@ -298,6 +298,7 @@ live_canary_preview() {
     run_cli rebalance-once \
         --portfolio deploy/canary-live-portfolio.toml \
         --dry-run \
+        --account-wide \
         --capital "${capital}" \
         --db data/auto_invest.db \
         --env-file .env \

@@ -193,7 +193,7 @@ def _provenance_banner(
 
 
 def _assert_universe_within_whitelist(text: str, challenger_key: str) -> None:
-    """결과가 유효 TOML 이고, [portfolio].universe ⊆ [whitelist].symbols 인지 검증(헌법 II)."""
+    """Validate signal universe, optional execution map, and live whitelist."""
     try:
         data = tomllib.loads(text)
     except tomllib.TOMLDecodeError as e:
@@ -208,10 +208,23 @@ def _assert_universe_within_whitelist(text: str, challenger_key: str) -> None:
         raise ReassignExecError(
             "재지정 결과 [portfolio].universe 가 비어 있음 — 챔피언 전략 유니버스 불명, 거부."
         )
-    outside = [s for s in universe if s not in symbols]
+    raw_map = data.get("execution", {}).get("symbol_map", {})
+    if raw_map:
+        symbol_map = {str(k).upper(): str(v).upper() for k, v in raw_map.items()}
+        if set(symbol_map) != set(universe):
+            raise ReassignExecError(
+                f"챔피언 '{challenger_key}' 신호 유니버스와 execution 매핑 키 불일치 — "
+                "검증 신호를 체결 종목으로 완전히 옮길 수 없어 재지정 거부."
+            )
+        if len(set(symbol_map.values())) != len(symbol_map):
+            raise ReassignExecError("execution 매핑 값 중복 — 1:1 체결 경계 불명, 재지정 거부.")
+        execution_universe = list(symbol_map.values())
+    else:
+        execution_universe = universe
+    outside = [s for s in execution_universe if s not in symbols]
     if outside:
         raise ReassignExecError(
-            f"챔피언 '{challenger_key}' 유니버스 {outside} 가 라이브 화이트리스트 "
+            f"챔피언 '{challenger_key}' 체결 유니버스 {outside} 가 라이브 화이트리스트 "
             f"{sorted(symbols)} 밖 — 라이브 거래 집합 확대는 운영자 게이트(헌법 II). "
             "자율 재지정 거부."
         )

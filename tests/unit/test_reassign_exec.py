@@ -158,7 +158,7 @@ def test_provenance_banner_present() -> None:
 
 def test_universe_outside_whitelist_blocked() -> None:
     # 챔피언이 QQQ·EFA 를 거래하나 라이브 화이트리스트는 SPY·IEF·GLD — 거래 집합 확대 거부.
-    with pytest.raises(ReassignExecError, match="화이트리스트"):
+    with pytest.raises(ReassignExecError, match="화이트리스트|매핑 키 불일치"):
         build_live_config_text(
             live_text=_LIVE,
             challenger_text=_CHALLENGER_WIDE,
@@ -360,11 +360,19 @@ def test_real_global_to_globalfixed_reassignment() -> None:
     # 등가중 전략이 라이브로 이식됐다.
     assert data["portfolio"]["weight_scheme"] == "equal"
     assert data["portfolio"]["id"] == "global-trend-fixed"
-    # 라이브 거래 집합(SPY·IEF·GLD)과 캐너리 캡이 보존됐다.
-    assert data["whitelist"]["symbols"] == ["SPY", "IEF", "GLD"]
+    # 신호 집합은 SPY·IEF·GLD, 실제 거래 집합은 저가 1:1 대체 ETF로 보존됐다.
+    assert data["portfolio"]["universe"] == ["SPY", "IEF", "GLD"]
+    assert data["execution"]["symbol_map"] == {
+        "SPY": "SPYM",
+        "IEF": "IEF",
+        "GLD": "GLDM",
+    }
+    assert data["whitelist"]["symbols"] == ["SPYM", "IEF", "GLDM"]
     assert data["caps"]["canary_acceptance_drawdown_pct"] == 3.0
-    # 유니버스 ⊆ 화이트리스트(가드 통과).
-    assert set(out.challenger_universe) <= set(out.live_whitelist_symbols)
+    # 체결 매핑 값 ⊆ 화이트리스트(가드 통과).
+    assert set(data["execution"]["symbol_map"].values()) <= set(
+        out.live_whitelist_symbols
+    )
 
 
 def test_real_wide_reassignment_blocked() -> None:
@@ -373,7 +381,7 @@ def test_real_wide_reassignment_blocked() -> None:
     live_text = (repo / LIVE_CONFIG_PATH).read_text(encoding="utf-8")
     wide_text = (repo / TRACK_DEPLOY_CONFIGS["wide"]).read_text(encoding="utf-8")
 
-    with pytest.raises(ReassignExecError, match="화이트리스트"):
+    with pytest.raises(ReassignExecError, match="화이트리스트|매핑 키 불일치"):
         build_reassignment(
             decision=_reassign_decision(challenger_key="wide", incumbent_key="global"),
             live_text=live_text,

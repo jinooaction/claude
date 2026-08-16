@@ -40,7 +40,7 @@ import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
-from decimal import ROUND_FLOOR, Decimal
+from decimal import ROUND_FLOOR, ROUND_HALF_UP, Decimal
 
 from auto_invest.strategy.sizing import (
     erc_group_scales,
@@ -252,9 +252,7 @@ def _base_weights(
                 subset, lookback_bars=lookback_bars, member_vols=member_vols
             )
         else:
-            raw = erc_group_scales(
-                subset, lookback_bars=lookback_bars, member_vols=member_vols
-            )
+            raw = erc_group_scales(subset, lookback_bars=lookback_bars, member_vols=member_vols)
         # The optimizer can return weights for only a subset on partial data;
         # any selected name it omitted falls back to its inverse-vol weight so
         # the vector still covers every selected name before normalization.
@@ -268,10 +266,11 @@ def _base_weights(
 # ----------------------------------------------------------------- planning
 
 
-def _target_qty(target_dollar: Decimal, price: Decimal) -> int:
+def _target_qty(target_dollar: Decimal, price: Decimal, *, lot_rounding: str = "floor") -> int:
     if price <= 0:
         return 0
-    return int((target_dollar / price).to_integral_value(rounding=ROUND_FLOOR))
+    rounding = ROUND_FLOOR if lot_rounding == "floor" else ROUND_HALF_UP
+    return int((target_dollar / price).to_integral_value(rounding=rounding))
 
 
 def rebalance_plan(
@@ -284,6 +283,7 @@ def rebalance_plan(
     rebalance_threshold_pct: Decimal = Decimal("0"),
     min_notional_usd: Decimal = Decimal("0"),
     mode: str = "rebalance",
+    lot_rounding: str = "floor",
 ) -> list[PlannedOrder]:
     """Diff a target-weight vector against holdings into BUY/SELL orders.
 
@@ -305,9 +305,39 @@ def rebalance_plan(
     gate chain, which rejects anything over the caps. Deterministic: symbols are
     processed in sorted order.
     """
+    if lot_rounding not in {"floor", "nearest"}:
+        raise ValueError(f"unknown lot_rounding: {lot_rounding!r}")
+
     investable = capital_usd * invested_fraction
     orders: list[PlannedOrder] = []
     symbols = sorted(set(target_weights) | {s for s, q in holdings.items() if q})
+    target_quantities: dict[str, int] = {}
+    for symbol, weight in target_weights.items():
+        price = prices.get(symbol)
+        if price is not None and price > 0:
+            target_quantities[symbol] = _target_qty(
+                weight * investable, price, lot_rounding=lot_rounding
+            )
+
+    if lot_rounding == "nearest":
+        target_notional = sum(
+            Decimal(qty) * prices[symbol] for symbol, qty in target_quantities.items()
+        )
+        while target_notional > investable:
+            candidates: list[tuple[Decimal, str]] = []
+            for symbol, qty in target_quantities.items():
+                if qty < 1:
+                    continue
+                price = prices[symbol]
+                target_dollar = target_weights[symbol] * investable
+                before = abs(Decimal(qty) * price - target_dollar)
+                after = abs(Decimal(qty - 1) * price - target_dollar)
+                candidates.append((after - before, symbol))
+            if not candidates:
+                break
+            _, reduce_symbol = min(candidates)
+            target_quantities[reduce_symbol] -= 1
+            target_notional -= prices[reduce_symbol]
 
     for symbol in symbols:
         current_qty = holdings.get(symbol, 0)
@@ -328,7 +358,7 @@ def rebalance_plan(
             # a name already held. Exits above already handle rank dropouts.
             if current_qty > 0:
                 continue
-            target_qty = _target_qty(weight * investable, price)
+            target_qty = target_quantities.get(symbol, 0)
             if target_qty < 1:
                 continue
             if min_notional_usd > 0 and Decimal(target_qty) * price < min_notional_usd:
@@ -337,7 +367,7 @@ def rebalance_plan(
             continue
 
         target_dollar = weight * investable
-        target_qty = _target_qty(target_dollar, price)
+        target_qty = target_quantities.get(symbol, 0)
         delta = target_qty - current_qty
         if delta == 0:
             continue

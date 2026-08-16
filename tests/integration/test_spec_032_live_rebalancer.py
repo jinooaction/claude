@@ -219,9 +219,7 @@ async def test_paper_rebalance_uses_audit_positions_on_next_run(conn, tmp_path):
     )
 
     first = await execute_rebalance(**kwargs)
-    assert [(r.symbol, r.side, r.state) for r in first.results] == [
-        ("AAA", "BUY", "PAPER_FILLED")
-    ]
+    assert [(r.symbol, r.side, r.state) for r in first.results] == [("AAA", "BUY", "PAPER_FILLED")]
 
     # current_positions remains a live/cache table; paper state is reconstructed
     # from ORDER_PAPER_FILLED instead.
@@ -343,9 +341,9 @@ async def test_rebalance_threads_per_symbol_order_exchange(conn, tmp_path):
 async def test_dry_run_computes_plan_but_routes_nothing(conn, tmp_path):
     """`dry_run=True` previews the full plan (buys top names, sells the dropout)
     but NEVER calls the router — proven by a router that explodes if touched."""
-    _seed_bars(conn, "WIN", [100 * (1.01 ** i) for i in range(40)])
-    _seed_bars(conn, "MID", [100 * (1.005 ** i) for i in range(40)])
-    _seed_bars(conn, "LOSE", [100 * (0.99 ** i) for i in range(40)])
+    _seed_bars(conn, "WIN", [100 * (1.01**i) for i in range(40)])
+    _seed_bars(conn, "MID", [100 * (1.005**i) for i in range(40)])
+    _seed_bars(conn, "LOSE", [100 * (0.99**i) for i in range(40)])
     _seed_holding(conn, "LOSE", 10, "100")
     universe = ("WIN", "MID", "LOSE")
 
@@ -370,9 +368,7 @@ async def test_dry_run_computes_plan_but_routes_nothing(conn, tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_account_wide_cash_shortfall_runs_sell_only_and_withholds_buys(
-    conn, tmp_path
-):
+async def test_account_wide_cash_shortfall_runs_sell_only_and_withholds_buys(conn, tmp_path):
     """계좌 전체 모드는 브로커 보유를 실제 자본으로 보되, 현금 부족이면 매도부터 한다."""
     for sym, growth in (("SPYM", 1.01), ("IEF", 1.004), ("GLDM", 1.006)):
         _seed_bars(conn, sym, [100 * (growth**i) for i in range(40)])
@@ -437,3 +433,38 @@ async def test_account_wide_refuses_liquidation_only_buy_symbol(conn, tmp_path):
             execution_side="both",
             purchasable_cash_usd=Decimal("1000"),
         )
+
+
+@pytest.mark.asyncio
+async def test_execution_proxy_keeps_signal_bars_but_routes_only_proxy_symbols(conn, tmp_path):
+    for sym, growth in (("SPY", 1.01), ("IEF", 1.004), ("GLD", 1.006)):
+        _seed_bars(conn, sym, [100 * (growth**i) for i in range(40)])
+
+    class _BoomRouter:
+        async def submit_order(self, **kwargs):
+            raise AssertionError("dry_run must not route any order")
+
+    out = await execute_rebalance(
+        config=_cfg(
+            ("SPY", "IEF", "GLD"),
+            top_n=3,
+            invested_fraction=Decimal("0.99"),
+            rebalance_mode="hold_replace",
+        ),
+        router=_BoomRouter(),
+        conn=conn,
+        quote_provider=_quote_provider({"SPYM": "86.89", "IEF": "95", "GLDM": "80.46"}),
+        total_capital_usd=Decimal("293"),
+        caps=_caps(per_trade="50", per_symbol="60", glob="100"),
+        dry_run=True,
+        account_holdings={"ORANY": 28},
+        purchasable_cash_usd=Decimal("934.27"),
+        execution_symbol_map={"SPY": "SPYM", "IEF": "IEF", "GLD": "GLDM"},
+        lot_rounding="nearest",
+    )
+
+    assert set(out.signal_target_weights) == {"SPY", "IEF", "GLD"}
+    assert set(out.target_weights) == {"SPYM", "IEF", "GLDM"}
+    assert {r.symbol for r in out.results} == {"SPYM", "IEF", "GLDM"}
+    assert all(r.state == "DRY_RUN" and r.routed_qty == 1 for r in out.results)
+    assert [(w.symbol, w.reason) for w in out.withheld] == [("ORANY", "unmanaged_holding")]
