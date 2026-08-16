@@ -103,6 +103,8 @@ def test_workflow_and_forced_command_are_read_only_and_exact():
     assert "observe\\ daily-ml-edge)" in gateway
     assert "observe\\ daily-ml-edge\\ *)" not in gateway
     assert "automation/daily-cross-asset-ml-last-run" in workflow
+    assert 'expected=$(git rev-parse "origin/$branch")' in workflow
+    assert '--force-with-lease="refs/heads/${branch}:${expected}"' in workflow
     combined = (workflow + module + probe).lower()
     for forbidden in ("submit_order", "cancel_order", "rebalance-once", "--mode live"):
         assert forbidden not in combined
