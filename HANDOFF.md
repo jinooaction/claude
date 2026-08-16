@@ -33,15 +33,25 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `bc33a7f` — Merge pull request #637 from jinooaction/Codex/145-ml-edge-ensemble |
-| main 테스트 | #637 머지 코드 기준 `uv run pytest` → 2870 passed, 6 skipped. |
-| main 린트 | #637 머지 코드 기준 `uv run ruff check src tests` → All checks passed. |
+| 마지막 main 커밋 | `3ed4ba5` — Merge pull request #639 from jinooaction/Codex/146-daily-cross-asset-ml |
+| main 테스트 | #639 머지 코드 기준 `uv run pytest` → 2877 passed, 6 skipped. |
+| main 린트 | #639 머지 코드 기준 `uv run ruff check src tests` → All checks passed. |
 | 열린 PR | 없음. |
-| 출시 완료 스펙 | 최신 기능: #637(스펙 145, AI 확신도 기반 추세 앙상블 no-live 자동 연구), #633/#634(스펙 144, production 사람 승인을 기계 승인으로 대체), #632(스펙 143 첫 양의 실계좌 손익 인계). |
-| 골격 스펙 | 없음. 스펙 145의 T001~T015가 모두 완료됐다. |
-| 최근 출시 작업 | #637은 Ridge와 Gradient Boosting의 표본 외 예측을 기존 추세 비중에 확신도만큼 섞고, 매주 비용·통계 관문을 다시 검사하는 sidecar를 추가했다. |
-| 활성 작업 | 없음. AI 후보는 현재 `NO_EDGE`라 live 전략을 교체하지 않았다. 별도로 기존 production 예약 실행은 모든 기존 게이트를 통과할 때만 자동 실주문한다. |
+| 출시 완료 스펙 | 최신 기능: #639(스펙 146, KIS 일봉 11자산 교차자산 ML 자동 연구), #637(스펙 145, AI 확신도 기반 추세 앙상블), #633/#634(스펙 144, production 기계 승인). |
+| 골격 스펙 | 없음. 스펙 146의 기능 구현과 안전 검증은 완료됐다. |
+| 최근 출시 작업 | #639는 11개 ETF의 일봉을 주간 패널로 바꾸고 다음 주 상대수익을 학습해 비용·통계 관문을 매주 다시 검사하는 사이드카를 추가했다. |
+| 활성 작업 | 실제 KIS 계산 run `31933192404`는 연구 단계까지 성공했지만 사이드카 푸시의 lease 오류로 결과 발행이 실패했다. `Codex/146-daily-cross-asset-ml-sidecar-fix`에서 예상 원격 해시를 명시하는 보정을 진행 중이다. live 전략은 교체하지 않았다. |
 | 안전 경계 | 헌법 X.4 v7.0.0. 단 1은 실계좌 NAV의 20%인 293달러다. K1/K2, 손실 예산 20%, 정규장, production 기계 승인, 추가-전용 감사 로그를 유지한다. production 개인키는 환경 비밀값에만 있고 서버는 공개키로 검증한다. ORANY 28주는 비관리 보유로 자동 매도되지 않는다. |
+
+## 최근 관찰 — 2026-08-16 KST (#639 일봉 교차자산 AI 후보 출시, 결과 발행 보정 중)
+
+현재 `main` 최신 머지는 `3ed4ba5`(#639)이고 기능 커밋은 `4c3012a`다.
+
+- **새 연구 구조**: KIS가 저장한 `SPY, QQQ, EFA, EEM, IEF, TLT, LQD, GLD, DBC, VNQ, UUP` 조정 일봉을 주간 자료로 바꾸고 Ridge와 Gradient Boosting이 다음 주 상대수익을 학습한다. 검증 오차와 모델 불일치가 큰 예측은 줄이며 상위 4개, 종목당 25%, 총 99%만 허용한다.
+- **검증 관문**: 최소 10개 분리 미래구간, 10·25·50bp 비용, 동일비중과 기존 11자산 추세 비교, Sharpe +0.20, PSR·DSR 0.95, 구간 승률 60%, 낙폭·50bp 양의 수익을 모두 요구한다. 하나라도 실패하면 `NO_EDGE`다.
+- **실제 실행 상태**: deploy run `31933137242`는 성공했다. 배포 전 자동 run `31933137337`은 강제 명령 갱신 전이라 `BLOCKED`였고, 배포 후 수동 run `31933192404`는 KIS 수집·모델 계산을 성공했다. 다만 sidecar 푸시가 `stale info`로 실패해 판정 JSON은 아직 원격에 발행되지 않았다.
+- **진행 중 보정**: `Codex/146-daily-cross-asset-ml-sidecar-fix`가 `--force-with-lease`의 예상 원격 해시를 명시한다. 보정 머지 뒤 실제 workflow를 다시 실행해 판정을 회수해야 한다.
+- **안전 경계**: 주문·취소·자본·live 전략·허용 종목·한도 변경은 모두 0건이다. KIS quotations 읽기와 연구 DB 적재만 수행하며 기존 `Backtest -> Canary -> Full`을 유지한다.
 
 ## 최근 관찰 — 2026-08-16 KST (#637 AI 확신도 기반 추세 앙상블 출시)
 

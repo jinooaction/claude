@@ -103,6 +103,8 @@ jobs:
           cp /tmp/daily-cross-asset-ml/candidate_package.json "$worktree/candidate_package.json"
           git -C "$worktree" add LAST_RUN.md report.json candidate_package.json
           git -C "$worktree" commit -m "daily-cross-asset-ml run ${GITHUB_RUN_ID}"
-          git -C "$worktree" push --force-with-lease \
+          expected=$(git rev-parse "origin/$branch")
+          git -C "$worktree" push \
+            --force-with-lease="refs/heads/${branch}:${expected}" \
             "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
             "$branch:$branch"
