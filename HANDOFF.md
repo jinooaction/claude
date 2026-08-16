@@ -33,9 +33,9 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `6782f7c` — Merge pull request #634 from jinooaction/Codex/144-autonomous-production-approval-checkout |
-| main 테스트 | #634 기능 커밋 기준 `uv run pytest` → 2864 passed, 6 skipped. |
-| main 린트 | #634 기능 커밋 기준 `uv run ruff check src tests` → All checks passed. |
+| 마지막 main 커밋 | `d28eb71` — Merge pull request #635 from jinooaction/Codex/144-autonomous-production-approval-closeout |
+| main 테스트 | #635 머지 코드 기준 `uv run pytest` → 2864 passed, 6 skipped. |
+| main 린트 | #635 머지 코드 기준 `uv run ruff check src tests` → All checks passed. |
 | 열린 PR | 없음. |
 | 출시 완료 스펙 | 최신 기능: #633/#634(스펙 144, production 사람 승인을 기계 승인으로 대체하고 실서버 주문 없는 검증 완료), #632(스펙 143 첫 양의 실계좌 손익 인계), #631(KIS 잔고 평가값 mark). |
 | 골격 스펙 | 없음. 스펙 144의 T001~T011이 모두 완료됐다. |
@@ -45,7 +45,7 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 ## 최근 관찰 — 2026-08-16 KST (#633/#634 production 사람 승인 제거 완료)
 
-현재 `main` 최신 머지는 `6782f7c`(#634)이고 자동 승인 기능 커밋은 `846426e`, checkout 보정 커밋은 `e59636a`이다.
+현재 `main` 최신 머지는 `d28eb71`(#635)이고 자동 승인 기능 커밋은 `846426e`, checkout 보정 커밋은 `e59636a`, 완료 기록 커밋은 `4bcd2c5`이다.
 
 - **자동 승인 출시**: preview 뒤 별도 `autonomous_live_approval` job이 `refs/heads/main`, `schedule/workflow_dispatch`, `armed:true`, 자본 가드를 검증한다. 예약은 실주문 결정, 수동은 주문 없는 사전점검 결정만 출력한다.
 - **GitHub 환경**: production required reviewer를 제거했다. API 재조회에서 보호 규칙은 branch policy 하나, 허용 branch는 `main` 하나, 환경 secret은 화면에서 `LIVE_ORDER_SIGNING_KEY` 한 개로 유지됨을 확인했다.
