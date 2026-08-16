@@ -1,5 +1,5 @@
 {
-  "commit": "4685c9fd2ee4e9374c0fe460772a9fb3d1385684",
+  "commit": "3ed4ba58f8b41a64192b58d119fdb6b2e430e3d6",
   "overall_status": "OK",
   "released_work": [
     {
@@ -543,7 +543,7 @@
       "status": "released"
     }
   ],
-  "run_id": "31928642321",
+  "run_id": "31933137297",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -835,7 +835,11 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "141-lot-aware-execution-proxy"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "146-daily-cross-asset-ml"
     }
   ],
-  "timestamp_utc": "2026-08-16T05:17:08.767940Z"
+  "timestamp_utc": "2026-08-16T07:08:51.366924Z"
 }
