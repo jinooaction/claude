@@ -1,5 +1,5 @@
 {
-  "commit": "a2d23cfb156b5d6deb2b0e394444e0b05999bea3",
+  "commit": "fe240a542e6be090f271eecc474fca6403aaa897",
   "overall_status": "OK",
   "released_work": [
     {
@@ -516,7 +516,7 @@
       "status": "released"
     }
   ],
-  "run_id": "31915415572",
+  "run_id": "31916736259",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -795,7 +795,11 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "072-candidate-evidence-diagnostics"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "139-forward-edge-watch-kis-range"
     }
   ],
-  "timestamp_utc": "2026-08-15T23:42:31.002544Z"
+  "timestamp_utc": "2026-08-16T00:14:39.225571Z"
 }
