@@ -167,6 +167,7 @@ _SOURCE_REFS: dict[str, str] = {
         "automation/profit-evidence-engine-last-run:profit_evidence.json"
     ),
     "ml-edge-ensemble": "automation/ml-edge-ensemble-last-run:report.json",
+    "daily-cross-asset-ml": "automation/daily-cross-asset-ml-last-run:report.json",
     "rebalance-paper-forward": "automation/rebalance-paper-forward-last-run:LAST_RUN.md",
     "edge-autoarm": "automation/edge-autoarm-last-run:LAST_RUN.md",
     "money-path": "automation/money-path-last-run:LAST_RUN.md",
@@ -2401,6 +2402,20 @@ def _candidate_packets(parsed: dict[str, Any]) -> list[WorkPacket]:
                     source_weight=2500,
                     fallback_domain="investment_edge",
                     fallback_reason="AI 앙상블 후보가 사전 등록된 검증 관문을 모두 통과했다.",
+                    fallback_action="no-live 재현 검증 후 Canary 승격 여부를 판단한다.",
+                )
+            )
+    daily_ml_report = parsed.get("daily-cross-asset-ml")
+    if isinstance(daily_ml_report, dict):
+        daily_ml_candidate = daily_ml_report.get("candidate_package")
+        if isinstance(daily_ml_candidate, dict) and daily_ml_candidate.get("eligible") is True:
+            packets.append(
+                _packet_from_item(
+                    daily_ml_candidate,
+                    source_key="daily-cross-asset-ml",
+                    source_weight=2600,
+                    fallback_domain="investment_edge",
+                    fallback_reason="일봉 교차자산 AI 후보가 사전 등록 관문을 모두 통과했다.",
                     fallback_action="no-live 재현 검증 후 Canary 승격 여부를 판단한다.",
                 )
             )
