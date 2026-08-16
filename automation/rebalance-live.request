@@ -1,22 +1,27 @@
-# 라이브 캐너리 포트폴리오 무장 센티넬 (스펙 040).
+# 라이브 캐너리 포트폴리오 무장 센티넬 (스펙 040; 스펙 050 자본 사다리가 갱신).
 #
 # 이 파일이 main 에 머지되면 rebalance-live-canary.yml 워크플로가 발화한다.
-#   - armed: false → **드라이런 미리보기만**(실주문 0건). "실거래로 무엇을 살지"만 보여준다.
-#   - armed: true  → **실주문**(rebalance-once --mode live --confirm-live). 실제 돈 이동.
+#   - armed: false → 드라이런 미리보기만(실주문 0건).
+#   - armed: true  → 실주문(시장시간 스케줄에서만). 실제 돈 이동.
 #
-# ⚠ 무장(armed: true) 전 체크리스트 (운영자):
-#   1. 사이드카 automation/rebalance-live-canary-last-run 의 드라이런 미리보기를 확인 —
-#      무장 시 무엇을 사고팔지 납득되는가?
-#   2. 룰 워커 충돌 해소 — 같은 실계좌에 canary-live-rules.toml 워커가 돌면 충돌한다.
-#      무장 전 룰 워커를 비활성(disabled 룰셋)으로 전환할 것(별도 go-live 채널).
-#   3. capital_usd 는 $1,000 이하(이 설정의 캡은 소액에 맞춰 큼 — 워크플로가 초과 시 거부).
+# 🪜 이 상태는 스펙 050 자본 사다리(증거 게이트 공식)가 결정했다 — 운영자 위임
+#   (2026-06-11): "자본·수단도 자동과 자율에 맡긴다. 기준은 계좌 잔고와 포트폴리오."
+#   헌법 X.4 v7.0.0. 사다리: 단0=0% → 단1=20% 탐색 → 단2=25% → 단3=50% → 단4=100% (실계좌 NAV 대비).
+#   승격 = 관측 ≥20 + ≥27일 + 낙폭 < 예산/2. 강등 = 낙폭 ≥ 예산/2(즉시).
+#   정지 = 낙폭 ≥ 예산(즉시, 무장 해제). 재사이징 = 계좌 NAV ±10% 드리프트.
 #
-# 헌법 X.4: 라이브 전환은 운영자 결정. 소액 캐너리 무장 전용, 풀라이브 아님.
+# 증거: exploration canary ready(globalfixed-ensemble-3-6-9-12), 전략 지문 정합. 단 0→1.
+#
+# 즉시 정지: automation/AUTOARM_DISABLED 파일을 main 에 두면 사다리가 멈춘다.
+# 낙폭 예산은 운영자 소유 — 변경은 운영자 결정.
 
-armed: false
-capital_usd: 500
-requested_by: mason
+armed: true
+capital_usd: 293
+requested_by: spec-050-capital-ladder (operator delegation 2026-06-11)
 stage: live-canary-portfolio
-run_seq: 5
-run: 2026-06-11 — 백필 깊이화(PR #245, --min-bars 1000) 검증 재발화. armed:false 그대로 — push 이벤트는 미리보기만(실주문 0건). 기대: 백필 fetched ≈1000 + 드라이런 target_weights 비어있지 않음.
-note: "🔴 무장 해제(run_seq 5, 2026-06-04) — 운영자 지시 'AAPL 1주 실거래 검증은 의미없어 중단해'. 좁은 3종목 1위 매수는 세계 최고 수준 아님(상대 순위만, 절대 기대수익 바닥 없음). 라이브 거래 중단(룰 워커도 disabled). 우선순위: 유니버스 최대 확대 + 절대 기대수익 게이트(듀얼 모멘텀) → 넓은 forward 페이퍼로 검증 후 재무장."
+run_seq: 6
+ladder_rung: 1
+rung_entered: 2026-08-16
+account_nav_usd: 1466.83000000
+dd_budget_pct: 20.0
+note: "🪜 자본 사다리 단 1 (20.00% of NAV $1466.83000000). exploration canary ready(globalfixed-ensemble-3-6-9-12), 전략 지문 정합. 단 0→1."
