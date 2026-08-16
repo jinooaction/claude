@@ -33,15 +33,27 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `fe240a5` — Merge pull request #615 from jinooaction/codex/forward-edge-watch-kis-range |
-| main 테스트 | #615 최종 커밋 기준 `uv run pytest` → 2813 passed, 5 skipped. 머지 후 KIS live smoke 5개는 별도로 모두 통과했다. |
-| main 린트 | #615 최종 커밋 기준 `uv run ruff check src tests` → All checks passed. |
-| 열린 PR | 없음(#615은 merge 완료, 이 HANDOFF 갱신 전 확인 기준). |
-| 출시 완료 스펙 | 최신 기능: #615(스펙 139, `globalfixed` 전진 엣지 자율 추적과 KIS 최근 주문 범위 조회), #613(스펙 138, 시간 분리·비용 차감 수익 증거 엔진). 직전: #611(스펙 137), #609(스펙 136), #607(스펙 135). |
-| 골격 스펙 | 없음. `.specify/feature.json`은 완료 스펙 `specs/139-forward-edge-watch-kis-range`를 가리키고, `tasks.md`는 T001~T011 완료 상태다. |
-| 최근 출시 작업 | #615는 KIS 최근 주문 조회를 최대 21회에서 거래소별 범위 3회로 줄이면서 거래소 하나의 실패도 계속 전체 실패로 처리한다. 자율 작업 루프는 profit-evidence를 읽어 `wait-for-globalfixed-forward-edge`를 직접 선택한다. |
-| 활성 작업 | `three_asset_fixed-w10`은 `HOLDOUT_EDGE`지만 `globalfixed` 전진 관찰 41회, PSR 0.82727 < 0.95라 `OBSERVATION_WAIT`다. 일반 후보를 반복 생성하지 않고 같은 전략 지문의 독립 forward 관측을 기다린다. |
-| 안전 경계 | 실제 주문, 자본 배분, live 재무장, PSR 기준, whitelist/caps, 손실 예산, 비밀값, 감사 로그, 헌법, kernel은 바꾸지 않았다. deploy run `31916736255`, autonomous-work run `31916736280`, KIS smoke run `31916736347`은 모두 성공했다. smoke는 시세·현금·보유·총자산·최근 주문 5/5 통과, 최근 주문 0건·열린 미체결 0건이다. |
+| 마지막 main 커밋 | `9b5346f` — Merge pull request #617 from jinooaction/codex/140-heldout-exploration-canary |
+| main 테스트 | #617 기능 커밋 기준 `uv run pytest` → 2823 passed, 5 skipped. 후속 A4 오탐 회귀 2개를 더해 HANDOFF 갱신 후 2825 passed/5 skipped를 재확인한다. |
+| main 린트 | #617 기능 커밋 기준 `uv run ruff check src tests` → All checks passed. |
+| 열린 PR | 없음(#617 merge 완료). 후속 `codex/140-capital-keyword-guard`는 아직 PR 생성 전이다. |
+| 출시 완료 스펙 | 최신 기능: #617(스펙 140, 정확 배포전략 장기 홀드아웃+forward+강화 캐너리를 최대 20% 탐색 단에 연결), #615(스펙 139), #613(스펙 138). |
+| 골격 스펙 | 없음. `.specify/feature.json`은 `specs/140-heldout-exploration-canary`를 가리킨다. 기능은 출시됐고 T010~T012 운영 관찰 중이며 A4 오탐 수정 T013은 구현 완료다. |
+| 최근 출시 작업 | #617은 자본 사다리를 0→20% 탐색→25%→50%→100%로 바꾸고, 정확한 균등가중 앙상블의 235개월 홀드아웃·50bp 비용·forward 42관측/PSR 0.829449/Calmar 우위·강화 캐너리 PASS·전략 지문 일치를 첫 진입에 요구한다. |
+| 활성 작업 | autoarm run `31918671085`는 수익 증거·forward·앵커드·강화 캐너리·실계좌 NAV까지 통과했지만 `cap` 키워드가 허용된 A4 자본 사다리를 A6 포지션 한도 변경으로 오인해 센티넬 쓰기만 차단했다. 후속 브랜치에서 키워드 오탐을 수정했으며 재머지·재실행이 남았다. |
+| 안전 경계 | 헌법 X.4 v7.0.0. 첫 진입은 기존 25%보다 작은 20% 탐색이고 25% 이상은 원래 EDGE_CONFIRMED를 유지한다. K1 캡, whitelist, 손실 예산 20%, 비밀값, 감사 로그, 정규장, production, 서킷 브레이커는 유지한다. 현재 센티넬은 단 0·실주문 0건이다. |
+
+## 최근 관찰 — 2026-08-16 KST (#617 홀드아웃 탐색 캐너리 출시, A4 오탐 후속 중)
+
+현재 `main` 최신 기능 머지는 `9b5346f`(#617)이고 기능 커밋은 `403187f`다.
+
+- **바뀐 돈 경로**: 정확한 `globalfixed` 3·6·9·12개월 균등가중 앙상블만 20% 탐색 단에 들어갈 수 있다. 25% 이상은 기존 PSR 0.95 `EDGE_CONFIRMED`와 라이브 증거를 다시 요구한다.
+- **실측 증거**: 개발 431개월, 홀드아웃 235개월, 연 50bp 비용 후 홀드아웃 CAGR 8.682649%, Sharpe 1.831434, 최대 낙폭 5.572914%다. 벤치마크는 8.291414%, 1.264685, 17.268823다. 최신 forward는 42관측, PSR 0.829449, Calmar 우위다.
+- **배포·sidecar**: deploy run `31918426044`, forward run `31918468464`, profit-evidence run `31918638758` 성공. 최신 profit sidecar는 `historical_passed=true`, `exploration_canary_ready=true`다.
+- **현재 차단점**: autoarm run `31918671085`는 강화 캐너리와 실계좌 NAV까지 통과했지만 안전 분류기의 짧은 `cap` 키워드가 `capital ladder`를 포지션 한도 변경으로 오인해 센티넬 쓰기에서 종료 코드 1이 났다. 주문과 센티넬은 변하지 않았다.
+- **후속 수정**: `codex/140-capital-keyword-guard`는 bare `cap`만 제거하고 `caps`, `position cap`, `exposure cap`, 보호 파일 경로 감지는 유지한다. 임시 센티넬 쓰기 재생은 NAV $1466.83 → 단 1 자본 $293으로 통과했다.
+- **다음 순서**: 후속 PR 검증·머지 → 배포 → `forward-edge-autoarm.yml` 재실행 → 센티넬 PR의 단 1 머지 확인 → 미국 정규장에서 `rebalance-live-canary.yml` 실행·주문/체결/잔고 감사. 휴장·정수 주·추세 신호 때문에 주문 0건이면 강제하지 않는다.
+- **상세 인계**: `HANDOFF-146-HELDOUT-EXPLORATION-CANARY.md`.
 
 ## 최근 관찰 — 2026-08-16 KST (#615 전진 엣지 추적과 KIS 범위 조회 완료)
 
@@ -7517,6 +7529,7 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 
 ## 과거 인수인계 파일 (참고용)
 
+- `HANDOFF-146-HELDOUT-EXPLORATION-CANARY.md` — #617의 20% 탐색 캐너리 출시, 실제 sidecar 통과, A4/A6 키워드 오탐 후속과 재실행 순서
 - `HANDOFF-143-BROAD-NO-EDGE-VOL-TARGET-DRAWDOWN.md` — #611이 광역 no-edge 변동성 목표·낙폭 제어 계약을 출시하고, released-work가 `candidate-broad-no-edge-vol-target-drawdown-experiment`를 소비해 현재 autonomous-work가 `wait-for-fresh-evidence` / `OBSERVATION_WAIT`로 전진한 상태
 - `HANDOFF-142-BROAD-NO-EDGE-TAIL-RISK-CONVEXITY.md` — #609가 광역 no-edge 꼬리위험 방어·볼록성 계약을 출시하고, released-work가 `candidate-broad-no-edge-tail-risk-convexity-experiment`를 소비해 다음 후보가 `candidate-broad-no-edge-vol-target-drawdown-experiment`로 전진한 상태
 - `HANDOFF-141-BROAD-NO-EDGE-CROSS-ASSET-RELATIVE-VALUE.md` — #607이 광역 no-edge 자산 간 상대가치 계약을 출시하고, released-work가 `candidate-broad-no-edge-cross-asset-relative-value-experiment`를 소비해 다음 후보가 `candidate-broad-no-edge-tail-risk-convexity-experiment`로 전진한 상태

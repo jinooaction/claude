@@ -59,7 +59,6 @@ _SURFACE_PATHS: dict[BoundarySurface, tuple[str, ...]] = {
 
 _SURFACE_KEYWORDS: dict[BoundarySurface, tuple[str, ...]] = {
     BoundarySurface.POSITION_CAPS: (
-        "cap",
         "caps",
         "position cap",
         "exposure cap",
