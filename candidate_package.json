@@ -1,0 +1,8 @@
+{
+  "eligible": false,
+  "candidate_id": "candidate-daily-cross-asset-ml-v1",
+  "status": "blocked",
+  "verdict": "BLOCKED",
+  "reason_ko": "refused command: observe daily-ml-edge\n",
+  "live_promotion_authorized": false
+}

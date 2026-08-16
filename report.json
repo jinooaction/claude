@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0",
+  "experiment_id": "daily-cross-asset-ml-v1",
+  "verdict": "BLOCKED",
+  "reason": "refused command: observe daily-ml-edge\n",
+  "candidate_package": {
+    "eligible": false,
+    "candidate_id": "candidate-daily-cross-asset-ml-v1",
+    "status": "blocked",
+    "verdict": "BLOCKED",
+    "reason_ko": "refused command: observe daily-ml-edge\n",
+    "live_promotion_authorized": false
+  },
+  "safety": {
+    "orders_submitted": 0,
+    "orders_cancelled": 0,
+    "live_strategy_changed": false,
+    "capital_changed": false
+  }
+}
