@@ -43,6 +43,10 @@ def test_manifest_matches_contract(capsys):
             "candidate_results.json"
         ),
         (
+            "profit-evidence-engine\tautomation/profit-evidence-engine-last-run\t"
+            "profit_evidence.json"
+        ),
+        (
             "rebalance-paper-forward\tautomation/rebalance-paper-forward-last-run\t"
             "LAST_RUN.md"
         ),

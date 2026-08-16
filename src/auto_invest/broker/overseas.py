@@ -903,12 +903,22 @@ async def get_order_executions(
     app_secret: str,
     account: str,
     order_date_yyyymmdd: str,
+    end_date_yyyymmdd: str | None = None,
     market: str = "NASD",
 ) -> list[BrokerExecution]:
     """해외주식 주문체결내역(inquire-ccnl)을 조회해 정규화된 체결 상태 목록을 반환.
 
     읽기 전용(GET). 체결·미체결 모두(CCLD_NCCS_DVSN='00') 가져와 부분체결과 종료
     여부를 함께 파악한다. 주문을 내거나 취소하지 않는다(spec 015 FR-001)."""
+    end_date = end_date_yyyymmdd or order_date_yyyymmdd
+    try:
+        start_value = datetime.strptime(order_date_yyyymmdd, "%Y%m%d").date()
+        end_value = datetime.strptime(end_date, "%Y%m%d").date()
+    except ValueError as exc:
+        raise ValueError("order dates must use valid YYYYMMDD values") from exc
+    if end_value < start_value:
+        raise ValueError("end_date_yyyymmdd must be on or after order_date_yyyymmdd")
+
     cano, acnt_prdt = _split_account(account)
     response = await client.request(
         "GET",
@@ -925,7 +935,7 @@ async def get_order_executions(
             "OVRS_EXCG_CD": market,
             "PDNO": "%",
             "ORD_STRT_DT": order_date_yyyymmdd,
-            "ORD_END_DT": order_date_yyyymmdd,
+            "ORD_END_DT": end_date,
             "SLL_BUY_DVSN": "00",
             "CCLD_NCCS_DVSN": "00",
             "SORT_SQN_DVSN": "00",
@@ -968,6 +978,7 @@ async def get_order_executions_resolving_market(
     app_secret: str,
     account: str,
     order_date_yyyymmdd: str,
+    end_date_yyyymmdd: str | None = None,
     markets: Sequence[str] = US_ORDER_EXCHANGES,
 ) -> list[BrokerExecution]:
     """주문체결내역을 *여러 거래소* 에 걸쳐 합쳐 조회(주문번호별 중복 제거).
@@ -985,6 +996,7 @@ async def get_order_executions_resolving_market(
             app_secret=app_secret,
             account=account,
             order_date_yyyymmdd=order_date_yyyymmdd,
+            end_date_yyyymmdd=end_date_yyyymmdd,
             market=market,
         )
         for market in markets

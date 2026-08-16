@@ -269,21 +269,18 @@ async def test_live_kis_recent_orders_have_no_open_unfilled(
     account_no = _required_env("KIS_ACCOUNT_NO")
 
     today = datetime.now(UTC).date()
-    executions = []
+    start_date = today - timedelta(days=6)
     async with httpx.AsyncClient(base_url=KIS_BASE_URL, timeout=30.0) as inner:
         broker = _make_broker(inner)
-        for offset in range(7):
-            order_date = (today - timedelta(days=offset)).strftime("%Y%m%d")
-            executions.extend(
-                await get_order_executions_resolving_market(
-                    broker,
-                    access_token=access_token,
-                    app_key=app_key,
-                    app_secret=app_secret,
-                    account=account_no,
-                    order_date_yyyymmdd=order_date,
-                )
-            )
+        executions = await get_order_executions_resolving_market(
+            broker,
+            access_token=access_token,
+            app_key=app_key,
+            app_secret=app_secret,
+            account=account_no,
+            order_date_yyyymmdd=start_date.strftime("%Y%m%d"),
+            end_date_yyyymmdd=today.strftime("%Y%m%d"),
+        )
 
     by_id = {execution.kis_order_id: execution for execution in executions}
     open_orders = [
