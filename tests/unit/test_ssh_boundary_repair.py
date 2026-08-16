@@ -71,6 +71,7 @@ def test_gateway_allows_only_fixed_commands_without_eval():
     assert re.search(r'observe\\ paper-track-verdict\\ \*\)', code)
     assert re.search(r'observe\\ ladder-forward-verdict\)', code)
     assert re.search(r'observe\\ ladder-anchored-verdict\)', code)
+    assert re.search(r'observe\\ exploration-canary\)', code)
     assert re.search(r'observe\\ account-nav\)', code)
     assert re.search(r'observe\\ live-growth\)', code)
     assert re.search(r'observe\\ live-canary-backfill\)', code)
@@ -190,6 +191,8 @@ def test_observe_helper_exposes_only_observation_and_paper_commands():
     assert "paper-track-verdict" in body
     assert "ladder-forward-verdict" in body
     assert "ladder-anchored-verdict" in body
+    assert "exploration-canary" in body
+    assert "exploration_canary()" in body
     assert "account-nav" in body
     assert "live-growth" in body
     assert "live-canary-backfill" in body

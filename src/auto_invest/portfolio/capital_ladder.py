@@ -10,9 +10,10 @@
 
   단(rung)  배치 비율(실계좌 NAV 대비)   진입 조건
   0         0%   (무장 해제)            — (강등/정지의 종착점)
-  1         25%                         forward 페이퍼 EDGE_CONFIRMED + 전략 지문 정합
-  2         50%                         단 1에서 관측 ≥20 + ≥27일 경과 + 낙폭 < 예산/2
-  3         100%                        단 2에서 같은 기준 재충족
+  1         20%  (탐색 캐너리)          정확 배포전략 홀드아웃 + forward floor + hardening
+  2         25%                         EDGE_CONFIRMED + 단 1 live 증거
+  3         50%                         단 2에서 같은 live 증거 재충족
+  4         100%                        단 3에서 같은 live 증거 재충족
 
   강등: 단 진입 후 라이브 낙폭 ≥ 예산/2 (기본 10%) → 한 단 아래로(단 1이면 0 = 무장 해제).
   정지: 단 진입 후 라이브 낙폭 ≥ 예산   (기본 20%) → 단 0 + 무장 해제.
@@ -53,11 +54,12 @@ from auto_invest.portfolio.autoarm import (
 # ---- 사다리 상수 (스펙 050 — 바꾸려면 스펙/헌법 개정 절차) ----
 RUNG_FRACTIONS: dict[int, Decimal] = {
     0: Decimal("0"),
-    1: Decimal("0.25"),
-    2: Decimal("0.50"),
-    3: Decimal("1.00"),
+    1: Decimal("0.20"),
+    2: Decimal("0.25"),
+    3: Decimal("0.50"),
+    4: Decimal("1.00"),
 }
-MAX_RUNG = 3
+MAX_RUNG = 4
 
 # 운영자 낙폭 예산(2026-06-11 위임 계약, 기본 20%). 강등은 예산/2, 정지는 예산.
 DEFAULT_DD_BUDGET_PCT = Decimal("20")
@@ -184,7 +186,8 @@ def render_ladder_sentinel(
         "#\n"
         "# 🪜 이 상태는 스펙 050 자본 사다리(증거 게이트 공식)가 결정했다 — 운영자 위임\n"
         '#   (2026-06-11): "자본·수단도 자동과 자율에 맡긴다. 기준은 계좌 잔고와 포트폴리오."\n'
-        "#   헌법 X.4 v5.0.0. 사다리: 단0=0% → 단1=25% → 단2=50% → 단3=100% (실계좌 NAV 대비).\n"
+        "#   헌법 X.4 v7.0.0. 사다리: 단0=0% → 단1=20% 탐색 → 단2=25% → "
+        "단3=50% → 단4=100% (실계좌 NAV 대비).\n"
         "#   승격 = 관측 ≥20 + ≥27일 + 낙폭 < 예산/2. 강등 = 낙폭 ≥ 예산/2(즉시).\n"
         "#   정지 = 낙폭 ≥ 예산(즉시, 무장 해제). 재사이징 = 계좌 NAV ±10% 드리프트.\n"
         "#\n"
@@ -232,6 +235,7 @@ def decide_ladder(
     validated_config: PortfolioRebalanceConfig,
     kill_switch_present: bool,
     today: date,
+    exploration_verdict: dict | None = None,
     dd_budget_pct: Decimal = DEFAULT_DD_BUDGET_PCT,
 ) -> LadderDecision:
     """자본 사다리 결정 — 순수·결정론·보수적 fail-safe.
@@ -240,9 +244,9 @@ def decide_ladder(
       1. 킬스위치 → DISABLED.
       2. 전략 지문 불일치 → BLOCKED (어떤 단에서도 검증 안 한 전략에 자본 배치 금지).
       3. 계좌 NAV 불능(None/≤0) → BLOCKED (사이징 불가 — 모르면 아무것도 안 바꾼다).
-      4. 단 0: forward EDGE_CONFIRMED 면 단 1 로 PROMOTE, 아니면 WAIT_EDGE.
+      4. 단 0: forward EDGE_CONFIRMED 또는 엄격한 탐색 캐너리 증거면 단 1 로 PROMOTE.
       5. 단 ≥1: 낙폭 ≥ 예산 → HALT / 낙폭 ≥ 예산/2 → DEMOTE /
-         증거(관측·경과일·낙폭) 충족 + 단 < 3 → PROMOTE / NAV 드리프트 → RESIZE / STAY.
+         증거(관측·경과일·낙폭) 충족 + 단 < 4 → PROMOTE / NAV 드리프트 → RESIZE / STAY.
     """
     cur_sent = parse_sentinel(sentinel_text)
     rung_raw, entered, recorded_nav = parse_ladder_fields(sentinel_text)
@@ -314,21 +318,40 @@ def decide_ladder(
         )
         return _d(action, target, reason, capital=capital, sentinel=sentinel)
 
-    # 4. 단 0 — forward 검증이 첫 진입 게이트 (autoarm 의 EDGE_CONFIRMED 조건 승계).
+    # 4. 단 0 — 완전 forward 또는 제한된 탐색 캐너리만 첫 진입을 허용한다.
     if rung == 0:
         v_label = (
             forward_verdict.get("verdict") if isinstance(forward_verdict, dict) else None
         )
-        if v_label != EDGE_CONFIRMED:
+        exploration_ready = (
+            isinstance(exploration_verdict, dict)
+            and exploration_verdict.get("verdict") == "EXPLORATION_CANARY_READY"
+        )
+        if v_label != EDGE_CONFIRMED and not exploration_ready:
+            exploration_label = (
+                exploration_verdict.get("verdict")
+                if isinstance(exploration_verdict, dict)
+                else None
+            )
             return _d(
                 ACTION_WAIT_EDGE, 0,
-                f"단 0 + forward 판정={v_label!r} — EDGE_CONFIRMED 아님. 배치 보류"
-                "(정상, 더 쌓여야 함).",
+                f"단 0 + forward 판정={v_label!r}, 탐색 캐너리="
+                f"{exploration_label!r}"
+                " — 진입 증거 미충족. 배치 보류.",
             )
         n_obs = forward_verdict.get("n_obs")
+        if exploration_ready and v_label != EDGE_CONFIRMED:
+            candidate = exploration_verdict.get("candidate_id", "unknown")
+            return _changed(
+                ACTION_PROMOTE, 1,
+                f"정확 배포전략 {candidate}의 홀드아웃·forward floor·하드닝·지문 정합 "
+                "충족 → 탐색 캐너리 단 1 (NAV의 20%) 진입.",
+                f"exploration canary ready({candidate}), 전략 지문 정합. 단 0→1.",
+            )
         return _changed(
             ACTION_PROMOTE, 1,
-            f"forward EDGE_CONFIRMED(관측 {n_obs}) + 정합 → 단 1 (NAV 의 25%) 진입.",
+            f"forward EDGE_CONFIRMED(관측 {n_obs}) + 정합 → 탐색 캐너리 단 1 "
+            "(NAV 의 20%) 진입.",
             f"forward EDGE_CONFIRMED(관측 {n_obs}), 전략 지문 정합. 단 0→1.",
         )
 
@@ -357,8 +380,13 @@ def decide_ladder(
         )
 
     # 승격 — 세 증거 전부 + 천장 미만. 증거가 None(측정 불가)이면 절대 승격 아님.
+    forward_confirmed = (
+        isinstance(forward_verdict, dict)
+        and forward_verdict.get("verdict") == EDGE_CONFIRMED
+    )
     if (
         rung < MAX_RUNG
+        and (rung != 1 or forward_confirmed)
         and obs is not None
         and obs >= PROMOTION_MIN_OBS
         and period_days is not None
@@ -406,5 +434,6 @@ def decide_ladder(
     return _d(
         ACTION_STAY, rung,
         f"단 {rung} 유지 — 승격 증거 미충족(관측 {obs}/{PROMOTION_MIN_OBS}, "
-        f"경과 {period_days}일/{PROMOTION_MIN_CALENDAR_DAYS}, 낙폭 {dd}%), 강등 사유 없음.",
+        f"경과 {period_days}일/{PROMOTION_MIN_CALENDAR_DAYS}, 낙폭 {dd}%, "
+        f"forward_confirmed={forward_confirmed}), 강등 사유 없음.",
     )

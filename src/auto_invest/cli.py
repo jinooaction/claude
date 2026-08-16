@@ -5951,6 +5951,16 @@ def ladder_decide_cmd(
         "결합 — 둘 중 하나라도 EDGE_CONFIRMED 면 확정(앵커드가 깊은 OOS+짧은 forward "
         "지속으로 20일을 기다리지 않고 가속). 없으면 기존 표준 판정만(하위 호환).",
     ),
+    profit_evidence_json: Path = typer.Option(
+        None,
+        "--profit-evidence-json",
+        help="정확 배포전략의 시간 분리 홀드아웃과 forward floor 증거 JSON(선택).",
+    ),
+    hardened_canary_json: Path = typer.Option(
+        None,
+        "--hardened-canary-json",
+        help="정확 배포전략의 격리 hardened canary 결과 JSON(선택). PASS만 인정.",
+    ),
     live_growth_json: Path = typer.Option(
         None,
         "--live-growth-json",
@@ -5997,9 +6007,10 @@ def ladder_decide_cmd(
     """스펙 050 — 자본 사다리 결정(읽기 전용 판정, 주문 0건).
 
     운영자 위임(2026-06-11) 하 자본 배치 규모를 증거 게이트 공식으로 결정한다:
-    단0=0% → 단1=25% → 단2=50% → 단3=100% (실계좌 NAV 대비). 내려가는 건 낙폭
+    단0=0% → 단1=20% 탐색 → 단2=25% → 단3=50% → 단4=100% (실계좌 NAV 대비).
+    내려가는 건 낙폭
     하나로 즉시(예산/2 강등·예산 정지), 올라가는 건 세 증거(관측·경과일·낙폭) 전부.
-    헌법 X.4 v5.0.0. 비위임 불변(캡·화이트리스트·감사·서킷 브레이커)은 그대로다.
+    헌법 X.4 v7.0.0. 비위임 불변(캡·화이트리스트·감사·서킷 브레이커)은 그대로다.
     """
     import json as _json
     from datetime import UTC
@@ -6018,6 +6029,8 @@ def ladder_decide_cmd(
 
     verdict = _read_json(verdict_json) or {}
     anchored = _read_json(anchored_verdict_json)
+    profit_evidence = _read_json(profit_evidence_json)
+    hardened_canary = _read_json(hardened_canary_json)
     edge_source = "standard"
     if anchored is not None:
         # 앵커드 판정이 있으면 표준과 결합 — 둘 중 하나라도 EDGE_CONFIRMED 면 확정(가속).
@@ -6028,6 +6041,28 @@ def ladder_decide_cmd(
         edge_source = combined.get("source", "standard")
         verdict = combined  # decide_ladder 는 verdict["verdict"]/["n_obs"] 만 읽음 — 호환.
     growth = _read_json(live_growth_json)
+    deployment_match = (
+        profit_evidence.get("deployment_match")
+        if isinstance(profit_evidence, dict)
+        else None
+    )
+    exploration_verdict = None
+    if isinstance(deployment_match, dict):
+        ready = deployment_match.get("exploration_canary_ready") is True
+        canary_pass = (
+            isinstance(hardened_canary, dict)
+            and hardened_canary.get("verdict") == "PASS"
+        )
+        exploration_verdict = {
+            "verdict": (
+                "EXPLORATION_CANARY_READY"
+                if ready and canary_pass
+                else "EXPLORATION_CANARY_WAIT"
+            ),
+            "candidate_id": deployment_match.get("candidate_id"),
+            "historical_forward_ready": ready,
+            "hardened_canary_pass": canary_pass,
+        }
     nav_doc = _read_json(account_nav_json)
     account_nav = None
     if isinstance(nav_doc, dict) and nav_doc.get("total_value_usd") is not None:
@@ -6058,6 +6093,7 @@ def ladder_decide_cmd(
         validated_config=validated_cfg,
         kill_switch_present=kill_switch.exists(),
         today=_dt.now(UTC).date(),
+        exploration_verdict=exploration_verdict,
         dd_budget_pct=_Dec(str(dd_budget_pct)),
     )
 
@@ -6078,6 +6114,7 @@ def ladder_decide_cmd(
     if output_format == "json":
         out = decision.to_json_dict()
         out["edge_source"] = edge_source  # standard | anchored | both | none (포렌식)
+        out["exploration_verdict"] = exploration_verdict
         typer.echo(_json.dumps(out))
     else:
         typer.echo(

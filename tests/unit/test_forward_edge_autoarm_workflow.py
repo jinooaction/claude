@@ -51,6 +51,16 @@ def test_ladder_decide_consumes_anchored_verdict() -> None:
     assert "uv run auto-invest ladder-decide" in text
     assert "--verdict-json /tmp/verdict_global.json" in text
     assert "--anchored-verdict-json /tmp/anchored_global.json" in text
+    assert "--profit-evidence-json /tmp/profit_evidence.json" in text
+    assert "--hardened-canary-json /tmp/exploration_canary.json" in text
+    assert "--validated-portfolio deploy/global-trend-fixed-portfolio.toml" in text
+
+
+def test_exploration_canary_is_isolated_and_places_no_orders() -> None:
+    text = _text()
+    assert "Harden exact deployed candidate before exploration capital" in text
+    assert "observe exploration-canary" in text
+    assert "rebalance-once" not in text
 
 
 def test_sidecar_publishes_anchored_evidence_and_edge_source() -> None:
@@ -59,3 +69,23 @@ def test_sidecar_publishes_anchored_evidence_and_edge_source() -> None:
     assert "엣지 출처" in text
     assert "## 앵커드 판정 JSON" in text
     assert "cat /tmp/anchored_global.json" in text
+
+
+def test_autoarm_pr_body_keeps_quality_gate_contract() -> None:
+    text = _text()
+    for heading in (
+        "# 변경 요약",
+        "## 위험 등급",
+        "## 문제 정의",
+        "## 탐색 근거",
+        "## 변경 내용",
+        "## 검증",
+        "## 하네스 검증",
+        "## 안전 경계",
+        "## 인계",
+        "## 자동 머지 준비",
+    ):
+        assert heading in text
+    assert "agent_harness_probe.py --strict" in text
+    assert "check_handoff_facts.py" in text
+    assert "--delete-branch" not in text

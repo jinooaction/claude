@@ -70,9 +70,11 @@ def test_engine_selects_family_before_holdout_and_requires_forward_gate() -> Non
                     "n_obs": 41,
                     "psr_vs_benchmark": "0.827270",
                     "verdict": "NO_EDGE",
+                    "beats_benchmark_calmar": True,
                 }
             ]
         },
+        deployment_factors=_factors(1.015, 0.997, len(dates)),
     )
 
     assert report.trial_count == 12
@@ -85,6 +87,73 @@ def test_engine_selects_family_before_holdout_and_requires_forward_gate() -> Non
     assert report.forward.psr_vs_benchmark == 0.82727
     assert all(gate.passed for gate in report.gates)
     assert len(report.neighbors) == 2
+    assert report.deployment_match.historical_passed is True
+    assert report.deployment_match.exploration_canary_ready is True
+    assert report.deployment_match.trend_windows_months == (3, 6, 9, 12)
+    assert report.deployment_match.annual_cost_bps == 50
+    assert report.deployment_match.split.overlap_months == 0
+    assert report.deployment_match.development is not None
+    assert report.deployment_match.holdout is not None
+    assert report.deployment_match.holdout.n_months >= 120
+    assert {
+        "deployment_temporal_split",
+        "deployment_holdout_months",
+        "deployment_annual_cost_bps",
+    }.issubset({gate.gate_id for gate in report.deployment_match.gates})
+
+
+def test_exploration_canary_requires_every_forward_floor() -> None:
+    dates = _dates()
+    base = {
+        "key": "globalfixed",
+        "n_obs": 40,
+        "psr_vs_benchmark": "0.80",
+        "verdict": "NO_EDGE",
+        "beats_benchmark_calmar": True,
+    }
+
+    def report_for(**overrides):
+        row = {**base, **overrides}
+        return evaluate_profit_evidence(
+            dates=dates,
+            candidate_factors=_candidate_factors(len(dates)),
+            benchmark_factors=_factors(1.013, 0.985, len(dates)),
+            leaderboard={"rows": [row]},
+            deployment_factors=_factors(1.015, 0.997, len(dates)),
+        )
+
+    assert report_for().deployment_match.exploration_canary_ready is True
+    assert report_for(n_obs=39).deployment_match.exploration_canary_ready is False
+    assert (
+        report_for(psr_vs_benchmark="0.799999").deployment_match.exploration_canary_ready
+        is False
+    )
+    assert (
+        report_for(beats_benchmark_calmar=False).deployment_match.exploration_canary_ready
+        is False
+    )
+
+
+def test_exploration_canary_fails_closed_without_exact_deployment_factors() -> None:
+    dates = _dates()
+    report = evaluate_profit_evidence(
+        dates=dates,
+        candidate_factors=_candidate_factors(len(dates)),
+        benchmark_factors=_factors(1.013, 0.985, len(dates)),
+        leaderboard={
+            "rows": [
+                {
+                    "key": "globalfixed",
+                    "n_obs": 100,
+                    "psr_vs_benchmark": "0.99",
+                    "verdict": "EDGE_CONFIRMED",
+                    "beats_benchmark_calmar": True,
+                }
+            ]
+        },
+    )
+    assert report.deployment_match.historical_passed is False
+    assert report.deployment_match.exploration_canary_ready is False
 
 
 def test_holdout_failure_is_not_reported_as_edge() -> None:

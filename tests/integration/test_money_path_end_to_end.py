@@ -47,12 +47,12 @@ runner = CliRunner()
 
 _REPO = Path(__file__).resolve().parents[2]
 _LIVE_TOML = _REPO / "deploy" / "canary-live-portfolio.toml"
-_VALIDATED_TOML = _REPO / "deploy" / "global-trend-portfolio.toml"
+_VALIDATED_TOML = _REPO / "deploy" / "global-trend-fixed-portfolio.toml"
 _SENTINEL = _REPO / "automation" / "rebalance-live.request"
 
 ACCOUNT = "E2E-ACCT"
-ACCOUNT_NAV = Decimal("12000")  # 실계좌 NAV 가정 — 사다리 단 1 = 25% = $3,000.
-RUNG1_CAPITAL = Decimal("3000")
+ACCOUNT_NAV = Decimal("12000")  # 실계좌 NAV 가정 — 탐색 단 1 = 20% = $2,400.
+RUNG1_CAPITAL = Decimal("2400")
 
 _D0 = datetime(2023, 1, 3, tzinfo=UTC)
 # 전략의 가장 긴 신호 창(추세 앙상블 252) + 모멘텀 여유 — 깊은 백필(--min-bars 1000)
@@ -199,7 +199,7 @@ async def test_full_money_path_with_real_live_config(db_path: Path, tmp_path: Pa
         _VALIDATED_TOML, env={"KIS_ACCOUNT_NO": ACCOUNT}
     )
     assert strategy_fingerprint(cfg) == strategy_fingerprint(validated_cfg), (
-        "deploy/canary-live-portfolio.toml 과 deploy/global-trend-portfolio.toml 의"
+        "deploy/canary-live-portfolio.toml 과 deploy/global-trend-fixed-portfolio.toml 의"
         " 전략 지문이 다르다 — 검증하지 않은 전략이 라이브로 가는 드리프트."
     )
 
@@ -420,7 +420,7 @@ def test_money_path_report_surfaces_downside_with_real_config():
     예산·엣지 신뢰도를 끝단까지 표면화하는지 — 회귀 보호. 돈 0 이동(순수 판정·보고).
 
     실제 EDGE_CONFIRMED + 검증=배치 지문 정합이면 사다리는 단0→단1 PROMOTE 를 내고,
-    보고서는 첫 자본(NAV 25%)의 다운사이드를 달러로(강등 10% / 정지 20%) 보여야 한다.
+    보고서는 탐색 자본(NAV 20%)의 다운사이드를 달러로(강등 10% / 정지 20%) 보여야 한다.
     """
     from auto_invest.analytics.money_path import assess_money_path
 
@@ -451,13 +451,13 @@ def test_money_path_report_surfaces_downside_with_real_config():
         },
         now=datetime(2026, 6, 12, 8, tzinfo=UTC),
     )
-    # 방어선 예산: 첫 자본 = NAV($12,000) 25% = $3,000, 강등 -$300(10%) / 정지 -$600(20%).
+    # 방어선 예산: 탐색 자본 = NAV($12,000) 20% = $2,400, 강등 -$240 / 정지 -$480.
     # (PROMOTE → DEPLOYED 단계: 엣지 신뢰도는 EDGE_CONFIRMED 단계 전용 — 아래 별도 테스트.)
     assert report.safety is not None
-    assert report.safety.capital_usd == int(RUNG1_CAPITAL)  # 3000
-    assert report.safety.loss_at_demote_usd == 300
-    assert report.safety.loss_at_halt_usd == 600
-    assert "$3000" in report.as_text()  # 다운사이드가 달러로 끝단까지 표면화됨
+    assert report.safety.capital_usd == int(RUNG1_CAPITAL)  # 2400
+    assert report.safety.loss_at_demote_usd == 240
+    assert report.safety.loss_at_halt_usd == 480
+    assert "$2400" in report.as_text()  # 다운사이드가 달러로 끝단까지 표면화됨
 
 
 def test_money_path_edge_confidence_stage_real_config():

@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Heldout exploration canary evidence",
+  "type": "object",
+  "required": ["deployment_match"],
+  "properties": {
+    "deployment_match": {
+      "type": "object",
+      "required": [
+        "candidate_id",
+        "trend_windows_months",
+        "annual_cost_bps",
+        "split",
+        "development",
+        "holdout",
+        "historical_passed",
+        "exploration_canary_ready",
+        "forward"
+      ],
+      "properties": {
+        "candidate_id": {"const": "globalfixed-ensemble-3-6-9-12"},
+        "trend_windows_months": {"const": [3, 6, 9, 12]},
+        "annual_cost_bps": {"type": "number", "minimum": 50},
+        "split": {
+          "type": "object",
+          "required": ["overlap_months"],
+          "properties": {"overlap_months": {"const": 0}}
+        },
+        "development": {"type": "object"},
+        "holdout": {
+          "type": "object",
+          "required": ["n_months"],
+          "properties": {"n_months": {"type": "integer", "minimum": 120}}
+        },
+        "historical_passed": {"type": "boolean"},
+        "exploration_canary_ready": {"type": "boolean"},
+        "forward": {
+          "type": "object",
+          "required": ["observations", "psr", "beats_benchmark_calmar"],
+          "properties": {
+            "observations": {"type": ["integer", "null"]},
+            "psr": {"type": ["number", "null"]},
+            "beats_benchmark_calmar": {"type": "boolean"}
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

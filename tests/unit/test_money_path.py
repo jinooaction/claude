@@ -602,14 +602,14 @@ def test_no_edge_yet_shows_psr_when_present():
 
 def test_deployed_stage_next_rung_gates():
     r = assess_money_path(
-        ladder=_ladder(action="STAY", cur=1, tgt=1, cap=379, dd="3.0", obs=12),
+        ladder=_ladder(action="STAY", cur=1, tgt=1, cap=303, dd="3.0", obs=12),
         forward_verdict=_verdict(verdict="EDGE_CONFIRMED", n_obs=22),
         live_growth={"period_days": "15.0", "current_nav_usd": "500.0"},
         now=NOW,
     )
     assert r.stage == STAGE_DEPLOYED
     assert r.current_rung == 1
-    assert r.capital_pct == "25"
+    assert r.capital_pct == "20"
     names = {g.name: g.status for g in r.gates}
     assert names["라이브 관측 수"] == GATE_PENDING  # 12 < 20
     assert names["경과일"] == GATE_PENDING  # 15 < 27
@@ -618,7 +618,7 @@ def test_deployed_stage_next_rung_gates():
 
 def test_promote_action_reports_target_rung():
     r = assess_money_path(
-        ladder=_ladder(action="PROMOTE", cur=0, tgt=1, cap=379),
+        ladder=_ladder(action="PROMOTE", cur=0, tgt=1, cap=303),
         forward_verdict=_verdict(verdict="EDGE_CONFIRMED", n_obs=22),
         now=NOW,
     )
@@ -715,11 +715,11 @@ def test_safety_budget_prospective_at_rung0():
     assert s is not None
     assert s.prospective is True
     assert s.reference_rung == 1  # 첫 자본 단
-    assert s.capital_usd == 379  # floor(1518.21 * 0.25)
+    assert s.capital_usd == 303  # floor(1518.21 * 0.20)
     assert s.demote_dd_pct == "10"  # 예산 20% / 2
     assert s.halt_dd_pct == "20"
-    assert s.loss_at_demote_usd == 38  # ceil(379 * 0.10)
-    assert s.loss_at_halt_usd == 76  # ceil(379 * 0.20)
+    assert s.loss_at_demote_usd == 31  # ceil(303 * 0.10)
+    assert s.loss_at_halt_usd == 61  # ceil(303 * 0.20)
     assert s.current_dd_pct is None  # 아직 배치 안 됨 → 현재 낙폭 없음
     assert s.margin_to_demote_pct is None
 
@@ -767,7 +767,7 @@ def test_safety_budget_defended_negative_margin():
     s = r.safety
     assert s is not None
     assert s.reference_rung == 2  # 초과한 그 단 기준
-    assert s.capital_usd == 759  # floor(1518.21 * 0.50)
+    assert s.capital_usd == 379  # floor(1518.21 * 0.25)
     assert s.current_dd_pct == "11.0"
     assert Decimal(s.margin_to_demote_pct) < 0  # 10 - 11.0 = -1.0
 
@@ -826,7 +826,7 @@ def test_safety_budget_in_to_dict():
     sb = r.to_dict()["safety_budget"]
     assert sb["reference_rung"] == 1
     assert sb["prospective"] is True
-    assert sb["loss_at_demote_usd"] == 38
+    assert sb["loss_at_demote_usd"] == 31
     assert sb["demote_dd_pct"] == "10"
 
 
@@ -841,17 +841,18 @@ def test_as_text_includes_safety_section():
 
 
 def test_capital_pct_no_scientific_notation():
-    # Decimal.normalize() 회귀: 단2=50%·단3=100% 가 '5E+1'/'1E+2' 로 깨지면 안 됨.
+    # Decimal.normalize() 회귀: 단3=50%·단4=100% 가 '5E+1'/'1E+2' 로 깨지면 안 됨.
     assert _capital_pct(0) == "0"
-    assert _capital_pct(1) == "25"
-    assert _capital_pct(2) == "50"
-    assert _capital_pct(3) == "100"
+    assert _capital_pct(1) == "20"
+    assert _capital_pct(2) == "25"
+    assert _capital_pct(3) == "50"
+    assert _capital_pct(4) == "100"
 
 
-def test_capital_pct_in_report_at_rung2():
-    # 실제 돈이 NAV 50%(단2)로 커진 보고서에 '5E+1%' 가 새어나오면 안 됨.
+def test_capital_pct_in_report_at_rung3():
+    # 실제 돈이 NAV 50%(단3)로 커진 보고서에 '5E+1%' 가 새어나오면 안 됨.
     r = assess_money_path(
-        ladder=_ladder(action="STAY", cur=2, tgt=2, cap=759, dd="2.0", obs=25),
+        ladder=_ladder(action="STAY", cur=3, tgt=3, cap=759, dd="2.0", obs=25),
         forward_verdict=_verdict(verdict="EDGE_CONFIRMED", n_obs=30),
         live_growth={"period_days": "30.0"},
         now=NOW,

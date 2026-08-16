@@ -2,9 +2,9 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Profit Evidence Report",
   "type": "object",
-  "required": ["schema_version", "status", "historical_verdict", "trial_count", "split", "selected_candidate", "development", "holdout", "benchmark_holdout", "gates", "neighbors", "forward", "safety_invariants"],
+  "required": ["schema_version", "status", "historical_verdict", "trial_count", "split", "selected_candidate", "development", "holdout", "benchmark_holdout", "gates", "neighbors", "forward", "deployment_match", "safety_invariants"],
   "properties": {
-    "schema_version": {"const": "1.0"},
+    "schema_version": {"const": "1.1"},
     "status": {"enum": ["NO_HOLDOUT_EDGE", "FORWARD_VALIDATION", "FORWARD_EDGE_READY"]},
     "historical_verdict": {"enum": ["HOLDOUT_EDGE", "NO_HOLDOUT_EDGE"]},
     "trial_count": {"const": 12},
@@ -16,6 +16,7 @@
     "gates": {"type": "array", "minItems": 4},
     "neighbors": {"type": "array", "minItems": 1},
     "forward": {"type": "object"},
+    "deployment_match": {"type": "object", "required": ["candidate_id", "historical_passed", "exploration_canary_ready", "entry_policy"]},
     "safety_invariants": {"type": "array", "minItems": 8}
   },
   "additionalProperties": true

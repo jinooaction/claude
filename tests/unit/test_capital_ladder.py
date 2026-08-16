@@ -88,7 +88,7 @@ note: "disarmed"
 
 _RUNG1 = """# header
 armed: true
-capital_usd: 3000
+capital_usd: 2400
 requested_by: spec-050
 stage: live-canary-portfolio
 run_seq: 6
@@ -100,10 +100,13 @@ note: "rung 1"
 """
 
 _RUNG2 = _RUNG1.replace("ladder_rung: 1", "ladder_rung: 2").replace(
-    "capital_usd: 3000", "capital_usd: 6000"
+    "capital_usd: 2400", "capital_usd: 3000"
 )
 _RUNG3 = _RUNG1.replace("ladder_rung: 1", "ladder_rung: 3").replace(
-    "capital_usd: 3000", "capital_usd: 12000"
+    "capital_usd: 2400", "capital_usd: 6000"
+)
+_RUNG4 = _RUNG1.replace("ladder_rung: 1", "ladder_rung: 4").replace(
+    "capital_usd: 2400", "capital_usd: 12000"
 )
 
 # 옛 autoarm 무장 센티넬 — 사다리 필드 없음(하위 호환: 단 1 취급).
@@ -163,8 +166,9 @@ def test_parse_ladder_fields_missing_is_none():
 
 
 def test_rung_capital_floor():
-    assert rung_capital_usd(1, Decimal("12345")) == 3086  # 25% 내림
-    assert rung_capital_usd(3, Decimal("12345")) == 12345
+    assert rung_capital_usd(1, Decimal("12345")) == 2469  # 20% 내림
+    assert rung_capital_usd(2, Decimal("12345")) == 3086
+    assert rung_capital_usd(4, Decimal("12345")) == 12345
     assert rung_capital_usd(0, Decimal("12345")) == 0
 
 
@@ -204,12 +208,37 @@ def test_rung0_promotes_to_rung1_on_edge_confirmed():
     d = _decide(_DISARMED)
     assert d.action == ACTION_PROMOTE
     assert d.target_rung == 1
-    assert d.target_capital_usd == 3000  # 25% of 12000
+    assert d.target_capital_usd == 2400  # 20% of 12000
     assert d.sentinel_changes
     assert "armed: true" in d.new_sentinel_text
     assert "ladder_rung: 1" in d.new_sentinel_text
     assert f"rung_entered: {_TODAY.isoformat()}" in d.new_sentinel_text
     assert "run_seq: 6" in d.new_sentinel_text  # 5 + 1
+
+
+def test_rung0_enters_exploration_canary_without_full_forward_edge() -> None:
+    d = _decide(
+        _DISARMED,
+        forward_verdict=_verdict("NO_EDGE", 41),
+        exploration_verdict={
+            "verdict": "EXPLORATION_CANARY_READY",
+            "candidate_id": "globalfixed-ensemble-3-6-9-12",
+        },
+    )
+    assert d.action == ACTION_PROMOTE
+    assert d.target_rung == 1
+    assert d.target_capital_usd == 2400
+    assert "exploration canary ready" in d.new_sentinel_text
+
+
+def test_exploration_wait_never_arms() -> None:
+    d = _decide(
+        _DISARMED,
+        forward_verdict=_verdict("NO_EDGE", 41),
+        exploration_verdict={"verdict": "EXPLORATION_CANARY_WAIT"},
+    )
+    assert d.action == ACTION_WAIT_EDGE
+    assert not d.sentinel_changes
 
 
 # ---- 강등·정지 (내려가는 건 즉시) ---------------------------------------------------
@@ -226,7 +255,7 @@ def test_demote_one_rung_at_half_budget():
     d = _decide(_RUNG2, live_growth=_growth(dd="10.0"))
     assert d.action == ACTION_DEMOTE
     assert d.target_rung == 1
-    assert d.target_capital_usd == 3000
+    assert d.target_capital_usd == 2400
     assert "armed: true" in d.new_sentinel_text
 
 
@@ -250,7 +279,7 @@ def test_promote_rung1_to_2_with_full_evidence():
     d = _decide(_RUNG1, live_growth=_growth(dd="2.5", obs=25, period_days="30"))
     assert d.action == ACTION_PROMOTE
     assert d.target_rung == 2
-    assert d.target_capital_usd == 6000
+    assert d.target_capital_usd == 3000
     assert "ladder_rung: 2" in d.new_sentinel_text
 
 
@@ -277,10 +306,21 @@ def test_no_promotion_without_growth_at_all():
     assert d.action == ACTION_STAY
 
 
-def test_rung3_is_ceiling():
-    d = _decide(_RUNG3, live_growth=_growth(dd="1.0", obs=40, period_days="60"))
+def test_exploration_rung_cannot_reach_25pct_without_full_forward_edge():
+    d = _decide(
+        _RUNG1,
+        forward_verdict=_verdict("NO_EDGE", 41),
+        exploration_verdict={"verdict": "EXPLORATION_CANARY_READY"},
+        live_growth=_growth(dd="1.0", obs=40, period_days="60"),
+    )
+    assert d.action == ACTION_STAY
+    assert d.target_rung == 1
+
+
+def test_rung4_is_ceiling():
+    d = _decide(_RUNG4, live_growth=_growth(dd="1.0", obs=40, period_days="60"))
     assert d.action in (ACTION_STAY, ACTION_RESIZE)  # 승격 없음
-    assert d.target_rung == 3
+    assert d.target_rung == 4
 
 
 def test_legacy_armed_sentinel_treated_as_rung1():
@@ -294,7 +334,7 @@ def test_legacy_armed_sentinel_treated_as_rung1():
 
 
 def test_resize_on_nav_drift_keeps_rung_and_clock():
-    # 단 1 자본 $3,000인데 계좌 NAV 가 $24,000 로 늘었다(입금) → 25% = $6,000 로 재계산.
+    # 단 1 자본 $2,400인데 계좌 NAV 가 $24,000 로 늘었다(입금) → 20% = $4,800.
     d = _decide(
         _RUNG1,
         account_nav_usd=Decimal("24000"),
@@ -302,12 +342,12 @@ def test_resize_on_nav_drift_keeps_rung_and_clock():
     )
     assert d.action == ACTION_RESIZE
     assert d.target_rung == 1
-    assert d.target_capital_usd == 6000
+    assert d.target_capital_usd == 4800
     assert "rung_entered: 2026-05-10" in d.new_sentinel_text  # 시계 리셋 안 함
 
 
 def test_no_resize_within_drift_band():
-    # NAV $12,300 → 기대 자본 $3,075, 센티넬 $3,000 — 드리프트 2.4% < 10% → STAY.
+    # NAV $12,300 → 기대 자본 $2,460, 센티넬 $2,400 — 드리프트 2.4% < 10% → STAY.
     d = _decide(
         _RUNG1,
         account_nav_usd=Decimal("12300"),

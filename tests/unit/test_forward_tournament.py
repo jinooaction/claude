@@ -38,6 +38,7 @@ def _verdict(
         "n_obs": n_obs,
         "min_obs_required": min_obs,
         "strategy_calmar": calmar,
+        "beats_benchmark_calmar": True,
         "strategy_sharpe_annual": sharpe,
         "strategy_max_drawdown_pct": dd,
         "excess_return_pct": excess,
@@ -93,6 +94,14 @@ def test_confirmed_but_low_obs_is_premature():
 def test_confirmed_enough_obs_is_comparable():
     t = _track("x", vj=_verdict(verdict=EDGE_CONFIRMED, n_obs=25, min_obs=20))
     assert t.comparability == COMPARABLE
+    assert t.beats_benchmark_calmar is True
+    assert t.to_json_dict()["beats_benchmark_calmar"] is True
+
+
+def test_missing_calmar_superiority_fails_closed() -> None:
+    verdict = _verdict(verdict=NO_EDGE, n_obs=40)
+    del verdict["beats_benchmark_calmar"]
+    assert _track("x", vj=verdict).beats_benchmark_calmar is False
 
 
 def test_no_edge_enough_obs_is_comparable():

@@ -51,6 +51,7 @@ def test_probe_writes_machine_readable_no_live_report(tmp_path: Path, capsys) ->
                         "n_obs": 41,
                         "psr_vs_benchmark": "0.827270",
                         "verdict": "NO_EDGE",
+                        "beats_benchmark_calmar": True,
                     }
                 ]
             }
@@ -82,8 +83,12 @@ def test_probe_writes_machine_readable_no_live_report(tmp_path: Path, capsys) ->
     assert payload["trial_count"] == 12
     assert payload["split"]["overlap_months"] == 0
     assert len(payload["safety_invariants"]) >= 8
+    assert payload["deployment_match"]["candidate_id"] == (
+        "globalfixed-ensemble-3-6-9-12"
+    )
+    assert isinstance(payload["deployment_match"]["historical_passed"], bool)
     assert "실주문" in summary_out.read_text(encoding="utf-8")
-    assert json.loads(capsys.readouterr().out)["schema_version"] == "1.0"
+    assert json.loads(capsys.readouterr().out)["schema_version"] == "1.1"
 
 
 def test_workflow_is_read_only_and_publishes_profit_evidence_sidecar() -> None:

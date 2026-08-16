@@ -46,6 +46,9 @@ description: "Task list template for feature implementation"
 
 ## Phase 1: Setup (Shared Infrastructure)
 
+> 돈 경로·안전 경계 작업은 헌법 변경, 정확한 전략 지문, fail-closed 시험, 배포 후 sidecar
+> 재생, 되돌림 확인을 각각 독립 작업으로 포함한다.
+
 **Purpose**: Project initialization and basic structure
 
 - [ ] T001 Create project structure per implementation plan
