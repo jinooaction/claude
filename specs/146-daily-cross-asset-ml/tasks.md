@@ -6,4 +6,4 @@
 - [x] T004 Add exact read-only server command and SSH gateway allowlist entry.
 - [x] T005 Add weekly sidecar workflow and autonomous eligible-only input.
 - [x] T006 Add synthetic, chronology, cap, database, workflow, and safety tests.
-- [ ] T007 Run focused/full tests, lint, harness, handoff, PR quality gate, merge, deploy, and real KIS run.
+- [x] T007 Run focused/full tests, lint, harness, handoff, PR quality gate, merge, deploy, and real KIS run.
