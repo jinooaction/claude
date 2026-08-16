@@ -217,6 +217,22 @@ case "${cmd}" in
         echo "refused command: ${cmd}" >&2
         exit 126
         ;;
+    live-canary-verify-order\ *)
+        read -r action run_id signed_sha capital expires nonce signature extra <<<"${cmd}"
+        if [[ "${action:-}" == "live-canary-verify-order" \
+            && -z "${extra:-}" \
+            && "${run_id:-}" =~ ^[0-9]+$ \
+            && "${signed_sha:-}" =~ ^[0-9a-f]{40}$ \
+            && "${capital:-}" =~ ^[0-9]+([.][0-9]+)?$ \
+            && "${expires:-}" =~ ^[0-9]+$ \
+            && "${nonce:-}" =~ ^[0-9]+-[0-9]+$ \
+            && "${signature:-}" =~ ^[A-Za-z0-9+/]+={0,2}$ ]]; then
+            exec sudo -n /usr/local/sbin/auto-invest-live-canary verify-order \
+                "${run_id}" "${signed_sha}" "${capital}" "${expires}" "${nonce}" "${signature}"
+        fi
+        echo "refused command: ${cmd}" >&2
+        exit 126
+        ;;
     live-canary-fills)
         exec sudo -n /usr/local/sbin/auto-invest-live-canary fills
         ;;

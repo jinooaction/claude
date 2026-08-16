@@ -34,6 +34,7 @@
 - [x] T015 안전 경계 문구를 포함해 커밋·PR·자동 머지하고 off-hours 배포를 확인한다.
 - [x] T016 주문 없는 live-profit workflow와 파생 money/capital sidecar를 현재 main에서 재발행한다.
 - [ ] T017 다음 정규장 production 승인 뒤 주문·체결·양의 손익 또는 단일 외부 조건을 권위 증거로 확정한다.
+- [x] T018 수동 production 실행을 주문 없는 서명 preflight로 분리하고 예약 주문과의 동시 실행을 막는다.
 
 ## Dependencies
 

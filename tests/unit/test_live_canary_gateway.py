@@ -230,6 +230,8 @@ def test_gateway_exposes_signed_order_and_non_order_evidence_only() -> None:
     helper = HELPER.read_text(encoding="utf-8")
 
     assert "live-canary-order\\ *)" in repair
+    assert "live-canary-verify-order\\ *)" in repair
+    assert "auto-invest-live-canary verify-order" in repair
     assert "live-canary-fills)" in repair
     assert "live-canary-profit\\ *)" in repair
     assert "verify_signature" in helper

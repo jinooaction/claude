@@ -52,10 +52,14 @@ def test_live_canary_real_orders_remain_behind_production_gate() -> None:
     assert "github.event_name != 'push'" in header
     assert "\n    environment: production\n" in real_order
     assert "Validate production live gate outputs" in real_order
-    assert "LIVE rebalance — REAL ORDERS" in real_order
+    assert "Authorize request — scheduled runs place real orders" in real_order
     assert "LIVE_ORDER_SIGNING_KEY: ${{ secrets.LIVE_ORDER_SIGNING_KEY }}" in real_order
     assert "openssl pkeyutl -sign -rawin" in real_order
-    assert "live-canary-order ${GITHUB_RUN_ID}" in real_order
+    assert 'gateway_action="live-canary-order"' in real_order
+    assert 'gateway_action="live-canary-verify-order"' in real_order
+    assert '[[ "${EVENT}" == "workflow_dispatch" ]]' in real_order
+    assert '"${gateway_action} ${GITHUB_RUN_ID}' in real_order
+    assert "real orders=0" in real_order
     assert "${GITHUB_RUN_ATTEMPT}" in real_order
 
     helper = (ROOT / "deploy" / "live-canary-on-instance.sh").read_text(
@@ -70,9 +74,10 @@ def test_live_canary_real_order_failures_reach_job_and_sidecar() -> None:
     text = _workflow_text()
     real_order = _real_order_job(text)
 
-    live_step = real_order.split("LIVE rebalance — REAL ORDERS", 1)[1].split(
-        "\n\n      - name:", 1
-    )[0]
+    live_section = real_order.split(
+        "Authorize request — scheduled runs place real orders", 1
+    )[1]
+    live_step = live_section.split("\n\n      - name:", 1)[0]
     assert "ssh_exit=$?" in live_step
     assert 'exit "${ssh_exit}"' in live_step
 
@@ -112,3 +117,10 @@ def test_live_canary_preview_and_real_orders_use_broker_snapshot() -> None:
     assert "--account-wide" in preview_fn
     assert "--account-wide" in live_helper
     assert "live-canary-order" in real_order
+
+
+def test_live_canary_runs_do_not_overlap() -> None:
+    text = _workflow_text()
+
+    assert "concurrency:\n  group: rebalance-live-canary" in text
+    assert "cancel-in-progress: false" in text
