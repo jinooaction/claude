@@ -1,0 +1,67 @@
+name: ML edge ensemble research
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "35 3 * * 0"
+  push:
+    branches: [main]
+    paths:
+      - "src/auto_invest/analytics/ml_edge_ensemble.py"
+      - "scripts/ml_edge_ensemble_probe.py"
+      - ".github/workflows/ml-edge-ensemble.yml"
+      - "pyproject.toml"
+      - "uv.lock"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ml-edge-ensemble
+  cancel-in-progress: false
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@6b9c6063abd6010835644d4c2e1bef4cf5cd0fca
+        with:
+          version: "0.9.26"
+          enable-cache: true
+      - name: Run no-live ML experiment
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/ml-edge-ensemble
+          uv run python scripts/ml_edge_ensemble_probe.py \
+            --json-out /tmp/ml-edge-ensemble/report.json \
+            --markdown-out /tmp/ml-edge-ensemble/LAST_RUN.md
+          jq '.candidate_package' /tmp/ml-edge-ensemble/report.json \
+            > /tmp/ml-edge-ensemble/candidate_package.json
+      - name: Publish research sidecar
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          branch=automation/ml-edge-ensemble-last-run
+          worktree=$(mktemp -d)
+          git config user.name "ml-edge-ensemble-bot"
+          git config user.email "ml-edge-ensemble-bot@noreply.github.com"
+          if git fetch origin "$branch"; then
+            git worktree add -B "$branch" "$worktree" "origin/$branch"
+          else
+            git worktree add --detach "$worktree" HEAD
+            git -C "$worktree" switch --orphan "$branch"
+            git -C "$worktree" rm -rf . >/dev/null 2>&1 || true
+          fi
+          cp /tmp/ml-edge-ensemble/LAST_RUN.md "$worktree/LAST_RUN.md"
+          cp /tmp/ml-edge-ensemble/report.json "$worktree/report.json"
+          cp /tmp/ml-edge-ensemble/candidate_package.json "$worktree/candidate_package.json"
+          git -C "$worktree" add LAST_RUN.md report.json candidate_package.json
+          git -C "$worktree" commit -m "ml-edge-ensemble run ${GITHUB_RUN_ID}"
+          git -C "$worktree" push --force-with-lease \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "$branch:$branch"
