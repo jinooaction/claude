@@ -1,5 +1,5 @@
 {
-  "commit": "738f57f6bc67a8341cb535ee8f5c73920e7b5e96",
+  "commit": "5d20ea8e35e9b1f717950f9f447036054768cf6f",
   "overall_status": "OK",
   "released_work": [
     {
@@ -534,7 +534,7 @@
       "status": "released"
     }
   ],
-  "run_id": "31921546359",
+  "run_id": "31922602108",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -823,7 +823,11 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "141-lot-aware-execution-proxy"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "143-live-canary-gateway-profit-evidence"
     }
   ],
-  "timestamp_utc": "2026-08-16T02:17:19.624943Z"
+  "timestamp_utc": "2026-08-16T02:44:54.314701Z"
 }
