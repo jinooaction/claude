@@ -559,7 +559,7 @@ def design(
     intent: str = typer.Option(
         "",
         "--intent",
-        help="운영자 자연어 의도 (예: \"자본 100달러, 미국 대형주 분산, 매주 적립, 위험 보통\")",
+        help='운영자 자연어 의도 (예: "자본 100달러, 미국 대형주 분산, 매주 적립, 위험 보통")',
     ),
     db_path: Path = typer.Option(
         Path("data/auto_invest.db"),
@@ -732,6 +732,7 @@ def design(
         async with httpx.AsyncClient(timeout=60.0) as _:
             # anthropic SDK 클라이언트 — async 버전.
             import anthropic
+
             anth_client = anthropic.AsyncAnthropic(
                 api_key=secrets.get("ANTHROPIC_API_KEY", ""),
             )
@@ -808,10 +809,7 @@ def design(
                     parsed.rules_toml,
                     kis_balance_usd=balance.cash_usd,
                 )
-                static_passed = (
-                    vr.static_result is not None
-                    and vr.static_result.status == "PASS"
-                )
+                static_passed = vr.static_result is not None and vr.static_result.status == "PASS"
                 if not static_passed or vr.overall_status == "BLOCKED":
                     _audit.append(
                         conn,
@@ -876,7 +874,8 @@ def design(
 
     config_dir = db_path.parent / ".." / "config"
     rules_path = deploy.write_auto_rules_file(
-        generated_toml, config_dir=config_dir.resolve(),
+        generated_toml,
+        config_dir=config_dir.resolve(),
     )
     stage_payloads = [
         {
@@ -932,9 +931,7 @@ def design(
         typer.echo(f"    - {stage.stage}: {stage.status} ({stage.reason_code})")
     typer.echo(generated_toml[:500] + ("..." if len(generated_toml) > 500 else ""))
     typer.echo("")
-    typer.echo(
-        "룰 후보를 만들었습니다. 라이브 worker는 시작하지 않았고 실제 주문은 0건입니다."
-    )
+    typer.echo("룰 후보를 만들었습니다. 라이브 worker는 시작하지 않았고 실제 주문은 0건입니다.")
     typer.echo(
         "다음 단계: 후보를 기존 검증 경로"
         "(backtest -> paper/forward -> canary -> 승인된 live)에 제출하세요."
@@ -1344,7 +1341,7 @@ def _design_check_summary(db_path: Path) -> None:
         if deployed is None:
             typer.echo(
                 "아직 라이브로 배포된 design 결과가 없습니다. "
-                "`auto-invest design --intent \"...\"`로 새 룰을 설계해주세요."
+                '`auto-invest design --intent "..."`로 새 룰을 설계해주세요.'
             )
             return
 
@@ -1366,13 +1363,11 @@ def _design_check_summary(db_path: Path) -> None:
 
         # live worker session 시작 이후의 통계.
         intents = conn.execute(
-            "SELECT COUNT(*) AS n FROM audit_log "
-            "WHERE event_type = 'ORDER_INTENT' AND seq > ?",
+            "SELECT COUNT(*) AS n FROM audit_log WHERE event_type = 'ORDER_INTENT' AND seq > ?",
             (live_session_id,),
         ).fetchone()["n"]
         fills = conn.execute(
-            "SELECT COUNT(*) AS n FROM audit_log "
-            "WHERE event_type = 'FILL' AND seq > ?",
+            "SELECT COUNT(*) AS n FROM audit_log WHERE event_type = 'FILL' AND seq > ?",
             (live_session_id,),
         ).fetchone()["n"]
         denied = conn.execute(
@@ -1389,8 +1384,7 @@ def _design_check_summary(db_path: Path) -> None:
 
         # worker가 아직 실행 중인지 확인 — 같은 seq 이후 WORKER_STOPPED가 있나.
         worker_stopped = conn.execute(
-            "SELECT seq FROM audit_log "
-            "WHERE event_type = 'WORKER_STOPPED' AND seq > ? LIMIT 1",
+            "SELECT seq FROM audit_log WHERE event_type = 'WORKER_STOPPED' AND seq > ? LIMIT 1",
             (live_session_id,),
         ).fetchone()
         worker_state = "종료됨" if worker_stopped is not None else "실행 중"
@@ -1408,8 +1402,7 @@ def _design_check_summary(db_path: Path) -> None:
     if completed:
         com_payload = _json.loads(completed["payload_json"])
         typer.echo(
-            "Claude 해석: "
-            f"{_json.dumps(com_payload.get('interpretation', {}), ensure_ascii=False)}"
+            f"Claude 해석: {_json.dumps(com_payload.get('interpretation', {}), ensure_ascii=False)}"
         )
     typer.echo("")
     typer.echo("라이브 worker 시작 이후 통계:")
@@ -1600,18 +1593,12 @@ def performance(
 
     try:
         until_dt = _parse_iso(until) if until else datetime.now(UTC)
-        since_dt = (
-            until_dt - _parse_window(window)
-            if window is not None
-            else _parse_iso(since)
-        )
+        since_dt = until_dt - _parse_window(window) if window is not None else _parse_iso(since)
     except ValueError as exc:
         typer.echo(f"잘못된 기간 인자: {exc}", err=True)
         _exit(2)
 
-    starting_capital = (
-        Decimal(str(capital)) if capital is not None and capital > 0 else None
-    )
+    starting_capital = Decimal(str(capital)) if capital is not None and capital > 0 else None
 
     if not db_path.exists():
         typer.echo(f"DB 파일을 찾을 수 없습니다: {db_path}", err=True)
@@ -1638,9 +1625,7 @@ def performance(
                     )
                 )
             except Exception as exc:  # noqa: BLE001 — 시세 조회 실패는 미실현만 미반영
-                typer.echo(
-                    f"(시세 조회 실패 — 미실현 손익 미반영: {exc})", err=True
-                )
+                typer.echo(f"(시세 조회 실패 — 미실현 손익 미반영: {exc})", err=True)
         report = compute_performance(
             fills,
             marks,
@@ -1674,9 +1659,7 @@ def performance(
             )
         finally:
             write_conn.close()
-        typer.echo(
-            f"(스냅샷 기록됨: LIVE_PERFORMANCE_SNAPSHOT seq={seq})", err=True
-        )
+        typer.echo(f"(스냅샷 기록됨: LIVE_PERFORMANCE_SNAPSHOT seq={seq})", err=True)
 
     slippage_stats = compute_slippage(fills) if slippage else None
 
@@ -1743,9 +1726,7 @@ def fills(
         help="브로커 체결 조회로 라이브 열린 주문의 체결을 한 번 당겨 장부에 반영. "
         "--env 필요. 미지정 시 읽기 전용 요약만 출력.",
     ),
-    db_path: Path = typer.Option(
-        Path("data/auto_invest.db"), "--db", help="SQLite database path."
-    ),
+    db_path: Path = typer.Option(Path("data/auto_invest.db"), "--db", help="SQLite database path."),
     env_file: Path | None = typer.Option(
         None, "--env", help="KIS 자격 증명 .env (--sync 에 필요)."
     ),
@@ -1878,9 +1859,7 @@ async def _run_reconcile(
 
 @app.command(name="promote-check")
 def promote_check(
-    db_path: Path = typer.Option(
-        Path("data/auto_invest.db"), "--db", help="SQLite database path."
-    ),
+    db_path: Path = typer.Option(Path("data/auto_invest.db"), "--db", help="SQLite database path."),
     rules_path: Path = typer.Option(
         Path("deploy/canary-live-rules.toml"),
         "--rules",
@@ -1892,9 +1871,7 @@ def promote_check(
         help="라이브 캐너리 시작 자본(USD) — 총수익률 계산 기준.",
     ),
     mode: str = typer.Option("live", "--mode", help="live 또는 paper."),
-    output_format: str = typer.Option(
-        "text", "--format", help="text 또는 json."
-    ),
+    output_format: str = typer.Option("text", "--format", help="text 또는 json."),
 ) -> None:
     """스펙 026 — 라이브 캐너리가 풀라이브 승격 준비가 됐는지 평가(헌법 VI 절반).
 
@@ -1940,18 +1917,14 @@ def promote_check(
         typer.echo(f"승격 준비: {'✅ READY' if readiness.ready else '⏳ NOT READY'}")
         for reason in readiness.reasons:
             typer.echo(f"  - {reason}")
-        typer.echo(
-            "주의: 실제 풀라이브 승격은 스펙 007 하드닝 캐너리(IX.B-2)도 통과해야 합니다."
-        )
+        typer.echo("주의: 실제 풀라이브 승격은 스펙 007 하드닝 캐너리(IX.B-2)도 통과해야 합니다.")
 
     _exit(0 if readiness.ready else 1)
 
 
 @app.command()
 def reconcile(
-    db_path: Path = typer.Option(
-        Path("data/auto_invest.db"), "--db", help="SQLite database path."
-    ),
+    db_path: Path = typer.Option(Path("data/auto_invest.db"), "--db", help="SQLite database path."),
     halt_path: Path = typer.Option(
         Path("data/halt.flag"), "--halt-path", help="Filesystem halt-flag path."
     ),
@@ -2239,9 +2212,7 @@ def _attach_judgment_summary(conn, rep):  # noqa: ANN001, ANN201
         from auto_invest.telemetry.prices import load_prices
 
         prices = load_prices(Path("config/llm_prices.toml"))
-        client = JudgmentClient(
-            anthropic.AsyncAnthropic(api_key=api_key), conn=conn, prices=prices
-        )
+        client = JudgmentClient(anthropic.AsyncAnthropic(api_key=api_key), conn=conn, prices=prices)
         summary = asyncio.run(summarize_day(client, conn=conn, counters=counters))
     except Exception:  # noqa: BLE001 — 어떤 실패든 결정론적 폴백으로
         summary = fallback_narrative(counters)
@@ -2294,9 +2265,7 @@ def report(
     conn = db.get_connection(db_path)
     db.migrate(conn)
     try:
-        rep = build_report(
-            conn, session_date=session_date, tiers=tiers, include_performance=True
-        )
+        rep = build_report(conn, session_date=session_date, tiers=tiers, include_performance=True)
         # spec 004 daily_summary 판단 지점(순수 자문): ANTHROPIC_API_KEY 가 있으면
         # Claude 서술 요약, 없거나 실패하면 결정론적 카운터 폴백. 어느 경우든
         # 리포트는 정상 생성된다(FR-022).
@@ -2811,15 +2780,44 @@ def _load_account_rebalance_settings(path: Path) -> tuple[bool, frozenset[str], 
 
     table = raw.get("account_rebalance", {})
     enabled = bool(table.get("enabled", False))
-    liquidation = frozenset(
-        str(s).strip().upper() for s in table.get("liquidation_symbols", [])
-    )
+    liquidation = frozenset(str(s).strip().upper() for s in table.get("liquidation_symbols", []))
     cash_buffer_pct = Decimal(str(table.get("cash_buffer_pct", "0.01")))
     if cash_buffer_pct < 0:
         raise ConfigError("[account_rebalance].cash_buffer_pct must be non-negative")
     if any(not s for s in liquidation):
         raise ConfigError("[account_rebalance].liquidation_symbols contains an empty symbol")
     return enabled, liquidation, cash_buffer_pct
+
+
+def _load_execution_settings(path: Path) -> tuple[dict[str, str], str]:
+    """Load optional fail-closed signal-to-execution symbol settings."""
+    import tomllib
+
+    if not path.exists():
+        raise ConfigError(f"portfolio file not found: {path}")
+    try:
+        raw = tomllib.loads(path.read_bytes().decode("utf-8"))
+    except tomllib.TOMLDecodeError as e:
+        raise ConfigError(f"portfolio file is not valid TOML: {e}") from e
+
+    table = raw.get("execution", {})
+    raw_map = table.get("symbol_map", {})
+    if not isinstance(raw_map, dict):
+        raise ConfigError("[execution].symbol_map must be a table")
+    symbol_map = {
+        str(signal).strip().upper(): str(execution).strip().upper()
+        for signal, execution in raw_map.items()
+    }
+    if any(not signal or not execution for signal, execution in symbol_map.items()):
+        raise ConfigError("[execution].symbol_map contains an empty symbol")
+    if len(set(symbol_map.values())) != len(symbol_map):
+        raise ConfigError("[execution].symbol_map values must be one-to-one")
+    lot_rounding = str(table.get("lot_rounding", "floor")).strip().lower()
+    if lot_rounding not in {"floor", "nearest"}:
+        raise ConfigError("[execution].lot_rounding must be 'floor' or 'nearest'")
+    if not symbol_map and lot_rounding != "floor":
+        raise ConfigError("nearest lot rounding requires an explicit execution symbol map")
+    return symbol_map, lot_rounding
 
 
 @app.command("ingest-history")
@@ -2896,9 +2894,7 @@ def backtest_cmd(
     date_from: str = typer.Option(
         None, "--from", help="Inclusive session-date start (YYYY-MM-DD)."
     ),
-    date_to: str = typer.Option(
-        None, "--to", help="Inclusive session-date end (YYYY-MM-DD)."
-    ),
+    date_to: str = typer.Option(None, "--to", help="Inclusive session-date end (YYYY-MM-DD)."),
     dataset_version: str = typer.Option(
         None,
         "--dataset-version",
@@ -2977,9 +2973,7 @@ def backtest_cmd(
             else _cost_base.commission_bps
         ),
         slippage_bps=(
-            _Decimal(str(slippage_bps))
-            if slippage_bps is not None
-            else _cost_base.slippage_bps
+            _Decimal(str(slippage_bps)) if slippage_bps is not None else _cost_base.slippage_bps
         ),
         min_commission_usd=(
             _Decimal(str(min_commission_usd))
@@ -3060,9 +3054,7 @@ def backtest_cmd(
 
     data_source = CSVDataSource(dataset_dir)
     # Coverage pre-check (FR-B10).
-    holes = data_source.coverage_holes(
-        list(data_source.list_symbols()), ds_start, ds_end
-    )
+    holes = data_source.coverage_holes(list(data_source.list_symbols()), ds_start, ds_end)
     if holes:
         for sym, d in holes[:20]:
             typer.echo(f"coverage hole: {sym} {d.isoformat()}", err=True)
@@ -3305,8 +3297,7 @@ def bars_export_cmd(
         typer.echo(f"exported (timeframe={timeframe}) → {out_dir}:")
         for r in exported:
             typer.echo(
-                f"  {r['symbol']:8} rows={r['rows']:<6} "
-                f"{r['first_date']} → {r['last_date']}"
+                f"  {r['symbol']:8} rows={r['rows']:<6} {r['first_date']} → {r['last_date']}"
             )
         if skipped:
             typer.echo(f"skipped (0 bars): {', '.join(skipped)}")
@@ -3331,9 +3322,7 @@ def backfill_bars_cmd(
     db_path: Path = typer.Option(
         Path("data/auto_invest.db"), "--db", help="SQLite path; bars go to price_bars."
     ),
-    env_file: Path = typer.Option(
-        None, "--env-file", help=".env with KIS_APP_KEY/KIS_APP_SECRET."
-    ),
+    env_file: Path = typer.Option(None, "--env-file", help=".env with KIS_APP_KEY/KIS_APP_SECRET."),
     base_url: str = typer.Option(
         "https://openapi.koreainvestment.com:9443", "--base-url", help="KIS REST base URL."
     ),
@@ -3625,9 +3614,7 @@ def regime_stratify_cmd(
 
     if out is not None:
         out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(
-            _json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-        )
+        out.write_text(_json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     if as_json:
         typer.echo(_json.dumps(result, ensure_ascii=False))
     else:
@@ -3635,9 +3622,7 @@ def regime_stratify_cmd(
             f"regime stratify: 수익률 {result['total_return_days']}일 — {result['join_rule']}"
         )
         for label, st in result["by_label"].items():
-            line = (
-                f"  {label:12} n={st['n_days']:5}  누적 {st.get('total_return_pct', '-'):>8}%"
-            )
+            line = f"  {label:12} n={st['n_days']:5}  누적 {st.get('total_return_pct', '-'):>8}%"
             if "sharpe" in st:
                 line += f"  샤프 {st['sharpe']:>6}  최대낙폭 {st['max_drawdown_pct']}%"
             typer.echo(line)
@@ -3889,9 +3874,7 @@ def portfolio_walk_forward_cmd(
     db_path: Path = typer.Option(
         Path("data/auto_invest.db"), "--db", help="SQLite audit-log path."
     ),
-    halt_path: Path = typer.Option(
-        Path("data/halt.flag"), "--halt-path", help="Halt-flag path."
-    ),
+    halt_path: Path = typer.Option(Path("data/halt.flag"), "--halt-path", help="Halt-flag path."),
     history_root: Path = typer.Option(
         Path("data/history"), "--history-root", help="Parent of <dataset_version>/."
     ),
@@ -3968,7 +3951,9 @@ def portfolio_walk_forward_cmd(
     try:
         if trailing_years is not None:
             window = trailing_window(
-                data_source, port_cfg.universe, trailing_years=trailing_years  # type: ignore[union-attr]
+                data_source,
+                port_cfg.universe,
+                trailing_years=trailing_years,  # type: ignore[union-attr]
             )
             if window is None:
                 typer.echo("dataset has no sessions for the portfolio universe", err=True)
@@ -4089,20 +4074,14 @@ def backtest_portfolio_cmd(
         "--portfolio",
         help="TOML with [caps], [whitelist], [portfolio] sections (spec 032).",
     ),
-    date_from: str = typer.Option(
-        ..., "--from", help="Inclusive session-date start (YYYY-MM-DD)."
-    ),
-    date_to: str = typer.Option(
-        ..., "--to", help="Inclusive session-date end (YYYY-MM-DD)."
-    ),
+    date_from: str = typer.Option(..., "--from", help="Inclusive session-date start (YYYY-MM-DD)."),
+    date_to: str = typer.Option(..., "--to", help="Inclusive session-date end (YYYY-MM-DD)."),
     dataset_version: str = typer.Option(
         None,
         "--dataset-version",
         help="Specific dataset_version; defaults to most recent under data/history/.",
     ),
-    capital: float = typer.Option(
-        100000.0, "--capital", help="Starting capital in USD."
-    ),
+    capital: float = typer.Option(100000.0, "--capital", help="Starting capital in USD."),
     db_path: Path = typer.Option(
         Path("data/auto_invest.db"), "--db", help="SQLite audit-log path."
     ),
@@ -4171,9 +4150,7 @@ def backtest_portfolio_cmd(
             else _cost_base.commission_bps
         ),
         slippage_bps=(
-            _Decimal(str(slippage_bps))
-            if slippage_bps is not None
-            else _cost_base.slippage_bps
+            _Decimal(str(slippage_bps)) if slippage_bps is not None else _cost_base.slippage_bps
         ),
         min_commission_usd=(
             _Decimal(str(min_commission_usd))
@@ -4259,8 +4236,7 @@ def backtest_portfolio_cmd(
     if equity_out is not None:
         equity_out.parent.mkdir(parents=True, exist_ok=True)
         equity_out.write_text(
-            "date,value\n"
-            + "".join(f"{d.isoformat()},{eq}\n" for d, eq in result.equity_curve),
+            "date,value\n" + "".join(f"{d.isoformat()},{eq}\n" for d, eq in result.equity_curve),
             encoding="utf-8",
         )
 
@@ -4432,9 +4408,10 @@ def rebalance_once_cmd(
         _pf_env = None
     try:
         caps, whitelist, port_cfg = _load_portfolio_for_backtest(portfolio, env=_pf_env)
-        account_enabled, liquidation_symbols, cash_buffer_pct = (
-            _load_account_rebalance_settings(portfolio)
+        account_enabled, liquidation_symbols, cash_buffer_pct = _load_account_rebalance_settings(
+            portfolio
         )
+        execution_symbol_map, lot_rounding = _load_execution_settings(portfolio)
     except ConfigError as exc:
         typer.echo(f"portfolio validation failed: {exc}", err=True)
         _exit(65)
@@ -4442,7 +4419,17 @@ def rebalance_once_cmd(
 
     # Safety: every universe symbol MUST be on the whitelist, else its buys would
     # be rejected at the gate — surface that BEFORE contacting the broker.
-    missing = [s for s in port_cfg.universe if s not in whitelist.symbols]
+    if execution_symbol_map and set(execution_symbol_map) != set(port_cfg.universe):
+        missing_map = sorted(set(port_cfg.universe) - set(execution_symbol_map))
+        extra_map = sorted(set(execution_symbol_map) - set(port_cfg.universe))
+        typer.echo(
+            "execution symbol map must exactly cover portfolio universe: "
+            f"missing={missing_map}, extra={extra_map}",
+            err=True,
+        )
+        _exit(65)
+    trade_symbols = set(execution_symbol_map.values()) or set(port_cfg.universe)
+    missing = sorted(trade_symbols - set(whitelist.symbols))
     if missing:
         typer.echo(
             f"universe symbols not on the whitelist: {missing} — add them to "
@@ -4458,11 +4445,10 @@ def rebalance_once_cmd(
                 err=True,
             )
             _exit(65)
-        overlap = sorted(set(port_cfg.universe) & set(liquidation_symbols))
+        overlap = sorted(trade_symbols & set(liquidation_symbols))
         if overlap:
             typer.echo(
-                "account_rebalance liquidation symbols overlap target universe: "
-                f"{overlap}",
+                f"account_rebalance liquidation symbols overlap target universe: {overlap}",
                 err=True,
             )
             _exit(65)
@@ -4491,14 +4477,19 @@ def rebalance_once_cmd(
     # always a subset of the configured (whitelist-checked) universe, so this can
     # only NARROW the trading set — never widen it past the whitelist (principle II).
     if construct_universe_top_n > 0:
+        if execution_symbol_map:
+            typer.echo(
+                "construct-universe cannot be combined with a fixed execution symbol map",
+                err=True,
+            )
+            _exit(65)
         from auto_invest.market_data.store import get_bars as _get_bars
         from auto_invest.strategy.universe import select_universe as _select_universe
 
         _conn_u = db.get_connection(db_path)
         try:
             _cand_bars = {
-                s: _get_bars(_conn_u, symbol=s, timeframe=timeframe)
-                for s in port_cfg.universe
+                s: _get_bars(_conn_u, symbol=s, timeframe=timeframe) for s in port_cfg.universe
             }
         finally:
             _conn_u.close()
@@ -4573,6 +4564,8 @@ def rebalance_once_cmd(
                     stage=StrategyStage.CANARY,
                     dry_run=True,
                     execution_side=side,
+                    execution_symbol_map=execution_symbol_map,
+                    lot_rounding=lot_rounding,
                 )
             finally:
                 conn.close()
@@ -4652,12 +4645,12 @@ def rebalance_once_cmd(
                     stage=StrategyStage.CANARY,
                     dry_run=dry_run,
                     account_holdings=broker_holdings,
-                    liquidation_only_symbols=(
-                        liquidation_symbols if account_wide else frozenset()
-                    ),
+                    liquidation_only_symbols=(liquidation_symbols if account_wide else frozenset()),
                     execution_side=side,
                     purchasable_cash_usd=purchasable_cash,
                     cash_buffer_pct=cash_buffer_pct,
+                    execution_symbol_map=execution_symbol_map,
+                    lot_rounding=lot_rounding,
                 )
             finally:
                 conn.close()
@@ -4691,8 +4684,14 @@ def rebalance_once_cmd(
                         outcome.planned_sell_notional_usd  # type: ignore[attr-defined]
                     ),
                     "target_weights": {
-                        s: str(w) for s, w in outcome.target_weights.items()  # type: ignore[attr-defined]
+                        s: str(w)
+                        for s, w in outcome.target_weights.items()  # type: ignore[attr-defined]
                     },
+                    "signal_target_weights": {
+                        s: str(w)
+                        for s, w in outcome.signal_target_weights.items()  # type: ignore[attr-defined]
+                    },
+                    "execution_symbol_map": outcome.execution_symbol_map,  # type: ignore[attr-defined]
                     "results": [
                         {
                             "symbol": r.symbol,
@@ -4726,30 +4725,26 @@ def rebalance_once_cmd(
     )
     if outcome.purchasable_cash_usd is not None:  # type: ignore[attr-defined]
         typer.echo(
-            "cash: purchasable="
-            f"{outcome.purchasable_cash_usd} required={outcome.required_cash_usd}"  # type: ignore[attr-defined]
+            f"cash: purchasable={outcome.purchasable_cash_usd} required={outcome.required_cash_usd}"  # type: ignore[attr-defined]
         )
     typer.echo(
         "target weights: "
         + ", ".join(
-            f"{s}={w}" for s, w in sorted(outcome.target_weights.items())  # type: ignore[attr-defined]
+            f"{s}={w}"
+            for s, w in sorted(outcome.target_weights.items())  # type: ignore[attr-defined]
         )
     )
     typer.echo("")
     for r in outcome.results:  # type: ignore[attr-defined]
         typer.echo(
             f"  {r.side:4} {r.symbol:6} req={r.requested_qty} routed={r.routed_qty} "
-            f"@~{r.limit_price_usd}  -> {r.state}"
-            + (f" ({r.reason})" if r.reason else "")
+            f"@~{r.limit_price_usd}  -> {r.state}" + (f" ({r.reason})" if r.reason else "")
         )
     if outcome.withheld:  # type: ignore[attr-defined]
         typer.echo("")
         typer.echo("withheld:")
         for w in outcome.withheld:  # type: ignore[attr-defined]
-            typer.echo(
-                f"  {w.side:4} {w.symbol:6} req={w.requested_qty} -> WITHHELD "
-                f"({w.reason})"
-            )
+            typer.echo(f"  {w.side:4} {w.symbol:6} req={w.requested_qty} -> WITHHELD ({w.reason})")
 
 
 @app.command("walk-forward")
@@ -4757,9 +4752,7 @@ def walk_forward_cmd(
     rules: Path = typer.Option(
         ..., "--rules", help="Path to rules TOML (same format as the live worker)."
     ),
-    date_from: str = typer.Option(
-        ..., "--from", help="Inclusive session-date start (YYYY-MM-DD)."
-    ),
+    date_from: str = typer.Option(..., "--from", help="Inclusive session-date start (YYYY-MM-DD)."),
     date_to: str = typer.Option(..., "--to", help="Inclusive session-date end (YYYY-MM-DD)."),
     in_sample_days: int = typer.Option(
         ..., "--in-sample-days", help="In-sample (fit) window length in calendar days."
@@ -5202,9 +5195,7 @@ def tune(
             f"skipped={len(result.skipped)}"
         )
         for cls in result.candidates:
-            typer.echo(
-                f"  - {cls.candidate.candidate_id} [{cls.tier}] {cls.reason}"
-            )
+            typer.echo(f"  - {cls.candidate.candidate_id} [{cls.tier}] {cls.reason}")
         for cid, reason in result.skipped:
             typer.echo(f"  · skipped {cid}: {reason}")
         if result.canary_candidates or result.canary_validations:
@@ -5227,9 +5218,7 @@ def nav_snapshot_cmd(
     env_file: Path = typer.Option(
         None, "--env-file", "--env", help="KIS 시세 조회용 .env (미실현 mark-to-market)."
     ),
-    base_url: str = typer.Option(
-        "https://openapi.koreainvestment.com:9443", "--base-url"
-    ),
+    base_url: str = typer.Option("https://openapi.koreainvestment.com:9443", "--base-url"),
     no_marks: bool = typer.Option(
         False, "--no-marks", help="시세 조회 생략 — 평균단가로 보수 평가."
     ),
@@ -5347,9 +5336,7 @@ def nav_snapshot_cmd(
                     holdings_count=len([h for h in snap.holdings if h.qty != 0]),
                     total_qty_drift=snap.total_qty_drift,
                     total_value_drift_usd=str(snap.total_value_drift_usd),
-                    capital_basis_usd=(
-                        None if capital_dec is None else str(capital_dec)
-                    ),
+                    capital_basis_usd=(None if capital_dec is None else str(capital_dec)),
                 ),
             )
         finally:
@@ -5389,9 +5376,7 @@ def forward_verdict_cmd(
     min_obs: int = typer.Option(
         20, "--min-obs", help="이보다 적은 관측이면 판정 보류(INSUFFICIENT_DATA)."
     ),
-    dsr_threshold: float = typer.Option(
-        0.95, "--dsr-threshold", help="PSR/DSR 합격선 (0..1)."
-    ),
+    dsr_threshold: float = typer.Option(0.95, "--dsr-threshold", help="PSR/DSR 합격선 (0..1)."),
     output_format: str = typer.Option("text", "--format", help="text | json."),
 ) -> None:
     """Spec 035 — forward 페이퍼 트랙이 '실제로 돈을 버는가'를 자동 판정한다.
@@ -5455,17 +5440,13 @@ def forward_verdict_cmd(
             for sym in universe:
                 bars = get_bars(conn, symbol=sym, timeframe=timeframe)
                 bars_by_symbol[sym] = [
-                    (_to_date(b.bar_open_utc), b.close_usd)
-                    for b in bars
-                    if b.close_usd > 0
+                    (_to_date(b.bar_open_utc), b.close_usd) for b in bars if b.close_usd > 0
                 ]
     finally:
         conn.close()
 
     benchmark_curve = (
-        equal_weight_buy_hold_curve(nav_dates, bars_by_symbol)
-        if bars_by_symbol
-        else None
+        equal_weight_buy_hold_curve(nav_dates, bars_by_symbol) if bars_by_symbol else None
     )
 
     verdict = forward_edge_verdict(
@@ -5520,9 +5501,7 @@ def forward_verdict_anchored_cmd(
         1, "--num-trials", help="시도한 설정 수 — DSR 다중검정 보정(정직히)."
     ),
     capital: float = typer.Option(100000.0, "--capital", help="OOS 시작 자본 USD."),
-    halt_path: Path = typer.Option(
-        Path("data/halt.flag"), "--halt-path", help="Halt 깃발 경로."
-    ),
+    halt_path: Path = typer.Option(Path("data/halt.flag"), "--halt-path", help="Halt 깃발 경로."),
     min_oos_obs: int = typer.Option(60, "--min-oos-obs", help="앵커 최소 OOS 관측(일)."),
     min_forward_obs: int = typer.Option(
         5, "--min-forward-obs", help="지속 확인 최소 forward 관측(일)."
@@ -5597,7 +5576,9 @@ def forward_verdict_anchored_cmd(
     try:
         if trailing_years is not None:
             window = trailing_window(
-                data_source, port_cfg.universe, trailing_years=trailing_years  # type: ignore[union-attr]
+                data_source,
+                port_cfg.universe,
+                trailing_years=trailing_years,  # type: ignore[union-attr]
             )
             if window is None:
                 typer.echo("dataset has no sessions for the universe", err=True)
@@ -5870,9 +5851,7 @@ def account_nav_cmd(
 @app.command("growth")
 def growth_cmd(
     mode: str = typer.Option("paper", "--mode", help="paper | live."),
-    db_path: Path = typer.Option(
-        Path("data/auto_invest.db"), "--db", help="SQLite database path."
-    ),
+    db_path: Path = typer.Option(Path("data/auto_invest.db"), "--db", help="SQLite database path."),
     since: str = typer.Option(
         None,
         "--since",
@@ -6042,22 +6021,15 @@ def ladder_decide_cmd(
         verdict = combined  # decide_ladder 는 verdict["verdict"]/["n_obs"] 만 읽음 — 호환.
     growth = _read_json(live_growth_json)
     deployment_match = (
-        profit_evidence.get("deployment_match")
-        if isinstance(profit_evidence, dict)
-        else None
+        profit_evidence.get("deployment_match") if isinstance(profit_evidence, dict) else None
     )
     exploration_verdict = None
     if isinstance(deployment_match, dict):
         ready = deployment_match.get("exploration_canary_ready") is True
-        canary_pass = (
-            isinstance(hardened_canary, dict)
-            and hardened_canary.get("verdict") == "PASS"
-        )
+        canary_pass = isinstance(hardened_canary, dict) and hardened_canary.get("verdict") == "PASS"
         exploration_verdict = {
             "verdict": (
-                "EXPLORATION_CANARY_READY"
-                if ready and canary_pass
-                else "EXPLORATION_CANARY_WAIT"
+                "EXPLORATION_CANARY_READY" if ready and canary_pass else "EXPLORATION_CANARY_WAIT"
             ),
             "candidate_id": deployment_match.get("candidate_id"),
             "historical_forward_ready": ready,
@@ -6313,9 +6285,7 @@ def reassign_decide_cmd(
                     requested_level=AutonomyLevel.STRATEGY_REASSIGNMENT,
                     declared_surfaces=declared,
                 )
-                live_portfolio.write_text(
-                    execution.new_live_config_text, encoding="utf-8"
-                )
+                live_portfolio.write_text(execution.new_live_config_text, encoding="utf-8")
                 sentinel.write_text(execution.rung0_sentinel_text, encoding="utf-8")
                 out["wrote_files"] = True
         except (ReassignExecError, OSError) as e:
@@ -6443,9 +6413,7 @@ def canary_portfolio_cmd(
     else:
         latest = latest_dataset_dir(history_root)
         if latest is None:
-            typer.echo(
-                f"{history_root} 아래 데이터셋 없음 — 먼저 ingest-history 실행", err=True
-            )
+            typer.echo(f"{history_root} 아래 데이터셋 없음 — 먼저 ingest-history 실행", err=True)
             raise typer.Exit(EXIT_COVERAGE)
         data_source = CSVDataSource(latest)
 
@@ -6454,9 +6422,7 @@ def canary_portfolio_cmd(
     for sym in port_cfg.universe:
         sessions.update(data_source.session_dates(sym))
     if not sessions:
-        typer.echo(
-            f"데이터셋에 유니버스 {list(port_cfg.universe)} 세션 없음 — 백필 필요", err=True
-        )
+        typer.echo(f"데이터셋에 유니버스 {list(port_cfg.universe)} 세션 없음 — 백필 필요", err=True)
         if bars_conn is not None:
             bars_conn.close()
         raise typer.Exit(EXIT_COVERAGE)

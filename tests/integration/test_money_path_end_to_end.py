@@ -28,7 +28,7 @@ from typer.testing import CliRunner
 
 from auto_invest.broker.client import AsyncTokenBucket, CircuitBreaker, ResilientClient
 from auto_invest.broker.models import Quote
-from auto_invest.cli import _load_portfolio_for_backtest, app
+from auto_invest.cli import _load_execution_settings, _load_portfolio_for_backtest, app
 from auto_invest.execution.order_router import OrderRouter
 from auto_invest.execution.rebalancer import execute_rebalance
 from auto_invest.market_data.store import PriceBar, get_bars, insert_bar
@@ -40,6 +40,7 @@ from auto_invest.portfolio.capital_ladder import (
     ACTION_WAIT_EDGE,
     decide_ladder,
     parse_ladder_fields,
+    render_ladder_sentinel,
     rung_capital_usd,
 )
 
@@ -88,6 +89,25 @@ def _seed_uptrend(conn, symbol: str, start: str, *, n: int, amp: str) -> None:
 def _quote_provider(conn, universe):
     last = {
         s: get_bars(conn, symbol=s, timeframe="1d")[-1].close_usd for s in universe
+    }
+
+    async def provider(symbol: str) -> Quote:
+        p = last[symbol]
+        return Quote(
+            symbol=symbol,
+            last_price_usd=p,
+            bid_usd=(p * Decimal("0.999")).quantize(Decimal("0.01")),
+            ask_usd=(p * Decimal("1.001")).quantize(Decimal("0.01")),
+            quoted_at_utc=datetime(2026, 6, 1, tzinfo=UTC),
+        )
+
+    return provider
+
+
+def _execution_quote_provider(conn, symbol_map):
+    last = {
+        execution: get_bars(conn, symbol=signal, timeframe="1d")[-1].close_usd
+        for signal, execution in symbol_map.items()
     }
 
     async def provider(symbol: str) -> Quote:
@@ -193,6 +213,7 @@ def _seed_nav_series(db_path: Path, *, n: int, basis: str) -> None:
 async def test_full_money_path_with_real_live_config(db_path: Path, tmp_path: Path):
     """실제 라이브 설정으로 신호→주문→체결→NAV→판정→사다리 전 사슬이 이어진다."""
     caps, whitelist, cfg = _load_live_config()
+    execution_symbol_map, lot_rounding = _load_execution_settings(_LIVE_TOML)
 
     # 0. 검증=배치 정합 — 실제 두 운영 설정의 전략 지문이 동일해야 사다리가 가동된다.
     _, _, validated_cfg = _load_portfolio_for_backtest(
@@ -213,18 +234,23 @@ async def test_full_money_path_with_real_live_config(db_path: Path, tmp_path: Pa
             config=cfg,
             router=_paper_router(conn, tmp_path, whitelist, caps),
             conn=conn,
-            quote_provider=_quote_provider(conn, cfg.universe),
+            quote_provider=_execution_quote_provider(conn, execution_symbol_map),
             total_capital_usd=RUNG1_CAPITAL,
             caps=caps,
+            account_holdings={},
+            purchasable_cash_usd=ACCOUNT_NAV,
+            execution_symbol_map=execution_symbol_map,
+            lot_rounding=lot_rounding,
         )
     finally:
         conn.close()
 
     # 상승 추세 → 세 자산 전부 비중 > 0 (2026-06-10 "빈 비중" 클래스의 회귀 방패).
-    assert set(out.target_weights) == set(cfg.universe), (
-        f"목표 비중이 유니버스를 다 덮지 못함: {out.target_weights!r} — 이력/신호"
+    assert set(out.signal_target_weights) == set(cfg.universe), (
+        f"신호 비중이 유니버스를 다 덮지 못함: {out.signal_target_weights!r} — 이력/신호"
         " 경로가 끊겼다(얕은 백필 클래스)."
     )
+    assert set(out.target_weights) == set(execution_symbol_map.values())
     assert all(Decimal(str(w)) > 0 for w in out.target_weights.values())
     fills = [r for r in out.results if r.state == "PAPER_FILLED"]
     assert len(fills) >= 2, f"체결이 너무 적음: {[(r.symbol, r.state) for r in out.results]}"
@@ -378,7 +404,15 @@ def test_committed_sentinel_blocks_unvalidated_strategy(db_path: Path):
     )
     mutated = cfg.model_copy(update={"top_n": 2})
     d = decide_ladder(
-        sentinel_text=_SENTINEL.read_text(encoding="utf-8"),
+        sentinel_text=render_ladder_sentinel(
+            rung=0,
+            capital_usd=0,
+            account_nav_usd=ACCOUNT_NAV,
+            rung_entered=date(2026, 6, 12),
+            run_seq=1,
+            dd_budget_pct=Decimal("20"),
+            evidence="test rung-0 baseline",
+        ),
         forward_verdict={"verdict": "EDGE_CONFIRMED", "n_obs": 99},
         live_growth=None,
         account_nav_usd=ACCOUNT_NAV,
@@ -429,7 +463,15 @@ def test_money_path_report_surfaces_downside_with_real_config():
         _VALIDATED_TOML, env={"KIS_ACCOUNT_NO": ACCOUNT}
     )
     d = decide_ladder(
-        sentinel_text=_SENTINEL.read_text(encoding="utf-8"),
+        sentinel_text=render_ladder_sentinel(
+            rung=0,
+            capital_usd=0,
+            account_nav_usd=ACCOUNT_NAV,
+            rung_entered=date(2026, 6, 12),
+            run_seq=1,
+            dd_budget_pct=Decimal("20"),
+            evidence="test rung-0 baseline",
+        ),
         forward_verdict={"verdict": "EDGE_CONFIRMED", "n_obs": 25},
         live_growth=None,
         account_nav_usd=ACCOUNT_NAV,

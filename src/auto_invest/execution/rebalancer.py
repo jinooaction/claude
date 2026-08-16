@@ -75,6 +75,7 @@ def _trend_spec(
     """
     return spec_from_filter_config(config.trend_filter)
 
+
 _CENT = Decimal("0.01")
 # Marketable-limit buffer when bid/ask is unavailable: cross by 20 bps so the
 # order is aggressive enough to fill but slippage stays bounded.
@@ -121,17 +122,23 @@ class RebalanceOutcome:
     planned_buy_notional_usd: Decimal = Decimal("0")
     planned_sell_notional_usd: Decimal = Decimal("0")
     withheld: list[RebalanceWithheldOrder] = field(default_factory=list)
+    signal_target_weights: dict[str, Decimal] = field(default_factory=dict)
+    execution_symbol_map: dict[str, str] = field(default_factory=dict)
 
 
 def _marketable_limit(side: Side, quote: Quote) -> Decimal:
     """Aggressive limit near the touch: BUY at ask, SELL at bid (buffer fallback)."""
     if side is Side.BUY:
-        ref = quote.ask_usd if quote.ask_usd is not None else (
-            quote.last_price_usd * (Decimal(1) + _MARKETABLE_BUFFER)
+        ref = (
+            quote.ask_usd
+            if quote.ask_usd is not None
+            else (quote.last_price_usd * (Decimal(1) + _MARKETABLE_BUFFER))
         )
     else:
-        ref = quote.bid_usd if quote.bid_usd is not None else (
-            quote.last_price_usd * (Decimal(1) - _MARKETABLE_BUFFER)
+        ref = (
+            quote.bid_usd
+            if quote.bid_usd is not None
+            else (quote.last_price_usd * (Decimal(1) - _MARKETABLE_BUFFER))
         )
     return ref.quantize(_CENT)
 
@@ -238,6 +245,8 @@ async def execute_rebalance(
     execution_side: str = "both",
     purchasable_cash_usd: Decimal | None = None,
     cash_buffer_pct: Decimal = Decimal("0.01"),
+    execution_symbol_map: Mapping[str, str] | None = None,
+    lot_rounding: str = "floor",
 ) -> RebalanceOutcome:
     """Compute the target portfolio and route the rebalance via the live/paper router.
 
@@ -263,7 +272,7 @@ async def execute_rebalance(
         bb_period=config.bb_period,
         bb_std=config.bb_std,
     )
-    tw = target_weights(
+    signal_tw = target_weights(
         ranked_scores=ranked,
         closes_by_symbol=_closes_by_symbol(conn, config.universe, timeframe),
         weight_scheme=config.weight_scheme,
@@ -273,13 +282,31 @@ async def execute_rebalance(
         trend=_trend_spec(config),
     )
 
+    symbol_map = {
+        str(signal).upper(): str(execution).upper()
+        for signal, execution in (execution_symbol_map or {}).items()
+    }
+    if symbol_map:
+        universe = set(config.universe)
+        if set(symbol_map) != universe:
+            missing = sorted(universe - set(symbol_map))
+            extra = sorted(set(symbol_map) - universe)
+            raise ValueError(
+                "execution symbol map must exactly cover signal universe; "
+                f"missing={missing}, extra={extra}"
+            )
+        if len(set(symbol_map.values())) != len(symbol_map):
+            raise ValueError("execution symbol map values must be one-to-one")
+        tw = {symbol_map[symbol]: weight for symbol, weight in signal_tw.items()}
+    else:
+        tw = dict(signal_tw)
+
     requested_side = _normalized_side(execution_side)
     liquidation_only = liquidation_only_symbols or frozenset()
     overlap = set(tw) & set(liquidation_only)
     if overlap:
         raise ValueError(
-            "liquidation-only symbols cannot be target buys: "
-            + ", ".join(sorted(overlap))
+            "liquidation-only symbols cannot be target buys: " + ", ".join(sorted(overlap))
         )
 
     # 2. Current holdings (long-only; ignore zero rows). In account-wide mode
@@ -331,6 +358,7 @@ async def execute_rebalance(
         rebalance_threshold_pct=config.rebalance_threshold_pct,
         min_notional_usd=config.min_notional_usd,
         mode=config.rebalance_mode,
+        lot_rounding=lot_rounding,
     )
 
     # 5. Exposure snapshot (consistent for the whole rebalance; sells reduce later).
@@ -345,9 +373,7 @@ async def execute_rebalance(
     # 6. Route SELLs first (free cash), then BUYs; each already symbol-sorted.
     for planned in plan:
         if planned.side == "BUY" and planned.symbol in liquidation_only:
-            raise ValueError(
-                f"liquidation-only symbol cannot be bought: {planned.symbol}"
-            )
+            raise ValueError(f"liquidation-only symbol cannot be bought: {planned.symbol}")
 
     sells = [o for o in plan if o.side == "SELL"]
     buys = [o for o in plan if o.side == "BUY"]
@@ -400,9 +426,7 @@ async def execute_rebalance(
                     side=planned.side,
                     requested_qty=planned.qty,
                     reason=(
-                        "cash_shortfall_sell_first"
-                        if cash_shortfall
-                        else "side_filtered_sell_only"
+                        "cash_shortfall_sell_first" if cash_shortfall else "side_filtered_sell_only"
                     ),
                 )
             )
@@ -457,9 +481,7 @@ async def execute_rebalance(
             )
             continue
 
-        rule = _synthetic_rule(
-            config.id, planned.symbol, side, routed_qty, stage=stage
-        )
+        rule = _synthetic_rule(config.id, planned.symbol, side, routed_qty, stage=stage)
         # Override the synthetic rule's placeholder limit with our marketable price
         # by passing it as a literal expression the router evaluates verbatim.
         rule = rule.model_copy(
@@ -476,9 +498,7 @@ async def execute_rebalance(
             else local_symbol_reservations.get(planned.symbol, Decimal("0"))
         )
         current_global_exposure_usd = (
-            global_exposure
-            if router_handles_reservations
-            else local_global_reservation
+            global_exposure if router_handles_reservations else local_global_reservation
         )
         outcome: OrderOutcome = await router.submit_order(
             rule=rule,
@@ -531,6 +551,8 @@ async def execute_rebalance(
         planned_buy_notional_usd=planned_buy_notional,
         planned_sell_notional_usd=planned_sell_notional,
         withheld=withheld,
+        signal_target_weights=dict(signal_tw),
+        execution_symbol_map=symbol_map,
     )
 
 

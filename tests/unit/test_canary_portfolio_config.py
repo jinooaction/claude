@@ -10,7 +10,11 @@ from __future__ import annotations
 import tomllib
 from pathlib import Path
 
-from auto_invest.cli import _load_portfolio_for_backtest
+from auto_invest.cli import (
+    _load_account_rebalance_settings,
+    _load_execution_settings,
+    _load_portfolio_for_backtest,
+)
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _CANARY = _REPO_ROOT / "deploy" / "canary-portfolio.toml"
@@ -22,9 +26,7 @@ _MULTIASSET = _REPO_ROOT / "deploy" / "multi-asset-trend-portfolio.toml"
 
 
 def test_canary_portfolio_parses_and_has_absolute_momentum_gate():
-    caps, wl, cfg = _load_portfolio_for_backtest(
-        _CANARY, env={"KIS_ACCOUNT_NO": "ACC-TEST"}
-    )
+    caps, wl, cfg = _load_portfolio_for_backtest(_CANARY, env={"KIS_ACCOUNT_NO": "ACC-TEST"})
     # 스펙 041 — 절대 기대수익 게이트(듀얼 모멘텀): 상대 순위 1위라도 자기 후행수익이
     # 바닥(min_return) 미달이면 현금. "기대 안 되면 투자 안 함."
     assert cfg.trend_filter is not None
@@ -40,9 +42,7 @@ def test_canary_portfolio_parses_and_has_absolute_momentum_gate():
 
 
 def test_canary_portfolio_universe_all_whitelisted():
-    _caps, wl, cfg = _load_portfolio_for_backtest(
-        _CANARY, env={"KIS_ACCOUNT_NO": "ACC-TEST"}
-    )
+    _caps, wl, cfg = _load_portfolio_for_backtest(_CANARY, env={"KIS_ACCOUNT_NO": "ACC-TEST"})
     for sym in cfg.universe:
         assert sym in wl.symbols, f"{sym} not in whitelist"
 
@@ -56,12 +56,9 @@ def test_live_portfolio_config_ensemble_canary_invariants():
     ③ top_n=3(셋 다 보유). ④ 다중 속도 추세 앙상블 ON(드로다운 방어).
     ⑤ 저회전(hold_replace). 라이브 거래 집합 변경은 운영자 게이트(헌법 II) — 무장 전엔 돈 0.
     """
-    _caps, wl, cfg = _load_portfolio_for_backtest(
-        _CANARY_LIVE, env={"KIS_ACCOUNT_NO": "ACC-TEST"}
-    )
+    _caps, wl, cfg = _load_portfolio_for_backtest(_CANARY_LIVE, env={"KIS_ACCOUNT_NO": "ACC-TEST"})
     assert set(cfg.universe) == {"SPY", "IEF", "GLD"}
-    assert set(wl.symbols) == {"SPY", "IEF", "GLD"}
-    assert set(cfg.universe) <= set(wl.symbols)
+    assert set(wl.symbols) == {"SPYM", "IEF", "GLDM"}
     assert cfg.weight_scheme == "equal"
     assert cfg.top_n == 3
     assert cfg.rebalance_mode == "hold_replace"
@@ -70,6 +67,16 @@ def test_live_portfolio_config_ensemble_canary_invariants():
     assert cfg.trend_filter.method == "sma"
     assert cfg.trend_filter.on_insufficient == "cash"
     assert cfg.trend_filter.ensemble_windows == (63, 126, 189, 252)
+
+    account_enabled, liquidation, cash_buffer = _load_account_rebalance_settings(_CANARY_LIVE)
+    symbol_map, lot_rounding = _load_execution_settings(_CANARY_LIVE)
+    assert account_enabled is True
+    assert liquidation == frozenset()
+    assert str(cash_buffer) == "0.01"
+    assert symbol_map == {"SPY": "SPYM", "IEF": "IEF", "GLD": "GLDM"}
+    assert lot_rounding == "nearest"
+    assert set(symbol_map) == set(cfg.universe)
+    assert set(symbol_map.values()) == set(wl.symbols)
 
 
 def test_live_canary_strategy_matches_validated_ensemble():
@@ -81,9 +88,7 @@ def test_live_canary_strategy_matches_validated_ensemble():
     """
     from auto_invest.portfolio.autoarm import strategy_fingerprint
 
-    _c1, _w1, live = _load_portfolio_for_backtest(
-        _CANARY_LIVE, env={"KIS_ACCOUNT_NO": "ACC-TEST"}
-    )
+    _c1, _w1, live = _load_portfolio_for_backtest(_CANARY_LIVE, env={"KIS_ACCOUNT_NO": "ACC-TEST"})
     validated_path = _REPO_ROOT / "deploy" / "global-trend-fixed-portfolio.toml"
     _c2, _w2, validated = _load_portfolio_for_backtest(
         validated_path, env={"KIS_ACCOUNT_NO": "ACC-TEST"}
@@ -130,9 +135,7 @@ def test_notrend_control_config_is_identical_minus_trend_filter():
     유니버스·가중치·top_n·재조정 주기가 달라지면 A/B 가 추세 필터의 효과를 격리하지
     못한다(교란변수). 두 설정이 trend_filter 외 모든 운용 파라미터가 같음을 못박는다.
     """
-    _c1, _w1, on = _load_portfolio_for_backtest(
-        _CANARY, env={"KIS_ACCOUNT_NO": "ACC-TEST"}
-    )
+    _c1, _w1, on = _load_portfolio_for_backtest(_CANARY, env={"KIS_ACCOUNT_NO": "ACC-TEST"})
     _c2, _w2, off = _load_portfolio_for_backtest(
         _CANARY_NOTREND, env={"KIS_ACCOUNT_NO": "ACC-TEST"}
     )
@@ -158,9 +161,7 @@ def test_multi_asset_trend_config_is_uncorrelated_two_asset_trend():
     채권 IEF)을 합친다 — 그게 분산 이득의 근거. 각 자산을 자기 추세 게이트(sma 200)로 보유/
     현금. PAPER 전용이라 절대 위험 0(라이브는 별도 운영자 게이트, 헌법 X.4).
     """
-    _caps, wl, cfg = _load_portfolio_for_backtest(
-        _MULTIASSET, env={"KIS_ACCOUNT_NO": "ACC-TEST"}
-    )
+    _caps, wl, cfg = _load_portfolio_for_backtest(_MULTIASSET, env={"KIS_ACCOUNT_NO": "ACC-TEST"})
     # 비상관 2자산: 주식(SPY) + 채권(IEF). 둘 다 보유(top_n=2, 선택 아님).
     assert set(cfg.universe) == {"SPY", "IEF"}
     assert cfg.top_n == 2
@@ -174,7 +175,5 @@ def test_multi_asset_trend_config_is_uncorrelated_two_asset_trend():
     # 저회전(검증된 비용 강건성).
     assert cfg.rebalance_mode == "hold_replace"
     # ARM C(risk-managed-beta)와의 차이를 못박는다: 둘 다 주식이 아니라 채권이 들어가야 한다.
-    _c2, _w2, rm = _load_portfolio_for_backtest(
-        _RMBETA, env={"KIS_ACCOUNT_NO": "ACC-TEST"}
-    )
+    _c2, _w2, rm = _load_portfolio_for_backtest(_RMBETA, env={"KIS_ACCOUNT_NO": "ACC-TEST"})
     assert "IEF" in cfg.universe and "IEF" not in rm.universe  # 채권 = 분산의 원천

@@ -65,9 +65,7 @@ def test_select_empty_when_all_sentinel():
 
 def test_equal_weights_sum_to_one_over_exactly_top_n():
     ranked = [("A", Decimal("3")), ("B", Decimal("2")), ("C", Decimal("1"))]
-    w = target_weights(
-        ranked_scores=ranked, closes_by_symbol={}, weight_scheme="equal", top_n=2
-    )
+    w = target_weights(ranked_scores=ranked, closes_by_symbol={}, weight_scheme="equal", top_n=2)
     assert set(w) == {"A", "B"}  # SC-01: exactly the top N
     assert sum(w.values()) == Decimal("1.000000")
     assert w["A"] == w["B"]
@@ -88,9 +86,7 @@ def test_score_proportional_is_monotone_in_score():
 def test_inverse_vol_favours_low_volatility():
     # CALM rises ~steadily (low vol); WILD oscillates hard (high vol).
     calm = _series([100 + i * 0.1 for i in range(40)])
-    wild = _series(
-        [100 + (8 if i % 2 == 0 else -8) for i in range(40)]
-    )
+    wild = _series([100 + (8 if i % 2 == 0 else -8) for i in range(40)])
     ranked = [("CALM", Decimal("1")), ("WILD", Decimal("1"))]
     w = target_weights(
         ranked_scores=ranked,
@@ -142,9 +138,10 @@ def test_optimizer_falls_back_on_insufficient_data():
 
 def test_target_weights_empty_when_no_eligible():
     ranked = [("A", Decimal("-Inf"))]
-    assert target_weights(
-        ranked_scores=ranked, closes_by_symbol={}, weight_scheme="equal", top_n=1
-    ) == {}
+    assert (
+        target_weights(ranked_scores=ranked, closes_by_symbol={}, weight_scheme="equal", top_n=1)
+        == {}
+    )
 
 
 def test_unknown_weight_scheme_raises():
@@ -294,6 +291,26 @@ def test_rebalance_plan_is_sorted_and_deterministic():
     orders = rebalance_plan(**kw)
     assert orders == rebalance_plan(**kw)
     assert [o.symbol for o in orders] == sorted(o.symbol for o in orders)
+
+
+def test_nearest_lot_rounding_only_rounds_up_when_it_reduces_target_error():
+    base = dict(
+        target_weights={"SPYM": Decimal("0.333334"), "GLDM": Decimal("0.166666")},
+        holdings={},
+        prices={"SPYM": Decimal("86.89"), "GLDM": Decimal("80.46")},
+        capital_usd=Decimal("293"),
+        invested_fraction=Decimal("0.99"),
+        mode="hold_replace",
+        min_notional_usd=Decimal("50"),
+    )
+
+    floor = rebalance_plan(**base, lot_rounding="floor")
+    assert [(order.symbol, order.side, order.qty) for order in floor] == [("SPYM", "BUY", 1)]
+    nearest = rebalance_plan(**base, lot_rounding="nearest")
+    assert [(order.symbol, order.side, order.qty) for order in nearest] == [
+        ("GLDM", "BUY", 1),
+        ("SPYM", "BUY", 1),
+    ]
 
 
 # --------------------------------------------------------------- config (SC-11)
