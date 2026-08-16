@@ -1,5 +1,5 @@
 {
-  "commit": "d28eb71c06ddf7080cb3fc92cd6a1210425769f9",
+  "commit": "bc33a7f0b58184596ecc5ab93954460716dcab0d",
   "overall_status": "OK",
   "released_work": [
     {
@@ -543,7 +543,7 @@
       "status": "released"
     }
   ],
-  "run_id": "31926716992",
+  "run_id": "31928435773",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -834,7 +834,11 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "141-lot-aware-execution-proxy"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "145-ml-edge-ensemble"
     }
   ],
-  "timestamp_utc": "2026-08-16T04:28:44.342889Z"
+  "timestamp_utc": "2026-08-16T05:11:59.233890Z"
 }
