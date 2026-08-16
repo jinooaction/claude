@@ -166,6 +166,7 @@ _SOURCE_REFS: dict[str, str] = {
     "profit-evidence-engine": (
         "automation/profit-evidence-engine-last-run:profit_evidence.json"
     ),
+    "ml-edge-ensemble": "automation/ml-edge-ensemble-last-run:report.json",
     "rebalance-paper-forward": "automation/rebalance-paper-forward-last-run:LAST_RUN.md",
     "edge-autoarm": "automation/edge-autoarm-last-run:LAST_RUN.md",
     "money-path": "automation/money-path-last-run:LAST_RUN.md",
@@ -2389,6 +2390,20 @@ def _candidate_packets(parsed: dict[str, Any]) -> list[WorkPacket]:
                 fallback_action="검증 결과를 회고하고 통과 후보는 다음 단계로 연결한다.",
             )
         )
+    ml_report = parsed.get("ml-edge-ensemble")
+    if isinstance(ml_report, dict):
+        ml_candidate = ml_report.get("candidate_package")
+        if isinstance(ml_candidate, dict) and ml_candidate.get("eligible") is True:
+            packets.append(
+                _packet_from_item(
+                    ml_candidate,
+                    source_key="ml-edge-ensemble",
+                    source_weight=2500,
+                    fallback_domain="investment_edge",
+                    fallback_reason="AI 앙상블 후보가 사전 등록된 검증 관문을 모두 통과했다.",
+                    fallback_action="no-live 재현 검증 후 Canary 승격 여부를 판단한다.",
+                )
+            )
     return packets
 
 
