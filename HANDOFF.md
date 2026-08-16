@@ -33,15 +33,26 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `2be2d3d` — Merge pull request #620 from jinooaction/Codex/141-lot-aware-execution-proxy |
-| main 테스트 | #620 기능 커밋 기준 `uv run pytest` → 2827 passed, 6 skipped. |
-| main 린트 | #620 기능 커밋 기준 `uv run ruff check src tests` → All checks passed. |
+| 마지막 main 커밋 | `d6bda48` — Merge pull request #622 from jinooaction/Codex/141-live-order-evidence-hardening |
+| main 테스트 | #622 기능 커밋 기준 `uv run pytest` → 2828 passed, 6 skipped. |
+| main 린트 | #622 기능 커밋 기준 `uv run ruff check src tests` → All checks passed. |
 | 열린 PR | 없음. |
-| 출시 완료 스펙 | 최신 기능: #620(스펙 141, 검증 신호를 저단가 체결 ETF에 매핑하고 실제 KIS 계좌 원본으로 주문 산정), #617(스펙 140), #615(스펙 139). |
-| 골격 스펙 | 없음. `.specify/feature.json`은 `specs/141-lot-aware-execution-proxy`를 가리킨다. T010 배포와 T011 KIS 미리보기는 완료됐고 T012 첫 정규장 주문·체결 확인만 남았다. |
-| 최근 출시 작업 | #620은 검증 신호 `SPY/IEF/GLD`를 그대로 두고 체결만 `SPYM/IEF/GLDM`으로 매핑한다. 미리보기와 실주문은 모두 KIS 실제 보유·현금 원본을 읽으며, 단 1에서 nearest 정수 주를 사용한다. |
+| 출시 완료 스펙 | 최신 기능: #622(스펙 141 후속, 실주문 실패 전파·체결 동기화·사후 증거), #620(스펙 141, 저단가 체결 ETF와 KIS 실제 계좌 원본), #617(스펙 140). |
+| 골격 스펙 | 없음. `.specify/feature.json`은 `specs/141-lot-aware-execution-proxy`를 가리킨다. T010·T011·T013은 완료됐고 T012 첫 정규장 주문·체결 확인만 남았다. |
+| 최근 출시 작업 | #622는 실주문 SSH 실패가 로그 출력 성공으로 덮이지 않게 종료 코드를 전파한다. 주문 뒤 KIS 체결을 최대 세 번 동기화하고 열린 주문·최근 체결·잔고 측정·stderr를 항상 발행되는 sidecar에 남긴다. 주문 종목·수량·자본은 바꾸지 않았다. |
 | 활성 작업 | KIS 미리보기 run `31919969616`은 매수가능현금 934.27달러에서 `SPYM` 1주와 `GLDM` 1주, 합계 178.32달러를 계획했다. 2026-08-16은 일요일이라 실주문 단계는 취소했다. 다음 미국 정규장 예약 실행에서 주문·체결·잔고·감사 로그를 확인해야 한다. |
-| 안전 경계 | 헌법 X.4 v7.0.0. 단 1은 실계좌 NAV의 20%인 293달러이며 25% 이상은 원래 EDGE_CONFIRMED를 유지한다. K1 캡, 손실 예산 20%, 비밀값, 감사 로그, 정규장, production, 서킷 브레이커를 유지한다. ORANY 28주는 비관리 보유로 보류돼 자동 매도되지 않았고 현재 실주문·체결은 0건이다. |
+| 안전 경계 | 헌법 X.4 v7.0.0. 단 1은 실계좌 NAV의 20%인 293달러이며 25% 이상은 원래 EDGE_CONFIRMED를 유지한다. K1 캡, 손실 예산 20%, 비밀값, 추가-전용 감사 로그, 정규장, production, 서킷 브레이커를 유지한다. ORANY 28주는 비관리 보유로 보류돼 자동 매도되지 않았고 현재 실주문·체결은 0건이다. |
+
+## 최근 관찰 — 2026-08-16 KST (#622 실주문 실패 전파·체결 증거 보강 출시)
+
+현재 `main` 최신 머지는 `d6bda48`(#622)이고 안전 경계 기능 커밋은 `9ff629a`다.
+
+- **고친 증거 결함**: 실주문 SSH가 실패해도 뒤의 `cat`이 성공하면 GitHub 단계가 성공처럼 끝날 수 있었다. 이제 실주문·KIS 체결 동기화·사후 측정의 SSH 종료 코드를 각각 단계 결과로 전파한다.
+- **즉시 사후 증거**: 주문 뒤 `fills --sync`를 20초 간격으로 최대 세 번 실행한다. 새 주문·취소 없이 KIS 체결을 추가-전용 감사 장부에 반영하고 열린 주문·최근 체결을 출력한다. 실패해도 sidecar는 LIVE·동기화·측정 결과와 가용한 stdout·stderr를 발행한다.
+- **배포·KIS 확인**: deploy run `31920536032`가 성공했다. KIS smoke run `31920565098`은 서버 checkout `d6bda48`, 키·시세·현금 934.27달러·ORANY 28주·총자산 1466.83달러·최근 주문 0건·열린 미체결 0건을 5/5로 확인했다.
+- **검증**: focused 49 passed, 전체 2828 passed/6 skipped, ruff, YAML parse, diff, HANDOFF 사실 검사, 엄격 하네스 14/14, PR 품질 관문을 통과했다.
+- **남은 단일 외부 조건**: 다음 미국 정규장 예약 실행은 2026-08-18 00:00 KST이며 production 환경의 `jinooaction` 승인이 필요하다. 승인 뒤 같은 run의 주문·체결·잔고·감사 로그를 확인해야 T012를 완료할 수 있다. 실제 주문·체결·수익은 아직 0이다.
+- **상세 인계**: `HANDOFF-148-LIVE-ORDER-EVIDENCE-HARDENING.md`.
 
 ## 최근 관찰 — 2026-08-16 KST (#620 소액 정수 주 체결 경로 출시·KIS 미리보기 통과)
 
