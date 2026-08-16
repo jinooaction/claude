@@ -498,6 +498,20 @@ def _holdings_value_usd(rows: list[dict]) -> Decimal:
     )
 
 
+def _position_marks_usd(rows: list[dict]) -> dict[str, Decimal]:
+    """Broker balance valuation rows -> per-share marks for positive holdings."""
+    marks: dict[str, Decimal] = {}
+    for row in _dedup_balance_rows(rows):
+        symbol = str(row.get("ovrs_pdno", "")).strip()
+        qty = int(row.get("ovrs_cblc_qty", 0) or 0)
+        if not symbol or qty <= 0:
+            continue
+        evaluation = _row_eval_amount_usd(row)
+        if evaluation > 0:
+            marks[symbol] = evaluation / Decimal(qty)
+    return marks
+
+
 async def get_positions(
     client: ResilientClient,
     *,
@@ -517,6 +531,35 @@ async def get_positions(
         market=market,
     )
     return _parse_positions(rows)
+
+
+async def get_position_marks_resolving_market(
+    client: ResilientClient,
+    *,
+    access_token: str,
+    app_key: str,
+    app_secret: str,
+    account: str,
+    markets: Sequence[str] = US_ORDER_EXCHANGES,
+) -> dict[str, Decimal]:
+    """Read authoritative per-share marks from KIS balance valuations.
+
+    This is a fallback for holdings whose standalone quote lookup is unavailable.
+    It performs no order or cancel operation and ignores zero/non-positive values.
+    """
+    rows: list[dict] = []
+    for market in markets:
+        rows.extend(
+            await _inquire_balance_output1(
+                client,
+                access_token=access_token,
+                app_key=app_key,
+                app_secret=app_secret,
+                account=account,
+                market=market,
+            )
+        )
+    return _position_marks_usd(rows)
 
 
 async def get_positions_resolving_market(

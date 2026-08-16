@@ -1006,13 +1006,17 @@ async def _fetch_marks(
     app_key: str,
     app_secret: str,
     db_path: Path,
+    account_no: str | None = None,
 ):
     """Spec 011 — 미청산 종목의 현재 시세(mark)를 조회.
 
     종목별로 독립 조회하며, 실패한 종목은 결과 dict 에서 빠진다(우아한 강등,
     FR-005). 반환: {symbol: 현재가 Decimal}.
     """
-    from auto_invest.broker.overseas import get_quote_resolving_market
+    from auto_invest.broker.overseas import (
+        get_position_marks_resolving_market,
+        get_quote_resolving_market,
+    )
 
     marks: dict = {}
     if not symbols:
@@ -1045,6 +1049,25 @@ async def _fetch_marks(
                 marks[sym] = quote.last_price_usd
             except Exception:  # noqa: BLE001 — 종목별 실패는 미실현 미반영으로 흡수
                 continue
+        missing = set(symbols) - marks.keys()
+        if missing and account_no:
+            try:
+                balance_marks = await get_position_marks_resolving_market(
+                    client,
+                    access_token=token.access_token,
+                    app_key=app_key,
+                    app_secret=app_secret,
+                    account=account_no,
+                )
+                marks.update(
+                    {
+                        symbol: mark
+                        for symbol, mark in balance_marks.items()
+                        if symbol in missing
+                    }
+                )
+            except Exception:  # noqa: BLE001 — fallback 실패도 종목 미평가로 보수 처리
+                pass
     return marks
 
 
@@ -1642,6 +1665,7 @@ def performance(
                         app_key=secrets["KIS_APP_KEY"],
                         app_secret=secrets["KIS_APP_SECRET"],
                         db_path=db_path,
+                        account_no=secrets["KIS_ACCOUNT_NO"],
                     )
                 )
             except Exception as exc:  # noqa: BLE001 — 시세 조회 실패는 미실현만 미반영

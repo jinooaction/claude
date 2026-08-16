@@ -33,15 +33,25 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `f6b30be` — Merge pull request #628 from jinooaction/Codex/143-manual-live-auth-preflight |
-| main 테스트 | #628 기능 커밋 기준 `uv run pytest` → 2854 passed, 6 skipped. |
-| main 린트 | #628 기능 커밋 기준 `uv run ruff check src tests` → All checks passed. |
+| 마지막 main 커밋 | `a1b02a5` — Merge pull request #630 from jinooaction/Codex/143-historical-live-fill-recovery |
+| main 테스트 | #630 기능 커밋 기준 `uv run pytest` → 2861 passed, 6 skipped. |
+| main 린트 | #630 기능 커밋 기준 `uv run ruff check src tests` → All checks passed. |
 | 열린 PR | 없음. |
-| 출시 완료 스펙 | 최신 기능: #626(스펙 143, production 서명 주문 관문·최초 실계좌 수익 증거·자동 재평가), #624(스펙 142, 실제 주문 가능 경로 우선 표시), #622(스펙 141 후속, 실주문 실패 전파·체결 동기화·사후 증거). |
-| 골격 스펙 | 없음. `.specify/feature.json`은 구현·배포가 끝난 `specs/143-live-canary-gateway-profit-evidence`를 가리킨다. T017 실제 주문·체결·양의 손익 확인만 시장 시간·production 승인 조건으로 남았다. |
-| 최근 출시 작업 | #628은 수동 production 실행을 주문 없는 서명·센티넬·배포 정합 preflight로 분리했다. 실제 주문은 평일 예약 실행만 선택하고 live-canary 실행은 겹치지 않는다. |
-| 활성 작업 | 수동 preflight run `31923193057`은 미리보기 성공 뒤 production 승인 대기다. 승인해도 주문은 0건이다. 최신 money-path는 `REAL_ORDER_PATH_ARMED`, 표준 단 1, 293달러이고 live-profit은 `NO_FILLS_YET`, 체결 0건, 총손익 0달러다. 실제 주문은 다음 미국 정규장 예약 실행에서만 가능하다. |
-| 안전 경계 | 헌법 X.4 v7.0.0. 단 1은 실계좌 NAV의 20%인 293달러다. K1/K2, 손실 예산 20%, 정규장, production 승인, 추가-전용 감사 로그를 유지한다. production 개인키는 환경 비밀값에만 있고 서버는 공개키로 검증한다. ORANY 28주는 비관리 보유로 자동 매도되지 않으며 현재 실주문·체결은 0건이다. |
+| 출시 완료 스펙 | 최신 기능: #630(스펙 143 후속, 과거 KIS 체결 복구·검증된 시작 보유 원가), #628(주문 없는 수동 production preflight), #626(서명 주문 관문·최초 실계좌 수익 증거). |
+| 골격 스펙 | 없음. `.specify/feature.json`은 `specs/143-live-canary-gateway-profit-evidence`를 가리킨다. T021의 체결 복구는 완료됐고, ORANY 현재 평가값까지 포함한 완전한 양의 손익과 멱등 재실행 확인이 남았다. |
+| 최근 출시 작업 | #630은 당일만 조회하던 KIS 체결 동기화를 과거 날짜 범위로 확장하고, 시스템 가동 전 보유 원가를 합성 체결 없이 성과 시작 상태로 연결했다. |
+| 활성 작업 | run `31924111789`이 2026-06-23 매도 체결 3건·수량 10주를 복구해 실현손익 +15.93달러를 확인했다. ORANY 독립 시세가 빠져 현재 판정은 `PNL_INCOMPLETE`이며, KIS 잔고 평가금액 기반 현재가 보완이 `Codex/143-balance-mark-fallback`에서 진행 중이다. |
+| 안전 경계 | 헌법 X.4 v7.0.0. 단 1은 실계좌 NAV의 20%인 293달러다. K1/K2, 손실 예산 20%, 정규장, production 승인, 추가-전용 감사 로그를 유지한다. production 개인키는 환경 비밀값에만 있고 서버는 공개키로 검증한다. 과거 복구와 성과 측정은 주문·취소·자본 변경을 하지 않는다. ORANY 28주는 비관리 보유로 자동 매도되지 않는다. |
+
+## 최근 관찰 — 2026-08-16 KST (#630 과거 실체결·양의 실현손익 복구)
+
+현재 `main` 최신 머지는 `a1b02a5`(#630)이고 안전 경계 기능 커밋은 `8e706c8`이다.
+
+- **고친 뿌리 원인**: 체결 동기화가 실행 당일만 KIS에 조회해 2026-06-23 매도 체결을 놓쳤고, 로컬 주문 3건은 계속 `SUBMITTED`로 남았다. 실제 계좌에는 다음 날부터 ORANY 28주만 있었으므로 장부와 브로커가 어긋나 있었다.
+- **복구 결과**: 주문 없는 live-profit run `31924111789`이 BHP 1주 82.68달러, MRK 3주 118.94달러, RELX 6주 31.10달러를 KIS 체결 시각 `2026-06-23T02:20:15Z`로 기록했다. 열린 주문은 0건이 됐고 실현손익은 +15.93달러다.
+- **보수 판정**: 체결 3건과 데이터 경고 0건은 확인됐지만 ORANY 독립 시세가 빠져 `PNL_INCOMPLETE`다. 기준을 낮추지 않고 KIS 잔고의 종목별 평가금액을 대체 현재가로 쓰는 후속이 `Codex/143-balance-mark-fallback`에서 진행 중이다.
+- **배포·검증**: deploy run `31924077339`과 복구 run `31924111789`이 성공했다. #630은 전체 2861 passed/6 skipped, ruff, 셸·YAML·diff, HANDOFF 사실 검사, 엄격 하네스 14/14, PR 품질 관문을 통과했다.
+- **안전 경계**: 복구 run은 KIS 조회와 확인된 체결의 추가 전용 기록, 성과 측정만 했다. 새 주문·취소·자본 변경은 0건이다. 같은 날짜 복구를 재실행해 적용 체결 0건을 확인하는 절차가 남았다.
 
 ## 최근 관찰 — 2026-08-16 KST (#628 수동 권위 검증과 예약 실주문 분리)
 

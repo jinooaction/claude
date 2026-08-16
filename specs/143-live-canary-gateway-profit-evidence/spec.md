@@ -115,6 +115,8 @@ live-profit 완료가 money-path를, money-path 완료가 capital readiness를 �
 - **FR-020**: 외부 보유 원가는 검증된 KIS run·수량·평단이 모두 있는 파일만 성과 시작 상태로
   허용하며 주문·fills·current_positions를 수정하지 않아야 한다.
 - **FR-021**: 외부 보유 정합 기준선은 최신 KIS 실제 보유와 일치해야 한다.
+- **FR-022**: 독립 시세 조회가 현재 보유 종목을 반환하지 않으면 KIS 잔고의 종목별 평가금액을
+  수량으로 나눈 브로커 현재가를 해당 종목의 보수적 대체 mark로 사용해야 한다.
 
 ### Key Entities
 
