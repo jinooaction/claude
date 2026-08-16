@@ -33,15 +33,27 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `d6bda48` — Merge pull request #622 from jinooaction/Codex/141-live-order-evidence-hardening |
-| main 테스트 | #622 기능 커밋 기준 `uv run pytest` → 2828 passed, 6 skipped. |
-| main 린트 | #622 기능 커밋 기준 `uv run ruff check src tests` → All checks passed. |
+| 마지막 main 커밋 | `bb8f200` — Merge pull request #624 from jinooaction/Codex/142-live-money-route-priority |
+| main 테스트 | #624 기능 커밋 기준 `uv run pytest` → 2833 passed, 6 skipped. |
+| main 린트 | #624 기능 커밋 기준 `uv run ruff check src tests` → All checks passed. |
 | 열린 PR | 없음. |
-| 출시 완료 스펙 | 최신 기능: #622(스펙 141 후속, 실주문 실패 전파·체결 동기화·사후 증거), #620(스펙 141, 저단가 체결 ETF와 KIS 실제 계좌 원본), #617(스펙 140). |
-| 골격 스펙 | 없음. `.specify/feature.json`은 `specs/141-lot-aware-execution-proxy`를 가리킨다. T010·T011·T013은 완료됐고 T012 첫 정규장 주문·체결 확인만 남았다. |
-| 최근 출시 작업 | #622는 실주문 SSH 실패가 로그 출력 성공으로 덮이지 않게 종료 코드를 전파한다. 주문 뒤 KIS 체결을 최대 세 번 동기화하고 열린 주문·최근 체결·잔고 측정·stderr를 항상 발행되는 sidecar에 남긴다. 주문 종목·수량·자본은 바꾸지 않았다. |
-| 활성 작업 | KIS 미리보기 run `31919969616`은 매수가능현금 934.27달러에서 `SPYM` 1주와 `GLDM` 1주, 합계 178.32달러를 계획했다. 2026-08-16은 일요일이라 실주문 단계는 취소했다. 다음 미국 정규장 예약 실행에서 주문·체결·잔고·감사 로그를 확인해야 한다. |
+| 출시 완료 스펙 | 최신 기능: #624(스펙 142, 실제 주문 가능 경로 우선 표시), #622(스펙 141 후속, 실주문 실패 전파·체결 동기화·사후 증거), #620(스펙 141, 저단가 체결 ETF와 KIS 실제 계좌 원본). |
+| 골격 스펙 | 없음. `.specify/feature.json`은 완료된 `specs/142-live-money-route-priority`를 가리킨다. 스펙 141의 T012 첫 정규장 주문·체결 확인만 외부 시간 조건으로 남았다. |
+| 최근 출시 작업 | #624는 표준 자본 사다리와 micro 경로를 함께 평가해 무장된 경로를 최상위에 표시한다. 센티넬과 최신 sidecar가 다르면 실패 폐쇄하며 주문·자본·안전 관문은 바꾸지 않았다. |
+| 활성 작업 | 최신 money-path는 `REAL_ORDER_PATH_ARMED`, 표준 단 1, 293달러이고 capital-path-readiness는 `CAPITAL_ARMABLE`이다. 다음 미국 정규장 예약 실행에서 production 승인 뒤 주문·체결·잔고·감사 로그를 확인해야 한다. |
 | 안전 경계 | 헌법 X.4 v7.0.0. 단 1은 실계좌 NAV의 20%인 293달러이며 25% 이상은 원래 EDGE_CONFIRMED를 유지한다. K1 캡, 손실 예산 20%, 비밀값, 추가-전용 감사 로그, 정규장, production, 서킷 브레이커를 유지한다. ORANY 28주는 비관리 보유로 보류돼 자동 매도되지 않았고 현재 실주문·체결은 0건이다. |
+
+## 최근 관찰 — 2026-08-16 KST (#624 실제 주문 가능 경로 우선 표시 출시)
+
+현재 `main` 최신 머지는 `bb8f200`(#624)이고 기능 커밋은 `679c008`이다.
+
+- **고친 뿌리 원인**: 표준 자본 사다리가 `armed:true`, 단 1, 293달러인데도 최상위 실제 돈 상태는 비무장 micro 경로만 평가해 `PREVIEW_ONLY`로 표시했다. 이제 표준과 micro를 각각 평가해 `REAL_ORDER_PATH_ARMED > BLOCKED > PREVIEW_ONLY > UNKNOWN` 순으로 고른다.
+- **실패 폐쇄**: 표준 센티넬과 최신 live-canary sidecar 무장이 다르거나 빠졌으면 `BLOCKED`다. production 승인, 비-push 실행, 미국 정규장, KIS 매수가능현금 1% 여유, 손실 브레이커, K1 캡과 K2 허용 목록은 그대로다.
+- **배포 확인**: deploy run `31921324439`가 서버 워커를 `bb8f200`으로 교체하고 서비스를 재시작했다. 배포 상관 식별자는 `75745d159c83c53beb4b31567ac796a3`이다.
+- **운영 보고서 확인**: money-path run `31921324379`는 `REAL_ORDER_PATH_ARMED`, `capital-ladder-live-canary`, 293달러, 다음 예약 `2026-08-17T15:00:00Z`를 기록했다. 수동 capital-path-readiness run `31921361671`은 `CAPITAL_ARMABLE`, `REAL_ORDER_PATH_ARMED`, `DEPLOYED`로 같은 결론을 냈다.
+- **검증**: 연관 회귀 169 passed, 전체 2833 passed/6 skipped, ruff, diff, HANDOFF 사실 검사, 엄격 하네스 14/14, PR 품질 관문을 통과했다.
+- **남은 외부 조건**: 실제 주문·체결·수익은 아직 0이다. 다음 미국 정규장 예약 실행은 2026-08-18 00:00 KST이고 production 환경의 `jinooaction` 승인과 모든 preflight 통과가 필요하다. 지정가가 체결돼 손익 증거가 생기기 전에는 목표를 완료로 선언하지 않는다.
+- **상세 인계**: `HANDOFF-149-LIVE-MONEY-ROUTE-PRIORITY.md`.
 
 ## 최근 관찰 — 2026-08-16 KST (#622 실주문 실패 전파·체결 증거 보강 출시)
 
