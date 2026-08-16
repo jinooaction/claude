@@ -1,5 +1,5 @@
 {
-  "commit": "a3486afa414419dd8f6feeeac51e6e6d8f8ba454",
+  "commit": "2be2d3dde3db0a401310e72ca7f1efcde4519d39",
   "overall_status": "OK",
   "released_work": [
     {
@@ -525,7 +525,7 @@
       "status": "released"
     }
   ],
-  "run_id": "31918975414",
+  "run_id": "31919928076",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -809,7 +809,11 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "140-heldout-exploration-canary"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "141-lot-aware-execution-proxy"
     }
   ],
-  "timestamp_utc": "2026-08-16T01:10:55.875218Z"
+  "timestamp_utc": "2026-08-16T01:35:52.533627Z"
 }
