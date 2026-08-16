@@ -319,12 +319,46 @@ jobs:
                  --account-wide \
                  --capital ${CAP} --db data/auto_invest.db --env-file .env --json" \
               > /tmp/live_rebal.json 2>/tmp/live_rebal.err
-          echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
+          ssh_exit=$?
+          echo "ssh_exit=${ssh_exit}" >> "$GITHUB_OUTPUT"
           echo "--- live rebalance ---"; cat /tmp/live_rebal.json
           echo "--- stderr ---"; cat /tmp/live_rebal.err
+          exit "${ssh_exit}"
+
+      - name: Sync broker fills and read audit ledger
+        id: fills
+        if: always()
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          # 지정가 체결은 주문 응답 직후 KIS에 늦게 보일 수 있다. 짧게 세 번 동기화하되
+          # fills --sync는 주문·취소 없이 브로커 체결을 추가-전용 장부로 당기기만 한다.
+          sync_exit=0
+          : > /tmp/live_fills.log
+          for attempt in 1 2 3; do
+            echo "--- fill sync attempt ${attempt}/3 ---" >> /tmp/live_fills.log
+            ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
+                -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+                "cd /opt/auto-invest && /usr/local/bin/uv run auto-invest fills \
+                   --sync --db data/auto_invest.db --env .env" \
+                >> /tmp/live_fills.log 2>&1
+            sync_exit=$?
+            if [[ "${sync_exit}" != "0" || "${attempt}" == "3" ]]; then
+              break
+            fi
+            sleep 20
+          done
+          echo "ssh_exit=${sync_exit}" >> "$GITHUB_OUTPUT"
+          cat /tmp/live_fills.log
+          exit "${sync_exit}"
 
       - name: Measure live track after real orders
         id: measure
+        if: always()
         env:
           HOST: ${{ secrets.VULTR_SSH_HOST }}
           USER: ${{ secrets.VULTR_SSH_USER }}
@@ -339,7 +373,10 @@ jobs:
                  /usr/local/bin/uv run auto-invest nav-snapshot --mode live --capital ${CAP} --db data/auto_invest.db --env-file .env --snapshot --format json; \
                  /usr/local/bin/uv run auto-invest forward-verdict --mode live --portfolio deploy/canary-live-portfolio.toml --db data/auto_invest.db --format json" \
               > /tmp/live_measure.log 2>&1
-          echo "exit=$?"; cat /tmp/live_measure.log
+          ssh_exit=$?
+          echo "ssh_exit=${ssh_exit}" >> "$GITHUB_OUTPUT"
+          echo "exit=${ssh_exit}"; cat /tmp/live_measure.log
+          exit "${ssh_exit}"
 
       - name: Publish production live canary result to sidecar branch
         if: always()
@@ -349,6 +386,8 @@ jobs:
           CAP: ${{ steps.gate.outputs.capital }}
           BLOCKED: ${{ steps.gate.outputs.blocked }}
           LIVE_OUTCOME: ${{ steps.live.outcome }}
+          FILLS_OUTCOME: ${{ steps.fills.outcome }}
+          MEASURE_OUTCOME: ${{ steps.measure.outcome }}
           EVENT: ${{ github.event_name }}
         run: |
           set -o pipefail
@@ -367,7 +406,9 @@ jobs:
             echo "| capital_usd | ${CAP:-?} |"
             echo "| blocked (자본 가드 거부) | ${BLOCKED:-?} |"
             echo "| event | ${EVENT:-?} |"
-            echo "| LIVE 스텝 | ${LIVE_OUTCOME:-skipped} (success=실주문 실행 / skipped=미실행) |"
+            echo "| LIVE 스텝 | ${LIVE_OUTCOME:-skipped} (success=명령 종료 코드 0) |"
+            echo "| 체결 동기화 | ${FILLS_OUTCOME:-skipped} |"
+            echo "| 사후 측정 | ${MEASURE_OUTCOME:-skipped} |"
             echo ""
             if [[ "${LIVE_OUTCOME:-skipped}" == "success" ]]; then
               echo "> ⚠ **무장 + production 승인 + 실주문 실행** — 실주문 job 이 실행됐다."
@@ -384,6 +425,15 @@ jobs:
             echo "## 라이브 재조정 결과 (armed=true 일 때만)"
             echo '```json'
             cat /tmp/live_rebal.json 2>/dev/null || echo '(실주문 결과 없음)'
+            if [[ -s /tmp/live_rebal.err ]]; then
+              echo '--- stderr ---'
+              cat /tmp/live_rebal.err
+            fi
+            echo '```'
+            echo ""
+            echo "## KIS 체결 동기화·감사 장부 요약"
+            echo '```'
+            cat /tmp/live_fills.log 2>/dev/null || echo '(체결 동기화 결과 없음)'
             echo '```'
             echo ""
             echo "## 라이브 트랙 측정 (NAV 스냅샷 + forward-verdict --mode live + 칼마)"

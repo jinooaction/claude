@@ -57,6 +57,37 @@ def test_live_canary_real_orders_remain_behind_production_gate() -> None:
     assert "--account-wide" in real_order
 
 
+def test_live_canary_real_order_failures_reach_job_and_sidecar() -> None:
+    text = _workflow_text()
+    real_order = _real_order_job(text)
+
+    live_step = real_order.split("LIVE rebalance — REAL ORDERS", 1)[1].split(
+        "\n\n      - name:", 1
+    )[0]
+    assert "ssh_exit=$?" in live_step
+    assert 'exit "${ssh_exit}"' in live_step
+
+    fill_step = real_order.split("Sync broker fills and read audit ledger", 1)[1].split(
+        "\n\n      - name:", 1
+    )[0]
+    assert "if: always()" in fill_step
+    assert "auto-invest fills" in fill_step
+    assert "--sync --db data/auto_invest.db --env .env" in fill_step
+    assert 'exit "${sync_exit}"' in fill_step
+
+    measure_step = real_order.split("Measure live track after real orders", 1)[1].split(
+        "\n\n      - name:", 1
+    )[0]
+    assert "if: always()" in measure_step
+    assert 'exit "${ssh_exit}"' in measure_step
+
+    publish_step = real_order.split("Publish production live canary result", 1)[1]
+    assert "FILLS_OUTCOME: ${{ steps.fills.outcome }}" in publish_step
+    assert "MEASURE_OUTCOME: ${{ steps.measure.outcome }}" in publish_step
+    assert "cat /tmp/live_rebal.err" in publish_step
+    assert "KIS 체결 동기화·감사 장부 요약" in publish_step
+
+
 def test_live_canary_preview_and_real_orders_use_broker_snapshot() -> None:
     text = _workflow_text()
     real_order = _real_order_job(text)
