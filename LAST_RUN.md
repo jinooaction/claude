@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-08-16T00:14:39.225571Z)
+# 완료 후보 소비 장부 (as of 2026-08-16T00:22:39.716500Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -8,8 +8,8 @@
 | 항목 | 값 |
 |------|-----|
 | overall_status | OK |
-| released_count | 57 |
-| scanned_specs | 89 |
+| released_count | 58 |
+| scanned_specs | 90 |
 
 ## 완료 후보
 
@@ -52,6 +52,7 @@
 | candidate-facf2fa31834 | released | 085-public-data-cross-validation | specs/085-public-data-cross-validation/contracts/public-data-fred-cross-check.md | completed_candidate_id |
 | candidate-fd04772a23c5 | released | 078-money-gate-alignment-loop | specs/078-money-gate-alignment-loop/contracts/money-gate-alignment.md | selected_work_candidate |
 | candidate-fd04772a23c5 | released | 079-completed-candidate-consumption | specs/079-completed-candidate-consumption/spec.md | selected_work_candidate |
+| candidate-forward-edge-watch-kis-range | released | 139-forward-edge-watch-kis-range | specs/139-forward-edge-watch-kis-range/spec.md | completed_candidate_id |
 | candidate-forward-paper-db-writability | released | 122-forward-paper-db-writability | specs/122-forward-paper-db-writability/spec.md | completed_candidate_id |
 | candidate-forward-regime-edge-experiment | released | 095-forward-regime-edge-experiment | specs/095-forward-regime-edge-experiment/spec.md | completed_candidate_id |
 | candidate-handoff-truth-liveness-contract | released | 107-handoff-truth-liveness-contract | specs/107-handoff-truth-liveness-contract/spec.md | completed_candidate_id |
@@ -121,7 +122,6 @@
 | 070-candidate-implementation-factory | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 071-candidate-result-executor | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 072-candidate-evidence-diagnostics | 체크박스 작업이 없거나 완료되지 않았습니다. |
-| 139-forward-edge-watch-kis-range | 체크박스 작업이 없거나 완료되지 않았습니다. |
 
 ## 안전 경계
 
@@ -138,7 +138,7 @@
 
 ```json
 {
-  "commit": "fe240a542e6be090f271eecc474fca6403aaa897",
+  "commit": "5572f1e46ab658433f35885571402d17b1abf53f",
   "overall_status": "OK",
   "released_work": [
     {
@@ -475,6 +475,15 @@
       "status": "released"
     },
     {
+      "candidate_id": "candidate-forward-edge-watch-kis-range",
+      "entry_id": "released-1b78f8885744",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/139-forward-edge-watch-kis-range/spec.md",
+      "spec_id": "139-forward-edge-watch-kis-range",
+      "status": "released"
+    },
+    {
       "candidate_id": "candidate-forward-paper-db-writability",
       "entry_id": "released-7a299b33507e",
       "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
@@ -755,7 +764,8 @@
     "135-broad-no-edge-cross-asset-relative-value",
     "136-broad-no-edge-tail-risk-convexity",
     "137-broad-no-edge-vol-target-drawdown",
-    "138-profit-evidence-engine"
+    "138-profit-evidence-engine",
+    "139-forward-edge-watch-kis-range"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -934,12 +944,8 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "072-candidate-evidence-diagnostics"
-    },
-    {
-      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "139-forward-edge-watch-kis-range"
     }
   ],
-  "timestamp_utc": "2026-08-16T00:14:39.225571Z"
+  "timestamp_utc": "2026-08-16T00:22:39.716500Z"
 }
 ```
