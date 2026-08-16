@@ -2,7 +2,7 @@
 
 **Feature Branch**: `Codex/142-live-money-route-priority`
 **Created**: 2026-08-16
-**Status**: In Progress
+**Status**: Complete
 **Risk Grade**: 2 - 읽기 전용 돈 경로 상태 집계와 다음 세션 판단 변경
 
 ## User Scenarios & Testing
