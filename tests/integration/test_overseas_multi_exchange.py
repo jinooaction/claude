@@ -27,6 +27,7 @@ from auto_invest.broker.overseas import (
     US_ORDER_EXCHANGES,
     get_balance_resolving_market,
     get_order_executions_resolving_market,
+    get_position_marks_resolving_market,
     get_positions_resolving_market,
 )
 
@@ -223,6 +224,31 @@ async def test_positions_deduped_if_kis_returns_all_on_any_market() -> None:
     assert len(positions) == 1
     assert positions[0].symbol == "SPY"
     assert positions[0].qty == 1
+
+
+@pytest.mark.asyncio
+async def test_position_marks_use_deduped_broker_evaluation_per_share() -> None:
+    """Standalone quotes may miss symbols; balance valuation remains a broker mark."""
+    same = [
+        {
+            "ovrs_pdno": "ORANY",
+            "ovrs_cblc_qty": "28",
+            "pchs_avg_pric": "11.195",
+            "frcr_evlu_amt2": "532.56",
+        }
+    ]
+    async with _client() as client:
+        with respx.mock(base_url=BASE) as mock:
+            mock.get(BALANCE).mock(return_value=httpx.Response(200, json={"output1": same}))
+            marks = await get_position_marks_resolving_market(
+                client,
+                access_token="t",
+                app_key="k",
+                app_secret="s",
+                account=ACCOUNT,
+            )
+
+    assert marks == {"ORANY": Decimal("19.02")}
 
 
 # ----------------------------------------------------------- 잔고/NAV(inquire-balance + cash)
