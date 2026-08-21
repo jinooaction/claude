@@ -1,0 +1,46 @@
+{
+  "as_of_utc": "2026-08-21T15:36:02Z",
+  "counts": {
+    "records": 1,
+    "rejected_orders": 2,
+    "valued_orders": 2,
+    "valued_records": 1
+  },
+  "cumulative": {
+    "buy_intended_order_mark_pnl_usd": "-1.14",
+    "sell_intended_order_mark_pnl_usd": "+0.00",
+    "total_intended_order_mark_pnl_usd": "-1.14"
+  },
+  "definition": "positive intended_order_mark_pnl_usd means rejected orders would currently look favorable; negative means rejection avoided a worse mark-to-current outcome. This is diagnostic, not accounting PnL.",
+  "interpretation_ko": "최신 신호는 보이지만 자동 전략 판단을 내리기에는 표본이 부족합니다.",
+  "latest": {
+    "latest_signal": "INTENT_LOSS",
+    "opportunity_as_of_utc": "2026-06-26T17:03:11Z",
+    "recorded_at_utc": "2026-06-26T17:03:12Z",
+    "rejected_count": 2,
+    "run_id": "28253047287",
+    "run_url": "https://github.com/jinooaction/claude/actions/runs/28253047287",
+    "total_intended_order_mark_pnl_usd": "-1.14",
+    "valued_count": 2
+  },
+  "latest_signal": "INTENT_LOSS",
+  "next_action_ko": "최신 손실 의도 신호가 실주문을 막고 있어 새 live 표본은 자동으로 쌓이지 않습니다. forward 토너먼트·재지정 증거를 기다리거나 별도 전략 검토 후 재무장 여부를 판단합니다.",
+  "safety_note_ko": "이 신호는 관찰·검토 입력입니다. 주문 재시도, 전략 교체, 자본 변경을 직접 수행하지 않습니다.",
+  "schema_version": 1,
+  "strategy_loop_input": {
+    "effect": "evidence_only_no_gate_override",
+    "target": "specs/055-autonomous-reassignment"
+  },
+  "streaks": {
+    "intent_gain": 0,
+    "intent_loss": 1
+  },
+  "thresholds": {
+    "execution_review_gain_usd": "+5.00",
+    "min_valued_reports": 2,
+    "strategy_review_loss_usd": "-5.00",
+    "streak_threshold": 2
+  },
+  "verdict": "INSUFFICIENT_DATA",
+  "verdict_label_ko": "표본 부족"
+}
