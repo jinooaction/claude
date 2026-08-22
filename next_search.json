@@ -1,0 +1,17 @@
+{
+  "batch_id": "strategy-factory-e676a1d58b7e",
+  "failed_gates": [
+    "pbo",
+    "psr_vs_benchmark",
+    "segment_win_rate",
+    "sharpe_superiority"
+  ],
+  "multiplicity_trial_count": 256,
+  "next_batch_sequence": null,
+  "next_strategy_family": "independent_macro_regime",
+  "safety": "research only; no orders or capital change",
+  "schema_version": "1.0",
+  "search_space_exhausted": true,
+  "suppress_batch_id": "strategy-factory-e676a1d58b7e",
+  "verdict": "NO_FACTORY_EDGE"
+}
