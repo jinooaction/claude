@@ -341,11 +341,11 @@ async def test_full_money_path_with_real_live_config(db_path: Path, tmp_path: Pa
         today=date(2026, 6, 12),
     )
     if d.current_rung == 0:
-        assert d.action == ACTION_PROMOTE and d.target_rung == 1
-        assert d.target_capital_usd == rung_capital_usd(1, ACCOUNT_NAV)
+        assert d.action == ACTION_PROMOTE and d.target_rung == 2
+        assert d.target_capital_usd == rung_capital_usd(2, ACCOUNT_NAV)
         # 7. 게이트가 쓸 새 센티넬이 자본 권위 불변식을 만족한다.
         rung, _entered, nav = parse_ladder_fields(d.new_sentinel_text)
-        assert rung == 1 and nav == ACCOUNT_NAV
+        assert rung == 2 and nav == ACCOUNT_NAV
         assert d.target_capital_usd == rung_capital_usd(rung, nav)
     else:
         # 사다리가 이미 가동된 상태의 저장소에서도 결정은 항상 난다(액션 라벨 유효).
@@ -453,7 +453,7 @@ def test_money_path_report_surfaces_downside_with_real_config():
     """돈 경로 보고서(운영자 대시보드)가 실제 사다리 결정(실제 설정·NAV)으로 방어선
     예산·엣지 신뢰도를 끝단까지 표면화하는지 — 회귀 보호. 돈 0 이동(순수 판정·보고).
 
-    실제 EDGE_CONFIRMED + 검증=배치 지문 정합이면 사다리는 단0→단1 PROMOTE 를 내고,
+    실제 EDGE_CONFIRMED + 검증=배치 지문 정합이면 사다리는 단0→단2 PROMOTE 를 내고,
     보고서는 탐색 자본(NAV 20%)의 다운사이드를 달러로(강등 10% / 정지 20%) 보여야 한다.
     """
     from auto_invest.analytics.money_path import assess_money_path
@@ -480,7 +480,7 @@ def test_money_path_report_surfaces_downside_with_real_config():
         kill_switch_present=False,
         today=date(2026, 6, 12),
     )
-    assert d.action == ACTION_PROMOTE  # 단0 → 단1 (지문 정합 + EDGE_CONFIRMED)
+    assert d.action == ACTION_PROMOTE  # 단0 → 단2 (지문 정합 + EDGE_CONFIRMED)
 
     report = assess_money_path(
         ladder=d.to_json_dict(),

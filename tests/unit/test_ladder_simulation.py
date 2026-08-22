@@ -14,12 +14,12 @@ from auto_invest.portfolio.capital_ladder import MAX_RUNG, RUNG_FRACTIONS
 
 
 def test_smooth_strategy_climbs_and_holds_top_rung() -> None:
-    # 낙폭 없는 꾸준한 +1%/월 → 매 calm 월 승격, 단 3 도달 후 유지.
+    # 낙폭 없는 꾸준한 +1%/월 → 매 calm 월 승격, 단 5 도달 후 유지.
     res = simulate_ladder_growth([0.01] * 12, start_rung=1)
     assert res.demotions == 0
     assert res.halts == 0
-    assert res.promotions == 3  # 1→2, 2→3, 3→4
-    assert res.rung_months[4] == 9  # 네 번째 달부터 단 4
+    assert res.promotions == 4  # 1→2→3→4→5
+    assert res.rung_months[5] == 8  # 다섯 번째 달부터 단 5
     assert res.avg_rung > 2.0
 
 
@@ -57,7 +57,7 @@ def test_zero_returns_grow_nothing_but_climb() -> None:
 def test_low_drawdown_holds_higher_rung_than_choppy() -> None:
     # 핵심 메커니즘: 같은 길이에서 낮은 낙폭 스트림이 더 높은 평균 단을 유지한다.
     smooth = [0.005] * 24
-    choppy = ([0.06, -0.115] * 12)  # 주기적 11.5% 낙폭 → 반복 강등
+    choppy = [0.06, -0.115] * 12  # 주기적 11.5% 낙폭 → 반복 강등
     s = simulate_ladder_growth(smooth, start_rung=1)
     c = simulate_ladder_growth(choppy, start_rung=1)
     assert s.demotions == 0
@@ -87,8 +87,14 @@ def test_deterministic_and_dict_shape() -> None:
     assert a.as_dict() == b.as_dict()
     d = a.as_dict()
     assert set(d) >= {
-        "final_nav_multiple", "cagr_pct", "demotions", "halts", "promotions",
-        "avg_rung", "rung_months", "unconstrained_nav_multiple",
+        "final_nav_multiple",
+        "cagr_pct",
+        "demotions",
+        "halts",
+        "promotions",
+        "avg_rung",
+        "rung_months",
+        "unconstrained_nav_multiple",
     }
     assert isinstance(a, LadderGrowthResult)
 
@@ -96,4 +102,4 @@ def test_deterministic_and_dict_shape() -> None:
 def test_reuses_spec050_rung_fractions() -> None:
     # 사다리 비율은 스펙 050 단일 출처를 재사용(여기서 재정의 안 함).
     assert RUNG_FRACTIONS[MAX_RUNG] == 1
-    assert set(RUNG_FRACTIONS) == {0, 1, 2, 3, 4}
+    assert set(RUNG_FRACTIONS) == {0, 1, 2, 3, 4, 5}

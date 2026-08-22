@@ -167,6 +167,9 @@ _SOURCE_REFS: dict[str, str] = {
     "profit-evidence-engine": (
         "automation/profit-evidence-engine-last-run:profit_evidence.json"
     ),
+    "strategy-factory": (
+        "automation/autonomous-strategy-factory-last-run:strategy_factory.json"
+    ),
     "ml-edge-ensemble": "automation/ml-edge-ensemble-last-run:report.json",
     "daily-cross-asset-ml": "automation/daily-cross-asset-ml-last-run:report.json",
     "rebalance-paper-forward": "automation/rebalance-paper-forward-last-run:LAST_RUN.md",
@@ -3089,6 +3092,7 @@ def _macro_growth_source_refs() -> tuple[str, ...]:
 
 def _investment_edge_source_refs() -> tuple[str, ...]:
     return (
+        _SOURCE_REFS["strategy-factory"],
         _SOURCE_REFS["rebalance-paper-forward"],
         _SOURCE_REFS["money-path"],
         _SOURCE_REFS["released-work"],

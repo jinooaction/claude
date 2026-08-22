@@ -3,9 +3,9 @@ name: Capital ladder gate (forward edge -> rung promotions/demotions)
 # 스펙 050 — 자본 사다리 게이트. 스펙 049(EDGE_CONFIRMED → 무장)를 승계·확장한다.
 #
 # 운영자 위임(2026-06-11): "자본·수단도 자동과 자율에 맡긴다. 기준은 계좌 잔고와
-# 포트폴리오." (헌법 X.4 v7.0.0). 자본 배치 규모를 증거 게이트 공식으로 결정한다:
+# 포트폴리오." (헌법 X.4 v8.0.0). 자본 배치 규모를 증거 게이트 공식으로 결정한다:
 #
-#   단0=0% → 단1=20% 탐색 → 단2=25% → 단3=50% → 단4=100% (실계좌 NAV 대비)
+#   단0=0% → 단1=10% 연구 → 단2=20% 탐색 → 단3=25% → 단4=50% → 단5=100%
 #   - 단 0→1: EDGE_CONFIRMED 또는 정확 배포전략의 장기 홀드아웃+forward floor+hardening.
 #   - 단 1→2: forward 페이퍼 EDGE_CONFIRMED + live 증거를 다시 요구한다.
 #   - 승격(단 n→n+1): 그 단에서 라이브 관측 ≥20 + ≥27일 경과 + 낙폭 < 예산/2(10%).
@@ -24,7 +24,7 @@ name: Capital ladder gate (forward edge -> rung promotions/demotions)
 #   - 결과는 사이드카 automation/edge-autoarm-last-run 으로 발행:
 #       git show origin/automation/edge-autoarm-last-run:LAST_RUN.md
 #
-# 헌법 X.4 v7.0.0: 자본 사다리는 운영자의 상시 위임에 따른 자율 운영. 비위임 불변
+# 헌법 X.4 v8.0.0: 자본 사다리는 운영자의 상시 위임에 따른 자율 운영. 비위임 불변
 # (K1 캡 체계·화이트리스트·감사·서킷 브레이커·낙폭 예산 소유권)은 그대로다.
 
 on:
@@ -55,12 +55,26 @@ jobs:
         run: |
           set -uo pipefail
           git fetch origin automation/profit-evidence-engine-last-run || true
+          git fetch origin automation/autonomous-strategy-factory-last-run || true
           if ! git show origin/automation/profit-evidence-engine-last-run:profit_evidence.json \
               > /tmp/profit_evidence.json 2>/tmp/profit_evidence.err; then
             echo '{}' > /tmp/profit_evidence.json
             cat /tmp/profit_evidence.err || true
           fi
           jq '.deployment_match // {}' /tmp/profit_evidence.json
+          if ! git show \
+              origin/automation/autonomous-strategy-factory-last-run:strategy_factory.json \
+              > /tmp/strategy_factory.json 2>/tmp/strategy_factory.err; then
+            echo '{}' > /tmp/strategy_factory.json
+            cat /tmp/strategy_factory.err || true
+          fi
+          factory_epoch="$(git show -s --format=%ct \
+            origin/automation/autonomous-strategy-factory-last-run 2>/dev/null || echo 0)"
+          now_epoch="$(date +%s)"
+          python3 -c \
+            "print(max(0, int('${now_epoch}')-int('${factory_epoch}'))/3600 if int('${factory_epoch}') else 999999)" \
+            > /tmp/strategy_factory_age_hours
+          jq '.decision // {}' /tmp/strategy_factory.json
 
       - name: Install SSH key
         env:
@@ -86,7 +100,133 @@ jobs:
           echo "capital=${capital:-}" >> "$GITHUB_OUTPUT"
           echo "armed=${armed:-false} rung_entered=${entered:-(none)} capital=${capital:-(none)}"
 
+      - name: Assign a complete factory winner at zero capital first
+        id: factory_assignment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ARMED: ${{ steps.state.outputs.armed }}
+        run: |
+          set -euo pipefail
+          echo "changed=false" >> "$GITHUB_OUTPUT"
+          [[ "${ARMED:-false}" == "false" ]] || exit 0
+          [[ "$(jq -r '.decision.verdict // ""' /tmp/strategy_factory.json)" == "FACTORY_EDGE" ]] || exit 0
+          [[ "$(jq -r '.candidate_count // 0' /tmp/strategy_factory.json)" == "64" ]] || exit 0
+          [[ "$(jq -r '.complete_trial_count // 0' /tmp/strategy_factory.json)" == "64" ]] || exit 0
+          [[ "$(jq -r '.decision.research_canary_eligible // false' /tmp/strategy_factory.json)" == "true" ]] || exit 0
+          [[ "$(awk '{print ($1 <= 36.0) ? "fresh" : "stale"}' /tmp/strategy_factory_age_hours)" == "fresh" ]] || exit 0
+          jq -er '.decision.selected_deploy_config' /tmp/strategy_factory.json \
+            > /tmp/factory_selected_portfolio.toml
+          FACTORY_CONFIG=/tmp/factory_selected_portfolio.toml \
+          FACTORY_JSON=/tmp/strategy_factory.json uv run python - <<'PY'
+          import json
+          import os
+          import tomllib
+          from pathlib import Path
+          from auto_invest.config.rules import PortfolioRebalanceConfig
+          from auto_invest.portfolio.autoarm import strategy_fingerprint_digest
+
+          raw = tomllib.loads(Path(os.environ["FACTORY_CONFIG"]).read_text())
+          cfg = PortfolioRebalanceConfig.model_validate(raw["portfolio"])
+          evidence = json.loads(Path(os.environ["FACTORY_JSON"]).read_text())
+          expected = evidence["decision"]["selected_strategy_fingerprint"]
+          assert strategy_fingerprint_digest(cfg) == expected
+          assert set(raw["whitelist"]["symbols"]) == {"SPYM", "IEF", "GLDM"}
+          assert raw["whitelist"]["order_types"] == ["LIMIT"]
+          assert raw["whitelist"]["sessions"] == ["REGULAR"]
+          assert raw["account_rebalance"]["cash_buffer_pct"] == "0.01"
+          PY
+          if cmp -s /tmp/factory_selected_portfolio.toml deploy/canary-live-portfolio.toml; then
+            exit 0
+          fi
+          cp /tmp/factory_selected_portfolio.toml deploy/canary-live-portfolio.toml
+          candidate="$(jq -r '.decision.selected_candidate_id' /tmp/strategy_factory.json)"
+          BRANCH="automation/strategy-factory-assignment/${GITHUB_RUN_ID}"
+          git config user.name "strategy-factory-assignment-bot"
+          git config user.email "strategy-factory-assignment-bot@noreply.github.com"
+          git checkout -b "${BRANCH}"
+          git add deploy/canary-live-portfolio.toml
+          git commit -m "feat(150): stage factory winner ${candidate} at rung 0" \
+            -m "this changes the safety perimeter"
+          git push -u origin "${BRANCH}"
+          cat > /tmp/factory_assignment_pr.md <<EOF
+          # 변경 요약
+
+          - 자동 전략 공장 전체 관문을 통과한 `${candidate}` 설정을 자본 0, 무장 해제 상태에서 배포 후보로 지정한다.
+
+          ## 위험 등급
+
+          - [ ] 등급 0: 설명·조사
+          - [ ] 등급 1: 일반 코드
+          - [ ] 등급 2: 운영 체계
+          - [ ] 등급 3: 안전 경계
+          - [x] 등급 4: 돈 경로 변경
+
+          ## 문제 정의
+
+          - 요청: 합격 전략을 사람 개입 없이 제한된 연구 캐너리로 연결한다.
+          - 실제 목표: 검증 설정과 주문 설정을 일치시킨 뒤 정확한 배포 설정으로 다시 강화 검사한다.
+          - 비목표: 이 PR에서 무장, 주문, 자본 배분을 하지 않는다.
+          - 위험: 잘못된 설정 교체가 다음 주문 후보를 바꿀 수 있다.
+          - 완료 기준: 64/64, 전체 관문, 지문, whitelist, LIMIT, REGULAR, 현금 1%가 일치한다.
+
+          ## 탐색 근거
+
+          - 읽은 파일: strategy_factory.json, 현재 live 포트폴리오, 무장 센티넬
+          - 확인한 실행 경로: 자본 0 설정 교체 → 배포 → exact hardened canary → 별도 10% 승격 PR
+          - 제거하거나 줄인 기능: 없음
+          - 남긴 기능 또는 대체 수단: K1/K2, 손실 예산, 정규장, 서명, nonce, 감사, 킬스위치
+
+          ## 변경 내용
+
+          - 자본 0에서 live 포트폴리오 설정만 공장 승자와 일치시킨다.
+
+          ## 검증
+
+          - [x] 64/64 전체 시도 및 모든 공장 관문 PASS
+          - [x] 전략 지문 exact match와 주문 안전 설정 검사
+          - [ ] `uv run pytest` (PR CI)
+          - [ ] `uv run ruff check src tests` (PR CI)
+
+          ## 하네스 검증
+
+          - 하네스 평가: 기능 PR에서 strict PASS, 이 PR은 생성된 설정 1개만 변경
+          - HANDOFF 검증: 기능 PR에서 PASS, 이 PR은 자본 0 설정 지정만 수행
+
+          ## 안전 경계
+
+          - Kernel 터치: 없음
+          - 안전 경계 변경: 있음, 헌법 X.4 v8.0.0의 연구 캐너리 적용
+          - 돈 경로 변경: 전략 후보 설정 변경, 현재 자본 0·주문 0
+          - 감사 로그·비밀값·주문 제한 영향: 기존 경계를 그대로 사용
+
+          ## 인계
+
+          - 다음 세션이 알아야 할 상태: 설정 배포 후 exact hardened canary가 다시 PASS해야 10% 승격 가능
+          - 남은 위험: 배포 전 또는 지문 불일치면 자본 0 유지
+          - 실행하지 못한 검증: 실제 주문은 이 PR에서 금지
+
+          ## 자동 머지 준비
+
+          - [x] 작업 완료
+          - [ ] 테스트 통과 (PR CI)
+          - [ ] 린트 깨끗함 (PR CI)
+          - [ ] PR 머지 가능 상태 확인
+          - [x] `WIP` 또는 `DO NOT MERGE` 표식 없음
+          - [x] Kernel 터치 없음
+          EOF
+          pr_url="$(gh pr create --base main --head "${BRANCH}" \
+            --title "feat(150): 자본 0에서 공장 승자 ${candidate} 지정" \
+            --body-file /tmp/factory_assignment_pr.md)"
+          if gh pr merge "${pr_url}" --auto --merge; then
+            echo "factory assignment waits for required PR checks before merge"
+          else
+            echo "auto-merge unavailable; assignment PR remains ready for the next autonomous session"
+          fi
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "pr_url=${pr_url}" >> "$GITHUB_OUTPUT"
+
       - name: Compute forward verdict on instance (read-only, ensemble paper track)
+        if: steps.factory_assignment.outputs.changed != 'true'
         id: verdict
         env:
           HOST: ${{ secrets.VULTR_SSH_HOST }}
@@ -106,6 +246,7 @@ jobs:
           if [[ ! -s /tmp/verdict_global.json ]]; then echo '{}' > /tmp/verdict_global.json; fi
 
       - name: Compute anchored verdict on instance (read-only, deep OOS + short forward)
+        if: steps.factory_assignment.outputs.changed != 'true'
         id: anchored
         env:
           HOST: ${{ secrets.VULTR_SSH_HOST }}
@@ -125,6 +266,7 @@ jobs:
           if [[ ! -s /tmp/anchored_global.json ]]; then echo '{}' > /tmp/anchored_global.json; fi
 
       - name: Harden exact deployed candidate before exploration capital (isolated, no orders)
+        if: steps.factory_assignment.outputs.changed != 'true'
         id: exploration_canary
         env:
           HOST: ${{ secrets.VULTR_SSH_HOST }}
@@ -143,6 +285,7 @@ jobs:
           echo "--- stderr ---"; cat /tmp/exploration_canary.err
 
       - name: Measure live evidence on instance (account NAV + growth since rung entry)
+        if: steps.factory_assignment.outputs.changed != 'true'
         env:
           HOST: ${{ secrets.VULTR_SSH_HOST }}
           USER: ${{ secrets.VULTR_SSH_USER }}
@@ -181,12 +324,15 @@ jobs:
 
       - name: Decide capital ladder (tested src module; writes sentinel on change)
         id: decide
+        if: steps.factory_assignment.outputs.changed != 'true'
         run: |
           set -uo pipefail
           uv run auto-invest ladder-decide \
             --verdict-json /tmp/verdict_global.json \
             --anchored-verdict-json /tmp/anchored_global.json \
             --profit-evidence-json /tmp/profit_evidence.json \
+            --factory-evidence-json /tmp/strategy_factory.json \
+            --factory-evidence-age-hours "$(cat /tmp/strategy_factory_age_hours)" \
             --hardened-canary-json /tmp/exploration_canary.json \
             --live-growth-json /tmp/live_growth.json \
             --live-performance-json /tmp/live_performance.json \
@@ -228,7 +374,7 @@ jobs:
           {
             echo "feat(050): 자본 사다리 ${ACTION} — 단 ${cur}→${tgt} (자본 \$${cap}, NAV \$${nav})"
             echo ""
-            echo "운영자 위임(2026-06-11) + 헌법 X.4 v7.0.0 자본 사다리의 증거 게이트 결정."
+            echo "운영자 위임(2026-06-11) + 헌법 X.4 v8.0.0 자본 사다리의 증거 게이트 결정."
             echo "결정: ${reason}"
             echo "실주문은 시장시간 스케줄에서만(이 머지는 미리보기). 즉시 정지:"
             echo "automation/AUTOARM_DISABLED."
@@ -250,7 +396,7 @@ jobs:
             echo ""
             echo "## 문제 정의"
             echo ""
-            echo "- 요청: 헌법 X.4 v7.0.0 자본 사다리의 증거 판정을 실행한다."
+            echo "- 요청: 헌법 X.4 v8.0.0 자본 사다리의 증거 판정을 실행한다."
             echo "- 실제 목표: 검증된 범위 안에서 자본을 단계적으로 배치하거나 즉시 줄인다."
             echo "- 비목표: whitelist, 캡, 낙폭 예산, 주문시간을 바꾸지 않는다."
             echo "- 위험: 잘못된 승격은 실계좌 노출을 늘린다."
@@ -283,7 +429,7 @@ jobs:
             echo "## 안전 경계"
             echo ""
             echo "- Kernel 터치: 없음"
-            echo "- 안전 경계 변경: 없음 (헌법 X.4 v7.0.0 실행)"
+            echo "- 안전 경계 변경: 없음 (헌법 X.4 v8.0.0 실행)"
             echo "- 돈 경로 변경: 있음"
             echo "- 감사 로그·비밀값·주문 제한 영향: 기존 경계를 그대로 사용"
             echo ""
@@ -352,7 +498,7 @@ jobs:
           {
             echo "# 자본 사다리 게이트 — 최신 실행 (스펙 050; 스펙 049 승계)"
             echo ""
-            echo "헌법 X.4 v7.0.0. 단0=0% → 단1=20% 탐색 → 단2=25% → 단3=50% → 단4=100%"
+            echo "헌법 X.4 v8.0.0. 단0=0% → 단1=10% 연구 → 단2=20% 탐색 → 단3=25% → 단4=50% → 단5=100%"
             echo "(실계좌 NAV 대비). 내려가는 건 낙폭 하나로 즉시, 올라가는 건 세 증거 전부."
             echo "판정 계산은 read-only — 서버 상태 무변경, 주문 0건."
             echo ""

@@ -39,8 +39,7 @@ def test_autoarm_computes_anchored_verdict_read_only() -> None:
 def test_autoarm_anchored_failure_falls_back_to_empty_json() -> None:
     text = _text()
     fallback = (
-        "if [[ ! -s /tmp/anchored_global.json ]]; then "
-        "echo '{}' > /tmp/anchored_global.json; fi"
+        "if [[ ! -s /tmp/anchored_global.json ]]; then echo '{}' > /tmp/anchored_global.json; fi"
     )
     assert fallback in text
     assert "앵커드 산출 실패/공백은 미확정으로 흡수" in text
@@ -52,6 +51,8 @@ def test_ladder_decide_consumes_anchored_verdict() -> None:
     assert "--verdict-json /tmp/verdict_global.json" in text
     assert "--anchored-verdict-json /tmp/anchored_global.json" in text
     assert "--profit-evidence-json /tmp/profit_evidence.json" in text
+    assert "--factory-evidence-json /tmp/strategy_factory.json" in text
+    assert "--factory-evidence-age-hours" in text
     assert "--hardened-canary-json /tmp/exploration_canary.json" in text
     assert "live-canary-profit ${CAPITAL}" in text
     assert "--live-performance-json /tmp/live_performance.json" in text
@@ -63,6 +64,20 @@ def test_exploration_canary_is_isolated_and_places_no_orders() -> None:
     assert "Harden exact deployed candidate before exploration capital" in text
     assert "observe exploration-canary" in text
     assert "rebalance-once" not in text
+
+
+def test_factory_winner_is_assigned_disarmed_before_exact_hardening() -> None:
+    text = _text()
+    assign = text.index("Assign a complete factory winner at zero capital first")
+    harden = text.index("Harden exact deployed candidate before exploration capital")
+    decide = text.index("Decide capital ladder")
+    assert assign < harden < decide
+    assert '[[ "${ARMED:-false}" == "false" ]]' in text
+    assert "complete_trial_count" in text
+    assert "selected_strategy_fingerprint" in text
+    assert "deploy/canary-live-portfolio.toml" in text
+    assert "steps.factory_assignment.outputs.changed != 'true'" in text
+    assert "this changes the safety perimeter" in text
 
 
 def test_sidecar_publishes_anchored_evidence_and_edge_source() -> None:

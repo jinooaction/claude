@@ -7,7 +7,11 @@ import argparse
 import importlib.util
 import json
 import sys
+import tomllib
 from pathlib import Path
+
+from auto_invest.config.rules import PortfolioRebalanceConfig
+from auto_invest.portfolio.autoarm import strategy_fingerprint_digest
 
 _ROOT = Path(__file__).resolve().parents[1]
 _CORE_PATH = _ROOT / "src" / "auto_invest" / "portfolio" / "live_entry_revalidation.py"
@@ -30,11 +34,23 @@ def _read(path: Path) -> object:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--profit-evidence-json", type=Path, required=True)
+    parser.add_argument("--factory-evidence-json", type=Path)
     parser.add_argument("--hardened-canary-json", type=Path, required=True)
     parser.add_argument("--live-performance-json", type=Path, required=True)
     parser.add_argument("--evidence-age-hours", type=float, required=True)
+    parser.add_argument("--factory-evidence-age-hours", type=float)
+    parser.add_argument("--live-portfolio", type=Path)
     parser.add_argument("--max-evidence-age-hours", type=float, default=36.0)
     args = parser.parse_args(argv)
+
+    live_fingerprint = None
+    if args.live_portfolio is not None:
+        try:
+            raw = tomllib.loads(args.live_portfolio.read_text(encoding="utf-8"))
+            config = PortfolioRebalanceConfig.model_validate(raw["portfolio"])
+            live_fingerprint = strategy_fingerprint_digest(config)
+        except (OSError, KeyError, ValueError, tomllib.TOMLDecodeError):
+            live_fingerprint = None
 
     result = evaluate_live_entry(
         _read(args.profit_evidence_json),
@@ -42,6 +58,11 @@ def main(argv: list[str] | None = None) -> int:
         _read(args.live_performance_json),
         evidence_age_hours=args.evidence_age_hours,
         max_evidence_age_hours=args.max_evidence_age_hours,
+        factory_evidence=(
+            _read(args.factory_evidence_json) if args.factory_evidence_json is not None else None
+        ),
+        factory_evidence_age_hours=args.factory_evidence_age_hours,
+        live_strategy_fingerprint=live_fingerprint,
     )
     print(json.dumps(result.as_dict(), ensure_ascii=False, sort_keys=True))
     return 0 if result.allowed else 3

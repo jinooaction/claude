@@ -58,6 +58,7 @@ _FP_FIELDS = (
     "universe",
     "weight_scheme",
     "rebalance_mode",
+    "rebalance_every_n_sessions",
     "top_n",
     "top_pct",
     "lookback_bars",

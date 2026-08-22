@@ -1341,7 +1341,16 @@ def assess_money_path(
     safety: SafetyBudget | None
     if stage == STAGE_BLOCKED:
         safety = None
-    elif current_rung < 1:  # 단0 — 첫 자본이 들어가면 어떤 다운사이드 예산인지 미리.
+    elif action == ACTION_PROMOTE and report_rung >= 1:
+        safety = _safety_budget(
+            reference_rung=report_rung,
+            account_nav=account_nav,
+            deployed_capital=deployed_capital,
+            current_dd_pct=live_dd,
+            dd_budget_pct=dd_budget_pct,
+            prospective=False,
+        )
+    elif current_rung < 1:  # 단0 대기 — 가장 작은 첫 자본 단 기준 예상 예산.
         safety = _safety_budget(
             reference_rung=1,
             account_nav=account_nav,

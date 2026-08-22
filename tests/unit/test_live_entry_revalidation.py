@@ -64,3 +64,63 @@ def test_invalid_fill_count_never_opens_first_entry() -> None:
     result = evaluate_live_entry(_profit(), {"verdict": "PASS"}, {}, evidence_age_hours=1)
     assert result.allowed is False
     assert result.fills_count is None
+
+
+def test_factory_winner_can_open_only_the_exact_10pct_strategy() -> None:
+    fingerprint = "sha256:exact"
+    factory = {
+        "candidate_count": 64,
+        "complete_trial_count": 64,
+        "decision": {
+            "verdict": "FACTORY_EDGE",
+            "research_canary_eligible": True,
+            "selected_candidate_id": "factory-winner",
+            "selected_strategy_fingerprint": fingerprint,
+        },
+    }
+    ready = evaluate_live_entry(
+        None,
+        {"verdict": "PASS"},
+        {"fills_count": 0},
+        evidence_age_hours=None,
+        factory_evidence=factory,
+        factory_evidence_age_hours=2,
+        live_strategy_fingerprint=fingerprint,
+    )
+    mismatch = evaluate_live_entry(
+        None,
+        {"verdict": "PASS"},
+        {"fills_count": 0},
+        evidence_age_hours=None,
+        factory_evidence=factory,
+        factory_evidence_age_hours=2,
+        live_strategy_fingerprint="sha256:other",
+    )
+    assert ready.allowed is True
+    assert ready.evidence["entry_source"] == "strategy_factory"
+    assert mismatch.allowed is False
+    assert "factory_strategy_fingerprint" in mismatch.reasons
+
+
+def test_incomplete_or_stale_factory_evidence_fails_closed() -> None:
+    factory = {
+        "candidate_count": 64,
+        "complete_trial_count": 63,
+        "decision": {
+            "verdict": "FACTORY_EDGE",
+            "research_canary_eligible": True,
+            "selected_strategy_fingerprint": "sha256:exact",
+        },
+    }
+    result = evaluate_live_entry(
+        None,
+        {"verdict": "PASS"},
+        {"fills_count": 0},
+        evidence_age_hours=None,
+        factory_evidence=factory,
+        factory_evidence_age_hours=40,
+        live_strategy_fingerprint="sha256:exact",
+    )
+    assert result.allowed is False
+    assert "factory_trials_complete" in result.reasons
+    assert "factory_evidence_fresh" in result.reasons

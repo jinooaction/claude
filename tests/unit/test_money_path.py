@@ -409,18 +409,14 @@ def test_accumulating_measured_eta_from_prior():
     # 직전 사이드카: 6/8(월) 관측 1 → now 6/12(금) 관측 5 → 4 거래일에 4 관측 = 1/거래일.
     now = datetime(2026, 6, 12, 8, 0, 0, tzinfo=UTC)
     prior = {"as_of_utc": "2026-06-08T08:00:00Z", "n_obs": 1}
-    r = assess_money_path(
-        ladder=_ladder(), forward_verdict=_verdict(n_obs=5), prior=prior, now=now
-    )
+    r = assess_money_path(ladder=_ladder(), forward_verdict=_verdict(n_obs=5), prior=prior, now=now)
     assert r.eta.basis == ETA_MEASURED
     assert r.eta.obs_per_trading_day == 1.0
     assert r.eta.obs_remaining == 15
 
 
 def test_accumulating_obs_already_met_projects_today():
-    r = assess_money_path(
-        ladder=_ladder(), forward_verdict=_verdict(n_obs=20, min_obs=20), now=NOW
-    )
+    r = assess_money_path(ladder=_ladder(), forward_verdict=_verdict(n_obs=20, min_obs=20), now=NOW)
     # 관측은 찼지만 verdict 가 INSUFFICIENT_DATA 라 아직 ACCUMULATING — ETA 0/오늘.
     assert r.eta.obs_remaining == 0
     assert r.eta.projected_date == "2026-06-13"
@@ -434,9 +430,7 @@ def test_convergence_converging_when_obs_grows():
     # 직전 6/8(월) 관측 1 → now 6/12(금) 관측 5 = 매 거래일 증가 → CONVERGING.
     now = datetime(2026, 6, 12, 8, 0, 0, tzinfo=UTC)
     prior = {"as_of_utc": "2026-06-08T08:00:00Z", "n_obs": 1}
-    r = assess_money_path(
-        ladder=_ladder(), forward_verdict=_verdict(n_obs=5), prior=prior, now=now
-    )
+    r = assess_money_path(ladder=_ladder(), forward_verdict=_verdict(n_obs=5), prior=prior, now=now)
     assert r.eta.convergence == CONV_CONVERGING
     assert r.eta.basis == ETA_MEASURED
     names = {g.name: g.status for g in r.gates}
@@ -446,9 +440,7 @@ def test_convergence_converging_when_obs_grows():
 def test_convergence_stalled_when_obs_flat_over_trading_days():
     # 직전 6/11(목) 관측 3 → now 6/13(토) 관측 3, 거래일 2 경과했는데 그대로 = STALLED.
     prior = {"as_of_utc": "2026-06-11T08:00:00Z", "n_obs": 3}
-    r = assess_money_path(
-        ladder=_ladder(), forward_verdict=_verdict(n_obs=3), prior=prior, now=NOW
-    )
+    r = assess_money_path(ladder=_ladder(), forward_verdict=_verdict(n_obs=3), prior=prior, now=NOW)
     assert r.eta.convergence == CONV_STALLED
     assert r.eta.basis == ETA_NOMINAL  # 정체는 측정 불가 → nominal 최선치
     assert "정체" in r.headline and "⚠" in r.headline
@@ -459,18 +451,14 @@ def test_convergence_stalled_when_obs_flat_over_trading_days():
 def test_convergence_stalled_not_flagged_same_trading_day():
     # 같은 거래일에 두 번 돌면(거래일 0 경과) 관측이 같아도 정체 아님 → UNKNOWN.
     prior = {"as_of_utc": "2026-06-13T02:00:00Z", "n_obs": 3}
-    r = assess_money_path(
-        ladder=_ladder(), forward_verdict=_verdict(n_obs=3), prior=prior, now=NOW
-    )
+    r = assess_money_path(ladder=_ladder(), forward_verdict=_verdict(n_obs=3), prior=prior, now=NOW)
     assert r.eta.convergence == CONV_UNKNOWN
 
 
 def test_convergence_regressed_when_obs_drops():
     # 직전 관측 5 → now 관측 1 = 전진 시계 리셋(베이시스 변경) → REGRESSED, 게이트 FAIL.
     prior = {"as_of_utc": "2026-06-11T08:00:00Z", "n_obs": 5}
-    r = assess_money_path(
-        ladder=_ladder(), forward_verdict=_verdict(n_obs=1), prior=prior, now=NOW
-    )
+    r = assess_money_path(ladder=_ladder(), forward_verdict=_verdict(n_obs=1), prior=prior, now=NOW)
     assert r.eta.convergence == CONV_REGRESSED
     assert r.eta.obs_remaining == 19  # 관측 줄어 남은 관측이 다시 늘어남
     assert "리셋" in r.headline and "⚠" in r.headline
@@ -590,8 +578,12 @@ def test_sample_fields_present_in_eta_dict():
 # ── 전략 지문 정합(검증=배포) — '엣지를 쌓아도 배포가 막히는' 분기 진단 ──
 
 
-def _fp(match=True, diverged=None, live="deploy/canary-live-portfolio.toml",
-        validated="deploy/global-trend-portfolio.toml"):
+def _fp(
+    match=True,
+    diverged=None,
+    live="deploy/canary-live-portfolio.toml",
+    validated="deploy/global-trend-portfolio.toml",
+):
     return {
         "match": match,
         "diverged": diverged or [],
@@ -720,9 +712,7 @@ def test_edge_confirmed_no_psr_no_confidence_gate():
 def test_no_edge_yet_shows_psr_when_present():
     r = assess_money_path(
         ladder=_ladder(),
-        forward_verdict=_verdict(
-            verdict="NO_EDGE", n_obs=25, beats=False, dsr="0.40", psr="0.50"
-        ),
+        forward_verdict=_verdict(verdict="NO_EDGE", n_obs=25, beats=False, dsr="0.40", psr="0.50"),
         now=NOW,
     )
     names = {g.name: g.status for g in r.gates}
@@ -739,7 +729,7 @@ def test_deployed_stage_next_rung_gates():
     )
     assert r.stage == STAGE_DEPLOYED
     assert r.current_rung == 1
-    assert r.capital_pct == "20"
+    assert r.capital_pct == "10"
     names = {g.name: g.status for g in r.gates}
     assert names["라이브 관측 수"] == GATE_PENDING  # 12 < 20
     assert names["경과일"] == GATE_PENDING  # 15 < 27
@@ -767,9 +757,7 @@ def test_defended_stage_demote():
 
 
 def test_blocked_stage_on_blocked_action():
-    r = assess_money_path(
-        ladder=_ladder(action="BLOCKED"), forward_verdict=_verdict(), now=NOW
-    )
+    r = assess_money_path(ladder=_ladder(action="BLOCKED"), forward_verdict=_verdict(), now=NOW)
     assert r.stage == STAGE_BLOCKED
 
 
@@ -845,11 +833,11 @@ def test_safety_budget_prospective_at_rung0():
     assert s is not None
     assert s.prospective is True
     assert s.reference_rung == 1  # 첫 자본 단
-    assert s.capital_usd == 303  # floor(1518.21 * 0.20)
+    assert s.capital_usd == 151  # floor(1518.21 * 0.10)
     assert s.demote_dd_pct == "10"  # 예산 20% / 2
     assert s.halt_dd_pct == "20"
-    assert s.loss_at_demote_usd == 31  # ceil(303 * 0.10)
-    assert s.loss_at_halt_usd == 61  # ceil(303 * 0.20)
+    assert s.loss_at_demote_usd == 16  # ceil(151 * 0.10)
+    assert s.loss_at_halt_usd == 31  # ceil(151 * 0.20)
     assert s.current_dd_pct is None  # 아직 배치 안 됨 → 현재 낙폭 없음
     assert s.margin_to_demote_pct is None
 
@@ -897,15 +885,13 @@ def test_safety_budget_defended_negative_margin():
     s = r.safety
     assert s is not None
     assert s.reference_rung == 2  # 초과한 그 단 기준
-    assert s.capital_usd == 379  # floor(1518.21 * 0.25)
+    assert s.capital_usd == 303  # floor(1518.21 * 0.20)
     assert s.current_dd_pct == "11.0"
     assert Decimal(s.margin_to_demote_pct) < 0  # 10 - 11.0 = -1.0
 
 
 def test_safety_budget_none_when_blocked():
-    r = assess_money_path(
-        ladder=_ladder(action="BLOCKED"), forward_verdict=_verdict(), now=NOW
-    )
+    r = assess_money_path(ladder=_ladder(action="BLOCKED"), forward_verdict=_verdict(), now=NOW)
     assert r.safety is None
     assert r.to_dict()["safety_budget"] is None
 
@@ -956,7 +942,7 @@ def test_safety_budget_in_to_dict():
     sb = r.to_dict()["safety_budget"]
     assert sb["reference_rung"] == 1
     assert sb["prospective"] is True
-    assert sb["loss_at_demote_usd"] == 31
+    assert sb["loss_at_demote_usd"] == 16
     assert sb["demote_dd_pct"] == "10"
 
 
@@ -971,18 +957,19 @@ def test_as_text_includes_safety_section():
 
 
 def test_capital_pct_no_scientific_notation():
-    # Decimal.normalize() 회귀: 단3=50%·단4=100% 가 '5E+1'/'1E+2' 로 깨지면 안 됨.
+    # Decimal.normalize() 회귀: 단4=50%·단5=100% 가 '5E+1'/'1E+2' 로 깨지면 안 됨.
     assert _capital_pct(0) == "0"
-    assert _capital_pct(1) == "20"
-    assert _capital_pct(2) == "25"
-    assert _capital_pct(3) == "50"
-    assert _capital_pct(4) == "100"
+    assert _capital_pct(1) == "10"
+    assert _capital_pct(2) == "20"
+    assert _capital_pct(3) == "25"
+    assert _capital_pct(4) == "50"
+    assert _capital_pct(5) == "100"
 
 
-def test_capital_pct_in_report_at_rung3():
-    # 실제 돈이 NAV 50%(단3)로 커진 보고서에 '5E+1%' 가 새어나오면 안 됨.
+def test_capital_pct_in_report_at_rung4():
+    # 실제 돈이 NAV 50%(단4)로 커진 보고서에 '5E+1%' 가 새어나오면 안 됨.
     r = assess_money_path(
-        ladder=_ladder(action="STAY", cur=3, tgt=3, cap=759, dd="2.0", obs=25),
+        ladder=_ladder(action="STAY", cur=4, tgt=4, cap=759, dd="2.0", obs=25),
         forward_verdict=_verdict(verdict="EDGE_CONFIRMED", n_obs=30),
         live_growth={"period_days": "30.0"},
         now=NOW,

@@ -365,14 +365,24 @@ jobs:
         run: |
           set -uo pipefail
           branch="automation/profit-evidence-engine-last-run"
+          factory_branch="automation/autonomous-strategy-factory-last-run"
           git fetch --depth=1 origin \
             "+refs/heads/${branch}:refs/remotes/origin/${branch}" >/tmp/entry_fetch.log 2>&1 || true
+          git fetch --depth=1 origin \
+            "+refs/heads/${factory_branch}:refs/remotes/origin/${factory_branch}" \
+            >>/tmp/entry_fetch.log 2>&1 || true
           git show "origin/${branch}:profit_evidence.json" \
             > /tmp/profit_evidence.json 2>/tmp/profit_evidence.err || echo '{}' > /tmp/profit_evidence.json
           evidence_epoch="$(git show -s --format=%ct "origin/${branch}" 2>/dev/null || echo 0)"
           now_epoch="$(date +%s)"
           evidence_age_hours="$(python3 -c \
             "print(max(0, int('${now_epoch}')-int('${evidence_epoch}'))/3600 if int('${evidence_epoch}') else 999999)")"
+          git show "origin/${factory_branch}:strategy_factory.json" \
+            > /tmp/strategy_factory.json 2>/tmp/strategy_factory.err || echo '{}' \
+            > /tmp/strategy_factory.json
+          factory_epoch="$(git show -s --format=%ct "origin/${factory_branch}" 2>/dev/null || echo 0)"
+          factory_age_hours="$(python3 -c \
+            "print(max(0, int('${now_epoch}')-int('${factory_epoch}'))/3600 if int('${factory_epoch}') else 999999)")"
           port="${PORT:-22}"
           set +e
           ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
@@ -387,9 +397,12 @@ jobs:
           profit_exit=$?
           PYTHONPATH=src python3 scripts/live_entry_revalidation_probe.py \
             --profit-evidence-json /tmp/profit_evidence.json \
+            --factory-evidence-json /tmp/strategy_factory.json \
             --hardened-canary-json /tmp/entry_hardened_canary.json \
             --live-performance-json /tmp/entry_live_profit.json \
             --evidence-age-hours "${evidence_age_hours}" \
+            --factory-evidence-age-hours "${factory_age_hours}" \
+            --live-portfolio deploy/canary-live-portfolio.toml \
             > /tmp/entry_revalidation.json
           revalidation_exit=$?
           allowed="$(python3 -c \
@@ -403,7 +416,8 @@ jobs:
           {
             echo "evidence_age_hours=${evidence_age_hours} canary_exit=${canary_exit} profit_exit=${profit_exit}"
             cat /tmp/entry_revalidation.json
-            cat /tmp/profit_evidence.err /tmp/entry_hardened_canary.err /tmp/entry_live_profit.err 2>/dev/null
+            cat /tmp/profit_evidence.err /tmp/strategy_factory.err \
+              /tmp/entry_hardened_canary.err /tmp/entry_live_profit.err 2>/dev/null
           } > /tmp/entry_revalidation.log
           cat /tmp/entry_revalidation.log
           [[ "${canary_exit}" == "0" && "${profit_exit}" == "0" ]] || exit 3
