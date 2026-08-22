@@ -42,7 +42,7 @@
 ## Phase 7: Verification and Release
 
 - [x] T022 Run targeted tests, full pytest, ruff, shell/YAML, diff, strict harness, HANDOFF facts, and PR quality gate.
-- [ ] T023 Commit K-meta changes with `this changes the safety perimeter`, push, open grade-4 PR, and auto-merge.
-- [ ] T024 Verify deploy, run the strategy factory on production data, and inspect the 64-trial decision.
+- [x] T023 Commit K-meta changes with `this changes the safety perimeter`, push, open grade-4 PR, and auto-merge.
+- [x] T024 Verify deploy, run the strategy factory on production data, and inspect the 64-trial decision.
 - [x] T025 If and only if a complete winner exists, run hardened no-order checks and autoarm; otherwise confirm rung 0 and next independent batch.
-- [ ] T026 Refresh HANDOFF with actual winner/no-winner, account state, orders, fills, and remaining risk.
+- [x] T026 Refresh HANDOFF with actual winner/no-winner, account state, orders, fills, and remaining risk.

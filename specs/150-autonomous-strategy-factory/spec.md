@@ -2,7 +2,7 @@
 
 **Feature Branch**: `Codex/150-autonomous-strategy-factory`
 **Created**: 2026-08-23
-**Status**: Implemented - production release pending
+**Status**: Released - production search exhausted without a qualifying edge
 **Risk Grade**: 4 - 신규 전략의 첫 실자본 진입 계약과 자본 사다리를 변경
 **Input**: "서로 다른 전략을 자동 생성하고 과적합을 보정한 백테스트로 검증해, 합격 전략을 기다림 없이 제한된 소액 실거래 캐너리로 올린다."
 
