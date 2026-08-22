@@ -53,6 +53,8 @@ def test_ladder_decide_consumes_anchored_verdict() -> None:
     assert "--anchored-verdict-json /tmp/anchored_global.json" in text
     assert "--profit-evidence-json /tmp/profit_evidence.json" in text
     assert "--hardened-canary-json /tmp/exploration_canary.json" in text
+    assert "live-canary-profit ${CAPITAL}" in text
+    assert "--live-performance-json /tmp/live_performance.json" in text
     assert "--validated-portfolio deploy/global-trend-fixed-portfolio.toml" in text
 
 

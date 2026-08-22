@@ -80,3 +80,62 @@ def test_hardened_failure_keeps_real_money_disarmed(tmp_path: Path) -> None:
     assert payload["action"] == "WAIT_EDGE"
     assert payload["target_rung"] == 0
     assert payload["exploration_verdict"]["hardened_canary_pass"] is False
+
+
+def test_separate_live_performance_demotes_unfilled_stale_entry(tmp_path: Path) -> None:
+    forward = _json(tmp_path, "forward.json", {"verdict": "NO_EDGE", "n_obs": 47})
+    profit = _json(
+        tmp_path,
+        "profit.json",
+        {
+            "deployment_match": {
+                "candidate_id": "globalfixed-ensemble-3-6-9-12",
+                "exploration_canary_ready": False,
+            }
+        },
+    )
+    canary = _json(tmp_path, "canary.json", {"verdict": "PASS"})
+    growth = _json(
+        tmp_path,
+        "growth.json",
+        {"snapshot_count": 1, "max_drawdown_pct": None, "period_days": None},
+    )
+    performance = _json(tmp_path, "performance.json", {"fills_count": 0})
+    nav = _json(tmp_path, "nav.json", {"total_value_usd": "1457.59"})
+    sentinel = tmp_path / "sentinel.request"
+    sentinel.write_text(
+        "armed: true\ncapital_usd: 293\nladder_rung: 1\nrung_entered: 2026-08-22\n",
+        encoding="utf-8",
+    )
+
+    result = RUNNER.invoke(
+        app,
+        [
+            "ladder-decide",
+            "--verdict-json",
+            str(forward),
+            "--profit-evidence-json",
+            str(profit),
+            "--hardened-canary-json",
+            str(canary),
+            "--live-growth-json",
+            str(growth),
+            "--live-performance-json",
+            str(performance),
+            "--account-nav-json",
+            str(nav),
+            "--live-portfolio",
+            str(ROOT / "deploy/canary-live-portfolio.toml"),
+            "--validated-portfolio",
+            str(ROOT / "deploy/global-trend-fixed-portfolio.toml"),
+            "--sentinel",
+            str(sentinel),
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["action"] == "DEMOTE"
+    assert payload["target_rung"] == 0

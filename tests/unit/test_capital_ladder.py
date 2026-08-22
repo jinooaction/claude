@@ -252,7 +252,8 @@ def test_unfilled_exploration_rung_demotes_when_latest_entry_evidence_fails() ->
         _RUNG1,
         forward_verdict=_verdict("NO_EDGE", 47),
         exploration_verdict={"verdict": "EXPLORATION_CANARY_WAIT"},
-        live_growth=_growth(fills_count=0),
+        live_growth=_growth(),
+        live_performance={"fills_count": 0},
     )
     assert d.action == ACTION_DEMOTE
     assert d.target_rung == 0
@@ -264,7 +265,8 @@ def test_existing_strategy_fill_keeps_live_risk_gates_authoritative() -> None:
         _RUNG1,
         forward_verdict=_verdict("NO_EDGE", 47),
         exploration_verdict={"verdict": "EXPLORATION_CANARY_WAIT"},
-        live_growth=_growth(fills_count=1),
+        live_growth=_growth(),
+        live_performance={"fills_count": 1},
     )
     assert d.action == ACTION_STAY
     assert d.target_rung == 1

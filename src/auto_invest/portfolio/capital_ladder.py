@@ -236,6 +236,7 @@ def decide_ladder(
     kill_switch_present: bool,
     today: date,
     exploration_verdict: dict | None = None,
+    live_performance: dict | None = None,
     dd_budget_pct: Decimal = DEFAULT_DD_BUDGET_PCT,
 ) -> LadderDecision:
     """자본 사다리 결정 — 순수·결정론·보수적 fail-safe.
@@ -364,9 +365,8 @@ def decide_ladder(
         isinstance(exploration_verdict, dict)
         and exploration_verdict.get("verdict") == "EXPLORATION_CANARY_READY"
     )
-    live_fills = (
-        live_growth.get("fills_count") if isinstance(live_growth, dict) else None
-    )
+    fill_source = live_performance if isinstance(live_performance, dict) else live_growth
+    live_fills = fill_source.get("fills_count") if isinstance(fill_source, dict) else None
     if (
         rung == 1
         and live_fills == 0
