@@ -177,6 +177,8 @@ measure_profit() {
         --db data/auto_invest.db \
         --env .env \
         --opening-positions deploy/live-opening-positions.toml \
+        --portfolio deploy/canary-live-portfolio.toml \
+        --strategy-scope \
         --snapshot \
         --slippage \
         --format json

@@ -54,6 +54,8 @@ class LiveProfitEvidence:
     unmarked_symbols: tuple[str, ...]
     data_quality_warnings: tuple[str, ...]
     source_run_id: str
+    measurement_contract_id: str | None
+    measurement_scope: str | None
     detail: str
 
     def to_dict(self) -> dict:
@@ -64,8 +66,7 @@ class LiveProfitEvidence:
 
     def as_markdown(self) -> str:
         first = (
-            f"{self.first_profit_observed_at_utc} / "
-            f"${self.first_profit_total_pnl_usd}"
+            f"{self.first_profit_observed_at_utc} / ${self.first_profit_total_pnl_usd}"
             if self.first_profit_observed
             else "아직 없음"
         )
@@ -93,7 +94,11 @@ class LiveProfitEvidence:
         return "\n".join(lines)
 
 
-def _prior_first(prior: dict | None) -> tuple[bool, dict]:
+def _prior_first(
+    prior: dict | None,
+    *,
+    measurement_contract_id: str | None,
+) -> tuple[bool, dict]:
     if not isinstance(prior, dict):
         return False, {}
     first_fills = _int(prior.get("first_profit_fills_count"))
@@ -104,6 +109,10 @@ def _prior_first(prior: dict | None) -> tuple[bool, dict]:
     )
     achieved = (
         achieved_flag
+        and prior.get("measurement_scope") == "strategy"
+        and isinstance(measurement_contract_id, str)
+        and bool(measurement_contract_id)
+        and prior.get("measurement_contract_id") == measurement_contract_id
         and isinstance(first_at, str)
         and bool(first_at)
         and first_fills is not None
@@ -121,7 +130,18 @@ def assess_live_profit(
     observed_at_utc: str,
     source_run_id: str,
 ) -> LiveProfitEvidence:
-    prior_achieved, prior_data = _prior_first(prior)
+    measurement_contract_id = (
+        performance.get("measurement_contract_id") if isinstance(performance, dict) else None
+    )
+    measurement_scope = (
+        performance.get("measurement_scope") if isinstance(performance, dict) else None
+    )
+    prior_achieved, prior_data = _prior_first(
+        prior,
+        measurement_contract_id=(
+            measurement_contract_id if isinstance(measurement_contract_id, str) else None
+        ),
+    )
     fills: int | None = None
     gross: Decimal | None = None
     realized: Decimal | None = None
@@ -131,7 +151,13 @@ def assess_live_profit(
     unmarked: tuple[str, ...] = ()
     warnings: tuple[str, ...] = ()
 
-    valid = isinstance(performance, dict) and performance.get("mode") == "live"
+    valid = (
+        isinstance(performance, dict)
+        and performance.get("mode") == "live"
+        and measurement_scope == "strategy"
+        and isinstance(measurement_contract_id, str)
+        and bool(measurement_contract_id)
+    )
     if valid:
         fills = _int(performance.get("fills_count"))
         gross = _decimal(performance.get("gross_invested_usd"))
@@ -158,7 +184,10 @@ def assess_live_profit(
 
     if not valid:
         current_status = STATUS_UNKNOWN
-        detail = "live 성과 JSON이 없거나 필수 필드가 불완전해 손익을 단정하지 않음."
+        detail = (
+            "전략 범위 live 성과 JSON과 측정 계약이 없거나 필수 필드가 불완전해 "
+            "손익을 단정하지 않음."
+        )
     elif fills == 0:
         current_status = STATUS_NO_FILLS
         detail = "실제 live 체결이 0건이라 수익 판정 전 단계."
@@ -196,15 +225,13 @@ def assess_live_profit(
         first_total = None
 
     return LiveProfitEvidence(
-        schema_version="1.0",
+        schema_version="1.1",
         status=status,
         current_status=current_status,
         first_profit_observed=achieved,
         first_profit_observed_at_utc=None if first_at is None else str(first_at),
         first_profit_fills_count=first_fills,
-        first_profit_realized_pnl_usd=(
-            None if first_realized is None else str(first_realized)
-        ),
+        first_profit_realized_pnl_usd=(None if first_realized is None else str(first_realized)),
         first_profit_unrealized_pnl_usd=(
             None if first_unrealized is None else str(first_unrealized)
         ),
@@ -219,5 +246,9 @@ def assess_live_profit(
         unmarked_symbols=unmarked,
         data_quality_warnings=warnings,
         source_run_id=source_run_id,
+        measurement_contract_id=(
+            measurement_contract_id if isinstance(measurement_contract_id, str) else None
+        ),
+        measurement_scope=(measurement_scope if isinstance(measurement_scope, str) else None),
         detail=detail,
     )

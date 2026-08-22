@@ -205,6 +205,11 @@ COMMAND_POLICIES: dict[str, CommandPolicy] = {
         AutonomyLevel.READ_ONLY,
         "Read-only operational health check.",
     ),
+    "resume-readiness": _p(
+        "resume-readiness",
+        AutonomyLevel.READ_ONLY,
+        "Evaluate reconciliation halt release eligibility without clearing halt or placing orders.",
+    ),
     "ingest-history": _p(
         "ingest-history",
         AutonomyLevel.PROPOSAL,

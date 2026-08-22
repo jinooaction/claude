@@ -36,6 +36,7 @@ class NavPoint:
     at_utc: str
     nav_usd: Decimal
     capital_basis_usd: str | None = None
+    measurement_contract_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -114,9 +115,23 @@ def read_nav_points(
                 at_utc=at,
                 nav_usd=Decimal(str(p["total_nav_usd"])),
                 capital_basis_usd=p.get("capital_basis_usd"),
+                measurement_contract_id=p.get("measurement_contract_id"),
             )
         )
     return points
+
+
+def latest_measurement_contract_suffix(points: list[NavPoint]) -> list[NavPoint]:
+    """Return only the latest contiguous performance-definition contract."""
+    if not points or points[-1].measurement_contract_id is None:
+        return points
+    contract_id = points[-1].measurement_contract_id
+    start = len(points)
+    for index in range(len(points) - 1, -1, -1):
+        if points[index].measurement_contract_id != contract_id:
+            break
+        start = index
+    return points[start:]
 
 
 def consistent_basis_suffix(points: list[NavPoint]) -> list[NavPoint]:
@@ -184,6 +199,7 @@ def stitch_basis_segments(points: list[NavPoint]) -> list[NavPoint]:
                     at_utc=prev.at_utc,
                     nav_usd=synth,
                     capital_basis_usd=prev.capital_basis_usd,
+                    measurement_contract_id=prev.measurement_contract_id,
                 )
             )
         synth = synth * (cur.nav_usd / prev.nav_usd)
@@ -192,6 +208,7 @@ def stitch_basis_segments(points: list[NavPoint]) -> list[NavPoint]:
                 at_utc=cur.at_utc,
                 nav_usd=synth,
                 capital_basis_usd=cur.capital_basis_usd,
+                measurement_contract_id=cur.measurement_contract_id,
             )
         )
     return out if out else [points[-1]]

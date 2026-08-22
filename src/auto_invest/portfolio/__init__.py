@@ -16,6 +16,7 @@ from auto_invest.portfolio.growth import (
     NavPoint,
     compute_growth,
     consistent_basis_suffix,
+    latest_measurement_contract_suffix,
     read_nav_points,
     stitch_basis_segments,
 )
@@ -48,6 +49,7 @@ __all__ = [
     "effective_capital",
     "equal_weight_buy_hold_curve",
     "forward_edge_verdict",
+    "latest_measurement_contract_suffix",
     "read_nav_points",
     "render_text",
     "stitch_basis_segments",

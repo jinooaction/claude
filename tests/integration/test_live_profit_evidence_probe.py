@@ -6,9 +6,7 @@ import importlib.util
 import json
 from pathlib import Path
 
-_PROBE_PATH = (
-    Path(__file__).resolve().parents[2] / "scripts" / "live_profit_evidence_probe.py"
-)
+_PROBE_PATH = Path(__file__).resolve().parents[2] / "scripts" / "live_profit_evidence_probe.py"
 _spec = importlib.util.spec_from_file_location("live_profit_evidence_probe", _PROBE_PATH)
 assert _spec and _spec.loader
 _probe = importlib.util.module_from_spec(_spec)
@@ -25,6 +23,8 @@ def test_probe_writes_sticky_json_and_markdown(tmp_path: Path) -> None:
         json.dumps(
             {
                 "mode": "live",
+                "measurement_scope": "strategy",
+                "measurement_contract_id": "sha256:test-contract",
                 "fills_count": 2,
                 "gross_invested_usd": "178.32",
                 "realized_pnl_usd": "0",

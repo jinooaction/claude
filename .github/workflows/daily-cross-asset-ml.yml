@@ -61,9 +61,9 @@ jobs:
           if [ "${status}" -ne 0 ] || ! jq -e . /tmp/daily-cross-asset-ml/report.json >/dev/null 2>&1; then
             reason=$(tail -c 2000 /tmp/daily-cross-asset-ml/remote.log | jq -Rs .)
             jq -n --argjson reason "${reason}" '{
-              schema_version:"1.0", experiment_id:"daily-cross-asset-ml-v1",
+              schema_version:"1.1", experiment_id:"low-turnover-daily-cross-asset-ml-v2",
               verdict:"BLOCKED", reason:$reason,
-              candidate_package:{eligible:false,candidate_id:"candidate-daily-cross-asset-ml-v1",
+              candidate_package:{eligible:false,candidate_id:"candidate-low-turnover-daily-cross-asset-ml-v2",
                 status:"blocked",verdict:"BLOCKED",reason_ko:$reason,live_promotion_authorized:false},
               safety:{orders_submitted:0,orders_cancelled:0,live_strategy_changed:false,capital_changed:false}
             }' > /tmp/daily-cross-asset-ml/report.json
@@ -77,6 +77,9 @@ jobs:
             echo "- commit: ${GITHUB_SHA}"
             echo "- verdict: $(jq -r '.verdict' /tmp/daily-cross-asset-ml/report.json)"
             echo "- reason: $(jq -r '.reason' /tmp/daily-cross-asset-ml/report.json)"
+            echo "- baseline_turnover: $(jq -r '.model_metrics.baseline_turnover // "N/A"' /tmp/daily-cross-asset-ml/report.json)"
+            echo "- candidate_turnover: $(jq -r '.model_metrics.candidate_turnover // "N/A"' /tmp/daily-cross-asset-ml/report.json)"
+            echo "- turnover_reduction_pct: $(jq -r '.model_metrics.turnover_reduction_pct // "N/A"' /tmp/daily-cross-asset-ml/report.json)"
             echo "- orders_submitted: 0"
           } > /tmp/daily-cross-asset-ml/LAST_RUN.md
           echo "remote_exit=${status}" >> "$GITHUB_OUTPUT"

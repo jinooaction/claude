@@ -11,6 +11,7 @@ from auto_invest.portfolio.growth import (
     NavPoint,
     compute_growth,
     consistent_basis_suffix,
+    latest_measurement_contract_suffix,
     read_nav_points,
     render_text,
     stitch_basis_segments,
@@ -315,6 +316,20 @@ def test_stitch_no_clean_returns_returns_last_point():
     ]
     out = stitch_basis_segments(pts)
     assert [p.nav_usd for p in out] == [Decimal("300")]
+
+
+def test_latest_measurement_contract_excludes_legacy_and_old_contracts():
+    points = [
+        NavPoint("2026-08-16T00:00:00Z", Decimal("293"), "293", None),
+        NavPoint("2026-08-17T00:00:00Z", Decimal("919"), "293", "sha256:old"),
+        NavPoint("2026-08-18T00:00:00Z", Decimal("293"), "293", "sha256:new"),
+        NavPoint("2026-08-19T00:00:00Z", Decimal("294"), "293", "sha256:new"),
+    ]
+
+    selected = latest_measurement_contract_suffix(points)
+
+    assert [point.nav_usd for point in selected] == [Decimal("293"), Decimal("294")]
+    assert all(point.measurement_contract_id == "sha256:new" for point in selected)
 
 
 def test_render_text_smoke():

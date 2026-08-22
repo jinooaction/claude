@@ -314,12 +314,21 @@ live_canary_measure() {
         --capital "${capital}" \
         --db data/auto_invest.db \
         --env-file .env \
+        --opening-positions deploy/live-opening-positions.toml \
+        --portfolio deploy/canary-live-portfolio.toml \
+        --strategy-scope \
         --snapshot \
         --format json
     run_cli forward-verdict \
         --mode live \
         --portfolio deploy/canary-live-portfolio.toml \
         --db data/auto_invest.db \
+        --format json
+    run_cli resume-readiness \
+        --db data/auto_invest.db \
+        --halt-path data/halt.flag \
+        --opening-positions deploy/live-opening-positions.toml \
+        --portfolio deploy/canary-live-portfolio.toml \
         --format json
 }
 
