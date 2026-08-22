@@ -1,0 +1,50 @@
+{
+  "entries": [
+    {
+      "candidate_id": "candidate-cc96b35062da",
+      "created_at_utc": "2026-06-28T17:18:21Z",
+      "decision": "evidence_dependent",
+      "entry_id": "ledger-f6440fc15f37",
+      "evidence_package_id": null,
+      "next_recheck_condition": "후보가 COMPARABLE 관측 수에 도달하면 재검토",
+      "reason_ko": "후보별 전진 관측·상관·낙폭을 같은 기준으로 묶는 실험을 설계한다."
+    },
+    {
+      "candidate_id": "candidate-1ed634d8bf6d",
+      "created_at_utc": "2026-07-01T09:30:35Z",
+      "decision": "rejected",
+      "entry_id": "ledger-5b69ce7cd6b0",
+      "evidence_package_id": "autonomous-promotion:28504209238",
+      "next_recheck_condition": null,
+      "reason_ko": "기계 판독 검증 결과에 실패가 있어 승격 증거로 병합하지 않는다."
+    },
+    {
+      "candidate_id": "candidate-cc96b35062da",
+      "created_at_utc": "2026-07-01T09:30:35Z",
+      "decision": "rejected",
+      "entry_id": "ledger-87e07600d9b6",
+      "evidence_package_id": "autonomous-promotion:28504209238",
+      "next_recheck_condition": null,
+      "reason_ko": "기계 판독 검증 결과에 실패가 있어 승격 증거로 병합하지 않는다."
+    },
+    {
+      "candidate_id": "candidate-6ee3370e933d",
+      "created_at_utc": "2026-07-02T07:29:35Z",
+      "decision": "evidence_dependent",
+      "entry_id": "ledger-53e39189cf6f",
+      "evidence_package_id": null,
+      "next_recheck_condition": null,
+      "reason_ko": "stale evidence 목록을 후보와 별도 관측 이슈로 보고한다."
+    },
+    {
+      "candidate_id": "candidate-dff4f9344b02",
+      "created_at_utc": "2026-07-02T07:29:35Z",
+      "decision": "evidence_dependent",
+      "entry_id": "ledger-9e7f4ffc34c4",
+      "evidence_package_id": null,
+      "next_recheck_condition": null,
+      "reason_ko": "execution-quality sidecar 신선도를 회복한 뒤 거부 주문 기회손익과 브로커 오류율을 읽기 전용으로 증거 패키징한다."
+    }
+  ],
+  "schema_version": "1.0"
+}
