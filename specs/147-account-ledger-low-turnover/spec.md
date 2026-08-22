@@ -2,7 +2,7 @@
 
 **Feature Branch**: `Codex/147-account-ledger-low-turnover`
 **Created**: 2026-08-22
-**Status**: In Progress
+**Status**: Complete
 **Risk Grade**: 4 - 돈 경로와 자본 승격 증거를 보수적으로 변경
 
 ## User Scenarios & Testing

@@ -27,6 +27,6 @@
 ## Phase 5: Validation and release
 
 - [x] T013 Run targeted tests, `uv run pytest`, and `uv run ruff check src tests`.
-- [ ] T014 Run strict harness, HANDOFF facts, diff check, and PR quality gate.
-- [ ] T015 Commit, push, open and merge the PR, then verify deployment sidecars.
-- [ ] T016 Refresh `HANDOFF.md`, commit, push, merge, and verify final main state.
+- [x] T014 Run strict harness, HANDOFF facts, diff check, and PR quality gate.
+- [x] T015 Commit, push, open and merge the PR, then verify deployment sidecars.
+- [x] T016 Refresh `HANDOFF.md`, commit, push, merge, and verify final main state.
