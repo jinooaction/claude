@@ -33,7 +33,7 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `bf48336` — Merge pull request #649 from jinooaction/automation/capital-ladder/demote-32570303365 |
+| 마지막 main 커밋 | `54db9f6` — Merge pull request #650 from jinooaction/Codex/149-disarmed-profit-observation |
 | main 테스트 | #644 머지 코드 기준 `uv run pytest` → 2904 passed, 6 skipped. |
 | main 린트 | #644 머지 코드 기준 `uv run ruff check src tests` → All checks passed. |
 | 열린 PR | 없음. |

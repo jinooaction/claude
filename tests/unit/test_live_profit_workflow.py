@@ -22,6 +22,7 @@ def test_live_profit_workflow_is_fixed_read_only_observation() -> None:
     assert '"observe account-nav"' in text
     assert "steps.measurement_capital.outputs.value" in text
     assert "measurement_capital" in text
+    assert "Decimal(str(value)):.2f" in text
     assert "live-canary-order" not in text
     assert "--confirm-live" not in text
     assert "rebalance-once" not in text

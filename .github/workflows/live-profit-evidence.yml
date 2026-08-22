@@ -77,7 +77,7 @@ jobs:
               "${USER}@${HOST}" "observe account-nav" \
               > /tmp/live_profit_account_nav.json
             measurement_capital="$(python3 -c \
-              "import json; print(json.load(open('/tmp/live_profit_account_nav.json'))['total_value_usd'])")"
+              "import json; from decimal import Decimal; value=json.load(open('/tmp/live_profit_account_nav.json'))['total_value_usd']; print(f'{Decimal(str(value)):.2f}')")"
           fi
           ./scripts/ci_validate_decimal.sh measurement_capital "${measurement_capital}"
           python3 -c \
