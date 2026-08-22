@@ -53,6 +53,16 @@ jobs:
             --summary-out /tmp/LAST_RUN.md \
             --json-out /tmp/profit_evidence.json \
             --json > /tmp/profit_evidence.stdout.json
+          {
+            echo ""
+            echo "## 메타데이터"
+            echo ""
+            echo "| 항목 | 값 |"
+            echo "|------|-----|"
+            echo "| run_id | ${GITHUB_RUN_ID} |"
+            echo "| commit | ${GITHUB_SHA} |"
+            echo "| timestamp_utc | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
+          } >> /tmp/LAST_RUN.md
           cat /tmp/LAST_RUN.md
 
       - name: Publish read-only sidecar

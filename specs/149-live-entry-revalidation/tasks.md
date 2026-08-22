@@ -26,5 +26,6 @@
 ## Phase 5: Validation and Release
 
 - [x] T012 Run targeted and full tests, ruff, shell/YAML, harness, handoff, and PR quality gates.
-- [ ] T013 Commit with safety-perimeter marker, push, open PR, and auto-merge.
+- [x] T013 Commit with safety-perimeter marker, push, open PR, and auto-merge.
 - [ ] T014 Verify deploy and no-order production preflight, then refresh HANDOFF.
+- [x] T015 Fix the observed profit-evidence liveness false MISSING at the producer timestamp contract and add a regression.
