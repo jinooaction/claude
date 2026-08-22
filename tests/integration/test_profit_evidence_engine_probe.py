@@ -96,6 +96,7 @@ def test_workflow_is_read_only_and_publishes_profit_evidence_sidecar() -> None:
     assert "schedule:" in text and "workflow_dispatch:" in text
     assert "profit_evidence_engine_probe.py" in text
     assert "automation/profit-evidence-engine-last-run" in text
+    assert "| timestamp_utc | $(date -u +%Y-%m-%dT%H:%M:%SZ) |" in text
     assert "rebalance-paper-forward-last-run:leaderboard.json" in text
     assert "--mode live" not in text
     assert "--confirm-live" not in text

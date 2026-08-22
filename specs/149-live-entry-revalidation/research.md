@@ -17,3 +17,7 @@
 ## Decision: liveness 개별 fetch fallback
 
 **Rationale**: 원격 branch와 파일이 존재하는데 와일드카드 shallow fetch 결과에서 빠졌다. 실제 누락 판정 전에 정확한 ref를 한 번 직접 가져오는 것이 가장 좁은 복구다.
+
+## Decision: 수익 증거 생산자의 실행 시각 계약 보완
+
+**Rationale**: 첫 운영 실행 로그에서 ref와 `LAST_RUN.md` 수집은 성공했지만 생산 보고에 `timestamp_utc`가 없어 감시기가 `MISSING`으로 판정했다. 개별 ref 재수집은 네트워크 누락을 방어하고, 생산 워크플로는 표준 실행 시각을 추가해 liveness 판정 입력을 완성한다.

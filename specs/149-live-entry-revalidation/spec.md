@@ -2,7 +2,7 @@
 
 **Feature Branch**: `Codex/149-live-entry-revalidation-parallel-edge`
 **Created**: 2026-08-22
-**Status**: In Progress
+**Status**: Released - operational verification in progress
 **Risk Grade**: 4 - 실제 주문 직전 자격 판정과 자동 무장 해제를 변경
 
 ## User Scenarios & Testing
@@ -23,7 +23,7 @@
 
 운영자는 수익 증거 sidecar가 실제로 존재하는데 감시기가 `MISSING`으로 보고하지 않기를 원한다.
 
-**Independent Test**: 와일드카드 fetch 뒤 첫 조회가 실패해도 해당 sidecar ref를 직접 다시 fetch해 수집하며, 실제 누락일 때만 `MISSING`이다.
+**Independent Test**: 생산 sidecar가 표준 `timestamp_utc`를 포함하고, 와일드카드 fetch 뒤 첫 조회가 실패해도 해당 sidecar ref를 직접 다시 fetch해 수집하며, 실제 누락일 때만 `MISSING`이다.
 
 ### User Story 3 - 실거래 관찰과 신규 엣지 탐색을 병렬화한다 (Priority: P1)
 
@@ -44,7 +44,7 @@
 - **FR-003**: 증거 누락·손상·오래됨·모순은 주문 전에 fail-closed 해야 한다.
 - **FR-004**: 첫 체결 전 최신 자격이 실패하면 자본 사다리는 단 1을 단 0으로 자동 강등해야 한다.
 - **FR-005**: 이미 체결된 전략은 주문 전 재검증 실패만으로 위험 축소 거래까지 막지 않고 기존 라이브 손실·정합성 게이트를 유지해야 한다.
-- **FR-006**: pipeline 감시기는 일괄 수집 실패 시 개별 ref를 한 번 직접 재수집해야 한다.
+- **FR-006**: 수익 증거 생산자는 표준 `timestamp_utc` 메타데이터를 발행하고, pipeline 감시기는 일괄 수집 실패 시 개별 ref를 한 번 직접 재수집해야 한다.
 - **FR-007**: forward 미달은 관찰 상태로 기록하되, 별도의 no-live challenger 후보 생성을 막지 않아야 한다.
 - **FR-008**: challenger는 최소 5개 새 독립 관측 단위의 증거 지문으로 중복을 억제해야 한다.
 - **FR-009**: challenger는 브로커 호출·실제 주문·자본 배분·live 전략 변경을 수행하지 않아야 한다.
