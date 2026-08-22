@@ -1,0 +1,1697 @@
+{
+  "agent_ops_frontier_map": [
+    {
+      "coverage_status": "released",
+      "frontier_key": "handoff_truth_liveness",
+      "label_ko": "HANDOFF 사실성 생존성",
+      "next_action_ko": "HANDOFF.md, check_handoff_facts.py, agent_harness_probe.py, released-work, autonomous-work 증거를 함께 읽어 stale handoff와 정상 handoff-only baseline을 분리하는 읽기 전용 계약을 만든다.",
+      "priority_score": 2150,
+      "reason_ko": "HANDOFF.md와 check_handoff_facts는 최신 main·코드 merge 상태를 다음 세션에 전달하지만, stale handoff와 정상 handoff-only 예외를 후보 관점에서 분리하는 계약은 아직 없다.",
+      "recommended_candidate_id": "candidate-handoff-truth-liveness-contract",
+      "required_inputs": [
+        "automation/autonomous-work-execution-last-run:LAST_RUN.md",
+        "automation/released-work-last-run:released_work.json",
+        "automation/pipeline-liveness-last-run:LAST_RUN.md",
+        "AGENTS.md",
+        "CLAUDE.md",
+        "HANDOFF.md",
+        ".codex/quality-gate.md",
+        "scripts/local_concurrency_guard.py",
+        ".codex/hooks.json",
+        ".githooks/pre-commit",
+        ".githooks/pre-push",
+        ".codex/state/concurrency",
+        ".codex/harness/evaluation_tasks.toml",
+        ".codex/harness/quality_tasks.toml",
+        ".codex/harness/redteam_tasks.toml",
+        "scripts/check_handoff_facts.py",
+        "scripts/agent_harness_probe.py",
+        ".github/pull_request_template.md",
+        ".github/workflows/pr-quality-gate.yml"
+      ],
+      "title_ko": "HANDOFF 사실성 생존성 계약"
+    },
+    {
+      "coverage_status": "released",
+      "frontier_key": "pr_merge_evidence_liveness",
+      "label_ko": "PR/머지 증거 생존성",
+      "next_action_ko": "PR 본문 품질 관문, merge commit, released-work sidecar, deploy-status 관측을 함께 읽어 머지 뒤 완료 증거의 PASS/WAIT/FAIL 계약을 만든다.",
+      "priority_score": 2050,
+      "reason_ko": "PR 품질 관문, merge commit, released-work, deploy 관측은 각각 존재하지만 작업 완료 보고가 어느 증거까지 살아 있어야 하는지 후보 단위로 닫혀 있지 않다.",
+      "recommended_candidate_id": "candidate-pr-merge-evidence-liveness-contract",
+      "required_inputs": [
+        "automation/autonomous-work-execution-last-run:LAST_RUN.md",
+        "automation/released-work-last-run:released_work.json",
+        "automation/pipeline-liveness-last-run:LAST_RUN.md",
+        "AGENTS.md",
+        "CLAUDE.md",
+        "HANDOFF.md",
+        ".codex/quality-gate.md",
+        "scripts/local_concurrency_guard.py",
+        ".codex/hooks.json",
+        ".githooks/pre-commit",
+        ".githooks/pre-push",
+        ".codex/state/concurrency",
+        ".codex/harness/evaluation_tasks.toml",
+        ".codex/harness/quality_tasks.toml",
+        ".codex/harness/redteam_tasks.toml",
+        "scripts/check_handoff_facts.py",
+        "scripts/agent_harness_probe.py",
+        ".github/pull_request_template.md",
+        ".github/workflows/pr-quality-gate.yml"
+      ],
+      "title_ko": "PR/머지 증거 생존성 계약"
+    },
+    {
+      "coverage_status": "released",
+      "frontier_key": "worktree_concurrency_liveness",
+      "label_ko": "worktree 동시 작업 생존성",
+      "next_action_ko": "local_concurrency_guard, .codex/state/concurrency 복구 스냅샷, pre-commit/pre-push 훅 경로를 읽어 동시 작업 방어의 PASS/WAIT/FAIL 계약을 만든다.",
+      "priority_score": 1950,
+      "reason_ko": "local_concurrency_guard와 session lease는 병렬 Codex 작업을 막지만, WARN/BLOCK·isolate·복구 스냅샷 흐름의 생존성은 후보로 닫혀 있지 않다.",
+      "recommended_candidate_id": "candidate-worktree-concurrency-liveness-contract",
+      "required_inputs": [
+        "automation/autonomous-work-execution-last-run:LAST_RUN.md",
+        "automation/released-work-last-run:released_work.json",
+        "automation/pipeline-liveness-last-run:LAST_RUN.md",
+        "AGENTS.md",
+        "CLAUDE.md",
+        "HANDOFF.md",
+        ".codex/quality-gate.md",
+        "scripts/local_concurrency_guard.py",
+        ".codex/hooks.json",
+        ".githooks/pre-commit",
+        ".githooks/pre-push",
+        ".codex/state/concurrency",
+        ".codex/harness/evaluation_tasks.toml",
+        ".codex/harness/quality_tasks.toml",
+        ".codex/harness/redteam_tasks.toml",
+        "scripts/check_handoff_facts.py",
+        "scripts/agent_harness_probe.py",
+        ".github/pull_request_template.md",
+        ".github/workflows/pr-quality-gate.yml"
+      ],
+      "title_ko": "worktree 동시 작업 생존성 계약"
+    },
+    {
+      "coverage_status": "released",
+      "frontier_key": "agent_harness_regression_liveness",
+      "label_ko": "agent harness 회귀 생존성",
+      "next_action_ko": ".codex/harness/evaluation_tasks.toml, quality_tasks.toml, redteam_tasks.toml, scripts/agent_harness_probe.py를 함께 읽어 하네스 회귀 증거의 PASS/WAIT/FAIL 계약을 만든다.",
+      "priority_score": 1850,
+      "reason_ko": "evaluation, 첫 판단 품질, redteam 하네스 묶음은 존재하지만, strict harness가 무엇을 PASS/WAIT/FAIL로 보존해야 하는지 후보 단위로 아직 닫혀 있지 않다.",
+      "recommended_candidate_id": "candidate-agent-harness-regression-liveness-contract",
+      "required_inputs": [
+        "automation/autonomous-work-execution-last-run:LAST_RUN.md",
+        "automation/released-work-last-run:released_work.json",
+        "automation/pipeline-liveness-last-run:LAST_RUN.md",
+        "AGENTS.md",
+        "CLAUDE.md",
+        "HANDOFF.md",
+        ".codex/quality-gate.md",
+        "scripts/local_concurrency_guard.py",
+        ".codex/hooks.json",
+        ".githooks/pre-commit",
+        ".githooks/pre-push",
+        ".codex/state/concurrency",
+        ".codex/harness/evaluation_tasks.toml",
+        ".codex/harness/quality_tasks.toml",
+        ".codex/harness/redteam_tasks.toml",
+        "scripts/check_handoff_facts.py",
+        "scripts/agent_harness_probe.py",
+        ".github/pull_request_template.md",
+        ".github/workflows/pr-quality-gate.yml"
+      ],
+      "title_ko": "agent harness 회귀 생존성 계약"
+    },
+    {
+      "coverage_status": "released",
+      "frontier_key": "operator_report_liveness",
+      "label_ko": "운영자 이해 가능 보고 생존성",
+      "next_action_ko": "AGENTS.md 보고 기준, .codex/quality-gate.md, PR 템플릿, QUALITY-006, HANDOFF와 released-work 증거를 함께 읽어 운영자가 다시 묻지 않아도 되는 완료 보고의 PASS/WAIT/FAIL 계약을 만든다.",
+      "priority_score": 1750,
+      "reason_ko": "AGENTS.md, quality gate, PR 템플릿, 첫 판단 품질 과제는 완료 보고의 의미 전달을 요구하지만, 최종 보고가 실제 운영 상태 변화·검증·남은 위험을 후보 단위로 보존하는 계약은 아직 닫혀 있지 않다.",
+      "recommended_candidate_id": "candidate-operator-report-liveness-contract",
+      "required_inputs": [
+        "automation/autonomous-work-execution-last-run:LAST_RUN.md",
+        "automation/released-work-last-run:released_work.json",
+        "automation/pipeline-liveness-last-run:LAST_RUN.md",
+        "AGENTS.md",
+        "CLAUDE.md",
+        "HANDOFF.md",
+        ".codex/quality-gate.md",
+        "scripts/local_concurrency_guard.py",
+        ".codex/hooks.json",
+        ".githooks/pre-commit",
+        ".githooks/pre-push",
+        ".codex/state/concurrency",
+        ".codex/harness/evaluation_tasks.toml",
+        ".codex/harness/quality_tasks.toml",
+        ".codex/harness/redteam_tasks.toml",
+        "scripts/check_handoff_facts.py",
+        "scripts/agent_harness_probe.py",
+        ".github/pull_request_template.md",
+        ".github/workflows/pr-quality-gate.yml"
+      ],
+      "title_ko": "운영자 이해 가능 보고 생존성 계약"
+    }
+  ],
+  "broad_no_edge_frontier_map": [
+    {
+      "coverage_status": "released",
+      "frontier_key": "asset_universe_rotation",
+      "label_ko": "자산군 확장과 방어 회전",
+      "next_action_ko": "public-data, rebalance-paper-forward, money-path를 함께 읽어 주식·현금성·채권성·방어 자산군 대체 후보의 no-live 후보군과 제외 기준을 SDD로 정의한다.",
+      "priority_score": 2490,
+      "reason_ko": "기존 비교 트랙이 모두 NO_EDGE라면 같은 자산군 안에서 신호만 바꾸는 탐색은 충분히 넓지 않다.",
+      "recommended_candidate_id": "candidate-broad-no-edge-asset-universe-rotation-experiment",
+      "required_inputs": [
+        "automation/released-work-last-run:released_work.json",
+        "automation/autonomous-evolution-last-run:candidate_backlog.json",
+        "automation/autonomous-evolution-last-run:learning_ledger.json",
+        "automation/candidate-implementation-factory-last-run:candidate_factory.json",
+        "automation/candidate-implementation-factory-last-run:candidate_packages.json",
+        "automation/candidate-implementation-results:candidate_results.json",
+        "automation/money-path-last-run:LAST_RUN.md",
+        "automation/edge-autoarm-last-run:LAST_RUN.md",
+        "automation/pipeline-liveness-last-run:LAST_RUN.md",
+        "automation/rebalance-paper-forward-last-run:LAST_RUN.md",
+        "automation/capital-path-readiness-last-run:capital_path_readiness.json",
+        "automation/public-data:LAST_RUN.md",
+        "automation/public-data:summary.json",
+        "automation/public-data:regime.json",
+        "automation/public-data:regime_timeline.csv",
+        "automation/regime-stratify-last-run:LAST_RUN.md",
+        "automation/execution-quality-last-run:LAST_RUN.md",
+        "automation/kis-smoke-last-run:LAST_RUN.md",
+        "automation/rebalance-micro-gtaa-last-run:LAST_RUN.md"
+      ],
+      "review_axes": [
+        "strategy_family",
+        "asset_universe"
+      ],
+      "title_ko": "광역 자산군 방어 회전 no-live 실험 설계",
+      "work_domain_key": "strategy_design"
+    },
+    {
+      "coverage_status": "released",
+      "frontier_key": "multi_horizon_signal",
+      "label_ko": "다중 보유 기간과 신호군",
+      "next_action_ko": "rebalance-paper-forward와 learning ledger를 읽어 단기·중기·장기 보유 기간과 trend·carry·quality·volatility 신호군을 분리한 no-live 실험 후보를 만든다.",
+      "priority_score": 2390,
+      "reason_ko": "단일 보유 기간이나 유사한 momentum 신호만 반복하면 엣지가 없는 구간을 계속 같은 방식으로 재측정할 수 있다.",
+      "recommended_candidate_id": "candidate-broad-no-edge-multi-horizon-signal-experiment",
+      "required_inputs": [
+        "automation/released-work-last-run:released_work.json",
+        "automation/autonomous-evolution-last-run:candidate_backlog.json",
+        "automation/autonomous-evolution-last-run:learning_ledger.json",
+        "automation/candidate-implementation-factory-last-run:candidate_factory.json",
+        "automation/candidate-implementation-factory-last-run:candidate_packages.json",
+        "automation/candidate-implementation-results:candidate_results.json",
+        "automation/money-path-last-run:LAST_RUN.md",
+        "automation/edge-autoarm-last-run:LAST_RUN.md",
+        "automation/pipeline-liveness-last-run:LAST_RUN.md",
+        "automation/rebalance-paper-forward-last-run:LAST_RUN.md",
+        "automation/capital-path-readiness-last-run:capital_path_readiness.json",
+        "automation/public-data:LAST_RUN.md",
+        "automation/public-data:summary.json",
+        "automation/public-data:regime.json",
+        "automation/public-data:regime_timeline.csv",
+        "automation/regime-stratify-last-run:LAST_RUN.md",
+        "automation/execution-quality-last-run:LAST_RUN.md",
+        "automation/kis-smoke-last-run:LAST_RUN.md",
+        "automation/rebalance-micro-gtaa-last-run:LAST_RUN.md"
+      ],
+      "review_axes": [
+        "signal_family",
+        "holding_period"
+      ],
+      "title_ko": "다중 보유 기간 신호군 no-live 실험 설계",
+      "work_domain_key": "strategy_design"
+    },
+    {
+      "coverage_status": "released",
+      "frontier_key": "regime_cost_robustness",
+      "label_ko": "레짐과 비용 견고성",
+      "next_action_ko": "regime-stratify, execution-quality, money-path 증거를 함께 읽어 레짐 구간별 통과 기준과 비용 민감도 stress test를 no-live 계약으로 정의한다.",
+      "priority_score": 2290,
+      "reason_ko": "paper 성과가 비용, 슬리피지, 레짐 전환에 약하면 실제 돈 경로로 올라갈 수 없다.",
+      "recommended_candidate_id": "candidate-broad-no-edge-regime-cost-robustness-experiment",
+      "required_inputs": [
+        "automation/released-work-last-run:released_work.json",
+        "automation/autonomous-evolution-last-run:candidate_backlog.json",
+        "automation/autonomous-evolution-last-run:learning_ledger.json",
+        "automation/candidate-implementation-factory-last-run:candidate_factory.json",
+        "automation/candidate-implementation-factory-last-run:candidate_packages.json",
+        "automation/candidate-implementation-results:candidate_results.json",
+        "automation/money-path-last-run:LAST_RUN.md",
+        "automation/edge-autoarm-last-run:LAST_RUN.md",
+        "automation/pipeline-liveness-last-run:LAST_RUN.md",
+        "automation/rebalance-paper-forward-last-run:LAST_RUN.md",
+        "automation/capital-path-readiness-last-run:capital_path_readiness.json",
+        "automation/public-data:LAST_RUN.md",
+        "automation/public-data:summary.json",
+        "automation/public-data:regime.json",
+        "automation/public-data:regime_timeline.csv",
+        "automation/regime-stratify-last-run:LAST_RUN.md",
+        "automation/execution-quality-last-run:LAST_RUN.md",
+        "automation/kis-smoke-last-run:LAST_RUN.md",
+        "automation/rebalance-micro-gtaa-last-run:LAST_RUN.md"
+      ],
+      "review_axes": [
+        "regime_window",
+        "cost_sensitivity"
+      ],
+      "title_ko": "레짐·비용 견고성 no-live 실험 설계",
+      "work_domain_key": "strategy_design"
+    },
+    {
+      "coverage_status": "released",
+      "frontier_key": "data_gap_causal_audit",
+      "label_ko": "데이터 결측 원인 감사",
+      "next_action_ko": "public-data summary, regime.json, regime_timeline.csv를 읽어 데이터 결측 원인이 no-edge 판정에 끼친 영향을 분리하는 읽기 전용 감사를 정의한다.",
+      "priority_score": 2190,
+      "reason_ko": "엣지가 없다는 결론이 진짜 전략 문제인지, 공개 데이터 범위·조인·레짐 라벨 결측 때문인지 분리해야 한다.",
+      "recommended_candidate_id": "candidate-broad-no-edge-data-gap-audit",
+      "required_inputs": [
+        "automation/released-work-last-run:released_work.json",
+        "automation/autonomous-evolution-last-run:candidate_backlog.json",
+        "automation/autonomous-evolution-last-run:learning_ledger.json",
+        "automation/candidate-implementation-factory-last-run:candidate_factory.json",
+        "automation/candidate-implementation-factory-last-run:candidate_packages.json",
+        "automation/candidate-implementation-results:candidate_results.json",
+        "automation/money-path-last-run:LAST_RUN.md",
+        "automation/edge-autoarm-last-run:LAST_RUN.md",
+        "automation/pipeline-liveness-last-run:LAST_RUN.md",
+        "automation/rebalance-paper-forward-last-run:LAST_RUN.md",
+        "automation/capital-path-readiness-last-run:capital_path_readiness.json",
+        "automation/public-data:LAST_RUN.md",
+        "automation/public-data:summary.json",
+        "automation/public-data:regime.json",
+        "automation/public-data:regime_timeline.csv",
+        "automation/regime-stratify-last-run:LAST_RUN.md",
+        "automation/execution-quality-last-run:LAST_RUN.md",
+        "automation/kis-smoke-last-run:LAST_RUN.md",
+        "automation/rebalance-micro-gtaa-last-run:LAST_RUN.md"
+      ],
+      "review_axes": [
+        "data_missing_cause",
+        "regime_window"
+      ],
+      "title_ko": "NO_EDGE 데이터 결측 원인 감사",
+      "work_domain_key": "data_quality"
+    },
+    {
+      "coverage_status": "released",
+      "frontier_key": "cross_asset_relative_value",
+      "label_ko": "자산 간 상대가치와 현금 대체",
+      "next_action_ko": "rebalance-paper-forward, public-data, regime-stratify, money-path를 함께 읽어 주식·채권·원자재·현금성 자산 간 상대가치 no-live 후보와 제외 기준을 SDD로 정의한다.",
+      "priority_score": 2090,
+      "reason_ko": "자산군·신호·레짐·데이터 결측 축을 모두 닫았는데도 NO_EDGE_YET가 계속되면, 절대 모멘텀만 보지 말고 자산 간 스프레드와 현금 대체 수익률을 함께 비교해야 한다.",
+      "recommended_candidate_id": "candidate-broad-no-edge-cross-asset-relative-value-experiment",
+      "required_inputs": [
+        "automation/released-work-last-run:released_work.json",
+        "automation/autonomous-evolution-last-run:candidate_backlog.json",
+        "automation/autonomous-evolution-last-run:learning_ledger.json",
+        "automation/candidate-implementation-factory-last-run:candidate_factory.json",
+        "automation/candidate-implementation-factory-last-run:candidate_packages.json",
+        "automation/candidate-implementation-results:candidate_results.json",
+        "automation/money-path-last-run:LAST_RUN.md",
+        "automation/edge-autoarm-last-run:LAST_RUN.md",
+        "automation/pipeline-liveness-last-run:LAST_RUN.md",
+        "automation/rebalance-paper-forward-last-run:LAST_RUN.md",
+        "automation/capital-path-readiness-last-run:capital_path_readiness.json",
+        "automation/public-data:LAST_RUN.md",
+        "automation/public-data:summary.json",
+        "automation/public-data:regime.json",
+        "automation/public-data:regime_timeline.csv",
+        "automation/regime-stratify-last-run:LAST_RUN.md",
+        "automation/execution-quality-last-run:LAST_RUN.md",
+        "automation/kis-smoke-last-run:LAST_RUN.md",
+        "automation/rebalance-micro-gtaa-last-run:LAST_RUN.md"
+      ],
+      "review_axes": [
+        "relative_value_spread",
+        "cash_proxy_yield",
+        "asset_pair"
+      ],
+      "title_ko": "자산 간 상대가치 no-live 실험 설계",
+      "work_domain_key": "strategy_design"
+    },
+    {
+      "coverage_status": "released",
+      "frontier_key": "tail_risk_convexity",
+      "label_ko": "꼬리위험 방어와 볼록성",
+      "next_action_ko": "regime-stratify, execution-quality, rebalance-paper-forward 증거를 함께 읽어 tail-risk 방어 후보, 비용 부담, 레짐별 대기 조건을 no-live 계약으로 만든다.",
+      "priority_score": 1990,
+      "reason_ko": "평균 수익률 엣지가 약한 구간에서는 큰 하락장에서 손실을 줄이는 볼록성 후보가 자본 사다리의 다음 입력이 될 수 있다.",
+      "recommended_candidate_id": "candidate-broad-no-edge-tail-risk-convexity-experiment",
+      "required_inputs": [
+        "automation/released-work-last-run:released_work.json",
+        "automation/autonomous-evolution-last-run:candidate_backlog.json",
+        "automation/autonomous-evolution-last-run:learning_ledger.json",
+        "automation/candidate-implementation-factory-last-run:candidate_factory.json",
+        "automation/candidate-implementation-factory-last-run:candidate_packages.json",
+        "automation/candidate-implementation-results:candidate_results.json",
+        "automation/money-path-last-run:LAST_RUN.md",
+        "automation/edge-autoarm-last-run:LAST_RUN.md",
+        "automation/pipeline-liveness-last-run:LAST_RUN.md",
+        "automation/rebalance-paper-forward-last-run:LAST_RUN.md",
+        "automation/capital-path-readiness-last-run:capital_path_readiness.json",
+        "automation/public-data:LAST_RUN.md",
+        "automation/public-data:summary.json",
+        "automation/public-data:regime.json",
+        "automation/public-data:regime_timeline.csv",
+        "automation/regime-stratify-last-run:LAST_RUN.md",
+        "automation/execution-quality-last-run:LAST_RUN.md",
+        "automation/kis-smoke-last-run:LAST_RUN.md",
+        "automation/rebalance-micro-gtaa-last-run:LAST_RUN.md"
+      ],
+      "review_axes": [
+        "tail_regime",
+        "convexity_proxy",
+        "cost_drag"
+      ],
+      "title_ko": "꼬리위험 방어 no-live 실험 설계",
+      "work_domain_key": "portfolio_design"
+    },
+    {
+      "coverage_status": "released",
+      "frontier_key": "vol_target_drawdown",
+      "label_ko": "변동성 목표와 낙폭 제어",
+      "next_action_ko": "money-path, edge-autoarm, forward verdict, live drawdown evidence를 함께 읽어 변동성 목표·낙폭 제어 no-live 후보와 자본 사다리로 올릴 수 없는 제외 조건을 정의한다.",
+      "priority_score": 1890,
+      "reason_ko": "현재 전략은 칼마가 벤치마크보다 낫지만 PSR이 기준 미달이다. 포지션 진입 신호가 아니라 변동성 목표와 낙폭 제어가 확률 신뢰도를 올릴 수 있는지 분리해야 한다.",
+      "recommended_candidate_id": "candidate-broad-no-edge-vol-target-drawdown-experiment",
+      "required_inputs": [
+        "automation/released-work-last-run:released_work.json",
+        "automation/autonomous-evolution-last-run:candidate_backlog.json",
+        "automation/autonomous-evolution-last-run:learning_ledger.json",
+        "automation/candidate-implementation-factory-last-run:candidate_factory.json",
+        "automation/candidate-implementation-factory-last-run:candidate_packages.json",
+        "automation/candidate-implementation-results:candidate_results.json",
+        "automation/money-path-last-run:LAST_RUN.md",
+        "automation/edge-autoarm-last-run:LAST_RUN.md",
+        "automation/pipeline-liveness-last-run:LAST_RUN.md",
+        "automation/rebalance-paper-forward-last-run:LAST_RUN.md",
+        "automation/capital-path-readiness-last-run:capital_path_readiness.json",
+        "automation/public-data:LAST_RUN.md",
+        "automation/public-data:summary.json",
+        "automation/public-data:regime.json",
+        "automation/public-data:regime_timeline.csv",
+        "automation/regime-stratify-last-run:LAST_RUN.md",
+        "automation/execution-quality-last-run:LAST_RUN.md",
+        "automation/kis-smoke-last-run:LAST_RUN.md",
+        "automation/rebalance-micro-gtaa-last-run:LAST_RUN.md"
+      ],
+      "review_axes": [
+        "volatility_target",
+        "drawdown_control",
+        "psr_sensitivity"
+      ],
+      "title_ko": "변동성 목표 낙폭 제어 no-live 실험 설계",
+      "work_domain_key": "portfolio_design"
+    }
+  ],
+  "broad_validation_failure_frontier_map": [
+    {
+      "coverage_status": "released",
+      "failure_codes": [
+        "execution_failed"
+      ],
+      "frontier_key": "command_replay_contract",
+      "label_ko": "검증 명령 재현 계약",
+      "next_action_ko": "candidate-result-executor와 candidate-packages 증거를 읽어 실패 명령, 허용된 읽기 전용 재현 범위, 종료 코드, stdout/stderr 요약, 다음 진단 action을 기계 판독 계약으로 만든다.",
+      "package_count": 0,
+      "package_kinds": [
+        "strategy_backtest",
+        "portfolio_backtest"
+      ],
+      "priority_score": 2480,
+      "reason_ko": "현재 막힌 패키지는 모두 `execution_failed` 진단이며, 실패 명령·종료 코드·제한 출력이 다음 후보 발굴의 병목이다. 같은 패키지를 막연히 재시도하지 말고 재현 가능한 실패 지문 계약으로 먼저 닫아야 한다.",
+      "recommended_candidate_id": "candidate-broad-validation-failure-command-replay-contract",
+      "required_inputs": [
+        "automation/released-work-last-run:released_work.json",
+        "automation/autonomous-evolution-last-run:candidate_backlog.json",
+        "automation/autonomous-evolution-last-run:learning_ledger.json",
+        "automation/candidate-implementation-factory-last-run:candidate_factory.json",
+        "automation/candidate-implementation-factory-last-run:candidate_packages.json",
+        "automation/candidate-implementation-results:candidate_results.json",
+        "automation/money-path-last-run:LAST_RUN.md",
+        "automation/edge-autoarm-last-run:LAST_RUN.md",
+        "automation/pipeline-liveness-last-run:LAST_RUN.md",
+        "automation/rebalance-paper-forward-last-run:LAST_RUN.md",
+        "automation/capital-path-readiness-last-run:capital_path_readiness.json",
+        "automation/public-data:LAST_RUN.md",
+        "automation/public-data:summary.json",
+        "automation/public-data:regime.json",
+        "automation/public-data:regime_timeline.csv",
+        "automation/regime-stratify-last-run:LAST_RUN.md",
+        "automation/execution-quality-last-run:LAST_RUN.md",
+        "automation/kis-smoke-last-run:LAST_RUN.md",
+        "automation/rebalance-micro-gtaa-last-run:LAST_RUN.md"
+      ],
+      "retryable_count": 0,
+      "review_axes": [
+        "validation_command",
+        "exit_code",
+        "safe_replay",
+        "output_digest"
+      ],
+      "title_ko": "검증 실패 명령 재현 계약",
+      "work_domain_key": "agent_ops"
+    },
+    {
+      "coverage_status": "released",
+      "failure_codes": [
+        "execution_failed"
+      ],
+      "frontier_key": "data_readiness_contract",
+      "label_ko": "검증 데이터 준비도",
+      "next_action_ko": "candidate history support, portfolio TOML, public-data, regime-stratify 증거를 함께 읽어 history root, 관측 기간, 데이터 결측 원인을 검증 패키지별 PASS/WAIT/FAIL로 분리한다.",
+      "package_count": 0,
+      "package_kinds": [
+        "strategy_backtest",
+        "portfolio_backtest"
+      ],
+      "priority_score": 2380,
+      "reason_ko": "두 패키지 모두 후보 history root와 포트폴리오 입력을 요구한다. 실행 실패가 전략 아이디어의 실패인지 데이터 준비 결함인지 분리하지 못하면 엣지 탐색 폭이 실제보다 좁아진다.",
+      "recommended_candidate_id": "candidate-broad-validation-failure-data-readiness-contract",
+      "required_inputs": [
+        "automation/released-work-last-run:released_work.json",
+        "automation/autonomous-evolution-last-run:candidate_backlog.json",
+        "automation/autonomous-evolution-last-run:learning_ledger.json",
+        "automation/candidate-implementation-factory-last-run:candidate_factory.json",
+        "automation/candidate-implementation-factory-last-run:candidate_packages.json",
+        "automation/candidate-implementation-results:candidate_results.json",
+        "automation/money-path-last-run:LAST_RUN.md",
+        "automation/edge-autoarm-last-run:LAST_RUN.md",
+        "automation/pipeline-liveness-last-run:LAST_RUN.md",
+        "automation/rebalance-paper-forward-last-run:LAST_RUN.md",
+        "automation/capital-path-readiness-last-run:capital_path_readiness.json",
+        "automation/public-data:LAST_RUN.md",
+        "automation/public-data:summary.json",
+        "automation/public-data:regime.json",
+        "automation/public-data:regime_timeline.csv",
+        "automation/regime-stratify-last-run:LAST_RUN.md",
+        "automation/execution-quality-last-run:LAST_RUN.md",
+        "automation/kis-smoke-last-run:LAST_RUN.md",
+        "automation/rebalance-micro-gtaa-last-run:LAST_RUN.md"
+      ],
+      "retryable_count": 0,
+      "review_axes": [
+        "history_root",
+        "portfolio_toml",
+        "market_history_coverage"
+      ],
+      "title_ko": "검증 실패 데이터 준비도 계약",
+      "work_domain_key": "data_quality"
+    },
+    {
+      "coverage_status": "released",
+      "failure_codes": [
+        "execution_failed"
+      ],
+      "frontier_key": "package_kind_expansion",
+      "label_ko": "전략·포트폴리오 패키지 분리",
+      "next_action_ko": "strategy_backtest와 portfolio_backtest 실패를 나눠 전략군, 포트폴리오 구성, 보유 기간, 산출 증거별 no-live 후보 축을 재정렬한다.",
+      "package_count": 0,
+      "package_kinds": [
+        "strategy_backtest",
+        "portfolio_backtest"
+      ],
+      "priority_score": 2280,
+      "reason_ko": "막힌 패키지는 전략 백테스트와 포트폴리오 백테스트가 섞여 있다. 둘을 같은 실패로 취급하면 전략군, 포트폴리오 구성, 보유 기간, 산출 증거를 넓히는 순서가 흐려진다.",
+      "recommended_candidate_id": "candidate-broad-validation-failure-package-kind-expansion-contract",
+      "required_inputs": [
+        "automation/released-work-last-run:released_work.json",
+        "automation/autonomous-evolution-last-run:candidate_backlog.json",
+        "automation/autonomous-evolution-last-run:learning_ledger.json",
+        "automation/candidate-implementation-factory-last-run:candidate_factory.json",
+        "automation/candidate-implementation-factory-last-run:candidate_packages.json",
+        "automation/candidate-implementation-results:candidate_results.json",
+        "automation/money-path-last-run:LAST_RUN.md",
+        "automation/edge-autoarm-last-run:LAST_RUN.md",
+        "automation/pipeline-liveness-last-run:LAST_RUN.md",
+        "automation/rebalance-paper-forward-last-run:LAST_RUN.md",
+        "automation/capital-path-readiness-last-run:capital_path_readiness.json",
+        "automation/public-data:LAST_RUN.md",
+        "automation/public-data:summary.json",
+        "automation/public-data:regime.json",
+        "automation/public-data:regime_timeline.csv",
+        "automation/regime-stratify-last-run:LAST_RUN.md",
+        "automation/execution-quality-last-run:LAST_RUN.md",
+        "automation/kis-smoke-last-run:LAST_RUN.md",
+        "automation/rebalance-micro-gtaa-last-run:LAST_RUN.md"
+      ],
+      "retryable_count": 0,
+      "review_axes": [
+        "strategy_family",
+        "portfolio_design",
+        "holding_period"
+      ],
+      "title_ko": "검증 실패 패키지 종류별 frontier 확장",
+      "work_domain_key": "strategy_design"
+    },
+    {
+      "coverage_status": "released",
+      "failure_codes": [
+        "execution_failed"
+      ],
+      "frontier_key": "promotion_recheck_contract",
+      "label_ko": "승격 재검토 조건",
+      "next_action_ko": "learning ledger, autonomous-promotion, candidate-result evidence를 함께 읽어 어떤 실패 지문 변화가 후보 재검토를 허용하는지 결정론적 계약으로 만든다.",
+      "package_count": 0,
+      "package_kinds": [
+        "strategy_backtest",
+        "portfolio_backtest"
+      ],
+      "priority_score": 2180,
+      "reason_ko": "learning ledger가 실패 후보를 억제한 뒤 재검토 조건이 없으면, 실패가 고쳐져도 후보가 닫힌 채 남을 수 있다. 억제 기억은 필요하지만 새 증거가 생겼을 때 되살리는 조건도 필요하다.",
+      "recommended_candidate_id": "candidate-broad-validation-failure-promotion-recheck-contract",
+      "required_inputs": [
+        "automation/released-work-last-run:released_work.json",
+        "automation/autonomous-evolution-last-run:candidate_backlog.json",
+        "automation/autonomous-evolution-last-run:learning_ledger.json",
+        "automation/candidate-implementation-factory-last-run:candidate_factory.json",
+        "automation/candidate-implementation-factory-last-run:candidate_packages.json",
+        "automation/candidate-implementation-results:candidate_results.json",
+        "automation/money-path-last-run:LAST_RUN.md",
+        "automation/edge-autoarm-last-run:LAST_RUN.md",
+        "automation/pipeline-liveness-last-run:LAST_RUN.md",
+        "automation/rebalance-paper-forward-last-run:LAST_RUN.md",
+        "automation/capital-path-readiness-last-run:capital_path_readiness.json",
+        "automation/public-data:LAST_RUN.md",
+        "automation/public-data:summary.json",
+        "automation/public-data:regime.json",
+        "automation/public-data:regime_timeline.csv",
+        "automation/regime-stratify-last-run:LAST_RUN.md",
+        "automation/execution-quality-last-run:LAST_RUN.md",
+        "automation/kis-smoke-last-run:LAST_RUN.md",
+        "automation/rebalance-micro-gtaa-last-run:LAST_RUN.md"
+      ],
+      "retryable_count": 0,
+      "review_axes": [
+        "learning_ledger",
+        "promotion_evidence",
+        "recheck_condition"
+      ],
+      "title_ko": "검증 실패 승격 재검토 계약",
+      "work_domain_key": "review"
+    }
+  ],
+  "commit": "ebfb7cf5173c37506be85285f4dfe8326051fd46",
+  "data_evidence_frontier_map": [
+    {
+      "coverage_status": "released",
+      "frontier_key": "public_data_input_quality",
+      "label_ko": "공개 데이터 입력 품질",
+      "next_action_ko": "public-data summary, regime.json, regime_timeline.csv, regime-stratify, pipeline-liveness를 함께 읽어 공개 데이터 입력 품질 검증 게이트를 만든다.",
+      "priority_score": 2250,
+      "reason_ko": "public-data sidecar는 발행 항목과 교차 검증 요약을 갖고 있지만, 그 범위·누락·검증 상태를 다음 투자 후보의 입력 품질 계약으로 고정하지 않았다.",
+      "recommended_candidate_id": "candidate-public-data-input-quality-contract",
+      "required_inputs": [
+        "automation/public-data:LAST_RUN.md",
+        "automation/public-data:summary.json",
+        "automation/public-data:regime.json",
+        "automation/public-data:regime_timeline.csv",
+        "automation/regime-stratify-last-run:LAST_RUN.md",
+        "automation/pipeline-liveness-last-run:LAST_RUN.md",
+        "automation/released-work-last-run:released_work.json",
+        "automation/capital-path-readiness-last-run:capital_path_readiness.json"
+      ],
+      "title_ko": "공개 데이터 입력 품질 계약"
+    },
+    {
+      "coverage_status": "released",
+      "frontier_key": "regime_timeline_coverage",
+      "label_ko": "레짐 타임라인 커버리지",
+      "next_action_ko": "regime_timeline.csv와 regime-stratify 결과를 읽어 라벨 커버리지, 레짐별 관측 수, 전망적 조인 품질을 검증하는 후보를 만든다.",
+      "priority_score": 2150,
+      "reason_ko": "레짐 층화는 public-data 타임라인에 의존하지만, 라벨 결측·관측 수·전망적 조인 품질을 별도 후보로 닫지 않았다.",
+      "recommended_candidate_id": "candidate-regime-timeline-coverage-contract",
+      "required_inputs": [
+        "automation/public-data:LAST_RUN.md",
+        "automation/public-data:summary.json",
+        "automation/public-data:regime.json",
+        "automation/public-data:regime_timeline.csv",
+        "automation/regime-stratify-last-run:LAST_RUN.md",
+        "automation/pipeline-liveness-last-run:LAST_RUN.md",
+        "automation/released-work-last-run:released_work.json",
+        "automation/capital-path-readiness-last-run:capital_path_readiness.json"
+      ],
+      "title_ko": "레짐 타임라인 커버리지 계약"
+    },
+    {
+      "coverage_status": "released",
+      "frontier_key": "data_evidence_liveness",
+      "label_ko": "데이터 증거 생존성",
+      "next_action_ko": "pipeline-liveness의 collect-public-data와 regime-stratify 체크를 데이터 품질 후보의 PASS/WAIT/FAIL 기준으로 분리한다.",
+      "priority_score": 2050,
+      "reason_ko": "pipeline-liveness는 public-data와 regime-stratify 신선도를 보여주지만, 데이터 품질 후보 관점의 대기·복구 기준은 분리돼 있지 않다.",
+      "recommended_candidate_id": "candidate-data-evidence-liveness-contract",
+      "required_inputs": [
+        "automation/public-data:LAST_RUN.md",
+        "automation/public-data:summary.json",
+        "automation/public-data:regime.json",
+        "automation/public-data:regime_timeline.csv",
+        "automation/regime-stratify-last-run:LAST_RUN.md",
+        "automation/pipeline-liveness-last-run:LAST_RUN.md",
+        "automation/released-work-last-run:released_work.json",
+        "automation/capital-path-readiness-last-run:capital_path_readiness.json"
+      ],
+      "title_ko": "데이터 증거 생존성 계약"
+    }
+  ],
+  "evidence_surfaces": [
+    {
+      "key": "capital-path-readiness",
+      "parse_status": "ok",
+      "present": true,
+      "source_ref": "automation/capital-path-readiness-last-run:capital_path_readiness.json",
+      "summary_ko": "readiness=ACCUMULATING_EDGE, live=PREVIEW_ONLY"
+    },
+    {
+      "key": "evolution-backlog",
+      "parse_status": "ok",
+      "present": true,
+      "source_ref": "automation/autonomous-evolution-last-run:candidate_backlog.json",
+      "summary_ko": "candidates=10"
+    },
+    {
+      "key": "evolution-ledger",
+      "parse_status": "ok",
+      "present": true,
+      "source_ref": "automation/autonomous-evolution-last-run:learning_ledger.json",
+      "summary_ko": "entries=5"
+    },
+    {
+      "key": "autonomous-promotion",
+      "parse_status": "ok",
+      "present": true,
+      "source_ref": "automation/autonomous-promotion-last-run:promotion_summary.json",
+      "summary_ko": "overall=ok"
+    },
+    {
+      "key": "candidate-implementation-factory",
+      "parse_status": "ok",
+      "present": true,
+      "source_ref": "automation/candidate-implementation-factory-last-run:candidate_factory.json",
+      "summary_ko": "overall=degraded"
+    },
+    {
+      "key": "candidate-packages",
+      "parse_status": "ok",
+      "present": true,
+      "source_ref": "automation/candidate-implementation-factory-last-run:candidate_packages.json",
+      "summary_ko": "packages=2"
+    },
+    {
+      "key": "candidate-result-executor",
+      "parse_status": "ok",
+      "present": true,
+      "source_ref": "automation/candidate-implementation-results:candidate_results.json",
+      "summary_ko": "results=2"
+    },
+    {
+      "key": "profit-evidence-engine",
+      "parse_status": "ok",
+      "present": true,
+      "source_ref": "automation/profit-evidence-engine-last-run:profit_evidence.json",
+      "summary_ko": "구조화 JSON 존재"
+    },
+    {
+      "key": "strategy-factory",
+      "parse_status": "ok",
+      "present": true,
+      "source_ref": "automation/autonomous-strategy-factory-last-run:strategy_factory.json",
+      "summary_ko": "candidates=64"
+    },
+    {
+      "key": "ml-edge-ensemble",
+      "parse_status": "ok",
+      "present": true,
+      "source_ref": "automation/ml-edge-ensemble-last-run:report.json",
+      "summary_ko": "구조화 JSON 존재"
+    },
+    {
+      "key": "daily-cross-asset-ml",
+      "parse_status": "ok",
+      "present": true,
+      "source_ref": "automation/daily-cross-asset-ml-last-run:report.json",
+      "summary_ko": "구조화 JSON 존재"
+    },
+    {
+      "key": "rebalance-paper-forward",
+      "parse_status": "ok",
+      "present": true,
+      "source_ref": "automation/rebalance-paper-forward-last-run:LAST_RUN.md",
+      "summary_ko": "구조화 JSON 존재"
+    },
+    {
+      "key": "edge-autoarm",
+      "parse_status": "ok",
+      "present": true,
+      "source_ref": "automation/edge-autoarm-last-run:LAST_RUN.md",
+      "summary_ko": "구조화 JSON 존재"
+    },
+    {
+      "key": "money-path",
+      "parse_status": "ok",
+      "present": true,
+      "source_ref": "automation/money-path-last-run:LAST_RUN.md",
+      "summary_ko": "구조화 JSON 존재"
+    },
+    {
+      "key": "execution-quality",
+      "parse_status": "ok",
+      "present": true,
+      "source_ref": "automation/execution-quality-last-run:LAST_RUN.md",
+      "summary_ko": "overall=OBSERVE"
+    },
+    {
+      "key": "kis-smoke",
+      "parse_status": "ok",
+      "present": true,
+      "source_ref": "automation/kis-smoke-last-run:LAST_RUN.md",
+      "summary_ko": "state=success, exit=0"
+    },
+    {
+      "key": "rebalance-micro-gtaa",
+      "parse_status": "ok",
+      "present": true,
+      "source_ref": "automation/rebalance-micro-gtaa-last-run:LAST_RUN.md",
+      "summary_ko": "signal=INTENT_LOSS"
+    },
+    {
+      "key": "public-data",
+      "parse_status": "ok",
+      "present": true,
+      "source_ref": "automation/public-data:LAST_RUN.md",
+      "summary_ko": "overall_ok=True, published=11"
+    },
+    {
+      "key": "regime-stratify",
+      "parse_status": "ok",
+      "present": true,
+      "source_ref": "automation/regime-stratify-last-run:LAST_RUN.md",
+      "summary_ko": "total_return_days=752"
+    },
+    {
+      "key": "released-work",
+      "parse_status": "ok",
+      "present": true,
+      "source_ref": "automation/released-work-last-run:released_work.json",
+      "summary_ko": "overall=OK"
+    },
+    {
+      "key": "pipeline-liveness",
+      "parse_status": "ok",
+      "present": true,
+      "source_ref": "automation/pipeline-liveness-last-run:LAST_RUN.md",
+      "summary_ko": "overall=OK"
+    }
+  ],
+  "execution_quality_frontier_map": [
+    {
+      "coverage_status": "released",
+      "frontier_key": "broker_rejection_taxonomy",
+      "label_ko": "브로커 거부 분류",
+      "next_action_ko": "execution-quality, rebalance-micro-gtaa, kis-smoke 증거를 함께 읽어 브로커 거부 코드·원인·재발 가능성을 분류하는 읽기 전용 계약을 만든다.",
+      "priority_score": 2150,
+      "reason_ko": "execution-quality sidecar는 거부 주문과 KIS 오류 코드를 관측하지만, 거부 원인 분류와 재발 기준은 별도 후보로 닫혀 있지 않다.",
+      "recommended_candidate_id": "candidate-broker-rejection-taxonomy-contract",
+      "required_inputs": [
+        "automation/execution-quality-last-run:LAST_RUN.md",
+        "automation/kis-smoke-last-run:LAST_RUN.md",
+        "automation/rebalance-micro-gtaa-last-run:LAST_RUN.md",
+        "automation/money-path-last-run:LAST_RUN.md",
+        "automation/pipeline-liveness-last-run:LAST_RUN.md",
+        "automation/released-work-last-run:released_work.json",
+        "automation/capital-path-readiness-last-run:capital_path_readiness.json"
+      ],
+      "title_ko": "브로커 거부 분류 계약"
+    },
+    {
+      "coverage_status": "released",
+      "frontier_key": "execution_cost_basis",
+      "label_ko": "체결 비용 기준",
+      "next_action_ko": "execution-quality와 money-path 증거를 읽어 실제 비용 기준이 충분한지와 관측 대기 상태를 분리하는 읽기 전용 계약을 만든다.",
+      "priority_score": 2050,
+      "reason_ko": "비용 차감 엣지 후보는 execution-quality를 읽지만, accepted fill 비용 기준의 충분성은 아직 독립 후보로 닫혀 있지 않다.",
+      "recommended_candidate_id": "candidate-execution-cost-basis-contract",
+      "required_inputs": [
+        "automation/execution-quality-last-run:LAST_RUN.md",
+        "automation/kis-smoke-last-run:LAST_RUN.md",
+        "automation/rebalance-micro-gtaa-last-run:LAST_RUN.md",
+        "automation/money-path-last-run:LAST_RUN.md",
+        "automation/pipeline-liveness-last-run:LAST_RUN.md",
+        "automation/released-work-last-run:released_work.json",
+        "automation/capital-path-readiness-last-run:capital_path_readiness.json"
+      ],
+      "title_ko": "체결 비용 기준 계약"
+    },
+    {
+      "coverage_status": "released",
+      "frontier_key": "broker_diagnostic_liveness",
+      "label_ko": "브로커 진단 생존성",
+      "next_action_ko": "kis-smoke, execution-quality, pipeline-liveness를 함께 읽어 브로커 진단 증거의 생존성 기준을 읽기 전용 계약으로 고정한다.",
+      "priority_score": 1950,
+      "reason_ko": "KIS smoke와 execution-quality는 신선도와 성공 상태를 보여주지만, 체결 품질 후보 관점의 PASS/WAIT/FAIL 계약은 아직 분리돼 있지 않다.",
+      "recommended_candidate_id": "candidate-broker-diagnostic-liveness-contract",
+      "required_inputs": [
+        "automation/execution-quality-last-run:LAST_RUN.md",
+        "automation/kis-smoke-last-run:LAST_RUN.md",
+        "automation/rebalance-micro-gtaa-last-run:LAST_RUN.md",
+        "automation/money-path-last-run:LAST_RUN.md",
+        "automation/pipeline-liveness-last-run:LAST_RUN.md",
+        "automation/released-work-last-run:released_work.json",
+        "automation/capital-path-readiness-last-run:capital_path_readiness.json"
+      ],
+      "title_ko": "브로커 진단 생존성 계약"
+    }
+  ],
+  "investment_edge_frontier_map": [
+    {
+      "coverage_status": "released",
+      "frontier_key": "forward_regime_edge",
+      "label_ko": "forward 레짐 엣지",
+      "next_action_ko": "rebalance-paper-forward, money-path, released-work, learning ledger를 함께 읽어 레짐별 forward edge no-live 실험 계약과 검증 기준을 SDD로 만든다.",
+      "priority_score": 2350,
+      "reason_ko": "forward verdict 관측과 레짐 성과 증거는 존재하지만, 레짐별 견고성을 다음 no-live 실험 후보로 분리한 계약은 아직 없다.",
+      "recommended_candidate_id": "candidate-forward-regime-edge-experiment",
+      "required_inputs": [
+        "automation/autonomous-strategy-factory-last-run:strategy_factory.json",
+        "automation/rebalance-paper-forward-last-run:LAST_RUN.md",
+        "automation/money-path-last-run:LAST_RUN.md",
+        "automation/released-work-last-run:released_work.json",
+        "automation/autonomous-evolution-last-run:learning_ledger.json",
+        "automation/pipeline-liveness-last-run:LAST_RUN.md"
+      ],
+      "title_ko": "forward 레짐 엣지 no-live 실험 설계"
+    },
+    {
+      "coverage_status": "released",
+      "frontier_key": "signal_diversification_edge",
+      "label_ko": "신호 다변화 엣지",
+      "next_action_ko": "기존 forward verdict와 released-work를 읽어 상관이 낮은 신호 후보군을 no-live 실험 후보로 분리한다.",
+      "priority_score": 2250,
+      "reason_ko": "기존 forward 후보가 특정 신호·전략군에 치우치면 세계 수준의 투자 엣지 탐색 폭이 좁아진다.",
+      "recommended_candidate_id": "candidate-signal-diversification-edge-experiment",
+      "required_inputs": [
+        "automation/autonomous-strategy-factory-last-run:strategy_factory.json",
+        "automation/rebalance-paper-forward-last-run:LAST_RUN.md",
+        "automation/money-path-last-run:LAST_RUN.md",
+        "automation/released-work-last-run:released_work.json",
+        "automation/autonomous-evolution-last-run:learning_ledger.json",
+        "automation/pipeline-liveness-last-run:LAST_RUN.md"
+      ],
+      "title_ko": "신호 다변화 no-live 엣지 실험 설계"
+    },
+    {
+      "coverage_status": "released",
+      "frontier_key": "cost_adjusted_edge",
+      "label_ko": "비용 차감 엣지",
+      "next_action_ko": "forward verdict, execution-quality, money-path 증거를 함께 읽어 비용 차감 no-live 실험 후보와 통과 기준을 만든다.",
+      "priority_score": 2150,
+      "reason_ko": "paper 성과가 실제 돈으로 이어지려면 비용과 슬리피지에 둔감한 엣지를 분리해 검증해야 한다.",
+      "recommended_candidate_id": "candidate-cost-adjusted-edge-experiment",
+      "required_inputs": [
+        "automation/autonomous-strategy-factory-last-run:strategy_factory.json",
+        "automation/rebalance-paper-forward-last-run:LAST_RUN.md",
+        "automation/money-path-last-run:LAST_RUN.md",
+        "automation/released-work-last-run:released_work.json",
+        "automation/autonomous-evolution-last-run:learning_ledger.json",
+        "automation/pipeline-liveness-last-run:LAST_RUN.md"
+      ],
+      "title_ko": "거래 비용 차감 no-live 엣지 실험 설계"
+    }
+  ],
+  "macro_candidate_map": [
+    {
+      "closed_count": 10,
+      "coverage_status": "active",
+      "domain_key": "investment_edge",
+      "label_ko": "투자 엣지",
+      "next_action_ko": "forward verdict, money-path, released-work, learning ledger를 함께 읽어 투자 엣지 후보 공간을 영역별로 지도화하고 첫 no-live 실험 후보를 생성한다.",
+      "operator_or_blocked_count": 0,
+      "priority_score": 2400,
+      "ready_count": 1,
+      "reason_ko": "최근 후보는 운영 체계 개선에 치우쳤고, 장기 목표는 측정 가능한 투자 성과 성장이다.",
+      "recommended_candidate_id": "candidate-investment-edge-frontier-map",
+      "released_count": 8,
+      "suppressed_count": 2,
+      "title_ko": "투자 엣지 frontier 지도와 실험 후보 재생성",
+      "work_domain_key": "strategy_design"
+    },
+    {
+      "closed_count": 0,
+      "coverage_status": "underexplored",
+      "domain_key": "data_evidence",
+      "label_ko": "데이터 증거",
+      "next_action_ko": "공개 데이터, regime, pipeline-liveness, public-data sidecar의 빈 영역을 지도화해 다음 데이터 품질 후보를 생성한다.",
+      "operator_or_blocked_count": 0,
+      "priority_score": 2300,
+      "ready_count": 0,
+      "reason_ko": "새 투자 후보는 데이터 깊이와 교차 검증 표면이 충분해야 재현 가능하다.",
+      "recommended_candidate_id": "candidate-data-evidence-frontier-map",
+      "released_count": 0,
+      "suppressed_count": 0,
+      "title_ko": "데이터 증거 frontier 지도와 입력 품질 후보 재생성",
+      "work_domain_key": "data_quality"
+    },
+    {
+      "closed_count": 0,
+      "coverage_status": "underexplored",
+      "domain_key": "execution_quality",
+      "label_ko": "체결 품질",
+      "next_action_ko": "execution-quality와 broker 진단 증거를 지도화해 다음 읽기 전용 체결 품질 후보를 생성한다.",
+      "operator_or_blocked_count": 0,
+      "priority_score": 2200,
+      "ready_count": 0,
+      "reason_ko": "투자 엣지가 실제 돈으로 이어지려면 주문 거부, 슬리피지, 지연, 비용 관측이 계속 닫혀야 한다.",
+      "recommended_candidate_id": "candidate-execution-quality-frontier-map",
+      "released_count": 0,
+      "suppressed_count": 0,
+      "title_ko": "체결 품질 frontier 지도와 거래 비용 후보 재생성",
+      "work_domain_key": "execution_quality"
+    },
+    {
+      "closed_count": 0,
+      "coverage_status": "underexplored",
+      "domain_key": "agent_ops",
+      "label_ko": "운영 체계",
+      "next_action_ko": "autonomous-work, released-work, handoff, harness 증거를 지도화해 다음 운영 체계 후보를 생성한다.",
+      "operator_or_blocked_count": 0,
+      "priority_score": 2100,
+      "ready_count": 0,
+      "reason_ko": "후보 생성·검증·인계 루프 자체가 멈추면 다음 세션이 다시 수동 발굴을 반복한다.",
+      "recommended_candidate_id": "candidate-agent-ops-frontier-map",
+      "released_count": 0,
+      "suppressed_count": 0,
+      "title_ko": "운영 체계 frontier 지도와 자율 루프 후보 재생성",
+      "work_domain_key": "agent_ops"
+    }
+  ],
+  "objective_calibration": {
+    "candidate_scores": [
+      {
+        "candidate_id": "candidate-parallel-edge-challenger-9325da7f6b01",
+        "component_scores": {
+          "evidence_readiness": 100,
+          "growth_leverage": 100,
+          "learning_value": 60,
+          "safety_margin": 100,
+          "validation_cost_fit": 70
+        },
+        "explanation_ko": "기존 안전 경계 안에서 검증 가능한 다음 작업 후보입니다.",
+        "priority_score": 9750,
+        "risk_grade": 2,
+        "status": "EXECUTION_READY",
+        "total_score": 92
+      },
+      {
+        "candidate_id": "wait-for-globalfixed-forward-edge",
+        "component_scores": {
+          "evidence_readiness": 100,
+          "growth_leverage": 0,
+          "learning_value": 60,
+          "safety_margin": 100,
+          "validation_cost_fit": 85
+        },
+        "explanation_ko": "기존 안전 경계 안에서 검증 가능한 다음 작업 후보입니다.",
+        "priority_score": 1,
+        "risk_grade": 0,
+        "status": "OBSERVATION_WAIT",
+        "total_score": 64
+      },
+      {
+        "candidate_id": "candidate-fd04772a23c5",
+        "component_scores": {
+          "evidence_readiness": 100,
+          "growth_leverage": 90,
+          "learning_value": 45,
+          "safety_margin": 100,
+          "validation_cost_fit": 85
+        },
+        "explanation_ko": "기존 안전 경계 안에서 검증 가능한 다음 작업 후보입니다.",
+        "priority_score": 2997,
+        "risk_grade": 2,
+        "status": "RELEASED",
+        "total_score": 89
+      },
+      {
+        "candidate_id": "candidate-source-diversification-sidecar-bottleneck",
+        "component_scores": {
+          "evidence_readiness": 100,
+          "growth_leverage": 90,
+          "learning_value": 45,
+          "safety_margin": 100,
+          "validation_cost_fit": 85
+        },
+        "explanation_ko": "기존 안전 경계 안에서 검증 가능한 다음 작업 후보입니다.",
+        "priority_score": 2994,
+        "risk_grade": 2,
+        "status": "RELEASED",
+        "total_score": 89
+      },
+      {
+        "candidate_id": "candidate-88a7e7f07361",
+        "component_scores": {
+          "evidence_readiness": 100,
+          "growth_leverage": 89,
+          "learning_value": 45,
+          "safety_margin": 100,
+          "validation_cost_fit": 85
+        },
+        "explanation_ko": "기존 안전 경계 안에서 검증 가능한 다음 작업 후보입니다.",
+        "priority_score": 2968,
+        "risk_grade": 2,
+        "status": "RELEASED",
+        "total_score": 89
+      },
+      {
+        "candidate_id": "candidate-e481b0309206",
+        "component_scores": {
+          "evidence_readiness": 100,
+          "growth_leverage": 89,
+          "learning_value": 45,
+          "safety_margin": 100,
+          "validation_cost_fit": 85
+        },
+        "explanation_ko": "기존 안전 경계 안에서 검증 가능한 다음 작업 후보입니다.",
+        "priority_score": 2960,
+        "risk_grade": 2,
+        "status": "RELEASED",
+        "total_score": 89
+      },
+      {
+        "candidate_id": "candidate-fa66202bf496",
+        "component_scores": {
+          "evidence_readiness": 100,
+          "growth_leverage": 89,
+          "learning_value": 45,
+          "safety_margin": 100,
+          "validation_cost_fit": 85
+        },
+        "explanation_ko": "기존 안전 경계 안에서 검증 가능한 다음 작업 후보입니다.",
+        "priority_score": 2959,
+        "risk_grade": 2,
+        "status": "RELEASED",
+        "total_score": 89
+      },
+      {
+        "candidate_id": "candidate-dff4f9344b02",
+        "component_scores": {
+          "evidence_readiness": 100,
+          "growth_leverage": 88,
+          "learning_value": 45,
+          "safety_margin": 100,
+          "validation_cost_fit": 85
+        },
+        "explanation_ko": "기존 안전 경계 안에서 검증 가능한 다음 작업 후보입니다.",
+        "priority_score": 2927,
+        "risk_grade": 2,
+        "status": "RELEASED",
+        "total_score": 89
+      },
+      {
+        "candidate_id": "candidate-6ee3370e933d",
+        "component_scores": {
+          "evidence_readiness": 100,
+          "growth_leverage": 87,
+          "learning_value": 45,
+          "safety_margin": 100,
+          "validation_cost_fit": 85
+        },
+        "explanation_ko": "기존 안전 경계 안에서 검증 가능한 다음 작업 후보입니다.",
+        "priority_score": 2924,
+        "risk_grade": 2,
+        "status": "RELEASED",
+        "total_score": 88
+      },
+      {
+        "candidate_id": "candidate-facf2fa31834",
+        "component_scores": {
+          "evidence_readiness": 100,
+          "growth_leverage": 86,
+          "learning_value": 45,
+          "safety_margin": 100,
+          "validation_cost_fit": 85
+        },
+        "explanation_ko": "기존 안전 경계 안에서 검증 가능한 다음 작업 후보입니다.",
+        "priority_score": 2894,
+        "risk_grade": 2,
+        "status": "RELEASED",
+        "total_score": 88
+      },
+      {
+        "candidate_id": "candidate-1ed634d8bf6d",
+        "component_scores": {
+          "evidence_readiness": 100,
+          "growth_leverage": 91,
+          "learning_value": 45,
+          "safety_margin": 100,
+          "validation_cost_fit": 90
+        },
+        "explanation_ko": "기존 안전 경계 안에서 검증 가능한 다음 작업 후보입니다.",
+        "priority_score": 3018,
+        "risk_grade": 2,
+        "status": "SUPPRESSED",
+        "total_score": 90
+      }
+    ],
+    "exploration_budget": {
+      "max_parallel_candidates": 1,
+      "max_ranked_candidates": 10,
+      "max_validation_minutes": 90,
+      "requires_handoff_refresh": true,
+      "requires_pr_quality_gate": true
+    },
+    "learning_metrics": {
+      "blocked_count": 0,
+      "operator_approval_count": 0,
+      "ranked_count": 1,
+      "released_count": 8,
+      "safety_impact_count": 0,
+      "suppressed_count": 10
+    },
+    "objective_version": "autonomous-growth-objective-v1",
+    "selected_candidate_id": "candidate-parallel-edge-challenger-9325da7f6b01",
+    "stop_conditions": [
+      "operator approval required for safety-impact or grade >=4 work",
+      "missing or malformed required sidecar evidence blocks autonomous start",
+      "full pytest, ruff, handoff fact check, strict harness, or PR quality gate failure blocks merge",
+      "WIP or DO NOT MERGE PR body blocks automatic merge"
+    ]
+  },
+  "overall_status": "EXECUTION_READY",
+  "ranked_work": [
+    {
+      "autonomy_level": "CODEX_AUTONOMOUS_START",
+      "blocked_package_refs": [],
+      "candidate_id": "candidate-parallel-edge-challenger-9325da7f6b01",
+      "completion_gates": [
+        "관련 focused pytest 통과",
+        "uv run pytest 통과",
+        "uv run ruff check src tests 통과",
+        "uv run python scripts/check_handoff_facts.py 통과",
+        "uv run python scripts/agent_harness_probe.py --strict 통과",
+        "PR 품질 관문 통과",
+        "필요한 HANDOFF 갱신"
+      ],
+      "domain_key": "strategy_design",
+      "next_action_ko": "공개 데이터·레짐·비용·paper forward를 사용해 기존 후보와 다른 신호군을 시간 분리 walk-forward로 검증하고, 통과하지 못하면 live 승격 없이 기각한다.",
+      "packet_id": "work-e2e6a116d197",
+      "priority_score": 9750,
+      "reason_ko": "현재 전략은 forward 관측 47, PSR 0.60173 < 0.95로 관찰 중이다. 관측 45~49 구간의 증거를 하나의 지문으로 묶고, 기다림과 별도로 신규 no-live 후보를 탐색한다.",
+      "required_inputs": [
+        "automation/profit-evidence-engine-last-run:profit_evidence.json",
+        "automation/rebalance-paper-forward-last-run:LAST_RUN.md",
+        "automation/public-data:LAST_RUN.md",
+        "automation/regime-stratify-last-run:LAST_RUN.md",
+        "automation/execution-quality-last-run:LAST_RUN.md",
+        "automation/released-work-last-run:released_work.json"
+      ],
+      "risk_grade": 2,
+      "safety_boundary": [
+        "no broker API call",
+        "no orders",
+        "no capital allocation",
+        "no live strategy change",
+        "no whitelist/caps change",
+        "no secret read/write",
+        "no external paid service",
+        "work packet only; code/PR/merge stays in Codex review path",
+        "브로커 API 호출 금지",
+        "실제 주문·자본 배분·live 전략 변경 금지"
+      ],
+      "safety_impact": [],
+      "source_refs": [
+        "automation/profit-evidence-engine-last-run:profit_evidence.json",
+        "automation/rebalance-paper-forward-last-run:LAST_RUN.md",
+        "automation/public-data:LAST_RUN.md",
+        "automation/regime-stratify-last-run:LAST_RUN.md",
+        "automation/execution-quality-last-run:LAST_RUN.md",
+        "automation/released-work-last-run:released_work.json"
+      ],
+      "start_guidance_ko": "운영자 추가 질문 없이 새 worktree 또는 브랜치에서 SDD 두께를 판단하고 구현, 검증, PR, 자동 머지 절차로 진행할 수 있다.",
+      "status": "EXECUTION_READY",
+      "title_ko": "실거래 관찰과 병렬인 신규 엣지 challenger",
+      "validation_failure_groups": [],
+      "work_type": "parallel_edge_challenger"
+    }
+  ],
+  "run_id": "32586520696",
+  "safety_invariants": [
+    "no broker API call",
+    "no orders",
+    "no capital allocation",
+    "no live strategy change",
+    "no whitelist/caps change",
+    "no secret read/write",
+    "no external paid service",
+    "work packet only; code/PR/merge stays in Codex review path"
+  ],
+  "schema_version": "1.0",
+  "selected_work": {
+    "autonomy_level": "CODEX_AUTONOMOUS_START",
+    "blocked_package_refs": [],
+    "candidate_id": "candidate-parallel-edge-challenger-9325da7f6b01",
+    "completion_gates": [
+      "관련 focused pytest 통과",
+      "uv run pytest 통과",
+      "uv run ruff check src tests 통과",
+      "uv run python scripts/check_handoff_facts.py 통과",
+      "uv run python scripts/agent_harness_probe.py --strict 통과",
+      "PR 품질 관문 통과",
+      "필요한 HANDOFF 갱신"
+    ],
+    "domain_key": "strategy_design",
+    "next_action_ko": "공개 데이터·레짐·비용·paper forward를 사용해 기존 후보와 다른 신호군을 시간 분리 walk-forward로 검증하고, 통과하지 못하면 live 승격 없이 기각한다.",
+    "packet_id": "work-e2e6a116d197",
+    "priority_score": 9750,
+    "reason_ko": "현재 전략은 forward 관측 47, PSR 0.60173 < 0.95로 관찰 중이다. 관측 45~49 구간의 증거를 하나의 지문으로 묶고, 기다림과 별도로 신규 no-live 후보를 탐색한다.",
+    "required_inputs": [
+      "automation/profit-evidence-engine-last-run:profit_evidence.json",
+      "automation/rebalance-paper-forward-last-run:LAST_RUN.md",
+      "automation/public-data:LAST_RUN.md",
+      "automation/regime-stratify-last-run:LAST_RUN.md",
+      "automation/execution-quality-last-run:LAST_RUN.md",
+      "automation/released-work-last-run:released_work.json"
+    ],
+    "risk_grade": 2,
+    "safety_boundary": [
+      "no broker API call",
+      "no orders",
+      "no capital allocation",
+      "no live strategy change",
+      "no whitelist/caps change",
+      "no secret read/write",
+      "no external paid service",
+      "work packet only; code/PR/merge stays in Codex review path",
+      "브로커 API 호출 금지",
+      "실제 주문·자본 배분·live 전략 변경 금지"
+    ],
+    "safety_impact": [],
+    "source_refs": [
+      "automation/profit-evidence-engine-last-run:profit_evidence.json",
+      "automation/rebalance-paper-forward-last-run:LAST_RUN.md",
+      "automation/public-data:LAST_RUN.md",
+      "automation/regime-stratify-last-run:LAST_RUN.md",
+      "automation/execution-quality-last-run:LAST_RUN.md",
+      "automation/released-work-last-run:released_work.json"
+    ],
+    "start_guidance_ko": "운영자 추가 질문 없이 새 worktree 또는 브랜치에서 SDD 두께를 판단하고 구현, 검증, PR, 자동 머지 절차로 진행할 수 있다.",
+    "status": "EXECUTION_READY",
+    "title_ko": "실거래 관찰과 병렬인 신규 엣지 challenger",
+    "validation_failure_groups": [],
+    "work_type": "parallel_edge_challenger"
+  },
+  "suppressed_work": [
+    {
+      "autonomy_level": "OBSERVATION_WAIT",
+      "blocked_package_refs": [],
+      "candidate_id": "wait-for-globalfixed-forward-edge",
+      "completion_gates": [
+        "새 sidecar 증거 수집",
+        "released-work/autonomous-work 재실행"
+      ],
+      "domain_key": "strategy_design",
+      "next_action_ko": "같은 전략 지문으로 새 독립 forward 관측을 누적하고 profit-evidence와 autonomous-work를 다시 평가한다.",
+      "packet_id": "work-092e37cf7e80",
+      "priority_score": 1,
+      "reason_ko": "three_asset_fixed-w10은 역사 검증을 통과했지만 globalfixed 전진 기준은 미달이다: 관측 47, PSR 0.60173 < 0.95.",
+      "required_inputs": [
+        "automation/profit-evidence-engine-last-run:profit_evidence.json",
+        "automation/rebalance-paper-forward-last-run:LAST_RUN.md",
+        "automation/capital-path-readiness-last-run:capital_path_readiness.json",
+        "automation/released-work-last-run:released_work.json"
+      ],
+      "risk_grade": 0,
+      "safety_boundary": [
+        "no broker API call",
+        "no orders",
+        "no capital allocation",
+        "no live strategy change",
+        "no whitelist/caps change",
+        "no secret read/write",
+        "no external paid service",
+        "work packet only; code/PR/merge stays in Codex review path"
+      ],
+      "safety_impact": [],
+      "source_refs": [
+        "automation/profit-evidence-engine-last-run:profit_evidence.json",
+        "automation/rebalance-paper-forward-last-run:LAST_RUN.md",
+        "automation/capital-path-readiness-last-run:capital_path_readiness.json",
+        "automation/released-work-last-run:released_work.json"
+      ],
+      "start_guidance_ko": "현재는 새 코드 작업을 시작하지 말고 다음 sidecar 갱신 증거를 기다린다.",
+      "status": "OBSERVATION_WAIT",
+      "title_ko": "globalfixed 전진 엣지 관찰",
+      "validation_failure_groups": [],
+      "work_type": "forward_edge_watch"
+    },
+    {
+      "autonomy_level": "CLOSED_RELEASED",
+      "blocked_package_refs": [],
+      "candidate_id": "candidate-fd04772a23c5",
+      "completion_gates": [
+        "released-work 장부 유지"
+      ],
+      "domain_key": "analysis",
+      "next_action_ko": "이미 구현·머지·인계된 후보이므로 다음 후보로 넘어간다.",
+      "packet_id": "work-2c9e2c9c3c96",
+      "priority_score": 2997,
+      "reason_ko": "released-work 장부가 이 후보를 완료 처리했다: 완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "required_inputs": [
+        "automation/autonomous-promotion-last-run:promotion_summary.json",
+        "automation/released-work-last-run:released_work.json"
+      ],
+      "risk_grade": 2,
+      "safety_boundary": [
+        "no broker API call",
+        "no orders",
+        "no capital allocation",
+        "no live strategy change",
+        "no whitelist/caps change",
+        "no secret read/write",
+        "no external paid service",
+        "work packet only; code/PR/merge stays in Codex review path"
+      ],
+      "safety_impact": [],
+      "source_refs": [
+        "automation/autonomous-promotion-last-run:promotion_summary.json",
+        "automation/released-work-last-run:released_work.json"
+      ],
+      "start_guidance_ko": "이미 구현·머지·인계된 후보이므로 다시 착수하지 않는다.",
+      "status": "RELEASED",
+      "title_ko": "제목 없음",
+      "validation_failure_groups": [],
+      "work_type": "analytics_validation"
+    },
+    {
+      "autonomy_level": "CLOSED_RELEASED",
+      "blocked_package_refs": [],
+      "candidate_id": "candidate-source-diversification-sidecar-bottleneck",
+      "completion_gates": [
+        "released-work 장부 유지"
+      ],
+      "domain_key": "analysis",
+      "next_action_ko": "이미 구현·머지·인계된 후보이므로 다음 후보로 넘어간다.",
+      "packet_id": "work-0ddc1686384e",
+      "priority_score": 2994,
+      "reason_ko": "released-work 장부가 이 후보를 완료 처리했다: 완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "required_inputs": [
+        "automation/autonomous-promotion-last-run:promotion_summary.json",
+        "automation/released-work-last-run:released_work.json"
+      ],
+      "risk_grade": 2,
+      "safety_boundary": [
+        "no broker API call",
+        "no orders",
+        "no capital allocation",
+        "no live strategy change",
+        "no whitelist/caps change",
+        "no secret read/write",
+        "no external paid service",
+        "work packet only; code/PR/merge stays in Codex review path"
+      ],
+      "safety_impact": [],
+      "source_refs": [
+        "automation/autonomous-promotion-last-run:promotion_summary.json",
+        "automation/released-work-last-run:released_work.json"
+      ],
+      "start_guidance_ko": "이미 구현·머지·인계된 후보이므로 다시 착수하지 않는다.",
+      "status": "RELEASED",
+      "title_ko": "제목 없음",
+      "validation_failure_groups": [],
+      "work_type": "analytics_validation"
+    },
+    {
+      "autonomy_level": "CLOSED_RELEASED",
+      "blocked_package_refs": [],
+      "candidate_id": "candidate-88a7e7f07361",
+      "completion_gates": [
+        "released-work 장부 유지"
+      ],
+      "domain_key": "analysis",
+      "next_action_ko": "이미 구현·머지·인계된 후보이므로 다음 후보로 넘어간다.",
+      "packet_id": "work-0df8a55123ba",
+      "priority_score": 2968,
+      "reason_ko": "released-work 장부가 이 후보를 완료 처리했다: 완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "required_inputs": [
+        "automation/autonomous-promotion-last-run:promotion_summary.json",
+        "automation/released-work-last-run:released_work.json"
+      ],
+      "risk_grade": 2,
+      "safety_boundary": [
+        "no broker API call",
+        "no orders",
+        "no capital allocation",
+        "no live strategy change",
+        "no whitelist/caps change",
+        "no secret read/write",
+        "no external paid service",
+        "work packet only; code/PR/merge stays in Codex review path"
+      ],
+      "safety_impact": [],
+      "source_refs": [
+        "automation/autonomous-promotion-last-run:promotion_summary.json",
+        "automation/released-work-last-run:released_work.json"
+      ],
+      "start_guidance_ko": "이미 구현·머지·인계된 후보이므로 다시 착수하지 않는다.",
+      "status": "RELEASED",
+      "title_ko": "제목 없음",
+      "validation_failure_groups": [],
+      "work_type": "analytics_validation"
+    },
+    {
+      "autonomy_level": "CLOSED_RELEASED",
+      "blocked_package_refs": [],
+      "candidate_id": "candidate-e481b0309206",
+      "completion_gates": [
+        "released-work 장부 유지"
+      ],
+      "domain_key": "analysis",
+      "next_action_ko": "이미 구현·머지·인계된 후보이므로 다음 후보로 넘어간다.",
+      "packet_id": "work-5bde83d8e6c6",
+      "priority_score": 2960,
+      "reason_ko": "released-work 장부가 이 후보를 완료 처리했다: 완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "required_inputs": [
+        "automation/autonomous-promotion-last-run:promotion_summary.json",
+        "automation/released-work-last-run:released_work.json"
+      ],
+      "risk_grade": 2,
+      "safety_boundary": [
+        "no broker API call",
+        "no orders",
+        "no capital allocation",
+        "no live strategy change",
+        "no whitelist/caps change",
+        "no secret read/write",
+        "no external paid service",
+        "work packet only; code/PR/merge stays in Codex review path"
+      ],
+      "safety_impact": [],
+      "source_refs": [
+        "automation/autonomous-promotion-last-run:promotion_summary.json",
+        "automation/released-work-last-run:released_work.json"
+      ],
+      "start_guidance_ko": "이미 구현·머지·인계된 후보이므로 다시 착수하지 않는다.",
+      "status": "RELEASED",
+      "title_ko": "제목 없음",
+      "validation_failure_groups": [],
+      "work_type": "analytics_validation"
+    },
+    {
+      "autonomy_level": "CLOSED_RELEASED",
+      "blocked_package_refs": [],
+      "candidate_id": "candidate-fa66202bf496",
+      "completion_gates": [
+        "released-work 장부 유지"
+      ],
+      "domain_key": "analysis",
+      "next_action_ko": "이미 구현·머지·인계된 후보이므로 다음 후보로 넘어간다.",
+      "packet_id": "work-4cc491a78202",
+      "priority_score": 2959,
+      "reason_ko": "released-work 장부가 이 후보를 완료 처리했다: 완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "required_inputs": [
+        "automation/autonomous-promotion-last-run:promotion_summary.json",
+        "automation/released-work-last-run:released_work.json"
+      ],
+      "risk_grade": 2,
+      "safety_boundary": [
+        "no broker API call",
+        "no orders",
+        "no capital allocation",
+        "no live strategy change",
+        "no whitelist/caps change",
+        "no secret read/write",
+        "no external paid service",
+        "work packet only; code/PR/merge stays in Codex review path"
+      ],
+      "safety_impact": [],
+      "source_refs": [
+        "automation/autonomous-promotion-last-run:promotion_summary.json",
+        "automation/released-work-last-run:released_work.json"
+      ],
+      "start_guidance_ko": "이미 구현·머지·인계된 후보이므로 다시 착수하지 않는다.",
+      "status": "RELEASED",
+      "title_ko": "제목 없음",
+      "validation_failure_groups": [],
+      "work_type": "analytics_validation"
+    },
+    {
+      "autonomy_level": "CLOSED_RELEASED",
+      "blocked_package_refs": [],
+      "candidate_id": "candidate-dff4f9344b02",
+      "completion_gates": [
+        "released-work 장부 유지"
+      ],
+      "domain_key": "analysis",
+      "next_action_ko": "이미 구현·머지·인계된 후보이므로 다음 후보로 넘어간다.",
+      "packet_id": "work-7a3821c877e5",
+      "priority_score": 2927,
+      "reason_ko": "released-work 장부가 이 후보를 완료 처리했다: 완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "required_inputs": [
+        "automation/autonomous-promotion-last-run:promotion_summary.json",
+        "automation/released-work-last-run:released_work.json"
+      ],
+      "risk_grade": 2,
+      "safety_boundary": [
+        "no broker API call",
+        "no orders",
+        "no capital allocation",
+        "no live strategy change",
+        "no whitelist/caps change",
+        "no secret read/write",
+        "no external paid service",
+        "work packet only; code/PR/merge stays in Codex review path"
+      ],
+      "safety_impact": [],
+      "source_refs": [
+        "automation/autonomous-promotion-last-run:promotion_summary.json",
+        "automation/released-work-last-run:released_work.json"
+      ],
+      "start_guidance_ko": "이미 구현·머지·인계된 후보이므로 다시 착수하지 않는다.",
+      "status": "RELEASED",
+      "title_ko": "제목 없음",
+      "validation_failure_groups": [],
+      "work_type": "analytics_validation"
+    },
+    {
+      "autonomy_level": "CLOSED_RELEASED",
+      "blocked_package_refs": [],
+      "candidate_id": "candidate-6ee3370e933d",
+      "completion_gates": [
+        "released-work 장부 유지"
+      ],
+      "domain_key": "analysis",
+      "next_action_ko": "이미 구현·머지·인계된 후보이므로 다음 후보로 넘어간다.",
+      "packet_id": "work-821895cc1539",
+      "priority_score": 2924,
+      "reason_ko": "released-work 장부가 이 후보를 완료 처리했다: 완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "required_inputs": [
+        "automation/autonomous-promotion-last-run:promotion_summary.json",
+        "automation/released-work-last-run:released_work.json"
+      ],
+      "risk_grade": 2,
+      "safety_boundary": [
+        "no broker API call",
+        "no orders",
+        "no capital allocation",
+        "no live strategy change",
+        "no whitelist/caps change",
+        "no secret read/write",
+        "no external paid service",
+        "work packet only; code/PR/merge stays in Codex review path"
+      ],
+      "safety_impact": [],
+      "source_refs": [
+        "automation/autonomous-promotion-last-run:promotion_summary.json",
+        "automation/released-work-last-run:released_work.json"
+      ],
+      "start_guidance_ko": "이미 구현·머지·인계된 후보이므로 다시 착수하지 않는다.",
+      "status": "RELEASED",
+      "title_ko": "제목 없음",
+      "validation_failure_groups": [],
+      "work_type": "analytics_validation"
+    },
+    {
+      "autonomy_level": "CLOSED_RELEASED",
+      "blocked_package_refs": [],
+      "candidate_id": "candidate-facf2fa31834",
+      "completion_gates": [
+        "released-work 장부 유지"
+      ],
+      "domain_key": "analysis",
+      "next_action_ko": "이미 구현·머지·인계된 후보이므로 다음 후보로 넘어간다.",
+      "packet_id": "work-18ad4945d0c5",
+      "priority_score": 2894,
+      "reason_ko": "released-work 장부가 이 후보를 완료 처리했다: 완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "required_inputs": [
+        "automation/autonomous-promotion-last-run:promotion_summary.json",
+        "automation/released-work-last-run:released_work.json"
+      ],
+      "risk_grade": 2,
+      "safety_boundary": [
+        "no broker API call",
+        "no orders",
+        "no capital allocation",
+        "no live strategy change",
+        "no whitelist/caps change",
+        "no secret read/write",
+        "no external paid service",
+        "work packet only; code/PR/merge stays in Codex review path"
+      ],
+      "safety_impact": [],
+      "source_refs": [
+        "automation/autonomous-promotion-last-run:promotion_summary.json",
+        "automation/released-work-last-run:released_work.json"
+      ],
+      "start_guidance_ko": "이미 구현·머지·인계된 후보이므로 다시 착수하지 않는다.",
+      "status": "RELEASED",
+      "title_ko": "제목 없음",
+      "validation_failure_groups": [],
+      "work_type": "analytics_validation"
+    },
+    {
+      "autonomy_level": "CLOSED_SUPPRESSED",
+      "blocked_package_refs": [],
+      "candidate_id": "candidate-1ed634d8bf6d",
+      "completion_gates": [
+        "learning ledger 억제 사유 유지"
+      ],
+      "domain_key": "analysis",
+      "next_action_ko": "승격 판단과 필요한 검증 evidence를 확인한다.",
+      "packet_id": "work-08043b9ad7c4",
+      "priority_score": 3018,
+      "reason_ko": "learning ledger가 이 후보를 억제했다: 기계 판독 검증 결과에 실패가 있어 승격 증거로 병합하지 않는다.",
+      "required_inputs": [
+        "automation/autonomous-promotion-last-run:promotion_summary.json"
+      ],
+      "risk_grade": 2,
+      "safety_boundary": [
+        "no broker API call",
+        "no orders",
+        "no capital allocation",
+        "no live strategy change",
+        "no whitelist/caps change",
+        "no secret read/write",
+        "no external paid service",
+        "work packet only; code/PR/merge stays in Codex review path"
+      ],
+      "safety_impact": [],
+      "source_refs": [
+        "automation/autonomous-promotion-last-run:promotion_summary.json"
+      ],
+      "start_guidance_ko": "learning ledger가 억제한 후보이므로 새 증거 또는 재검토 조건 없이는 다시 착수하지 않는다.",
+      "status": "SUPPRESSED",
+      "title_ko": "제목 없음",
+      "validation_failure_groups": [],
+      "work_type": "analytics_validation"
+    }
+  ],
+  "timestamp_utc": "2026-08-22T17:02:25Z"
+}
