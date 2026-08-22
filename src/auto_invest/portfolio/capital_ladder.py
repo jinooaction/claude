@@ -355,7 +355,32 @@ def decide_ladder(
             f"forward EDGE_CONFIRMED(관측 {n_obs}), 전략 지문 정합. 단 0→1.",
         )
 
-    # 5. 단 ≥ 1 — 라이브 실적이 유일한 잣대 (내려가는 건 즉시, 올라가는 건 증거).
+    # 5. 첫 체결 전 탐색 승인이 최신 증거에서 사라졌으면 오래된 무장을 회수한다.
+    # 이미 체결된 전략은 위험 축소 거래를 막지 않고 아래 라이브 손실 게이트로 넘긴다.
+    v_label = (
+        forward_verdict.get("verdict") if isinstance(forward_verdict, dict) else None
+    )
+    exploration_ready = (
+        isinstance(exploration_verdict, dict)
+        and exploration_verdict.get("verdict") == "EXPLORATION_CANARY_READY"
+    )
+    live_fills = (
+        live_growth.get("fills_count") if isinstance(live_growth, dict) else None
+    )
+    if (
+        rung == 1
+        and live_fills == 0
+        and v_label != EDGE_CONFIRMED
+        and not exploration_ready
+    ):
+        return _changed(
+            ACTION_DEMOTE,
+            0,
+            "단 1 첫 전략 체결 전 최신 탐색 자격 미달 -> 단 0(무장 해제).",
+            "첫 전략 체결 0건 + 최신 탐색 자격 미달. 단 1->0, 재진입은 최신 forward 재검증부터.",
+        )
+
+    # 6. 단 ≥ 1 — 라이브 실적이 유일한 잣대 (내려가는 건 즉시, 올라가는 건 증거).
     halt_dd = dd_budget_pct
     demote_dd = dd_budget_pct / 2
 

@@ -355,8 +355,63 @@ jobs:
           VULTR_SSH_USER="${SSH_USER:-}" \
           ./scripts/ci_secure_ssh.sh
 
+      - name: Revalidate latest edge before the first strategy fill
+        id: entry_revalidation
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+          CAP: ${{ steps.gate.outputs.capital }}
+        run: |
+          set -uo pipefail
+          branch="automation/profit-evidence-engine-last-run"
+          git fetch --depth=1 origin \
+            "+refs/heads/${branch}:refs/remotes/origin/${branch}" >/tmp/entry_fetch.log 2>&1 || true
+          git show "origin/${branch}:profit_evidence.json" \
+            > /tmp/profit_evidence.json 2>/tmp/profit_evidence.err || echo '{}' > /tmp/profit_evidence.json
+          evidence_epoch="$(git show -s --format=%ct "origin/${branch}" 2>/dev/null || echo 0)"
+          now_epoch="$(date +%s)"
+          evidence_age_hours="$(python3 -c \
+            "print(max(0, int('${now_epoch}')-int('${evidence_epoch}'))/3600 if int('${evidence_epoch}') else 999999)")"
+          port="${PORT:-22}"
+          set +e
+          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "observe exploration-canary" \
+              > /tmp/entry_hardened_canary.json 2>/tmp/entry_hardened_canary.err
+          canary_exit=$?
+          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "live-canary-profit ${CAP}" \
+              > /tmp/entry_live_profit.json 2>/tmp/entry_live_profit.err
+          profit_exit=$?
+          PYTHONPATH=src python3 scripts/live_entry_revalidation_probe.py \
+            --profit-evidence-json /tmp/profit_evidence.json \
+            --hardened-canary-json /tmp/entry_hardened_canary.json \
+            --live-performance-json /tmp/entry_live_profit.json \
+            --evidence-age-hours "${evidence_age_hours}" \
+            > /tmp/entry_revalidation.json
+          revalidation_exit=$?
+          allowed="$(python3 -c \
+            "import json; print(str(json.load(open('/tmp/entry_revalidation.json')).get('allowed', False)).lower())" \
+            2>/dev/null || echo false)"
+          state="$(python3 -c \
+            "import json; print(json.load(open('/tmp/entry_revalidation.json')).get('state', 'ENTRY_BLOCKED'))" \
+            2>/dev/null || echo ENTRY_BLOCKED)"
+          echo "allowed=${allowed}" >> "$GITHUB_OUTPUT"
+          echo "state=${state}" >> "$GITHUB_OUTPUT"
+          {
+            echo "evidence_age_hours=${evidence_age_hours} canary_exit=${canary_exit} profit_exit=${profit_exit}"
+            cat /tmp/entry_revalidation.json
+            cat /tmp/profit_evidence.err /tmp/entry_hardened_canary.err /tmp/entry_live_profit.err 2>/dev/null
+          } > /tmp/entry_revalidation.log
+          cat /tmp/entry_revalidation.log
+          [[ "${canary_exit}" == "0" && "${profit_exit}" == "0" ]] || exit 3
+          exit "${revalidation_exit}"
+
       - name: Authorize request — scheduled runs place real orders
         id: live
+        if: steps.entry_revalidation.outputs.allowed == 'true'
         env:
           HOST: ${{ secrets.VULTR_SSH_HOST }}
           USER: ${{ secrets.VULTR_SSH_USER }}
@@ -471,6 +526,25 @@ jobs:
           echo "exit=${ssh_exit}"; cat /tmp/live_measure.log
           exit "${ssh_exit}"
 
+      - name: Reconcile account after the order attempt
+        id: reconciliation
+        if: always()
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "reconciliation-halt-recovery" \
+              > /tmp/post_trade_reconciliation.json 2>/tmp/post_trade_reconciliation.err
+          ssh_exit=$?
+          echo "ssh_exit=${ssh_exit}" >> "$GITHUB_OUTPUT"
+          cat /tmp/post_trade_reconciliation.json /tmp/post_trade_reconciliation.err
+          exit "${ssh_exit}"
+
       - name: Publish production live canary result to sidecar branch
         if: always()
         env:
@@ -478,9 +552,11 @@ jobs:
           ARMED: ${{ steps.gate.outputs.armed }}
           CAP: ${{ steps.gate.outputs.capital }}
           BLOCKED: ${{ steps.gate.outputs.blocked }}
+          ENTRY_OUTCOME: ${{ steps.entry_revalidation.outcome }}
           LIVE_OUTCOME: ${{ steps.live.outcome }}
           FILLS_OUTCOME: ${{ steps.fills.outcome }}
           MEASURE_OUTCOME: ${{ steps.measure.outcome }}
+          RECONCILIATION_OUTCOME: ${{ steps.reconciliation.outcome }}
           EVENT: ${{ github.event_name }}
         run: |
           set -o pipefail
@@ -498,10 +574,12 @@ jobs:
             echo "| armed (무장 여부) | ${ARMED:-?} |"
             echo "| capital_usd | ${CAP:-?} |"
             echo "| blocked (자본 가드 거부) | ${BLOCKED:-?} |"
+            echo "| 첫 체결 전 최신 엣지 재검증 | ${ENTRY_OUTCOME:-skipped} |"
             echo "| event | ${EVENT:-?} |"
             echo "| LIVE 스텝 | ${LIVE_OUTCOME:-skipped} (success=명령 종료 코드 0) |"
             echo "| 체결 동기화 | ${FILLS_OUTCOME:-skipped} |"
             echo "| 사후 측정 | ${MEASURE_OUTCOME:-skipped} |"
+            echo "| 사후 계좌 정합성 | ${RECONCILIATION_OUTCOME:-skipped} |"
             echo ""
             if [[ "${LIVE_OUTCOME:-skipped}" == "success" ]]; then
               echo "> ⚠ **무장 + production 기계 승인 + 실행** — 예약이면 실주문, 수동이면 주문 없는 검증이다."
@@ -513,6 +591,11 @@ jobs:
             echo "## 드라이런 미리보기 — 무장 시 거래할 내역 (주문 0건)"
             echo '```json'
             echo '(preview job 이 직전 sidecar에 발행함)'
+            echo '```'
+            echo ""
+            echo "## 첫 체결 전 최신 엣지 재검증"
+            echo '```json'
+            cat /tmp/entry_revalidation.log 2>/dev/null || echo '(none)'
             echo '```'
             echo ""
             echo "## 라이브 재조정 결과 (armed=true 일 때만)"
@@ -532,6 +615,12 @@ jobs:
             echo "## 라이브 트랙 측정 (NAV 스냅샷 + forward-verdict --mode live + 칼마)"
             echo '```'
             cat /tmp/live_measure.log 2>/dev/null || echo '(none)'
+            echo '```'
+            echo ""
+            echo "## 사후 계좌 정합성"
+            echo '```json'
+            cat /tmp/post_trade_reconciliation.json 2>/dev/null || echo '{}'
+            cat /tmp/post_trade_reconciliation.err 2>/dev/null || true
             echo '```'
           } > LAST_RUN.md
           git checkout --orphan publish

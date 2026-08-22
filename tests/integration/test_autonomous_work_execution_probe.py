@@ -312,6 +312,46 @@ def test_probe_closed_queue_emits_macro_growth_candidate(tmp_path, capsys):
     assert payload["selected_work"]["status"] == "EXECUTION_READY"
 
 
+def test_forward_wait_emits_parallel_no_live_challenger(tmp_path, capsys):
+    (tmp_path / "profit-evidence-engine.md").write_text(
+        json.dumps(
+            {
+                "historical_verdict": "HOLDOUT_EDGE",
+                "status": "FORWARD_VALIDATION",
+                "selected_candidate": {"candidate_id": "three_asset_fixed-w10"},
+                "forward": {
+                    "track_key": "globalfixed",
+                    "n_obs": 47,
+                    "psr_vs_benchmark": 0.60173,
+                    "threshold": 0.95,
+                    "passed": False,
+                    "verdict": "NO_EDGE",
+                },
+                "deployment_match": {
+                    "candidate_id": "globalfixed-ensemble-3-6-9-12",
+                    "exploration_canary_ready": False,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "pipeline-liveness.md").write_text(
+        '## 결정 JSON\n```json\n{"overall":"OK","checks":[]}\n```\n',
+        encoding="utf-8",
+    )
+
+    rc = probe_main(["--evidence-dir", str(tmp_path), "--json", "--now", "2026-08-22T10:00:00Z"])
+
+    assert rc == 0
+    payload = json.loads(capsys.readouterr().out)
+    selected = payload["selected_work"]
+    assert selected["candidate_id"].startswith("candidate-parallel-edge-challenger-")
+    assert selected["status"] == "EXECUTION_READY"
+    assert selected["work_type"] == "parallel_edge_challenger"
+    suppressed = {row["candidate_id"]: row for row in payload["suppressed_work"]}
+    assert suppressed["wait-for-globalfixed-forward-edge"]["status"] == "OBSERVATION_WAIT"
+
+
 def test_pipeline_liveness_registers_autonomous_work_execution():
     specs = {spec.key: spec for spec in default_specs()}
 
