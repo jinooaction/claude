@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-08-22T11:41:36.324261Z)
+# 완료 후보 소비 장부 (as of 2026-08-22T11:50:04.040700Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -9,7 +9,7 @@
 |------|-----|
 | overall_status | OK |
 | released_count | 60 |
-| scanned_specs | 97 |
+| scanned_specs | 98 |
 
 ## 완료 후보
 
@@ -126,7 +126,6 @@
 | 072-candidate-evidence-diagnostics | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 140-heldout-exploration-canary | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 141-lot-aware-execution-proxy | 체크박스 작업이 없거나 완료되지 않았습니다. |
-| 149-live-entry-revalidation | 체크박스 작업이 없거나 완료되지 않았습니다. |
 
 ## 안전 경계
 
@@ -143,7 +142,7 @@
 
 ```json
 {
-  "commit": "68562946e861363727a344fa3cd1a0ec7584a796",
+  "commit": "8f3f86806b628a69703debc8a0f6ed8dd9ceff84",
   "overall_status": "OK",
   "released_work": [
     {
@@ -795,7 +794,8 @@
     "145-ml-edge-ensemble",
     "146-daily-cross-asset-ml",
     "147-account-ledger-low-turnover",
-    "148-reconciliation-halt-recovery"
+    "148-reconciliation-halt-recovery",
+    "149-live-entry-revalidation"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -982,12 +982,8 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "141-lot-aware-execution-proxy"
-    },
-    {
-      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "149-live-entry-revalidation"
     }
   ],
-  "timestamp_utc": "2026-08-22T11:41:36.324261Z"
+  "timestamp_utc": "2026-08-22T11:50:04.040700Z"
 }
 ```
