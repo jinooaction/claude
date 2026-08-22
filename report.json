@@ -1,0 +1,17 @@
+{
+  "evidence_quality": "VALID",
+  "halt_cleared": false,
+  "halt_present_after": false,
+  "halt_present_before": false,
+  "halt_reason_before": null,
+  "measurement_contract_id": "sha256:2542c0ddd4499481582d820ebee48fadbbfbab9b6208c749d843c025b74288d8",
+  "observed_at_utc": "2026-08-22T16:07:24.445Z",
+  "orders_submitted": 0,
+  "reasons": [],
+  "reconciliation_state": "OK",
+  "remote_exit": 0,
+  "schema_version": "1.0",
+  "status": "CLEAR",
+  "workflow_commit": "f91cc8c94b1f67877bb10fa8011ec58023189983",
+  "workflow_run_id": "32583711050"
+}
