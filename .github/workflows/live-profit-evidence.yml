@@ -59,6 +59,33 @@ jobs:
           VULTR_SSH_USER="${SSH_USER:-}" \
           ./scripts/ci_secure_ssh.sh
 
+      - name: Resolve positive measurement capital without changing live authority
+        id: measurement_capital
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+          AUTHORIZED_CAP: ${{ steps.capital.outputs.value }}
+        run: |
+          set -euo pipefail
+          measurement_capital="${AUTHORIZED_CAP}"
+          if ! python3 -c \
+              'import sys; from decimal import Decimal; sys.exit(0 if Decimal(sys.argv[1]) > 0 else 1)' \
+              "${measurement_capital}"; then
+            ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts \
+              -o ConnectTimeout=15 -p "${PORT:-22}" -i ~/.ssh/id_ed25519 \
+              "${USER}@${HOST}" "observe account-nav" \
+              > /tmp/live_profit_account_nav.json
+            measurement_capital="$(python3 -c \
+              "import json; print(json.load(open('/tmp/live_profit_account_nav.json'))['total_value_usd'])")"
+          fi
+          ./scripts/ci_validate_decimal.sh measurement_capital "${measurement_capital}"
+          python3 -c \
+            'import sys; from decimal import Decimal; sys.exit(0 if Decimal(sys.argv[1]) > 0 else 1)' \
+            "${measurement_capital}"
+          echo "value=${measurement_capital}" >> "${GITHUB_OUTPUT}"
+          echo "authorized_capital=${AUTHORIZED_CAP} measurement_capital=${measurement_capital}"
+
       - name: Sync live fills (fixed read path, no orders)
         id: fills
         continue-on-error: true
@@ -96,7 +123,7 @@ jobs:
           HOST: ${{ secrets.VULTR_SSH_HOST }}
           USER: ${{ secrets.VULTR_SSH_USER }}
           PORT: ${{ secrets.VULTR_SSH_PORT }}
-          CAP: ${{ steps.capital.outputs.value }}
+          CAP: ${{ steps.measurement_capital.outputs.value }}
         run: |
           set +e
           ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts \
@@ -137,6 +164,8 @@ jobs:
           FILLS_EXIT: ${{ steps.fills.outputs.exit }}
           PERFORMANCE_OUTCOME: ${{ steps.performance.outcome }}
           PERFORMANCE_EXIT: ${{ steps.performance.outputs.exit }}
+          AUTHORIZED_CAP: ${{ steps.capital.outputs.value }}
+          MEASUREMENT_CAP: ${{ steps.measurement_capital.outputs.value }}
         run: |
           set -euo pipefail
           BRANCH=automation/live-profit-evidence-last-run
@@ -160,6 +189,8 @@ jobs:
             echo "| trigger | ${GITHUB_EVENT_NAME} |"
             echo "| fills | ${FILLS_OUTCOME:-unknown} (exit=${FILLS_EXIT:-unknown}) |"
             echo "| performance | ${PERFORMANCE_OUTCOME:-unknown} (exit=${PERFORMANCE_EXIT:-unknown}) |"
+            echo "| authorized_capital | ${AUTHORIZED_CAP:-unknown} |"
+            echo "| measurement_capital | ${MEASUREMENT_CAP:-unknown} (read-only PnL denominator) |"
             echo "| safety | fixed read commands only; no orders, cancels, or capital changes |"
           } >> "${tmpdir}/LAST_RUN.md"
 
