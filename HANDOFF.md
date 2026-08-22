@@ -33,17 +33,33 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `54db9f6` — Merge pull request #650 from jinooaction/Codex/149-disarmed-profit-observation |
-| main 테스트 | #644 머지 코드 기준 `uv run pytest` → 2904 passed, 6 skipped. |
-| main 린트 | #644 머지 코드 기준 `uv run ruff check src tests` → All checks passed. |
+| 마지막 main 커밋 | `6856294` — Merge pull request #651 from jinooaction/Codex/149-measurement-capital-scale |
+| main 테스트 | #651 머지 코드 기준 `uv run pytest -q` → 2917 passed, 5 skipped. |
+| main 린트 | #651 머지 코드 기준 `uv run ruff check src tests` → All checks passed. |
 | 열린 PR | 없음. |
-| 출시 완료 스펙 | 최신 기능: #644(스펙 148, 정합성 halt 조건부 자동 복구), #642(스펙 147, 전략/계정 성과 장부 분리와 저회전 AI), #639/#640(스펙 146, 일봉 교차자산 ML). |
-| 골격 스펙 | 없음. 스펙 148의 T001~T014가 모두 완료됐다. |
-| 최근 출시 작업 | #644는 KIS smoke 뒤 새 정합성 검사와 전략 측정 계약을 확인해 정합성 오류 halt만 자동 복구하고, money-path가 실제 halt 증거를 최우선으로 판정하게 한다. |
-| 활성 작업 | 없음. 정합성은 `OK`, `data/halt.flag`는 해제됐고 293달러 자본 경로는 `REAL_ORDER_PATH_ARMED`다. 전략 체결·전략 손익은 아직 0건·0달러이며 다음 예약은 `2026-08-24T15:00:00Z`다. |
-| 안전 경계 | 헌법 X.4 v7.0.0. 자동 복구는 `reconciliation mismatch:` halt만 대상으로 하며 수동·손실 halt는 보존한다. K1/K2, 손실 예산 20%, 정규장, 현금 1% 여유, production 기계 승인, 추가-전용 감사 로그를 유지한다. ORANY 28주는 시작 전 외부 보유로 전략 손익에서 제외한다. |
+| 출시 완료 스펙 | 최신 기능: #646~#651(스펙 149, 첫 주문 직전 최신 엣지 재검증·자동 강등·병렬 후보 탐색·무장 해제 뒤 손익 관찰), #644(스펙 148, 정합성 halt 조건부 자동 복구), #642(스펙 147, 전략/계정 성과 장부 분리와 저회전 AI). |
+| 골격 스펙 | 없음. 스펙 149의 T001~T018이 모두 완료됐다. |
+| 최근 출시 작업 | 첫 전략 체결 전에 최신 연구 증거가 미달이면 브로커 주문 전 차단하고 단 0으로 자동 강등한다. 전진 엣지 미달과 동시에 주문 없는 신규 후보 탐색을 병렬로 시작하며, 체결·전략 손익·정합성 증거를 자동으로 닫는다. |
+| 활성 작업 | 코드 PR 없음. 최신 전략은 전진 PSR `0.601730 < 0.95`로 `NO_EDGE`; `armed:false`, 단 0, 자본 0, 실주문 불가다. 전략 체결·손익은 0건·0달러다. 자율 작업은 `candidate-parallel-edge-challenger-9325da7f6b01`을 주문 없는 다음 검증 후보로 선택했다. |
+| 안전 경계 | 헌법 X.4 v7.0.0. 최신 자격 실패는 첫 주문 전에 fail-closed하고 자동 강등한다. K1/K2, 손실 예산 20%, 정규장, 현금 1% 여유, production 기계 승인, 서명·nonce, 추가-전용 감사 로그를 유지한다. ORANY 28주는 시작 전 외부 보유로 전략 손익에서 제외한다. GitHub Actions의 기본 권한은 읽기 전용을 유지하고, 명시적 쓰기 권한을 가진 자동화의 PR 생성만 허용했다. |
 
-## 최근 관찰 — 2026-08-22 KST (#644 정합성 halt 조건부 자동 복구 완료)
+## 최근 관찰 — 2026-08-22 KST (#646~#651 최신 엣지 재검증·자동 무장 해제 완료)
+
+현재 `main` 최신 머지는 `6856294`(#651)다. 핵심 기능은 #646, 운영 증거 보정은 #647~#651에 나눠 출시됐다.
+
+- **현재 결론**: 실주문은 불가능하다. 최신 돈 경로는 `PREVIEW_ONLY`, `can_submit_real_orders=false`, `armed:false`, 단 0, 자본 0이다. 전략 체결은 0건이고 실현·미실현·총손익은 모두 0달러다.
+- **왜 멈췄나**: 전진 관측은 47개로 충분하지만 PSR이 `0.601730`이라 단 1 기준 `0.95`에 못 미친다. 칼마 우위와 전략 지문은 통과했지만 하나라도 실패하면 `NO_EDGE`로 판정한다.
+- **첫 주문 안전장치**: 전략 체결이 0건이면 매 실제 주문 직전에 역사 홀드아웃, 최신 전진 관측·PSR·칼마, 강화 캐너리, 증거 나이를 다시 확인한다. 실패·누락·오래됨·모순은 서명과 브로커 호출 전에 차단한다. 체결 뒤에는 이 연구 관문만으로 위험 축소 매도를 막지 않는다.
+- **자동 무장 해제**: autoarm run `32570303365`가 단 1에서 0으로 강등했다. 상태 PR #649를 병합해 `armed:false`, 자본 0을 권위 상태로 확정했고 후속 run `32570553036`은 단 0 유지(`WAIT_EDGE`)를 확인했다.
+- **기다리기만 하지 않음**: 자율 작업 run은 같은 증거를 반복하지 않는 주문 없는 병렬 후보 `candidate-parallel-edge-challenger-9325da7f6b01`을 `EXECUTION_READY`로 선택했다. 검증을 통과하기 전 live 전략이나 자본은 바꾸지 않는다.
+- **관찰 폐회로**: profit-evidence 생산자에 표준 시각을 넣고 감시기의 개별 ref 재수집을 추가해 pipeline liveness run `32569968280`이 `OK`가 됐다. 무장 해제 뒤에도 계좌 NAV `1457.59`를 읽기 전용 측정 분모로만 사용해 전략 체결 0건·손익 0달러를 계속 관찰한다. 승인 자본은 여전히 0이다.
+- **주문 없는 생산 확인**: live canary run `32570485409`은 미리보기만 성공했고 실주문 job은 건너뛰어 주문 0건이었다. 최신 정합성은 `CLEAR/OK`, halt 없음이다. 이 실행은 무장 해제 상태이므로 새 주문 직전 재검증 단계 자체를 실행하지 않았고, 해당 단계는 코드·회귀시험·실제 최신 증거 재생으로 차단 결과를 확인했다.
+- **외부 확인**: deploy run `32570962053` 성공. KIS smoke run `32571047289`은 main `6856294`, 키 유효, 5/5 통과, 현금 934.27달러, 계좌 NAV 1457.59달러, ORANY 28주, 열린 미체결 0건을 확인했다. money-path run `32571001761`은 `PREVIEW_ONLY`를 발행했다.
+- **사람 손 제거**: 자동 강등 workflow의 PR 생성 실패 원인이던 GitHub 저장소 설정을 고쳤다. 기본 workflow 권한은 `read`로 유지하고 `can_approve_pull_request_reviews=true`만 켜, 명시적 쓰기 권한을 가진 자본 사다리 자동화가 다음 상태 PR을 직접 만들 수 있게 했다.
+- **검증**: 전체 2917 passed/5 skipped, ruff, 엄격 하네스 14/14, HANDOFF 사실 검사, PR 품질 관문이 통과했다.
+- **상세 인계**: `HANDOFF-155-LIVE-ENTRY-REVALIDATION.md`.
+
+## 이전 관찰 — 2026-08-22 KST (#644 정합성 halt 조건부 자동 복구 완료)
 
 현재 `main` 최신 머지는 `68eab4e`(#644)이고 기능 커밋은 `d089022`다.
 
@@ -7671,6 +7687,9 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 
 ## 과거 인수인계 파일 (참고용)
 
+- `HANDOFF-155-LIVE-ENTRY-REVALIDATION.md` — 첫 전략 체결 전 최신 엣지 재검증,
+  실패 시 단 0 자동 강등, 주문 없는 병렬 후보 탐색, 무장 해제 뒤 전략 손익 관찰,
+  자동 상태 PR 권한 복구. 현재 실주문 불가·체결 0건·손익 0달러.
 - `HANDOFF-154-RECONCILIATION-HALT-RECOVERY.md` — 새 KIS 정합성 `OK`와 전략 측정
   계약 `VALID`를 확인한 뒤 정합성 오류 halt만 자동 복구. production run
   `32557022009`에서 halt 해제·주문 0건, 후속 money-path run `32557042951`에서

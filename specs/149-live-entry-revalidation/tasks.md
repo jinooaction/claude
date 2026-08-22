@@ -27,7 +27,7 @@
 
 - [x] T012 Run targeted and full tests, ruff, shell/YAML, harness, handoff, and PR quality gates.
 - [x] T013 Commit with safety-perimeter marker, push, open PR, and auto-merge.
-- [ ] T014 Verify deploy and no-order production preflight, then refresh HANDOFF.
+- [x] T014 Verify deploy and no-order production preflight, then refresh HANDOFF.
 - [x] T015 Fix the observed profit-evidence liveness false MISSING at the producer timestamp contract and add a regression.
 - [x] T016 Feed strategy-scope live performance into the capital ladder so zero-fill stale entry approval demotes automatically.
 - [x] T017 Keep strategy fills and PnL observable after disarm by using account NAV only as a positive measurement denominator.
