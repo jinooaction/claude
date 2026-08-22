@@ -77,6 +77,12 @@ jobs:
           uv run python scripts/pipeline_liveness_probe.py --manifest > /tmp/manifest.tsv
           while IFS=$'\t' read -r key branch filename; do
             [[ -z "${key}" ]] && continue
+            if ! git show "origin/${branch}:${filename}" \
+                 > "/tmp/sidecars/${key}.md" 2>/dev/null; then
+              # 와일드카드 shallow fetch에서 ref가 빠지는 경우 실제 누락으로 오인하지 않는다.
+              git fetch --depth=1 origin \
+                "+refs/heads/${branch}:refs/remotes/origin/${branch}" >/dev/null 2>&1 || true
+            fi
             if git show "origin/${branch}:${filename}" \
                  > "/tmp/sidecars/${key}.md" 2>/dev/null; then
               echo "✓ ${key}: 사이드카 수집 (${branch}:${filename})"

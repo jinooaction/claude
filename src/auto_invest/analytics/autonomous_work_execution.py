@@ -133,6 +133,7 @@ BROAD_NO_EDGE_VOL_TARGET_DRAWDOWN_CANDIDATE_ID = (
 WAIT_FOR_FRESH_EVIDENCE_CANDIDATE_ID = "wait-for-fresh-evidence"
 WAIT_FOR_GLOBALFIXED_FORWARD_EDGE_ID = "wait-for-globalfixed-forward-edge"
 GLOBALFIXED_PROMOTION_RECHECK_ID = "candidate-globalfixed-promotion-recheck"
+PARALLEL_EDGE_CHALLENGER_PREFIX = "candidate-parallel-edge-challenger"
 
 _REJECTED_STATUSES = {
     "reject",
@@ -3373,6 +3374,89 @@ def _profit_evidence_packet(payload: Any) -> WorkPacket | None:
     )
 
 
+def _parallel_edge_challenger_packet(
+    payload: Any,
+    parsed: Mapping[str, Any],
+) -> WorkPacket | None:
+    """Keep no-live discovery moving while the incumbent accumulates forward evidence."""
+
+    if not isinstance(payload, Mapping):
+        return None
+    if _clean(payload.get("historical_verdict")).upper() != "HOLDOUT_EDGE":
+        return None
+    deployment = payload.get("deployment_match")
+    if not isinstance(deployment, Mapping):
+        return None
+    if deployment.get("exploration_canary_ready") is True:
+        return None
+    forward = payload.get("forward")
+    if not isinstance(forward, Mapping):
+        return None
+    try:
+        n_obs = max(0, int(forward.get("n_obs") or 0))
+    except (TypeError, ValueError):
+        return None
+
+    observation_bucket = n_obs // 5
+    digest_source = {
+        "candidate_id": deployment.get("candidate_id"),
+        "track": forward.get("track_key"),
+        "observation_bucket": observation_bucket,
+        "verdict": forward.get("verdict"),
+    }
+    digest = hashlib.sha256(
+        json.dumps(digest_source, sort_keys=True, ensure_ascii=True).encode("utf-8")
+    ).hexdigest()[:12]
+    candidate_id = f"{PARALLEL_EDGE_CHALLENGER_PREFIX}-{digest}"
+    if candidate_id in _released_candidates(parsed.get("released-work")):
+        return None
+
+    source_refs = (
+        _SOURCE_REFS["profit-evidence-engine"],
+        _SOURCE_REFS["rebalance-paper-forward"],
+        _SOURCE_REFS["public-data"],
+        _SOURCE_REFS["regime-stratify"],
+        _SOURCE_REFS["execution-quality"],
+        _SOURCE_REFS["released-work"],
+    )
+    autonomy_level, start_guidance, completion_gates = _execution_contract(
+        STATUS_EXECUTION_READY, 2, ()
+    )
+    psr = _clean(forward.get("psr_vs_benchmark"), "unknown")
+    threshold = _clean(forward.get("threshold"), "0.95")
+    title = "실거래 관찰과 병렬인 신규 엣지 challenger"
+    return WorkPacket(
+        packet_id=_packet_id(candidate_id, title, source_refs),
+        candidate_id=candidate_id,
+        domain_key="strategy_design",
+        title_ko=title,
+        work_type="parallel_edge_challenger",
+        risk_grade=2,
+        safety_impact=(),
+        priority_score=9750,
+        status=STATUS_EXECUTION_READY,
+        autonomy_level=autonomy_level,
+        reason_ko=(
+            f"현재 전략은 forward 관측 {n_obs}, PSR {psr} < {threshold}로 관찰 중이다. "
+            f"관측 {observation_bucket * 5}~{observation_bucket * 5 + 4} 구간의 증거를 "
+            "하나의 지문으로 묶고, 기다림과 별도로 신규 no-live 후보를 탐색한다."
+        ),
+        next_action_ko=(
+            "공개 데이터·레짐·비용·paper forward를 사용해 기존 후보와 다른 신호군을 "
+            "시간 분리 walk-forward로 검증하고, 통과하지 못하면 live 승격 없이 기각한다."
+        ),
+        start_guidance_ko=start_guidance,
+        completion_gates=completion_gates,
+        required_inputs=source_refs,
+        safety_boundary=(
+            *SAFETY_INVARIANTS,
+            "브로커 API 호출 금지",
+            "실제 주문·자본 배분·live 전략 변경 금지",
+        ),
+        source_refs=source_refs,
+    )
+
+
 def _macro_growth_packet(
     template: MacroGrowthCandidateTemplate,
     *,
@@ -4484,6 +4568,11 @@ def build_autonomous_work_execution(
     profit_evidence_packet = _profit_evidence_packet(parsed.get("profit-evidence-engine"))
     if profit_evidence_packet is not None:
         packets.append(profit_evidence_packet)
+    parallel_challenger = _parallel_edge_challenger_packet(
+        parsed.get("profit-evidence-engine"), parsed
+    )
+    if parallel_challenger is not None:
+        packets.append(parallel_challenger)
 
     ordered = _dedupe_packets(packets)
     macro_candidate_map = _macro_candidate_map(ordered)
@@ -4651,6 +4740,7 @@ __all__ = [
     "GLOBALFIXED_PROMOTION_RECHECK_ID",
     "STATUS_EXECUTION_READY",
     "STATUS_OBSERVATION_WAIT",
+    "PARALLEL_EDGE_CHALLENGER_PREFIX",
     "WAIT_FOR_GLOBALFIXED_FORWARD_EDGE_ID",
     "STATUS_OPERATOR_APPROVAL_REQUIRED",
     "STATUS_RELEASED",

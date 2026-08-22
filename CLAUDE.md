@@ -215,6 +215,8 @@ After a successful merge, the session SHOULD:
 ---
 
 <!-- SPECKIT START -->
+**Active feature plan**: `specs/149-live-entry-revalidation/plan.md`
+
 Active feature pointer: `.specify/feature.json` is the maintained pointer for
 the current worktree. Do not trust prose in this block as the source of truth
 for in-flight work; use the `git_ground_truth` start hook, latest `HANDOFF.md`,

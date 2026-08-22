@@ -63,15 +63,21 @@ def _verdict(label: str = "EDGE_CONFIRMED", n_obs: int = 22) -> dict:
 
 
 def _growth(
-    dd: str | None = "2.5", obs: int | None = 25, period_days: str | None = "30"
+    dd: str | None = "2.5",
+    obs: int | None = 25,
+    period_days: str | None = "30",
+    fills_count: int | None = None,
 ) -> dict:
-    return {
+    result = {
         "schema_version": "1.0",
         "mode": "live",
         "snapshot_count": obs,
         "max_drawdown_pct": dd,
         "period_days": period_days,
     }
+    if fills_count is not None:
+        result["fills_count"] = fills_count
+    return result
 
 
 _TODAY = date(2026, 6, 12)
@@ -239,6 +245,29 @@ def test_exploration_wait_never_arms() -> None:
     )
     assert d.action == ACTION_WAIT_EDGE
     assert not d.sentinel_changes
+
+
+def test_unfilled_exploration_rung_demotes_when_latest_entry_evidence_fails() -> None:
+    d = _decide(
+        _RUNG1,
+        forward_verdict=_verdict("NO_EDGE", 47),
+        exploration_verdict={"verdict": "EXPLORATION_CANARY_WAIT"},
+        live_growth=_growth(fills_count=0),
+    )
+    assert d.action == ACTION_DEMOTE
+    assert d.target_rung == 0
+    assert "armed: false" in d.new_sentinel_text
+
+
+def test_existing_strategy_fill_keeps_live_risk_gates_authoritative() -> None:
+    d = _decide(
+        _RUNG1,
+        forward_verdict=_verdict("NO_EDGE", 47),
+        exploration_verdict={"verdict": "EXPLORATION_CANARY_WAIT"},
+        live_growth=_growth(fills_count=1),
+    )
+    assert d.action == ACTION_STAY
+    assert d.target_rung == 1
 
 
 # ---- 강등·정지 (내려가는 건 즉시) ---------------------------------------------------
