@@ -2,7 +2,7 @@
 
 **Feature Branch**: `Codex/149-live-entry-revalidation-parallel-edge`
 **Created**: 2026-08-22
-**Status**: Released - operational verification in progress
+**Status**: Complete
 **Risk Grade**: 4 - 실제 주문 직전 자격 판정과 자동 무장 해제를 변경
 
 ## User Scenarios & Testing
