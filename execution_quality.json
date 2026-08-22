@@ -1,0 +1,90 @@
+{
+  "broker_rejections": {
+    "broker_error_observation_rate": "1.0000",
+    "exception_types": {
+      "KisOrderResponseError": 2
+    },
+    "http_statuses": {
+      "200": 2
+    },
+    "kis_msg_codes": {
+      "APBK1672": 2
+    },
+    "parsed_broker_errors": 2,
+    "rejected_orders": 2,
+    "unparsed_reasons": 0
+  },
+  "broker_smoke": {
+    "key_valid": true,
+    "present": true,
+    "smoke_error_rate": "0.0000",
+    "smoke_exit": 0,
+    "smoke_state": "success",
+    "tests_failed": 0,
+    "tests_total": 5,
+    "timestamp_utc": "2026-08-22T16:06:24Z"
+  },
+  "commit": "f91cc8c94b1f67877bb10fa8011ec58023189983",
+  "evidence_surfaces": [
+    {
+      "key": "opportunity-monitor",
+      "parse_status": "ok",
+      "present": true,
+      "source_ref": "automation/rebalance-micro-gtaa-last-run:opportunity_monitor.json",
+      "summary_ko": "verdict=INSUFFICIENT_DATA, signal=INTENT_LOSS"
+    },
+    {
+      "key": "opportunity-history",
+      "parse_status": "ok",
+      "present": true,
+      "source_ref": "automation/rebalance-micro-gtaa-last-run:opportunity_history.json",
+      "summary_ko": "records=1, rejected_rows=2"
+    },
+    {
+      "key": "rebalance-micro-gtaa",
+      "parse_status": "ok",
+      "present": true,
+      "source_ref": "automation/rebalance-micro-gtaa-last-run:LAST_RUN.md",
+      "summary_ko": "reason=latest_intent_loss"
+    },
+    {
+      "key": "kis-smoke",
+      "parse_status": "ok",
+      "present": true,
+      "source_ref": "automation/kis-smoke-last-run:LAST_RUN.md",
+      "summary_ko": "state=success, exit=0"
+    }
+  ],
+  "live_gate": {
+    "cumulative_pnl_usd": "-1.14",
+    "latest_signal": "INTENT_LOSS",
+    "ok": false,
+    "present": true,
+    "reason": "latest_intent_loss",
+    "verdict": "INSUFFICIENT_DATA"
+  },
+  "opportunity_monitor": {
+    "cumulative_pnl_usd": "-1.14",
+    "latest_run_id": "28253047287",
+    "latest_signal": "INTENT_LOSS",
+    "next_action_ko": "최신 손실 의도 신호가 실주문을 막고 있어 새 live 표본은 자동으로 쌓이지 않습니다. forward 토너먼트·재지정 증거를 기다리거나 별도 전략 검토 후 재무장 여부를 판단합니다.",
+    "rejected_orders": 2,
+    "valued_orders": 2,
+    "valued_records": 1,
+    "verdict": "INSUFFICIENT_DATA"
+  },
+  "overall_status": "OBSERVE",
+  "run_id": "32583711131",
+  "safety_invariants": [
+    "no broker API call",
+    "no orders",
+    "no capital allocation",
+    "no live strategy change",
+    "no whitelist/caps change",
+    "no secret read/write",
+    "no external paid service",
+    "execution-quality evidence package only"
+  ],
+  "schema_version": "1.0",
+  "timestamp_utc": "2026-08-22T16:06:41Z"
+}
