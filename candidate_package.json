@@ -1,6 +1,6 @@
 {
-  "candidate_id": "candidate-daily-cross-asset-ml-v1",
-  "data": "sha256:09d0ee686dda4d82ee1631fac1292522ecdec0cb09fc138cc31eb92d709aeabd",
+  "candidate_id": "candidate-low-turnover-daily-cross-asset-ml-v2",
+  "data": "sha256:f8f78e8d25f83ec73997cd9c36e1b7fb5a194823bcba147bbf092c741f8e999a",
   "domain_key": "investment_edge",
   "eligible": false,
   "evidence_refs": [
@@ -11,13 +11,13 @@
   "features": "sha256:b718803406484520f8584307a9c467c8339d7d4a9d85af564d768ef64646dfc1",
   "kind": "strategy_backtest",
   "live_promotion_authorized": false,
-  "model": "sha256:bc7aa31a0dac31eaa7a648e778f81ab3d07220ab4602f113a8ad53e11f5434af",
+  "model": "sha256:f5f929ec8238d932511ae75b9f5395c8a8845a96794e5fefec4a7bad50b0dcc6",
   "next_action_ko": "독립 no-live 재현 뒤 기존 Canary 승격 관문을 적용한다.",
   "priority_score": 760,
-  "reason_ko": "failed gates: sharpe_margin, psr, dsr, fold_win_rate, max_drawdown, positive_50bp_return",
+  "reason_ko": "failed gates: sharpe_margin, psr, dsr, fold_win_rate, max_drawdown",
   "replay_command": "uv run python scripts/daily_cross_asset_ml_probe.py --db data/forward_wide.db --json",
   "risk_grade": 2,
   "status": "rejected",
-  "title_ko": "일봉 교차자산 AI 상대수익 후보 재현 검증",
+  "title_ko": "저회전 일봉 교차자산 AI 상대수익 후보",
   "verdict": "NO_EDGE"
 }

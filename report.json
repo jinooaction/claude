@@ -1,21 +1,21 @@
 {
   "benchmarks": {
     "incumbent_wide_trend_25bp": {
-      "cagr_pct": 2.540715,
+      "cagr_pct": 2.53851,
       "max_dd_pct": 5.511424,
-      "sharpe": 0.587707,
-      "total_return_pct": 5.603568
+      "sharpe": 0.589643,
+      "total_return_pct": 5.649552
     },
     "passive_equal_weight_25bp": {
-      "cagr_pct": 14.143136,
+      "cagr_pct": 14.30132,
       "max_dd_pct": 5.325597,
-      "sharpe": 1.752912,
-      "total_return_pct": 33.303894
+      "sharpe": 1.777849,
+      "total_return_pct": 34.049806
     }
   },
   "candidate_package": {
-    "candidate_id": "candidate-daily-cross-asset-ml-v1",
-    "data": "sha256:09d0ee686dda4d82ee1631fac1292522ecdec0cb09fc138cc31eb92d709aeabd",
+    "candidate_id": "candidate-low-turnover-daily-cross-asset-ml-v2",
+    "data": "sha256:f8f78e8d25f83ec73997cd9c36e1b7fb5a194823bcba147bbf092c741f8e999a",
     "domain_key": "investment_edge",
     "eligible": false,
     "evidence_refs": [
@@ -26,64 +26,64 @@
     "features": "sha256:b718803406484520f8584307a9c467c8339d7d4a9d85af564d768ef64646dfc1",
     "kind": "strategy_backtest",
     "live_promotion_authorized": false,
-    "model": "sha256:bc7aa31a0dac31eaa7a648e778f81ab3d07220ab4602f113a8ad53e11f5434af",
+    "model": "sha256:f5f929ec8238d932511ae75b9f5395c8a8845a96794e5fefec4a7bad50b0dcc6",
     "next_action_ko": "독립 no-live 재현 뒤 기존 Canary 승격 관문을 적용한다.",
     "priority_score": 760,
-    "reason_ko": "failed gates: sharpe_margin, psr, dsr, fold_win_rate, max_drawdown, positive_50bp_return",
+    "reason_ko": "failed gates: sharpe_margin, psr, dsr, fold_win_rate, max_drawdown",
     "replay_command": "uv run python scripts/daily_cross_asset_ml_probe.py --db data/forward_wide.db --json",
     "risk_grade": 2,
     "status": "rejected",
-    "title_ko": "일봉 교차자산 AI 상대수익 후보 재현 검증",
+    "title_ko": "저회전 일봉 교차자산 AI 상대수익 후보",
     "verdict": "NO_EDGE"
   },
   "cost_scenarios": [
     {
       "cost_bps": 10,
       "metrics": {
-        "cagr_pct": 4.33648,
-        "max_dd_pct": 9.452481,
-        "sharpe": 0.50609,
-        "total_return_pct": 9.663786
+        "cagr_pct": 4.472304,
+        "max_dd_pct": 8.833324,
+        "sharpe": 0.633318,
+        "total_return_pct": 10.06682
       },
-      "turnover": 34.34
+      "turnover": 8.374194
     },
     {
       "cost_bps": 25,
       "metrics": {
-        "cagr_pct": 1.893908,
-        "max_dd_pct": 11.457877,
-        "sharpe": 0.249174,
-        "total_return_pct": 4.161376
+        "cagr_pct": 3.877129,
+        "max_dd_pct": 9.006857,
+        "sharpe": 0.55657,
+        "total_return_pct": 8.696808
       },
-      "turnover": 34.34
+      "turnover": 8.374194
     },
     {
       "cost_bps": 50,
       "metrics": {
-        "cagr_pct": -2.055845,
-        "max_dd_pct": 14.925532,
-        "sharpe": -0.179008,
-        "total_return_pct": -4.413704
+        "cagr_pct": 2.891984,
+        "max_dd_pct": 9.29555,
+        "sharpe": 0.427322,
+        "total_return_pct": 6.449628
       },
-      "turnover": 34.34
+      "turnover": 8.374194
     }
   ],
   "data": {
-    "common_week_end": "2026-08-14",
+    "common_week_end": "2026-08-21",
     "common_week_start": "2021-06-11",
-    "common_weeks": 271,
+    "common_weeks": 272,
     "daily_counts": {
-      "DBC": 1300,
-      "EEM": 1300,
-      "EFA": 1300,
-      "GLD": 1300,
-      "IEF": 1300,
-      "LQD": 1300,
-      "QQQ": 1300,
-      "SPY": 1300,
-      "TLT": 1300,
-      "UUP": 1300,
-      "VNQ": 1300
+      "DBC": 1305,
+      "EEM": 1305,
+      "EFA": 1305,
+      "GLD": 1305,
+      "IEF": 1305,
+      "LQD": 1305,
+      "QQQ": 1305,
+      "SPY": 1305,
+      "TLT": 1305,
+      "UUP": 1305,
+      "VNQ": 1305
     },
     "symbols": [
       "SPY",
@@ -99,11 +99,11 @@
       "UUP"
     ]
   },
-  "experiment_id": "daily-cross-asset-ml-v1",
+  "experiment_id": "low-turnover-daily-cross-asset-ml-v2",
   "fingerprints": {
-    "data": "sha256:09d0ee686dda4d82ee1631fac1292522ecdec0cb09fc138cc31eb92d709aeabd",
+    "data": "sha256:f8f78e8d25f83ec73997cd9c36e1b7fb5a194823bcba147bbf092c741f8e999a",
     "features": "sha256:b718803406484520f8584307a9c467c8339d7d4a9d85af564d768ef64646dfc1",
-    "model": "sha256:bc7aa31a0dac31eaa7a648e778f81ab3d07220ab4602f113a8ad53e11f5434af"
+    "model": "sha256:f5f929ec8238d932511ae75b9f5395c8a8845a96794e5fefec4a7bad50b0dcc6"
   },
   "folds": [
     {
@@ -294,8 +294,8 @@
       "chronology_ok": true,
       "fold_id": 15,
       "ridge_rmse": 0.02516992183146656,
-      "test_end": "2026-08-07",
-      "test_rows": 11,
+      "test_end": "2026-08-14",
+      "test_rows": 22,
       "test_start": "2026-08-07",
       "train_label_end": "2026-07-31",
       "train_rows": 2376,
@@ -310,51 +310,57 @@
       "required": ">= 10"
     },
     {
-      "actual": 1.893908,
+      "actual": 3.877129,
       "gate_id": "positive_25bp_cagr",
       "passed": true,
       "required": "> 0"
     },
     {
-      "actual": -1.503738,
+      "actual": -1.221279,
       "gate_id": "sharpe_margin",
       "passed": false,
       "required": ">= 0.20 over both benchmarks"
     },
     {
-      "actual": 0.013356004569647917,
+      "actual": 0.031673671098232825,
       "gate_id": "psr",
       "passed": false,
       "required": ">= 0.95"
     },
     {
-      "actual": 0.5569669861356094,
+      "actual": 0.5900449946772435,
       "gate_id": "dsr",
       "passed": false,
       "required": ">= 0.95"
     },
     {
-      "actual": 0.2,
+      "actual": 0.3333333333333333,
       "gate_id": "fold_win_rate",
       "passed": false,
       "required": ">= 0.60"
     },
     {
-      "actual": 11.457877,
+      "actual": 9.006857,
       "gate_id": "max_drawdown",
       "passed": false,
       "required": "<= 5.325597"
     },
     {
-      "actual": -4.413704,
+      "actual": 6.449628,
       "gate_id": "positive_50bp_return",
-      "passed": false,
+      "passed": true,
       "required": "> 0"
+    },
+    {
+      "actual": 8.374193548387096,
+      "gate_id": "turnover_not_increased",
+      "passed": true,
+      "required": "<= baseline 34.340000"
     }
   ],
   "latest_allocation": {
     "cash_weight": 1.0,
-    "date": "2026-08-07",
+    "date": "2026-08-14",
     "weights": {
       "DBC": 0.0,
       "EEM": 0.0,
@@ -370,18 +376,25 @@
     }
   },
   "model_metrics": {
+    "baseline_turnover": 34.34,
     "boosting_mean_validation_rmse": 0.020007236831285143,
-    "fold_win_rate": 0.2,
-    "fold_wins": 3,
-    "prediction_weeks": 113,
+    "candidate_turnover": 8.374194,
+    "estimated_trade_cost_bps": 25,
+    "fold_win_rate": 0.3333333333333333,
+    "fold_wins": 5,
+    "minimum_hold_weeks": 4,
+    "prediction_weeks": 114,
     "ridge_mean_validation_rmse": 0.020882258367235108,
+    "suppressed_trades": 53,
+    "trade_threshold": 0.08,
     "trial_sharpes_annual": [
-      0.50021,
-      0.593673,
-      0.249174
-    ]
+      0.512292,
+      1.359805,
+      0.55657
+    ],
+    "turnover_reduction_pct": 75.61388
   },
-  "reason": "failed gates: sharpe_margin, psr, dsr, fold_win_rate, max_drawdown, positive_50bp_return",
+  "reason": "failed gates: sharpe_margin, psr, dsr, fold_win_rate, max_drawdown",
   "safety": {
     "capital_changed": false,
     "caps_changed": false,
@@ -390,10 +403,10 @@
     "orders_submitted": 0,
     "whitelist_changed": false
   },
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "significance": {
-    "dsr_model_trials": 0.5569669861356094,
-    "psr_vs_better_benchmark": 0.013356004569647917
+    "dsr_model_trials": 0.5900449946772435,
+    "psr_vs_better_benchmark": 0.031673671098232825
   },
   "verdict": "NO_EDGE"
 }
