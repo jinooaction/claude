@@ -300,6 +300,13 @@ COMMAND_POLICIES: dict[str, CommandPolicy] = {
         writes_db=True,
         uses_broker=True,
     ),
+    "reconcile-recover": _p(
+        "reconcile-recover",
+        AutonomyLevel.BOUNDED_LIVE,
+        "Run fresh broker reconciliation and conditionally clear only its unchanged halt.",
+        writes_db=True,
+        uses_broker=True,
+    ),
     "regime-stratify": _p(
         "regime-stratify",
         AutonomyLevel.READ_ONLY,

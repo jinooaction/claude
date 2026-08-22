@@ -1,9 +1,7 @@
 """halt 해제 채널(release-halt.yml)의 안전 불변식 회귀 (2026-06-11).
 
-halt 는 스펙 014 서킷 브레이커·정합성 불일치의 킬스위치다. 해제 채널은 운영자
-지시(센티넬 머지 또는 확인어 입력)로만 발화해야 하고, 해제는 반드시 감사 행
-(HALT_CLEARED)을 남기는 CLI(`resume --confirm`)로만 해야 한다. 이 테스트는
-그 가드가 조용히 사라지지 않게 못박는다.
+halt 는 스펙 014 서킷 브레이커·정합성 불일치의 킬스위치다. 수동 채널도 root 소유
+고정 helper가 새 정합성과 측정 계약을 통과한 정합성 halt만 해제해야 한다.
 """
 
 from __future__ import annotations
@@ -20,11 +18,11 @@ def _workflow_text() -> str:
     return _WORKFLOW.read_text(encoding="utf-8")
 
 
-def test_release_uses_audited_cli_not_rm():
+def test_release_uses_fixed_conditional_recovery_not_blind_resume():
     text = _workflow_text()
-    # 해제는 감사 행을 남기는 CLI 로만 — rm 은 K4 추가 전용 감사를 우회한다.
-    assert "auto-invest resume --confirm" in text
-    assert "--db data/auto_invest.db" in text  # HALT_CLEARED 감사 행 목적지
+    assert '"reconciliation-halt-recovery"' in text
+    assert "auto-invest resume --confirm" not in text
+    assert "cd /opt/auto-invest" not in text
     for line in text.splitlines():
         if "halt.flag" in line:
             # 명령 토큰 rm 만 잡는다(--confirm 의 'rm ' 오탐 방지).

@@ -10,6 +10,7 @@ SCRIPT = REPO_ROOT / "deploy" / "repair-ssh-boundary.sh"
 KIS_SMOKE_HELPER = REPO_ROOT / "deploy" / "kis-smoke-on-instance.sh"
 OBSERVE_HELPER = REPO_ROOT / "deploy" / "observe-on-instance.sh"
 REFRESH_HELPER = REPO_ROOT / "deploy" / "refresh-ssh-boundary-helpers.sh"
+RECOVERY_HELPER = REPO_ROOT / "deploy" / "reconciliation-recovery-on-instance.sh"
 
 
 def _body() -> str:
@@ -31,6 +32,8 @@ def test_repair_script_exists_and_is_executable():
     assert OBSERVE_HELPER.stat().st_mode & 0o111
     assert REFRESH_HELPER.is_file()
     assert REFRESH_HELPER.stat().st_mode & 0o111
+    assert RECOVERY_HELPER.is_file()
+    assert RECOVERY_HELPER.stat().st_mode & 0o111
 
 
 def test_requires_root_and_public_key_not_private_key():
@@ -90,6 +93,9 @@ def test_gateway_allows_only_fixed_commands_without_eval():
     )
     assert r"^(trend|notrend|rmbeta|multiasset|global|globalfixed|wide)$" in code
     assert "/usr/local/sbin/auto-invest-observe" in code
+    assert re.search(r'\breconciliation-halt-recovery\)', code)
+    assert "/usr/local/sbin/auto-invest-reconciliation-recovery" in code
+    assert not re.search(r'reconciliation-halt-recovery\\ \*\)', code)
     assert re.search(r'\bstart-deploy\)', code)
     assert re.search(r'\bdeploy-journal\)', code)
     assert "refused command" in code
@@ -107,6 +113,7 @@ def test_sudoers_is_narrow_and_visudo_validated():
     assert "/usr/local/sbin/auto-invest-sync-units" in body
     assert "/usr/local/sbin/auto-invest-kis-smoke" in body
     assert "/usr/local/sbin/auto-invest-observe" in body
+    assert "/usr/local/sbin/auto-invest-reconciliation-recovery" in body
     assert "/usr/bin/systemctl start auto-invest-deploy.service" in body
     assert "/usr/bin/journalctl -u auto-invest-deploy.service -n 120 --no-pager" in body
 
@@ -146,6 +153,7 @@ def test_refresh_helpers_only_mode_reinstalls_boundary_without_key_rotation():
     assert "install_sync_helper" in refresh_block
     assert "install_kis_smoke_helper" in refresh_block
     assert "install_observe_helper" in refresh_block
+    assert "install_reconciliation_recovery_helper" in refresh_block
     assert "install_sudoers" in refresh_block
     assert "AUTO_INVEST_SSH_BOUNDARY_HELPERS_REFRESHED" in refresh_block
     assert "install_deploy_user" not in refresh_block
@@ -163,6 +171,23 @@ def test_repair_installs_helper_files_from_current_main_when_available():
     assert '"deploy/sync-units.sh"' in body
     assert '"deploy/kis-smoke-on-instance.sh"' in body
     assert '"deploy/observe-on-instance.sh"' in body
+    assert '"deploy/reconciliation-recovery-on-instance.sh"' in body
+
+
+def test_reconciliation_recovery_helper_is_fixed_and_order_free():
+    body = RECOVERY_HELPER.read_text(encoding="utf-8")
+
+    assert "reconcile-recover" in body
+    assert "--confirm" in body
+    assert "--external-holdings deploy/external-holdings.toml" in body
+    assert "--opening-positions deploy/live-opening-positions.toml" in body
+    assert "--portfolio deploy/canary-live-portfolio.toml" in body
+    assert "--db data/auto_invest.db" in body
+    assert "--halt-path data/halt.flag" in body
+    assert "rebalance-once" not in body
+    assert "--confirm-live" not in body
+    assert "eval " not in body
+    assert "bash -c" not in body
 
 
 def test_refresh_boundary_helper_is_narrow_and_main_sourced():

@@ -13,6 +13,8 @@ from auto_invest.performance.measurement_contract import (
 from auto_invest.performance.opening_positions import load_opening_positions
 from auto_invest.persistence import audit, db
 from auto_invest.persistence.audit import PortfolioNavSnapshotPayload
+from auto_invest.reconciliation.runner import ReconciliationOutcome
+from auto_invest.worker.halt import set_halt
 
 ROOT = Path(__file__).resolve().parents[2]
 OPENING = ROOT / "deploy/live-opening-positions.toml"
@@ -130,3 +132,77 @@ def test_resume_readiness_blocks_an_unknown_measurement_contract(tmp_path: Path)
 
     assert result.exit_code == 0, result.stdout
     assert json.loads(result.stdout)["status"] == "BLOCKED"
+
+
+def test_reconcile_recover_runs_fresh_check_and_clears_eligible_halt(
+    tmp_path: Path, monkeypatch
+) -> None:
+    db_path = tmp_path / "auto-invest.db"
+    _seed_ready_evidence(db_path)
+    halt_path = tmp_path / "halt.flag"
+    set_halt(halt_path, "reconciliation mismatch: 1 position(s)")
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "KIS_APP_KEY=k\nKIS_APP_SECRET=s\nKIS_ACCOUNT_NO=1234567801\n",
+        encoding="utf-8",
+    )
+
+    async def fake_reconcile(conn, **_kwargs):
+        now = datetime.now(UTC).isoformat().replace("+00:00", "Z")
+        conn.execute(
+            "INSERT INTO reconciliation_runs "
+            "(started_at_utc, finished_at_utc, result) VALUES (?, ?, 'OK')",
+            (now, now),
+        )
+        return ReconciliationOutcome(
+            state="OK",
+            started_at_utc=now,
+            finished_at_utc=now,
+        )
+
+    monkeypatch.setattr("auto_invest.cli._run_reconcile", fake_reconcile)
+    result = runner.invoke(
+        app,
+        [
+            "reconcile-recover",
+            "--confirm",
+            "--db",
+            str(db_path),
+            "--halt-path",
+            str(halt_path),
+            "--env",
+            str(env_path),
+            "--external-holdings",
+            str(ROOT / "deploy/external-holdings.toml"),
+            "--opening-positions",
+            str(OPENING),
+            "--portfolio",
+            str(PORTFOLIO),
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.stdout
+    report = json.loads(result.stdout)
+    assert report["status"] == "RECOVERED"
+    assert report["orders_submitted"] == 0
+    assert not halt_path.exists()
+
+
+def test_reconcile_recover_requires_confirmation(tmp_path: Path) -> None:
+    db_path = tmp_path / "auto-invest.db"
+    _seed_ready_evidence(db_path)
+    result = runner.invoke(
+        app,
+        [
+            "reconcile-recover",
+            "--db",
+            str(db_path),
+            "--opening-positions",
+            str(OPENING),
+            "--portfolio",
+            str(PORTFOLIO),
+        ],
+    )
+    assert result.exit_code == 2
