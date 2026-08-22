@@ -25,6 +25,6 @@
 ## Phase 5: Validation and Release
 
 - [x] T011 Run targeted and full validation, lint, harness, and quality gates.
-- [ ] T012 Commit, push, open and auto-merge the PR.
-- [ ] T013 Verify deployment, execute fresh recovery, and verify sidecars.
-- [ ] T014 Refresh and merge HANDOFF with final production truth.
+- [x] T012 Commit, push, open and auto-merge the PR.
+- [x] T013 Verify deployment, execute fresh recovery, and verify sidecars.
+- [x] T014 Refresh and merge HANDOFF with final production truth.

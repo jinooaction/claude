@@ -2,7 +2,7 @@
 
 **Feature Branch**: `Codex/148-reconciliation-halt-recovery`
 **Created**: 2026-08-22
-**Status**: In Progress
+**Status**: Complete
 **Risk Grade**: 4 - 라이브 주문 가능 상태와 중지 해제 경로를 변경
 
 ## User Scenarios & Testing
@@ -60,4 +60,3 @@
 - 손실 차단 또는 운영자가 직접 건 수동 halt의 자동 해제.
 - 주문 한도·허용 종목·자본 사다리 완화.
 - 복구 실행 자체에서 실제 주문 제출.
-

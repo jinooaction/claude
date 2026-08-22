@@ -33,17 +33,30 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `bb868b4` — Merge pull request #642 from jinooaction/Codex/147-account-ledger-low-turnover |
-| main 테스트 | #642 머지 코드 기준 `uv run pytest` → 2888 passed, 6 skipped. |
-| main 린트 | #642 머지 코드 기준 `uv run ruff check src tests` → All checks passed. |
+| 마지막 main 커밋 | `68eab4e` — Merge pull request #644 from jinooaction/Codex/148-reconciliation-halt-recovery |
+| main 테스트 | #644 머지 코드 기준 `uv run pytest` → 2904 passed, 6 skipped. |
+| main 린트 | #644 머지 코드 기준 `uv run ruff check src tests` → All checks passed. |
 | 열린 PR | 없음. |
-| 출시 완료 스펙 | 최신 기능: #642(스펙 147, 전략/계정 성과 장부 분리와 저회전 AI), #639/#640(스펙 146, 일봉 교차자산 ML), #637(스펙 145, AI 확신도 기반 추세 앙상블). |
-| 골격 스펙 | 없음. 스펙 147의 T001~T016이 모두 완료됐다. |
-| 최근 출시 작업 | #642는 시스템 가동 전 보유 종목과 청산 체결을 전략 성과에서 제외하고, 같은 측정 계약의 NAV만 이어 붙이며, 정합성 정지 해제 준비도와 저회전 AI 후보를 자동 측정한다. |
-| 활성 작업 | 없음. 전략 실체결은 0건, 전략 손익은 0달러, 전략 NAV는 293달러다. 정합성은 오래된 `MISMATCH`라 `data/halt.flag`가 유지되고 실주문은 차단된다. |
-| 안전 경계 | 헌법 X.4 v7.0.0. `armed:true`와 293달러 자본 배정은 남아 있지만 정합성 정지가 주문을 막는다. K1/K2, 손실 예산 20%, 정규장, production 기계 승인, 추가-전용 감사 로그를 유지한다. ORANY 28주는 시작 전 외부 보유로 전략 손익에서 제외한다. |
+| 출시 완료 스펙 | 최신 기능: #644(스펙 148, 정합성 halt 조건부 자동 복구), #642(스펙 147, 전략/계정 성과 장부 분리와 저회전 AI), #639/#640(스펙 146, 일봉 교차자산 ML). |
+| 골격 스펙 | 없음. 스펙 148의 T001~T014가 모두 완료됐다. |
+| 최근 출시 작업 | #644는 KIS smoke 뒤 새 정합성 검사와 전략 측정 계약을 확인해 정합성 오류 halt만 자동 복구하고, money-path가 실제 halt 증거를 최우선으로 판정하게 한다. |
+| 활성 작업 | 없음. 정합성은 `OK`, `data/halt.flag`는 해제됐고 293달러 자본 경로는 `REAL_ORDER_PATH_ARMED`다. 전략 체결·전략 손익은 아직 0건·0달러이며 다음 예약은 `2026-08-24T15:00:00Z`다. |
+| 안전 경계 | 헌법 X.4 v7.0.0. 자동 복구는 `reconciliation mismatch:` halt만 대상으로 하며 수동·손실 halt는 보존한다. K1/K2, 손실 예산 20%, 정규장, 현금 1% 여유, production 기계 승인, 추가-전용 감사 로그를 유지한다. ORANY 28주는 시작 전 외부 보유로 전략 손익에서 제외한다. |
 
-## 최근 관찰 — 2026-08-22 KST (#642 전략 성과 장부 교정·저회전 AI 검증 완료)
+## 최근 관찰 — 2026-08-22 KST (#644 정합성 halt 조건부 자동 복구 완료)
+
+현재 `main` 최신 머지는 `68eab4e`(#644)이고 기능 커밋은 `d089022`다.
+
+- **자동 복구 결과**: production run `32557022009`가 새 KIS 정합성을 `OK`로 확인했다. 전략 측정 계약 `sha256:2542c0ddd4499481582d820ebee48fadbbfbab9b6208c749d843c025b74288d8`은 `VALID`였고, 기존 `reconciliation mismatch: 3 position(s)` halt는 감사 기록과 함께 해제됐다. 이 실행의 주문은 0건이다.
+- **복구 범위**: `reconciliation mismatch:`로 시작하는, 검사 전후 완전히 같은 halt만 자동 해제한다. 수동 중지·손실 차단·서킷브레이커 halt, 새 불일치, KIS 오류, 오래되거나 다른 측정 계약은 그대로 차단한다. 감사 쓰기 실패 시 원래 halt 파일을 복원한다.
+- **운영 자동화**: KIS smoke 완료 뒤 root 소유 fixed SSH helper가 자동 복구를 실행하고 `automation/reconciliation-halt-recovery-last-run`에 JSON을 남긴다. 기존 수동 release workflow의 blind `resume`도 같은 조건부 명령으로 교체했다.
+- **현재 실제 돈 경로**: 후속 money-path run `32557042951`은 `REAL_ORDER_PATH_ARMED`, `can_submit_real_orders=true`, 자본 293달러, 다음 예약 `2026-08-24T15:00:00Z`를 발행했다. 복구 sidecar가 누락·36시간 초과·차단·halt 존재이면 이 상태는 자동으로 `BLOCKED`가 된다.
+- **아직 수익 아님**: 전략 체결은 0건, 전략 손익은 0달러다. 무장은 주문 가능 조건이 갖춰졌다는 뜻이며 체결이나 수익 보장이 아니다. 다음 평일 정규장에 현금 1% 여유, 손실 차단, K1/K2, 서명·nonce·배포 정합을 모두 통과해야만 주문한다.
+- **배포·외부 확인**: deploy run `32556975350` 성공. KIS smoke run `32556975347`은 성공(exit 0)했고 새 main commit `68eab4e`를 확인했다. 복구 뒤 money-path도 자동 재실행됐다.
+- **검증**: 전체 2904 passed/6 skipped, ruff, 셸 구문, YAML, diff, 엄격 하네스 14/14, HANDOFF 사실 검사, PR 품질 관문이 통과했다.
+- **상세 인계**: `HANDOFF-154-RECONCILIATION-HALT-RECOVERY.md`.
+
+## 이전 관찰 — 2026-08-22 KST (#642 전략 성과 장부 교정·저회전 AI 검증 완료)
 
 현재 `main` 최신 머지는 `bb868b4`(#642)이고 기능 커밋은 `db5d8ac`이다.
 
@@ -7657,6 +7670,13 @@ bash scripts/operator_install.sh     # 자동 검증 5단계 + sudo systemctl �
 이 불변량은 스펙 007 하드닝 캐너리에 의해 **생산 배포 경계**에서 강제됩니다 (라이브 워커가 새 코드를 받기 전에).
 
 ## 과거 인수인계 파일 (참고용)
+
+- `HANDOFF-154-RECONCILIATION-HALT-RECOVERY.md` — 새 KIS 정합성 `OK`와 전략 측정
+  계약 `VALID`를 확인한 뒤 정합성 오류 halt만 자동 복구. production run
+  `32557022009`에서 halt 해제·주문 0건, 후속 money-path run `32557042951`에서
+  `REAL_ORDER_PATH_ARMED`, 다음 예약 `2026-08-24T15:00:00Z` 확인.
+- `HANDOFF-153-ACCOUNT-LEDGER-LOW-TURNOVER.md` — 계정 전체와 전략 성과 장부 분리,
+  시작 전 외부 보유 제외, 전략 체결 0건·손익 0달러 교정, 저회전 AI `NO_EDGE`.
 
 - `HANDOFF-152-DAILY-CROSS-ASSET-ML.md` — #639/#640 일봉 11자산 ML 후보 출시, KIS 1,300일봉 실제 `NO_EDGE`, 사이드카 lease 보정과 다음 저회전 연구 방향
 - `HANDOFF-146-HELDOUT-EXPLORATION-CANARY.md` — #617의 20% 탐색 캐너리 출시, 실제 sidecar 통과, A4/A6 키워드 오탐 후속과 재실행 순서
