@@ -621,6 +621,11 @@ class LivePerformanceSnapshotPayload(AuditPayload):
     avg_fill_latency_sec: str | None = None
     median_fill_latency_sec: str | None = None
     measurable_latency_fills: int = 0
+    measurement_contract_id: str | None = None
+    measurement_scope: str = "account"
+    excluded_fills_count: int = 0
+    excluded_realized_pnl_usd: str = "0"
+    excluded_unrealized_pnl_usd: str = "0"
     computed_at_utc: str
 
 
@@ -839,6 +844,8 @@ class PortfolioNavSnapshotPayload(AuditPayload):
     # 현금 미포함 레거시 측정 — forward 판정은 같은 베이시스의 최신 연속 구간만 쓴다
     # (자금 흐름이 수익률로 오인되는 오염 방지). 추가-전용 필드(헌법 IV 불변).
     capital_basis_usd: str | None = None
+    measurement_contract_id: str | None = None
+    measurement_scope: str = "account"
 
 
 class EffectiveCapitalUpdatedPayload(AuditPayload):

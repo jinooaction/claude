@@ -11,7 +11,7 @@ from auto_invest.analytics.daily_cross_asset_ml import (
     UNIVERSE,
     DailyClose,
     render_markdown,
-    run_daily_cross_asset_ml,
+    run_low_turnover_daily_cross_asset_ml,
 )
 from auto_invest.market_data.store import get_bars
 from auto_invest.persistence import db
@@ -21,12 +21,12 @@ def _blocked(exc: Exception) -> dict:
     reason = f"{type(exc).__name__}: {exc}"
     return {
         "schema_version": "1.0",
-        "experiment_id": "daily-cross-asset-ml-v1",
+        "experiment_id": "low-turnover-daily-cross-asset-ml-v2",
         "verdict": "BLOCKED",
         "reason": reason,
         "candidate_package": {
             "eligible": False,
-            "candidate_id": "candidate-daily-cross-asset-ml-v1",
+            "candidate_id": "candidate-low-turnover-daily-cross-asset-ml-v2",
             "status": "blocked",
             "verdict": "BLOCKED",
             "reason_ko": reason,
@@ -58,7 +58,7 @@ def main() -> int:
             ]
             for symbol in UNIVERSE
         }
-        report = run_daily_cross_asset_ml(daily)
+        report = run_low_turnover_daily_cross_asset_ml(daily)
         payload = report.as_dict()
         markdown = render_markdown(report)
     except Exception as exc:  # A blocked report is evidence, not a silent stale success.

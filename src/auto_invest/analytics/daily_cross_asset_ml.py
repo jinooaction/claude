@@ -11,7 +11,7 @@ import hashlib
 import json
 import math
 from collections.abc import Mapping, Sequence
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import date
 from statistics import NormalDist
 from typing import Any
@@ -27,11 +27,25 @@ UNIVERSE = ("SPY", "QQQ", "EFA", "EEM", "IEF", "TLT", "LQD", "GLD", "DBC", "VNQ"
 EXPERIMENT_ID = "daily-cross-asset-ml-v1"
 PERIODS_PER_YEAR = 52
 FEATURE_NAMES = (
-    "momentum_1w", "momentum_4w", "momentum_13w", "momentum_26w", "momentum_52w",
-    "volatility_4w", "volatility_13w", "volatility_26w", "downside_volatility_13w",
-    "drawdown_26w", "trend_distance_13w", "trend_distance_26w", "rank_momentum_13w",
-    "rank_momentum_26w", "spy_correlation_26w", "market_breadth_13w", "spy_momentum_13w",
-    "spy_volatility_13w", *tuple(f"asset_{symbol}" for symbol in UNIVERSE),
+    "momentum_1w",
+    "momentum_4w",
+    "momentum_13w",
+    "momentum_26w",
+    "momentum_52w",
+    "volatility_4w",
+    "volatility_13w",
+    "volatility_26w",
+    "downside_volatility_13w",
+    "drawdown_26w",
+    "trend_distance_13w",
+    "trend_distance_26w",
+    "rank_momentum_13w",
+    "rank_momentum_26w",
+    "spy_correlation_26w",
+    "market_breadth_13w",
+    "spy_momentum_13w",
+    "spy_volatility_13w",
+    *tuple(f"asset_{symbol}" for symbol in UNIVERSE),
 )
 
 
@@ -65,6 +79,9 @@ class DailyMLConfig:
     max_asset_weight: float = 0.25
     max_total_weight: float = 0.99
     cost_scenarios_bps: tuple[int, ...] = (10, 25, 50)
+    minimum_hold_weeks: int = 0
+    trade_threshold: float = 0.0
+    estimated_trade_cost_bps: int = 0
 
 
 @dataclass(frozen=True)
@@ -115,6 +132,7 @@ class Decision:
     cash_weight: float
     turnover: float
     gross_return: float
+    suppressed_trades: int = 0
 
 
 @dataclass(frozen=True)
@@ -249,14 +267,25 @@ def build_panel(
             average26 = sum(levels[symbol][index - 25 : index + 1]) / 26
             one_hot = tuple(float(i == asset_index) for i in range(len(UNIVERSE)))
             features = (
-                _ret(levels[symbol], index, 1), _ret(levels[symbol], index, 4),
-                mom13[symbol], mom26[symbol], _ret(levels[symbol], index, 52),
-                _vol(asset_returns[index - 4 : index]), _vol(window13), _vol(window26),
-                _vol([min(value, 0.0) for value in window13]), levels[symbol][index] / peak - 1.0,
+                _ret(levels[symbol], index, 1),
+                _ret(levels[symbol], index, 4),
+                mom13[symbol],
+                mom26[symbol],
+                _ret(levels[symbol], index, 52),
+                _vol(asset_returns[index - 4 : index]),
+                _vol(window13),
+                _vol(window26),
+                _vol([min(value, 0.0) for value in window13]),
+                levels[symbol][index] / peak - 1.0,
                 levels[symbol][index] / average13 - 1.0,
-                levels[symbol][index] / average26 - 1.0, _rank(mom13, symbol),
-                _rank(mom26, symbol), _corr(window26, spy_returns), breadth,
-                mom13["SPY"], _vol(returns["SPY"][index - 13 : index]), *one_hot,
+                levels[symbol][index] / average26 - 1.0,
+                _rank(mom13, symbol),
+                _rank(mom26, symbol),
+                _corr(window26, spy_returns),
+                breadth,
+                mom13["SPY"],
+                _vol(returns["SPY"][index - 13 : index]),
+                *one_hot,
             )
             if len(features) != len(FEATURE_NAMES) or not all(math.isfinite(v) for v in features):
                 raise DailyMLEdgeDataError(f"non-finite feature at {dates[index]}/{symbol}")
@@ -362,9 +391,19 @@ def _walk_forward(
                 )
             )
         folds.append(
-            FoldResult(fold_id, train[0].date, dates[max_train_target], dates[test_start],
-                       dates[test_end], len(train), len(test), ridge_rmse, boost_rmse,
-                       error_quantile, chronology_ok)
+            FoldResult(
+                fold_id,
+                train[0].date,
+                dates[max_train_target],
+                dates[test_start],
+                dates[test_end],
+                len(train),
+                len(test),
+                ridge_rmse,
+                boost_rmse,
+                error_quantile,
+                chronology_ok,
+            )
         )
     if not folds:
         raise DailyMLEdgeDataError("no valid walk-forward folds")
@@ -409,32 +448,74 @@ def _ml_decisions(
     for row in predictions:
         grouped.setdefault(row.feature_index, []).append(row)
     previous = {symbol: 0.0 for symbol in UNIVERSE}
+    holding_age = {symbol: 0 for symbol in UNIVERSE}
     out: list[Decision] = []
     for index in sorted(grouped):
         group = {row.asset: row for row in grouped[index]}
         if set(group) != set(UNIVERSE):
             raise DailyMLEdgeDataError(f"incomplete predictions at index {index}")
+        cost_floor = config.estimated_trade_cost_bps / 10_000
         scores = {
             symbol: max(
                 0.0,
                 float(getattr(row, prediction_field))
-                - config.uncertainty_scale * row.uncertainty,
+                - config.uncertainty_scale * row.uncertainty
+                - cost_floor,
             )
             / row.trailing_volatility
             for symbol, row in group.items()
         }
-        weights = _capped_weights(scores, config)
+        raw_weights = _capped_weights(scores, config)
+        weights = dict(raw_weights)
+        suppressed = 0
+        for symbol in UNIVERSE:
+            delta = raw_weights[symbol] - previous[symbol]
+            still_locked = (
+                previous[symbol] > 0
+                and raw_weights[symbol] < previous[symbol]
+                and holding_age[symbol] < config.minimum_hold_weeks
+            )
+            below_threshold = abs(delta) < config.trade_threshold
+            if delta != 0 and (still_locked or below_threshold):
+                weights[symbol] = previous[symbol]
+                suppressed += 1
+        total_weight = sum(weights.values())
+        if total_weight > config.max_total_weight:
+            scale = config.max_total_weight / total_weight
+            weights = {symbol: weight * scale for symbol, weight in weights.items()}
         cash = max(0.0, 1.0 - sum(weights.values()))
         turnover = sum(abs(weights[symbol] - previous[symbol]) for symbol in UNIVERSE)
         gross = sum(weights[symbol] * group[symbol].realized_return for symbol in UNIVERSE)
-        out.append(Decision(index, next(iter(group.values())).date, weights, cash, turnover, gross))
+        out.append(
+            Decision(
+                index,
+                next(iter(group.values())).date,
+                weights,
+                cash,
+                turnover,
+                gross,
+                suppressed,
+            )
+        )
+        holding_age = {
+            symbol: (
+                holding_age[symbol] + 1
+                if weights[symbol] > 0 and previous[symbol] > 0
+                else (1 if weights[symbol] > 0 else 0)
+            )
+            for symbol in UNIVERSE
+        }
         previous = weights
     return tuple(out)
 
 
 def _benchmark_decisions(
-    indices: Sequence[int], dates: Sequence[str], levels: Mapping[str, Sequence[float]],
-    returns: Mapping[str, Sequence[float]], *, trend: bool,
+    indices: Sequence[int],
+    dates: Sequence[str],
+    levels: Mapping[str, Sequence[float]],
+    returns: Mapping[str, Sequence[float]],
+    *,
+    trend: bool,
 ) -> tuple[Decision, ...]:
     previous = {symbol: 0.0 for symbol in UNIVERSE}
     out: list[Decision] = []
@@ -447,11 +528,13 @@ def _benchmark_decisions(
             inv_total = sum(inv_vol.values())
             base = {symbol: 0.99 * inv_vol[symbol] / inv_total for symbol in UNIVERSE}
             weights = {
-                symbol: base[symbol] * sum(
+                symbol: base[symbol]
+                * sum(
                     levels[symbol][index]
                     > sum(levels[symbol][index - window + 1 : index + 1]) / window
                     for window in (13, 26, 39, 52)
-                ) / 4
+                )
+                / 4
                 for symbol in UNIVERSE
             }
         else:
@@ -522,11 +605,18 @@ def run_daily_cross_asset_ml(
     config = config or DailyMLConfig()
     dates, levels, returns, panel = build_panel(daily, config)
     folds, predictions = _walk_forward(dates, panel, config)
+    baseline_candidate = _ml_decisions(
+        predictions,
+        replace(
+            config,
+            minimum_hold_weeks=0,
+            trade_threshold=0.0,
+            estimated_trade_cost_bps=0,
+        ),
+    )
     candidate = _ml_decisions(predictions, config)
     ridge_candidate = _ml_decisions(predictions, config, prediction_field="ridge_return")
-    boosting_candidate = _ml_decisions(
-        predictions, config, prediction_field="boosting_return"
-    )
+    boosting_candidate = _ml_decisions(predictions, config, prediction_field="boosting_return")
     indices = [row.feature_index for row in candidate]
     decision_dates = [row.date for row in candidate]
     passive = _benchmark_decisions(indices, decision_dates, levels, returns, trend=False)
@@ -552,36 +642,46 @@ def run_daily_cross_asset_ml(
     dsr = _dsr(primary_returns, trial_sharpes)
     wins = 0
     for fold in folds:
-        candidate_fold = [
-            row for row in candidate if fold.test_start <= row.date <= fold.test_end
-        ]
-        passive_fold = [
-            row for row in passive if fold.test_start <= row.date <= fold.test_end
-        ]
-        trend_fold = [
-            row for row in trend if fold.test_start <= row.date <= fold.test_end
-        ]
-        candidate_total = math.prod(
-            1 + value for value in _net_returns(candidate_fold, 25)
-        )
+        candidate_fold = [row for row in candidate if fold.test_start <= row.date <= fold.test_end]
+        passive_fold = [row for row in passive if fold.test_start <= row.date <= fold.test_end]
+        trend_fold = [row for row in trend if fold.test_start <= row.date <= fold.test_end]
+        candidate_total = math.prod(1 + value for value in _net_returns(candidate_fold, 25))
         passive_total = math.prod(1 + value for value in _net_returns(passive_fold, 25))
         trend_total = math.prod(1 + value for value in _net_returns(trend_fold, 25))
         wins += int(candidate_total > max(passive_total, trend_total))
     win_rate = wins / len(folds)
     better_drawdown = min(passive_stats["max_dd_pct"], trend_stats["max_dd_pct"])
     fifty = next(row for row in cost_rows if row["cost_bps"] == 50)["metrics"]
+    baseline_turnover = sum(row.turnover for row in baseline_candidate)
+    candidate_turnover = sum(row.turnover for row in candidate)
+    suppressed_trades = sum(row.suppressed_trades for row in candidate)
     gates = (
         GateResult("fold_count", len(folds) >= 10, len(folds), ">= 10"),
         GateResult("positive_25bp_cagr", primary["cagr_pct"] > 0, primary["cagr_pct"], "> 0"),
-        GateResult("sharpe_margin", primary["sharpe"] >= better_sharpe + 0.20,
-                   primary["sharpe"] - better_sharpe, ">= 0.20 over both benchmarks"),
+        GateResult(
+            "sharpe_margin",
+            primary["sharpe"] >= better_sharpe + 0.20,
+            primary["sharpe"] - better_sharpe,
+            ">= 0.20 over both benchmarks",
+        ),
         GateResult("psr", psr is not None and psr >= 0.95, psr, ">= 0.95"),
         GateResult("dsr", dsr is not None and dsr >= 0.95, dsr, ">= 0.95"),
         GateResult("fold_win_rate", win_rate >= 0.60, win_rate, ">= 0.60"),
-        GateResult("max_drawdown", primary["max_dd_pct"] <= better_drawdown,
-                   primary["max_dd_pct"], f"<= {better_drawdown}"),
-        GateResult("positive_50bp_return", fifty["total_return_pct"] > 0,
-                   fifty["total_return_pct"], "> 0"),
+        GateResult(
+            "max_drawdown",
+            primary["max_dd_pct"] <= better_drawdown,
+            primary["max_dd_pct"],
+            f"<= {better_drawdown}",
+        ),
+        GateResult(
+            "positive_50bp_return", fifty["total_return_pct"] > 0, fifty["total_return_pct"], "> 0"
+        ),
+        GateResult(
+            "turnover_not_increased",
+            candidate_turnover <= baseline_turnover + 1e-12,
+            candidate_turnover,
+            f"<= baseline {baseline_turnover:.6f}",
+        ),
     )
     ready = all(gate.passed for gate in gates)
     verdict = "DAILY_ML_EDGE_CANDIDATE_READY" if ready else "NO_EDGE"
@@ -596,11 +696,27 @@ def run_daily_cross_asset_ml(
         "model": _fingerprint({"config": asdict(config), "sklearn": sklearn.__version__}),
         "features": _fingerprint(FEATURE_NAMES),
     }
+    low_turnover_enabled = (
+        config.minimum_hold_weeks > 0
+        or config.trade_threshold > 0
+        or config.estimated_trade_cost_bps > 0
+    )
+    experiment_id = (
+        "low-turnover-daily-cross-asset-ml-v2" if low_turnover_enabled else EXPERIMENT_ID
+    )
     latest = candidate[-1]
     package = {
         "eligible": ready,
-        "candidate_id": "candidate-daily-cross-asset-ml-v1",
-        "title_ko": "일봉 교차자산 AI 상대수익 후보 재현 검증",
+        "candidate_id": (
+            "candidate-low-turnover-daily-cross-asset-ml-v2"
+            if low_turnover_enabled
+            else "candidate-daily-cross-asset-ml-v1"
+        ),
+        "title_ko": (
+            "저회전 일봉 교차자산 AI 상대수익 후보"
+            if low_turnover_enabled
+            else "일봉 교차자산 AI 상대수익 후보 재현 검증"
+        ),
         "domain_key": "investment_edge",
         "status": "new" if ready else "rejected",
         "risk_grade": 2,
@@ -610,39 +726,89 @@ def run_daily_cross_asset_ml(
         "reason_ko": reason,
         "next_action_ko": "독립 no-live 재현 뒤 기존 Canary 승격 관문을 적용한다.",
         "replay_command": (
-            "uv run python scripts/daily_cross_asset_ml_probe.py "
-            "--db data/forward_wide.db --json"
+            "uv run python scripts/daily_cross_asset_ml_probe.py --db data/forward_wide.db --json"
         ),
         "evidence_refs": ["daily-cross-asset-ml", "kis-price-bars", "global-trend-wide"],
         **fingerprints,
         "live_promotion_authorized": False,
     }
     return DailyMLReport(
-        "1.0", EXPERIMENT_ID, verdict, reason,
-        {"symbols": list(UNIVERSE), "daily_counts": {s: len(daily[s]) for s in UNIVERSE},
-         "common_week_start": dates[0], "common_week_end": dates[-1], "common_weeks": len(dates)},
+        "1.1",
+        experiment_id,
+        verdict,
+        reason,
+        {
+            "symbols": list(UNIVERSE),
+            "daily_counts": {s: len(daily[s]) for s in UNIVERSE},
+            "common_week_start": dates[0],
+            "common_week_end": dates[-1],
+            "common_weeks": len(dates),
+        },
         folds,
-        {"prediction_weeks": len(candidate), "fold_wins": wins, "fold_win_rate": win_rate,
-         "ridge_mean_validation_rmse": float(np.mean([f.ridge_rmse for f in folds])),
-         "boosting_mean_validation_rmse": float(np.mean([f.boosting_rmse for f in folds])),
-         "trial_sharpes_annual": trial_sharpes},
+        {
+            "prediction_weeks": len(candidate),
+            "fold_wins": wins,
+            "fold_win_rate": win_rate,
+            "baseline_turnover": round(baseline_turnover, 6),
+            "candidate_turnover": round(candidate_turnover, 6),
+            "turnover_reduction_pct": round((1 - candidate_turnover / baseline_turnover) * 100, 6)
+            if baseline_turnover > 0
+            else 0.0,
+            "suppressed_trades": suppressed_trades,
+            "minimum_hold_weeks": config.minimum_hold_weeks,
+            "trade_threshold": config.trade_threshold,
+            "estimated_trade_cost_bps": config.estimated_trade_cost_bps,
+            "ridge_mean_validation_rmse": float(np.mean([f.ridge_rmse for f in folds])),
+            "boosting_mean_validation_rmse": float(np.mean([f.boosting_rmse for f in folds])),
+            "trial_sharpes_annual": trial_sharpes,
+        },
         cost_rows,
         {"passive_equal_weight_25bp": passive_stats, "incumbent_wide_trend_25bp": trend_stats},
-        {"psr_vs_better_benchmark": psr, "dsr_model_trials": dsr}, gates,
+        {"psr_vs_better_benchmark": psr, "dsr_model_trials": dsr},
+        gates,
         {"date": latest.date, "weights": latest.weights, "cash_weight": latest.cash_weight},
-        package, fingerprints,
-        {"orders_submitted": 0, "orders_cancelled": 0, "live_strategy_changed": False,
-         "capital_changed": False, "whitelist_changed": False, "caps_changed": False},
+        package,
+        fingerprints,
+        {
+            "orders_submitted": 0,
+            "orders_cancelled": 0,
+            "live_strategy_changed": False,
+            "capital_changed": False,
+            "whitelist_changed": False,
+            "caps_changed": False,
+        },
     )
+
+
+def run_low_turnover_daily_cross_asset_ml(
+    daily: Mapping[str, Sequence[DailyClose]],
+    config: DailyMLConfig | None = None,
+) -> DailyMLReport:
+    """Run the separately identified low-turnover challenger (spec 147)."""
+    low_turnover = config or DailyMLConfig(
+        minimum_hold_weeks=4,
+        trade_threshold=0.08,
+        estimated_trade_cost_bps=25,
+    )
+    return run_daily_cross_asset_ml(daily, low_turnover)
 
 
 def render_markdown(report: DailyMLReport) -> str:
     lines = [
-        "# 일봉 교차자산 AI 후보", "", "| 항목 | 값 |", "|------|----|",
-        f"| 판정 | {report.verdict} |", f"| 이유 | {report.reason} |",
-        f"| 공통 주 | {report.data['common_weeks']} |", f"| 미래 구간 | {len(report.folds)} |",
+        "# 일봉 교차자산 AI 후보",
+        "",
+        "| 항목 | 값 |",
+        "|------|----|",
+        f"| 판정 | {report.verdict} |",
+        f"| 이유 | {report.reason} |",
+        f"| 공통 주 | {report.data['common_weeks']} |",
+        f"| 미래 구간 | {len(report.folds)} |",
         f"| PSR | {report.significance['psr_vs_better_benchmark']} |",
         f"| DSR | {report.significance['dsr_model_trials']} |",
+        f"| 기준 회전율 | {report.model_metrics['baseline_turnover']} |",
+        f"| 후보 회전율 | {report.model_metrics['candidate_turnover']} |",
+        f"| 회전율 감소 | {report.model_metrics['turnover_reduction_pct']}% |",
+        f"| 억제 거래 | {report.model_metrics['suppressed_trades']} |",
         "",
         "## 비용 차감 결과",
         "",

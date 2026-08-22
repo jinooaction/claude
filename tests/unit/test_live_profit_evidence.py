@@ -25,6 +25,8 @@ def _performance(
 ) -> dict:
     return {
         "mode": "live",
+        "measurement_scope": "strategy",
+        "measurement_contract_id": "sha256:test-contract",
         "fills_count": fills,
         "gross_invested_usd": "178.32" if fills else "0",
         "realized_pnl_usd": realized,
@@ -106,6 +108,27 @@ def test_malformed_prior_cannot_forge_first_profit() -> None:
         "first_profit_total_pnl_usd": "1.00",
     }
     report = _assess(_performance(fills=0, unrealized="0", total="0"), prior)
+
+    assert report.status == STATUS_NO_FILLS
+    assert report.first_profit_observed is False
+
+
+def test_account_scope_profit_is_not_strategy_profit() -> None:
+    performance = _performance()
+    performance["measurement_scope"] = "account"
+
+    report = _assess(performance)
+
+    assert report.status == STATUS_UNKNOWN
+    assert report.first_profit_observed is False
+
+
+def test_prior_profit_from_another_contract_is_not_sticky() -> None:
+    prior = _assess(_performance()).to_dict()
+    performance = _performance(fills=0, unrealized="0", total="0")
+    performance["measurement_contract_id"] = "sha256:new-contract"
+
+    report = _assess(performance, prior)
 
     assert report.status == STATUS_NO_FILLS
     assert report.first_profit_observed is False

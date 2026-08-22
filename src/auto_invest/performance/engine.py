@@ -158,6 +158,12 @@ class PerformanceReport:
     unmarked_symbols: list[str]  # 미청산이나 시세 조회 못 한 종목
     data_quality_warnings: list[str]
     risk: RiskMetrics | None = None  # 위험조정 성과 (US2); 청산 0건이면 None
+    measurement_contract_id: str | None = None
+    measurement_scope: str = "account"
+    excluded_symbols: tuple[str, ...] = ()
+    excluded_fills_count: int = 0
+    excluded_realized_pnl_usd: Decimal = Decimal("0")
+    excluded_unrealized_pnl_usd: Decimal = Decimal("0")
 
     SCHEMA_VERSION = "1.2"  # 1.2: risk 블록에 sortino_ratio 추가 (spec 016 슬라이스 2)
 
@@ -204,6 +210,12 @@ class PerformanceReport:
             "unmarked_symbols": self.unmarked_symbols,
             "data_quality_warnings": self.data_quality_warnings,
             "risk": None if self.risk is None else self.risk.to_json_dict(),
+            "measurement_contract_id": self.measurement_contract_id,
+            "measurement_scope": self.measurement_scope,
+            "excluded_symbols": list(self.excluded_symbols),
+            "excluded_fills_count": self.excluded_fills_count,
+            "excluded_realized_pnl_usd": str(self.excluded_realized_pnl_usd),
+            "excluded_unrealized_pnl_usd": str(self.excluded_unrealized_pnl_usd),
         }
 
 
@@ -403,6 +415,19 @@ def net_cash_flow_usd(fills: list[FillRecord]) -> Decimal:
         elif f.side == "SELL":
             net += notional
     return net
+
+
+def partition_fills(
+    fills: list[FillRecord], excluded_symbols: frozenset[str]
+) -> tuple[list[FillRecord], list[FillRecord]]:
+    """Split strategy-attributable fills from pre-system holding activity."""
+    if not excluded_symbols:
+        return list(fills), []
+    included: list[FillRecord] = []
+    excluded: list[FillRecord] = []
+    for fill in fills:
+        (excluded if fill.symbol in excluded_symbols else included).append(fill)
+    return included, excluded
 
 
 # --------------------------------------------------- risk-adjusted (US2, P2)
@@ -750,14 +775,23 @@ def compute_performance(
     until: datetime,
     starting_capital: Decimal | None = None,
     opening_positions: tuple[OpeningPosition, ...] = (),
+    excluded_symbols: frozenset[str] = frozenset(),
+    measurement_contract_id: str | None = None,
 ) -> PerformanceReport:
     """정규화된 체결 + 시세(marks)로 성과 리포트를 합성한다. 순수 함수.
 
     `starting_capital` 은 위험조정 지표의 자산곡선 기준 자본이다. 미지정 시 기간
     내 총 투입액(gross_invested)을 대용으로 쓴다(투입 자본 대비 실현 수익률 관점).
     """
+    strategy_fills, excluded_fills = partition_fills(fills, excluded_symbols)
+    strategy_opening = tuple(
+        row for row in opening_positions if row.symbol not in excluded_symbols
+    )
+    excluded_opening = tuple(
+        row for row in opening_positions if row.symbol in excluded_symbols
+    )
     positions, rules, gross_invested, warnings = reconstruct(
-        fills, opening_positions=opening_positions
+        strategy_fills, opening_positions=strategy_opening
     )
 
     per_symbol: list[SymbolPerformance] = []
@@ -806,16 +840,32 @@ def compute_performance(
         else gross_invested
     )
     risk = compute_risk_metrics(
-        fills,
+        strategy_fills,
         starting_capital=cap,
-        opening_positions=opening_positions,
+        opening_positions=strategy_opening,
     )
+
+    excluded_positions, _, _, excluded_warnings = reconstruct(
+        excluded_fills, opening_positions=excluded_opening
+    )
+    excluded_realized = sum(
+        (row.realized_pnl_usd for row in excluded_positions.values()), Decimal("0")
+    )
+    excluded_unrealized = sum(
+        (
+            (marks[symbol] - row.avg_cost_usd) * Decimal(row.qty)
+            for symbol, row in excluded_positions.items()
+            if row.qty != 0 and symbol in marks
+        ),
+        Decimal("0"),
+    )
+    warnings.extend(f"excluded scope: {warning}" for warning in excluded_warnings)
 
     return PerformanceReport(
         mode=mode,
         period_since_utc=_fmt_ts(since),
         period_until_utc=_fmt_ts(until),
-        fills_count=len(fills),
+        fills_count=len(strategy_fills),
         gross_invested_usd=gross_invested,
         realized_pnl_usd=total_realized,
         unrealized_pnl_usd=total_unrealized,
@@ -826,6 +876,12 @@ def compute_performance(
         unmarked_symbols=sorted(unmarked),
         data_quality_warnings=warnings,
         risk=risk,
+        measurement_contract_id=measurement_contract_id,
+        measurement_scope="strategy" if measurement_contract_id else "account",
+        excluded_symbols=tuple(sorted(excluded_symbols)),
+        excluded_fills_count=len(excluded_fills),
+        excluded_realized_pnl_usd=excluded_realized,
+        excluded_unrealized_pnl_usd=excluded_unrealized,
     )
 
 
@@ -838,6 +894,8 @@ def build_performance_report(
     marks: dict[str, Decimal] | None = None,
     starting_capital: Decimal | None = None,
     opening_positions: tuple[OpeningPosition, ...] = (),
+    excluded_symbols: frozenset[str] = frozenset(),
+    measurement_contract_id: str | None = None,
 ) -> PerformanceReport:
     """audit_log 에서 체결을 읽어 성과 리포트를 만든다 (read-only 진입점)."""
     fills = read_fills(conn, mode=mode, since=since, until=until)
@@ -849,6 +907,8 @@ def build_performance_report(
         until=until,
         starting_capital=starting_capital,
         opening_positions=opening_positions,
+        excluded_symbols=excluded_symbols,
+        measurement_contract_id=measurement_contract_id,
     )
 
 
@@ -885,6 +945,11 @@ def snapshot_fields(
         "sharpe_ratio": _s(risk.sharpe_ratio) if risk else None,
         "max_drawdown_pct": _s(risk.max_drawdown_pct) if risk else None,
         "total_return_pct": _s(risk.total_return_pct) if risk else None,
+        "measurement_contract_id": report.measurement_contract_id,
+        "measurement_scope": report.measurement_scope,
+        "excluded_fills_count": report.excluded_fills_count,
+        "excluded_realized_pnl_usd": str(report.excluded_realized_pnl_usd),
+        "excluded_unrealized_pnl_usd": str(report.excluded_unrealized_pnl_usd),
         "computed_at_utc": computed_at_utc,
     }
     if latency is not None:

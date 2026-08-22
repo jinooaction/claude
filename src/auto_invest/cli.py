@@ -1060,11 +1060,7 @@ async def _fetch_marks(
                     account=account_no,
                 )
                 marks.update(
-                    {
-                        symbol: mark
-                        for symbol, mark in balance_marks.items()
-                        if symbol in missing
-                    }
+                    {symbol: mark for symbol, mark in balance_marks.items() if symbol in missing}
                 )
             except Exception:  # noqa: BLE001 — fallback 실패도 종목 미평가로 보수 처리
                 pass
@@ -1549,6 +1545,16 @@ def performance(
         "--opening-positions",
         help="시스템 가동 전 KIS 보유의 검증된 수량·평단 TOML. 성과 시작 상태로만 사용.",
     ),
+    strategy_scope: bool = typer.Option(
+        False,
+        "--strategy-scope",
+        help="검증된 시작 전 보유 종목과 그 체결을 전략 성과에서 제외한다.",
+    ),
+    portfolio: Path | None = typer.Option(
+        None,
+        "--portfolio",
+        help="전략 범위 계약의 유니버스 충돌 검사용 포트폴리오 TOML.",
+    ),
     base_url: str = typer.Option(
         "https://openapi.koreainvestment.com:9443",
         "--base-url",
@@ -1641,6 +1647,31 @@ def performance(
         typer.echo(f"시작 포지션 오류: {exc}", err=True)
         _exit(2)
 
+    measurement_contract = None
+    excluded_symbols: frozenset[str] = frozenset()
+    if strategy_scope:
+        if mode != "live" or opening_positions_path is None or portfolio is None:
+            typer.echo(
+                "--strategy-scope requires --mode live, --opening-positions, and --portfolio.",
+                err=True,
+            )
+            _exit(2)
+        from auto_invest.performance.measurement_contract import (
+            MeasurementContractError,
+            build_strategy_measurement_contract,
+        )
+
+        try:
+            _caps, _whitelist, strategy_config = _load_portfolio_for_backtest(portfolio)
+            measurement_contract = build_strategy_measurement_contract(
+                opening_positions,
+                strategy_universe=strategy_config.universe,  # type: ignore[union-attr]
+            )
+        except (ConfigError, MeasurementContractError) as exc:
+            typer.echo(f"strategy measurement contract failed: {exc}", err=True)
+            _exit(65)
+        excluded_symbols = frozenset(measurement_contract.excluded_symbols)
+
     if not db_path.exists():
         typer.echo(f"DB 파일을 찾을 수 없습니다: {db_path}", err=True)
         _exit(1)
@@ -1650,9 +1681,7 @@ def performance(
         # read-only — PRAGMA query_only로 INSERT/UPDATE/DELETE를 차단.
         conn.execute("PRAGMA query_only = ON")
         fills = read_fills(conn, mode=mode, since=since_dt, until=until_dt)
-        positions, _, _, _ = reconstruct(
-            fills, opening_positions=opening_positions
-        )
+        positions, _, _, _ = reconstruct(fills, opening_positions=opening_positions)
         open_symbols = sorted(s for s, p in positions.items() if p.qty != 0)
         marks: dict = {}
         if open_symbols and not no_marks and env_file is not None:
@@ -1678,12 +1707,19 @@ def performance(
             until=until_dt,
             starting_capital=starting_capital,
             opening_positions=opening_positions,
+            excluded_symbols=excluded_symbols,
+            measurement_contract_id=(
+                None if measurement_contract is None else measurement_contract.contract_id
+            ),
         )
     finally:
         conn.close()
 
     # spec 028: 체결 지연(의사결정→체결) — 라이브에서만 의미가 있다(페이퍼는 동기 체결).
-    latency_stats = compute_fill_latency(fills)
+    from auto_invest.performance.engine import partition_fills
+
+    strategy_fills, _excluded_fills = partition_fills(fills, excluded_symbols)
+    latency_stats = compute_fill_latency(strategy_fills)
 
     if snapshot:
         # 측정은 위에서 read-only(query_only)로 끝냈다. 스냅샷은 분리된 쓰기
@@ -1706,7 +1742,7 @@ def performance(
             write_conn.close()
         typer.echo(f"(스냅샷 기록됨: LIVE_PERFORMANCE_SNAPSHOT seq={seq})", err=True)
 
-    slippage_stats = compute_slippage(fills) if slippage else None
+    slippage_stats = compute_slippage(strategy_fills) if slippage else None
 
     if output_format == "json":
         payload = report.to_json_dict()
@@ -5315,6 +5351,21 @@ def nav_snapshot_cmd(
         " NAV 에 현금을 포함한다. 없으면 현금 0(레거시) — 매수/매도가 NAV 를 출렁여"
         " forward 수익률이 오염되므로, 판정용 페이퍼 트랙은 반드시 줄 것.",
     ),
+    strategy_scope: bool = typer.Option(
+        False,
+        "--strategy-scope",
+        help="live 전략 측정에서 검증된 시작 전 보유 종목의 체결을 제외한다.",
+    ),
+    opening_positions_path: Path | None = typer.Option(
+        None,
+        "--opening-positions",
+        help="전략 범위에서 제외할 검증된 시작 전 보유 TOML.",
+    ),
+    portfolio: Path | None = typer.Option(
+        None,
+        "--portfolio",
+        help="전략 범위 계약의 유니버스 충돌 검사용 포트폴리오 TOML.",
+    ),
     output_format: str = typer.Option("text", "--format", help="text | json."),
 ) -> None:
     """Spec 029/035 — 현재 시가평가 순자산(NAV)을 계산하고 (옵션) 시계열에 1점 기록한다.
@@ -5329,7 +5380,12 @@ def nav_snapshot_cmd(
     import json as _json
     from datetime import UTC, datetime
 
-    from auto_invest.performance.engine import net_cash_flow_usd, read_fills, reconstruct
+    from auto_invest.performance.engine import (
+        net_cash_flow_usd,
+        partition_fills,
+        read_fills,
+        reconstruct,
+    )
     from auto_invest.portfolio import compute_nav
     from auto_invest.portfolio.nav import render_text as nav_render_text
 
@@ -5343,6 +5399,34 @@ def nav_snapshot_cmd(
         typer.echo(f"DB 파일을 찾을 수 없습니다: {db_path}", err=True)
         _exit(1)
 
+    measurement_contract = None
+    excluded_fills_count = 0
+    if strategy_scope:
+        if mode != "live" or opening_positions_path is None or portfolio is None:
+            typer.echo(
+                "--strategy-scope requires --mode live, --opening-positions, and --portfolio.",
+                err=True,
+            )
+            _exit(2)
+        from auto_invest.performance.measurement_contract import (
+            MeasurementContractError,
+            build_strategy_measurement_contract,
+        )
+        from auto_invest.performance.opening_positions import (
+            OpeningPositionsError,
+            load_opening_positions,
+        )
+
+        try:
+            _caps, _whitelist, strategy_config = _load_portfolio_for_backtest(portfolio)
+            measurement_contract = build_strategy_measurement_contract(
+                load_opening_positions(opening_positions_path),
+                strategy_universe=strategy_config.universe,  # type: ignore[union-attr]
+            )
+        except (ConfigError, OpeningPositionsError, MeasurementContractError) as exc:
+            typer.echo(f"strategy measurement contract failed: {exc}", err=True)
+            _exit(65)
+
     # 보유는 전체 누적 체결로 재구성한다 — 넓은 기간으로 모든 fills 를 읽는다.
     since_dt = datetime(1970, 1, 1, tzinfo=UTC)
     until_dt = datetime.now(UTC)
@@ -5350,6 +5434,11 @@ def nav_snapshot_cmd(
     try:
         conn.execute("PRAGMA query_only = ON")
         fills = read_fills(conn, mode=mode, since=since_dt, until=until_dt)
+        if measurement_contract is not None:
+            fills, excluded_fills = partition_fills(
+                fills, frozenset(measurement_contract.excluded_symbols)
+            )
+            excluded_fills_count = len(excluded_fills)
         positions, _, _, _ = reconstruct(fills)
     finally:
         conn.close()
@@ -5417,6 +5506,12 @@ def nav_snapshot_cmd(
                     total_qty_drift=snap.total_qty_drift,
                     total_value_drift_usd=str(snap.total_value_drift_usd),
                     capital_basis_usd=(None if capital_dec is None else str(capital_dec)),
+                    measurement_contract_id=(
+                        None if measurement_contract is None else measurement_contract.contract_id
+                    ),
+                    measurement_scope=(
+                        "strategy" if measurement_contract is not None else "account"
+                    ),
                 ),
             )
         finally:
@@ -5426,6 +5521,11 @@ def nav_snapshot_cmd(
     if output_format == "json":
         out = snap.to_json_dict()
         out["mode"] = mode
+        out["measurement_contract_id"] = (
+            None if measurement_contract is None else measurement_contract.contract_id
+        )
+        out["measurement_scope"] = "strategy" if measurement_contract is not None else "account"
+        out["excluded_fills_count"] = excluded_fills_count
         typer.echo(_json.dumps(out))
     else:
         typer.echo(nav_render_text(snap))
@@ -5475,6 +5575,7 @@ def forward_verdict_cmd(
     from auto_invest.market_data.store import get_bars
     from auto_invest.portfolio import (
         forward_edge_verdict,
+        latest_measurement_contract_suffix,
         read_nav_points,
         stitch_basis_segments,
     )
@@ -5508,11 +5609,14 @@ def forward_verdict_cmd(
     try:
         conn.execute("PRAGMA query_only = ON")
         all_points = read_nav_points(conn, mode=mode)
+        contract_points = (
+            latest_measurement_contract_suffix(all_points) if mode == "live" else all_points
+        )
         # 시간가중수익률(TWR): 자본 베이시스 경계(자금 흐름)만 건너뛰고 같은 전략의 구간
         # 내부 수익률을 사슬로 이어 전체 track record 를 보존한다. 옛 방식(최신 베이시스
         # 구간만)은 같은 전략인데 자본이 바뀌면 forward 관측을 통째로 리셋해 낭비했다 —
         # 수익률은 자본 규모와 무관하므로 과거를 버릴 이유가 없다(GIPS 표준).
-        points = stitch_basis_segments(all_points)
+        points = stitch_basis_segments(contract_points)
         nav_curve = [p.nav_usd for p in points]
         nav_dates = [_to_date(p.at_utc) for p in points]
         bars_by_symbol: dict[str, list] = {}
@@ -5610,6 +5714,7 @@ def forward_verdict_anchored_cmd(
     from auto_invest.backtest.recency import assess_recency, stale_guard, trailing_window
     from auto_invest.portfolio import (
         daily_returns_from_curve,
+        latest_measurement_contract_suffix,
         read_nav_points,
         stitch_basis_segments,
     )
@@ -5701,7 +5806,10 @@ def forward_verdict_anchored_cmd(
         oos_returns = report.pooled_returns
         # 2) 짧은 forward — 라이브 페이퍼 NAV(시간가중수익률 스티치)에서 일수익률.
         conn.execute("PRAGMA query_only = ON")
-        fwd_points = stitch_basis_segments(read_nav_points(conn, mode=mode))
+        raw_fwd_points = read_nav_points(conn, mode=mode)
+        if mode == "live":
+            raw_fwd_points = latest_measurement_contract_suffix(raw_fwd_points)
+        fwd_points = stitch_basis_segments(raw_fwd_points)
         forward_returns = daily_returns_from_curve([p.nav_usd for p in fwd_points])
     except Exception as exc:  # 데이터 부족·창 불가 등 — 사용 오류로 표면화
         typer.echo(f"anchored verdict failed: {exc}", err=True)
@@ -5958,6 +6066,7 @@ def growth_cmd(
     from auto_invest.portfolio.growth import (
         compute_growth,
         consistent_basis_suffix,
+        latest_measurement_contract_suffix,
         read_nav_points,
     )
 
@@ -5985,6 +6094,8 @@ def growth_cmd(
     finally:
         conn.close()
     if consistent_basis:
+        if mode == "live":
+            points = latest_measurement_contract_suffix(points)
         points = consistent_basis_suffix(points)
     report = compute_growth(points, mode=mode)
 
@@ -5994,6 +6105,82 @@ def growth_cmd(
     from auto_invest.portfolio.growth import render_text
 
     typer.echo(render_text(report))
+
+
+@app.command("resume-readiness")
+def resume_readiness_cmd(
+    db_path: Path = typer.Option(Path("data/auto_invest.db"), "--db"),
+    halt_path: Path = typer.Option(Path("data/halt.flag"), "--halt-path"),
+    opening_positions_path: Path = typer.Option(..., "--opening-positions"),
+    portfolio_path: Path = typer.Option(..., "--portfolio"),
+    max_age_hours: float = typer.Option(36.0, "--max-age-hours"),
+    output_format: str = typer.Option("json", "--format", help="json | text"),
+) -> None:
+    """정합성 halt 해제 가능성을 읽기 전용으로 판정한다(주문·해제 0건)."""
+    import json as _json
+    from datetime import UTC, datetime
+
+    from auto_invest.performance.measurement_contract import (
+        MeasurementContractError,
+        build_strategy_measurement_contract,
+    )
+    from auto_invest.performance.opening_positions import (
+        OpeningPositionsError,
+        load_opening_positions,
+    )
+    from auto_invest.reconciliation.readiness import evaluate_resume_readiness
+
+    if output_format not in ("json", "text"):
+        typer.echo("--format must be json or text", err=True)
+        _exit(2)
+    if not db_path.exists():
+        typer.echo(f"DB not found: {db_path}", err=True)
+        _exit(2)
+    try:
+        _caps, _whitelist, strategy_config = _load_portfolio_for_backtest(portfolio_path)
+        contract = build_strategy_measurement_contract(
+            load_opening_positions(opening_positions_path),
+            strategy_universe=strategy_config.universe,
+        )
+    except (ConfigError, OpeningPositionsError, MeasurementContractError) as exc:
+        typer.echo(f"strategy measurement contract failed: {exc}", err=True)
+        _exit(65)
+    conn = db.get_connection(db_path)
+    try:
+        conn.execute("PRAGMA query_only = ON")
+        row = conn.execute(
+            "SELECT result, finished_at_utc FROM reconciliation_runs ORDER BY seq DESC LIMIT 1"
+        ).fetchone()
+        nav_rows = conn.execute(
+            "SELECT payload_json FROM audit_log "
+            "WHERE event_type = 'PORTFOLIO_NAV_SNAPSHOT' "
+            "ORDER BY seq DESC"
+        ).fetchall()
+    finally:
+        conn.close()
+    nav_payload = next(
+        (
+            payload
+            for payload in (_json.loads(item["payload_json"]) for item in nav_rows)
+            if payload.get("mode") == "live"
+        ),
+        {},
+    )
+    observed_contract_id = nav_payload.get("measurement_contract_id")
+    evidence_quality = "VALID" if observed_contract_id == contract.contract_id else "BLOCKED"
+    result = evaluate_resume_readiness(
+        reconciliation_state=None if row is None else row["result"],
+        reconciliation_finished_at_utc=None if row is None else row["finished_at_utc"],
+        now=datetime.now(UTC),
+        halt_present=halt_path.exists(),
+        measurement_contract_id=observed_contract_id,
+        evidence_quality=evidence_quality,
+        max_age_hours=max_age_hours,
+    )
+    if output_format == "json":
+        typer.echo(_json.dumps(result.to_json_dict(), ensure_ascii=False))
+    else:
+        typer.echo(f"{result.status}: {', '.join(result.reasons) or 'ready'}")
 
 
 @app.command("ladder-decide")
