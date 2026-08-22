@@ -31,3 +31,4 @@
 - [x] T015 Fix the observed profit-evidence liveness false MISSING at the producer timestamp contract and add a regression.
 - [x] T016 Feed strategy-scope live performance into the capital ladder so zero-fill stale entry approval demotes automatically.
 - [x] T017 Keep strategy fills and PnL observable after disarm by using account NAV only as a positive measurement denominator.
+- [x] T018 Normalize broker account NAV to the capital validator's two-decimal contract.
