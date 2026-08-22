@@ -80,9 +80,11 @@ jobs:
           REQ=automation/rebalance-live.request
           armed="$(grep -E '^armed:' "$REQ" 2>/dev/null | head -1 | awk '{print $2}' || true)"
           entered="$(grep -E '^rung_entered:' "$REQ" 2>/dev/null | head -1 | awk '{print $2}' || true)"
+          capital="$(grep -E '^capital_usd:' "$REQ" 2>/dev/null | head -1 | awk '{print $2}' || true)"
           echo "armed=${armed:-false}" >> "$GITHUB_OUTPUT"
           echo "entered=${entered:-}" >> "$GITHUB_OUTPUT"
-          echo "armed=${armed:-false} rung_entered=${entered:-(none)}"
+          echo "capital=${capital:-}" >> "$GITHUB_OUTPUT"
+          echo "armed=${armed:-false} rung_entered=${entered:-(none)} capital=${capital:-(none)}"
 
       - name: Compute forward verdict on instance (read-only, ensemble paper track)
         id: verdict
@@ -146,6 +148,7 @@ jobs:
           USER: ${{ secrets.VULTR_SSH_USER }}
           PORT: ${{ secrets.VULTR_SSH_PORT }}
           ENTERED: ${{ steps.state.outputs.entered }}
+          CAPITAL: ${{ steps.state.outputs.capital }}
         run: |
           set +e
           port="${PORT:-22}"
@@ -164,6 +167,17 @@ jobs:
               "observe live-growth${since_arg}" \
               > /tmp/live_growth.json 2>/tmp/live_growth.err
           echo "--- live growth ---"; cat /tmp/live_growth.json; cat /tmp/live_growth.err
+          # 전략 범위 체결 수는 NAV 성장 시계열과 별도 계약이다. 현재 단의 자본으로
+          # 읽기 전용 성과를 측정해 첫 체결 전 오래된 무장 회수에 사용한다.
+          if [[ -n "${CAPITAL}" ]]; then
+            ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
+                -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+                "live-canary-profit ${CAPITAL}" \
+                > /tmp/live_performance.json 2>/tmp/live_performance.err
+          fi
+          if [[ ! -s /tmp/live_performance.json ]]; then echo '{}' > /tmp/live_performance.json; fi
+          echo "--- live strategy performance ---"
+          cat /tmp/live_performance.json /tmp/live_performance.err 2>/dev/null
 
       - name: Decide capital ladder (tested src module; writes sentinel on change)
         id: decide
@@ -175,6 +189,7 @@ jobs:
             --profit-evidence-json /tmp/profit_evidence.json \
             --hardened-canary-json /tmp/exploration_canary.json \
             --live-growth-json /tmp/live_growth.json \
+            --live-performance-json /tmp/live_performance.json \
             --account-nav-json /tmp/account_nav.json \
             --live-portfolio deploy/canary-live-portfolio.toml \
             --validated-portfolio deploy/global-trend-fixed-portfolio.toml \
@@ -399,6 +414,11 @@ jobs:
             echo "## 라이브 실적 JSON (현재 단 진입 이후, read-only)"
             echo '```json'
             cat /tmp/live_growth.json 2>/dev/null || echo '{}'
+            echo '```'
+            echo ""
+            echo "## 라이브 전략 성과 JSON (첫 체결 수, read-only)"
+            echo '```json'
+            cat /tmp/live_performance.json 2>/dev/null || echo '{}'
             echo '```'
           } > LAST_RUN.md
           git checkout --orphan publish

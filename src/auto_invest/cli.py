@@ -6308,6 +6308,12 @@ def ladder_decide_cmd(
         help="growth --mode live --since <단 진입일> --format json 출력 파일(단 ≥1 증거)."
         " 없거나 못 읽으면 증거 없음으로 처리(승격 불가, fail-safe).",
     ),
+    live_performance_json: Path = typer.Option(
+        None,
+        "--live-performance-json",
+        help="performance --strategy-scope --format json 출력 파일(첫 전략 체결 수 증거)."
+        " 없거나 못 읽으면 첫 체결 전 자동 강등은 보류하되 주문 전 게이트는 별도로 차단.",
+    ),
     account_nav_json: Path = typer.Option(
         None,
         "--account-nav-json",
@@ -6382,6 +6388,7 @@ def ladder_decide_cmd(
         edge_source = combined.get("source", "standard")
         verdict = combined  # decide_ladder 는 verdict["verdict"]/["n_obs"] 만 읽음 — 호환.
     growth = _read_json(live_growth_json)
+    live_performance = _read_json(live_performance_json)
     deployment_match = (
         profit_evidence.get("deployment_match") if isinstance(profit_evidence, dict) else None
     )
@@ -6428,6 +6435,7 @@ def ladder_decide_cmd(
         kill_switch_present=kill_switch.exists(),
         today=_dt.now(UTC).date(),
         exploration_verdict=exploration_verdict,
+        live_performance=live_performance,
         dd_budget_pct=_Dec(str(dd_budget_pct)),
     )
 
