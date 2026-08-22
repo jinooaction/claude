@@ -1,0 +1,116 @@
+name: Reconciliation halt recovery (conditional, no orders)
+
+on:
+  workflow_run:
+    workflows:
+      - "KIS smoke (autonomous)"
+    types:
+      - completed
+  schedule:
+    - cron: "20 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: reconciliation-halt-recovery
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86
+
+      - name: Install SSH key
+        env:
+          KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.VULTR_SSH_KNOWN_HOSTS }}
+          SSH_USER: ${{ secrets.VULTR_SSH_USER }}
+        run: |
+          VULTR_SSH_PRIVATE_KEY="${KEY:-}" \
+          VULTR_SSH_KNOWN_HOSTS="${KNOWN_HOSTS:-}" \
+          VULTR_SSH_USER="${SSH_USER:-}" \
+          ./scripts/ci_secure_ssh.sh
+
+      - name: Run fixed conditional recovery
+        id: recovery
+        continue-on-error: true
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          set -uo pipefail
+          : > /tmp/recovery.json
+          : > /tmp/recovery.err
+          code=1
+          for attempt in 1 2 3 4 5 6 7 8; do
+            set +e
+            ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts \
+              -o ConnectTimeout=15 -p "${PORT:-22}" -i ~/.ssh/id_ed25519 \
+              "${USER}@${HOST}" "reconciliation-halt-recovery" \
+              > /tmp/recovery.json 2> /tmp/recovery.err
+            code=$?
+            set -e
+            [[ "${code}" -eq 0 ]] && break
+            if jq -e \
+              '(.status == "BLOCKED" or .status == "INCONCLUSIVE") and .orders_submitted == 0' \
+              /tmp/recovery.json >/dev/null 2>&1; then
+              echo "valid fail-closed recovery report received; no retry" >&2
+              break
+            fi
+            echo "recovery attempt ${attempt} failed (exit=${code}); waiting for deploy/helper refresh" >&2
+            sleep 30
+          done
+          cat /tmp/recovery.json
+          cat /tmp/recovery.err >&2
+          echo "exit=${code}" >> "${GITHUB_OUTPUT}"
+          exit "${code}"
+
+      - name: Build fail-closed recovery report
+        if: always()
+        env:
+          REMOTE_EXIT: ${{ steps.recovery.outputs.exit }}
+        run: |
+          set -euo pipefail
+          uv run python scripts/reconciliation_recovery_sidecar.py \
+            --raw /tmp/recovery.json \
+            --remote-exit "${REMOTE_EXIT:-255}" \
+            --run-id "${GITHUB_RUN_ID}" \
+            --commit "${GITHUB_SHA}" \
+            --json-out /tmp/recovery_report.json \
+            --summary-out /tmp/LAST_RUN.md
+          cat /tmp/LAST_RUN.md
+
+      - name: Publish recovery sidecar
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          BRANCH=automation/reconciliation-halt-recovery-last-run
+          tmpdir="$(mktemp -d)"
+          cp /tmp/recovery_report.json "${tmpdir}/report.json" 2>/dev/null \
+            || echo '{"status":"INCONCLUSIVE","halt_present_after":true,"evidence_quality":"BLOCKED","orders_submitted":0}' > "${tmpdir}/report.json"
+          cp /tmp/LAST_RUN.md "${tmpdir}/LAST_RUN.md" 2>/dev/null \
+            || echo '# 정합성 halt 자동 복구 - 보고 생성 실패' > "${tmpdir}/LAST_RUN.md"
+          cp /tmp/recovery.err "${tmpdir}/recovery.err" 2>/dev/null || true
+          cd "${tmpdir}"
+          git init -q
+          git config user.name "reconciliation-recovery-bot"
+          git config user.email "reconciliation-recovery-bot@noreply.github.com"
+          git checkout --orphan publish -q
+          python3 "${GITHUB_WORKSPACE}/scripts/redact_public_sidecar.py" . 2>/dev/null || true
+          git add .
+          git commit -q -m "reconciliation recovery ${GITHUB_RUN_ID} @ ${GITHUB_SHA:0:7}"
+          git push --force \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "publish:${BRANCH}"

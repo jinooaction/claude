@@ -187,6 +187,29 @@ async def test_reconciliation_mismatch_qty_halts_worker(tmp_path: Path):
 
 
 @pytest.mark.asyncio
+async def test_reconciliation_mismatch_does_not_overwrite_manual_halt(tmp_path: Path):
+    from auto_invest.worker.halt import read_halt, set_halt
+
+    async with _broker(tmp_path) as (client, conn, halt_path):
+        manual = set_halt(halt_path, "operator maintenance")
+        _seed_local_position(conn, symbol="AAPL", qty=10)
+        with respx.mock(base_url=BASE) as mock:
+            _mock_kis_endpoints(mock, positions=[])
+            outcome = await run_reconciliation(
+                conn,
+                client,
+                access_token="tok",
+                app_key="app",
+                app_secret="sec",
+                account=ACCOUNT,
+                halt_path=halt_path,
+            )
+
+        assert outcome.state == "MISMATCH"
+        assert read_halt(halt_path) == manual
+
+
+@pytest.mark.asyncio
 async def test_reconciliation_mismatch_when_local_has_unknown_symbol(tmp_path: Path):
     async with _broker(tmp_path) as (client, conn, halt_path):
         _seed_local_position(conn, symbol="AAPL", qty=5)

@@ -31,6 +31,11 @@ CONSUMED_SIDECARS: list[tuple[str, str, str]] = [
         "profit_evidence.json",
     ),
     (
+        "reconciliation-halt-recovery",
+        "automation/reconciliation-halt-recovery-last-run",
+        "report.json",
+    ),
+    (
         "rebalance-micro-gtaa",
         "automation/rebalance-micro-gtaa-last-run",
         "LAST_RUN.md",
@@ -292,6 +297,7 @@ def build_report(
     canary = _read(sidecar_dir, "rebalance-live-canary")
     micro = _read(sidecar_dir, "rebalance-micro-gtaa")
     live_profit_raw = _read(sidecar_dir, "live-profit-evidence")
+    halt_recovery_raw = _read(sidecar_dir, "reconciliation-halt-recovery")
     promote = _read(sidecar_dir, "promote-readiness")
     prior_raw = _read(sidecar_dir, "money-path")
 
@@ -329,6 +335,12 @@ def build_report(
         live_profit_evidence = None
     if not isinstance(live_profit_evidence, dict):
         live_profit_evidence = None
+    try:
+        halt_recovery = json.loads(halt_recovery_raw) if halt_recovery_raw else None
+    except json.JSONDecodeError:
+        halt_recovery = None
+    if not isinstance(halt_recovery, dict):
+        halt_recovery = None
 
     fingerprint = None
     if live_portfolio is not None and validated_portfolio is not None:
@@ -347,6 +359,7 @@ def build_report(
         live_request=live_request,
         live_last_run=live_last_run,
         live_profit_evidence=live_profit_evidence,
+        halt_recovery=halt_recovery,
         now=now,
     )
     # 다음 실행의 ETA 실측 + 표본 churn 비교를 위해, 이번 forward 관측 수와 베이시스 제외

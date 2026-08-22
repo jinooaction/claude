@@ -150,6 +150,21 @@ dd_budget_pct: 20.0
 """
 
 
+def _recovery_sidecar(observed_at: str) -> str:
+    return json.dumps(
+        {
+            "status": "CLEAR",
+            "observed_at_utc": observed_at,
+            "halt_present_after": False,
+            "reconciliation_state": "OK",
+            "evidence_quality": "VALID",
+            "halt_cleared": False,
+            "orders_submitted": 0,
+            "reasons": [],
+        }
+    )
+
+
 def _write(d: Path, key: str, text: str) -> None:
     (d / f"{key}.md").write_text(text, encoding="utf-8")
 
@@ -264,6 +279,10 @@ def test_probe_manifest_lists_consumed_sidecars(capsys):
         "profit_evidence.json" in out
     )
     assert "money-path\tautomation/money-path-last-run\tLAST_RUN.md" in out
+    assert (
+        "reconciliation-halt-recovery\t"
+        "automation/reconciliation-halt-recovery-last-run\treport.json" in out
+    )
 
 
 def test_probe_surfaces_live_profit_evidence(tmp_path, capsys):
@@ -297,6 +316,11 @@ def test_probe_surfaces_live_profit_evidence(tmp_path, capsys):
 def test_probe_prefers_armed_capital_ladder_live_path(tmp_path, capsys):
     _write(tmp_path, "edge-autoarm", _edge_sidecar())
     _write(tmp_path, "rebalance-live-canary", _CANARY_ARMED_SIDECAR)
+    _write(
+        tmp_path,
+        "reconciliation-halt-recovery",
+        _recovery_sidecar("2026-08-16T02:00:00Z"),
+    )
     live_request = tmp_path / "rebalance-live.request"
     live_request.write_text(_LIVE_REQUEST_ARMED, encoding="utf-8")
     micro_request = tmp_path / "rebalance-micro-gtaa.request"
@@ -331,6 +355,11 @@ def test_probe_micro_armed_state_is_top_level_json(tmp_path, capsys):
     _write(tmp_path, "edge-autoarm", _edge_sidecar())
     _write(tmp_path, "rebalance-live-canary", _CANARY_SIDECAR)
     _write(tmp_path, "rebalance-micro-gtaa", _MICRO_SIDECAR_OLD_FORMAT)
+    _write(
+        tmp_path,
+        "reconciliation-halt-recovery",
+        _recovery_sidecar("2026-06-22T12:55:00Z"),
+    )
     rc = probe_main(
         [
             "--sidecar-dir",
@@ -362,6 +391,11 @@ def test_probe_micro_intent_loss_blocks_live_money_state(tmp_path, capsys):
     _write(tmp_path, "edge-autoarm", _edge_sidecar())
     _write(tmp_path, "rebalance-live-canary", _CANARY_SIDECAR)
     _write(tmp_path, "rebalance-micro-gtaa", _MICRO_SIDECAR_INTENT_LOSS)
+    _write(
+        tmp_path,
+        "reconciliation-halt-recovery",
+        _recovery_sidecar("2026-07-28T16:20:00Z"),
+    )
     rc = probe_main(
         [
             "--sidecar-dir",
@@ -391,6 +425,11 @@ def test_probe_micro_disarmed_state_is_preview_only_text(tmp_path, capsys):
     req.write_text(_MICRO_REQUEST_DISARMED, encoding="utf-8")
     _write(tmp_path, "edge-autoarm", _edge_sidecar())
     _write(tmp_path, "rebalance-live-canary", _CANARY_SIDECAR)
+    _write(
+        tmp_path,
+        "reconciliation-halt-recovery",
+        _recovery_sidecar("2026-06-22T12:55:00Z"),
+    )
     rc = probe_main(
         [
             "--sidecar-dir",

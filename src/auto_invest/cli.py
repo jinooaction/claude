@@ -6120,16 +6120,6 @@ def resume_readiness_cmd(
     import json as _json
     from datetime import UTC, datetime
 
-    from auto_invest.performance.measurement_contract import (
-        MeasurementContractError,
-        build_strategy_measurement_contract,
-    )
-    from auto_invest.performance.opening_positions import (
-        OpeningPositionsError,
-        load_opening_positions,
-    )
-    from auto_invest.reconciliation.readiness import evaluate_resume_readiness
-
     if output_format not in ("json", "text"):
         typer.echo("--format must be json or text", err=True)
         _exit(2)
@@ -6137,27 +6127,56 @@ def resume_readiness_cmd(
         typer.echo(f"DB not found: {db_path}", err=True)
         _exit(2)
     try:
-        _caps, _whitelist, strategy_config = _load_portfolio_for_backtest(portfolio_path)
-        contract = build_strategy_measurement_contract(
-            load_opening_positions(opening_positions_path),
-            strategy_universe=strategy_config.universe,
-        )
-    except (ConfigError, OpeningPositionsError, MeasurementContractError) as exc:
+        conn = db.get_connection(db_path)
+        conn.execute("PRAGMA query_only = ON")
+        try:
+            result = _evaluate_current_resume_readiness(
+                conn,
+                halt_path=halt_path,
+                opening_positions_path=opening_positions_path,
+                portfolio_path=portfolio_path,
+                max_age_hours=max_age_hours,
+                now=datetime.now(UTC),
+            )
+        finally:
+            conn.close()
+    except (ConfigError, ValueError) as exc:
         typer.echo(f"strategy measurement contract failed: {exc}", err=True)
         _exit(65)
-    conn = db.get_connection(db_path)
-    try:
-        conn.execute("PRAGMA query_only = ON")
-        row = conn.execute(
-            "SELECT result, finished_at_utc FROM reconciliation_runs ORDER BY seq DESC LIMIT 1"
-        ).fetchone()
-        nav_rows = conn.execute(
-            "SELECT payload_json FROM audit_log "
-            "WHERE event_type = 'PORTFOLIO_NAV_SNAPSHOT' "
-            "ORDER BY seq DESC"
-        ).fetchall()
-    finally:
-        conn.close()
+    if output_format == "json":
+        typer.echo(_json.dumps(result.to_json_dict(), ensure_ascii=False))
+    else:
+        typer.echo(f"{result.status}: {', '.join(result.reasons) or 'ready'}")
+
+
+def _evaluate_current_resume_readiness(
+    conn,
+    *,
+    halt_path: Path,
+    opening_positions_path: Path,
+    portfolio_path: Path,
+    max_age_hours: float,
+    now,
+):
+    import json as _json
+
+    from auto_invest.performance.measurement_contract import build_strategy_measurement_contract
+    from auto_invest.performance.opening_positions import load_opening_positions
+    from auto_invest.reconciliation.readiness import evaluate_resume_readiness
+
+    _caps, _whitelist, strategy_config = _load_portfolio_for_backtest(portfolio_path)
+    contract = build_strategy_measurement_contract(
+        load_opening_positions(opening_positions_path),
+        strategy_universe=strategy_config.universe,
+    )
+    row = conn.execute(
+        "SELECT result, finished_at_utc FROM reconciliation_runs ORDER BY seq DESC LIMIT 1"
+    ).fetchone()
+    nav_rows = conn.execute(
+        "SELECT payload_json FROM audit_log "
+        "WHERE event_type = 'PORTFOLIO_NAV_SNAPSHOT' "
+        "ORDER BY seq DESC"
+    ).fetchall()
     nav_payload = next(
         (
             payload
@@ -6168,19 +6187,95 @@ def resume_readiness_cmd(
     )
     observed_contract_id = nav_payload.get("measurement_contract_id")
     evidence_quality = "VALID" if observed_contract_id == contract.contract_id else "BLOCKED"
-    result = evaluate_resume_readiness(
+    return evaluate_resume_readiness(
         reconciliation_state=None if row is None else row["result"],
         reconciliation_finished_at_utc=None if row is None else row["finished_at_utc"],
-        now=datetime.now(UTC),
+        now=now,
         halt_present=halt_path.exists(),
         measurement_contract_id=observed_contract_id,
         evidence_quality=evidence_quality,
         max_age_hours=max_age_hours,
     )
+
+
+@app.command("reconcile-recover")
+def reconcile_recover_cmd(
+    confirm: bool = typer.Option(False, "--confirm", help="조건을 만족할 때 halt 해제를 허용."),
+    db_path: Path = typer.Option(Path("data/auto_invest.db"), "--db"),
+    halt_path: Path = typer.Option(Path("data/halt.flag"), "--halt-path"),
+    env_file: Path | None = typer.Option(None, "--env"),
+    base_url: str = typer.Option("https://openapi.koreainvestment.com:9443", "--base-url"),
+    external_holdings_path: Path = typer.Option(
+        Path("deploy/external-holdings.toml"), "--external-holdings"
+    ),
+    opening_positions_path: Path = typer.Option(..., "--opening-positions"),
+    portfolio_path: Path = typer.Option(..., "--portfolio"),
+    max_age_hours: float = typer.Option(36.0, "--max-age-hours"),
+    output_format: str = typer.Option("json", "--format", help="json | text"),
+) -> None:
+    """새 정합성 검사와 전략 증거가 모두 유효할 때 정합성 halt만 해제한다."""
+    import json as _json
+    from datetime import UTC, datetime
+
+    from auto_invest.reconciliation.external_holdings import load_external_holdings
+    from auto_invest.reconciliation.recovery import recover_reconciliation_halt
+    from auto_invest.worker.halt import read_halt
+
+    if not confirm:
+        typer.echo("Pass --confirm to enable conditional reconciliation recovery.", err=True)
+        _exit(2)
+    if output_format not in ("json", "text"):
+        typer.echo("--format must be json or text", err=True)
+        _exit(2)
+    if env_file is None or not db_path.exists():
+        typer.echo("--env and an existing --db are required", err=True)
+        _exit(2)
+    try:
+        secrets = load_secrets(env_file)
+        external_holdings = load_external_holdings(external_holdings_path)
+    except ConfigError as exc:
+        typer.echo(f"configuration failed: {exc}", err=True)
+        _exit(2)
+
+    initial_halt = read_halt(halt_path)
+    conn = db.get_connection(db_path)
+    try:
+        outcome = asyncio.run(
+            _run_reconcile(
+                conn,
+                base_url=base_url,
+                app_key=secrets["KIS_APP_KEY"],
+                app_secret=secrets["KIS_APP_SECRET"],
+                account_no=secrets["KIS_ACCOUNT_NO"],
+                halt_path=halt_path,
+                db_path=db_path,
+                market="NASD",
+                external_holdings=external_holdings,
+            )
+        )
+        readiness = _evaluate_current_resume_readiness(
+            conn,
+            halt_path=halt_path,
+            opening_positions_path=opening_positions_path,
+            portfolio_path=portfolio_path,
+            max_age_hours=max_age_hours,
+            now=datetime.now(UTC),
+        )
+        report = recover_reconciliation_halt(
+            conn,
+            halt_path=halt_path,
+            initial_halt=initial_halt,
+            outcome=outcome,
+            readiness=readiness,
+        )
+    finally:
+        conn.close()
+
     if output_format == "json":
-        typer.echo(_json.dumps(result.to_json_dict(), ensure_ascii=False))
+        typer.echo(_json.dumps(report.to_json_dict(), ensure_ascii=False, indent=2))
     else:
-        typer.echo(f"{result.status}: {', '.join(result.reasons) or 'ready'}")
+        typer.echo(f"{report.status}: {', '.join(report.reasons) or 'clear'}")
+    _exit(0 if report.status in ("RECOVERED", "CLEAR") else 1)
 
 
 @app.command("ladder-decide")

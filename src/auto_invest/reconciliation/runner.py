@@ -41,7 +41,9 @@ from auto_invest.persistence.audit import (
     ReconciliationMismatchPayload,
     ReconciliationOkPayload,
 )
-from auto_invest.worker.halt import set_halt
+from auto_invest.worker.halt import read_halt, set_halt
+
+RECONCILIATION_HALT_PREFIX = "reconciliation mismatch:"
 
 
 def _utcnow_iso_ms() -> str:
@@ -233,7 +235,13 @@ async def run_reconciliation(
         result="MISMATCH",
         diff=diff,
     )
-    set_halt(halt_path, f"reconciliation mismatch: {len(diff['position_diffs'])} position(s)")
+    current_halt = read_halt(halt_path)
+    # 정합성 검사는 손실 차단이나 운영자 수동 중지를 더 약한 정합성 사유로 덮어쓰지 않는다.
+    if current_halt is None:
+        set_halt(
+            halt_path,
+            f"{RECONCILIATION_HALT_PREFIX} {len(diff['position_diffs'])} position(s)",
+        )
     return ReconciliationOutcome(
         state="MISMATCH",
         started_at_utc=started_at,

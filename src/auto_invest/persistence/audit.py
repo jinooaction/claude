@@ -32,6 +32,7 @@ EventType = Literal[
     "ERROR",
     "RECONCILIATION_OK",
     "RECONCILIATION_MISMATCH",
+    "RECONCILIATION_HALT_RECOVERED",
     "HALT_SET",
     "HALT_CLEARED",
     "STRATEGY_PAUSED",
@@ -197,6 +198,14 @@ class ReconciliationMismatchPayload(AuditPayload):
     started_at_utc: str
     finished_at_utc: str
     diff: dict[str, Any]
+
+
+class ReconciliationHaltRecoveredPayload(AuditPayload):
+    event_type: Literal["RECONCILIATION_HALT_RECOVERED"] = "RECONCILIATION_HALT_RECOVERED"
+    previous_halt_reason: str
+    reconciliation_finished_at_utc: str
+    measurement_contract_id: str
+    orders_submitted: Literal[0] = 0
 
 
 class HaltSetPayload(AuditPayload):
@@ -914,6 +923,7 @@ AnyPayload = (
     | ErrorPayload
     | ReconciliationOkPayload
     | ReconciliationMismatchPayload
+    | ReconciliationHaltRecoveredPayload
     | HaltSetPayload
     | HaltClearedPayload
     | StrategyPausedPayload

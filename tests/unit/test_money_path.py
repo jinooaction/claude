@@ -109,6 +109,19 @@ def _live_request(armed="true", capital="293", rung="1", nav="1466.83"):
     }
 
 
+def _halt_clear(now: datetime = NOW):
+    return {
+        "status": "CLEAR",
+        "observed_at_utc": now.isoformat().replace("+00:00", "Z"),
+        "halt_present_after": False,
+        "reconciliation_state": "OK",
+        "evidence_quality": "VALID",
+        "halt_cleared": False,
+        "orders_submitted": 0,
+        "reasons": [],
+    }
+
+
 def _micro_last_run(preflight=None):
     return {
         "run_id": "27935469561",
@@ -147,6 +160,7 @@ def test_live_money_state_micro_armed_surfaces_real_order_path():
     state = assess_live_money_state(
         micro_request=_micro_request(),
         micro_last_run=_micro_last_run(),
+        halt_recovery=_halt_clear(MONDAY_BEFORE_MICRO_SCHEDULE),
         now=MONDAY_BEFORE_MICRO_SCHEDULE,
     )
     assert state.status == LIVE_STATUS_ARMED
@@ -160,10 +174,46 @@ def test_live_money_state_micro_armed_surfaces_real_order_path():
     assert state.last_run.preflight_reason == "preflight evidence absent"
 
 
+def test_live_money_state_blocks_armed_path_without_recovery_evidence():
+    state = assess_live_money_state(
+        micro_request=_micro_request(),
+        micro_last_run=_micro_last_run(),
+        now=MONDAY_BEFORE_MICRO_SCHEDULE,
+    )
+    assert state.status == LIVE_STATUS_BLOCKED
+    assert state.can_submit_real_orders is False
+    assert state.next_scheduled_live_utc is None
+    assert "evidence missing" in state.detail
+
+
+def test_live_money_state_blocks_stale_or_present_halt_recovery():
+    stale = _halt_clear(datetime(2026, 6, 20, 0, 0, tzinfo=UTC))
+    present = _halt_clear(MONDAY_BEFORE_MICRO_SCHEDULE)
+    present["status"] = "BLOCKED"
+    present["halt_present_after"] = True
+
+    stale_state = assess_live_money_state(
+        micro_request=_micro_request(),
+        halt_recovery=stale,
+        now=MONDAY_BEFORE_MICRO_SCHEDULE,
+    )
+    present_state = assess_live_money_state(
+        micro_request=_micro_request(),
+        halt_recovery=present,
+        now=MONDAY_BEFORE_MICRO_SCHEDULE,
+    )
+
+    assert stale_state.status == LIVE_STATUS_BLOCKED
+    assert "stale" in stale_state.detail
+    assert present_state.status == LIVE_STATUS_BLOCKED
+    assert present_state.can_submit_real_orders is False
+
+
 def test_live_money_state_micro_armed_intent_loss_blocks_orders():
     state = assess_live_money_state(
         micro_request=_micro_request(),
         micro_last_run=_micro_last_run_with_intent_loss(),
+        halt_recovery=_halt_clear(MONDAY_BEFORE_MICRO_SCHEDULE),
         now=MONDAY_BEFORE_MICRO_SCHEDULE,
     )
 
@@ -195,6 +245,7 @@ def test_live_money_state_micro_disarmed_is_preview_only():
     state = assess_live_money_state(
         micro_request=_micro_request(armed="false"),
         micro_last_run=None,
+        halt_recovery=_halt_clear(MONDAY_BEFORE_MICRO_SCHEDULE),
         now=MONDAY_BEFORE_MICRO_SCHEDULE,
     )
     assert state.status == LIVE_STATUS_PREVIEW
@@ -216,6 +267,7 @@ def test_live_money_state_missing_sentinel_is_unknown():
     state = assess_live_money_state(
         micro_request=None,
         micro_last_run=None,
+        halt_recovery=_halt_clear(MONDAY_BEFORE_MICRO_SCHEDULE),
         now=MONDAY_BEFORE_MICRO_SCHEDULE,
     )
     assert state.status == LIVE_STATUS_UNKNOWN
@@ -228,6 +280,7 @@ def test_money_path_report_puts_live_money_state_before_ladder_stage():
         forward_verdict=_verdict(n_obs=1),
         micro_request=_micro_request(),
         micro_last_run=_micro_last_run(),
+        halt_recovery=_halt_clear(MONDAY_BEFORE_MICRO_SCHEDULE),
         now=MONDAY_BEFORE_MICRO_SCHEDULE,
     )
     d = r.to_dict()
@@ -248,6 +301,7 @@ def test_live_money_state_prefers_armed_capital_ladder_over_disarmed_micro():
         canary_armed=True,
         micro_request=_micro_request(armed="false"),
         micro_last_run=None,
+        halt_recovery=_halt_clear(NOW),
         now=NOW,
     )
 
@@ -299,6 +353,7 @@ def test_live_money_state_keeps_armed_micro_when_standard_is_inactive():
         canary_armed=False,
         micro_request=_micro_request(),
         micro_last_run=_micro_last_run(),
+        halt_recovery=_halt_clear(MONDAY_BEFORE_MICRO_SCHEDULE),
         now=MONDAY_BEFORE_MICRO_SCHEDULE,
     )
 

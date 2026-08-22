@@ -36,6 +36,7 @@ on:
   workflow_run:
     workflows:
       - "Live profit evidence (실계좌 체결과 첫 수익 증거)"
+      - "Reconciliation halt recovery (conditional, no orders)"
     types:
       - completed
   push:
@@ -49,6 +50,7 @@ on:
       - 'scripts/live_profit_evidence_probe.py'
       - '.github/workflows/money-path.yml'
       - '.github/workflows/live-profit-evidence.yml'
+      - '.github/workflows/reconciliation-halt-recovery.yml'
       - 'automation/rebalance-micro-gtaa.request'
       - '.github/workflows/rebalance-micro-gtaa-canary.yml'
 

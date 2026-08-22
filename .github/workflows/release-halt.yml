@@ -1,6 +1,6 @@
 name: Release halt flag (guarded, audited)
 
-# 운영자 지시로 라이브 halt 깃발(data/halt.flag)을 해제하는 가드형 채널.
+# 운영자 지시로 정합성 halt의 조건부 복구를 재실행하는 가드형 채널.
 #
 # halt 는 스펙 014 손실 서킷 브레이커·정합성 불일치가 자동 설정하는 킬스위치다.
 # 해제는 운영자 결정이므로 두 가지 가드형 트리거만 허용한다:
@@ -10,8 +10,8 @@ name: Release halt flag (guarded, audited)
 #      머지되면 push 로 발화. 머지 자체가 운영자 지시의 포렌식 기록이다.
 #
 # 안전 경계:
-#   - rm 금지 — `auto-invest resume --confirm` 으로만 해제해 K4 감사 로그에
-#     HALT_CLEARED 행을 남긴다(헌법 IV 추가 전용 감사).
+#   - rm·무조건 resume 금지 — root 소유 고정 helper가 새 정합성 검사와 측정 계약을
+#     통과한, 변하지 않은 정합성 halt만 해제하고 K4 감사 로그를 남긴다.
 #   - 해제는 주문 *게이트* 를 여는 것뿐 — 돈이 움직이려면 별도로 라이브 무장
 #     (armed:true 센티넬, 헌법 X.4)과 시장시간 스케줄이 필요하다.
 #   - 서킷 브레이커·정합성 안전망은 그대로 — 조건이 다시 발화하면 깃발이 다시
@@ -45,6 +45,9 @@ jobs:
     environment: production
     timeout-minutes: 10
     steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
       - name: Validate confirmation (workflow_dispatch only)
         if: github.event_name == 'workflow_dispatch'
         env:
@@ -67,7 +70,7 @@ jobs:
           VULTR_SSH_USER="${SSH_USER:-}" \
           ./scripts/ci_secure_ssh.sh
 
-      - name: "Release halt — auto-invest resume --confirm (감사 행 HALT_CLEARED)"
+      - name: "Conditional reconciliation recovery (fixed SSH command)"
         id: release
         env:
           HOST: ${{ secrets.VULTR_SSH_HOST }}
@@ -78,13 +81,7 @@ jobs:
           port="${PORT:-22}"
           ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
               -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
-              "cd /opt/auto-invest && \
-                 echo '--- 해제 전 깃발 상태 ---' && \
-                 (cat data/halt.flag 2>/dev/null || echo '(없음 — 정지 아님)') && \
-                 echo '' && echo '--- resume (감사 행 HALT_CLEARED) ---' && \
-                 /usr/local/bin/uv run auto-invest resume --confirm --halt-path data/halt.flag --db data/auto_invest.db && \
-                 echo '--- 해제 후 깃발 상태 ---' && \
-                 (cat data/halt.flag 2>/dev/null || echo '(없음 — 해제 확인)')" \
+              "reconciliation-halt-recovery" \
               > /tmp/release.txt 2>&1
           echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
           cat /tmp/release.txt
@@ -128,13 +125,13 @@ jobs:
             echo "| timestamp_utc | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
             echo "| ssh_exit | ${SSH_EXIT:-(unset)} |"
             echo ""
-            echo "## 해제 전/후 깃발 상태 + resume 출력"
+            echo "## 새 정합성 검사 + 조건부 복구 출력"
             echo ""
             echo '```'
             cat /tmp/release.txt 2>/dev/null || echo '(출력 없음 — SSH 단계 진입 못함)'
             echo '```'
             echo ""
-            echo "> 해제는 주문 게이트를 여는 것뿐 — 돈이 움직이려면 별도 라이브 무장"
+            echo "> 정합성 halt가 실제로 해제돼도 돈이 움직이려면 별도 라이브 무장"
             echo "> (armed:true, 헌법 X.4)과 시장시간 스케줄이 필요하다. 서킷 브레이커·"
             echo "> 정합성 안전망은 그대로(조건 재발화 시 깃발이 다시 선다)."
           } > LAST_RUN.md

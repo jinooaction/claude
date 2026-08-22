@@ -34,7 +34,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, timedelta
 from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal, InvalidOperation
 
@@ -46,7 +46,7 @@ from auto_invest.portfolio.capital_ladder import (
     RUNG_FRACTIONS,
 )
 
-SCHEMA_VERSION = "1.3"
+SCHEMA_VERSION = "1.4"
 
 # 자본 사다리 결정 라벨(capital_ladder 와 동일 — 재사용보다 명시로 결합도 낮춤).
 ACTION_PROMOTE = "PROMOTE"
@@ -94,6 +94,8 @@ MICRO_GTAA_PATH = "micro-gtaa-live-canary"
 CAPITAL_LADDER_PATH = "capital-ladder-live-canary"
 MICRO_MAX_CAPITAL_USD = 1000
 MICRO_SCHEDULE_HOUR_UTC = 15
+HALT_RECOVERY_MAX_AGE_HOURS = 36
+HALT_RECOVERY_GATE = "fresh reconciliation evidence and global halt clear"
 MICRO_REQUIRED_GATES = (
     "strategy intent gate clear",
     "non-push workflow event",
@@ -339,6 +341,7 @@ class MoneyPathReport:
     deployed_capital_usd: int | None
     canary_armed: bool | None
     live_money_state: LiveMoneyState
+    halt_recovery_evidence: dict | None
     live_profit_evidence: dict | None
     gates: list[GateCondition]
     eta: EtaProjection
@@ -358,6 +361,7 @@ class MoneyPathReport:
             "deployed_capital_usd": self.deployed_capital_usd,
             "canary_armed": self.canary_armed,
             "live_money_state": self.live_money_state.to_dict(),
+            "halt_recovery_evidence": self.halt_recovery_evidence,
             "live_profit_evidence": self.live_profit_evidence,
             "gates": [g.to_dict() for g in self.gates],
             "eta": self.eta.to_dict(),
@@ -1038,6 +1042,7 @@ def assess_live_money_state(
     live_request: dict | None = None,
     live_last_run: dict | None = None,
     canary_armed: bool | None = None,
+    halt_recovery: dict | None = None,
     now: datetime,
 ) -> LiveMoneyState:
     """모든 live 경로를 평가하고 실제 주문 가능성이 가장 높은 경로를 선택한다."""
@@ -1059,7 +1064,54 @@ def assess_live_money_state(
         LIVE_STATUS_UNKNOWN: 1,
     }
     # 동률이면 현재 자본 사다리 표준 경로를 우선해 한 화면의 기준을 맞춘다.
-    return standard if rank[standard.status] >= rank[micro.status] else micro
+    selected = standard if rank[standard.status] >= rank[micro.status] else micro
+    if selected.status == LIVE_STATUS_BLOCKED:
+        return selected
+    recovery_block = _halt_recovery_block_reason(halt_recovery, now=now)
+    if recovery_block is None:
+        return selected
+    return replace(
+        selected,
+        status=LIVE_STATUS_BLOCKED,
+        can_submit_real_orders=False,
+        next_scheduled_live_utc=None,
+        required_gates=(HALT_RECOVERY_GATE, *selected.required_gates),
+        detail=f"전역 halt 안전 게이트 차단: {recovery_block}",
+    )
+
+
+def _halt_recovery_block_reason(
+    halt_recovery: dict | None,
+    *,
+    now: datetime,
+) -> str | None:
+    """Return a reason unless recovery evidence proves the global halt is clear."""
+    if not isinstance(halt_recovery, dict):
+        return "reconciliation recovery evidence missing"
+    if halt_recovery.get("orders_submitted") != 0:
+        return "recovery order-count contract invalid"
+    observed = _parse_iso(
+        None
+        if halt_recovery.get("observed_at_utc") is None
+        else str(halt_recovery.get("observed_at_utc"))
+    )
+    now_utc = now.replace(tzinfo=UTC) if now.tzinfo is None else now.astimezone(UTC)
+    if observed is None:
+        return "recovery timestamp missing or invalid"
+    age_seconds = (now_utc - observed).total_seconds()
+    if age_seconds < -300:
+        return "recovery timestamp is in the future"
+    if age_seconds > HALT_RECOVERY_MAX_AGE_HOURS * 3600:
+        return "reconciliation recovery evidence stale"
+    if halt_recovery.get("status") not in {"RECOVERED", "CLEAR"}:
+        return f"recovery status is {halt_recovery.get('status')!r}"
+    if halt_recovery.get("reconciliation_state") != "OK":
+        return "latest reconciliation is not OK"
+    if halt_recovery.get("evidence_quality") != "VALID":
+        return "strategy measurement evidence is not VALID"
+    if halt_recovery.get("halt_present_after") is not False:
+        return "global halt is present or unknown"
+    return None
 
 
 def _pct_str(value: Decimal) -> str:
@@ -1190,6 +1242,7 @@ def assess_money_path(
     live_request: dict | None = None,
     live_last_run: dict | None = None,
     live_profit_evidence: dict | None = None,
+    halt_recovery: dict | None = None,
     dd_budget_pct: Decimal = DEFAULT_DD_BUDGET_PCT,
     now: datetime,
 ) -> MoneyPathReport:
@@ -1209,6 +1262,8 @@ def assess_money_path(
     live_request/live_last_run: 표준 자본 사다리 live-canary의 권위 센티넬·실행 증거. 두 경로를
         함께 평가해 실제 주문 가능한 경로를 최상위 상태로 표면화한다.
     live_profit_evidence: 체결·결측·손익을 보수적으로 판정한 최초 수익 sidecar.
+    halt_recovery: 최신 production 정합성 복구 보고. 누락·오래됨·halt 존재이면 실제 주문
+        가능 상태를 fail-closed 한다.
     """
     if now.tzinfo is None:
         now = now.replace(tzinfo=UTC)
@@ -1219,6 +1274,7 @@ def assess_money_path(
         live_request=live_request,
         live_last_run=live_last_run,
         canary_armed=canary_armed,
+        halt_recovery=halt_recovery,
         now=now,
     )
 
@@ -1606,6 +1662,7 @@ def assess_money_path(
         deployed_capital_usd=deployed_capital,
         canary_armed=canary_armed,
         live_money_state=live_money_state,
+        halt_recovery_evidence=halt_recovery,
         live_profit_evidence=live_profit_evidence,
         gates=gates,
         eta=eta,
