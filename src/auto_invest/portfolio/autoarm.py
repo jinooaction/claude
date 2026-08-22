@@ -38,6 +38,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from dataclasses import dataclass
 
@@ -117,6 +119,7 @@ def strategy_fingerprint(cfg: PortfolioRebalanceConfig) -> tuple:
         tuple(cfg.universe),
         cfg.weight_scheme,
         cfg.rebalance_mode,
+        cfg.rebalance_every_n_sessions,
         cfg.top_n,
         cfg.top_pct,
         cfg.lookback_bars,
@@ -124,6 +127,12 @@ def strategy_fingerprint(cfg: PortfolioRebalanceConfig) -> tuple:
         tuple(sorted((k, str(v)) for k, v in cfg.weights.items())),
         _trend_fingerprint(cfg.trend_filter),
     )
+
+
+def strategy_fingerprint_digest(cfg: PortfolioRebalanceConfig) -> str:
+    """Stable serializable digest of the exact live strategy fingerprint."""
+    encoded = json.dumps(strategy_fingerprint(cfg), sort_keys=True, separators=(",", ":")).encode()
+    return "sha256:" + hashlib.sha256(encoded).hexdigest()
 
 
 # ---- 센티넬 파싱/렌더 -------------------------------------------------------------
@@ -301,12 +310,8 @@ def decide_autoarm(
     sharpe = verdict.get("strategy_sharpe_annual") if isinstance(verdict, dict) else None
     dd = verdict.get("strategy_max_drawdown_pct") if isinstance(verdict, dict) else None
     calmar = verdict.get("strategy_calmar") if isinstance(verdict, dict) else None
-    summary = (
-        f"EDGE_CONFIRMED (관측 {n_obs}, 전략 샤프 {sharpe}, 최대낙폭 {dd}%, 칼마 {calmar})"
-    )
-    sentinel = render_armed_sentinel(
-        capital_usd=capital, run_seq=new_seq, verdict_summary=summary
-    )
+    summary = f"EDGE_CONFIRMED (관측 {n_obs}, 전략 샤프 {sharpe}, 최대낙폭 {dd}%, 칼마 {calmar})"
+    sentinel = render_armed_sentinel(capital_usd=capital, run_seq=new_seq, verdict_summary=summary)
     return AutoArmDecision(
         action=ACTION_ARM,
         reason=(

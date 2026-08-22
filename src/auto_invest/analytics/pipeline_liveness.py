@@ -62,9 +62,7 @@ _MD_TS_ROW_RE = re.compile(rf"^\|\s*timestamp_utc\s*\|\s*({_ISO_UTC})\s*\|", re.
 _AS_OF_RE = re.compile(rf"\bas of\s+({_ISO_UTC})\b", re.IGNORECASE)
 
 # 마지막 fallback: JSON 조각이나 오래된 Markdown 에서 첫 `timestamp_utc` 값을 찾는다.
-_TS_RE = re.compile(
-    rf"timestamp_utc[^0-9]*?({_ISO_UTC})"
-)
+_TS_RE = re.compile(rf"timestamp_utc[^0-9]*?({_ISO_UTC})")
 
 
 @dataclass(frozen=True)
@@ -445,6 +443,15 @@ def default_specs() -> list[SidecarSpec]:
             critical=False,
             description="시간 분리·비용 차감 수익 후보 검증(스펙 138, 연구 전용)",
             first_expected_utc="2026-08-16T09:15:00Z",
+        ),
+        SidecarSpec(
+            key="autonomous-strategy-factory",
+            branch="automation/autonomous-strategy-factory-last-run",
+            filename="LAST_RUN.md",
+            max_age_hours=30.0,
+            critical=False,
+            description="64개 후보 전체 다중검정 자동 전략 탐색(스펙 150, 연구 전용)",
+            first_expected_utc="2026-08-24T08:35:00Z",
         ),
         SidecarSpec(
             key="autonomous-evolution",

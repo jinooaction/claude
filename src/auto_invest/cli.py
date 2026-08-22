@@ -6297,6 +6297,16 @@ def ladder_decide_cmd(
         "--profit-evidence-json",
         help="정확 배포전략의 시간 분리 홀드아웃과 forward floor 증거 JSON(선택).",
     ),
+    factory_evidence_json: Path = typer.Option(
+        None,
+        "--factory-evidence-json",
+        help="64회 자동 전략 공장 전체 판정 JSON(선택). 완전 합격만 10% 연구 캐너리 후보.",
+    ),
+    factory_evidence_age_hours: float = typer.Option(
+        None,
+        "--factory-evidence-age-hours",
+        help="자동 전략 공장 증거 나이(시간). 36시간 초과 또는 미확인이면 연구 진입 차단.",
+    ),
     hardened_canary_json: Path = typer.Option(
         None,
         "--hardened-canary-json",
@@ -6354,16 +6364,19 @@ def ladder_decide_cmd(
     """스펙 050 — 자본 사다리 결정(읽기 전용 판정, 주문 0건).
 
     운영자 위임(2026-06-11) 하 자본 배치 규모를 증거 게이트 공식으로 결정한다:
-    단0=0% → 단1=20% 탐색 → 단2=25% → 단3=50% → 단4=100% (실계좌 NAV 대비).
+    단0=0% → 단1=10% 연구 → 단2=20% 탐색 → 단3=25% → 단4=50% → 단5=100%.
     내려가는 건 낙폭
     하나로 즉시(예산/2 강등·예산 정지), 올라가는 건 세 증거(관측·경과일·낙폭) 전부.
-    헌법 X.4 v7.0.0. 비위임 불변(캡·화이트리스트·감사·서킷 브레이커)은 그대로다.
+    헌법 X.4 v8.0.0. 비위임 불변(캡·화이트리스트·감사·서킷 브레이커)은 그대로다.
     """
     import json as _json
+    import tomllib as _tomllib
     from datetime import UTC
     from datetime import datetime as _dt
     from decimal import Decimal as _Dec
 
+    from auto_invest.config.rules import PortfolioRebalanceConfig
+    from auto_invest.portfolio.autoarm import strategy_fingerprint_digest
     from auto_invest.portfolio.capital_ladder import decide_ladder
 
     def _read_json(path: Path | None) -> dict | None:
@@ -6377,6 +6390,7 @@ def ladder_decide_cmd(
     verdict = _read_json(verdict_json) or {}
     anchored = _read_json(anchored_verdict_json)
     profit_evidence = _read_json(profit_evidence_json)
+    factory_evidence = _read_json(factory_evidence_json)
     hardened_canary = _read_json(hardened_canary_json)
     edge_source = "standard"
     if anchored is not None:
@@ -6404,6 +6418,37 @@ def ladder_decide_cmd(
             "historical_forward_ready": ready,
             "hardened_canary_pass": canary_pass,
         }
+    factory_decision = (
+        factory_evidence.get("decision") if isinstance(factory_evidence, dict) else None
+    )
+    factory_candidate_cfg = None
+    factory_contract_ready = False
+    factory_candidate_id = None
+    if isinstance(factory_decision, dict):
+        factory_candidate_id = factory_decision.get("selected_candidate_id")
+        selected_config = factory_decision.get("selected_deploy_config")
+        try:
+            selected_payload = (
+                _tomllib.loads(selected_config) if isinstance(selected_config, str) else {}
+            )
+            factory_candidate_cfg = PortfolioRebalanceConfig.model_validate(
+                selected_payload["portfolio"]
+            )
+            selected_fingerprint = strategy_fingerprint_digest(factory_candidate_cfg)
+        except (KeyError, ValueError, _tomllib.TOMLDecodeError):
+            factory_candidate_cfg = None
+            selected_fingerprint = None
+        factory_contract_ready = (
+            factory_decision.get("verdict") == "FACTORY_EDGE"
+            and factory_decision.get("research_canary_eligible") is True
+            and factory_evidence.get("candidate_count") == 64
+            and factory_evidence.get("complete_trial_count") == 64
+            and selected_fingerprint == factory_decision.get("selected_strategy_fingerprint")
+            and factory_evidence_age_hours is not None
+            and 0.0 <= factory_evidence_age_hours <= 36.0
+            and isinstance(hardened_canary, dict)
+            and hardened_canary.get("verdict") == "PASS"
+        )
     nav_doc = _read_json(account_nav_json)
     account_nav = None
     if isinstance(nav_doc, dict) and nav_doc.get("total_value_usd") is not None:
@@ -6424,6 +6469,29 @@ def ladder_decide_cmd(
         typer.echo(_json.dumps(out))
         raise typer.Exit(0) from None
 
+    factory_exact_match = (
+        factory_contract_ready
+        and factory_candidate_cfg is not None
+        and strategy_fingerprint_digest(live_cfg)
+        == strategy_fingerprint_digest(factory_candidate_cfg)
+    )
+    factory_verdict = {
+        "verdict": ("RESEARCH_CANARY_READY" if factory_exact_match else "RESEARCH_CANARY_WAIT"),
+        "candidate_id": factory_candidate_id,
+        "complete_trials": (
+            factory_evidence.get("complete_trial_count")
+            if isinstance(factory_evidence, dict)
+            else None
+        ),
+        "exact_strategy_match": factory_exact_match,
+        "hardened_canary_pass": (
+            isinstance(hardened_canary, dict) and hardened_canary.get("verdict") == "PASS"
+        ),
+        "evidence_age_hours": factory_evidence_age_hours,
+    }
+    if factory_exact_match and factory_candidate_cfg is not None:
+        validated_cfg = factory_candidate_cfg
+
     sentinel_text = sentinel.read_text(encoding="utf-8") if sentinel.exists() else ""
     decision = decide_ladder(
         sentinel_text=sentinel_text,
@@ -6435,6 +6503,7 @@ def ladder_decide_cmd(
         kill_switch_present=kill_switch.exists(),
         today=_dt.now(UTC).date(),
         exploration_verdict=exploration_verdict,
+        factory_verdict=factory_verdict,
         live_performance=live_performance,
         dd_budget_pct=_Dec(str(dd_budget_pct)),
     )
@@ -6457,6 +6526,7 @@ def ladder_decide_cmd(
         out = decision.to_json_dict()
         out["edge_source"] = edge_source  # standard | anchored | both | none (포렌식)
         out["exploration_verdict"] = exploration_verdict
+        out["factory_verdict"] = factory_verdict
         typer.echo(_json.dumps(out))
     else:
         typer.echo(

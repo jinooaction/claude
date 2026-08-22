@@ -46,8 +46,11 @@ def evaluate_live_entry(
     *,
     evidence_age_hours: float | None,
     max_evidence_age_hours: float = 36.0,
+    factory_evidence: Any = None,
+    factory_evidence_age_hours: float | None = None,
+    live_strategy_fingerprint: str | None = None,
 ) -> LiveEntryRevalidation:
-    """Allow first exposure only while the exact exploration contract is current."""
+    """Allow first exposure only under a current exploration or factory contract."""
 
     performance = live_performance if isinstance(live_performance, Mapping) else {}
     fills_count = _int_or_none(performance.get("fills_count"))
@@ -87,7 +90,7 @@ def evaluate_live_entry(
         isinstance(hardened_canary, Mapping) and hardened_canary.get("verdict") == "PASS"
     )
 
-    checks = {
+    exploration_checks = {
         "historical_verdict": payload.get("historical_verdict") == "HOLDOUT_EDGE",
         "historical_passed": deployment.get("historical_passed") is True,
         "exploration_canary_ready": deployment.get("exploration_canary_ready") is True,
@@ -99,16 +102,53 @@ def evaluate_live_entry(
             evidence_age_hours is not None and 0.0 <= evidence_age_hours <= max_evidence_age_hours
         ),
     }
-    reasons = tuple(key for key, passed in checks.items() if not passed)
+    factory = factory_evidence if isinstance(factory_evidence, Mapping) else {}
+    factory_decision = factory.get("decision")
+    factory_decision = factory_decision if isinstance(factory_decision, Mapping) else {}
+    selected_fingerprint = factory_decision.get("selected_strategy_fingerprint")
+    factory_checks = {
+        "factory_verdict": factory_decision.get("verdict") == "FACTORY_EDGE",
+        "factory_trials_complete": (
+            _int_or_none(factory.get("candidate_count")) == 64
+            and _int_or_none(factory.get("complete_trial_count")) == 64
+        ),
+        "factory_research_canary_eligible": (
+            factory_decision.get("research_canary_eligible") is True
+        ),
+        "factory_strategy_fingerprint": (
+            isinstance(selected_fingerprint, str)
+            and selected_fingerprint != ""
+            and selected_fingerprint == live_strategy_fingerprint
+        ),
+        "factory_hardened_canary": canary_passed,
+        "factory_evidence_fresh": (
+            factory_evidence_age_hours is not None
+            and 0.0 <= factory_evidence_age_hours <= max_evidence_age_hours
+        ),
+    }
+    exploration_ready = all(exploration_checks.values())
+    factory_ready = bool(factory) and all(factory_checks.values())
+    if exploration_ready or factory_ready:
+        reasons: tuple[str, ...] = ()
+    elif factory:
+        reasons = tuple(key for key, passed in factory_checks.items() if not passed)
+    else:
+        reasons = tuple(key for key, passed in exploration_checks.items() if not passed)
     evidence = {
         "candidate_id": deployment.get("candidate_id"),
+        "entry_source": (
+            "strategy_factory" if factory_ready else "exploration" if exploration_ready else None
+        ),
         "forward_n_obs": n_obs,
         "forward_psr": psr,
         "min_forward_obs": min_obs,
         "min_forward_psr": min_psr,
         "evidence_age_hours": evidence_age_hours,
         "max_evidence_age_hours": max_evidence_age_hours,
-        "checks": checks,
+        "checks": exploration_checks,
+        "factory_candidate_id": factory_decision.get("selected_candidate_id"),
+        "factory_evidence_age_hours": factory_evidence_age_hours,
+        "factory_checks": factory_checks,
     }
     return LiveEntryRevalidation(
         allowed=not reasons,
