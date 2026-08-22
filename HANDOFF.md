@@ -33,7 +33,7 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `e708650` — Merge pull request #647 from jinooaction/Codex/149-profit-evidence-liveness-metadata |
+| 마지막 main 커밋 | `bf48336` — Merge pull request #649 from jinooaction/automation/capital-ladder/demote-32570303365 |
 | main 테스트 | #644 머지 코드 기준 `uv run pytest` → 2904 passed, 6 skipped. |
 | main 린트 | #644 머지 코드 기준 `uv run ruff check src tests` → All checks passed. |
 | 열린 PR | 없음. |

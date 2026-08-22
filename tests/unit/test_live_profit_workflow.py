@@ -18,6 +18,10 @@ def test_live_profit_workflow_is_fixed_read_only_observation() -> None:
     assert "order_end_date" in text
     assert 'remote_command="live-canary-fills ${ORDER_START_DATE} ${ORDER_END_DATE}"' in text
     assert '"live-canary-profit ${CAP}"' in text
+    assert "Resolve positive measurement capital without changing live authority" in text
+    assert '"observe account-nav"' in text
+    assert "steps.measurement_capital.outputs.value" in text
+    assert "measurement_capital" in text
     assert "live-canary-order" not in text
     assert "--confirm-live" not in text
     assert "rebalance-once" not in text
