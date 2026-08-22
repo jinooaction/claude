@@ -215,14 +215,14 @@ After a successful merge, the session SHOULD:
 ---
 
 <!-- SPECKIT START -->
-**Active feature plan**: `specs/149-live-entry-revalidation/plan.md`
+**Active feature plan**: `specs/151-independent-macro-regime/plan.md`
 
 Active feature pointer: `.specify/feature.json` is the maintained pointer for
 the current worktree. Do not trust prose in this block as the source of truth
 for in-flight work; use the `git_ground_truth` start hook, latest `HANDOFF.md`,
 and `/sync` against `jinooaction/claude` `Codex/*` branches before continuing.
 
-현재 계획 포인터: `specs/145-ml-edge-ensemble/plan.md` — 정규화 선형 모델과 얕은 비선형 부스팅 모델을 비용 포함 확장형 워크포워드로 검증하고, 예측 확신에 따라 기존 추세 전략을 기울이며, 모든 사전 등록 기준을 통과한 경우에만 기존 연구 루프가 읽을 후보 패키지를 발행하는 no-live AI 엣지 계약.
+현재 계획 포인터: `specs/151-independent-macro-regime/plan.md` — 소진된 가격 매개변수 공간과 독립적인 금리곡선·물가·실시간 삼 규칙·VIX 전략군 64개를 시점 기준 자료와 누적 다중검정으로 검증하고, 연구와 주문 직전 신호가 정확히 같을 때만 기존 10% 연구 캐너리 심사로 넘기는 계약.
 
 머지 완료(베이스라인): spec 004 (LLM 판단 지점), 005 (자율 튜너), 006 (배포 자동화), 007 (하드닝 카나리), 008 (백테스트), 009 (paper-run), 010 (자동 룰 설계자), 011 (라이브 성과 측정). **주의: 일부 tasks.md 가 stale 0% 로 표시된 적 있음 — 코드/테스트를 믿을 것.**
 
