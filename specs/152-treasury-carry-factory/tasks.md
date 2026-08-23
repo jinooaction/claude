@@ -72,7 +72,7 @@
 - [x] T027 Wire prior evidence, five yield inputs, exact-count checks, deduplication, and sidecar publication in `.github/workflows/autonomous-strategy-factory.yml`.
 - [x] T028 [P] Add probe, workflow contract, and 15-minute performance tests in `tests/integration/test_treasury_carry_factory_probe.py` and `tests/integration/test_strategy_factory_workflow.py`.
 - [x] T029 Run focused tests, full pytest, ruff, YAML/shell checks, strict harness, HANDOFF facts, and diff check.
-- [ ] T030 Commit, push, open a grade-4 PR with full quality evidence, and auto-merge only after all gates pass.
+- [x] T030 Commit, push, open a grade-4 PR with full quality evidence, and auto-merge only after all gates pass.
 - [ ] T031 Verify deployment, refresh public data, run the production factory, and inspect the 576-trial no-order decision.
 - [ ] T032 If and only if a full winner exists, run hardened no-order parity and existing canary eligibility; otherwise prove rung 0, capital 0, orders 0, and fills 0.
 - [ ] T033 Refresh `HANDOFF.md` with production data, decision, account state, and the next independent strategy family.
