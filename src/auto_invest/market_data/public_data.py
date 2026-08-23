@@ -984,7 +984,7 @@ def collect_public_data(
         "probes": probes,
         "items": items,
         "isolation_note": (
-            "기본 연구용 — FACTORY_EDGE 거시 전략만 후보·지문·신선도·커밋 "
+            "기본 연구용 — FACTORY_EDGE 공개자료 기반 전략만 후보·지문·신선도·커밋 "
             "관문 뒤 주문 전 증거로 사용"
         ),
     }
