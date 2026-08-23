@@ -33,7 +33,7 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `001254b` — Merge pull request #657 from jinooaction/Codex/151-independent-macro-regime-implementation |
+| 마지막 main 커밋 | `4820cc1` — Merge pull request #659 from jinooaction/Codex/152-independent-asset-carry |
 | main 테스트 | #657 머지 코드 기준 `uv run pytest -q` → 2949 passed, 5 skipped. |
 | main 린트 | #657 머지 코드 기준 `uv run ruff check src tests` → All checks passed. |
 | 열린 PR | 없음. |
