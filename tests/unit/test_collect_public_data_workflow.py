@@ -85,7 +85,8 @@ def test_config_parses_and_cross_checks_reference_collected_ids() -> None:
     """설정 정합 — 모든 교차 검증 짝이 실제 수집되는 레지스트리 키를 가리킨다.
 
     4차(2026-06-11, 운영자 선택) 이후 수집은 공식 키리스 조합(재무부·Cboe·
-    BLS·DBnomics)에 FRED 그래프 CSV 국채 만기 5종과 CPIAUCNS/SAHMREALTIME을 더한다.
+    BLS·DBnomics)에 FRED 그래프 CSV 국채 만기 5종, HQM 회사채 금리 2종,
+    CPIAUCNS/SAHMREALTIME을 더한다.
     Stooq 가격 CSV 와 FRED 공식 API 키 경로는 탐침/후속 선택지로만 둔다.
     가격 이력 확장은 보류 — 가격 소스는 KIS 백필 유지(ARM F 유니버스 정합
     단언이 사라진 이유).
@@ -99,6 +100,8 @@ def test_config_parses_and_cross_checks_reference_collected_ids() -> None:
         "DGS5",
         "DGS10",
         "DGS30",
+        "HQMCB10YR",
+        "HQMCB20YR",
         "CPIAUCNS",
         "SAHMREALTIME",
     ]

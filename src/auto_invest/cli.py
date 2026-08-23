@@ -4488,6 +4488,11 @@ def rebalance_once_cmd(
         "--treasury-evidence",
         help="Spec 152 factory JSON. Required with [portfolio.treasury_carry_policy].",
     ),
+    credit_evidence: Path | None = typer.Option(
+        None,
+        "--credit-evidence",
+        help="Spec 154 factory JSON. Required with [portfolio.credit_spread_policy].",
+    ),
     as_json: bool = typer.Option(False, "--json", help="Emit a single JSON object."),
 ) -> None:
     """Run ONE cross-sectional rebalance against the live/paper account (spec 032 slice 2).
@@ -4592,6 +4597,31 @@ def rebalance_once_cmd(
         typer.echo(
             "--treasury-evidence requires [portfolio.treasury_carry_policy]", err=True
         )
+        _exit(65)
+
+    credit_snapshot: dict[str, object] | None = None
+    if port_cfg.credit_spread_policy is not None:
+        if credit_evidence is None:
+            typer.echo(
+                "credit spread policy requires --credit-evidence before broker call",
+                err=True,
+            )
+            _exit(65)
+        from auto_invest.analytics.credit_spread_factory import validate_live_credit_evidence
+        from auto_invest.portfolio.autoarm import strategy_fingerprint_digest
+
+        try:
+            credit_payload = _json.loads(credit_evidence.read_text(encoding="utf-8"))
+            credit_snapshot = validate_live_credit_evidence(
+                credit_payload,
+                candidate_id=port_cfg.id,
+                strategy_fingerprint=strategy_fingerprint_digest(port_cfg),
+            )
+        except (OSError, ValueError, _json.JSONDecodeError) as exc:
+            typer.echo(f"credit evidence validation failed before broker call: {exc}", err=True)
+            _exit(65)
+    elif credit_evidence is not None:
+        typer.echo("--credit-evidence requires [portfolio.credit_spread_policy]", err=True)
         _exit(65)
 
     # Safety: every universe symbol MUST be on the whitelist, else its buys would
@@ -4745,6 +4775,7 @@ def rebalance_once_cmd(
                     lot_rounding=lot_rounding,
                     macro_snapshot=macro_snapshot,
                     treasury_snapshot=treasury_snapshot,
+                    credit_snapshot=credit_snapshot,
                 )
             finally:
                 conn.close()
@@ -4832,6 +4863,7 @@ def rebalance_once_cmd(
                     lot_rounding=lot_rounding,
                     macro_snapshot=macro_snapshot,
                     treasury_snapshot=treasury_snapshot,
+                    credit_snapshot=credit_snapshot,
                 )
             finally:
                 conn.close()

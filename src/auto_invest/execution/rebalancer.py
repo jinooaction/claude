@@ -54,6 +54,7 @@ from auto_invest.persistence import positions as positions_mod
 from auto_invest.strategy.factors import composite_scores
 from auto_invest.strategy.rebalance import (
     PlannedOrder,
+    credit_spread_target_weights,
     macro_target_weights,
     rebalance_plan,
     target_weights,
@@ -254,6 +255,7 @@ async def execute_rebalance(
     lot_rounding: str = "floor",
     macro_snapshot: Mapping[str, object] | None = None,
     treasury_snapshot: Mapping[str, object] | None = None,
+    credit_snapshot: Mapping[str, object] | None = None,
 ) -> RebalanceOutcome:
     """Compute the target portfolio and route the rebalance via the live/paper router.
 
@@ -304,6 +306,13 @@ async def execute_rebalance(
         signal_tw = treasury_target_weights(
             policy=config.treasury_carry_policy,
             snapshot=treasury_snapshot,
+        )
+    if config.credit_spread_policy is not None:
+        if credit_snapshot is None:
+            raise ValueError("credit spread policy requires fresh credit evidence")
+        signal_tw = credit_spread_target_weights(
+            policy=config.credit_spread_policy,
+            snapshot=credit_snapshot,
         )
 
     symbol_map = {

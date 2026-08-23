@@ -1,7 +1,7 @@
-name: Autonomous strategy factory (hierarchical Treasury carry validation)
+name: Autonomous strategy factory (hierarchical credit spread validation)
 
-# 스펙 153. 브로커와 완전히 분리된 연구 워크플로다. 기존 512회는 감사 장부에
-# 보존하고, 현재 국채 64개만 같은 통계 가족으로 시점 기준 자료에서 검증한다.
+# 스펙 154. 브로커와 완전히 분리된 연구 워크플로다. 기존 576회는 감사 장부에
+# 보존하고, 현재 회사채 64개만 같은 통계 가족으로 시점 기준 자료에서 검증한다.
 # 이 워크플로 자체는 주문, 자본 변경, 라이브 설정 변경을 하지 않는다.
 
 on:
@@ -15,12 +15,14 @@ on:
       - 'src/auto_invest/analytics/strategy_factory.py'
       - 'src/auto_invest/analytics/macro_strategy_factory.py'
       - 'src/auto_invest/analytics/treasury_carry_factory.py'
+      - 'src/auto_invest/analytics/credit_spread_factory.py'
       - 'src/auto_invest/analytics/edge_gate_calibration.py'
       - 'src/auto_invest/market_data/public_data.py'
       - 'src/auto_invest/market_data/macro_regime.py'
       - 'scripts/strategy_factory_probe.py'
       - 'scripts/macro_strategy_factory_probe.py'
       - 'scripts/treasury_carry_factory_probe.py'
+      - 'scripts/credit_spread_factory_probe.py'
       - 'scripts/edge_gate_calibration_probe.py'
       - 'deploy/public-data.toml'
       - '.github/workflows/autonomous-strategy-factory.yml'
@@ -63,6 +65,8 @@ jobs:
           test -s /tmp/public-data/fred/DGS5.csv
           test -s /tmp/public-data/fred/DGS10.csv
           test -s /tmp/public-data/fred/DGS30.csv
+          test -s /tmp/public-data/fred/HQMCB10YR.csv
+          test -s /tmp/public-data/fred/HQMCB20YR.csv
           test -s /tmp/public-data/fred/CPIAUCNS.csv
           test -s /tmp/public-data/fred/SAHMREALTIME.csv
           test -s /tmp/public-data/cboe/VIX.csv
@@ -100,10 +104,28 @@ jobs:
             --prior-ledger /tmp/trial_ledger_prior.jsonl \
             --calibration-json /tmp/edge_gate_calibration.json \
             --timestamp-utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --json-out /tmp/treasury_carry_factory.json \
+            --summary-out /tmp/LAST_RUN.md
+          test "$(jq -r '.complete_trial_count' /tmp/treasury_carry_factory.json)" = "64"
+          test "$(jq -r '.global_audit_trial_count' /tmp/treasury_carry_factory.json)" = "576"
+          test "$(jq -r '.multiplicity_trial_count' /tmp/treasury_carry_factory.json)" = "64"
+          cat /tmp/LAST_RUN.md
+
+      - name: Run the complete 64-trial credit spread batch
+        run: |
+          set -euo pipefail
+          uv run python scripts/credit_spread_factory_probe.py \
+            --code-commit "${GITHUB_SHA}" \
+            --macro-data-dir /tmp/public-data \
+            --prior-factory-json /tmp/treasury_carry_factory.json \
+            --macro-factory-json /tmp/macro_strategy_factory.json \
+            --prior-ledger /tmp/trial_ledger_prior.jsonl \
+            --calibration-json /tmp/edge_gate_calibration.json \
+            --timestamp-utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --json-out /tmp/strategy_factory.json \
             --summary-out /tmp/LAST_RUN.md
           test "$(jq -r '.complete_trial_count' /tmp/strategy_factory.json)" = "64"
-          test "$(jq -r '.global_audit_trial_count' /tmp/strategy_factory.json)" = "576"
+          test "$(jq -r '.global_audit_trial_count' /tmp/strategy_factory.json)" = "640"
           test "$(jq -r '.multiplicity_trial_count' /tmp/strategy_factory.json)" = "64"
           cat /tmp/LAST_RUN.md
 
@@ -120,12 +142,15 @@ jobs:
             cp /tmp/trial_ledger_prior.jsonl /tmp/trial_ledger.jsonl
             jq -c '. as $root | .trial_records[] | . + {
               batch_id: $root.batch_id,
-              data_fingerprint: $root.macro_data_fingerprint,
+              data_fingerprint: $root.credit_data_fingerprint,
               code_commit: $root.code_commit,
               timestamp_utc: $root.timestamp_utc
             }' /tmp/strategy_factory.json >> /tmp/trial_ledger.jsonl
             echo "duplicate=false" >> "$GITHUB_OUTPUT"
           fi
+          jq -c '.audit_records[]' /tmp/strategy_factory.json > /tmp/audit_catalog.jsonl
+          test "$(wc -l < /tmp/audit_catalog.jsonl | tr -d ' ')" = "640"
+          test "$(jq -r '.strategy_fingerprint' /tmp/audit_catalog.jsonl | sort -u | wc -l | tr -d ' ')" = "640"
           jq '{
             schema_version,
             batch_id,
@@ -152,12 +177,16 @@ jobs:
             2>/dev/null || echo '{}' > "${tmpdir}/strategy_factory.json"
           cp /tmp/macro_strategy_factory.json "${tmpdir}/macro_strategy_factory.json" \
             2>/dev/null || echo '{}' > "${tmpdir}/macro_strategy_factory.json"
-          cp /tmp/strategy_factory.json "${tmpdir}/treasury_carry_factory.json" \
+          cp /tmp/treasury_carry_factory.json "${tmpdir}/treasury_carry_factory.json" \
             2>/dev/null || echo '{}' > "${tmpdir}/treasury_carry_factory.json"
+          cp /tmp/strategy_factory.json "${tmpdir}/credit_spread_factory.json" \
+            2>/dev/null || echo '{}' > "${tmpdir}/credit_spread_factory.json"
           cp /tmp/edge_gate_calibration.json "${tmpdir}/edge_gate_calibration.json" \
             2>/dev/null || echo '{}' > "${tmpdir}/edge_gate_calibration.json"
           cp /tmp/trial_ledger.jsonl "${tmpdir}/trial_ledger.jsonl" \
             2>/dev/null || : > "${tmpdir}/trial_ledger.jsonl"
+          cp /tmp/audit_catalog.jsonl "${tmpdir}/audit_catalog.jsonl" \
+            2>/dev/null || : > "${tmpdir}/audit_catalog.jsonl"
           cp /tmp/next_search.json "${tmpdir}/next_search.json" \
             2>/dev/null || echo '{}' > "${tmpdir}/next_search.json"
           {
@@ -183,8 +212,9 @@ jobs:
           python3 "${GITHUB_WORKSPACE}/scripts/redact_public_sidecar.py" . 2>/dev/null || true
           git add LAST_RUN.md strategy_factory.json macro_strategy_factory.json \
             treasury_carry_factory.json \
+            credit_spread_factory.json \
             edge_gate_calibration.json \
-            trial_ledger.jsonl next_search.json
+            trial_ledger.jsonl audit_catalog.jsonl next_search.json
           git commit -q -m "strategy-factory run ${GITHUB_RUN_ID} @ ${GITHUB_SHA:0:7}"
           git push --force \
             "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \

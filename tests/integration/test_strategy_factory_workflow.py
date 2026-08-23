@@ -10,6 +10,7 @@ def test_workflow_runs_complete_batch_without_broker_or_order_command() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
     assert "scripts/macro_strategy_factory_probe.py" in text
     assert "scripts/treasury_carry_factory_probe.py" in text
+    assert "scripts/credit_spread_factory_probe.py" in text
     assert "scripts/edge_gate_calibration_probe.py" in text
     assert "collect-public-data" in text
     assert "CPIAUCNS.csv" in text
@@ -17,18 +18,26 @@ def test_workflow_runs_complete_batch_without_broker_or_order_command() -> None:
     assert "DGS3MO.csv" in text
     assert "DGS5.csv" in text
     assert "DGS30.csv" in text
+    assert "HQMCB10YR.csv" in text
+    assert "HQMCB20YR.csv" in text
     assert "complete_trial_count" in text
     assert "trial_ledger.jsonl" in text
     assert "next_search.json" in text
     assert "--prior-ledger /tmp/trial_ledger_prior.jsonl" in text
+    assert "--macro-factory-json /tmp/macro_strategy_factory.json" in text
     assert "multiplicity_trial_count" in text
     assert ".decision.verdict" in text
     assert "next_strategy_family" in text
     assert "macro_strategy_factory.json" in text
     assert "treasury_carry_factory.json" in text
-    assert 'global_audit_trial_count\' /tmp/strategy_factory.json)\" = \"576' in text
-    assert 'multiplicity_trial_count\' /tmp/strategy_factory.json)\" = \"64' in text
-    assert 'verdict\' /tmp/edge_gate_calibration.json)\" = \"CALIBRATED' in text
+    assert "credit_spread_factory.json" in text
+    assert "data_fingerprint: $root.credit_data_fingerprint" in text
+    assert "audit_catalog.jsonl" in text
+    assert "wc -l < /tmp/audit_catalog.jsonl" in text
+    assert 'global_audit_trial_count\' /tmp/treasury_carry_factory.json)" = "576' in text
+    assert 'global_audit_trial_count\' /tmp/strategy_factory.json)" = "640' in text
+    assert 'multiplicity_trial_count\' /tmp/strategy_factory.json)" = "64' in text
+    assert 'verdict\' /tmp/edge_gate_calibration.json)" = "CALIBRATED' in text
     assert "rebalance-once" not in text
     assert "KIS_" not in text
     assert "secrets.VULTR" not in text
