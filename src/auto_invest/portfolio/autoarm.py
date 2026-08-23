@@ -126,6 +126,15 @@ def strategy_fingerprint(cfg: PortfolioRebalanceConfig) -> tuple:
         cfg.momentum_period,
         tuple(sorted((k, str(v)) for k, v in cfg.weights.items())),
         _trend_fingerprint(cfg.trend_filter),
+        (
+            "none"
+            if cfg.macro_policy is None
+            else json.dumps(
+                cfg.macro_policy.model_dump(mode="json"),
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+        ),
     )
 
 

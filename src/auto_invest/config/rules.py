@@ -130,9 +130,9 @@ class SizingConfig(BaseModel):
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
-    mode: Literal[
-        "fixed", "target_vol", "inverse_vol", "erc", "min_variance", "max_sharpe"
-    ] = "fixed"
+    mode: Literal["fixed", "target_vol", "inverse_vol", "erc", "min_variance", "max_sharpe"] = (
+        "fixed"
+    )
     target_volatility_pct: Decimal = Field(default=Decimal("2.0"), gt=0)
     lookback_bars: int = Field(default=20, ge=2)
     min_scale: Decimal = Field(default=Decimal("0"), ge=0, le=1)
@@ -322,12 +322,38 @@ class TrendFilterConfig(BaseModel):
 
     @field_validator("ensemble_windows")
     @classmethod
-    def _check_ensemble_windows(
-        cls, v: tuple[int, ...] | None
-    ) -> tuple[int, ...] | None:
+    def _check_ensemble_windows(cls, v: tuple[int, ...] | None) -> tuple[int, ...] | None:
         if v is not None and (len(v) == 0 or any(w < 2 for w in v)):
             raise ValueError("ensemble_windows must be non-empty with each >= 2")
         return v
+
+
+class MacroPolicyConfig(BaseModel):
+    """Optional spec-151 macro overlay shared by research and execution."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    family: Literal[
+        "curve_cycle", "inflation_direction", "labor_growth_shock", "vix_shock_recovery"
+    ]
+    base_portfolio: Literal["equal_3asset", "factory-relative_momentum-cb2e32f74390"]
+    threshold: Decimal
+    confirmation_days: int | None = Field(default=None, ge=1)
+    release_threshold_pp: Decimal | None = Field(default=None, ge=0)
+    direction_months: Literal[3, 6] | None = None
+    cooldown_days: int | None = Field(default=None, ge=1)
+    tilt_pct: Decimal = Field(..., gt=0, le=100)
+
+    @model_validator(mode="after")
+    def _family_fields(self) -> MacroPolicyConfig:
+        if self.family == "curve_cycle":
+            if self.confirmation_days is None or self.release_threshold_pp is None:
+                raise ValueError("curve_cycle requires confirmation_days and release_threshold_pp")
+        elif self.family in {"inflation_direction", "labor_growth_shock"}:
+            if self.direction_months is None:
+                raise ValueError(f"{self.family} requires direction_months")
+        elif self.confirmation_days is None or self.cooldown_days is None:
+            raise ValueError("vix_shock_recovery requires confirmation_days and cooldown_days")
+        return self
 
 
 class PortfolioRebalanceConfig(BaseModel):
@@ -381,6 +407,7 @@ class PortfolioRebalanceConfig(BaseModel):
     min_notional_usd: Decimal = Field(default=Decimal("0"), ge=0)
     # 스펙 036 — 절대 모멘텀 추세 필터(드로다운 방어). 생략 시 미적용(기존 동작 byte 동일).
     trend_filter: TrendFilterConfig | None = None
+    macro_policy: MacroPolicyConfig | None = None
 
     @field_validator("universe")
     @classmethod
@@ -405,9 +432,7 @@ class PortfolioRebalanceConfig(BaseModel):
     @model_validator(mode="after")
     def _require_exactly_one(self) -> PortfolioRebalanceConfig:
         if (self.top_n is None) == (self.top_pct is None):
-            raise ValueError(
-                "PortfolioRebalanceConfig: set exactly one of top_n or top_pct"
-            )
+            raise ValueError("PortfolioRebalanceConfig: set exactly one of top_n or top_pct")
         return self
 
 
@@ -476,7 +501,5 @@ class TradingRule(BaseModel):
             and self.sizing.mode == "inverse_vol"
             and self.sizing_group is None
         ):
-            raise ValueError(
-                "sizing.mode='inverse_vol' requires sizing_group to be set"
-            )
+            raise ValueError("sizing.mode='inverse_vol' requires sizing_group to be set")
         return self

@@ -1,7 +1,7 @@
-name: Autonomous strategy factory (64-trial overfit-corrected search)
+name: Autonomous strategy factory (512-trial macro search)
 
-# 스펙 150. 브로커와 완전히 분리된 연구 워크플로다. 공개 월간 자료로 64개 후보를
-# 모두 실행하고, 전체 시도에 대한 DSR/PBO와 시간 구간·비용 관문을 함께 계산한다.
+# 스펙 151. 브로커와 완전히 분리된 연구 워크플로다. 기존 생산 256회와 사전 탐색
+# 192회를 보존하고, 공식 거시 후보 64개를 시점 기준 자료로 검증한다.
 # 이 워크플로 자체는 주문, 자본 변경, 라이브 설정 변경을 하지 않는다.
 
 on:
@@ -13,7 +13,12 @@ on:
     paths:
       - 'src/auto_invest/analytics/backtest_overfitting.py'
       - 'src/auto_invest/analytics/strategy_factory.py'
+      - 'src/auto_invest/analytics/macro_strategy_factory.py'
+      - 'src/auto_invest/market_data/public_data.py'
+      - 'src/auto_invest/market_data/macro_regime.py'
       - 'scripts/strategy_factory_probe.py'
+      - 'scripts/macro_strategy_factory_probe.py'
+      - 'deploy/public-data.toml'
       - '.github/workflows/autonomous-strategy-factory.yml'
 
 permissions:
@@ -34,25 +39,33 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86
 
-      - name: Load append-only trial ledger
+      - name: Load append-only production trial ledger
         run: |
           set -euo pipefail
           git fetch origin automation/autonomous-strategy-factory-last-run || true
           git show origin/automation/autonomous-strategy-factory-last-run:trial_ledger.jsonl \
             > /tmp/trial_ledger_prior.jsonl 2>/dev/null || : > /tmp/trial_ledger_prior.jsonl
-          git show origin/automation/autonomous-strategy-factory-last-run:next_search.json \
-            > /tmp/next_search_prior.json 2>/dev/null || echo '{}' > /tmp/next_search_prior.json
-          sequence="$(jq -r \
-            'if .search_space_exhausted == true then 3 else (.next_batch_sequence // 0) end' \
-            /tmp/next_search_prior.json)"
-          echo "${sequence}" > /tmp/batch_sequence
 
-      - name: Run complete 64-trial batch
+      - name: Refresh official macro data
+        timeout-minutes: 12
         run: |
           set -euo pipefail
-          uv run python scripts/strategy_factory_probe.py \
+          uv run auto-invest collect-public-data \
+            --config deploy/public-data.toml \
+            --out-dir /tmp/public-data \
+            --json > /tmp/public_data_collect.json
+          test -s /tmp/public-data/fred/DGS2.csv
+          test -s /tmp/public-data/fred/DGS10.csv
+          test -s /tmp/public-data/fred/CPIAUCNS.csv
+          test -s /tmp/public-data/fred/SAHMREALTIME.csv
+          test -s /tmp/public-data/cboe/VIX.csv
+
+      - name: Run 192 replay plus complete 64-trial macro batch
+        run: |
+          set -euo pipefail
+          uv run python scripts/macro_strategy_factory_probe.py \
             --code-commit "${GITHUB_SHA}" \
-            --batch-sequence "$(cat /tmp/batch_sequence)" \
+            --macro-data-dir /tmp/public-data \
             --prior-ledger /tmp/trial_ledger_prior.jsonl \
             --timestamp-utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --json-out /tmp/strategy_factory.json \
@@ -73,7 +86,7 @@ jobs:
             cp /tmp/trial_ledger_prior.jsonl /tmp/trial_ledger.jsonl
             jq -c '. as $root | .trial_records[] | . + {
               batch_id: $root.batch_id,
-              data_fingerprint: $root.data_fingerprint,
+              data_fingerprint: $root.macro_data_fingerprint,
               code_commit: $root.code_commit,
               timestamp_utc: $root.timestamp_utc
             }' /tmp/strategy_factory.json >> /tmp/trial_ledger.jsonl
@@ -84,10 +97,8 @@ jobs:
             batch_id,
             verdict: .decision.verdict,
             failed_gates: [.decision.gates[] | select(.passed == false) | .gate_id],
-            next_strategy_family: (if .decision.verdict == "NO_FACTORY_EDGE"
-              then "independent_macro_regime"
-              else null end),
-            next_batch_sequence: .decision.next_batch_sequence,
+            next_strategy_family: .decision.next_strategy_family,
+            next_batch_sequence: null,
             search_space_exhausted: .decision.search_space_exhausted,
             multiplicity_trial_count,
             suppress_batch_id: .batch_id,
@@ -105,6 +116,8 @@ jobs:
           tmpdir="$(mktemp -d)"
           cp /tmp/strategy_factory.json "${tmpdir}/strategy_factory.json" \
             2>/dev/null || echo '{}' > "${tmpdir}/strategy_factory.json"
+          cp /tmp/strategy_factory.json "${tmpdir}/macro_strategy_factory.json" \
+            2>/dev/null || echo '{}' > "${tmpdir}/macro_strategy_factory.json"
           cp /tmp/trial_ledger.jsonl "${tmpdir}/trial_ledger.jsonl" \
             2>/dev/null || : > "${tmpdir}/trial_ledger.jsonl"
           cp /tmp/next_search.json "${tmpdir}/next_search.json" \
@@ -130,7 +143,8 @@ jobs:
           git config user.email "strategy-factory-bot@noreply.github.com"
           git checkout --orphan publish -q
           python3 "${GITHUB_WORKSPACE}/scripts/redact_public_sidecar.py" . 2>/dev/null || true
-          git add LAST_RUN.md strategy_factory.json trial_ledger.jsonl next_search.json
+          git add LAST_RUN.md strategy_factory.json macro_strategy_factory.json \
+            trial_ledger.jsonl next_search.json
           git commit -q -m "strategy-factory run ${GITHUB_RUN_ID} @ ${GITHUB_SHA:0:7}"
           git push --force \
             "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \

@@ -52,7 +52,12 @@ from auto_invest.execution.order_router import OrderOutcome, OrderRouter
 from auto_invest.market_data.store import get_bars
 from auto_invest.persistence import positions as positions_mod
 from auto_invest.strategy.factors import composite_scores
-from auto_invest.strategy.rebalance import PlannedOrder, rebalance_plan, target_weights
+from auto_invest.strategy.rebalance import (
+    PlannedOrder,
+    macro_target_weights,
+    rebalance_plan,
+    target_weights,
+)
 from auto_invest.strategy.trend import (
     TrendEnsembleSpec,
     TrendSpec,
@@ -247,6 +252,7 @@ async def execute_rebalance(
     cash_buffer_pct: Decimal = Decimal("0.01"),
     execution_symbol_map: Mapping[str, str] | None = None,
     lot_rounding: str = "floor",
+    macro_snapshot: Mapping[str, object] | None = None,
 ) -> RebalanceOutcome:
     """Compute the target portfolio and route the rebalance via the live/paper router.
 
@@ -281,6 +287,14 @@ async def execute_rebalance(
         lookback_bars=config.lookback_bars,
         trend=_trend_spec(config),
     )
+    if config.macro_policy is not None:
+        if macro_snapshot is None:
+            raise ValueError("macro policy requires fresh macro evidence")
+        signal_tw = macro_target_weights(
+            base_weights=signal_tw,
+            policy=config.macro_policy,
+            snapshot=macro_snapshot,
+        )
 
     symbol_map = {
         str(signal).upper(): str(execution).upper()

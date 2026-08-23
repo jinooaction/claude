@@ -139,9 +139,32 @@ verify_order_request() {
     echo "LIVE_ORDER_AUTHORIZED run_id=${run_id} commit=${signed_sha} capital=${capital} nonce=${nonce}"
 }
 
+validate_macro_evidence_revision() {
+    local evidence="$1" signed_sha="$2" evidence_sha
+    evidence_sha="$(jq -er '.code_commit | select(test("^[0-9a-f]{40}$"))' "${evidence}")" \
+        || die "macro evidence code commit is missing or invalid"
+    git_as_app cat-file -e "${evidence_sha}^{commit}" 2>/dev/null \
+        || die "macro evidence commit is unavailable on the server"
+    git_as_app merge-base --is-ancestor "${evidence_sha}" "${signed_sha}" \
+        || die "macro evidence was not produced by signed main history"
+}
+
 place_order() {
     local run_id="$1" signed_sha="$2" capital="$3" expires="$4" nonce="$5" signature="$6"
+    local -a macro_args=()
     verify_order_request "${run_id}" "${signed_sha}" "${capital}" "${expires}" "${nonce}" "${signature}"
+    if grep -Fq '[portfolio.macro_policy]' deploy/canary-live-portfolio.toml; then
+        local evidence="/tmp/auto-invest-macro-strategy-factory.json"
+        git_as_app fetch origin automation/autonomous-strategy-factory-last-run --quiet \
+            || die "failed to refresh macro strategy evidence"
+        git_as_app show \
+            origin/automation/autonomous-strategy-factory-last-run:macro_strategy_factory.json \
+            > "${evidence}" \
+            || die "missing macro strategy evidence"
+        validate_macro_evidence_revision "${evidence}" "${signed_sha}"
+        chmod 0644 "${evidence}"
+        macro_args=(--macro-evidence "${evidence}")
+    fi
     run_cli rebalance-once \
         --portfolio deploy/canary-live-portfolio.toml \
         --mode live \
@@ -150,6 +173,7 @@ place_order() {
         --capital "${capital}" \
         --db data/auto_invest.db \
         --env-file .env \
+        "${macro_args[@]}" \
         --json
 }
 

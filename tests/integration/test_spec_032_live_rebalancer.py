@@ -23,13 +23,14 @@ from auto_invest.broker.client import AsyncTokenBucket, CircuitBreaker, Resilien
 from auto_invest.broker.models import Quote
 from auto_invest.config.caps import SizingCaps
 from auto_invest.config.enums import OrderType, Side
-from auto_invest.config.rules import PortfolioRebalanceConfig
+from auto_invest.config.rules import MacroPolicyConfig, PortfolioRebalanceConfig
 from auto_invest.config.whitelist import Whitelist
 from auto_invest.execution.order_router import OrderOutcome, OrderRouter
 from auto_invest.execution.rebalancer import execute_rebalance
 from auto_invest.market_data.store import PriceBar, insert_bar
 from auto_invest.persistence import db
 from auto_invest.persistence import positions as positions_mod
+from auto_invest.strategy.rebalance import macro_target_weights
 
 _D0 = datetime(2023, 1, 3, tzinfo=UTC)
 ACCOUNT = "REBAL-ACCT"
@@ -142,6 +143,76 @@ def _cfg(universe, **overrides) -> PortfolioRebalanceConfig:
     )
     base.update(overrides)
     return PortfolioRebalanceConfig(**base)
+
+
+def _macro_policy() -> MacroPolicyConfig:
+    return MacroPolicyConfig(
+        family="curve_cycle",
+        base_portfolio="equal_3asset",
+        threshold=Decimal("0"),
+        confirmation_days=20,
+        release_threshold_pp=Decimal("0.25"),
+        tilt_pct=Decimal("20"),
+    )
+
+
+def _macro_snapshot(*, fresh: bool = True) -> dict[str, object]:
+    return {
+        "as_of_date": "2026-08-23",
+        "curve_history": ["-0.3"] * 60,
+        "vix_history": ["20"] * 20,
+        "complete": True,
+        "fresh": fresh,
+    }
+
+
+@pytest.mark.asyncio
+async def test_macro_rebalance_uses_shared_weights_and_blocks_stale_before_quote(conn, tmp_path):
+    universe = ("SPY", "IEF", "GLD")
+    for symbol, growth in (("SPY", 1.01), ("IEF", 1.005), ("GLD", 1.002)):
+        _seed_bars(conn, symbol, [100 * (growth**i) for i in range(40)])
+    caps = _caps(per_trade="100", per_symbol="100", glob="100")
+    router = _paper_router(conn, tmp_path, _whitelist(universe), caps)
+    quote_calls = 0
+
+    async def quote_provider(symbol: str) -> Quote:
+        nonlocal quote_calls
+        quote_calls += 1
+        return await _quote_provider({item: "100" for item in universe})(symbol)
+
+    config = _cfg(universe, top_n=3, macro_policy=_macro_policy())
+    with pytest.raises(ValueError, match="incomplete or stale"):
+        await execute_rebalance(
+            config=config,
+            router=router,
+            conn=conn,
+            quote_provider=quote_provider,
+            total_capital_usd=Decimal("100000"),
+            caps=caps,
+            macro_snapshot=_macro_snapshot(fresh=False),
+        )
+    assert quote_calls == 0
+
+    outcome = await execute_rebalance(
+        config=config,
+        router=router,
+        conn=conn,
+        quote_provider=quote_provider,
+        total_capital_usd=Decimal("100000"),
+        caps=caps,
+        dry_run=True,
+        macro_snapshot=_macro_snapshot(),
+    )
+    expected = macro_target_weights(
+        base_weights={
+            "SPY": Decimal("0.333334"),
+            "IEF": Decimal("0.333333"),
+            "GLD": Decimal("0.333333"),
+        },
+        policy=_macro_policy(),
+        snapshot=_macro_snapshot(),
+    )
+    assert outcome.signal_target_weights == expected
 
 
 @pytest.mark.asyncio

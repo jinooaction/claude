@@ -3,12 +3,13 @@
 # 4차(운영자 선택, 2026-06-11): 공식 키리스 조합 — 미 재무부 금리 + Cboe VIX +
 # BLS 거시(+DBnomics 미러 교차 검증). Stooq 는 실측에서 실행기 IP 차단(JS
 # 장벽)이 확정돼 수집에서 빼고 탐침으로만 추적한다. FRED 그래프 CSV 는
-# httpx 기본 user-agent 로 DGS2/DGS10 금리만 연구 수집에 승격한다.
+# httpx 기본 user-agent 로 DGS2/DGS10 금리와 CPIAUCNS/SAHMREALTIME 거시
+# 이력을 연구 수집에 승격한다.
 # FRED 공식 API 키 경로는 키 등록 전까지 탐침/후속 선택지로만 남긴다.
 # 가격 일봉 이력 확장은 보류 — 가격 소스는 KIS 백필이 유지한다(운영자 결정).
-# 격리 원칙: 이 채널의 산출물은 연구·백테스트·검증 전용 — 라이브 매매 신호는
-# 계속 KIS 데이터(price_bars)만 사용한다. 수집은 collect-public-data.yml 이
-# GitHub Actions 실행기에서 돌리고 automation/public-data 사이드카로 발행한다.
+# 격리 원칙: 기본 용도는 연구·백테스트·검증이다. 스펙 151 거시 전략이
+# FACTORY_EDGE를 얻은 경우에만 후보·지문·신선도·커밋 관문을 거쳐 주문 전
+# 증거로 읽는다. 수집 결과를 라이브 DB에 쓰거나 이 채널에서 주문하지 않는다.
 
 [collection]
 # 첫 실측(2026-06-11, run 27380895825) 교훈: FRED 타르핏(연결 후 30초 무응답)
@@ -54,11 +55,19 @@ short = "2 Yr"
 [fred]
 # FRED 그래프 CSV — 키 불필요 공개 엔드포인트. candidate-facf2fa31834 증거에서
 # 채널 UA 는 timeout, httpx 기본 UA 는 200으로 확인되어 DGS2/DGS10에만
-# 명시적으로 기본 UA 를 쓴다. 연구 전용이며 라이브 신호 입력이 아니다.
-series = ["DGS2", "DGS10"]
+# 명시적으로 기본 UA 를 쓴다. CPI·고용은 더 긴 발표 주기를 각자 검증한다.
+series = ["DGS2", "DGS10", "CPIAUCNS", "SAHMREALTIME"]
 min_rows = 1500
 max_staleness_days = 7
 user_agent = "httpx-default"
+
+[fred.series_settings.CPIAUCNS]
+min_rows = 1200
+max_staleness_days = 70
+
+[fred.series_settings.SAHMREALTIME]
+min_rows = 700
+max_staleness_days = 70
 
 [cboe]
 # Cboe VIX 공식 이력 (1990년~, 단일 CSV) — 종가 시계열로 발행.
@@ -93,10 +102,12 @@ min_rows = 12
 max_staleness_days = 700
 
 [[cross_checks]]
-# 같은 통계의 원본(BLS 직접) vs 미러(DBnomics) 수준 대조 — 같은 값이어야
-# 정상이므로 합격선 100%. 독립 측정은 아니지만 전송 경로 오염은 잡는다.
+# FRED의 깊고 신선한 비계절조정 CPI와 BLS 통계의 DBnomics 미러를 대조한다.
+# BLS 익명 API는 일일 할당량 소진 시 REQUEST_NOT_PROCESSED를 반환하므로
+# 직접 수집은 최선 노력 보고용으로 남기고, 투자 판단 관문은 키리스 두 경로로
+# 고정한다. 신선도는 FRED 시리즈 자체의 70일 관문이 별도로 책임진다.
 kind = "levels"
-a = "bls:CUUR0000SA0"
+a = "fred:CPIAUCNS"
 b = "dbnomics:BLS/cu/CUUR0000SA0"
 tolerance = "0.001"
 min_overlap = 12

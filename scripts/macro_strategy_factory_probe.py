@@ -1,0 +1,89 @@
+#!/usr/bin/env python3
+"""Run the no-live spec-151 macro factory from public-data sidecar files."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+import urllib.request
+from datetime import UTC, datetime
+from pathlib import Path
+
+from auto_invest.analytics.global_trend import align_gold_levels, parse_gold
+from auto_invest.analytics.macro_strategy_factory import (
+    render_macro_factory_markdown,
+    run_macro_strategy_factory,
+)
+from auto_invest.analytics.risk_managed_beta import parse_shiller
+from auto_invest.market_data.macro_regime import load_macro_snapshot_bundle
+
+SHILLER_URL = "https://raw.githubusercontent.com/datasets/s-and-p-500/main/data/data.csv"
+GOLD_URL = "https://raw.githubusercontent.com/datasets/gold-prices/main/data/monthly.csv"
+
+
+def _read(path: Path | None, url: str) -> str:
+    if path is not None:
+        return path.read_text(encoding="utf-8")
+    with urllib.request.urlopen(url, timeout=60) as response:  # noqa: S310
+        return response.read().decode()
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--shiller-file", type=Path)
+    parser.add_argument("--gold-file", type=Path)
+    parser.add_argument("--macro-data-dir", type=Path, required=True)
+    parser.add_argument("--prior-ledger", type=Path, required=True)
+    parser.add_argument("--code-commit", default="unknown")
+    parser.add_argument("--timestamp-utc")
+    parser.add_argument("--json-out", type=Path)
+    parser.add_argument("--summary-out", type=Path)
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args(argv)
+    timestamp = args.timestamp_utc or datetime.now(UTC).isoformat()
+    try:
+        rows = [
+            row
+            for row in parse_shiller(_read(args.shiller_file, SHILLER_URL))
+            if row.date >= "1990-01-01"
+        ]
+        gold = align_gold_levels(rows, parse_gold(_read(args.gold_file, GOLD_URL)))
+        current_date = datetime.fromisoformat(timestamp.replace("Z", "+00:00")).date().isoformat()
+        snapshots, quality = load_macro_snapshot_bundle(
+            args.macro_data_dir, [row.date for row in rows[:-1]] + [current_date]
+        )
+        prior_records = [
+            json.loads(line)
+            for line in args.prior_ledger.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        payload = run_macro_strategy_factory(
+            rows,
+            gold,
+            snapshots[:-1],
+            live_snapshot=snapshots[-1],
+            macro_data_quality=quality,
+            prior_trial_records=prior_records,
+            code_commit=args.code_commit,
+            timestamp_utc=timestamp,
+        )
+    except (json.JSONDecodeError, OSError, ValueError) as exc:
+        print(f"macro strategy factory input error: {exc}", file=sys.stderr)
+        return 2
+
+    summary = render_macro_factory_markdown(payload)
+    if args.json_out is not None:
+        args.json_out.parent.mkdir(parents=True, exist_ok=True)
+        args.json_out.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+    if args.summary_out is not None:
+        args.summary_out.parent.mkdir(parents=True, exist_ok=True)
+        args.summary_out.write_text(summary + "\n", encoding="utf-8")
+    print(json.dumps(payload, ensure_ascii=False) if args.json else summary)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

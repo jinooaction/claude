@@ -8,15 +8,18 @@ WORKFLOW = ROOT / ".github" / "workflows" / "autonomous-strategy-factory.yml"
 
 def test_workflow_runs_complete_batch_without_broker_or_order_command() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
-    assert "scripts/strategy_factory_probe.py" in text
+    assert "scripts/macro_strategy_factory_probe.py" in text
+    assert "collect-public-data" in text
+    assert "CPIAUCNS.csv" in text
+    assert "SAHMREALTIME.csv" in text
     assert "complete_trial_count" in text
     assert "trial_ledger.jsonl" in text
     assert "next_search.json" in text
     assert "--prior-ledger /tmp/trial_ledger_prior.jsonl" in text
-    assert '--batch-sequence "$(cat /tmp/batch_sequence)"' in text
     assert "multiplicity_trial_count" in text
-    assert "NO_FACTORY_EDGE" in text
-    assert "independent_macro_regime" in text
+    assert ".decision.verdict" in text
+    assert "next_strategy_family" in text
+    assert "macro_strategy_factory.json" in text
     assert "rebalance-once" not in text
     assert "KIS_" not in text
     assert "secrets.VULTR" not in text
