@@ -69,6 +69,7 @@ def test_invalid_fill_count_never_opens_first_entry() -> None:
 def test_factory_winner_can_open_only_the_exact_10pct_strategy() -> None:
     fingerprint = "sha256:exact"
     factory = {
+        "gate_version": "2.0",
         "candidate_count": 64,
         "complete_trial_count": 64,
         "decision": {

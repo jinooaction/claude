@@ -54,14 +54,52 @@ def probabilistic_sharpe(
     return _decimal(0.5 * math.erfc(-z / math.sqrt(2.0)))
 
 
-def expected_max_sharpe_from_trials(trial_sharpes: Sequence[float]) -> float:
+def effective_independent_trials(
+    trial_returns: Sequence[Sequence[float]],
+) -> Decimal:
+    """Estimate independent trials from average within-family return correlation.
+
+    Bailey and Lopez de Prado's DSR uses independent trials, not the raw count of
+    correlated parameter variants. Invalid or non-positive dependence falls back
+    to the raw count, which is the conservative fail-closed choice.
+    """
+
+    matrix = np.asarray(trial_returns, dtype=np.float64)
+    if matrix.ndim != 2 or matrix.shape[0] < 1 or matrix.shape[1] < 2:
+        raise ValueError("trial returns must be an aligned two-dimensional matrix")
+    raw_count = int(matrix.shape[0])
+    if raw_count == 1:
+        return _decimal(1.0)
+    if np.any(np.std(matrix, axis=1) <= 0.0):
+        return _decimal(float(raw_count))
+    correlations = np.corrcoef(matrix)
+    off_diagonal = correlations[np.triu_indices(raw_count, 1)]
+    if off_diagonal.size == 0 or not np.all(np.isfinite(off_diagonal)):
+        return _decimal(float(raw_count))
+    average = float(np.mean(off_diagonal))
+    if average <= 0.0:
+        return _decimal(float(raw_count))
+    average = min(1.0, average)
+    implied = average + (1.0 - average) * raw_count
+    return _decimal(max(1.0, min(float(raw_count), implied)))
+
+
+def expected_max_sharpe_from_trials(
+    trial_sharpes: Sequence[float],
+    *,
+    effective_trial_count: Decimal | float | None = None,
+) -> float:
     values = np.asarray(trial_sharpes, dtype=np.float64)
     if values.size < 2:
         return 0.0
     std = float(np.std(values, ddof=1))
     if std <= 0.0:
         return 0.0
-    n = float(values.size)
+    n = float(values.size if effective_trial_count is None else effective_trial_count)
+    if n < 1.0 or n > float(values.size):
+        raise ValueError("effective trial count must be within the raw trial count")
+    if n <= 1.0:
+        return 0.0
     # Stable normal quantiles through Python's NormalDist.
     from statistics import NormalDist
 
@@ -78,10 +116,14 @@ def deflated_sharpe_from_trials(
     trial_sharpes: Sequence[float],
     *,
     periods_per_year: int = 12,
+    effective_trial_count: Decimal | float | None = None,
 ) -> Decimal | None:
     return probabilistic_sharpe(
         selected_returns,
-        benchmark_sharpe_annual=expected_max_sharpe_from_trials(trial_sharpes),
+        benchmark_sharpe_annual=expected_max_sharpe_from_trials(
+            trial_sharpes,
+            effective_trial_count=effective_trial_count,
+        ),
         periods_per_year=periods_per_year,
     )
 
@@ -130,6 +172,7 @@ def probability_of_backtest_overfitting(
 __all__ = [
     "annualized_sharpe",
     "deflated_sharpe_from_trials",
+    "effective_independent_trials",
     "expected_max_sharpe_from_trials",
     "probabilistic_sharpe",
     "probability_of_backtest_overfitting",

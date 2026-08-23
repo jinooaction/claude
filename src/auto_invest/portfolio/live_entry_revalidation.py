@@ -107,6 +107,7 @@ def evaluate_live_entry(
     factory_decision = factory_decision if isinstance(factory_decision, Mapping) else {}
     selected_fingerprint = factory_decision.get("selected_strategy_fingerprint")
     factory_checks = {
+        "factory_gate_version": factory.get("gate_version") == "2.0",
         "factory_verdict": factory_decision.get("verdict") == "FACTORY_EDGE",
         "factory_trials_complete": (
             _int_or_none(factory.get("candidate_count")) == 64

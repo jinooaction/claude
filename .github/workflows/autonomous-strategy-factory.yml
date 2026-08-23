@@ -1,7 +1,7 @@
-name: Autonomous strategy factory (576-trial Treasury carry search)
+name: Autonomous strategy factory (hierarchical Treasury carry validation)
 
-# 스펙 152. 브로커와 완전히 분리된 연구 워크플로다. 기존 가격·거시 512회를
-# 보존하고, 공식 국채 만기 캐리 후보 64개를 시점 기준 자료로 검증한다.
+# 스펙 153. 브로커와 완전히 분리된 연구 워크플로다. 기존 512회는 감사 장부에
+# 보존하고, 현재 국채 64개만 같은 통계 가족으로 시점 기준 자료에서 검증한다.
 # 이 워크플로 자체는 주문, 자본 변경, 라이브 설정 변경을 하지 않는다.
 
 on:
@@ -15,11 +15,13 @@ on:
       - 'src/auto_invest/analytics/strategy_factory.py'
       - 'src/auto_invest/analytics/macro_strategy_factory.py'
       - 'src/auto_invest/analytics/treasury_carry_factory.py'
+      - 'src/auto_invest/analytics/edge_gate_calibration.py'
       - 'src/auto_invest/market_data/public_data.py'
       - 'src/auto_invest/market_data/macro_regime.py'
       - 'scripts/strategy_factory_probe.py'
       - 'scripts/macro_strategy_factory_probe.py'
       - 'scripts/treasury_carry_factory_probe.py'
+      - 'scripts/edge_gate_calibration_probe.py'
       - 'deploy/public-data.toml'
       - '.github/workflows/autonomous-strategy-factory.yml'
 
@@ -65,6 +67,17 @@ jobs:
           test -s /tmp/public-data/fred/SAHMREALTIME.csv
           test -s /tmp/public-data/cboe/VIX.csv
 
+      - name: Calibrate the hierarchical edge gate
+        run: |
+          set -euo pipefail
+          uv run python scripts/edge_gate_calibration_probe.py \
+            --seed 60000 \
+            --repetitions 500 \
+            --code-commit "${GITHUB_SHA}" \
+            --timestamp-utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --json-out /tmp/edge_gate_calibration.json
+          test "$(jq -r '.verdict' /tmp/edge_gate_calibration.json)" = "CALIBRATED"
+
       - name: Reconstruct the complete prior 512-trial evidence
         run: |
           set -euo pipefail
@@ -85,11 +98,13 @@ jobs:
             --macro-data-dir /tmp/public-data \
             --prior-factory-json /tmp/macro_strategy_factory.json \
             --prior-ledger /tmp/trial_ledger_prior.jsonl \
+            --calibration-json /tmp/edge_gate_calibration.json \
             --timestamp-utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --json-out /tmp/strategy_factory.json \
             --summary-out /tmp/LAST_RUN.md
           test "$(jq -r '.complete_trial_count' /tmp/strategy_factory.json)" = "64"
-          test "$(jq -r '.multiplicity_trial_count' /tmp/strategy_factory.json)" = "576"
+          test "$(jq -r '.global_audit_trial_count' /tmp/strategy_factory.json)" = "576"
+          test "$(jq -r '.multiplicity_trial_count' /tmp/strategy_factory.json)" = "64"
           cat /tmp/LAST_RUN.md
 
       - name: Preserve trials and suppress an identical completed batch
@@ -139,6 +154,8 @@ jobs:
             2>/dev/null || echo '{}' > "${tmpdir}/macro_strategy_factory.json"
           cp /tmp/strategy_factory.json "${tmpdir}/treasury_carry_factory.json" \
             2>/dev/null || echo '{}' > "${tmpdir}/treasury_carry_factory.json"
+          cp /tmp/edge_gate_calibration.json "${tmpdir}/edge_gate_calibration.json" \
+            2>/dev/null || echo '{}' > "${tmpdir}/edge_gate_calibration.json"
           cp /tmp/trial_ledger.jsonl "${tmpdir}/trial_ledger.jsonl" \
             2>/dev/null || : > "${tmpdir}/trial_ledger.jsonl"
           cp /tmp/next_search.json "${tmpdir}/next_search.json" \
@@ -166,6 +183,7 @@ jobs:
           python3 "${GITHUB_WORKSPACE}/scripts/redact_public_sidecar.py" . 2>/dev/null || true
           git add LAST_RUN.md strategy_factory.json macro_strategy_factory.json \
             treasury_carry_factory.json \
+            edge_gate_calibration.json \
             trial_ledger.jsonl next_search.json
           git commit -q -m "strategy-factory run ${GITHUB_RUN_ID} @ ${GITHUB_SHA:0:7}"
           git push --force \

@@ -15,8 +15,15 @@ from typing import Any
 from auto_invest.analytics.backtest_overfitting import (
     annualized_sharpe,
     deflated_sharpe_from_trials,
+    effective_independent_trials,
     probabilistic_sharpe,
     probability_of_backtest_overfitting,
+)
+from auto_invest.analytics.edge_gate_calibration import (
+    CALIBRATED,
+    GATE_VERSION,
+    HOLDOUT_PSR_MIN,
+    PBO_DIAGNOSTIC_MAX,
 )
 from auto_invest.analytics.global_trend import gold_total_return_factors
 from auto_invest.analytics.multi_asset_trend import bond_total_return_factors, correlation
@@ -33,9 +40,11 @@ from auto_invest.strategy.rebalance import treasury_target_weights
 SCHEMA_VERSION = "1.0"
 EXPECTED_CANDIDATES = 64
 EXPECTED_PRIOR_TRIALS = 512
-EXPECTED_MULTIPLICITY_TRIALS = 576
+EXPECTED_GLOBAL_AUDIT_TRIALS = 576
+EXPECTED_MULTIPLICITY_TRIALS = EXPECTED_GLOBAL_AUDIT_TRIALS
 FACTORY_EDGE = "FACTORY_EDGE"
 NO_FACTORY_EDGE = "NO_FACTORY_EDGE"
+OBJECTIVE = "diversifier"
 FAMILIES = ("carry_roll", "carry_rate_trend", "defensive_curve", "curve_barbell")
 SERIES_TO_SYMBOL = {
     "DGS3MO": "SGOV",
@@ -78,8 +87,7 @@ class TreasuryCurveSnapshot:
         payload: dict[str, Any] = {
             "as_of_date": self.as_of_date,
             "yields": {
-                key: None if value is None else str(value)
-                for key, value in self.yields.items()
+                key: None if value is None else str(value) for key, value in self.yields.items()
             },
             "observation_dates": dict(self.observation_dates),
             "complete": self.complete,
@@ -420,6 +428,23 @@ def _prior_records(
     return production[:256] + exploratory[:192] + macro[:64]
 
 
+def _calibration_valid(payload: dict[str, Any], *, code_commit: str) -> bool:
+    scenario = payload.get("scenario", {})
+    revised = payload.get("revised", {})
+    thresholds = payload.get("thresholds", {})
+    return bool(
+        payload.get("gate_version") == GATE_VERSION
+        and payload.get("verdict") == CALIBRATED
+        and payload.get("code_commit") == code_commit
+        and int(scenario.get("repetitions", 0)) >= 200
+        and float(revised.get("false_acceptance_rate", 1.0)) <= 0.05
+        and float(revised.get("detection_rate", 0.0)) >= 0.80
+        and float(thresholds.get("development_dsr_diagnostic_min", 0.0)) == 0.95
+        and float(thresholds.get("development_pbo_diagnostic_max", 1.0)) == 0.10
+        and float(thresholds.get("holdout_psr_min", 0.0)) == HOLDOUT_PSR_MIN
+    )
+
+
 def run_treasury_carry_factory(
     rows: list[MonthlyRow],
     gold_levels: list[float],
@@ -428,10 +453,13 @@ def run_treasury_carry_factory(
     treasury_data_quality: dict[str, Any],
     prior_trial_records: list[dict[str, Any]],
     prior_factory_payload: dict[str, Any],
+    calibration_evidence: dict[str, Any],
     live_snapshot: TreasuryCurveSnapshot | None = None,
     code_commit: str = "unknown",
     timestamp_utc: str | None = None,
 ) -> dict[str, Any]:
+    """Run gate v2 with family-local discovery and untouched confirmation."""
+
     if len(rows) != len(gold_levels) or len(snapshots) != len(rows):
         raise ValueError("rows, gold, and Treasury snapshots must align")
     candidates = generate_treasury_candidates()
@@ -440,58 +468,80 @@ def run_treasury_carry_factory(
     boundary = next(
         (index for index, value in enumerate(dates) if value >= "2007-01-01"), len(dates)
     )
-    start = min(len(dates), boundary + 1)
-    if start < 120 or len(dates) - start < 120:
+    holdout_start = min(len(dates), boundary + 1)
+    if boundary < 120 or len(dates) - holdout_start < 120:
         raise ValueError("development and holdout must each contain at least 120 months")
 
-    ladder = _ladder_factors(snapshots, sleeves)[start:]
-    ladder_stats = summarize(ladder)
-    ladder_segments = [
-        annualized_sharpe(segment) for segment in _segments([factor - 1.0 for factor in ladder])
+    ladder_all = _ladder_factors(snapshots, sleeves)
+    ladder_development = ladder_all[:boundary]
+    ladder_holdout = ladder_all[holdout_start:]
+    ladder_holdout_stats = summarize(ladder_holdout)
+    ladder_development_segments = [
+        annualized_sharpe(segment)
+        for segment in _segments([factor - 1.0 for factor in ladder_development])
     ]
     incumbent_assets = [
         market_total_return_factors(rows),
         bond_total_return_factors(rows),
         gold_total_return_factors(gold_levels),
     ]
-    incumbent = [sum(values) / 3.0 for values in zip(*incumbent_assets, strict=True)][start:]
-    incumbent_stats = summarize(incumbent)
+    incumbent_all = [sum(values) / 3.0 for values in zip(*incumbent_assets, strict=True)]
+    incumbent_holdout = incumbent_all[holdout_start:]
+    incumbent_holdout_stats = summarize(incumbent_holdout)
 
     records: list[dict[str, Any]] = []
-    primary_returns: list[list[float]] = []
-    current_segments: list[list[float]] = []
+    development_returns: list[list[float]] = []
+    holdout_factors_by_cost: list[dict[int, list[float]]] = []
+    development_segments: list[list[float]] = []
     for candidate in candidates:
-        by_cost: dict[int, list[float]] = {}
+        full_by_cost: dict[int, list[float]] = {}
         turnover = 0.0
         for cost in (10, 25, 50):
             factors, candidate_turnover = _candidate_factors(
                 candidate, snapshots, sleeves, cost_bps=cost
             )
-            by_cost[cost] = factors[start:]
+            full_by_cost[cost] = factors
             if cost == 25:
                 turnover = candidate_turnover
-        returns = [factor - 1.0 for factor in by_cost[25]]
-        segments = _segments(returns)
+        candidate_development = [factor - 1.0 for factor in full_by_cost[25][:boundary]]
+        candidate_holdout = full_by_cost[25][holdout_start:]
+        segments = _segments(candidate_development)
         segment_sharpes = [annualized_sharpe(segment) for segment in segments]
-        stats = summarize(by_cost[25])
-        primary_returns.append(returns)
-        current_segments.append(segment_sharpes)
+        development_stats = summarize(full_by_cost[25][:boundary])
+        holdout_stats = summarize(candidate_holdout)
+        development_returns.append(candidate_development)
+        development_segments.append(segment_sharpes)
+        holdout_factors_by_cost.append(
+            {cost: values[holdout_start:] for cost, values in full_by_cost.items()}
+        )
         records.append(
             {
                 "candidate_id": candidate.candidate_id,
                 "strategy_fingerprint": candidate.strategy_fingerprint,
                 "status": "complete",
                 "family": candidate.policy.family,
-                "sharpe_25bps": round(stats.sharpe, 6),
-                "cagr_25bps": round(stats.cagr_pct, 6),
-                "max_drawdown_25bps": round(stats.max_dd_pct, 6),
-                "calmar_25bps": None if stats.calmar is None else round(stats.calmar, 6),
-                "total_return_50bps": round(math.prod(by_cost[50]) - 1.0, 8),
+                "sharpe_25bps": round(development_stats.sharpe, 6),
+                "development_sharpe_25bps": round(development_stats.sharpe, 6),
+                "development_calmar_25bps": (
+                    None if development_stats.calmar is None else round(development_stats.calmar, 6)
+                ),
+                "development_max_drawdown_25bps": round(development_stats.max_dd_pct, 6),
+                "holdout_sharpe_25bps": round(holdout_stats.sharpe, 6),
+                "holdout_cagr_25bps": round(holdout_stats.cagr_pct, 6),
+                "holdout_max_drawdown_25bps": round(holdout_stats.max_dd_pct, 6),
+                "holdout_calmar_25bps": (
+                    None if holdout_stats.calmar is None else round(holdout_stats.calmar, 6)
+                ),
+                "holdout_total_return_50bps": round(
+                    math.prod(full_by_cost[50][holdout_start:]) - 1.0, 8
+                ),
                 "turnover": round(turnover, 6),
                 "segment_sharpes": [round(value, 6) for value in segment_sharpes],
                 "segment_wins": sum(
                     value > benchmark
-                    for value, benchmark in zip(segment_sharpes, ladder_segments, strict=True)
+                    for value, benchmark in zip(
+                        segment_sharpes, ladder_development_segments, strict=True
+                    )
                 ),
             }
         )
@@ -499,39 +549,47 @@ def run_treasury_carry_factory(
     winner_index = max(
         range(len(records)),
         key=lambda index: (
-            records[index]["sharpe_25bps"],
-            records[index]["calmar_25bps"] or -math.inf,
-            -records[index]["max_drawdown_25bps"],
+            records[index]["development_sharpe_25bps"],
+            records[index]["development_calmar_25bps"] or -math.inf,
+            -records[index]["development_max_drawdown_25bps"],
             candidates[index].candidate_id,
         ),
     )
     winner = candidates[winner_index]
     winner_record = records[winner_index]
-    prior = _prior_records(prior_trial_records, prior_factory_payload)
-    trial_records = prior + records
-    trial_sharpes = [float(record["sharpe_25bps"]) for record in trial_records]
-    trial_fingerprints = [
-        str(record.get("strategy_fingerprint") or f"legacy:{record.get('candidate_id')}")
-        for record in trial_records
-    ]
-    unique_trial_fingerprints = len(set(trial_fingerprints))
-    segment_scores = [
-        [float(value) for value in record["segment_sharpes"]] for record in trial_records
-    ]
-    dsr = deflated_sharpe_from_trials(primary_returns[winner_index], trial_sharpes)
-    psr = probabilistic_sharpe(
-        primary_returns[winner_index], benchmark_sharpe_annual=ladder_stats.sharpe
+    family_trial_sharpes = [float(record["development_sharpe_25bps"]) for record in records]
+    effective_trials = effective_independent_trials(development_returns)
+    dsr = deflated_sharpe_from_trials(
+        development_returns[winner_index],
+        family_trial_sharpes,
+        effective_trial_count=effective_trials,
     )
-    pbo = probability_of_backtest_overfitting(segment_scores)
-    win_rate = winner_record["segment_wins"] / 10.0
-    winner_factors, _ = _candidate_factors(winner, snapshots, sleeves, cost_bps=25)
-    winner_factors = winner_factors[start:]
+    pbo = probability_of_backtest_overfitting(development_segments)
+
+    winner_holdout = holdout_factors_by_cost[winner_index][25]
     blend = [
         0.8 * base + 0.2 * candidate
-        for base, candidate in zip(incumbent, winner_factors, strict=True)
+        for base, candidate in zip(incumbent_holdout, winner_holdout, strict=True)
     ]
     blend_stats = summarize(blend)
-    incumbent_correlation = correlation(incumbent, winner_factors)
+    blend_psr = probabilistic_sharpe(
+        [factor - 1.0 for factor in blend],
+        benchmark_sharpe_annual=incumbent_holdout_stats.sharpe,
+    )
+    standalone_psr = probabilistic_sharpe(
+        [factor - 1.0 for factor in winner_holdout],
+        benchmark_sharpe_annual=ladder_holdout_stats.sharpe,
+    )
+    incumbent_correlation = correlation(incumbent_holdout, winner_holdout)
+
+    prior = _prior_records(prior_trial_records, prior_factory_payload)
+    audit_records = prior + records
+    audit_fingerprints = [
+        str(record.get("strategy_fingerprint") or f"legacy:{record.get('candidate_id')}")
+        for record in audit_records
+    ]
+    unique_audit_fingerprints = len(set(audit_fingerprints))
+    calibration_passed = _calibration_valid(calibration_evidence, code_commit=code_commit)
 
     latest = live_snapshot or snapshots[-1]
     parity_weights = treasury_target_weights(
@@ -544,88 +602,158 @@ def run_treasury_carry_factory(
         for snapshot in snapshots
         for observed in snapshot.observation_dates.values()
     )
-    gates = (
-        ("complete_trials", len(records) == 64, len(records), 64),
-        ("prior_replay_complete", len(prior) == 512, len(prior), 512),
-        ("multiplicity_trials", len(trial_records) == 576, len(trial_records), 576),
-        (
-            "unique_trial_fingerprints",
-            unique_trial_fingerprints == 576,
-            unique_trial_fingerprints,
-            576,
-        ),
-        (
-            "treasury_data_complete",
-            treasury_data_quality.get("complete") is True,
-            treasury_data_quality.get("complete"),
-            True,
-        ),
-        ("publication_safe", publication_safe, publication_safe, True),
-        ("live_data_complete", latest.complete, latest.complete, True),
-        ("live_data_fresh", latest.fresh, latest.fresh, True),
-        ("research_live_parity", bool(parity_digest), bool(parity_digest), True),
-        ("development_months", start >= 120, start, 120),
-        ("embargo_months", start - boundary == 1, start - boundary, 1),
-        ("holdout_months", len(ladder) >= 120, len(ladder), 120),
-        ("dsr", dsr is not None and dsr >= Decimal("0.95"), dsr, Decimal("0.95")),
-        ("pbo", pbo is not None and pbo <= Decimal("0.10"), pbo, Decimal("0.10")),
-        (
-            "psr_vs_treasury_ladder",
-            psr is not None and psr >= Decimal("0.95"),
-            psr,
-            Decimal("0.95"),
-        ),
-        ("segment_win_rate", win_rate >= 0.60, round(win_rate, 6), 0.60),
-        (
-            "sharpe_superiority",
-            winner_record["sharpe_25bps"] >= ladder_stats.sharpe + 0.20,
-            round(winner_record["sharpe_25bps"] - ladder_stats.sharpe, 6),
-            0.20,
-        ),
-        (
-            "calmar_superiority",
-            winner_record["calmar_25bps"] is not None
-            and ladder_stats.calmar is not None
-            and winner_record["calmar_25bps"] > ladder_stats.calmar,
-            winner_record["calmar_25bps"],
-            ladder_stats.calmar,
-        ),
-        (
-            "drawdown_defense",
-            winner_record["max_drawdown_25bps"] <= ladder_stats.max_dd_pct * 0.80,
-            winner_record["max_drawdown_25bps"],
-            round(ladder_stats.max_dd_pct * 0.80, 6),
-        ),
-        (
-            "cost_50bps_positive",
-            winner_record["total_return_50bps"] > 0.0,
-            winner_record["total_return_50bps"],
-            0.0,
-        ),
-        (
-            "incumbent_correlation",
-            incumbent_correlation is not None and incumbent_correlation < 0.80,
-            incumbent_correlation,
-            0.80,
-        ),
-        (
-            "blend_sharpe_improvement",
-            blend_stats.sharpe >= incumbent_stats.sharpe + 0.05,
-            round(blend_stats.sharpe - incumbent_stats.sharpe, 6),
-            0.05,
-        ),
-        (
-            "blend_drawdown_non_worsening",
-            blend_stats.max_dd_pct <= incumbent_stats.max_dd_pct,
-            blend_stats.max_dd_pct,
-            incumbent_stats.max_dd_pct,
-        ),
+
+    gate_rows: list[dict[str, Any]] = []
+
+    def add_gate(
+        gate_id: str,
+        passed: bool,
+        actual: Any,
+        required: Any,
+        *,
+        stage: str,
+        blocking: bool = True,
+    ) -> None:
+        gate_rows.append(
+            {
+                "gate_id": gate_id,
+                "passed": bool(passed),
+                "actual": str(actual),
+                "required": str(required),
+                "stage": stage,
+                "blocking": blocking,
+            }
+        )
+
+    add_gate(
+        "gate_calibration",
+        calibration_passed,
+        calibration_evidence.get("verdict"),
+        CALIBRATED,
+        stage="calibration",
     )
-    gate_rows = [
-        {"gate_id": key, "passed": bool(passed), "actual": str(actual), "required": str(required)}
-        for key, passed, actual, required in gates
-    ]
-    passed = all(gate[1] for gate in gates)
+    add_gate("complete_family_trials", len(records) == 64, len(records), 64, stage="audit")
+    add_gate("prior_audit_complete", len(prior) == 512, len(prior), 512, stage="audit")
+    add_gate(
+        "global_audit_trials", len(audit_records) == 576, len(audit_records), 576, stage="audit"
+    )
+    add_gate(
+        "unique_audit_fingerprints",
+        unique_audit_fingerprints == 576,
+        unique_audit_fingerprints,
+        576,
+        stage="audit",
+    )
+    add_gate(
+        "family_pbo_rows",
+        len(development_segments) == 64,
+        len(development_segments),
+        64,
+        stage="discovery",
+    )
+    add_gate(
+        "treasury_data_complete",
+        treasury_data_quality.get("complete") is True,
+        treasury_data_quality.get("complete"),
+        True,
+        stage="data",
+    )
+    add_gate("publication_safe", publication_safe, publication_safe, True, stage="data")
+    add_gate("live_data_complete", latest.complete, latest.complete, True, stage="data")
+    add_gate("live_data_fresh", latest.fresh, latest.fresh, True, stage="data")
+    add_gate("research_live_parity", bool(parity_digest), bool(parity_digest), True, stage="parity")
+    add_gate("development_months", boundary >= 120, boundary, 120, stage="split")
+    add_gate(
+        "embargo_months", holdout_start - boundary == 1, holdout_start - boundary, 1, stage="split"
+    )
+    add_gate("holdout_months", len(ladder_holdout) >= 120, len(ladder_holdout), 120, stage="split")
+    add_gate(
+        "development_dsr_diagnostic",
+        dsr is not None and dsr >= Decimal("0.95"),
+        dsr,
+        Decimal("0.95"),
+        stage="discovery",
+        blocking=False,
+    )
+    add_gate(
+        "development_pbo_diagnostic",
+        pbo is not None and pbo <= Decimal(str(PBO_DIAGNOSTIC_MAX)),
+        pbo,
+        PBO_DIAGNOSTIC_MAX,
+        stage="discovery",
+        blocking=False,
+    )
+    add_gate(
+        "holdout_blend_psr",
+        blend_psr is not None and blend_psr >= Decimal(str(HOLDOUT_PSR_MIN)),
+        blend_psr,
+        HOLDOUT_PSR_MIN,
+        stage="confirmation",
+    )
+    add_gate(
+        "holdout_cost_50bps_positive",
+        winner_record["holdout_total_return_50bps"] > 0.0,
+        winner_record["holdout_total_return_50bps"],
+        0.0,
+        stage="confirmation",
+    )
+    add_gate(
+        "incumbent_correlation",
+        incumbent_correlation is not None and incumbent_correlation < 0.80,
+        incumbent_correlation,
+        0.80,
+        stage="economics",
+    )
+    add_gate(
+        "blend_sharpe_improvement",
+        blend_stats.sharpe >= incumbent_holdout_stats.sharpe + 0.05,
+        round(blend_stats.sharpe - incumbent_holdout_stats.sharpe, 6),
+        0.05,
+        stage="economics",
+    )
+    add_gate(
+        "blend_drawdown_non_worsening",
+        blend_stats.max_dd_pct <= incumbent_holdout_stats.max_dd_pct,
+        blend_stats.max_dd_pct,
+        incumbent_holdout_stats.max_dd_pct,
+        stage="economics",
+    )
+    add_gate(
+        "standalone_psr_diagnostic",
+        standalone_psr is not None and standalone_psr >= Decimal("0.95"),
+        standalone_psr,
+        Decimal("0.95"),
+        stage="replacement_diagnostic",
+        blocking=False,
+    )
+    add_gate(
+        "standalone_sharpe_diagnostic",
+        winner_record["holdout_sharpe_25bps"] >= ladder_holdout_stats.sharpe + 0.20,
+        round(winner_record["holdout_sharpe_25bps"] - ladder_holdout_stats.sharpe, 6),
+        0.20,
+        stage="replacement_diagnostic",
+        blocking=False,
+    )
+    add_gate(
+        "standalone_calmar_diagnostic",
+        winner_record["holdout_calmar_25bps"] is not None
+        and ladder_holdout_stats.calmar is not None
+        and winner_record["holdout_calmar_25bps"] > ladder_holdout_stats.calmar,
+        winner_record["holdout_calmar_25bps"],
+        ladder_holdout_stats.calmar,
+        stage="replacement_diagnostic",
+        blocking=False,
+    )
+    add_gate(
+        "standalone_drawdown_diagnostic",
+        winner_record["holdout_max_drawdown_25bps"] <= ladder_holdout_stats.max_dd_pct * 0.80,
+        winner_record["holdout_max_drawdown_25bps"],
+        round(ladder_holdout_stats.max_dd_pct * 0.80, 6),
+        stage="replacement_diagnostic",
+        blocking=False,
+    )
+
+    passed = all(gate["passed"] for gate in gate_rows if gate["blocking"])
     data_fp = _fingerprint(
         {
             "quality": treasury_data_quality,
@@ -634,11 +762,14 @@ def run_treasury_carry_factory(
         }
     )
     batch_id = (
-        "treasury-carry-factory-"
-        + _fingerprint({"data": data_fp, "code": code_commit, "grammar": SCHEMA_VERSION})[7:19]
+        "treasury-carry-factory-v2-"
+        + _fingerprint(
+            {"data": data_fp, "code": code_commit, "grammar": SCHEMA_VERSION, "gate": GATE_VERSION}
+        )[7:19]
     )
     return {
-        "schema_version": SCHEMA_VERSION,
+        "schema_version": "2.0",
+        "gate_version": GATE_VERSION,
         "batch_id": batch_id,
         "timestamp_utc": timestamp_utc or datetime.now(UTC).isoformat(),
         "code_commit": code_commit,
@@ -647,8 +778,34 @@ def run_treasury_carry_factory(
         "complete_trial_count": len(records),
         "prior_trial_count": len(prior),
         "current_trial_count": len(records),
-        "multiplicity_trial_count": len(trial_records),
-        "unique_trial_fingerprint_count": unique_trial_fingerprints,
+        "global_audit_trial_count": len(audit_records),
+        "multiplicity_trial_count": len(records),
+        "family_raw_trial_count": len(records),
+        "family_effective_trial_count": str(effective_trials),
+        "unique_trial_fingerprint_count": unique_audit_fingerprints,
+        "calibration": calibration_evidence,
+        "statistical_family": {
+            "family_id": "treasury_carry_v1",
+            "objective": OBJECTIVE,
+            "benchmark_id": "incumbent_80_20_blend",
+            "selection_rule": "max_development_sharpe_then_calmar_then_drawdown",
+            "development_range": [dates[0], dates[boundary - 1]],
+            "embargo_date": dates[boundary],
+            "holdout_range": [dates[holdout_start], dates[-1]],
+        },
+        "development_selection": {
+            "selected_candidate_id": winner.candidate_id,
+            "selected_strategy_fingerprint": winner.strategy_fingerprint,
+            "dsr": None if dsr is None else str(dsr),
+            "pbo": None if pbo is None else str(pbo),
+        },
+        "holdout_confirmation": {
+            "candidate_id": winner.candidate_id,
+            "blend_psr_vs_incumbent": None if blend_psr is None else str(blend_psr),
+            "standalone_psr_vs_treasury_ladder": (
+                None if standalone_psr is None else str(standalone_psr)
+            ),
+        },
         "candidates": [candidate.as_dict() for candidate in candidates],
         "trial_records": records,
         "treasury_data": treasury_data_quality,
@@ -665,11 +822,12 @@ def run_treasury_carry_factory(
         },
         "decision": {
             "verdict": FACTORY_EDGE if passed else NO_FACTORY_EDGE,
+            "objective": OBJECTIVE,
             "selected_candidate_id": winner.candidate_id if passed else None,
             "provisional_best_candidate_id": winner.candidate_id,
             "dsr": None if dsr is None else str(dsr),
             "pbo": None if pbo is None else str(pbo),
-            "psr": None if psr is None else str(psr),
+            "psr": None if blend_psr is None else str(blend_psr),
             "gates": gate_rows,
             "research_canary_eligible": passed,
             "selected_strategy_fingerprint": winner.strategy_fingerprint if passed else None,
@@ -677,8 +835,8 @@ def run_treasury_carry_factory(
             "search_space_exhausted": not passed,
             "next_strategy_family": None if passed else "independent_credit_or_fx_carry",
         },
-        "treasury_benchmark": ladder_stats.as_dict(),
-        "incumbent_benchmark": incumbent_stats.as_dict(),
+        "treasury_benchmark": ladder_holdout_stats.as_dict(),
+        "incumbent_benchmark": incumbent_holdout_stats.as_dict(),
         "blend": {
             **blend_stats.as_dict(),
             "candidate_weight": "0.20",
@@ -709,20 +867,29 @@ def validate_live_treasury_evidence(
         raise ValueError("Treasury evidence is stale")
     decision = payload.get("decision", {})
     evidence = payload.get("live_treasury_evidence", {})
+    if payload.get("gate_version") != GATE_VERSION:
+        raise ValueError("Treasury factory gate version is missing or legacy")
     if decision.get("verdict") != FACTORY_EDGE or not decision.get("research_canary_eligible"):
         raise ValueError("Treasury factory has no eligible winner")
     gates = decision.get("gates")
-    if not isinstance(gates, list) or not gates or any(
-        not isinstance(gate, dict) or gate.get("passed") is not True for gate in gates
+    if (
+        not isinstance(gates, list)
+        or not gates
+        or any(
+            not isinstance(gate, dict)
+            or (gate.get("blocking") is not False and gate.get("passed") is not True)
+            for gate in gates
+        )
     ):
         raise ValueError("Treasury factory gates are incomplete or failed")
     if decision.get("selected_candidate_id") != candidate_id:
         raise ValueError("Treasury candidate id does not match factory winner")
     if decision.get("selected_strategy_fingerprint") != strategy_fingerprint:
         raise ValueError("Treasury strategy fingerprint does not match factory winner")
-    if evidence.get("candidate_id") != candidate_id or evidence.get(
-        "strategy_fingerprint"
-    ) != strategy_fingerprint:
+    if (
+        evidence.get("candidate_id") != candidate_id
+        or evidence.get("strategy_fingerprint") != strategy_fingerprint
+    ):
         raise ValueError("live Treasury evidence identity mismatch")
     if evidence.get("data_fingerprint") != payload.get("treasury_data_fingerprint"):
         raise ValueError("live Treasury data fingerprint mismatch")
@@ -756,25 +923,31 @@ def render_treasury_factory_markdown(payload: dict[str, Any]) -> str:
         f"- 판정: **{decision['verdict']}**",
         f"- 묶음: `{payload['batch_id']}`",
         f"- 공식 후보: {payload['complete_trial_count']}/{payload['candidate_count']}",
-        f"- 이전 탐색: {payload['prior_trial_count']}",
-        f"- 누적 다중검정: {payload['multiplicity_trial_count']}",
+        f"- 전체 감사 시도: {payload.get('global_audit_trial_count')}",
+        f"- 현재 통계 가족: {payload.get('family_raw_trial_count')}개 ",
+        f"  (독립 환산 {payload.get('family_effective_trial_count')})",
         f"- 잠정 최고: `{decision['provisional_best_candidate_id']}`",
-        f"- DSR/PBO/PSR: {decision['dsr']} / {decision['pbo']} / {decision['psr']}",
+        "- 개발 진단 DSR/PBO, 홀드아웃 PSR: "
+        f"{decision['dsr']} / {decision['pbo']} / {decision['psr']}",
         "",
         "## 관문",
         "",
-        "| 관문 | 상태 | 현재 | 기준 |",
-        "|---|:---:|---:|---:|",
+        "| 관문 | 역할 | 상태 | 현재 | 기준 |",
+        "|---|---|:---:|---:|---:|",
     ]
     for gate in decision["gates"]:
         status = "PASS" if gate["passed"] else "FAIL"
-        lines.append(f"| {gate['gate_id']} | {status} | {gate['actual']} | {gate['required']} |")
+        role = "차단" if gate.get("blocking", True) else "진단"
+        lines.append(
+            f"| {gate['gate_id']} | {role} | {status} | {gate['actual']} | {gate['required']} |"
+        )
     lines.extend(["", "> 이 실행은 주문과 자본을 변경하지 않는다."])
     return "\n".join(lines)
 
 
 __all__ = [
     "EXPECTED_CANDIDATES",
+    "EXPECTED_GLOBAL_AUDIT_TRIALS",
     "EXPECTED_MULTIPLICITY_TRIALS",
     "FACTORY_EDGE",
     "NO_FACTORY_EDGE",
