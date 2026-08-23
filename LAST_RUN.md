@@ -1,7 +1,7 @@
 # 일봉 교차자산 AI 후보 최신 실행
 
-- run_id: 32556975345
-- commit: 68eab4e3fed44205a305d0dd7bbd5352b157f367
+- run_id: 32618990850
+- commit: caae2e507708c9c5c98d39a8db3cbe84966d33d1
 - verdict: NO_EDGE
 - reason: failed gates: sharpe_margin, psr, dsr, fold_win_rate, max_drawdown
 - baseline_turnover: 34.34
