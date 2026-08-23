@@ -23,14 +23,18 @@ from auto_invest.broker.client import AsyncTokenBucket, CircuitBreaker, Resilien
 from auto_invest.broker.models import Quote
 from auto_invest.config.caps import SizingCaps
 from auto_invest.config.enums import OrderType, Side
-from auto_invest.config.rules import MacroPolicyConfig, PortfolioRebalanceConfig
+from auto_invest.config.rules import (
+    MacroPolicyConfig,
+    PortfolioRebalanceConfig,
+    TreasuryCarryPolicyConfig,
+)
 from auto_invest.config.whitelist import Whitelist
 from auto_invest.execution.order_router import OrderOutcome, OrderRouter
 from auto_invest.execution.rebalancer import execute_rebalance
 from auto_invest.market_data.store import PriceBar, insert_bar
 from auto_invest.persistence import db
 from auto_invest.persistence import positions as positions_mod
-from auto_invest.strategy.rebalance import macro_target_weights
+from auto_invest.strategy.rebalance import macro_target_weights, treasury_target_weights
 
 _D0 = datetime(2023, 1, 3, tzinfo=UTC)
 ACCOUNT = "REBAL-ACCT"
@@ -166,6 +170,32 @@ def _macro_snapshot(*, fresh: bool = True) -> dict[str, object]:
     }
 
 
+def _treasury_policy() -> TreasuryCarryPolicyConfig:
+    return TreasuryCarryPolicyConfig(
+        family="carry_rate_trend",
+        max_maturity_years=30,
+        lookback_months=3,
+        top_n=2,
+        signal_strength=Decimal("1.0"),
+    )
+
+
+def _treasury_snapshot(*, fresh: bool = True) -> dict[str, object]:
+    histories = {
+        "SGOV": ["3.0", "3.0", "3.0", "3.0"],
+        "SHY": ["3.5", "3.4", "3.3", "3.2"],
+        "IEI": ["4.0", "3.8", "3.6", "3.4"],
+        "IEF": ["4.5", "4.2", "3.9", "3.6"],
+        "TLT": ["5.0", "4.6", "4.2", "3.8"],
+    }
+    return {
+        "as_of_date": "2026-08-23",
+        "yield_history": histories,
+        "complete": True,
+        "fresh": fresh,
+    }
+
+
 @pytest.mark.asyncio
 async def test_macro_rebalance_uses_shared_weights_and_blocks_stale_before_quote(conn, tmp_path):
     universe = ("SPY", "IEF", "GLD")
@@ -211,6 +241,51 @@ async def test_macro_rebalance_uses_shared_weights_and_blocks_stale_before_quote
         },
         policy=_macro_policy(),
         snapshot=_macro_snapshot(),
+    )
+    assert outcome.signal_target_weights == expected
+
+
+@pytest.mark.asyncio
+async def test_treasury_rebalance_uses_shared_weights_and_blocks_stale_before_quote(
+    conn, tmp_path
+):
+    universe = ("SGOV", "SHY", "IEI", "IEF", "TLT")
+    for symbol in universe:
+        _seed_bars(conn, symbol, [100 + index / 10 for index in range(40)])
+    caps = _caps(per_trade="100", per_symbol="100", glob="100")
+    router = _paper_router(conn, tmp_path, _whitelist(universe), caps)
+    quote_calls = 0
+
+    async def quote_provider(symbol: str) -> Quote:
+        nonlocal quote_calls
+        quote_calls += 1
+        return await _quote_provider({item: "100" for item in universe})(symbol)
+
+    config = _cfg(universe, top_n=5, treasury_carry_policy=_treasury_policy())
+    with pytest.raises(ValueError, match="stale"):
+        await execute_rebalance(
+            config=config,
+            router=router,
+            conn=conn,
+            quote_provider=quote_provider,
+            total_capital_usd=Decimal("100000"),
+            caps=caps,
+            treasury_snapshot=_treasury_snapshot(fresh=False),
+        )
+    assert quote_calls == 0
+
+    outcome = await execute_rebalance(
+        config=config,
+        router=router,
+        conn=conn,
+        quote_provider=quote_provider,
+        total_capital_usd=Decimal("100000"),
+        caps=caps,
+        dry_run=True,
+        treasury_snapshot=_treasury_snapshot(),
+    )
+    expected = treasury_target_weights(
+        policy=_treasury_policy(), snapshot=_treasury_snapshot()
     )
     assert outcome.signal_target_weights == expected
 

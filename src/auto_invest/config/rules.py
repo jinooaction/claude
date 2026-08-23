@@ -356,6 +356,26 @@ class MacroPolicyConfig(BaseModel):
         return self
 
 
+class TreasuryCarryPolicyConfig(BaseModel):
+    """Optional spec-152 Treasury maturity policy shared by research and execution."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    family: Literal[
+        "carry_roll", "carry_rate_trend", "defensive_curve", "curve_barbell"
+    ]
+    max_maturity_years: Literal[10, 30]
+    lookback_months: Literal[3, 12]
+    top_n: Literal[1, 2]
+    signal_strength: Decimal
+
+    @field_validator("signal_strength")
+    @classmethod
+    def _check_signal_strength(cls, value: Decimal) -> Decimal:
+        if value not in {Decimal("0.5"), Decimal("1.0")}:
+            raise ValueError("signal_strength must be 0.5 or 1.0")
+        return value
+
+
 class PortfolioRebalanceConfig(BaseModel):
     """스펙 032 — 횡단면 포트폴리오 재조정 설정. 비커널.
 
@@ -408,6 +428,7 @@ class PortfolioRebalanceConfig(BaseModel):
     # 스펙 036 — 절대 모멘텀 추세 필터(드로다운 방어). 생략 시 미적용(기존 동작 byte 동일).
     trend_filter: TrendFilterConfig | None = None
     macro_policy: MacroPolicyConfig | None = None
+    treasury_carry_policy: TreasuryCarryPolicyConfig | None = None
 
     @field_validator("universe")
     @classmethod
@@ -433,6 +454,8 @@ class PortfolioRebalanceConfig(BaseModel):
     def _require_exactly_one(self) -> PortfolioRebalanceConfig:
         if (self.top_n is None) == (self.top_pct is None):
             raise ValueError("PortfolioRebalanceConfig: set exactly one of top_n or top_pct")
+        if self.macro_policy is not None and self.treasury_carry_policy is not None:
+            raise ValueError("macro_policy and treasury_carry_policy are mutually exclusive")
         return self
 
 

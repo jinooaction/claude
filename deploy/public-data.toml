@@ -54,9 +54,9 @@ short = "2 Yr"
 
 [fred]
 # FRED 그래프 CSV — 키 불필요 공개 엔드포인트. candidate-facf2fa31834 증거에서
-# 채널 UA 는 timeout, httpx 기본 UA 는 200으로 확인되어 DGS2/DGS10에만
+# 채널 UA 는 timeout, httpx 기본 UA 는 200으로 확인되어 DGS 만기 5종에
 # 명시적으로 기본 UA 를 쓴다. CPI·고용은 더 긴 발표 주기를 각자 검증한다.
-series = ["DGS2", "DGS10", "CPIAUCNS", "SAHMREALTIME"]
+series = ["DGS3MO", "DGS2", "DGS5", "DGS10", "DGS30", "CPIAUCNS", "SAHMREALTIME"]
 min_rows = 1500
 max_staleness_days = 7
 user_agent = "httpx-default"

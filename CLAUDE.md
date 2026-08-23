@@ -215,14 +215,14 @@ After a successful merge, the session SHOULD:
 ---
 
 <!-- SPECKIT START -->
-**Active feature plan**: `specs/151-independent-macro-regime/plan.md`
+**Active feature plan**: `specs/152-treasury-carry-factory/plan.md`
 
 Active feature pointer: `.specify/feature.json` is the maintained pointer for
 the current worktree. Do not trust prose in this block as the source of truth
 for in-flight work; use the `git_ground_truth` start hook, latest `HANDOFF.md`,
 and `/sync` against `jinooaction/claude` `Codex/*` branches before continuing.
 
-현재 계획 포인터: `specs/151-independent-macro-regime/plan.md` — 소진된 가격 매개변수 공간과 독립적인 금리곡선·물가·실시간 삼 규칙·VIX 전략군 64개를 시점 기준 자료와 누적 다중검정으로 검증하고, 연구와 주문 직전 신호가 정확히 같을 때만 기존 10% 연구 캐너리 심사로 넘기는 계약.
+현재 계획 포인터: `specs/152-treasury-carry-factory/plan.md` — 미국 국채 3개월·2년·5년·10년·30년 만기 회전 전략군 64개를 공식 시점 기준 자료와 이전 탐색을 포함한 총 576회 다중검정으로 검증하고, 국채 사다리 우위·기존 3자산 분산 이득·연구와 주문 비중 동일성을 모두 통과한 경우에만 기존 캐너리 심사로 넘기는 계약.
 
 머지 완료(베이스라인): spec 004 (LLM 판단 지점), 005 (자율 튜너), 006 (배포 자동화), 007 (하드닝 카나리), 008 (백테스트), 009 (paper-run), 010 (자동 룰 설계자), 011 (라이브 성과 측정). **주의: 일부 tasks.md 가 stale 0% 로 표시된 적 있음 — 코드/테스트를 믿을 것.**
 

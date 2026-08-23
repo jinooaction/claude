@@ -117,6 +117,11 @@ def test_fingerprint_identical_configs_match():
     assert strategy_fingerprint(_cfg()) == strategy_fingerprint(_cfg())
 
 
+def test_optional_treasury_policy_does_not_change_legacy_fingerprint_shape():
+    assert _cfg().treasury_carry_policy is None
+    assert len(strategy_fingerprint(_cfg())) == 11
+
+
 def test_fingerprint_differs_on_universe():
     other = _cfg(universe=["SPY", "IEF"])
     assert strategy_fingerprint(_cfg()) != strategy_fingerprint(other)
