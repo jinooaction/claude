@@ -44,10 +44,10 @@
 - [x] T022 [P] Add probe and workflow contract tests in `tests/integration/test_macro_strategy_factory_probe.py` and `tests/integration/test_strategy_factory_workflow.py`.
 - [x] T023 Run targeted tests, full pytest, ruff, YAML/shell checks, strict harness, HANDOFF facts, and PR quality gate using `scripts/agent_harness_probe.py` and `scripts/check_handoff_facts.py`.
 - [x] T024 Add and run a 15-minute upper-bound performance regression for 192 replay plus 64 official trials in `tests/integration/test_macro_strategy_factory_probe.py`.
-- [ ] T025 Commit, push, open the grade-4 PR with `.github/pull_request_template.md`, and auto-merge only when all gates pass.
-- [ ] T026 Verify deployment, refresh public-data, execute `.github/workflows/autonomous-strategy-factory.yml`, and inspect the 512-trial production decision.
-- [ ] T027 If and only if a full winner exists, run hardened no-order parity through `.github/workflows/forward-edge-autoarm.yml`; otherwise prove rung 0 and orders 0.
-- [ ] T028 Refresh `HANDOFF.md` with the actual macro winner/no-winner, data coverage, account state, orders, and next independent family.
+- [x] T025 Commit, push, open the grade-4 PR with `.github/pull_request_template.md`, and auto-merge only when all gates pass.
+- [x] T026 Verify deployment, refresh public-data, execute `.github/workflows/autonomous-strategy-factory.yml`, and inspect the 512-trial production decision.
+- [x] T027 If and only if a full winner exists, run hardened no-order parity through `.github/workflows/forward-edge-autoarm.yml`; otherwise prove rung 0 and orders 0.
+- [x] T028 Refresh `HANDOFF.md` with the actual macro winner/no-winner, data coverage, account state, orders, and next independent family.
 
 ## Dependencies
 
