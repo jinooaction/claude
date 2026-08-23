@@ -4483,6 +4483,11 @@ def rebalance_once_cmd(
         "--macro-evidence",
         help="Spec 151 factory JSON. Required when [portfolio.macro_policy] is configured.",
     ),
+    treasury_evidence: Path | None = typer.Option(
+        None,
+        "--treasury-evidence",
+        help="Spec 152 factory JSON. Required with [portfolio.treasury_carry_policy].",
+    ),
     as_json: bool = typer.Option(False, "--json", help="Emit a single JSON object."),
 ) -> None:
     """Run ONE cross-sectional rebalance against the live/paper account (spec 032 slice 2).
@@ -4558,6 +4563,35 @@ def rebalance_once_cmd(
             _exit(65)
     elif macro_evidence is not None:
         typer.echo("--macro-evidence requires [portfolio.macro_policy]", err=True)
+        _exit(65)
+
+    treasury_snapshot: dict[str, object] | None = None
+    if port_cfg.treasury_carry_policy is not None:
+        if treasury_evidence is None:
+            typer.echo(
+                "Treasury carry policy requires --treasury-evidence before broker call",
+                err=True,
+            )
+            _exit(65)
+        from auto_invest.analytics.treasury_carry_factory import (
+            validate_live_treasury_evidence,
+        )
+        from auto_invest.portfolio.autoarm import strategy_fingerprint_digest
+
+        try:
+            treasury_payload = _json.loads(treasury_evidence.read_text(encoding="utf-8"))
+            treasury_snapshot = validate_live_treasury_evidence(
+                treasury_payload,
+                candidate_id=port_cfg.id,
+                strategy_fingerprint=strategy_fingerprint_digest(port_cfg),
+            )
+        except (OSError, ValueError, _json.JSONDecodeError) as exc:
+            typer.echo(f"Treasury evidence validation failed before broker call: {exc}", err=True)
+            _exit(65)
+    elif treasury_evidence is not None:
+        typer.echo(
+            "--treasury-evidence requires [portfolio.treasury_carry_policy]", err=True
+        )
         _exit(65)
 
     # Safety: every universe symbol MUST be on the whitelist, else its buys would
@@ -4710,6 +4744,7 @@ def rebalance_once_cmd(
                     execution_symbol_map=execution_symbol_map,
                     lot_rounding=lot_rounding,
                     macro_snapshot=macro_snapshot,
+                    treasury_snapshot=treasury_snapshot,
                 )
             finally:
                 conn.close()
@@ -4796,6 +4831,7 @@ def rebalance_once_cmd(
                     execution_symbol_map=execution_symbol_map,
                     lot_rounding=lot_rounding,
                     macro_snapshot=macro_snapshot,
+                    treasury_snapshot=treasury_snapshot,
                 )
             finally:
                 conn.close()

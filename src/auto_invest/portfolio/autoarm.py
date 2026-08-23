@@ -115,7 +115,7 @@ def strategy_fingerprint(cfg: PortfolioRebalanceConfig) -> tuple:
     유니버스·가중 방식·선택 폭·재조정 동작·추세 게이트(앙상블 창 포함)를 포착한다.
     캡/자본/화이트리스트(라이브 사이징)는 제외 — 그건 전략이 아니라 *운용 규모*다.
     """
-    return (
+    base = (
         tuple(cfg.universe),
         cfg.weight_scheme,
         cfg.rebalance_mode,
@@ -134,6 +134,15 @@ def strategy_fingerprint(cfg: PortfolioRebalanceConfig) -> tuple:
                 sort_keys=True,
                 separators=(",", ":"),
             )
+        ),
+    )
+    if cfg.treasury_carry_policy is None:
+        return base
+    return base + (
+        json.dumps(
+            cfg.treasury_carry_policy.model_dump(mode="json"),
+            sort_keys=True,
+            separators=(",", ":"),
         ),
     )
 

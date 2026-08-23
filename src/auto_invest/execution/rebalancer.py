@@ -253,6 +253,7 @@ async def execute_rebalance(
     execution_symbol_map: Mapping[str, str] | None = None,
     lot_rounding: str = "floor",
     macro_snapshot: Mapping[str, object] | None = None,
+    treasury_snapshot: Mapping[str, object] | None = None,
 ) -> RebalanceOutcome:
     """Compute the target portfolio and route the rebalance via the live/paper router.
 
@@ -294,6 +295,15 @@ async def execute_rebalance(
             base_weights=signal_tw,
             policy=config.macro_policy,
             snapshot=macro_snapshot,
+        )
+    if config.treasury_carry_policy is not None:
+        if treasury_snapshot is None:
+            raise ValueError("Treasury carry policy requires fresh Treasury evidence")
+        from auto_invest.strategy.rebalance import treasury_target_weights
+
+        signal_tw = treasury_target_weights(
+            policy=config.treasury_carry_policy,
+            snapshot=treasury_snapshot,
         )
 
     symbol_map = {

@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import ROUND_FLOOR, ROUND_HALF_UP, Decimal
 
-from auto_invest.config.rules import MacroPolicyConfig
+from auto_invest.config.rules import MacroPolicyConfig, TreasuryCarryPolicyConfig
 from auto_invest.strategy.sizing import (
     erc_group_scales,
     inverse_vol_group_scale,
@@ -313,6 +313,114 @@ def macro_target_weights(
     if any(value < 0 for value in weights.values()) or sum(weights.values()) > Decimal("1.000001"):
         raise ValueError("macro policy violated long-only weight bounds")
     return weights
+
+
+_TREASURY_MATURITIES: dict[str, Decimal] = {
+    "SGOV": Decimal("0.25"),
+    "SHY": Decimal("2"),
+    "IEI": Decimal("5"),
+    "IEF": Decimal("10"),
+    "TLT": Decimal("30"),
+}
+
+
+def _treasury_history(
+    snapshot: Mapping[str, object], symbol: str
+) -> tuple[Decimal | None, ...]:
+    raw_history = snapshot.get("yield_history", {})
+    if not isinstance(raw_history, Mapping):
+        return ()
+    raw = raw_history.get(symbol, ())
+    if not isinstance(raw, (list, tuple)):
+        return ()
+    values: list[Decimal | None] = []
+    for value in raw:
+        values.append(None if value is None else Decimal(str(value)))
+    return tuple(values)
+
+
+def treasury_target_weights(
+    *,
+    policy: TreasuryCarryPolicyConfig,
+    snapshot: Mapping[str, object],
+    allow_partial: bool = False,
+) -> dict[str, Decimal]:
+    """Return long-only Treasury sleeve weights for research and order planning."""
+
+    if snapshot.get("fresh") is not True:
+        raise ValueError("treasury snapshot is stale")
+    if not allow_partial and snapshot.get("complete") is not True:
+        raise ValueError("treasury snapshot is incomplete")
+
+    eligible = [
+        symbol
+        for symbol, maturity in _TREASURY_MATURITIES.items()
+        if maturity <= Decimal(policy.max_maturity_years)
+    ]
+    histories = {symbol: _treasury_history(snapshot, symbol) for symbol in eligible}
+    eligible = [
+        symbol
+        for symbol in eligible
+        if histories[symbol] and histories[symbol][-1] is not None
+    ]
+    if not eligible:
+        raise ValueError("treasury snapshot has no eligible maturity")
+
+    shortest = min(eligible, key=lambda symbol: _TREASURY_MATURITIES[symbol])
+    longest = max(eligible, key=lambda symbol: _TREASURY_MATURITIES[symbol])
+    short_yield = histories[shortest][-1]
+    long_yield = histories[longest][-1]
+    assert short_yield is not None and long_yield is not None
+    inversion = max(Decimal("0"), short_yield - long_yield)
+
+    scores: dict[str, Decimal] = {}
+    for index, symbol in enumerate(eligible):
+        history = histories[symbol]
+        current = history[-1]
+        assert current is not None
+        lookback_index = max(0, len(history) - 1 - policy.lookback_months)
+        previous = next(
+            (value for value in reversed(history[: lookback_index + 1]) if value is not None),
+            current,
+        )
+        maturity = _TREASURY_MATURITIES[symbol]
+        duration = min(Decimal("16"), maturity * Decimal("0.9"))
+        carry = current / Decimal("12")
+        trend = -duration * (current - previous) / Decimal(policy.lookback_months)
+        if index == 0:
+            roll = Decimal("0")
+        else:
+            shorter_symbol = eligible[index - 1]
+            shorter_yield = histories[shorter_symbol][-1]
+            assert shorter_yield is not None
+            maturity_gap = maturity - _TREASURY_MATURITIES[shorter_symbol]
+            roll = duration * (current - shorter_yield) / maturity_gap / Decimal("12")
+
+        strength = policy.signal_strength
+        if policy.family == "carry_roll":
+            score = carry + strength * roll + strength * trend / Decimal("4")
+        elif policy.family == "carry_rate_trend":
+            score = carry + strength * trend + roll / Decimal("2")
+        elif policy.family == "defensive_curve":
+            score = carry + strength * trend + roll - duration * inversion / Decimal("12")
+        else:
+            if symbol not in {shortest, longest}:
+                continue
+            side = Decimal("1") if symbol == longest else Decimal("-1")
+            curve_tilt = side * (long_yield - short_yield)
+            score = carry + strength * (curve_tilt + trend) + roll
+        scores[symbol] = score
+
+    selected = sorted(scores, key=lambda symbol: (-scores[symbol], symbol))[: policy.top_n]
+    if not selected:
+        raise ValueError("treasury policy selected no maturity")
+    if policy.family == "curve_barbell" and len(selected) > 1:
+        floor = min(scores[symbol] for symbol in selected)
+        return _normalize(
+            {symbol: scores[symbol] - floor + Decimal("1") for symbol in selected}
+        )
+    equal = _canon(_ONE / Decimal(len(selected)))
+    return _fix_residual({symbol: equal for symbol in selected})
 
 
 def _base_weights(
