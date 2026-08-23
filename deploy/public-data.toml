@@ -3,8 +3,8 @@
 # 4차(운영자 선택, 2026-06-11): 공식 키리스 조합 — 미 재무부 금리 + Cboe VIX +
 # BLS 거시(+DBnomics 미러 교차 검증). Stooq 는 실측에서 실행기 IP 차단(JS
 # 장벽)이 확정돼 수집에서 빼고 탐침으로만 추적한다. FRED 그래프 CSV 는
-# httpx 기본 user-agent 로 DGS2/DGS10 금리와 CPIAUCNS/SAHMREALTIME 거시
-# 이력을 연구 수집에 승격한다.
+# httpx 기본 user-agent 로 국채 만기 5종, HQM 회사채 금리 2종,
+# CPIAUCNS/SAHMREALTIME 거시 이력을 연구 수집에 승격한다.
 # FRED 공식 API 키 경로는 키 등록 전까지 탐침/후속 선택지로만 남긴다.
 # 가격 일봉 이력 확장은 보류 — 가격 소스는 KIS 백필이 유지한다(운영자 결정).
 # 격리 원칙: 기본 용도는 연구·백테스트·검증이다. 공개자료 기반 전략이
@@ -55,8 +55,8 @@ short = "2 Yr"
 [fred]
 # FRED 그래프 CSV — 키 불필요 공개 엔드포인트. candidate-facf2fa31834 증거에서
 # 채널 UA 는 timeout, httpx 기본 UA 는 200으로 확인되어 DGS 만기 5종에
-# 명시적으로 기본 UA 를 쓴다. CPI·고용은 더 긴 발표 주기를 각자 검증한다.
-series = ["DGS3MO", "DGS2", "DGS5", "DGS10", "DGS30", "CPIAUCNS", "SAHMREALTIME"]
+# 명시적으로 기본 UA 를 쓴다. HQM·CPI·고용은 더 긴 발표 주기를 각자 검증한다.
+series = ["DGS3MO", "DGS2", "DGS5", "DGS10", "DGS30", "HQMCB10YR", "HQMCB20YR", "CPIAUCNS", "SAHMREALTIME"]
 min_rows = 1500
 max_staleness_days = 7
 user_agent = "httpx-default"
@@ -67,6 +67,16 @@ max_staleness_days = 70
 
 [fred.series_settings.SAHMREALTIME]
 min_rows = 700
+max_staleness_days = 70
+
+# 미국 재무부 HQM 고품질 회사채 금리곡선. 월간 1984년 이후 약 510개 관측이며
+# AAA·AA·A 회사채를 대표한다. 월간 발표 지연을 허용하되 70일을 넘기면 거부한다.
+[fred.series_settings.HQMCB10YR]
+min_rows = 500
+max_staleness_days = 70
+
+[fred.series_settings.HQMCB20YR]
+min_rows = 500
 max_staleness_days = 70
 
 [cboe]

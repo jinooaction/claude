@@ -376,6 +376,24 @@ class TreasuryCarryPolicyConfig(BaseModel):
         return value
 
 
+class CreditSpreadPolicyConfig(BaseModel):
+    """Optional spec-154 investment-grade credit policy shared by research and execution."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    family: Literal["carry_buffer", "spread_compression", "curve_value", "stress_reentry"]
+    lookback_months: Literal[3, 12]
+    spread_threshold_bps: Literal[50, 100]
+    confirmation_months: Literal[1, 3]
+    max_credit_weight: Decimal
+
+    @field_validator("max_credit_weight")
+    @classmethod
+    def _check_max_credit_weight(cls, value: Decimal) -> Decimal:
+        if value not in {Decimal("0.5"), Decimal("1.0")}:
+            raise ValueError("max_credit_weight must be 0.5 or 1.0")
+        return value
+
+
 class PortfolioRebalanceConfig(BaseModel):
     """스펙 032 — 횡단면 포트폴리오 재조정 설정. 비커널.
 
@@ -429,6 +447,7 @@ class PortfolioRebalanceConfig(BaseModel):
     trend_filter: TrendFilterConfig | None = None
     macro_policy: MacroPolicyConfig | None = None
     treasury_carry_policy: TreasuryCarryPolicyConfig | None = None
+    credit_spread_policy: CreditSpreadPolicyConfig | None = None
 
     @field_validator("universe")
     @classmethod
@@ -454,8 +473,18 @@ class PortfolioRebalanceConfig(BaseModel):
     def _require_exactly_one(self) -> PortfolioRebalanceConfig:
         if (self.top_n is None) == (self.top_pct is None):
             raise ValueError("PortfolioRebalanceConfig: set exactly one of top_n or top_pct")
-        if self.macro_policy is not None and self.treasury_carry_policy is not None:
-            raise ValueError("macro_policy and treasury_carry_policy are mutually exclusive")
+        policy_count = sum(
+            policy is not None
+            for policy in (
+                self.macro_policy,
+                self.treasury_carry_policy,
+                self.credit_spread_policy,
+            )
+        )
+        if policy_count > 1:
+            raise ValueError(
+                "macro, Treasury carry, and credit spread policies are mutually exclusive"
+            )
         return self
 
 

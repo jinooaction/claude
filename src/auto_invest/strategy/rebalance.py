@@ -42,7 +42,11 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import ROUND_FLOOR, ROUND_HALF_UP, Decimal
 
-from auto_invest.config.rules import MacroPolicyConfig, TreasuryCarryPolicyConfig
+from auto_invest.config.rules import (
+    CreditSpreadPolicyConfig,
+    MacroPolicyConfig,
+    TreasuryCarryPolicyConfig,
+)
 from auto_invest.strategy.sizing import (
     erc_group_scales,
     inverse_vol_group_scale,
@@ -421,6 +425,56 @@ def treasury_target_weights(
         )
     equal = _canon(_ONE / Decimal(len(selected)))
     return _fix_residual({symbol: equal for symbol in selected})
+
+
+def _credit_history(snapshot: Mapping[str, object], key: str) -> tuple[Decimal, ...]:
+    raw_history = snapshot.get("credit_history", {})
+    if not isinstance(raw_history, Mapping):
+        return ()
+    raw = raw_history.get(key, ())
+    if not isinstance(raw, (list, tuple)):
+        return ()
+    return tuple(Decimal(str(value)) for value in raw if value is not None)
+
+
+def credit_spread_target_weights(
+    *,
+    policy: CreditSpreadPolicyConfig,
+    snapshot: Mapping[str, object],
+) -> dict[str, Decimal]:
+    """Return long-only LQD/IEF weights from a point-in-time HQM credit snapshot."""
+
+    if snapshot.get("complete") is not True or snapshot.get("fresh") is not True:
+        raise ValueError("credit snapshot is incomplete or stale")
+    spreads = _credit_history(snapshot, "spread_10")
+    long_spreads = _credit_history(snapshot, "spread_20")
+    corporate = _credit_history(snapshot, "corporate_10")
+    if min(len(spreads), len(long_spreads), len(corporate)) < policy.lookback_months + 1:
+        raise ValueError("credit snapshot has insufficient history")
+
+    lookback = policy.lookback_months
+    threshold = Decimal(policy.spread_threshold_bps) / Decimal("100")
+    current = spreads[-1]
+    prior = spreads[-1 - lookback]
+    corporate_prior = corporate[-1 - lookback]
+    recent = spreads[-policy.confirmation_months - 1 :]
+    compressing = all(left >= right for left, right in zip(recent, recent[1:], strict=False))
+    curve_spread = long_spreads[-1] - current
+
+    if policy.family == "carry_buffer":
+        signal = all(value >= threshold for value in recent[1:]) and (
+            corporate[-1] <= corporate_prior + threshold
+        )
+    elif policy.family == "spread_compression":
+        signal = current >= threshold and current < prior and compressing
+    elif policy.family == "curve_value":
+        signal = current >= threshold and curve_spread > Decimal("0") and compressing
+    else:
+        peak = max(spreads[-lookback - 1 :])
+        signal = peak >= threshold and current < peak and compressing
+
+    credit_weight = policy.max_credit_weight if signal else Decimal("0")
+    return _fix_residual({"LQD": credit_weight, "IEF": Decimal("1") - credit_weight})
 
 
 def _base_weights(

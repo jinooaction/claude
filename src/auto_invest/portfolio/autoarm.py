@@ -136,15 +136,24 @@ def strategy_fingerprint(cfg: PortfolioRebalanceConfig) -> tuple:
             )
         ),
     )
-    if cfg.treasury_carry_policy is None:
-        return base
-    return base + (
-        json.dumps(
-            cfg.treasury_carry_policy.model_dump(mode="json"),
-            sort_keys=True,
-            separators=(",", ":"),
-        ),
-    )
+    if cfg.treasury_carry_policy is not None:
+        return base + (
+            json.dumps(
+                cfg.treasury_carry_policy.model_dump(mode="json"),
+                sort_keys=True,
+                separators=(",", ":"),
+            ),
+        )
+    if cfg.credit_spread_policy is not None:
+        return base + (
+            "credit_spread",
+            json.dumps(
+                cfg.credit_spread_policy.model_dump(mode="json"),
+                sort_keys=True,
+                separators=(",", ":"),
+            ),
+        )
+    return base
 
 
 def strategy_fingerprint_digest(cfg: PortfolioRebalanceConfig) -> str:
