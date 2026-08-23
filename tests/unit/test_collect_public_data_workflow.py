@@ -3,7 +3,7 @@
 채널의 안전 계약을 CI 에 못박는다:
   1. 돈 경로 무접촉 — 워크플로에 KIS/Vultr 시크릿·SSH 가 없어야 한다.
   2. 격리 — 거래 워크플로가 검증 전 원시 public-data 산출물을 직접 읽지
-     않아야 한다(거시 전략은 FACTORY_EDGE 사이드카만 주문 전에 읽는다).
+     않아야 한다(합격 전략은 FACTORY_EDGE 사이드카만 주문 전에 읽는다).
   3. 설정 정합 — 교차 검증 짝이 실제 수집 목록에 있어야 한다. FRED 그래프
      CSV 는 DGS2/DGS10 금리만 연구 수집에 허용하고, FRED 공식 API 키 경로와
      Stooq 가격 CSV 는 탐침/후속 선택지로만 둔다.
@@ -52,6 +52,18 @@ def test_workflow_touches_no_money_path_secrets() -> None:
     # 시크릿 참조는 GITHUB_TOKEN 단 하나.
     refs = {part.split("}")[0].strip() for part in text.split("secrets.")[1:]}
     assert refs == {"GITHUB_TOKEN"}, refs
+
+
+def test_sidecar_disclosure_covers_all_validated_public_data_strategies() -> None:
+    """거시·국채 등 소비 전략이 늘어도 보고서가 특정 스펙만 허용한다고 오해시키지 않는다."""
+    workflow = _wf_text()
+    module = _MODULE.read_text(encoding="utf-8")
+    config = _CONFIG.read_text(encoding="utf-8")
+
+    assert "검증을 통과한 공개자료 기반 전략만" in workflow
+    assert "FACTORY_EDGE 공개자료 기반 전략만" in module
+    assert "공개자료 기반 전략이" in config
+    assert "스펙 151 거시 전략이 채택" not in workflow
 
 
 def test_trading_workflows_do_not_consume_public_data() -> None:
