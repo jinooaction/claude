@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
@@ -17,10 +17,12 @@ from auto_invest.market_data.macro_regime import (
     UNEMPLOYMENT_CSV,
     VIX_CSV,
     build_macro_regime_report,
+    build_point_in_time_snapshots,
     compose_overall,
     inflation_state,
     load_series_csv,
     sahm_rule_state,
+    validate_live_macro_evidence,
     vix_state,
     yield_curve_state,
 )
@@ -42,6 +44,102 @@ def _points(values: list[str], *, start_month: tuple[int, int] = (2024, 1)) -> l
         if m == 13:
             y, m = y + 1, 1
     return out
+
+
+def _daily_points(start: date, count: int, value: str) -> list[tuple[str, Decimal]]:
+    return [((start + timedelta(days=index)).isoformat(), Decimal(value)) for index in range(count)]
+
+
+def test_point_in_time_snapshot_uses_lagged_monthly_and_prior_daily_values() -> None:
+    target = date(2020, 8, 1)
+    dgs2 = _daily_points(date(2020, 4, 1), 123, "1.0")
+    dgs10 = _daily_points(date(2020, 4, 1), 123, "1.5")
+    vix = _daily_points(date(2020, 4, 1), 123, "20")
+    dgs2[-1] = (target.isoformat(), Decimal("9"))
+    dgs10[-1] = (target.isoformat(), Decimal("1"))
+    vix[-1] = (target.isoformat(), Decimal("99"))
+    cpi = _points([str(100 + index) for index in range(36)], start_month=(2017, 7))
+    sahm = _points([str(Decimal(index) / 100) for index in range(36)], start_month=(2017, 7))
+
+    snapshot = build_point_in_time_snapshots(
+        [target.isoformat()],
+        dgs2=dgs2,
+        dgs10=dgs10,
+        cpi=cpi,
+        sahm_realtime=sahm,
+        vix=vix,
+    )[0]
+
+    assert snapshot.yield_spread_10y2y == Decimal("0.5")
+    assert snapshot.vix_close == Decimal("20")
+    assert snapshot.cpi_available_date is not None
+    assert snapshot.cpi_available_date <= target.isoformat()
+    assert snapshot.sahm_available_date is not None
+    assert snapshot.complete is True and snapshot.fresh is True
+
+
+def test_point_in_time_snapshot_fails_closed_on_cross_check_or_staleness() -> None:
+    target = date(2020, 8, 1)
+    daily_end = date(2020, 7, 1)
+    dgs2 = _daily_points(date(2020, 3, 1), (daily_end - date(2020, 3, 1)).days + 1, "1")
+    dgs10 = _daily_points(date(2020, 3, 1), len(dgs2), "1.5")
+    vix = _daily_points(date(2020, 3, 1), len(dgs2), "20")
+    monthly = _points([str(100 + index) for index in range(36)], start_month=(2017, 7))
+    sahm = _points(["0.2"] * 36, start_month=(2017, 7))
+
+    snapshot = build_point_in_time_snapshots(
+        [target.isoformat()],
+        dgs2=dgs2,
+        dgs10=dgs10,
+        cpi=monthly,
+        sahm_realtime=sahm,
+        vix=vix,
+        cross_check_status="FAIL",
+    )[0]
+
+    assert snapshot.complete is True
+    assert snapshot.fresh is False
+    assert snapshot.source_freshness_days["yield_curve"] > 7
+
+
+def test_live_macro_evidence_requires_exact_winner_identity_and_freshness() -> None:
+    now = datetime(2026, 8, 23, tzinfo=UTC)
+    payload = {
+        "timestamp_utc": "2026-08-23T00:00:00Z",
+        "decision": {
+            "verdict": "FACTORY_EDGE",
+            "research_canary_eligible": True,
+            "selected_candidate_id": "macro-1",
+            "selected_strategy_fingerprint": "sha256:abc",
+        },
+        "live_macro_evidence": {
+            "candidate_id": "macro-1",
+            "strategy_fingerprint": "sha256:abc",
+            "fresh": True,
+            "complete": True,
+            "cross_checked": True,
+            "latest_snapshot": {
+                "as_of_date": "2026-08-23",
+                "complete": True,
+                "fresh": True,
+            },
+        },
+    }
+    snapshot = validate_live_macro_evidence(
+        payload,
+        candidate_id="macro-1",
+        strategy_fingerprint="sha256:abc",
+        now=now,
+    )
+    assert snapshot["as_of_date"] == "2026-08-23"
+    payload["decision"]["selected_strategy_fingerprint"] = "sha256:different"
+    with pytest.raises(ValueError, match="fingerprint"):
+        validate_live_macro_evidence(
+            payload,
+            candidate_id="macro-1",
+            strategy_fingerprint="sha256:abc",
+            now=now,
+        )
 
 
 # ---------- CSV 로더 ----------
@@ -198,9 +296,9 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 def test_module_is_research_only_no_live_imports() -> None:
     """라이브 DB/주문 경로 무접촉 — public_data.py 와 같은 격리 계약."""
-    text = (
-        _REPO_ROOT / "src" / "auto_invest" / "market_data" / "macro_regime.py"
-    ).read_text(encoding="utf-8")
+    text = (_REPO_ROOT / "src" / "auto_invest" / "market_data" / "macro_regime.py").read_text(
+        encoding="utf-8"
+    )
     for forbidden in (
         "insert_bar",
         "auto_invest.db",
@@ -220,9 +318,9 @@ def test_live_trading_paths_do_not_import_macro_regime() -> None:
 
 
 def test_workflow_wires_regime_report_into_sidecar() -> None:
-    wf = (
-        _REPO_ROOT / ".github" / "workflows" / "collect-public-data.yml"
-    ).read_text(encoding="utf-8")
+    wf = (_REPO_ROOT / ".github" / "workflows" / "collect-public-data.yml").read_text(
+        encoding="utf-8"
+    )
     assert "auto-invest macro-regime" in wf
     assert "regime.json" in wf
     # 보고 실패가 데이터 발행을 막지 않는다 (fail-soft)
@@ -235,9 +333,7 @@ def test_report_source_paths_match_channel_config() -> None:
     """보고서가 읽는 파일명이 채널 설정의 발행 식별자와 정합."""
     import tomllib
 
-    cfg = tomllib.loads(
-        (_REPO_ROOT / "deploy" / "public-data.toml").read_text(encoding="utf-8")
-    )
+    cfg = tomllib.loads((_REPO_ROOT / "deploy" / "public-data.toml").read_text(encoding="utf-8"))
     spread_id = cfg["treasury"]["spread"]["id"]
     assert f"treasury/{spread_id}.csv" == SPREAD_CSV
     assert cfg["cboe"]["vix"] is True and VIX_CSV == "cboe/VIX.csv"
@@ -287,9 +383,7 @@ def test_timeline_risk_off_with_two_flags_and_sahm() -> None:
     vix = [(d, Decimal("30")) for d in days]  # ELEVATED — 깃발 1
     # 16개월(2025-02~2026-05) — 지연 1일이면 마지막 달도 06-01 이전 발효
     une = _points(["4.0"] * 13 + ["4.6", "4.8", "5.0"], start_month=(2025, 2))
-    rows = daily_regime_timeline(
-        spread, vix, [], [(d, v) for d, v in une], publication_lag_days=1
-    )
+    rows = daily_regime_timeline(spread, vix, [], [(d, v) for d, v in une], publication_lag_days=1)
     assert all(r["label"] == "RISK_OFF" for r in rows)  # vix + sahm = 깃발 2
     assert all("sahm" in r["flags"] and "vix" in r["flags"] for r in rows)
 
@@ -316,15 +410,13 @@ def test_build_regime_timeline_from_dir_and_csv_roundtrip(tmp_path: Path) -> Non
     rows = build_regime_timeline(tmp_path)
     assert len(rows) == 3 and rows[0]["label"] == "RISK_OFF"  # 역전 + 위기 VIX
     text = timeline_to_csv(rows)
-    assert text.splitlines()[0] == (
-        "date,label,flags,available,spread,vix,inflation_yoy,sahm_pp"
-    )
+    assert text.splitlines()[0] == ("date,label,flags,available,spread,vix,inflation_yoy,sahm_pp")
     assert "2026-06-01,RISK_OFF,yield_curve;vix,2,-0.1,40,," in text
 
 
 def test_workflow_wires_timeline_into_sidecar() -> None:
-    wf = (
-        _REPO_ROOT / ".github" / "workflows" / "collect-public-data.yml"
-    ).read_text(encoding="utf-8")
+    wf = (_REPO_ROOT / ".github" / "workflows" / "collect-public-data.yml").read_text(
+        encoding="utf-8"
+    )
     assert "--timeline-out /tmp/public-data/regime_timeline.csv" in wf
     assert "regime_timeline.csv    # 일별 레짐 이력" in wf

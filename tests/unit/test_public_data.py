@@ -120,8 +120,12 @@ def _bars(n: int, *, end: date = AS_OF, close: Decimal = Decimal("100")) -> list
         d = (end - timedelta(days=n - 1 - i)).isoformat()
         out.append(
             PublicBar(
-                date=d, open_usd=close, high_usd=close + 1, low_usd=close - 1,
-                close_usd=close, volume=1000,
+                date=d,
+                open_usd=close,
+                high_usd=close + 1,
+                low_usd=close - 1,
+                close_usd=close,
+                volume=1000,
             )
         )
     return out
@@ -138,9 +142,7 @@ def test_validate_daily_bars_too_few_rows() -> None:
 
 
 def test_validate_daily_bars_stale() -> None:
-    v = validate_daily_bars(
-        _bars(30, end=AS_OF - timedelta(days=30)), as_of=AS_OF, min_rows=10
-    )
+    v = validate_daily_bars(_bars(30, end=AS_OF - timedelta(days=30)), as_of=AS_OF, min_rows=10)
     assert not v.ok and any("신선도" in i for i in v.issues)
 
 
@@ -153,8 +155,12 @@ def test_validate_daily_bars_gap() -> None:
 def test_validate_daily_bars_ohlc_violation_and_nonpositive() -> None:
     bad = _bars(10)[:-1] + [
         PublicBar(
-            date=AS_OF.isoformat(), open_usd=Decimal("100"), high_usd=Decimal("90"),
-            low_usd=Decimal("95"), close_usd=Decimal("-1"), volume=0,
+            date=AS_OF.isoformat(),
+            open_usd=Decimal("100"),
+            high_usd=Decimal("90"),
+            low_usd=Decimal("95"),
+            close_usd=Decimal("-1"),
+            volume=0,
         )
     ]
     v = validate_daily_bars(bad, as_of=AS_OF, min_rows=5)
@@ -167,8 +173,12 @@ def test_validate_daily_bars_jump_anomaly() -> None:
     bars = _bars(10)
     last = bars[-1]
     bars[-1] = PublicBar(
-        date=last.date, open_usd=last.open_usd, high_usd=Decimal("300"),
-        low_usd=last.low_usd, close_usd=Decimal("200"), volume=last.volume,
+        date=last.date,
+        open_usd=last.open_usd,
+        high_usd=Decimal("300"),
+        low_usd=last.low_usd,
+        close_usd=Decimal("200"),
+        volume=last.volume,
     )
     v = validate_daily_bars(bars, as_of=AS_OF, min_rows=5)
     assert not v.ok and any("이상치" in i for i in v.issues)
@@ -350,9 +360,7 @@ def test_collect_failing_item_is_quarantined_not_published(tmp_path: Path) -> No
         if request.url.host == "stooq.com":
             if "ief" in str(request.url.params["s"]):
                 # IEF 만 60일 묵은 데이터 → 신선도 위반 → 미발행 (fail-soft)
-                return httpx.Response(
-                    200, text=_stooq_body(100, end=AS_OF - timedelta(days=60))
-                )
+                return httpx.Response(200, text=_stooq_body(100, end=AS_OF - timedelta(days=60)))
             return httpx.Response(200, text=_stooq_body(100))
         series = request.url.params["id"]
         return httpx.Response(200, text=_fred_body(series, 100))
@@ -469,8 +477,7 @@ def test_official_source_urls() -> None:
     assert cboe_vix_history_url().endswith("/VIX_History.csv")
     assert bls_v1_url("LNS14000000").endswith("/timeseries/data/LNS14000000")
     assert dbnomics_series_url("BLS/cu/CUUR0000SA0") == (
-        "https://api.db.nomics.world/v22/series/BLS/cu/CUUR0000SA0"
-        "?observations=1&format=json"
+        "https://api.db.nomics.world/v22/series/BLS/cu/CUUR0000SA0?observations=1&format=json"
     )
     with pytest.raises(ValueError):
         bls_v1_url("  ")
@@ -479,11 +486,7 @@ def test_official_source_urls() -> None:
 
 
 def test_parse_treasury_csv_wide_to_series() -> None:
-    text = (
-        'Date,"1 Mo","2 Yr","10 Yr"\n'
-        "06/11/2026,4.30,3.90,4.40\n"
-        "06/10/2026,4.31,,4.39\n"
-    )
+    text = 'Date,"1 Mo","2 Yr","10 Yr"\n06/11/2026,4.30,3.90,4.40\n06/10/2026,4.31,,4.39\n'
     out = parse_treasury_csv(text)
     assert set(out) == {"1 Mo", "2 Yr", "10 Yr"}
     ten = out["10 Yr"]
@@ -499,9 +502,7 @@ def test_parse_treasury_csv_bad_header_raises() -> None:
 
 def test_parse_cboe_daily_csv_sorts_and_zero_volume() -> None:
     text = (
-        "DATE,OPEN,HIGH,LOW,CLOSE\n"
-        "01/02/2026,17.6,18.2,17.0,17.2\n"
-        "01/01/2026,17.0,17.5,16.8,17.1\n"
+        "DATE,OPEN,HIGH,LOW,CLOSE\n01/02/2026,17.6,18.2,17.0,17.2\n01/01/2026,17.0,17.5,16.8,17.1\n"
     )
     bars = parse_cboe_daily_csv(text)
     assert [b.date for b in bars] == ["2026-01-01", "2026-01-02"]
@@ -602,9 +603,7 @@ def _bls_body(series_id: str) -> str:
         {"year": str(y), "period": f"M{m:02d}", "value": str(_cpi_value(y, m))}
         for (y, m) in _last_months(24)
     ]
-    return json.dumps(
-        {"status": "REQUEST_SUCCEEDED", "Results": {"series": [{"data": data}]}}
-    )
+    return json.dumps({"status": "REQUEST_SUCCEEDED", "Results": {"series": [{"data": data}]}})
 
 
 def _dbnomics_body() -> str:
@@ -659,10 +658,14 @@ def _official_config() -> dict:
             "spread": {"id": "UST10Y2Y", "long": "10 Yr", "short": "2 Yr"},
         },
         "fred": {
-            "series": ["DGS2", "DGS10"],
+            "series": ["DGS2", "DGS10", "CPIAUCNS", "SAHMREALTIME"],
             "min_rows": 50,
             "max_staleness_days": 7,
             "user_agent": "httpx-default",
+            "series_settings": {
+                "CPIAUCNS": {"min_rows": 12, "max_staleness_days": 70},
+                "SAHMREALTIME": {"min_rows": 12, "max_staleness_days": 70},
+            },
         },
         "cboe": {"vix": True, "min_rows": 50, "max_staleness_days": 7},
         "bls": {"series": ["LNS14000000", "CUUR0000SA0"], "min_rows": 12},
@@ -677,7 +680,7 @@ def _official_config() -> dict:
         "cross_checks": [
             {
                 "kind": "levels",
-                "a": "bls:CUUR0000SA0",
+                "a": "fred:CPIAUCNS",
                 "b": "dbnomics:BLS/cu/CUUR0000SA0",
                 "tolerance": "0.001",
                 "min_overlap": 12,
@@ -739,19 +742,23 @@ def _official_handler(request: httpx.Request) -> httpx.Response:
             return httpx.Response(200, text=_fred_rate_body(series, "3.90", end=AS_OF))
         if series == "DGS10":
             return httpx.Response(200, text=_fred_rate_body(series, "4.40", end=AS_OF))
+        if series == "CPIAUCNS":
+            rows = [f"{y:04d}-{m:02d}-01,{_cpi_value(y, m)}" for y, m in _last_months(24)]
+            return httpx.Response(200, text=f"observation_date,{series}\n" + "\n".join(rows))
+        if series == "SAHMREALTIME":
+            rows = [f"{y:04d}-{m:02d}-01,0.2" for y, m in _last_months(24)]
+            return httpx.Response(200, text=f"observation_date,{series}\n" + "\n".join(rows))
     raise AssertionError(f"예상 밖 호출: {request.url}")
 
 
 def test_collect_official_sources_happy_path(tmp_path: Path) -> None:
     out_dir = tmp_path / "out"
     with httpx.Client(transport=httpx.MockTransport(_official_handler)) as client:
-        summary = collect_public_data(
-            client, _official_config(), out_dir=out_dir, as_of=AS_OF
-        )
+        summary = collect_public_data(client, _official_config(), out_dir=out_dir, as_of=AS_OF)
     assert summary["overall_ok"] is True
-    # UST2Y + UST10Y + 파생 스프레드 + FRED 2종 + VIX + BLS 2종 + DBnomics 3종 = 11
-    assert summary["published"] == 11
-    # CPI 미러 + 금리 대조 4건(DBnomics H.15 2건, FRED 2건) — 전부 PASS
+    # UST2Y + UST10Y + 스프레드 + FRED 4종 + VIX + BLS 2종 + DBnomics 3종 = 13
+    assert summary["published"] == 13
+    # FRED/DBnomics CPI + 금리 대조 4건 — 전부 PASS
     assert [c["status"] for c in summary["cross_checks"]] == [
         "PASS",
         "PASS",
@@ -767,6 +774,8 @@ def test_collect_official_sources_happy_path(tmp_path: Path) -> None:
     assert (out_dir / "bls" / "CUUR0000SA0.csv").exists()
     assert (out_dir / "fred" / "DGS2.csv").exists()
     assert (out_dir / "fred" / "DGS10.csv").exists()
+    assert (out_dir / "fred" / "CPIAUCNS.csv").exists()
+    assert (out_dir / "fred" / "SAHMREALTIME.csv").exists()
     assert (out_dir / "dbnomics" / "BLS_CU_CUUR0000SA0.csv").exists()
     assert (out_dir / "dbnomics" / "FED_H15_RIFLGFCY10_N.B.csv").exists()
 
@@ -780,11 +789,33 @@ def test_collect_fred_uses_configured_default_user_agent(tmp_path: Path) -> None
         return _official_handler(request)
 
     with httpx.Client(transport=httpx.MockTransport(handler)) as client:
-        collect_public_data(
+        collect_public_data(client, _official_config(), out_dir=tmp_path / "out", as_of=AS_OF)
+    assert len(fred_uas) == 4
+    assert all(ua.startswith("python-httpx/") and ua != USER_AGENT for ua in fred_uas)
+
+
+def test_bls_daily_quota_does_not_block_keyless_macro_cross_checks(tmp_path: Path) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "api.bls.gov":
+            return httpx.Response(
+                200,
+                json={
+                    "status": "REQUEST_NOT_PROCESSED",
+                    "message": ["daily threshold reached"],
+                    "Results": {},
+                },
+            )
+        return _official_handler(request)
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        summary = collect_public_data(
             client, _official_config(), out_dir=tmp_path / "out", as_of=AS_OF
         )
-    assert len(fred_uas) == 2
-    assert all(ua.startswith("python-httpx/") and ua != USER_AGENT for ua in fred_uas)
+
+    assert summary["overall_ok"] is False
+    assert summary["published"] == 11
+    assert [item["status"] for item in summary["cross_checks"]] == ["PASS"] * 5
+    assert all(item["ok"] is False for item in summary["items"] if item["kind"] == "bls")
 
 
 def test_collect_official_sources_failsoft_and_spread_needs_both_legs(
@@ -797,11 +828,9 @@ def test_collect_official_sources_failsoft_and_spread_needs_both_legs(
 
     out_dir = tmp_path / "out"
     with httpx.Client(transport=httpx.MockTransport(handler)) as client:
-        summary = collect_public_data(
-            client, _official_config(), out_dir=out_dir, as_of=AS_OF
-        )
+        summary = collect_public_data(client, _official_config(), out_dir=out_dir, as_of=AS_OF)
     assert summary["overall_ok"] is False
-    assert summary["published"] == 8  # FRED 2종 + VIX + BLS 2종 + DBnomics 3종은 계속 발행
+    assert summary["published"] == 10  # FRED 4종 + VIX + BLS 2종 + DBnomics 3종
     by_id = {i["id"]: i for i in summary["items"]}
     assert not by_id["UST10Y"]["ok"] and not by_id["UST2Y"]["ok"]
     assert not by_id["UST10Y2Y"]["ok"]  # 한 다리만 죽어도 스프레드는 미발행

@@ -84,21 +84,20 @@ def test_live_canary_real_orders_remain_behind_machine_and_production_gates() ->
     assert "real orders=0" in real_order
     assert "${GITHUB_RUN_ATTEMPT}" in real_order
 
-    helper = (ROOT / "deploy" / "live-canary-on-instance.sh").read_text(
-        encoding="utf-8"
-    )
+    helper = (ROOT / "deploy" / "live-canary-on-instance.sh").read_text(encoding="utf-8")
     assert "--mode live" in helper
     assert "--confirm-live" in helper
     assert "--account-wide" in helper
+    assert "validate_macro_evidence_revision" in helper
+    assert 'merge-base --is-ancestor "${evidence_sha}" "${signed_sha}"' in helper
+    assert "--macro-evidence" in helper
 
 
 def test_live_canary_real_order_failures_reach_job_and_sidecar() -> None:
     text = _workflow_text()
     real_order = _real_order_job(text)
 
-    live_section = real_order.split(
-        "Authorize request — scheduled runs place real orders", 1
-    )[1]
+    live_section = real_order.split("Authorize request — scheduled runs place real orders", 1)[1]
     live_step = live_section.split("\n\n      - name:", 1)[0]
     assert "ssh_exit=$?" in live_step
     assert 'exit "${ssh_exit}"' in live_step
@@ -129,9 +128,7 @@ def test_live_canary_preview_and_real_orders_use_broker_snapshot() -> None:
     text = _workflow_text()
     real_order = _real_order_job(text)
     observe_helper = (ROOT / "deploy" / "observe-on-instance.sh").read_text(encoding="utf-8")
-    live_helper = (ROOT / "deploy" / "live-canary-on-instance.sh").read_text(
-        encoding="utf-8"
-    )
+    live_helper = (ROOT / "deploy" / "live-canary-on-instance.sh").read_text(encoding="utf-8")
 
     preview_fn = observe_helper.split("live_canary_preview()", 1)[1].split(
         "live_canary_measure()", 1

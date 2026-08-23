@@ -42,6 +42,7 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import ROUND_FLOOR, ROUND_HALF_UP, Decimal
 
+from auto_invest.config.rules import MacroPolicyConfig
 from auto_invest.strategy.sizing import (
     erc_group_scales,
     inverse_vol_group_scale,
@@ -220,6 +221,97 @@ def target_weights(
         weights, _ = apply_trend_ensemble_filter(weights, closes_by_symbol, trend)
     elif trend is not None:
         weights, _ = apply_trend_filter(weights, closes_by_symbol, trend)
+    return weights
+
+
+def _decimal_history(snapshot: Mapping[str, object], key: str) -> tuple[Decimal, ...]:
+    raw = snapshot.get(key, ())
+    if not isinstance(raw, (list, tuple)):
+        return ()
+    try:
+        return tuple(Decimal(str(value)) for value in raw)
+    except Exception:  # noqa: BLE001 - malformed evidence is rejected by the caller.
+        return ()
+
+
+def _curve_defense(policy: MacroPolicyConfig, history: tuple[Decimal, ...]) -> Decimal:
+    confirmation = policy.confirmation_days or 0
+    if len(history) < confirmation or confirmation == 0:
+        return Decimal("0")
+    confirmed_at = -1
+    run = 0
+    for index, value in enumerate(history):
+        run = run + 1 if value <= policy.threshold else 0
+        if run >= confirmation:
+            confirmed_at = index
+    if confirmed_at < 0:
+        return Decimal("0")
+    release = policy.release_threshold_pp or Decimal("0")
+    return Decimal("1") if history[-1] < release else Decimal("0")
+
+
+def _vix_defense(policy: MacroPolicyConfig, history: tuple[Decimal, ...]) -> Decimal:
+    confirmation = policy.confirmation_days or 0
+    if len(history) < confirmation or confirmation == 0:
+        return Decimal("0")
+    last_confirmed = -1
+    run = 0
+    for index, value in enumerate(history):
+        run = run + 1 if value >= policy.threshold else 0
+        if run >= confirmation:
+            last_confirmed = index
+    if last_confirmed < 0:
+        return Decimal("0")
+    elapsed = len(history) - 1 - last_confirmed
+    cooldown = policy.cooldown_days or 0
+    if elapsed == 0:
+        return Decimal("1")
+    if cooldown <= 0 or elapsed > cooldown:
+        return Decimal("0")
+    return max(Decimal("0"), Decimal("1") - Decimal(elapsed) / Decimal(cooldown))
+
+
+def macro_target_weights(
+    *,
+    base_weights: Mapping[str, Decimal],
+    policy: MacroPolicyConfig,
+    snapshot: Mapping[str, object],
+) -> dict[str, Decimal]:
+    """Apply the shared long-only macro overlay used by research and execution."""
+
+    if snapshot.get("complete") is not True or snapshot.get("fresh") is not True:
+        raise ValueError("macro snapshot is incomplete or stale")
+    weights = {symbol: _canon(Decimal(value)) for symbol, value in base_weights.items()}
+    for symbol in ("SPY", "IEF", "GLD"):
+        weights.setdefault(symbol, Decimal("0"))
+
+    intensity = Decimal("0")
+    bond_share = Decimal("0.75")
+    if policy.family == "curve_cycle":
+        intensity = _curve_defense(policy, _decimal_history(snapshot, "curve_history"))
+    elif policy.family == "inflation_direction":
+        direction = snapshot.get(f"cpi_direction_{policy.direction_months}m")
+        level = snapshot.get("cpi_yoy")
+        if level is not None and direction is not None:
+            level_ok = Decimal(str(level)) >= policy.threshold
+            intensity = Decimal("1") if level_ok and Decimal(str(direction)) > 0 else Decimal("0")
+        bond_share = Decimal("0")
+    elif policy.family == "labor_growth_shock":
+        direction = snapshot.get(f"sahm_direction_{policy.direction_months}m")
+        level = snapshot.get("sahm_realtime")
+        if level is not None and direction is not None:
+            level_ok = Decimal(str(level)) >= policy.threshold
+            intensity = Decimal("1") if level_ok and Decimal(str(direction)) > 0 else Decimal("0")
+    else:
+        intensity = _vix_defense(policy, _decimal_history(snapshot, "vix_history"))
+        bond_share = Decimal("0.5")
+
+    shift = min(weights["SPY"], policy.tilt_pct / Decimal("100") * intensity)
+    weights["SPY"] = _canon(weights["SPY"] - shift)
+    weights["IEF"] = _canon(weights["IEF"] + shift * bond_share)
+    weights["GLD"] = _canon(weights["GLD"] + shift * (Decimal("1") - bond_share))
+    if any(value < 0 for value in weights.values()) or sum(weights.values()) > Decimal("1.000001"):
+        raise ValueError("macro policy violated long-only weight bounds")
     return weights
 
 

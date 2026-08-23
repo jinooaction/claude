@@ -27,9 +27,10 @@ from __future__ import annotations
 import csv
 import io
 import json
+import os
 import time
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
@@ -258,9 +259,7 @@ def parse_treasury_csv(text: str) -> dict[str, list[SeriesPoint]]:
         for idx, label in enumerate(labels, start=1):
             raw = row[idx].strip() if idx < len(row) else ""
             value = (
-                None
-                if raw in ("", "N/A", "NA", ".")
-                else _parse_decimal(raw, what=f"{d} {label}")
+                None if raw in ("", "N/A", "NA", ".") else _parse_decimal(raw, what=f"{d} {label}")
             )
             out[label].append(SeriesPoint(date=d, value=value))
     for label in labels:
@@ -343,9 +342,7 @@ def parse_dbnomics_json(text: str) -> list[SeriesPoint]:
         if len(d) == 7:  # YYYY-MM (월간)
             d = f"{d}-01"
         value = (
-            None
-            if raw is None or str(raw) in ("NA", ".", "")
-            else _parse_decimal(str(raw), what=d)
+            None if raw is None or str(raw) in ("NA", ".", "") else _parse_decimal(str(raw), what=d)
         )
         points.append(SeriesPoint(date=d, value=value))
     points.sort(key=lambda p: p.date)
@@ -382,9 +379,7 @@ def validate_daily_bars(
     for b in bars:
         if min(b.open_usd, b.high_usd, b.low_usd, b.close_usd) <= 0:
             issues.append(f"{b.date}: 0 이하 가격")
-        if b.high_usd < max(b.open_usd, b.close_usd) or b.low_usd > min(
-            b.open_usd, b.close_usd
-        ):
+        if b.high_usd < max(b.open_usd, b.close_usd) or b.low_usd > min(b.open_usd, b.close_usd):
             issues.append(f"{b.date}: OHLC 정합 위반")
         if b.volume < 0:
             issues.append(f"{b.date}: 음수 거래량")
@@ -398,9 +393,7 @@ def validate_daily_bars(
             if prev.close_usd > 0:
                 move = abs(b.close_usd / prev.close_usd - 1) * 100
                 if move > max_day_move_pct:
-                    issues.append(
-                        f"{b.date}: 일일 변동 {move:.1f}% > {max_day_move_pct}% (이상치)"
-                    )
+                    issues.append(f"{b.date}: 일일 변동 {move:.1f}% > {max_day_move_pct}% (이상치)")
         prev = b
         if len(issues) >= 20:  # 진단 폭주 방지 — 처음 20건이면 원인 파악에 충분
             issues.append("(이후 생략)")
@@ -691,9 +684,7 @@ def collect_public_data(
         for ua in (USER_AGENT, None):
             if _over_budget():
                 break
-            probes.append(
-                probe_url(client, url, user_agent=ua, timeout=min(request_timeout, 10.0))
-            )
+            probes.append(probe_url(client, url, user_agent=ua, timeout=min(request_timeout, 10.0)))
 
     items: list[dict[str, Any]] = []
     # 검증 통과 값 레지스트리 — 교차 검증이 "provider:id" 로 참조한다.
@@ -722,8 +713,12 @@ def collect_public_data(
         kind: str, item_id: str, points: list[SeriesPoint], v: Validation, item: dict[str, Any]
     ) -> None:
         item.update(
-            ok=v.ok, rows=v.rows, first_date=v.first_date, last_date=v.last_date,
-            missing=sum(1 for p in points if p.value is None), issues=v.issues,
+            ok=v.ok,
+            rows=v.rows,
+            first_date=v.first_date,
+            last_date=v.last_date,
+            missing=sum(1 for p in points if p.value is None),
+            issues=v.issues,
         )
         if v.ok:
             safe = item_id.replace("/", "_").upper()
@@ -731,9 +726,7 @@ def collect_public_data(
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(_series_to_csv(points), encoding="utf-8")
             item["published"] = str(path.relative_to(out_dir))
-            registry[f"{kind}:{item_id}"] = {
-                p.date: p.value for p in points if p.value is not None
-            }
+            registry[f"{kind}:{item_id}"] = {p.date: p.value for p in points if p.value is not None}
 
     # ---- Stooq 일봉 (실측: 실행기 차단 — 설정에 남아 있으면 fail-soft 로 기록) ----
     stooq_cfg = config.get("stooq", {})
@@ -751,7 +744,10 @@ def collect_public_data(
                 max_staleness_days=int(stooq_cfg.get("max_staleness_days", 7)),
             )
             item.update(
-                ok=v.ok, rows=v.rows, first_date=v.first_date, last_date=v.last_date,
+                ok=v.ok,
+                rows=v.rows,
+                first_date=v.first_date,
+                last_date=v.last_date,
                 issues=v.issues,
             )
             if v.ok:
@@ -764,7 +760,7 @@ def collect_public_data(
             item.update(ok=False, issues=[f"{type(exc).__name__}: {exc}"])
         items.append(item)
 
-    # ---- FRED 그래프 CSV (DGS2/DGS10 연구 수집; 공식 API 키 경로는 보류) ---------
+    # ---- FRED 그래프 CSV (금리·깊은 CPI·실시간 고용; 공식 API 키 불필요) ----------
     fred_cfg = config.get("fred", {})
     for series_id in fred_cfg.get("series", []):
         item = {"kind": "fred", "id": series_id}
@@ -775,16 +771,19 @@ def collect_public_data(
             points = parse_fred_csv(
                 _fetch(
                     fred_csv_url(series_id),
-                    user_agent=_user_agent_from_config(
-                        fred_cfg.get("user_agent", "channel")
-                    ),
+                    user_agent=_user_agent_from_config(fred_cfg.get("user_agent", "channel")),
                 )
             )
+            series_settings = fred_cfg.get("series_settings", {}).get(series_id, {})
             v = validate_series(
                 points,
                 as_of=as_of,
-                min_rows=int(fred_cfg.get("min_rows", 24)),
-                max_staleness_days=int(fred_cfg.get("max_staleness_days", 70)),
+                min_rows=int(series_settings.get("min_rows", fred_cfg.get("min_rows", 24))),
+                max_staleness_days=int(
+                    series_settings.get(
+                        "max_staleness_days", fred_cfg.get("max_staleness_days", 70)
+                    )
+                ),
             )
             _publish_series("fred", series_id.upper(), points, v, item)
         except Exception as exc:  # noqa: BLE001 — 항목 단위 fail-soft
@@ -821,7 +820,9 @@ def collect_public_data(
             if fetch_issues:
                 v = Validation(
                     ok=v.ok and not fetch_issues,
-                    rows=v.rows, first_date=v.first_date, last_date=v.last_date,
+                    rows=v.rows,
+                    first_date=v.first_date,
+                    last_date=v.last_date,
                     issues=[*v.issues, *fetch_issues],
                 )
             _publish_series("treasury", item_id, points, v, item)
@@ -835,9 +836,7 @@ def collect_public_data(
                 item.update(ok=False, issues=["스프레드 입력 미발행 (장/단기 만기 검증 실패)"])
             else:
                 common = sorted(set(long_v) & set(short_v))
-                points = [
-                    SeriesPoint(date=d, value=long_v[d] - short_v[d]) for d in common
-                ]
+                points = [SeriesPoint(date=d, value=long_v[d] - short_v[d]) for d in common]
                 v = validate_series(
                     points,
                     as_of=as_of,
@@ -867,6 +866,12 @@ def collect_public_data(
                     max_staleness_days=int(cboe_cfg.get("max_staleness_days", 7)),
                 )
                 _publish_series("cboe", "VIX", points, v, item)
+                item["close_sanity"] = {
+                    "status": "PASS"
+                    if all(p.value is not None and p.value > 0 for p in points)
+                    else "FAIL",
+                    "checked_rows": len(points),
+                }
             except Exception as exc:  # noqa: BLE001 — 항목 단위 fail-soft
                 item.update(ok=False, issues=[f"{type(exc).__name__}: {exc}"])
             items.append(item)
@@ -930,25 +935,33 @@ def collect_public_data(
             )
         elif entry["kind"] == "returns":
             cc = cross_check_daily_returns(
-                a, b,
+                a,
+                b,
                 tolerance_pct=Decimal(str(cc_cfg.get("tolerance_pct", "0.5"))),
                 min_overlap_returns=int(cc_cfg.get("min_overlap", 60)),
                 min_agree_pct=Decimal(str(cc_cfg.get("min_agree_pct", "95"))),
             )
             entry.update(
-                status=cc.status, overlap=cc.overlap_returns, agree_pct=cc.agree_pct,
-                max_abs_diff=cc.max_abs_diff_pct, detail=cc.detail,
+                status=cc.status,
+                overlap=cc.overlap_returns,
+                agree_pct=cc.agree_pct,
+                max_abs_diff=cc.max_abs_diff_pct,
+                detail=cc.detail,
             )
         else:
             cc = cross_check_levels(
-                a, b,
+                a,
+                b,
                 tolerance=Decimal(str(cc_cfg.get("tolerance", "0.01"))),
                 min_overlap=int(cc_cfg.get("min_overlap", 12)),
                 min_agree_pct=Decimal(str(cc_cfg.get("min_agree_pct", "100"))),
             )
             entry.update(
-                status=cc.status, overlap=cc.overlap_returns, agree_pct=cc.agree_pct,
-                max_abs_diff=cc.max_abs_diff_pct, detail=cc.detail,
+                status=cc.status,
+                overlap=cc.overlap_returns,
+                agree_pct=cc.agree_pct,
+                max_abs_diff=cc.max_abs_diff_pct,
+                detail=cc.detail,
             )
         cross_checks.append(entry)
 
@@ -961,6 +974,8 @@ def collect_public_data(
     summary: dict[str, Any] = {
         "schema_version": "2.0",
         "as_of": as_of.isoformat(),
+        "source_commit": os.environ.get("GITHUB_SHA", "unknown"),
+        "generated_at_utc": datetime.now(UTC).isoformat(),
         "overall_ok": overall_ok,
         "published": published,
         "total_items": len(items),
@@ -968,7 +983,10 @@ def collect_public_data(
         "cross_checks": cross_checks,
         "probes": probes,
         "items": items,
-        "isolation_note": "연구 전용 — 라이브 매매 신호는 KIS 데이터만 사용",
+        "isolation_note": (
+            "기본 연구용 — FACTORY_EDGE 거시 전략만 후보·지문·신선도·커밋 "
+            "관문 뒤 주문 전 증거로 사용"
+        ),
     }
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "summary.json").write_text(

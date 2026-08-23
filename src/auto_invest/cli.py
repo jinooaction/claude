@@ -4478,6 +4478,11 @@ def rebalance_once_cmd(
         help="Required acknowledgement for '--mode live': without it a live run is "
         "refused. A safety interlock against accidental real orders.",
     ),
+    macro_evidence: Path | None = typer.Option(
+        None,
+        "--macro-evidence",
+        help="Spec 151 factory JSON. Required when [portfolio.macro_policy] is configured.",
+    ),
     as_json: bool = typer.Option(False, "--json", help="Emit a single JSON object."),
 ) -> None:
     """Run ONE cross-sectional rebalance against the live/paper account (spec 032 slice 2).
@@ -4532,6 +4537,28 @@ def rebalance_once_cmd(
         typer.echo(f"portfolio validation failed: {exc}", err=True)
         _exit(65)
         return
+
+    macro_snapshot: dict[str, object] | None = None
+    if port_cfg.macro_policy is not None:
+        if macro_evidence is None:
+            typer.echo("macro policy requires --macro-evidence before any broker call", err=True)
+            _exit(65)
+        from auto_invest.market_data.macro_regime import validate_live_macro_evidence
+        from auto_invest.portfolio.autoarm import strategy_fingerprint_digest
+
+        try:
+            macro_payload = _json.loads(macro_evidence.read_text(encoding="utf-8"))
+            macro_snapshot = validate_live_macro_evidence(
+                macro_payload,
+                candidate_id=port_cfg.id,
+                strategy_fingerprint=strategy_fingerprint_digest(port_cfg),
+            )
+        except (OSError, ValueError, _json.JSONDecodeError) as exc:
+            typer.echo(f"macro evidence validation failed before broker call: {exc}", err=True)
+            _exit(65)
+    elif macro_evidence is not None:
+        typer.echo("--macro-evidence requires [portfolio.macro_policy]", err=True)
+        _exit(65)
 
     # Safety: every universe symbol MUST be on the whitelist, else its buys would
     # be rejected at the gate — surface that BEFORE contacting the broker.
@@ -4682,6 +4709,7 @@ def rebalance_once_cmd(
                     execution_side=side,
                     execution_symbol_map=execution_symbol_map,
                     lot_rounding=lot_rounding,
+                    macro_snapshot=macro_snapshot,
                 )
             finally:
                 conn.close()
@@ -4767,6 +4795,7 @@ def rebalance_once_cmd(
                     cash_buffer_pct=cash_buffer_pct,
                     execution_symbol_map=execution_symbol_map,
                     lot_rounding=lot_rounding,
+                    macro_snapshot=macro_snapshot,
                 )
             finally:
                 conn.close()
