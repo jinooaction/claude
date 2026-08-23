@@ -1,5 +1,5 @@
 {
-  "commit": "6d60770d26390308addf14dc96086ea9fb7079c3",
+  "commit": "6c849a2d41220913643a3a8d6c983a359b2c70ca",
   "overall_status": "OK",
   "released_work": [
     {
@@ -543,7 +543,7 @@
       "status": "released"
     }
   ],
-  "run_id": "32643222827",
+  "run_id": "32647098673",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -846,7 +846,11 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "153-edge-gate-calibration"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "154-credit-spread-carry"
     }
   ],
-  "timestamp_utc": "2026-08-23T13:43:46.418888Z"
+  "timestamp_utc": "2026-08-23T14:59:05.427811Z"
 }
