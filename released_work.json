@@ -1,5 +1,5 @@
 {
-  "commit": "001254b098069ca121f8f55cc7659c32ef35bb9a",
+  "commit": "8a59a5bc86df75b93ded1ebc889d3a774c4237a9",
   "overall_status": "OK",
   "released_work": [
     {
@@ -543,7 +543,7 @@
       "status": "released"
     }
   ],
-  "run_id": "32608652178",
+  "run_id": "32609099317",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -653,7 +653,8 @@
     "147-account-ledger-low-turnover",
     "148-reconciliation-halt-recovery",
     "149-live-entry-revalidation",
-    "150-autonomous-strategy-factory"
+    "150-autonomous-strategy-factory",
+    "151-independent-macro-regime"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -840,11 +841,7 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "141-lot-aware-execution-proxy"
-    },
-    {
-      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "151-independent-macro-regime"
     }
   ],
-  "timestamp_utc": "2026-08-23T00:45:19.041727Z"
+  "timestamp_utc": "2026-08-23T00:55:58.345642Z"
 }
