@@ -36,6 +36,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--macro-data-dir", type=Path, required=True)
     parser.add_argument("--prior-factory-json", type=Path, required=True)
     parser.add_argument("--prior-ledger", type=Path, required=True)
+    parser.add_argument("--calibration-json", type=Path, required=True)
     parser.add_argument("--code-commit", default="unknown")
     parser.add_argument("--timestamp-utc")
     parser.add_argument("--json-out", type=Path)
@@ -55,6 +56,7 @@ def main(argv: list[str] | None = None) -> int:
             args.macro_data_dir, [row.date for row in rows] + [current_date]
         )
         prior_payload = json.loads(args.prior_factory_json.read_text(encoding="utf-8"))
+        calibration_payload = json.loads(args.calibration_json.read_text(encoding="utf-8"))
         prior_records = [
             json.loads(line)
             for line in args.prior_ledger.read_text(encoding="utf-8").splitlines()
@@ -68,6 +70,7 @@ def main(argv: list[str] | None = None) -> int:
             treasury_data_quality=quality,
             prior_trial_records=prior_records,
             prior_factory_payload=prior_payload,
+            calibration_evidence=calibration_payload,
             code_commit=args.code_commit,
             timestamp_utc=timestamp,
         )

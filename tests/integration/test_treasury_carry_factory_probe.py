@@ -94,10 +94,36 @@ def _write_prior_inputs(tmp_path: Path) -> tuple[Path, Path]:
     return ledger, prior
 
 
-def test_probe_writes_576_trial_no_order_evidence_within_upper_bound(tmp_path: Path) -> None:
+def _write_calibration(tmp_path: Path) -> Path:
+    path = tmp_path / "calibration.json"
+    path.write_text(
+        json.dumps(
+            {
+                "gate_version": "2.0",
+                "verdict": "CALIBRATED",
+                "code_commit": "abc123",
+                "scenario": {"repetitions": 500},
+                "revised": {
+                    "false_acceptance_rate": 0.036,
+                    "detection_rate": 0.834,
+                },
+                "thresholds": {
+                    "development_dsr_diagnostic_min": 0.95,
+                    "development_pbo_diagnostic_max": 0.10,
+                    "holdout_psr_min": 0.95,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_probe_writes_hierarchical_no_order_evidence_within_upper_bound(tmp_path: Path) -> None:
     shiller, gold = _write_market_inputs(tmp_path)
     treasury = _write_treasury_inputs(tmp_path)
     ledger, prior = _write_prior_inputs(tmp_path)
+    calibration = _write_calibration(tmp_path)
     json_out = tmp_path / "factory.json"
     summary_out = tmp_path / "LAST_RUN.md"
     started = time.monotonic()
@@ -115,6 +141,8 @@ def test_probe_writes_576_trial_no_order_evidence_within_upper_bound(tmp_path: P
             str(prior),
             "--prior-ledger",
             str(ledger),
+            "--calibration-json",
+            str(calibration),
             "--code-commit",
             "abc123",
             "--timestamp-utc",
@@ -134,7 +162,14 @@ def test_probe_writes_576_trial_no_order_evidence_within_upper_bound(tmp_path: P
     payload = json.loads(json_out.read_text(encoding="utf-8"))
     assert payload["candidate_count"] == 64
     assert payload["prior_trial_count"] == 512
-    assert payload["multiplicity_trial_count"] == 576
-    assert payload["decision"]["selected_candidate_id"] is None
+    assert payload["global_audit_trial_count"] == 576
+    assert payload["multiplicity_trial_count"] == 64
+    assert payload["family_raw_trial_count"] == 64
+    assert payload["decision"]["objective"] == "diversifier"
+    assert payload["gate_version"] == "2.0"
+    if payload["decision"]["verdict"] == "FACTORY_EDGE":
+        assert payload["decision"]["selected_candidate_id"] is not None
+    else:
+        assert payload["decision"]["selected_candidate_id"] is None
     assert elapsed < 900
     assert "독립 국채 캐리 전략 공장" in summary_out.read_text(encoding="utf-8")

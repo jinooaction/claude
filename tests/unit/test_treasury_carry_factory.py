@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, date, datetime
 from decimal import Decimal
 
@@ -8,7 +9,7 @@ import pytest
 from auto_invest.analytics.risk_managed_beta import MonthlyRow
 from auto_invest.analytics.treasury_carry_factory import (
     EXPECTED_CANDIDATES,
-    EXPECTED_MULTIPLICITY_TRIALS,
+    EXPECTED_GLOBAL_AUDIT_TRIALS,
     NO_FACTORY_EDGE,
     TreasuryCurveSnapshot,
     build_treasury_curve_snapshots,
@@ -103,6 +104,21 @@ def _prior_factory() -> dict:
     }
 
 
+def _calibration(code_commit: str = "abc123") -> dict:
+    return {
+        "gate_version": "2.0",
+        "verdict": "CALIBRATED",
+        "code_commit": code_commit,
+        "scenario": {"repetitions": 500},
+        "revised": {"false_acceptance_rate": 0.036, "detection_rate": 0.834},
+        "thresholds": {
+            "development_dsr_diagnostic_min": 0.95,
+            "development_pbo_diagnostic_max": 0.10,
+            "holdout_psr_min": 0.95,
+        },
+    }
+
+
 def test_candidate_grammar_is_frozen_unique_and_deterministic() -> None:
     first = generate_treasury_candidates()
     second = generate_treasury_candidates()
@@ -183,13 +199,17 @@ def test_factory_accounts_for_exactly_576_trials_and_fails_closed() -> None:
         treasury_data_quality={"complete": True},
         prior_trial_records=_prior_ledger(),
         prior_factory_payload=_prior_factory(),
+        calibration_evidence=_calibration(),
         code_commit="abc123",
         timestamp_utc="2026-08-23T00:00:00Z",
     )
     assert payload["prior_trial_count"] == 512
     assert payload["current_trial_count"] == 64
-    assert payload["multiplicity_trial_count"] == EXPECTED_MULTIPLICITY_TRIALS
-    assert payload["unique_trial_fingerprint_count"] == EXPECTED_MULTIPLICITY_TRIALS
+    assert payload["global_audit_trial_count"] == EXPECTED_GLOBAL_AUDIT_TRIALS
+    assert payload["multiplicity_trial_count"] == 64
+    assert payload["family_raw_trial_count"] == 64
+    assert Decimal("1") <= Decimal(payload["family_effective_trial_count"]) <= Decimal("64")
+    assert payload["unique_trial_fingerprint_count"] == EXPECTED_GLOBAL_AUDIT_TRIALS
     assert payload["decision"]["verdict"] == NO_FACTORY_EDGE
     assert payload["decision"]["selected_candidate_id"] is None
     assert payload["decision"]["selected_deploy_config"] is None
@@ -209,18 +229,88 @@ def test_missing_prior_or_duplicate_fingerprint_cannot_authorize_canary() -> Non
         treasury_data_quality={"complete": True},
         prior_trial_records=ledger,
         prior_factory_payload=prior,
+        calibration_evidence=_calibration(code_commit="unknown"),
     )
     gates = {gate["gate_id"]: gate for gate in payload["decision"]["gates"]}
-    assert gates["prior_replay_complete"]["passed"] is False
-    assert gates["multiplicity_trials"]["passed"] is False
-    assert gates["unique_trial_fingerprints"]["passed"] is False
+    assert gates["prior_audit_complete"]["passed"] is False
+    assert gates["global_audit_trials"]["passed"] is False
+    assert gates["unique_audit_fingerprints"]["passed"] is False
     assert payload["decision"]["research_canary_eligible"] is False
+
+
+def test_prior_families_do_not_change_current_family_statistics() -> None:
+    rows = _monthly_rows()
+    base_kwargs = {
+        "rows": rows,
+        "gold_levels": [400 * (1.004**index) for index in range(len(rows))],
+        "snapshots": _snapshots(rows),
+        "treasury_data_quality": {"complete": True},
+        "prior_factory_payload": _prior_factory(),
+        "calibration_evidence": _calibration(),
+        "code_commit": "abc123",
+    }
+    first = run_treasury_carry_factory(
+        prior_trial_records=_prior_ledger(),
+        **base_kwargs,
+    )
+    changed_prior = _prior_ledger()
+    for record in changed_prior:
+        record["sharpe_25bps"] += 100
+        record["segment_sharpes"] = [-100.0, 100.0] * 5
+    second = run_treasury_carry_factory(
+        prior_trial_records=changed_prior,
+        **base_kwargs,
+    )
+    assert first["development_selection"] == second["development_selection"]
+    assert first["family_effective_trial_count"] == second["family_effective_trial_count"]
+    assert first["decision"]["pbo"] == second["decision"]["pbo"]
+
+
+def test_holdout_changes_cannot_reselect_development_winner() -> None:
+    rows = _monthly_rows()
+    original = _snapshots(rows)
+    altered: list[TreasuryCurveSnapshot] = []
+    for index, snapshot in enumerate(original):
+        if snapshot.as_of_date < "2007-01-01":
+            altered.append(snapshot)
+            continue
+        shift = Decimal("8") if index % 2 else Decimal("-2")
+        altered.append(
+            replace(
+                snapshot,
+                yields={
+                    symbol: max(Decimal("0.1"), value + shift)
+                    for symbol, value in snapshot.yields.items()
+                    if value is not None
+                },
+            )
+        )
+    kwargs = {
+        "rows": rows,
+        "gold_levels": [400 * (1.004**index) for index in range(len(rows))],
+        "treasury_data_quality": {"complete": True},
+        "prior_trial_records": _prior_ledger(),
+        "prior_factory_payload": _prior_factory(),
+        "calibration_evidence": _calibration(),
+        "code_commit": "abc123",
+    }
+    first = run_treasury_carry_factory(snapshots=original, **kwargs)
+    second = run_treasury_carry_factory(snapshots=altered, **kwargs)
+    assert (
+        first["development_selection"]["selected_candidate_id"]
+        == second["development_selection"]["selected_candidate_id"]
+    )
+    assert first["decision"]["objective"] == "diversifier"
+    gates = {gate["gate_id"]: gate for gate in first["decision"]["gates"]}
+    assert gates["blend_sharpe_improvement"]["blocking"] is True
+    assert gates["standalone_sharpe_diagnostic"]["blocking"] is False
 
 
 def test_live_evidence_rejects_no_winner_and_accepts_matching_all_pass() -> None:
     with pytest.raises(ValueError, match="no eligible winner"):
         validate_live_treasury_evidence(
             {
+                "gate_version": "2.0",
                 "timestamp_utc": "2026-08-23T00:00:00Z",
                 "decision": {"verdict": NO_FACTORY_EDGE},
             },
@@ -232,6 +322,7 @@ def test_live_evidence_rejects_no_winner_and_accepts_matching_all_pass() -> None
     snapshot = _snapshots(_monthly_rows(14))[-1].as_dict(include_history=True)
     snapshot["as_of_date"] = "2026-08-23"
     payload = {
+        "gate_version": "2.0",
         "timestamp_utc": "2026-08-23T00:00:00Z",
         "code_commit": "abc",
         "treasury_data_fingerprint": "sha256:data",
@@ -240,7 +331,7 @@ def test_live_evidence_rejects_no_winner_and_accepts_matching_all_pass() -> None
             "research_canary_eligible": True,
             "selected_candidate_id": "candidate",
             "selected_strategy_fingerprint": "sha256:x",
-            "gates": [{"gate_id": "all", "passed": True}],
+            "gates": [{"gate_id": "all", "passed": True, "blocking": True}],
         },
         "research_live_parity": {"target_weights_digest": "sha256:weights"},
         "live_treasury_evidence": {
@@ -254,9 +345,12 @@ def test_live_evidence_rejects_no_winner_and_accepts_matching_all_pass() -> None
             "latest_snapshot": snapshot,
         },
     }
-    assert validate_live_treasury_evidence(
-        payload,
-        candidate_id="candidate",
-        strategy_fingerprint="sha256:x",
-        now=datetime(2026, 8, 23, tzinfo=UTC),
-    ) == snapshot
+    assert (
+        validate_live_treasury_evidence(
+            payload,
+            candidate_id="candidate",
+            strategy_fingerprint="sha256:x",
+            now=datetime(2026, 8, 23, tzinfo=UTC),
+        )
+        == snapshot
+    )
