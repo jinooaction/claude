@@ -1,5 +1,5 @@
 {
-  "commit": "8a59a5bc86df75b93ded1ebc889d3a774c4237a9",
+  "commit": "4820cc12ac22447eb579ed120bb38ed7ad78ae35",
   "overall_status": "OK",
   "released_work": [
     {
@@ -543,7 +543,7 @@
       "status": "released"
     }
   ],
-  "run_id": "32609099317",
+  "run_id": "32616655185",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -841,7 +841,11 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "141-lot-aware-execution-proxy"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "152-treasury-carry-factory"
     }
   ],
-  "timestamp_utc": "2026-08-23T00:55:58.345642Z"
+  "timestamp_utc": "2026-08-23T03:58:01.096946Z"
 }

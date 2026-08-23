@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-08-23T00:55:58.345642Z)
+# 완료 후보 소비 장부 (as of 2026-08-23T03:58:01.096946Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -126,6 +126,7 @@
 | 072-candidate-evidence-diagnostics | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 140-heldout-exploration-canary | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 141-lot-aware-execution-proxy | 체크박스 작업이 없거나 완료되지 않았습니다. |
+| 152-treasury-carry-factory | 체크박스 작업이 없거나 완료되지 않았습니다. |
 
 ## 안전 경계
 
@@ -142,7 +143,7 @@
 
 ```json
 {
-  "commit": "8a59a5bc86df75b93ded1ebc889d3a774c4237a9",
+  "commit": "4820cc12ac22447eb579ed120bb38ed7ad78ae35",
   "overall_status": "OK",
   "released_work": [
     {
@@ -984,8 +985,12 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "141-lot-aware-execution-proxy"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "152-treasury-carry-factory"
     }
   ],
-  "timestamp_utc": "2026-08-23T00:55:58.345642Z"
+  "timestamp_utc": "2026-08-23T03:58:01.096946Z"
 }
 ```
