@@ -181,4 +181,9 @@ def test_workflow_runs_commodity_after_fx_and_publishes_separate_evidence() -> N
     assert "--prior-factory-json /tmp/fx_carry_factory.json" in workflow
     assert 'global_audit_trial_count' in workflow and '= "672"' in workflow
     assert "commodity_term_structure_factory.json" in workflow
-    assert "data_fingerprint: $root.commodity_data_fingerprint" in workflow
+    assert "data_fingerprint: $root.positioning_data_fingerprint" in workflow
+    preserved_sidecar = (
+        'cp /tmp/commodity_term_structure_factory.json '
+        '"${tmpdir}/commodity_term_structure_factory.json"'
+    )
+    assert preserved_sidecar in workflow
