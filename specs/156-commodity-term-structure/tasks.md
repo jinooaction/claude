@@ -32,6 +32,6 @@
 
 - [x] T017 Run the immediate latest-data backtest without changing v2 preregistration.
 - [x] T018 Run focused and full tests, ruff, YAML, diff, harness, handoff facts, and PR gate.
-- [ ] T019 Commit, push, open the grade-4 PR, and auto-merge after green checks.
-- [ ] T020 Verify deployment, production replay, 672-trial audit, and KIS no-order smoke.
-- [ ] T021 Refresh HANDOFF with the result, gate diagnosis, account truth, and next family.
+- [x] T019 Commit, push, open the grade-4 PR, and auto-merge after green checks.
+- [x] T020 Verify deployment, production replay, 672-trial audit, and KIS no-order smoke.
+- [x] T021 Refresh HANDOFF with the result, gate diagnosis, account truth, and next family.
