@@ -215,14 +215,14 @@ After a successful merge, the session SHOULD:
 ---
 
 <!-- SPECKIT START -->
-**Active feature plan**: `specs/155-fx-carry-gate-power/plan.md`
+**Most recently completed feature**: `specs/155-fx-carry-gate-power/plan.md`
 
 Active feature pointer: `.specify/feature.json` is the maintained pointer for
 the current worktree. Do not trust prose in this block as the source of truth
 for in-flight work; use the `git_ground_truth` start hook, latest `HANDOFF.md`,
 and `/sync` against `jinooaction/claude` `Codex/*` branches before continuing.
 
-현재 계획 포인터: `specs/155-fx-carry-gate-power/plan.md` — AUD·CAD·JPY·GBP·USD 공개 환율과 단기금리로 외환 금리차 후보 16개를 사전등록하고, 관문 검출력 곡선과 손대지 않은 홀드아웃으로 즉시 검증한다. 라이브 0.95 기준은 유지하되 중간 신뢰 후보는 자본 0 종이검증 전용으로 분리한다.
+최근 완료 포인터: `specs/155-fx-carry-gate-power/plan.md` — 외환 금리차 후보 16개와 관문 검출력 곡선을 출시했고 생산 656회 판정은 `NO_FACTORY_EDGE`다. 현재 활성 기능은 없으며 다음 세션은 `HANDOFF.md`와 `/sync`로 새 작업을 정한다.
 
 머지 완료(베이스라인): spec 004 (LLM 판단 지점), 005 (자율 튜너), 006 (배포 자동화), 007 (하드닝 카나리), 008 (백테스트), 009 (paper-run), 010 (자동 룰 설계자), 011 (라이브 성과 측정). **주의: 일부 tasks.md 가 stale 0% 로 표시된 적 있음 — 코드/테스트를 믿을 것.**
 
