@@ -1,5 +1,5 @@
 {
-  "commit": "6c849a2d41220913643a3a8d6c983a359b2c70ca",
+  "commit": "b31d63a930e859840ee6ee71c69a2318adc88d63",
   "overall_status": "OK",
   "released_work": [
     {
@@ -543,7 +543,7 @@
       "status": "released"
     }
   ],
-  "run_id": "32713701315",
+  "run_id": "32731937336",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -655,7 +655,8 @@
     "149-live-entry-revalidation",
     "150-autonomous-strategy-factory",
     "151-independent-macro-regime",
-    "152-treasury-carry-factory"
+    "152-treasury-carry-factory",
+    "154-credit-spread-carry"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -846,11 +847,7 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "153-edge-gate-calibration"
-    },
-    {
-      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "154-credit-spread-carry"
     }
   ],
-  "timestamp_utc": "2026-08-24T09:50:59.830081Z"
+  "timestamp_utc": "2026-08-24T13:18:53.678713Z"
 }
