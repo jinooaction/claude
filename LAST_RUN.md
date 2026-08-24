@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-08-24T13:18:53.678713Z)
+# 완료 후보 소비 장부 (as of 2026-08-24T14:36:53.642792Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -127,6 +127,7 @@
 | 140-heldout-exploration-canary | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 141-lot-aware-execution-proxy | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 153-edge-gate-calibration | 체크박스 작업이 없거나 완료되지 않았습니다. |
+| 155-fx-carry-gate-power | 체크박스 작업이 없거나 완료되지 않았습니다. |
 
 ## 안전 경계
 
@@ -143,7 +144,7 @@
 
 ```json
 {
-  "commit": "b31d63a930e859840ee6ee71c69a2318adc88d63",
+  "commit": "69c53ce59ebe325fe7ac569a799182ceae01d0eb",
   "overall_status": "OK",
   "released_work": [
     {
@@ -991,8 +992,12 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "153-edge-gate-calibration"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "155-fx-carry-gate-power"
     }
   ],
-  "timestamp_utc": "2026-08-24T13:18:53.678713Z"
+  "timestamp_utc": "2026-08-24T14:36:53.642792Z"
 }
 ```

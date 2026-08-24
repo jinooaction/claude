@@ -1,5 +1,5 @@
 {
-  "commit": "b31d63a930e859840ee6ee71c69a2318adc88d63",
+  "commit": "69c53ce59ebe325fe7ac569a799182ceae01d0eb",
   "overall_status": "OK",
   "released_work": [
     {
@@ -543,7 +543,7 @@
       "status": "released"
     }
   ],
-  "run_id": "32731937336",
+  "run_id": "32739773747",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -847,7 +847,11 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "153-edge-gate-calibration"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "155-fx-carry-gate-power"
     }
   ],
-  "timestamp_utc": "2026-08-24T13:18:53.678713Z"
+  "timestamp_utc": "2026-08-24T14:36:53.642792Z"
 }
