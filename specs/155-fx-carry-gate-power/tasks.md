@@ -52,9 +52,9 @@
 - [x] T027 [P] Add probe and workflow contract tests in `tests/integration/`.
 - [x] T028 Run immediate latest-data backtest and record the fixed pre-result thresholds and output.
 - [x] T029 Run focused tests, full pytest, ruff, YAML, diff, strict harness, HANDOFF facts, and PR quality gate.
-- [ ] T030 Commit, push, open a grade-4 PR, and auto-merge after green checks.
-- [ ] T031 Verify deployment, production data, power curve, 656-trial decision, and KIS no-order smoke.
-- [ ] T032 Record result, gate diagnosis, account truth, residual risk, and next family in handoff.
+- [x] T030 Commit, push, open a grade-4 PR, and auto-merge after green checks.
+- [x] T031 Verify deployment, production data, power curve, 656-trial decision, and KIS no-order smoke.
+- [x] T032 Record result, gate diagnosis, account truth, residual risk, and next family in handoff.
 
 ## Dependencies
 
