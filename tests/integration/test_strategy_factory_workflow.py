@@ -35,11 +35,14 @@ def test_workflow_runs_complete_batch_without_broker_or_order_command() -> None:
     assert "treasury_carry_factory.json" in text
     assert "credit_spread_factory.json" in text
     assert "fx_carry_factory.json" in text
-    assert "data_fingerprint: $root.fx_data_fingerprint" in text
+    assert "commodity_term_structure_factory.json" in text
+    assert "scripts/commodity_term_structure_factory_probe.py" in text
+    assert "data_fingerprint: $root.commodity_data_fingerprint" in text
     assert "audit_catalog.jsonl" in text
     assert "wc -l < /tmp/audit_catalog.jsonl" in text
     assert 'global_audit_trial_count\' /tmp/treasury_carry_factory.json)" = "576' in text
-    assert 'global_audit_trial_count\' /tmp/strategy_factory.json)" = "656' in text
+    assert 'global_audit_trial_count\' /tmp/fx_carry_factory.json)" = "656' in text
+    assert 'global_audit_trial_count\' /tmp/strategy_factory.json)" = "672' in text
     assert 'multiplicity_trial_count\' /tmp/strategy_factory.json)" = "16' in text
     assert 'verdict\' /tmp/edge_gate_calibration.json)" = "CALIBRATED' in text
     assert "rebalance-once" not in text
