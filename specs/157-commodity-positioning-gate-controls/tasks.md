@@ -30,6 +30,6 @@
 - [x] T014 [US3] Wire source collection, controls, factory, ledger, audit catalog, and sidecar into `.github/workflows/autonomous-strategy-factory.yml`.
 - [x] T015 Run the binding latest-data replay without changing the preregistration.
 - [x] T016 Run focused and full tests, ruff, YAML, diff, strict harness, handoff facts, and PR gate.
-- [ ] T017 Commit, push, open the grade-4 PR, and auto-merge after green checks.
-- [ ] T018 Verify deployment, production replay, 688-trial audit, and KIS no-order smoke.
-- [ ] T019 Refresh HANDOFF with empirical gate proof, strategy result, account truth, and next action.
+- [x] T017 Commit, push, open the grade-4 PR, and auto-merge after green checks.
+- [x] T018 Verify deployment, production replay, 688-trial audit, and KIS no-order smoke.
+- [x] T019 Refresh HANDOFF with empirical gate proof, strategy result, account truth, and next action.
