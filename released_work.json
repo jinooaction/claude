@@ -1,5 +1,5 @@
 {
-  "commit": "5f19631820f04a532206cb3747acc5def905a7e9",
+  "commit": "ebbefee21eae5a79dd9491f6885c9f307ac53dc6",
   "overall_status": "OK",
   "released_work": [
     {
@@ -543,7 +543,7 @@
       "status": "released"
     }
   ],
-  "run_id": "32761332390",
+  "run_id": "32789350558",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -849,7 +849,11 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "153-edge-gate-calibration"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "157-commodity-positioning-gate-controls"
     }
   ],
-  "timestamp_utc": "2026-08-24T18:15:15.003889Z"
+  "timestamp_utc": "2026-08-24T23:26:40.530359Z"
 }
