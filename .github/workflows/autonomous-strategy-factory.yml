@@ -1,7 +1,7 @@
-name: Autonomous strategy factory (hierarchical credit spread validation)
+name: Autonomous strategy factory (hierarchical FX carry validation)
 
-# 스펙 154. 브로커와 완전히 분리된 연구 워크플로다. 기존 576회는 감사 장부에
-# 보존하고, 현재 회사채 64개만 같은 통계 가족으로 시점 기준 자료에서 검증한다.
+# 스펙 155. 브로커와 완전히 분리된 연구 워크플로다. 기존 640회는 감사 장부에
+# 보존하고, 현재 외환 금리차 16개만 같은 통계 가족으로 시점 기준 자료에서 검증한다.
 # 이 워크플로 자체는 주문, 자본 변경, 라이브 설정 변경을 하지 않는다.
 
 on:
@@ -16,6 +16,7 @@ on:
       - 'src/auto_invest/analytics/macro_strategy_factory.py'
       - 'src/auto_invest/analytics/treasury_carry_factory.py'
       - 'src/auto_invest/analytics/credit_spread_factory.py'
+      - 'src/auto_invest/analytics/fx_carry_factory.py'
       - 'src/auto_invest/analytics/edge_gate_calibration.py'
       - 'src/auto_invest/market_data/public_data.py'
       - 'src/auto_invest/market_data/macro_regime.py'
@@ -23,6 +24,7 @@ on:
       - 'scripts/macro_strategy_factory_probe.py'
       - 'scripts/treasury_carry_factory_probe.py'
       - 'scripts/credit_spread_factory_probe.py'
+      - 'scripts/fx_carry_factory_probe.py'
       - 'scripts/edge_gate_calibration_probe.py'
       - 'deploy/public-data.toml'
       - '.github/workflows/autonomous-strategy-factory.yml'
@@ -69,6 +71,15 @@ jobs:
           test -s /tmp/public-data/fred/HQMCB20YR.csv
           test -s /tmp/public-data/fred/CPIAUCNS.csv
           test -s /tmp/public-data/fred/SAHMREALTIME.csv
+          test -s /tmp/public-data/fred/DEXUSAL.csv
+          test -s /tmp/public-data/fred/DEXCAUS.csv
+          test -s /tmp/public-data/fred/DEXJPUS.csv
+          test -s /tmp/public-data/fred/DEXUSUK.csv
+          test -s /tmp/public-data/fred/IRSTCI01AUM156N.csv
+          test -s /tmp/public-data/fred/IRSTCI01CAM156N.csv
+          test -s /tmp/public-data/fred/IRSTCI01JPM156N.csv
+          test -s /tmp/public-data/fred/IRSTCI01GBM156N.csv
+          test -s /tmp/public-data/fred/IRSTCI01USM156N.csv
           test -s /tmp/public-data/cboe/VIX.csv
 
       - name: Calibrate the hierarchical edge gate
@@ -122,11 +133,26 @@ jobs:
             --prior-ledger /tmp/trial_ledger_prior.jsonl \
             --calibration-json /tmp/edge_gate_calibration.json \
             --timestamp-utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --json-out /tmp/credit_spread_factory.json \
+            --summary-out /tmp/CREDIT_LAST_RUN.md
+          test "$(jq -r '.complete_trial_count' /tmp/credit_spread_factory.json)" = "64"
+          test "$(jq -r '.global_audit_trial_count' /tmp/credit_spread_factory.json)" = "640"
+          test "$(jq -r '.multiplicity_trial_count' /tmp/credit_spread_factory.json)" = "64"
+
+      - name: Run the preregistered 16-trial FX carry batch
+        run: |
+          set -euo pipefail
+          uv run python scripts/fx_carry_factory_probe.py \
+            --code-commit "${GITHUB_SHA}" \
+            --macro-data-dir /tmp/public-data \
+            --prior-factory-json /tmp/credit_spread_factory.json \
+            --calibration-json /tmp/edge_gate_calibration.json \
+            --timestamp-utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --json-out /tmp/strategy_factory.json \
             --summary-out /tmp/LAST_RUN.md
-          test "$(jq -r '.complete_trial_count' /tmp/strategy_factory.json)" = "64"
-          test "$(jq -r '.global_audit_trial_count' /tmp/strategy_factory.json)" = "640"
-          test "$(jq -r '.multiplicity_trial_count' /tmp/strategy_factory.json)" = "64"
+          test "$(jq -r '.complete_trial_count' /tmp/strategy_factory.json)" = "16"
+          test "$(jq -r '.global_audit_trial_count' /tmp/strategy_factory.json)" = "656"
+          test "$(jq -r '.multiplicity_trial_count' /tmp/strategy_factory.json)" = "16"
           cat /tmp/LAST_RUN.md
 
       - name: Preserve trials and suppress an identical completed batch
@@ -142,15 +168,15 @@ jobs:
             cp /tmp/trial_ledger_prior.jsonl /tmp/trial_ledger.jsonl
             jq -c '. as $root | .trial_records[] | . + {
               batch_id: $root.batch_id,
-              data_fingerprint: $root.credit_data_fingerprint,
+              data_fingerprint: $root.fx_data_fingerprint,
               code_commit: $root.code_commit,
               timestamp_utc: $root.timestamp_utc
             }' /tmp/strategy_factory.json >> /tmp/trial_ledger.jsonl
             echo "duplicate=false" >> "$GITHUB_OUTPUT"
           fi
           jq -c '.audit_records[]' /tmp/strategy_factory.json > /tmp/audit_catalog.jsonl
-          test "$(wc -l < /tmp/audit_catalog.jsonl | tr -d ' ')" = "640"
-          test "$(jq -r '.strategy_fingerprint' /tmp/audit_catalog.jsonl | sort -u | wc -l | tr -d ' ')" = "640"
+          test "$(wc -l < /tmp/audit_catalog.jsonl | tr -d ' ')" = "656"
+          test "$(jq -r '.strategy_fingerprint' /tmp/audit_catalog.jsonl | sort -u | wc -l | tr -d ' ')" = "656"
           jq '{
             schema_version,
             batch_id,
@@ -179,8 +205,10 @@ jobs:
             2>/dev/null || echo '{}' > "${tmpdir}/macro_strategy_factory.json"
           cp /tmp/treasury_carry_factory.json "${tmpdir}/treasury_carry_factory.json" \
             2>/dev/null || echo '{}' > "${tmpdir}/treasury_carry_factory.json"
-          cp /tmp/strategy_factory.json "${tmpdir}/credit_spread_factory.json" \
+          cp /tmp/credit_spread_factory.json "${tmpdir}/credit_spread_factory.json" \
             2>/dev/null || echo '{}' > "${tmpdir}/credit_spread_factory.json"
+          cp /tmp/strategy_factory.json "${tmpdir}/fx_carry_factory.json" \
+            2>/dev/null || echo '{}' > "${tmpdir}/fx_carry_factory.json"
           cp /tmp/edge_gate_calibration.json "${tmpdir}/edge_gate_calibration.json" \
             2>/dev/null || echo '{}' > "${tmpdir}/edge_gate_calibration.json"
           cp /tmp/trial_ledger.jsonl "${tmpdir}/trial_ledger.jsonl" \
@@ -213,6 +241,7 @@ jobs:
           git add LAST_RUN.md strategy_factory.json macro_strategy_factory.json \
             treasury_carry_factory.json \
             credit_spread_factory.json \
+            fx_carry_factory.json \
             edge_gate_calibration.json \
             trial_ledger.jsonl audit_catalog.jsonl next_search.json
           git commit -q -m "strategy-factory run ${GITHUB_RUN_ID} @ ${GITHUB_SHA:0:7}"

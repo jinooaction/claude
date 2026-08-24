@@ -16,7 +16,26 @@ def test_revised_gate_controls_false_acceptance_and_detects_planted_edge() -> No
         "development_dsr_diagnostic_min": 0.95,
         "development_pbo_diagnostic_max": 0.1,
         "holdout_psr_min": 0.95,
+        "paper_psr_min": 0.8,
     }
+    assert set(report["family_calibrations"]) == {"16", "64"}
+    for calibration in report["family_calibrations"].values():
+        assert calibration["live_calibrated"] is True
+        assert calibration["null_false_acceptance_rate"] <= 0.05
+        assert calibration["target_live_detection_rate"] >= 0.80
+        assert set(calibration["power_curve"]) == {
+            "0.20",
+            "0.30",
+            "0.40",
+            "0.50",
+            "0.60",
+            "0.80",
+        }
+        assert calibration["power_curve"]["0.40"]["live_detection_rate"] < 0.80
+        assert (
+            calibration["power_curve"]["0.40"]["paper_admission_rate"]
+            > calibration["power_curve"]["0.40"]["live_detection_rate"]
+        )
 
 
 def test_calibration_is_deterministic_for_fixed_inputs() -> None:

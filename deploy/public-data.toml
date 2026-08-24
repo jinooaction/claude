@@ -56,7 +56,13 @@ short = "2 Yr"
 # FRED 그래프 CSV — 키 불필요 공개 엔드포인트. candidate-facf2fa31834 증거에서
 # 채널 UA 는 timeout, httpx 기본 UA 는 200으로 확인되어 DGS 만기 5종에
 # 명시적으로 기본 UA 를 쓴다. HQM·CPI·고용은 더 긴 발표 주기를 각자 검증한다.
-series = ["DGS3MO", "DGS2", "DGS5", "DGS10", "DGS30", "HQMCB10YR", "HQMCB20YR", "CPIAUCNS", "SAHMREALTIME"]
+series = [
+    "DGS3MO", "DGS2", "DGS5", "DGS10", "DGS30",
+    "HQMCB10YR", "HQMCB20YR", "CPIAUCNS", "SAHMREALTIME",
+    "DEXUSAL", "DEXCAUS", "DEXJPUS", "DEXUSUK",
+    "IRSTCI01AUM156N", "IRSTCI01CAM156N", "IRSTCI01JPM156N",
+    "IRSTCI01GBM156N", "IRSTCI01USM156N",
+]
 min_rows = 1500
 max_staleness_days = 7
 user_agent = "httpx-default"
@@ -78,6 +84,47 @@ max_staleness_days = 70
 [fred.series_settings.HQMCB20YR]
 min_rows = 500
 max_staleness_days = 70
+
+# 연준 H.10 현물환. AUD·GBP는 USD/외화 직접 표기, CAD·JPY는 외화/USD 역표기다.
+# 외환 공장은 모두 USD/외화로 명시 변환하며 최근 14일 안의 관측만 허용한다.
+[fred.series_settings.DEXUSAL]
+min_rows = 14000
+max_staleness_days = 14
+
+[fred.series_settings.DEXCAUS]
+min_rows = 14000
+max_staleness_days = 14
+
+[fred.series_settings.DEXJPUS]
+min_rows = 14000
+max_staleness_days = 14
+
+[fred.series_settings.DEXUSUK]
+min_rows = 14000
+max_staleness_days = 14
+
+# OECD Main Economic Indicators의 익일물 콜/은행간 금리 FRED 전송본. 월간 자료의
+# 발표 지연을 감안해 관측월 시작일 기준 100일까지 허용한다. OECD 인용이 필요하며
+# 외환 공장 공개 보고서에 출처·단위·인용 조건을 함께 남긴다.
+[fred.series_settings.IRSTCI01AUM156N]
+min_rows = 400
+max_staleness_days = 100
+
+[fred.series_settings.IRSTCI01CAM156N]
+min_rows = 400
+max_staleness_days = 100
+
+[fred.series_settings.IRSTCI01JPM156N]
+min_rows = 400
+max_staleness_days = 100
+
+[fred.series_settings.IRSTCI01GBM156N]
+min_rows = 400
+max_staleness_days = 100
+
+[fred.series_settings.IRSTCI01USM156N]
+min_rows = 400
+max_staleness_days = 100
 
 [cboe]
 # Cboe VIX 공식 이력 (1990년~, 단일 CSV) — 종가 시계열로 발행.

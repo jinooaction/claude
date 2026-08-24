@@ -394,6 +394,25 @@ class CreditSpreadPolicyConfig(BaseModel):
         return value
 
 
+class FxCarryPolicyConfig(BaseModel):
+    """Optional spec-155 FX carry policy shared by research and execution."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    family: Literal["pure_carry", "carry_momentum", "carry_value", "defensive_carry"]
+    lookback_months: Literal[3, 12]
+    top_n: Literal[2] = 2
+    risk_lookback_months: Literal[12] = 12
+    value_lookback_months: Literal[36] = 36
+    max_foreign_weight: Decimal
+
+    @field_validator("max_foreign_weight")
+    @classmethod
+    def _check_max_foreign_weight(cls, value: Decimal) -> Decimal:
+        if value not in {Decimal("0.5"), Decimal("1.0")}:
+            raise ValueError("max_foreign_weight must be 0.5 or 1.0")
+        return value
+
+
 class PortfolioRebalanceConfig(BaseModel):
     """스펙 032 — 횡단면 포트폴리오 재조정 설정. 비커널.
 
@@ -448,6 +467,7 @@ class PortfolioRebalanceConfig(BaseModel):
     macro_policy: MacroPolicyConfig | None = None
     treasury_carry_policy: TreasuryCarryPolicyConfig | None = None
     credit_spread_policy: CreditSpreadPolicyConfig | None = None
+    fx_carry_policy: FxCarryPolicyConfig | None = None
 
     @field_validator("universe")
     @classmethod
@@ -479,11 +499,12 @@ class PortfolioRebalanceConfig(BaseModel):
                 self.macro_policy,
                 self.treasury_carry_policy,
                 self.credit_spread_policy,
+                self.fx_carry_policy,
             )
         )
         if policy_count > 1:
             raise ValueError(
-                "macro, Treasury carry, and credit spread policies are mutually exclusive"
+                "macro, Treasury carry, credit spread, and FX carry policies are mutually exclusive"
             )
         return self
 

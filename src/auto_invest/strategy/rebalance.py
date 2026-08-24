@@ -44,6 +44,7 @@ from decimal import ROUND_FLOOR, ROUND_HALF_UP, Decimal
 
 from auto_invest.config.rules import (
     CreditSpreadPolicyConfig,
+    FxCarryPolicyConfig,
     MacroPolicyConfig,
     TreasuryCarryPolicyConfig,
 )
@@ -475,6 +476,126 @@ def credit_spread_target_weights(
 
     credit_weight = policy.max_credit_weight if signal else Decimal("0")
     return _fix_residual({"LQD": credit_weight, "IEF": Decimal("1") - credit_weight})
+
+
+_FX_SYMBOLS = {"AUD": "FXA", "CAD": "FXC", "JPY": "FXY", "GBP": "FXB"}
+
+
+def _fx_history(snapshot: Mapping[str, object], section: str, currency: str) -> tuple[Decimal, ...]:
+    raw_section = snapshot.get(section, {})
+    if not isinstance(raw_section, Mapping):
+        return ()
+    raw = raw_section.get(currency, ())
+    if not isinstance(raw, (list, tuple)):
+        return ()
+    return tuple(Decimal(str(value)) for value in raw if value is not None)
+
+
+def _fx_volatility(values: tuple[Decimal, ...], months: int) -> Decimal:
+    if len(values) < months + 1:
+        raise ValueError("FX snapshot has insufficient volatility history")
+    returns = [
+        float(values[index] / values[index - 1] - Decimal("1"))
+        for index in range(len(values) - months, len(values))
+    ]
+    mean = sum(returns) / len(returns)
+    variance = sum((value - mean) ** 2 for value in returns) / max(1, len(returns) - 1)
+    return Decimal(str(math.sqrt(variance * 12.0)))
+
+
+def _all_usd_fx_weights() -> dict[str, Decimal]:
+    weights = {symbol: Decimal("0") for symbol in _FX_SYMBOLS.values()}
+    weights["UUP"] = Decimal("1.000000")
+    return weights
+
+
+def fx_carry_target_weights(
+    *,
+    policy: FxCarryPolicyConfig,
+    snapshot: Mapping[str, object],
+) -> dict[str, Decimal]:
+    """Return long-only FXA/FXC/FXY/FXB/UUP weights from point-in-time FX data."""
+
+    if snapshot.get("complete") is not True or snapshot.get("fresh") is not True:
+        raise ValueError("FX snapshot is incomplete or stale")
+    usd_rates = _fx_history(snapshot, "rate_history", "USD")
+    if not usd_rates:
+        raise ValueError("FX snapshot has no USD rate history")
+
+    required = max(
+        policy.lookback_months + 1,
+        policy.risk_lookback_months + 1,
+        policy.value_lookback_months,
+    )
+    scores: dict[str, Decimal] = {}
+    vols: dict[str, Decimal] = {}
+    for currency in _FX_SYMBOLS:
+        spots = _fx_history(snapshot, "spot_history", currency)
+        rates = _fx_history(snapshot, "rate_history", currency)
+        if min(len(spots), len(rates)) < required:
+            raise ValueError("FX snapshot has insufficient signal history")
+        if any(value <= 0 for value in spots):
+            raise ValueError("FX spot history must be positive")
+        carry_months = min(policy.lookback_months, len(rates), len(usd_rates))
+        carry = sum(
+            local - usd
+            for local, usd in zip(
+                rates[-carry_months:], usd_rates[-carry_months:], strict=True
+            )
+        ) / Decimal(carry_months * 100)
+        momentum = spots[-1] / spots[-1 - policy.lookback_months] - Decimal("1")
+        value_mean = sum(spots[-policy.value_lookback_months :]) / Decimal(
+            policy.value_lookback_months
+        )
+        value = value_mean / spots[-1] - Decimal("1")
+        vol = _fx_volatility(spots, policy.risk_lookback_months)
+        vols[currency] = max(vol, Decimal("0.000001"))
+        if policy.family == "pure_carry":
+            score = carry
+        elif policy.family == "carry_momentum":
+            score = carry + momentum
+        elif policy.family == "carry_value":
+            score = carry + value / Decimal("3")
+        else:
+            score = carry + momentum / Decimal("2")
+        if score > 0:
+            scores[currency] = score
+
+    if policy.family == "defensive_carry":
+        spot_histories = {
+            currency: _fx_history(snapshot, "spot_history", currency)
+            for currency in _FX_SYMBOLS
+        }
+        current_cross_vol = sum(vols.values()) / Decimal(len(vols))
+        cross_vol_history: list[Decimal] = []
+        max_history = min(len(values) for values in spot_histories.values())
+        start = max(policy.risk_lookback_months + 1, max_history - 60)
+        for end in range(start, max_history + 1):
+            cross_vol_history.append(
+                sum(
+                    _fx_volatility(values[:end], policy.risk_lookback_months)
+                    for values in spot_histories.values()
+                )
+                / Decimal(len(spot_histories))
+            )
+        ordered = sorted(cross_vol_history)
+        median_vol = ordered[len(ordered) // 2] if ordered else current_cross_vol
+        if current_cross_vol > median_vol:
+            return _all_usd_fx_weights()
+
+    selected = sorted(scores, key=lambda currency: (-scores[currency], currency))[: policy.top_n]
+    if not selected:
+        return _all_usd_fx_weights()
+    inverse_vol = {currency: Decimal("1") / vols[currency] for currency in selected}
+    denominator = sum(inverse_vol.values())
+    foreign = {
+        _FX_SYMBOLS[currency]: policy.max_foreign_weight * inverse_vol[currency] / denominator
+        for currency in selected
+    }
+    output = {symbol: Decimal("0") for symbol in (*_FX_SYMBOLS.values(), "UUP")}
+    output.update(foreign)
+    output["UUP"] = Decimal("1") - sum(foreign.values())
+    return _fix_residual(output)
 
 
 def _base_weights(

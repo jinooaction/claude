@@ -11,6 +11,7 @@ def test_workflow_runs_complete_batch_without_broker_or_order_command() -> None:
     assert "scripts/macro_strategy_factory_probe.py" in text
     assert "scripts/treasury_carry_factory_probe.py" in text
     assert "scripts/credit_spread_factory_probe.py" in text
+    assert "scripts/fx_carry_factory_probe.py" in text
     assert "scripts/edge_gate_calibration_probe.py" in text
     assert "collect-public-data" in text
     assert "CPIAUCNS.csv" in text
@@ -20,6 +21,8 @@ def test_workflow_runs_complete_batch_without_broker_or_order_command() -> None:
     assert "DGS30.csv" in text
     assert "HQMCB10YR.csv" in text
     assert "HQMCB20YR.csv" in text
+    assert "DEXUSAL.csv" in text
+    assert "IRSTCI01USM156N.csv" in text
     assert "complete_trial_count" in text
     assert "trial_ledger.jsonl" in text
     assert "next_search.json" in text
@@ -31,12 +34,13 @@ def test_workflow_runs_complete_batch_without_broker_or_order_command() -> None:
     assert "macro_strategy_factory.json" in text
     assert "treasury_carry_factory.json" in text
     assert "credit_spread_factory.json" in text
-    assert "data_fingerprint: $root.credit_data_fingerprint" in text
+    assert "fx_carry_factory.json" in text
+    assert "data_fingerprint: $root.fx_data_fingerprint" in text
     assert "audit_catalog.jsonl" in text
     assert "wc -l < /tmp/audit_catalog.jsonl" in text
     assert 'global_audit_trial_count\' /tmp/treasury_carry_factory.json)" = "576' in text
-    assert 'global_audit_trial_count\' /tmp/strategy_factory.json)" = "640' in text
-    assert 'multiplicity_trial_count\' /tmp/strategy_factory.json)" = "64' in text
+    assert 'global_audit_trial_count\' /tmp/strategy_factory.json)" = "656' in text
+    assert 'multiplicity_trial_count\' /tmp/strategy_factory.json)" = "16' in text
     assert 'verdict\' /tmp/edge_gate_calibration.json)" = "CALIBRATED' in text
     assert "rebalance-once" not in text
     assert "KIS_" not in text

@@ -24,9 +24,11 @@ DEVELOPMENT_OBSERVATIONS = 204
 HOLDOUT_OBSERVATIONS = 235
 CANDIDATE_CORRELATION = 0.80
 PLANTED_SHARPE_ANNUAL = 0.60
+POWER_SHARPES_ANNUAL = (0.20, 0.30, 0.40, 0.50, 0.60, 0.80)
 DEVELOPMENT_DSR_DIAGNOSTIC_MIN = 0.95
 PBO_DIAGNOSTIC_MAX = 0.10
 HOLDOUT_PSR_MIN = 0.95
+PAPER_PSR_MIN = 0.80
 FALSE_ACCEPTANCE_MAX = 0.05
 DETECTION_MIN = 0.80
 
@@ -35,11 +37,16 @@ def _segments(returns: np.ndarray, count: int = 10) -> list[float]:
     return [annualized_sharpe(segment) for segment in np.array_split(returns, count)]
 
 
-def _simulate_once(rng: np.random.Generator, planted_sharpe: float) -> dict[str, Any]:
+def _simulate_once(
+    rng: np.random.Generator,
+    planted_sharpe: float,
+    *,
+    family_size: int = FAMILY_SIZE,
+) -> dict[str, Any]:
     common_development = rng.normal(size=DEVELOPMENT_OBSERVATIONS)
     common_holdout = rng.normal(size=HOLDOUT_OBSERVATIONS)
-    idiosyncratic_development = rng.normal(size=(FAMILY_SIZE, DEVELOPMENT_OBSERVATIONS))
-    idiosyncratic_holdout = rng.normal(size=(FAMILY_SIZE, HOLDOUT_OBSERVATIONS))
+    idiosyncratic_development = rng.normal(size=(family_size, DEVELOPMENT_OBSERVATIONS))
+    idiosyncratic_holdout = rng.normal(size=(family_size, HOLDOUT_OBSERVATIONS))
     common_weight = math.sqrt(CANDIDATE_CORRELATION)
     residual_weight = math.sqrt(1.0 - CANDIDATE_CORRELATION)
     development = common_weight * common_development + residual_weight * idiosyncratic_development
@@ -81,15 +88,69 @@ def _simulate_once(rng: np.random.Generator, planted_sharpe: float) -> dict[str,
     )
     return {
         "revised_passed": revised_passed,
+        "paper_admitted": holdout_psr is not None and holdout_psr >= PAPER_PSR_MIN,
         "legacy_passed": legacy_passed,
         "dsr": None if development_dsr is None else float(development_dsr),
         "pbo": None if development_pbo is None else float(development_pbo),
         "winner_is_planted": winner_index == 0 if planted_sharpe > 0.0 else None,
+        "holdout_psr": None if holdout_psr is None else float(holdout_psr),
     }
 
 
 def _rate(rows: list[dict[str, Any]], key: str) -> float:
     return round(sum(bool(row[key]) for row in rows) / len(rows), 6)
+
+
+def _power_seed(seed: int, family_size: int, planted_sharpe: float) -> int:
+    if planted_sharpe == PLANTED_SHARPE_ANNUAL:
+        return seed + 1_000_000
+    return seed + 2_000_000 + family_size * 10_000 + int(planted_sharpe * 10_000)
+
+
+def _family_calibration(
+    *, seed: int, repetitions: int, family_size: int
+) -> tuple[dict[str, Any], list[dict[str, Any]], dict[float, list[dict[str, Any]]]]:
+    null_rng = np.random.default_rng(seed)
+    null_rows = [
+        _simulate_once(null_rng, 0.0, family_size=family_size) for _ in range(repetitions)
+    ]
+    power_rows: dict[float, list[dict[str, Any]]] = {}
+    power_curve: dict[str, Any] = {}
+    for planted_sharpe in POWER_SHARPES_ANNUAL:
+        rng = np.random.default_rng(_power_seed(seed, family_size, planted_sharpe))
+        rows = [
+            _simulate_once(rng, planted_sharpe, family_size=family_size)
+            for _ in range(repetitions)
+        ]
+        power_rows[planted_sharpe] = rows
+        power_curve[f"{planted_sharpe:.2f}"] = {
+            "live_detection_rate": _rate(rows, "revised_passed"),
+            "paper_admission_rate": _rate(rows, "paper_admitted"),
+            "planted_candidate_selection_rate": _rate(rows, "winner_is_planted"),
+        }
+    false_acceptance = _rate(null_rows, "revised_passed")
+    target_detection = power_curve[f"{PLANTED_SHARPE_ANNUAL:.2f}"]["live_detection_rate"]
+    minimum_detectable = next(
+        (
+            key
+            for key, value in power_curve.items()
+            if value["live_detection_rate"] >= DETECTION_MIN
+        ),
+        None,
+    )
+    report = {
+        "family_size": family_size,
+        "null_false_acceptance_rate": false_acceptance,
+        "null_paper_admission_rate": _rate(null_rows, "paper_admitted"),
+        "target_planted_sharpe_annual": PLANTED_SHARPE_ANNUAL,
+        "target_live_detection_rate": target_detection,
+        "minimum_80pct_detectable_sharpe": minimum_detectable,
+        "live_calibrated": (
+            false_acceptance <= FALSE_ACCEPTANCE_MAX and target_detection >= DETECTION_MIN
+        ),
+        "power_curve": power_curve,
+    }
+    return report, null_rows, power_rows
 
 
 def run_edge_gate_calibration(
@@ -101,16 +162,22 @@ def run_edge_gate_calibration(
 ) -> dict[str, Any]:
     if repetitions < 200:
         raise ValueError("calibration requires at least 200 repetitions")
-    null_rng = np.random.default_rng(seed)
-    edge_rng = np.random.default_rng(seed + 1_000_000)
-    null_rows = [_simulate_once(null_rng, 0.0) for _ in range(repetitions)]
-    edge_rows = [_simulate_once(edge_rng, PLANTED_SHARPE_ANNUAL) for _ in range(repetitions)]
+    family_calibrations: dict[str, Any] = {}
+    raw_rows: dict[int, tuple[list[dict[str, Any]], dict[float, list[dict[str, Any]]]]] = {}
+    for family_size in (16, 64):
+        family_report, null, power = _family_calibration(
+            seed=seed, repetitions=repetitions, family_size=family_size
+        )
+        family_calibrations[str(family_size)] = family_report
+        raw_rows[family_size] = (null, power)
+    null_rows, family_64_power = raw_rows[64]
+    edge_rows = family_64_power[PLANTED_SHARPE_ANNUAL]
     revised_false_acceptance = _rate(null_rows, "revised_passed")
     revised_detection = _rate(edge_rows, "revised_passed")
     legacy_false_acceptance = _rate(null_rows, "legacy_passed")
     legacy_detection = _rate(edge_rows, "legacy_passed")
-    calibrated = (
-        revised_false_acceptance <= FALSE_ACCEPTANCE_MAX and revised_detection >= DETECTION_MIN
+    calibrated = all(
+        report["live_calibrated"] is True for report in family_calibrations.values()
     )
     return {
         "schema_version": "1.0",
@@ -126,11 +193,14 @@ def run_edge_gate_calibration(
             "holdout_observations": HOLDOUT_OBSERVATIONS,
             "candidate_correlation": CANDIDATE_CORRELATION,
             "planted_sharpe_annual": PLANTED_SHARPE_ANNUAL,
+            "power_sharpes_annual": list(POWER_SHARPES_ANNUAL),
+            "calibrated_family_sizes": [16, 64],
         },
         "thresholds": {
             "development_dsr_diagnostic_min": DEVELOPMENT_DSR_DIAGNOSTIC_MIN,
             "development_pbo_diagnostic_max": PBO_DIAGNOSTIC_MAX,
             "holdout_psr_min": HOLDOUT_PSR_MIN,
+            "paper_psr_min": PAPER_PSR_MIN,
         },
         "required": {
             "false_acceptance_max": FALSE_ACCEPTANCE_MAX,
@@ -154,6 +224,7 @@ def run_edge_gate_calibration(
             "detection_rate": legacy_detection,
             "description": "raw 576-trial DSR 0.95 plus PBO 0.10 plus holdout PSR 0.95",
         },
+        "family_calibrations": family_calibrations,
         "safety": ["simulation only", "no broker API", "no orders", "no capital change"],
     }
 
@@ -164,6 +235,7 @@ __all__ = [
     "DEVELOPMENT_DSR_DIAGNOSTIC_MIN",
     "GATE_VERSION",
     "HOLDOUT_PSR_MIN",
+    "PAPER_PSR_MIN",
     "PBO_DIAGNOSTIC_MAX",
     "run_edge_gate_calibration",
 ]
