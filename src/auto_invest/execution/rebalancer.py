@@ -55,6 +55,7 @@ from auto_invest.strategy.factors import composite_scores
 from auto_invest.strategy.rebalance import (
     PlannedOrder,
     credit_spread_target_weights,
+    fx_carry_target_weights,
     macro_target_weights,
     rebalance_plan,
     target_weights,
@@ -256,6 +257,7 @@ async def execute_rebalance(
     macro_snapshot: Mapping[str, object] | None = None,
     treasury_snapshot: Mapping[str, object] | None = None,
     credit_snapshot: Mapping[str, object] | None = None,
+    fx_snapshot: Mapping[str, object] | None = None,
 ) -> RebalanceOutcome:
     """Compute the target portfolio and route the rebalance via the live/paper router.
 
@@ -313,6 +315,13 @@ async def execute_rebalance(
         signal_tw = credit_spread_target_weights(
             policy=config.credit_spread_policy,
             snapshot=credit_snapshot,
+        )
+    if config.fx_carry_policy is not None:
+        if fx_snapshot is None:
+            raise ValueError("FX carry policy requires fresh FX evidence")
+        signal_tw = fx_carry_target_weights(
+            policy=config.fx_carry_policy,
+            snapshot=fx_snapshot,
         )
 
     symbol_map = {

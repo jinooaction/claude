@@ -153,6 +153,15 @@ def strategy_fingerprint(cfg: PortfolioRebalanceConfig) -> tuple:
                 separators=(",", ":"),
             ),
         )
+    if cfg.fx_carry_policy is not None:
+        return base + (
+            "fx_carry",
+            json.dumps(
+                cfg.fx_carry_policy.model_dump(mode="json"),
+                sort_keys=True,
+                separators=(",", ":"),
+            ),
+        )
     return base
 
 

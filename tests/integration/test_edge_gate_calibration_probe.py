@@ -32,3 +32,5 @@ def test_calibration_probe_writes_promotable_machine_evidence(tmp_path) -> None:
     assert payload["verdict"] == "CALIBRATED"
     assert payload["revised"]["false_acceptance_rate"] <= 0.05
     assert payload["revised"]["detection_rate"] >= 0.80
+    assert payload["family_calibrations"]["16"]["live_calibrated"] is True
+    assert payload["family_calibrations"]["64"]["live_calibrated"] is True

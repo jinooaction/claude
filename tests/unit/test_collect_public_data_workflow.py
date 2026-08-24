@@ -104,6 +104,15 @@ def test_config_parses_and_cross_checks_reference_collected_ids() -> None:
         "HQMCB20YR",
         "CPIAUCNS",
         "SAHMREALTIME",
+        "DEXUSAL",
+        "DEXCAUS",
+        "DEXJPUS",
+        "DEXUSUK",
+        "IRSTCI01AUM156N",
+        "IRSTCI01CAM156N",
+        "IRSTCI01JPM156N",
+        "IRSTCI01GBM156N",
+        "IRSTCI01USM156N",
     ]
     assert cfg["fred"]["user_agent"] == "httpx-default"
     # 수집 시 레지스트리에 올라갈 "provider:id" 키를 설정에서 재구성한다.
@@ -180,6 +189,21 @@ def test_deep_macro_series_have_individual_validation_and_cpi_cross_check() -> N
         cc["a"] == "fred:CPIAUCNS" and cc["b"] == "dbnomics:BLS/cu/CUUR0000SA0"
         for cc in cfg["cross_checks"]
     )
+
+
+def test_fx_series_have_preregistered_coverage_and_freshness() -> None:
+    cfg = tomllib.loads(_CONFIG.read_text(encoding="utf-8"))
+    settings = cfg["fred"]["series_settings"]
+    for series_id in ("DEXUSAL", "DEXCAUS", "DEXJPUS", "DEXUSUK"):
+        assert settings[series_id] == {"min_rows": 14000, "max_staleness_days": 14}
+    for series_id in (
+        "IRSTCI01AUM156N",
+        "IRSTCI01CAM156N",
+        "IRSTCI01JPM156N",
+        "IRSTCI01GBM156N",
+        "IRSTCI01USM156N",
+    ):
+        assert settings[series_id] == {"min_rows": 400, "max_staleness_days": 100}
 
 
 def test_collect_step_has_own_timeout_below_job_limit() -> None:
