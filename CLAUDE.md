@@ -215,14 +215,14 @@ After a successful merge, the session SHOULD:
 ---
 
 <!-- SPECKIT START -->
-**Active feature**: `specs/156-commodity-term-structure/plan.md`
+**Most recently completed feature**: `specs/156-commodity-term-structure/plan.md`
 
 Active feature pointer: `.specify/feature.json` is the maintained pointer for
 the current worktree. Do not trust prose in this block as the source of truth
 for in-flight work; use the `git_ground_truth` start hook, latest `HANDOFF.md`,
 and `/sync` against `jinooaction/claude` `Codex/*` branches before continuing.
 
-현재 활성 포인터: `specs/156-commodity-term-structure/plan.md` — 원자재 기간구조 후보 16개를 사전등록하고 즉시 생산 백테스트한다. 이 기능은 자본·주문·허용목록·헌법·커널을 바꾸지 않는다.
+최근 완료 포인터: `specs/156-commodity-term-structure/plan.md` — 원자재 기간구조 후보 16개를 생산 백테스트해 `NO_FACTORY_EDGE`로 판정했다. 현재 활성 기능은 없으며 다음 우선순위는 독립 원자재 재고·포지셔닝 전략군이다. 자본·주문·허용목록·헌법·커널은 바뀌지 않았다.
 
 머지 완료(베이스라인): spec 004 (LLM 판단 지점), 005 (자율 튜너), 006 (배포 자동화), 007 (하드닝 카나리), 008 (백테스트), 009 (paper-run), 010 (자동 룰 설계자), 011 (라이브 성과 측정). **주의: 일부 tasks.md 가 stale 0% 로 표시된 적 있음 — 코드/테스트를 믿을 것.**
 
