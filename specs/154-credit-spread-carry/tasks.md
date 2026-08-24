@@ -51,9 +51,9 @@
 - [x] T026 Wire data, prior evidence, exact counts, ledger, and sidecar in `.github/workflows/autonomous-strategy-factory.yml`.
 - [x] T027 [P] Add probe and workflow contract tests in `tests/integration/`.
 - [x] T028 Run focused tests, full pytest, ruff, diff, strict harness, HANDOFF facts, and PR quality gate.
-- [ ] T029 Commit, push, open a grade-4 PR, and auto-merge after green checks.
-- [ ] T030 Verify deployment, production public data, 640-trial decision, and KIS no-order smoke.
-- [ ] T031 Record production result, account truth, residual risk, and next family in `HANDOFF.md` and a detailed handoff.
+- [x] T029 Commit, push, open a grade-4 PR, and auto-merge after green checks.
+- [x] T030 Verify deployment, production public data, 640-trial decision, and KIS no-order smoke.
+- [x] T031 Record production result, account truth, residual risk, and next family in `HANDOFF.md` and a detailed handoff.
 
 ## Dependencies
 
