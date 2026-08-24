@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-08-24T23:26:40.530359Z)
+# 완료 후보 소비 장부 (as of 2026-08-24T23:51:23.027500Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -9,7 +9,7 @@
 |------|-----|
 | overall_status | OK |
 | released_count | 60 |
-| scanned_specs | 104 |
+| scanned_specs | 105 |
 
 ## 완료 후보
 
@@ -127,7 +127,6 @@
 | 140-heldout-exploration-canary | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 141-lot-aware-execution-proxy | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 153-edge-gate-calibration | 체크박스 작업이 없거나 완료되지 않았습니다. |
-| 157-commodity-positioning-gate-controls | 체크박스 작업이 없거나 완료되지 않았습니다. |
 
 ## 안전 경계
 
@@ -144,7 +143,7 @@
 
 ```json
 {
-  "commit": "ebbefee21eae5a79dd9491f6885c9f307ac53dc6",
+  "commit": "89644b0bf4ae80d6fc2f3a06685cdcda247f0ee9",
   "overall_status": "OK",
   "released_work": [
     {
@@ -803,7 +802,8 @@
     "152-treasury-carry-factory",
     "154-credit-spread-carry",
     "155-fx-carry-gate-power",
-    "156-commodity-term-structure"
+    "156-commodity-term-structure",
+    "157-commodity-positioning-gate-controls"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -994,12 +994,8 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "153-edge-gate-calibration"
-    },
-    {
-      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "157-commodity-positioning-gate-controls"
     }
   ],
-  "timestamp_utc": "2026-08-24T23:26:40.530359Z"
+  "timestamp_utc": "2026-08-24T23:51:23.027500Z"
 }
 ```
