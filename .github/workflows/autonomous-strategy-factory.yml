@@ -1,7 +1,7 @@
-name: Autonomous strategy factory (commodity term-structure validation)
+name: Autonomous strategy factory (commodity positioning validation)
 
-# 스펙 156. 브로커와 완전히 분리된 연구 워크플로다. 기존 656회는 감사 장부에
-# 보존하고, 현재 원자재 기간구조 16개만 같은 통계 가족으로 시점 기준 자료에서 검증한다.
+# 스펙 157. 브로커와 완전히 분리된 연구 워크플로다. 현실 양성 대조군으로 관문을
+# 감사하고, 기존 672회와 현재 원자재 재고·포지셔닝 16개를 시점 기준 자료에서 검증한다.
 # 이 워크플로 자체는 주문, 자본 변경, 라이브 설정 변경을 하지 않는다.
 
 on:
@@ -18,6 +18,8 @@ on:
       - 'src/auto_invest/analytics/credit_spread_factory.py'
       - 'src/auto_invest/analytics/fx_carry_factory.py'
       - 'src/auto_invest/analytics/commodity_term_structure_factory.py'
+      - 'src/auto_invest/analytics/commodity_positioning_factory.py'
+      - 'src/auto_invest/analytics/real_world_gate_controls.py'
       - 'src/auto_invest/analytics/edge_gate_calibration.py'
       - 'src/auto_invest/market_data/public_data.py'
       - 'src/auto_invest/market_data/macro_regime.py'
@@ -27,6 +29,7 @@ on:
       - 'scripts/credit_spread_factory_probe.py'
       - 'scripts/fx_carry_factory_probe.py'
       - 'scripts/commodity_term_structure_factory_probe.py'
+      - 'scripts/commodity_positioning_factory_probe.py'
       - 'scripts/edge_gate_calibration_probe.py'
       - 'deploy/public-data.toml'
       - '.github/workflows/autonomous-strategy-factory.yml'
@@ -165,10 +168,27 @@ jobs:
             --prior-factory-json /tmp/fx_carry_factory.json \
             --calibration-json /tmp/edge_gate_calibration.json \
             --timestamp-utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --json-out /tmp/commodity_term_structure_factory.json \
+            --summary-out /tmp/TERM_STRUCTURE_LAST_RUN.md
+          test "$(jq -r '.complete_trial_count' /tmp/commodity_term_structure_factory.json)" = "16"
+          test "$(jq -r '.global_audit_trial_count' /tmp/commodity_term_structure_factory.json)" = "672"
+          test "$(jq -r '.multiplicity_trial_count' /tmp/commodity_term_structure_factory.json)" = "16"
+
+      - name: Audit real controls and run the 16-trial commodity positioning batch
+        run: |
+          set -euo pipefail
+          uv run python scripts/commodity_positioning_factory_probe.py \
+            --code-commit "${GITHUB_SHA}" \
+            --macro-data-dir /tmp/public-data \
+            --prior-factory-json /tmp/commodity_term_structure_factory.json \
+            --calibration-json /tmp/edge_gate_calibration.json \
+            --timestamp-utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --controls-json-out /tmp/real_world_gate_controls.json \
             --json-out /tmp/strategy_factory.json \
             --summary-out /tmp/LAST_RUN.md
+          test "$(jq -r '.promotion_control_passed' /tmp/real_world_gate_controls.json)" = "true"
           test "$(jq -r '.complete_trial_count' /tmp/strategy_factory.json)" = "16"
-          test "$(jq -r '.global_audit_trial_count' /tmp/strategy_factory.json)" = "672"
+          test "$(jq -r '.global_audit_trial_count' /tmp/strategy_factory.json)" = "688"
           test "$(jq -r '.multiplicity_trial_count' /tmp/strategy_factory.json)" = "16"
           cat /tmp/LAST_RUN.md
 
@@ -185,15 +205,15 @@ jobs:
             cp /tmp/trial_ledger_prior.jsonl /tmp/trial_ledger.jsonl
             jq -c '. as $root | .trial_records[] | . + {
               batch_id: $root.batch_id,
-              data_fingerprint: $root.commodity_data_fingerprint,
+              data_fingerprint: $root.positioning_data_fingerprint,
               code_commit: $root.code_commit,
               timestamp_utc: $root.timestamp_utc
             }' /tmp/strategy_factory.json >> /tmp/trial_ledger.jsonl
             echo "duplicate=false" >> "$GITHUB_OUTPUT"
           fi
           jq -c '.audit_records[]' /tmp/strategy_factory.json > /tmp/audit_catalog.jsonl
-          test "$(wc -l < /tmp/audit_catalog.jsonl | tr -d ' ')" = "672"
-          test "$(jq -r '.strategy_fingerprint' /tmp/audit_catalog.jsonl | sort -u | wc -l | tr -d ' ')" = "672"
+          test "$(wc -l < /tmp/audit_catalog.jsonl | tr -d ' ')" = "688"
+          test "$(jq -r '.strategy_fingerprint' /tmp/audit_catalog.jsonl | sort -u | wc -l | tr -d ' ')" = "688"
           jq '{
             schema_version,
             batch_id,
@@ -226,8 +246,12 @@ jobs:
             2>/dev/null || echo '{}' > "${tmpdir}/credit_spread_factory.json"
           cp /tmp/fx_carry_factory.json "${tmpdir}/fx_carry_factory.json" \
             2>/dev/null || echo '{}' > "${tmpdir}/fx_carry_factory.json"
-          cp /tmp/strategy_factory.json "${tmpdir}/commodity_term_structure_factory.json" \
+          cp /tmp/commodity_term_structure_factory.json "${tmpdir}/commodity_term_structure_factory.json" \
             2>/dev/null || echo '{}' > "${tmpdir}/commodity_term_structure_factory.json"
+          cp /tmp/strategy_factory.json "${tmpdir}/commodity_positioning_factory.json" \
+            2>/dev/null || echo '{}' > "${tmpdir}/commodity_positioning_factory.json"
+          cp /tmp/real_world_gate_controls.json "${tmpdir}/real_world_gate_controls.json" \
+            2>/dev/null || echo '{}' > "${tmpdir}/real_world_gate_controls.json"
           cp /tmp/edge_gate_calibration.json "${tmpdir}/edge_gate_calibration.json" \
             2>/dev/null || echo '{}' > "${tmpdir}/edge_gate_calibration.json"
           cp /tmp/trial_ledger.jsonl "${tmpdir}/trial_ledger.jsonl" \
@@ -262,6 +286,8 @@ jobs:
             credit_spread_factory.json \
             fx_carry_factory.json \
             commodity_term_structure_factory.json \
+            commodity_positioning_factory.json \
+            real_world_gate_controls.json \
             edge_gate_calibration.json \
             trial_ledger.jsonl audit_catalog.jsonl next_search.json
           git commit -q -m "strategy-factory run ${GITHUB_RUN_ID} @ ${GITHUB_SHA:0:7}"
