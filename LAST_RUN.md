@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-08-25T06:19:43.982054Z)
+# 완료 후보 소비 장부 (as of 2026-08-25T06:26:05.488739Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -9,7 +9,7 @@
 |------|-----|
 | overall_status | OK |
 | released_count | 60 |
-| scanned_specs | 106 |
+| scanned_specs | 107 |
 
 ## 완료 후보
 
@@ -129,7 +129,6 @@
 | 153-edge-gate-calibration | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 159-paired-forward-edge-gate | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 160-forward-paper-ledger-integrity | 체크박스 작업이 없거나 완료되지 않았습니다. |
-| 161-research-canary-evidence-parity | 체크박스 작업이 없거나 완료되지 않았습니다. |
 
 ## 안전 경계
 
@@ -146,7 +145,7 @@
 
 ```json
 {
-  "commit": "194b7edb0c63a7931db85ff6f78b5ee544f767e5",
+  "commit": "db31b3d1d029554eaadaa07cee0917affe2d25be",
   "overall_status": "OK",
   "released_work": [
     {
@@ -807,7 +806,8 @@
     "155-fx-carry-gate-power",
     "156-commodity-term-structure",
     "157-commodity-positioning-gate-controls",
-    "158-full-gate-supply-demand"
+    "158-full-gate-supply-demand",
+    "161-research-canary-evidence-parity"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -1006,12 +1006,8 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "160-forward-paper-ledger-integrity"
-    },
-    {
-      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "161-research-canary-evidence-parity"
     }
   ],
-  "timestamp_utc": "2026-08-25T06:19:43.982054Z"
+  "timestamp_utc": "2026-08-25T06:26:05.488739Z"
 }
 ```
