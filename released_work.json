@@ -1,5 +1,5 @@
 {
-  "commit": "388ba3200ff0f315df5c0a9cb6a1244e27b87e4a",
+  "commit": "534b9cd4bea2b0b801f4af8551c0fc5127cddb39",
   "overall_status": "OK",
   "released_work": [
     {
@@ -543,7 +543,7 @@
       "status": "released"
     }
   ],
-  "run_id": "32899168987",
+  "run_id": "32910288207",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -863,7 +863,11 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "160-forward-paper-ledger-integrity"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "165-options-selection-objective-repair"
     }
   ],
-  "timestamp_utc": "2026-08-25T21:06:30.687614Z"
+  "timestamp_utc": "2026-08-25T23:20:14.974775Z"
 }
