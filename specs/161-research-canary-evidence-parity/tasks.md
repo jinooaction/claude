@@ -29,7 +29,7 @@
 - [x] T013 Run focused tests, full pytest, ruff, YAML, diff check, strict harness, and handoff facts
 - [x] T014 Validate the Grade 4 PR body, commit with the safety-perimeter marker, push, open PR, and merge
 - [x] T015 Confirm deployment and rerun factory, autoarm, live-entry, money, capital, KIS, and reconciliation evidence
-- [ ] T016 Record production results and refresh HANDOFF through a follow-up PR
+- [x] T016 Record production results and refresh HANDOFF through a follow-up PR
 
 ## Dependencies
 
