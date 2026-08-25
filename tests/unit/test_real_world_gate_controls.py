@@ -8,9 +8,11 @@ from io import BytesIO
 import pytest
 
 from auto_invest.analytics.real_world_gate_controls import (
+    FULL_GATE_CONTROLS_VALID,
     REAL_WORLD_CONTROLS_VALID,
     parse_aqr_tsmom_monthly,
     parse_fama_french_monthly,
+    run_full_gate_control_audit,
     run_real_world_gate_audit,
 )
 
@@ -141,3 +143,45 @@ def test_malformed_or_stale_controls_fail_closed() -> None:
         code_commit="abc123",
     )
     assert payload["promotion_control_passed"] is False
+
+
+def test_complete_diversifier_gate_passes_real_control_and_rejects_null() -> None:
+    months = [f"{month:%Y-%m}" for month in _months()]
+    values = _positive_returns()
+    cash = [1.002] * len(values)
+    incumbent = [1.004 + 0.03 * math.sin(index * 0.7) for index in range(len(values))]
+
+    payload = run_full_gate_control_audit(
+        dict(zip(months, values, strict=True)),
+        months=months,
+        cash_factors=cash,
+        incumbent_factors=incumbent,
+        code_commit="abc123",
+        timestamp_utc="2027-01-15T00:00:00Z",
+    )
+
+    assert payload["verdict"] == FULL_GATE_CONTROLS_VALID
+    assert payload["conclusion"] == "FULL_GATE_EMPIRICALLY_PASSABLE"
+    assert payload["promotion_control_passed"] is True
+    assert payload["positive_control"]["passed"] is True
+    assert payload["null_control"]["passed"] is False
+    assert {gate["gate_id"] for gate in payload["positive_control"]["gates"]} == {
+        "holdout_excess_psr",
+        "holdout_excess_50bps_positive",
+        "incumbent_correlation",
+        "blend_sharpe_improvement",
+        "blend_drawdown_non_worsening",
+    }
+    assert payload["isolation"]["candidate_trial_count_contribution"] == 0
+
+
+def test_complete_gate_control_rejects_alignment_or_commit_mismatch() -> None:
+    months = [f"{month:%Y-%m}" for month in _months()]
+    values = dict(zip(months, _positive_returns(), strict=True))
+    with pytest.raises(ValueError, match="align"):
+        run_full_gate_control_audit(
+            values,
+            months=months,
+            cash_factors=[1.0] * (len(months) - 1),
+            incumbent_factors=[1.0] * len(months),
+        )

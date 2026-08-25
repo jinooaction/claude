@@ -215,14 +215,14 @@ After a successful merge, the session SHOULD:
 ---
 
 <!-- SPECKIT START -->
-**Most recently completed feature**: `specs/157-commodity-positioning-gate-controls/plan.md`
+**Active feature**: `specs/158-full-gate-supply-demand/plan.md`
 
 Active feature pointer: `.specify/feature.json` is the maintained pointer for
 the current worktree. Do not trust prose in this block as the source of truth
 for in-flight work; use the `git_ground_truth` start hook, latest `HANDOFF.md`,
 and `/sync` against `jinooaction/claude` `Codex/*` branches before continuing.
 
-최근 완료 포인터: `specs/157-commodity-positioning-gate-controls/plan.md` — 현실 양성 대조군은 PSR 통계선을 통과하고 평균 제거 대조군은 탈락했다. CFTC·EIA 원자재 후보 16개는 생산 `NO_FACTORY_EDGE`이며 자본·주문·허용목록·헌법·커널은 바뀌지 않았다. 현재 활성 기능은 없다.
+활성 포인터: `specs/158-full-gate-supply-demand/plan.md` — 전체 다섯 승격 관문을 현실 양성·무효 대조군으로 감사하고 EIA 공급·수요 후보 16개를 704개 고유 감사 장부로 검증한다. 자본·주문·허용목록·헌법·커널은 바꾸지 않는다.
 
 머지 완료(베이스라인): spec 004 (LLM 판단 지점), 005 (자율 튜너), 006 (배포 자동화), 007 (하드닝 카나리), 008 (백테스트), 009 (paper-run), 010 (자동 룰 설계자), 011 (라이브 성과 측정). **주의: 일부 tasks.md 가 stale 0% 로 표시된 적 있음 — 코드/테스트를 믿을 것.**
 

@@ -15,6 +15,8 @@ from xml.etree import ElementTree
 
 from auto_invest.analytics.backtest_overfitting import annualized_sharpe, probabilistic_sharpe
 from auto_invest.analytics.edge_gate_calibration import GATE_VERSION, HOLDOUT_PSR_MIN
+from auto_invest.analytics.multi_asset_trend import correlation
+from auto_invest.analytics.risk_managed_beta import summarize
 
 FAMA_FRENCH_URL = (
     "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp/"
@@ -27,7 +29,10 @@ AQR_TSMOM_URL = (
 CONTROL_START_MONTH = "2007-01"
 REAL_WORLD_CONTROLS_VALID = "REAL_WORLD_CONTROLS_VALID"
 REAL_WORLD_CONTROLS_FAILED = "REAL_WORLD_CONTROLS_FAILED"
+FULL_GATE_CONTROLS_VALID = "FULL_GATE_CONTROLS_VALID"
+FULL_GATE_CONTROLS_FAILED = "FULL_GATE_CONTROLS_FAILED"
 MIN_CONTROL_OBSERVATIONS = 180
+FULL_GATE_COST_BPS = 50
 
 
 def _digest(raw: bytes) -> str:
@@ -208,12 +213,176 @@ def run_real_world_gate_audit(
     }
 
 
+def _annualized_relative_return(candidate: list[float], cash: list[float]) -> float:
+    relative = math.prod(left / right for left, right in zip(candidate, cash, strict=True))
+    return relative ** (12.0 / len(candidate)) - 1.0
+
+
+def _complete_diversifier_control(
+    control_id: str,
+    excess_returns: list[float],
+    cash_factors: list[float],
+    incumbent_factors: list[float],
+    *,
+    cost_bps: int,
+) -> dict[str, Any]:
+    monthly_haircut = cost_bps / 10_000.0 / 12.0
+    candidate = [
+        cash * (1.0 + excess - monthly_haircut)
+        for cash, excess in zip(cash_factors, excess_returns, strict=True)
+    ]
+    candidate_excess = [
+        factor / cash - 1.0 for factor, cash in zip(candidate, cash_factors, strict=True)
+    ]
+    incumbent_stats = summarize(incumbent_factors)
+    blend = [
+        0.8 * incumbent + 0.2 * challenger
+        for incumbent, challenger in zip(incumbent_factors, candidate, strict=True)
+    ]
+    blend_stats = summarize(blend)
+    psr = probabilistic_sharpe(candidate_excess)
+    annual_excess = _annualized_relative_return(candidate, cash_factors)
+    incumbent_correlation = correlation(incumbent_factors, candidate)
+    if incumbent_correlation is None:
+        incumbent_correlation = 1.0
+    blend_improvement = blend_stats.sharpe - incumbent_stats.sharpe
+    raw_gates = (
+        (
+            "holdout_excess_psr",
+            psr is not None and float(psr) >= HOLDOUT_PSR_MIN,
+            psr,
+            HOLDOUT_PSR_MIN,
+        ),
+        ("holdout_excess_50bps_positive", annual_excess > 0.0, annual_excess, "> 0"),
+        ("incumbent_correlation", incumbent_correlation < 0.80, incumbent_correlation, "< 0.80"),
+        ("blend_sharpe_improvement", blend_improvement >= 0.05, blend_improvement, ">= 0.05"),
+        (
+            "blend_drawdown_non_worsening",
+            blend_stats.max_dd_pct <= incumbent_stats.max_dd_pct,
+            blend_stats.max_dd_pct,
+            incumbent_stats.max_dd_pct,
+        ),
+    )
+    gates = [
+        {
+            "gate_id": gate_id,
+            "passed": bool(passed),
+            "actual": None if actual is None else str(actual),
+            "required": str(required),
+        }
+        for gate_id, passed, actual, required in raw_gates
+    ]
+    return {
+        "control_id": control_id,
+        "cost_bps_annual": cost_bps,
+        "psr": None if psr is None else str(psr),
+        "annual_excess_return": round(annual_excess, 8),
+        "incumbent_correlation": round(incumbent_correlation, 8),
+        "incumbent_sharpe": round(incumbent_stats.sharpe, 8),
+        "blend_sharpe": round(blend_stats.sharpe, 8),
+        "blend_sharpe_improvement": round(blend_improvement, 8),
+        "incumbent_max_drawdown_pct": incumbent_stats.max_dd_pct,
+        "blend_max_drawdown_pct": blend_stats.max_dd_pct,
+        "gates": gates,
+        "passed": all(gate["passed"] for gate in gates),
+    }
+
+
+def run_full_gate_control_audit(
+    aqr_returns: dict[str, float],
+    *,
+    months: list[str],
+    cash_factors: list[float],
+    incumbent_factors: list[float],
+    psr_controls: dict[str, Any] | None = None,
+    code_commit: str = "unknown",
+    timestamp_utc: str | None = None,
+) -> dict[str, Any]:
+    """Evaluate a real diversifier and its null through the complete live decision."""
+    if not (len(months) == len(cash_factors) == len(incumbent_factors)):
+        raise ValueError("full-gate control inputs must align")
+    if len(months) < MIN_CONTROL_OBSERVATIONS or len(set(months)) != len(months):
+        raise ValueError("full-gate control months are incomplete or duplicated")
+    try:
+        values = [float(aqr_returns[month]) for month in months]
+    except KeyError as exc:
+        raise ValueError("AQR full-gate control months do not align") from exc
+    if not all(math.isfinite(value) for value in values):
+        raise ValueError("AQR full-gate returns are not finite")
+    mean = sum(values) / len(values)
+    positive = _complete_diversifier_control(
+        "aqr_diversified_tsmom_50bps",
+        values,
+        cash_factors,
+        incumbent_factors,
+        cost_bps=FULL_GATE_COST_BPS,
+    )
+    null = _complete_diversifier_control(
+        "aqr_diversified_tsmom_demeaned_50bps",
+        [value - mean for value in values],
+        cash_factors,
+        incumbent_factors,
+        cost_bps=FULL_GATE_COST_BPS,
+    )
+    psr_controls_passed = psr_controls is None or bool(
+        psr_controls.get("verdict") == REAL_WORLD_CONTROLS_VALID
+        and psr_controls.get("promotion_control_passed") is True
+        and psr_controls.get("code_commit") == code_commit
+    )
+    passed = (
+        positive["passed"] is True
+        and null["passed"] is False
+        and psr_controls_passed
+    )
+    fingerprint = _fingerprint(
+        {
+            "gate_version": GATE_VERSION,
+            "months": [months[0], months[-1]],
+            "cost_bps": FULL_GATE_COST_BPS,
+            "positive": positive,
+            "null": null,
+            "psr_control_fingerprint": (
+                psr_controls.get("control_fingerprint") if psr_controls else None
+            ),
+        }
+    )
+    return {
+        "schema_version": "1.0",
+        "gate_version": GATE_VERSION,
+        "timestamp_utc": timestamp_utc or datetime.now(UTC).isoformat(),
+        "code_commit": code_commit,
+        "verdict": FULL_GATE_CONTROLS_VALID if passed else FULL_GATE_CONTROLS_FAILED,
+        "conclusion": (
+            "FULL_GATE_EMPIRICALLY_PASSABLE"
+            if passed
+            else "FULL_GATE_FEASIBILITY_NOT_PROVEN"
+        ),
+        "promotion_control_passed": passed,
+        "window": [months[0], months[-1]],
+        "observations": len(months),
+        "positive_control": positive,
+        "null_control": null,
+        "psr_controls": psr_controls,
+        "psr_controls_passed": psr_controls_passed,
+        "control_fingerprint": fingerprint,
+        "isolation": {
+            "candidate_trial_count_contribution": 0,
+            "promotion_candidate": False,
+            "purpose": "complete gate diagnostic only",
+        },
+        "safety": ["no broker API", "no orders", "no capital or whitelist change"],
+    }
+
+
 __all__ = [
     "AQR_TSMOM_URL",
     "FAMA_FRENCH_URL",
+    "FULL_GATE_CONTROLS_FAILED",
+    "FULL_GATE_CONTROLS_VALID",
     "REAL_WORLD_CONTROLS_FAILED",
     "REAL_WORLD_CONTROLS_VALID",
     "parse_aqr_tsmom_monthly",
     "parse_fama_french_monthly",
+    "run_full_gate_control_audit",
     "run_real_world_gate_audit",
 ]
