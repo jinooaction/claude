@@ -7,8 +7,8 @@
 배경(왜 필요한가):
   자율 시스템이 "진짜 돈"으로 가는 길은 여러 사이드카에 흩어져 있다:
     · 전진 페이퍼(rebalance-paper-forward) — 전진 엣지 관측을 매 거래일 1개씩 쌓는다.
-    · 자본 사다리 게이트(edge-autoarm) — 전진 엣지가 EDGE_CONFIRMED 가 되면 단0→단1
-      (실계좌 NAV 의 0%→25%)로 자본을 올린다(헌법 X.4 v5.0.0 사다리).
+    · 자본 사다리 게이트(edge-autoarm) — 증거 종류에 맞는 첫 캐너리 단부터 자본을
+      단계적으로 올린다(헌법 X.4 v9.0.0 사다리).
     · 라이브 캐너리(rebalance-live-canary) — 무장 시 실제로 주문을 낸다.
     · 승격 준비(promote-readiness) — 헌법 VI 풀라이브 트랙레코드 게이트.
   "지금 진짜 돈이 어디까지 왔나, 다음 한 발을 막는 게 정확히 무엇인가, 언제 첫
@@ -44,6 +44,7 @@ from auto_invest.portfolio.capital_ladder import (
     PROMOTION_MIN_CALENDAR_DAYS,
     PROMOTION_MIN_OBS,
     RUNG_FRACTIONS,
+    rung_pct_text,
 )
 from auto_invest.portfolio.edge_verdict import PAIRED_ACTIVE_RETURN_PSR_METHOD
 
@@ -1129,10 +1130,9 @@ def _pct_str(value: Decimal) -> str:
 
 
 def _capital_pct(rung: int) -> str:
-    frac = RUNG_FRACTIONS.get(rung)
-    if frac is None:
+    if rung not in RUNG_FRACTIONS:
         return "?"
-    return _pct_str(frac * 100)
+    return rung_pct_text(rung)
 
 
 def _safety_budget(
@@ -1546,7 +1546,8 @@ def assess_money_path(
         )
         next_action = (
             "자율 시스템은 매 거래일 전진 관측을 쌓는다. 최소 관측 도달 후 엣지가 "
-            f"{EDGE_CONFIRMED} 되면 자본 사다리가 단0→단1(NAV 25%)을 자율 무장한다"
+            f"{EDGE_CONFIRMED} 되면 자본 사다리가 단0→단1(NAV {_capital_pct(1)}%)을 "
+            "자율 무장한다"
             "(헌법 X.4 상시 위임). 운영자 전용은 입금(NAV 상한)·킬스위치뿐."
         )
     elif stage == STAGE_NO_EDGE_YET:
@@ -1572,7 +1573,8 @@ def assess_money_path(
     elif stage == STAGE_EDGE_CONFIRMED:
         conf = f", 신뢰도 PSR {psr}" if psr is not None else ""
         headline = (
-            f"🟢 전진 엣지 확정(EDGE_CONFIRMED{conf}) — 첫 자본(단0→단1, NAV 25%) 배치 임박."
+            f"🟢 전진 엣지 확정(EDGE_CONFIRMED{conf}) — 첫 자본(단0→단1, "
+            f"NAV {_capital_pct(1)}%) 배치 임박."
         )
         blocking = (
             "막는 것 없음 — 자본 사다리가 다음 게이트 실행에서 단1을 자율 무장한다"
@@ -1596,7 +1598,8 @@ def assess_money_path(
             )
         )
         next_action = (
-            "자본 사다리가 단1(NAV 25%)을 자율 무장한다(센티넬 PR 자동 머지). 실제 실주문은 "
+            f"자본 사다리가 단1(NAV {_capital_pct(1)}%)을 자율 무장한다"
+            "(센티넬 PR 자동 머지). 실제 실주문은 "
             "시장시간 스케줄에서 시작된다(헌법 X.4 상시 위임). 운영자 전용은 입금(NAV 상한)·"
             "킬스위치뿐."
         )

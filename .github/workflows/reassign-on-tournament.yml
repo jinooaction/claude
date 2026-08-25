@@ -200,7 +200,7 @@ jobs:
             echo ""
             echo "- 결정: ${reason}"
             echo "- 전략 블록은 챔피언 deploy 설정에서 이식, 운영/거래집합([caps]·[whitelist])은 라이브 보존."
-            echo "- 자본 사다리는 rung 0(무장 해제)으로 리셋 — 새 전략은 forward 재검증부터 25%·50%·100%."
+            echo "- 자본 사다리는 rung 0(무장 해제)으로 리셋 — 새 전략은 forward 재검증부터 10% 연구·20% 탐색·25%·50%·100%."
             echo ""
             echo "### 5중 게이트 결정 JSON"
             echo '```json'

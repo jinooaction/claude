@@ -63,6 +63,26 @@ RUNG_FRACTIONS: dict[int, Decimal] = {
     5: Decimal("1.00"),
 }
 MAX_RUNG = 5
+RUNG_ROLES_KO: dict[int, str] = {
+    1: " 연구",
+    2: " 탐색",
+}
+
+
+def rung_pct_text(rung: int) -> str:
+    """사다리 비율을 과학적 표기 없이 사람이 읽는 백분율 숫자로 반환한다."""
+    value = (RUNG_FRACTIONS[rung] * 100).normalize()
+    return format(value, "f")
+
+
+def ladder_schedule_ko(*, start_rung: int = 0) -> str:
+    """헌법 X.4 자본 사다리 순서를 단일 상수에서 렌더링한다."""
+    if start_rung not in RUNG_FRACTIONS:
+        raise ValueError(f"unknown capital ladder rung: {start_rung}")
+    return " → ".join(
+        f"단{rung}={rung_pct_text(rung)}%{RUNG_ROLES_KO.get(rung, '')}"
+        for rung in range(start_rung, MAX_RUNG + 1)
+    )
 
 # 운영자 낙폭 예산(2026-06-11 위임 계약, 기본 20%). 강등은 예산/2, 정지는 예산.
 DEFAULT_DD_BUDGET_PCT = Decimal("20")
@@ -189,8 +209,7 @@ def render_ladder_sentinel(
         "#\n"
         "# 🪜 이 상태는 스펙 050 자본 사다리(증거 게이트 공식)가 결정했다 — 운영자 위임\n"
         '#   (2026-06-11): "자본·수단도 자동과 자율에 맡긴다. 기준은 계좌 잔고와 포트폴리오."\n'
-        "#   헌법 X.4 v9.0.0. 사다리: 단0=0% → 단1=10% 연구 → 단2=20% 탐색 → "
-        "단3=25% → 단4=50% → 단5=100% (실계좌 NAV 대비).\n"
+        f"#   헌법 X.4 v9.0.0. 사다리: {ladder_schedule_ko()} (실계좌 NAV 대비).\n"
         "#   승격 = 관측 ≥20 + ≥27일 + 낙폭 < 예산/2. 강등 = 낙폭 ≥ 예산/2(즉시).\n"
         "#   정지 = 낙폭 ≥ 예산(즉시, 무장 해제). 재사이징 = 계좌 NAV ±10% 드리프트.\n"
         "#\n"

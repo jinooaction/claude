@@ -18,8 +18,8 @@
      (forward_tournament 가 challenger_key 를 set 할 때 ①③ 을 함께 보장한다.)
   ④ 소액 실거래 검증: 하드닝 캐너리(스펙 007, 과거 리플레이+충격+퍼즈)를 PASS.
   ⑤ 교체 후 재검증: 재지정 시 자본 사다리를 rung 0 으로 리셋 → 새 전략을 forward 재검증부터
-     25%·50%·100% 로 자율 재승격(capital_ladder, 실행 단계). 검증 안 한 전략에 자본이 즉시
-     실리지 않게 하는 안전장치다.
+     10% 연구·20% 탐색·25%·50%·100% 로 자율 재승격(capital_ladder, 실행 단계). 검증 안 한
+     전략에 자본이 즉시 실리지 않게 하는 안전장치다.
 
 이 모듈은 **결정만** 한다 — 주문 0건, 돈 0 이동, 네트워크 0. 결정의 실행(라이브 설정 교체 +
 사다리 리셋 센티넬)은 워크플로가, 실주문은 시장시간 스케줄이 한다. 보수적 fail-safe:
@@ -42,6 +42,7 @@ from auto_invest.analytics.forward_tournament import (
     OBS_HEALTH_OK,
     TournamentLeaderboard,
 )
+from auto_invest.portfolio.capital_ladder import ladder_schedule_ko
 
 # 하드닝 캐너리(스펙 007) 합격 라벨 — 이 값일 때만 ④ 게이트 통과.
 CANARY_PASS = "PASS"
@@ -190,7 +191,7 @@ def decide_reassignment(
         ACTION_REASSIGN,
         f"도전자 '{challenger}'가 5중 게이트 전부 통과(엣지 확정·다중검정 보정·사과 대 사과·"
         f"하드닝 캐너리 PASS) → 라이브를 '{incumbent}'에서 '{challenger}'로 재지정 + 자본 "
-        "사다리 rung 0 리셋(새 전략을 25%부터 자율 재검증).",
+        f"사다리 rung 0 리셋(새 전략을 {ladder_schedule_ko(start_rung=1)} 순서로 자율 재검증).",
     )
 
 

@@ -967,6 +967,22 @@ def test_as_text_includes_safety_section():
     text = r.as_text()
     assert "자본 방어선 예산" in text
     assert "첫 자본" in text
+    assert "단1(NAV 의 10%)" in text
+
+
+def test_first_capital_messages_follow_current_ladder_fraction():
+    accumulating = assess_money_path(ladder=_ladder(), forward_verdict=_verdict(), now=NOW)
+    confirmed = assess_money_path(
+        ladder=_ladder(action="WAIT_EDGE"),
+        forward_verdict=_verdict(verdict="EDGE_CONFIRMED", n_obs=22),
+        now=NOW,
+    )
+
+    assert "단0→단1(NAV 10%)" in accumulating.next_action
+    assert "단0→단1, NAV 10%" in confirmed.headline
+    assert "단1(NAV 10%)" in confirmed.next_action
+    assert "NAV 25%" not in accumulating.as_text()
+    assert "NAV 25%" not in confirmed.as_text()
 
 
 # ── 배치 비율 표기 (과학적 표기 회귀) ──

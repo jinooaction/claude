@@ -24,9 +24,11 @@ from auto_invest.portfolio.capital_ladder import (
     PROMOTION_MIN_CALENDAR_DAYS,
     PROMOTION_MIN_OBS,
     decide_ladder,
+    ladder_schedule_ko,
     parse_ladder_fields,
     render_ladder_sentinel,
     rung_capital_usd,
+    rung_pct_text,
 )
 
 # ---- 픽스처 (autoarm 테스트와 동일 앙상블) ----------------------------------------
@@ -87,6 +89,15 @@ def _growth(
 
 _TODAY = date(2026, 6, 12)
 _NAV = Decimal("12000")
+
+
+def test_capital_ladder_reporting_comes_from_rung_fractions() -> None:
+    assert rung_pct_text(1) == "10"
+    assert rung_pct_text(5) == "100"
+    assert ladder_schedule_ko() == (
+        "단0=0% → 단1=10% 연구 → 단2=20% 탐색 → 단3=25% → 단4=50% → 단5=100%"
+    )
+    assert ladder_schedule_ko(start_rung=1).startswith("단1=10% 연구 → 단2=20% 탐색")
 
 _DISARMED = """# header
 armed: false

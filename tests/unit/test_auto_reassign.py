@@ -153,6 +153,8 @@ def test_reassign_reason_names_both_strategies() -> None:
     d = decide_reassignment(leaderboard=lb, canary_verdict="PASS", kill_switch_present=False)
     assert "multi-asset-trend" in d.reason and "global-trend" in d.reason
     assert "rung 0" in d.reason  # ⑤ 사다리 리셋 명시
+    assert "단1=10% 연구" in d.reason
+    assert "단2=20% 탐색" in d.reason
 
 
 def test_all_gates_pass_false_when_any_gate_open() -> None:
