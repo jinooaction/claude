@@ -1,5 +1,5 @@
 {
-  "commit": "402f7923b9c0d2dfcea129453f5acaba8759e426",
+  "commit": "2141a7c972cf3a125a3b7bd0801d73b5d76ce4ed",
   "overall_status": "OK",
   "released_work": [
     {
@@ -543,7 +543,7 @@
       "status": "released"
     }
   ],
-  "run_id": "32864981985",
+  "run_id": "32897412111",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -862,7 +862,11 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "160-forward-paper-ledger-integrity"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "164-independent-options-variance-risk-premium"
     }
   ],
-  "timestamp_utc": "2026-08-25T15:18:48.916491Z"
+  "timestamp_utc": "2026-08-25T20:48:06.540473Z"
 }
