@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the no-order spec-164 options variance-risk-premium factory."""
+"""Run the no-order spec-165 options selection and objective repair."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from auto_invest.analytics.options_variance_risk_premium_factory import (
     FRENCH_DAILY_URL,
     PUT_URL,
     VIX_URL,
+    WPUT_URL,
     load_options_premium_bundle,
     render_options_variance_risk_premium_markdown,
     run_options_variance_risk_premium_factory,
@@ -46,6 +47,7 @@ def _named_payloads(values: list[str]) -> dict[str, dict]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--put-file", type=Path)
+    parser.add_argument("--wput-file", type=Path)
     parser.add_argument("--vix-file", type=Path)
     parser.add_argument("--french-daily-file", type=Path)
     parser.add_argument("--macro-data-dir", type=Path, required=True)
@@ -71,6 +73,7 @@ def main(argv: list[str] | None = None) -> int:
         cash_text = (args.macro_data_dir / "fred" / "DGS3MO.csv").read_text(encoding="utf-8")
         bundle = load_options_premium_bundle(
             _read_bytes(args.put_file, PUT_URL),
+            _read_bytes(args.wput_file, WPUT_URL),
             _read_bytes(args.vix_file, VIX_URL),
             _read_bytes(args.french_daily_file, FRENCH_DAILY_URL),
             parse_fred_csv(cash_text),

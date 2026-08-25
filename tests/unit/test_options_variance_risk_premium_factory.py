@@ -20,7 +20,10 @@ from auto_invest.analytics.options_variance_risk_premium_factory import (
     options_target_weight,
     parse_cboe_put_history,
     parse_cboe_vix_history,
+    parse_cboe_wput_history,
     parse_fama_french_daily,
+    portfolio_adoption_lane,
+    premium_existence_lane,
     run_options_variance_risk_premium_factory,
     standalone_premium_lane,
     validate_options_premium_bundle,
@@ -46,6 +49,7 @@ def _previous_month(value: date) -> date:
 def _bundle(count: int = 220) -> OptionsPremiumBundle:
     months = _months(count)
     put = tuple(1.009 + 0.018 * math.sin(index * 1.7) for index in range(count))
+    wput = tuple(1.0085 + 0.019 * math.sin(index * 1.83) for index in range(count))
     market = tuple(1.006 + 0.045 * math.sin(index * 1.3) for index in range(count))
     cash = tuple(1.002 for _ in range(count))
     features: dict[int, tuple[VarianceRiskPremiumSnapshot, ...]] = {}
@@ -72,6 +76,7 @@ def _bundle(count: int = 220) -> OptionsPremiumBundle:
     return OptionsPremiumBundle(
         factor_months=tuple(months),
         put_factors=put,
+        wput_factors=wput,
         market_factors=market,
         cash_factors=cash,
         features=features,
@@ -133,6 +138,16 @@ def test_cboe_parsers_ignore_sparse_put_rows_and_fail_on_duplicates() -> None:
         parse_cboe_put_history(put + b"01/04/2007,702\n")
 
 
+def test_wput_parser_enforces_the_independent_source_contract() -> None:
+    raw = b"DATE,WPUT\n01/31/2006,100\n02/01/2006,100.5\n"
+    parsed = parse_cboe_wput_history(raw)
+    assert parsed.rows[0] == (date(2006, 1, 31), 100.0)
+    with pytest.raises(ValueError, match="header mismatch"):
+        parse_cboe_wput_history(raw.replace(b"DATE,WPUT", b"DATE,PUT"))
+    with pytest.raises(ValueError, match="duplicated"):
+        parse_cboe_wput_history(raw + b"02/01/2006,101\n")
+
+
 def test_fama_french_daily_parser_keeps_market_and_cash_returns() -> None:
     lines = ["note", ",Mkt-RF,SMB,HML,RF", "20070103,1.00,0,0,0.01", "20070104,-0.50,0,0,0.01"]
     raw = io.BytesIO()
@@ -180,6 +195,19 @@ def test_expected_shortfall_and_standalone_lane_include_tail_gates() -> None:
     assert expected_shortfall_95(candidate) < 0
     assert {"maximum_drawdown", "expected_shortfall_95"} <= set(lane["gates"])
     assert "active_fraction" not in lane["gates"]
+
+
+def test_premium_existence_is_not_confused_with_portfolio_adoption() -> None:
+    count = 180
+    cash = [1.002] * count
+    candidate = [1.008 + 0.004 * math.sin(index * 1.7) for index in range(count)]
+    stronger_market = [1.012 + 0.006 * math.sin(index * 1.3) for index in range(count)]
+    premium = premium_existence_lane(candidate, cash)
+    adoption = portfolio_adoption_lane(candidate, cash, stronger_market)
+    assert premium["passed"] is True
+    assert adoption["passed"] is False
+    assert premium["promotion_eligible"] is False
+    assert adoption["promotion_eligible"] is False
 
 
 def test_development_tie_breaks_on_tail_loss_then_drawdown_and_identity() -> None:
@@ -262,7 +290,77 @@ def test_factory_preserves_736_trials_and_appends_exactly_16() -> None:
     assert payload["split"]["holdout_months"] >= 120
     assert payload["model_chronology"]["passed"] is True
     assert payload["decision"]["research_canary_eligible"] is False
+    assert payload["decision"]["paper_forward_eligible"] is False
+    assert payload["promotion_allowed"] is False
     assert payload["research_live_parity"]["passed"] is False
+    assert payload["selection_repair"]["protocol"] == {
+        "outer_train_months": 84,
+        "outer_embargo_months": 1,
+        "outer_test_months": 12,
+        "inner_train_months": 48,
+        "inner_embargo_months": 1,
+        "inner_validation_months": 12,
+        "independent_index": "WPUT",
+        "independent_index_used_for_selection": False,
+    }
+    chronology = payload["selection_repair"]["chronology"]
+    assert chronology["all_folds_valid"] is True
+    assert chronology["fold_count"] >= 8
+    assert all(
+        len(row["inner_folds"]) >= 2
+        for row in payload["selection_repair"]["portfolio_selection"]["outer_folds"]
+    )
+    assert set(payload["objective_lanes"]) == {
+        "premium_existence",
+        "portfolio_adoption",
+        "timing_value",
+    }
+    assert all(
+        row["diagnostic_only"] is True and row["promotion_eligible"] is False
+        for row in payload["objective_lanes"].values()
+    )
+    assert payload["legacy_selection"]["decision"]["verdict"] in {
+        "FACTORY_EDGE_CONFIRMED",
+        "PAPER_EDGE_CANDIDATE",
+        "REFERENCE_EDGE_CONFIRMED_SELECTION_UNCONFIRMED",
+        "GATE_OR_REFERENCE_SUSPECT",
+        "NO_FACTORY_EDGE",
+    }
     assert all(
         row["retroactive_promotion_allowed"] is False for row in payload["prior_adoption_audit"]
     )
+
+
+def test_wput_changes_cannot_change_put_selected_candidates_or_weights() -> None:
+    original = _bundle()
+    mutated = _bundle()
+    object.__setattr__(
+        mutated,
+        "wput_factors",
+        tuple(1.015 + 0.06 * math.sin(index * 2.31) for index in range(220)),
+    )
+
+    def run(bundle: OptionsPremiumBundle) -> dict:
+        return run_options_variance_risk_premium_factory(
+            bundle,
+            prior_factory_payload=_prior(),
+            prior_family_payloads={},
+            calibration_evidence=_calibration(),
+            full_gate_controls=_controls(),
+            code_commit="abc123",
+            timestamp_utc="2026-08-26T00:00:00Z",
+            calibration_repetitions=10,
+        )
+
+    first = run(original)["selection_repair"]
+    second = run(mutated)["selection_repair"]
+    for lane in ("portfolio_selection", "timing_selection"):
+        first_selection = [
+            (row["selected_candidate_id"], row["selected_weights"])
+            for row in first[lane]["outer_folds"]
+        ]
+        second_selection = [
+            (row["selected_candidate_id"], row["selected_weights"])
+            for row in second[lane]["outer_folds"]
+        ]
+        assert first_selection == second_selection

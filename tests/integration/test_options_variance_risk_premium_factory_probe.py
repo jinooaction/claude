@@ -13,6 +13,7 @@ def test_probe_exposes_offline_sources_and_no_money_boundary() -> None:
         text=True,
     )
     assert "--put-file" in result.stdout
+    assert "--wput-file" in result.stdout
     assert "--vix-file" in result.stdout
     assert "--french-daily-file" in result.stdout
     assert "--prior-family-json" in result.stdout
@@ -33,6 +34,11 @@ def test_workflow_registers_options_premium_as_canonical_last_family() -> None:
     assert 'global_audit_trial_count\' /tmp/strategy_factory.json)" = "752' in workflow
     assert 'multiplicity_trial_count\' /tmp/strategy_factory.json)" = "16' in workflow
     assert ".options_premium_data.complete" in workflow
+    assert ".options_premium_data.sources.cboe_wput" in workflow
+    assert ".selection_repair.chronology.all_folds_valid" in workflow
+    assert ".selection_repair.protocol.independent_index_used_for_selection" in workflow
+    assert ".objective_lanes" in workflow
+    assert ".promotion_allowed" in workflow
     assert ".reference_control" in workflow
     assert ".prior_adoption_audit" in workflow
     assert "if: success()" in workflow

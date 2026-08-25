@@ -1,7 +1,7 @@
-name: Autonomous strategy factory (options variance-premium validation)
+name: Autonomous strategy factory (options selection/objective validation)
 
-# 스펙 164. 브로커와 완전히 분리된 연구 워크플로다. 알려진 PUT 프리미엄과
-# 평균 0 대조군으로 목적 관문을 감사하고, 기존 736회와 옵션 전략 16개를 검증한다.
+# 스펙 165. 브로커와 완전히 분리된 연구 워크플로다. PUT에서만 중첩 선택하고
+# WPUT에 그대로 재생하며, 기존 736회와 옵션 전략 16개를 검증한다.
 # 이 워크플로 자체는 주문, 자본 변경, 라이브 설정 변경을 하지 않는다.
 
 on:
@@ -291,7 +291,12 @@ jobs:
           test "$(jq -r '.multiplicity_trial_count' /tmp/strategy_factory.json)" = "16"
           test "$(jq -r '.unique_trial_fingerprint_count' /tmp/strategy_factory.json)" = "752"
           test "$(jq -r '.options_premium_data.complete' /tmp/strategy_factory.json)" = "true"
+          test "$(jq -r '.options_premium_data.sources.cboe_wput.selection_input' /tmp/strategy_factory.json)" = "false"
           test "$(jq -r '.model_chronology.passed' /tmp/strategy_factory.json)" = "true"
+          test "$(jq -r '.selection_repair.chronology.all_folds_valid' /tmp/strategy_factory.json)" = "true"
+          test "$(jq -r '.selection_repair.chronology.fold_count' /tmp/strategy_factory.json)" -ge "8"
+          test "$(jq -r '.selection_repair.protocol.independent_index_used_for_selection' /tmp/strategy_factory.json)" = "false"
+          test "$(jq -r '.promotion_allowed' /tmp/strategy_factory.json)" = "false"
           test "$(jq -r '.full_gate_controls.promotion_control_passed' /tmp/strategy_factory.json)" = "true"
           test "$(jq -r '.objective_gate_calibration.passable' /tmp/strategy_factory.json)" = "true"
           test "$(jq -r '.prior_adoption_audit | length' /tmp/strategy_factory.json)" = "9"
@@ -300,6 +305,8 @@ jobs:
           jq -e '
             (.reference_control.recognized_reference_passed | type) == "boolean" and
             (.reference_control.mean_zero_null_rejected | type) == "boolean" and
+            (.objective_lanes | keys | sort) == ["portfolio_adoption", "premium_existence", "timing_value"] and
+            all(.objective_lanes[]; .diagnostic_only == true and .promotion_eligible == false) and
             all(.prior_adoption_audit[]; .retroactive_promotion_allowed == false) and
             .development_selection.selected_candidate_id != null and
             ([.options_premium_data_fingerprint, .model_fingerprint,
