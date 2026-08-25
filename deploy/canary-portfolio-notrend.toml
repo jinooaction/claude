@@ -2,7 +2,7 @@
 #
 # 이 파일은 canary-portfolio.toml(추세 필터 ON)과 **유니버스·가중치·top_n·재조정 주기까지
 # 전부 동일**하고 오직 [portfolio.trend_filter] 절만 없다(추세 필터 미적용). 워크플로
-# rebalance-paper-forward.yml 이 두 설정을 *각자 전용 DB*(forward_trend.db / forward_notrend.db)
+# rebalance-paper-forward.yml 이 두 설정을 *각자 전용 DB*(forward_v2_trend.db / forward_v2_notrend.db)
 # 에서 병렬로 페이퍼 돌려, 스펙 035 forward-verdict 가 양쪽을 판정한다. 두 판정을 나란히
 # 비교하면 "추세 필터가 실제로 도움이 되는가"의 격리된 답이 나온다. PAPER 전용 — 돈 0 이동.
 #

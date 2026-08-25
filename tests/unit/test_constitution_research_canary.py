@@ -8,7 +8,15 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def test_constitution_adds_10pct_without_weakening_higher_gates() -> None:
     text = (ROOT / ".specify" / "memory" / "constitution.md").read_text(encoding="utf-8")
-    assert "**Version**: 8.0.0" in text
+    assert "**Version**: 9.0.0" in text
+    assert "Legacy evidence without `gate_version=2.0` still requires exactly 64/64" in text
+    assert "Current `gate_version=2.0` evidence requires at least 16" in text
+    assert "`complete_family_trials`" in text
+    assert "`prior_audit_complete`" in text
+    assert "`global_audit_trials`" in text
+    assert "`unique_audit_fingerprints`" in text
+    assert "every blocking gate MUST pass" in text
+    assert "variable family size does NOT lower any preregistered statistical" in text
     assert "1 = 10% research canary" in text
     assert "2 = 20% exploration canary" in text
     assert "3 = 25%" in text

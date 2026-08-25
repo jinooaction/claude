@@ -3,7 +3,7 @@ name: Capital ladder gate (forward edge -> rung promotions/demotions)
 # 스펙 050 — 자본 사다리 게이트. 스펙 049(EDGE_CONFIRMED → 무장)를 승계·확장한다.
 #
 # 운영자 위임(2026-06-11): "자본·수단도 자동과 자율에 맡긴다. 기준은 계좌 잔고와
-# 포트폴리오." (헌법 X.4 v8.0.0). 자본 배치 규모를 증거 게이트 공식으로 결정한다:
+# 포트폴리오." (헌법 X.4 v9.0.0). 자본 배치 규모를 증거 게이트 공식으로 결정한다:
 #
 #   단0=0% → 단1=10% 연구 → 단2=20% 탐색 → 단3=25% → 단4=50% → 단5=100%
 #   - 단 0→1: EDGE_CONFIRMED 또는 정확 배포전략의 장기 홀드아웃+forward floor+hardening.
@@ -24,7 +24,7 @@ name: Capital ladder gate (forward edge -> rung promotions/demotions)
 #   - 결과는 사이드카 automation/edge-autoarm-last-run 으로 발행:
 #       git show origin/automation/edge-autoarm-last-run:LAST_RUN.md
 #
-# 헌법 X.4 v8.0.0: 자본 사다리는 운영자의 상시 위임에 따른 자율 운영. 비위임 불변
+# 헌법 X.4 v9.0.0: 자본 사다리는 운영자의 상시 위임에 따른 자율 운영. 비위임 불변
 # (K1 캡 체계·화이트리스트·감사·서킷 브레이커·낙폭 예산 소유권)은 그대로다.
 
 on:
@@ -72,9 +72,29 @@ jobs:
             origin/automation/autonomous-strategy-factory-last-run 2>/dev/null || echo 0)"
           now_epoch="$(date +%s)"
           python3 -c \
-            "print(max(0, int('${now_epoch}')-int('${factory_epoch}'))/3600 if int('${factory_epoch}') else 999999)" \
+            "print((int('${now_epoch}')-int('${factory_epoch}'))/3600 if int('${factory_epoch}') else 999999)" \
             > /tmp/strategy_factory_age_hours
           jq '.decision // {}' /tmp/strategy_factory.json
+
+      - name: Validate versioned factory evidence contract (read-only)
+        id: factory_contract
+        run: |
+          set +e
+          uv run python scripts/factory_evidence_gate.py \
+            --evidence /tmp/strategy_factory.json \
+            --json-out /tmp/factory_evidence_assessment.json
+          status=$?
+          set -e
+          if [[ "${status}" == "0" ]]; then
+            echo "eligible=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
+          fi
+          if [[ ! -s /tmp/factory_evidence_assessment.json ]]; then
+            echo '{"eligible":false,"reasons":["assessment_unavailable"]}' \
+              > /tmp/factory_evidence_assessment.json
+          fi
+          cat /tmp/factory_evidence_assessment.json
 
       - name: Install SSH key
         env:
@@ -105,15 +125,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ARMED: ${{ steps.state.outputs.armed }}
+          FACTORY_CONTRACT_ELIGIBLE: ${{ steps.factory_contract.outputs.eligible }}
         run: |
           set -euo pipefail
           echo "changed=false" >> "$GITHUB_OUTPUT"
           [[ "${ARMED:-false}" == "false" ]] || exit 0
-          [[ "$(jq -r '.decision.verdict // ""' /tmp/strategy_factory.json)" == "FACTORY_EDGE" ]] || exit 0
-          [[ "$(jq -r '.candidate_count // 0' /tmp/strategy_factory.json)" == "64" ]] || exit 0
-          [[ "$(jq -r '.complete_trial_count // 0' /tmp/strategy_factory.json)" == "64" ]] || exit 0
-          [[ "$(jq -r '.decision.research_canary_eligible // false' /tmp/strategy_factory.json)" == "true" ]] || exit 0
-          [[ "$(awk '{print ($1 <= 36.0) ? "fresh" : "stale"}' /tmp/strategy_factory_age_hours)" == "fresh" ]] || exit 0
+          [[ "${FACTORY_CONTRACT_ELIGIBLE:-false}" == "true" ]] || exit 0
+          [[ "$(awk '{print ($1 >= 0.0 && $1 <= 36.0) ? "fresh" : "stale"}' /tmp/strategy_factory_age_hours)" == "fresh" ]] || exit 0
           jq -er '.decision.selected_deploy_config' /tmp/strategy_factory.json \
             > /tmp/factory_selected_portfolio.toml
           FACTORY_CONFIG=/tmp/factory_selected_portfolio.toml \
@@ -167,7 +185,7 @@ jobs:
           - 실제 목표: 검증 설정과 주문 설정을 일치시킨 뒤 정확한 배포 설정으로 다시 강화 검사한다.
           - 비목표: 이 PR에서 무장, 주문, 자본 배분을 하지 않는다.
           - 위험: 잘못된 설정 교체가 다음 주문 후보를 바꿀 수 있다.
-          - 완료 기준: 64/64, 전체 관문, 지문, whitelist, LIMIT, REGULAR, 현금 1%가 일치한다.
+          - 완료 기준: 사전등록 가족 100% 완주, 네 필수 누적 감사 관문, 모든 차단 관문, 지문, whitelist, LIMIT, REGULAR, 현금 1%가 일치한다.
 
           ## 탐색 근거
 
@@ -182,7 +200,7 @@ jobs:
 
           ## 검증
 
-          - [x] 64/64 전체 시도 및 모든 공장 관문 PASS
+          - [x] 버전별 사전등록 가족 전체 시도, 누적 고유 감사, 모든 차단 관문 PASS
           - [x] 전략 지문 exact match와 주문 안전 설정 검사
           - [ ] `uv run pytest` (PR CI)
           - [ ] `uv run ruff check src tests` (PR CI)
@@ -195,7 +213,7 @@ jobs:
           ## 안전 경계
 
           - Kernel 터치: 없음
-          - 안전 경계 변경: 있음, 헌법 X.4 v8.0.0의 연구 캐너리 적용
+          - 안전 경계 변경: 있음, 헌법 X.4 v9.0.0의 연구 캐너리 적용
           - 돈 경로 변경: 전략 후보 설정 변경, 현재 자본 0·주문 0
           - 감사 로그·비밀값·주문 제한 영향: 기존 경계를 그대로 사용
 
@@ -374,7 +392,7 @@ jobs:
           {
             echo "feat(050): 자본 사다리 ${ACTION} — 단 ${cur}→${tgt} (자본 \$${cap}, NAV \$${nav})"
             echo ""
-            echo "운영자 위임(2026-06-11) + 헌법 X.4 v8.0.0 자본 사다리의 증거 게이트 결정."
+            echo "운영자 위임(2026-06-11) + 헌법 X.4 v9.0.0 자본 사다리의 증거 게이트 결정."
             echo "결정: ${reason}"
             echo "실주문은 시장시간 스케줄에서만(이 머지는 미리보기). 즉시 정지:"
             echo "automation/AUTOARM_DISABLED."
@@ -396,7 +414,7 @@ jobs:
             echo ""
             echo "## 문제 정의"
             echo ""
-            echo "- 요청: 헌법 X.4 v8.0.0 자본 사다리의 증거 판정을 실행한다."
+            echo "- 요청: 헌법 X.4 v9.0.0 자본 사다리의 증거 판정을 실행한다."
             echo "- 실제 목표: 검증된 범위 안에서 자본을 단계적으로 배치하거나 즉시 줄인다."
             echo "- 비목표: whitelist, 캡, 낙폭 예산, 주문시간을 바꾸지 않는다."
             echo "- 위험: 잘못된 승격은 실계좌 노출을 늘린다."
@@ -429,7 +447,7 @@ jobs:
             echo "## 안전 경계"
             echo ""
             echo "- Kernel 터치: 없음"
-            echo "- 안전 경계 변경: 없음 (헌법 X.4 v8.0.0 실행)"
+            echo "- 안전 경계 변경: 없음 (헌법 X.4 v9.0.0 실행)"
             echo "- 돈 경로 변경: 있음"
             echo "- 감사 로그·비밀값·주문 제한 영향: 기존 경계를 그대로 사용"
             echo ""
@@ -498,7 +516,7 @@ jobs:
           {
             echo "# 자본 사다리 게이트 — 최신 실행 (스펙 050; 스펙 049 승계)"
             echo ""
-            echo "헌법 X.4 v8.0.0. 단0=0% → 단1=10% 연구 → 단2=20% 탐색 → 단3=25% → 단4=50% → 단5=100%"
+            echo "헌법 X.4 v9.0.0. 단0=0% → 단1=10% 연구 → 단2=20% 탐색 → 단3=25% → 단4=50% → 단5=100%"
             echo "(실계좌 NAV 대비). 내려가는 건 낙폭 하나로 즉시, 올라가는 건 세 증거 전부."
             echo "판정 계산은 read-only — 서버 상태 무변경, 주문 0건."
             echo ""
@@ -550,6 +568,11 @@ jobs:
             echo "## 정확 배포전략 수익 증거 JSON (read-only)"
             echo '```json'
             jq '.deployment_match // {}' /tmp/profit_evidence.json 2>/dev/null || echo '{}'
+            echo '```'
+            echo ""
+            echo "## 전략 공장 완전성 판정 JSON (read-only)"
+            echo '```json'
+            cat /tmp/factory_evidence_assessment.json 2>/dev/null || echo '{}'
             echo '```'
             echo ""
             echo "## 탐색 진입 hardened canary JSON (격리, 주문 0건)"

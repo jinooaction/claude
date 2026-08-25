@@ -73,7 +73,9 @@ def test_factory_winner_is_assigned_disarmed_before_exact_hardening() -> None:
     decide = text.index("Decide capital ladder")
     assert assign < harden < decide
     assert '[[ "${ARMED:-false}" == "false" ]]' in text
-    assert "complete_trial_count" in text
+    assert "scripts/factory_evidence_gate.py" in text
+    assert "FACTORY_CONTRACT_ELIGIBLE" in text
+    assert 'candidate_count // 0' not in text
     assert "selected_strategy_fingerprint" in text
     assert "deploy/canary-live-portfolio.toml" in text
     assert "steps.factory_assignment.outputs.changed != 'true'" in text
@@ -86,6 +88,8 @@ def test_sidecar_publishes_anchored_evidence_and_edge_source() -> None:
     assert "엣지 출처" in text
     assert "## 앵커드 판정 JSON" in text
     assert "cat /tmp/anchored_global.json" in text
+    assert "## 전략 공장 완전성 판정 JSON" in text
+    assert "cat /tmp/factory_evidence_assessment.json" in text
 
 
 def test_autoarm_pr_body_keeps_quality_gate_contract() -> None:

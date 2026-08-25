@@ -1,9 +1,68 @@
+from __future__ import annotations
+
+import tomllib
+from pathlib import Path
+
+from auto_invest.config.rules import PortfolioRebalanceConfig
+from auto_invest.portfolio.autoarm import strategy_fingerprint_digest
 from auto_invest.portfolio.live_entry_revalidation import (
     ACTIVE_LIVE_TRACK,
     ENTRY_BLOCKED,
     ENTRY_READY,
     evaluate_live_entry,
 )
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def _factory() -> tuple[dict, str]:
+    config_text = (ROOT / "deploy/canary-live-portfolio.toml").read_text(encoding="utf-8")
+    config = PortfolioRebalanceConfig.model_validate(tomllib.loads(config_text)["portfolio"])
+    fingerprint = strategy_fingerprint_digest(config)
+    return (
+        {
+            "gate_version": "2.0",
+            "candidate_count": 16,
+            "complete_trial_count": 16,
+            "global_audit_trial_count": 704,
+            "unique_trial_fingerprint_count": 704,
+            "decision": {
+                "verdict": "FACTORY_EDGE",
+                "research_canary_eligible": True,
+                "selected_candidate_id": "factory-winner",
+                "selected_strategy_fingerprint": fingerprint,
+                "selected_deploy_config": config_text,
+                "gates": [
+                    {
+                        "gate_id": "complete_family_trials",
+                        "passed": True,
+                        "actual": "16",
+                        "required": "16",
+                    },
+                    {
+                        "gate_id": "prior_audit_complete",
+                        "passed": True,
+                        "actual": "688",
+                        "required": "688",
+                    },
+                    {
+                        "gate_id": "global_audit_trials",
+                        "passed": True,
+                        "actual": "704",
+                        "required": "704",
+                    },
+                    {
+                        "gate_id": "unique_audit_fingerprints",
+                        "passed": True,
+                        "actual": "704",
+                        "required": "704",
+                    },
+                    {"gate_id": "holdout_excess_psr", "passed": True},
+                ],
+            },
+        },
+        fingerprint,
+    )
 
 
 def _profit(*, ready: bool = True, psr: float = 0.81) -> dict:
@@ -80,18 +139,7 @@ def test_invalid_fill_count_never_opens_first_entry() -> None:
 
 
 def test_factory_winner_can_open_only_the_exact_10pct_strategy() -> None:
-    fingerprint = "sha256:exact"
-    factory = {
-        "gate_version": "2.0",
-        "candidate_count": 64,
-        "complete_trial_count": 64,
-        "decision": {
-            "verdict": "FACTORY_EDGE",
-            "research_canary_eligible": True,
-            "selected_candidate_id": "factory-winner",
-            "selected_strategy_fingerprint": fingerprint,
-        },
-    }
+    factory, fingerprint = _factory()
     ready = evaluate_live_entry(
         None,
         {"verdict": "PASS"},
@@ -124,6 +172,8 @@ def test_incomplete_or_stale_factory_evidence_fails_closed() -> None:
             "verdict": "FACTORY_EDGE",
             "research_canary_eligible": True,
             "selected_strategy_fingerprint": "sha256:exact",
+            "selected_deploy_config": "[portfolio]\n",
+            "gates": [{"gate_id": "complete_trials", "passed": True}],
         },
     }
     result = evaluate_live_entry(
@@ -136,5 +186,5 @@ def test_incomplete_or_stale_factory_evidence_fails_closed() -> None:
         live_strategy_fingerprint="sha256:exact",
     )
     assert result.allowed is False
-    assert "factory_trials_complete" in result.reasons
+    assert "factory_contract_complete" in result.reasons
     assert "factory_evidence_fresh" in result.reasons
