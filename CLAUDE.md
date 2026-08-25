@@ -215,14 +215,14 @@ After a successful merge, the session SHOULD:
 ---
 
 <!-- SPECKIT START -->
-**Active feature plan**: `specs/160-forward-paper-ledger-integrity/plan.md`
+**Active feature plan**: `specs/162-usda-crop-supply-demand/plan.md`
 
 Active feature pointer: `.specify/feature.json` is the maintained pointer for
 the current worktree. Do not trust prose in this block as the source of truth
 for in-flight work; use the `git_ground_truth` start hook, latest `HANDOFF.md`,
 and `/sync` against `jinooaction/claude` `Codex/*` branches before continuing.
 
-현재 포인터: `specs/160-forward-paper-ledger-integrity/plan.md` — 음수 현금과 자본 초과 보유로 오염된 forward paper 증거를 승격에서 차단하고, 기존 감사 DB를 보존한 채 7개 트랙을 깨끗한 측정 세대로 전환한다. 자본·주문·기준·허용목록·헌법·커널은 바꾸지 않는다.
+현재 포인터: `specs/162-usda-crop-supply-demand/plan.md` — USDA가 매달 당시 공개한 작물 수급 전망으로 독립 전략군 16개를 사전등록하고, 기준을 바꾸지 않은 채 즉시 백테스트한다. 자본·주문·허용목록·헌법·커널은 바꾸지 않는다.
 
 머지 완료(베이스라인): spec 004 (LLM 판단 지점), 005 (자율 튜너), 006 (배포 자동화), 007 (하드닝 카나리), 008 (백테스트), 009 (paper-run), 010 (자동 룰 설계자), 011 (라이브 성과 측정). **주의: 일부 tasks.md 가 stale 0% 로 표시된 적 있음 — 코드/테스트를 믿을 것.**
 
