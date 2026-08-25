@@ -38,5 +38,16 @@ gate result. Post-hoc live passes remain non-promotable.
 ## Safety
 
 `research_canary_eligible=false`. No broker, order, capital, margin, cap, arming,
-whitelist, constitution, or kernel change was made. Production workflow run, deploy
-status, and current-main KIS read-only smoke will be appended after merge.
+whitelist, constitution, or kernel change was made.
+
+## Main Production Closure
+
+- Merge: PR #682, main `2141a7c972cf3a125a3b7bd0801d73b5d76ce4ed`
+- Strategy factory: run `32897412078`, success, 16/16 current and 752/752 unique
+- Production verdict: `GATE_OR_REFERENCE_SUSPECT`
+- Production diagnosis: `ECONOMIC_PREMIUM_EXISTS_BUT_ADOPTION_GATE_OVERCONSTRAINED`
+- Deploy: run `32897412147`, success
+- KIS read-only smoke: run `32898262246`, 5/5 success on main `2141a7c`
+- KIS state: cash $934.27, NAV $1454.23, external ORANY 28 shares, recent/open orders 0
+- Money path: `PREVIEW_ONLY`, `ACCUMULATING_EDGE`, rung 0/5, capital $0,
+  forward evidence 0/20, real-order submission false
