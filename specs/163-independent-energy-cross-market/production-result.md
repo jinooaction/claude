@@ -19,6 +19,25 @@ already frozen control design accurately. The real positive/null pair tests the 
 diversifier lane, while the seeded synthetic family calibration tests the new standalone
 lane. No threshold, feature, model, candidate, split, metric, or result changed.
 
+## Authoritative Production Reproduction
+
+- Workflow run: `32861194112`, success
+- Main commit: `08970e7b2dbb065eda824a7d3de5485b876865d4`
+- Production timestamp: `2026-08-25T14:49:16Z`
+- Production batch ID: `energy-cross-market-a69882576424`
+- Reproduced verdict: `NO_FACTORY_EDGE`
+- Reproduced criterion diagnosis: `OBJECTIVE_GATE_PASSABLE_CANDIDATE_UNCONFIRMED`
+- Reproduced audit: 16/16 current candidates, 736/736 global unique fingerprints
+- Reproduced selected candidate and metrics: exact match with the frozen local replay
+- Publication: success; incomplete or stale runs cannot overwrite this evidence sidecar
+
+The post-merge KIS read-only smoke run `32861858561` also passed 5/5 against the same
+commit. It observed zero recent orders and zero open unfilled orders. Deploy workflow
+`32861194460` completed safely, but the server refused the code swap during the US regular
+session and deferred it to `auto-invest-deploy.timer` after `2026-08-25T21:00:00Z`.
+Production research evidence is therefore current, while server code deployment remains a
+time-gated follow-up rather than a completed claim.
+
 ## Data And Chronology
 
 - Factor window: March 1998 through June 2026, 340 months

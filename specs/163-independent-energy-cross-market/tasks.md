@@ -57,8 +57,8 @@
 ## Phase 8: Verification and Release
 
 - [x] T016 Run focused tests, full pytest, ruff, YAML parse, diff check, strict harness, handoff facts, and PR quality validation
-- [ ] T017 Create and merge the grade-4 PR, verify deploy and production factory evidence, and run KIS read-only smoke
-- [ ] T018 Refresh `HANDOFF.md` and add the detailed spec-163 handoff with the current money-path state
+- [x] T017 Create and merge the grade-4 PR, verify the market-hours deploy deferral and production factory evidence, and run KIS read-only smoke
+- [x] T018 Refresh `HANDOFF.md` and add the detailed spec-163 handoff with the current money-path state
 
 ## Dependencies
 
