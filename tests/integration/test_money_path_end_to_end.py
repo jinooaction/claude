@@ -496,10 +496,10 @@ def test_money_path_report_surfaces_downside_with_real_config():
             "verdict": "EDGE_CONFIRMED",
             "n_obs": 25,
             "min_obs_required": 20,
-                "psr_vs_benchmark": "0.97",
-                "dsr_threshold": "0.95",
-                "significance_method": "paired_active_return_psr_v1",
-            },
+            "psr_vs_benchmark": "0.97",
+            "dsr_threshold": "0.95",
+            "significance_method": "paired_active_return_psr_v1",
+        },
         now=datetime(2026, 6, 12, 8, tzinfo=UTC),
     )
     # 방어선 예산: 탐색 자본 = NAV($12,000) 20% = $2,400, 강등 -$240 / 정지 -$480.
