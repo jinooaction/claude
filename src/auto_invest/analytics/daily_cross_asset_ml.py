@@ -726,7 +726,8 @@ def run_daily_cross_asset_ml(
         "reason_ko": reason,
         "next_action_ko": "독립 no-live 재현 뒤 기존 Canary 승격 관문을 적용한다.",
         "replay_command": (
-            "uv run python scripts/daily_cross_asset_ml_probe.py --db data/forward_wide.db --json"
+            "uv run python scripts/daily_cross_asset_ml_probe.py "
+            "--db data/forward_v2_wide.db --json"
         ),
         "evidence_refs": ["daily-cross-asset-ml", "kis-price-bars", "global-trend-wide"],
         **fingerprints,

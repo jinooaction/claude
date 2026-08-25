@@ -223,6 +223,32 @@ def test_deploy_workflow_invokes_only_gateway_commands():
     assert "sudo journalctl -u auto-invest-deploy.service" not in workflow
 
 
+def test_forward_paper_epoch_binds_all_tracks_and_consumers_to_clean_databases():
+    helper = (REPO_ROOT / "deploy" / "observe-on-instance.sh").read_text(
+        encoding="utf-8"
+    )
+    track_keys = (
+        "trend",
+        "notrend",
+        "rmbeta",
+        "multiasset",
+        "global",
+        "globalfixed",
+        "wide",
+    )
+    for key in track_keys:
+        assert f'TRACK_DB="data/forward_v2_{key}.db"' in helper
+        assert f'TRACK_DB="data/forward_{key}.db"' not in helper
+
+    for key in ("globalfixed", "wide", "multiasset"):
+        assert f'CANDIDATE_HISTORY_DB="data/forward_v2_{key}.db"' in helper
+    assert helper.count("data/forward_v2_globalfixed.db") >= 5
+    assert helper.count("data/forward_v2_trend.db") >= 3
+    assert helper.count("data/forward_v2_wide.db") >= 4
+    assert "rm -f data/forward_" not in helper
+    assert "truncate" not in helper.lower()
+
+
 def test_live_money_workflows_require_production_environment():
     protected = (
         "go-live-canary.yml",

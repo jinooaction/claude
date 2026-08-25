@@ -35,43 +35,43 @@ track_config() {
     case "${track}" in
         trend)
             TRACK_PORTFOLIO="deploy/canary-portfolio.toml"
-            TRACK_DB="data/forward_trend.db"
+            TRACK_DB="data/forward_v2_trend.db"
             TRACK_HALT="data/forward_trend.halt.flag"
             TRACK_CONSTRUCT_TOP_N="50"
             ;;
         notrend)
             TRACK_PORTFOLIO="deploy/canary-portfolio-notrend.toml"
-            TRACK_DB="data/forward_notrend.db"
+            TRACK_DB="data/forward_v2_notrend.db"
             TRACK_HALT="data/forward_notrend.halt.flag"
             TRACK_CONSTRUCT_TOP_N="50"
             ;;
         rmbeta)
             TRACK_PORTFOLIO="deploy/risk-managed-beta-portfolio.toml"
-            TRACK_DB="data/forward_rmbeta.db"
+            TRACK_DB="data/forward_v2_rmbeta.db"
             TRACK_HALT="data/forward_rmbeta.halt.flag"
             TRACK_CONSTRUCT_TOP_N=""
             ;;
         multiasset)
             TRACK_PORTFOLIO="deploy/multi-asset-trend-portfolio.toml"
-            TRACK_DB="data/forward_multiasset.db"
+            TRACK_DB="data/forward_v2_multiasset.db"
             TRACK_HALT="data/forward_multiasset.halt.flag"
             TRACK_CONSTRUCT_TOP_N=""
             ;;
         global)
             TRACK_PORTFOLIO="deploy/global-trend-portfolio.toml"
-            TRACK_DB="data/forward_global.db"
+            TRACK_DB="data/forward_v2_global.db"
             TRACK_HALT="data/forward_global.halt.flag"
             TRACK_CONSTRUCT_TOP_N=""
             ;;
         globalfixed)
             TRACK_PORTFOLIO="deploy/global-trend-fixed-portfolio.toml"
-            TRACK_DB="data/forward_globalfixed.db"
+            TRACK_DB="data/forward_v2_globalfixed.db"
             TRACK_HALT="data/forward_globalfixed.halt.flag"
             TRACK_CONSTRUCT_TOP_N=""
             ;;
         wide)
             TRACK_PORTFOLIO="deploy/global-trend-wide-portfolio.toml"
-            TRACK_DB="data/forward_wide.db"
+            TRACK_DB="data/forward_v2_wide.db"
             TRACK_HALT="data/forward_wide.halt.flag"
             TRACK_CONSTRUCT_TOP_N=""
             ;;
@@ -90,15 +90,15 @@ candidate_history_config() {
             ;;
         global-trend-wide)
             CANDIDATE_HISTORY_PORTFOLIO="deploy/global-trend-wide-portfolio.toml"
-            CANDIDATE_HISTORY_DB="data/forward_wide.db"
+            CANDIDATE_HISTORY_DB="data/forward_v2_wide.db"
             ;;
         global-trend-fixed)
             CANDIDATE_HISTORY_PORTFOLIO="deploy/global-trend-fixed-portfolio.toml"
-            CANDIDATE_HISTORY_DB="data/forward_globalfixed.db"
+            CANDIDATE_HISTORY_DB="data/forward_v2_globalfixed.db"
             ;;
         multi-asset-trend)
             CANDIDATE_HISTORY_PORTFOLIO="deploy/multi-asset-trend-portfolio.toml"
-            CANDIDATE_HISTORY_DB="data/forward_multiasset.db"
+            CANDIDATE_HISTORY_DB="data/forward_v2_multiasset.db"
             ;;
         *)
             die "candidate-history supports only micro-gtaa, global-trend-wide, global-trend-fixed, or multi-asset-trend"
@@ -132,6 +132,7 @@ paper_track_run() {
     track_config "${track}"
     require_repo
     ensure_paper_track_storage
+    echo "measurement_epoch=v2-clean-unlevered db=${TRACK_DB}"
 
     run_cli backfill-bars \
         --portfolio "${TRACK_PORTFOLIO}" \
@@ -201,12 +202,12 @@ signal_ic_trend() {
     echo "--- H=21 ---"
     run_cli signal-ic \
         --portfolio deploy/canary-portfolio.toml \
-        --db data/forward_trend.db \
+        --db data/forward_v2_trend.db \
         --forward-horizon 21 2>/dev/null
     echo "--- H=63 ---"
     run_cli signal-ic \
         --portfolio deploy/canary-portfolio.toml \
-        --db data/forward_trend.db \
+        --db data/forward_v2_trend.db \
         --forward-horizon 63 2>/dev/null
     exit 0
 }
@@ -216,7 +217,7 @@ ladder_forward_verdict() {
     run_cli forward-verdict \
         --mode paper \
         --portfolio deploy/global-trend-fixed-portfolio.toml \
-        --db data/forward_globalfixed.db \
+        --db data/forward_v2_globalfixed.db \
         --format json
 }
 
@@ -228,7 +229,7 @@ ladder_anchored_verdict() {
 
     run_cli bars-export \
         --portfolio deploy/global-trend-fixed-portfolio.toml \
-        --db data/forward_globalfixed.db \
+        --db data/forward_v2_globalfixed.db \
         --out-dir "${wrk}/bars" \
         --json \
         > "${wrk}/bars-export.json"
@@ -238,7 +239,7 @@ ladder_anchored_verdict() {
         > "${wrk}/ingest.log"
     run_cli forward-verdict-anchored \
         --portfolio deploy/global-trend-fixed-portfolio.toml \
-        --db data/forward_globalfixed.db \
+        --db data/forward_v2_globalfixed.db \
         --history-root "${wrk}/hist" \
         --trailing-years 5 \
         --mode paper \
@@ -467,13 +468,13 @@ daily_ml_edge() {
         --portfolio deploy/global-trend-wide-portfolio.toml \
         --min-bars 1250 \
         --order deepen \
-        --db data/forward_wide.db \
+        --db data/forward_v2_wide.db \
         --env-file .env \
         --json
 
     echo "DAILY_ML_EDGE_JSON_BEGIN"
     sudo -u "${APP_USER}" -H /usr/local/bin/uv run python \
-        scripts/daily_cross_asset_ml_probe.py --db data/forward_wide.db --json
+        scripts/daily_cross_asset_ml_probe.py --db data/forward_v2_wide.db --json
     echo "DAILY_ML_EDGE_JSON_END"
 }
 

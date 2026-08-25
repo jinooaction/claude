@@ -5591,15 +5591,20 @@ def nav_snapshot_cmd(
 
     capital_dec: Decimal | None = None
     ledger_cash: Decimal | None = None
+    ledger_cash_nonnegative: bool | None = None
     if capital is not None:
         capital_dec = Decimal(str(capital))
         ledger_cash = capital_dec + net_cash_flow_usd(fills)
-        if ledger_cash < 0:
+        ledger_cash_nonnegative = ledger_cash >= Decimal("-0.01")
+        if mode == "paper" and not ledger_cash_nonnegative:
             typer.echo(
-                f"(경고: 장부 현금 음수 ${ledger_cash} — 자본 기준이 누적 순투입보다"
-                " 작음. NAV 는 그래도 자본+손익으로 일관되게 계산됨)",
+                f"invalid paper measurement: negative paper cash ${ledger_cash}; "
+                "snapshot not appended",
                 err=True,
             )
+            _exit(65)
+        if mode == "live" and ledger_cash < 0:
+            typer.echo(f"(경고: 장부 현금 음수 ${ledger_cash})", err=True)
 
     snap = compute_nav(
         broker_cash_usd=None,
@@ -5655,6 +5660,9 @@ def nav_snapshot_cmd(
         )
         out["measurement_scope"] = "strategy" if measurement_contract is not None else "account"
         out["excluded_fills_count"] = excluded_fills_count
+        out["capital_basis_usd"] = None if capital_dec is None else str(capital_dec)
+        out["ledger_cash_nonnegative"] = ledger_cash_nonnegative
+        out["measurement_valid"] = True
         typer.echo(_json.dumps(out))
     else:
         typer.echo(nav_render_text(snap))

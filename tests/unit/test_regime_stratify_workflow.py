@@ -88,7 +88,7 @@ def test_stratify_bars_export_reads_forward_dbs():
     """bars-export 는 forward 트랙 DB 를 *읽기만* 한다(전용 DB 격리 원칙과 정합)."""
     text = _observe_text()
     for track in _STRATIFY_TRACKS:
-        assert f'TRACK_DB="data/forward_{track}.db"' in text
+        assert f'TRACK_DB="data/forward_v2_{track}.db"' in text
 
     helper_block = _regime_helper_block()
     assert helper_block.count("run_cli bars-export") == 1

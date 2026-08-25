@@ -41,3 +41,9 @@ def test_forward_workflow_calibrates_and_publishes_paired_gate_evidence():
     assert "--json-out /tmp/forward_gate_calibration.json" in text
     assert "cp /tmp/forward_gate_calibration.json forward_gate_calibration.json" in text
     assert "git add LAST_RUN.md leaderboard.json forward_gate_calibration.json" in text
+
+
+def test_forward_workflow_labels_clean_unlevered_measurement_epoch():
+    text = _workflow_text()
+    assert "v2-clean-unlevered" in text
+    assert "legacy forward PSR/counts are ineligible" in text
