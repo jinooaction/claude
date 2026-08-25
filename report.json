@@ -1,21 +1,21 @@
 {
   "benchmarks": {
     "incumbent_wide_trend_25bp": {
-      "cagr_pct": 2.53851,
+      "cagr_pct": 2.459697,
       "max_dd_pct": 5.511424,
-      "sharpe": 0.589643,
-      "total_return_pct": 5.649552
+      "sharpe": 0.574377,
+      "total_return_pct": 5.520907
     },
     "passive_equal_weight_25bp": {
-      "cagr_pct": 14.30132,
+      "cagr_pct": 14.079148,
       "max_dd_pct": 5.325597,
-      "sharpe": 1.777849,
-      "total_return_pct": 34.049806
+      "sharpe": 1.758665,
+      "total_return_pct": 33.817793
     }
   },
   "candidate_package": {
     "candidate_id": "candidate-low-turnover-daily-cross-asset-ml-v2",
-    "data": "sha256:f8f78e8d25f83ec73997cd9c36e1b7fb5a194823bcba147bbf092c741f8e999a",
+    "data": "sha256:ac211918a17deec6b601642d3795fd5bed352f23d8b4bd807566f46011143a90",
     "domain_key": "investment_edge",
     "eligible": false,
     "evidence_refs": [
@@ -30,7 +30,7 @@
     "next_action_ko": "독립 no-live 재현 뒤 기존 Canary 승격 관문을 적용한다.",
     "priority_score": 760,
     "reason_ko": "failed gates: sharpe_margin, psr, dsr, fold_win_rate, max_drawdown",
-    "replay_command": "uv run python scripts/daily_cross_asset_ml_probe.py --db data/forward_wide.db --json",
+    "replay_command": "uv run python scripts/daily_cross_asset_ml_probe.py --db data/forward_v2_wide.db --json",
     "risk_grade": 2,
     "status": "rejected",
     "title_ko": "저회전 일봉 교차자산 AI 상대수익 후보",
@@ -40,9 +40,9 @@
     {
       "cost_bps": 10,
       "metrics": {
-        "cagr_pct": 4.472304,
+        "cagr_pct": 4.432565,
         "max_dd_pct": 8.833324,
-        "sharpe": 0.633318,
+        "sharpe": 0.630561,
         "total_return_pct": 10.06682
       },
       "turnover": 8.374194
@@ -50,9 +50,9 @@
     {
       "cost_bps": 25,
       "metrics": {
-        "cagr_pct": 3.877129,
+        "cagr_pct": 3.842776,
         "max_dd_pct": 9.006857,
-        "sharpe": 0.55657,
+        "sharpe": 0.554151,
         "total_return_pct": 8.696808
       },
       "turnover": 8.374194
@@ -60,30 +60,30 @@
     {
       "cost_bps": 50,
       "metrics": {
-        "cagr_pct": 2.891984,
+        "cagr_pct": 2.866479,
         "max_dd_pct": 9.29555,
-        "sharpe": 0.427322,
+        "sharpe": 0.42547,
         "total_return_pct": 6.449628
       },
       "turnover": 8.374194
     }
   ],
   "data": {
-    "common_week_end": "2026-08-21",
+    "common_week_end": "2026-08-24",
     "common_week_start": "2021-06-11",
-    "common_weeks": 272,
+    "common_weeks": 273,
     "daily_counts": {
-      "DBC": 1305,
-      "EEM": 1305,
-      "EFA": 1305,
-      "GLD": 1305,
-      "IEF": 1305,
-      "LQD": 1305,
-      "QQQ": 1305,
-      "SPY": 1305,
-      "TLT": 1305,
-      "UUP": 1305,
-      "VNQ": 1305
+      "DBC": 1306,
+      "EEM": 1306,
+      "EFA": 1306,
+      "GLD": 1306,
+      "IEF": 1306,
+      "LQD": 1306,
+      "QQQ": 1306,
+      "SPY": 1306,
+      "TLT": 1306,
+      "UUP": 1306,
+      "VNQ": 1306
     },
     "symbols": [
       "SPY",
@@ -101,7 +101,7 @@
   },
   "experiment_id": "low-turnover-daily-cross-asset-ml-v2",
   "fingerprints": {
-    "data": "sha256:f8f78e8d25f83ec73997cd9c36e1b7fb5a194823bcba147bbf092c741f8e999a",
+    "data": "sha256:ac211918a17deec6b601642d3795fd5bed352f23d8b4bd807566f46011143a90",
     "features": "sha256:b718803406484520f8584307a9c467c8339d7d4a9d85af564d768ef64646dfc1",
     "model": "sha256:f5f929ec8238d932511ae75b9f5395c8a8845a96794e5fefec4a7bad50b0dcc6"
   },
@@ -294,8 +294,8 @@
       "chronology_ok": true,
       "fold_id": 15,
       "ridge_rmse": 0.02516992183146656,
-      "test_end": "2026-08-14",
-      "test_rows": 22,
+      "test_end": "2026-08-21",
+      "test_rows": 33,
       "test_start": "2026-08-07",
       "train_label_end": "2026-07-31",
       "train_rows": 2376,
@@ -310,25 +310,25 @@
       "required": ">= 10"
     },
     {
-      "actual": 3.877129,
+      "actual": 3.842776,
       "gate_id": "positive_25bp_cagr",
       "passed": true,
       "required": "> 0"
     },
     {
-      "actual": -1.221279,
+      "actual": -1.204514,
       "gate_id": "sharpe_margin",
       "passed": false,
       "required": ">= 0.20 over both benchmarks"
     },
     {
-      "actual": 0.031673671098232825,
+      "actual": 0.03292277542748906,
       "gate_id": "psr",
       "passed": false,
       "required": ">= 0.95"
     },
     {
-      "actual": 0.5900449946772435,
+      "actual": 0.5874995603602053,
       "gate_id": "dsr",
       "passed": false,
       "required": ">= 0.95"
@@ -355,12 +355,12 @@
       "actual": 8.374193548387096,
       "gate_id": "turnover_not_increased",
       "passed": true,
-      "required": "<= baseline 34.340000"
+      "required": "<= baseline 34.590000"
     }
   ],
   "latest_allocation": {
     "cash_weight": 1.0,
-    "date": "2026-08-14",
+    "date": "2026-08-21",
     "weights": {
       "DBC": 0.0,
       "EEM": 0.0,
@@ -376,23 +376,23 @@
     }
   },
   "model_metrics": {
-    "baseline_turnover": 34.34,
+    "baseline_turnover": 34.59,
     "boosting_mean_validation_rmse": 0.020007236831285143,
     "candidate_turnover": 8.374194,
     "estimated_trade_cost_bps": 25,
     "fold_win_rate": 0.3333333333333333,
     "fold_wins": 5,
     "minimum_hold_weeks": 4,
-    "prediction_weeks": 114,
+    "prediction_weeks": 115,
     "ridge_mean_validation_rmse": 0.020882258367235108,
     "suppressed_trades": 53,
     "trade_threshold": 0.08,
     "trial_sharpes_annual": [
-      0.512292,
-      1.359805,
-      0.55657
+      0.493758,
+      1.353721,
+      0.554151
     ],
-    "turnover_reduction_pct": 75.61388
+    "turnover_reduction_pct": 75.790131
   },
   "reason": "failed gates: sharpe_margin, psr, dsr, fold_win_rate, max_drawdown",
   "safety": {
@@ -405,8 +405,8 @@
   },
   "schema_version": "1.1",
   "significance": {
-    "dsr_model_trials": 0.5900449946772435,
-    "psr_vs_better_benchmark": 0.031673671098232825
+    "dsr_model_trials": 0.5874995603602053,
+    "psr_vs_better_benchmark": 0.03292277542748906
   },
   "verdict": "NO_EDGE"
 }

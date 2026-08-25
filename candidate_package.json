@@ -1,6 +1,6 @@
 {
   "candidate_id": "candidate-low-turnover-daily-cross-asset-ml-v2",
-  "data": "sha256:f8f78e8d25f83ec73997cd9c36e1b7fb5a194823bcba147bbf092c741f8e999a",
+  "data": "sha256:ac211918a17deec6b601642d3795fd5bed352f23d8b4bd807566f46011143a90",
   "domain_key": "investment_edge",
   "eligible": false,
   "evidence_refs": [
@@ -15,7 +15,7 @@
   "next_action_ko": "독립 no-live 재현 뒤 기존 Canary 승격 관문을 적용한다.",
   "priority_score": 760,
   "reason_ko": "failed gates: sharpe_margin, psr, dsr, fold_win_rate, max_drawdown",
-  "replay_command": "uv run python scripts/daily_cross_asset_ml_probe.py --db data/forward_wide.db --json",
+  "replay_command": "uv run python scripts/daily_cross_asset_ml_probe.py --db data/forward_v2_wide.db --json",
   "risk_grade": 2,
   "status": "rejected",
   "title_ko": "저회전 일봉 교차자산 AI 상대수익 후보",
