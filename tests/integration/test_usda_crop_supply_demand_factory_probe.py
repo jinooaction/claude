@@ -17,15 +17,26 @@ def test_probe_exposes_offline_inputs_and_no_money_boundary() -> None:
     assert "--prior-factory-json" in result.stdout
     assert "--controls-json" in result.stdout
 
-    probe = Path("scripts/usda_crop_supply_demand_factory_probe.py").read_text()
+    probe = Path("scripts/usda_crop_supply_demand_factory_probe.py").read_text(
+        encoding="utf-8"
+    )
     assert "run_usda_crop_supply_demand_factory" in probe
     assert "KIS_" not in probe
     assert "auto_invest.brokers" not in probe
 
 
-def test_strategy_factory_workflow_registers_usda_as_canonical_last_family() -> None:
-    workflow = Path(".github/workflows/autonomous-strategy-factory.yml").read_text()
+def test_strategy_factory_workflow_preserves_usda_as_the_720_trial_predecessor() -> None:
+    workflow = Path(".github/workflows/autonomous-strategy-factory.yml").read_text(
+        encoding="utf-8"
+    )
     assert "scripts/usda_crop_supply_demand_factory_probe.py" in workflow
     assert "usda_crop_supply_demand_factory.json" in workflow
-    assert 'global_audit_trial_count\' /tmp/strategy_factory.json)" = "720' in workflow
-    assert 'multiplicity_trial_count\' /tmp/strategy_factory.json)" = "16' in workflow
+    assert (
+        'global_audit_trial_count\' /tmp/usda_crop_supply_demand_factory.json)" = "720'
+        in workflow
+    )
+    assert (
+        'multiplicity_trial_count\' /tmp/usda_crop_supply_demand_factory.json)" = "16'
+        in workflow
+    )
+    assert "--prior-factory-json /tmp/usda_crop_supply_demand_factory.json" in workflow
