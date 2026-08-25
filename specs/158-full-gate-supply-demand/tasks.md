@@ -10,5 +10,5 @@
 - [x] T008 Wire the new probe and sidecar artifacts after spec 157 in the production workflow.
 - [x] T009 Run latest official-data replay and record the immutable result.
 - [x] T010 Run focused/full tests, ruff, YAML, strict harness, handoff facts, and PR quality gate.
-- [ ] T011 Commit, push, open and auto-merge a clean PR; verify deploy and production replay.
-- [ ] T012 Run KIS no-order smoke and money/capital-path checks, then refresh HANDOFF.
+- [x] T011 Commit, push, open and auto-merge a clean PR; verify deploy and production replay.
+- [x] T012 Run KIS no-order smoke and money/capital-path checks, then refresh HANDOFF.
