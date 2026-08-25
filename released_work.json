@@ -1,5 +1,5 @@
 {
-  "commit": "7cca336a67d8228f0147ab75fdd482e1dc95cbb3",
+  "commit": "e42e13ca1189e8bef0144c10966102f8256de602",
   "overall_status": "OK",
   "released_work": [
     {
@@ -543,7 +543,7 @@
       "status": "released"
     }
   ],
-  "run_id": "32800129575",
+  "run_id": "32802220335",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -659,7 +659,8 @@
     "154-credit-spread-carry",
     "155-fx-carry-gate-power",
     "156-commodity-term-structure",
-    "157-commodity-positioning-gate-controls"
+    "157-commodity-positioning-gate-controls",
+    "158-full-gate-supply-demand"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -850,11 +851,7 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "153-edge-gate-calibration"
-    },
-    {
-      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "158-full-gate-supply-demand"
     }
   ],
-  "timestamp_utc": "2026-08-25T02:06:47.175895Z"
+  "timestamp_utc": "2026-08-25T02:39:26.436226Z"
 }
