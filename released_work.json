@@ -1,5 +1,5 @@
 {
-  "commit": "db31b3d1d029554eaadaa07cee0917affe2d25be",
+  "commit": "4f59ef72def122205b29465eb135e5ec47f57b2b",
   "overall_status": "OK",
   "released_work": [
     {
@@ -543,7 +543,7 @@
       "status": "released"
     }
   ],
-  "run_id": "32833005272",
+  "run_id": "32846066074",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -860,7 +860,11 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "160-forward-paper-ledger-integrity"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "162-usda-crop-supply-demand"
     }
   ],
-  "timestamp_utc": "2026-08-25T09:38:19.073057Z"
+  "timestamp_utc": "2026-08-25T12:09:45.652452Z"
 }
