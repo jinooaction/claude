@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import tomllib
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from typing import Any
 
+from auto_invest.config.rules import PortfolioRebalanceConfig
+from auto_invest.portfolio.autoarm import strategy_fingerprint_digest
 from auto_invest.portfolio.edge_verdict import PAIRED_ACTIVE_RETURN_PSR_METHOD
+from auto_invest.portfolio.factory_evidence import assess_factory_evidence
 
 SCHEMA_VERSION = "1.0"
 ENTRY_READY = "ENTRY_READY"
@@ -99,9 +103,7 @@ def evaluate_live_entry(
         "exploration_canary_ready": deployment.get("exploration_canary_ready") is True,
         "forward_observations": n_obs is not None and n_obs >= min_obs,
         "forward_psr": psr is not None and psr >= min_psr,
-        "forward_significance_method": (
-            significance_method == PAIRED_ACTIVE_RETURN_PSR_METHOD
-        ),
+        "forward_significance_method": (significance_method == PAIRED_ACTIVE_RETURN_PSR_METHOD),
         "forward_calmar": forward.get("beats_benchmark_calmar") is True,
         "hardened_canary": canary_passed,
         "evidence_fresh": (
@@ -111,16 +113,21 @@ def evaluate_live_entry(
     factory = factory_evidence if isinstance(factory_evidence, Mapping) else {}
     factory_decision = factory.get("decision")
     factory_decision = factory_decision if isinstance(factory_decision, Mapping) else {}
-    selected_fingerprint = factory_decision.get("selected_strategy_fingerprint")
+    factory_assessment = assess_factory_evidence(factory)
+    selected_fingerprint = factory_assessment.selected_strategy_fingerprint
+    selected_config = factory_decision.get("selected_deploy_config")
+    try:
+        selected_payload = (
+            tomllib.loads(selected_config) if isinstance(selected_config, str) else {}
+        )
+        selected_cfg = PortfolioRebalanceConfig.model_validate(selected_payload["portfolio"])
+        parsed_fingerprint = strategy_fingerprint_digest(selected_cfg)
+    except (KeyError, ValueError, tomllib.TOMLDecodeError):
+        parsed_fingerprint = None
     factory_checks = {
-        "factory_gate_version": factory.get("gate_version") == "2.0",
-        "factory_verdict": factory_decision.get("verdict") == "FACTORY_EDGE",
-        "factory_trials_complete": (
-            _int_or_none(factory.get("candidate_count")) == 64
-            and _int_or_none(factory.get("complete_trial_count")) == 64
-        ),
-        "factory_research_canary_eligible": (
-            factory_decision.get("research_canary_eligible") is True
+        "factory_contract_complete": factory_assessment.eligible,
+        "factory_strategy_config_valid": (
+            parsed_fingerprint is not None and parsed_fingerprint == selected_fingerprint
         ),
         "factory_strategy_fingerprint": (
             isinstance(selected_fingerprint, str)
@@ -155,6 +162,7 @@ def evaluate_live_entry(
         "max_evidence_age_hours": max_evidence_age_hours,
         "checks": exploration_checks,
         "factory_candidate_id": factory_decision.get("selected_candidate_id"),
+        "factory_assessment": factory_assessment.as_dict(),
         "factory_evidence_age_hours": factory_evidence_age_hours,
         "factory_checks": factory_checks,
     }

@@ -6437,7 +6437,7 @@ def ladder_decide_cmd(
     factory_evidence_json: Path = typer.Option(
         None,
         "--factory-evidence-json",
-        help="64회 자동 전략 공장 전체 판정 JSON(선택). 완전 합격만 10% 연구 캐너리 후보.",
+        help="버전별 전략 공장 전체 판정 JSON(선택). 완전 합격만 10% 연구 캐너리 후보.",
     ),
     factory_evidence_age_hours: float = typer.Option(
         None,
@@ -6504,7 +6504,7 @@ def ladder_decide_cmd(
     단0=0% → 단1=10% 연구 → 단2=20% 탐색 → 단3=25% → 단4=50% → 단5=100%.
     내려가는 건 낙폭
     하나로 즉시(예산/2 강등·예산 정지), 올라가는 건 세 증거(관측·경과일·낙폭) 전부.
-    헌법 X.4 v8.0.0. 비위임 불변(캡·화이트리스트·감사·서킷 브레이커)은 그대로다.
+    헌법 X.4 v9.0.0. 비위임 불변(캡·화이트리스트·감사·서킷 브레이커)은 그대로다.
     """
     import json as _json
     import tomllib as _tomllib
@@ -6515,6 +6515,7 @@ def ladder_decide_cmd(
     from auto_invest.config.rules import PortfolioRebalanceConfig
     from auto_invest.portfolio.autoarm import strategy_fingerprint_digest
     from auto_invest.portfolio.capital_ladder import decide_ladder
+    from auto_invest.portfolio.factory_evidence import assess_factory_evidence
 
     def _read_json(path: Path | None) -> dict | None:
         if path is None:
@@ -6528,6 +6529,7 @@ def ladder_decide_cmd(
     anchored = _read_json(anchored_verdict_json)
     profit_evidence = _read_json(profit_evidence_json)
     factory_evidence = _read_json(factory_evidence_json)
+    factory_assessment = assess_factory_evidence(factory_evidence)
     hardened_canary = _read_json(hardened_canary_json)
     edge_source = "standard"
     if anchored is not None:
@@ -6560,9 +6562,8 @@ def ladder_decide_cmd(
     )
     factory_candidate_cfg = None
     factory_contract_ready = False
-    factory_candidate_id = None
+    factory_candidate_id = factory_assessment.selected_candidate_id
     if isinstance(factory_decision, dict):
-        factory_candidate_id = factory_decision.get("selected_candidate_id")
         selected_config = factory_decision.get("selected_deploy_config")
         try:
             selected_payload = (
@@ -6576,11 +6577,8 @@ def ladder_decide_cmd(
             factory_candidate_cfg = None
             selected_fingerprint = None
         factory_contract_ready = (
-            factory_decision.get("verdict") == "FACTORY_EDGE"
-            and factory_decision.get("research_canary_eligible") is True
-            and factory_evidence.get("candidate_count") == 64
-            and factory_evidence.get("complete_trial_count") == 64
-            and selected_fingerprint == factory_decision.get("selected_strategy_fingerprint")
+            factory_assessment.eligible
+            and selected_fingerprint == factory_assessment.selected_strategy_fingerprint
             and factory_evidence_age_hours is not None
             and 0.0 <= factory_evidence_age_hours <= 36.0
             and isinstance(hardened_canary, dict)
@@ -6615,11 +6613,11 @@ def ladder_decide_cmd(
     factory_verdict = {
         "verdict": ("RESEARCH_CANARY_READY" if factory_exact_match else "RESEARCH_CANARY_WAIT"),
         "candidate_id": factory_candidate_id,
-        "complete_trials": (
-            factory_evidence.get("complete_trial_count")
-            if isinstance(factory_evidence, dict)
-            else None
-        ),
+        "contract_version": factory_assessment.contract_version,
+        "contract_complete": factory_assessment.eligible,
+        "contract_reasons": list(factory_assessment.reasons),
+        "candidate_count": factory_assessment.candidate_count,
+        "complete_trials": factory_assessment.complete_trial_count,
         "exact_strategy_match": factory_exact_match,
         "hardened_canary_pass": (
             isinstance(hardened_canary, dict) and hardened_canary.get("verdict") == "PASS"

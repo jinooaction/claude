@@ -85,22 +85,53 @@ def test_hardened_failure_keeps_real_money_disarmed(tmp_path: Path) -> None:
     assert payload["exploration_verdict"]["hardened_canary_pass"] is False
 
 
-def test_complete_exact_factory_winner_enters_only_10pct(tmp_path: Path) -> None:
+def _invoke_factory(tmp_path: Path, *, winner: bool):
     live = ROOT / "deploy" / "canary-live-portfolio.toml"
     config_text = live.read_text(encoding="utf-8")
     config = PortfolioRebalanceConfig.model_validate(tomllib.loads(config_text)["portfolio"])
+    fingerprint = strategy_fingerprint_digest(config)
     factory = _json(
         tmp_path,
         "factory.json",
         {
-            "candidate_count": 64,
-            "complete_trial_count": 64,
+            "gate_version": "2.0",
+            "candidate_count": 16,
+            "complete_trial_count": 16,
+            "global_audit_trial_count": 704,
+            "unique_trial_fingerprint_count": 704,
             "decision": {
-                "verdict": "FACTORY_EDGE",
-                "research_canary_eligible": True,
-                "selected_candidate_id": "factory-exact",
-                "selected_strategy_fingerprint": strategy_fingerprint_digest(config),
-                "selected_deploy_config": config_text,
+                "verdict": "FACTORY_EDGE" if winner else "NO_FACTORY_EDGE",
+                "research_canary_eligible": winner,
+                "selected_candidate_id": "factory-exact" if winner else None,
+                "selected_strategy_fingerprint": fingerprint if winner else None,
+                "selected_deploy_config": config_text if winner else None,
+                "gates": [
+                    {
+                        "gate_id": "complete_family_trials",
+                        "passed": True,
+                        "actual": "16",
+                        "required": "16",
+                    },
+                    {
+                        "gate_id": "prior_audit_complete",
+                        "passed": True,
+                        "actual": "688",
+                        "required": "688",
+                    },
+                    {
+                        "gate_id": "global_audit_trials",
+                        "passed": True,
+                        "actual": "704",
+                        "required": "704",
+                    },
+                    {
+                        "gate_id": "unique_audit_fingerprints",
+                        "passed": True,
+                        "actual": "704",
+                        "required": "704",
+                    },
+                    {"gate_id": "holdout_excess_psr", "passed": winner},
+                ],
             },
         },
     )
@@ -109,7 +140,7 @@ def test_complete_exact_factory_winner_enters_only_10pct(tmp_path: Path) -> None
     nav = _json(tmp_path, "nav.json", {"total_value_usd": "12000"})
     sentinel = tmp_path / "sentinel.request"
     sentinel.write_text("armed: false\ncapital_usd: 0\nrun_seq: 1\n", encoding="utf-8")
-    result = RUNNER.invoke(
+    return RUNNER.invoke(
         app,
         [
             "ladder-decide",
@@ -133,12 +164,30 @@ def test_complete_exact_factory_winner_enters_only_10pct(tmp_path: Path) -> None
             "json",
         ],
     )
+
+
+def test_complete_exact_factory_winner_enters_only_10pct(tmp_path: Path) -> None:
+    result = _invoke_factory(tmp_path, winner=True)
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
     assert payload["action"] == "PROMOTE"
     assert payload["target_rung"] == 1
     assert payload["target_capital_usd"] == 1200
+    assert payload["factory_verdict"]["contract_version"] == "family-complete-v2"
+    assert payload["factory_verdict"]["contract_complete"] is True
     assert payload["factory_verdict"]["exact_strategy_match"] is True
+
+
+def test_current_no_factory_edge_stays_disarmed(tmp_path: Path) -> None:
+    result = _invoke_factory(tmp_path, winner=False)
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["action"] == "WAIT_EDGE"
+    assert payload["target_rung"] == 0
+    assert payload["target_capital_usd"] is None
+    assert payload["factory_verdict"]["contract_complete"] is False
+    assert "factory_edge" in payload["factory_verdict"]["contract_reasons"]
 
 
 def test_separate_live_performance_demotes_unfilled_stale_entry(tmp_path: Path) -> None:

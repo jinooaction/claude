@@ -33,10 +33,10 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `9455c8b` — Merge pull request #673 from jinooaction/Codex/159-strategy-usability-energy-replication |
-| main 테스트 | #673 기능 머지 전 `uv run pytest -q` → 3030 passed, 5 skipped. 건너뛴 5개는 KIS 실연결 환경 전용이며 KIS 생산 검사는 별도로 5/5 통과했다. |
-| main 린트 | #673 기능 머지 전 `uv run ruff check src tests` → All checks passed. |
-| 열린 PR | 기능 PR 없음. 이 인계 갱신은 `Codex/handoff-after-full-gate-supply-demand`에서 진행한다. |
+| 마지막 main 커밋 | `c74e947` — Merge pull request #674 from jinooaction/Codex/160-forward-paper-ledger-integrity |
+| main 테스트 | #674 기능 머지 전 `uv run pytest -q` → 3033 passed, 5 skipped. 건너뛴 5개는 KIS 실연결 환경 전용이며 KIS 생산 검사는 별도로 5/5 통과했다. |
+| main 린트 | #674 기능 머지 전 `uv run ruff check src tests` → All checks passed. |
+| 열린 PR | 기능 PR 없음. 스펙 161 연구 캐너리 증거 계약 정합화가 격리 브랜치에서 진행 중이다. |
 | 출시 완료 스펙 | 최신 기능: #671(스펙 158, 전체 다섯 관문 현실 감사·독립 EIA 공급/수요 16개·704개 고유 감사 장부), #669(스펙 157, 현실 통계 대조군·독립 원자재 재고/포지셔닝), #667(스펙 156, 독립 원자재 기간구조), #665(스펙 155, 독립 외환 금리차·관문 검출력), #663(스펙 154, 회사채 스프레드), #662(스펙 153, 가족별 다중검정과 개발/홀드아웃 분리), #659/#660(스펙 152, 미국 국채 캐리), #657(스펙 151, 독립 거시 전략), #653(스펙 150, 자동 전략 공장). |
 | 골격 스펙 | 없음. 다음 신규 기능은 이번 16개와 홀드아웃을 재사용하지 않고 USDA 작물 재고·생산·사용 또는 에너지 교차시장 복제로 독립 검증한다. |
 | 최근 출시 작업 | 스펙 158이 AQR 분산 추세를 50bp 차감한 뒤 정확한 다섯 관문에 넣어 모두 통과시키고 평균 제거 무효 대조군은 막았다. 새 EIA 공급·수요 후보는 비용 후 연 초과수익 +0.447504%, 혼합 샤프 +0.118590, 상관 -0.135530, 낙폭 개선을 통과했지만 홀드아웃 PSR 0.705637이 라이브 0.95와 종이 0.80에 못 미쳤다. |

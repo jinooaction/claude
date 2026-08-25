@@ -47,3 +47,7 @@ def test_forward_workflow_labels_clean_unlevered_measurement_epoch():
     text = _workflow_text()
     assert "v2-clean-unlevered" in text
     assert "legacy forward PSR/counts are ineligible" in text
+    assert "forward_v2_trend.db" in text
+    assert "forward_v2_notrend.db" in text
+    assert " / forward_trend.db" not in text
+    assert " / forward_notrend.db" not in text

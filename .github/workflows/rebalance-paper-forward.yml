@@ -517,8 +517,8 @@ jobs:
           {
             echo "# forward 페이퍼 A/B 토너먼트 — 최신 실행 (현재 데이터, 돈 안 움직임)"
             echo ""
-            echo "추세 필터 **ON**(canary-portfolio.toml / forward_trend.db) vs **OFF**"
-            echo "(canary-portfolio-notrend.toml / forward_notrend.db). 전용 DB 로 격리된"
+            echo "추세 필터 **ON**(canary-portfolio.toml / forward_v2_trend.db) vs **OFF**"
+            echo "(canary-portfolio-notrend.toml / forward_v2_notrend.db). 전용 DB 로 격리된"
             echo "두 페이퍼 트랙을 스펙 035 forward-verdict 로 각각 판정한다. PAPER 전용 — 실주문 0건."
             echo ""
             echo "| 항목 | 값 |"
