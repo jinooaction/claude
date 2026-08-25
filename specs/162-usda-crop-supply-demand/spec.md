@@ -2,7 +2,7 @@
 
 **Feature Branch**: `Codex/162-usda-crop-supply-demand`
 **Created**: 2026-08-25
-**Status**: Preregistered before any candidate result
+**Status**: Completed; grammar and gates were preregistered before any candidate result
 **Input**: Test a genuinely independent crop supply-demand return source and explain whether the existing promotion standard is defective or merely conservative.
 
 ## User Scenarios & Testing

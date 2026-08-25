@@ -34,3 +34,11 @@
 - WASDE has no January 2019 report because of the U.S. government shutdown.
 - Gold is an imperfect hedge for crop-specific inflation, so economic failure is plausible and meaningful.
 - Archived workbook labels can change; schema mismatch must fail closed rather than silently skip.
+
+## Post-Preregistration Data Finding
+
+ESMIS exposes five same-date archive aliases across the retained history. The
+factory prefers the unprefixed dated workbook and verifies that every alias has
+identical corn, wheat, and soybean market-year, ending-stock, and total-use
+inputs. This technical source rule was added after the first live archive replay
+failed closed; it does not change any signal, candidate, split, cost, or gate.
