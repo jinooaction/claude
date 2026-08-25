@@ -15,8 +15,8 @@
 
   2. **rung 0 자본 사다리 센티넬** — `capital_ladder.render_ladder_sentinel(rung=0)`. 새 전략은
      아직 *라이브로* 검증 안 됐으므로 자본을 0%(무장 해제)로 리셋한다 → forward 재검증부터
-     25%·50%·100% 로 자율 재승격(스펙 050 사다리). 검증 안 한 전략에 자본이 즉시 실리는 것을
-     막는 ⑤번 안전장치다.
+     10% 연구·20% 탐색·25%·50%·100% 로 자율 재승격(스펙 050 사다리). 검증 안 한 전략에
+     자본이 즉시 실리는 것을 막는 ⑤번 안전장치다.
 
 안전 경계(헌법 II 비협상 — 자율 재지정으로 절대 못 넘김):
   challenger 의 거래 유니버스가 라이브 화이트리스트의 *부분집합이 아니면* 재지정을 거부한다
@@ -38,7 +38,7 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from auto_invest.portfolio.auto_reassign import ACTION_REASSIGN, ReassignDecision
-from auto_invest.portfolio.capital_ladder import render_ladder_sentinel
+from auto_invest.portfolio.capital_ladder import ladder_schedule_ko, render_ladder_sentinel
 
 # 트랙 key → forward-paper deploy 설정 파일 경로(단일 출처).
 #   rebalance-paper-forward.yml 의 각 ARM `cfg=` 와 일치해야 한다. challenger_key/incumbent_key
@@ -186,7 +186,7 @@ def _provenance_banner(
         f"#     [portfolio] 블록과 이식 출처 {chal_path} 의 주석이다.\n"
         "#     5중 게이트 통과 기록은 이 변경을 만든 PR 본문에 있다.\n"
         "#   교체 직후 자본 사다리는 rung 0(0%, 무장 해제)로 리셋된다 — 새 전략은 forward\n"
-        "#   재검증부터 25%·50%·100% 로 자율 재승격(스펙 050).\n"
+        f"#   재검증부터 {ladder_schedule_ko(start_rung=1)} 순서로 자율 재승격(스펙 050).\n"
         "#   검증 안 한 전략에 자본이 즉시 실리는 것을 막는다.\n"
         "\n"
     )
