@@ -26,7 +26,7 @@
 ## Phase 5: Verification And Release
 
 - [x] T012 Run latest official-data replay and record immutable metrics in `specs/162-usda-crop-supply-demand/production-result.md`.
-- [ ] T013 Run focused/full tests, ruff, YAML, strict harness, handoff facts, and PR body gate.
+- [x] T013 Run focused/full tests, ruff, YAML, strict harness, handoff facts, and PR body gate.
 - [ ] T014 Commit, push, open and auto-merge a clean PR; verify deploy and production strategy-factory replay.
 - [ ] T015 Run no-order KIS smoke and money/capital checks, then refresh `HANDOFF.md`.
 
