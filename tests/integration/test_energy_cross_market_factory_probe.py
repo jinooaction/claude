@@ -26,14 +26,21 @@ def test_probe_exposes_offline_inputs_and_no_money_boundary() -> None:
     assert "auto_invest.broker" not in probe
 
 
-def test_strategy_factory_workflow_registers_energy_as_canonical_last_family() -> None:
+def test_strategy_factory_workflow_preserves_energy_before_options_family() -> None:
     workflow = Path(".github/workflows/autonomous-strategy-factory.yml").read_text(
         encoding="utf-8"
     )
     assert "scripts/energy_cross_market_factory_probe.py" in workflow
     assert "energy_cross_market_factory.json" in workflow
-    assert 'global_audit_trial_count\' /tmp/strategy_factory.json)" = "736' in workflow
-    assert 'multiplicity_trial_count\' /tmp/strategy_factory.json)" = "16' in workflow
+    assert (
+        'global_audit_trial_count\' /tmp/energy_cross_market_factory.json)" = "736'
+        in workflow
+    )
+    assert (
+        'multiplicity_trial_count\' /tmp/energy_cross_market_factory.json)" = "16'
+        in workflow
+    )
+    assert "--prior-factory-json /tmp/energy_cross_market_factory.json" in workflow
     assert "if: success()" in workflow
     assert ".energy_cross_market_data.complete" in workflow
     assert ".model_chronology.passed" in workflow
