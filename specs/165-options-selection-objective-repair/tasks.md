@@ -29,13 +29,13 @@
 
 ## Phase 4: Whole-System Expert Review
 
-- [ ] T016 [US4] Inspect current data, research/statistics, forward evidence, execution, risk/order controls, automation, and observability truth surfaces
-- [ ] T017 [US4] Record severity-ranked findings, evidence, remediation, and separate order-automation/profit-edge readiness in `specs/165-options-selection-objective-repair/system-review.md`
-- [ ] T018 Run the current-data production replay and record immutable evidence in `specs/165-options-selection-objective-repair/production-result.md`
+- [x] T016 [US4] Inspect current data, research/statistics, forward evidence, execution, risk/order controls, automation, and observability truth surfaces
+- [x] T017 [US4] Record severity-ranked findings, evidence, remediation, and separate order-automation/profit-edge readiness in `specs/165-options-selection-objective-repair/system-review.md`
+- [x] T018 Run the current-data production replay and record immutable evidence in `specs/165-options-selection-objective-repair/production-result.md`
 
 ## Phase 5: Verification and Release
 
-- [ ] T019 Run focused tests, full pytest, Ruff, YAML parse, deterministic replay, diff check, strict harness, handoff facts, and PR quality validation
+- [x] T019 Run focused tests, full pytest, Ruff, YAML parse, deterministic replay, diff check, strict harness, handoff facts, and PR quality validation
 - [ ] T020 Create and merge the grade-4 PR, verify deployment and production sidecars, and run KIS read-only smoke
 - [ ] T021 Refresh `HANDOFF.md`, commit and merge the handoff, then re-check current money-path truth
 
