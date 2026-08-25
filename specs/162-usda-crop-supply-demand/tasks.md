@@ -27,8 +27,8 @@
 
 - [x] T012 Run latest official-data replay and record immutable metrics in `specs/162-usda-crop-supply-demand/production-result.md`.
 - [x] T013 Run focused/full tests, ruff, YAML, strict harness, handoff facts, and PR body gate.
-- [ ] T014 Commit, push, open and auto-merge a clean PR; verify deploy and production strategy-factory replay.
-- [ ] T015 Run no-order KIS smoke and money/capital checks, then refresh `HANDOFF.md`.
+- [x] T014 Commit, push, open and auto-merge a clean PR; verify deploy and production strategy-factory replay.
+- [x] T015 Run no-order KIS smoke and money/capital checks, then refresh `HANDOFF.md`.
 
 ## Dependencies
 
