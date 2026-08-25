@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-08-25T14:42:46.082127Z)
+# 완료 후보 소비 장부 (as of 2026-08-25T15:18:48.916491Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -9,7 +9,7 @@
 |------|-----|
 | overall_status | OK |
 | released_count | 60 |
-| scanned_specs | 108 |
+| scanned_specs | 109 |
 
 ## 완료 후보
 
@@ -129,7 +129,6 @@
 | 153-edge-gate-calibration | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 159-paired-forward-edge-gate | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 160-forward-paper-ledger-integrity | 체크박스 작업이 없거나 완료되지 않았습니다. |
-| 163-independent-energy-cross-market | 체크박스 작업이 없거나 완료되지 않았습니다. |
 
 ## 안전 경계
 
@@ -146,7 +145,7 @@
 
 ```json
 {
-  "commit": "08970e7b2dbb065eda824a7d3de5485b876865d4",
+  "commit": "402f7923b9c0d2dfcea129453f5acaba8759e426",
   "overall_status": "OK",
   "released_work": [
     {
@@ -809,7 +808,8 @@
     "157-commodity-positioning-gate-controls",
     "158-full-gate-supply-demand",
     "161-research-canary-evidence-parity",
-    "162-usda-crop-supply-demand"
+    "162-usda-crop-supply-demand",
+    "163-independent-energy-cross-market"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -1008,12 +1008,8 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "160-forward-paper-ledger-integrity"
-    },
-    {
-      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "163-independent-energy-cross-market"
     }
   ],
-  "timestamp_utc": "2026-08-25T14:42:46.082127Z"
+  "timestamp_utc": "2026-08-25T15:18:48.916491Z"
 }
 ```
