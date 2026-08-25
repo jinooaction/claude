@@ -1,5 +1,5 @@
 {
-  "commit": "385da407b6fd42669cd2fe2306c51b7fa337211e",
+  "commit": "08970e7b2dbb065eda824a7d3de5485b876865d4",
   "overall_status": "OK",
   "released_work": [
     {
@@ -543,7 +543,7 @@
       "status": "released"
     }
   ],
-  "run_id": "32848188678",
+  "run_id": "32861193980",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -861,7 +861,11 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "160-forward-paper-ledger-integrity"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "163-independent-energy-cross-market"
     }
   ],
-  "timestamp_utc": "2026-08-25T12:33:09.601463Z"
+  "timestamp_utc": "2026-08-25T14:42:46.082127Z"
 }
