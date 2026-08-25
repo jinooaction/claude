@@ -6,6 +6,7 @@ The canonical `strategy_factory.json` MUST expose:
 - exactly 16 candidates and 16 complete current trials
 - exactly 704 prior and 720 total unique audit records
 - USDA source coverage, URLs, hashes, freshness, and split fingerprint
+- same-date archive aliases accepted only when their preregistered crop inputs match
 - development winner selected without holdout access
 - at least 120 holdout months and 10/25/50bp cost metrics
 - unchanged full and paper gate rows with blocking flags
@@ -15,4 +16,4 @@ The canonical `strategy_factory.json` MUST expose:
 - explicit live implementation/parity status
 - safety declaration: no broker, orders, capital, whitelist, caps, or arming changes
 
-Any count mismatch, duplicate fingerprint, malformed source, failed control, code mismatch, stale evidence, or live-parity mismatch MUST fail closed before capital consumption.
+Any count mismatch, duplicate fingerprint, malformed or conflicting source, failed control, code mismatch, stale evidence, or live-parity mismatch MUST fail closed before capital consumption.

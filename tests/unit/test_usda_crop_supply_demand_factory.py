@@ -20,6 +20,7 @@ from auto_invest.analytics.usda_crop_supply_demand_factory import (
     parse_wasde_index_pages,
     parse_wasde_workbook,
     run_usda_crop_supply_demand_factory,
+    validate_wasde_archive_aliases,
 )
 
 
@@ -183,6 +184,26 @@ def test_workbook_parser_uses_rightmost_projected_crop_values(
     assert parsed["wheat"].stocks_to_use == pytest.approx(0.2)
 
 
+def test_index_parser_prefers_final_archive_and_preserves_aliases() -> None:
+    release = date(2010, 7, 12)
+    rows: list[str] = []
+    for _ in range(190):
+        filename = f"wasde-{release:%m-%d-%Y}.xls"
+        rows.append(
+            f'<tr><time datetime="{release.isoformat()}T12:00:00Z"></time>'
+            f'<a href="/archive/{filename}">xls</a></tr>'
+        )
+        release = _advance_month(release)
+    alias_page = (
+        '<tr><time datetime="2010-07-12T12:00:00Z"></time>'
+        '<a href="/archive/ORIGwasde-07-12-2010.xls">xls</a>'
+        '<a href="/archive/R1wasde-07-12-2010.xls">xls</a></tr>'
+    )
+    refs = parse_wasde_index_pages(["<table>" + "".join(rows) + alias_page + "</table>"])
+    assert refs[0].url.endswith("wasde-07-12-2010.xls")
+    assert len(refs[0].alternate_urls) == 2
+
+
 def _release_observations(index: int, market_year: str) -> dict[str, WasdeCropObservation]:
     release_date = date(2010 + index // 12, index % 12 + 1, 12)
     output: dict[str, WasdeCropObservation] = {}
@@ -199,6 +220,15 @@ def _release_observations(index: int, market_year: str) -> dict[str, WasdeCropOb
             f"sha256:{index}",
         )
     return output
+
+
+def test_archive_aliases_must_preserve_preregistered_crop_inputs() -> None:
+    primary = _release_observations(0, "2025/26")
+    validate_wasde_archive_aliases(primary, [deepcopy(primary)])
+    changed = deepcopy(primary)
+    object.__setattr__(changed["corn"], "ending_stocks", 999.0)
+    with pytest.raises(ValueError, match="archive revisions"):
+        validate_wasde_archive_aliases(primary, [changed])
 
 
 def test_marketing_year_rollover_is_neutral_not_a_false_scarcity_signal() -> None:

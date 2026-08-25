@@ -8,7 +8,7 @@ import json
 import sys
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -64,13 +64,26 @@ def _workbooks(
     directory: Path | None,
 ) -> dict[str, bytes]:
     if directory is not None:
-        return {ref.url: _workbook_path(directory, ref).read_bytes() for ref in refs}
+        return {
+            url: _workbook_path(
+                directory,
+                WasdeWorkbookRef(ref.release_date, url),
+            ).read_bytes()
+            for ref in refs
+            for url in ref.archive_urls
+        }
 
-    def fetch(ref: WasdeWorkbookRef) -> tuple[str, bytes]:
-        return ref.url, _read_bytes(None, ref.url)
+    def fetch(item: tuple[date, str]) -> tuple[str, bytes]:
+        _, url = item
+        return url, _read_bytes(None, url)
 
     with ThreadPoolExecutor(max_workers=8) as pool:
-        return dict(pool.map(fetch, refs))
+        items = [
+            (ref.release_date, url)
+            for ref in refs
+            for url in ref.archive_urls
+        ]
+        return dict(pool.map(fetch, items))
 
 
 def main(argv: list[str] | None = None) -> int:

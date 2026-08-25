@@ -104,6 +104,11 @@ def _calendar_months(start: date, end: date) -> list[date]:
 class WasdeWorkbookRef:
     release_date: date
     url: str
+    alternate_urls: tuple[str, ...] = ()
+
+    @property
+    def archive_urls(self) -> tuple[str, ...]:
+        return (self.url, *self.alternate_urls)
 
 
 @dataclass(frozen=True)
@@ -207,22 +212,39 @@ class _WasdeIndexParser(HTMLParser):
         self._inside_row = False
 
 
+def _canonical_archive_url(release_date: date, urls: set[str]) -> str:
+    ordered = sorted(urls)
+    expected = f"wasde-{release_date:%m-%d-%Y}.xls".lower()
+    exact = [url for url in ordered if url.rsplit("/", 1)[-1].lower() == expected]
+    if len(exact) == 1:
+        return exact[0]
+    basenames = {url.rsplit("/", 1)[-1].lower() for url in ordered}
+    if len(basenames) == 1:
+        return ordered[0]
+    raise ValueError("WASDE release has ambiguous archive revisions")
+
+
 def parse_wasde_index_pages(pages: list[str]) -> tuple[WasdeWorkbookRef, ...]:
-    refs: dict[date, WasdeWorkbookRef] = {}
+    urls_by_date: dict[date, set[str]] = {}
     for page in pages:
         parser = _WasdeIndexParser()
         parser.feed(page)
         for release_date, urls in parser.rows:
             if release_date < FIRST_XLS_RELEASE:
                 continue
-            if len(urls) != 1:
-                raise ValueError("WASDE release must have exactly one XLS workbook")
-            candidate = WasdeWorkbookRef(release_date, urls[0])
-            prior = refs.get(release_date)
-            if prior is not None and prior != candidate:
-                raise ValueError("WASDE release date has conflicting XLS workbooks")
-            refs[release_date] = candidate
-    ordered = tuple(refs[key] for key in sorted(refs))
+            urls_by_date.setdefault(release_date, set()).update(urls)
+    refs: list[WasdeWorkbookRef] = []
+    for release_date in sorted(urls_by_date):
+        urls = urls_by_date[release_date]
+        canonical = _canonical_archive_url(release_date, urls)
+        refs.append(
+            WasdeWorkbookRef(
+                release_date,
+                canonical,
+                tuple(sorted(urls - {canonical})),
+            )
+        )
+    ordered = tuple(refs)
     if len(ordered) < MIN_RELEASES:
         raise ValueError("WASDE archive does not provide the preregistered release depth")
     if ordered[0].release_date > date(2010, 7, 31):
@@ -355,6 +377,26 @@ def parse_wasde_workbook(
     return output
 
 
+def validate_wasde_archive_aliases(
+    primary: dict[str, WasdeCropObservation],
+    aliases: list[dict[str, WasdeCropObservation]],
+) -> None:
+    def signature(observations: dict[str, WasdeCropObservation]) -> tuple[tuple[Any, ...], ...]:
+        return tuple(
+            (
+                crop,
+                value.market_year,
+                value.ending_stocks,
+                value.total_use,
+            )
+            for crop, value in sorted(observations.items())
+        )
+
+    expected = signature(primary)
+    if any(signature(alias) != expected for alias in aliases):
+        raise ValueError("WASDE archive revisions change preregistered crop inputs")
+
+
 def build_revision_snapshots(
     releases: list[dict[str, WasdeCropObservation]],
 ) -> tuple[CropRevisionSnapshot, ...]:
@@ -396,10 +438,21 @@ def load_crop_supply_demand_bundle(
     *,
     current_date: date,
 ) -> CropSupplyDemandBundle:
-    expected_urls = {ref.url for ref in refs}
+    expected_urls = {url for ref in refs for url in ref.archive_urls}
     if set(raw_by_url) != expected_urls:
         raise ValueError("WASDE workbook bundle is incomplete")
-    releases = [parse_wasde_workbook(raw_by_url[ref.url], ref=ref) for ref in refs]
+    releases: list[dict[str, WasdeCropObservation]] = []
+    for ref in refs:
+        primary = parse_wasde_workbook(raw_by_url[ref.url], ref=ref)
+        aliases = [
+            parse_wasde_workbook(
+                raw_by_url[url],
+                ref=WasdeWorkbookRef(ref.release_date, url),
+            )
+            for url in ref.alternate_urls
+        ]
+        validate_wasde_archive_aliases(primary, aliases)
+        releases.append(primary)
     snapshots = build_revision_snapshots(releases)
     latest_complete_month = _next_month(_month_start(current_date)) - timedelta(days=1)
     if latest_complete_month >= current_date:
@@ -431,11 +484,16 @@ def load_crop_supply_demand_bundle(
         and 0 <= latest_age <= 45
         and 0 <= cash_age <= 7
     )
+    refs_by_date = {ref.release_date: ref for ref in refs}
     sources = [
         {
             "release_date": item.release_date.isoformat(),
             "url": item.observations["corn"].source_url,
             "content_digest": item.observations["corn"].content_digest,
+            "archive_aliases": [
+                {"url": url, "content_digest": _content_digest(raw_by_url[url])}
+                for url in refs_by_date[item.release_date].alternate_urls
+            ],
         }
         for item in snapshots
     ]
@@ -451,6 +509,11 @@ def load_crop_supply_demand_bundle(
         "months": len(months),
         "missing_release_months": missing_release_months,
         "release_sources": sources,
+        "archive_alias_count": sum(len(ref.alternate_urls) for ref in refs),
+        "archive_alias_policy": (
+            "prefer the unprefixed dated workbook and require every archive alias "
+            "to have identical preregistered crop inputs"
+        ),
         "point_in_time": True,
         "revision_policy": "each archived workbook is used exactly as released",
         "basis_risk": "crop scarcity may not predict broad gold inflation exposure",
