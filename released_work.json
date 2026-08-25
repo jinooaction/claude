@@ -1,5 +1,5 @@
 {
-  "commit": "9455c8b58c700f39c610bb06eef5b678fe690eb4",
+  "commit": "c74e947150beb983eded08a7a53fba36b2768743",
   "overall_status": "OK",
   "released_work": [
     {
@@ -543,7 +543,7 @@
       "status": "released"
     }
   ],
-  "run_id": "32806458798",
+  "run_id": "32809509677",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -855,7 +855,11 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "159-paired-forward-edge-gate"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "160-forward-paper-ledger-integrity"
     }
   ],
-  "timestamp_utc": "2026-08-25T03:47:10.067564Z"
+  "timestamp_utc": "2026-08-25T04:35:04.904308Z"
 }
