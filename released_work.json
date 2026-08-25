@@ -1,5 +1,5 @@
 {
-  "commit": "8b05fb92ced697e6d9474e8a278b99d3accd7337",
+  "commit": "194b7edb0c63a7931db85ff6f78b5ee544f767e5",
   "overall_status": "OK",
   "released_work": [
     {
@@ -543,7 +543,7 @@
       "status": "released"
     }
   ],
-  "run_id": "32813701513",
+  "run_id": "32816471296",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -865,5 +865,5 @@
       "spec_id": "161-research-canary-evidence-parity"
     }
   ],
-  "timestamp_utc": "2026-08-25T05:39:44.709621Z"
+  "timestamp_utc": "2026-08-25T06:19:43.982054Z"
 }
