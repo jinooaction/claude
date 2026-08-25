@@ -754,6 +754,38 @@ def run_usda_crop_supply_demand_factory(
         segments = [annualized_sharpe(segment) for segment in _segments(development)]
         development_stats = summarize([1.0 + value for value in development])
         holdout_stats = summarize(holdout)
+        candidate_psr = probabilistic_sharpe(holdout_excess)
+        candidate_correlation = correlation(incumbent_holdout, holdout)
+        if candidate_correlation is None:
+            candidate_correlation = 1.0
+        candidate_blend_stats = summarize(
+            [
+                0.8 * incumbent + 0.2 * factor
+                for incumbent, factor in zip(incumbent_holdout, holdout, strict=True)
+            ]
+        )
+        candidate_blend_improvement = (
+            candidate_blend_stats.sharpe - incumbent_stats.sharpe
+        )
+        candidate_excess_50 = _annualized_excess(
+            full_by_cost[50][holdout_start:], cash_all[holdout_start:]
+        )
+        posthoc_live_passed = bool(
+            candidate_psr is not None
+            and candidate_psr >= HOLDOUT_PSR_MIN
+            and candidate_excess_50 > 0
+            and candidate_correlation < 0.80
+            and candidate_blend_improvement >= 0.05
+            and candidate_blend_stats.max_dd_pct <= incumbent_stats.max_dd_pct
+        )
+        posthoc_paper_passed = bool(
+            candidate_psr is not None
+            and candidate_psr >= PAPER_PSR_MIN
+            and candidate_excess_50 > 0
+            and candidate_correlation < 0.80
+            and candidate_blend_improvement >= 0
+            and candidate_blend_stats.max_dd_pct <= incumbent_stats.max_dd_pct * 1.20
+        )
         development_returns.append(development)
         development_segments.append(segments)
         holdout_by_cost.append(
@@ -770,14 +802,21 @@ def run_usda_crop_supply_demand_factory(
                     development_stats.max_dd_pct, 6
                 ),
                 "holdout_excess_sharpe_25bps": round(annualized_sharpe(holdout_excess), 6),
+                "holdout_psr_25bps": (
+                    None if candidate_psr is None else round(float(candidate_psr), 6)
+                ),
                 "holdout_cagr_25bps": round(holdout_stats.cagr_pct, 6),
                 "holdout_max_drawdown_25bps": round(holdout_stats.max_dd_pct, 6),
-                "holdout_excess_annual_return_50bps": round(
-                    _annualized_excess(
-                        full_by_cost[50][holdout_start:], cash_all[holdout_start:]
-                    ),
-                    8,
+                "holdout_excess_annual_return_50bps": round(candidate_excess_50, 8),
+                "holdout_incumbent_correlation": round(candidate_correlation, 6),
+                "holdout_blend_sharpe_improvement": round(
+                    candidate_blend_improvement, 6
                 ),
+                "holdout_blend_max_drawdown_pct": round(
+                    candidate_blend_stats.max_dd_pct, 6
+                ),
+                "posthoc_live_gate_snapshot_passed": posthoc_live_passed,
+                "posthoc_paper_gate_snapshot_passed": posthoc_paper_passed,
                 "turnover": round(turnover, 6),
                 "gold_active_months": sum(weight > 0 for weight in candidate_weights),
                 "segment_sharpes": [round(value, 6) for value in segments],
@@ -794,6 +833,23 @@ def run_usda_crop_supply_demand_factory(
     )
     winner = candidates[winner_index]
     winner_record = records[winner_index]
+    best_holdout_record = max(
+        records,
+        key=lambda record: (
+            float(record["holdout_psr_25bps"] or -1.0),
+            float(record["holdout_excess_annual_return_50bps"]),
+        ),
+    )
+    posthoc_live_candidates = [
+        str(record["candidate_id"])
+        for record in records
+        if record["posthoc_live_gate_snapshot_passed"]
+    ]
+    posthoc_paper_candidates = [
+        str(record["candidate_id"])
+        for record in records
+        if record["posthoc_paper_gate_snapshot_passed"]
+    ]
     trial_sharpes = [float(record["development_sharpe_excess_25bps"]) for record in records]
     effective_trials = effective_independent_trials(development_returns)
     dsr = deflated_sharpe_from_trials(
@@ -1111,6 +1167,26 @@ def run_usda_crop_supply_demand_factory(
             "selected_candidate_id": winner.candidate_id,
             "selection_metric": "development excess Sharpe after 25bps",
         },
+        "selection_sanity": {
+            "development_winner_matches_best_holdout": (
+                winner.candidate_id == best_holdout_record["candidate_id"]
+            ),
+            "best_holdout_candidate_id": best_holdout_record["candidate_id"],
+            "best_holdout_psr_25bps": best_holdout_record["holdout_psr_25bps"],
+            "best_holdout_excess_annual_return_50bps": best_holdout_record[
+                "holdout_excess_annual_return_50bps"
+            ],
+            "best_holdout_development_sharpe_excess_25bps": best_holdout_record[
+                "development_sharpe_excess_25bps"
+            ],
+            "posthoc_live_gate_candidate_ids": posthoc_live_candidates,
+            "posthoc_paper_gate_candidate_ids": posthoc_paper_candidates,
+            "promotion_allowed": False,
+            "reason": (
+                "holdout-ranked candidates are descriptive only because the holdout "
+                "has already been inspected"
+            ),
+        },
         "holdout_confirmation": {
             "window": split["holdout"],
             "embargo_months": EMBARGO_MONTHS,
@@ -1159,6 +1235,7 @@ def render_usda_crop_factory_markdown(payload: dict[str, Any]) -> str:
     holdout = payload["holdout_confirmation"]
     economics = payload["economic_comparison"]
     power = payload["gate_power"]["actual_holdout"]
+    sanity = payload["selection_sanity"]
     failed = [
         gate["gate_id"]
         for gate in decision["gates"]
@@ -1176,6 +1253,10 @@ def render_usda_crop_factory_markdown(payload: dict[str, Any]) -> str:
             f"- 홀드아웃: {holdout['months']}개월, 현금 초과 PSR {holdout['psr_vs_cash']}",
             f"- 50bp 후 연 초과수익: {holdout['excess_annual_return_50bps']:.4%}",
             f"- 기존 포트폴리오 상관: {economics['incumbent_correlation']:.4f}",
+            f"- 사후 최상 후보: `{sanity['best_holdout_candidate_id']}` "
+            f"(PSR {sanity['best_holdout_psr_25bps']}, 승격 불가)",
+            f"- 사후 실거래 관문 통과 후보 수: "
+            f"{len(sanity['posthoc_live_gate_candidate_ids'])}",
             f"- 80% 검출 최소 연 샤프 근사: "
             f"{power['minimum_80pct_detectable_annual_sharpe_approx']:.3f}",
             f"- 실패 관문: {', '.join(failed) if failed else '없음'}",
@@ -1200,4 +1281,5 @@ __all__ = [
     "parse_wasde_workbook",
     "render_usda_crop_factory_markdown",
     "run_usda_crop_supply_demand_factory",
+    "validate_wasde_archive_aliases",
 ]

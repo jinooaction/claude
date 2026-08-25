@@ -277,6 +277,9 @@ def test_factory_keeps_720_trials_and_untouched_holdout() -> None:
     assert first["decision"]["criterion_diagnosis"].startswith("PASSABLE")
     assert first["decision"]["research_canary_eligible"] is False
     assert first["research_live_parity"]["passed"] is False
+    assert first["selection_sanity"]["promotion_allowed"] is False
+    assert len(first["selection_sanity"]["posthoc_live_gate_candidate_ids"]) <= 16
+    assert all("holdout_psr_25bps" in row for row in first["trial_records"])
 
     changed = deepcopy(_bundle())
     revisions = deepcopy(changed.revisions)

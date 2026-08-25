@@ -8,6 +8,7 @@ The canonical `strategy_factory.json` MUST expose:
 - USDA source coverage, URLs, hashes, freshness, and split fingerprint
 - same-date archive aliases accepted only when their preregistered crop inputs match
 - development winner selected without holdout access
+- a descriptive all-candidate holdout scan that can never authorize promotion
 - at least 120 holdout months and 10/25/50bp cost metrics
 - unchanged full and paper gate rows with blocking flags
 - calibrated false-positive and actual-holdout detection-power context
