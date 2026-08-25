@@ -98,6 +98,7 @@ class TrackResult:
     excess_return_pct: Decimal | None
     dsr: Decimal | None
     beats_benchmark_calmar: bool
+    significance_method: str | None
     universe: tuple[str, ...]
     comparability: str  # COMPARABLE | PREMATURE | UNKNOWN
     rank: int | None = None  # 1-기반 등수(정렬 후 채워짐)
@@ -130,6 +131,7 @@ class TrackResult:
             ),
             "dsr": None if self.dsr is None else str(self.dsr),
             "beats_benchmark_calmar": self.beats_benchmark_calmar,
+            "significance_method": self.significance_method,
             "psr_vs_benchmark": (
                 None if self.psr_vs_benchmark is None else str(self.psr_vs_benchmark)
             ),
@@ -160,6 +162,7 @@ def build_track_result(
             n_obs=None, min_obs=None, sharpe=None, total_return_pct=None,
             max_drawdown_pct=None, calmar=None, excess_return_pct=None, dsr=None,
             beats_benchmark_calmar=False,
+            significance_method=None,
             universe=(), comparability=UNKNOWN,
         )
     verdict = verdict_json.get("verdict")
@@ -192,6 +195,11 @@ def build_track_result(
         excess_return_pct=_dec(verdict_json.get("excess_return_pct")),
         dsr=_dec(verdict_json.get("dsr")),
         beats_benchmark_calmar=verdict_json.get("beats_benchmark_calmar") is True,
+        significance_method=(
+            str(verdict_json["significance_method"])
+            if verdict_json.get("significance_method") is not None
+            else None
+        ),
         psr_vs_benchmark=_dec(verdict_json.get("psr_vs_benchmark")),
         dsr_threshold=_dec(verdict_json.get("dsr_threshold")),
         universe=universe,

@@ -18,6 +18,7 @@ def _profit(*, ready: bool = True, psr: float = 0.81) -> dict:
                 "n_obs": 47,
                 "psr_vs_benchmark": psr,
                 "beats_benchmark_calmar": True,
+                "significance_method": "paired_active_return_psr_v1",
             },
         },
     }
@@ -42,6 +43,18 @@ def test_stale_entry_approval_fails_closed() -> None:
     assert result.state == ENTRY_BLOCKED
     assert "exploration_canary_ready" in result.reasons
     assert "forward_psr" in result.reasons
+
+
+def test_legacy_forward_statistic_cannot_open_first_fill() -> None:
+    profit = _profit()
+    profit["deployment_match"]["forward"].pop("significance_method")
+
+    result = evaluate_live_entry(
+        profit, {"verdict": "PASS"}, {"fills_count": 0}, evidence_age_hours=2
+    )
+
+    assert result.allowed is False
+    assert "forward_significance_method" in result.reasons
 
 
 def test_missing_or_old_evidence_fails_closed_before_first_fill() -> None:

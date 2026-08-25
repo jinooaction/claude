@@ -71,6 +71,7 @@ def test_engine_selects_family_before_holdout_and_requires_forward_gate() -> Non
                     "psr_vs_benchmark": "0.827270",
                     "verdict": "NO_EDGE",
                     "beats_benchmark_calmar": True,
+                    "significance_method": "paired_active_return_psr_v1",
                 }
             ]
         },
@@ -110,6 +111,7 @@ def test_exploration_canary_requires_every_forward_floor() -> None:
         "psr_vs_benchmark": "0.80",
         "verdict": "NO_EDGE",
         "beats_benchmark_calmar": True,
+        "significance_method": "paired_active_return_psr_v1",
     }
 
     def report_for(**overrides):
@@ -132,6 +134,10 @@ def test_exploration_canary_requires_every_forward_floor() -> None:
         report_for(beats_benchmark_calmar=False).deployment_match.exploration_canary_ready
         is False
     )
+    assert (
+        report_for(significance_method=None).deployment_match.exploration_canary_ready
+        is False
+    )
 
 
 def test_exploration_canary_fails_closed_without_exact_deployment_factors() -> None:
@@ -148,6 +154,7 @@ def test_exploration_canary_fails_closed_without_exact_deployment_factors() -> N
                     "psr_vs_benchmark": "0.99",
                     "verdict": "EDGE_CONFIRMED",
                     "beats_benchmark_calmar": True,
+                    "significance_method": "paired_active_return_psr_v1",
                 }
             ]
         },

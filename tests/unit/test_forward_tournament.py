@@ -31,6 +31,7 @@ def _verdict(
     psr=None,
     dsr=None,
     dsr_threshold="0.95",
+    significance_method="paired_active_return_psr_v1",
     universe=("SPY", "IEF", "GLD"),
 ):
     return {
@@ -46,6 +47,7 @@ def _verdict(
         "psr_vs_benchmark": psr,
         "dsr": dsr,
         "dsr_threshold": dsr_threshold,
+        "significance_method": significance_method,
         "universe": list(universe),
     }
 
@@ -96,6 +98,7 @@ def test_confirmed_enough_obs_is_comparable():
     assert t.comparability == COMPARABLE
     assert t.beats_benchmark_calmar is True
     assert t.to_json_dict()["beats_benchmark_calmar"] is True
+    assert t.to_json_dict()["significance_method"] == "paired_active_return_psr_v1"
 
 
 def test_missing_calmar_superiority_fails_closed() -> None:

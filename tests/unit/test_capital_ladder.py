@@ -59,7 +59,12 @@ def _cfg(**overrides) -> PortfolioRebalanceConfig:
 
 
 def _verdict(label: str = "EDGE_CONFIRMED", n_obs: int = 22) -> dict:
-    return {"schema_version": "1.1", "verdict": label, "n_obs": n_obs}
+    return {
+        "schema_version": "1.2",
+        "verdict": label,
+        "n_obs": n_obs,
+        "significance_method": "paired_active_return_psr_v1",
+    }
 
 
 def _growth(
@@ -224,6 +229,17 @@ def test_rung0_promotes_to_rung1_on_edge_confirmed():
     assert "ladder_rung: 2" in d.new_sentinel_text
     assert f"rung_entered: {_TODAY.isoformat()}" in d.new_sentinel_text
     assert "run_seq: 6" in d.new_sentinel_text  # 5 + 1
+
+
+def test_rung0_rejects_legacy_edge_confirmed_evidence():
+    legacy = _verdict()
+    legacy.pop("significance_method")
+
+    decision = _decide(_DISARMED, forward_verdict=legacy)
+
+    assert decision.action == ACTION_WAIT_EDGE
+    assert decision.target_rung == 0
+    assert "LEGACY_EDGE_EVIDENCE" in decision.reason
 
 
 def test_rung0_enters_exploration_canary_without_full_forward_edge() -> None:

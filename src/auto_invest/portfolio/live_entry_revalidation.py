@@ -6,6 +6,8 @@ from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from typing import Any
 
+from auto_invest.portfolio.edge_verdict import PAIRED_ACTIVE_RETURN_PSR_METHOD
+
 SCHEMA_VERSION = "1.0"
 ENTRY_READY = "ENTRY_READY"
 ENTRY_BLOCKED = "ENTRY_BLOCKED"
@@ -84,6 +86,7 @@ def evaluate_live_entry(
 
     n_obs = _int_or_none(forward.get("n_obs"))
     psr = _float_or_none(forward.get("psr_vs_benchmark"))
+    significance_method = forward.get("significance_method")
     min_obs = _int_or_none(policy.get("min_forward_obs")) or 40
     min_psr = _float_or_none(policy.get("min_forward_psr")) or 0.80
     canary_passed = (
@@ -96,6 +99,9 @@ def evaluate_live_entry(
         "exploration_canary_ready": deployment.get("exploration_canary_ready") is True,
         "forward_observations": n_obs is not None and n_obs >= min_obs,
         "forward_psr": psr is not None and psr >= min_psr,
+        "forward_significance_method": (
+            significance_method == PAIRED_ACTIVE_RETURN_PSR_METHOD
+        ),
         "forward_calmar": forward.get("beats_benchmark_calmar") is True,
         "hardened_canary": canary_passed,
         "evidence_fresh": (
@@ -142,6 +148,7 @@ def evaluate_live_entry(
         ),
         "forward_n_obs": n_obs,
         "forward_psr": psr,
+        "forward_significance_method": significance_method,
         "min_forward_obs": min_obs,
         "min_forward_psr": min_psr,
         "evidence_age_hours": evidence_age_hours,

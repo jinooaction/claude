@@ -23,6 +23,7 @@ from auto_invest.analytics.risk_managed_beta import (
     market_total_return_factors,
     summarize,
 )
+from auto_invest.portfolio.edge_verdict import PAIRED_ACTIVE_RETURN_PSR_METHOD
 
 SCHEMA_VERSION = "1.1"
 HOLDOUT_EDGE = "HOLDOUT_EDGE"
@@ -167,11 +168,16 @@ class ForwardEvidence:
     dsr: float | None
     verdict: str | None
     beats_benchmark_calmar: bool = False
+    significance_method: str | None = None
     threshold: float = 0.95
 
     @property
     def passed(self) -> bool:
-        if self.verdict != "EDGE_CONFIRMED" or self.psr_vs_benchmark is None:
+        if (
+            self.verdict != "EDGE_CONFIRMED"
+            or self.psr_vs_benchmark is None
+            or self.significance_method != PAIRED_ACTIVE_RETURN_PSR_METHOD
+        ):
             return False
         if self.psr_vs_benchmark < self.threshold:
             return False
@@ -186,6 +192,7 @@ class ForwardEvidence:
             "dsr": self.dsr,
             "verdict": self.verdict,
             "beats_benchmark_calmar": self.beats_benchmark_calmar,
+            "significance_method": self.significance_method,
             "threshold": self.threshold,
             "passed": self.passed,
         }
@@ -220,6 +227,7 @@ class DeploymentMatchEvidence:
             and (self.forward.n_obs or 0) >= EXPLORATION_FORWARD_MIN_OBS
             and (self.forward.psr_vs_benchmark or 0.0) >= EXPLORATION_FORWARD_MIN_PSR
             and self.forward.beats_benchmark_calmar
+            and self.forward.significance_method == PAIRED_ACTIVE_RETURN_PSR_METHOD
         )
 
     def as_dict(self) -> dict[str, Any]:
@@ -679,8 +687,22 @@ def _forward_evidence(
                     dsr=_optional_float(row.get("dsr")),
                     verdict=str(row.get("verdict") or "") or None,
                     beats_benchmark_calmar=bool(row.get("beats_benchmark_calmar")),
+                    significance_method=(
+                        str(row.get("significance_method"))
+                        if row.get("significance_method") is not None
+                        else None
+                    ),
                 )
-    return ForwardEvidence(track_key, False, None, None, None, None, False)
+    return ForwardEvidence(
+        track_key=track_key,
+        present=False,
+        n_obs=None,
+        psr_vs_benchmark=None,
+        dsr=None,
+        verdict=None,
+        beats_benchmark_calmar=False,
+        significance_method=None,
+    )
 
 
 def _optional_float(value: object) -> float | None:
