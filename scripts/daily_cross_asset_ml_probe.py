@@ -43,7 +43,7 @@ def _blocked(exc: Exception) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--db", type=Path, default=Path("data/forward_wide.db"))
+    parser.add_argument("--db", type=Path, default=Path("data/forward_v2_wide.db"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--json-out", type=Path)
     parser.add_argument("--markdown-out", type=Path)

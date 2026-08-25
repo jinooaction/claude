@@ -33,7 +33,7 @@ def _helper_text() -> str:
 def test_every_track_declares_paired_db_and_halt_flag():
     text = _helper_text()
     for track in _TRACKS:
-        assert f'TRACK_DB="data/forward_{track}.db"' in text, (
+        assert f'TRACK_DB="data/forward_v2_{track}.db"' in text, (
             f"{track} 트랙의 전용 DB 선언이 사라짐"
         )
         assert f'TRACK_HALT="data/forward_{track}.halt.flag"' in text, (

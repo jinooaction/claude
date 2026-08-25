@@ -40,9 +40,9 @@ def test_candidate_history_manifest_is_deterministic() -> None:
     ]
     assert [row.db_path for row in rows] == [
         "data/auto_invest.db",
-        "data/forward_globalfixed.db",
-        "data/forward_wide.db",
-        "data/forward_multiasset.db",
+        "data/forward_v2_globalfixed.db",
+        "data/forward_v2_wide.db",
+        "data/forward_v2_multiasset.db",
     ]
     assert all(row.history_root.startswith(CANDIDATE_RESULT_HISTORY_ROOT) for row in rows)
 

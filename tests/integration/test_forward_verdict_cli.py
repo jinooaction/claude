@@ -206,6 +206,9 @@ def test_nav_snapshot_capital_includes_ledger_cash(tmp_path: Path) -> None:
     out = json.loads(result.stdout)
     assert Decimal(out["cash_usd"]) == Decimal("11000")
     assert Decimal(out["total_nav_usd"]) == Decimal("12000")
+    assert Decimal(out["capital_basis_usd"]) == Decimal("12000")
+    assert out["ledger_cash_nonnegative"] is True
+    assert out["measurement_valid"] is True
 
     conn = db.get_connection(db_path)
     row = conn.execute(
@@ -216,6 +219,54 @@ def test_nav_snapshot_capital_includes_ledger_cash(tmp_path: Path) -> None:
     payload = json.loads(row["payload_json"])
     assert Decimal(payload["capital_basis_usd"]) == Decimal("12000")
     assert Decimal(payload["total_nav_usd"]) == Decimal("12000")
+
+
+def test_nav_snapshot_rejects_negative_paper_cash_without_audit_append(
+    tmp_path: Path,
+) -> None:
+    """자본보다 많이 산 paper 장부는 수익 증거가 아니라 무효 측정이다."""
+    db_path = tmp_path / "auto_invest.db"
+    conn = db.get_connection(db_path)
+    db.migrate(conn)
+    audit.append(
+        conn,
+        OrderPaperFilledPayload(
+            rule_id="r1",
+            symbol="AAA",
+            side="BUY",
+            qty=121,
+            simulated_fill_price_usd="100.00",
+            quote_source="last",
+            correlation_id="c1",
+            paper_session_id=1,
+        ),
+    )
+    before = conn.execute(
+        "SELECT COUNT(*) c FROM audit_log WHERE event_type='PORTFOLIO_NAV_SNAPSHOT'"
+    ).fetchone()["c"]
+    conn.close()
+
+    result = runner.invoke(
+        app,
+        [
+            "nav-snapshot",
+            "--mode", "paper",
+            "--db", str(db_path),
+            "--no-marks",
+            "--snapshot",
+            "--capital", "12000",
+            "--format", "json",
+        ],
+    )
+
+    assert result.exit_code == 65
+    assert "negative paper cash" in (result.stdout + result.stderr)
+    conn = db.get_connection(db_path)
+    after = conn.execute(
+        "SELECT COUNT(*) c FROM audit_log WHERE event_type='PORTFOLIO_NAV_SNAPSHOT'"
+    ).fetchone()["c"]
+    conn.close()
+    assert after == before
 
 
 def test_forward_verdict_excludes_legacy_basis_points(tmp_path: Path) -> None:

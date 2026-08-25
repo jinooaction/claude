@@ -50,19 +50,19 @@ CANDIDATE_HISTORY_DATASETS: tuple[CandidateHistoryDataset, ...] = (
     CandidateHistoryDataset(
         key="global-trend-fixed",
         portfolio_path="deploy/global-trend-fixed-portfolio.toml",
-        db_path="data/forward_globalfixed.db",
+        db_path="data/forward_v2_globalfixed.db",
         history_root=_history_root("global-trend-fixed"),
     ),
     CandidateHistoryDataset(
         key="global-trend-wide",
         portfolio_path="deploy/global-trend-wide-portfolio.toml",
-        db_path="data/forward_wide.db",
+        db_path="data/forward_v2_wide.db",
         history_root=_history_root("global-trend-wide"),
     ),
     CandidateHistoryDataset(
         key="multi-asset-trend",
         portfolio_path="deploy/multi-asset-trend-portfolio.toml",
-        db_path="data/forward_multiasset.db",
+        db_path="data/forward_v2_multiasset.db",
         history_root=_history_root("multi-asset-trend"),
     ),
 )

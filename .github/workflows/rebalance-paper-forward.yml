@@ -5,7 +5,7 @@ name: Rebalance forward paper validation (current-data track)
 # "단순 보유를 우연 아니게 이기는가"를 자동 판정한다.
 #
 # 스펙 037 — A/B 토너먼트: 추세 필터 ON(canary-portfolio.toml) vs OFF
-# (canary-portfolio-notrend.toml)를 *각자 전용 DB*(forward_trend.db / forward_notrend.db)
+# (canary-portfolio-notrend.toml)를 *각자 전용 DB*(forward_v2_trend.db / forward_v2_notrend.db)
 # 에서 병렬로 돌린다. DB 파일이 격리 경계라 두 트랙의 체결·NAV 가 섞이지 않는다(코드 변경 0).
 # 두 판정을 나란히 비교하면 "추세 필터(드로다운 방어)가 실제로 도움이 되는가"의 격리된 답.
 #
@@ -527,6 +527,7 @@ jobs:
             echo "| commit | ${GITHUB_SHA} |"
             echo "| trigger | ${GITHUB_EVENT_NAME} |"
             echo "| timestamp_utc | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
+            echo "| measurement_epoch | v2-clean-unlevered |"
             echo "| TREND-ON prep ssh_exit | ${PREP_TREND_EXIT:-?} |"
             echo "| TREND-ON verdict ssh_exit | ${VERDICT_TREND_EXIT:-?} |"
             echo "| TREND-OFF prep ssh_exit | ${PREP_NOTREND_EXIT:-?} |"
@@ -541,6 +542,9 @@ jobs:
             echo "| GLOBAL-TREND-FIXED verdict ssh_exit | ${VERDICT_GLOBALFIXED_EXIT:-?} |"
             echo "| GLOBAL-TREND-WIDE prep ssh_exit | ${PREP_WIDE_EXIT:-?} |"
             echo "| GLOBAL-TREND-WIDE verdict ssh_exit | ${VERDICT_WIDE_EXIT:-?} |"
+            echo ""
+            echo "> legacy forward PSR/counts are ineligible. 이전 DB는 감사용으로 보존하지만"
+            echo "> 이 측정 세대의 승격 관문에는 사용하지 않는다."
             echo ""
             echo "## 🧪 짝지은 forward 관문 교정 (스펙 159, 주문 0건)"
             echo ""

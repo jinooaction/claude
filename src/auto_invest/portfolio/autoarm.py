@@ -10,7 +10,7 @@
 
 입력:
   - forward-verdict JSON: ARM E(검증된 앙상블 페이퍼 트랙, global-trend-portfolio.toml,
-    data/forward_global.db)의 스펙 035 엣지 판정.
+    data/forward_v2_global.db)의 스펙 035 엣지 판정.
   - 라이브 캐너리가 *실제로 거래할* 설정(canary-live-portfolio.toml)의 전략 블록.
   - 검증에 쓴 설정(global-trend-portfolio.toml)의 전략 블록.
   - 현재 무장 센티넬(automation/rebalance-live.request) 본문.
