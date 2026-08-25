@@ -1,7 +1,7 @@
-name: Autonomous strategy factory (energy cross-market validation)
+name: Autonomous strategy factory (options variance-premium validation)
 
-# 스펙 163. 브로커와 완전히 분리된 연구 워크플로다. 전체 승격 관문을 현실 양성
-# 대조군으로 감사하고, 기존 720회와 에너지 교차시장 16개를 당시 공개 자료로 검증한다.
+# 스펙 164. 브로커와 완전히 분리된 연구 워크플로다. 알려진 PUT 프리미엄과
+# 평균 0 대조군으로 목적 관문을 감사하고, 기존 736회와 옵션 전략 16개를 검증한다.
 # 이 워크플로 자체는 주문, 자본 변경, 라이브 설정 변경을 하지 않는다.
 
 on:
@@ -22,6 +22,7 @@ on:
       - 'src/auto_invest/analytics/commodity_supply_demand_factory.py'
       - 'src/auto_invest/analytics/usda_crop_supply_demand_factory.py'
       - 'src/auto_invest/analytics/energy_cross_market_factory.py'
+      - 'src/auto_invest/analytics/options_variance_risk_premium_factory.py'
       - 'src/auto_invest/analytics/real_world_gate_controls.py'
       - 'src/auto_invest/analytics/edge_gate_calibration.py'
       - 'src/auto_invest/market_data/public_data.py'
@@ -36,6 +37,7 @@ on:
       - 'scripts/commodity_supply_demand_factory_probe.py'
       - 'scripts/usda_crop_supply_demand_factory_probe.py'
       - 'scripts/energy_cross_market_factory_probe.py'
+      - 'scripts/options_variance_risk_premium_factory_probe.py'
       - 'scripts/edge_gate_calibration_probe.py'
       - 'deploy/public-data.toml'
       - '.github/workflows/autonomous-strategy-factory.yml'
@@ -243,21 +245,64 @@ jobs:
             --calibration-json /tmp/edge_gate_calibration.json \
             --controls-json /tmp/full_gate_controls.json \
             --timestamp-utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            --json-out /tmp/strategy_factory.json \
-            --summary-out /tmp/LAST_RUN.md
-          test "$(jq -r '.complete_trial_count' /tmp/strategy_factory.json)" = "16"
-          test "$(jq -r '.global_audit_trial_count' /tmp/strategy_factory.json)" = "736"
-          test "$(jq -r '.multiplicity_trial_count' /tmp/strategy_factory.json)" = "16"
-          test "$(jq -r '.unique_trial_fingerprint_count' /tmp/strategy_factory.json)" = "736"
-          test "$(jq -r '.energy_cross_market_data.complete' /tmp/strategy_factory.json)" = "true"
-          test "$(jq -r '.model_chronology.passed' /tmp/strategy_factory.json)" = "true"
-          test "$(jq -r '.full_gate_controls.promotion_control_passed' /tmp/strategy_factory.json)" = "true"
-          test "$(jq -r '.objective_gate_calibration.passable' /tmp/strategy_factory.json)" = "true"
+            --json-out /tmp/energy_cross_market_factory.json \
+            --summary-out /tmp/ENERGY_LAST_RUN.md
+          test "$(jq -r '.complete_trial_count' /tmp/energy_cross_market_factory.json)" = "16"
+          test "$(jq -r '.global_audit_trial_count' /tmp/energy_cross_market_factory.json)" = "736"
+          test "$(jq -r '.multiplicity_trial_count' /tmp/energy_cross_market_factory.json)" = "16"
+          test "$(jq -r '.unique_trial_fingerprint_count' /tmp/energy_cross_market_factory.json)" = "736"
+          test "$(jq -r '.energy_cross_market_data.complete' /tmp/energy_cross_market_factory.json)" = "true"
+          test "$(jq -r '.model_chronology.passed' /tmp/energy_cross_market_factory.json)" = "true"
+          test "$(jq -r '.full_gate_controls.promotion_control_passed' /tmp/energy_cross_market_factory.json)" = "true"
+          test "$(jq -r '.objective_gate_calibration.passable' /tmp/energy_cross_market_factory.json)" = "true"
           jq -e 'all(.decision.gates[]; (.passed | type) == "boolean")' \
-            /tmp/strategy_factory.json >/dev/null
+            /tmp/energy_cross_market_factory.json >/dev/null
           jq -e '
             .development_selection.selected_candidate_id != null and
             ([.energy_cross_market_data_fingerprint, .model_fingerprint,
+              .split_fingerprint, .research_live_parity.strategy_fingerprint,
+              .research_live_parity.target_weights_digest] |
+             all(startswith("sha256:")))
+          ' /tmp/energy_cross_market_factory.json >/dev/null
+
+      - name: Run the preregistered 16-trial options variance-premium batch
+        run: |
+          set -euo pipefail
+          uv run python scripts/options_variance_risk_premium_factory_probe.py \
+            --code-commit "${GITHUB_SHA}" \
+            --macro-data-dir /tmp/public-data \
+            --prior-factory-json /tmp/energy_cross_market_factory.json \
+            --prior-family-json macro=/tmp/macro_strategy_factory.json \
+            --prior-family-json treasury_carry=/tmp/treasury_carry_factory.json \
+            --prior-family-json credit_spread=/tmp/credit_spread_factory.json \
+            --prior-family-json fx_carry=/tmp/fx_carry_factory.json \
+            --prior-family-json commodity_term_structure=/tmp/commodity_term_structure_factory.json \
+            --prior-family-json commodity_positioning=/tmp/commodity_positioning_factory.json \
+            --prior-family-json commodity_supply_demand=/tmp/commodity_supply_demand_factory.json \
+            --prior-family-json usda_crop=/tmp/usda_crop_supply_demand_factory.json \
+            --prior-family-json energy_cross_market=/tmp/energy_cross_market_factory.json \
+            --calibration-json /tmp/edge_gate_calibration.json \
+            --controls-json /tmp/full_gate_controls.json \
+            --timestamp-utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --json-out /tmp/strategy_factory.json \
+            --summary-out /tmp/LAST_RUN.md
+          test "$(jq -r '.complete_trial_count' /tmp/strategy_factory.json)" = "16"
+          test "$(jq -r '.global_audit_trial_count' /tmp/strategy_factory.json)" = "752"
+          test "$(jq -r '.multiplicity_trial_count' /tmp/strategy_factory.json)" = "16"
+          test "$(jq -r '.unique_trial_fingerprint_count' /tmp/strategy_factory.json)" = "752"
+          test "$(jq -r '.options_premium_data.complete' /tmp/strategy_factory.json)" = "true"
+          test "$(jq -r '.model_chronology.passed' /tmp/strategy_factory.json)" = "true"
+          test "$(jq -r '.full_gate_controls.promotion_control_passed' /tmp/strategy_factory.json)" = "true"
+          test "$(jq -r '.objective_gate_calibration.passable' /tmp/strategy_factory.json)" = "true"
+          test "$(jq -r '.prior_adoption_audit | length' /tmp/strategy_factory.json)" = "9"
+          jq -e 'all(.decision.gates[]; (.passed | type) == "boolean")' \
+            /tmp/strategy_factory.json >/dev/null
+          jq -e '
+            (.reference_control.recognized_reference_passed | type) == "boolean" and
+            (.reference_control.mean_zero_null_rejected | type) == "boolean" and
+            all(.prior_adoption_audit[]; .retroactive_promotion_allowed == false) and
+            .development_selection.selected_candidate_id != null and
+            ([.options_premium_data_fingerprint, .model_fingerprint,
               .split_fingerprint, .research_live_parity.strategy_fingerprint,
               .research_live_parity.target_weights_digest] |
              all(startswith("sha256:")))
@@ -277,16 +322,16 @@ jobs:
             cp /tmp/trial_ledger_prior.jsonl /tmp/trial_ledger.jsonl
             jq -c '. as $root | .trial_records[] | . + {
               batch_id: $root.batch_id,
-              data_fingerprint: $root.energy_cross_market_data_fingerprint,
-              prior_data_fingerprint: $root.usda_crop_data_fingerprint,
+              data_fingerprint: $root.options_premium_data_fingerprint,
+              prior_data_fingerprint: $root.energy_cross_market_data_fingerprint,
               code_commit: $root.code_commit,
               timestamp_utc: $root.timestamp_utc
             }' /tmp/strategy_factory.json >> /tmp/trial_ledger.jsonl
             echo "duplicate=false" >> "$GITHUB_OUTPUT"
           fi
           jq -c '.audit_records[]' /tmp/strategy_factory.json > /tmp/audit_catalog.jsonl
-          test "$(wc -l < /tmp/audit_catalog.jsonl | tr -d ' ')" = "736"
-          test "$(jq -r '.strategy_fingerprint' /tmp/audit_catalog.jsonl | sort -u | wc -l | tr -d ' ')" = "736"
+          test "$(wc -l < /tmp/audit_catalog.jsonl | tr -d ' ')" = "752"
+          test "$(jq -r '.strategy_fingerprint' /tmp/audit_catalog.jsonl | sort -u | wc -l | tr -d ' ')" = "752"
           jq '{
             schema_version,
             batch_id,
@@ -327,8 +372,10 @@ jobs:
             2>/dev/null || echo '{}' > "${tmpdir}/commodity_supply_demand_factory.json"
           cp /tmp/usda_crop_supply_demand_factory.json "${tmpdir}/usda_crop_supply_demand_factory.json" \
             2>/dev/null || echo '{}' > "${tmpdir}/usda_crop_supply_demand_factory.json"
-          cp /tmp/strategy_factory.json "${tmpdir}/energy_cross_market_factory.json" \
+          cp /tmp/energy_cross_market_factory.json "${tmpdir}/energy_cross_market_factory.json" \
             2>/dev/null || echo '{}' > "${tmpdir}/energy_cross_market_factory.json"
+          cp /tmp/strategy_factory.json "${tmpdir}/options_variance_risk_premium_factory.json" \
+            2>/dev/null || echo '{}' > "${tmpdir}/options_variance_risk_premium_factory.json"
           cp /tmp/real_world_gate_controls.json "${tmpdir}/real_world_gate_controls.json" \
             2>/dev/null || echo '{}' > "${tmpdir}/real_world_gate_controls.json"
           cp /tmp/full_gate_controls.json "${tmpdir}/full_gate_controls.json" \
@@ -371,6 +418,7 @@ jobs:
             commodity_supply_demand_factory.json \
             usda_crop_supply_demand_factory.json \
             energy_cross_market_factory.json \
+            options_variance_risk_premium_factory.json \
             real_world_gate_controls.json \
             full_gate_controls.json \
             edge_gate_calibration.json \
