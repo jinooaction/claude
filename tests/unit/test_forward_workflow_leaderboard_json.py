@@ -32,3 +32,12 @@ def test_forward_sidecar_publishes_machine_readable_leaderboard_json():
     assert "git add LAST_RUN.md leaderboard.json" in text
     assert "observation_health" in text
     assert "unknown_count" in text
+
+
+def test_forward_workflow_calibrates_and_publishes_paired_gate_evidence():
+    text = _workflow_text()
+    assert "scripts/forward_gate_calibration_probe.py" in text
+    assert "--repetitions 5000" in text
+    assert "--json-out /tmp/forward_gate_calibration.json" in text
+    assert "cp /tmp/forward_gate_calibration.json forward_gate_calibration.json" in text
+    assert "git add LAST_RUN.md leaderboard.json forward_gate_calibration.json" in text

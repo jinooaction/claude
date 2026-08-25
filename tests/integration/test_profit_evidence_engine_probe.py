@@ -52,6 +52,7 @@ def test_probe_writes_machine_readable_no_live_report(tmp_path: Path, capsys) ->
                         "psr_vs_benchmark": "0.827270",
                         "verdict": "NO_EDGE",
                         "beats_benchmark_calmar": True,
+                        "significance_method": "paired_active_return_psr_v1",
                     }
                 ]
             }

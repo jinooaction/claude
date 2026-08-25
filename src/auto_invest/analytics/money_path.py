@@ -45,8 +45,9 @@ from auto_invest.portfolio.capital_ladder import (
     PROMOTION_MIN_OBS,
     RUNG_FRACTIONS,
 )
+from auto_invest.portfolio.edge_verdict import PAIRED_ACTIVE_RETURN_PSR_METHOD
 
-SCHEMA_VERSION = "1.4"
+SCHEMA_VERSION = "1.5"
 
 # 자본 사다리 결정 라벨(capital_ladder 와 동일 — 재사용보다 명시로 결합도 낮춤).
 ACTION_PROMOTE = "PROMOTE"
@@ -1289,7 +1290,13 @@ def assess_money_path(
     live_dd = _dec(ladder.get("live_dd_pct"))
     live_obs = _int(ladder.get("live_obs"))
 
-    verdict = forward_verdict.get("verdict")
+    raw_verdict = forward_verdict.get("verdict")
+    significance_method = forward_verdict.get("significance_method")
+    legacy_edge_evidence = (
+        raw_verdict == EDGE_CONFIRMED
+        and significance_method != PAIRED_ACTIVE_RETURN_PSR_METHOD
+    )
+    verdict = None if legacy_edge_evidence else raw_verdict
     n_obs = _int(forward_verdict.get("n_obs"))
     min_obs = _int(forward_verdict.get("min_obs_required")) or PROMOTION_MIN_OBS
     beats_calmar = bool(forward_verdict.get("beats_benchmark_calmar"))
@@ -1382,7 +1389,16 @@ def assess_money_path(
     eta = EtaProjection(ETA_NONE, None, None, None, None, "해당 없음.")
 
     if stage == STAGE_BLOCKED:
-        if fp_match is False:
+        if legacy_edge_evidence:
+            headline = (
+                "🛑 전진 엣지 증거 차단 — EDGE_CONFIRMED가 구버전 비짝지은 통계라 "
+                "자본 승격에 사용할 수 없다."
+            )
+            blocking = (
+                f"유의성 방식={significance_method!r}; 필요한 방식="
+                f"{PAIRED_ACTIVE_RETURN_PSR_METHOD!r}. 배포 후 전진 판정을 다시 생성해야 한다."
+            )
+        elif fp_match is False:
             # 차단 원인을 지문 불일치로 특정 — 운영자가 정확히 무엇을 고칠지 안다.
             diff_txt = ", ".join(fp_diverged) or "항목 불명"
             headline = (
@@ -1403,11 +1419,24 @@ def assess_money_path(
             )
         gates.append(
             GateCondition(
-                "자본 사다리 게이트",
+                "전진 유의성 방식" if legacy_edge_evidence else "자본 사다리 게이트",
                 GATE_FAIL,
-                f"action={action}",
-                "WAIT_EDGE/STAY/PROMOTE 등 정상 결정",
-                "BLOCKED/DISABLED 는 안전 자세(상태 무변경). 사유는 edge-autoarm 사이드카 확인.",
+                (
+                    str(significance_method)
+                    if legacy_edge_evidence
+                    else f"action={action}"
+                ),
+                (
+                    PAIRED_ACTIVE_RETURN_PSR_METHOD
+                    if legacy_edge_evidence
+                    else "WAIT_EDGE/STAY/PROMOTE 등 정상 결정"
+                ),
+                (
+                    "구버전 EDGE_CONFIRMED를 새 자본 증거로 재사용하지 않는다."
+                    if legacy_edge_evidence
+                    else "BLOCKED/DISABLED 는 안전 자세(상태 무변경). 사유는 edge-autoarm "
+                    "사이드카 확인."
+                ),
             )
         )
         next_action = (

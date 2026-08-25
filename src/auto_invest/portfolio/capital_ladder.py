@@ -51,6 +51,7 @@ from auto_invest.portfolio.autoarm import (
     parse_sentinel,
     strategy_fingerprint,
 )
+from auto_invest.portfolio.edge_verdict import PAIRED_ACTIVE_RETURN_PSR_METHOD
 
 # ---- 사다리 상수 (스펙 050 — 바꾸려면 스펙/헌법 개정 절차) ----
 RUNG_FRACTIONS: dict[int, Decimal] = {
@@ -227,6 +228,15 @@ def _growth_field_decimal(growth: dict | None, key: str) -> Decimal | None:
         return None
 
 
+def _paired_forward_confirmed(forward_verdict: object) -> bool:
+    return (
+        isinstance(forward_verdict, dict)
+        and forward_verdict.get("verdict") == EDGE_CONFIRMED
+        and forward_verdict.get("significance_method")
+        == PAIRED_ACTIVE_RETURN_PSR_METHOD
+    )
+
+
 def decide_ladder(
     *,
     sentinel_text: str,
@@ -327,7 +337,17 @@ def decide_ladder(
 
     # 4. 단 0 — 공장 연구 10%, 기존 탐색/forward 20% 계약을 구분한다.
     if rung == 0:
-        v_label = forward_verdict.get("verdict") if isinstance(forward_verdict, dict) else None
+        raw_v_label = (
+            forward_verdict.get("verdict")
+            if isinstance(forward_verdict, dict)
+            else None
+        )
+        forward_confirmed = _paired_forward_confirmed(forward_verdict)
+        v_label = (
+            raw_v_label
+            if raw_v_label != EDGE_CONFIRMED or forward_confirmed
+            else "LEGACY_EDGE_EVIDENCE"
+        )
         exploration_ready = (
             isinstance(exploration_verdict, dict)
             and exploration_verdict.get("verdict") == "EXPLORATION_CANARY_READY"
@@ -380,7 +400,17 @@ def decide_ladder(
 
     # 5. 첫 체결 전 탐색 승인이 최신 증거에서 사라졌으면 오래된 무장을 회수한다.
     # 이미 체결된 전략은 위험 축소 거래를 막지 않고 아래 라이브 손실 게이트로 넘긴다.
-    v_label = forward_verdict.get("verdict") if isinstance(forward_verdict, dict) else None
+    raw_v_label = (
+        forward_verdict.get("verdict")
+        if isinstance(forward_verdict, dict)
+        else None
+    )
+    forward_confirmed = _paired_forward_confirmed(forward_verdict)
+    v_label = (
+        raw_v_label
+        if raw_v_label != EDGE_CONFIRMED or forward_confirmed
+        else "LEGACY_EDGE_EVIDENCE"
+    )
     exploration_ready = (
         isinstance(exploration_verdict, dict)
         and exploration_verdict.get("verdict") == "EXPLORATION_CANARY_READY"
@@ -429,9 +459,6 @@ def decide_ladder(
         )
 
     # 승격 — 세 증거 전부 + 천장 미만. 증거가 None(측정 불가)이면 절대 승격 아님.
-    forward_confirmed = (
-        isinstance(forward_verdict, dict) and forward_verdict.get("verdict") == EDGE_CONFIRMED
-    )
     if (
         rung < MAX_RUNG
         and (rung != 1 or exploration_ready or forward_confirmed)

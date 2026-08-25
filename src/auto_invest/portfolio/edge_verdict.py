@@ -42,6 +42,8 @@ INSUFFICIENT_DATA = "INSUFFICIENT_DATA"  # 아직 판정할 만큼 관측이 안
 DEFAULT_MIN_OBS = 20  # NAV 점이 이보다 적으면 판정 보류(샤프가 통계적으로 무의미)
 DEFAULT_DSR_THRESHOLD = Decimal("0.95")  # 디플레이티드/확률적 샤프 합격선
 DEFAULT_CONFIDENCE = Decimal("0.95")  # MinTRL 신뢰수준
+PAIRED_ACTIVE_RETURN_PSR_METHOD = "paired_active_return_psr_v1"
+ABSOLUTE_RETURN_PSR_METHOD = "absolute_return_psr_v1"
 
 
 def daily_returns_from_curve(curve: list[Decimal]) -> list[Decimal]:
@@ -161,18 +163,20 @@ class EdgeVerdict:
     benchmark_total_return_pct: Decimal | None
     benchmark_max_drawdown_pct: Decimal | None
     excess_return_pct: Decimal | None  # 전략 − 벤치마크 총수익률
-    psr_vs_benchmark: Decimal | None  # 참 샤프가 벤치마크 샤프보다 클 확률(PSR)
+    psr_vs_benchmark: Decimal | None  # 짝지은 능동 수익률의 참 정보비율이 0보다 클 확률
     dsr: Decimal | None  # 다중검정 보정 디플레이티드 샤프(과적합 처벌)
     num_trials: int
     min_track_record_obs: Decimal | None
     dsr_threshold: Decimal
     has_benchmark: bool
+    significance_method: str
+    active_information_ratio_annual: Decimal | None
     # 스펙 038 — 칼마(연수익/최대낙폭): 추세추종의 자본 방어를 포착하는 지표.
     strategy_calmar: Decimal | None = None
     benchmark_calmar: Decimal | None = None
     beats_benchmark_calmar: bool = False
 
-    SCHEMA_VERSION = "1.1"
+    SCHEMA_VERSION = "1.2"
 
     def to_json_dict(self) -> dict:
         def _s(v: Decimal | None) -> str | None:
@@ -194,6 +198,10 @@ class EdgeVerdict:
             "benchmark_calmar": _s(self.benchmark_calmar),
             "excess_return_pct": _s(self.excess_return_pct),
             "beats_benchmark_calmar": self.beats_benchmark_calmar,
+            "significance_method": self.significance_method,
+            "active_information_ratio_annual": _s(
+                self.active_information_ratio_annual
+            ),
             "psr_vs_benchmark": _s(self.psr_vs_benchmark),
             "dsr": _s(self.dsr),
             "num_trials": self.num_trials,
@@ -212,6 +220,8 @@ def _insufficient(
     dsr_threshold: Decimal,
     strat_return: Decimal | None = None,
     strat_dd: Decimal | None = None,
+    has_benchmark: bool = False,
+    significance_method: str = ABSOLUTE_RETURN_PSR_METHOD,
 ) -> EdgeVerdict:
     return EdgeVerdict(
         verdict=INSUFFICIENT_DATA,
@@ -230,7 +240,9 @@ def _insufficient(
         num_trials=num_trials,
         min_track_record_obs=None,
         dsr_threshold=dsr_threshold,
-        has_benchmark=False,
+        has_benchmark=has_benchmark,
+        significance_method=significance_method,
+        active_information_ratio_annual=None,
     )
 
 
@@ -249,14 +261,20 @@ def forward_edge_verdict(
     판정 규칙 (전부 만족해야 EDGE_CONFIRMED):
       1. 관측 충분: n_obs ≥ min_obs (아니면 INSUFFICIENT_DATA).
       2. 단순 보유를 이긴다: 초과수익 > 0 **그리고** 전략 샤프 > 벤치마크 샤프.
-      3. 우연이 아니다: PSR(벤치마크 샤프 기준) ≥ 임계치.
-      4. 과적합이 아니다: num_trials>1 이면 DSR ≥ 임계치(다중검정 보정).
+      3. 우연이 아니다: 같은 기간의 능동 수익률(전략−벤치) PSR ≥ 임계치.
+      4. 과적합이 아니다: num_trials>1 이면 능동 수익률 DSR ≥ 임계치.
     벤치마크가 없으면(가격 바 부족) 2의 '벤치마크 이김' 대신 PSR(0 기준)으로 강등하되,
     그래도 통계가 안 서면 INSUFFICIENT_DATA. 보수적으로 — 모르면 EDGE 선언 금지.
     """
+    benchmark_supplied = benchmark_curve is not None
+    significance_method = (
+        PAIRED_ACTIVE_RETURN_PSR_METHOD
+        if benchmark_supplied
+        else ABSOLUTE_RETURN_PSR_METHOD
+    )
     strat_rets = daily_returns_from_curve(nav_curve)
     n_obs = len(strat_rets)
-    has_benchmark = benchmark_curve is not None and len(benchmark_curve) >= 2
+    has_benchmark = benchmark_supplied
 
     # 전략 곡선의 총수익·낙폭 (양수 곡선일 때만 — metrics 계약과 동일).
     strat_return = (
@@ -265,6 +283,19 @@ def forward_edge_verdict(
     strat_dd = (
         max_drawdown_pct(nav_curve) if nav_curve and all(v > 0 for v in nav_curve) else None
     )
+
+    if benchmark_supplied and len(nav_curve) != len(benchmark_curve):
+        return _insufficient(
+            "전략·벤치마크 곡선 길이가 달라 같은 기간 수익률을 짝지을 수 없음",
+            n_obs=n_obs,
+            min_obs=min_obs,
+            num_trials=num_trials,
+            dsr_threshold=dsr_threshold,
+            strat_return=strat_return,
+            strat_dd=strat_dd,
+            has_benchmark=True,
+            significance_method=significance_method,
+        )
 
     if n_obs < min_obs:
         return _insufficient(
@@ -275,46 +306,87 @@ def forward_edge_verdict(
             dsr_threshold=dsr_threshold,
             strat_return=strat_return,
             strat_dd=strat_dd,
+            has_benchmark=has_benchmark,
+            significance_method=significance_method,
         )
 
-    # 벤치마크 샤프·수익 — 같은 잣대(significance/metrics)로.
-    bench_sharpe: Decimal | None = None
-    bench_return: Decimal | None = None
-    bench_dd: Decimal | None = None
-    if has_benchmark:
-        bench_rets = daily_returns_from_curve(benchmark_curve)  # type: ignore[arg-type]
-        bench_sig = significance_summary(bench_rets) if bench_rets else None
-        if bench_sig is not None:
-            bench_sharpe = bench_sig.sharpe_annual
-        if benchmark_curve and benchmark_curve[0] > 0:  # type: ignore[index]
-            bench_return = total_return_pct(benchmark_curve)  # type: ignore[arg-type]
-        if benchmark_curve and all(v > 0 for v in benchmark_curve):  # type: ignore[union-attr]
-            bench_dd = max_drawdown_pct(benchmark_curve)  # type: ignore[arg-type]
-
-    benchmark_sharpe_for_psr = bench_sharpe if bench_sharpe is not None else Decimal("0")
-
-    sig = significance_summary(
+    strat_sig = significance_summary(
         strat_rets,
-        num_trials=num_trials,
-        trial_sharpe_std_annual=trial_sharpe_std_annual,
-        benchmark_sharpe_annual=benchmark_sharpe_for_psr,
+        num_trials=num_trials if not has_benchmark else 1,
+        trial_sharpe_std_annual=(
+            trial_sharpe_std_annual if not has_benchmark else None
+        ),
         confidence=confidence,
     )
-    if sig is None:
-        # 분산 0 등 — 통계 불가. 보수적으로 데이터 부족 취급.
+    if strat_sig is None:
         return _insufficient(
-            "수익률 분산이 0이거나 통계 계산 불가 — 판정 보류",
+            "전략 수익률 분산이 0이거나 통계 계산 불가 — 판정 보류",
             n_obs=n_obs,
             min_obs=min_obs,
             num_trials=num_trials,
             dsr_threshold=dsr_threshold,
             strat_return=strat_return,
             strat_dd=strat_dd,
+            has_benchmark=has_benchmark,
+            significance_method=significance_method,
         )
 
-    strat_sharpe = sig.sharpe_annual
-    psr = sig.psr  # significance_summary 가 benchmark_sharpe_annual 기준으로 이미 계산
-    dsr = sig.dsr  # num_trials>1 일 때만 채워짐
+    # 절대 품질은 각 곡선, 상대 유의성은 같은 기간의 능동 수익률로 분리한다.
+    bench_sharpe: Decimal | None = None
+    bench_return: Decimal | None = None
+    bench_dd: Decimal | None = None
+    decision_sig = strat_sig
+    active_information_ratio: Decimal | None = None
+    if has_benchmark:
+        assert benchmark_curve is not None
+        bench_rets = daily_returns_from_curve(benchmark_curve)
+        if len(bench_rets) != n_obs:
+            return _insufficient(
+                "전략·벤치마크 유효 수익률 길이가 달라 정확히 짝지을 수 없음",
+                n_obs=n_obs,
+                min_obs=min_obs,
+                num_trials=num_trials,
+                dsr_threshold=dsr_threshold,
+                strat_return=strat_return,
+                strat_dd=strat_dd,
+                has_benchmark=True,
+                significance_method=significance_method,
+            )
+        bench_sig = significance_summary(bench_rets) if bench_rets else None
+        if bench_sig is not None:
+            bench_sharpe = bench_sig.sharpe_annual
+        if benchmark_curve[0] > 0:
+            bench_return = total_return_pct(benchmark_curve)
+        if all(v > 0 for v in benchmark_curve):
+            bench_dd = max_drawdown_pct(benchmark_curve)
+        active_rets = [
+            strategy - benchmark
+            for strategy, benchmark in zip(strat_rets, bench_rets, strict=True)
+        ]
+        paired_sig = significance_summary(
+            active_rets,
+            num_trials=num_trials,
+            trial_sharpe_std_annual=trial_sharpe_std_annual,
+            confidence=confidence,
+        )
+        if paired_sig is None:
+            return _insufficient(
+                "능동 수익률(전략−벤치마크) 분산이 0이거나 통계 계산 불가",
+                n_obs=n_obs,
+                min_obs=min_obs,
+                num_trials=num_trials,
+                dsr_threshold=dsr_threshold,
+                strat_return=strat_return,
+                strat_dd=strat_dd,
+                has_benchmark=True,
+                significance_method=significance_method,
+            )
+        decision_sig = paired_sig
+        active_information_ratio = paired_sig.sharpe_annual
+
+    strat_sharpe = strat_sig.sharpe_annual
+    psr = decision_sig.psr
+    dsr = decision_sig.dsr
     excess = (
         (strat_return - bench_return)
         if (strat_return is not None and bench_return is not None)
@@ -326,7 +398,8 @@ def forward_edge_verdict(
         has_benchmark
         and bench_sharpe is not None
         and strat_sharpe > bench_sharpe
-        and (excess is None or excess > 0)
+        and excess is not None
+        and excess > 0
     )
     psr_ok = psr is not None and psr >= dsr_threshold
     dsr_ok = num_trials <= 1 or (dsr is not None and dsr >= dsr_threshold)
@@ -350,7 +423,7 @@ def forward_edge_verdict(
             reason = (
                 f"단순 보유 대비 위험조정 우위(전략 샤프 {strat_sharpe} > 벤치 "
                 f"{bench_sharpe}, 초과수익 {excess}%)이며 우연/과적합과 구별됨"
-                f"(PSR {psr} ≥ {dsr_threshold}"
+                f"(능동 수익률 PSR {psr} ≥ {dsr_threshold}"
                 + (f", DSR {dsr} ≥ {dsr_threshold}" if num_trials > 1 else "")
                 + ")"
             )
@@ -360,7 +433,9 @@ def forward_edge_verdict(
             if not beats_benchmark:
                 bits.append("단순 보유를 위험조정으로 못 이김")
             if not psr_ok:
-                bits.append(f"PSR {psr} < {dsr_threshold}(우연과 구별 안 됨)")
+                bits.append(
+                    f"능동 수익률 PSR {psr} < {dsr_threshold}(우연과 구별 안 됨)"
+                )
             if not dsr_ok:
                 bits.append(f"DSR {dsr} < {dsr_threshold}(과적합 보정 후 붕괴)")
             reason = "; ".join(bits) or "우위 없음"
@@ -400,9 +475,11 @@ def forward_edge_verdict(
         psr_vs_benchmark=psr,
         dsr=dsr,
         num_trials=num_trials,
-        min_track_record_obs=sig.min_track_record_obs,
+        min_track_record_obs=decision_sig.min_track_record_obs,
         dsr_threshold=dsr_threshold,
         has_benchmark=has_benchmark,
+        significance_method=significance_method,
+        active_information_ratio_annual=active_information_ratio,
         strategy_calmar=strat_calmar,
         benchmark_calmar=bench_calmar,
         beats_benchmark_calmar=beats_calmar,
@@ -440,7 +517,9 @@ def render_text(v: EdgeVerdict) -> str:
     else:
         lines.append("벤치마크      : (가격 바 부족 — 비교 없음)")
     lines += [
-        f"PSR(벤치 기준): {_p(v.psr_vs_benchmark)}",
+        f"유의성 방식    : {v.significance_method}",
+        f"능동 정보비율  : {_p(v.active_information_ratio_annual)}",
+        f"PSR(능동>0)    : {_p(v.psr_vs_benchmark)}",
         f"DSR(시도 {v.num_trials}): {_p(v.dsr)}",
         f"MinTRL(관측)  : {_p(v.min_track_record_obs)}",
         "",

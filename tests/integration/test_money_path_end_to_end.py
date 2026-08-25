@@ -329,7 +329,11 @@ async def test_full_money_path_with_real_live_config(db_path: Path, tmp_path: Pa
 
     # 6. 자본 사다리 — 실제 센티넬·실제 설정으로 결정이 난다.
     sentinel_text = _SENTINEL.read_text(encoding="utf-8")
-    edge_verdict = {"verdict": "EDGE_CONFIRMED", "n_obs": verdict["n_obs"]}
+    edge_verdict = {
+        "verdict": "EDGE_CONFIRMED",
+        "n_obs": verdict["n_obs"],
+        "significance_method": verdict["significance_method"],
+    }
     d = decide_ladder(
         sentinel_text=sentinel_text,
         forward_verdict=edge_verdict,
@@ -472,7 +476,11 @@ def test_money_path_report_surfaces_downside_with_real_config():
             dd_budget_pct=Decimal("20"),
             evidence="test rung-0 baseline",
         ),
-        forward_verdict={"verdict": "EDGE_CONFIRMED", "n_obs": 25},
+        forward_verdict={
+            "verdict": "EDGE_CONFIRMED",
+            "n_obs": 25,
+            "significance_method": "paired_active_return_psr_v1",
+        },
         live_growth=None,
         account_nav_usd=ACCOUNT_NAV,
         live_config=cfg,
@@ -490,6 +498,7 @@ def test_money_path_report_surfaces_downside_with_real_config():
             "min_obs_required": 20,
             "psr_vs_benchmark": "0.97",
             "dsr_threshold": "0.95",
+            "significance_method": "paired_active_return_psr_v1",
         },
         now=datetime(2026, 6, 12, 8, tzinfo=UTC),
     )
@@ -529,6 +538,7 @@ def test_money_path_edge_confidence_stage_real_config():
             "min_obs_required": 20,
             "psr_vs_benchmark": "0.97",
             "dsr_threshold": "0.95",
+            "significance_method": "paired_active_return_psr_v1",
         },
         now=datetime(2026, 6, 12, 8, tzinfo=UTC),
     )

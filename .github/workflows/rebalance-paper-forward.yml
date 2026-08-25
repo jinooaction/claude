@@ -51,6 +51,14 @@ jobs:
         uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39
         continue-on-error: true
 
+      - name: "짝지은 forward 관문 교정 — 무엣지 오탐·심은 엣지 검출"
+        run: |
+          uv run python scripts/forward_gate_calibration_probe.py \
+            --seed 159001 \
+            --repetitions 5000 \
+            --code-commit "${GITHUB_SHA}" \
+            --json-out /tmp/forward_gate_calibration.json
+
       - name: "일일 전략 모니터 — regime/엣지/레버리지/오늘 신호 (스펙 046)"
         id: monitor
         continue-on-error: true
@@ -534,6 +542,15 @@ jobs:
             echo "| GLOBAL-TREND-WIDE prep ssh_exit | ${PREP_WIDE_EXIT:-?} |"
             echo "| GLOBAL-TREND-WIDE verdict ssh_exit | ${VERDICT_WIDE_EXIT:-?} |"
             echo ""
+            echo "## 🧪 짝지은 forward 관문 교정 (스펙 159, 주문 0건)"
+            echo ""
+            echo "> 같은 날짜의 전략−벤치마크 능동 수익률로 PSR을 계산한다. 아래 대조군이"
+            echo "> 실패하면 이 실행은 forward 판정을 신뢰하지 않고 앞 단계에서 중단된다."
+            echo ""
+            echo '```json'
+            cat /tmp/forward_gate_calibration.json 2>/dev/null || echo '{}'
+            echo '```'
+            echo ""
             cat /tmp/leaderboard.md 2>/dev/null || echo '(leaderboard unavailable)'
             echo ""
             echo "## 🧾 리더보드 결정 JSON (기계 판독 단일 증거)"
@@ -690,9 +707,10 @@ jobs:
             echo '```'
           } > LAST_RUN.md
           cp /tmp/leaderboard.json leaderboard.json
+          cp /tmp/forward_gate_calibration.json forward_gate_calibration.json
           git checkout --orphan publish
           python3 "${GITHUB_WORKSPACE}/scripts/redact_public_sidecar.py" . 2>/dev/null || true
-          git add LAST_RUN.md leaderboard.json
+          git add LAST_RUN.md leaderboard.json forward_gate_calibration.json
           git commit -q -m "rebalance-paper-forward A/B run ${GITHUB_RUN_ID}"
           git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "publish:${BRANCH}"
           echo "Published to ${BRANCH}."

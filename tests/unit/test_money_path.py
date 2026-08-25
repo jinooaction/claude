@@ -68,7 +68,7 @@ def _verdict(
     snapshots=None,
 ):
     d = {
-        "schema_version": "1.1",
+        "schema_version": "1.2",
         "verdict": verdict,
         "n_obs": n_obs,
         "min_obs_required": min_obs,
@@ -77,6 +77,7 @@ def _verdict(
         "psr_vs_benchmark": psr,
         "dsr_threshold": "0.95",
         "universe": ["SPY", "IEF", "GLD"],
+        "significance_method": "paired_active_return_psr_v1",
     }
     # 자본 베이시스 정합 결과(cli.py forward-verdict 발행) — 표본 안정성 입력. 옛
     # 사이드카엔 없을 수 있어 기본 미포함(None) → 기존 동작/거짓 경보 0 보존.
@@ -85,6 +86,21 @@ def _verdict(
     if snapshots is not None:
         d["snapshot_count"] = snapshots
     return d
+
+
+def test_legacy_edge_evidence_is_blocked_from_money_path() -> None:
+    verdict = _verdict("EDGE_CONFIRMED", n_obs=48, psr="0.99")
+    verdict.pop("significance_method")
+
+    report = assess_money_path(
+        ladder=_ladder(),
+        forward_verdict=verdict,
+        now=NOW,
+    )
+
+    assert report.stage == STAGE_BLOCKED
+    assert "구버전" in report.headline
+    assert report.gates[0].status == GATE_FAIL
 
 
 def _micro_request(armed="true", capital="1000"):

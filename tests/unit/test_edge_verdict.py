@@ -11,9 +11,11 @@ from datetime import date
 from decimal import Decimal
 
 from auto_invest.portfolio.edge_verdict import (
+    ABSOLUTE_RETURN_PSR_METHOD,
     EDGE_CONFIRMED,
     INSUFFICIENT_DATA,
     NO_EDGE,
+    PAIRED_ACTIVE_RETURN_PSR_METHOD,
     calmar_ratio,
     daily_returns_from_curve,
     equal_weight_buy_hold_curve,
@@ -133,6 +135,65 @@ def test_edge_confirmed_beats_benchmark():
     assert v.excess_return_pct is not None and v.excess_return_pct > 0
     assert v.strategy_sharpe_annual > v.benchmark_sharpe_annual
     assert v.psr_vs_benchmark is not None and v.psr_vs_benchmark >= Decimal("0.95")
+    assert v.significance_method == PAIRED_ACTIVE_RETURN_PSR_METHOD
+    assert v.active_information_ratio_annual is not None
+
+
+def test_paired_psr_is_invariant_to_common_market_shocks():
+    active = _alternating("0.002", "0.003", 48)
+    quiet_benchmark = _alternating("0.0004", "0.004", 48)
+    volatile_benchmark = _alternating("0.0004", "0.025", 48)
+    quiet_strategy = [b + a for b, a in zip(quiet_benchmark, active, strict=True)]
+    volatile_strategy = [
+        b + a for b, a in zip(volatile_benchmark, active, strict=True)
+    ]
+
+    quiet = forward_edge_verdict(
+        _curve_from_returns(Decimal("10000"), quiet_strategy),
+        _curve_from_returns(Decimal("10000"), quiet_benchmark),
+        min_obs=20,
+    )
+    volatile = forward_edge_verdict(
+        _curve_from_returns(Decimal("10000"), volatile_strategy),
+        _curve_from_returns(Decimal("10000"), volatile_benchmark),
+        min_obs=20,
+    )
+
+    assert quiet.psr_vs_benchmark == volatile.psr_vs_benchmark
+    assert (
+        quiet.active_information_ratio_annual
+        == volatile.active_information_ratio_annual
+    )
+
+
+def test_paired_verdict_fails_closed_on_misaligned_curves():
+    strat = _curve_from_returns(
+        Decimal("10000"), _alternating("0.004", "0.002", 40)
+    )
+    bench = _curve_from_returns(
+        Decimal("10000"), _alternating("0.001", "0.002", 39)
+    )
+
+    verdict = forward_edge_verdict(strat, bench, min_obs=20)
+
+    assert verdict.verdict == INSUFFICIENT_DATA
+    assert "길이" in verdict.reason
+    assert verdict.significance_method == PAIRED_ACTIVE_RETURN_PSR_METHOD
+
+
+def test_paired_verdict_fails_closed_on_zero_active_variance():
+    bench_rets = _alternating("0.0005", "0.01", 40)
+    strat_rets = [value + Decimal("0.001") for value in bench_rets]
+
+    verdict = forward_edge_verdict(
+        _curve_from_returns(Decimal("10000"), strat_rets),
+        _curve_from_returns(Decimal("10000"), bench_rets),
+        min_obs=20,
+    )
+
+    assert verdict.verdict == INSUFFICIENT_DATA
+    assert verdict.active_information_ratio_annual is None
+    assert "능동 수익률" in verdict.reason
 
 
 def test_no_edge_loses_to_benchmark():
@@ -228,7 +289,9 @@ def test_verdict_reports_calmar_fields():
     assert "strategy_calmar" in d
     assert "benchmark_calmar" in d
     assert "beats_benchmark_calmar" in d
-    assert d["schema_version"] == "1.1"
+    assert d["schema_version"] == "1.2"
+    assert d["significance_method"] == PAIRED_ACTIVE_RETURN_PSR_METHOD
+    assert d["active_information_ratio_annual"] is not None
     # 낙폭이 있는 전략·벤치 모두 칼마가 산출된다.
     assert v.strategy_calmar is not None
     assert v.benchmark_calmar is not None
@@ -239,6 +302,7 @@ def test_verdict_monotonic_strategy_calmar_none():
     strat = _curve_from_returns(Decimal("10000"), _alternating("0.006", "0.001", 40))
     v = forward_edge_verdict(strat, None, min_obs=20)
     assert v.strategy_calmar is None  # 낙폭 0 → 칼마 None
+    assert v.significance_method == ABSOLUTE_RETURN_PSR_METHOD
 
 
 def test_to_json_dict_roundtrip_keys():
