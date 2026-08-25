@@ -36,8 +36,8 @@
 ## Phase 5: Verification and Release
 
 - [x] T019 Run focused tests, full pytest, Ruff, YAML parse, deterministic replay, diff check, strict harness, handoff facts, and PR quality validation
-- [ ] T020 Create and merge the grade-4 PR, verify deployment and production sidecars, and run KIS read-only smoke
-- [ ] T021 Refresh `HANDOFF.md`, commit and merge the handoff, then re-check current money-path truth
+- [x] T020 Create and merge the grade-4 PR, verify deployment and production sidecars, and verify the latest KIS read-only smoke on an unchanged broker path
+- [x] T021 Refresh `HANDOFF.md`, commit and merge the handoff, then re-check current money-path truth
 
 ## Dependencies
 
