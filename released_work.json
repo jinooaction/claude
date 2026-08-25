@@ -1,5 +1,5 @@
 {
-  "commit": "c74e947150beb983eded08a7a53fba36b2768743",
+  "commit": "8b05fb92ced697e6d9474e8a278b99d3accd7337",
   "overall_status": "OK",
   "released_work": [
     {
@@ -543,7 +543,7 @@
       "status": "released"
     }
   ],
-  "run_id": "32809509677",
+  "run_id": "32813701513",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -859,7 +859,11 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "160-forward-paper-ledger-integrity"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "161-research-canary-evidence-parity"
     }
   ],
-  "timestamp_utc": "2026-08-25T04:35:04.904308Z"
+  "timestamp_utc": "2026-08-25T05:39:44.709621Z"
 }
