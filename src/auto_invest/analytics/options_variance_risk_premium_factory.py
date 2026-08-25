@@ -51,16 +51,27 @@ DEVELOPMENT_MONTHS = 84
 EMBARGO_MONTHS = 1
 MIN_HOLDOUT_MONTHS = 120
 MIN_FACTOR_MONTHS = 205
+OUTER_TRAIN_MONTHS = 84
+OUTER_EMBARGO_MONTHS = 1
+OUTER_TEST_MONTHS = 12
+INNER_TRAIN_MONTHS = 48
+INNER_EMBARGO_MONTHS = 1
+INNER_VALIDATION_MONTHS = 12
 RIDGE_ALPHA = 10.0
 RIDGE_MIN_TRAIN = 60
 PUT_CONTINUOUS_START = date(2007, 1, 3)
+WPUT_CONTINUOUS_START = date(2006, 1, 31)
 OBJECTIVE = "standalone_options_variance_risk_premium"
 FACTORY_EDGE_CONFIRMED = "FACTORY_EDGE_CONFIRMED"
 PAPER_EDGE_CANDIDATE = "PAPER_EDGE_CANDIDATE"
 REFERENCE_EDGE_CONFIRMED_SELECTION_UNCONFIRMED = "REFERENCE_EDGE_CONFIRMED_SELECTION_UNCONFIRMED"
 GATE_OR_REFERENCE_SUSPECT = "GATE_OR_REFERENCE_SUSPECT"
 NO_FACTORY_EDGE = "NO_FACTORY_EDGE"
+SELECTION_METHOD_CONFIRMED_DIAGNOSTIC = "SELECTION_METHOD_CONFIRMED_DIAGNOSTIC"
+PREMIUM_CONFIRMED_SELECTION_UNRESOLVED = "PREMIUM_CONFIRMED_SELECTION_UNRESOLVED"
+NO_CROSS_INDEX_PREMIUM = "NO_CROSS_INDEX_PREMIUM"
 PUT_URL = "https://cdn.cboe.com/api/global/us_indices/daily_prices/PUT_History.csv"
+WPUT_URL = "https://cdn.cboe.com/api/global/us_indices/daily_prices/WPUT_History.csv"
 VIX_URL = "https://cdn.cboe.com/api/global/us_indices/daily_prices/VIX_History.csv"
 FRENCH_DAILY_URL = (
     "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp/"
@@ -154,10 +165,23 @@ class OptionsPremiumCandidate:
 class OptionsPremiumBundle:
     factor_months: tuple[str, ...]
     put_factors: tuple[float, ...]
+    wput_factors: tuple[float, ...]
     market_factors: tuple[float, ...]
     cash_factors: tuple[float, ...]
     features: dict[int, tuple[VarianceRiskPremiumSnapshot, ...]]
     quality: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class _NestedSelectionResult:
+    contract: dict[str, Any]
+    put_factors: tuple[float, ...]
+    wput_factors: tuple[float, ...]
+    cash_factors: tuple[float, ...]
+    market_factors: tuple[float, ...]
+    passive_put_factors: tuple[float, ...]
+    passive_wput_factors: tuple[float, ...]
+    selected_weights: tuple[Decimal, ...]
 
 
 def _parse_mmddyyyy(raw: str) -> date:
@@ -206,6 +230,43 @@ def parse_cboe_put_history(raw: bytes) -> DailyHistory:
     if [row[0] for row in rows] != sorted(row[0] for row in rows):
         raise ValueError("Cboe PUT dates must increase")
     return DailyHistory(tuple(rows), _content_digest(raw), ignored)
+
+
+def parse_cboe_wput_history(raw: bytes) -> DailyHistory:
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise ValueError("Cboe WPUT history encoding mismatch") from exc
+    reader = csv.reader(io.StringIO(text))
+    try:
+        header = [value.strip() for value in next(reader)]
+    except StopIteration as exc:
+        raise ValueError("Cboe WPUT history is empty") from exc
+    if header != ["DATE", "WPUT"]:
+        raise ValueError("Cboe WPUT history header mismatch")
+    rows: list[tuple[date, float]] = []
+    seen: set[date] = set()
+    for row in reader:
+        if not row or not row[0].strip():
+            continue
+        if len(row) != 2:
+            raise ValueError("Cboe WPUT history row schema mismatch")
+        observed = _parse_mmddyyyy(row[0].strip())
+        try:
+            level = float(row[1])
+        except ValueError as exc:
+            raise ValueError("Cboe WPUT level is invalid") from exc
+        if not math.isfinite(level) or level <= 0:
+            raise ValueError("Cboe WPUT level must be finite and positive")
+        if observed in seen:
+            raise ValueError("Cboe WPUT date is duplicated")
+        seen.add(observed)
+        rows.append((observed, level))
+    if not rows or rows[0][0] != WPUT_CONTINUOUS_START:
+        raise ValueError("Cboe WPUT history must begin on 2006-01-31")
+    if [row[0] for row in rows] != sorted(row[0] for row in rows):
+        raise ValueError("Cboe WPUT dates must increase")
+    return DailyHistory(tuple(rows), _content_digest(raw))
 
 
 def parse_cboe_vix_history(raw: bytes) -> DailyHistory:
@@ -347,6 +408,7 @@ def _fred_cash_crosscheck(
 
 def load_options_premium_bundle(
     put_raw: bytes,
+    wput_raw: bytes,
     vix_raw: bytes,
     french_daily_raw: bytes,
     cash_points: list[SeriesPoint],
@@ -354,9 +416,11 @@ def load_options_premium_bundle(
     current_date: date,
 ) -> OptionsPremiumBundle:
     put = parse_cboe_put_history(put_raw)
+    wput = parse_cboe_wput_history(wput_raw)
     vix = parse_cboe_vix_history(vix_raw)
     french = parse_fama_french_daily(french_daily_raw)
     put_levels = _last_by_month(put.rows)
+    wput_levels = _last_by_month(wput.rows)
     vix_levels = _last_by_month(vix.rows)
     market, cash, realized = _monthly_french(french)
     complete_before = _month(current_date)
@@ -364,6 +428,11 @@ def load_options_premium_bundle(
         month: put_levels[month] / put_levels[_shift_month(month, -1)]
         for month in put_levels
         if month < complete_before and _shift_month(month, -1) in put_levels
+    }
+    wput_factors = {
+        month: wput_levels[month] / wput_levels[_shift_month(month, -1)]
+        for month in wput_levels
+        if month < complete_before and _shift_month(month, -1) in wput_levels
     }
     market_levels: dict[date, float] = {}
     level = 1.0
@@ -377,6 +446,7 @@ def load_options_premium_bundle(
         needed = (
             target in market
             and target in cash
+            and target in wput_factors
             and source in put_factors
             and source in vix_levels
             and source in realized
@@ -430,6 +500,7 @@ def load_options_premium_bundle(
         raise ValueError("FRED DGS3MO has no observed values")
     source_ages = {
         "put_age_days": (current_date - put.rows[-1][0]).days,
+        "wput_age_days": (current_date - wput.rows[-1][0]).days,
         "vix_age_days": (current_date - vix.rows[-1][0]).days,
         "french_age_days": (current_date - french[-1].observed_date).days,
         "fred_age_days": (current_date - date.fromisoformat(observed_cash[-1].date)).days,
@@ -440,7 +511,8 @@ def load_options_premium_bundle(
         len(factor_months) >= MIN_FACTOR_MONTHS
         and holdout_months >= MIN_HOLDOUT_MONTHS
         and all(
-            0 <= source_ages[key] <= 10 for key in ("put_age_days", "vix_age_days", "fred_age_days")
+            0 <= source_ages[key] <= 10
+            for key in ("put_age_days", "wput_age_days", "vix_age_days", "fred_age_days")
         )
         and 0 <= source_ages["french_age_days"] <= 90
         and all(
@@ -455,6 +527,7 @@ def load_options_premium_bundle(
         "first_factor_month": factor_months[0].isoformat(),
         "last_factor_month": factor_months[-1].isoformat(),
         "continuous_put_start": PUT_CONTINUOUS_START.isoformat(),
+        "continuous_wput_start": WPUT_CONTINUOUS_START.isoformat(),
         "sparse_pre_2007_rows_ignored": put.ignored_pre_continuous_rows,
         "signal_lag": "month t features first affect target month t+1",
         "point_in_time": False,
@@ -472,6 +545,13 @@ def load_options_premium_bundle(
                 "digest": put.content_digest,
                 "first_date": put.rows[0][0].isoformat(),
                 "last_date": put.rows[-1][0].isoformat(),
+            },
+            "cboe_wput": {
+                "url": WPUT_URL,
+                "digest": wput.content_digest,
+                "first_date": wput.rows[0][0].isoformat(),
+                "last_date": wput.rows[-1][0].isoformat(),
+                "selection_input": False,
             },
             "cboe_vix": {
                 "url": VIX_URL,
@@ -496,6 +576,7 @@ def load_options_premium_bundle(
     return OptionsPremiumBundle(
         factor_months=tuple(month.isoformat() for month in factor_months),
         put_factors=tuple(put_factors[month] for month in factor_months),
+        wput_factors=tuple(wput_factors[month] for month in factor_months),
         market_factors=tuple(market[month] for month in factor_months),
         cash_factors=tuple(cash[month] for month in factor_months),
         features=features,
@@ -612,6 +693,296 @@ def _candidate_factors(
         turnover_total += turnover
         previous = weight
     return output, weights, float(turnover_total)
+
+
+def _factors_from_fixed_weights(
+    option_factors: Sequence[float],
+    cash_factors: Sequence[float],
+    weights: Sequence[Decimal],
+    *,
+    annual_haircut_bps: int = 50,
+    turnover_cost_bps: int = 25,
+) -> list[float]:
+    if not (len(option_factors) == len(cash_factors) == len(weights)):
+        raise ValueError("fixed-weight option replay factors must align")
+    output: list[float] = []
+    previous = Decimal("0")
+    for option_factor, cash_factor, weight in zip(
+        option_factors, cash_factors, weights, strict=True
+    ):
+        turnover = abs(weight - previous)
+        gross = float(weight) * option_factor + (1.0 - float(weight)) * cash_factor
+        annual_cost = float(weight) * annual_haircut_bps / 10_000.0 / 12.0
+        turnover_cost = float(turnover) * turnover_cost_bps / 10_000.0
+        net = gross * (1.0 - annual_cost) * (1.0 - turnover_cost)
+        if not math.isfinite(net) or net <= 0:
+            raise ValueError("fixed-weight option replay produced a non-positive factor")
+        output.append(net)
+        previous = weight
+    return output
+
+
+def _nested_outer_folds(factor_count: int) -> list[dict[str, Any]]:
+    folds: list[dict[str, Any]] = []
+    first_test = OUTER_TRAIN_MONTHS + OUTER_EMBARGO_MONTHS
+    for test_start in range(first_test, factor_count - OUTER_TEST_MONTHS + 1, OUTER_TEST_MONTHS):
+        outer_train_end = test_start - OUTER_EMBARGO_MONTHS
+        inner_folds: list[dict[str, int]] = []
+        first_validation = INNER_TRAIN_MONTHS + INNER_EMBARGO_MONTHS
+        for validation_start in range(
+            first_validation,
+            outer_train_end - INNER_VALIDATION_MONTHS + 1,
+            INNER_VALIDATION_MONTHS,
+        ):
+            inner_train_end = validation_start - INNER_EMBARGO_MONTHS
+            inner_folds.append(
+                {
+                    "train_start_index": 0,
+                    "train_end_index": inner_train_end - 1,
+                    "embargo_index": validation_start - 1,
+                    "validation_start_index": validation_start,
+                    "validation_end_index": validation_start + INNER_VALIDATION_MONTHS - 1,
+                }
+            )
+        if len(inner_folds) < 2:
+            raise ValueError("nested options selection requires at least two inner folds")
+        folds.append(
+            {
+                "outer_index": len(folds),
+                "train_start_index": 0,
+                "train_end_index": outer_train_end - 1,
+                "embargo_index": test_start - 1,
+                "test_start_index": test_start,
+                "test_end_index": test_start + OUTER_TEST_MONTHS - 1,
+                "inner_folds": inner_folds,
+            }
+        )
+    if len(folds) < 8:
+        raise ValueError("nested options selection requires at least eight outer folds")
+    return folds
+
+
+def _finite_score(value: float) -> float:
+    return value if math.isfinite(value) else -1_000_000.0
+
+
+def _portfolio_inner_score(
+    candidate_factors: Sequence[float],
+    cash_factors: Sequence[float],
+    market_factors: Sequence[float],
+    inner_folds: Sequence[dict[str, int]],
+) -> dict[str, float]:
+    cash_sharpes: list[float] = []
+    equity_improvements: list[float] = []
+    tail_advantages: list[float] = []
+    for fold in inner_folds:
+        start = fold["validation_start_index"]
+        end = fold["validation_end_index"] + 1
+        candidate = candidate_factors[start:end]
+        cash = cash_factors[start:end]
+        market = market_factors[start:end]
+        cash_sharpes.append(
+            _finite_score(
+                annualized_sharpe(
+                    [left / right - 1.0 for left, right in zip(candidate, cash, strict=True)]
+                )
+            )
+        )
+        equity_improvements.append(
+            _finite_score(summarize(list(candidate)).sharpe - summarize(list(market)).sharpe)
+        )
+        tail_advantages.append(
+            _finite_score(expected_shortfall_95(candidate) - expected_shortfall_95(market))
+        )
+    return {
+        "worst_inner_cash_excess_sharpe": min(cash_sharpes),
+        "median_inner_cash_excess_sharpe": statistics.median(cash_sharpes),
+        "median_inner_equity_sharpe_improvement": statistics.median(equity_improvements),
+        "median_inner_tail_advantage": statistics.median(tail_advantages),
+    }
+
+
+def _timing_inner_score(
+    candidate_factors: Sequence[float],
+    passive_factors: Sequence[float],
+    inner_folds: Sequence[dict[str, int]],
+) -> dict[str, float]:
+    active_sharpes: list[float] = []
+    annual_excesses: list[float] = []
+    tail_advantages: list[float] = []
+    for fold in inner_folds:
+        start = fold["validation_start_index"]
+        end = fold["validation_end_index"] + 1
+        candidate = candidate_factors[start:end]
+        passive = passive_factors[start:end]
+        active_sharpes.append(
+            _finite_score(
+                annualized_sharpe(
+                    [left / right - 1.0 for left, right in zip(candidate, passive, strict=True)]
+                )
+            )
+        )
+        annual_excesses.append(_finite_score(_annualized_excess(candidate, passive)))
+        tail_advantages.append(
+            _finite_score(expected_shortfall_95(candidate) - expected_shortfall_95(passive))
+        )
+    return {
+        "worst_inner_active_excess_sharpe": min(active_sharpes),
+        "median_inner_active_excess_sharpe": statistics.median(active_sharpes),
+        "median_inner_annual_excess": statistics.median(annual_excesses),
+        "median_inner_tail_advantage": statistics.median(tail_advantages),
+    }
+
+
+def _dated_fold(fold: dict[str, Any], months: Sequence[str]) -> dict[str, Any]:
+    output = dict(fold)
+    output["train_window"] = [months[fold["train_start_index"]], months[fold["train_end_index"]]]
+    output["embargo_month"] = months[fold["embargo_index"]]
+    if "test_start_index" in fold:
+        output["test_window"] = [months[fold["test_start_index"]], months[fold["test_end_index"]]]
+    if "validation_start_index" in fold:
+        output["validation_window"] = [
+            months[fold["validation_start_index"]],
+            months[fold["validation_end_index"]],
+        ]
+    return output
+
+
+def _run_nested_selection(
+    *,
+    mode: str,
+    candidates: Sequence[OptionsPremiumCandidate],
+    put_factors_by_candidate: Sequence[Sequence[float]],
+    wput_factors_by_candidate: Sequence[Sequence[float]],
+    weights_by_candidate: Sequence[Sequence[Decimal]],
+    bundle: OptionsPremiumBundle,
+) -> _NestedSelectionResult:
+    if mode not in {"portfolio", "timing"}:
+        raise ValueError("unknown nested options selection mode")
+    candidate_indexes = [
+        index
+        for index, candidate in enumerate(candidates)
+        if mode == "portfolio" or candidate.policy.family != "passive_put"
+    ]
+    passive_by_weight = {
+        candidate.policy.max_put_weight: index
+        for index, candidate in enumerate(candidates)
+        if candidate.policy.family == "passive_put"
+    }
+    selected_put: list[float] = []
+    selected_wput: list[float] = []
+    selected_cash: list[float] = []
+    selected_market: list[float] = []
+    selected_passive_put: list[float] = []
+    selected_passive_wput: list[float] = []
+    selected_weights: list[Decimal] = []
+    outer_contracts: list[dict[str, Any]] = []
+    for fold in _nested_outer_folds(len(bundle.factor_months)):
+        scored: list[tuple[tuple[Any, ...], int, dict[str, float]]] = []
+        for candidate_index in candidate_indexes:
+            candidate = candidates[candidate_index]
+            if mode == "portfolio":
+                score = _portfolio_inner_score(
+                    put_factors_by_candidate[candidate_index],
+                    bundle.cash_factors,
+                    bundle.market_factors,
+                    fold["inner_folds"],
+                )
+                key = (
+                    -score["worst_inner_cash_excess_sharpe"],
+                    -score["median_inner_cash_excess_sharpe"],
+                    -score["median_inner_equity_sharpe_improvement"],
+                    -score["median_inner_tail_advantage"],
+                    candidate.candidate_id,
+                )
+            else:
+                passive_index = passive_by_weight[candidate.policy.max_put_weight]
+                score = _timing_inner_score(
+                    put_factors_by_candidate[candidate_index],
+                    put_factors_by_candidate[passive_index],
+                    fold["inner_folds"],
+                )
+                key = (
+                    -score["worst_inner_active_excess_sharpe"],
+                    -score["median_inner_active_excess_sharpe"],
+                    -score["median_inner_annual_excess"],
+                    -score["median_inner_tail_advantage"],
+                    candidate.candidate_id,
+                )
+            scored.append((key, candidate_index, score))
+        _, selected_index, selected_score = min(scored, key=lambda row: row[0])
+        selected = candidates[selected_index]
+        start = fold["test_start_index"]
+        end = fold["test_end_index"] + 1
+        test_weights = list(weights_by_candidate[selected_index][start:end])
+        selected_put.extend(put_factors_by_candidate[selected_index][start:end])
+        selected_wput.extend(wput_factors_by_candidate[selected_index][start:end])
+        selected_cash.extend(bundle.cash_factors[start:end])
+        selected_market.extend(bundle.market_factors[start:end])
+        selected_weights.extend(test_weights)
+        if mode == "timing":
+            passive_index = passive_by_weight[selected.policy.max_put_weight]
+            selected_passive_put.extend(put_factors_by_candidate[passive_index][start:end])
+            selected_passive_wput.extend(wput_factors_by_candidate[passive_index][start:end])
+        latest_selection_index = max(
+            row["validation_end_index"] for row in fold["inner_folds"]
+        )
+        chronology_valid = latest_selection_index < fold["embargo_index"]
+        outer_contracts.append(
+            {
+                **_dated_fold(fold, bundle.factor_months),
+                "inner_folds": [
+                    _dated_fold(row, bundle.factor_months) for row in fold["inner_folds"]
+                ],
+                "selected_candidate_id": selected.candidate_id,
+                "selected_strategy_fingerprint": selected.strategy_fingerprint,
+                "selected_score": {
+                    key: round(value, 8) for key, value in selected_score.items()
+                },
+                "selected_weights": [str(weight) for weight in test_weights],
+                "selection_latest_index": latest_selection_index,
+                "selection_latest_month": bundle.factor_months[latest_selection_index],
+                "chronology_valid": chronology_valid,
+                "wput_used_for_selection": False,
+            }
+        )
+    identity = [
+        {
+            "candidate_id": row["selected_candidate_id"],
+            "weights": row["selected_weights"],
+        }
+        for row in outer_contracts
+    ]
+    contract = {
+        "selector": (
+            "worst/median cash-excess Sharpe, equity Sharpe improvement, tail advantage, id"
+            if mode == "portfolio"
+            else "worst/median active-excess Sharpe, annual excess, tail advantage, id"
+        ),
+        "outer_folds": outer_contracts,
+        "selection_fingerprint": _fingerprint(identity),
+        "put_stitched": {
+            "months": len(selected_put),
+            "first_month": outer_contracts[0]["test_window"][0],
+            "last_month": outer_contracts[-1]["test_window"][1],
+        },
+        "wput_replay": {
+            "months": len(selected_wput),
+            "selection_input": False,
+            "exact_put_selection_fingerprint": _fingerprint(identity),
+            "exact_weight_replay": True,
+        },
+    }
+    return _NestedSelectionResult(
+        contract=contract,
+        put_factors=tuple(selected_put),
+        wput_factors=tuple(selected_wput),
+        cash_factors=tuple(selected_cash),
+        market_factors=tuple(selected_market),
+        passive_put_factors=tuple(selected_passive_put),
+        passive_wput_factors=tuple(selected_passive_wput),
+        selected_weights=tuple(selected_weights),
+    )
 
 
 def _annualized_excess(candidate: Sequence[float], benchmark: Sequence[float]) -> float:
@@ -736,11 +1107,42 @@ def premium_existence_lane(
     return {
         "passed": all(row["passed"] for row in gates.values()),
         "diagnostic_only": True,
+        "promotion_eligible": False,
         "promotion_allowed": False,
         "gates": gates,
+        "metrics": {
+            "psr_vs_cash": None if psr is None else str(psr),
+            "annual_cash_excess": round(annual_excess, 8),
+        },
         "meaning": (
             "tests whether a compensated PUT premium exists; it does not establish "
             "portfolio adoption or executable parity"
+        ),
+    }
+
+
+def portfolio_adoption_lane(
+    candidate_factors: Sequence[float],
+    cash_factors: Sequence[float],
+    market_factors: Sequence[float],
+) -> dict[str, Any]:
+    """Test whether the premium improves an investable broad-equity alternative."""
+    lane = standalone_premium_lane(
+        candidate_factors,
+        cash_factors,
+        market_factors,
+        paper=False,
+    )
+    return {
+        "passed": lane["passed"],
+        "diagnostic_only": True,
+        "promotion_eligible": False,
+        "promotion_allowed": False,
+        "gates": lane["gates"],
+        "metrics": lane["metrics"],
+        "meaning": (
+            "tests whether a selected premium portfolio improves cash and broad-equity "
+            "risk-adjusted outcomes; it does not establish executable parity"
         ),
     }
 
@@ -777,6 +1179,8 @@ def timing_enhancement_lane(
     return {
         "passed": all(row["passed"] for row in gates.values()),
         "diagnostic_only": True,
+        "promotion_eligible": False,
+        "promotion_allowed": False,
         "gates": gates,
         "metrics": {
             "annual_excess_vs_passive": round(annual_excess, 8),
@@ -785,6 +1189,24 @@ def timing_enhancement_lane(
             "passive_expected_shortfall_95": round(passive_es, 8),
             "active_fraction": round(active_fraction, 6),
         },
+    }
+
+
+def _cross_index_objective(
+    put_lane: dict[str, Any],
+    wput_lane: dict[str, Any],
+    *,
+    question: str,
+) -> dict[str, Any]:
+    return {
+        "passed": bool(put_lane["passed"] and wput_lane["passed"]),
+        "diagnostic_only": True,
+        "promotion_eligible": False,
+        "promotion_allowed": False,
+        "question": question,
+        "put": put_lane,
+        "wput": wput_lane,
+        "cross_index_required": True,
     }
 
 
@@ -961,6 +1383,7 @@ def run_options_variance_risk_premium_factory(
     if not (
         factor_count
         == len(bundle.put_factors)
+        == len(bundle.wput_factors)
         == len(bundle.market_factors)
         == len(bundle.cash_factors)
         == len(bundle.features[6])
@@ -1068,6 +1491,55 @@ def run_options_variance_risk_premium_factory(
             }
         )
 
+    put_factors_by_candidate = [row[(50, 25)] for row in all_factors]
+    wput_factors_by_candidate = [
+        _factors_from_fixed_weights(
+            bundle.wput_factors,
+            bundle.cash_factors,
+            weights,
+        )
+        for weights in all_weights
+    ]
+    portfolio_selection = _run_nested_selection(
+        mode="portfolio",
+        candidates=candidates,
+        put_factors_by_candidate=put_factors_by_candidate,
+        wput_factors_by_candidate=wput_factors_by_candidate,
+        weights_by_candidate=all_weights,
+        bundle=bundle,
+    )
+    timing_selection = _run_nested_selection(
+        mode="timing",
+        candidates=candidates,
+        put_factors_by_candidate=put_factors_by_candidate,
+        wput_factors_by_candidate=wput_factors_by_candidate,
+        weights_by_candidate=all_weights,
+        bundle=bundle,
+    )
+    selection_rows = (
+        portfolio_selection.contract["outer_folds"]
+        + timing_selection.contract["outer_folds"]
+    )
+    chronology_violations = [
+        {
+            "mode": "portfolio" if index < len(selection_rows) / 2 else "timing",
+            "outer_index": row["outer_index"],
+            "selection_latest_index": row["selection_latest_index"],
+            "embargo_index": row["embargo_index"],
+        }
+        for index, row in enumerate(selection_rows)
+        if not row["chronology_valid"]
+    ]
+    nested_chronology = {
+        "fold_count": len(portfolio_selection.contract["outer_folds"]),
+        "all_folds_valid": not chronology_violations,
+        "violations": chronology_violations,
+        "minimum_inner_folds": min(
+            len(row["inner_folds"])
+            for row in portfolio_selection.contract["outer_folds"]
+        ),
+    }
+
     winner_index = _development_winner_index(records)
     winner = candidates[winner_index]
     winner_factors = all_factors[winner_index][(50, 25)][holdout_start:]
@@ -1125,6 +1597,64 @@ def run_options_variance_risk_premium_factory(
         "mean_zero_null_rejected": not null_live["passed"] and not null_paper["passed"],
     }
 
+    repair_start = portfolio_selection.contract["outer_folds"][0]["test_start_index"]
+    repair_end = portfolio_selection.contract["outer_folds"][-1]["test_end_index"] + 1
+    repair_cash = bundle.cash_factors[repair_start:repair_end]
+    premium_put = premium_existence_lane(
+        put_factors_by_candidate[reference_index][repair_start:repair_end],
+        repair_cash,
+    )
+    premium_wput = premium_existence_lane(
+        wput_factors_by_candidate[reference_index][repair_start:repair_end],
+        repair_cash,
+    )
+    portfolio_put = portfolio_adoption_lane(
+        portfolio_selection.put_factors,
+        portfolio_selection.cash_factors,
+        portfolio_selection.market_factors,
+    )
+    portfolio_wput = portfolio_adoption_lane(
+        portfolio_selection.wput_factors,
+        portfolio_selection.cash_factors,
+        portfolio_selection.market_factors,
+    )
+    timing_active_fraction = sum(
+        weight > 0 for weight in timing_selection.selected_weights
+    ) / len(timing_selection.selected_weights)
+    timing_put = timing_enhancement_lane(
+        timing_selection.put_factors,
+        timing_selection.passive_put_factors,
+        active_fraction=timing_active_fraction,
+    )
+    timing_wput = timing_enhancement_lane(
+        timing_selection.wput_factors,
+        timing_selection.passive_wput_factors,
+        active_fraction=timing_active_fraction,
+    )
+    objective_lanes = {
+        "premium_existence": _cross_index_objective(
+            premium_put,
+            premium_wput,
+            question="does cash-secured put exposure beat cash after costs?",
+        ),
+        "portfolio_adoption": _cross_index_objective(
+            portfolio_put,
+            portfolio_wput,
+            question=(
+                "does nested-selected put exposure improve broad-equity risk-adjusted outcomes?"
+            ),
+        ),
+        "timing_value": _cross_index_objective(
+            timing_put,
+            timing_wput,
+            question="does automated timing improve matching passive put exposure?",
+        ),
+    }
+    portfolio_selection.contract["put_stitched"]["metrics"] = portfolio_put["metrics"]
+    portfolio_selection.contract["wput_replay"]["metrics"] = portfolio_wput["metrics"]
+    timing_selection.contract["put_stitched"]["metrics"] = timing_put["metrics"]
+    timing_selection.contract["wput_replay"]["metrics"] = timing_wput["metrics"]
+
     prior = _prior_records(prior_factory_payload)
     audit_records = prior + records
     identities = [
@@ -1162,6 +1692,14 @@ def run_options_variance_risk_premium_factory(
         "embargo_months": EMBARGO_MONTHS == 1,
         "holdout_months": holdout_months >= MIN_HOLDOUT_MONTHS,
         "model_chronology": chronology_passed,
+        "nested_selection_chronology": nested_chronology["all_folds_valid"],
+        "nested_selection_coverage": (
+            nested_chronology["fold_count"] >= 8
+            and nested_chronology["minimum_inner_folds"] >= 2
+        ),
+        "wput_independent_replay": all(
+            row["wput_used_for_selection"] is False for row in selection_rows
+        ),
         "prior_adoption_non_promoting": all(
             row["retroactive_promotion_allowed"] is False for row in prior_adoption
         ),
@@ -1322,6 +1860,60 @@ def run_options_variance_risk_premium_factory(
         ),
         "search_space_exhausted": verdict == NO_FACTORY_EDGE,
     }
+    legacy_decision = decision
+    if not infrastructure_passed:
+        repair_verdict = GATE_OR_REFERENCE_SUSPECT
+        repair_diagnosis = "INFRASTRUCTURE_OR_CONTROL_INVALID"
+    elif objective_lanes["premium_existence"]["passed"] and (
+        objective_lanes["portfolio_adoption"]["passed"]
+        or objective_lanes["timing_value"]["passed"]
+    ):
+        repair_verdict = SELECTION_METHOD_CONFIRMED_DIAGNOSTIC
+        repair_diagnosis = "CROSS_INDEX_SELECTION_DIAGNOSTIC_PASSED"
+    elif objective_lanes["premium_existence"]["passed"]:
+        repair_verdict = PREMIUM_CONFIRMED_SELECTION_UNRESOLVED
+        repair_diagnosis = "CROSS_INDEX_PREMIUM_EXISTS_ADOPTION_OR_TIMING_UNRESOLVED"
+    else:
+        repair_verdict = NO_CROSS_INDEX_PREMIUM
+        repair_diagnosis = "CROSS_INDEX_PREMIUM_NOT_CONFIRMED"
+    latest_nested_candidate = portfolio_selection.contract["outer_folds"][-1][
+        "selected_candidate_id"
+    ]
+    objective_gate_rows = [
+        {
+            "gate_id": f"cross_index_{lane_id}",
+            "passed": lane["passed"],
+            "actual": str(lane["passed"]),
+            "required": "diagnostic only; never promotes",
+            "stage": "historical_nested_replay",
+            "blocking": False,
+        }
+        for lane_id, lane in objective_lanes.items()
+    ]
+    decision = {
+        "verdict": repair_verdict,
+        "criterion_diagnosis": repair_diagnosis,
+        "objective": "separated_options_premium_adoption_and_timing",
+        "provisional_best_candidate_id": latest_nested_candidate,
+        "confirmed_candidate_id": None,
+        "paper_candidate_id": None,
+        "selected_candidate_id": None,
+        "selected_strategy_fingerprint": None,
+        "research_canary_eligible": False,
+        "paper_forward_eligible": False,
+        "promotion_allowed": False,
+        "historical_reuse": True,
+        "gates": common_gate_rows + objective_gate_rows,
+        "paper_gates": {},
+        "failed_standalone_live_gates": [
+            lane_id for lane_id, lane in objective_lanes.items() if not lane["passed"]
+        ],
+        "dsr": None,
+        "pbo": None,
+        "psr": None,
+        "next_strategy_family": "collect_clean_forward_options_evidence",
+        "search_space_exhausted": False,
+    }
     return {
         "schema_version": SCHEMA_VERSION,
         "gate_version": GATE_VERSION,
@@ -1336,6 +1928,9 @@ def run_options_variance_risk_premium_factory(
         "family_raw_trial_count": len(records),
         "family_effective_trial_count": str(effective_trials),
         "unique_trial_fingerprint_count": unique_audit,
+        "research_canary_eligible": False,
+        "paper_forward_eligible": False,
+        "promotion_allowed": False,
         "options_premium_data": bundle.quality,
         "options_premium_data_fingerprint": data_fingerprint,
         "energy_cross_market_data_fingerprint": prior_factory_payload.get(
@@ -1348,6 +1943,25 @@ def run_options_variance_risk_premium_factory(
             "first_prediction_index": RIDGE_MIN_TRAIN,
             "latest_rows": {str(horizon): ridge_chronology[horizon][-1] for horizon in (6, 12)},
         },
+        "selection_repair": {
+            "protocol": {
+                "outer_train_months": OUTER_TRAIN_MONTHS,
+                "outer_embargo_months": OUTER_EMBARGO_MONTHS,
+                "outer_test_months": OUTER_TEST_MONTHS,
+                "inner_train_months": INNER_TRAIN_MONTHS,
+                "inner_embargo_months": INNER_EMBARGO_MONTHS,
+                "inner_validation_months": INNER_VALIDATION_MONTHS,
+                "independent_index": "WPUT",
+                "independent_index_used_for_selection": False,
+            },
+            "chronology": nested_chronology,
+            "portfolio_selection": portfolio_selection.contract,
+            "timing_selection": timing_selection.contract,
+            "historical_reuse": True,
+            "diagnostic_only": True,
+            "promotion_eligible": False,
+        },
+        "objective_lanes": objective_lanes,
         "split": split,
         "split_fingerprint": split_fingerprint,
         "development_selection": {
@@ -1379,12 +1993,37 @@ def run_options_variance_risk_premium_factory(
             "posthoc_standalone_paper_candidate_ids": posthoc_paper,
             "promotion_allowed": False,
         },
+        "legacy_selection": {
+            "protocol": "spec-164 one-shot development selection and untouched holdout",
+            "development_selection": {
+                "window": split["development"],
+                "months": DEVELOPMENT_MONTHS,
+                "selected_candidate_id": winner.candidate_id,
+            },
+            "holdout_confirmation": {
+                "window": split["holdout"],
+                "months": holdout_months,
+                **standalone_live["metrics"],
+            },
+            "standalone_live_lane": standalone_live,
+            "standalone_paper_lane": standalone_paper,
+            "timing_enhancement_lane": timing_lane,
+            "decision": legacy_decision,
+            "selection_sanity": {
+                "development_winner_matches_best_holdout": winner.candidate_id
+                == best_holdout["candidate_id"],
+                "best_holdout_candidate_id": best_holdout["candidate_id"],
+                "posthoc_standalone_live_candidate_ids": posthoc_live,
+                "posthoc_standalone_paper_candidate_ids": posthoc_paper,
+                "promotion_allowed": False,
+            },
+        },
         "trial_records": records,
         "audit_records": audit_records,
         "development_returns": development_returns,
         "decision": decision,
-        "research_candidate": (winner.as_dict() if verdict == FACTORY_EDGE_CONFIRMED else None),
-        "paper_candidate": (winner.as_dict() if verdict == PAPER_EDGE_CANDIDATE else None),
+        "research_candidate": None,
+        "paper_candidate": None,
         "research_live_parity": {
             "passed": False,
             "intended_expressions": list(INTENDED_EXPRESSIONS),
@@ -1399,13 +2038,18 @@ def run_options_variance_risk_premium_factory(
         },
         "criterion_audit": {
             "premium_question": (
-                "does cash-secured PUT exposure beat cash and improve broad-equity "
-                "risk-adjusted outcomes?"
+                "does cash-secured PUT exposure beat cash after costs?"
+            ),
+            "portfolio_adoption_question": (
+                "does selected PUT exposure improve broad-equity risk-adjusted outcomes?"
             ),
             "timing_question": "does automation improve matching passive PUT exposure?",
             "timing_is_non_blocking_for_premium": True,
             "threshold_change_after_results": False,
             "prior_candidate_reclassification": False,
+            "historical_reuse": True,
+            "public_history_point_in_time": False,
+            "benchmark_execution_parity": False,
         },
         "safety": [
             "research evidence only",
@@ -1418,28 +2062,29 @@ def run_options_variance_risk_premium_factory(
 
 def render_options_variance_risk_premium_markdown(payload: dict[str, Any]) -> str:
     decision = payload["decision"]
-    holdout = payload["holdout_confirmation"]
+    holdout = payload["legacy_selection"]["holdout_confirmation"]
     reference = payload["reference_control"]
-    timing = payload["timing_enhancement_lane"]
+    objectives = payload["objective_lanes"]
     return "\n".join(
         [
-            "# 옵션 변동성 위험 프리미엄 독립 전략 공장",
+            "# 옵션 선택·목적 교정 독립 전략 공장",
             "",
             f"- 관문 진단: `{decision['criterion_diagnosis']}`",
-            f"- 전략 판정: `{decision['verdict']}`",
-            f"- 개발 선택 후보: `{decision['provisional_best_candidate_id']}`",
+            f"- 진단 판정: `{decision['verdict']}`",
+            f"- 최신 중첩 선택 후보: `{decision['provisional_best_candidate_id']}`",
             f"- 감사 시도: {payload['global_audit_trial_count']}회 (현재 전략군 16회)",
-            f"- 홀드아웃: {holdout['months']}개월, 현금 초과 PSR {holdout['psr_vs_cash']}",
-            f"- 연 현금 초과수익: {holdout['annual_cash_excess']:.4%}",
-            f"- 주식 대비 샤프 변화: {holdout['sharpe_improvement']:+.4f}",
-            f"- 선택 후보 실거래급 관문: {payload['standalone_live_lane']['passed']}",
-            f"- 선택 후보 관찰급 관문: {payload['standalone_paper_lane']['passed']}",
+            f"- 기존 홀드아웃: {holdout['months']}개월, 현금 초과 PSR {holdout['psr_vs_cash']}",
+            f"- 교차지수 프리미엄 존재: {objectives['premium_existence']['passed']}",
+            f"- 교차지수 포트폴리오 채택: {objectives['portfolio_adoption']['passed']}",
+            f"- 교차지수 자동 타이밍 추가가치: {objectives['timing_value']['passed']}",
+            "- WPUT 선택 입력 사용: False",
+            f"- 중첩 시간 순서: {payload['selection_repair']['chronology']['all_folds_valid']}",
             f"- 알려진 PUT 기준 관문 인식: {reference['recognized_reference_passed']}",
             f"- 알려진 PUT 현금 프리미엄 존재: {reference['economic_premium_detected']}",
             f"- 평균 0 대조군 기각: {reference['mean_zero_null_rejected']}",
-            f"- 자동 타이밍 추가가치: {None if timing is None else timing['passed']}",
-            "- 실패 실거래급 관문: "
+            "- 실패 교차지수 목적: "
             f"{', '.join(decision['failed_standalone_live_gates']) or '없음'}",
+            "- 역사 결과 승격 가능: False",
             "- PUTW/SPX 옵션 실행 정합: False",
             "- 주문/자본/마진/허용목록 변경: 0",
         ]
@@ -1450,6 +2095,7 @@ __all__ = [
     "FRENCH_DAILY_URL",
     "PUT_URL",
     "VIX_URL",
+    "WPUT_URL",
     "OptionsPremiumBundle",
     "OptionsPremiumPolicy",
     "VarianceRiskPremiumSnapshot",
@@ -1461,10 +2107,13 @@ __all__ = [
     "options_target_weight",
     "parse_cboe_put_history",
     "parse_cboe_vix_history",
+    "parse_cboe_wput_history",
     "parse_fama_french_daily",
     "render_options_variance_risk_premium_markdown",
     "run_options_variance_risk_premium_factory",
     "standalone_premium_lane",
+    "premium_existence_lane",
+    "portfolio_adoption_lane",
     "timing_enhancement_lane",
     "validate_options_premium_bundle",
 ]
