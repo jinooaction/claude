@@ -275,12 +275,29 @@ def test_factory_winner_enters_only_10pct_research_canary() -> None:
         factory_verdict={
             "verdict": "RESEARCH_CANARY_READY",
             "candidate_id": "factory-winner",
+            "fundability_passed": True,
         },
     )
     assert d.action == ACTION_PROMOTE
     assert d.target_rung == 1
     assert d.target_capital_usd == 1200
     assert "strategy factory ready" in d.new_sentinel_text
+
+
+def test_factory_winner_without_fundability_never_arms() -> None:
+    d = _decide(
+        _DISARMED,
+        forward_verdict=_verdict("NO_EDGE", 0),
+        factory_verdict={
+            "verdict": "RESEARCH_CANARY_READY",
+            "candidate_id": "factory-winner",
+            "fundability_passed": False,
+        },
+    )
+
+    assert d.action == ACTION_WAIT_EDGE
+    assert d.target_rung == 0
+    assert not d.sentinel_changes
 
 
 def test_exploration_wait_never_arms() -> None:
@@ -357,7 +374,10 @@ def test_promote_rung1_to_2_requires_existing_exploration_contract():
         _RUNG1,
         forward_verdict=_verdict("NO_EDGE", 40),
         exploration_verdict={"verdict": "EXPLORATION_CANARY_READY"},
-        factory_verdict={"verdict": "RESEARCH_CANARY_READY"},
+        factory_verdict={
+            "verdict": "RESEARCH_CANARY_READY",
+            "fundability_passed": True,
+        },
         live_growth=_growth(dd="2.5", obs=25, period_days="30"),
     )
     assert d.action == ACTION_PROMOTE

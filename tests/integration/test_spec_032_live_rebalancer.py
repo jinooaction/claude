@@ -34,6 +34,7 @@ from auto_invest.execution.rebalancer import execute_rebalance
 from auto_invest.market_data.store import PriceBar, insert_bar
 from auto_invest.persistence import db
 from auto_invest.persistence import positions as positions_mod
+from auto_invest.portfolio.fundability import validate_fundability_evidence
 from auto_invest.strategy.rebalance import macro_target_weights, treasury_target_weights
 
 _D0 = datetime(2023, 1, 3, tzinfo=UTC)
@@ -614,3 +615,8 @@ async def test_execution_proxy_keeps_signal_bars_but_routes_only_proxy_symbols(c
     assert {r.symbol for r in out.results} == {"SPYM", "IEF", "GLDM"}
     assert all(r.state == "DRY_RUN" and r.routed_qty == 1 for r in out.results)
     assert [(w.symbol, w.reason) for w in out.withheld] == [("ORANY", "unmanaged_holding")]
+    assert out.fundability is not None
+    assert out.fundability.fundable is True
+    assert validate_fundability_evidence(
+        out.fundability.as_dict(), expected_capital_usd=Decimal("293")
+    )

@@ -51,6 +51,7 @@ from auto_invest.config.rules import (
 from auto_invest.execution.order_router import OrderOutcome, OrderRouter
 from auto_invest.market_data.store import get_bars
 from auto_invest.persistence import positions as positions_mod
+from auto_invest.portfolio.fundability import FundabilityAssessment, assess_fundability
 from auto_invest.strategy.factors import composite_scores
 from auto_invest.strategy.rebalance import (
     PlannedOrder,
@@ -131,6 +132,7 @@ class RebalanceOutcome:
     withheld: list[RebalanceWithheldOrder] = field(default_factory=list)
     signal_target_weights: dict[str, Decimal] = field(default_factory=dict)
     execution_symbol_map: dict[str, str] = field(default_factory=dict)
+    fundability: FundabilityAssessment | None = None
 
 
 def _marketable_limit(side: Side, quote: Quote) -> Decimal:
@@ -449,6 +451,26 @@ async def execute_rebalance(
     if cash_shortfall:
         effective_side = "sell" if sells else "none"
 
+    order_prices = {
+        order.symbol: _marketable_limit(
+            Side.BUY if order.side == "BUY" else Side.SELL,
+            quotes[order.symbol],
+        )
+        for order in plan
+        if order.symbol in quotes
+    }
+    fundability = assess_fundability(
+        target_weights=tw,
+        holdings=holdings,
+        prices=prices,
+        order_prices=order_prices,
+        planned_orders=[(order.symbol, order.side, order.qty) for order in plan],
+        capital_usd=total_capital_usd,
+        invested_fraction=config.invested_fraction,
+        caps=caps,
+        effective_side=effective_side,
+    )
+
     results: list[RebalanceOrderResult] = []
     for planned in sells + buys:
         if effective_side == "none":
@@ -595,6 +617,7 @@ async def execute_rebalance(
         withheld=withheld,
         signal_target_weights=dict(signal_tw),
         execution_symbol_map=symbol_map,
+        fundability=fundability,
     )
 
 

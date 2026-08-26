@@ -4937,6 +4937,11 @@ def rebalance_once_cmd(
                         for s, w in outcome.signal_target_weights.items()  # type: ignore[attr-defined]
                     },
                     "execution_symbol_map": outcome.execution_symbol_map,  # type: ignore[attr-defined]
+                    "fundability": (
+                        outcome.fundability.as_dict()  # type: ignore[attr-defined]
+                        if outcome.fundability is not None  # type: ignore[attr-defined]
+                        else None
+                    ),
                     "results": [
                         {
                             "symbol": r.symbol,
@@ -6444,6 +6449,11 @@ def ladder_decide_cmd(
         "--factory-evidence-age-hours",
         help="자동 전략 공장 증거 나이(시간). 36시간 초과 또는 미확인이면 연구 진입 차단.",
     ),
+    fundability_preview_json: Path = typer.Option(
+        None,
+        "--fundability-preview-json",
+        help="현재 NAV 10% 자본의 라이브 드라이런 미리보기 JSON. 구현 가능성 통과만 연구 진입.",
+    ),
     hardened_canary_json: Path = typer.Option(
         None,
         "--hardened-canary-json",
@@ -6514,8 +6524,9 @@ def ladder_decide_cmd(
 
     from auto_invest.config.rules import PortfolioRebalanceConfig
     from auto_invest.portfolio.autoarm import strategy_fingerprint_digest
-    from auto_invest.portfolio.capital_ladder import decide_ladder
+    from auto_invest.portfolio.capital_ladder import decide_ladder, rung_capital_usd
     from auto_invest.portfolio.factory_evidence import assess_factory_evidence
+    from auto_invest.portfolio.fundability import validate_fundability_evidence
 
     def _read_json(path: Path | None) -> dict | None:
         if path is None:
@@ -6591,6 +6602,22 @@ def ladder_decide_cmd(
             account_nav = _Dec(str(nav_doc["total_value_usd"]))
         except ArithmeticError:
             account_nav = None
+    fundability_preview = _read_json(fundability_preview_json)
+    fundability_payload = (
+        fundability_preview.get("fundability")
+        if isinstance(fundability_preview, dict)
+        else None
+    )
+    expected_research_capital = (
+        rung_capital_usd(1, account_nav) if account_nav is not None and account_nav > 0 else None
+    )
+    factory_fundability_pass = validate_fundability_evidence(
+        fundability_payload,
+        expected_capital_usd=(
+            None if expected_research_capital is None else _Dec(expected_research_capital)
+        ),
+    )
+    factory_contract_ready = factory_contract_ready and factory_fundability_pass
 
     try:
         _, _, live_cfg = _load_portfolio_for_backtest(live_portfolio, env=None)
@@ -6623,6 +6650,9 @@ def ladder_decide_cmd(
             isinstance(hardened_canary, dict) and hardened_canary.get("verdict") == "PASS"
         ),
         "evidence_age_hours": factory_evidence_age_hours,
+        "fundability_passed": factory_fundability_pass,
+        "fundability": fundability_payload,
+        "expected_research_capital_usd": expected_research_capital,
     }
     if factory_exact_match and factory_candidate_cfg is not None:
         validated_cfg = factory_candidate_cfg

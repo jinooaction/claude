@@ -5,12 +5,14 @@ from __future__ import annotations
 import tomllib
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass
+from decimal import Decimal
 from typing import Any
 
 from auto_invest.config.rules import PortfolioRebalanceConfig
 from auto_invest.portfolio.autoarm import strategy_fingerprint_digest
 from auto_invest.portfolio.edge_verdict import PAIRED_ACTIVE_RETURN_PSR_METHOD
 from auto_invest.portfolio.factory_evidence import assess_factory_evidence
+from auto_invest.portfolio.fundability import validate_fundability_evidence
 
 SCHEMA_VERSION = "1.0"
 ENTRY_READY = "ENTRY_READY"
@@ -55,6 +57,8 @@ def evaluate_live_entry(
     factory_evidence: Any = None,
     factory_evidence_age_hours: float | None = None,
     live_strategy_fingerprint: str | None = None,
+    fundability_evidence: Any = None,
+    expected_capital_usd: Decimal | None = None,
 ) -> LiveEntryRevalidation:
     """Allow first exposure only under a current exploration or factory contract."""
 
@@ -96,6 +100,10 @@ def evaluate_live_entry(
     canary_passed = (
         isinstance(hardened_canary, Mapping) and hardened_canary.get("verdict") == "PASS"
     )
+    fundability_passed = validate_fundability_evidence(
+        fundability_evidence,
+        expected_capital_usd=expected_capital_usd,
+    )
 
     exploration_checks = {
         "historical_verdict": payload.get("historical_verdict") == "HOLDOUT_EDGE",
@@ -109,6 +117,7 @@ def evaluate_live_entry(
         "evidence_fresh": (
             evidence_age_hours is not None and 0.0 <= evidence_age_hours <= max_evidence_age_hours
         ),
+        "fundability": fundability_passed,
     }
     factory = factory_evidence if isinstance(factory_evidence, Mapping) else {}
     factory_decision = factory.get("decision")
@@ -139,6 +148,7 @@ def evaluate_live_entry(
             factory_evidence_age_hours is not None
             and 0.0 <= factory_evidence_age_hours <= max_evidence_age_hours
         ),
+        "factory_fundability": fundability_passed,
     }
     exploration_ready = all(exploration_checks.values())
     factory_ready = bool(factory) and all(factory_checks.values())
@@ -165,6 +175,10 @@ def evaluate_live_entry(
         "factory_assessment": factory_assessment.as_dict(),
         "factory_evidence_age_hours": factory_evidence_age_hours,
         "factory_checks": factory_checks,
+        "fundability": fundability_evidence,
+        "expected_capital_usd": (
+            None if expected_capital_usd is None else str(expected_capital_usd)
+        ),
     }
     return LiveEntryRevalidation(
         allowed=not reasons,

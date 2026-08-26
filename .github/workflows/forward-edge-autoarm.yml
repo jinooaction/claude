@@ -320,6 +320,27 @@ jobs:
               "observe account-nav" \
               > /tmp/account_nav.json 2>/tmp/account_nav.err
           echo "--- account NAV ---"; cat /tmp/account_nav.json; cat /tmp/account_nav.err
+          research_capital="$(python3 - <<'PY'
+          import json
+          from decimal import Decimal, ROUND_FLOOR
+          try:
+              nav = Decimal(str(json.load(open('/tmp/account_nav.json'))['total_value_usd']))
+              print(int((nav * Decimal('0.10')).to_integral_value(rounding=ROUND_FLOOR)))
+          except Exception:
+              print(0)
+          PY
+          )"
+          if [[ "${research_capital}" -gt 0 ]]; then
+            ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
+                -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+                "observe live-canary-preview ${research_capital}" \
+                > /tmp/rung1_fundability_preview.json 2>/tmp/rung1_fundability_preview.err
+          fi
+          if [[ ! -s /tmp/rung1_fundability_preview.json ]]; then
+            echo '{}' > /tmp/rung1_fundability_preview.json
+          fi
+          echo "--- rung 1 fundability preview (orders=0) ---"
+          cat /tmp/rung1_fundability_preview.json /tmp/rung1_fundability_preview.err 2>/dev/null
           # 라이브 트랙 실적(현재 단 진입 이후) — 승격/강등 증거. since 가 없으면 전체.
           since_arg=""
           if [[ -n "${ENTERED}" ]]; then since_arg=" ${ENTERED}"; fi
@@ -351,6 +372,7 @@ jobs:
             --profit-evidence-json /tmp/profit_evidence.json \
             --factory-evidence-json /tmp/strategy_factory.json \
             --factory-evidence-age-hours "$(cat /tmp/strategy_factory_age_hours)" \
+            --fundability-preview-json /tmp/rung1_fundability_preview.json \
             --hardened-canary-json /tmp/exploration_canary.json \
             --live-growth-json /tmp/live_growth.json \
             --live-performance-json /tmp/live_performance.json \
@@ -573,6 +595,11 @@ jobs:
             echo "## 전략 공장 완전성 판정 JSON (read-only)"
             echo '```json'
             cat /tmp/factory_evidence_assessment.json 2>/dev/null || echo '{}'
+            echo '```'
+            echo ""
+            echo "## 연구 단 1 구현 가능성 미리보기 (read-only, 주문 0건)"
+            echo '```json'
+            cat /tmp/rung1_fundability_preview.json 2>/dev/null || echo '{}'
             echo '```'
             echo ""
             echo "## 탐색 진입 hardened canary JSON (격리, 주문 0건)"
