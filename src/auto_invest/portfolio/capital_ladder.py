@@ -269,6 +269,7 @@ def decide_ladder(
     exploration_verdict: dict | None = None,
     factory_verdict: dict | None = None,
     live_performance: dict | None = None,
+    entry_execution_ready: bool = False,
     dd_budget_pct: Decimal = DEFAULT_DD_BUDGET_PCT,
 ) -> LadderDecision:
     """자본 사다리 결정 — 순수·결정론·보수적 fail-safe.
@@ -277,7 +278,7 @@ def decide_ladder(
       1. 킬스위치 → DISABLED.
       2. 전략 지문 불일치 → BLOCKED (어떤 단에서도 검증 안 한 전략에 자본 배치 금지).
       3. 계좌 NAV 불능(None/≤0) → BLOCKED (사이징 불가 — 모르면 아무것도 안 바꾼다).
-      4. 단 0: 공장 전체 관문이면 단 1(10%), 기존 탐색·forward면 단 2(20%)로 PROMOTE.
+      4. 단 0: 동등성+자금 구현성 뒤 공장 전체 관문이면 단 1(10%), 기존 탐색·forward면 단 2.
       5. 단 ≥1: 낙폭 ≥ 예산 → HALT / 낙폭 ≥ 예산/2 → DEMOTE /
          증거(관측·경과일·낙폭) 충족 + 단 < 4 → PROMOTE / NAV 드리프트 → RESIZE / STAY.
     """
@@ -367,16 +368,19 @@ def decide_ladder(
             if raw_v_label != EDGE_CONFIRMED or forward_confirmed
             else "LEGACY_EDGE_EVIDENCE"
         )
-        exploration_ready = (
+        exploration_ready = entry_execution_ready and (
             isinstance(exploration_verdict, dict)
             and exploration_verdict.get("verdict") == "EXPLORATION_CANARY_READY"
         )
-        factory_ready = (
+        factory_ready = entry_execution_ready and (
             isinstance(factory_verdict, dict)
             and factory_verdict.get("verdict") == "RESEARCH_CANARY_READY"
             and factory_verdict.get("fundability_passed") is True
         )
-        if v_label != EDGE_CONFIRMED and not exploration_ready and not factory_ready:
+        if (
+            v_label != EDGE_CONFIRMED
+            or not entry_execution_ready
+        ) and not exploration_ready and not factory_ready:
             exploration_label = (
                 exploration_verdict.get("verdict")
                 if isinstance(exploration_verdict, dict)
@@ -390,7 +394,7 @@ def decide_ladder(
                 0,
                 f"단 0 + forward 판정={v_label!r}, 탐색 캐너리="
                 f"{exploration_label!r}, 연구 캐너리={factory_label!r}"
-                " — 진입 증거 미충족. 배치 보류.",
+                f", 실행 준비={entry_execution_ready} — 진입 증거 미충족. 배치 보류.",
             )
         n_obs = forward_verdict.get("n_obs")
         if factory_ready and v_label != EDGE_CONFIRMED and not exploration_ready:
@@ -431,11 +435,11 @@ def decide_ladder(
         if raw_v_label != EDGE_CONFIRMED or forward_confirmed
         else "LEGACY_EDGE_EVIDENCE"
     )
-    exploration_ready = (
+    exploration_ready = entry_execution_ready and (
         isinstance(exploration_verdict, dict)
         and exploration_verdict.get("verdict") == "EXPLORATION_CANARY_READY"
     )
-    factory_ready = (
+    factory_ready = entry_execution_ready and (
         isinstance(factory_verdict, dict)
         and factory_verdict.get("verdict") == "RESEARCH_CANARY_READY"
         and factory_verdict.get("fundability_passed") is True

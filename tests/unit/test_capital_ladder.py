@@ -148,6 +148,7 @@ def _decide(sentinel: str, **kw):
         validated_config=_cfg(),
         kill_switch_present=False,
         today=_TODAY,
+        entry_execution_ready=True,
     )
     defaults.update(kw)
     return decide_ladder(**defaults)
@@ -251,6 +252,34 @@ def test_rung0_rejects_legacy_edge_confirmed_evidence():
     assert decision.action == ACTION_WAIT_EDGE
     assert decision.target_rung == 0
     assert "LEGACY_EDGE_EVIDENCE" in decision.reason
+
+
+def test_rung0_rejects_every_edge_path_without_execution_readiness() -> None:
+    direct = _decide(_DISARMED, entry_execution_ready=False)
+    exploration = _decide(
+        _DISARMED,
+        forward_verdict=_verdict("NO_EDGE", 41),
+        exploration_verdict={
+            "verdict": "EXPLORATION_CANARY_READY",
+            "candidate_id": "globalfixed-ensemble-3-6-9-12",
+        },
+        entry_execution_ready=False,
+    )
+    factory = _decide(
+        _DISARMED,
+        forward_verdict=_verdict("NO_EDGE", 0),
+        factory_verdict={
+            "verdict": "RESEARCH_CANARY_READY",
+            "candidate_id": "factory-winner",
+            "fundability_passed": True,
+        },
+        entry_execution_ready=False,
+    )
+
+    assert {direct.action, exploration.action, factory.action} == {ACTION_WAIT_EDGE}
+    assert all(
+        decision.target_rung == 0 for decision in (direct, exploration, factory)
+    )
 
 
 def test_rung0_enters_exploration_canary_without_full_forward_edge() -> None:

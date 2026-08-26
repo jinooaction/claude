@@ -13,6 +13,7 @@ name: KIS smoke (autonomous)
 #
 # 검증 항목 (tests/integration/test_live_broker.py):
 #   - test_live_kis_token_and_quote: KIS OAuth + AAPL quote
+#   - test_live_kis_execution_proxy_parity_and_quotes: 대체 ETF 3쌍 일봉 동등성 + 현재가
 #   - test_live_kis_purchasable_cash: 외화예수금 조회 (잔고 0원 회귀)
 #   - test_live_kis_positions: 보유 종목 조회 (포트폴리오 stub 회귀)
 #   - test_live_kis_combined_balance: end-to-end 잔고 (cash + 평가금액)
@@ -35,6 +36,7 @@ on:
       - 'src/auto_invest/cli.py'
       - 'src/auto_invest/reconciliation/**'
       - 'tests/integration/test_live_broker.py'
+      - 'deploy/canary-live-portfolio.toml'
       - '.github/workflows/kis-smoke.yml'
   schedule:
     # 매일 03:00 UTC = KST 12:00 (미국 시장 외 시간).
@@ -195,7 +197,7 @@ jobs:
               detail="ssh-keygen 으로 생성한 ed25519 개인키 전체 내용(BEGIN/END 줄 포함)을 Secret 에 다시 붙여넣기."
           elif [[ "${SMOKE_STATE:-}" == "success" ]]; then
               status="✅ 모든 KIS smoke 통과"
-              detail="KIS quote / 외화예수금 / 보유 종목 / 합산 잔고 4건 모두 정상."
+              detail="KIS quote / 실행 대체 ETF 동등성 / 외화예수금 / 보유 종목 / 합산 잔고 모두 정상."
           elif [[ "${SMOKE_STATE:-}" == "setup_pending" ]]; then
               status="⏭️ 건너뜀 — 인스턴스/원격 셋업 미완료 (셋업 보류)"
               detail="SSH 연결 실패 또는 원격의 /opt/auto-invest / .env 부재. 위 'Run KIS smoke on instance' 스텝 로그의 ::warning:: 메시지 참조."
@@ -218,6 +220,7 @@ jobs:
           ## 검증 범위 (회귀 방어)
 
           - KIS OAuth + AAPL quote
+          - 실행 대체 ETF 3쌍 조정 일봉 동등성 + 현재가·거래소 해석
           - 외화예수금 조회 — 잔고 0원 표시 회귀
           - 보유 종목 조회 — 포트폴리오 stub 회귀
           - 합산 잔고 (cash + 평가금액) — design 명령 동일 경로

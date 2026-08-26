@@ -168,6 +168,9 @@ case "${cmd}" in
     observe\ live-canary-backfill)
         exec sudo -n /usr/local/sbin/auto-invest-observe live-canary-backfill
         ;;
+    observe\ execution-proxy-parity)
+        exec sudo -n /usr/local/sbin/auto-invest-observe execution-proxy-parity
+        ;;
     observe\ live-canary-preview\ *)
         capital="${cmd#observe live-canary-preview }"
         if [[ "${capital}" =~ ^[0-9]+([.][0-9]+)?$ ]]; then

@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import tomllib
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
@@ -24,6 +26,17 @@ from auto_invest.cli import app
 from auto_invest.config.caps import SizingCaps
 from auto_invest.config.rules import PortfolioRebalanceConfig
 from auto_invest.portfolio.autoarm import strategy_fingerprint_digest
+from auto_invest.portfolio.execution_proxy_parity import (
+    LOOKBACK_SESSIONS,
+    MAX_ANNUALIZED_RETURN_GAP,
+    MAX_ANNUALIZED_TRACKING_ERROR,
+    MAX_EVIDENCE_AGE_HOURS,
+    MAX_MARKET_DATA_AGE_DAYS,
+    MIN_COMMON_SESSIONS,
+    MIN_MEDIAN_DOLLAR_VOLUME_USD,
+    MIN_RETURN_CORRELATION,
+    PREREGISTERED_EXECUTION_SYMBOL_MAP,
+)
 from auto_invest.portfolio.fundability import assess_fundability
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -60,6 +73,65 @@ def _json(tmp_path: Path, name: str, payload: dict) -> Path:
     return path
 
 
+def _proxy_parity_json(tmp_path: Path) -> Path:
+    observed = datetime.now(UTC)
+    pair_checks = {
+        "common_sessions": True,
+        "latest_session_aligned": True,
+        "freshness": True,
+        "return_correlation": True,
+        "annualized_tracking_error": True,
+        "annualized_return_gap": True,
+        "execution_liquidity": True,
+    }
+    pairs = [
+        {
+            "signal_symbol": signal,
+            "execution_symbol": execution,
+            "common_sessions": MIN_COMMON_SESSIONS,
+            "first_session": (observed.date() - timedelta(days=365)).isoformat(),
+            "last_session": observed.date().isoformat(),
+            "signal_latest_session": observed.date().isoformat(),
+            "execution_latest_session": observed.date().isoformat(),
+            "return_correlation": 0.99,
+            "annualized_tracking_error": 0.01,
+            "annualized_return_gap": 0.01,
+            "median_execution_dollar_volume_usd": "10000000",
+            "checks": dict(pair_checks),
+            "passed": True,
+        }
+        for signal, execution in sorted(PREREGISTERED_EXECUTION_SYMBOL_MAP.items())
+    ]
+    body = {
+        "schema_version": "1.0",
+        "observed_at_utc": observed.isoformat().replace("+00:00", "Z"),
+        "dataset_version": "test",
+        "symbol_map": PREREGISTERED_EXECUTION_SYMBOL_MAP,
+        "contract": {
+            "lookback_sessions": LOOKBACK_SESSIONS,
+            "min_common_sessions": MIN_COMMON_SESSIONS,
+            "min_return_correlation": MIN_RETURN_CORRELATION,
+            "max_annualized_tracking_error": MAX_ANNUALIZED_TRACKING_ERROR,
+            "max_annualized_return_gap": MAX_ANNUALIZED_RETURN_GAP,
+            "min_median_dollar_volume_usd": str(MIN_MEDIAN_DOLLAR_VOLUME_USD),
+            "max_market_data_age_days": MAX_MARKET_DATA_AGE_DAYS,
+            "max_evidence_age_hours": MAX_EVIDENCE_AGE_HOURS,
+        },
+        "checks": {
+            "mapping_exact": True,
+            "pair_count": True,
+            "all_pairs_passed": True,
+        },
+        "pairs": pairs,
+        "passed": True,
+    }
+    encoded = json.dumps(
+        body, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+    ).encode()
+    body["evidence_digest"] = "sha256:" + hashlib.sha256(encoded).hexdigest()
+    return _json(tmp_path, "proxy-parity.json", body)
+
+
 def _invoke(tmp_path: Path, *, canary_verdict: str):
     forward = _json(
         tmp_path,
@@ -78,6 +150,27 @@ def _invoke(tmp_path: Path, *, canary_verdict: str):
     )
     canary = _json(tmp_path, "canary.json", {"verdict": canary_verdict})
     nav = _json(tmp_path, "nav.json", {"total_value_usd": "12000"})
+    fundability = assess_fundability(
+        target_weights={"AAA": Decimal("0.5"), "BBB": Decimal("0.5")},
+        holdings={},
+        prices={"AAA": Decimal("100"), "BBB": Decimal("100")},
+        order_prices={"AAA": Decimal("100"), "BBB": Decimal("100")},
+        planned_orders=[("AAA", "BUY", 5), ("BBB", "BUY", 6)],
+        capital_usd=Decimal("1200"),
+        invested_fraction=Decimal("0.99"),
+        caps=SizingCaps(
+            per_trade_pct=Decimal("50"),
+            per_symbol_pct=Decimal("60"),
+            global_exposure_pct=Decimal("100"),
+            canary_capital_pct=Decimal("10"),
+            canary_min_duration_days=14,
+            canary_acceptance_drawdown_pct=Decimal("10"),
+        ),
+    )
+    fundability_path = _json(
+        tmp_path, "exploration-fundability.json", {"fundability": fundability.as_dict()}
+    )
+    proxy_parity_path = _proxy_parity_json(tmp_path)
     sentinel = tmp_path / "sentinel.request"
     sentinel.write_text("armed: false\ncapital_usd: 0\nrun_seq: 1\n", encoding="utf-8")
     return RUNNER.invoke(
@@ -90,6 +183,10 @@ def _invoke(tmp_path: Path, *, canary_verdict: str):
             str(profit),
             "--hardened-canary-json",
             str(canary),
+            "--fundability-preview-json",
+            str(fundability_path),
+            "--execution-proxy-parity-json",
+            str(proxy_parity_path),
             "--account-nav-json",
             str(nav),
             "--live-portfolio",
@@ -277,6 +374,7 @@ def _invoke_factory(tmp_path: Path, *, winner: bool, include_fundability: bool =
         "fundability.json",
         {"fundability": fundability.as_dict()} if include_fundability else {},
     )
+    proxy_parity_path = _proxy_parity_json(tmp_path)
     sentinel = tmp_path / "sentinel.request"
     sentinel.write_text("armed: false\ncapital_usd: 0\nrun_seq: 1\n", encoding="utf-8")
     return RUNNER.invoke(
@@ -291,6 +389,8 @@ def _invoke_factory(tmp_path: Path, *, winner: bool, include_fundability: bool =
             "2",
             "--fundability-preview-json",
             str(fundability_path),
+            "--execution-proxy-parity-json",
+            str(proxy_parity_path),
             "--hardened-canary-json",
             str(canary),
             "--account-nav-json",

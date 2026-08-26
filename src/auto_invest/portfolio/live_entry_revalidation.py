@@ -59,6 +59,7 @@ def evaluate_live_entry(
     live_strategy_fingerprint: str | None = None,
     fundability_evidence: Any = None,
     expected_capital_usd: Decimal | None = None,
+    execution_proxy_parity_passed: bool = False,
 ) -> LiveEntryRevalidation:
     """Allow first exposure only under a current exploration or factory contract."""
 
@@ -118,6 +119,7 @@ def evaluate_live_entry(
             evidence_age_hours is not None and 0.0 <= evidence_age_hours <= max_evidence_age_hours
         ),
         "fundability": fundability_passed,
+        "execution_proxy_parity": execution_proxy_parity_passed,
     }
     factory = factory_evidence if isinstance(factory_evidence, Mapping) else {}
     factory_decision = factory.get("decision")
@@ -149,6 +151,7 @@ def evaluate_live_entry(
             and 0.0 <= factory_evidence_age_hours <= max_evidence_age_hours
         ),
         "factory_fundability": fundability_passed,
+        "factory_execution_proxy_parity": execution_proxy_parity_passed,
     }
     exploration_ready = all(exploration_checks.values())
     factory_ready = bool(factory) and all(factory_checks.values())
@@ -176,6 +179,7 @@ def evaluate_live_entry(
         "factory_evidence_age_hours": factory_evidence_age_hours,
         "factory_checks": factory_checks,
         "fundability": fundability_evidence,
+        "execution_proxy_parity_passed": execution_proxy_parity_passed,
         "expected_capital_usd": (
             None if expected_capital_usd is None else str(expected_capital_usd)
         ),

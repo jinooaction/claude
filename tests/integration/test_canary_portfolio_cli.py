@@ -152,6 +152,89 @@ def test_canary_portfolio_reads_from_bars_db(tmp_path: Path) -> None:
     assert out["portfolio_id"] == "canary-cli-test"
 
 
+def _bars_db_with_session_shape(
+    tmp_path: Path,
+    *,
+    ief_sessions: list[date],
+) -> Path:
+    from decimal import Decimal
+
+    from auto_invest.market_data.store import PriceBar, insert_bar
+    from auto_invest.persistence import db
+
+    bars_db = tmp_path / "session-shape.db"
+    conn = db.get_connection(bars_db)
+    db.migrate(conn)
+    for sym, sessions in (("SPY", _SESSIONS), ("IEF", ief_sessions)):
+        for index, session in enumerate(sessions):
+            close = Decimal(str(100 + index * 0.1))
+            insert_bar(
+                conn,
+                PriceBar(
+                    symbol=sym,
+                    timeframe="1d",
+                    bar_open_utc=f"{session.isoformat()}T00:00:00.000Z",
+                    open_usd=close,
+                    high_usd=close,
+                    low_usd=close,
+                    close_usd=close,
+                    volume=1_000_000,
+                ),
+            )
+    conn.close()
+    return bars_db
+
+
+def _run_bars_canary(tmp_path: Path, bars_db: Path):
+    portfolio = tmp_path / "session-shape.toml"
+    portfolio.write_text(_PORTFOLIO)
+    return runner.invoke(
+        app,
+        [
+            "canary-portfolio",
+            "--portfolio", str(portfolio),
+            "--bars-db", str(bars_db),
+            "--window-days", "45",
+            "--bands-toml", _BANDS,
+            "--db", str(tmp_path / "session-shape-audit.db"),
+            "--halt-path", str(tmp_path / "HALT"),
+            "--skip-fuzz",
+            "--skip-shock",
+            "--format", "json",
+        ],
+    )
+
+
+def test_canary_uses_latest_sessions_shared_by_every_symbol(tmp_path: Path) -> None:
+    bars_db = _bars_db_with_session_shape(tmp_path, ief_sessions=_SESSIONS[:-2])
+    result = _run_bars_canary(tmp_path, bars_db)
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output.strip().splitlines()[-1])
+    assert payload["verdict"] == "PASS"
+    assert payload["window_end"] == _SESSIONS[-3].isoformat()
+    assert payload["window_common_session_count"] == 45
+    assert payload["audit_integrity_count"] == 0
+    assert payload["audit_integrity_holes"] == []
+
+
+def test_canary_still_rejects_a_real_hole_inside_common_bounds(tmp_path: Path) -> None:
+    missing = _SESSIONS[-10]
+    bars_db = _bars_db_with_session_shape(
+        tmp_path,
+        ief_sessions=[session for session in _SESSIONS if session != missing],
+    )
+    result = _run_bars_canary(tmp_path, bars_db)
+
+    assert result.exit_code == 1, result.output
+    payload = json.loads(result.output.strip().splitlines()[-1])
+    assert payload["verdict"] == "FAIL"
+    assert payload["audit_integrity_count"] == 1
+    assert payload["audit_integrity_holes"] == [
+        {"symbol": "IEF", "session_date": missing.isoformat()}
+    ]
+
+
 def test_canary_portfolio_coverage_exit_when_no_dataset(tmp_path: Path) -> None:
     portfolio = tmp_path / "challenger.toml"
     portfolio.write_text(_PORTFOLIO)

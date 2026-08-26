@@ -6454,6 +6454,11 @@ def ladder_decide_cmd(
         "--fundability-preview-json",
         help="현재 NAV 10% 자본의 라이브 드라이런 미리보기 JSON. 구현 가능성 통과만 연구 진입.",
     ),
+    execution_proxy_parity_json: Path = typer.Option(
+        None,
+        "--execution-proxy-parity-json",
+        help="현재 라이브 실행 매핑의 KIS 조정 일봉 동등성 감사 JSON.",
+    ),
     hardened_canary_json: Path = typer.Option(
         None,
         "--hardened-canary-json",
@@ -6525,6 +6530,9 @@ def ladder_decide_cmd(
     from auto_invest.config.rules import PortfolioRebalanceConfig
     from auto_invest.portfolio.autoarm import strategy_fingerprint_digest
     from auto_invest.portfolio.capital_ladder import decide_ladder, rung_capital_usd
+    from auto_invest.portfolio.execution_proxy_parity import (
+        validate_execution_proxy_parity_evidence,
+    )
     from auto_invest.portfolio.factory_evidence import assess_factory_evidence
     from auto_invest.portfolio.fundability import validate_fundability_evidence
 
@@ -6557,17 +6565,6 @@ def ladder_decide_cmd(
         profit_evidence.get("deployment_match") if isinstance(profit_evidence, dict) else None
     )
     exploration_verdict = None
-    if isinstance(deployment_match, dict):
-        ready = deployment_match.get("exploration_canary_ready") is True
-        canary_pass = isinstance(hardened_canary, dict) and hardened_canary.get("verdict") == "PASS"
-        exploration_verdict = {
-            "verdict": (
-                "EXPLORATION_CANARY_READY" if ready and canary_pass else "EXPLORATION_CANARY_WAIT"
-            ),
-            "candidate_id": deployment_match.get("candidate_id"),
-            "historical_forward_ready": ready,
-            "hardened_canary_pass": canary_pass,
-        }
     factory_decision = (
         factory_evidence.get("decision") if isinstance(factory_evidence, dict) else None
     )
@@ -6617,11 +6614,10 @@ def ladder_decide_cmd(
             None if expected_research_capital is None else _Dec(expected_research_capital)
         ),
     )
-    factory_contract_ready = factory_contract_ready and factory_fundability_pass
-
     try:
         _, _, live_cfg = _load_portfolio_for_backtest(live_portfolio, env=None)
         _, _, validated_cfg = _load_portfolio_for_backtest(validated_portfolio, env=None)
+        expected_symbol_map, _lot_rounding = _load_execution_settings(live_portfolio)
     except ConfigError as e:
         out = {
             "schema_version": "1.0",
@@ -6630,6 +6626,32 @@ def ladder_decide_cmd(
         }
         typer.echo(_json.dumps(out))
         raise typer.Exit(0) from None
+
+    proxy_parity_payload = _read_json(execution_proxy_parity_json)
+    proxy_parity_pass = validate_execution_proxy_parity_evidence(
+        proxy_parity_payload,
+        expected_symbol_map=expected_symbol_map,
+    )
+    entry_execution_ready = factory_fundability_pass and proxy_parity_pass
+    factory_contract_ready = factory_contract_ready and entry_execution_ready
+    if isinstance(deployment_match, dict):
+        ready = deployment_match.get("exploration_canary_ready") is True
+        canary_pass = (
+            isinstance(hardened_canary, dict)
+            and hardened_canary.get("verdict") == "PASS"
+        )
+        exploration_verdict = {
+            "verdict": (
+                "EXPLORATION_CANARY_READY"
+                if ready and canary_pass and entry_execution_ready
+                else "EXPLORATION_CANARY_WAIT"
+            ),
+            "candidate_id": deployment_match.get("candidate_id"),
+            "historical_forward_ready": ready,
+            "hardened_canary_pass": canary_pass,
+            "fundability_passed": factory_fundability_pass,
+            "execution_proxy_parity_passed": proxy_parity_pass,
+        }
 
     factory_exact_match = (
         factory_contract_ready
@@ -6651,6 +6673,9 @@ def ladder_decide_cmd(
         ),
         "evidence_age_hours": factory_evidence_age_hours,
         "fundability_passed": factory_fundability_pass,
+        "execution_proxy_parity_passed": proxy_parity_pass,
+        "entry_execution_ready": entry_execution_ready,
+        "execution_proxy_parity": proxy_parity_payload,
         "fundability": fundability_payload,
         "expected_research_capital_usd": expected_research_capital,
     }
@@ -6670,6 +6695,7 @@ def ladder_decide_cmd(
         exploration_verdict=exploration_verdict,
         factory_verdict=factory_verdict,
         live_performance=live_performance,
+        entry_execution_ready=entry_execution_ready,
         dd_budget_pct=_Dec(str(dd_budget_pct)),
     )
 
@@ -6988,7 +7014,6 @@ def canary_portfolio_cmd(
     이 verdict 가 reassign-decide --canary-verdict 입력(재지정 ④ 게이트)이 된다.
     """
     import json as _json
-    from datetime import date as _date
     from decimal import Decimal as _Dec
 
     from auto_invest.backtest.data_source import (
@@ -6999,6 +7024,7 @@ def canary_portfolio_cmd(
     from auto_invest.canary.portfolio_harness import (
         DEFAULT_REASSIGN_BANDS_PATH,
         PortfolioCanaryInputs,
+        latest_complete_session_window,
         run_portfolio_canary,
     )
     from auto_invest.canary.run import EXIT_COVERAGE, EXIT_FAILED, EXIT_OK, EXIT_USAGE
@@ -7022,17 +7048,19 @@ def canary_portfolio_cmd(
             raise typer.Exit(EXIT_COVERAGE)
         data_source = CSVDataSource(latest)
 
-    # 윈도우: 유니버스 심볼의 가용 세션 합집합에서 최근 window_days 거래일.
-    sessions: set[_date] = set()
-    for sym in port_cfg.universe:
-        sessions.update(data_source.session_dates(sym))
-    if not sessions:
-        typer.echo(f"데이터셋에 유니버스 {list(port_cfg.universe)} 세션 없음 — 백필 필요", err=True)
+    # 윈도우: 모든 유니버스 심볼에 실제 바가 있는 최신 공통 거래일.
+    try:
+        window = latest_complete_session_window(
+            data_source, list(port_cfg.universe), window_days=window_days
+        )
+    except ValueError as exc:
+        typer.echo(
+            f"데이터셋에 유니버스 {list(port_cfg.universe)} 공통 세션 없음({exc}) — 백필 필요",
+            err=True,
+        )
         if bars_conn is not None:
             bars_conn.close()
-        raise typer.Exit(EXIT_COVERAGE)
-    ordered = sorted(sessions)
-    window = ordered[-window_days:] if len(ordered) >= window_days else ordered
+        raise typer.Exit(EXIT_COVERAGE) from None
     date_start, date_end = window[0], window[-1]
 
     inputs = PortfolioCanaryInputs(
@@ -7070,6 +7098,7 @@ def canary_portfolio_cmd(
         out["portfolio_id"] = port_cfg.id
         out["window_start"] = date_start.isoformat()
         out["window_end"] = date_end.isoformat()
+        out["window_common_session_count"] = len(window)
         typer.echo(_json.dumps(out, ensure_ascii=False))
     else:
         typer.echo(
@@ -7078,6 +7107,73 @@ def canary_portfolio_cmd(
             f"실패지표={outcome.failing_metrics}"
         )
     raise typer.Exit(EXIT_OK if outcome.passed else EXIT_FAILED)
+
+
+@app.command("execution-proxy-parity")
+def execution_proxy_parity_cmd(
+    portfolio: Path = typer.Option(
+        Path("deploy/canary-live-portfolio.toml"),
+        "--portfolio",
+        help="[execution].symbol_map 이 있는 라이브 포트폴리오 설정.",
+    ),
+    bars_db: Path = typer.Option(
+        Path("data/auto_invest.db"),
+        "--bars-db",
+        help="신호·대체 ETF 조정 일봉이 저장된 price_bars SQLite DB.",
+    ),
+    bars_timeframe: str = typer.Option("1d", "--bars-timeframe"),
+    output_format: str = typer.Option("json", "--format", help="json | text."),
+) -> None:
+    """대체 ETF의 경제적 동등성을 저장 일봉으로 감사한다(주문 0건)."""
+
+    import json as _json
+    from datetime import UTC as _UTC
+    from datetime import datetime as _datetime
+
+    from auto_invest.backtest.data_source import SqliteBarDataSource
+    from auto_invest.persistence import db as _db
+    from auto_invest.portfolio.execution_proxy_parity import (
+        assess_execution_proxy_parity,
+    )
+
+    if output_format not in {"json", "text"}:
+        typer.echo("--format must be json or text", err=True)
+        raise typer.Exit(2)
+    if not bars_db.exists():
+        typer.echo(f"bars DB 없음: {bars_db}", err=True)
+        raise typer.Exit(2)
+    try:
+        symbol_map, _lot_rounding = _load_execution_settings(portfolio)
+    except ConfigError as exc:
+        typer.echo(f"실행 매핑 로드 실패: {exc}", err=True)
+        raise typer.Exit(2) from None
+    if not symbol_map:
+        typer.echo("실행 매핑 없음 — 동등성 감사 불가", err=True)
+        raise typer.Exit(2)
+
+    conn = _db.get_connection(bars_db)
+    try:
+        evidence = assess_execution_proxy_parity(
+            SqliteBarDataSource(conn, timeframe=bars_timeframe),
+            symbol_map=symbol_map,
+            observed_at=_datetime.now(_UTC),
+        )
+    finally:
+        conn.close()
+
+    if output_format == "json":
+        typer.echo(_json.dumps(evidence.as_dict(), ensure_ascii=False, sort_keys=True))
+    else:
+        failed = [
+            f"{pair.signal_symbol}->{pair.execution_symbol}"
+            for pair in evidence.pairs
+            if not pair.passed
+        ]
+        typer.echo(
+            f"[{'PASS' if evidence.passed else 'FAIL'}] execution proxy parity; "
+            f"failed={failed or 'none'}"
+        )
+    raise typer.Exit(0 if evidence.passed else 1)
 
 
 @app.command("evolution-scan")

@@ -209,6 +209,7 @@ def test_first_fill_requires_current_exploration_and_fundability_contracts() -> 
         evidence_age_hours=2,
         fundability_evidence=_fundability(),
         expected_capital_usd=Decimal("1000"),
+        execution_proxy_parity_passed=True,
     )
     assert result.allowed is True
     assert result.state == ENTRY_READY
@@ -222,6 +223,7 @@ def test_stale_entry_approval_fails_closed() -> None:
         evidence_age_hours=2,
         fundability_evidence=_fundability(),
         expected_capital_usd=Decimal("1000"),
+        execution_proxy_parity_passed=True,
     )
     assert result.allowed is False
     assert result.state == ENTRY_BLOCKED
@@ -240,6 +242,7 @@ def test_legacy_forward_statistic_cannot_open_first_fill() -> None:
         evidence_age_hours=2,
         fundability_evidence=_fundability(),
         expected_capital_usd=Decimal("1000"),
+        execution_proxy_parity_passed=True,
     )
 
     assert result.allowed is False
@@ -255,6 +258,7 @@ def test_missing_or_old_evidence_fails_closed_before_first_fill() -> None:
         evidence_age_hours=40,
         fundability_evidence=_fundability(),
         expected_capital_usd=Decimal("1000"),
+        execution_proxy_parity_passed=True,
     )
     assert missing.allowed is False
     assert old.allowed is False
@@ -268,6 +272,21 @@ def test_missing_fundability_blocks_first_fill() -> None:
 
     assert result.allowed is False
     assert "fundability" in result.reasons
+
+
+def test_missing_proxy_parity_blocks_first_fill() -> None:
+    result = evaluate_live_entry(
+        _profit(),
+        {"verdict": "PASS"},
+        {"fills_count": 0},
+        evidence_age_hours=2,
+        fundability_evidence=_fundability(),
+        expected_capital_usd=Decimal("1000"),
+        execution_proxy_parity_passed=False,
+    )
+
+    assert result.allowed is False
+    assert "execution_proxy_parity" in result.reasons
 
 
 def test_existing_fill_defers_to_live_risk_gates() -> None:
@@ -294,6 +313,7 @@ def test_factory_winner_can_open_only_the_exact_10pct_strategy() -> None:
         live_strategy_fingerprint=fingerprint,
         fundability_evidence=_fundability(),
         expected_capital_usd=Decimal("1000"),
+        execution_proxy_parity_passed=True,
     )
     mismatch = evaluate_live_entry(
         None,
@@ -305,6 +325,7 @@ def test_factory_winner_can_open_only_the_exact_10pct_strategy() -> None:
         live_strategy_fingerprint="sha256:other",
         fundability_evidence=_fundability(),
         expected_capital_usd=Decimal("1000"),
+        execution_proxy_parity_passed=True,
     )
     assert ready.allowed is True
     assert ready.evidence["entry_source"] == "strategy_factory"
@@ -334,6 +355,7 @@ def test_incomplete_or_stale_factory_evidence_fails_closed() -> None:
         live_strategy_fingerprint="sha256:exact",
         fundability_evidence=_fundability(),
         expected_capital_usd=Decimal("1000"),
+        execution_proxy_parity_passed=True,
     )
     assert result.allowed is False
     assert "factory_contract_complete" in result.reasons

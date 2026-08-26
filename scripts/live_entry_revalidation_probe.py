@@ -13,6 +13,9 @@ from pathlib import Path
 
 from auto_invest.config.rules import PortfolioRebalanceConfig
 from auto_invest.portfolio.autoarm import strategy_fingerprint_digest
+from auto_invest.portfolio.execution_proxy_parity import (
+    validate_execution_proxy_parity_evidence,
+)
 
 _ROOT = Path(__file__).resolve().parents[1]
 _CORE_PATH = _ROOT / "src" / "auto_invest" / "portfolio" / "live_entry_revalidation.py"
@@ -42,16 +45,24 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--factory-evidence-age-hours", type=float)
     parser.add_argument("--live-portfolio", type=Path)
     parser.add_argument("--fundability-preview-json", type=Path, required=True)
+    parser.add_argument("--execution-proxy-parity-json", type=Path, required=True)
     parser.add_argument("--capital-usd", type=Decimal, required=True)
     parser.add_argument("--max-evidence-age-hours", type=float, default=36.0)
     args = parser.parse_args(argv)
 
     live_fingerprint = None
+    execution_symbol_map: dict[str, str] = {}
     if args.live_portfolio is not None:
         try:
             raw = tomllib.loads(args.live_portfolio.read_text(encoding="utf-8"))
             config = PortfolioRebalanceConfig.model_validate(raw["portfolio"])
             live_fingerprint = strategy_fingerprint_digest(config)
+            execution_symbol_map = {
+                str(signal).strip().upper(): str(execution).strip().upper()
+                for signal, execution in raw.get("execution", {})
+                .get("symbol_map", {})
+                .items()
+            }
         except (OSError, KeyError, ValueError, tomllib.TOMLDecodeError):
             live_fingerprint = None
 
@@ -60,6 +71,10 @@ def main(argv: list[str] | None = None) -> int:
         fundability_preview.get("fundability")
         if isinstance(fundability_preview, dict)
         else None
+    )
+    execution_proxy_parity_passed = validate_execution_proxy_parity_evidence(
+        _read(args.execution_proxy_parity_json),
+        expected_symbol_map=execution_symbol_map,
     )
     result = evaluate_live_entry(
         _read(args.profit_evidence_json),
@@ -74,6 +89,7 @@ def main(argv: list[str] | None = None) -> int:
         live_strategy_fingerprint=live_fingerprint,
         fundability_evidence=fundability_evidence,
         expected_capital_usd=args.capital_usd,
+        execution_proxy_parity_passed=execution_proxy_parity_passed,
     )
     print(json.dumps(result.as_dict(), ensure_ascii=False, sort_keys=True))
     return 0 if result.allowed else 3

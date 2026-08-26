@@ -55,6 +55,8 @@ def test_ladder_decide_consumes_anchored_verdict() -> None:
     assert "--factory-evidence-age-hours" in text
     assert "observe live-canary-preview ${research_capital}" in text
     assert "--fundability-preview-json /tmp/rung1_fundability_preview.json" in text
+    assert "observe execution-proxy-parity" in text
+    assert "--execution-proxy-parity-json /tmp/execution_proxy_parity.json" in text
     assert "--hardened-canary-json /tmp/exploration_canary.json" in text
     assert "live-canary-profit ${CAPITAL}" in text
     assert "--live-performance-json /tmp/live_performance.json" in text
@@ -94,6 +96,8 @@ def test_sidecar_publishes_anchored_evidence_and_edge_source() -> None:
     assert "cat /tmp/factory_evidence_assessment.json" in text
     assert "## 연구 단 1 구현 가능성 미리보기" in text
     assert "cat /tmp/rung1_fundability_preview.json" in text
+    assert "## 실행 대체 ETF 동등성 감사" in text
+    assert "cat /tmp/execution_proxy_parity.json" in text
 
 
 def test_autoarm_pr_body_keeps_quality_gate_contract() -> None:

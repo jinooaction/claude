@@ -20,8 +20,11 @@ def test_live_order_revalidates_before_signing_or_gateway_call() -> None:
     assert "live-canary-profit ${CAP}" in text
     assert "observe live-canary-preview ${CAP}" in text
     assert "--fundability-preview-json /tmp/entry_fundability_preview.json" in text
+    assert "observe execution-proxy-parity" in text
+    assert "--execution-proxy-parity-json /tmp/entry_execution_proxy_parity.json" in text
     assert '--capital-usd "${CAP}"' in text
     assert "fundability_exit" in text
+    assert "proxy_parity_exit" in text
 
 
 def test_live_order_closes_fill_profit_and_reconciliation_evidence() -> None:
