@@ -282,9 +282,15 @@ def test_factory_preserves_736_trials_and_appends_exactly_16() -> None:
         calibration_repetitions=100,
     )
     assert payload["candidate_count"] == 16
+    assert payload["gate_version"] == "3.0"
     assert payload["prior_trial_count"] == 736
     assert payload["global_audit_trial_count"] == 752
     assert payload["unique_trial_fingerprint_count"] == 752
+    gate_by_id = {row["gate_id"]: row for row in payload["decision"]["gates"]}
+    assert gate_by_id["complete_family_trials"]["actual"] == "16"
+    assert gate_by_id["prior_audit_complete"]["actual"] == "736"
+    assert gate_by_id["global_audit_trials"]["actual"] == "752"
+    assert gate_by_id["unique_audit_fingerprints"]["actual"] == "752"
     assert payload["split"]["development_months"] == 84
     assert payload["split"]["embargo_months"] == 1
     assert payload["split"]["holdout_months"] >= 120
@@ -303,6 +309,10 @@ def test_factory_preserves_736_trials_and_appends_exactly_16() -> None:
         "independent_index": "WPUT",
         "independent_index_used_for_selection": False,
     }
+    assert payload["legacy_selection"]["decision"]["pbo"] is not None
+    assert all(len(row["segment_sharpes"]) == 8 for row in payload["trial_records"])
+    assert len(payload["development_segment_sharpes"]) == 16
+    assert all(len(row) == 8 for row in payload["development_segment_sharpes"])
     chronology = payload["selection_repair"]["chronology"]
     assert chronology["all_folds_valid"] is True
     assert chronology["fold_count"] >= 8

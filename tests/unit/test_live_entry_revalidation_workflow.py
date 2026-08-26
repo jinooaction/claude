@@ -18,6 +18,10 @@ def test_live_order_revalidates_before_signing_or_gateway_call() -> None:
     assert "--live-portfolio deploy/canary-live-portfolio.toml" in text
     assert "observe exploration-canary" in text
     assert "live-canary-profit ${CAP}" in text
+    assert "observe live-canary-preview ${CAP}" in text
+    assert "--fundability-preview-json /tmp/entry_fundability_preview.json" in text
+    assert '--capital-usd "${CAP}"' in text
+    assert "fundability_exit" in text
 
 
 def test_live_order_closes_fill_profit_and_reconciliation_evidence() -> None:

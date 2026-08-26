@@ -1,10 +1,20 @@
 from __future__ import annotations
 
+import math
 import tomllib
+from decimal import Decimal
 from pathlib import Path
 
+from auto_invest.analytics.backtest_overfitting import (
+    annualized_sharpe,
+    deflated_sharpe_from_trials,
+    effective_independent_trials,
+    probability_of_backtest_overfitting,
+)
+from auto_invest.config.caps import SizingCaps
 from auto_invest.config.rules import PortfolioRebalanceConfig
 from auto_invest.portfolio.autoarm import strategy_fingerprint_digest
+from auto_invest.portfolio.fundability import assess_fundability
 from auto_invest.portfolio.live_entry_revalidation import (
     ACTIVE_LIVE_TRACK,
     ENTRY_BLOCKED,
@@ -15,49 +25,118 @@ from auto_invest.portfolio.live_entry_revalidation import (
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def _fundability(capital: Decimal = Decimal("1000")) -> dict:
+    result = assess_fundability(
+        target_weights={"AAA": Decimal("0.5"), "BBB": Decimal("0.5")},
+        holdings={},
+        prices={"AAA": Decimal("100"), "BBB": Decimal("100")},
+        order_prices={"AAA": Decimal("100"), "BBB": Decimal("100")},
+        planned_orders=[("AAA", "BUY", 4), ("BBB", "BUY", 5)],
+        capital_usd=capital,
+        invested_fraction=Decimal("0.99"),
+        caps=SizingCaps(
+            per_trade_pct=Decimal("50"),
+            per_symbol_pct=Decimal("60"),
+            global_exposure_pct=Decimal("100"),
+            canary_capital_pct=Decimal("10"),
+            canary_min_duration_days=14,
+            canary_acceptance_drawdown_pct=Decimal("10"),
+        ),
+    )
+    return result.as_dict()
+
+
 def _factory() -> tuple[dict, str]:
     config_text = (ROOT / "deploy/canary-live-portfolio.toml").read_text(encoding="utf-8")
     config = PortfolioRebalanceConfig.model_validate(tomllib.loads(config_text)["portfolio"])
     fingerprint = strategy_fingerprint_digest(config)
+    prior = [
+        {
+            "candidate_id": f"prior-{index}",
+            "strategy_fingerprint": f"sha256:prior-{index}",
+            "status": "EXPLORATORY_REJECTED",
+        }
+        for index in range(16)
+    ]
+    trials = [
+        {
+            "candidate_id": f"factory-{index}",
+            "strategy_fingerprint": f"sha256:factory-{index}",
+            "status": "complete",
+        }
+        for index in range(15)
+    ] + [
+        {
+            "candidate_id": "factory-winner",
+            "strategy_fingerprint": fingerprint,
+            "status": "complete",
+        }
+    ]
+    development_returns = []
+    development_segments = []
+    for index, row in enumerate(trials):
+        mean = 0.005 if index == 15 else -0.001 + 0.00005 * index
+        returns = [mean + 0.01 * math.sin(month * 1.7 + index) for month in range(80)]
+        segments = [
+            annualized_sharpe(returns[start : start + 10]) for start in range(0, 80, 10)
+        ]
+        row["holdout_psr"] = "0.999"
+        development_returns.append(returns)
+        development_segments.append(segments)
+    dsr = deflated_sharpe_from_trials(
+        development_returns[-1],
+        [annualized_sharpe(row) for row in development_returns],
+        effective_trial_count=effective_independent_trials(development_returns),
+    )
+    pbo = probability_of_backtest_overfitting(development_segments)
+    assert dsr is not None and pbo is not None
     return (
         {
-            "gate_version": "2.0",
+            "gate_version": "3.0",
             "candidate_count": 16,
             "complete_trial_count": 16,
-            "global_audit_trial_count": 704,
-            "unique_trial_fingerprint_count": 704,
+            "prior_trial_count": 16,
+            "global_audit_trial_count": 32,
+            "unique_trial_fingerprint_count": 32,
+            "trial_records": trials,
+            "audit_records": prior + trials,
+            "development_returns": development_returns,
+            "development_segment_sharpes": development_segments,
+            "criterion_audit": {
+                "historical_reuse": False,
+                "public_history_point_in_time": True,
+                "benchmark_execution_parity": True,
+                "threshold_change_after_results": False,
+                "prior_candidate_reclassification": False,
+            },
+            "research_live_parity": {
+                "passed": True,
+                "candidate_id": "factory-winner",
+                "strategy_fingerprint": fingerprint,
+            },
             "decision": {
                 "verdict": "FACTORY_EDGE",
                 "research_canary_eligible": True,
                 "selected_candidate_id": "factory-winner",
                 "selected_strategy_fingerprint": fingerprint,
                 "selected_deploy_config": config_text,
+                "psr": "0.999",
+                "dsr": str(dsr),
+                "pbo": str(pbo),
                 "gates": [
                     {
-                        "gate_id": "complete_family_trials",
+                        "gate_id": gate_id,
                         "passed": True,
-                        "actual": "16",
-                        "required": "16",
-                    },
-                    {
-                        "gate_id": "prior_audit_complete",
-                        "passed": True,
-                        "actual": "688",
-                        "required": "688",
-                    },
-                    {
-                        "gate_id": "global_audit_trials",
-                        "passed": True,
-                        "actual": "704",
-                        "required": "704",
-                    },
-                    {
-                        "gate_id": "unique_audit_fingerprints",
-                        "passed": True,
-                        "actual": "704",
-                        "required": "704",
-                    },
-                    {"gate_id": "holdout_excess_psr", "passed": True},
+                        "actual": str(actual),
+                        "required": str(actual),
+                        "blocking": True,
+                    }
+                    for gate_id, actual in (
+                        ("complete_family_trials", 16),
+                        ("prior_audit_complete", 16),
+                        ("global_audit_trials", 32),
+                        ("unique_audit_fingerprints", 32),
+                    )
                 ],
             },
         },
@@ -83,9 +162,14 @@ def _profit(*, ready: bool = True, psr: float = 0.81) -> dict:
     }
 
 
-def test_first_fill_requires_current_exploration_contract() -> None:
+def test_first_fill_requires_current_exploration_and_fundability_contracts() -> None:
     result = evaluate_live_entry(
-        _profit(), {"verdict": "PASS"}, {"fills_count": 0}, evidence_age_hours=2
+        _profit(),
+        {"verdict": "PASS"},
+        {"fills_count": 0},
+        evidence_age_hours=2,
+        fundability_evidence=_fundability(),
+        expected_capital_usd=Decimal("1000"),
     )
     assert result.allowed is True
     assert result.state == ENTRY_READY
@@ -97,6 +181,8 @@ def test_stale_entry_approval_fails_closed() -> None:
         {"verdict": "PASS"},
         {"fills_count": 0},
         evidence_age_hours=2,
+        fundability_evidence=_fundability(),
+        expected_capital_usd=Decimal("1000"),
     )
     assert result.allowed is False
     assert result.state == ENTRY_BLOCKED
@@ -109,7 +195,12 @@ def test_legacy_forward_statistic_cannot_open_first_fill() -> None:
     profit["deployment_match"]["forward"].pop("significance_method")
 
     result = evaluate_live_entry(
-        profit, {"verdict": "PASS"}, {"fills_count": 0}, evidence_age_hours=2
+        profit,
+        {"verdict": "PASS"},
+        {"fills_count": 0},
+        evidence_age_hours=2,
+        fundability_evidence=_fundability(),
+        expected_capital_usd=Decimal("1000"),
     )
 
     assert result.allowed is False
@@ -119,11 +210,25 @@ def test_legacy_forward_statistic_cannot_open_first_fill() -> None:
 def test_missing_or_old_evidence_fails_closed_before_first_fill() -> None:
     missing = evaluate_live_entry(None, None, {"fills_count": 0}, evidence_age_hours=None)
     old = evaluate_live_entry(
-        _profit(), {"verdict": "PASS"}, {"fills_count": 0}, evidence_age_hours=40
+        _profit(),
+        {"verdict": "PASS"},
+        {"fills_count": 0},
+        evidence_age_hours=40,
+        fundability_evidence=_fundability(),
+        expected_capital_usd=Decimal("1000"),
     )
     assert missing.allowed is False
     assert old.allowed is False
     assert "evidence_fresh" in old.reasons
+
+
+def test_missing_fundability_blocks_first_fill() -> None:
+    result = evaluate_live_entry(
+        _profit(), {"verdict": "PASS"}, {"fills_count": 0}, evidence_age_hours=2
+    )
+
+    assert result.allowed is False
+    assert "fundability" in result.reasons
 
 
 def test_existing_fill_defers_to_live_risk_gates() -> None:
@@ -148,6 +253,8 @@ def test_factory_winner_can_open_only_the_exact_10pct_strategy() -> None:
         factory_evidence=factory,
         factory_evidence_age_hours=2,
         live_strategy_fingerprint=fingerprint,
+        fundability_evidence=_fundability(),
+        expected_capital_usd=Decimal("1000"),
     )
     mismatch = evaluate_live_entry(
         None,
@@ -157,6 +264,8 @@ def test_factory_winner_can_open_only_the_exact_10pct_strategy() -> None:
         factory_evidence=factory,
         factory_evidence_age_hours=2,
         live_strategy_fingerprint="sha256:other",
+        fundability_evidence=_fundability(),
+        expected_capital_usd=Decimal("1000"),
     )
     assert ready.allowed is True
     assert ready.evidence["entry_source"] == "strategy_factory"
@@ -184,6 +293,8 @@ def test_incomplete_or_stale_factory_evidence_fails_closed() -> None:
         factory_evidence=factory,
         factory_evidence_age_hours=40,
         live_strategy_fingerprint="sha256:exact",
+        fundability_evidence=_fundability(),
+        expected_capital_usd=Decimal("1000"),
     )
     assert result.allowed is False
     assert "factory_contract_complete" in result.reasons

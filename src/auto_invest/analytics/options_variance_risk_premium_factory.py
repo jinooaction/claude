@@ -28,7 +28,6 @@ from auto_invest.analytics.commodity_term_structure_factory import (
     _latest_rate_before,
 )
 from auto_invest.analytics.edge_gate_calibration import (
-    GATE_VERSION,
     HOLDOUT_PSR_MIN,
     PAPER_PSR_MIN,
 )
@@ -44,6 +43,7 @@ from auto_invest.analytics.risk_managed_beta import summarize
 from auto_invest.market_data.public_data import SeriesPoint
 
 SCHEMA_VERSION = "1.0"
+CONSUMER_GATE_VERSION = "3.0"
 EXPECTED_CANDIDATES = 16
 EXPECTED_PRIOR_TRIALS = 736
 EXPECTED_GLOBAL_AUDIT_TRIALS = 752
@@ -1449,7 +1449,7 @@ def run_options_variance_risk_premium_factory(
         active_fraction = sum(weight > 0 for weight in weights[holdout_start:]) / holdout_months
         development_returns.append(development_excess)
         segment_sharpes = [
-            annualized_sharpe(segment) for segment in _segments(development_excess, count=7)
+            annualized_sharpe(segment) for segment in _segments(development_excess, count=8)
         ]
         development_segments.append(segment_sharpes)
         all_factors.append(by_cost)
@@ -1797,17 +1797,25 @@ def run_options_variance_risk_premium_factory(
         diagnosis = "REFERENCE_EDGE_RECOGNIZED_SELECTION_FAILED"
     else:
         diagnosis = "RECOGNIZED_REFERENCE_NOT_CONFIRMED_GATE_OR_REFERENCE_SUSPECT"
-    common_gate_rows = [
-        {
-            "gate_id": gate_id,
-            "passed": bool(passed),
-            "actual": str(bool(passed)),
-            "required": "True",
-            "stage": "control",
-            "blocking": True,
-        }
-        for gate_id, passed in common_gates.items()
-    ]
+    audit_gate_counts = {
+        "complete_family_trials": (len(records), EXPECTED_CANDIDATES),
+        "prior_audit_complete": (len(prior), EXPECTED_PRIOR_TRIALS),
+        "global_audit_trials": (len(audit_records), EXPECTED_GLOBAL_AUDIT_TRIALS),
+        "unique_audit_fingerprints": (unique_audit, EXPECTED_GLOBAL_AUDIT_TRIALS),
+    }
+    common_gate_rows = []
+    for gate_id, passed in common_gates.items():
+        actual, required = audit_gate_counts.get(gate_id, (bool(passed), True))
+        common_gate_rows.append(
+            {
+                "gate_id": gate_id,
+                "passed": bool(passed),
+                "actual": str(actual),
+                "required": str(required),
+                "stage": "control",
+                "blocking": True,
+            }
+        )
     live_gate_rows = [
         {
             "gate_id": gate_id,
@@ -1916,7 +1924,7 @@ def run_options_variance_risk_premium_factory(
     }
     return {
         "schema_version": SCHEMA_VERSION,
-        "gate_version": GATE_VERSION,
+        "gate_version": CONSUMER_GATE_VERSION,
         "timestamp_utc": timestamp_utc or datetime.now(UTC).isoformat(),
         "code_commit": code_commit,
         "batch_id": batch_id,
@@ -2021,6 +2029,7 @@ def run_options_variance_risk_premium_factory(
         "trial_records": records,
         "audit_records": audit_records,
         "development_returns": development_returns,
+        "development_segment_sharpes": development_segments,
         "decision": decision,
         "research_candidate": None,
         "paper_candidate": None,

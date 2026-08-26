@@ -8,6 +8,7 @@ import importlib.util
 import json
 import sys
 import tomllib
+from decimal import Decimal
 from pathlib import Path
 
 from auto_invest.config.rules import PortfolioRebalanceConfig
@@ -40,6 +41,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--evidence-age-hours", type=float, required=True)
     parser.add_argument("--factory-evidence-age-hours", type=float)
     parser.add_argument("--live-portfolio", type=Path)
+    parser.add_argument("--fundability-preview-json", type=Path, required=True)
+    parser.add_argument("--capital-usd", type=Decimal, required=True)
     parser.add_argument("--max-evidence-age-hours", type=float, default=36.0)
     args = parser.parse_args(argv)
 
@@ -52,6 +55,12 @@ def main(argv: list[str] | None = None) -> int:
         except (OSError, KeyError, ValueError, tomllib.TOMLDecodeError):
             live_fingerprint = None
 
+    fundability_preview = _read(args.fundability_preview_json)
+    fundability_evidence = (
+        fundability_preview.get("fundability")
+        if isinstance(fundability_preview, dict)
+        else None
+    )
     result = evaluate_live_entry(
         _read(args.profit_evidence_json),
         _read(args.hardened_canary_json),
@@ -63,6 +72,8 @@ def main(argv: list[str] | None = None) -> int:
         ),
         factory_evidence_age_hours=args.factory_evidence_age_hours,
         live_strategy_fingerprint=live_fingerprint,
+        fundability_evidence=fundability_evidence,
+        expected_capital_usd=args.capital_usd,
     )
     print(json.dumps(result.as_dict(), ensure_ascii=False, sort_keys=True))
     return 0 if result.allowed else 3

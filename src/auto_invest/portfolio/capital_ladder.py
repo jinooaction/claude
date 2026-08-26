@@ -374,6 +374,7 @@ def decide_ladder(
         factory_ready = (
             isinstance(factory_verdict, dict)
             and factory_verdict.get("verdict") == "RESEARCH_CANARY_READY"
+            and factory_verdict.get("fundability_passed") is True
         )
         if v_label != EDGE_CONFIRMED and not exploration_ready and not factory_ready:
             exploration_label = (
@@ -437,6 +438,7 @@ def decide_ladder(
     factory_ready = (
         isinstance(factory_verdict, dict)
         and factory_verdict.get("verdict") == "RESEARCH_CANARY_READY"
+        and factory_verdict.get("fundability_passed") is True
     )
     fill_source = live_performance if isinstance(live_performance, dict) else live_growth
     live_fills = fill_source.get("fills_count") if isinstance(fill_source, dict) else None

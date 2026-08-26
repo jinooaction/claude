@@ -23,6 +23,7 @@ on:
       - 'src/auto_invest/analytics/usda_crop_supply_demand_factory.py'
       - 'src/auto_invest/analytics/energy_cross_market_factory.py'
       - 'src/auto_invest/analytics/options_variance_risk_premium_factory.py'
+      - 'src/auto_invest/portfolio/factory_evidence.py'
       - 'src/auto_invest/analytics/real_world_gate_controls.py'
       - 'src/auto_invest/analytics/edge_gate_calibration.py'
       - 'src/auto_invest/market_data/public_data.py'
@@ -38,6 +39,7 @@ on:
       - 'scripts/usda_crop_supply_demand_factory_probe.py'
       - 'scripts/energy_cross_market_factory_probe.py'
       - 'scripts/options_variance_risk_premium_factory_probe.py'
+      - 'scripts/factory_evidence_gate.py'
       - 'scripts/edge_gate_calibration_probe.py'
       - 'deploy/public-data.toml'
       - '.github/workflows/autonomous-strategy-factory.yml'
@@ -314,6 +316,17 @@ jobs:
               .research_live_parity.target_weights_digest] |
              all(startswith("sha256:")))
           ' /tmp/strategy_factory.json >/dev/null
+          set +e
+          uv run python scripts/factory_evidence_gate.py \
+            --evidence /tmp/strategy_factory.json \
+            --json-out /tmp/factory_evidence_v3.json
+          v3_exit=$?
+          set -e
+          [[ "${v3_exit}" == "0" || "${v3_exit}" == "3" ]]
+          test "$(jq -r '.contract_version' /tmp/factory_evidence_v3.json)" = "family-complete-v3"
+          test "$(jq -r '.global_audit_trial_count' /tmp/factory_evidence_v3.json)" = "752"
+          test "$(jq -r '.program_multiplicity.method' /tmp/factory_evidence_v3.json)" = \
+            "bonferroni-global-fwer-v1"
           cat /tmp/LAST_RUN.md
 
       - name: Preserve trials and suppress an identical completed batch
