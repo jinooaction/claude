@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-08-26T13:06:23.123667Z)
+# 완료 후보 소비 장부 (as of 2026-08-26T14:19:32.661001Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -130,6 +130,7 @@
 | 159-paired-forward-edge-gate | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 160-forward-paper-ledger-integrity | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 166-family-complete-v3-fundability | 체크박스 작업이 없거나 완료되지 않았습니다. |
+| 167-calibrated-research-entry | 체크박스 작업이 없거나 완료되지 않았습니다. |
 
 ## 안전 경계
 
@@ -146,7 +147,7 @@
 
 ```json
 {
-  "commit": "eed92c6c9be4048e66c8463033729370020935e6",
+  "commit": "42f3c54865e989a01912ece56d2eb77f3f1f8ac7",
   "overall_status": "OK",
   "released_work": [
     {
@@ -1015,8 +1016,12 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "166-family-complete-v3-fundability"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "167-calibrated-research-entry"
     }
   ],
-  "timestamp_utc": "2026-08-26T13:06:23.123667Z"
+  "timestamp_utc": "2026-08-26T14:19:32.661001Z"
 }
 ```
