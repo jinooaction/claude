@@ -1,5 +1,5 @@
 {
-  "commit": "5576741baa16c8036bec71ac17da08ed27c061a7",
+  "commit": "ecc84b93abda36efc5c104cf5894be664d70f15a",
   "overall_status": "OK",
   "released_work": [
     {
@@ -543,7 +543,7 @@
       "status": "released"
     }
   ],
-  "run_id": "32982428262",
+  "run_id": "33024089337",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -869,7 +869,11 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "166-family-complete-v3-fundability"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "170-small-account-execution-parity"
     }
   ],
-  "timestamp_utc": "2026-08-26T14:47:12.035483Z"
+  "timestamp_utc": "2026-08-26T23:38:40.605930Z"
 }
