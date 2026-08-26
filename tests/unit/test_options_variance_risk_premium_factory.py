@@ -92,6 +92,7 @@ def _prior() -> dict:
                 "candidate_id": f"prior-{index:03d}",
                 "strategy_fingerprint": f"sha256:prior-{index:03d}",
                 "status": "complete",
+                "batch_id": "strategy-factory-test-prior",
             }
             for index in range(736)
         ],
@@ -101,16 +102,35 @@ def _prior() -> dict:
 def _calibration() -> dict:
     return {
         "gate_version": "2.0",
+        "research_entry_gate_version": "3.1",
         "verdict": "CALIBRATED",
         "code_commit": "abc123",
-        "scenario": {"repetitions": 500},
-        "thresholds": {"holdout_psr_min": 0.95, "paper_psr_min": 0.80},
+        "scenario": {"seed": 60_000, "repetitions": 500},
+        "thresholds": {
+            "holdout_psr_min": 0.95,
+            "paper_psr_min": 0.80,
+            "research_entry_pbo_max": 0.25,
+        },
+        "required": {
+            "family_false_acceptance_max": 0.01,
+            "detection_min": 0.80,
+            "program_false_acceptance_budget": 0.20,
+            "maximum_research_families": 20,
+        },
         "family_calibrations": {
             "16": {
                 "live_calibrated": True,
                 "null_false_acceptance_rate": 0.04,
                 "target_live_detection_rate": 0.84,
-            }
+                "research_entry_calibrated": True,
+                "null_research_entry_acceptance_rate": 0.01,
+                "target_research_entry_detection_rate": 0.84,
+            },
+            "64": {
+                "research_entry_calibrated": True,
+                "null_research_entry_acceptance_rate": 0.004,
+                "target_research_entry_detection_rate": 0.804,
+            },
         },
     }
 
@@ -282,9 +302,12 @@ def test_factory_preserves_736_trials_and_appends_exactly_16() -> None:
         calibration_repetitions=100,
     )
     assert payload["candidate_count"] == 16
-    assert payload["gate_version"] == "3.0"
+    assert payload["gate_version"] == "3.1"
     assert payload["prior_trial_count"] == 736
     assert payload["global_audit_trial_count"] == 752
+    assert payload["program_research_family_count"] == 2
+    assert len(payload["research_family_audit"]) == 2
+    assert all("research_family_id" in row for row in payload["audit_records"])
     assert payload["unique_trial_fingerprint_count"] == 752
     gate_by_id = {row["gate_id"]: row for row in payload["decision"]["gates"]}
     assert gate_by_id["complete_family_trials"]["actual"] == "16"

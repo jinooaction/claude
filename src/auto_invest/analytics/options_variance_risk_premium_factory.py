@@ -39,11 +39,15 @@ from auto_invest.analytics.energy_cross_market_factory import (
     _shift_month,
     expanding_ridge_predictions,
 )
+from auto_invest.analytics.research_family_audit import (
+    annotate_research_families,
+    build_research_family_audit,
+)
 from auto_invest.analytics.risk_managed_beta import summarize
 from auto_invest.market_data.public_data import SeriesPoint
 
 SCHEMA_VERSION = "1.0"
-CONSUMER_GATE_VERSION = "3.0"
+CONSUMER_GATE_VERSION = "3.1"
 EXPECTED_CANDIDATES = 16
 EXPECTED_PRIOR_TRIALS = 736
 EXPECTED_GLOBAL_AUDIT_TRIALS = 752
@@ -1656,7 +1660,9 @@ def run_options_variance_risk_premium_factory(
     timing_selection.contract["wput_replay"]["metrics"] = timing_wput["metrics"]
 
     prior = _prior_records(prior_factory_payload)
-    audit_records = prior + records
+    audit_records = annotate_research_families([*prior, *records])
+    records = audit_records[-len(records) :]
+    research_family_audit = build_research_family_audit(audit_records)
     identities = [
         str(record.get("strategy_fingerprint") or record.get("candidate_id"))
         for record in audit_records
@@ -1932,6 +1938,7 @@ def run_options_variance_risk_premium_factory(
         "complete_trial_count": len(records),
         "prior_trial_count": len(prior),
         "global_audit_trial_count": len(audit_records),
+        "program_research_family_count": len(research_family_audit),
         "multiplicity_trial_count": len(records),
         "family_raw_trial_count": len(records),
         "family_effective_trial_count": str(effective_trials),
@@ -2028,6 +2035,7 @@ def run_options_variance_risk_premium_factory(
         },
         "trial_records": records,
         "audit_records": audit_records,
+        "research_family_audit": research_family_audit,
         "development_returns": development_returns,
         "development_segment_sharpes": development_segments,
         "decision": decision,
@@ -2082,6 +2090,7 @@ def render_options_variance_risk_premium_markdown(payload: dict[str, Any]) -> st
             f"- 진단 판정: `{decision['verdict']}`",
             f"- 최신 중첩 선택 후보: `{decision['provisional_best_candidate_id']}`",
             f"- 감사 시도: {payload['global_audit_trial_count']}회 (현재 전략군 16회)",
+            f"- 독립 연구 전략군: {payload['program_research_family_count']}개",
             f"- 기존 홀드아웃: {holdout['months']}개월, 현금 초과 PSR {holdout['psr_vs_cash']}",
             f"- 교차지수 프리미엄 존재: {objectives['premium_existence']['passed']}",
             f"- 교차지수 포트폴리오 채택: {objectives['portfolio_adoption']['passed']}",

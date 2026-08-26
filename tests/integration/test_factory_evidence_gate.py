@@ -13,6 +13,10 @@ from auto_invest.analytics.backtest_overfitting import (
     effective_independent_trials,
     probability_of_backtest_overfitting,
 )
+from auto_invest.analytics.research_family_audit import (
+    annotate_research_families,
+    build_research_family_audit,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 PROBE = ROOT / "scripts" / "factory_evidence_gate.py"
@@ -29,12 +33,13 @@ def _payload() -> dict:
             "candidate_id": f"prior-{index}",
             "strategy_fingerprint": f"sha256:prior-{index}",
             "status": "EXPLORATORY_REJECTED",
+            "batch_id": "strategy-factory-test-prior",
         }
         for index in range(16)
     ]
     trials = [
         {
-            "candidate_id": f"candidate-{index}",
+            "candidate_id": f"options-vrp-candidate-{index}",
             "strategy_fingerprint": f"sha256:candidate-{index}",
             "status": "complete",
         }
@@ -59,14 +64,20 @@ def _payload() -> dict:
     pbo = probability_of_backtest_overfitting(development_segments)
     assert dsr is not None and pbo is not None
     winner = trials[-1]
+    audit_records = annotate_research_families(prior + trials)
+    trials = audit_records[-16:]
+    family_audit = build_research_family_audit(audit_records)
     return {
-        "gate_version": "3.0",
+        "gate_version": "3.1",
+        "code_commit": "abc123",
         "candidate_count": 16,
         "complete_trial_count": 16,
         "prior_trial_count": 16,
         "global_audit_trial_count": 32,
         "unique_trial_fingerprint_count": 32,
-        "audit_records": prior + trials,
+        "program_research_family_count": len(family_audit),
+        "research_family_audit": family_audit,
+        "audit_records": audit_records,
         "trial_records": trials,
         "development_returns": development_returns,
         "development_segment_sharpes": development_segments,
@@ -81,6 +92,31 @@ def _payload() -> dict:
             "passed": True,
             "candidate_id": winner["candidate_id"],
             "strategy_fingerprint": winner["strategy_fingerprint"],
+        },
+        "development_selection": {"selected_candidate_id": winner["candidate_id"]},
+        "repository_gate_calibration": {
+            "research_entry_gate_version": "3.1",
+            "verdict": "CALIBRATED",
+            "code_commit": "abc123",
+            "scenario": {"seed": 60_000, "repetitions": 500},
+            "thresholds": {
+                "holdout_psr_min": 0.95,
+                "research_entry_pbo_max": 0.25,
+            },
+            "required": {
+                "family_false_acceptance_max": 0.01,
+                "detection_min": 0.80,
+                "program_false_acceptance_budget": 0.20,
+                "maximum_research_families": 20,
+            },
+            "family_calibrations": {
+                size: {
+                    "research_entry_calibrated": True,
+                    "null_research_entry_acceptance_rate": 0.01,
+                    "target_research_entry_detection_rate": 0.81,
+                }
+                for size in ("16", "64")
+            },
         },
         "decision": {
             "verdict": "FACTORY_EDGE",
@@ -110,7 +146,7 @@ def _payload() -> dict:
     }
 
 
-def test_probe_exits_zero_and_writes_assessment_for_complete_v3(tmp_path: Path) -> None:
+def test_probe_exits_zero_and_writes_assessment_for_complete_v31(tmp_path: Path) -> None:
     evidence = tmp_path / "factory.json"
     output = tmp_path / "assessment.json"
     evidence.write_text(json.dumps(_payload()), encoding="utf-8")
@@ -118,8 +154,8 @@ def test_probe_exits_zero_and_writes_assessment_for_complete_v3(tmp_path: Path) 
     assert _probe.main(["--evidence", str(evidence), "--json-out", str(output)]) == 0
     result = json.loads(output.read_text(encoding="utf-8"))
     assert result["eligible"] is True
-    assert result["contract_version"] == "family-complete-v3"
-    assert result["program_multiplicity"]["method"] == "bonferroni-global-fwer-v1"
+    assert result["contract_version"] == "calibrated-family-entry-v3.1"
+    assert result["program_multiplicity"]["method"] == "calibrated-family-risk-budget-v1"
 
 
 def test_probe_exits_three_for_v2_or_no_edge_evidence(tmp_path: Path) -> None:
@@ -129,7 +165,7 @@ def test_probe_exits_three_for_v2_or_no_edge_evidence(tmp_path: Path) -> None:
     evidence.write_text(json.dumps(payload), encoding="utf-8")
     assert _probe.main(["--evidence", str(evidence)]) == 3
 
-    payload["gate_version"] = "3.0"
+    payload["gate_version"] = "3.1"
     payload["decision"]["verdict"] = "NO_FACTORY_EDGE"
     evidence.write_text(json.dumps(payload), encoding="utf-8")
     assert _probe.main(["--evidence", str(evidence)]) == 3

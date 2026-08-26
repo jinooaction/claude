@@ -34,7 +34,7 @@ def test_workflow_registers_options_premium_as_canonical_last_family() -> None:
     assert 'global_audit_trial_count\' /tmp/strategy_factory.json)" = "752' in workflow
     assert 'multiplicity_trial_count\' /tmp/strategy_factory.json)" = "16' in workflow
     assert "scripts/factory_evidence_gate.py" in workflow
-    assert "family-complete-v3" in workflow
+    assert "calibrated-family-entry-v3.1" in workflow
     assert ".options_premium_data.complete" in workflow
     assert ".options_premium_data.sources.cboe_wput" in workflow
     assert ".selection_repair.chronology.all_folds_valid" in workflow

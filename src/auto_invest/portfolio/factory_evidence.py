@@ -14,11 +14,30 @@ from auto_invest.analytics.backtest_overfitting import (
     effective_independent_trials,
     probability_of_backtest_overfitting,
 )
+from auto_invest.analytics.edge_gate_calibration import (
+    CALIBRATION_MIN_REPETITIONS,
+    CALIBRATION_SEED,
+    DETECTION_MIN,
+    DEVELOPMENT_DSR_DIAGNOSTIC_MIN,
+    FAMILY_FALSE_ACCEPTANCE_MAX,
+    HOLDOUT_PSR_MIN,
+    MAXIMUM_RESEARCH_FAMILIES,
+    PROGRAM_FALSE_ACCEPTANCE_BUDGET,
+    RESEARCH_ENTRY_GATE_VERSION,
+    RESEARCH_ENTRY_PBO_MAX,
+)
+from auto_invest.analytics.research_family_audit import (
+    build_research_family_audit,
+    classify_research_family,
+)
 
 MIN_V3_CANDIDATES = 16
 PROGRAM_FWER_MAX = Decimal("0.05")
-MIN_DSR = Decimal("0.95")
-MAX_PBO = Decimal("0.20")
+MIN_DSR = Decimal(str(DEVELOPMENT_DSR_DIAGNOSTIC_MIN))
+MIN_HOLDOUT_PSR = Decimal(str(HOLDOUT_PSR_MIN))
+MAX_PBO = Decimal(str(RESEARCH_ENTRY_PBO_MAX))
+MAX_FAMILY_FALSE_ACCEPTANCE = Decimal(str(FAMILY_FALSE_ACCEPTANCE_MAX))
+PROGRAM_RESEARCH_BUDGET = Decimal(str(PROGRAM_FALSE_ACCEPTANCE_BUDGET))
 COMPLETE_AUDIT_STATUSES = frozenset({"complete", "EXPLORATORY_REJECTED"})
 REQUIRED_AUDIT_GATES = (
     "complete_family_trials",
@@ -170,6 +189,8 @@ def _assess_v3(
 
     audit_rows = _rows(evidence, "audit_records")
     trial_rows = _rows(evidence, "trial_records")
+    claimed_family_audit = _rows(evidence, "research_family_audit")
+    claimed_family_count = _nonnegative_int(evidence.get("program_research_family_count"))
     audit_identities = [_row_identity(row) for row in audit_rows or ()]
     trial_identities = [_row_identity(row) for row in trial_rows or ()]
     unique_count_claim = _nonnegative_int(evidence.get("unique_trial_fingerprint_count"))
@@ -187,6 +208,22 @@ def _assess_v3(
     audit_fingerprints = [fingerprint for _, fingerprint in audit_pairs]
     trial_ids = [candidate_id for candidate_id, _ in trial_pairs]
     trial_fingerprints = [fingerprint for _, fingerprint in trial_pairs]
+
+    recomputed_family_audit: list[dict[str, Any]] | None = None
+    family_ids_match = False
+    if audit_rows is not None:
+        try:
+            recomputed_family_audit = build_research_family_audit(audit_rows)
+            family_ids_match = all(
+                row.get("research_family_id") == classify_research_family(row)
+                for row in audit_rows
+            )
+        except ValueError:
+            recomputed_family_audit = None
+            family_ids_match = False
+    recomputed_family_count = (
+        None if recomputed_family_audit is None else len(recomputed_family_audit)
+    )
 
     selected_rows = [
         row
@@ -208,6 +245,12 @@ def _assess_v3(
     criterion = criterion if isinstance(criterion, Mapping) else {}
     live_parity = evidence.get("research_live_parity")
     live_parity = live_parity if isinstance(live_parity, Mapping) else {}
+    development_selection_value = evidence.get("development_selection")
+    development_selection = (
+        development_selection_value
+        if isinstance(development_selection_value, Mapping)
+        else {}
+    )
 
     selected_psr = _decimal(decision.get("psr"))
     selected_record_psr = (
@@ -223,23 +266,26 @@ def _assess_v3(
     )
     recomputed_dsr: Decimal | None = None
     recomputed_pbo: Decimal | None = None
-    if (
-        development_returns is not None
-        and development_segments is not None
-        and selected_index is not None
-    ):
+    recomputed_winner_index: int | None = None
+    if development_segments is not None:
+        try:
+            recomputed_pbo = probability_of_backtest_overfitting(development_segments)
+        except (ArithmeticError, ValueError):
+            recomputed_pbo = None
+    if development_returns is not None and selected_index is not None:
         try:
             trial_sharpes = [annualized_sharpe(row) for row in development_returns]
+            recomputed_winner_index = max(
+                range(len(trial_sharpes)), key=trial_sharpes.__getitem__
+            )
             effective_trials = effective_independent_trials(development_returns)
             recomputed_dsr = deflated_sharpe_from_trials(
                 development_returns[selected_index],
                 trial_sharpes,
                 effective_trial_count=effective_trials,
             )
-            recomputed_pbo = probability_of_backtest_overfitting(development_segments)
         except (ArithmeticError, ValueError):
             recomputed_dsr = None
-            recomputed_pbo = None
     raw_p = None if selected_psr is None else Decimal("1") - selected_psr
     adjusted_p = (
         None
@@ -251,18 +297,108 @@ def _assess_v3(
         if global_count is None or global_count <= 0
         else Decimal("1") - PROGRAM_FWER_MAX / Decimal(global_count)
     )
+    calibration_value = evidence.get("repository_gate_calibration")
+    calibration = calibration_value if isinstance(calibration_value, Mapping) else {}
+    calibration_scenario_value = calibration.get("scenario")
+    calibration_scenario = (
+        calibration_scenario_value
+        if isinstance(calibration_scenario_value, Mapping)
+        else {}
+    )
+    calibration_thresholds_value = calibration.get("thresholds")
+    calibration_thresholds = (
+        calibration_thresholds_value
+        if isinstance(calibration_thresholds_value, Mapping)
+        else {}
+    )
+    calibration_required_value = calibration.get("required")
+    calibration_required = (
+        calibration_required_value
+        if isinstance(calibration_required_value, Mapping)
+        else {}
+    )
+    family_calibrations_value = calibration.get("family_calibrations")
+    family_calibrations = (
+        family_calibrations_value
+        if isinstance(family_calibrations_value, Mapping)
+        else {}
+    )
+    family_calibration_checks: dict[str, bool] = {}
+    for family_size in ("16", "64"):
+        report_value = family_calibrations.get(family_size)
+        report = report_value if isinstance(report_value, Mapping) else {}
+        null_rate = _decimal(report.get("null_research_entry_acceptance_rate"))
+        detection_rate = _decimal(report.get("target_research_entry_detection_rate"))
+        family_calibration_checks[family_size] = bool(
+            report.get("research_entry_calibrated") is True
+            and null_rate is not None
+            and null_rate <= MAX_FAMILY_FALSE_ACCEPTANCE
+            and detection_rate is not None
+            and detection_rate >= Decimal(str(DETECTION_MIN))
+        )
+    calibration_complete = bool(
+        calibration.get("research_entry_gate_version") == RESEARCH_ENTRY_GATE_VERSION
+        and calibration.get("verdict") == "CALIBRATED"
+        and calibration.get("code_commit") == evidence.get("code_commit")
+        and _nonnegative_int(calibration_scenario.get("seed")) == CALIBRATION_SEED
+        and (
+            (_nonnegative_int(calibration_scenario.get("repetitions")) or 0)
+            >= CALIBRATION_MIN_REPETITIONS
+        )
+        and _decimal(calibration_thresholds.get("holdout_psr_min")) == MIN_HOLDOUT_PSR
+        and _decimal(calibration_thresholds.get("research_entry_pbo_max")) == MAX_PBO
+        and (
+            _decimal(calibration_required.get("family_false_acceptance_max"))
+            == MAX_FAMILY_FALSE_ACCEPTANCE
+        )
+        and _decimal(calibration_required.get("detection_min"))
+        == Decimal(str(DETECTION_MIN))
+        and _decimal(calibration_required.get("program_false_acceptance_budget"))
+        == PROGRAM_RESEARCH_BUDGET
+        and _nonnegative_int(calibration_required.get("maximum_research_families"))
+        == MAXIMUM_RESEARCH_FAMILIES
+        and all(family_calibration_checks.values())
+    )
+    program_bound = (
+        None
+        if recomputed_family_count is None
+        else Decimal(recomputed_family_count) * MAX_FAMILY_FALSE_ACCEPTANCE
+    )
     multiplicity = {
-        "method": "bonferroni-global-fwer-v1",
+        "method": "calibrated-family-risk-budget-v1",
+        "research_family_count": recomputed_family_count,
+        "claimed_research_family_count": claimed_family_count,
+        "per_family_false_acceptance_max": str(MAX_FAMILY_FALSE_ACCEPTANCE),
+        "program_false_acceptance_bound": (
+            None if program_bound is None else str(program_bound)
+        ),
+        "program_false_acceptance_budget": str(PROGRAM_RESEARCH_BUDGET),
+        "maximum_research_families": MAXIMUM_RESEARCH_FAMILIES,
+        "calibration_complete": calibration_complete,
+        "family_calibrations": family_calibration_checks,
         "selected_psr": None if selected_psr is None else str(selected_psr),
-        "raw_one_sided_p": None if raw_p is None else str(raw_p),
-        "global_trial_count": global_count,
-        "adjusted_p": None if adjusted_p is None else str(adjusted_p),
-        "threshold": str(PROGRAM_FWER_MAX),
-        "required_psr": None if required_psr is None else str(required_psr),
         "recomputed_dsr": None if recomputed_dsr is None else str(recomputed_dsr),
         "recomputed_pbo": None if recomputed_pbo is None else str(recomputed_pbo),
         "claimed_dsr": None if claimed_dsr is None else str(claimed_dsr),
         "claimed_pbo": None if claimed_pbo is None else str(claimed_pbo),
+        "dsr_diagnostic": {
+            "blocking": False,
+            "threshold": str(MIN_DSR),
+            "passed": bool(recomputed_dsr is not None and recomputed_dsr >= MIN_DSR),
+        },
+        "raw_bonferroni_diagnostic": {
+            "blocking": False,
+            "method": "bonferroni-global-fwer-v1",
+            "raw_one_sided_p": None if raw_p is None else str(raw_p),
+            "global_trial_count": global_count,
+            "adjusted_p": None if adjusted_p is None else str(adjusted_p),
+            "threshold": str(PROGRAM_FWER_MAX),
+            "required_psr": None if required_psr is None else str(required_psr),
+            "passed": bool(
+                adjusted_p is not None
+                and Decimal("0") <= adjusted_p <= PROGRAM_FWER_MAX
+            ),
+        },
     }
     expected_gate_counts = {
         "complete_family_trials": candidate_count,
@@ -305,6 +441,18 @@ def _assess_v3(
             and len(set(audit_fingerprints)) == len(audit_fingerprints)
             and unique_count_claim == len(audit_fingerprints)
             and global_count == len(audit_fingerprints)
+        ),
+        "research_family_ids_recomputed": family_ids_match,
+        "research_family_audit_present": claimed_family_audit is not None,
+        "research_family_audit_recomputed": bool(
+            claimed_family_audit is not None
+            and recomputed_family_audit is not None
+            and [dict(row) for row in claimed_family_audit] == recomputed_family_audit
+        ),
+        "research_family_count_recomputed": bool(
+            claimed_family_count is not None
+            and recomputed_family_count is not None
+            and claimed_family_count == recomputed_family_count
         ),
         "prior_count_recomputed": bool(
             prior_count is not None
@@ -349,10 +497,19 @@ def _assess_v3(
             (selected_candidate_id, selected_strategy_fingerprint, selected_deploy_config)
         ),
         "selected_record_match": len(selected_rows) == 1,
+        "development_selection_match": bool(
+            development_selection.get("selected_candidate_id") == selected_candidate_id
+        ),
+        "development_winner_recomputed": bool(
+            selected_index is not None and selected_index == recomputed_winner_index
+        ),
         "selected_psr_matches_record": bool(
             selected_psr is not None
             and selected_record_psr is not None
             and selected_psr == selected_record_psr
+        ),
+        "selected_psr_threshold": bool(
+            selected_psr is not None and selected_psr >= MIN_HOLDOUT_PSR
         ),
         "point_in_time_data": criterion.get("public_history_point_in_time") is True,
         "historical_data_not_reused": criterion.get("historical_reuse") is False,
@@ -387,14 +544,17 @@ def _assess_v3(
             and recomputed_pbo is not None
             and Decimal("0") <= recomputed_pbo <= Decimal("1")
         ),
-        "family_dsr": bool(recomputed_dsr is not None and recomputed_dsr >= MIN_DSR),
         "family_pbo": bool(recomputed_pbo is not None and recomputed_pbo <= MAX_PBO),
-        "program_wide_multiplicity": bool(
-            adjusted_p is not None and Decimal("0") <= adjusted_p <= PROGRAM_FWER_MAX
+        "repository_calibration": calibration_complete,
+        "program_research_budget": bool(
+            program_bound is not None
+            and program_bound <= PROGRAM_RESEARCH_BUDGET
+            and recomputed_family_count is not None
+            and recomputed_family_count <= MAXIMUM_RESEARCH_FAMILIES
         ),
     }
     return _assessment(
-        contract_version="family-complete-v3",
+        contract_version="calibrated-family-entry-v3.1",
         candidate_count=candidate_count,
         complete_trial_count=complete_trial_count,
         global_audit_trial_count=global_count,
@@ -422,7 +582,7 @@ def _diagnostic_assessment(
         selected_candidate_id=selected_candidate_id,
         selected_strategy_fingerprint=selected_strategy_fingerprint,
         program_multiplicity={},
-        checks={"family_complete_v3_required": False},
+        checks={"calibrated_family_entry_v31_required": False},
     )
 
 
@@ -450,7 +610,7 @@ def assess_factory_evidence(evidence: object) -> FactoryEvidenceAssessment:
     selected_strategy_fingerprint = _nonempty_string(decision.get("selected_strategy_fingerprint"))
     selected_deploy_config = _nonempty_string(decision.get("selected_deploy_config"))
 
-    if evidence.get("gate_version") == "3.0":
+    if evidence.get("gate_version") == "3.1":
         return _assess_v3(
             evidence,
             decision,
@@ -461,11 +621,12 @@ def assess_factory_evidence(evidence: object) -> FactoryEvidenceAssessment:
             selected_strategy_fingerprint=selected_strategy_fingerprint,
             selected_deploy_config=selected_deploy_config,
         )
-    version = (
-        "family-complete-v2-diagnostic"
-        if evidence.get("gate_version") == "2.0"
-        else "legacy-64-diagnostic"
-    )
+    if evidence.get("gate_version") == "3.0":
+        version = "family-complete-v3-diagnostic"
+    elif evidence.get("gate_version") == "2.0":
+        version = "family-complete-v2-diagnostic"
+    else:
+        version = "legacy-64-diagnostic"
     return _diagnostic_assessment(
         version=version,
         candidate_count=candidate_count,
