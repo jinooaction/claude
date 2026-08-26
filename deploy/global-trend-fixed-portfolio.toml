@@ -52,7 +52,7 @@ rebalance_every_n_sessions = 21
 lookback_bars              = 200
 momentum_period            = 120
 rebalance_threshold_pct    = "2.0"
-min_notional_usd           = "50"
+min_notional_usd           = "20"
 
 # 추세 앙상블은 라이브와 동일(사과 대 사과). 각 자산이 자기 다중속도 추세 위 비율만큼 노출.
 [portfolio.trend_filter]

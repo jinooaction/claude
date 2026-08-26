@@ -397,6 +397,14 @@ jobs:
           profit_exit=$?
           ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
               -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "observe execution-proxy-parity" \
+              > /tmp/entry_execution_proxy_parity.json 2>/tmp/entry_execution_proxy_parity.err
+          proxy_parity_exit=$?
+          if [[ ! -s /tmp/entry_execution_proxy_parity.json ]]; then
+            echo '{}' > /tmp/entry_execution_proxy_parity.json
+          fi
+          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
               "observe live-canary-preview ${CAP}" \
               > /tmp/entry_fundability_preview.json 2>/tmp/entry_fundability_preview.err
           fundability_exit=$?
@@ -412,6 +420,7 @@ jobs:
             --factory-evidence-age-hours "${factory_age_hours}" \
             --live-portfolio deploy/canary-live-portfolio.toml \
             --fundability-preview-json /tmp/entry_fundability_preview.json \
+            --execution-proxy-parity-json /tmp/entry_execution_proxy_parity.json \
             --capital-usd "${CAP}" \
             > /tmp/entry_revalidation.json
           revalidation_exit=$?
@@ -424,14 +433,16 @@ jobs:
           echo "allowed=${allowed}" >> "$GITHUB_OUTPUT"
           echo "state=${state}" >> "$GITHUB_OUTPUT"
           {
-            echo "evidence_age_hours=${evidence_age_hours} canary_exit=${canary_exit} profit_exit=${profit_exit} fundability_exit=${fundability_exit}"
+            echo "evidence_age_hours=${evidence_age_hours} canary_exit=${canary_exit} profit_exit=${profit_exit} proxy_parity_exit=${proxy_parity_exit} fundability_exit=${fundability_exit}"
             cat /tmp/entry_revalidation.json
             cat /tmp/profit_evidence.err /tmp/strategy_factory.err \
               /tmp/entry_hardened_canary.err /tmp/entry_live_profit.err \
+              /tmp/entry_execution_proxy_parity.err \
               /tmp/entry_fundability_preview.err 2>/dev/null
           } > /tmp/entry_revalidation.log
           cat /tmp/entry_revalidation.log
           [[ "${canary_exit}" == "0" && "${profit_exit}" == "0" && \
+             "${proxy_parity_exit}" == "0" && \
              "${fundability_exit}" == "0" ]] || exit 3
           exit "${revalidation_exit}"
 

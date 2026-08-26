@@ -88,12 +88,13 @@ class PortfolioCanaryOutcome:
     candidate_drawdown_pct: float
     shock_violations: int
     audit_integrity_count: int
+    audit_integrity_holes: list[tuple[str, date]]
     fuzz_counterexamples: int
     window_gate_rejections: int  # 정상 윈도우 게이트 거부(참고 — 위반으로 안 셈, 룰 캐너리와 동일)
     resolved_shock_dates: list[date]
     skipped_shock_dates: list[date]
 
-    SCHEMA_VERSION = "1.0"
+    SCHEMA_VERSION = "1.1"
 
     @property
     def passed(self) -> bool:
@@ -114,6 +115,10 @@ class PortfolioCanaryOutcome:
             "candidate_drawdown_pct": self.candidate_drawdown_pct,
             "shock_violations": self.shock_violations,
             "audit_integrity_count": self.audit_integrity_count,
+            "audit_integrity_holes": [
+                {"symbol": symbol, "session_date": session.isoformat()}
+                for symbol, session in self.audit_integrity_holes
+            ],
             "fuzz_counterexamples": self.fuzz_counterexamples,
             "window_gate_rejections": self.window_gate_rejections,
             "resolved_shock_dates": [d.isoformat() for d in self.resolved_shock_dates],
@@ -231,6 +236,7 @@ def run_portfolio_canary(
         candidate_drawdown_pct=candidate_drawdown_pct,
         shock_violations=shock_violations,
         audit_integrity_count=audit_integrity_count,
+        audit_integrity_holes=list(holes),
         fuzz_counterexamples=fuzz_counterexamples,
         window_gate_rejections=window_gate_rejections,
         resolved_shock_dates=resolved_shock_dates,
@@ -243,5 +249,30 @@ __all__ = [
     "DEFAULT_TIER",
     "PortfolioCanaryInputs",
     "PortfolioCanaryOutcome",
+    "latest_complete_session_window",
     "run_portfolio_canary",
 ]
+
+
+def latest_complete_session_window(
+    data_source: HistoricalDataSource,
+    symbols: list[str],
+    *,
+    window_days: int,
+) -> list[date]:
+    """Return the latest sessions present for every symbol.
+
+    The intersection only chooses replay bounds. Coverage inside those bounds is
+    still checked against the XNYS calendar, so a real middle-of-window hole
+    remains a hard integrity failure.
+    """
+
+    if window_days < 1:
+        raise ValueError("window_days must be positive")
+    session_sets = [set(data_source.session_dates(symbol)) for symbol in symbols]
+    if not session_sets or any(not sessions for sessions in session_sets):
+        raise ValueError("one or more portfolio symbols have no sessions")
+    common = sorted(set.intersection(*session_sets))
+    if not common:
+        raise ValueError("portfolio symbols have no common sessions")
+    return common[-window_days:]

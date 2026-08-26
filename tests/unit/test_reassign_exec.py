@@ -365,11 +365,11 @@ def test_real_global_to_globalfixed_reassignment() -> None:
     # 신호 집합은 SPY·IEF·GLD, 실제 거래 집합은 저가 1:1 대체 ETF로 보존됐다.
     assert data["portfolio"]["universe"] == ["SPY", "IEF", "GLD"]
     assert data["execution"]["symbol_map"] == {
-        "SPY": "SPYM",
-        "IEF": "IEF",
-        "GLD": "GLDM",
+        "SPY": "SCHX",
+        "IEF": "SPTI",
+        "GLD": "IAUM",
     }
-    assert data["whitelist"]["symbols"] == ["SPYM", "IEF", "GLDM"]
+    assert data["whitelist"]["symbols"] == ["SCHX", "SPTI", "IAUM"]
     assert data["caps"]["canary_acceptance_drawdown_pct"] == 3.0
     # 체결 매핑 값 ⊆ 화이트리스트(가드 통과).
     assert set(data["execution"]["symbol_map"].values()) <= set(

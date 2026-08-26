@@ -45,6 +45,8 @@ from auto_invest.broker.overseas import (
     get_positions,
     get_purchasable_cash_usd,
     get_quote,
+    get_quote_resolving_market,
+    order_exchange_for_quote_market,
 )
 
 pytestmark = pytest.mark.skipif(
@@ -153,6 +155,79 @@ async def test_live_kis_token_and_quote(kis_token_bundle: dict) -> None:
     assert quote.last_price_usd > Decimal("0")
     # Last price is non-secret market data, so printing it is fine.
     print(f"\nLive AAPL quote: ${quote.last_price_usd}")
+
+
+@pytest.mark.asyncio
+async def test_live_kis_execution_proxy_parity_and_quotes(
+    kis_token_bundle: dict,
+    tmp_path,
+) -> None:
+    """사전등록 실행 대체재의 KIS 일봉 동등성과 주문 거래소 해석(주문 0건)."""
+
+    from auto_invest.backtest.data_source import SqliteBarDataSource
+    from auto_invest.market_data.feed import backfill_daily_bars
+    from auto_invest.persistence import db
+    from auto_invest.portfolio.execution_proxy_parity import (
+        PREREGISTERED_EXECUTION_SYMBOL_MAP,
+        assess_execution_proxy_parity,
+    )
+
+    access_token = kis_token_bundle["access_token"]
+    app_key = kis_token_bundle["app_key"]
+    app_secret = kis_token_bundle["app_secret"]
+    bars_db = tmp_path / "proxy-parity.db"
+    conn = db.get_connection(bars_db)
+    db.migrate(conn)
+    symbols = sorted(
+        set(PREREGISTERED_EXECUTION_SYMBOL_MAP)
+        | set(PREREGISTERED_EXECUTION_SYMBOL_MAP.values())
+    )
+    try:
+        async with httpx.AsyncClient(base_url=KIS_BASE_URL, timeout=30.0) as inner:
+            broker = _make_broker(inner)
+            backfill = await backfill_daily_bars(
+                conn,
+                broker,
+                access_token=access_token,
+                app_key=app_key,
+                app_secret=app_secret,
+                symbols=symbols,
+                min_bars=300,
+            )
+            quotes = {}
+            for symbol in PREREGISTERED_EXECUTION_SYMBOL_MAP.values():
+                quote = await get_quote_resolving_market(
+                    broker,
+                    access_token=access_token,
+                    app_key=app_key,
+                    app_secret=app_secret,
+                    symbol=symbol,
+                )
+                quotes[symbol] = quote
+
+        assert all(row["exchange"] and row["fetched"] >= 252 for row in backfill)
+        evidence = assess_execution_proxy_parity(
+            SqliteBarDataSource(conn),
+            symbol_map=PREREGISTERED_EXECUTION_SYMBOL_MAP,
+            observed_at=datetime.now(UTC),
+        )
+    finally:
+        conn.close()
+
+    assert evidence.passed is True, evidence.as_dict()
+    assert all(quote.last_price_usd > 0 for quote in quotes.values())
+    assert all(
+        order_exchange_for_quote_market(quote.resolved_market) is not None
+        for quote in quotes.values()
+    )
+    print(f"\nExecution proxy parity: {evidence.as_dict()}")
+    print(
+        "Execution proxy quotes: "
+        + ", ".join(
+            f"{symbol}=${quote.last_price_usd}({quote.resolved_market})"
+            for symbol, quote in quotes.items()
+        )
+    )
 
 
 @pytest.mark.asyncio

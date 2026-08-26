@@ -8,6 +8,7 @@ from auto_invest.portfolio.fundability import (
     assess_fundability,
     validate_fundability_evidence,
 )
+from auto_invest.strategy.rebalance import rebalance_plan
 
 
 def _caps(*, per_trade: str = "50", per_symbol: str = "60") -> SizingCaps:
@@ -61,6 +62,40 @@ def test_small_capital_that_cannot_express_three_legs_fails_weight_error() -> No
     assert result.fundable is False
     assert "l1_weight_error" in result.reasons
     assert "max_leg_weight_error" in result.reasons
+
+
+def test_preregistered_two_active_proxies_fit_current_research_capital() -> None:
+    prices = {"SCHX": Decimal("30.21"), "IAUM": Decimal("45.79")}
+    targets = {"SCHX": Decimal("0.333333"), "IAUM": Decimal("0.333333")}
+    planned = rebalance_plan(
+        target_weights=targets,
+        holdings={},
+        prices=prices,
+        capital_usd=Decimal("145"),
+        invested_fraction=Decimal("0.99"),
+        min_notional_usd=Decimal("20"),
+        mode="hold_replace",
+        lot_rounding="nearest",
+    )
+    result = assess_fundability(
+        target_weights=targets,
+        holdings={},
+        prices=prices,
+        order_prices=prices,
+        planned_orders=[
+            (order.symbol, order.side, order.qty) for order in planned
+        ],
+        capital_usd=Decimal("145"),
+        invested_fraction=Decimal("0.99"),
+        caps=_caps(per_trade="50", per_symbol="60"),
+    )
+
+    assert [(order.symbol, order.qty) for order in planned] == [
+        ("IAUM", 1),
+        ("SCHX", 2),
+    ]
+    assert result.fundable is True
+    assert result.max_leg_weight_error <= Decimal("0.15")
 
 
 def test_zero_order_minimum_notional_path_fails_funded_targets() -> None:

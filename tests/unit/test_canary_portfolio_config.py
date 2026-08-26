@@ -58,7 +58,7 @@ def test_live_portfolio_config_ensemble_canary_invariants():
     """
     _caps, wl, cfg = _load_portfolio_for_backtest(_CANARY_LIVE, env={"KIS_ACCOUNT_NO": "ACC-TEST"})
     assert set(cfg.universe) == {"SPY", "IEF", "GLD"}
-    assert set(wl.symbols) == {"SPYM", "IEF", "GLDM"}
+    assert set(wl.symbols) == {"SCHX", "SPTI", "IAUM"}
     assert cfg.weight_scheme == "equal"
     assert cfg.top_n == 3
     assert cfg.rebalance_mode == "hold_replace"
@@ -73,7 +73,7 @@ def test_live_portfolio_config_ensemble_canary_invariants():
     assert account_enabled is True
     assert liquidation == frozenset()
     assert str(cash_buffer) == "0.01"
-    assert symbol_map == {"SPY": "SPYM", "IEF": "IEF", "GLD": "GLDM"}
+    assert symbol_map == {"SPY": "SCHX", "IEF": "SPTI", "GLD": "IAUM"}
     assert lot_rounding == "nearest"
     assert set(symbol_map) == set(cfg.universe)
     assert set(symbol_map.values()) == set(wl.symbols)
@@ -94,6 +94,7 @@ def test_live_canary_strategy_matches_validated_ensemble():
         validated_path, env={"KIS_ACCOUNT_NO": "ACC-TEST"}
     )
     assert strategy_fingerprint(live) == strategy_fingerprint(validated)
+    assert live.min_notional_usd == validated.min_notional_usd == 20
 
 
 def test_micro_gtaa_live_canary_invariants():

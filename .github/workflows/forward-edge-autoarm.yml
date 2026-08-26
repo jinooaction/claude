@@ -320,6 +320,15 @@ jobs:
               "observe account-nav" \
               > /tmp/account_nav.json 2>/tmp/account_nav.err
           echo "--- account NAV ---"; cat /tmp/account_nav.json; cat /tmp/account_nav.err
+          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "observe execution-proxy-parity" \
+              > /tmp/execution_proxy_parity.json 2>/tmp/execution_proxy_parity.err
+          if [[ ! -s /tmp/execution_proxy_parity.json ]]; then
+            echo '{}' > /tmp/execution_proxy_parity.json
+          fi
+          echo "--- execution proxy parity (orders=0) ---"
+          cat /tmp/execution_proxy_parity.json /tmp/execution_proxy_parity.err 2>/dev/null
           research_capital="$(python3 - <<'PY'
           import json
           from decimal import Decimal, ROUND_FLOOR
@@ -373,6 +382,7 @@ jobs:
             --factory-evidence-json /tmp/strategy_factory.json \
             --factory-evidence-age-hours "$(cat /tmp/strategy_factory_age_hours)" \
             --fundability-preview-json /tmp/rung1_fundability_preview.json \
+            --execution-proxy-parity-json /tmp/execution_proxy_parity.json \
             --hardened-canary-json /tmp/exploration_canary.json \
             --live-growth-json /tmp/live_growth.json \
             --live-performance-json /tmp/live_performance.json \
@@ -600,6 +610,11 @@ jobs:
             echo "## 연구 단 1 구현 가능성 미리보기 (read-only, 주문 0건)"
             echo '```json'
             cat /tmp/rung1_fundability_preview.json 2>/dev/null || echo '{}'
+            echo '```'
+            echo ""
+            echo "## 실행 대체 ETF 동등성 감사 (KIS read-only, 주문 0건)"
+            echo '```json'
+            cat /tmp/execution_proxy_parity.json 2>/dev/null || echo '{}'
             echo '```'
             echo ""
             echo "## 탐색 진입 hardened canary JSON (격리, 주문 0건)"
