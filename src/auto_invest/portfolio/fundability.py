@@ -123,7 +123,9 @@ def assess_fundability(
     per_symbol_cap = _cap_amount(capital_usd, caps.per_symbol_pct)
     global_cap = _cap_amount(capital_usd, caps.global_exposure_pct)
 
-    for symbol, side, requested_qty in planned_orders:
+    sells = [order for order in planned_orders if order[1] == "SELL"]
+    buys = [order for order in planned_orders if order[1] == "BUY"]
+    for symbol, side, requested_qty in sells + buys:
         if requested_qty <= 0:
             continue
         if effective_side == "none":
@@ -144,6 +146,11 @@ def assess_fundability(
         if side == "SELL":
             sold = min(projected_all.get(symbol, 0), routed_qty)
             projected_all[symbol] = projected_all.get(symbol, 0) - sold
+            released = Decimal(sold) * prices.get(symbol, Decimal("0"))
+            symbol_exposure[symbol] = max(
+                Decimal("0"), symbol_exposure.get(symbol, Decimal("0")) - released
+            )
+            global_exposure = max(Decimal("0"), global_exposure - released)
             continue
         if symbol not in active:
             cap_compliant = False
@@ -157,6 +164,17 @@ def assess_fundability(
         projected_all[symbol] = projected_all.get(symbol, 0) + routed_qty
         symbol_exposure[symbol] = proposed_symbol
         global_exposure = proposed_global
+
+    final_symbol_exposure = {
+        symbol: Decimal(qty) * prices.get(symbol, Decimal("0"))
+        for symbol, qty in projected_all.items()
+    }
+    final_global_exposure = sum(final_symbol_exposure.values(), Decimal("0"))
+    cap_compliant = bool(
+        cap_compliant
+        and all(exposure <= per_symbol_cap for exposure in final_symbol_exposure.values())
+        and final_global_exposure <= global_cap
+    )
 
     projected_weights: dict[str, Decimal] = {}
     errors: list[Decimal] = []

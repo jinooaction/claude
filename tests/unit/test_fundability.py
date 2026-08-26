@@ -121,6 +121,38 @@ def test_unpriced_existing_holding_cannot_be_ignored_by_global_cap() -> None:
     assert "exposure_quote_coverage" in result.reasons
 
 
+def test_existing_holding_above_symbol_cap_fails_even_without_a_new_buy() -> None:
+    result = assess_fundability(
+        target_weights={"AAA": Decimal("0.7")},
+        holdings={"AAA": 7},
+        prices={"AAA": Decimal("100")},
+        order_prices={},
+        planned_orders=[],
+        capital_usd=Decimal("1000"),
+        invested_fraction=Decimal("1"),
+        caps=_caps(per_trade="50", per_symbol="60"),
+    )
+
+    assert result.fundable is False
+    assert "exposure_caps" in result.reasons
+
+
+def test_preview_applies_sells_before_buys_like_the_live_rebalancer() -> None:
+    result = assess_fundability(
+        target_weights={"AAA": Decimal("0.5"), "BBB": Decimal("0.4")},
+        holdings={"AAA": 8},
+        prices={"AAA": Decimal("100"), "BBB": Decimal("100")},
+        order_prices={"AAA": Decimal("100"), "BBB": Decimal("100")},
+        planned_orders=[("BBB", "BUY", 4), ("AAA", "SELL", 3)],
+        capital_usd=Decimal("1000"),
+        invested_fraction=Decimal("1"),
+        caps=_caps(per_trade="50", per_symbol="60"),
+    )
+
+    assert result.fundable is True
+    assert result.projected_quantities == {"AAA": 5, "BBB": 4}
+
+
 def test_serialized_preview_is_recomputed_and_rejects_tampering_or_wrong_capital() -> None:
     result = assess_fundability(
         target_weights={"AAA": Decimal("0.5"), "BBB": Decimal("0.5")},
