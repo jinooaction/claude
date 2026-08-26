@@ -31,7 +31,7 @@
 
 - [x] T016 Amend constitution X.4 to v10.0.0 in a dedicated forensic commit without changing the kernel manifest
 - [x] T017 Run current 752-row production evidence through v3 and record the exact result in `specs/166-family-complete-v3-fundability/production-result.md`
-- [ ] T018 Run focused tests, full pytest, Ruff, YAML, strict harness, handoff facts, and PR quality validation
+- [x] T018 Run focused tests, full pytest, Ruff, YAML, strict harness, handoff facts, and PR quality validation
 - [ ] T019 Create and merge the grade-4 PR, verify deploy and automatic sidecars, and confirm no order or capital change
 - [ ] T020 Refresh and merge `HANDOFF.md`, then re-check current money-path truth
 
