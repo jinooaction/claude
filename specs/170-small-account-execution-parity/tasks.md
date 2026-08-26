@@ -11,7 +11,7 @@
 
 - [x] T003 [US1] Add delayed-latest-session and interior-hole tests in `tests/integration/test_canary_portfolio_cli.py`
 - [x] T004 [US2] Add parity metric, evidence mutation, mapping, and stale-data tests in `tests/unit/test_execution_proxy_parity.py`
-- [ ] T005 [US2] Add KIS read-only proxy quote/history smoke coverage in `tests/integration/test_live_broker.py`
+- [x] T005 [US2] Add KIS read-only proxy quote/history smoke coverage in `tests/integration/test_live_broker.py`
 - [x] T006 [US3] Add every-entry-path parity/fundability tests in `tests/unit/test_capital_ladder.py` and `tests/unit/test_live_entry_revalidation.py`
 
 ## Phase 3: Implementation

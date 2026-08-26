@@ -71,6 +71,10 @@ def test_safety_commands_json_cli():
     assert commands["evolution-scan"]["can_place_order"] is False
     assert commands["evolution-scan"]["uses_broker"] is False
     assert commands["evolution-scan"]["writes_db"] is False
+    assert commands["execution-proxy-parity"]["level"] == "A0"
+    assert commands["execution-proxy-parity"]["can_place_order"] is False
+    assert commands["execution-proxy-parity"]["uses_broker"] is False
+    assert commands["execution-proxy-parity"]["writes_db"] is False
     assert commands["promotion-scan"]["level"] == "A0"
     assert commands["promotion-scan"]["can_place_order"] is False
     assert commands["promotion-scan"]["uses_broker"] is False

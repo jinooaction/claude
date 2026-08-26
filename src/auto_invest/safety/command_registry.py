@@ -141,6 +141,11 @@ COMMAND_POLICIES: dict[str, CommandPolicy] = {
         "Report LLM token efficiency metrics; records price-table audit metadata.",
         writes_db=True,
     ),
+    "execution-proxy-parity": _p(
+        "execution-proxy-parity",
+        AutonomyLevel.READ_ONLY,
+        "Validate stored signal-to-execution proxy parity; no orders or state changes.",
+    ),
     "evolution-scan": _p(
         "evolution-scan",
         AutonomyLevel.READ_ONLY,

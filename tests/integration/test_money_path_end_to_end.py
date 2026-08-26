@@ -105,8 +105,16 @@ def _quote_provider(conn, universe):
 
 
 def _execution_quote_provider(conn, symbol_map):
+    proxy_prices = {
+        "SCHX": Decimal("30.21"),
+        "SPTI": Decimal("28.15"),
+        "IAUM": Decimal("45.79"),
+    }
     last = {
-        execution: get_bars(conn, symbol=signal, timeframe="1d")[-1].close_usd
+        execution: proxy_prices.get(
+            execution,
+            get_bars(conn, symbol=signal, timeframe="1d")[-1].close_usd,
+        )
         for signal, execution in symbol_map.items()
     }
 
@@ -342,6 +350,7 @@ async def test_full_money_path_with_real_live_config(db_path: Path, tmp_path: Pa
         live_config=cfg,
         validated_config=validated_cfg,
         kill_switch_present=False,
+        entry_execution_ready=True,
         today=date(2026, 6, 12),
     )
     if d.current_rung == 0:
@@ -364,6 +373,7 @@ async def test_full_money_path_with_real_live_config(db_path: Path, tmp_path: Pa
         live_config=cfg,
         validated_config=validated_cfg,
         kill_switch_present=False,
+        entry_execution_ready=True,
         today=date(2026, 6, 12),
     )
     assert d.to_json_dict() == d2.to_json_dict()
@@ -486,6 +496,7 @@ def test_money_path_report_surfaces_downside_with_real_config():
         live_config=cfg,
         validated_config=validated_cfg,
         kill_switch_present=False,
+        entry_execution_ready=True,
         today=date(2026, 6, 12),
     )
     assert d.action == ACTION_PROMOTE  # 단0 → 단2 (지문 정합 + EDGE_CONFIRMED)
