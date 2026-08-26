@@ -16,6 +16,10 @@ from auto_invest.analytics.backtest_overfitting import (
     effective_independent_trials,
     probability_of_backtest_overfitting,
 )
+from auto_invest.analytics.research_family_audit import (
+    annotate_research_families,
+    build_research_family_audit,
+)
 from auto_invest.cli import app
 from auto_invest.config.caps import SizingCaps
 from auto_invest.config.rules import PortfolioRebalanceConfig
@@ -24,6 +28,30 @@ from auto_invest.portfolio.fundability import assess_fundability
 
 ROOT = Path(__file__).resolve().parents[2]
 RUNNER = CliRunner()
+
+
+def _research_calibration() -> dict:
+    return {
+        "research_entry_gate_version": "3.1",
+        "verdict": "CALIBRATED",
+        "code_commit": "abc123",
+        "scenario": {"seed": 60_000, "repetitions": 500},
+        "thresholds": {"holdout_psr_min": 0.95, "research_entry_pbo_max": 0.25},
+        "required": {
+            "family_false_acceptance_max": 0.01,
+            "detection_min": 0.80,
+            "program_false_acceptance_budget": 0.20,
+            "maximum_research_families": 20,
+        },
+        "family_calibrations": {
+            size: {
+                "research_entry_calibrated": True,
+                "null_research_entry_acceptance_rate": 0.01,
+                "target_research_entry_detection_rate": 0.81,
+            }
+            for size in ("16", "64")
+        },
+    }
 
 
 def _json(tmp_path: Path, name: str, payload: dict) -> Path:
@@ -105,19 +133,20 @@ def _invoke_factory(tmp_path: Path, *, winner: bool, include_fundability: bool =
             "candidate_id": f"prior-{index}",
             "strategy_fingerprint": f"sha256:prior-{index}",
             "status": "EXPLORATORY_REJECTED",
+            "batch_id": "strategy-factory-test-prior",
         }
         for index in range(16)
     ]
     trials = [
         {
-            "candidate_id": f"family-{index}",
+            "candidate_id": f"options-vrp-family-{index}",
             "strategy_fingerprint": f"sha256:family-{index}",
             "status": "complete",
         }
         for index in range(15)
     ] + [
         {
-            "candidate_id": "factory-exact",
+            "candidate_id": "options-vrp-factory-exact",
             "strategy_fingerprint": fingerprint,
             "status": "complete",
         }
@@ -140,18 +169,24 @@ def _invoke_factory(tmp_path: Path, *, winner: bool, include_fundability: bool =
     )
     pbo = probability_of_backtest_overfitting(development_segments)
     assert dsr is not None and pbo is not None
+    audit_records = annotate_research_families(prior + trials)
+    trials = audit_records[-16:]
+    family_audit = build_research_family_audit(audit_records)
     factory = _json(
         tmp_path,
         "factory.json",
         {
-            "gate_version": "3.0",
+            "gate_version": "3.1",
+            "code_commit": "abc123",
             "candidate_count": 16,
             "complete_trial_count": 16,
             "prior_trial_count": 16,
             "global_audit_trial_count": 32,
             "unique_trial_fingerprint_count": 32,
+            "program_research_family_count": len(family_audit),
+            "research_family_audit": family_audit,
             "trial_records": trials,
-            "audit_records": prior + trials,
+            "audit_records": audit_records,
             "development_returns": development_returns,
             "development_segment_sharpes": development_segments,
             "criterion_audit": {
@@ -163,13 +198,17 @@ def _invoke_factory(tmp_path: Path, *, winner: bool, include_fundability: bool =
             },
             "research_live_parity": {
                 "passed": winner,
-                "candidate_id": "factory-exact",
+                "candidate_id": "options-vrp-factory-exact",
                 "strategy_fingerprint": fingerprint,
             },
+            "development_selection": {
+                "selected_candidate_id": "options-vrp-factory-exact"
+            },
+            "repository_gate_calibration": _research_calibration(),
             "decision": {
                 "verdict": "FACTORY_EDGE" if winner else "NO_FACTORY_EDGE",
                 "research_canary_eligible": winner,
-                "selected_candidate_id": "factory-exact" if winner else None,
+                "selected_candidate_id": "options-vrp-factory-exact" if winner else None,
                 "selected_strategy_fingerprint": fingerprint if winner else None,
                 "selected_deploy_config": config_text if winner else None,
                 "psr": "0.999" if winner else None,
@@ -275,7 +314,10 @@ def test_complete_exact_factory_winner_enters_only_10pct(tmp_path: Path) -> None
     assert payload["action"] == "PROMOTE"
     assert payload["target_rung"] == 1
     assert payload["target_capital_usd"] == 1200
-    assert payload["factory_verdict"]["contract_version"] == "family-complete-v3"
+    assert (
+        payload["factory_verdict"]["contract_version"]
+        == "calibrated-family-entry-v3.1"
+    )
     assert payload["factory_verdict"]["contract_complete"] is True
     assert payload["factory_verdict"]["exact_strategy_match"] is True
     assert payload["factory_verdict"]["fundability_passed"] is True

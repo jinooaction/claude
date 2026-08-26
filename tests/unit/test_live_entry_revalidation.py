@@ -11,6 +11,10 @@ from auto_invest.analytics.backtest_overfitting import (
     effective_independent_trials,
     probability_of_backtest_overfitting,
 )
+from auto_invest.analytics.research_family_audit import (
+    annotate_research_families,
+    build_research_family_audit,
+)
 from auto_invest.config.caps import SizingCaps
 from auto_invest.config.rules import PortfolioRebalanceConfig
 from auto_invest.portfolio.autoarm import strategy_fingerprint_digest
@@ -23,6 +27,30 @@ from auto_invest.portfolio.live_entry_revalidation import (
 )
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def _research_calibration() -> dict:
+    return {
+        "research_entry_gate_version": "3.1",
+        "verdict": "CALIBRATED",
+        "code_commit": "abc123",
+        "scenario": {"seed": 60_000, "repetitions": 500},
+        "thresholds": {"holdout_psr_min": 0.95, "research_entry_pbo_max": 0.25},
+        "required": {
+            "family_false_acceptance_max": 0.01,
+            "detection_min": 0.80,
+            "program_false_acceptance_budget": 0.20,
+            "maximum_research_families": 20,
+        },
+        "family_calibrations": {
+            size: {
+                "research_entry_calibrated": True,
+                "null_research_entry_acceptance_rate": 0.01,
+                "target_research_entry_detection_rate": 0.81,
+            }
+            for size in ("16", "64")
+        },
+    }
 
 
 def _fundability(capital: Decimal = Decimal("1000")) -> dict:
@@ -55,19 +83,20 @@ def _factory() -> tuple[dict, str]:
             "candidate_id": f"prior-{index}",
             "strategy_fingerprint": f"sha256:prior-{index}",
             "status": "EXPLORATORY_REJECTED",
+            "batch_id": "strategy-factory-test-prior",
         }
         for index in range(16)
     ]
     trials = [
         {
-            "candidate_id": f"factory-{index}",
+            "candidate_id": f"options-vrp-factory-{index}",
             "strategy_fingerprint": f"sha256:factory-{index}",
             "status": "complete",
         }
         for index in range(15)
     ] + [
         {
-            "candidate_id": "factory-winner",
+            "candidate_id": "options-vrp-factory-winner",
             "strategy_fingerprint": fingerprint,
             "status": "complete",
         }
@@ -90,16 +119,22 @@ def _factory() -> tuple[dict, str]:
     )
     pbo = probability_of_backtest_overfitting(development_segments)
     assert dsr is not None and pbo is not None
+    audit_records = annotate_research_families(prior + trials)
+    trials = audit_records[-16:]
+    family_audit = build_research_family_audit(audit_records)
     return (
         {
-            "gate_version": "3.0",
+            "gate_version": "3.1",
+            "code_commit": "abc123",
             "candidate_count": 16,
             "complete_trial_count": 16,
             "prior_trial_count": 16,
             "global_audit_trial_count": 32,
             "unique_trial_fingerprint_count": 32,
+            "program_research_family_count": len(family_audit),
+            "research_family_audit": family_audit,
             "trial_records": trials,
-            "audit_records": prior + trials,
+            "audit_records": audit_records,
             "development_returns": development_returns,
             "development_segment_sharpes": development_segments,
             "criterion_audit": {
@@ -111,13 +146,17 @@ def _factory() -> tuple[dict, str]:
             },
             "research_live_parity": {
                 "passed": True,
-                "candidate_id": "factory-winner",
+                "candidate_id": "options-vrp-factory-winner",
                 "strategy_fingerprint": fingerprint,
             },
+            "development_selection": {
+                "selected_candidate_id": "options-vrp-factory-winner"
+            },
+            "repository_gate_calibration": _research_calibration(),
             "decision": {
                 "verdict": "FACTORY_EDGE",
                 "research_canary_eligible": True,
-                "selected_candidate_id": "factory-winner",
+                "selected_candidate_id": "options-vrp-factory-winner",
                 "selected_strategy_fingerprint": fingerprint,
                 "selected_deploy_config": config_text,
                 "psr": "0.999",

@@ -323,10 +323,13 @@ jobs:
           v3_exit=$?
           set -e
           [[ "${v3_exit}" == "0" || "${v3_exit}" == "3" ]]
-          test "$(jq -r '.contract_version' /tmp/factory_evidence_v3.json)" = "family-complete-v3"
+          test "$(jq -r '.contract_version' /tmp/factory_evidence_v3.json)" = \
+            "calibrated-family-entry-v3.1"
           test "$(jq -r '.global_audit_trial_count' /tmp/factory_evidence_v3.json)" = "752"
+          test "$(jq -r '.program_research_family_count' /tmp/strategy_factory.json)" = "17"
+          test "$(jq -r '.research_family_audit | length' /tmp/strategy_factory.json)" = "17"
           test "$(jq -r '.program_multiplicity.method' /tmp/factory_evidence_v3.json)" = \
-            "bonferroni-global-fwer-v1"
+            "calibrated-family-risk-budget-v1"
           cat /tmp/LAST_RUN.md
 
       - name: Preserve trials and suppress an identical completed batch

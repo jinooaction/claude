@@ -4,7 +4,7 @@ from auto_invest.analytics.edge_gate_calibration import run_edge_gate_calibratio
 def test_revised_gate_controls_false_acceptance_and_detects_planted_edge() -> None:
     report = run_edge_gate_calibration(
         seed=60_000,
-        repetitions=200,
+        repetitions=500,
         timestamp_utc="2026-08-23T00:00:00Z",
         code_commit="abc123",
     )
@@ -15,14 +15,21 @@ def test_revised_gate_controls_false_acceptance_and_detects_planted_edge() -> No
     assert report["thresholds"] == {
         "development_dsr_diagnostic_min": 0.95,
         "development_pbo_diagnostic_max": 0.1,
+        "research_entry_pbo_max": 0.25,
         "holdout_psr_min": 0.95,
         "paper_psr_min": 0.8,
     }
+    assert report["research_entry"]["calibrated"] is True
+    assert report["research_entry"]["program_false_acceptance_budget"] == 0.20
+    assert report["research_entry"]["maximum_research_families"] == 20
     assert set(report["family_calibrations"]) == {"16", "64"}
     for calibration in report["family_calibrations"].values():
         assert calibration["live_calibrated"] is True
+        assert calibration["research_entry_calibrated"] is True
         assert calibration["null_false_acceptance_rate"] <= 0.05
         assert calibration["target_live_detection_rate"] >= 0.80
+        assert calibration["null_research_entry_acceptance_rate"] <= 0.01
+        assert calibration["target_research_entry_detection_rate"] >= 0.80
         assert set(calibration["power_curve"]) == {
             "0.20",
             "0.30",

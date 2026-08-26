@@ -61,9 +61,9 @@ def test_workflow_runs_complete_batch_without_broker_or_order_command() -> None:
     assert 'global_audit_trial_count\' /tmp/strategy_factory.json)" = "752' in text
     assert 'multiplicity_trial_count\' /tmp/strategy_factory.json)" = "16' in text
     assert "scripts/factory_evidence_gate.py" in text
-    assert 'contract_version\' /tmp/factory_evidence_v3.json)" = "family-complete-v3' in text
+    assert "calibrated-family-entry-v3.1" in text
     assert 'global_audit_trial_count\' /tmp/factory_evidence_v3.json)" = "752' in text
-    assert "bonferroni-global-fwer-v1" in text
+    assert "calibrated-family-risk-budget-v1" in text
     assert 'verdict\' /tmp/edge_gate_calibration.json)" = "CALIBRATED' in text
     assert "rebalance-once" not in text
     assert "KIS_" not in text

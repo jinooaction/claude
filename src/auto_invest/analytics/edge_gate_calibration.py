@@ -27,10 +27,17 @@ PLANTED_SHARPE_ANNUAL = 0.60
 POWER_SHARPES_ANNUAL = (0.20, 0.30, 0.40, 0.50, 0.60, 0.80)
 DEVELOPMENT_DSR_DIAGNOSTIC_MIN = 0.95
 PBO_DIAGNOSTIC_MAX = 0.10
+RESEARCH_ENTRY_PBO_MAX = 0.25
 HOLDOUT_PSR_MIN = 0.95
 PAPER_PSR_MIN = 0.80
 FALSE_ACCEPTANCE_MAX = 0.05
+FAMILY_FALSE_ACCEPTANCE_MAX = 0.01
+PROGRAM_FALSE_ACCEPTANCE_BUDGET = 0.20
+MAXIMUM_RESEARCH_FAMILIES = 20
 DETECTION_MIN = 0.80
+CALIBRATION_SEED = 60_000
+CALIBRATION_MIN_REPETITIONS = 500
+RESEARCH_ENTRY_GATE_VERSION = "3.1"
 
 
 def _segments(returns: np.ndarray, count: int = 10) -> list[float]:
@@ -78,6 +85,11 @@ def _simulate_once(
         [*prior_sharpes.tolist(), *trial_sharpes],
     )
     revised_passed = holdout_psr is not None and holdout_psr >= HOLDOUT_PSR_MIN
+    research_entry_passed = (
+        revised_passed
+        and development_pbo is not None
+        and development_pbo <= RESEARCH_ENTRY_PBO_MAX
+    )
     legacy_passed = (
         legacy_dsr is not None
         and legacy_dsr >= 0.95
@@ -88,6 +100,7 @@ def _simulate_once(
     )
     return {
         "revised_passed": revised_passed,
+        "research_entry_passed": research_entry_passed,
         "paper_admitted": holdout_psr is not None and holdout_psr >= PAPER_PSR_MIN,
         "legacy_passed": legacy_passed,
         "dsr": None if development_dsr is None else float(development_dsr),
@@ -125,11 +138,16 @@ def _family_calibration(
         power_rows[planted_sharpe] = rows
         power_curve[f"{planted_sharpe:.2f}"] = {
             "live_detection_rate": _rate(rows, "revised_passed"),
+            "research_entry_detection_rate": _rate(rows, "research_entry_passed"),
             "paper_admission_rate": _rate(rows, "paper_admitted"),
             "planted_candidate_selection_rate": _rate(rows, "winner_is_planted"),
         }
     false_acceptance = _rate(null_rows, "revised_passed")
     target_detection = power_curve[f"{PLANTED_SHARPE_ANNUAL:.2f}"]["live_detection_rate"]
+    research_false_acceptance = _rate(null_rows, "research_entry_passed")
+    research_target_detection = power_curve[f"{PLANTED_SHARPE_ANNUAL:.2f}"][
+        "research_entry_detection_rate"
+    ]
     minimum_detectable = next(
         (
             key
@@ -147,6 +165,12 @@ def _family_calibration(
         "minimum_80pct_detectable_sharpe": minimum_detectable,
         "live_calibrated": (
             false_acceptance <= FALSE_ACCEPTANCE_MAX and target_detection >= DETECTION_MIN
+        ),
+        "null_research_entry_acceptance_rate": research_false_acceptance,
+        "target_research_entry_detection_rate": research_target_detection,
+        "research_entry_calibrated": (
+            research_false_acceptance <= FAMILY_FALSE_ACCEPTANCE_MAX
+            and research_target_detection >= DETECTION_MIN
         ),
         "power_curve": power_curve,
     }
@@ -176,12 +200,17 @@ def run_edge_gate_calibration(
     revised_detection = _rate(edge_rows, "revised_passed")
     legacy_false_acceptance = _rate(null_rows, "legacy_passed")
     legacy_detection = _rate(edge_rows, "legacy_passed")
+    research_entry_calibrated = all(
+        report["research_entry_calibrated"] is True
+        for report in family_calibrations.values()
+    )
     calibrated = all(
         report["live_calibrated"] is True for report in family_calibrations.values()
-    )
+    ) and research_entry_calibrated
     return {
         "schema_version": "1.0",
         "gate_version": GATE_VERSION,
+        "research_entry_gate_version": RESEARCH_ENTRY_GATE_VERSION,
         "timestamp_utc": timestamp_utc or datetime.now(UTC).isoformat(),
         "code_commit": code_commit,
         "verdict": CALIBRATED if calibrated else CALIBRATION_FAILED,
@@ -199,12 +228,25 @@ def run_edge_gate_calibration(
         "thresholds": {
             "development_dsr_diagnostic_min": DEVELOPMENT_DSR_DIAGNOSTIC_MIN,
             "development_pbo_diagnostic_max": PBO_DIAGNOSTIC_MAX,
+            "research_entry_pbo_max": RESEARCH_ENTRY_PBO_MAX,
             "holdout_psr_min": HOLDOUT_PSR_MIN,
             "paper_psr_min": PAPER_PSR_MIN,
         },
         "required": {
             "false_acceptance_max": FALSE_ACCEPTANCE_MAX,
+            "family_false_acceptance_max": FAMILY_FALSE_ACCEPTANCE_MAX,
             "detection_min": DETECTION_MIN,
+            "program_false_acceptance_budget": PROGRAM_FALSE_ACCEPTANCE_BUDGET,
+            "maximum_research_families": MAXIMUM_RESEARCH_FAMILIES,
+        },
+        "research_entry": {
+            "method": "holdout-psr-plus-family-pbo-v1",
+            "calibrated": research_entry_calibrated,
+            "calibration_seed": seed,
+            "minimum_repetitions": CALIBRATION_MIN_REPETITIONS,
+            "family_false_acceptance_max": FAMILY_FALSE_ACCEPTANCE_MAX,
+            "program_false_acceptance_budget": PROGRAM_FALSE_ACCEPTANCE_BUDGET,
+            "maximum_research_families": MAXIMUM_RESEARCH_FAMILIES,
         },
         "revised": {
             "false_acceptance_rate": revised_false_acceptance,
@@ -232,10 +274,18 @@ def run_edge_gate_calibration(
 __all__ = [
     "CALIBRATED",
     "CALIBRATION_FAILED",
+    "CALIBRATION_MIN_REPETITIONS",
+    "CALIBRATION_SEED",
+    "DETECTION_MIN",
     "DEVELOPMENT_DSR_DIAGNOSTIC_MIN",
+    "FAMILY_FALSE_ACCEPTANCE_MAX",
     "GATE_VERSION",
     "HOLDOUT_PSR_MIN",
+    "MAXIMUM_RESEARCH_FAMILIES",
     "PAPER_PSR_MIN",
     "PBO_DIAGNOSTIC_MAX",
+    "PROGRAM_FALSE_ACCEPTANCE_BUDGET",
+    "RESEARCH_ENTRY_GATE_VERSION",
+    "RESEARCH_ENTRY_PBO_MAX",
     "run_edge_gate_calibration",
 ]

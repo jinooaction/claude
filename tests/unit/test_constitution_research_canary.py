@@ -6,18 +6,20 @@ from auto_invest.portfolio.capital_ladder import MAX_RUNG, RUNG_FRACTIONS
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def test_constitution_requires_v3_global_correction_and_exact_fundability() -> None:
+def test_constitution_requires_calibrated_family_entry_and_exact_fundability() -> None:
     text = (ROOT / ".specify" / "memory" / "constitution.md").read_text(encoding="utf-8")
-    assert "**Version**: 10.0.0" in text
-    assert "`gate_version=3.0` (`family-complete-v3`)" in text
-    assert "Legacy and `gate_version=2.0` evidence are diagnostic-only" in text
+    assert "**Version**: 10.1.0" in text
+    assert "`gate_version=3.1` (`calibrated-family-entry-v3.1`)" in text
+    assert "`gate_version=3.0`, legacy, and `gate_version=2.0` evidence are diagnostic-only" in text
     assert "`complete_family_trials`" in text
     assert "`prior_audit_complete`" in text
     assert "`global_audit_trials`" in text
     assert "`unique_audit_fingerprints`" in text
     assert "The consumer, not the producer, MUST independently recount" in text
-    assert "`min(1, (1 - PSR) × trials) <= 0.05`" in text
-    assert "require DSR at least 0.95 and PBO at most 0.20" in text
+    assert "holdout PSR MUST equal the selected raw trial row and be at least 0.95" in text
+    assert "PBO MUST be at most 0.25" in text
+    assert "DSR >= 0.95 and raw-candidate Bonferroni" in text
+    assert "research_family_count × 0.01 <= 0.20" in text
     assert "100% positive-target quote coverage" in text
     assert "at least 66% funded positive target legs" in text
     assert "L1 capital-weight error at most 25%" in text
