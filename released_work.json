@@ -1,5 +1,5 @@
 {
-  "commit": "e1728ca5178e05478358ebae43552f94b5e7cb02",
+  "commit": "eed92c6c9be4048e66c8463033729370020935e6",
   "overall_status": "OK",
   "released_work": [
     {
@@ -543,7 +543,7 @@
       "status": "released"
     }
   ],
-  "run_id": "32954652232",
+  "run_id": "32972227095",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -864,7 +864,11 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "160-forward-paper-ledger-integrity"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "166-family-complete-v3-fundability"
     }
   ],
-  "timestamp_utc": "2026-08-26T09:45:16.854108Z"
+  "timestamp_utc": "2026-08-26T13:06:23.123667Z"
 }
