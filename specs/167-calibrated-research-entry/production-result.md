@@ -2,8 +2,13 @@
 
 **Measured**: 2026-08-26  
 **Pre-release main**: `eed92c6c9be4048e66c8463033729370020935e6`  
-**Factory sidecar**: `f7bbacad925ab5b06c5c4520f7db7164536d877c`  
-**Autoarm run**: `32973803207`
+**Merged main**: `42f3c54865e989a01912ece56d2eb77f3f1f8ac7`
+**Factory run**: `32979548961`
+**Factory sidecar**: `763ff4cd079eca4c2c13eae4a82809539dfb2b21`
+**Autoarm run**: `32980657704`
+**Autoarm sidecar**: `a66e2f65750d88f087108a4e4541349c3d07395d`
+**KIS read-only smoke**: `32980668128`
+**KIS sidecar**: `efd2ee1c07e00dda796b97560b06878b753f2ad6`
 
 ## Independent Audit
 
@@ -59,13 +64,24 @@ the next independent priority after the calibrated gate is deployed.
 
 ## Post-release Evidence
 
-To be filled after merge and deployment:
-
-- merged main commit
-- deployment run and worker restart
-- new factory sidecar v3.1 family count and PBO
-- new autoarm sidecar action/rung/fundability
-- broker smoke order count and open-order count
+- PR #687 merged as `42f3c54865e989a01912ece56d2eb77f3f1f8ac7`.
+- Deploy run `32979548873` synchronized and enabled the systemd units, but the worker code swap was
+  correctly refused while the US market was open. The next allowed deploy was
+  `2026-08-26T20:00:00Z`; `auto-invest-deploy.timer` was scheduled for
+  `2026-08-26T21:00:00Z`. Therefore the worker restart is deferred, not verified complete.
+- Factory run `32979548961` completed on the merge commit and published gate version `3.1`,
+  752/752 unique raw rows, 17/17 reconstructed families, and current-family PBO `0.371429`.
+  The consumer independently produced contract `calibrated-family-entry-v3.1`, program false
+  admission bound `0.17` within budget `0.20`, and `eligible=false` with no selected candidate.
+- Autoarm run `32980657704` completed with `WAIT_EDGE`, rung `0 -> 0`, no sentinel change,
+  no pull request, no capital movement, and no order. It consumed the v3.1 contract and recomputed
+  the same 17-family count and PBO `0.371429`.
+- The same autoarm run measured NAV `$1456.75`, expected research capital `$145`, and
+  `fundability_passed=false`. One SPYM share at the preview limit `$90.24` exceeded the 50%
+  per-trade cap, so it was withheld as `SKIPPED_PER_TRADE_CAP`.
+- KIS read-only smoke run `32980668128` checked the merge commit in an isolated checkout and passed
+  5/5 live broker checks: cash `$934.27`, NAV `$1456.75`, existing external ORANY 28 shares,
+  recent order/execution rows 0, and open unfilled orders 0.
 
 ## Pre-release Verification
 

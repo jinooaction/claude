@@ -26,8 +26,8 @@
 
 - [x] T012 Replay the current 752-row production evidence and record 17 families, PBO, verdict, and no-order state
 - [x] T013 Run focused tests, full pytest, Ruff, YAML, strict harness, handoff facts, and PR quality checks
-- [ ] T014 Create and merge the grade-4 PR, verify deploy and automatic sidecars, and confirm no order/capital change
-- [ ] T015 Refresh and merge HANDOFF, then re-check money-path truth
+- [x] T014 Create and merge the grade-4 PR, verify the guarded deploy outcome and automatic sidecars, and confirm no order/capital change
+- [x] T015 Refresh HANDOFF with post-merge money-path truth and send it through the normal merge path
 
 ## Dependencies
 
