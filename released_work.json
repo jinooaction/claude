@@ -1,5 +1,5 @@
 {
-  "commit": "0365b3b1c5a5b88746ba5ff16e1f4c11d9b06eaf",
+  "commit": "0f1cc9f17f2ced113d72b3335562b8531b20a4cc",
   "overall_status": "OK",
   "released_work": [
     {
@@ -543,7 +543,7 @@
       "status": "released"
     }
   ],
-  "run_id": "33090458368",
+  "run_id": "33092264743",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -876,5 +876,5 @@
       "spec_id": "171-parallel-regime-edge-challenger"
     }
   ],
-  "timestamp_utc": "2026-08-27T15:55:20.481542Z"
+  "timestamp_utc": "2026-08-27T16:15:31.749293Z"
 }
