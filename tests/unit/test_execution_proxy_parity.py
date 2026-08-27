@@ -112,6 +112,11 @@ def test_low_correlation_pair_fails_closed() -> None:
     assert evidence.passed is False
     pair = next(row for row in evidence.pairs if row.signal_symbol == "IEF")
     assert pair.checks["return_correlation"] is False
+    assert not validate_execution_proxy_parity_evidence(
+        evidence.as_dict(),
+        expected_symbol_map=PREREGISTERED_EXECUTION_SYMBOL_MAP,
+        now=observed_at,
+    )
 
 
 def test_wrong_mapping_stale_data_and_mutation_are_rejected() -> None:
@@ -152,4 +157,8 @@ def test_old_market_data_fails_even_when_metrics_are_close() -> None:
 
     assert evidence.passed is False
     assert all(pair.checks["freshness"] is False for pair in evidence.pairs)
-
+    assert not validate_execution_proxy_parity_evidence(
+        evidence.as_dict(),
+        expected_symbol_map=PREREGISTERED_EXECUTION_SYMBOL_MAP,
+        now=observed_at,
+    )

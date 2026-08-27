@@ -29,11 +29,31 @@ shares cannot satisfy the same error bound.
 ## KIS Truth Boundary
 
 Branch workflow run `33022326070` ended with `setup_pending`: the guarded KIS workflow only
-executes code reachable from `origin/main`. Therefore it did not run the six live read-only
-history/quote tests and is not recorded as a KIS pass. The production KIS parity evidence,
-common-session canary, and 10% no-order fundability check remain release gates after merge.
+executes code reachable from `origin/main`, so that run was not recorded as a pass. PR #689
+then merged as `ecc84b93abda36efc5c104cf5894be664d70f15a`; deploy run `33024089353`
+completed successfully. Main KIS run `33024089368` executed all six live read-only tests and
+reported `6 passed in 28.52s`, including zero open unfilled orders.
+
+The fresh KIS smoke database passed all three pairs. It measured GLD->IAUM correlation
+0.999613 and tracking error 0.8614%, IEF->SPTI correlation 0.976618 and tracking error
+1.5799%, and SPY->SCHX correlation 0.996965 and tracking error 1.0015%.
+
+## Post-Merge Truth Audit
+
+Manual capital-ladder run `33024217264` exposed two defects that the initial release did not
+catch. Its long-lived production bar database contained older first-write-wins rows and
+therefore produced a failing parity document. More importantly, the consumer authenticated
+that internally consistent failure document but treated authentication as a passing gate,
+reporting `entry_execution_ready=true`. The separate strategy verdict remained `NO_EDGE`, so
+the decision was still `WAIT_EDGE`; capital stayed zero and no order was submitted.
+
+The follow-up fix requires the parity document itself to pass and computes each production
+parity audit from a clean temporary KIS database. The long-lived first-write-wins market-data
+store remains unchanged for strategy reproducibility.
 
 ## Capital and Orders
 
-No order was submitted and no capital was armed by these checks. First capital remains gated
-on a fresh, digest-validated KIS parity document and a passing whole-share fundability result.
+No order was submitted and no capital was armed by these checks. Run `33024217264` confirmed
+that 10% research capital, $145 on current NAV $1,456.75, is fundable with one IAUM and two
+SCHX shares. First capital remains blocked because the exact deployed strategy is `NO_EDGE`
+on the current anchored test and has only one forward observation.

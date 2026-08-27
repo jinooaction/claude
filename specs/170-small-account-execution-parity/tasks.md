@@ -25,8 +25,8 @@
 
 ## Phase 4: Verification and Release
 
-- [ ] T013 Run focused tests and a branch KIS read-only smoke; record actual parity and affordability evidence
-- [ ] T014 Run full pytest, Ruff, YAML, strict harness, HANDOFF facts, and PR quality checks
+- [x] T013 Run focused tests and a branch KIS read-only smoke; record actual parity and affordability evidence
+- [x] T014 Run full pytest, Ruff, YAML, strict harness, HANDOFF facts, and PR quality checks
 - [ ] T015 Create and merge the grade-4 PR, verify guarded deploy, rerun no-order parity/canary/fundability sidecars, and confirm capital/orders remain zero
 - [ ] T016 Refresh `HANDOFF.md` with the current strategy verdict, execution readiness, and remaining first-capital blockers through the normal merge path
 

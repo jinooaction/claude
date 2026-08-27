@@ -293,18 +293,23 @@ live_canary_backfill() {
 }
 
 execution_proxy_parity() {
+    local tmpdir parity_db
     require_repo
-    # 원본 신호 3종과 사전등록 대체 ETF 3종을 같은 KIS 조정 일봉 경로로 갱신한다.
+    # 장기 price_bars는 재현성을 위해 first-write-wins다. 기업행동 전 값이 남은 장기 DB가
+    # 동등성을 오염시키지 않도록 매 감사마다 깨끗한 임시 DB에서 KIS 일봉을 다시 받는다.
+    tmpdir="$(sudo -u "${APP_USER}" -H mktemp -d /tmp/auto-invest-proxy-parity.XXXXXX)"
+    trap 'rm -rf "${tmpdir}"' RETURN
+    parity_db="${tmpdir}/parity.db"
     # 백필 출력은 stderr로 보내 stdout에는 소비 가능한 단일 JSON만 남긴다.
     run_cli backfill-bars \
         --symbols SPY,IEF,GLD,SCHX,SPTI,IAUM \
         --min-bars 300 \
-        --db data/auto_invest.db \
+        --db "${parity_db}" \
         --env-file .env \
         --json >&2
     run_cli execution-proxy-parity \
         --portfolio deploy/canary-live-portfolio.toml \
-        --bars-db data/auto_invest.db \
+        --bars-db "${parity_db}" \
         --format json
 }
 

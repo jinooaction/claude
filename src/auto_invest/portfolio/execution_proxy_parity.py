@@ -311,7 +311,7 @@ def validate_execution_proxy_parity_evidence(
     expected_symbol_map: Mapping[str, str],
     now: datetime | None = None,
 ) -> bool:
-    """Recompute thresholds, mapping, freshness, and digest from serialized evidence."""
+    """Recompute the evidence and require both authenticity and a passing result."""
 
     if not isinstance(evidence, Mapping) or evidence.get("schema_version") != "1.0":
         return False
@@ -373,7 +373,7 @@ def validate_execution_proxy_parity_evidence(
         passed = all(recomputed_top.values())
         if dict(evidence["checks"]) != recomputed_top or evidence.get("passed") is not passed:
             return False
-        return evidence.get("evidence_digest") == _canonical_digest(evidence)
+        return passed and evidence.get("evidence_digest") == _canonical_digest(evidence)
     except (
         ArithmeticError,
         InvalidOperation,
