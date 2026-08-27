@@ -54,6 +54,8 @@ specs/171-parallel-regime-edge-challenger/
 6. Keep the challenger outside the live factory evidence until it passes this contract and a separate paper-forward phase.
 7. Treat zero, negative, missing, or non-numeric current capital as no live-strategy-performance query;
    only a positive numeric value may reach the read-only profit observer.
+8. Materialize empty JSON/stderr evidence for skipped probes and clear function-local RETURN traps
+   after explicit success-path cleanup so later function returns cannot reuse expired locals.
 
 ## Implementation Order
 
@@ -65,3 +67,5 @@ specs/171-parallel-regime-edge-challenger/
 6. Run negative/positive/time-shift/cost controls and full repository verification.
 7. Merge, verify the dry-run worker and sidecars, and refresh HANDOFF through a separate PR if needed.
 8. Re-run the zero-capital autoarm path and confirm it emits neither a false capital error nor any order.
+9. Treat a workflow step exit caused by missing skipped-probe files or leaked cleanup traps as a failed
+   production verification, fix it, and repeat the full no-order run.

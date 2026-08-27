@@ -294,6 +294,7 @@ live_canary_backfill() {
 
 execution_proxy_parity() {
     local parity_db
+    local parity_status=0
     require_repo
     # 장기 price_bars는 재현성을 위해 first-write-wins다. 기업행동 전 값이 남은 장기 DB가
     # 동등성을 오염시키지 않도록 매 감사마다 깨끗한 임시 DB에서 KIS 일봉을 다시 받는다.
@@ -310,11 +311,16 @@ execution_proxy_parity() {
         --min-bars 300 \
         --db "${parity_db}" \
         --env-file .env \
-        --json >&2
-    run_cli execution-proxy-parity \
-        --portfolio deploy/canary-live-portfolio.toml \
-        --bars-db "${parity_db}" \
-        --format json
+        --json >&2 || parity_status=$?
+    if [[ "${parity_status}" -eq 0 ]]; then
+        run_cli execution-proxy-parity \
+            --portfolio deploy/canary-live-portfolio.toml \
+            --bars-db "${parity_db}" \
+            --format json || parity_status=$?
+    fi
+    rm -f "${parity_db}" "${parity_db}-shm" "${parity_db}-wal"
+    trap - RETURN
+    return "${parity_status}"
 }
 
 live_canary_preview() {

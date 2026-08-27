@@ -42,8 +42,11 @@
 - [x] T021 Record the successful proxy-parity production rerun and the unrelated zero-capital error discovered in its log
 - [x] T022 Add a regression contract requiring a positive numeric capital before live strategy performance observation
 - [x] T023 Implement the zero-capital no-op without changing ladder decisions, capital, or order behavior
-- [ ] T024 Re-run the zero-capital production autoarm and confirm no false capital error, no capital change, and no orders
-- [ ] T025 Complete the final production evidence and HANDOFF closeout through the normal merge path
+- [x] T024 Re-run zero-capital production autoarm and record the missing stderr file and leaked RETURN trap failures
+- [x] T025 Add regression contracts for skipped-probe evidence files and success-path trap cleanup
+- [x] T026 Implement both lifecycle fixes without changing ladder decisions, capital, or order behavior
+- [ ] T027 Re-run production autoarm through decision and sidecar publication with no false errors or orders
+- [ ] T028 Complete the final production evidence and HANDOFF closeout through the normal merge path
 
 ## Dependencies
 
@@ -52,4 +55,4 @@
 - T009-T011 block T012-T013.
 - T012-T013 block T014-T016.
 - T014-T018 block merge; T019 blocks handoff.
-- T021 blocks T022-T023; T023 blocks T024; T024 blocks T025.
+- T021 blocks T022-T023; T023 blocks T024; T024 blocks T025-T026; T026 blocks T027; T027 blocks T028.

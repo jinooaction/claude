@@ -360,6 +360,8 @@ jobs:
           echo "--- live growth ---"; cat /tmp/live_growth.json; cat /tmp/live_growth.err
           # 전략 범위 체결 수는 NAV 성장 시계열과 별도 계약이다. 현재 단의 자본으로
           # 읽기 전용 성과를 측정해 첫 체결 전 오래된 무장 회수에 사용한다.
+          rm -f /tmp/live_performance.json
+          : > /tmp/live_performance.err
           if awk -v capital="${CAPITAL:-0}" 'BEGIN { exit !(capital + 0 > 0) }'; then
             ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
                 -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
