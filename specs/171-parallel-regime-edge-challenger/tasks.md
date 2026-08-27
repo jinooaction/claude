@@ -7,22 +7,22 @@
 - [x] T001 Record the root-cause split, non-goals, safety boundary, and measurable completion criteria in `spec.md`
 - [x] T002 Freeze the 16 candidates, data split, costs, selection order, gates, and multiplicity budget in `contracts/preregistered-challenger.json`
 - [x] T003 Record official token guidance and strategy research basis in `research.md`
-- [ ] T004 Commit and push the preregistration before downloading or evaluating production data
+- [x] T004 Commit and push the preregistration before downloading or evaluating production data
 
 ## Phase 2: Test-First Token Liveness Repair
 
-- [ ] T005 [US1] Add a CLI test proving explicit token cache overrides the temporary DB-adjacent default
-- [ ] T006 [US1] Add observer contract tests requiring temporary bars DB plus shared `data/kis_token.json`
-- [ ] T007 [US1] Implement `--token-cache` and wire only the parity observer to the shared token cache
-- [ ] T008 [US1] Verify token refresh failure remains closed and no token value is printed or persisted to the temporary directory
+- [x] T005 [US1] Add a CLI test proving explicit token cache overrides the temporary DB-adjacent default
+- [x] T006 [US1] Add observer contract tests requiring temporary bars DB plus shared `data/kis_token.json`
+- [x] T007 [US1] Implement `--token-cache` and wire only the parity observer to the shared token cache
+- [x] T008 [US1] Verify token refresh failure remains closed and no token value is printed or persisted to the temporary directory
 
 ## Phase 3: Test-First Challenger
 
-- [ ] T009 [US2] Add exact-grid, fingerprint, no-look-ahead, weight-sum, turnover, and stress-trigger tests
-- [ ] T010 [US2] Add fixed-split, deterministic-selection, PBO/PSR, recent-segment, and cost symmetry tests
-- [ ] T011 [US3] Add result-contract mutation tests and invariant no-promotion/no-order assertions
-- [ ] T012 [US2] Implement the deterministic 16-candidate evaluator in `src/auto_invest/analytics/regime_adaptive_challenger.py`
-- [ ] T013 [US3] Implement the no-order JSON/Markdown probe and committed-contract validator
+- [x] T009 [US2] Add exact-grid, fingerprint, no-look-ahead, weight-sum, turnover, and stress-trigger tests
+- [x] T010 [US2] Add fixed-split, deterministic-selection, PBO/PSR, recent-segment, and cost symmetry tests
+- [x] T011 [US3] Add result-contract mutation tests and invariant no-promotion/no-order assertions
+- [x] T012 [US2] Implement the deterministic 16-candidate evaluator in `src/auto_invest/analytics/regime_adaptive_challenger.py`
+- [x] T013 [US3] Implement the no-order JSON/Markdown probe and committed-contract validator
 
 ## Phase 4: Evidence and Controls
 

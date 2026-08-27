@@ -90,6 +90,11 @@ def _require_clean_migrations(db_path: Path, *, allow_apply: bool) -> None:
         conn.close()
 
 
+def _resolve_backfill_token_cache(db_path: Path, token_cache: Path | None) -> Path:
+    """Keep the legacy DB-adjacent default while allowing ephemeral bars databases."""
+    return token_cache if token_cache is not None else db_path.parent / "kis_token.json"
+
+
 @app.command("telegram-alerts")
 def telegram_alerts(
     db_path: Path = typer.Option(
@@ -3438,6 +3443,11 @@ def backfill_bars_cmd(
     db_path: Path = typer.Option(
         Path("data/auto_invest.db"), "--db", help="SQLite path; bars go to price_bars."
     ),
+    token_cache: Path | None = typer.Option(
+        None,
+        "--token-cache",
+        help="Optional shared KIS token cache; defaults beside --db.",
+    ),
     env_file: Path = typer.Option(None, "--env-file", help=".env with KIS_APP_KEY/KIS_APP_SECRET."),
     base_url: str = typer.Option(
         "https://openapi.koreainvestment.com:9443", "--base-url", help="KIS REST base URL."
@@ -3530,7 +3540,7 @@ def backfill_bars_cmd(
                 base_url=base_url,
                 app_key=app_key,
                 app_secret=app_secret,
-                cache_path=db_path.parent / "kis_token.json",
+                cache_path=_resolve_backfill_token_cache(db_path, token_cache),
             )
             client = ResilientClient(
                 inner,
@@ -4599,9 +4609,7 @@ def rebalance_once_cmd(
             typer.echo(f"Treasury evidence validation failed before broker call: {exc}", err=True)
             _exit(65)
     elif treasury_evidence is not None:
-        typer.echo(
-            "--treasury-evidence requires [portfolio.treasury_carry_policy]", err=True
-        )
+        typer.echo("--treasury-evidence requires [portfolio.treasury_carry_policy]", err=True)
         _exit(65)
 
     credit_snapshot: dict[str, object] | None = None
@@ -6601,9 +6609,7 @@ def ladder_decide_cmd(
             account_nav = None
     fundability_preview = _read_json(fundability_preview_json)
     fundability_payload = (
-        fundability_preview.get("fundability")
-        if isinstance(fundability_preview, dict)
-        else None
+        fundability_preview.get("fundability") if isinstance(fundability_preview, dict) else None
     )
     expected_research_capital = (
         rung_capital_usd(1, account_nav) if account_nav is not None and account_nav > 0 else None
@@ -6636,10 +6642,7 @@ def ladder_decide_cmd(
     factory_contract_ready = factory_contract_ready and entry_execution_ready
     if isinstance(deployment_match, dict):
         ready = deployment_match.get("exploration_canary_ready") is True
-        canary_pass = (
-            isinstance(hardened_canary, dict)
-            and hardened_canary.get("verdict") == "PASS"
-        )
+        canary_pass = isinstance(hardened_canary, dict) and hardened_canary.get("verdict") == "PASS"
         exploration_verdict = {
             "verdict": (
                 "EXPLORATION_CANARY_READY"

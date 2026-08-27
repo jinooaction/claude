@@ -305,6 +305,7 @@ execution_proxy_parity() {
         --symbols SPY,IEF,GLD,SCHX,SPTI,IAUM \
         --min-bars 300 \
         --db "${parity_db}" \
+        --token-cache data/kis_token.json \
         --env-file .env \
         --json >&2
     run_cli execution-proxy-parity \
