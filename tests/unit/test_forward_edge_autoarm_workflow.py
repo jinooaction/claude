@@ -63,6 +63,19 @@ def test_ladder_decide_consumes_anchored_verdict() -> None:
     assert "--validated-portfolio deploy/global-trend-fixed-portfolio.toml" in text
 
 
+def test_execution_proxy_parity_uses_a_clean_ephemeral_database() -> None:
+    helper = _helper_text()
+    start = helper.index("execution_proxy_parity()")
+    end = helper.index("\nlive_canary_preview()", start)
+    function = helper[start:end]
+
+    assert "mktemp -d /tmp/auto-invest-proxy-parity.XXXXXX" in function
+    assert "trap 'rm -rf \"${tmpdir}\"' RETURN" in function
+    assert '--db "${parity_db}"' in function
+    assert '--bars-db "${parity_db}"' in function
+    assert "--db data/auto_invest.db" not in function
+
+
 def test_exploration_canary_is_isolated_and_places_no_orders() -> None:
     text = _text()
     assert "Harden exact deployed candidate before exploration capital" in text
