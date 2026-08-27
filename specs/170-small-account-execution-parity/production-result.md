@@ -51,9 +51,24 @@ The follow-up fix requires the parity document itself to pass and computes each 
 parity audit from a clean temporary KIS database. The long-lived first-write-wins market-data
 store remains unchanged for strategy reproducibility.
 
+PR #690 merged that correction as `0e8db900947fcfb510a22caee507ae270d321fb3`.
+Deploy run `33025942987` completed successfully. Main KIS run `33025962368` then
+executed all six read-only tests and reported `6 passed in 26.67s`, with zero recent or open
+unfilled orders. The clean production parity audit passed all three pairs: GLD->IAUM
+correlation 0.999651 and tracking error 0.8215%, IEF->SPTI correlation 0.976832 and tracking
+error 1.5789%, and SPY->SCHX correlation 0.996963 and tracking error 1.0010%.
+
+Final capital-ladder run `33026038166` consumed that passing document rather than merely
+authenticating it. It reported `execution_proxy_parity_passed=true`,
+`entry_execution_ready=true`, a hardened canary with 45 common sessions and zero audit
+integrity holes, and `fundability_passed=true`. The two active legs remained one IAUM share
+and two SCHX shares at $145 research capital.
+
 ## Capital and Orders
 
-No order was submitted and no capital was armed by these checks. Run `33024217264` confirmed
-that 10% research capital, $145 on current NAV $1,456.75, is fundable with one IAUM and two
-SCHX shares. First capital remains blocked because the exact deployed strategy is `NO_EDGE`
-on the current anchored test and has only one forward observation.
+No order was submitted and no capital was armed by these checks. Final run `33026038166`
+returned `WAIT_EDGE`, rung 0 -> 0, on current NAV $1,456.75. Ten-percent research capital,
+$145, is fundable with one IAUM and two SCHX shares, but first capital remains blocked because
+the exact deployed strategy is `NO_EDGE` on the current anchored test: it beat buy-and-hold in
+zero of three walk-forward segments, its mean Sharpe was below buy-and-hold, and it still has
+only one forward observation.
