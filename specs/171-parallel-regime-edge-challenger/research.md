@@ -29,9 +29,10 @@ but do not justify assuming it works.
 ## Token Liveness Decision
 
 KIS officially recommends reusing an unexpired access token and renewing it only when needed. The
-parity observer's temporary database must therefore not imply a temporary token cache. Add an
-explicit CLI token-cache option, preserve the old default for other callers, and pass the worker's
-shared `data/kis_token.json` only from this observer.
+parity observer's temporary database must therefore not imply a temporary token cache. The CLI has
+an explicit token-cache option, but the production helper is synchronized before a market-hours
+deferred package deploy. Therefore the observer locates its random ephemeral DB directly under
+`data/`; both old and new CLIs resolve the existing `data/kis_token.json` without a new option.
 
 - KIS official API token guidance: https://apiportal.koreainvestment.com/provider-doc4
 

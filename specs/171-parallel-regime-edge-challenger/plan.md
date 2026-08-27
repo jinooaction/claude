@@ -45,7 +45,8 @@ specs/171-parallel-regime-edge-challenger/
 
 ## Design Decisions
 
-1. Add `--token-cache` without changing the legacy default, limiting operational impact to explicit callers.
+1. Add `--token-cache` without changing the legacy default. Keep the production observer compatible
+   with a one-version-old CLI by placing only its random ephemeral DB directly under `data/`.
 2. Rebuild total-return levels from existing monthly factors; period t weights use levels ending at t-1.
 3. Define one-way turnover as half the absolute change across stock, bond, gold, and cash weights.
 4. Charge identical costs to challenger and incumbent so a low-turnover strategy does not receive a hidden advantage.

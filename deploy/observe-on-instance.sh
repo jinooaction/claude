@@ -293,19 +293,22 @@ live_canary_backfill() {
 }
 
 execution_proxy_parity() {
-    local tmpdir parity_db
+    local parity_db
     require_repo
     # 장기 price_bars는 재현성을 위해 first-write-wins다. 기업행동 전 값이 남은 장기 DB가
     # 동등성을 오염시키지 않도록 매 감사마다 깨끗한 임시 DB에서 KIS 일봉을 다시 받는다.
-    tmpdir="$(sudo -u "${APP_USER}" -H mktemp -d /tmp/auto-invest-proxy-parity.XXXXXX)"
-    trap 'rm -rf "${tmpdir}"' RETURN
-    parity_db="${tmpdir}/parity.db"
+    # DB를 data/ 바로 아래에 두면 장중 배포 연기로 CLI가 한 버전 뒤여도 기존 규칙에 따라
+    # 같은 디렉터리의 data/kis_token.json을 재사용한다. helper/CLI 배포 시차에 안전하다.
+    parity_db="$(
+        sudo -u "${APP_USER}" -H \
+            mktemp "${REPO}/data/auto-invest-proxy-parity.XXXXXX.db"
+    )"
+    trap 'rm -f "${parity_db}" "${parity_db}-shm" "${parity_db}-wal"' RETURN
     # 백필 출력은 stderr로 보내 stdout에는 소비 가능한 단일 JSON만 남긴다.
     run_cli backfill-bars \
         --symbols SPY,IEF,GLD,SCHX,SPTI,IAUM \
         --min-bars 300 \
         --db "${parity_db}" \
-        --token-cache data/kis_token.json \
         --env-file .env \
         --json >&2
     run_cli execution-proxy-parity \
