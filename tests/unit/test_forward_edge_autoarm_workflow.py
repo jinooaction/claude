@@ -69,13 +69,12 @@ def test_execution_proxy_parity_uses_a_clean_ephemeral_database() -> None:
     end = helper.index("\nlive_canary_preview()", start)
     function = helper[start:end]
 
-    assert "mktemp -d /tmp/auto-invest-proxy-parity.XXXXXX" in function
-    assert "trap 'rm -rf \"${tmpdir}\"' RETURN" in function
+    assert 'mktemp "${REPO}/data/auto-invest-proxy-parity.XXXXXX.db"' in function
+    assert 'rm -f "${parity_db}" "${parity_db}-shm" "${parity_db}-wal"' in function
     assert '--db "${parity_db}"' in function
     assert '--bars-db "${parity_db}"' in function
-    assert "--token-cache data/kis_token.json" in function
+    assert "--token-cache" not in function
     assert "--db data/auto_invest.db" not in function
-    assert '--token-cache "${tmpdir}' not in function
 
 
 def test_exploration_canary_is_isolated_and_places_no_orders() -> None:
