@@ -69,6 +69,10 @@ def test_zero_capital_skips_live_strategy_performance_observation() -> None:
     assert "capital + 0 > 0" in text
     assert 'if [[ -n "${CAPITAL}" ]]; then' not in text
     assert "live-canary-profit ${CAPITAL}" in text
+    assert ": > /tmp/live_performance.err" in text
+    assert text.index(": > /tmp/live_performance.err") < text.index(
+        'if awk -v capital="${CAPITAL:-0}"'
+    )
 
 
 def test_execution_proxy_parity_uses_a_clean_ephemeral_database() -> None:
@@ -79,6 +83,11 @@ def test_execution_proxy_parity_uses_a_clean_ephemeral_database() -> None:
 
     assert 'mktemp "${REPO}/data/auto-invest-proxy-parity.XXXXXX.db"' in function
     assert 'rm -f "${parity_db}" "${parity_db}-shm" "${parity_db}-wal"' in function
+    assert 'trap - RETURN' in function
+    assert (
+        'rm -f "${parity_db}" "${parity_db}-shm" "${parity_db}-wal"\n'
+        '    trap - RETURN'
+    ) in function
     assert '--db "${parity_db}"' in function
     assert '--bars-db "${parity_db}"' in function
     assert "--token-cache" not in function
