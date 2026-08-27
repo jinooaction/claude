@@ -34,8 +34,8 @@
 ## Phase 5: Verification and Release
 
 - [x] T018 Run full pytest, Ruff, JSON/YAML checks, strict harness, HANDOFF facts, and PR quality checks
-- [ ] T019 Create and merge the grade-4 PR, then verify guarded dry-run deployment and current sidecars
-- [ ] T020 Refresh `HANDOFF.md` with current strategy verdict, token liveness, and next observation through the normal merge path
+- [x] T019 Create and merge the grade-4 PR, then verify guarded dry-run deployment and current sidecars
+- [x] T020 Refresh `HANDOFF.md` with current strategy verdict, token liveness, and next observation through the normal merge path
 
 ## Phase 6: Post-Merge Zero-Capital Truthfulness
 
@@ -45,8 +45,8 @@
 - [x] T024 Re-run zero-capital production autoarm and record the missing stderr file and leaked RETURN trap failures
 - [x] T025 Add regression contracts for skipped-probe evidence files and success-path trap cleanup
 - [x] T026 Implement both lifecycle fixes without changing ladder decisions, capital, or order behavior
-- [ ] T027 Re-run production autoarm through decision and sidecar publication with no false errors or orders
-- [ ] T028 Complete the final production evidence and HANDOFF closeout through the normal merge path
+- [x] T027 Re-run production autoarm through decision and sidecar publication with no false errors or orders
+- [x] T028 Complete the final production evidence and HANDOFF closeout through the normal merge path
 
 ## Dependencies
 
