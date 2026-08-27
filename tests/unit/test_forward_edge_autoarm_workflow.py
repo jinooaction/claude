@@ -73,7 +73,9 @@ def test_execution_proxy_parity_uses_a_clean_ephemeral_database() -> None:
     assert "trap 'rm -rf \"${tmpdir}\"' RETURN" in function
     assert '--db "${parity_db}"' in function
     assert '--bars-db "${parity_db}"' in function
+    assert "--token-cache data/kis_token.json" in function
     assert "--db data/auto_invest.db" not in function
+    assert '--token-cache "${tmpdir}' not in function
 
 
 def test_exploration_canary_is_isolated_and_places_no_orders() -> None:
@@ -92,7 +94,7 @@ def test_factory_winner_is_assigned_disarmed_before_exact_hardening() -> None:
     assert '[[ "${ARMED:-false}" == "false" ]]' in text
     assert "scripts/factory_evidence_gate.py" in text
     assert "FACTORY_CONTRACT_ELIGIBLE" in text
-    assert 'candidate_count // 0' not in text
+    assert "candidate_count // 0" not in text
     assert "selected_strategy_fingerprint" in text
     assert "deploy/canary-live-portfolio.toml" in text
     assert "steps.factory_assignment.outputs.changed != 'true'" in text

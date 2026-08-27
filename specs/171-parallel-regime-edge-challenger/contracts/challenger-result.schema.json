@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://auto-invest.local/schemas/regime-edge-result-v1.json",
+  "title": "Regime adaptive challenger result",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "family_id",
+    "candidate_count",
+    "selected_candidate_id",
+    "verdict",
+    "gates",
+    "safety"
+  ],
+  "properties": {
+    "schema_version": {"const": "regime-edge-result-v1"},
+    "family_id": {"const": "regime-adaptive-stock-bond-joint-weakness-v1"},
+    "candidate_count": {"const": 16},
+    "selected_candidate_id": {"type": "string", "minLength": 1},
+    "verdict": {"enum": ["RESEARCH_EDGE", "NO_RESEARCH_EDGE"]},
+    "gates": {"type": "object", "additionalProperties": {"type": "boolean"}},
+    "safety": {
+      "type": "object",
+      "required": ["promotion_allowed", "orders_submitted", "capital_changed"],
+      "properties": {
+        "promotion_allowed": {"const": false},
+        "orders_submitted": {"const": 0},
+        "capital_changed": {"const": false}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": true
+}

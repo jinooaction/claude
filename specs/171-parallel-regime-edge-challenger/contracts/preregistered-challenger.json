@@ -1,0 +1,53 @@
+{
+  "schema_version": "regime-edge-preregistration-v1",
+  "family_id": "regime-adaptive-stock-bond-joint-weakness-v1",
+  "incumbent_id": "globalfixed-ensemble-3-6-9-12",
+  "completed_candidate_id": "candidate-parallel-edge-challenger-0520a80c0525",
+  "candidate_grid": {
+    "correlation_window_months": [12, 24],
+    "correlation_threshold": [0.0, 0.2],
+    "joint_weakness_lookback_months": [3, 6],
+    "defensive_action": ["cash", "gold"]
+  },
+  "candidate_count": 16,
+  "split": {
+    "development_end": "2006-12",
+    "embargo_month": "2007-01",
+    "holdout_start": "2007-02"
+  },
+  "selection_order": [
+    "development_sharpe_desc",
+    "development_cagr_desc",
+    "development_max_drawdown_asc",
+    "candidate_id_asc"
+  ],
+  "cost_model": {
+    "annual_fixed_bps": 50,
+    "principal_one_way_turnover_bps": 10,
+    "diagnostic_one_way_turnover_bps": [25, 50]
+  },
+  "gates": {
+    "maximum_family_pbo": 0.25,
+    "minimum_holdout_active_psr": 0.95,
+    "candidate_cagr_above_incumbent": true,
+    "candidate_sharpe_above_incumbent": true,
+    "candidate_max_drawdown_not_above_incumbent": true,
+    "minimum_recent_segment_sharpe_wins": 2,
+    "recent_segment_count": 3,
+    "latest_window_months": 60,
+    "latest_window_candidate_sharpe_above_incumbent": true,
+    "maximum_annual_one_way_turnover": 4.0
+  },
+  "multiplicity": {
+    "existing_research_family_count": 17,
+    "resulting_research_family_count": 18,
+    "calibrated_null_admission_per_family": 0.01,
+    "program_false_acceptance_budget": 0.18,
+    "maximum_program_false_acceptance_budget": 0.2
+  },
+  "safety": {
+    "promotion_allowed": false,
+    "orders_submitted": 0,
+    "capital_changed": false
+  }
+}
