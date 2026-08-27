@@ -1,5 +1,5 @@
 {
-  "commit": "305b6309bb7732f9a5c46239cdc85320ccec4971",
+  "commit": "598be9652beb0be52a3f76ab51a5aa5ad6195a2a",
   "overall_status": "OK",
   "released_work": [
     {
@@ -543,7 +543,7 @@
       "status": "released"
     }
   ],
-  "run_id": "33030254035",
+  "run_id": "33087984940",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -870,7 +870,11 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "166-family-complete-v3-fundability"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "171-parallel-regime-edge-challenger"
     }
   ],
-  "timestamp_utc": "2026-08-27T01:29:42.468183Z"
+  "timestamp_utc": "2026-08-27T15:28:34.319412Z"
 }
