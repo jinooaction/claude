@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-08-27T16:32:59.955262Z)
+# 완료 후보 소비 장부 (as of 2026-08-27T16:51:24.641384Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -8,8 +8,8 @@
 | 항목 | 값 |
 |------|-----|
 | overall_status | OK |
-| released_count | 60 |
-| scanned_specs | 113 |
+| released_count | 61 |
+| scanned_specs | 114 |
 
 ## 완료 후보
 
@@ -65,6 +65,7 @@
 | candidate-macro-growth-discovery | released | 088-autonomous-macro-growth-discovery | specs/088-autonomous-macro-growth-discovery/spec.md | completed_candidate_id |
 | candidate-operator-report-liveness-contract | released | 118-operator-report-liveness-contract | specs/118-operator-report-liveness-contract/spec.md | completed_candidate_id |
 | candidate-order-submission-uncertainty-recovery | released | 112-order-submission-uncertainty-recovery | specs/112-order-submission-uncertainty-recovery/spec.md | completed_candidate_id |
+| candidate-parallel-edge-challenger-0520a80c0525 | released | 171-parallel-regime-edge-challenger | specs/171-parallel-regime-edge-challenger/contracts/preregistered-challenger.json | completed_candidate_id |
 | candidate-pr-merge-evidence-liveness-contract | released | 108-pr-merge-evidence-liveness-contract | specs/108-pr-merge-evidence-liveness-contract/spec.md | completed_candidate_id |
 | candidate-profit-evidence-engine-root-redesign | released | 138-profit-evidence-engine | specs/138-profit-evidence-engine/spec.md | completed_candidate_id |
 | candidate-promote-readiness-observe-gateway | released | 121-promote-readiness-observe-gateway | specs/121-promote-readiness-observe-gateway/spec.md | completed_candidate_id |
@@ -130,7 +131,6 @@
 | 159-paired-forward-edge-gate | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 160-forward-paper-ledger-integrity | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 166-family-complete-v3-fundability | 체크박스 작업이 없거나 완료되지 않았습니다. |
-| 171-parallel-regime-edge-challenger | 체크박스 작업이 없거나 완료되지 않았습니다. |
 
 ## 안전 경계
 
@@ -147,7 +147,7 @@
 
 ```json
 {
-  "commit": "32807f4f42d748c82a56aa22ceb79f45f3050db0",
+  "commit": "320cf14a6334f512e42987fe188e0ac7d5111be2",
   "overall_status": "OK",
   "released_work": [
     {
@@ -601,6 +601,15 @@
       "status": "released"
     },
     {
+      "candidate_id": "candidate-parallel-edge-challenger-0520a80c0525",
+      "entry_id": "released-6d7ec810a6e6",
+      "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "source_field": "completed_candidate_id",
+      "source_file": "specs/171-parallel-regime-edge-challenger/contracts/preregistered-challenger.json",
+      "spec_id": "171-parallel-regime-edge-challenger",
+      "status": "released"
+    },
+    {
       "candidate_id": "candidate-pr-merge-evidence-liveness-contract",
       "entry_id": "released-c0e85509ee97",
       "reason_ko": "완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
@@ -815,7 +824,8 @@
     "164-independent-options-variance-risk-premium",
     "165-options-selection-objective-repair",
     "167-calibrated-research-entry",
-    "170-small-account-execution-parity"
+    "170-small-account-execution-parity",
+    "171-parallel-regime-edge-challenger"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -1018,12 +1028,8 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "166-family-complete-v3-fundability"
-    },
-    {
-      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "171-parallel-regime-edge-challenger"
     }
   ],
-  "timestamp_utc": "2026-08-27T16:32:59.955262Z"
+  "timestamp_utc": "2026-08-27T16:51:24.641384Z"
 }
 ```
