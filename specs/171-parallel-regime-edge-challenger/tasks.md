@@ -29,13 +29,21 @@
 - [x] T014 Run the preregistered production-data probe once and record the complete result
 - [x] T015 Run negative, planted-positive, one-month-shift, and higher-cost controls
 - [x] T016 Explain whether failure comes from family PBO, holdout evidence, economics, recency, turnover, data, or implementation
-- [ ] T017 Re-run the production proxy-parity observer with the shared token and confirm no orders/capital changes
+- [x] T017 Re-run the production proxy-parity observer with the shared token and confirm no orders/capital changes
 
 ## Phase 5: Verification and Release
 
-- [ ] T018 Run full pytest, Ruff, JSON/YAML checks, strict harness, HANDOFF facts, and PR quality checks
+- [x] T018 Run full pytest, Ruff, JSON/YAML checks, strict harness, HANDOFF facts, and PR quality checks
 - [ ] T019 Create and merge the grade-4 PR, then verify guarded dry-run deployment and current sidecars
 - [ ] T020 Refresh `HANDOFF.md` with current strategy verdict, token liveness, and next observation through the normal merge path
+
+## Phase 6: Post-Merge Zero-Capital Truthfulness
+
+- [x] T021 Record the successful proxy-parity production rerun and the unrelated zero-capital error discovered in its log
+- [x] T022 Add a regression contract requiring a positive numeric capital before live strategy performance observation
+- [x] T023 Implement the zero-capital no-op without changing ladder decisions, capital, or order behavior
+- [ ] T024 Re-run the zero-capital production autoarm and confirm no false capital error, no capital change, and no orders
+- [ ] T025 Complete the final production evidence and HANDOFF closeout through the normal merge path
 
 ## Dependencies
 
@@ -44,3 +52,4 @@
 - T009-T011 block T012-T013.
 - T012-T013 block T014-T016.
 - T014-T018 block merge; T019 blocks handoff.
+- T021 blocks T022-T023; T023 blocks T024; T024 blocks T025.

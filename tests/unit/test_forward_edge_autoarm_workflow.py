@@ -63,6 +63,14 @@ def test_ladder_decide_consumes_anchored_verdict() -> None:
     assert "--validated-portfolio deploy/global-trend-fixed-portfolio.toml" in text
 
 
+def test_zero_capital_skips_live_strategy_performance_observation() -> None:
+    text = _text()
+    assert 'awk -v capital="${CAPITAL:-0}"' in text
+    assert "capital + 0 > 0" in text
+    assert 'if [[ -n "${CAPITAL}" ]]; then' not in text
+    assert "live-canary-profit ${CAPITAL}" in text
+
+
 def test_execution_proxy_parity_uses_a_clean_ephemeral_database() -> None:
     helper = _helper_text()
     start = helper.index("execution_proxy_parity()")
