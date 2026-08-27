@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-08-27T00:10:44.411789Z)
+# 완료 후보 소비 장부 (as of 2026-08-27T01:29:42.468183Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -9,7 +9,7 @@
 |------|-----|
 | overall_status | OK |
 | released_count | 60 |
-| scanned_specs | 112 |
+| scanned_specs | 113 |
 
 ## 완료 후보
 
@@ -130,7 +130,6 @@
 | 159-paired-forward-edge-gate | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 160-forward-paper-ledger-integrity | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 166-family-complete-v3-fundability | 체크박스 작업이 없거나 완료되지 않았습니다. |
-| 170-small-account-execution-parity | 체크박스 작업이 없거나 완료되지 않았습니다. |
 
 ## 안전 경계
 
@@ -147,7 +146,7 @@
 
 ```json
 {
-  "commit": "0e8db900947fcfb510a22caee507ae270d321fb3",
+  "commit": "305b6309bb7732f9a5c46239cdc85320ccec4971",
   "overall_status": "OK",
   "released_work": [
     {
@@ -814,7 +813,8 @@
     "163-independent-energy-cross-market",
     "164-independent-options-variance-risk-premium",
     "165-options-selection-objective-repair",
-    "167-calibrated-research-entry"
+    "167-calibrated-research-entry",
+    "170-small-account-execution-parity"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -1017,12 +1017,8 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "166-family-complete-v3-fundability"
-    },
-    {
-      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "170-small-account-execution-parity"
     }
   ],
-  "timestamp_utc": "2026-08-27T00:10:44.411789Z"
+  "timestamp_utc": "2026-08-27T01:29:42.468183Z"
 }
 ```
