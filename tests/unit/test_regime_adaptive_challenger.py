@@ -192,6 +192,12 @@ def test_evaluation_is_deterministic_time_separated_and_never_promotes() -> None
         "orders_submitted": 0,
         "capital_changed": False,
     }
+    concentration = first["post_result_activation_concentration"]
+    assert concentration["diagnostic_status"] == "POST_RESULT_NOT_A_GATE"
+    assert concentration["stress_months"] >= concentration["stress_episodes"]
+    assert concentration["months_with_nonzero_gross_difference"] == (
+        concentration["positive_difference_months"] + concentration["negative_difference_months"]
+    )
     assert validate_report_payload(first, contract) is True
 
 

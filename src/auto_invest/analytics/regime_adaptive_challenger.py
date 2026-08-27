@@ -338,6 +338,54 @@ def _take(values: Sequence[float], indexes: Sequence[int]) -> list[float]:
     return [values[index] for index in indexes]
 
 
+def _activation_concentration(path: StrategyPath, holdout_indexes: Sequence[int]) -> dict[str, Any]:
+    stress_indexes = [index for index in holdout_indexes if path.stress_active[index]]
+    episodes: list[list[int]] = []
+    for index in stress_indexes:
+        if not episodes or index > episodes[-1][-1] + 1:
+            episodes.append([index])
+        else:
+            episodes[-1].append(index)
+    changed: list[dict[str, Any]] = []
+    for index in stress_indexes:
+        active_return = path.gross_factors[index] / path.incumbent_gross_factors[index] - 1.0
+        if abs(active_return) > 1e-12:
+            changed.append(
+                {
+                    "date": path.dates[index],
+                    "gross_active_return": round(active_return, 8),
+                }
+            )
+    total_absolute = sum(abs(float(item["gross_active_return"])) for item in changed)
+    largest_share = (
+        None
+        if total_absolute <= 0.0
+        else max(abs(float(item["gross_active_return"])) for item in changed) / total_absolute
+    )
+    return {
+        "diagnostic_status": "POST_RESULT_NOT_A_GATE",
+        "stress_months": len(stress_indexes),
+        "stress_episodes": len(episodes),
+        "episodes": [
+            {
+                "start": path.dates[episode[0]],
+                "end": path.dates[episode[-1]],
+                "months": len(episode),
+            }
+            for episode in episodes
+        ],
+        "months_with_nonzero_gross_difference": len(changed),
+        "positive_difference_months": sum(
+            float(item["gross_active_return"]) > 0.0 for item in changed
+        ),
+        "negative_difference_months": sum(
+            float(item["gross_active_return"]) < 0.0 for item in changed
+        ),
+        "largest_absolute_effect_share": _float_or_none(largest_share),
+        "changed_months": changed,
+    }
+
+
 def _delayed_holdout_factors(
     path: StrategyPath,
     holdout_indexes: Sequence[int],
@@ -571,6 +619,9 @@ def evaluate_regime_challenger(
         },
         "cost_model": dict(costs),
         "cost_diagnostics": cost_diagnostics,
+        "post_result_activation_concentration": _activation_concentration(
+            selected_path, holdout_indexes
+        ),
         "diagnostic_controls": {
             "negative_control_incumbent_vs_itself_psr": None,
             "negative_control_passed": False,
@@ -639,6 +690,7 @@ def report_markdown(payload: Mapping[str, Any]) -> str:
     incumbent = holdout["incumbent"]
     recent = payload["recent_three_segments"]
     latest = payload["latest_60_months"]
+    concentration = payload["post_result_activation_concentration"]
     split = payload["split"]
     period_summary = (
         f"{split['development_start']}~{split['development_end']} / "
@@ -677,6 +729,17 @@ def report_markdown(payload: Mapping[str, Any]) -> str:
         f"- 최근 60개월 샤프: {latest_summary}",
         f"- 연 편도 회전율: {holdout['annual_one_way_turnover']:.3f}배",
         f"- 실패 관문: {', '.join(payload['failed_gates']) if payload['failed_gates'] else '없음'}",
+        f"- 방어 신호 작동: {concentration['stress_months']}개월 / "
+        f"{concentration['stress_episodes']}개 연속 사건",
+        f"- 기존 전략과 실제 수익이 달라진 달: "
+        f"{concentration['months_with_nonzero_gross_difference']}개월",
+        "- 위 집중도 항목은 결과 확인 후 추가한 진단이며 합격 관문을 바꾸지 않음",
+        "",
+        "## 판단",
+        "",
+        "- 통계 핵심 관문과 최근 60개월 성과는 유망하지만 독립된 여러 국면 재현은 부족함",
+        "- 개선분이 2022~2023의 세 달에 집중되어 현재 자본을 맡길 일반 엣지로 확정할 수 없음",
+        "- 이는 전체 합격 기준 오류가 아니라 희소 국면 효과의 표본 부족이며 종이거래 후보로만 보존",
         "",
         "## 안전 경계",
         "",

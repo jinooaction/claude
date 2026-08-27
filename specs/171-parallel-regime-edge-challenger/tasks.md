@@ -26,9 +26,9 @@
 
 ## Phase 4: Evidence and Controls
 
-- [ ] T014 Run the preregistered production-data probe once and record the complete result
-- [ ] T015 Run negative, planted-positive, one-month-shift, and higher-cost controls
-- [ ] T016 Explain whether failure comes from family PBO, holdout evidence, economics, recency, turnover, data, or implementation
+- [x] T014 Run the preregistered production-data probe once and record the complete result
+- [x] T015 Run negative, planted-positive, one-month-shift, and higher-cost controls
+- [x] T016 Explain whether failure comes from family PBO, holdout evidence, economics, recency, turnover, data, or implementation
 - [ ] T017 Re-run the production proxy-parity observer with the shared token and confirm no orders/capital changes
 
 ## Phase 5: Verification and Release
