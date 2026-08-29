@@ -552,7 +552,7 @@
       "status": "released"
     }
   ],
-  "run_id": "33209589699",
+  "run_id": "33257068819",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -882,5 +882,5 @@
       "spec_id": "166-family-complete-v3-fundability"
     }
   ],
-  "timestamp_utc": "2026-08-28T20:45:40.748662Z"
+  "timestamp_utc": "2026-08-29T14:14:41.202738Z"
 }
