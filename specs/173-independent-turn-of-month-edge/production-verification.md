@@ -44,3 +44,12 @@ uv run python scripts/turn_of_month_equity_factory_probe.py \
 - 실패 관문: `holdout_excess_psr`, `holdout_annual_excess`, `positive_eras`,
   `single_year_concentration`, `stress_25bps_positive`
 - 주문·자본·라이브 전략 변경: 모두 0건
+
+## 저장소 완료 관문
+
+- 관련 회귀시험: 175개 통과
+- 전체 시험: 3,155개 통과, 실브로커 환경변수 전용 6개 제외
+- 린트: `uv run ruff check src tests` 통과
+- 에이전트 하네스: 엄격 모드 14/14 통과
+- HANDOFF 사실 검증: 통과
+- 결과 JSON 스키마와 전체 원시 결과 핵심 필드 일치: 통과

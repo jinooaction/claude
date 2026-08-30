@@ -47,9 +47,9 @@
 
 - [x] T026 [US4] 공식 Kenneth French 자료와 최신 `origin/main` 이전 공장 sidecar를 이용해 생산 프로브를 재생한다.
 - [x] T027 [US4] 실제 결과·실패 관문·자료 지문을 `production-result.json`, `production-result.md`, `production-verification.md`에 기록한다.
-- [ ] T028 전체 관련 테스트와 `uv run ruff check src tests`를 실행한다.
-- [ ] T029 전체 `uv run pytest`를 실행한다.
-- [ ] T030 `uv run python scripts/agent_harness_probe.py --strict`와 `uv run python scripts/check_handoff_facts.py`를 실행한다.
+- [x] T028 전체 관련 테스트와 `uv run ruff check src tests`를 실행한다.
+- [x] T029 전체 `uv run pytest`를 실행한다.
+- [x] T030 `uv run python scripts/agent_harness_probe.py --strict`와 `uv run python scripts/check_handoff_facts.py`를 실행한다.
 - [ ] T031 PR 본문을 `scripts/check_pr_quality_gate.py`로 검증하고 커밋·푸시·자동 머지한다.
 - [ ] T032 `/deploy-status`로 main dry-run worker 배포를 확인하고 `/handoff`로 `HANDOFF.md`를 갱신·병합한다.
 
