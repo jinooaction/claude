@@ -25,7 +25,7 @@ def _block(header: str, obj: dict) -> str:
     return f"## {header}\n```json\n{json.dumps(obj, ensure_ascii=False)}\n```\n"
 
 
-def _edge_sidecar(n_obs: int = 1, legacy=None, snapshots=None) -> str:
+def _edge_sidecar(n_obs: int = 1, legacy=None, snapshots=None, anchored=None) -> str:
     ladder = {
         "schema_version": "1.0",
         "action": "WAIT_EDGE",
@@ -58,7 +58,7 @@ def _edge_sidecar(n_obs: int = 1, legacy=None, snapshots=None) -> str:
         "current_nav_usd": "500.0",
         "period_days": "1.25",
     }
-    return (
+    text = (
         "# 자본 사다리 게이트 — 최신 실행\n\n"
         "| 항목 | 값 |\n|------|-----|\n"
         "| timestamp_utc | 2026-06-13T01:53:50Z |\n\n"
@@ -68,6 +68,12 @@ def _edge_sidecar(n_obs: int = 1, legacy=None, snapshots=None) -> str:
         + "\n"
         + _block("라이브 실적 JSON (현재 단 진입 이후, read-only)", growth)
     )
+    if anchored is not None:
+        text += "\n" + _block(
+            "앵커드 판정 JSON (깊은 OOS + 짧은 forward 지속성, read-only)",
+            anchored,
+        )
+    return text
 
 
 _CANARY_SIDECAR = (
@@ -196,6 +202,33 @@ def test_probe_accumulating_json(tmp_path, capsys):
     # 다음 실행 ETA 실측용 prior 힌트가 실려야 한다.
     assert out["forward_n_obs"] == 1
     assert out["as_of_utc"] == "2026-06-13T08:00:00Z"
+
+
+def test_probe_surfaces_anchored_no_edge_instead_of_false_accumulation(tmp_path, capsys):
+    anchored = {
+        "schema_version": "1.0",
+        "method": "backtest_anchored",
+        "verdict": "NO_EDGE",
+        "reason": "OOS 구간 과반 실패",
+        "oos_n_obs": 748,
+        "forward_n_obs": 4,
+        "oos_significance": "0.998745",
+    }
+    _write(tmp_path, "edge-autoarm", _edge_sidecar(n_obs=4, anchored=anchored))
+    _write(tmp_path, "rebalance-live-canary", _CANARY_SIDECAR)
+
+    rc = probe_main(
+        ["--sidecar-dir", str(tmp_path), "--json", "--now", "2026-06-13T08:00:00Z"]
+    )
+
+    assert rc == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["stage"] == "NO_EDGE_YET"
+    assert out["eta"]["basis"] == "n/a"
+    assert out["blocking_gate"] == "앵커드 OOS 실패: OOS 구간 과반 실패"
+    gates = {gate["name"]: gate for gate in out["gates"]}
+    assert gates["앵커드 표본외 판정"]["status"] == "FAIL"
+    assert gates["짧은 전진 관측"]["current"] == "4/20"
 
 
 def test_probe_measured_eta_from_prior_sidecar(tmp_path, capsys):

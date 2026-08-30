@@ -6,6 +6,8 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
+import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, date, datetime
@@ -27,14 +29,26 @@ from auto_invest.market_data.public_data import parse_fred_csv
 SHILLER_URL = "https://raw.githubusercontent.com/datasets/s-and-p-500/main/data/data.csv"
 GOLD_URL = "https://raw.githubusercontent.com/datasets/gold-prices/main/data/monthly.csv"
 MAX_INDEX_PAGES = 24
+MAX_FETCH_ATTEMPTS = 3
+FETCH_RETRY_DELAYS_SECONDS = (1.0, 2.0)
 
 
 def _read_bytes(path: Path | None, url: str) -> bytes:
     if path is not None:
         return path.read_bytes()
     request = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})  # noqa: S310
-    with urllib.request.urlopen(request, timeout=120) as response:  # noqa: S310
-        return response.read()
+    for attempt in range(MAX_FETCH_ATTEMPTS):
+        try:
+            with urllib.request.urlopen(request, timeout=120) as response:  # noqa: S310
+                return response.read()
+        except urllib.error.HTTPError as exc:
+            if exc.code < 500 or attempt == MAX_FETCH_ATTEMPTS - 1:
+                raise
+        except urllib.error.URLError:
+            if attempt == MAX_FETCH_ATTEMPTS - 1:
+                raise
+        time.sleep(FETCH_RETRY_DELAYS_SECONDS[attempt])
+    raise RuntimeError("unreachable USDA fetch retry state")
 
 
 def _index_pages(directory: Path | None) -> list[str]:
