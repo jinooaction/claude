@@ -34,8 +34,8 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 | 항목 | 상태 |
 |------|------|
 | 마지막 main 커밋 | `8bf612b` — Merge pull request #702 from jinooaction/codex/174-sidecar-jsonl-recovery |
-| main 테스트 | #702에서 `uv run pytest -q` → 3169 passed, 6 skipped, 실패 0. 건너뛴 6개는 `KIS_LIVE_TEST=1` 전용이다. 후속 진실 표면 보정은 전체 검증 중이다. |
-| main 린트 | #702에서 `uv run ruff check src tests`와 두 복구 스크립트 린트 → All checks passed. 후속 보정의 좁은 린트도 통과했다. |
+| main 테스트 | #702에서 3169 passed, 6 skipped였고 후속 진실 표면 보정에서 `uv run pytest -q` → 3172 passed, 6 skipped, 실패 0. 건너뛴 6개는 `KIS_LIVE_TEST=1` 전용이다. |
+| main 린트 | 후속 진실 표면 보정에서 `uv run ruff check src tests`와 USDA·money-path 프로브 린트 → All checks passed. |
 | 열린 PR | 2026-08-31 #702까지 병합됐고 열린 PR은 없다. USDA 일시 장애 재시도와 money-path 유효 판정 정렬을 격리 브랜치에서 검증 중이다. |
 | 출시 완료 스펙 | 최신 기능: #701(스펙 174, 회계 기반 횡단면 팩터 16개·800행·20가족 검증), #699(스펙 173, 판정 경로 교정·독립 월말월초 16개), #697(스펙 172, 8관문 합격 경로 감사), #692~#695(스펙 171, 독립 저회전 레짐 후보). |
 | 골격 스펙 | 없음. 스펙 174까지 완료됐다. 21번째 가족인 실적발표 후 주가 지연반응은 결과 전에 최대 가족 수·오합격 예산·검출력을 다시 교정해야 한다. |

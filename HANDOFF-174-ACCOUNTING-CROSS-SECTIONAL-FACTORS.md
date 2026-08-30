@@ -112,3 +112,5 @@ money-path는 표준 forward 4/20만 읽어 `ACCUMULATING_EDGE`로 표시하는 
 - HANDOFF 최신화 후 복구 전체 시험: 3169 passed, 6 skipped, 실패 0.
 - `uv run ruff check src tests`와 복구 스크립트 린트: 통과.
 - 엄격 하네스 14/14, HANDOFF 사실 검사: 통과.
+- USDA 재시도·money-path 결합 판정 보정: 관련 94 passed, 전체 3172 passed,
+  6 skipped, 실패 0. `ruff check src tests`와 두 프로브 린트, 엄격 하네스 14/14 통과.
