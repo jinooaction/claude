@@ -41,12 +41,12 @@
 - [x] T022 [US4] `scripts/turn_of_month_equity_factory_probe.py`를 구현해 공식 URL 또는 고정 파일만 읽게 한다.
 - [x] T023 [US4] `tests/integration/test_strategy_factory_workflow.py`에 새 실행·784행·19가족·sidecar 게시·금지 문자열 시험을 추가한다.
 - [x] T024 [US4] `.github/workflows/autonomous-strategy-factory.yml`에 레짐 복원과 달력 실행을 연결하고 최종 산출물을 게시한다.
-- [ ] T025 [US4] `specs/173-independent-turn-of-month-edge/contracts/turn-of-month-result.schema.json`으로 생산 결과를 검증한다.
+- [x] T025 [US4] `specs/173-independent-turn-of-month-edge/contracts/turn-of-month-result.schema.json`으로 생산 결과를 검증한다.
 
 ## 6단계 — 생산 재생과 완료 관문
 
-- [ ] T026 [US4] 공식 Kenneth French 자료와 최신 `origin/main` 이전 공장 sidecar를 이용해 생산 프로브를 재생한다.
-- [ ] T027 [US4] 실제 결과·실패 관문·자료 지문을 `production-result.json`, `production-result.md`, `production-verification.md`에 기록한다.
+- [x] T026 [US4] 공식 Kenneth French 자료와 최신 `origin/main` 이전 공장 sidecar를 이용해 생산 프로브를 재생한다.
+- [x] T027 [US4] 실제 결과·실패 관문·자료 지문을 `production-result.json`, `production-result.md`, `production-verification.md`에 기록한다.
 - [ ] T028 전체 관련 테스트와 `uv run ruff check src tests`를 실행한다.
 - [ ] T029 전체 `uv run pytest`를 실행한다.
 - [ ] T030 `uv run python scripts/agent_harness_probe.py --strict`와 `uv run python scripts/check_handoff_facts.py`를 실행한다.
