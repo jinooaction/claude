@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/accounting-factor-result.schema.json",
+  "title": "Accounting cross-sectional factor research result",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "family_id",
+    "candidate_count",
+    "global_audit_trial_count",
+    "program_research_family_count",
+    "decision",
+    "research_live_parity",
+    "promotion_allowed",
+    "safety"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "family_id": {"const": "equity-accounting-cross-sectional-factors"},
+    "candidate_count": {"const": 16},
+    "global_audit_trial_count": {"const": 800},
+    "program_research_family_count": {"const": 20},
+    "decision": {
+      "type": "object",
+      "required": ["verdict", "selected_deploy_config", "gates", "next_strategy_family"],
+      "properties": {
+        "verdict": {"enum": ["FACTORY_EDGE", "PAPER_CHALLENGER", "NO_FACTORY_EDGE"]},
+        "selected_deploy_config": {"type": "null"},
+        "next_strategy_family": {"const": "post-earnings-announcement-drift-after-recalibration"},
+        "gates": {"type": "array", "minItems": 1}
+      }
+    },
+    "research_live_parity": {
+      "type": "object",
+      "required": ["passed", "reason"],
+      "properties": {
+        "passed": {"const": false},
+        "reason": {"type": "string", "minLength": 1}
+      }
+    },
+    "promotion_allowed": {"const": false},
+    "safety": {
+      "type": "object",
+      "required": ["orders_submitted", "capital_changed", "live_strategy_changed"],
+      "properties": {
+        "orders_submitted": {"const": 0},
+        "capital_changed": {"const": false},
+        "live_strategy_changed": {"const": false}
+      }
+    }
+  }
+}

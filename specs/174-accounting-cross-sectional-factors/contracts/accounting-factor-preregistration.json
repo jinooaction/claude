@@ -1,0 +1,65 @@
+{
+  "schema_version": "accounting-factor-preregistration-v1",
+  "family_id": "equity-accounting-cross-sectional-factors",
+  "candidate_prefix": "accounting-factor-",
+  "profiles": {
+    "hml": [1.0, 0.0, 0.0],
+    "rmw": [0.0, 1.0, 0.0],
+    "cma": [0.0, 0.0, 1.0],
+    "hml-rmw": [0.5, 0.5, 0.0],
+    "hml-cma": [0.5, 0.0, 0.5],
+    "rmw-cma": [0.0, 0.5, 0.5],
+    "equal-three": [0.333333333333, 0.333333333333, 0.333333333334],
+    "defensive-three": [0.2, 0.4, 0.4]
+  },
+  "sleeve_scales": [0.5, 1.0],
+  "candidate_count": 16,
+  "data": {
+    "archive_url": "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/Data_Library/Historical_Archives/08%202015%20Update/ftp/F-F_Research_Data_5_Factors_2x3_CSV.zip",
+    "current_url": "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp/F-F_Research_Data_5_Factors_2x3_CSV.zip",
+    "required_columns": ["Mkt-RF", "SMB", "HML", "RMW", "CMA", "RF"],
+    "missing_sentinels": [-99.99, -999.0]
+  },
+  "split": {
+    "development_start": "1963-07",
+    "development_end": "2013-12",
+    "embargo_start": "2014-01",
+    "embargo_end": "2014-12",
+    "holdout_start": "2015-01"
+  },
+  "costs": {
+    "primary_annual_bps": 150,
+    "stress_annual_bps": [300, 500]
+  },
+  "gates": {
+    "family_pbo_max": 0.25,
+    "holdout_psr_min": 0.95,
+    "paper_psr_min": 0.80,
+    "holdout_annual_excess_min": 0.01,
+    "positive_eras_min": 3,
+    "recent_36m_wins_min": 2,
+    "single_year_positive_contribution_max": 0.25,
+    "top_five_month_positive_contribution_max": 0.50,
+    "max_drawdown_max": 0.30,
+    "stress_300bps_excess_positive": true,
+    "sign_flipped_placebo_must_fail_core": true
+  },
+  "program": {
+    "prior_trials": 784,
+    "resulting_trials": 800,
+    "resulting_research_family_count": 20,
+    "per_family_false_acceptance_max": 0.01,
+    "program_false_acceptance_bound": 0.20
+  },
+  "execution": {
+    "research_proxy": "Fama-French self-financing accounting factor sleeves",
+    "point_in_time_constituents": false,
+    "research_live_parity": false,
+    "promotion_allowed": false
+  },
+  "safety": {
+    "orders_submitted": 0,
+    "capital_changed": false,
+    "live_strategy_changed": false
+  }
+}
