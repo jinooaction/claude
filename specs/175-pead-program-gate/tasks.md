@@ -14,10 +14,10 @@
 
 **Goal**: 기존 `3.1`을 깨지 않고 21가족 진단용 `3.2` 프로그램 교정을 만든다.
 
-- [ ] T003 [P] [US1] 16·64후보 가족 상한, 21가족 구성, 보수 합계와 결정론을 검증하는 실패 테스트를 `tests/unit/test_edge_gate_calibration.py`에 추가한다.
-- [ ] T004 [P] [US1] 명령줄 교정 결과의 새 계약을 검증하는 실패 테스트를 `tests/integration/test_edge_gate_calibration_probe.py`에 추가한다.
-- [ ] T005 [US1] 후보 수별 상한과 프로그램 진단을 `src/auto_invest/analytics/edge_gate_calibration.py`에 구현하되 기존 `3.1` 필드를 유지한다.
-- [ ] T006 [US1] 교정 단위·통합 테스트를 통과시키고 고정 난수 재현값을 기록한다.
+- [x] T003 [P] [US1] 16·64후보 가족 상한, 21가족 구성, 보수 합계와 결정론을 검증하는 실패 테스트를 `tests/unit/test_edge_gate_calibration.py`에 추가한다.
+- [x] T004 [P] [US1] 명령줄 교정 결과의 새 계약을 검증하는 실패 테스트를 `tests/integration/test_edge_gate_calibration_probe.py`에 추가한다.
+- [x] T005 [US1] 후보 수별 상한과 프로그램 진단을 `src/auto_invest/analytics/edge_gate_calibration.py`에 구현하되 기존 `3.1` 필드를 유지한다.
+- [x] T006 [US1] 교정 단위·통합 테스트를 통과시키고 고정 난수 재현값을 기록한다.
 
 **Checkpoint**: 21가족 보수 상한 0.200, 16·64 가족 검출력 80% 이상, 실자본 적격 false.
 
@@ -29,14 +29,14 @@
 
 **Independent Test**: 1996년 이후 수익을 바꿔도 선택 후보가 같고, 손상된 월·신호·종목 수는 실패 폐쇄한다.
 
-- [ ] T007 [P] [US2] 공개 CSV 파서의 신호·월·수익·롱숏 종목 수 실패 사례를 `tests/unit/test_pead_factory.py`에 먼저 작성한다.
-- [ ] T008 [P] [US2] 16개 후보 ID·지문 고유성과 개발 선택 시간 격리 테스트를 `tests/unit/test_pead_factory.py`에 먼저 작성한다.
-- [ ] T009 [P] [US2] PBO·PSR·시대·최근 36개월·집중도·낙폭·비용·부호 반전 판정 테스트를 `tests/unit/test_pead_factory.py`에 먼저 작성한다.
-- [ ] T010 [US2] 자료 모델, 공개 CSV 파서, 품질·SHA-256 검증을 `src/auto_invest/analytics/pead_factory.py`에 구현한다.
-- [ ] T011 [US2] 사전등록 8가중치×2배율 후보 생성과 개발 전용 선택을 `src/auto_invest/analytics/pead_factory.py`에 구현한다.
-- [ ] T012 [US2] 출판 후·최근·강건성·위약 관문과 세 단계 판정을 `src/auto_invest/analytics/pead_factory.py`에 구현한다.
-- [ ] T013 [US2] 공개자료 다운로드·재시도·사전등록 입력·JSON/한글 요약 발행을 `scripts/pead_factory_probe.py`에 구현한다.
-- [ ] T014 [US2] PEAD 단위 테스트를 통과시킨다.
+- [x] T007 [P] [US2] 공개 CSV 파서의 신호·월·수익·롱숏 종목 수 실패 사례를 `tests/unit/test_pead_factory.py`에 먼저 작성한다.
+- [x] T008 [P] [US2] 16개 후보 ID·지문 고유성과 개발 선택 시간 격리 테스트를 `tests/unit/test_pead_factory.py`에 먼저 작성한다.
+- [x] T009 [P] [US2] PBO·PSR·시대·최근 36개월·집중도·낙폭·비용·부호 반전 판정 테스트를 `tests/unit/test_pead_factory.py`에 먼저 작성한다.
+- [x] T010 [US2] 자료 모델, 공개 CSV 파서, 품질·SHA-256 검증을 `src/auto_invest/analytics/pead_factory.py`에 구현한다.
+- [x] T011 [US2] 사전등록 8가중치×2배율 후보 생성과 개발 전용 선택을 `src/auto_invest/analytics/pead_factory.py`에 구현한다.
+- [x] T012 [US2] 출판 후·최근·강건성·위약 관문과 세 단계 판정을 `src/auto_invest/analytics/pead_factory.py`에 구현한다.
+- [x] T013 [US2] 공개자료 다운로드·재시도·사전등록 입력·JSON/한글 요약 발행을 `scripts/pead_factory_probe.py`에 구현한다.
+- [x] T014 [US2] PEAD 단위 테스트를 통과시킨다.
 
 **Checkpoint**: 역사적 재현 여부는 숫자로 나오지만 돈 경로는 계속 닫혀 있다.
 
@@ -48,9 +48,9 @@
 
 **Independent Test**: `PUBLISHED_EDGE` 표본에서도 연구 캐너리·승격 false, 배포 null, 자본·주문 0이다.
 
-- [ ] T015 [P] [US3] `PUBLISHED_EDGE` 합성 표본의 안전 필드와 오염 공개 테스트를 `tests/unit/test_pead_factory.py`에 먼저 추가한다.
-- [ ] T016 [US3] criterion validity, 현재 계좌 blocker, 2026-09-01 전진 관찰 초기 상태를 `src/auto_invest/analytics/pead_factory.py`에 구현한다.
-- [ ] T017 [US3] 결과가 `specs/175-pead-program-gate/contracts/pead-result.schema.json`을 만족하도록 통합 테스트를 `tests/integration/test_pead_factory_probe.py`에 작성하고 통과시킨다.
+- [x] T015 [P] [US3] `PUBLISHED_EDGE` 합성 표본의 안전 필드와 오염 공개 테스트를 `tests/unit/test_pead_factory.py`에 먼저 추가한다.
+- [x] T016 [US3] criterion validity, 현재 계좌 blocker, 2026-09-01 전진 관찰 초기 상태를 `src/auto_invest/analytics/pead_factory.py`에 구현한다.
+- [x] T017 [US3] 결과가 `specs/175-pead-program-gate/contracts/pead-result.schema.json`을 만족하도록 통합 테스트를 `tests/integration/test_pead_factory_probe.py`에 작성하고 통과시킨다.
 
 **Checkpoint**: “출판 엣지 있음/없음”과 “현재 계좌 부적격”이 별도 필드로 재현된다.
 
@@ -62,12 +62,12 @@
 
 **Independent Test**: ID, 지문, 가족 크기, 교정 상한 중 하나를 변조하면 독립 소비자가 거부한다.
 
-- [ ] T018 [P] [US4] 독립 감사의 정상·변조 실패 테스트를 `tests/unit/test_pead_factory_evidence.py`에 먼저 작성한다.
-- [ ] T019 [P] [US4] 명령줄 증거 소비자 정상·변조 실패 테스트를 `tests/integration/test_pead_evidence_gate.py`에 먼저 작성한다.
-- [ ] T020 [US4] 원시 장부 재계산과 안전 필드 검증을 `src/auto_invest/analytics/pead_factory_evidence.py`에 구현한다.
-- [ ] T021 [US4] 독립 소비자 명령줄을 `scripts/pead_evidence_gate.py`에 구현한다.
-- [ ] T022 [US4] 회계 팩터 sidecar를 보존한 뒤 PEAD 16행을 추가하는 단계를 `.github/workflows/autonomous-strategy-factory.yml`에 연결한다.
-- [ ] T023 [US4] 기존 돈 경로 소비자가 진단 전용 `3.2`를 계속 거부하는 회귀 테스트를 `tests/integration/test_factory_evidence_gate.py`와 `tests/integration/test_strategy_factory_workflow.py`에 추가한다.
+- [x] T018 [P] [US4] 독립 감사의 정상·변조 실패 테스트를 `tests/unit/test_pead_factory_evidence.py`에 먼저 작성한다.
+- [x] T019 [P] [US4] 명령줄 증거 소비자 정상·변조 실패 테스트를 `tests/integration/test_pead_evidence_gate.py`에 먼저 작성한다.
+- [x] T020 [US4] 원시 장부 재계산과 안전 필드 검증을 `src/auto_invest/analytics/pead_factory_evidence.py`에 구현한다.
+- [x] T021 [US4] 독립 소비자 명령줄을 `scripts/pead_evidence_gate.py`에 구현한다.
+- [x] T022 [US4] 회계 팩터 sidecar를 보존한 뒤 PEAD 16행을 추가하는 단계를 `.github/workflows/autonomous-strategy-factory.yml`에 연결한다.
+- [x] T023 [US4] 기존 돈 경로 소비자가 진단 전용 `3.2`를 계속 거부하는 회귀 테스트를 `tests/integration/test_factory_evidence_gate.py`와 `tests/integration/test_strategy_factory_workflow.py`에 추가한다.
 
 **Checkpoint**: 최종 공개 sidecar는 816행·21가족이고 어떤 결과에서도 주문·자본은 0이다.
 

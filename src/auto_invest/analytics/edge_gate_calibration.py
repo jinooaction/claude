@@ -38,6 +38,10 @@ DETECTION_MIN = 0.80
 CALIBRATION_SEED = 60_000
 CALIBRATION_MIN_REPETITIONS = 500
 RESEARCH_ENTRY_GATE_VERSION = "3.1"
+PROGRAM_EXTENSION_GATE_VERSION = "3.2"
+PROGRAM_EXTENSION_METHOD = "family-size-bonferroni-v2"
+PROGRAM_EXTENSION_FAMILY_CAPS = {16: 0.010, 64: 0.009}
+PROGRAM_EXTENSION_FAMILY_MIX = {16: 11, 64: 10}
 
 
 def _segments(returns: np.ndarray, count: int = 10) -> list[float]:
@@ -118,6 +122,38 @@ def _power_seed(seed: int, family_size: int, planted_sharpe: float) -> int:
     if planted_sharpe == PLANTED_SHARPE_ANNUAL:
         return seed + 1_000_000
     return seed + 2_000_000 + family_size * 10_000 + int(planted_sharpe * 10_000)
+
+
+def _diagnostic_program_null_rate(
+    *,
+    seed: int,
+    repetitions: int,
+    raw_rows: dict[int, tuple[list[dict[str, Any]], dict[float, list[dict[str, Any]]]]],
+) -> float:
+    """Estimate the 21-family null rate without using it as the safety bound.
+
+    Each family draws from its calibrated family-size null rows.  Families are
+    sampled independently only for this diagnostic; the hard contract remains
+    the Bonferroni sum, which does not assume independence.
+    """
+
+    rng = np.random.default_rng(seed + 3_000_000)
+    program_admitted = 0
+    family_sizes = [
+        family_size
+        for family_size, family_count in PROGRAM_EXTENSION_FAMILY_MIX.items()
+        for _ in range(family_count)
+    ]
+    for _ in range(repetitions):
+        admitted = False
+        for family_size in family_sizes:
+            null_rows = raw_rows[family_size][0]
+            sampled = null_rows[int(rng.integers(0, len(null_rows)))]
+            if sampled["research_entry_passed"]:
+                admitted = True
+                break
+        program_admitted += int(admitted)
+    return round(program_admitted / repetitions, 6)
 
 
 def _family_calibration(
@@ -207,6 +243,53 @@ def run_edge_gate_calibration(
     calibrated = all(
         report["live_calibrated"] is True for report in family_calibrations.values()
     ) and research_entry_calibrated
+    conservative_upper_bound = round(
+        sum(
+            PROGRAM_EXTENSION_FAMILY_CAPS[family_size] * family_count
+            for family_size, family_count in PROGRAM_EXTENSION_FAMILY_MIX.items()
+        ),
+        6,
+    )
+    extension_failed_checks: list[str] = []
+    if repetitions < CALIBRATION_MIN_REPETITIONS:
+        extension_failed_checks.append("minimum_repetitions")
+    for family_size in (16, 64):
+        family_report = family_calibrations[str(family_size)]
+        if (
+            family_report["null_research_entry_acceptance_rate"]
+            > PROGRAM_EXTENSION_FAMILY_CAPS[family_size]
+        ):
+            extension_failed_checks.append(f"family_{family_size}_false_acceptance")
+        if family_report["target_research_entry_detection_rate"] < DETECTION_MIN:
+            extension_failed_checks.append(f"family_{family_size}_detection")
+    if conservative_upper_bound > PROGRAM_FALSE_ACCEPTANCE_BUDGET:
+        extension_failed_checks.append("program_false_acceptance_budget")
+    program_extension = {
+        "gate_version": PROGRAM_EXTENSION_GATE_VERSION,
+        "method": PROGRAM_EXTENSION_METHOD,
+        "family_caps": {
+            str(key): value for key, value in PROGRAM_EXTENSION_FAMILY_CAPS.items()
+        },
+        "family_mix": {
+            str(key): value for key, value in PROGRAM_EXTENSION_FAMILY_MIX.items()
+        },
+        "conservative_upper_bound": conservative_upper_bound,
+        "diagnostic_program_null_rate": _diagnostic_program_null_rate(
+            seed=seed,
+            repetitions=repetitions,
+            raw_rows=raw_rows,
+        ),
+        "false_acceptance_budget": PROGRAM_FALSE_ACCEPTANCE_BUDGET,
+        "planted_sharpe_annual": PLANTED_SHARPE_ANNUAL,
+        "detection_min": DETECTION_MIN,
+        "minimum_repetitions": CALIBRATION_MIN_REPETITIONS,
+        "calibrated": not extension_failed_checks,
+        "failed_checks": extension_failed_checks,
+        "capital_entry_eligible": False,
+        "note": (
+            "diagnostic only; constitution gate 3.1 remains the capital-entry contract"
+        ),
+    }
     return {
         "schema_version": "1.0",
         "gate_version": GATE_VERSION,
@@ -267,6 +350,7 @@ def run_edge_gate_calibration(
             "description": "raw 576-trial DSR 0.95 plus PBO 0.10 plus holdout PSR 0.95",
         },
         "family_calibrations": family_calibrations,
+        "program_extension": program_extension,
         "safety": ["simulation only", "no broker API", "no orders", "no capital change"],
     }
 
@@ -285,6 +369,10 @@ __all__ = [
     "PAPER_PSR_MIN",
     "PBO_DIAGNOSTIC_MAX",
     "PROGRAM_FALSE_ACCEPTANCE_BUDGET",
+    "PROGRAM_EXTENSION_FAMILY_CAPS",
+    "PROGRAM_EXTENSION_FAMILY_MIX",
+    "PROGRAM_EXTENSION_GATE_VERSION",
+    "PROGRAM_EXTENSION_METHOD",
     "RESEARCH_ENTRY_GATE_VERSION",
     "RESEARCH_ENTRY_PBO_MAX",
     "run_edge_gate_calibration",
