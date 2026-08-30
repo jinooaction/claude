@@ -48,8 +48,8 @@ def test_workflow_keeps_options_turn_of_month_and_accounting_before_pead() -> No
         in workflow
     )
     assert "scripts/pead_factory_probe.py" in workflow
-    assert 'global_audit_trial_count\' /tmp/strategy_factory.json)" = "816' in workflow
-    assert 'multiplicity_trial_count\' /tmp/strategy_factory.json)" = "16' in workflow
+    assert ".global_audit_trial_count == 816" in workflow
+    assert ".multiplicity_trial_count == 16" in workflow
     assert "scripts/factory_evidence_gate.py" in workflow
     assert "calibrated-family-entry-v3.1" in workflow
     assert ".options_premium_data.complete" in workflow
