@@ -27,5 +27,5 @@
 - [x] T014 관련 테스트와 프로브를 실행해 `UNDERPOWERED`, `PARTIAL_COVERAGE`, `OBSERVATION_WAIT`를 확인한다.
 - [x] T015 `uv run pytest`와 `uv run ruff check src tests`를 통과시킨다.
 - [x] T016 엄격 하네스와 HANDOFF 사실 검증을 실행한다.
-- [ ] T017 PR 품질 관문을 통과하는 본문을 만들고 커밋·푸시·PR·자동 머지를 완료한다.
-- [ ] T018 `/handoff`와 배포 상태를 실제 `main` 기준으로 갱신·확인한다.
+- [x] T017 PR 품질 관문을 통과하는 본문을 만들고 커밋·푸시·PR·자동 머지를 완료한다.
+- [x] T018 `/handoff`와 배포 상태를 실제 `main` 기준으로 갱신·확인한다.
