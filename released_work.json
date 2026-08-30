@@ -1,5 +1,5 @@
 {
-  "commit": "c69b3c4f5655fe9673ab286ef42e29e67e72454c",
+  "commit": "794a46f214762a81e6c2d657cf8693b3542cc723",
   "overall_status": "OK",
   "released_work": [
     {
@@ -552,7 +552,7 @@
       "status": "released"
     }
   ],
-  "run_id": "33318682539",
+  "run_id": "33322684194",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -882,7 +882,11 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "166-family-complete-v3-fundability"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "174-accounting-cross-sectional-factors"
     }
   ],
-  "timestamp_utc": "2026-08-30T15:06:17.155841Z"
+  "timestamp_utc": "2026-08-30T16:31:28.013775Z"
 }
