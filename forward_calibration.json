@@ -1,0 +1,58 @@
+{
+  "checks": {
+    "live_null_rate_at_most_6_pct": true,
+    "live_planted_detection_at_least_80pct": false,
+    "paired_planted_power_exceeds_legacy": true,
+    "paper_null_rate_within_17_to_23_pct": true,
+    "paper_planted_detection_at_least_80pct": false
+  },
+  "code_commit": "fc5af9557c9657327bf6ef0e41089951b7cf32ae",
+  "detection_power_passed": false,
+  "false_positive_control_passed": true,
+  "null": {
+    "legacy_fixed_benchmark_sharpe": {
+      "live_acceptance_rate": 0.0,
+      "paper_acceptance_rate": 0.003
+    },
+    "paired_active_return": {
+      "live_acceptance_rate": 0.0495,
+      "paper_acceptance_rate": 0.215
+    }
+  },
+  "planted_edge": {
+    "legacy_fixed_benchmark_sharpe": {
+      "live_acceptance_rate": 0.0,
+      "paper_acceptance_rate": 0.0095
+    },
+    "paired_active_return": {
+      "live_acceptance_rate": 0.1545,
+      "paper_acceptance_rate": 0.424
+    }
+  },
+  "required": {
+    "minimum_detection_rate": 0.8
+  },
+  "safety": [
+    "simulation only",
+    "no broker API",
+    "no orders",
+    "no capital change"
+  ],
+  "scenario": {
+    "active_daily_std": 0.003,
+    "benchmark_daily_mean": 0.0003,
+    "benchmark_daily_std": 0.01,
+    "observations": 48,
+    "planted_active_sharpe_annual": 1.5,
+    "repetitions": 2000,
+    "seed_null": 159001,
+    "seed_planted": 1159001
+  },
+  "schema_version": "1.0",
+  "significance_method": "paired_active_return_psr_v1",
+  "thresholds": {
+    "live_psr": 0.95,
+    "paper_psr": 0.8
+  },
+  "verdict": "UNDERPOWERED"
+}

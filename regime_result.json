@@ -1,0 +1,655 @@
+{
+  "candidate_count": 16,
+  "candidate_registry": [
+    {
+      "candidate_fingerprint": "sha256:22cada92470e62118d389f460898fda6691e48d433b1b6bfa99ada301f72d979",
+      "candidate_id": "regime-corr12-thr0p0-weak3-cash",
+      "correlation_threshold": 0.0,
+      "correlation_window_months": 12,
+      "defensive_action": "cash",
+      "joint_weakness_lookback_months": 3
+    },
+    {
+      "candidate_fingerprint": "sha256:e1096c2b525b7793b3b27cd580602eeba5acd14a893ec05ecbbb848fd2523123",
+      "candidate_id": "regime-corr12-thr0p0-weak3-gold",
+      "correlation_threshold": 0.0,
+      "correlation_window_months": 12,
+      "defensive_action": "gold",
+      "joint_weakness_lookback_months": 3
+    },
+    {
+      "candidate_fingerprint": "sha256:a4912357883c23fbc811dce4325ec82eb2036207c66fd988d5d01b49ca2835ea",
+      "candidate_id": "regime-corr12-thr0p0-weak6-cash",
+      "correlation_threshold": 0.0,
+      "correlation_window_months": 12,
+      "defensive_action": "cash",
+      "joint_weakness_lookback_months": 6
+    },
+    {
+      "candidate_fingerprint": "sha256:d37dc2ad98f3cd22245b622536465432167526571d4c42d4825d16ea418e71ed",
+      "candidate_id": "regime-corr12-thr0p0-weak6-gold",
+      "correlation_threshold": 0.0,
+      "correlation_window_months": 12,
+      "defensive_action": "gold",
+      "joint_weakness_lookback_months": 6
+    },
+    {
+      "candidate_fingerprint": "sha256:de4eb93360c3fb8f47c10eb6b3c80491aadf0410d57585fbfbd7de23ce8e4eff",
+      "candidate_id": "regime-corr12-thr0p2-weak3-cash",
+      "correlation_threshold": 0.2,
+      "correlation_window_months": 12,
+      "defensive_action": "cash",
+      "joint_weakness_lookback_months": 3
+    },
+    {
+      "candidate_fingerprint": "sha256:950601b994593073d9df51f7a618f02fc57147dadbc94b2cf0eeb378769e4807",
+      "candidate_id": "regime-corr12-thr0p2-weak3-gold",
+      "correlation_threshold": 0.2,
+      "correlation_window_months": 12,
+      "defensive_action": "gold",
+      "joint_weakness_lookback_months": 3
+    },
+    {
+      "candidate_fingerprint": "sha256:80cf5eab3939176ac477a6db9de43e9aecdc054752938dc7215ead7dab89da74",
+      "candidate_id": "regime-corr12-thr0p2-weak6-cash",
+      "correlation_threshold": 0.2,
+      "correlation_window_months": 12,
+      "defensive_action": "cash",
+      "joint_weakness_lookback_months": 6
+    },
+    {
+      "candidate_fingerprint": "sha256:0f90cb827731634ccb93ec400644f6a699b2067a8d0d0b882873f8c25433e797",
+      "candidate_id": "regime-corr12-thr0p2-weak6-gold",
+      "correlation_threshold": 0.2,
+      "correlation_window_months": 12,
+      "defensive_action": "gold",
+      "joint_weakness_lookback_months": 6
+    },
+    {
+      "candidate_fingerprint": "sha256:ac4e308dd4c06132ea7f22972b72da4e73a3a0d49d399cd335eb620a7d0e9ee4",
+      "candidate_id": "regime-corr24-thr0p0-weak3-cash",
+      "correlation_threshold": 0.0,
+      "correlation_window_months": 24,
+      "defensive_action": "cash",
+      "joint_weakness_lookback_months": 3
+    },
+    {
+      "candidate_fingerprint": "sha256:25db6959507ae027cd3456be46c49511a48c96d0f4f4bd81503a85f2f4c70f9e",
+      "candidate_id": "regime-corr24-thr0p0-weak3-gold",
+      "correlation_threshold": 0.0,
+      "correlation_window_months": 24,
+      "defensive_action": "gold",
+      "joint_weakness_lookback_months": 3
+    },
+    {
+      "candidate_fingerprint": "sha256:acb17bd9f925d72bd33a57fa0547475037e9bc99c63466755c72ea8ee17dd0b5",
+      "candidate_id": "regime-corr24-thr0p0-weak6-cash",
+      "correlation_threshold": 0.0,
+      "correlation_window_months": 24,
+      "defensive_action": "cash",
+      "joint_weakness_lookback_months": 6
+    },
+    {
+      "candidate_fingerprint": "sha256:0b7a4e1570b4555f04d221077a4cb292fb2434bf2e68beca9c66a908258292e7",
+      "candidate_id": "regime-corr24-thr0p0-weak6-gold",
+      "correlation_threshold": 0.0,
+      "correlation_window_months": 24,
+      "defensive_action": "gold",
+      "joint_weakness_lookback_months": 6
+    },
+    {
+      "candidate_fingerprint": "sha256:4d8e50d9f318a3342ef7f51979b58b40bca6f9c6e608c7f536ea6c70bdb780de",
+      "candidate_id": "regime-corr24-thr0p2-weak3-cash",
+      "correlation_threshold": 0.2,
+      "correlation_window_months": 24,
+      "defensive_action": "cash",
+      "joint_weakness_lookback_months": 3
+    },
+    {
+      "candidate_fingerprint": "sha256:ac50af5a553dba095edb722f4faab0390f470fd563d938bc706b67f2cefb9917",
+      "candidate_id": "regime-corr24-thr0p2-weak3-gold",
+      "correlation_threshold": 0.2,
+      "correlation_window_months": 24,
+      "defensive_action": "gold",
+      "joint_weakness_lookback_months": 3
+    },
+    {
+      "candidate_fingerprint": "sha256:f006b817472a487f5d115fc9b833cf3d850e7e092bf576826db954c913adf512",
+      "candidate_id": "regime-corr24-thr0p2-weak6-cash",
+      "correlation_threshold": 0.2,
+      "correlation_window_months": 24,
+      "defensive_action": "cash",
+      "joint_weakness_lookback_months": 6
+    },
+    {
+      "candidate_fingerprint": "sha256:722dfdae87f8f82c1ddb1a6bc09a3c75a1b14f4f3adf722926dd2c63b9adf387",
+      "candidate_id": "regime-corr24-thr0p2-weak6-gold",
+      "correlation_threshold": 0.2,
+      "correlation_window_months": 24,
+      "defensive_action": "gold",
+      "joint_weakness_lookback_months": 6
+    }
+  ],
+  "completed_candidate_id": "candidate-parallel-edge-challenger-0520a80c0525",
+  "contract_digest": "sha256:feb5294480d2d6ff064aa57ea6ce8b0925e6d10d406a726bae584556ac9337a7",
+  "cost_diagnostics": {
+    "turnover_10bps": {
+      "candidate": {
+        "cagr_pct": 8.695121,
+        "calmar": 1.536504,
+        "max_drawdown_pct": 5.659028,
+        "n_months": 234,
+        "sharpe": 1.841788,
+        "vol_pct": 4.599468
+      },
+      "incumbent": {
+        "cagr_pct": 8.548482,
+        "calmar": 1.510592,
+        "max_drawdown_pct": 5.659028,
+        "n_months": 234,
+        "sharpe": 1.802237,
+        "vol_pct": 4.625645
+      }
+    },
+    "turnover_25bps": {
+      "candidate": {
+        "cagr_pct": 8.42071,
+        "calmar": 1.454664,
+        "max_drawdown_pct": 5.788768,
+        "n_months": 234,
+        "sharpe": 1.786689,
+        "vol_pct": 4.598852
+      },
+      "incumbent": {
+        "cagr_pct": 8.275139,
+        "calmar": 1.429516,
+        "max_drawdown_pct": 5.788768,
+        "n_months": 234,
+        "sharpe": 1.747012,
+        "vol_pct": 4.626604
+      }
+    },
+    "turnover_50bps": {
+      "candidate": {
+        "cagr_pct": 7.964674,
+        "calmar": 1.326404,
+        "max_drawdown_pct": 6.004714,
+        "n_months": 234,
+        "sharpe": 1.694098,
+        "vol_pct": 4.599796
+      },
+      "incumbent": {
+        "cagr_pct": 7.820879,
+        "calmar": 1.302456,
+        "max_drawdown_pct": 6.004714,
+        "n_months": 234,
+        "sharpe": 1.654361,
+        "vol_pct": 4.630047
+      }
+    }
+  },
+  "cost_model": {
+    "annual_fixed_bps": 50,
+    "diagnostic_one_way_turnover_bps": [
+      25,
+      50
+    ],
+    "principal_one_way_turnover_bps": 10
+  },
+  "development": {
+    "candidates_by_selection_order": [
+      {
+        "candidate_fingerprint": "sha256:f006b817472a487f5d115fc9b833cf3d850e7e092bf576826db954c913adf512",
+        "candidate_id": "regime-corr24-thr0p2-weak6-cash",
+        "correlation_threshold": 0.2,
+        "correlation_window_months": 24,
+        "defensive_action": "cash",
+        "joint_weakness_lookback_months": 6,
+        "metrics": {
+          "cagr_pct": 11.78005,
+          "calmar": 1.300308,
+          "max_drawdown_pct": 9.059431,
+          "n_months": 431,
+          "sharpe": 1.821724,
+          "vol_pct": 6.245361
+        }
+      },
+      {
+        "candidate_fingerprint": "sha256:4d8e50d9f318a3342ef7f51979b58b40bca6f9c6e608c7f536ea6c70bdb780de",
+        "candidate_id": "regime-corr24-thr0p2-weak3-cash",
+        "correlation_threshold": 0.2,
+        "correlation_window_months": 24,
+        "defensive_action": "cash",
+        "joint_weakness_lookback_months": 3,
+        "metrics": {
+          "cagr_pct": 11.741829,
+          "calmar": 1.296089,
+          "max_drawdown_pct": 9.059431,
+          "n_months": 431,
+          "sharpe": 1.821546,
+          "vol_pct": 6.226408
+        }
+      },
+      {
+        "candidate_fingerprint": "sha256:80cf5eab3939176ac477a6db9de43e9aecdc054752938dc7215ead7dab89da74",
+        "candidate_id": "regime-corr12-thr0p2-weak6-cash",
+        "correlation_threshold": 0.2,
+        "correlation_window_months": 12,
+        "defensive_action": "cash",
+        "joint_weakness_lookback_months": 6,
+        "metrics": {
+          "cagr_pct": 11.767693,
+          "calmar": 1.298944,
+          "max_drawdown_pct": 9.059431,
+          "n_months": 431,
+          "sharpe": 1.819024,
+          "vol_pct": 6.248606
+        }
+      },
+      {
+        "candidate_fingerprint": "sha256:acb17bd9f925d72bd33a57fa0547475037e9bc99c63466755c72ea8ee17dd0b5",
+        "candidate_id": "regime-corr24-thr0p0-weak6-cash",
+        "correlation_threshold": 0.0,
+        "correlation_window_months": 24,
+        "defensive_action": "cash",
+        "joint_weakness_lookback_months": 6,
+        "metrics": {
+          "cagr_pct": 11.751518,
+          "calmar": 1.297158,
+          "max_drawdown_pct": 9.059431,
+          "n_months": 431,
+          "sharpe": 1.817519,
+          "vol_pct": 6.24564
+        }
+      },
+      {
+        "candidate_fingerprint": "sha256:de4eb93360c3fb8f47c10eb6b3c80491aadf0410d57585fbfbd7de23ce8e4eff",
+        "candidate_id": "regime-corr12-thr0p2-weak3-cash",
+        "correlation_threshold": 0.2,
+        "correlation_window_months": 12,
+        "defensive_action": "cash",
+        "joint_weakness_lookback_months": 3,
+        "metrics": {
+          "cagr_pct": 11.734662,
+          "calmar": 1.295298,
+          "max_drawdown_pct": 9.059431,
+          "n_months": 431,
+          "sharpe": 1.816389,
+          "vol_pct": 6.241009
+        }
+      },
+      {
+        "candidate_fingerprint": "sha256:a4912357883c23fbc811dce4325ec82eb2036207c66fd988d5d01b49ca2835ea",
+        "candidate_id": "regime-corr12-thr0p0-weak6-cash",
+        "correlation_threshold": 0.0,
+        "correlation_window_months": 12,
+        "defensive_action": "cash",
+        "joint_weakness_lookback_months": 6,
+        "metrics": {
+          "cagr_pct": 11.733927,
+          "calmar": 1.295217,
+          "max_drawdown_pct": 9.059431,
+          "n_months": 431,
+          "sharpe": 1.813361,
+          "vol_pct": 6.251398
+        }
+      },
+      {
+        "candidate_fingerprint": "sha256:ac4e308dd4c06132ea7f22972b72da4e73a3a0d49d399cd335eb620a7d0e9ee4",
+        "candidate_id": "regime-corr24-thr0p0-weak3-cash",
+        "correlation_threshold": 0.0,
+        "correlation_window_months": 24,
+        "defensive_action": "cash",
+        "joint_weakness_lookback_months": 3,
+        "metrics": {
+          "cagr_pct": 11.689345,
+          "calmar": 1.290296,
+          "max_drawdown_pct": 9.059431,
+          "n_months": 431,
+          "sharpe": 1.81175,
+          "vol_pct": 6.234151
+        }
+      },
+      {
+        "candidate_fingerprint": "sha256:22cada92470e62118d389f460898fda6691e48d433b1b6bfa99ada301f72d979",
+        "candidate_id": "regime-corr12-thr0p0-weak3-cash",
+        "correlation_threshold": 0.0,
+        "correlation_window_months": 12,
+        "defensive_action": "cash",
+        "joint_weakness_lookback_months": 3,
+        "metrics": {
+          "cagr_pct": 11.697852,
+          "calmar": 1.291235,
+          "max_drawdown_pct": 9.059431,
+          "n_months": 431,
+          "sharpe": 1.810429,
+          "vol_pct": 6.243263
+        }
+      },
+      {
+        "candidate_fingerprint": "sha256:ac50af5a553dba095edb722f4faab0390f470fd563d938bc706b67f2cefb9917",
+        "candidate_id": "regime-corr24-thr0p2-weak3-gold",
+        "correlation_threshold": 0.2,
+        "correlation_window_months": 24,
+        "defensive_action": "gold",
+        "joint_weakness_lookback_months": 3,
+        "metrics": {
+          "cagr_pct": 11.754765,
+          "calmar": 1.297517,
+          "max_drawdown_pct": 9.059431,
+          "n_months": 431,
+          "sharpe": 1.785274,
+          "vol_pct": 6.36415
+        }
+      },
+      {
+        "candidate_fingerprint": "sha256:722dfdae87f8f82c1ddb1a6bc09a3c75a1b14f4f3adf722926dd2c63b9adf387",
+        "candidate_id": "regime-corr24-thr0p2-weak6-gold",
+        "correlation_threshold": 0.2,
+        "correlation_window_months": 24,
+        "defensive_action": "gold",
+        "joint_weakness_lookback_months": 6,
+        "metrics": {
+          "cagr_pct": 11.60643,
+          "calmar": 1.281143,
+          "max_drawdown_pct": 9.059431,
+          "n_months": 431,
+          "sharpe": 1.782294,
+          "vol_pct": 6.297341
+        }
+      },
+      {
+        "candidate_fingerprint": "sha256:0f90cb827731634ccb93ec400644f6a699b2067a8d0d0b882873f8c25433e797",
+        "candidate_id": "regime-corr12-thr0p2-weak6-gold",
+        "correlation_threshold": 0.2,
+        "correlation_window_months": 12,
+        "defensive_action": "gold",
+        "joint_weakness_lookback_months": 6,
+        "metrics": {
+          "cagr_pct": 11.709075,
+          "calmar": 1.292474,
+          "max_drawdown_pct": 9.059431,
+          "n_months": 431,
+          "sharpe": 1.776605,
+          "vol_pct": 6.372175
+        }
+      },
+      {
+        "candidate_fingerprint": "sha256:0b7a4e1570b4555f04d221077a4cb292fb2434bf2e68beca9c66a908258292e7",
+        "candidate_id": "regime-corr24-thr0p0-weak6-gold",
+        "correlation_threshold": 0.0,
+        "correlation_window_months": 24,
+        "defensive_action": "gold",
+        "joint_weakness_lookback_months": 6,
+        "metrics": {
+          "cagr_pct": 11.651582,
+          "calmar": 1.286127,
+          "max_drawdown_pct": 9.059431,
+          "n_months": 431,
+          "sharpe": 1.765762,
+          "vol_pct": 6.382244
+        }
+      },
+      {
+        "candidate_fingerprint": "sha256:d37dc2ad98f3cd22245b622536465432167526571d4c42d4825d16ea418e71ed",
+        "candidate_id": "regime-corr12-thr0p0-weak6-gold",
+        "correlation_threshold": 0.0,
+        "correlation_window_months": 12,
+        "defensive_action": "gold",
+        "joint_weakness_lookback_months": 6,
+        "metrics": {
+          "cagr_pct": 11.617131,
+          "calmar": 1.282325,
+          "max_drawdown_pct": 9.059431,
+          "n_months": 431,
+          "sharpe": 1.757628,
+          "vol_pct": 6.39451
+        }
+      },
+      {
+        "candidate_fingerprint": "sha256:950601b994593073d9df51f7a618f02fc57147dadbc94b2cf0eeb378769e4807",
+        "candidate_id": "regime-corr12-thr0p2-weak3-gold",
+        "correlation_threshold": 0.2,
+        "correlation_window_months": 12,
+        "defensive_action": "gold",
+        "joint_weakness_lookback_months": 3,
+        "metrics": {
+          "cagr_pct": 11.991703,
+          "calmar": 1.323671,
+          "max_drawdown_pct": 9.059431,
+          "n_months": 431,
+          "sharpe": 1.755941,
+          "vol_pct": 6.600311
+        }
+      },
+      {
+        "candidate_fingerprint": "sha256:25db6959507ae027cd3456be46c49511a48c96d0f4f4bd81503a85f2f4c70f9e",
+        "candidate_id": "regime-corr24-thr0p0-weak3-gold",
+        "correlation_threshold": 0.0,
+        "correlation_window_months": 24,
+        "defensive_action": "gold",
+        "joint_weakness_lookback_months": 3,
+        "metrics": {
+          "cagr_pct": 11.93087,
+          "calmar": 1.316956,
+          "max_drawdown_pct": 9.059431,
+          "n_months": 431,
+          "sharpe": 1.748886,
+          "vol_pct": 6.595386
+        }
+      },
+      {
+        "candidate_fingerprint": "sha256:e1096c2b525b7793b3b27cd580602eeba5acd14a893ec05ecbbb848fd2523123",
+        "candidate_id": "regime-corr12-thr0p0-weak3-gold",
+        "correlation_threshold": 0.0,
+        "correlation_window_months": 12,
+        "defensive_action": "gold",
+        "joint_weakness_lookback_months": 3,
+        "metrics": {
+          "cagr_pct": 11.937858,
+          "calmar": 1.317727,
+          "max_drawdown_pct": 9.059431,
+          "n_months": 431,
+          "sharpe": 1.745393,
+          "vol_pct": 6.612858
+        }
+      }
+    ],
+    "effective_trial_count": 1.151664,
+    "family_pbo": 0.171429,
+    "selected_dsr_diagnostic": 1.0,
+    "selected_raw_bonferroni_adjusted_p_diagnostic": 0.0
+  },
+  "diagnostic_controls": {
+    "negative_control_incumbent_vs_itself_psr": null,
+    "negative_control_passed": false,
+    "one_month_delayed_holdout": {
+      "cagr_pct": 6.978383,
+      "calmar": 1.325114,
+      "max_drawdown_pct": 5.26625,
+      "n_months": 234,
+      "sharpe": 1.465678,
+      "vol_pct": 4.689429
+    },
+    "planted_positive_active_psr": 1.0,
+    "planted_positive_detected": true
+  },
+  "failed_gates": [
+    "recent_segment_wins"
+  ],
+  "family_id": "regime-adaptive-stock-bond-joint-weakness-v1",
+  "forward_observation": {
+    "active_return_psr": null,
+    "candidate_fingerprint": "sha256:f006b817472a487f5d115fc9b833cf3d850e7e092bf576826db954c913adf512",
+    "candidate_id": "regime-corr24-thr0p2-weak6-cash",
+    "capital_changed": false,
+    "frozen_through": "2026-07",
+    "incumbent_id": "globalfixed-ensemble-3-6-9-12",
+    "live_psr_threshold": 0.95,
+    "live_strategy_changed": false,
+    "minimum_observations": 20,
+    "n_obs": 0,
+    "observation_end": null,
+    "observation_start": null,
+    "orders_submitted": 0,
+    "paper_psr_threshold": 0.8,
+    "promotion_allowed": false,
+    "schema_version": "regime-forward-observation-v1",
+    "status": "OBSERVATION_WAIT"
+  },
+  "gates": {
+    "annual_turnover": true,
+    "family_pbo": true,
+    "holdout_active_psr": true,
+    "holdout_cagr": true,
+    "holdout_drawdown": true,
+    "holdout_sharpe": true,
+    "latest_60_month_sharpe": true,
+    "recent_segment_wins": false
+  },
+  "holdout": {
+    "active_return_psr": 0.998215,
+    "annual_one_way_turnover": 1.683761,
+    "candidate": {
+      "cagr_pct": 8.695121,
+      "calmar": 1.536504,
+      "max_drawdown_pct": 5.659028,
+      "n_months": 234,
+      "sharpe": 1.841788,
+      "vol_pct": 4.599468
+    },
+    "incumbent": {
+      "cagr_pct": 8.548482,
+      "calmar": 1.510592,
+      "max_drawdown_pct": 5.659028,
+      "n_months": 234,
+      "sharpe": 1.802237,
+      "vol_pct": 4.625645
+    },
+    "stress_months": 10
+  },
+  "incumbent_id": "globalfixed-ensemble-3-6-9-12",
+  "input_digest": "sha256:18ed8992d566ee8a90ef119972d7b015386d36f46f3740d7dbcb562181e62a6a",
+  "latest_60_months": {
+    "candidate": {
+      "cagr_pct": 10.710145,
+      "calmar": 4.38052,
+      "max_drawdown_pct": 2.444948,
+      "n_months": 60,
+      "sharpe": 2.188585,
+      "vol_pct": 4.718121
+    },
+    "incumbent": {
+      "cagr_pct": 10.128789,
+      "calmar": 3.049811,
+      "max_drawdown_pct": 3.32112,
+      "n_months": 60,
+      "sharpe": 2.027655,
+      "vol_pct": 4.83344
+    }
+  },
+  "multiplicity": {
+    "calibrated_null_admission_per_family": 0.01,
+    "existing_research_family_count": 17,
+    "maximum_program_false_acceptance_budget": 0.2,
+    "program_false_acceptance_budget": 0.18,
+    "resulting_research_family_count": 18
+  },
+  "post_result_activation_concentration": {
+    "changed_months": [
+      {
+        "date": "2022-09",
+        "gross_active_return": 0.01706882
+      },
+      {
+        "date": "2022-12",
+        "gross_active_return": 0.00051723
+      },
+      {
+        "date": "2023-03",
+        "gross_active_return": 0.00900685
+      }
+    ],
+    "diagnostic_status": "POST_RESULT_NOT_A_GATE",
+    "episodes": [
+      {
+        "end": "2022-12",
+        "months": 9,
+        "start": "2022-04"
+      },
+      {
+        "end": "2023-03",
+        "months": 1,
+        "start": "2023-03"
+      }
+    ],
+    "largest_absolute_effect_share": 0.641856,
+    "months_with_nonzero_gross_difference": 3,
+    "negative_difference_months": 0,
+    "positive_difference_months": 3,
+    "stress_episodes": 2,
+    "stress_months": 10
+  },
+  "recent_three_segments": {
+    "required_wins": 2,
+    "segments": [
+      {
+        "candidate_sharpe": 1.877543,
+        "candidate_won": false,
+        "end": "2013-07",
+        "incumbent_sharpe": 1.877543,
+        "segment": 1,
+        "start": "2007-02"
+      },
+      {
+        "candidate_sharpe": 1.716587,
+        "candidate_won": false,
+        "end": "2020-01",
+        "incumbent_sharpe": 1.716587,
+        "segment": 2,
+        "start": "2013-08"
+      },
+      {
+        "candidate_sharpe": 1.990513,
+        "candidate_won": true,
+        "end": "2026-07",
+        "incumbent_sharpe": 1.881043,
+        "segment": 3,
+        "start": "2020-02"
+      }
+    ],
+    "wins": 1
+  },
+  "safety": {
+    "capital_changed": false,
+    "orders_submitted": 0,
+    "promotion_allowed": false
+  },
+  "schema_version": "regime-edge-result-v1",
+  "selected_candidate": {
+    "candidate_fingerprint": "sha256:f006b817472a487f5d115fc9b833cf3d850e7e092bf576826db954c913adf512",
+    "candidate_id": "regime-corr24-thr0p2-weak6-cash",
+    "correlation_threshold": 0.2,
+    "correlation_window_months": 24,
+    "defensive_action": "cash",
+    "joint_weakness_lookback_months": 6
+  },
+  "selected_candidate_id": "regime-corr24-thr0p2-weak6-cash",
+  "selection_rule": [
+    "development_sharpe_desc",
+    "development_cagr_desc",
+    "development_max_drawdown_asc",
+    "candidate_id_asc"
+  ],
+  "split": {
+    "development_end": "2006-12",
+    "development_months": 431,
+    "development_start": "1971-02",
+    "embargo_month": "2007-01",
+    "holdout_end": "2026-07",
+    "holdout_months": 234,
+    "holdout_start": "2007-02",
+    "overlap_months": 0
+  },
+  "verdict": "NO_RESEARCH_EDGE"
+}
