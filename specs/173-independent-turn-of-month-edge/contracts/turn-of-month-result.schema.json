@@ -29,7 +29,14 @@
         "gates": {"type": "array", "minItems": 1}
       }
     },
-    "research_live_parity": {"const": false},
+    "research_live_parity": {
+      "type": "object",
+      "required": ["passed", "reason"],
+      "properties": {
+        "passed": {"const": false},
+        "reason": {"type": "string", "minLength": 1}
+      }
+    },
     "promotion_allowed": {"const": false},
     "safety": {
       "type": "object",

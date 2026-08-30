@@ -848,12 +848,12 @@ def test_safety_budget_prospective_at_rung0():
     s = r.safety
     assert s is not None
     assert s.prospective is True
-    assert s.reference_rung == 1  # 첫 자본 단
-    assert s.capital_usd == 151  # floor(1518.21 * 0.10)
+    assert s.reference_rung == 2  # 표준 forward 첫 자본 단
+    assert s.capital_usd == 303  # floor(1518.21 * 0.20)
     assert s.demote_dd_pct == "10"  # 예산 20% / 2
     assert s.halt_dd_pct == "20"
-    assert s.loss_at_demote_usd == 16  # ceil(151 * 0.10)
-    assert s.loss_at_halt_usd == 31  # ceil(151 * 0.20)
+    assert s.loss_at_demote_usd == 31  # ceil(303 * 0.10)
+    assert s.loss_at_halt_usd == 61  # ceil(303 * 0.20)
     assert s.current_dd_pct is None  # 아직 배치 안 됨 → 현재 낙폭 없음
     assert s.margin_to_demote_pct is None
 
@@ -868,7 +868,7 @@ def test_safety_budget_prospective_at_edge_confirmed():
     assert r.stage == STAGE_EDGE_CONFIRMED
     assert r.safety is not None
     assert r.safety.prospective is True
-    assert r.safety.reference_rung == 1
+    assert r.safety.reference_rung == 2
 
 
 def test_safety_budget_deployed_shows_margins():
@@ -956,9 +956,9 @@ def test_safety_budget_custom_budget_scales_thresholds():
 def test_safety_budget_in_to_dict():
     r = assess_money_path(ladder=_ladder(), forward_verdict=_verdict(), now=NOW)
     sb = r.to_dict()["safety_budget"]
-    assert sb["reference_rung"] == 1
+    assert sb["reference_rung"] == 2
     assert sb["prospective"] is True
-    assert sb["loss_at_demote_usd"] == 16
+    assert sb["loss_at_demote_usd"] == 31
     assert sb["demote_dd_pct"] == "10"
 
 
@@ -967,7 +967,7 @@ def test_as_text_includes_safety_section():
     text = r.as_text()
     assert "자본 방어선 예산" in text
     assert "첫 자본" in text
-    assert "단1(NAV 의 10%)" in text
+    assert "단2(NAV 의 20%)" in text
 
 
 def test_first_capital_messages_follow_current_ladder_fraction():
@@ -978,9 +978,9 @@ def test_first_capital_messages_follow_current_ladder_fraction():
         now=NOW,
     )
 
-    assert "단0→단1(NAV 10%)" in accumulating.next_action
-    assert "단0→단1, NAV 10%" in confirmed.headline
-    assert "단1(NAV 10%)" in confirmed.next_action
+    assert "단0→단2(NAV 20%)" in accumulating.next_action
+    assert "단0→단2, NAV 20%" in confirmed.headline
+    assert "단2(NAV 20%)" in confirmed.next_action
     assert "NAV 25%" not in accumulating.as_text()
     assert "NAV 25%" not in confirmed.as_text()
 

@@ -25,6 +25,8 @@ def test_paired_gate_controls_null_but_reports_absolute_power_shortfall() -> Non
     assert report["checks"]["paper_planted_detection_at_least_80pct"] is False
     assert report["checks"]["live_planted_detection_at_least_80pct"] is False
     assert report["checks"]["live_null_rate_at_most_6_pct"] is True
+    assert report["false_positive_control_passed"] is True
+    assert report["detection_power_passed"] is False
     assert report["safety"] == [
         "simulation only",
         "no broker API",

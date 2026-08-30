@@ -6,8 +6,8 @@ name: Capital ladder gate (forward edge -> rung promotions/demotions)
 # 포트폴리오." (헌법 X.4 v9.0.0). 자본 배치 규모를 증거 게이트 공식으로 결정한다:
 #
 #   단0=0% → 단1=10% 연구 → 단2=20% 탐색 → 단3=25% → 단4=50% → 단5=100%
-#   - 단 0→1: EDGE_CONFIRMED 또는 정확 배포전략의 장기 홀드아웃+forward floor+hardening.
-#   - 단 1→2: forward 페이퍼 EDGE_CONFIRMED + live 증거를 다시 요구한다.
+#   - 단 0→1: 정확 배포전략의 공장 연구 10% 경로만 사용한다.
+#   - 단 0→2 또는 단 1→2: 같은 커밋에서 교정된 표준 forward EDGE_CONFIRMED를 요구한다.
 #   - 승격(단 n→n+1): 그 단에서 라이브 관측 ≥20 + ≥27일 경과 + 낙폭 < 예산/2(10%).
 #   - 강등: 낙폭 ≥ 예산/2(10%) → 한 단 아래(즉시). 정지: 낙폭 ≥ 예산(20%) → 단 0.
 #   - 재사이징: 계좌 NAV ±10% 드리프트(입금/성장) → 자본만 재계산.
@@ -19,8 +19,8 @@ name: Capital ladder gate (forward edge -> rung promotions/demotions)
 #   - 센티넬 머지 자체는 미리보기만 — 실주문은 rebalance-live-canary.yml 의 시장시간
 #     스케줄에서만. 빠른 장중 방어선은 스펙 014 서킷 브레이커(이 게이트는 느린 거버너).
 #   - 즉시 정지: automation/AUTOARM_DISABLED 파일을 main 에 두면 게이트가 DISABLED no-op.
-#   - 단 0→1 가속: 표준 20일 forward 판정에 더해, 깊은 OOS + 짧은 forward 지속성
-#     앵커드 판정도 함께 본다. 앵커드 산출 실패는 미확정으로 처리해 기존 fail-safe 유지.
+#   - 표준 paired forward 경로는 같은 커밋의 전체 교정을 통과해야 자본 사다리로 전달.
+#   - 앵커드 판정은 별도 전체 경로 교정이 생길 때까지 진단 증거로만 보존한다.
 #   - 결과는 사이드카 automation/edge-autoarm-last-run 으로 발행:
 #       git show origin/automation/edge-autoarm-last-run:LAST_RUN.md
 #
@@ -243,6 +243,16 @@ jobs:
           echo "changed=true" >> "$GITHUB_OUTPUT"
           echo "pr_url=${pr_url}" >> "$GITHUB_OUTPUT"
 
+      - name: Calibrate standard paired forward route (no orders)
+        if: steps.factory_assignment.outputs.changed != 'true'
+        run: |
+          set -euo pipefail
+          uv run python scripts/forward_gate_calibration_probe.py \
+            --seed 159001 \
+            --repetitions 5000 \
+            --code-commit "${GITHUB_SHA}" \
+            --json-out /tmp/forward_gate_calibration.json
+
       - name: Compute forward verdict on instance (read-only, ensemble paper track)
         if: steps.factory_assignment.outputs.changed != 'true'
         id: verdict
@@ -380,6 +390,8 @@ jobs:
           uv run auto-invest ladder-decide \
             --verdict-json /tmp/verdict_global.json \
             --anchored-verdict-json /tmp/anchored_global.json \
+            --standard-forward-calibration-json /tmp/forward_gate_calibration.json \
+            --expected-code-commit "${GITHUB_SHA}" \
             --profit-evidence-json /tmp/profit_evidence.json \
             --factory-evidence-json /tmp/strategy_factory.json \
             --factory-evidence-age-hours "$(cat /tmp/strategy_factory_age_hours)" \

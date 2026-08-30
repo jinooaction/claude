@@ -263,11 +263,10 @@ def backtest_anchored_verdict(
 def combine_edge_verdicts(
     standard: dict | None, anchored: dict | None
 ) -> dict:
-    """표준 forward 판정(20일)과 백테스트 앵커드 판정을 하나의 *유효* 판정으로 결합.
+    """표준 forward 판정과 백테스트 앵커드 판정의 원본 증거를 보존해 결합한다.
 
-    가속의 핵심: 둘 중 하나라도 EDGE_CONFIRMED 면 EDGE_CONFIRMED 다. 앵커드는 깊은 OOS 가
-    엣지를 세우고 짧은 forward 가 지속만 확인하므로(다중검정·지속성 검정 통과) 표준 20일을
-    기다리지 않고 확정할 수 있다 — 운영자 지적("4주 비효율") 해법의 게이트 표면.
+    연구 판정은 둘 중 하나가 확정이면 ``EDGE_CONFIRMED``로 남긴다. 자본 소비자는 경로별
+    전체 교정을 별도로 요구하므로, 교정되지 않은 앵커드 확정만으로 노출이 늘지는 않는다.
 
     결합 규칙(순수·결정론·보수적 fail-safe):
       1. 앵커드 또는 표준이 EDGE_CONFIRMED → EDGE_CONFIRMED(source 로 어느 쪽인지 기록).
@@ -275,8 +274,7 @@ def combine_edge_verdicts(
       3. 그 외(둘 다 미확정/입력 없음) → INSUFFICIENT_DATA(게이트는 무장 안 함 — 안전).
     입력이 None/파싱 불가여도 안전하게 흡수한다(누락 = 미확정으로 취급).
 
-    반환: 자본 사다리/autoarm 이 읽는 형태({"verdict", "n_obs", ...})에 source·근거를 덧붙인 dict.
-    앵커드가 확정원이면 n_obs 는 forward 지속 관측 수(앵커드는 깊은 OOS 가 증거라 작아도 정당).
+    반환: 소비자가 읽는 형태({"verdict", "n_obs", ...})에 source·원본 방법·근거를 덧붙인 dict.
     """
     s = standard if isinstance(standard, dict) else {}
     a = anchored if isinstance(anchored, dict) else {}
@@ -312,14 +310,21 @@ def combine_edge_verdicts(
         "verdict": verdict,
         "source": source,  # anchored | standard | both | none
         "n_obs": n_obs,
+        "significance_method": (
+            s.get("significance_method") if source in ("standard", "both") else None
+        ),
+        "standard_significance_method": s.get("significance_method"),
+        "standard_psr_vs_benchmark": s.get("psr_vs_benchmark"),
         "standard_verdict": s_v,
         "anchored_verdict": a_v,
+        "anchored_method": a.get("method"),
         "anchored_oos_n_obs": _int_or_none(a.get("oos_n_obs")),
         "anchored_significance": a.get("oos_significance"),
+        "anchored_dsr_threshold": a.get("dsr_threshold"),
+        "anchored_num_trials": _int_or_none(a.get("num_trials")),
         "reason": (
             f"유효 판정 {verdict} (출처={source}; 표준={s_v}, 앵커드={a_v}). "
-            "둘 중 하나라도 EDGE_CONFIRMED 면 확정 — 앵커드(깊은 OOS+짧은 forward 지속)가 "
-            "표준 20일을 기다리지 않고 검증된 엣지를 인정한다."
+            "연구 확정은 보존하되 자본 증거는 각 경로의 전체 교정을 따로 요구한다."
         ),
     }
 

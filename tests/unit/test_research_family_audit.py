@@ -69,6 +69,21 @@ def test_classifier_uses_batch_identity_before_candidate_prefix() -> None:
     )
 
 
+def test_classifier_counts_released_regime_and_calendar_as_distinct_families() -> None:
+    rows = annotate_research_families(
+        [
+            _row("regime-joint-weakness", 1),
+            _row("calendar-turn-last1-first1", 1),
+        ]
+    )
+
+    assert [row["research_family_id"] for row in rows] == [
+        "regime-adaptive-stock-bond-joint-weakness",
+        "equity-calendar-turn-of-month",
+    ]
+    assert len(build_research_family_audit(rows)) == 2
+
+
 def test_unknown_candidate_fails_closed() -> None:
     try:
         annotate_research_families([_row("unknown-family", 1)])

@@ -69,6 +69,17 @@ def _verdict(label: str = "EDGE_CONFIRMED", n_obs: int = 22) -> dict:
     }
 
 
+def _calibration(verdict: str = "CALIBRATED", *, commit: str = "abc123") -> dict:
+    return {
+        "schema_version": "1.0",
+        "significance_method": "paired_active_return_psr_v1",
+        "code_commit": commit,
+        "verdict": verdict,
+        "false_positive_control_passed": True,
+        "detection_power_passed": verdict == "CALIBRATED",
+    }
+
+
 def _growth(
     dd: str | None = "2.5",
     obs: int | None = 25,
@@ -149,6 +160,8 @@ def _decide(sentinel: str, **kw):
         kill_switch_present=False,
         today=_TODAY,
         entry_execution_ready=True,
+        standard_forward_calibration=_calibration(),
+        expected_code_commit="abc123",
     )
     defaults.update(kw)
     return decide_ladder(**defaults)
@@ -254,6 +267,22 @@ def test_rung0_rejects_legacy_edge_confirmed_evidence():
     assert "LEGACY_EDGE_EVIDENCE" in decision.reason
 
 
+def test_rung0_rejects_underpowered_or_mismatched_standard_calibration():
+    for calibration in (
+        _calibration("UNDERPOWERED"),
+        _calibration("CALIBRATION_FAILED"),
+        _calibration(commit="other"),
+        None,
+    ):
+        decision = _decide(
+            _DISARMED,
+            standard_forward_calibration=calibration,
+        )
+        assert decision.action == ACTION_WAIT_EDGE
+        assert decision.target_rung == 0
+        assert "교정" in decision.reason
+
+
 def test_rung0_rejects_every_edge_path_without_execution_readiness() -> None:
     direct = _decide(_DISARMED, entry_execution_ready=False)
     exploration = _decide(
@@ -282,7 +311,7 @@ def test_rung0_rejects_every_edge_path_without_execution_readiness() -> None:
     )
 
 
-def test_rung0_enters_exploration_canary_without_full_forward_edge() -> None:
+def test_rung0_keeps_exploration_diagnostic_without_full_path_calibration() -> None:
     d = _decide(
         _DISARMED,
         forward_verdict=_verdict("NO_EDGE", 41),
@@ -291,10 +320,9 @@ def test_rung0_enters_exploration_canary_without_full_forward_edge() -> None:
             "candidate_id": "globalfixed-ensemble-3-6-9-12",
         },
     )
-    assert d.action == ACTION_PROMOTE
-    assert d.target_rung == 2
-    assert d.target_capital_usd == 2400
-    assert "exploration canary ready" in d.new_sentinel_text
+    assert d.action == ACTION_WAIT_EDGE
+    assert d.target_rung == 0
+    assert "교정 미완료" in d.reason
 
 
 def test_factory_winner_enters_only_10pct_research_canary() -> None:
@@ -398,7 +426,7 @@ def test_halt_beats_demote_when_both_cross():
 # ---- 승격 (올라가는 건 증거 전부) ---------------------------------------------------
 
 
-def test_promote_rung1_to_2_requires_existing_exploration_contract():
+def test_rung1_cannot_promote_on_uncalibrated_exploration_contract():
     d = _decide(
         _RUNG1,
         forward_verdict=_verdict("NO_EDGE", 40),
@@ -409,10 +437,8 @@ def test_promote_rung1_to_2_requires_existing_exploration_contract():
         },
         live_growth=_growth(dd="2.5", obs=25, period_days="30"),
     )
-    assert d.action == ACTION_PROMOTE
-    assert d.target_rung == 2
-    assert d.target_capital_usd == 2400
-    assert "ladder_rung: 2" in d.new_sentinel_text
+    assert d.action == ACTION_STAY
+    assert d.target_rung == 1
 
 
 def test_no_promotion_with_insufficient_obs():
@@ -445,6 +471,39 @@ def test_exploration_rung_cannot_reach_25pct_without_full_forward_edge():
     )
     assert d.action == ACTION_STAY
     assert d.target_rung == 2
+
+
+def test_higher_rungs_cannot_increase_without_current_calibrated_forward_route():
+    decision = _decide(
+        _RUNG3,
+        forward_verdict=_verdict("EDGE_CONFIRMED", 80),
+        standard_forward_calibration=_calibration("UNDERPOWERED"),
+        live_growth=_growth(dd="1.0", obs=40, period_days="60"),
+    )
+    assert decision.action == ACTION_STAY
+    assert decision.target_rung == 3
+
+
+def test_downward_resize_remains_allowed_when_route_is_underpowered():
+    decision = _decide(
+        _RUNG3,
+        account_nav_usd=Decimal("6000"),
+        standard_forward_calibration=_calibration("UNDERPOWERED"),
+        live_growth=_growth(dd="1.0", obs=5, period_days="5", fills_count=1),
+    )
+    assert decision.action == ACTION_RESIZE
+    assert decision.target_capital_usd == 1500
+
+
+def test_upward_resize_is_frozen_when_route_is_underpowered():
+    decision = _decide(
+        _RUNG3,
+        account_nav_usd=Decimal("24000"),
+        standard_forward_calibration=_calibration("UNDERPOWERED"),
+        live_growth=_growth(dd="1.0", obs=5, period_days="5", fills_count=1),
+    )
+    assert decision.action == ACTION_STAY
+    assert decision.target_rung == 3
 
 
 def test_rung5_is_ceiling():

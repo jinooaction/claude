@@ -247,12 +247,48 @@ def _growth_field_decimal(growth: dict | None, key: str) -> Decimal | None:
         return None
 
 
-def _paired_forward_confirmed(forward_verdict: object) -> bool:
+def _standard_forward_calibrated(
+    forward_verdict: object,
+    standard_forward_calibration: object,
+    *,
+    expected_code_commit: str | None,
+) -> bool:
+    if not isinstance(forward_verdict, dict) or not isinstance(
+        standard_forward_calibration, dict
+    ):
+        return False
+    source = forward_verdict.get("source")
+    if source not in (None, "standard", "both"):
+        return False
+    method = forward_verdict.get("standard_significance_method") or forward_verdict.get(
+        "significance_method"
+    )
     return (
+        method == PAIRED_ACTIVE_RETURN_PSR_METHOD
+        and standard_forward_calibration.get("schema_version") == "1.0"
+        and standard_forward_calibration.get("significance_method") == method
+        and standard_forward_calibration.get("verdict") == "CALIBRATED"
+        and standard_forward_calibration.get("false_positive_control_passed") is True
+        and standard_forward_calibration.get("detection_power_passed") is True
+        and expected_code_commit is not None
+        and standard_forward_calibration.get("code_commit") == expected_code_commit
+    )
+
+
+def _paired_forward_confirmed(
+    forward_verdict: object,
+    standard_forward_calibration: object,
+    *,
+    expected_code_commit: str | None,
+) -> bool:
+    return bool(
         isinstance(forward_verdict, dict)
         and forward_verdict.get("verdict") == EDGE_CONFIRMED
-        and forward_verdict.get("significance_method")
-        == PAIRED_ACTIVE_RETURN_PSR_METHOD
+        and _standard_forward_calibrated(
+            forward_verdict,
+            standard_forward_calibration,
+            expected_code_commit=expected_code_commit,
+        )
     )
 
 
@@ -270,6 +306,8 @@ def decide_ladder(
     factory_verdict: dict | None = None,
     live_performance: dict | None = None,
     entry_execution_ready: bool = False,
+    standard_forward_calibration: dict | None = None,
+    expected_code_commit: str | None = None,
     dd_budget_pct: Decimal = DEFAULT_DD_BUDGET_PCT,
 ) -> LadderDecision:
     """자본 사다리 결정 — 순수·결정론·보수적 fail-safe.
@@ -362,15 +400,30 @@ def decide_ladder(
             if isinstance(forward_verdict, dict)
             else None
         )
-        forward_confirmed = _paired_forward_confirmed(forward_verdict)
-        v_label = (
-            raw_v_label
-            if raw_v_label != EDGE_CONFIRMED or forward_confirmed
-            else "LEGACY_EDGE_EVIDENCE"
+        forward_confirmed = _paired_forward_confirmed(
+            forward_verdict,
+            standard_forward_calibration,
+            expected_code_commit=expected_code_commit,
         )
+        source = forward_verdict.get("source") if isinstance(forward_verdict, dict) else None
+        method = (
+            forward_verdict.get("standard_significance_method")
+            or forward_verdict.get("significance_method")
+            if isinstance(forward_verdict, dict)
+            else None
+        )
+        if raw_v_label != EDGE_CONFIRMED or forward_confirmed:
+            v_label = raw_v_label
+        elif source == "anchored":
+            v_label = "UNCALIBRATED_ANCHORED_EDGE"
+        elif method != PAIRED_ACTIVE_RETURN_PSR_METHOD:
+            v_label = "LEGACY_EDGE_EVIDENCE"
+        else:
+            v_label = "UNCALIBRATED_EDGE_EVIDENCE"
         exploration_ready = entry_execution_ready and (
             isinstance(exploration_verdict, dict)
             and exploration_verdict.get("verdict") == "EXPLORATION_CANARY_READY"
+            and exploration_verdict.get("route_calibrated") is True
         )
         factory_ready = entry_execution_ready and (
             isinstance(factory_verdict, dict)
@@ -394,7 +447,13 @@ def decide_ladder(
                 0,
                 f"단 0 + forward 판정={v_label!r}, 탐색 캐너리="
                 f"{exploration_label!r}, 연구 캐너리={factory_label!r}"
-                f", 실행 준비={entry_execution_ready} — 진입 증거 미충족. 배치 보류.",
+                f", 실행 준비={entry_execution_ready} — 진입 증거 미충족"
+                + (
+                    ", 표준/앵커드/탐색 경로 교정 미완료. 배치 보류."
+                    if raw_v_label == EDGE_CONFIRMED
+                    or exploration_label == "EXPLORATION_CANARY_READY"
+                    else ". 배치 보류."
+                ),
             )
         n_obs = forward_verdict.get("n_obs")
         if factory_ready and v_label != EDGE_CONFIRMED and not exploration_ready:
@@ -429,7 +488,11 @@ def decide_ladder(
         if isinstance(forward_verdict, dict)
         else None
     )
-    forward_confirmed = _paired_forward_confirmed(forward_verdict)
+    forward_confirmed = _paired_forward_confirmed(
+        forward_verdict,
+        standard_forward_calibration,
+        expected_code_commit=expected_code_commit,
+    )
     v_label = (
         raw_v_label
         if raw_v_label != EDGE_CONFIRMED or forward_confirmed
@@ -438,6 +501,7 @@ def decide_ladder(
     exploration_ready = entry_execution_ready and (
         isinstance(exploration_verdict, dict)
         and exploration_verdict.get("verdict") == "EXPLORATION_CANARY_READY"
+        and exploration_verdict.get("route_calibrated") is True
     )
     factory_ready = entry_execution_ready and (
         isinstance(factory_verdict, dict)
@@ -487,7 +551,7 @@ def decide_ladder(
     if (
         rung < MAX_RUNG
         and (rung != 1 or exploration_ready or forward_confirmed)
-        and (rung != 2 or forward_confirmed)
+        and (rung < 2 or forward_confirmed)
         and obs is not None
         and obs >= PROMOTION_MIN_OBS
         and period_days is not None
@@ -509,7 +573,13 @@ def decide_ladder(
     current_cap = cur_sent.capital_usd
     if current_cap is not None and expected > 0:
         drift_pct = abs(Decimal(current_cap) - Decimal(expected)) / Decimal(expected) * 100
-        if drift_pct >= RESIZE_DRIFT_PCT:
+        upward_resize = expected > current_cap
+        resize_authorized = (
+            not upward_resize
+            or (rung == 1 and (factory_ready or forward_confirmed))
+            or (rung >= 2 and forward_confirmed)
+        )
+        if drift_pct >= RESIZE_DRIFT_PCT and resize_authorized:
             keep_entered = entered if entered is not None else today
             capital = expected
             sentinel = render_ladder_sentinel(
