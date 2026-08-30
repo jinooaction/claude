@@ -111,11 +111,11 @@
 
 **Purpose**: 코드·후보·관문을 먼저 커밋한 뒤 공식 자료를 한 번 열어 실제 판정과 운영 상태를 기록한다.
 
-- [ ] T030 구현 코드·시험·워크플로를 공식 자료 열람 전에 커밋해 결과 후 기준 변경 가능성을 차단한다.
-- [ ] T031 `scripts/accounting_factor_factory_probe.py`로 공식 2015년 보관본과 최신본을 내려받아 실제 생산 결과를 `/tmp/accounting_factor_factory.json`과 `/tmp/accounting_factor_factory.md`에 생성한다.
-- [ ] T032 `specs/174-accounting-cross-sectional-factors/contracts/accounting-factor-result.schema.json`으로 생산 JSON을 검증하고 같은 입력의 재실행 결과가 동일한지 확인한다.
-- [ ] T033 실제 선택 후보·PBO·PSR·비용 후 초과수익·시기/집중도/낙폭·스트레스·위약·재구성 차이를 `specs/174-accounting-cross-sectional-factors/result.md`에 기록한다.
-- [ ] T034 역사 결과와 무관하게 주문 0건·자본 배분 0건·라이브 설정 변경 0건과 다음 21번째 가족의 재교정 필요를 `specs/174-accounting-cross-sectional-factors/result.md`에 기록한다.
+- [X] T030 구현 코드·시험·워크플로를 공식 자료 열람 전에 커밋해 결과 후 기준 변경 가능성을 차단한다.
+- [X] T031 `scripts/accounting_factor_factory_probe.py`로 공식 2015년 보관본과 최신본을 내려받아 실제 생산 결과를 `/tmp/accounting_factor_factory.json`과 `/tmp/accounting_factor_factory.md`에 생성한다.
+- [X] T032 `specs/174-accounting-cross-sectional-factors/contracts/accounting-factor-result.schema.json`으로 생산 JSON을 검증하고 같은 입력의 재실행 결과가 동일한지 확인한다.
+- [X] T033 실제 선택 후보·PBO·PSR·비용 후 초과수익·시기/집중도/낙폭·스트레스·위약·재구성 차이를 `specs/174-accounting-cross-sectional-factors/production-result.md`에 기록한다.
+- [X] T034 역사 결과와 무관하게 주문 0건·자본 배분 0건·라이브 설정 변경 0건과 다음 21번째 가족의 재교정 필요를 `specs/174-accounting-cross-sectional-factors/production-result.md`에 기록한다.
 
 ---
 
