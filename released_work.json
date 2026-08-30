@@ -1,5 +1,5 @@
 {
-  "commit": "fc5af9557c9657327bf6ef0e41089951b7cf32ae",
+  "commit": "c69b3c4f5655fe9673ab286ef42e29e67e72454c",
   "overall_status": "OK",
   "released_work": [
     {
@@ -552,7 +552,7 @@
       "status": "released"
     }
   ],
-  "run_id": "33318101825",
+  "run_id": "33318682539",
   "safety_invariants": [
     "no broker API call",
     "no orders",
@@ -678,7 +678,8 @@
     "167-calibrated-research-entry",
     "170-small-account-execution-parity",
     "171-parallel-regime-edge-challenger",
-    "172-strategy-acceptance-path-audit"
+    "172-strategy-acceptance-path-audit",
+    "173-independent-turn-of-month-edge"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -881,11 +882,7 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "166-family-complete-v3-fundability"
-    },
-    {
-      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "173-independent-turn-of-month-edge"
     }
   ],
-  "timestamp_utc": "2026-08-30T14:53:35.647512Z"
+  "timestamp_utc": "2026-08-30T15:06:17.155841Z"
 }
