@@ -1,0 +1,83 @@
+{
+  "schema_version": "1.0",
+  "family_id": "equity-post-earnings-announcement-drift",
+  "diagnostic_gate_version": "3.2",
+  "data": {
+    "provider": "Open Source Asset Pricing",
+    "release": "2025-10",
+    "url": "https://drive.google.com/uc?id=1g7w-yQ6Cg2qbMEkER9Q3vgns4JszXQo6",
+    "signals": ["EarningsSurprise", "AnnouncementReturn"],
+    "portfolio": "LS",
+    "required_last_month": "2024-12",
+    "expected_content_digest": "sha256:6cdaf0ff051222b813e6f8404d7a30b94e146b421625f202bd04473fe97a1817",
+    "require_positive_long_short_counts": true
+  },
+  "program_calibration": {
+    "contract": "family-size-bonferroni-v2",
+    "seed": 60000,
+    "minimum_repetitions": 500,
+    "family_caps": {"16": 0.01, "64": 0.009},
+    "family_mix": {"16": 11, "64": 10},
+    "false_acceptance_budget": 0.2,
+    "conservative_upper_bound": 0.2,
+    "planted_sharpe_annual": 0.6,
+    "detection_min": 0.8,
+    "capital_entry_eligible": false
+  },
+  "candidates": {
+    "announcement_weights": [0.0, 0.142857142857, 0.285714285714, 0.428571428571, 0.571428571429, 0.714285714286, 0.857142857143, 1.0],
+    "sleeve_scales": [0.5, 1.0],
+    "expected_count": 16
+  },
+  "split": {
+    "development_end": "1996-12",
+    "embargo_start": "1997-01",
+    "embargo_end": "1997-12",
+    "post_publication_start": "1998-01",
+    "post_publication_end": "2015-12",
+    "recent_start": "2016-01",
+    "recent_required_months": 108
+  },
+  "costs": {
+    "primary_annual_bps": 150,
+    "stress_annual_bps": [300, 500]
+  },
+  "gates": {
+    "family_pbo_max": 0.25,
+    "post_publication_psr_min": 0.95,
+    "post_publication_annual_excess_min": 0.01,
+    "positive_eras_required": 3,
+    "era_count": 4,
+    "positive_recent_windows_required": 2,
+    "recent_window_count": 3,
+    "positive_year_contribution_max": 0.25,
+    "positive_top_five_month_contribution_max": 0.5,
+    "maximum_drawdown_max": 0.3,
+    "stress_300_annual_excess_min": 0.0,
+    "sign_flip_must_fail": true
+  },
+  "criterion_validity": {
+    "feasibility_preview_contaminated": true,
+    "untouched_holdout": false,
+    "point_in_time_constituents": false,
+    "account_execution_parity": false
+  },
+  "preregistration_amendment": {
+    "made_before_metric_evaluation": true,
+    "reason": "2017-01 through 2024-12 contains 96 months and cannot form three complete 36-month windows",
+    "thresholds_changed": false
+  },
+  "forward_observation": {
+    "start_date": "2026-09-01",
+    "required_earnings_events": 200,
+    "required_calendar_months": 12
+  },
+  "safety": {
+    "research_only": true,
+    "research_canary_eligible": false,
+    "promotion_allowed": false,
+    "capital_allocation_fraction": 0.0,
+    "orders_submitted": 0,
+    "selected_deploy_config": null
+  }
+}

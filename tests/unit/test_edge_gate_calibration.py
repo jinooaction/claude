@@ -22,6 +22,15 @@ def test_revised_gate_controls_false_acceptance_and_detects_planted_edge() -> No
     assert report["research_entry"]["calibrated"] is True
     assert report["research_entry"]["program_false_acceptance_budget"] == 0.20
     assert report["research_entry"]["maximum_research_families"] == 20
+    extension = report["program_extension"]
+    assert extension["gate_version"] == "3.2"
+    assert extension["method"] == "family-size-bonferroni-v2"
+    assert extension["family_caps"] == {"16": 0.01, "64": 0.009}
+    assert extension["family_mix"] == {"16": 11, "64": 10}
+    assert extension["conservative_upper_bound"] == 0.20
+    assert extension["diagnostic_program_null_rate"] <= 0.20
+    assert extension["calibrated"] is True
+    assert extension["capital_entry_eligible"] is False
     assert set(report["family_calibrations"]) == {"16", "64"}
     for calibration in report["family_calibrations"].values():
         assert calibration["live_calibrated"] is True
@@ -53,3 +62,15 @@ def test_calibration_is_deterministic_for_fixed_inputs() -> None:
         "code_commit": "abc123",
     }
     assert run_edge_gate_calibration(**kwargs) == run_edge_gate_calibration(**kwargs)
+
+
+def test_program_extension_fails_closed_below_preregistered_repetitions() -> None:
+    report = run_edge_gate_calibration(
+        seed=60_000,
+        repetitions=200,
+        timestamp_utc="2026-08-23T00:00:00Z",
+        code_commit="abc123",
+    )
+    assert report["program_extension"]["calibrated"] is False
+    assert "minimum_repetitions" in report["program_extension"]["failed_checks"]
+    assert report["program_extension"]["capital_entry_eligible"] is False

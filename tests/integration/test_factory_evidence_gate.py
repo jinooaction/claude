@@ -165,6 +165,20 @@ def test_probe_exits_three_for_v2_or_no_edge_evidence(tmp_path: Path) -> None:
     evidence.write_text(json.dumps(payload), encoding="utf-8")
     assert _probe.main(["--evidence", str(evidence)]) == 3
 
+
+def test_probe_fails_closed_for_diagnostic_only_v32_evidence(tmp_path: Path) -> None:
+    evidence = tmp_path / "factory.json"
+    payload = _payload()
+    payload["gate_version"] = "3.2"
+    payload["decision"]["verdict"] = "PUBLISHED_EDGE"
+    evidence.write_text(json.dumps(payload), encoding="utf-8")
+
+    output = tmp_path / "assessment.json"
+    assert _probe.main(["--evidence", str(evidence), "--json-out", str(output)]) == 3
+    result = json.loads(output.read_text(encoding="utf-8"))
+    assert result["eligible"] is False
+    assert result["contract_version"] == "legacy-64-diagnostic"
+
     payload["gate_version"] = "3.1"
     payload["decision"]["verdict"] = "NO_FACTORY_EDGE"
     evidence.write_text(json.dumps(payload), encoding="utf-8")
