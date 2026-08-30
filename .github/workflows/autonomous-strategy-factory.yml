@@ -491,6 +491,10 @@ jobs:
           git config user.email "strategy-factory-bot@noreply.github.com"
           git checkout --orphan publish -q
           python3 "${GITHUB_WORKSPACE}/scripts/redact_public_sidecar.py" .
+          python3 "${GITHUB_WORKSPACE}/scripts/validate_public_factory_sidecar.py" \
+            --strategy-json strategy_factory.json \
+            --audit-catalog audit_catalog.jsonl \
+            --trial-ledger trial_ledger.jsonl
           git add LAST_RUN.md strategy_factory.json macro_strategy_factory.json \
             treasury_carry_factory.json \
             credit_spread_factory.json \

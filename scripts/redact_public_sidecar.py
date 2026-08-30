@@ -65,6 +65,14 @@ SENSITIVE_JSON_KEYS = {
     "totalvalueusd",
     "total_value_usd",
 }
+PUBLIC_IDENTITY_JSON_KEYS = {
+    "candidateid",
+    "completedcandidateid",
+    "nextcandidateid",
+    "provisionalbestcandidateid",
+    "recommendedcandidateid",
+    "selectedcandidateid",
+}
 
 PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     (
@@ -126,11 +134,25 @@ def _is_sensitive_key(key: str) -> bool:
     return lowered in SENSITIVE_JSON_KEYS or normalised in SENSITIVE_JSON_KEYS
 
 
+def _is_public_identity_key(key: str) -> bool:
+    """Return whether a structured JSON field is a public strategy identifier.
+
+    Candidate identifiers are generated audit identities, not broker/account identifiers. Applying
+    the broad account-number regex to them can collapse distinct trials into one public identity.
+    """
+    return _normalise_key(key) in PUBLIC_IDENTITY_JSON_KEYS
+
+
 def _redact_json_value(value: object) -> object:
     if isinstance(value, dict):
         redacted: dict[str, object] = {}
         for key, item in value.items():
-            redacted[key] = "[REDACTED]" if _is_sensitive_key(key) else _redact_json_value(item)
+            if _is_sensitive_key(key):
+                redacted[key] = "[REDACTED]"
+            elif _is_public_identity_key(key) and isinstance(item, str):
+                redacted[key] = item
+            else:
+                redacted[key] = _redact_json_value(item)
         return redacted
     if isinstance(value, list):
         return [_redact_json_value(item) for item in value]

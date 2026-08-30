@@ -28,6 +28,8 @@ def test_workflow_runs_complete_batch_without_broker_or_order_command() -> None:
     assert "next_search.json" in text
     assert "--prior-ledger /tmp/trial_ledger_prior.jsonl" in text
     assert "scripts/recover_public_jsonl.py" in text
+    assert "scripts/validate_public_factory_sidecar.py" in text
+    assert "--audit-catalog audit_catalog.jsonl" in text
     assert "--allow-known-redaction-drop" in text
     assert "--macro-factory-json /tmp/macro_strategy_factory.json" in text
     assert "multiplicity_trial_count" in text
