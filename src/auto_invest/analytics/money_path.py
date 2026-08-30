@@ -1283,6 +1283,8 @@ def assess_money_path(
     forward_verdict = forward_verdict or {}
 
     action = ladder.get("action")
+    ladder_reason = str(ladder.get("reason") or "")
+    calibration_wait = action == ACTION_WAIT_EDGE and "교정" in ladder_reason
     current_rung = _int(ladder.get("current_rung")) or 0
     target_rung = _int(ladder.get("target_rung"))
     account_nav = _dec(ladder.get("account_nav_usd"))
@@ -1332,7 +1334,7 @@ def assess_money_path(
         stage = STAGE_DEFENDED
     elif action == ACTION_PROMOTE or current_rung >= 1 or (target_rung or 0) >= 1:
         stage = STAGE_DEPLOYED
-    elif verdict == EDGE_CONFIRMED:
+    elif verdict == EDGE_CONFIRMED and not calibration_wait:
         stage = STAGE_EDGE_CONFIRMED
     elif verdict == NO_EDGE:
         stage = STAGE_NO_EDGE_YET
@@ -1357,9 +1359,9 @@ def assess_money_path(
             dd_budget_pct=dd_budget_pct,
             prospective=False,
         )
-    elif current_rung < 1:  # 단0 대기 — 가장 작은 첫 자본 단 기준 예상 예산.
+    elif current_rung < 1:  # 단0 표준 대기 — 실제 직접 진입 단2(20%) 기준 예상 예산.
         safety = _safety_budget(
-            reference_rung=1,
+            reference_rung=2,
             account_nav=account_nav,
             deployed_capital=None,
             current_dd_pct=None,
@@ -1479,7 +1481,11 @@ def assess_money_path(
                 f"⏳ 단0(자본 0%) — 전진 엣지 누적 중({n_obs}/{min_obs} 관측). "
                 f"추정 첫-자본 ≈ {eta.projected_date or '미정'}. 정상(시간 게이트)."
             )
-        blocking = f"전진 관측 부족: {n_obs}/{min_obs} (통계적 유의까지 더 쌓여야 함)."
+        blocking = (
+            "표준 전진 경로 교정 미완료 — 연구 결과는 보존하지만 자본 증거로는 사용하지 않음."
+            if calibration_wait
+            else f"전진 관측 부족: {n_obs}/{min_obs} (통계적 유의까지 더 쌓여야 함)."
+        )
         gates.append(
             GateCondition(
                 "전진 관측 수",
@@ -1546,8 +1552,8 @@ def assess_money_path(
         )
         next_action = (
             "자율 시스템은 매 거래일 전진 관측을 쌓는다. 최소 관측 도달 후 엣지가 "
-            f"{EDGE_CONFIRMED} 되면 자본 사다리가 단0→단1(NAV {_capital_pct(1)}%)을 "
-            "자율 무장한다"
+            f"{EDGE_CONFIRMED}와 경로 교정을 모두 통과하면 자본 사다리가 "
+            f"단0→단2(NAV {_capital_pct(2)}%)를 자율 무장한다"
             "(헌법 X.4 상시 위임). 운영자 전용은 입금(NAV 상한)·킬스위치뿐."
         )
     elif stage == STAGE_NO_EDGE_YET:
@@ -1573,8 +1579,8 @@ def assess_money_path(
     elif stage == STAGE_EDGE_CONFIRMED:
         conf = f", 신뢰도 PSR {psr}" if psr is not None else ""
         headline = (
-            f"🟢 전진 엣지 확정(EDGE_CONFIRMED{conf}) — 첫 자본(단0→단1, "
-            f"NAV {_capital_pct(1)}%) 배치 임박."
+            f"🟢 전진 엣지 확정(EDGE_CONFIRMED{conf}) — 첫 자본(단0→단2, "
+            f"NAV {_capital_pct(2)}%) 배치 임박."
         )
         blocking = (
             "막는 것 없음 — 자본 사다리가 다음 게이트 실행에서 단1을 자율 무장한다"
@@ -1598,7 +1604,7 @@ def assess_money_path(
             )
         )
         next_action = (
-            f"자본 사다리가 단1(NAV {_capital_pct(1)}%)을 자율 무장한다"
+            f"자본 사다리가 단2(NAV {_capital_pct(2)}%)를 자율 무장한다"
             "(센티넬 PR 자동 머지). 실제 실주문은 "
             "시장시간 스케줄에서 시작된다(헌법 X.4 상시 위임). 운영자 전용은 입금(NAV 상한)·"
             "킬스위치뿐."

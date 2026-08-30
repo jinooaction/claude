@@ -1,0 +1,26 @@
+{
+  "schema_version": "forward-calibration-consumer-v1",
+  "standard_method": "paired_active_return_psr_v1",
+  "standard_entry": {
+    "requires_same_code_commit": true,
+    "requires_false_positive_control_passed": true,
+    "requires_detection_power_passed": true,
+    "missing_or_malformed": "BLOCK"
+  },
+  "anchored_entry": {
+    "method": "backtest_anchored",
+    "uses_standard_forward_calibration": false,
+    "requires_preserved_oos_and_forward_evidence": true,
+    "capital_eligible_before_full_path_calibration": false
+  },
+  "factory_and_exploration_entry": {
+    "uses_standard_forward_calibration": false,
+    "factory_uses_independent_full_path_calibration": true,
+    "exploration_capital_eligible_before_full_path_calibration": false
+  },
+  "exposure_changes": {
+    "upward_promotion_requires_current_route_authorization": true,
+    "upward_resize_requires_current_route_authorization": true,
+    "demotion_halt_sell_downward_resize_remain_allowed": true
+  }
+}

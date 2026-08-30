@@ -124,6 +124,13 @@ def run_forward_gate_calibration(
         "paired_planted_power_exceeds_legacy",
     )
     base_calibrated = all(checks[key] for key in calibration_checks)
+    detection_power_passed = all(
+        checks[key]
+        for key in (
+            "paper_planted_detection_at_least_80pct",
+            "live_planted_detection_at_least_80pct",
+        )
+    )
     verdict = (
         CALIBRATED
         if all(checks.values())
@@ -136,6 +143,8 @@ def run_forward_gate_calibration(
         "significance_method": PAIRED_ACTIVE_RETURN_PSR_METHOD,
         "code_commit": code_commit,
         "verdict": verdict,
+        "false_positive_control_passed": base_calibrated,
+        "detection_power_passed": detection_power_passed,
         "scenario": {
             "seed_null": seed,
             "seed_planted": seed + 1_000_000,

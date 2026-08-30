@@ -1,0 +1,62 @@
+{
+  "schema_version": "turn-of-month-preregistration-v1",
+  "family_id": "equity-calendar-turn-of-month",
+  "candidate_prefix": "calendar-turn-",
+  "candidate_grid": {
+    "last_sessions": [1, 2, 3, 4],
+    "first_sessions": [1, 2, 3, 4],
+    "candidate_count": 16
+  },
+  "signal": "market_on_month_boundary_else_cash",
+  "data": {
+    "source": "Kenneth R. French Data Library daily research factors",
+    "url": "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp/F-F_Research_Data_Factors_daily_CSV.zip",
+    "market_return": "Mkt-RF + RF",
+    "cash_return": "RF",
+    "latest_incomplete_month_policy": "drop"
+  },
+  "split": {
+    "development_start": "1926-07-01",
+    "development_end": "2005-12-31",
+    "embargo_start": "2006-01-01",
+    "embargo_end": "2006-12-31",
+    "holdout_start": "2007-01-01"
+  },
+  "costs": {
+    "primary_one_way_bps": 10,
+    "stress_one_way_bps": [25, 50],
+    "annual_fixed_bps": 50
+  },
+  "gates": {
+    "family_pbo_max": 0.25,
+    "holdout_psr_min": 0.95,
+    "paper_psr_min": 0.80,
+    "holdout_annual_excess_min": 0.005,
+    "positive_eras_min": 3,
+    "recent_36m_wins_min": 2,
+    "single_year_positive_contribution_max": 0.25,
+    "top_five_month_positive_contribution_max": 0.50,
+    "max_drawdown_not_worse_than_market": true,
+    "stress_25bps_excess_positive": true,
+    "shifted_10_session_placebo_must_fail_core": true
+  },
+  "execution": {
+    "research_proxy": "Fama-French US market",
+    "intended_signal_instrument": "SPY",
+    "current_broker_proxy": "SCHX",
+    "research_live_parity": false,
+    "promotion_allowed": false
+  },
+  "program": {
+    "existing_central_trials": 752,
+    "released_regime_trials_to_restore": 16,
+    "resulting_trials": 784,
+    "resulting_research_family_count": 19,
+    "program_false_acceptance_budget": 0.19
+  },
+  "safety": {
+    "orders_submitted": 0,
+    "capital_changed": false,
+    "live_strategy_changed": false
+  }
+}

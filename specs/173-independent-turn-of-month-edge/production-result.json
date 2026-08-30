@@ -1,0 +1,140 @@
+{
+  "schema_version": "1.0",
+  "gate_version": "3.1",
+  "family_id": "equity-calendar-turn-of-month",
+  "batch_id": "turn-of-month-39f9ae1d0e9f-d05b3d61541c",
+  "code_commit": "d05b3d61541c7a60a1ee552e70e653c135612558",
+  "generated_at": "2026-08-30T15:00:00Z",
+  "candidate_count": 16,
+  "complete_trial_count": 16,
+  "prior_trial_count": 768,
+  "global_audit_trial_count": 784,
+  "unique_trial_fingerprint_count": 784,
+  "program_research_family_count": 19,
+  "program_multiplicity": {
+    "method": "calibrated-family-risk-budget-v1",
+    "per_family_false_acceptance_max": "0.01",
+    "program_false_acceptance_bound": "0.19",
+    "program_false_acceptance_budget": "0.20"
+  },
+  "data_quality": {
+    "complete": true,
+    "chronology_passed": true,
+    "schema_passed": true,
+    "source_url": "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp/F-F_Research_Data_Factors_daily_CSV.zip",
+    "content_digest": "sha256:39f9ae1d0e9f575024bc23145980ac270cea508fb67e592578b3f4d65f36d006",
+    "row_count": 26274,
+    "first_date": "1926-07-01",
+    "last_date": "2026-06-30",
+    "latest_complete_month": "2026-06",
+    "dropped_incomplete_month": null,
+    "point_in_time": false,
+    "revision_limitation": "current public history is source-hashed, not a vintage archive"
+  },
+  "split": {
+    "development_start": "1926-07-01",
+    "development_end": "2005-12-31",
+    "embargo_start": "2006-01-01",
+    "embargo_end": "2006-12-31",
+    "holdout_start": "2007-01-01",
+    "holdout_end": "2026-06",
+    "development_months": 954,
+    "embargo_months": 12,
+    "holdout_months": 234
+  },
+  "development_selection": {
+    "method": "maximum_primary_cost_active_sharpe_on_development_only",
+    "selected_candidate_id": "calendar-turn-last2-first4-225649baec83",
+    "selected_strategy_fingerprint": "sha256:225649baec838b838a845317711246c66eb6b07c1b6c2741ccdda3bc2f2d26ae",
+    "selected_trial_index": 8,
+    "holdout_used_for_selection": false
+  },
+  "repository_gate_calibration": {
+    "research_entry_gate_version": "3.1",
+    "verdict": "CALIBRATED",
+    "code_commit": "d05b3d61541c7a60a1ee552e70e653c135612558",
+    "seed": 60000,
+    "repetitions": 500,
+    "family_16_null_research_entry_acceptance_rate": 0.01,
+    "family_16_target_research_entry_detection_rate": 0.84
+  },
+  "holdout": {
+    "psr": "0.619345",
+    "annual_cash_excess": 0.002136322879773944,
+    "era_annual_excess": {
+      "2007-2010": -0.061368579237535026,
+      "2011-2015": 0.009464484201174184,
+      "2016-2020": 0.05276276230520027,
+      "2021-2026": -0.0016796741994883346
+    },
+    "positive_eras": 2,
+    "recent_36m_annual_excess": [
+      0.05368880074100679,
+      0.09907609920331795,
+      -0.05550233479394928
+    ],
+    "recent_36m_wins": 2,
+    "single_year_positive_contribution": 0.29911300260405604,
+    "top_five_month_positive_contribution": 0.1478062380825797,
+    "strategy_max_drawdown": 0.3290777163569333,
+    "market_max_drawdown": 0.5017186076558935,
+    "stress_25bps_annual_cash_excess": -0.03335993695470396,
+    "stress_50bps_annual_cash_excess": -0.08985827657704537,
+    "shifted_10_session_placebo_psr": "0.386444",
+    "shifted_10_session_placebo_annual_cash_excess": -0.010151226011262948,
+    "shifted_10_session_placebo_core_passed": false
+  },
+  "research_live_parity": {
+    "passed": false,
+    "candidate_id": null,
+    "strategy_fingerprint": null,
+    "reason": "research index, SPY, and SCHX execution parity plus a live calendar scheduler and canary evidence are not implemented"
+  },
+  "promotion_allowed": false,
+  "decision": {
+    "verdict": "NO_FACTORY_EDGE",
+    "provisional_best_candidate_id": "calendar-turn-last2-first4-225649baec83",
+    "selected_candidate_id": null,
+    "selected_strategy_fingerprint": null,
+    "selected_deploy_config": null,
+    "research_canary_eligible": false,
+    "promotion_allowed": false,
+    "psr": "0.619345",
+    "dsr": "0.999990",
+    "pbo": "0.126984",
+    "failed_gates": [
+      "holdout_excess_psr",
+      "holdout_annual_excess",
+      "positive_eras",
+      "single_year_concentration",
+      "stress_25bps_positive"
+    ],
+    "paper_gates_passed": false,
+    "next_strategy_family": "accounting-cross-sectional-factors",
+    "search_space_exhausted": false,
+    "gates": [
+      {"gate_id": "complete_family_trials", "passed": true, "actual": "16", "required": "16", "blocking": true},
+      {"gate_id": "prior_audit_complete", "passed": true, "actual": "768", "required": "768", "blocking": true},
+      {"gate_id": "global_audit_trials", "passed": true, "actual": "784", "required": "784", "blocking": true},
+      {"gate_id": "unique_audit_fingerprints", "passed": true, "actual": "784", "required": "784", "blocking": true},
+      {"gate_id": "program_research_families", "passed": true, "actual": "19", "required": "19", "blocking": true},
+      {"gate_id": "program_false_acceptance_bound", "passed": true, "actual": "0.19", "required": "<=0.20", "blocking": true},
+      {"gate_id": "repository_calibration", "passed": true, "actual": "True", "required": "True", "blocking": true},
+      {"gate_id": "family_pbo", "passed": true, "actual": "0.126984", "required": "<=0.25", "blocking": true},
+      {"gate_id": "holdout_excess_psr", "passed": false, "actual": "0.619345", "required": ">=0.95", "blocking": true},
+      {"gate_id": "holdout_annual_excess", "passed": false, "actual": "0.002136322879773944", "required": ">=0.005", "blocking": true},
+      {"gate_id": "positive_eras", "passed": false, "actual": "2", "required": ">=3/4", "blocking": true},
+      {"gate_id": "recent_36m_wins", "passed": true, "actual": "2", "required": ">=2/3", "blocking": true},
+      {"gate_id": "single_year_concentration", "passed": false, "actual": "0.29911300260405604", "required": "<=0.25", "blocking": true},
+      {"gate_id": "top_five_month_concentration", "passed": true, "actual": "0.1478062380825797", "required": "<=0.50", "blocking": true},
+      {"gate_id": "max_drawdown_vs_market", "passed": true, "actual": "0.3290777163569333", "required": "<=0.5017186076558935", "blocking": true},
+      {"gate_id": "stress_25bps_positive", "passed": false, "actual": "-0.03335993695470396", "required": ">0", "blocking": true},
+      {"gate_id": "shifted_placebo_fails_core", "passed": true, "actual": "False", "required": "False", "blocking": true}
+    ]
+  },
+  "safety": {
+    "orders_submitted": 0,
+    "capital_changed": false,
+    "live_strategy_changed": false
+  }
+}

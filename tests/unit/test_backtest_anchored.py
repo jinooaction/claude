@@ -139,11 +139,24 @@ def test_deterministic():
 
 
 def _sv(verdict, n_obs=22):
-    return {"verdict": verdict, "n_obs": n_obs}
+    return {
+        "verdict": verdict,
+        "n_obs": n_obs,
+        "significance_method": "paired_active_return_psr_v1",
+        "psr_vs_benchmark": "0.99",
+    }
 
 
 def _av(verdict, oos=120, fwd=6):
-    return {"verdict": verdict, "oos_n_obs": oos, "forward_n_obs": fwd}
+    return {
+        "method": "backtest_anchored",
+        "verdict": verdict,
+        "oos_n_obs": oos,
+        "oos_significance": "0.99",
+        "dsr_threshold": "0.95",
+        "num_trials": 16,
+        "forward_n_obs": fwd,
+    }
 
 
 def test_combine_anchored_confirms_accelerates():
@@ -160,6 +173,15 @@ def test_combine_standard_confirms_still_works():
     assert c["verdict"] == EDGE_CONFIRMED
     assert c["source"] == "standard"
     assert c["n_obs"] == 22
+    assert c["significance_method"] == "paired_active_return_psr_v1"
+    assert c["standard_significance_method"] == "paired_active_return_psr_v1"
+
+
+def test_empty_anchored_payload_preserves_standard_confirmation_contract():
+    c = combine_edge_verdicts(_sv(EDGE_CONFIRMED, n_obs=22), {})
+    assert c["verdict"] == EDGE_CONFIRMED
+    assert c["source"] == "standard"
+    assert c["significance_method"] == "paired_active_return_psr_v1"
 
 
 def test_combine_both_confirm():
@@ -191,3 +213,6 @@ def test_combine_carries_anchored_evidence():
     assert c["verdict"] == EDGE_CONFIRMED  # 앵커드 확정이 우선(가속)
     assert c["source"] == "anchored"
     assert c["anchored_oos_n_obs"] == 250
+    assert c["anchored_method"] == "backtest_anchored"
+    assert c["anchored_significance"] == "0.99"
+    assert c["anchored_dsr_threshold"] == "0.95"

@@ -50,6 +50,9 @@ def test_ladder_decide_consumes_anchored_verdict() -> None:
     assert "uv run auto-invest ladder-decide" in text
     assert "--verdict-json /tmp/verdict_global.json" in text
     assert "--anchored-verdict-json /tmp/anchored_global.json" in text
+    assert "scripts/forward_gate_calibration_probe.py" in text
+    assert "--standard-forward-calibration-json /tmp/forward_gate_calibration.json" in text
+    assert '--expected-code-commit "${GITHUB_SHA}"' in text
     assert "--profit-evidence-json /tmp/profit_evidence.json" in text
     assert "--factory-evidence-json /tmp/strategy_factory.json" in text
     assert "--factory-evidence-age-hours" in text

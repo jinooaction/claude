@@ -218,6 +218,31 @@ def test_v31_complete_family_can_have_more_than_sixteen_candidates() -> None:
     assert result.candidate_count == 20
 
 
+def test_v31_recomputes_784_rows_and_19_families_but_live_parity_still_blocks() -> None:
+    payload = _v3_payload(prior_count=768)
+    for index, row in enumerate(payload["audit_records"][:16]):
+        row.pop("batch_id", None)
+        row.pop("exploration_batch_id", None)
+        prefix = "regime-joint-weakness" if index < 8 else "calendar-turn-restored"
+        row["candidate_id"] = f"{prefix}-{index:03d}"
+        row["strategy_fingerprint"] = f"sha256:{prefix}-{index:03d}"
+    payload["audit_records"] = annotate_research_families(payload["audit_records"])
+    payload["research_family_audit"] = build_research_family_audit(payload["audit_records"])
+    payload["program_research_family_count"] = 19
+    payload["decision"]["selected_deploy_config"] = None
+    payload["decision"]["research_canary_eligible"] = False
+    payload["research_live_parity"]["passed"] = False
+
+    result = assess_factory_evidence(payload)
+
+    assert result.global_audit_trial_count == 784
+    assert result.program_multiplicity["research_family_count"] == 19
+    assert result.program_multiplicity["program_false_acceptance_bound"] == "0.19"
+    assert result.eligible is False
+    assert "research_live_parity" in result.reasons
+    assert "selected_output_complete" in result.reasons
+
+
 def test_v31_rejects_partial_or_missing_raw_rows() -> None:
     partial = _v3_payload()
     partial["complete_trial_count"] = 15

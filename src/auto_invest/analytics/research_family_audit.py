@@ -8,6 +8,8 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 _PREFIX_FAMILIES = (
+    ("calendar-turn-", "equity-calendar-turn-of-month"),
+    ("regime-", "regime-adaptive-stock-bond-joint-weakness"),
     ("commodity-positioning-", "commodity-positioning"),
     ("commodity-supply-demand-", "commodity-supply-demand"),
     ("commodity-", "commodity-term-structure"),

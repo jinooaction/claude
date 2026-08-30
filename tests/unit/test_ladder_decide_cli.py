@@ -201,14 +201,16 @@ def _invoke(tmp_path: Path, *, canary_verdict: str):
     )
 
 
-def test_exact_evidence_and_hardened_pass_enter_20pct_canary(tmp_path: Path) -> None:
+def test_exact_exploration_evidence_remains_diagnostic_without_route_calibration(
+    tmp_path: Path,
+) -> None:
     result = _invoke(tmp_path, canary_verdict="PASS")
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
-    assert payload["action"] == "PROMOTE"
-    assert payload["target_rung"] == 2
-    assert payload["target_capital_usd"] == 2400
+    assert payload["action"] == "WAIT_EDGE"
+    assert payload["target_rung"] == 0
     assert payload["exploration_verdict"]["hardened_canary_pass"] is True
+    assert payload["exploration_verdict"]["route_calibrated"] is False
 
 
 def test_hardened_failure_keeps_real_money_disarmed(tmp_path: Path) -> None:

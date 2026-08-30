@@ -62,6 +62,17 @@ _DEEP_BARS = 300
 _SHALLOW_BARS = 100  # 2026-06-10 실측 사고 상태(기본 한 페이지).
 
 
+def _standard_forward_calibration() -> dict[str, object]:
+    return {
+        "schema_version": "1.0",
+        "significance_method": "paired_active_return_psr_v1",
+        "code_commit": "e2e-test-commit",
+        "verdict": "CALIBRATED",
+        "false_positive_control_passed": True,
+        "detection_power_passed": True,
+    }
+
+
 def _seed_uptrend(conn, symbol: str, start: str, *, n: int, amp: str) -> None:
     """완만한 상승 + 진동(변동성 > 0) 일봉 n개 — 추세 앙상블 전 창 위."""
     price = Decimal(start)
@@ -351,6 +362,8 @@ async def test_full_money_path_with_real_live_config(db_path: Path, tmp_path: Pa
         validated_config=validated_cfg,
         kill_switch_present=False,
         entry_execution_ready=True,
+        standard_forward_calibration=_standard_forward_calibration(),
+        expected_code_commit="e2e-test-commit",
         today=date(2026, 6, 12),
     )
     if d.current_rung == 0:
@@ -374,6 +387,8 @@ async def test_full_money_path_with_real_live_config(db_path: Path, tmp_path: Pa
         validated_config=validated_cfg,
         kill_switch_present=False,
         entry_execution_ready=True,
+        standard_forward_calibration=_standard_forward_calibration(),
+        expected_code_commit="e2e-test-commit",
         today=date(2026, 6, 12),
     )
     assert d.to_json_dict() == d2.to_json_dict()
@@ -497,6 +512,8 @@ def test_money_path_report_surfaces_downside_with_real_config():
         validated_config=validated_cfg,
         kill_switch_present=False,
         entry_execution_ready=True,
+        standard_forward_calibration=_standard_forward_calibration(),
+        expected_code_commit="e2e-test-commit",
         today=date(2026, 6, 12),
     )
     assert d.action == ACTION_PROMOTE  # 단0 → 단2 (지문 정합 + EDGE_CONFIRMED)

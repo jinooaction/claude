@@ -6438,9 +6438,18 @@ def ladder_decide_cmd(
     anchored_verdict_json: Path = typer.Option(
         None,
         "--anchored-verdict-json",
-        help="forward-verdict-anchored --format json 출력 파일(선택). 주면 표준 판정과 "
-        "결합 — 둘 중 하나라도 EDGE_CONFIRMED 면 확정(앵커드가 깊은 OOS+짧은 forward "
-        "지속으로 20일을 기다리지 않고 가속). 없으면 기존 표준 판정만(하위 호환).",
+        help="forward-verdict-anchored --format json 진단 파일. 연구 판정에는 결합하지만 "
+        "별도 전체 경로 교정 전에는 자본 진입 증거로 쓰지 않음.",
+    ),
+    standard_forward_calibration_json: Path = typer.Option(
+        None,
+        "--standard-forward-calibration-json",
+        help="같은 코드의 paired 표준 전진 전체 교정 JSON. 누락/미완료면 표준 자본 진입 차단.",
+    ),
+    expected_code_commit: str = typer.Option(
+        None,
+        "--expected-code-commit",
+        help="교정 JSON이 반드시 일치해야 하는 현재 코드 커밋.",
     ),
     profit_evidence_json: Path = typer.Option(
         None,
@@ -6554,14 +6563,14 @@ def ladder_decide_cmd(
 
     verdict = _read_json(verdict_json) or {}
     anchored = _read_json(anchored_verdict_json)
+    standard_forward_calibration = _read_json(standard_forward_calibration_json)
     profit_evidence = _read_json(profit_evidence_json)
     factory_evidence = _read_json(factory_evidence_json)
     factory_assessment = assess_factory_evidence(factory_evidence)
     hardened_canary = _read_json(hardened_canary_json)
     edge_source = "standard"
     if anchored is not None:
-        # 앵커드 판정이 있으면 표준과 결합 — 둘 중 하나라도 EDGE_CONFIRMED 면 확정(가속).
-        # 없으면 이 블록을 건너뛰어 기존 표준 판정만 쓴다(하위 호환·동작 무변경).
+        # 앵커드 판정은 원본 증거를 보존해 결합하되 자본 경로는 별도 교정을 요구한다.
         from auto_invest.portfolio.backtest_anchored import combine_edge_verdicts
 
         combined = combine_edge_verdicts(verdict, anchored)
@@ -6654,6 +6663,9 @@ def ladder_decide_cmd(
             "hardened_canary_pass": canary_pass,
             "fundability_passed": factory_fundability_pass,
             "execution_proxy_parity_passed": proxy_parity_pass,
+            "route_calibrated": False,
+            "capital_eligible": False,
+            "calibration_reason": "exploration full-path calibration is not registered",
         }
 
     factory_exact_match = (
@@ -6699,6 +6711,8 @@ def ladder_decide_cmd(
         factory_verdict=factory_verdict,
         live_performance=live_performance,
         entry_execution_ready=entry_execution_ready,
+        standard_forward_calibration=standard_forward_calibration,
+        expected_code_commit=expected_code_commit,
         dd_budget_pct=_Dec(str(dd_budget_pct)),
     )
 
@@ -6721,6 +6735,29 @@ def ladder_decide_cmd(
         out["edge_source"] = edge_source  # standard | anchored | both | none (포렌식)
         out["exploration_verdict"] = exploration_verdict
         out["factory_verdict"] = factory_verdict
+        out["standard_forward_calibration"] = {
+            "verdict": (
+                standard_forward_calibration.get("verdict")
+                if isinstance(standard_forward_calibration, dict)
+                else None
+            ),
+            "false_positive_control_passed": (
+                standard_forward_calibration.get("false_positive_control_passed")
+                if isinstance(standard_forward_calibration, dict)
+                else None
+            ),
+            "detection_power_passed": (
+                standard_forward_calibration.get("detection_power_passed")
+                if isinstance(standard_forward_calibration, dict)
+                else None
+            ),
+            "code_commit_match": bool(
+                isinstance(standard_forward_calibration, dict)
+                and expected_code_commit is not None
+                and standard_forward_calibration.get("code_commit")
+                == expected_code_commit
+            ),
+        }
         typer.echo(_json.dumps(out))
     else:
         typer.echo(
