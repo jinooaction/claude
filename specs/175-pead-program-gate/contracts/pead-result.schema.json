@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PEAD diagnostic research result",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "gate_version",
+    "family_id",
+    "verdict",
+    "candidate_count",
+    "global_audit",
+    "program_calibration",
+    "criterion_validity",
+    "safety"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "gate_version": {"const": "3.2"},
+    "family_id": {"const": "equity-post-earnings-announcement-drift"},
+    "verdict": {"enum": ["PUBLISHED_EDGE", "PAPER_CHALLENGER", "NO_FACTORY_EDGE"]},
+    "candidate_count": {"const": 16},
+    "global_audit": {
+      "type": "object",
+      "required": ["trial_count", "family_count", "family_size_counts"],
+      "properties": {
+        "trial_count": {"const": 816},
+        "family_count": {"const": 21},
+        "family_size_counts": {
+          "type": "object",
+          "required": ["16", "64"],
+          "properties": {"16": {"const": 11}, "64": {"const": 10}}
+        }
+      }
+    },
+    "program_calibration": {
+      "type": "object",
+      "required": ["conservative_upper_bound", "capital_entry_eligible"],
+      "properties": {
+        "conservative_upper_bound": {"const": 0.2},
+        "capital_entry_eligible": {"const": false}
+      }
+    },
+    "criterion_validity": {
+      "type": "object",
+      "required": ["feasibility_preview_contaminated", "untouched_holdout", "point_in_time_constituents", "account_execution_parity"],
+      "properties": {
+        "feasibility_preview_contaminated": {"const": true},
+        "untouched_holdout": {"const": false},
+        "point_in_time_constituents": {"const": false},
+        "account_execution_parity": {"const": false}
+      }
+    },
+    "safety": {
+      "type": "object",
+      "required": ["research_canary_eligible", "promotion_allowed", "capital_allocation_fraction", "orders_submitted", "selected_deploy_config"],
+      "properties": {
+        "research_canary_eligible": {"const": false},
+        "promotion_allowed": {"const": false},
+        "capital_allocation_fraction": {"const": 0.0},
+        "orders_submitted": {"const": 0},
+        "selected_deploy_config": {"type": "null"}
+      }
+    }
+  }
+}
+
