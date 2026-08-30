@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -16,6 +18,7 @@ _REDACTOR_SPEC = importlib.util.spec_from_file_location(
 assert _REDACTOR_SPEC is not None and _REDACTOR_SPEC.loader is not None
 _REDACTOR = importlib.util.module_from_spec(_REDACTOR_SPEC)
 _REDACTOR_SPEC.loader.exec_module(_REDACTOR)
+_RECOVERY = REPO_ROOT / "scripts" / "recover_public_jsonl.py"
 
 
 def _workflow_texts() -> dict[Path, str]:
@@ -300,3 +303,79 @@ def test_public_sidecar_redactor_masks_json_sensitive_keys():
         "nav_usd": "[REDACTED]",
         "nested": {"kis_order_id": "[REDACTED]", "published": 3},
     }
+
+
+def test_public_sidecar_redactor_preserves_numeric_jsonl_and_masks_keys(tmp_path):
+    path = tmp_path / "trial_ledger.jsonl"
+    original_float = 0.12345678901234
+    path.write_text(
+        json.dumps(
+            {
+                "segment_sharpes": [original_float],
+                "account_no": "1234567801",
+                "status": "complete",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    _REDACTOR._redact_path(path)
+
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert payload["segment_sharpes"] == [original_float]
+    assert payload["account_no"] == "[REDACTED]"
+    assert payload["status"] == "complete"
+
+
+def test_public_jsonl_recovery_only_drops_known_legacy_redaction(tmp_path):
+    source = tmp_path / "raw.jsonl"
+    destination = tmp_path / "clean.jsonl"
+    source.write_text(
+        '{"candidate_id":"valid","status":"complete"}\n'
+        '{"segment_sharpes":[0.[REDACTED_ACCOUNT],1.0]}\n',
+        encoding="utf-8",
+    )
+
+    recovered = subprocess.run(
+        [
+            sys.executable,
+            str(_RECOVERY),
+            "--input",
+            str(source),
+            "--output",
+            str(destination),
+            "--allow-known-redaction-drop",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert recovered.returncode == 0, recovered.stderr
+    assert json.loads(recovered.stdout) == {
+        "dropped_known_redaction_lines": 1,
+        "valid_lines": 1,
+    }
+    assert [json.loads(line) for line in destination.read_text().splitlines()] == [
+        {"candidate_id": "valid", "status": "complete"}
+    ]
+
+    arbitrary = tmp_path / "arbitrary.jsonl"
+    arbitrary.write_text('{"broken": nope}\n', encoding="utf-8")
+    rejected = subprocess.run(
+        [
+            sys.executable,
+            str(_RECOVERY),
+            "--input",
+            str(arbitrary),
+            "--output",
+            str(destination),
+            "--allow-known-redaction-drop",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert rejected.returncode == 2
+    assert "invalid JSONL" in rejected.stderr

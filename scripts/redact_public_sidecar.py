@@ -134,6 +134,8 @@ def _redact_json_value(value: object) -> object:
         return redacted
     if isinstance(value, list):
         return [_redact_json_value(item) for item in value]
+    if isinstance(value, str):
+        return redact(value)
     return value
 
 
@@ -170,6 +172,29 @@ def _redact_path(path: Path) -> None:
                     + "\n",
                     encoding="utf-8",
                 )
+        elif file_path.suffix == ".jsonl":
+            redacted_lines: list[str] = []
+            for line_number, line in enumerate(raw.splitlines(), start=1):
+                if not line.strip():
+                    continue
+                try:
+                    data = json.loads(line)
+                except json.JSONDecodeError as exc:
+                    raise ValueError(
+                        f"invalid JSONL before redaction: {file_path}:{line_number}: {exc}"
+                    ) from exc
+                redacted_lines.append(
+                    json.dumps(
+                        _redact_json_value(data),
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                        sort_keys=True,
+                    )
+                )
+            file_path.write_text(
+                "" if not redacted_lines else "\n".join(redacted_lines) + "\n",
+                encoding="utf-8",
+            )
         else:
             file_path.write_text(redact(raw), encoding="utf-8")
 
