@@ -3,8 +3,8 @@
 ## 1. 계약 형식
 
 ```bash
-python -m json.tool specs/174-accounting-cross-sectional-factors/contracts/accounting-factor-preregistration.json >/dev/null
-python -m json.tool specs/174-accounting-cross-sectional-factors/contracts/accounting-factor-result.schema.json >/dev/null
+uv run python -m json.tool specs/174-accounting-cross-sectional-factors/contracts/accounting-factor-preregistration.json >/dev/null
+uv run python -m json.tool specs/174-accounting-cross-sectional-factors/contracts/accounting-factor-result.schema.json >/dev/null
 ```
 
 ## 2. 좁은 회귀시험
