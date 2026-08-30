@@ -53,3 +53,10 @@ uv run python scripts/turn_of_month_equity_factory_probe.py \
 - 에이전트 하네스: 엄격 모드 14/14 통과
 - HANDOFF 사실 검증: 통과
 - 결과 JSON 스키마와 전체 원시 결과 핵심 필드 일치: 통과
+- PR #699 품질 관문과 자동 병합: 통과, main `fc5af95`
+- 드라이런 워커 배포: 실행 `33318101840` 성공, 상관 ID
+  `6606b7fb09a2daff6cefa3a7a213bccd`
+- 같은 main KIS 읽기 전용 스모크: 실행 `33318101829`, 6/6 통과
+- 같은 main 공식 전략 공장: 실행 `33318101856` 성공. 게시 sidecar가 코드 커밋
+  `fc5af95`, 감사 행 784개, 전략군 19개, 달력 후보 16개, 동일한 5개 실패 관문,
+  `NO_FACTORY_EDGE`, 주문·자본·라이브 전략 변경 0건을 재현했다.
