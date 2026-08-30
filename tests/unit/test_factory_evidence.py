@@ -243,6 +243,75 @@ def test_v31_recomputes_784_rows_and_19_families_but_live_parity_still_blocks() 
     assert "selected_output_complete" in result.reasons
 
 
+def test_v31_recomputes_800_rows_and_twenty_family_budget() -> None:
+    payload = _v3_payload(prior_count=768)
+    original_selected_id = payload["decision"]["selected_candidate_id"]
+    selected_index = next(
+        index
+        for index, row in enumerate(payload["trial_records"])
+        if row["candidate_id"] == original_selected_id
+    )
+    for index, row in enumerate(payload["audit_records"][:16]):
+        row.pop("batch_id", None)
+        row.pop("exploration_batch_id", None)
+        prefix = "regime-joint-weakness" if index < 8 else "calendar-turn-restored"
+        row["candidate_id"] = f"{prefix}-{index:03d}"
+        row["strategy_fingerprint"] = f"sha256:{prefix}-{index:03d}"
+
+    old_current = deepcopy(payload["audit_records"][-16:])
+    accounting = deepcopy(payload["trial_records"])
+    for index, row in enumerate(accounting):
+        row["candidate_id"] = f"accounting-factor-{index:03d}"
+        row["strategy_fingerprint"] = f"sha256:accounting-{index:03d}"
+    selected = accounting[selected_index]
+    audit = annotate_research_families(payload["audit_records"][:-16] + old_current + accounting)
+    accounting = audit[-16:]
+    selected = accounting[selected_index]
+    payload.update(
+        {
+            "prior_trial_count": 784,
+            "global_audit_trial_count": 800,
+            "unique_trial_fingerprint_count": 800,
+            "program_research_family_count": 20,
+            "research_family_audit": build_research_family_audit(audit),
+            "audit_records": audit,
+            "trial_records": accounting,
+        }
+    )
+    payload["development_selection"]["selected_candidate_id"] = selected["candidate_id"]
+    payload["decision"].update(
+        {
+            "selected_candidate_id": selected["candidate_id"],
+            "selected_strategy_fingerprint": selected["strategy_fingerprint"],
+            "selected_deploy_config": None,
+            "research_canary_eligible": False,
+        }
+    )
+    payload["research_live_parity"].update(
+        {
+            "passed": False,
+            "candidate_id": selected["candidate_id"],
+            "strategy_fingerprint": selected["strategy_fingerprint"],
+        }
+    )
+    payload["criterion_audit"].update(
+        {"public_history_point_in_time": False, "benchmark_execution_parity": False}
+    )
+    for gate in payload["decision"]["gates"]:
+        if gate["gate_id"] == "prior_audit_complete":
+            gate["actual"] = gate["required"] = "784"
+        elif gate["gate_id"] in {"global_audit_trials", "unique_audit_fingerprints"}:
+            gate["actual"] = gate["required"] = "800"
+
+    result = assess_factory_evidence(payload)
+
+    assert result.global_audit_trial_count == 800
+    assert result.program_multiplicity["research_family_count"] == 20
+    assert result.program_multiplicity["program_false_acceptance_bound"] == "0.20"
+    assert "program_research_budget" not in result.reasons
+    assert "research_live_parity" in result.reasons
+
+
 def test_v31_rejects_partial_or_missing_raw_rows() -> None:
     partial = _v3_payload()
     partial["complete_trial_count"] = 15

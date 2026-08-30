@@ -1,0 +1,76 @@
+{
+  "schema_version": "accounting-factor-production-summary-v1",
+  "family_id": "equity-accounting-cross-sectional-factors",
+  "code_commit": "5b73792d59d70f69642e428ba74108e35fc81ee3",
+  "generated_at": "2026-08-31T00:00:00Z",
+  "verdict": "NO_FACTORY_EDGE",
+  "historical_edge_passed": false,
+  "paper_gates_passed": false,
+  "research_canary_eligible": false,
+  "promotion_allowed": false,
+  "candidate_count": 16,
+  "global_audit_trial_count": 800,
+  "program_research_family_count": 20,
+  "program_false_acceptance_bound": 0.20,
+  "selected_on_development": {
+    "candidate_id": "accounting-factor-defensive-three-scale100-7cd34091ae29",
+    "profile": "defensive-three",
+    "weights": {"HML": 0.2, "RMW": 0.4, "CMA": 0.4},
+    "sleeve_scale": 1.0,
+    "holdout_used_for_selection": false
+  },
+  "split": {
+    "development": "1963-07..2013-12",
+    "embargo": "2014-01..2014-12",
+    "holdout": "2015-01..2026-06",
+    "development_months": 606,
+    "embargo_months": 12,
+    "holdout_months": 138
+  },
+  "data": {
+    "archive_sha256": "c50321fcd2e82b8a2350af3b14fb55cb8c4f17b2c82cc27eb598b3942ccb411f",
+    "current_sha256": "cbc3724812132654fbbe8daae3c46e0f90e70008434f94a7986fe49f1db6ad3b",
+    "archive_rows": 625,
+    "current_complete_rows": 756,
+    "development_revision_months": 606,
+    "development_max_abs_revision": 0.0334,
+    "point_in_time_factor_returns": true,
+    "point_in_time_constituents": false
+  },
+  "statistics": {
+    "development_dsr_diagnostic": 0.964996,
+    "family_pbo": 0.277778,
+    "holdout_psr": 0.271536,
+    "primary_150bps_annual_cash_excess": -0.014395650135721971,
+    "positive_eras": 1,
+    "recent_36m_wins": 1,
+    "single_year_positive_contribution": 0.446272994959341,
+    "top_five_month_positive_contribution": 0.2774720439685895,
+    "strategy_max_drawdown": 0.19408322338964934,
+    "stress_300bps_annual_cash_excess": -0.02907486016620542,
+    "stress_500bps_annual_cash_excess": -0.048335449571934475,
+    "sign_flipped_placebo_core_passed": false
+  },
+  "failed_gates": [
+    "family_pbo",
+    "holdout_excess_psr",
+    "holdout_annual_excess",
+    "positive_eras",
+    "recent_36m_wins",
+    "single_year_concentration",
+    "stress_300bps_positive"
+  ],
+  "reproducibility": {
+    "full_result_sha256": "2cc1c738a1f6075cebbc255d905352711b52337bcd66f7644896a33f0b460e37",
+    "identical_replay": true,
+    "consumer_contract": "calibrated-family-entry-v3.1",
+    "consumer_eligible": false
+  },
+  "next_strategy_family": "post-earnings-announcement-drift-after-recalibration",
+  "next_family_requires_recalibration": true,
+  "safety": {
+    "orders_submitted": 0,
+    "capital_changed": false,
+    "live_strategy_changed": false
+  }
+}
