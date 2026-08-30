@@ -76,13 +76,19 @@ def test_workflow_runs_complete_batch_without_broker_or_order_command() -> None:
     )
     assert 'global_audit_trial_count\' /tmp/turn_of_month_equity_factory.json)" = "784' in text
     assert 'global_audit_trial_count\' /tmp/accounting_factor_factory.json)" = "800' in text
-    assert 'global_audit_trial_count\' /tmp/strategy_factory.json)" = "816' in text
-    assert 'multiplicity_trial_count\' /tmp/strategy_factory.json)" = "16' in text
+    assert ".global_audit_trial_count == 816" in text
+    assert ".multiplicity_trial_count == 16" in text
+    assert ".global_audit.family_size_counts[\"16\"] == 11" in text
+    assert ".global_audit.family_size_counts[\"64\"] == 10" in text
+    assert ".program_calibration.conservative_upper_bound == 0.2" in text
+    assert ".safety.capital_allocation_fraction == 0" in text
+    assert ".safety.selected_deploy_config == null" in text
+    assert "PEAD workflow result contract mismatch" in text
     assert "scripts/factory_evidence_gate.py" in text
     assert "calibrated-family-entry-v3.1" in text
     assert 'global_audit_trial_count\' /tmp/factory_evidence_v3.json)" = "800' in text
-    assert 'recomputed_trial_count\' /tmp/pead_evidence.json)" = "816' in text
-    assert 'capital_eligible\' /tmp/pead_evidence.json)" = "false' in text
+    assert ".recomputed_trial_count == 816" in text
+    assert ".capital_eligible == false" in text
     assert 'wc -l < /tmp/audit_catalog.jsonl | tr -d \' \')" = "816' in text
     assert "calibrated-family-risk-budget-v1" in text
     assert 'verdict\' /tmp/edge_gate_calibration.json)" = "CALIBRATED' in text

@@ -410,27 +410,48 @@ jobs:
             --timestamp-utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --json-out /tmp/strategy_factory.json \
             --summary-out /tmp/LAST_RUN.md
-          test "$(jq -r '.complete_trial_count' /tmp/strategy_factory.json)" = "16"
-          test "$(jq -r '.global_audit_trial_count' /tmp/strategy_factory.json)" = "816"
-          test "$(jq -r '.multiplicity_trial_count' /tmp/strategy_factory.json)" = "16"
-          test "$(jq -r '.program_research_family_count' /tmp/strategy_factory.json)" = "21"
-          test "$(jq -r '.global_audit.family_size_counts."16"' /tmp/strategy_factory.json)" = "11"
-          test "$(jq -r '.global_audit.family_size_counts."64"' /tmp/strategy_factory.json)" = "10"
-          test "$(jq -r '.program_calibration.conservative_upper_bound' /tmp/strategy_factory.json)" = "0.2"
-          test "$(jq -r '.criterion_validity.untouched_holdout' /tmp/strategy_factory.json)" = "false"
-          test "$(jq -r '.safety.research_canary_eligible' /tmp/strategy_factory.json)" = "false"
-          test "$(jq -r '.safety.promotion_allowed' /tmp/strategy_factory.json)" = "false"
-          test "$(jq -r '.safety.capital_allocation_fraction' /tmp/strategy_factory.json)" = "0"
-          test "$(jq -r '.safety.orders_submitted' /tmp/strategy_factory.json)" = "0"
-          test "$(jq -r '.safety.selected_deploy_config' /tmp/strategy_factory.json)" = "null"
+          if ! jq -e '
+            .complete_trial_count == 16 and
+            .global_audit_trial_count == 816 and
+            .multiplicity_trial_count == 16 and
+            .program_research_family_count == 21 and
+            .global_audit.family_size_counts["16"] == 11 and
+            .global_audit.family_size_counts["64"] == 10 and
+            .program_calibration.conservative_upper_bound == 0.2 and
+            .criterion_validity.untouched_holdout == false and
+            .safety.research_canary_eligible == false and
+            .safety.promotion_allowed == false and
+            .safety.capital_allocation_fraction == 0 and
+            .safety.orders_submitted == 0 and
+            .safety.selected_deploy_config == null
+          ' /tmp/strategy_factory.json >/dev/null; then
+            echo 'PEAD workflow result contract mismatch' >&2
+            jq '{
+              complete_trial_count,
+              global_audit_trial_count,
+              multiplicity_trial_count,
+              program_research_family_count,
+              family_size_counts: .global_audit.family_size_counts,
+              conservative_upper_bound: .program_calibration.conservative_upper_bound,
+              criterion_validity,
+              safety
+            }' /tmp/strategy_factory.json >&2
+            exit 1
+          fi
           uv run python scripts/pead_evidence_gate.py \
             --evidence /tmp/strategy_factory.json \
             --json-out /tmp/pead_evidence.json
-          test "$(jq -r '.valid' /tmp/pead_evidence.json)" = "true"
-          test "$(jq -r '.recomputed_trial_count' /tmp/pead_evidence.json)" = "816"
-          test "$(jq -r '.recomputed_family_count' /tmp/pead_evidence.json)" = "21"
-          test "$(jq -r '.recomputed_conservative_upper_bound' /tmp/pead_evidence.json)" = "0.2"
-          test "$(jq -r '.capital_eligible' /tmp/pead_evidence.json)" = "false"
+          if ! jq -e '
+            .valid == true and
+            .recomputed_trial_count == 816 and
+            .recomputed_family_count == 21 and
+            .recomputed_conservative_upper_bound == 0.2 and
+            .capital_eligible == false
+          ' /tmp/pead_evidence.json >/dev/null; then
+            echo 'PEAD independent evidence contract mismatch' >&2
+            jq '.' /tmp/pead_evidence.json >&2
+            exit 1
+          fi
           set +e
           uv run python scripts/factory_evidence_gate.py \
             --evidence /tmp/strategy_factory.json \
