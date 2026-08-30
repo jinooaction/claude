@@ -1,5 +1,5 @@
 {
-  "commit": "bc815b6509c7301137d1efc681057d92209ac9c2",
+  "commit": "9d22a2b9e4cb34779f58253a87dc3f38255ea8b4",
   "overall_status": "OK",
   "released_work": [
     {
@@ -883,7 +883,11 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "166-family-complete-v3-fundability"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "175-pead-program-gate"
     }
   ],
-  "timestamp_utc": "2026-08-30T18:23:37.059073Z"
+  "timestamp_utc": "2026-08-30T21:41:03.779563Z"
 }
