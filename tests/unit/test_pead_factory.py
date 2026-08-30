@@ -236,6 +236,16 @@ def test_bundle_requires_complete_common_months_and_exact_recent_window() -> Non
     assert bundle.quality["latest_month"] == "2024-12"
     assert bundle.quality["all_long_short_counts_positive"] is True
 
+    with_extra_surprise_history = [
+        PeadMonth("EarningsSurprise", date(1971, 8, 1), 0.01, 10, 10),
+        *_months(),
+    ]
+    accepted = _bundle(with_extra_surprise_history)
+    assert accepted.quality["signal_start_months"] == {
+        "AnnouncementReturn": "1971-09",
+        "EarningsSurprise": "1971-08",
+    }
+
     with pytest.raises(ValueError, match="common monthly history"):
         _bundle(_months()[:-1])
 

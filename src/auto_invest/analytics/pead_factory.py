@@ -213,12 +213,19 @@ def build_pead_bundle(
             raise ValueError("PEAD bundle contains invalid returns or position counts")
         by_signal[row.signal_name][month] = row
     month_sets = [set(by_signal[signal]) for signal in SIGNALS]
-    if not month_sets[0] or month_sets[0] != month_sets[1]:
+    common = month_sets[0] & month_sets[1]
+    if not common:
         raise ValueError("PEAD signals must have complete common monthly history")
-    common_months = sorted(month_sets[0])
+    common_months = sorted(common)
     expected = _expected_months(common_months[0], REQUIRED_LAST_MONTH)
     if common_months != expected:
         raise ValueError("PEAD signals must have complete common monthly history through 2024-12")
+    if any(
+        month >= common_months[0]
+        for signal_months in month_sets
+        for month in signal_months - common
+    ):
+        raise ValueError("PEAD signal-specific months may only precede the common history")
     pairs: list[PeadPair] = []
     for month in common_months:
         announcement = by_signal["AnnouncementReturn"][month]
@@ -259,6 +266,12 @@ def build_pead_bundle(
         "common_start_month": common_months[0],
         "latest_month": common_months[-1],
         "common_month_count": len(common_months),
+        "signal_start_months": {
+            signal: min(by_signal[signal]) for signal in SIGNALS
+        },
+        "signal_month_counts": {
+            signal: len(by_signal[signal]) for signal in SIGNALS
+        },
         "all_long_short_counts_positive": True,
         "signal_definitions": {
             "AnnouncementReturn": {
