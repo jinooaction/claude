@@ -14,6 +14,7 @@ from auto_invest.backtest.significance import (
 
 PAIRED_ACTIVE_RETURN_PSR_METHOD = "paired_active_return_psr_v1"
 CALIBRATED = "CALIBRATED"
+UNDERPOWERED = "UNDERPOWERED"
 CALIBRATION_FAILED = "CALIBRATION_FAILED"
 OBSERVATIONS = 48
 PAPER_THRESHOLD = 0.80
@@ -23,6 +24,7 @@ BENCHMARK_DAILY_STD = 0.01
 ACTIVE_DAILY_STD = 0.003
 PLANTED_ACTIVE_SHARPE_ANNUAL = 1.50
 MIN_REPETITIONS = 2_000
+MINIMUM_DETECTION_RATE = 0.80
 
 
 def _acceptance_rates(
@@ -107,12 +109,33 @@ def run_forward_gate_calibration(
             planted["paired_active_return"]["paper_acceptance_rate"]
             > planted["legacy_fixed_benchmark_sharpe"]["paper_acceptance_rate"]
         ),
+        "paper_planted_detection_at_least_80pct": (
+            planted["paired_active_return"]["paper_acceptance_rate"]
+            >= MINIMUM_DETECTION_RATE
+        ),
+        "live_planted_detection_at_least_80pct": (
+            planted["paired_active_return"]["live_acceptance_rate"]
+            >= MINIMUM_DETECTION_RATE
+        ),
     }
+    calibration_checks = (
+        "paper_null_rate_within_17_to_23_pct",
+        "live_null_rate_at_most_6_pct",
+        "paired_planted_power_exceeds_legacy",
+    )
+    base_calibrated = all(checks[key] for key in calibration_checks)
+    verdict = (
+        CALIBRATED
+        if all(checks.values())
+        else UNDERPOWERED
+        if base_calibrated
+        else CALIBRATION_FAILED
+    )
     return {
         "schema_version": "1.0",
         "significance_method": PAIRED_ACTIVE_RETURN_PSR_METHOD,
         "code_commit": code_commit,
-        "verdict": CALIBRATED if all(checks.values()) else CALIBRATION_FAILED,
+        "verdict": verdict,
         "scenario": {
             "seed_null": seed,
             "seed_planted": seed + 1_000_000,
@@ -127,6 +150,7 @@ def run_forward_gate_calibration(
             "paper_psr": PAPER_THRESHOLD,
             "live_psr": LIVE_THRESHOLD,
         },
+        "required": {"minimum_detection_rate": MINIMUM_DETECTION_RATE},
         "null": null,
         "planted_edge": planted,
         "checks": checks,
@@ -142,6 +166,8 @@ def run_forward_gate_calibration(
 __all__ = [
     "CALIBRATED",
     "CALIBRATION_FAILED",
+    "MINIMUM_DETECTION_RATE",
     "PAIRED_ACTIVE_RETURN_PSR_METHOD",
+    "UNDERPOWERED",
     "run_forward_gate_calibration",
 ]

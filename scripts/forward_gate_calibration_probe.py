@@ -9,6 +9,7 @@ from pathlib import Path
 
 from auto_invest.analytics.forward_gate_calibration import (
     CALIBRATED,
+    UNDERPOWERED,
     run_forward_gate_calibration,
 )
 
@@ -35,7 +36,7 @@ def main(argv: list[str] | None = None) -> int:
         args.json_out.parent.mkdir(parents=True, exist_ok=True)
         args.json_out.write_text(rendered + "\n", encoding="utf-8")
     print(json.dumps(payload, ensure_ascii=False) if args.json else rendered)
-    return 0 if payload["verdict"] == CALIBRATED else 1
+    return 0 if payload["verdict"] in {CALIBRATED, UNDERPOWERED} else 1
 
 
 if __name__ == "__main__":

@@ -28,7 +28,8 @@ def test_forward_gate_calibration_probe_writes_no_order_evidence(tmp_path) -> No
 
     assert result.returncode == 0, result.stderr
     payload = json.loads(output.read_text(encoding="utf-8"))
-    assert payload["verdict"] == "CALIBRATED"
+    assert payload["verdict"] == "UNDERPOWERED"
+    assert payload["required"]["minimum_detection_rate"] == 0.8
     assert payload["significance_method"] == "paired_active_return_psr_v1"
     assert payload["code_commit"] == "abc123"
     assert "no orders" in payload["safety"]

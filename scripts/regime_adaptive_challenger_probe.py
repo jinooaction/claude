@@ -33,6 +33,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--contract", type=Path, required=True)
     parser.add_argument("--shiller-file", type=Path)
     parser.add_argument("--gold-file", type=Path)
+    parser.add_argument("--forward-contract", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--markdown-output", type=Path, required=True)
     parser.add_argument("--json", action="store_true")
@@ -46,8 +47,22 @@ def main(argv: list[str] | None = None) -> int:
             if int(row.date[:4]) >= 1971
         ]
         gold_levels = align_gold_levels(rows, parse_gold(_read_text(args.gold_file, GOLD_URL)))
-        payload = evaluate_regime_challenger(rows, gold_levels, contract)
-        validate_report_payload(payload, contract)
+        forward_contract = (
+            json.loads(args.forward_contract.read_text(encoding="utf-8"))
+            if args.forward_contract is not None
+            else None
+        )
+        payload = evaluate_regime_challenger(
+            rows,
+            gold_levels,
+            contract,
+            forward_contract=forward_contract,
+        )
+        validate_report_payload(
+            payload,
+            contract,
+            forward_contract=forward_contract,
+        )
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         print(f"regime challenger input error: {exc}", file=sys.stderr)
         return 2

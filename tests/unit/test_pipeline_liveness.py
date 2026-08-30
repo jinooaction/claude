@@ -264,6 +264,10 @@ def test_default_specs_registry_sane():
     assert "released-work" in keys
     assert by_key["released-work"].critical is False
     assert by_key["released-work"].branch == "automation/released-work-last-run"
+    assert by_key["regime-challenger-forward"].critical is False
+    assert by_key["regime-challenger-forward"].branch == (
+        "automation/regime-challenger-forward-last-run"
+    )
     # 스펙 080 — 운영자 대시보드/모바일 알림 루프. 멈추면 가시성 저하라
     # 비핵심으로 드러내되 돈 경로 빨강으로 보지는 않는다.
     assert "operator-status" in keys

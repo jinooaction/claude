@@ -1,0 +1,114 @@
+name: Regime challenger forward observation (주문 없는 월별 관찰)
+
+on:
+  schedule:
+    - cron: "20 7 16 * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/auto_invest/analytics/regime_adaptive_challenger.py'
+      - 'src/auto_invest/analytics/strategy_acceptance_path_audit.py'
+      - 'src/auto_invest/analytics/forward_gate_calibration.py'
+      - 'scripts/regime_adaptive_challenger_probe.py'
+      - 'scripts/strategy_acceptance_path_audit_probe.py'
+      - 'scripts/edge_gate_calibration_probe.py'
+      - 'scripts/forward_gate_calibration_probe.py'
+      - 'specs/171-parallel-regime-edge-challenger/contracts/preregistered-challenger.json'
+      - 'specs/172-strategy-acceptance-path-audit/contracts/regime-forward-observation.json'
+      - '.github/workflows/regime-challenger-forward-observation.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: regime-challenger-forward-observation
+  cancel-in-progress: false
+
+jobs:
+  observe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39
+
+      - name: Re-evaluate frozen candidate on public monthly data
+        run: |
+          set -euo pipefail
+          uv run python scripts/regime_adaptive_challenger_probe.py \
+            --contract specs/171-parallel-regime-edge-challenger/contracts/preregistered-challenger.json \
+            --forward-contract specs/172-strategy-acceptance-path-audit/contracts/regime-forward-observation.json \
+            --output /tmp/regime_result.json \
+            --markdown-output /tmp/regime_result.md
+
+      - name: Recompute calibration evidence
+        run: |
+          set -euo pipefail
+          uv run python scripts/edge_gate_calibration_probe.py \
+            --seed 60000 \
+            --repetitions 500 \
+            --timestamp-utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --code-commit "${GITHUB_SHA}" \
+            --json-out /tmp/edge_calibration.json
+          uv run python scripts/forward_gate_calibration_probe.py \
+            --seed 159001 \
+            --repetitions 2000 \
+            --code-commit "${GITHUB_SHA}" \
+            --json-out /tmp/forward_calibration.json
+
+      - name: Audit actual acceptance path
+        run: |
+          set -euo pipefail
+          uv run python scripts/strategy_acceptance_path_audit_probe.py \
+            --regime-result /tmp/regime_result.json \
+            --edge-calibration /tmp/edge_calibration.json \
+            --forward-calibration /tmp/forward_calibration.json \
+            --json-out /tmp/acceptance_audit.json \
+            --markdown-out /tmp/LAST_RUN.md
+          {
+            echo ""
+            echo "## 동결 후 레짐 관찰"
+            echo ""
+            jq '.forward_observation' /tmp/regime_result.json
+            echo ""
+            echo "## workflow metadata"
+            echo ""
+            echo "| 항목 | 값 |"
+            echo "| --- | --- |"
+            echo "| run_id | ${GITHUB_RUN_ID} |"
+            echo "| commit | ${GITHUB_SHA} |"
+            echo "| timestamp_utc | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
+            echo "| safety | no orders, no capital change, no live strategy change |"
+          } >> /tmp/LAST_RUN.md
+
+      - name: Publish isolated evidence sidecar
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          BRANCH=automation/regime-challenger-forward-last-run
+          out=$(mktemp -d)
+          cp /tmp/LAST_RUN.md "${out}/LAST_RUN.md" 2>/dev/null || {
+            echo "# 레짐 후보 전진 관찰 실패" > "${out}/LAST_RUN.md"
+            echo "| timestamp_utc | $(date -u +%Y-%m-%dT%H:%M:%SZ) |" >> "${out}/LAST_RUN.md"
+          }
+          cp /tmp/regime_result.json "${out}/regime_result.json" 2>/dev/null || echo '{}' > "${out}/regime_result.json"
+          cp /tmp/acceptance_audit.json "${out}/acceptance_audit.json" 2>/dev/null || echo '{}' > "${out}/acceptance_audit.json"
+          cp /tmp/edge_calibration.json "${out}/edge_calibration.json" 2>/dev/null || echo '{}' > "${out}/edge_calibration.json"
+          cp /tmp/forward_calibration.json "${out}/forward_calibration.json" 2>/dev/null || echo '{}' > "${out}/forward_calibration.json"
+          cd "${out}"
+          git init -q
+          git config user.name "regime-observation-bot"
+          git config user.email "regime-observation-bot@noreply.github.com"
+          git checkout --orphan publish -q
+          python3 "${GITHUB_WORKSPACE}/scripts/redact_public_sidecar.py" . 2>/dev/null || true
+          git add LAST_RUN.md regime_result.json acceptance_audit.json edge_calibration.json forward_calibration.json
+          git commit -q -m "regime forward observation ${GITHUB_RUN_ID} @ ${GITHUB_SHA:0:7}"
+          git push --force \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "publish:${BRANCH}"

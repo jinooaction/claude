@@ -49,6 +49,13 @@ EXPECTED_SAFETY = {
     "orders_submitted": 0,
     "capital_changed": False,
 }
+FORWARD_OBSERVATION_SCHEMA_VERSION = "regime-forward-observation-v1"
+FORWARD_OBSERVATION_SAFETY = {
+    "promotion_allowed": False,
+    "orders_submitted": 0,
+    "capital_changed": False,
+    "live_strategy_changed": False,
+}
 
 
 def _canonical_digest(value: Any) -> str:
@@ -420,8 +427,80 @@ def _delayed_holdout_factors(
     return tuple(_take(net, holdout_indexes))
 
 
+def _forward_observation(
+    paths: Mapping[str, StrategyPath],
+    net_by_candidate: Mapping[str, tuple[float, ...]],
+    *,
+    annual_fixed_bps: int,
+    turnover_bps: int,
+    contract: Mapping[str, Any],
+) -> dict[str, Any]:
+    exact = {
+        "schema_version": FORWARD_OBSERVATION_SCHEMA_VERSION,
+        "incumbent_id": INCUMBENT_ID,
+        **FORWARD_OBSERVATION_SAFETY,
+    }
+    for key, expected in exact.items():
+        if contract.get(key) != expected:
+            raise ValueError(f"forward observation {key} mismatch")
+    candidate_id = str(contract.get("candidate_id") or "")
+    if candidate_id not in paths:
+        raise ValueError("forward observation candidate_id mismatch")
+    path = paths[candidate_id]
+    candidate = next(item for item in registered_candidates() if item.candidate_id == candidate_id)
+    if contract.get("candidate_fingerprint") != candidate.fingerprint:
+        raise ValueError("forward observation candidate_fingerprint mismatch")
+    frozen_through = str(contract.get("frozen_through") or "")
+    minimum_observations = int(contract.get("minimum_observations") or 0)
+    paper_threshold = float(contract.get("paper_psr_threshold") or 0.0)
+    live_threshold = float(contract.get("live_psr_threshold") or 0.0)
+    if (
+        len(frozen_through) != 7
+        or minimum_observations < 2
+        or not 0.0 < paper_threshold < live_threshold < 1.0
+    ):
+        raise ValueError("forward observation threshold contract mismatch")
+
+    indexes = [index for index, date in enumerate(path.dates) if date[:7] > frozen_through]
+    candidate_factors = _take(net_by_candidate[candidate_id], indexes)
+    incumbent_full = apply_cost_model(
+        path.incumbent_gross_factors,
+        path.incumbent_one_way_turnover,
+        annual_fixed_bps=annual_fixed_bps,
+        turnover_bps=turnover_bps,
+    )
+    incumbent_factors = _take(incumbent_full, indexes)
+    active_returns = [
+        challenger / incumbent - 1.0
+        for challenger, incumbent in zip(
+            candidate_factors, incumbent_factors, strict=True
+        )
+    ]
+    psr = probabilistic_sharpe(active_returns)
+    if len(indexes) < minimum_observations:
+        status = "OBSERVATION_WAIT"
+    elif psr is not None and float(psr) >= live_threshold:
+        status = "LIVE_THRESHOLD_EVIDENCE_NO_PROMOTION"
+    elif psr is not None and float(psr) >= paper_threshold:
+        status = "PAPER_THRESHOLD_EVIDENCE_NO_PROMOTION"
+    else:
+        status = "NO_EDGE_EVIDENCE"
+    return {
+        **dict(contract),
+        "n_obs": len(indexes),
+        "observation_start": None if not indexes else path.dates[indexes[0]],
+        "observation_end": None if not indexes else path.dates[indexes[-1]],
+        "active_return_psr": _float_or_none(psr),
+        "status": status,
+    }
+
+
 def evaluate_regime_challenger(
-    rows: list[MonthlyRow], gold_levels: list[float], contract: Mapping[str, Any]
+    rows: list[MonthlyRow],
+    gold_levels: list[float],
+    contract: Mapping[str, Any],
+    *,
+    forward_contract: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     _validate_preregistration(contract)
     candidates = registered_candidates()
@@ -574,7 +653,7 @@ def evaluate_regime_challenger(
         "bond": bond_total_return_factors(rows),
         "gold": gold_total_return_factors(gold_levels),
     }
-    return {
+    payload = {
         "schema_version": SCHEMA_VERSION,
         "family_id": FAMILY_ID,
         "incumbent_id": INCUMBENT_ID,
@@ -638,9 +717,23 @@ def evaluate_regime_challenger(
         "multiplicity": dict(contract["multiplicity"]),
         "safety": dict(EXPECTED_SAFETY),
     }
+    if forward_contract is not None:
+        payload["forward_observation"] = _forward_observation(
+            paths,
+            net_by_candidate,
+            annual_fixed_bps=annual_fixed_bps,
+            turnover_bps=principal_bps,
+            contract=forward_contract,
+        )
+    return payload
 
 
-def validate_report_payload(payload: Mapping[str, Any], contract: Mapping[str, Any]) -> bool:
+def validate_report_payload(
+    payload: Mapping[str, Any],
+    contract: Mapping[str, Any],
+    *,
+    forward_contract: Mapping[str, Any] | None = None,
+) -> bool:
     _validate_preregistration(contract)
     if payload.get("schema_version") != SCHEMA_VERSION or payload.get("family_id") != FAMILY_ID:
         raise ValueError("result identity mismatch")
@@ -681,6 +774,20 @@ def validate_report_payload(payload: Mapping[str, Any], contract: Mapping[str, A
     split = payload.get("split")
     if not isinstance(split, Mapping) or split.get("overlap_months") != 0:
         raise ValueError("split overlap mismatch")
+    if forward_contract is not None:
+        observation = payload.get("forward_observation")
+        if not isinstance(observation, Mapping):
+            raise ValueError("forward observation missing")
+        for key, expected in forward_contract.items():
+            if observation.get(key) != expected:
+                raise ValueError(f"forward observation {key} mismatch")
+        if observation.get("status") not in {
+            "OBSERVATION_WAIT",
+            "NO_EDGE_EVIDENCE",
+            "PAPER_THRESHOLD_EVIDENCE_NO_PROMOTION",
+            "LIVE_THRESHOLD_EVIDENCE_NO_PROMOTION",
+        }:
+            raise ValueError("forward observation status mismatch")
     return True
 
 

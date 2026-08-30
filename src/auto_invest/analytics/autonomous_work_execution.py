@@ -3401,12 +3401,11 @@ def _parallel_edge_challenger_packet(
     except (TypeError, ValueError):
         return None
 
-    observation_bucket = n_obs // 5
     digest_source = {
         "candidate_id": deployment.get("candidate_id"),
         "track": forward.get("track_key"),
-        "observation_bucket": observation_bucket,
-        "verdict": forward.get("verdict"),
+        "historical_verdict": payload.get("historical_verdict"),
+        "research_contract_version": "independent-edge-family-v2",
     }
     digest = hashlib.sha256(
         json.dumps(digest_source, sort_keys=True, ensure_ascii=True).encode("utf-8")
@@ -3442,8 +3441,8 @@ def _parallel_edge_challenger_packet(
         autonomy_level=autonomy_level,
         reason_ko=(
             f"현재 전략은 forward 관측 {n_obs}, PSR {psr} < {threshold}로 관찰 중이다. "
-            f"관측 {observation_bucket * 5}~{observation_bucket * 5 + 4} 구간의 증거를 "
-            "하나의 지문으로 묶고, 기다림과 별도로 신규 no-live 후보를 탐색한다."
+            "관찰 시계와 연구 후보 식별자를 분리하고, 기다림과 별도로 신규 no-live 후보를 "
+            "탐색한다."
         ),
         next_action_ko=(
             "공개 데이터·레짐·비용·paper forward를 사용해 기존 후보와 다른 신호군을 "
