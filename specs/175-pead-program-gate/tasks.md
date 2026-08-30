@@ -75,7 +75,7 @@
 
 ## Phase 6: End-to-End Result and Quality Gates
 
-- [ ] T024 공개 출시본으로 PEAD 탐침과 독립 소비자를 실행해 JSON·한글 요약을 검증한다.
+- [x] T024 공개 출시본으로 PEAD 탐침과 독립 소비자를 실행해 JSON·한글 요약을 검증한다.
 - [ ] T025 전체 `uv run pytest`와 `uv run ruff check src tests`를 통과시킨다.
 - [ ] T026 등급 4 필수 검사 `uv run python scripts/agent_harness_probe.py --strict`와 `uv run python scripts/check_handoff_facts.py`를 통과시킨다.
 - [ ] T027 PR 본문을 `.github/pull_request_template.md`에 맞춰 작성하고 `scripts/check_pr_quality_gate.py`로 검증한다.
