@@ -68,3 +68,18 @@ uv run pytest -q \
 - `uv run python scripts/agent_harness_probe.py --strict`: 14/14 통과
 - `uv run python scripts/check_handoff_facts.py`: 통과
 - `uv run python scripts/check_pr_quality_gate.py --template .github/pull_request_template.md`: 통과
+
+## main 적용 뒤 운영 검증
+
+- 기능: #701 merge `794a46f`, 배포 `33322684220` 성공.
+- JSONL 문법 복구: #702 merge `8bf612b`, 배포 `33324153215` 성공.
+- USDA 재시도·money-path 통합 판정: #703 merge `b6fa6fd`, 배포 `33325907473`,
+  money-path `33325907470` 성공. 상태는 `NO_EDGE_YET`, `PREVIEW_ONLY`, 단0, 자본·주문 0.
+- 공개 감사 ID 무결성: #704 merge `c85e0a8`, 배포 `33327235868`, 전략 공장
+  `33327235891` 성공.
+- 최종 공개 sidecar: ledger 959줄, audit 800줄, 후보 ID 800개, 전략 지문 800개,
+  연구 가족 20개. 모든 JSONL 행은 객체로 파싱됐다.
+- `scripts/factory_evidence_gate.py`: 후보 ID·지문 고유성과 가족 수 재계산을 통과했다.
+  종료코드 3은 `NO_FACTORY_EDGE`, 연구 캐너리·시점보존 종목·실행 동등성 부재에 따른
+  의도된 실패 폐쇄다.
+- 최종 전체 회귀: 3,176개 통과, 6개 조건부 건너뜀, 실패 0. 린트와 엄격 하네스 14/14 통과.
