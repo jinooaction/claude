@@ -123,9 +123,9 @@
 
 **Purpose**: 전체 저장소와 실제 자동화 적용 경로를 검증하고 다음 세션이 같은 결론을 재현하게 한다.
 
-- [ ] T035 관련 단위·통합 시험과 `uv run ruff check src tests scripts/accounting_factor_factory_probe.py`를 실행한다.
-- [ ] T036 `uv run pytest`와 `uv run ruff check src tests` 전체 검증을 통과시킨다.
-- [ ] T037 `uv run python scripts/agent_harness_probe.py --strict`와 `uv run python scripts/check_handoff_facts.py`를 통과시킨다.
+- [X] T035 관련 단위·통합 시험과 `uv run ruff check src tests scripts/accounting_factor_factory_probe.py`를 실행한다.
+- [X] T036 `uv run pytest`와 `uv run ruff check src tests` 전체 검증을 통과시킨다.
+- [X] T037 `uv run python scripts/agent_harness_probe.py --strict`와 `uv run python scripts/check_handoff_facts.py`를 통과시킨다.
 - [ ] T038 위험 등급 4, 문제 정의, 탐색 근거, 안전 경계, 전체 검증, 되돌림을 담은 PR 본문을 만들고 `scripts/check_pr_quality_gate.py`로 검증한다.
 - [ ] T039 브랜치를 푸시하고 PR을 만든 뒤 최신 `origin/main`과의 머지 가능성·전체 관문을 다시 확인해 merge 방식으로 자동 머지한다.
 - [ ] T040 `deploy-status` 기술로 main 배포와 dry-run worker 반영 여부를 확인하고 실제 주문·자본 변경이 없는지 현재 sidecar에서 다시 읽는다.

@@ -58,5 +58,13 @@ uv run pytest -q \
   tests/integration/test_factory_evidence_gate.py
 ```
 
-공식 자료 열람 전 실행에서는 48개가 통과했다. 생산 결과 기록 뒤 전체 저장소 시험·린트·하네스·
-인계 사실 검증은 PR 직전 다시 실행해 별도 커밋과 PR 본문에 기록한다.
+공식 자료 열람 전 관련 시험 48개가 통과했다. 오래된 옵션 워크플로 시험의 784행 기대값을
+새 최종 800행 상태로 갱신한 뒤 전체 저장소를 다시 검증했다.
+
+- `uv run pytest -q`: 3,167개 통과, 6개 조건부 건너뜀, 실패 0개
+- 건너뜀 6개: `KIS_LIVE_TEST=1`이 필요한 기존 실계좌 연동 시험
+- `uv run ruff check src tests`: 통과
+- `uv run ruff check scripts/accounting_factor_factory_probe.py`: 통과
+- `uv run python scripts/agent_harness_probe.py --strict`: 14/14 통과
+- `uv run python scripts/check_handoff_facts.py`: 통과
+- `uv run python scripts/check_pr_quality_gate.py --template .github/pull_request_template.md`: 통과

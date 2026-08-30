@@ -27,7 +27,7 @@ def test_probe_exposes_offline_sources_and_no_money_boundary() -> None:
     assert "auto_invest.broker" not in probe
 
 
-def test_workflow_keeps_options_and_makes_turn_of_month_canonical_last_family() -> None:
+def test_workflow_keeps_options_and_turn_of_month_before_accounting_last_family() -> None:
     workflow = Path(".github/workflows/autonomous-strategy-factory.yml").read_text(encoding="utf-8")
     assert "scripts/options_variance_risk_premium_factory_probe.py" in workflow
     assert "options_variance_risk_premium_factory.json" in workflow
@@ -37,7 +37,13 @@ def test_workflow_keeps_options_and_makes_turn_of_month_canonical_last_family() 
         'global_audit_trial_count\' /tmp/options_variance_risk_premium_factory.json)" = "752'
         in workflow
     )
-    assert 'global_audit_trial_count\' /tmp/strategy_factory.json)" = "784' in workflow
+    assert (
+        'global_audit_trial_count\' /tmp/turn_of_month_equity_factory.json)" = "784'
+        in workflow
+    )
+    assert "scripts/accounting_factor_factory_probe.py" in workflow
+    assert "accounting_factor_factory.json" in workflow
+    assert 'global_audit_trial_count\' /tmp/strategy_factory.json)" = "800' in workflow
     assert 'multiplicity_trial_count\' /tmp/strategy_factory.json)" = "16' in workflow
     assert "scripts/factory_evidence_gate.py" in workflow
     assert "calibrated-family-entry-v3.1" in workflow
