@@ -33,14 +33,14 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `794a46f` — Merge pull request #701 from jinooaction/codex/174-accounting-cross-sectional-factors |
-| main 테스트 | #701 기능과 JSONL 복구 브랜치에서 `uv run pytest -q` → 3169 passed, 6 skipped, 실패 0. 건너뛴 6개는 `KIS_LIVE_TEST=1` 전용이다. |
-| main 린트 | JSONL 복구 브랜치에서 `uv run ruff check src tests`와 두 복구 스크립트 린트 → All checks passed. |
-| 열린 PR | 2026-08-31 사실 확인 시 열린 PR은 없다. #701은 병합됐고, 자동 전략 공장 sidecar JSONL 복구 브랜치를 검증 중이다. |
+| 마지막 main 커밋 | `8bf612b` — Merge pull request #702 from jinooaction/codex/174-sidecar-jsonl-recovery |
+| main 테스트 | #702에서 `uv run pytest -q` → 3169 passed, 6 skipped, 실패 0. 건너뛴 6개는 `KIS_LIVE_TEST=1` 전용이다. 후속 진실 표면 보정은 전체 검증 중이다. |
+| main 린트 | #702에서 `uv run ruff check src tests`와 두 복구 스크립트 린트 → All checks passed. 후속 보정의 좁은 린트도 통과했다. |
+| 열린 PR | 2026-08-31 #702까지 병합됐고 열린 PR은 없다. USDA 일시 장애 재시도와 money-path 유효 판정 정렬을 격리 브랜치에서 검증 중이다. |
 | 출시 완료 스펙 | 최신 기능: #701(스펙 174, 회계 기반 횡단면 팩터 16개·800행·20가족 검증), #699(스펙 173, 판정 경로 교정·독립 월말월초 16개), #697(스펙 172, 8관문 합격 경로 감사), #692~#695(스펙 171, 독립 저회전 레짐 후보). |
 | 골격 스펙 | 없음. 스펙 174까지 완료됐다. 21번째 가족인 실적발표 후 주가 지연반응은 결과 전에 최대 가족 수·오합격 예산·검출력을 다시 교정해야 한다. |
 | 최근 출시 작업 | 공식 Fama–French 보관본/최신본으로 회계 팩터 16개를 시간 분리했다. 개발 승자는 HML 20%+RMW 40%+CMA 40%였지만 PBO 0.277778, 홀드아웃 PSR 0.271536, 연 1.5% 비용 후 현금 초과 -1.440%로 탈락했다. |
-| 활성 작업 | `globalfixed-ensemble-3-6-9-12` 전진 관측은 4/20, 라이브 상태는 `PREVIEW_ONLY`, 단0, 자본·실주문 0건이다. main 배포는 성공했으나 전략 공장 run `33322684203`은 옛 sidecar JSONL 한 줄 오염 때문에 512행 재구성 전에 실패했다. 구조적 JSONL 가리기와 알려진 오염 1줄 복구는 전체 검증을 통과해 PR 대기 중이다. |
+| 활성 작업 | 실거래 상태는 `PREVIEW_ONLY`, 단0, 자본·실주문 0건이다. 자본 게이트는 `globalfixed-ensemble-3-6-9-12`의 앵커드 OOS를 `NO_EDGE`로 읽어 `WAIT_EDGE`지만 기존 money-path는 표준 forward 4/20만 보고 `ACCUMULATING_EDGE`로 잘못 요약했다. #702 뒤 전략 공장 run `33324153244`은 JSONL 512행을 정상 복원했으나 USDA ESMIS의 HTTP 500에서 중단됐다. 두 진실 표면을 후속 보정 중이다. |
 | 안전 경계 | main은 헌법 X.4 v10.1.0이다. 공장 10%와 표준 20% 첫 진입을 분리하고, 표준은 같은 커밋 전체 교정을 요구한다. 앵커드·탐색은 별도 교정 전 진단 전용이다. 손실 예산 20%, 정규장, 킬스위치, 주문·노출 한도는 유지했고 자본은 0이다. |
 
 ## 최근 완료 — 2026-08-31 KST (#701 회계 기반 횡단면 팩터와 20가족 장부)
@@ -62,12 +62,17 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
   주문·자본·라이브 전략 변경 0건이다.
 - **검증과 배포**: #701 merge `794a46f`, 배포 run `33322684220` 성공. 전체 3167 passed,
   6 skipped, 린트·엄격 하네스·PR 품질 관문을 통과했다.
-- **sidecar 후속 결함**: 전략 공장 run `33322684203`은 새 회계 단계 전 기존 512행 재구성에서
-  실패했다. 공개 sidecar 가리기가 통계 소수 한 줄을 계좌번호로 오인해 JSONL을 깨뜨린 것이
-  원인이다. 현재 복구 브랜치는 앞으로 JSONL 숫자를 구조적으로 보존하고, 과거의 알려진
-  `[REDACTED_ACCOUNT]` 숫자 오염 한 줄만 명시적으로 제외하며 다른 오류는 실패 폐쇄한다.
-- **다음 우선순위**: sidecar를 800행·20가족으로 다시 발행한 뒤, 21번째 가족 PEAD를
-  새 교정 계약으로 시작한다. 현재 자본은 열지 않는다.
+- **sidecar 후속 결함 복구**: #702 merge `8bf612b`, 배포 run `33324153215`가 성공했다.
+  JSONL 숫자를 구조적으로 보존하고 과거의 알려진 `[REDACTED_ACCOUNT]` 오염 한 줄만
+  제외하며 다른 오류는 실패 폐쇄한다. 전체 3169 passed, 6 skipped를 통과했다.
+- **재실행에서 드러난 다음 결함**: 전략 공장 run `33324153244`은 옛 512행과 64+64+16+
+  16+16+16 후보를 정상 복원한 뒤 USDA ESMIS HTTP 500에서 중단됐다. 같은 읽기 전용 GET만
+  세 번까지 재시도하고 최종 실패는 그대로 실패시키는 후속 보정을 진행 중이다.
+- **운영 요약 결함**: 자본 게이트는 앵커드 OOS `NO_EDGE` 때문에 안전하게 `WAIT_EDGE`였지만
+  money-path는 표준 forward 4/20만 읽어 `ACCUMULATING_EDGE`로 표시했다. 후속 보정은
+  자본 게이트와 같은 결합 판정을 읽어 `NO_EDGE_YET` 및 OOS 실패 사유를 표시한다.
+- **다음 우선순위**: 위 두 후속 보정과 sidecar 800행·20가족 재발행을 닫은 뒤, 21번째 가족
+  PEAD를 새 교정 계약으로 시작한다. 현재 자본은 열지 않는다.
 - **상세 인계**: `HANDOFF-174-ACCOUNTING-CROSS-SECTIONAL-FACTORS.md`와
   `specs/174-accounting-cross-sectional-factors/`.
 
