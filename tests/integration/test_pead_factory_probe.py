@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import math
 import subprocess
 import sys
 from datetime import date
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def _write_data(path) -> None:
@@ -72,13 +76,24 @@ def _calibration() -> dict[str, object]:
     }
 
 
+def _write_preregistration(path: Path, data: Path) -> None:
+    source = ROOT / "specs/175-pead-program-gate/contracts/pead-preregistration.json"
+    payload = json.loads(source.read_text(encoding="utf-8"))
+    payload["data"]["expected_content_digest"] = (
+        "sha256:" + hashlib.sha256(data.read_bytes()).hexdigest()
+    )
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+
 def test_probe_writes_schema_valid_research_only_evidence(tmp_path) -> None:
     data = tmp_path / "op.csv"
     prior = tmp_path / "prior.json"
     calibration = tmp_path / "calibration.json"
     output = tmp_path / "pead.json"
     summary = tmp_path / "PEAD_LAST_RUN.md"
+    preregistration = tmp_path / "preregistration.json"
     _write_data(data)
+    _write_preregistration(preregistration, data)
     prior.write_text(json.dumps(_prior()), encoding="utf-8")
     calibration.write_text(json.dumps(_calibration()), encoding="utf-8")
 
@@ -93,7 +108,7 @@ def test_probe_writes_schema_valid_research_only_evidence(tmp_path) -> None:
             "--calibration-json",
             str(calibration),
             "--preregistration",
-            "specs/175-pead-program-gate/contracts/pead-preregistration.json",
+            str(preregistration),
             "--result-schema",
             "specs/175-pead-program-gate/contracts/pead-result.schema.json",
             "--code-commit",
@@ -122,7 +137,9 @@ def test_probe_rejects_bad_program_calibration(tmp_path) -> None:
     data = tmp_path / "op.csv"
     prior = tmp_path / "prior.json"
     calibration = tmp_path / "calibration.json"
+    preregistration = tmp_path / "preregistration.json"
     _write_data(data)
+    _write_preregistration(preregistration, data)
     prior.write_text(json.dumps(_prior()), encoding="utf-8")
     bad = _calibration()
     bad["program_extension"]["conservative_upper_bound"] = 0.21
@@ -138,7 +155,7 @@ def test_probe_rejects_bad_program_calibration(tmp_path) -> None:
             "--calibration-json",
             str(calibration),
             "--preregistration",
-            "specs/175-pead-program-gate/contracts/pead-preregistration.json",
+            str(preregistration),
             "--code-commit",
             "abc123",
         ],
@@ -149,4 +166,3 @@ def test_probe_rejects_bad_program_calibration(tmp_path) -> None:
     )
     assert result.returncode == 2
     assert "program calibration" in result.stderr
-

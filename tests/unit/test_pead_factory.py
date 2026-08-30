@@ -104,9 +104,11 @@ def _preregistration() -> dict[str, object]:
         "data": {
             "provider": "Open Source Asset Pricing",
             "release": "2025-10",
+            "url": "https://drive.google.com/uc?id=1g7w-yQ6Cg2qbMEkER9Q3vgns4JszXQo6",
             "signals": ["EarningsSurprise", "AnnouncementReturn"],
             "portfolio": "LS",
             "required_last_month": "2024-12",
+            "expected_content_digest": "sha256:" + "a" * 64,
             "require_positive_long_short_counts": True,
         },
         "program_calibration": {
@@ -352,6 +354,17 @@ def test_calibration_prior_audit_and_safety_contract_fail_closed() -> None:
             prior_audit_records=_prior_rows(),
             calibration=_calibration(),
             preregistration=bad_preregistration,
+            code_commit="abc123",
+            generated_at="2026-08-31T00:00:00Z",
+        )
+    bad_gate = deepcopy(_preregistration())
+    bad_gate["gates"]["family_pbo_max"] = 0.30
+    with pytest.raises(ValueError, match="gate contract"):
+        run_pead_factory(
+            bundle=_bundle(),
+            prior_audit_records=_prior_rows(),
+            calibration=_calibration(),
+            preregistration=bad_gate,
             code_commit="abc123",
             generated_at="2026-08-31T00:00:00Z",
         )

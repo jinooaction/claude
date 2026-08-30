@@ -9,6 +9,7 @@
     "signals": ["EarningsSurprise", "AnnouncementReturn"],
     "portfolio": "LS",
     "required_last_month": "2024-12",
+    "expected_content_digest": "sha256:6cdaf0ff051222b813e6f8404d7a30b94e146b421625f202bd04473fe97a1817",
     "require_positive_long_short_counts": true
   },
   "program_calibration": {

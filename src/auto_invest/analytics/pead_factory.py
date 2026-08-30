@@ -410,17 +410,50 @@ def _gate(gate_id: str, passed: bool, actual: object, required: object) -> dict[
     }
 
 
-def _validate_preregistration(payload: Mapping[str, object]) -> None:
+def _validate_preregistration(payload: Mapping[str, object], *, data_digest: object) -> None:
     if (
         payload.get("family_id") != FAMILY_ID
         or payload.get("diagnostic_gate_version") != GATE_VERSION
     ):
         raise ValueError("PEAD preregistration identity is invalid")
+    data = payload.get("data")
+    program = payload.get("program_calibration")
     candidates = payload.get("candidates")
     split = payload.get("split")
+    costs = payload.get("costs")
+    gates = payload.get("gates")
+    criterion = payload.get("criterion_validity")
+    forward = payload.get("forward_observation")
     safety = payload.get("safety")
-    if not all(isinstance(value, Mapping) for value in (candidates, split, safety)):
+    if not all(
+        isinstance(value, Mapping)
+        for value in (data, program, candidates, split, costs, gates, criterion, forward, safety)
+    ):
         raise ValueError("PEAD preregistration is incomplete")
+    if (
+        data.get("provider") != "Open Source Asset Pricing"
+        or data.get("release") != DATA_RELEASE
+        or data.get("url") != DATA_URL
+        or data.get("signals") != ["EarningsSurprise", "AnnouncementReturn"]
+        or data.get("portfolio") != "LS"
+        or data.get("required_last_month") != REQUIRED_LAST_MONTH
+        or data.get("expected_content_digest") != data_digest
+        or data.get("require_positive_long_short_counts") is not True
+    ):
+        raise ValueError("PEAD preregistration data identity is invalid")
+    if program != {
+        "contract": "family-size-bonferroni-v2",
+        "seed": 60_000,
+        "minimum_repetitions": 500,
+        "family_caps": {"16": 0.01, "64": 0.009},
+        "family_mix": {"16": 11, "64": 10},
+        "false_acceptance_budget": 0.2,
+        "conservative_upper_bound": 0.2,
+        "planted_sharpe_annual": 0.6,
+        "detection_min": 0.8,
+        "capital_entry_eligible": False,
+    }:
+        raise ValueError("PEAD preregistration program calibration is invalid")
     weights = candidates.get("announcement_weights")
     if not isinstance(weights, list) or len(weights) != 8:
         raise ValueError("PEAD preregistration candidate weights are invalid")
@@ -431,6 +464,11 @@ def _validate_preregistration(payload: Mapping[str, object]) -> None:
     ):
         raise ValueError("PEAD preregistration candidate weights are invalid")
     if (
+        candidates.get("sleeve_scales") != [0.5, 1.0]
+        or candidates.get("expected_count") != EXPECTED_CANDIDATES
+    ):
+        raise ValueError("PEAD preregistration candidate shape is invalid")
+    if (
         split.get("development_end") != DEVELOPMENT_END
         or split.get("embargo_start") != EMBARGO_START
         or split.get("embargo_end") != EMBARGO_END
@@ -440,6 +478,36 @@ def _validate_preregistration(payload: Mapping[str, object]) -> None:
         or int(split.get("recent_required_months", 0)) != 108
     ):
         raise ValueError("PEAD preregistration split is invalid")
+    if costs != {"primary_annual_bps": 150, "stress_annual_bps": [300, 500]}:
+        raise ValueError("PEAD preregistration cost contract is invalid")
+    if gates != {
+        "family_pbo_max": 0.25,
+        "post_publication_psr_min": 0.95,
+        "post_publication_annual_excess_min": 0.01,
+        "positive_eras_required": 3,
+        "era_count": 4,
+        "positive_recent_windows_required": 2,
+        "recent_window_count": 3,
+        "positive_year_contribution_max": 0.25,
+        "positive_top_five_month_contribution_max": 0.5,
+        "maximum_drawdown_max": 0.3,
+        "stress_300_annual_excess_min": 0.0,
+        "sign_flip_must_fail": True,
+    }:
+        raise ValueError("PEAD preregistration gate contract is invalid")
+    if criterion != {
+        "feasibility_preview_contaminated": True,
+        "untouched_holdout": False,
+        "point_in_time_constituents": False,
+        "account_execution_parity": False,
+    }:
+        raise ValueError("PEAD preregistration criterion validity is invalid")
+    if forward != {
+        "start_date": "2026-09-01",
+        "required_earnings_events": 200,
+        "required_calendar_months": 12,
+    }:
+        raise ValueError("PEAD preregistration forward contract is invalid")
     if safety != {
         "research_only": True,
         "research_canary_eligible": False,
@@ -527,7 +595,10 @@ def run_pead_factory(
     code_commit: str,
     generated_at: str,
 ) -> dict[str, object]:
-    _validate_preregistration(preregistration)
+    _validate_preregistration(
+        preregistration,
+        data_digest=bundle.quality.get("content_digest"),
+    )
     program_calibration = _validate_calibration(calibration, code_commit=code_commit)
     prior = _validate_prior(prior_audit_records)
     if bundle.quality.get("complete") is not True:
@@ -722,6 +793,7 @@ def run_pead_factory(
         "timestamp_utc": generated_at,
         "batch_id": f"pead-{str(bundle.quality['content_digest'])[7:19]}-{code_commit[:12]}",
         "pead_data_fingerprint": bundle.quality["content_digest"],
+        "preregistration_fingerprint": _fingerprint(preregistration),
         "candidate_count": EXPECTED_CANDIDATES,
         "complete_trial_count": EXPECTED_CANDIDATES,
         "multiplicity_trial_count": EXPECTED_CANDIDATES,
