@@ -122,3 +122,5 @@ money-path는 표준 forward 4/20만 읽어 `ACCUMULATING_EDGE`로 표시하는 
 - 엄격 하네스 14/14, HANDOFF 사실 검사: 통과.
 - USDA 재시도·money-path 결합 판정 보정: 관련 94 passed, 전체 3172 passed,
   6 skipped, 실패 0. `ruff check src tests`와 두 프로브 린트, 엄격 하네스 14/14 통과.
+- 공개 감사 ID 무결성 보정: 관련 29 passed, 전체 3176 passed, 6 skipped, 실패 0.
+  `ruff check src tests`와 세 sidecar 스크립트 린트, 엄격 하네스 14/14 통과.
