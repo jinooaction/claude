@@ -74,7 +74,12 @@ jobs:
           set -euo pipefail
           git fetch origin automation/autonomous-strategy-factory-last-run || true
           git show origin/automation/autonomous-strategy-factory-last-run:trial_ledger.jsonl \
-            > /tmp/trial_ledger_prior.jsonl 2>/dev/null || : > /tmp/trial_ledger_prior.jsonl
+            > /tmp/trial_ledger_prior_raw.jsonl 2>/dev/null \
+            || : > /tmp/trial_ledger_prior_raw.jsonl
+          uv run python scripts/recover_public_jsonl.py \
+            --input /tmp/trial_ledger_prior_raw.jsonl \
+            --output /tmp/trial_ledger_prior.jsonl \
+            --allow-known-redaction-drop
 
       - name: Refresh official macro data
         timeout-minutes: 12
@@ -485,7 +490,7 @@ jobs:
           git config user.name "strategy-factory-bot"
           git config user.email "strategy-factory-bot@noreply.github.com"
           git checkout --orphan publish -q
-          python3 "${GITHUB_WORKSPACE}/scripts/redact_public_sidecar.py" . 2>/dev/null || true
+          python3 "${GITHUB_WORKSPACE}/scripts/redact_public_sidecar.py" .
           git add LAST_RUN.md strategy_factory.json macro_strategy_factory.json \
             treasury_carry_factory.json \
             credit_spread_factory.json \
