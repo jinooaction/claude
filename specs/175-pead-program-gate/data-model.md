@@ -79,3 +79,5 @@
 | `account_execution_parity` | false | 정수주·공매도·현재 비용 재현 |
 | `eligible_for_next_review` | false | 모든 조건 충족 후 별도 검토 |
 
+역사 최근성 검사는 2016-01~2024-12의 정확히 108개월을 겹치지 않는 36개월 세 구간으로
+나눈다.

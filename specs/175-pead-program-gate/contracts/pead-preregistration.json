@@ -33,8 +33,9 @@
     "embargo_start": "1997-01",
     "embargo_end": "1997-12",
     "post_publication_start": "1998-01",
-    "post_publication_end": "2016-12",
-    "recent_start": "2017-01"
+    "post_publication_end": "2015-12",
+    "recent_start": "2016-01",
+    "recent_required_months": 108
   },
   "costs": {
     "primary_annual_bps": 150,
@@ -60,6 +61,11 @@
     "point_in_time_constituents": false,
     "account_execution_parity": false
   },
+  "preregistration_amendment": {
+    "made_before_metric_evaluation": true,
+    "reason": "2017-01 through 2024-12 contains 96 months and cannot form three complete 36-month windows",
+    "thresholds_changed": false
+  },
   "forward_observation": {
     "start_date": "2026-09-01",
     "required_earnings_events": 200,
@@ -74,4 +80,3 @@
     "selected_deploy_config": null
   }
 }
-
