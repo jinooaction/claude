@@ -84,6 +84,17 @@ def test_classifier_counts_released_regime_and_calendar_as_distinct_families() -
     assert len(build_research_family_audit(rows)) == 2
 
 
+def test_classifier_counts_accounting_candidates_as_one_distinct_family() -> None:
+    rows = annotate_research_families(
+        [_row("accounting-factor-hml-scale050", 1), _row("accounting-factor-rmw", 2)]
+    )
+
+    assert {row["research_family_id"] for row in rows} == {
+        "equity-accounting-cross-sectional-factors"
+    }
+    assert build_research_family_audit(rows)[0]["candidate_count"] == 2
+
+
 def test_unknown_candidate_fails_closed() -> None:
     try:
         annotate_research_families([_row("unknown-family", 1)])

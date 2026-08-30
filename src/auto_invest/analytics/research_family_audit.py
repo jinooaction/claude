@@ -8,6 +8,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 _PREFIX_FAMILIES = (
+    ("accounting-factor-", "equity-accounting-cross-sectional-factors"),
     ("calendar-turn-", "equity-calendar-turn-of-month"),
     ("regime-", "regime-adaptive-stock-bond-joint-weakness"),
     ("commodity-positioning-", "commodity-positioning"),

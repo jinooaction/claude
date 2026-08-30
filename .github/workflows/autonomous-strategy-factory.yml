@@ -1,7 +1,7 @@
-name: Autonomous strategy factory (turn-of-month independent edge)
+name: Autonomous strategy factory (accounting-factor independent edge)
 
-# 스펙 173. 브로커와 완전히 분리된 연구 워크플로다. 기존 옵션 공장까지 재구성한 뒤
-# 출시된 레짐 16개를 복원하고 독립 월말·월초 전략 16개를 검증한다.
+# 스펙 174. 브로커와 완전히 분리된 연구 워크플로다. 월말 공장까지 784행을 재구성한 뒤
+# 독립 회계 기반 횡단면 팩터 16개를 검증해 800행·20가족 장부를 만든다.
 # 이 워크플로 자체는 주문, 자본 변경, 라이브 설정 변경을 하지 않는다.
 
 on:
@@ -24,6 +24,7 @@ on:
       - 'src/auto_invest/analytics/energy_cross_market_factory.py'
       - 'src/auto_invest/analytics/options_variance_risk_premium_factory.py'
       - 'src/auto_invest/analytics/turn_of_month_equity_factory.py'
+      - 'src/auto_invest/analytics/accounting_factor_factory.py'
       - 'src/auto_invest/analytics/research_family_audit.py'
       - 'src/auto_invest/portfolio/factory_evidence.py'
       - 'src/auto_invest/analytics/real_world_gate_controls.py'
@@ -42,6 +43,8 @@ on:
       - 'scripts/energy_cross_market_factory_probe.py'
       - 'scripts/options_variance_risk_premium_factory_probe.py'
       - 'scripts/turn_of_month_equity_factory_probe.py'
+      - 'scripts/accounting_factor_factory_probe.py'
+      - 'specs/174-accounting-cross-sectional-factors/contracts/accounting-factor-result.schema.json'
       - 'specs/171-parallel-regime-edge-challenger/production-result.json'
       - 'scripts/factory_evidence_gate.py'
       - 'scripts/edge_gate_calibration_probe.py'
@@ -330,14 +333,33 @@ jobs:
             --released-regime-json specs/171-parallel-regime-edge-challenger/production-result.json \
             --calibration-json /tmp/edge_gate_calibration.json \
             --timestamp-utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --json-out /tmp/turn_of_month_equity_factory.json \
+            --summary-out /tmp/turn_of_month_equity_factory.md
+          test "$(jq -r '.complete_trial_count' /tmp/turn_of_month_equity_factory.json)" = "16"
+          test "$(jq -r '.global_audit_trial_count' /tmp/turn_of_month_equity_factory.json)" = "784"
+          test "$(jq -r '.multiplicity_trial_count' /tmp/turn_of_month_equity_factory.json)" = "16"
+          test "$(jq -r '.unique_trial_fingerprint_count' /tmp/turn_of_month_equity_factory.json)" = "784"
+          test "$(jq -r '.program_research_family_count' /tmp/turn_of_month_equity_factory.json)" = "19"
+          test "$(jq -r '.research_family_audit | length' /tmp/turn_of_month_equity_factory.json)" = "19"
+          test "$(jq -r '.promotion_allowed' /tmp/turn_of_month_equity_factory.json)" = "false"
+
+      - name: Run the 16-trial accounting cross-sectional factor batch
+        run: |
+          set -euo pipefail
+          uv run python scripts/accounting_factor_factory_probe.py \
+            --code-commit "${GITHUB_SHA}" \
+            --prior-factory-json /tmp/turn_of_month_equity_factory.json \
+            --calibration-json /tmp/edge_gate_calibration.json \
+            --result-schema specs/174-accounting-cross-sectional-factors/contracts/accounting-factor-result.schema.json \
+            --timestamp-utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --json-out /tmp/strategy_factory.json \
             --summary-out /tmp/LAST_RUN.md
           test "$(jq -r '.complete_trial_count' /tmp/strategy_factory.json)" = "16"
-          test "$(jq -r '.global_audit_trial_count' /tmp/strategy_factory.json)" = "784"
+          test "$(jq -r '.global_audit_trial_count' /tmp/strategy_factory.json)" = "800"
           test "$(jq -r '.multiplicity_trial_count' /tmp/strategy_factory.json)" = "16"
-          test "$(jq -r '.unique_trial_fingerprint_count' /tmp/strategy_factory.json)" = "784"
-          test "$(jq -r '.program_research_family_count' /tmp/strategy_factory.json)" = "19"
-          test "$(jq -r '.research_family_audit | length' /tmp/strategy_factory.json)" = "19"
+          test "$(jq -r '.unique_trial_fingerprint_count' /tmp/strategy_factory.json)" = "800"
+          test "$(jq -r '.program_research_family_count' /tmp/strategy_factory.json)" = "20"
+          test "$(jq -r '.research_family_audit | length' /tmp/strategy_factory.json)" = "20"
           test "$(jq -r '.research_live_parity.passed' /tmp/strategy_factory.json)" = "false"
           test "$(jq -r '.promotion_allowed' /tmp/strategy_factory.json)" = "false"
           test "$(jq -r '.decision.selected_deploy_config' /tmp/strategy_factory.json)" = "null"
@@ -355,7 +377,7 @@ jobs:
           [[ "${v3_exit}" == "0" || "${v3_exit}" == "3" ]]
           test "$(jq -r '.contract_version' /tmp/factory_evidence_v3.json)" = \
             "calibrated-family-entry-v3.1"
-          test "$(jq -r '.global_audit_trial_count' /tmp/factory_evidence_v3.json)" = "784"
+          test "$(jq -r '.global_audit_trial_count' /tmp/factory_evidence_v3.json)" = "800"
           test "$(jq -r '.program_multiplicity.method' /tmp/factory_evidence_v3.json)" = \
             "calibrated-family-risk-budget-v1"
           cat /tmp/LAST_RUN.md
@@ -373,16 +395,16 @@ jobs:
             cp /tmp/trial_ledger_prior.jsonl /tmp/trial_ledger.jsonl
             jq -c '. as $root | .trial_records[] | . + {
               batch_id: $root.batch_id,
-              data_fingerprint: $root.turn_of_month_data_fingerprint,
-              prior_data_fingerprint: "options-variance-risk-premium-sidecar",
+              data_fingerprint: $root.accounting_factor_data_fingerprint,
+              prior_data_fingerprint: "turn-of-month-equity-factory-sidecar",
               code_commit: $root.code_commit,
               timestamp_utc: $root.timestamp_utc
             }' /tmp/strategy_factory.json >> /tmp/trial_ledger.jsonl
             echo "duplicate=false" >> "$GITHUB_OUTPUT"
           fi
           jq -c '.audit_records[]' /tmp/strategy_factory.json > /tmp/audit_catalog.jsonl
-          test "$(wc -l < /tmp/audit_catalog.jsonl | tr -d ' ')" = "784"
-          test "$(jq -r '.strategy_fingerprint' /tmp/audit_catalog.jsonl | sort -u | wc -l | tr -d ' ')" = "784"
+          test "$(wc -l < /tmp/audit_catalog.jsonl | tr -d ' ')" = "800"
+          test "$(jq -r '.strategy_fingerprint' /tmp/audit_catalog.jsonl | sort -u | wc -l | tr -d ' ')" = "800"
           jq '{
             schema_version,
             batch_id,
@@ -427,8 +449,10 @@ jobs:
             2>/dev/null || echo '{}' > "${tmpdir}/energy_cross_market_factory.json"
           cp /tmp/options_variance_risk_premium_factory.json "${tmpdir}/options_variance_risk_premium_factory.json" \
             2>/dev/null || echo '{}' > "${tmpdir}/options_variance_risk_premium_factory.json"
-          cp /tmp/strategy_factory.json "${tmpdir}/turn_of_month_equity_factory.json" \
+          cp /tmp/turn_of_month_equity_factory.json "${tmpdir}/turn_of_month_equity_factory.json" \
             2>/dev/null || echo '{}' > "${tmpdir}/turn_of_month_equity_factory.json"
+          cp /tmp/strategy_factory.json "${tmpdir}/accounting_factor_factory.json" \
+            2>/dev/null || echo '{}' > "${tmpdir}/accounting_factor_factory.json"
           cp /tmp/real_world_gate_controls.json "${tmpdir}/real_world_gate_controls.json" \
             2>/dev/null || echo '{}' > "${tmpdir}/real_world_gate_controls.json"
           cp /tmp/full_gate_controls.json "${tmpdir}/full_gate_controls.json" \
@@ -473,6 +497,7 @@ jobs:
             energy_cross_market_factory.json \
             options_variance_risk_premium_factory.json \
             turn_of_month_equity_factory.json \
+            accounting_factor_factory.json \
             real_world_gate_controls.json \
             full_gate_controls.json \
             edge_gate_calibration.json \

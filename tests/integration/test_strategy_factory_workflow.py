@@ -37,8 +37,8 @@ def test_workflow_runs_complete_batch_without_broker_or_order_command() -> None:
     assert "fx_carry_factory.json" in text
     assert "commodity_term_structure_factory.json" in text
     assert "scripts/commodity_term_structure_factory_probe.py" in text
-    assert "data_fingerprint: $root.turn_of_month_data_fingerprint" in text
-    assert 'prior_data_fingerprint: "options-variance-risk-premium-sidecar"' in text
+    assert "data_fingerprint: $root.accounting_factor_data_fingerprint" in text
+    assert 'prior_data_fingerprint: "turn-of-month-equity-factory-sidecar"' in text
     assert "commodity_positioning_factory.json" in text
     assert "commodity_supply_demand_factory.json" in text
     assert "scripts/commodity_supply_demand_factory_probe.py" in text
@@ -50,6 +50,8 @@ def test_workflow_runs_complete_batch_without_broker_or_order_command() -> None:
     assert "scripts/options_variance_risk_premium_factory_probe.py" in text
     assert "turn_of_month_equity_factory.json" in text
     assert "scripts/turn_of_month_equity_factory_probe.py" in text
+    assert "accounting_factor_factory.json" in text
+    assert "scripts/accounting_factor_factory_probe.py" in text
     assert "real_world_gate_controls.json" in text
     assert "full_gate_controls.json" in text
     assert "audit_catalog.jsonl" in text
@@ -64,11 +66,12 @@ def test_workflow_runs_complete_batch_without_broker_or_order_command() -> None:
         'global_audit_trial_count\' /tmp/options_variance_risk_premium_factory.json)" = "752'
         in text
     )
-    assert 'global_audit_trial_count\' /tmp/strategy_factory.json)" = "784' in text
+    assert 'global_audit_trial_count\' /tmp/turn_of_month_equity_factory.json)" = "784' in text
+    assert 'global_audit_trial_count\' /tmp/strategy_factory.json)" = "800' in text
     assert 'multiplicity_trial_count\' /tmp/strategy_factory.json)" = "16' in text
     assert "scripts/factory_evidence_gate.py" in text
     assert "calibrated-family-entry-v3.1" in text
-    assert 'global_audit_trial_count\' /tmp/factory_evidence_v3.json)" = "784' in text
+    assert 'global_audit_trial_count\' /tmp/factory_evidence_v3.json)" = "800' in text
     assert "calibrated-family-risk-budget-v1" in text
     assert 'verdict\' /tmp/edge_gate_calibration.json)" = "CALIBRATED' in text
     assert "rebalance-once" not in text

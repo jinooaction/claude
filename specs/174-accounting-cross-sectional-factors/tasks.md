@@ -16,9 +16,9 @@
 
 **Purpose**: 결과를 보기 전에 후보·자료·구간·비용·관문·출력 계약을 기계 판독 가능하게 고정한다.
 
-- [ ] T001 `specs/174-accounting-cross-sectional-factors/contracts/accounting-factor-preregistration.json`과 `accounting-factor-result.schema.json`을 JSON 파서로 검증한다.
-- [ ] T002 `specs/174-accounting-cross-sectional-factors/quickstart.md`의 실행 경로와 `uv run python` 명령을 현재 저장소 구조에 맞춰 검증한다.
-- [ ] T003 [P] `specs/174-accounting-cross-sectional-factors/checklists/requirements.md`의 모든 요구사항이 완료됐는지 확인한다.
+- [X] T001 `specs/174-accounting-cross-sectional-factors/contracts/accounting-factor-preregistration.json`과 `accounting-factor-result.schema.json`을 JSON 파서로 검증한다.
+- [X] T002 `specs/174-accounting-cross-sectional-factors/quickstart.md`의 실행 경로와 `uv run python` 명령을 현재 저장소 구조에 맞춰 검증한다.
+- [X] T003 [P] `specs/174-accounting-cross-sectional-factors/checklists/requirements.md`의 모든 요구사항이 완료됐는지 확인한다.
 
 ---
 
@@ -28,9 +28,9 @@
 
 **⚠️ CRITICAL**: 이 단계가 끝나기 전에는 사용자 스토리 구현을 시작하지 않는다.
 
-- [ ] T004 `src/auto_invest/analytics/turn_of_month_equity_factory.py`와 `scripts/turn_of_month_equity_factory_probe.py`에서 재사용할 PBO·PSR·집중도·결과 구조를 확인한다.
-- [ ] T005 [P] `src/auto_invest/analytics/factory_evidence.py`와 `src/auto_invest/analytics/research_family_audit.py`의 20가족 교정·가족 분류 계약을 확인한다.
-- [ ] T006 [P] `.github/workflows/autonomous-strategy-factory.yml`과 `tests/integration/test_strategy_factory_workflow.py`의 현재 784행·19가족 게시 흐름을 확인한다.
+- [X] T004 `src/auto_invest/analytics/turn_of_month_equity_factory.py`와 `scripts/turn_of_month_equity_factory_probe.py`에서 재사용할 PBO·PSR·집중도·결과 구조를 확인한다.
+- [X] T005 [P] `src/auto_invest/portfolio/factory_evidence.py`와 `src/auto_invest/analytics/research_family_audit.py`의 20가족 교정·가족 분류 계약을 확인한다.
+- [X] T006 [P] `.github/workflows/autonomous-strategy-factory.yml`과 `tests/integration/test_strategy_factory_workflow.py`의 현재 784행·19가족 게시 흐름을 확인한다.
 
 **Checkpoint**: 회계 모듈이 브로커·주문·라이브 설정을 가져오지 않는 독립 경계가 확정됨.
 
@@ -44,18 +44,18 @@
 
 ### Tests for User Story 1
 
-- [ ] T007 [P] [US1] 8개 가중 조합×2개 슬리브가 정확히 16개 고유 후보·지문을 만드는 실패 시험을 `tests/unit/test_accounting_factor_factory.py`에 작성한다.
-- [ ] T008 [P] [US1] 월별 ZIP 파서의 정상·중복·역순·필수열 누락·결측 표식·비유한 수 실패 시험을 `tests/unit/test_accounting_factor_factory.py`에 작성한다.
-- [ ] T009 [P] [US1] 보관본 개발/차단과 최신본 홀드아웃 분리, 공통 개발 월 불일치, 과거값 재구성 감사 시험을 `tests/unit/test_accounting_factor_factory.py`에 작성한다.
-- [ ] T010 [US1] 개발 선택·PBO·PSR·시대·최근 36개월·집중도·낙폭·3%/5% 비용·부호 반전 관문 시험을 `tests/unit/test_accounting_factor_factory.py`에 작성한다.
-- [ ] T011 [US1] T007~T010이 새 모듈 부재 또는 미구현 때문에 실패하는지 확인한다.
+- [X] T007 [P] [US1] 8개 가중 조합×2개 슬리브가 정확히 16개 고유 후보·지문을 만드는 실패 시험을 `tests/unit/test_accounting_factor_factory.py`에 작성한다.
+- [X] T008 [P] [US1] 월별 ZIP 파서의 정상·중복·역순·필수열 누락·결측 표식·비유한 수 실패 시험을 `tests/unit/test_accounting_factor_factory.py`에 작성한다.
+- [X] T009 [P] [US1] 보관본 개발/차단과 최신본 홀드아웃 분리, 공통 개발 월 불일치, 과거값 재구성 감사 시험을 `tests/unit/test_accounting_factor_factory.py`에 작성한다.
+- [X] T010 [US1] 개발 선택·PBO·PSR·시대·최근 36개월·집중도·낙폭·3%/5% 비용·부호 반전 관문 시험을 `tests/unit/test_accounting_factor_factory.py`에 작성한다.
+- [X] T011 [US1] T007~T010이 새 모듈 부재 또는 미구현 때문에 실패하는지 확인한다.
 
 ### Implementation for User Story 1
 
-- [ ] T012 [US1] 엄격한 ZIP/CSV 월자료 파서와 자료 지문·범위·재구성 감사를 `src/auto_invest/analytics/accounting_factor_factory.py`에 구현한다.
-- [ ] T013 [US1] 사전등록 16개 후보·불변 정책 지문·연 1.5% 비용 수익 계산을 `src/auto_invest/analytics/accounting_factor_factory.py`에 구현한다.
-- [ ] T014 [US1] 개발 전용 선택·10조각 PBO·홀드아웃 관문·3%/5% 스트레스·부호 반전 위약시험을 `src/auto_invest/analytics/accounting_factor_factory.py`에 구현한다.
-- [ ] T015 [US1] T007~T010 단위 시험을 통과시키고 결정론적 재실행을 확인한다.
+- [X] T012 [US1] 엄격한 ZIP/CSV 월자료 파서와 자료 지문·범위·재구성 감사를 `src/auto_invest/analytics/accounting_factor_factory.py`에 구현한다.
+- [X] T013 [US1] 사전등록 16개 후보·불변 정책 지문·연 1.5% 비용 수익 계산을 `src/auto_invest/analytics/accounting_factor_factory.py`에 구현한다.
+- [X] T014 [US1] 개발 전용 선택·10조각 PBO·홀드아웃 관문·3%/5% 스트레스·부호 반전 위약시험을 `src/auto_invest/analytics/accounting_factor_factory.py`에 구현한다.
+- [X] T015 [US1] T007~T010 단위 시험을 통과시키고 결정론적 재실행을 확인한다.
 
 **Checkpoint**: 공식 자료 파일을 주입하면 홀드아웃을 선택에 쓰지 않고 역사 판정 가능.
 
@@ -69,15 +69,15 @@
 
 ### Tests for User Story 2
 
-- [ ] T016 [P] [US2] `FACTORY_EDGE`·`PAPER_CHALLENGER`·`NO_FACTORY_EDGE` 분류와 실패 관문 공개 시험을 `tests/unit/test_accounting_factor_factory.py`에 작성한다.
-- [ ] T017 [P] [US2] 역사 합격 자료에서도 `selected_deploy_config=null`, `research_canary_eligible=false`, `promotion_allowed=false`인 시험을 `tests/unit/test_accounting_factor_factory.py`에 작성한다.
-- [ ] T018 [US2] 로컬 파일 주입·공식 URL 재시도·SHA-256·JSON/Markdown 출력을 검증하는 실패 시험을 `tests/integration/test_accounting_factor_factory_probe.py`에 작성한다.
+- [X] T016 [P] [US2] `FACTORY_EDGE`·`PAPER_CHALLENGER`·`NO_FACTORY_EDGE` 분류와 실패 관문 공개 시험을 `tests/unit/test_accounting_factor_factory.py`에 작성한다.
+- [X] T017 [P] [US2] 역사 합격 자료에서도 `selected_deploy_config=null`, `research_canary_eligible=false`, `promotion_allowed=false`인 시험을 `tests/unit/test_accounting_factor_factory.py`에 작성한다.
+- [X] T018 [US2] 로컬 파일 주입·공식 URL 재시도·SHA-256·JSON/Markdown 출력을 검증하는 실패 시험을 `tests/integration/test_accounting_factor_factory_probe.py`에 작성한다.
 
 ### Implementation for User Story 2
 
-- [ ] T019 [US2] 세 상태 분류·기준/현재값·실행 동등성 실패·다음 연구 방향을 `src/auto_invest/analytics/accounting_factor_factory.py` 결과와 Markdown에 구현한다.
-- [ ] T020 [US2] 공식 자료의 제한된 재시도와 로컬 파일 재현, JSON Schema 검증, JSON/Markdown 출력을 `scripts/accounting_factor_factory_probe.py`에 구현한다.
-- [ ] T021 [US2] T016~T018 시험을 통과시키고 프로브가 브로커·주문·자본·라이브 설정을 읽지 않는지 확인한다.
+- [X] T019 [US2] 세 상태 분류·기준/현재값·실행 동등성 실패·다음 연구 방향을 `src/auto_invest/analytics/accounting_factor_factory.py` 결과와 Markdown에 구현한다.
+- [X] T020 [US2] 공식 자료의 제한된 재시도와 로컬 파일 재현, JSON Schema 검증, JSON/Markdown 출력을 `scripts/accounting_factor_factory_probe.py`에 구현한다.
+- [X] T021 [US2] T016~T018 시험을 통과시키고 프로브가 브로커·주문·자본·라이브 설정을 읽지 않는지 확인한다.
 
 **Checkpoint**: 역사적 유망함과 현재 실행 가능성을 섞지 않는 독립 결과 생성 가능.
 
@@ -91,17 +91,17 @@
 
 ### Tests for User Story 3
 
-- [ ] T022 [P] [US3] `accounting-factor-` 후보를 하나의 `accounting-cross-sectional-factor` 가족으로 분류하는 시험을 `tests/unit/test_research_family_audit.py`에 작성한다.
-- [ ] T023 [P] [US3] 800행·20가족·0.20 오합격 상한과 실행 동등성 실패를 소비자가 재계산하는 시험을 `tests/unit/test_factory_evidence.py`에 작성한다.
-- [ ] T024 [US3] 회계 프로브가 이전 784행·19가족의 완전성, 중복, 상태, 교정을 실패 폐쇄하는 시험을 `tests/integration/test_accounting_factor_factory_probe.py`에 작성한다.
-- [ ] T025 [US3] 중앙 워크플로가 월말 전략 결과 뒤 회계 가족을 실행·검증·최종 게시하는 시험을 `tests/integration/test_strategy_factory_workflow.py`에 작성한다.
+- [X] T022 [P] [US3] `accounting-factor-` 후보를 하나의 `accounting-cross-sectional-factor` 가족으로 분류하는 시험을 `tests/unit/test_research_family_audit.py`에 작성한다.
+- [X] T023 [P] [US3] 800행·20가족·0.20 오합격 상한과 실행 동등성 실패를 소비자가 재계산하는 시험을 `tests/unit/test_factory_evidence.py`에 작성한다.
+- [X] T024 [US3] 회계 프로브가 이전 784행·19가족의 완전성, 중복, 상태, 교정을 실패 폐쇄하는 시험을 `tests/integration/test_accounting_factor_factory_probe.py`에 작성한다.
+- [X] T025 [US3] 중앙 워크플로가 월말 전략 결과 뒤 회계 가족을 실행·검증·최종 게시하는 시험을 `tests/integration/test_strategy_factory_workflow.py`에 작성한다.
 
 ### Implementation for User Story 3
 
-- [ ] T026 [US3] `src/auto_invest/analytics/research_family_audit.py`에 회계 가족 분류를 추가한다.
-- [ ] T027 [US3] `src/auto_invest/analytics/accounting_factor_factory.py`와 `scripts/accounting_factor_factory_probe.py`에 784→800행, 19→20가족 감사와 0.20 교정 검증을 구현한다.
-- [ ] T028 [US3] `.github/workflows/autonomous-strategy-factory.yml`에 회계 프로브, 800/20 단언, 상세/간결 sidecar 게시를 연결한다.
-- [ ] T029 [US3] T022~T025 시험을 통과시키고 중앙 소비자의 독립 재계산이 원시 결과와 일치하는지 확인한다.
+- [X] T026 [US3] `src/auto_invest/analytics/research_family_audit.py`에 회계 가족 분류를 추가한다.
+- [X] T027 [US3] `src/auto_invest/analytics/accounting_factor_factory.py`와 `scripts/accounting_factor_factory_probe.py`에 784→800행, 19→20가족 감사와 0.20 교정 검증을 구현한다.
+- [X] T028 [US3] `.github/workflows/autonomous-strategy-factory.yml`에 회계 프로브, 800/20 단언, 상세/간결 sidecar 게시를 연결한다.
+- [X] T029 [US3] T022~T025 시험을 통과시키고 중앙 소비자의 독립 재계산이 원시 결과와 일치하는지 확인한다.
 
 **Checkpoint**: 전체 장부가 800개 변형이 아니라 20개 독립 전략 가족임을 기계 판독 가능하게 표시.
 
