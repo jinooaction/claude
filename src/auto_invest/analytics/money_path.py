@@ -48,7 +48,7 @@ from auto_invest.portfolio.capital_ladder import (
 )
 from auto_invest.portfolio.edge_verdict import PAIRED_ACTIVE_RETURN_PSR_METHOD
 
-SCHEMA_VERSION = "1.5"
+SCHEMA_VERSION = "1.6"
 
 # 자본 사다리 결정 라벨(capital_ladder 와 동일 — 재사용보다 명시로 결합도 낮춤).
 ACTION_PROMOTE = "PROMOTE"
@@ -69,7 +69,7 @@ INSUFFICIENT_DATA = "INSUFFICIENT_DATA"
 # 자율 머니루프가 "진짜 돈"으로 가는 경로상의 한 칸. 위에서 아래로 진행한다.
 STAGE_BLOCKED = "BLOCKED"  # 게이트 입력 불능/정합성 차단/킬스위치 — 길을 읽을 수 없음
 STAGE_ACCUMULATING = "ACCUMULATING_EDGE"  # 단0 · 관측 < 최소 — 더 쌓이는 중(정상, 시간 게이트)
-STAGE_NO_EDGE_YET = "NO_EDGE_YET"  # 단0 · 관측 충분하나 엣지가 기준 미달(아직 엣지 없음)
+STAGE_NO_EDGE_YET = "NO_EDGE_YET"  # 단0 · 표준 또는 앵커드 판정이 엣지 없음
 STAGE_EDGE_CONFIRMED = "EDGE_CONFIRMED_PENDING_DEPLOY"  # 엣지 확정 — 첫 자본 배치 임박
 STAGE_DEPLOYED = "DEPLOYED"  # 단≥1 · 자본 배치됨 — 다음 단 게이트 추적
 STAGE_DEFENDED = "DEFENDED"  # 강등/정지(낙폭) — 자본 회수됨
@@ -1293,6 +1293,9 @@ def assess_money_path(
     live_obs = _int(ladder.get("live_obs"))
 
     raw_verdict = forward_verdict.get("verdict")
+    anchored_verdict = forward_verdict.get("anchored_verdict")
+    anchored_reason = str(forward_verdict.get("anchored_reason") or "")
+    anchored_oos_n_obs = _int(forward_verdict.get("anchored_oos_n_obs"))
     significance_method = forward_verdict.get("significance_method")
     legacy_edge_evidence = (
         raw_verdict == EDGE_CONFIRMED
@@ -1557,25 +1560,59 @@ def assess_money_path(
             "(헌법 X.4 상시 위임). 운영자 전용은 입금(NAV 상한)·킬스위치뿐."
         )
     elif stage == STAGE_NO_EDGE_YET:
-        headline = (
-            f"➖ 단0 — 관측({n_obs})은 충분하나 엣지가 기준 미달({verdict}). "
-            "아직 배치할 검증된 엣지가 없다(정상 — 과적합 방어)."
-        )
-        blocking = "엣지 미확정: 전진 성과가 벤치마크/유의 기준을 넘지 못함."
-        gates.append(
-            GateCondition(
-                "벤치마크 대비 칼마",
-                GATE_PASS if beats_calmar else GATE_FAIL,
-                "넘음" if beats_calmar else "못 넘음",
-                "전략 칼마 > 벤치마크 칼마",
-                "자본 방어(낙폭 대비 수익)가 벤치마크보다 나아야 한다.",
+        if anchored_verdict == NO_EDGE:
+            headline = (
+                f"➖ 단0 — 깊은 표본외(OOS) 판정이 {NO_EDGE}. 짧은 forward는 "
+                f"{n_obs}/{min_obs} 관측이지만 현재 전략을 배치할 근거가 없다."
             )
-        )
-        gates.extend(_confidence_gates(psr, dsr, dsr_threshold))
-        next_action = (
-            "자율 시스템은 계속 전진 관측을 쌓으며 엣지를 재평가한다. 전략 자체를 갈아엎으면 "
-            "지문이 바뀌어 누적이 리셋되므로, 후보 전략은 전진 토너먼트에 *추가*로 검증한다."
-        )
+            blocking = (
+                "앵커드 OOS 실패: " + anchored_reason
+                if anchored_reason
+                else "앵커드 OOS walk-forward가 엣지를 확인하지 못함."
+            )
+            gates.append(
+                GateCondition(
+                    "앵커드 표본외 판정",
+                    GATE_FAIL,
+                    f"{NO_EDGE} (OOS {anchored_oos_n_obs or '?'}개)",
+                    EDGE_CONFIRMED,
+                    "짧은 forward 관측보다 먼저 깊은 표본외 구간의 반복 가능성을 확인한다.",
+                )
+            )
+            gates.append(
+                GateCondition(
+                    "짧은 전진 관측",
+                    GATE_PENDING if n_obs is None or n_obs < min_obs else GATE_PASS,
+                    f"{n_obs if n_obs is not None else '?'}/{min_obs}",
+                    f"≥ {min_obs}",
+                    "계속 관측하되 앵커드 OOS 실패를 숨기거나 뒤집은 것으로 간주하지 않는다.",
+                )
+            )
+            next_action = (
+                "현재 전략은 돈을 배치하지 않는다. forward 관측은 감사용으로 계속 쌓고, "
+                "독립 전략 후보를 같은 과적합 방어 기준으로 추가 검증한다."
+            )
+        else:
+            headline = (
+                f"➖ 단0 — 관측({n_obs})은 충분하나 엣지가 기준 미달({verdict}). "
+                "아직 배치할 검증된 엣지가 없다(정상 — 과적합 방어)."
+            )
+            blocking = "엣지 미확정: 전진 성과가 벤치마크/유의 기준을 넘지 못함."
+            gates.append(
+                GateCondition(
+                    "벤치마크 대비 칼마",
+                    GATE_PASS if beats_calmar else GATE_FAIL,
+                    "넘음" if beats_calmar else "못 넘음",
+                    "전략 칼마 > 벤치마크 칼마",
+                    "자본 방어(낙폭 대비 수익)가 벤치마크보다 나아야 한다.",
+                )
+            )
+            gates.extend(_confidence_gates(psr, dsr, dsr_threshold))
+            next_action = (
+                "자율 시스템은 계속 전진 관측을 쌓으며 엣지를 재평가한다. 전략 자체를 "
+                "갈아엎으면 지문이 바뀌어 누적이 리셋되므로, 후보 전략은 전진 토너먼트에 "
+                "*추가*로 검증한다."
+            )
     elif stage == STAGE_EDGE_CONFIRMED:
         conf = f", 신뢰도 PSR {psr}" if psr is not None else ""
         headline = (

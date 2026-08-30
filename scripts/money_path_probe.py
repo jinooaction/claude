@@ -19,6 +19,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from auto_invest.analytics.money_path import assess_money_path
+from auto_invest.portfolio.backtest_anchored import combine_edge_verdicts
 
 # 이 프로브가 소비하는 사이드카(워크플로가 git show 로 모은다).
 # (key, branch, filename) — pipeline_liveness 의 --manifest 와 같은 형식.
@@ -249,6 +250,34 @@ def extract_json_after_header(text: str | None, header: str) -> dict | None:
     return obj if isinstance(obj, dict) else None
 
 
+def effective_forward_verdict(
+    standard: dict | None,
+    anchored: dict | None,
+) -> dict | None:
+    """자본 사다리와 같은 표준+앵커드 판정을 money-path에 전달한다.
+
+    표준 forward의 관측 수와 상세 지표는 그대로 보존하되, 최종 verdict는 실제 자본
+    사다리가 소비한 결합 규칙을 따른다. 이로써 앵커드 OOS가 NO_EDGE인데 상위 요약만
+    ACCUMULATING_EDGE로 보이는 상태 혼동을 막는다.
+    """
+    if standard is None and anchored is None:
+        return None
+    combined = combine_edge_verdicts(standard, anchored)
+    effective = dict(standard or {})
+    effective.update(
+        {
+            "verdict": combined["verdict"],
+            "effective_verdict_source": combined["source"],
+            "standard_verdict": combined["standard_verdict"],
+            "anchored_verdict": combined["anchored_verdict"],
+            "anchored_reason": (anchored or {}).get("reason"),
+            "anchored_oos_n_obs": combined["anchored_oos_n_obs"],
+            "anchored_significance": combined["anchored_significance"],
+        }
+    )
+    return effective
+
+
 def parse_canary_armed(text: str | None) -> bool | None:
     """라이브 캐너리 사이드카에서 `armed (무장 여부)` 표 행을 읽는다(없으면 None)."""
     if not text:
@@ -303,7 +332,12 @@ def build_report(
     prior_raw = _read(sidecar_dir, "money-path")
 
     ladder = extract_json_after_header(edge, "결정 JSON")
-    forward_verdict = extract_json_after_header(edge, "forward 판정 JSON")
+    standard_forward_verdict = extract_json_after_header(edge, "forward 판정 JSON")
+    anchored_forward_verdict = extract_json_after_header(edge, "앵커드 판정 JSON")
+    forward_verdict = effective_forward_verdict(
+        standard_forward_verdict,
+        anchored_forward_verdict,
+    )
     live_growth = extract_json_after_header(edge, "라이브 실적 JSON")
     promote_ready = extract_json_after_header(
         promote, "promote-check"
@@ -365,8 +399,8 @@ def build_report(
     )
     # 다음 실행의 ETA 실측 + 표본 churn 비교를 위해, 이번 forward 관측 수와 베이시스 제외
     # 개수를 결정 JSON 에 prior 힌트로 싣는다(다음 실행이 직전 대비 증감을 본다).
-    forward_n_obs = (forward_verdict or {}).get("n_obs")
-    forward_legacy = (forward_verdict or {}).get("legacy_snapshots_excluded")
+    forward_n_obs = (standard_forward_verdict or {}).get("n_obs")
+    forward_legacy = (standard_forward_verdict or {}).get("legacy_snapshots_excluded")
     return report, forward_n_obs, forward_legacy
 
 
