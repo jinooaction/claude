@@ -328,6 +328,34 @@ def test_public_sidecar_redactor_preserves_numeric_jsonl_and_masks_keys(tmp_path
     assert payload["status"] == "complete"
 
 
+def test_public_sidecar_redactor_preserves_candidate_identity_in_jsonl(tmp_path):
+    path = tmp_path / "audit_catalog.jsonl"
+    candidate_ids = (
+        "exploratory-price-overlay-12345678901234",
+        "exploratory-price-overlay-22345678901234",
+    )
+    path.write_text(
+        "".join(
+            json.dumps(
+                {
+                    "candidate_id": candidate_id,
+                    "strategy_fingerprint": f"sha256:{index:064x}",
+                    "account_no": "1234567801",
+                }
+            )
+            + "\n"
+            for index, candidate_id in enumerate(candidate_ids, 1)
+        ),
+        encoding="utf-8",
+    )
+
+    _REDACTOR._redact_path(path)
+
+    rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+    assert [row["candidate_id"] for row in rows] == list(candidate_ids)
+    assert {row["account_no"] for row in rows} == {"[REDACTED]"}
+
+
 def test_public_jsonl_recovery_only_drops_known_legacy_redaction(tmp_path):
     source = tmp_path / "raw.jsonl"
     destination = tmp_path / "clean.jsonl"
@@ -355,6 +383,7 @@ def test_public_jsonl_recovery_only_drops_known_legacy_redaction(tmp_path):
     assert recovered.returncode == 0, recovered.stderr
     assert json.loads(recovered.stdout) == {
         "dropped_known_redaction_lines": 1,
+        "repaired_redacted_candidate_ids": 0,
         "valid_lines": 1,
     }
     assert [json.loads(line) for line in destination.read_text().splitlines()] == [
@@ -379,3 +408,39 @@ def test_public_jsonl_recovery_only_drops_known_legacy_redaction(tmp_path):
     )
     assert rejected.returncode == 2
     assert "invalid JSONL" in rejected.stderr
+
+
+def test_public_jsonl_recovery_repairs_legacy_redacted_candidate_identity(tmp_path):
+    source = tmp_path / "raw.jsonl"
+    destination = tmp_path / "clean.jsonl"
+    fingerprint = "sha256:" + "a" * 64
+    source.write_text(
+        json.dumps(
+            {
+                "candidate_id": "exploratory-price-overlay-[REDACTED_ACCOUNT]",
+                "strategy_fingerprint": fingerprint,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    recovered = subprocess.run(
+        [
+            sys.executable,
+            str(_RECOVERY),
+            "--input",
+            str(source),
+            "--output",
+            str(destination),
+            "--allow-known-redaction-drop",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert recovered.returncode == 0, recovered.stderr
+    assert json.loads(recovered.stdout)["repaired_redacted_candidate_ids"] == 1
+    payload = json.loads(destination.read_text(encoding="utf-8"))
+    assert payload["candidate_id"] == "legacy-redacted-candidate-" + "a" * 20

@@ -33,14 +33,14 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `8bf612b` — Merge pull request #702 from jinooaction/codex/174-sidecar-jsonl-recovery |
+| 마지막 main 커밋 | `b6fa6fd` — Merge pull request #703 from jinooaction/Codex/174-postmerge-truth-recovery |
 | main 테스트 | #702에서 3169 passed, 6 skipped였고 후속 진실 표면 보정에서 `uv run pytest -q` → 3172 passed, 6 skipped, 실패 0. 건너뛴 6개는 `KIS_LIVE_TEST=1` 전용이다. |
 | main 린트 | 후속 진실 표면 보정에서 `uv run ruff check src tests`와 USDA·money-path 프로브 린트 → All checks passed. |
-| 열린 PR | 2026-08-31 #702까지 병합됐고 열린 PR은 없다. USDA 일시 장애 재시도와 money-path 유효 판정 정렬을 격리 브랜치에서 검증 중이다. |
+| 열린 PR | 2026-08-31 #703까지 병합됐고 열린 PR은 없다. 공개 감사 장부의 candidate ID 충돌을 격리 브랜치에서 복구 중이다. |
 | 출시 완료 스펙 | 최신 기능: #701(스펙 174, 회계 기반 횡단면 팩터 16개·800행·20가족 검증), #699(스펙 173, 판정 경로 교정·독립 월말월초 16개), #697(스펙 172, 8관문 합격 경로 감사), #692~#695(스펙 171, 독립 저회전 레짐 후보). |
 | 골격 스펙 | 없음. 스펙 174까지 완료됐다. 21번째 가족인 실적발표 후 주가 지연반응은 결과 전에 최대 가족 수·오합격 예산·검출력을 다시 교정해야 한다. |
 | 최근 출시 작업 | 공식 Fama–French 보관본/최신본으로 회계 팩터 16개를 시간 분리했다. 개발 승자는 HML 20%+RMW 40%+CMA 40%였지만 PBO 0.277778, 홀드아웃 PSR 0.271536, 연 1.5% 비용 후 현금 초과 -1.440%로 탈락했다. |
-| 활성 작업 | 실거래 상태는 `PREVIEW_ONLY`, 단0, 자본·실주문 0건이다. 자본 게이트는 `globalfixed-ensemble-3-6-9-12`의 앵커드 OOS를 `NO_EDGE`로 읽어 `WAIT_EDGE`지만 기존 money-path는 표준 forward 4/20만 보고 `ACCUMULATING_EDGE`로 잘못 요약했다. #702 뒤 전략 공장 run `33324153244`은 JSONL 512행을 정상 복원했으나 USDA ESMIS의 HTTP 500에서 중단됐다. 두 진실 표면을 후속 보정 중이다. |
+| 활성 작업 | #703 뒤 money-path run `33325907470`은 `NO_EDGE_YET`, 앵커드 OOS 748개 실패, forward 4/20, `PREVIEW_ONLY`, 단0, 자본·실주문 0건을 정확히 게시했다. 전략 공장 `33325907448`도 성공해 800행·20가족을 게시했으나, 공개 가리기가 숫자 접미사가 있는 후보 ID 4개를 다시 가려 한 쌍이 충돌했다. 지문 800개는 고유하고 승격은 거짓이지만 감사 ID 의미 무결성을 복구 중이다. |
 | 안전 경계 | main은 헌법 X.4 v10.1.0이다. 공장 10%와 표준 20% 첫 진입을 분리하고, 표준은 같은 커밋 전체 교정을 요구한다. 앵커드·탐색은 별도 교정 전 진단 전용이다. 손실 예산 20%, 정규장, 킬스위치, 주문·노출 한도는 유지했고 자본은 0이다. |
 
 ## 최근 완료 — 2026-08-31 KST (#701 회계 기반 횡단면 팩터와 20가족 장부)
@@ -71,6 +71,13 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 - **운영 요약 결함**: 자본 게이트는 앵커드 OOS `NO_EDGE` 때문에 안전하게 `WAIT_EDGE`였지만
   money-path는 표준 forward 4/20만 읽어 `ACCUMULATING_EDGE`로 표시했다. 후속 보정은
   자본 게이트와 같은 결합 판정을 읽어 `NO_EDGE_YET` 및 OOS 실패 사유를 표시한다.
+- **#703 적용 결과**: merge `b6fa6fd`, 배포 `33325907473`, money-path `33325907470`,
+  전략 공장 `33325907448`이 성공했다. USDA 실패 지점을 넘고 회계 16개까지 800행·20가족을
+  게시했으며 돈 경로도 `NO_EDGE_YET`으로 바로잡혔다.
+- **남은 공개 ID 결함**: JSONL 문법은 모두 유효하지만 광범위 계좌번호 정규식이 공개
+  `candidate_id`의 숫자 접미사 4개를 가렸다. 800개 지문은 고유하나 후보 ID는 799개만
+  고유해 독립 소비자가 실패 폐쇄했다. 공개 후보 ID 보존, 과거 ID의 지문 기반 대체,
+  게시 전 800 ID·800 지문·20가족 검증을 후속 적용 중이다.
 - **다음 우선순위**: 위 두 후속 보정과 sidecar 800행·20가족 재발행을 닫은 뒤, 21번째 가족
   PEAD를 새 교정 계약으로 시작한다. 현재 자본은 열지 않는다.
 - **상세 인계**: `HANDOFF-174-ACCOUNTING-CROSS-SECTIONAL-FACTORS.md`와
