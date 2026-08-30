@@ -1,0 +1,14 @@
+{
+  "schema_version": "regime-forward-observation-v1",
+  "candidate_id": "regime-corr24-thr0p2-weak6-cash",
+  "candidate_fingerprint": "sha256:f006b817472a487f5d115fc9b833cf3d850e7e092bf576826db954c913adf512",
+  "incumbent_id": "globalfixed-ensemble-3-6-9-12",
+  "frozen_through": "2026-07",
+  "minimum_observations": 20,
+  "paper_psr_threshold": 0.8,
+  "live_psr_threshold": 0.95,
+  "promotion_allowed": false,
+  "orders_submitted": 0,
+  "capital_changed": false,
+  "live_strategy_changed": false
+}

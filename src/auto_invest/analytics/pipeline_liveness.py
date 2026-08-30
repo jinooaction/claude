@@ -367,6 +367,15 @@ def default_specs() -> list[SidecarSpec]:
             description="레짐 층화(연구 전용)",
         ),
         SidecarSpec(
+            key="regime-challenger-forward",
+            branch="automation/regime-challenger-forward-last-run",
+            filename="LAST_RUN.md",
+            max_age_hours=840.0,
+            critical=False,
+            description="7/8 레짐 후보 동결 후 월별 관찰(주문 없는 연구 전용)",
+            first_expected_utc="2026-09-16T07:20:00Z",
+        ),
+        SidecarSpec(
             key="promote-readiness",
             branch="automation/promote-readiness-last-run",
             filename="LAST_RUN.md",

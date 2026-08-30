@@ -60,6 +60,17 @@ def _contract() -> dict:
     return json.loads(CONTRACT.read_text(encoding="utf-8"))
 
 
+def _forward_contract() -> dict:
+    path = (
+        ROOT
+        / "specs"
+        / "172-strategy-acceptance-path-audit"
+        / "contracts"
+        / "regime-forward-observation.json"
+    )
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 def test_registered_grid_is_exactly_the_frozen_sixteen() -> None:
     candidates = registered_candidates()
 
@@ -214,3 +225,31 @@ def test_result_validator_rejects_safety_or_identity_mutation() -> None:
         validate_report_payload(unsafe, contract)
     with pytest.raises(ValueError, match="candidate_count"):
         validate_report_payload(wrong_count, contract)
+
+
+def test_frozen_regime_candidate_starts_forward_observation_without_promotion() -> None:
+    rows, gold = _monthly_fixture()
+    contract = _contract()
+    forward_contract = _forward_contract()
+
+    payload = evaluate_regime_challenger(
+        rows,
+        gold,
+        contract,
+        forward_contract=forward_contract,
+    )
+
+    observation = payload["forward_observation"]
+    assert observation["candidate_id"] == "regime-corr24-thr0p2-weak6-cash"
+    assert observation["frozen_through"] == "2026-07"
+    assert observation["n_obs"] == 0
+    assert observation["active_return_psr"] is None
+    assert observation["status"] == "OBSERVATION_WAIT"
+    assert observation["promotion_allowed"] is False
+    assert observation["orders_submitted"] == 0
+    assert observation["capital_changed"] is False
+    assert validate_report_payload(
+        payload,
+        contract,
+        forward_contract=forward_contract,
+    ) is True

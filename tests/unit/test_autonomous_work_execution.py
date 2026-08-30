@@ -3151,5 +3151,49 @@ def test_profit_forward_status_mismatch_stays_observation_wait() -> None:
     assert report.selected_work.status == STATUS_OBSERVATION_WAIT
 
 
+def test_parallel_research_identity_does_not_change_with_observation_clock() -> None:
+    def evidence(n_obs: int, *released: str) -> dict[str, str]:
+        rows = _all_known_released_no_edge_evidence(*released)
+        rows["profit-evidence-engine"] = _json(
+            {
+                "historical_verdict": "HOLDOUT_EDGE",
+                "status": "FORWARD_VALIDATION",
+                "forward": {
+                    "track_key": "globalfixed",
+                    "n_obs": n_obs,
+                    "psr_vs_benchmark": 0.2,
+                    "threshold": 0.95,
+                    "passed": False,
+                    "verdict": "NO_EDGE",
+                },
+                "deployment_match": {
+                    "candidate_id": "globalfixed-ensemble-3-6-9-12",
+                    "exploration_canary_ready": False,
+                },
+            }
+        )
+        return rows
+
+    at_four = build_autonomous_work_execution(evidence(4), now=NOW)
+    at_five = build_autonomous_work_execution(evidence(5), now=NOW)
+    candidate_four = next(
+        row for row in at_four.ranked_work if row.work_type == "parallel_edge_challenger"
+    )
+    candidate_five = next(
+        row for row in at_five.ranked_work if row.work_type == "parallel_edge_challenger"
+    )
+
+    assert candidate_four.candidate_id == candidate_five.candidate_id
+    assert "관측 0~4" not in candidate_four.reason_ko
+    assert "관측 5~9" not in candidate_five.reason_ko
+
+    after_release = build_autonomous_work_execution(
+        evidence(9, candidate_four.candidate_id), now=NOW
+    )
+    assert all(
+        row.work_type != "parallel_edge_challenger" for row in after_release.ranked_work
+    )
+
+
 def _source_refs(packet) -> set[str]:
     return set(packet.source_refs)
