@@ -80,8 +80,8 @@
 - [x] T026 등급 4 필수 검사 `uv run python scripts/agent_harness_probe.py --strict`와 `uv run python scripts/check_handoff_facts.py`를 통과시킨다.
 - [x] T027 PR 본문을 `.github/pull_request_template.md`에 맞춰 작성하고 `scripts/check_pr_quality_gate.py`로 검증한다.
 - [x] T028 변경을 커밋·푸시하고 PR의 원격 검사를 확인해 조건 충족 시 merge commit 방식으로 자동 머지한다.
-- [ ] T029 `deploy-status` 기술로 main 배포·최신 sidecar를 확인하고 결과가 연구 전용임을 재검증한다.
-- [ ] T030 `handoff` 기술로 `HANDOFF.md`의 main 커밋, 테스트, 출시 스펙, 다음 관찰 지점을 갱신·검증·머지한다.
+- [x] T029 `deploy-status` 기술로 main 배포·최신 sidecar를 확인하고 결과가 연구 전용임을 재검증한다.
+- [x] T030 `handoff` 기술로 `HANDOFF.md`의 main 커밋, 테스트, 출시 스펙, 다음 관찰 지점을 갱신·검증·머지한다.
 
 ## Dependencies & Execution Order
 
