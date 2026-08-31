@@ -97,7 +97,7 @@ MICRO_GTAA_PATH = "micro-gtaa-live-canary"
 CAPITAL_LADDER_PATH = "capital-ladder-live-canary"
 MICRO_MAX_CAPITAL_USD = 1000
 MICRO_SCHEDULE_HOUR_UTC = 15
-LIVE_SCHEDULE_HOUR_NEW_YORK = 10
+LIVE_SCHEDULE_HOURS_NEW_YORK = (10, 11, 12, 13)
 LIVE_SCHEDULE_MINUTE = 17
 LIVE_SCHEDULE_TIMEZONE = ZoneInfo("America/New_York")
 HALT_RECOVERY_MAX_AGE_HOURS = 36
@@ -791,21 +791,23 @@ def _bool(value: object) -> bool | None:
 
 
 def _next_live_schedule(now: datetime) -> str:
-    """다음 평일 뉴욕 현지 10:17 live-canary 예약 후보 시각."""
+    """다음 평일 뉴욕 현지 live-canary 복수 예약 후보 시각."""
     if now.tzinfo is None:
         now = now.replace(tzinfo=UTC)
     local_now = now.astimezone(LIVE_SCHEDULE_TIMEZONE)
-    candidate = local_now.replace(
-        hour=LIVE_SCHEDULE_HOUR_NEW_YORK,
-        minute=LIVE_SCHEDULE_MINUTE,
-        second=0,
-        microsecond=0,
-    )
-    if local_now.weekday() >= 5 or local_now >= candidate:
-        candidate = candidate + timedelta(days=1)
-        while candidate.weekday() >= 5:
-            candidate = candidate + timedelta(days=1)
-    return candidate.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    day = local_now
+    while True:
+        if day.weekday() < 5:
+            for hour in LIVE_SCHEDULE_HOURS_NEW_YORK:
+                candidate = day.replace(
+                    hour=hour,
+                    minute=LIVE_SCHEDULE_MINUTE,
+                    second=0,
+                    microsecond=0,
+                )
+                if candidate > local_now:
+                    return candidate.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        day = (day + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 def _next_micro_schedule(now: datetime) -> str:

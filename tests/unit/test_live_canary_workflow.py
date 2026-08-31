@@ -43,6 +43,10 @@ def test_live_canary_preview_job_publishes_sidecar_without_production_gate() -> 
     assert "cd /opt/auto-invest" not in preview
     assert "--mode live --confirm-live" not in preview
     assert "LIVE rebalance — REAL ORDERS" not in preview
+    publish = preview.split("Publish live canary result to sidecar branch", 1)[1].split(
+        "\n        run:", 1
+    )[0]
+    assert "steps.gate.outputs.armed != 'true'" in publish
     measure = preview.split("Measure live track", 1)[1].split("\n      - name:", 1)[0]
     assert "steps.gate.outputs.armed != 'true'" in measure
 
@@ -106,23 +110,26 @@ def test_live_canary_real_order_failures_reach_job_and_sidecar() -> None:
     live_step = live_section.split("\n\n      - name:", 1)[0]
     assert "ssh_exit=$?" in live_step
     assert 'exit "${ssh_exit}"' in live_step
+    assert "LIVE_ORDER_SESSION_ALREADY_CLAIMED" in live_step
+    assert 'echo "duplicate=${duplicate}" >> "$GITHUB_OUTPUT"' in live_step
 
     fill_step = real_order.split("Sync broker fills and read audit ledger", 1)[1].split(
         "\n\n      - name:", 1
     )[0]
-    assert "if: always()" in fill_step
+    assert "if: always() && steps.live.outputs.duplicate != 'true'" in fill_step
     assert '"live-canary-fills"' in fill_step
     assert 'exit "${sync_exit}"' in fill_step
 
     measure_step = real_order.split("Measure live track after real orders", 1)[1].split(
         "\n\n      - name:", 1
     )[0]
-    assert "if: always()" in measure_step
+    assert "if: always() && steps.live.outputs.duplicate != 'true'" in measure_step
     assert '"observe live-canary-measure ${CAP}"' in measure_step
     assert '"live-canary-profit ${CAP}"' in measure_step
     assert 'exit "${ssh_exit}"' in measure_step
 
     publish_step = real_order.split("Publish production live canary result", 1)[1]
+    assert "if: always() && steps.live.outputs.duplicate != 'true'" in publish_step
     assert "FILLS_OUTCOME: ${{ steps.fills.outcome }}" in publish_step
     assert "MEASURE_OUTCOME: ${{ steps.measure.outcome }}" in publish_step
     assert "cat /tmp/live_rebal.err" in publish_step
@@ -154,6 +161,6 @@ def test_live_canary_schedule_avoids_top_of_hour_and_tracks_new_york_time() -> N
     text = _workflow_text()
     schedule = text.split("  schedule:", 1)[1].split("  workflow_dispatch:", 1)[0]
 
-    assert 'cron: "17 10 * * 1-5"' in schedule
+    assert 'cron: "17 10-13 * * 1-5"' in schedule
     assert 'timezone: "America/New_York"' in schedule
     assert 'cron: "0 ' not in schedule

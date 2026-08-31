@@ -88,3 +88,14 @@ OPERATIONAL_CANARY
 - 도중 마감 결과: 다음 중개사 쓰기 0건, `market_hours_gate` 거부 감사, 종료 코드 75
 - `check_scope`: CLI 시작 전 검사와 실행 권한 잠금 뒤 각 실제 중개사 쓰기 직전 검사
 - 종이매매·미리보기: 판정 대상이 아니므로 기존 동작 유지
+
+## LiveOrderSessionClaim
+
+같은 뉴욕 거래일의 복수 GitHub 예약을 실제 주문 한 번으로 축약하는 production 서버 장부다.
+
+- `market_session`: XNYS가 실제로 열린 서버 현재 시각의 뉴욕 현지 날짜
+- `run_id`, `code_commit`, `claimed_at_utc`: 최초 선점 실행의 신원과 시각
+- 저장: production 비밀 경계 안의 추가 전용 파일, 파일 잠금 아래 원자 확인·추가
+- 최초 실행: `LIVE_ORDER_SESSION_CLAIMED` 뒤 기존 `rebalance-once` 호출
+- 중복 실행: `LIVE_ORDER_SESSION_ALREADY_CLAIMED`와 최초 run ID를 반환하고 브로커 호출 0건
+- 장외·휴장: 선점하지 않고 종료 코드 75, 다음 정상 예약 기회를 소모하지 않음
