@@ -11,6 +11,7 @@ KIS_SMOKE_HELPER = REPO_ROOT / "deploy" / "kis-smoke-on-instance.sh"
 OBSERVE_HELPER = REPO_ROOT / "deploy" / "observe-on-instance.sh"
 REFRESH_HELPER = REPO_ROOT / "deploy" / "refresh-ssh-boundary-helpers.sh"
 RECOVERY_HELPER = REPO_ROOT / "deploy" / "reconciliation-recovery-on-instance.sh"
+DEPLOY_AUDIT_HELPER = REPO_ROOT / "deploy" / "deploy-audit-on-instance.sh"
 
 
 def _body() -> str:
@@ -34,6 +35,8 @@ def test_repair_script_exists_and_is_executable():
     assert REFRESH_HELPER.stat().st_mode & 0o111
     assert RECOVERY_HELPER.is_file()
     assert RECOVERY_HELPER.stat().st_mode & 0o111
+    assert DEPLOY_AUDIT_HELPER.is_file()
+    assert DEPLOY_AUDIT_HELPER.stat().st_mode & 0o111
 
 
 def test_requires_root_and_public_key_not_private_key():
@@ -98,6 +101,10 @@ def test_gateway_allows_only_fixed_commands_without_eval():
     assert not re.search(r'reconciliation-halt-recovery\\ \*\)', code)
     assert re.search(r'\bstart-deploy\)', code)
     assert re.search(r'\bdeploy-journal\)', code)
+    assert re.search(r'\bdeploy-audit\)', code)
+    assert re.search(r'deploy-audit\\ \*\)', code)
+    assert "/usr/local/sbin/auto-invest-deploy-audit" in code
+    assert r"^[0-9a-fA-F]{8,64}$" in code
     assert "refused command" in code
     assert "eval " not in code
     assert "bash -c" not in code
@@ -114,6 +121,7 @@ def test_sudoers_is_narrow_and_visudo_validated():
     assert "/usr/local/sbin/auto-invest-kis-smoke" in body
     assert "/usr/local/sbin/auto-invest-observe" in body
     assert "/usr/local/sbin/auto-invest-reconciliation-recovery" in body
+    assert "/usr/local/sbin/auto-invest-deploy-audit" in body
     assert "/usr/bin/systemctl start auto-invest-deploy.service" in body
     assert "/usr/bin/journalctl -u auto-invest-deploy.service -n 120 --no-pager" in body
 
@@ -154,6 +162,7 @@ def test_refresh_helpers_only_mode_reinstalls_boundary_without_key_rotation():
     assert "install_kis_smoke_helper" in refresh_block
     assert "install_observe_helper" in refresh_block
     assert "install_reconciliation_recovery_helper" in refresh_block
+    assert "install_deploy_audit_helper" in refresh_block
     assert "install_sudoers" in refresh_block
     assert "AUTO_INVEST_SSH_BOUNDARY_HELPERS_REFRESHED" in refresh_block
     assert "install_deploy_user" not in refresh_block
@@ -172,6 +181,31 @@ def test_repair_installs_helper_files_from_current_main_when_available():
     assert '"deploy/kis-smoke-on-instance.sh"' in body
     assert '"deploy/observe-on-instance.sh"' in body
     assert '"deploy/reconciliation-recovery-on-instance.sh"' in body
+    assert '"deploy/deploy-audit-on-instance.sh"' in body
+
+
+def test_deploy_audit_helper_is_fixed_read_only_and_revalidates_input():
+    body = DEPLOY_AUDIT_HELPER.read_text(encoding="utf-8")
+
+    assert 'DB_PATH="/opt/auto-invest/data/auto_invest.db"' in body
+    assert "sqlite3 -readonly" in body
+    assert "^[0-9a-fA-F]{8,64}$" in body
+    assert "event_type LIKE 'DEPLOY_%'" in body
+    assert "AUDIT_STATUS=ok" in body
+    assert "AUDIT_TERMINAL_EVENT=" in body
+    forbidden = (
+        "systemctl",
+        "git ",
+        "rebalance-once",
+        "auto-invest run",
+        "INSERT ",
+        "UPDATE ",
+        "DELETE ",
+        "eval ",
+        "bash -c",
+    )
+    for fragment in forbidden:
+        assert fragment not in body
 
 
 def test_reconciliation_recovery_helper_is_fixed_and_order_free():

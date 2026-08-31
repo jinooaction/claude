@@ -100,3 +100,15 @@ OPERATIONAL_CANARY
 - 최초 실행: `LIVE_ORDER_SESSION_CLAIMED` 뒤 기존 `rebalance-once` 호출
 - 중복 실행: `LIVE_ORDER_SESSION_ALREADY_CLAIMED`와 최초 run ID를 반환하고 브로커 호출 0건
 - 장외·휴장: 선점하지 않고 종료 코드 75, 다음 정상 예약 기회를 소모하지 않음
+
+## DeployAuditObservation
+
+exact-main 배포 여부를 서버의 추가 전용 감사 장부에서 읽는 비변경 관측 결과다.
+
+- 입력: 없거나 8~64자리 16진수인 `correlation_id`
+- 호출: SSH forced-command gateway의 `deploy-audit [correlation_id]` 고정 명령
+- 이중 검증: GitHub 워크플로와 root 소유 서버 helper가 입력 형식을 각각 검증
+- 읽기 경계: `/opt/auto-invest/data/auto_invest.db`를 `sqlite3 -readonly`로만 조회
+- 출력: `AUDIT_STATUS`, `AUDIT_CORRELATION_ID`, `AUDIT_ROW_COUNT`, `AUDIT_TERMINAL_EVENT`
+- 성공: 최신 또는 지정 감사 사슬의 마지막 이벤트가 `DEPLOY_COMPLETED`
+- 금지: 원격 셸·표준 입력 스크립트·환경 접두사·DB 쓰기·systemd·git·주문 명령

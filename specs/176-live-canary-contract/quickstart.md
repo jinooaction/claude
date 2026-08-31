@@ -45,3 +45,10 @@ sidecar의 `capital_entry_evidence.json`을 각각 내려받는다. 역할, 코�
 
 문제가 생기면 센티넬을 `armed:false`, 단 0, 자본 0으로 내린다. 기존 주문·체결·감사 행은
 삭제하지 않는다. 이미 산 전략 보유분은 기존 위험 축소 주문 경로로만 정리한다.
+
+## 6. 배포 감사 장부 확인
+
+main 배포 뒤 수동 `Deploy audit log verification` 워크플로를 실행한다. 이 워크플로는 SSH 경계의
+고정 `deploy-audit` 명령만 호출하며 서버에 셸 본문을 보내지 않는다. 성공 sidecar에서
+`ssh_exit=0`, `audit_status=ok`, `terminal_event=DEPLOY_COMPLETED`를 확인한다. 선택적 correlation
+ID는 8~64자리 16진수만 허용되고, 잘못된 값은 서버 데이터베이스를 읽기 전에 차단되어야 한다.

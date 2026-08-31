@@ -32,6 +32,7 @@ KIS_SMOKE_HELPER_PATH="${KIS_SMOKE_HELPER_PATH:-/usr/local/sbin/auto-invest-kis-
 OBSERVE_HELPER_PATH="${OBSERVE_HELPER_PATH:-/usr/local/sbin/auto-invest-observe}"
 LIVE_CANARY_HELPER_PATH="${LIVE_CANARY_HELPER_PATH:-/usr/local/sbin/auto-invest-live-canary}"
 RECONCILIATION_RECOVERY_HELPER_PATH="${RECONCILIATION_RECOVERY_HELPER_PATH:-/usr/local/sbin/auto-invest-reconciliation-recovery}"
+DEPLOY_AUDIT_HELPER_PATH="${DEPLOY_AUDIT_HELPER_PATH:-/usr/local/sbin/auto-invest-deploy-audit}"
 LIVE_ORDER_PUBLIC_KEY_PATH="${LIVE_ORDER_PUBLIC_KEY_PATH:-/usr/local/share/auto-invest/live-order-signing-public.pem}"
 SUDOERS_PATH="${SUDOERS_PATH:-/etc/sudoers.d/auto-invest-gh-deploy}"
 REPO_SYNC_UNITS="${REPO_SYNC_UNITS:-/opt/auto-invest/deploy/sync-units.sh}"
@@ -39,6 +40,7 @@ REPO_KIS_SMOKE_HELPER="${REPO_KIS_SMOKE_HELPER:-/opt/auto-invest/deploy/kis-smok
 REPO_OBSERVE_HELPER="${REPO_OBSERVE_HELPER:-/opt/auto-invest/deploy/observe-on-instance.sh}"
 REPO_LIVE_CANARY_HELPER="${REPO_LIVE_CANARY_HELPER:-/opt/auto-invest/deploy/live-canary-on-instance.sh}"
 REPO_RECONCILIATION_RECOVERY_HELPER="${REPO_RECONCILIATION_RECOVERY_HELPER:-/opt/auto-invest/deploy/reconciliation-recovery-on-instance.sh}"
+REPO_DEPLOY_AUDIT_HELPER="${REPO_DEPLOY_AUDIT_HELPER:-/opt/auto-invest/deploy/deploy-audit-on-instance.sh}"
 REPO_LIVE_ORDER_PUBLIC_KEY="${REPO_LIVE_ORDER_PUBLIC_KEY:-/opt/auto-invest/deploy/live-order-signing-public.pem}"
 
 die() {
@@ -273,6 +275,17 @@ case "${cmd}" in
     deploy-journal)
         exec sudo -n /usr/bin/journalctl -u auto-invest-deploy.service -n 120 --no-pager
         ;;
+    deploy-audit)
+        exec sudo -n /usr/local/sbin/auto-invest-deploy-audit
+        ;;
+    deploy-audit\ *)
+        correlation_id="${cmd#deploy-audit }"
+        if [[ "${correlation_id}" =~ ^[0-9a-fA-F]{8,64}$ ]]; then
+            exec sudo -n /usr/local/sbin/auto-invest-deploy-audit "${correlation_id}"
+        fi
+        echo "refused command: ${cmd}" >&2
+        exit 126
+        ;;
     *)
         echo "refused command: ${cmd}" >&2
         exit 126
@@ -313,6 +326,13 @@ install_reconciliation_recovery_helper() {
         "deploy/reconciliation-recovery-on-instance.sh" \
         "${REPO_RECONCILIATION_RECOVERY_HELPER}" \
         "${RECONCILIATION_RECOVERY_HELPER_PATH}"
+}
+
+install_deploy_audit_helper() {
+    install_repo_file \
+        "deploy/deploy-audit-on-instance.sh" \
+        "${REPO_DEPLOY_AUDIT_HELPER}" \
+        "${DEPLOY_AUDIT_HELPER_PATH}"
 }
 
 install_live_order_public_key() {
@@ -369,7 +389,7 @@ install_sudoers() {
     tmp_file="$(mktemp)"
     cat > "${tmp_file}" <<EOF_SUDOERS
 # auto-invest deploy gateway: ${DEPLOY_USER} may run only fixed root-owned commands.
-${DEPLOY_USER} ALL=(root) NOPASSWD: ${SYNC_HELPER_PATH}, ${KIS_SMOKE_HELPER_PATH}, ${OBSERVE_HELPER_PATH}, ${LIVE_CANARY_HELPER_PATH}, ${RECONCILIATION_RECOVERY_HELPER_PATH}, /usr/bin/systemctl start auto-invest-deploy.service, /usr/bin/journalctl -u auto-invest-deploy.service -n 120 --no-pager
+${DEPLOY_USER} ALL=(root) NOPASSWD: ${SYNC_HELPER_PATH}, ${KIS_SMOKE_HELPER_PATH}, ${OBSERVE_HELPER_PATH}, ${LIVE_CANARY_HELPER_PATH}, ${RECONCILIATION_RECOVERY_HELPER_PATH}, ${DEPLOY_AUDIT_HELPER_PATH}, /usr/bin/systemctl start auto-invest-deploy.service, /usr/bin/journalctl -u auto-invest-deploy.service -n 120 --no-pager
 EOF_SUDOERS
     visudo -cf "${tmp_file}" >/dev/null
     install -m 0440 -o root -g root "${tmp_file}" "${SUDOERS_PATH}"
@@ -434,6 +454,7 @@ main() {
         install_observe_helper
         install_live_canary_helper
         install_reconciliation_recovery_helper
+        install_deploy_audit_helper
         install_live_order_public_key
         install_sudoers
         echo "AUTO_INVEST_SSH_BOUNDARY_HELPERS_REFRESHED"
@@ -444,6 +465,7 @@ main() {
         echo "observe_helper=${OBSERVE_HELPER_PATH}"
         echo "live_canary_helper=${LIVE_CANARY_HELPER_PATH}"
         echo "reconciliation_recovery_helper=${RECONCILIATION_RECOVERY_HELPER_PATH}"
+        echo "deploy_audit_helper=${DEPLOY_AUDIT_HELPER_PATH}"
         echo "live_order_public_key=${LIVE_ORDER_PUBLIC_KEY_PATH}"
         exit 0
     fi
@@ -454,6 +476,7 @@ main() {
     install_observe_helper
     install_live_canary_helper
     install_reconciliation_recovery_helper
+    install_deploy_audit_helper
     install_live_order_public_key
     install_deploy_user
     install_authorized_key
@@ -468,6 +491,7 @@ main() {
     echo "observe_helper=${OBSERVE_HELPER_PATH}"
     echo "live_canary_helper=${LIVE_CANARY_HELPER_PATH}"
     echo "reconciliation_recovery_helper=${RECONCILIATION_RECOVERY_HELPER_PATH}"
+    echo "deploy_audit_helper=${DEPLOY_AUDIT_HELPER_PATH}"
     echo "live_order_public_key=${LIVE_ORDER_PUBLIC_KEY_PATH}"
 }
 
