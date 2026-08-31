@@ -79,7 +79,11 @@ def _research_calibration() -> dict:
     }
 
 
-def _fundability(capital: Decimal = Decimal("1000")) -> dict:
+def _fundability(
+    capital: Decimal = Decimal("1000"),
+    *,
+    canary_capital_pct: Decimal = Decimal("10"),
+) -> dict:
     result = assess_fundability(
         target_weights={"AAA": Decimal("0.5"), "BBB": Decimal("0.5")},
         holdings={},
@@ -92,7 +96,7 @@ def _fundability(capital: Decimal = Decimal("1000")) -> dict:
             per_trade_pct=Decimal("50"),
             per_symbol_pct=Decimal("60"),
             global_exposure_pct=Decimal("100"),
-            canary_capital_pct=Decimal("10"),
+            canary_capital_pct=canary_capital_pct,
             canary_min_duration_days=14,
             canary_acceptance_drawdown_pct=Decimal("10"),
         ),
@@ -411,6 +415,28 @@ def test_operational_route_allows_first_fill_but_never_claims_alpha() -> None:
     assert result.evidence["entry_source"] == "operational_canary"
     assert result.evidence["operational_assessment"]["alpha_confirmed"] is False
     assert result.evidence["operational_assessment"]["max_rung"] == 1
+
+
+def test_operational_first_fill_rejects_declared_canary_capital_mismatch() -> None:
+    fingerprint = "sha256:" + "a" * 64
+    result = evaluate_live_entry(
+        None,
+        {"verdict": "PASS"},
+        {"fills_count": 0},
+        evidence_age_hours=None,
+        operational_evidence=_operational_evidence(fingerprint=fingerprint),
+        operational_evidence_age_hours=2,
+        expected_code_commit="a" * 40,
+        live_strategy_fingerprint=fingerprint,
+        validated_strategy_fingerprint=fingerprint,
+        entry_route="operational_canary",
+        fundability_evidence=_fundability(canary_capital_pct=Decimal("5")),
+        expected_capital_usd=Decimal("1000"),
+        execution_proxy_parity_passed=True,
+    )
+
+    assert result.allowed is False
+    assert "operational_canary_capital_contract" in result.reasons
 
 
 def test_operational_first_fill_fails_on_route_commit_fingerprint_or_staleness() -> None:

@@ -41,10 +41,12 @@
 
 [caps]
 # 소액 캐너리용 보수 캡. 종목당 60%·전체 100%와 외부 자본 사다리의 현재 단 한도를 함께 적용한다.
+# canary_capital_pct는 첫 주문 재검사가 단 1의 NAV 10% 계약과 대조하는 이중 선언이다.
+# 실제 주문 자본은 이 값만 믿지 않고 센티넬·최신 NAV·정수 주 미리보기로 다시 계산한다.
 per_trade_pct                  = 50.0
 per_symbol_pct                 = 60.0
 global_exposure_pct            = 100.0
-canary_capital_pct             = 5.0
+canary_capital_pct             = 10.0
 canary_min_duration_days       = 10
 canary_acceptance_drawdown_pct = 3.0
 
