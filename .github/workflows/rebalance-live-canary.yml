@@ -77,11 +77,16 @@ jobs:
           #     손 편집으로는 소액 이상을 무장할 수 없다.
           rung="$(grep -E '^ladder_rung:' "$REQ" 2>/dev/null | head -1 | awk '{print $2}' || true)"
           nav="$(grep -E '^account_nav_usd:' "$REQ" 2>/dev/null | head -1 | awk '{print $2}' || true)"
+          entry_route="$(grep -E '^entry_route:' "$REQ" 2>/dev/null | head -1 | awk '{print $2}' || true)"
           ./scripts/ci_validate_decimal.sh capital "$capital" || exit $?
           blocked=false
           if [[ -n "$rung" && -n "$nav" ]]; then
             if (( $(printf '%.0f' "$capital") > $(printf '%.0f' "$nav") )); then
               echo "❌ capital_usd=$capital > account_nav_usd=$nav — 사다리 기록 실계좌 NAV 초과. 거부." >&2
+              armed=false; blocked=true
+            fi
+            if [[ "$rung" -gt 0 && ! "$entry_route" =~ ^(operational_canary|factory_research|exploration)$ ]]; then
+              echo "❌ ladder rung ${rung} has no valid typed entry_route. 거부." >&2
               armed=false; blocked=true
             fi
           else
@@ -373,13 +378,16 @@ jobs:
             >>/tmp/entry_fetch.log 2>&1 || true
           git show "origin/${branch}:profit_evidence.json" \
             > /tmp/profit_evidence.json 2>/tmp/profit_evidence.err || echo '{}' > /tmp/profit_evidence.json
+          git show "origin/${branch}:operational_canary_evidence.json" \
+            > /tmp/operational_canary_evidence.json 2>/tmp/operational_canary_evidence.err \
+            || echo '{}' > /tmp/operational_canary_evidence.json
           evidence_epoch="$(git show -s --format=%ct "origin/${branch}" 2>/dev/null || echo 0)"
           now_epoch="$(date +%s)"
           evidence_age_hours="$(python3 -c \
             "print(max(0, int('${now_epoch}')-int('${evidence_epoch}'))/3600 if int('${evidence_epoch}') else 999999)")"
-          git show "origin/${factory_branch}:strategy_factory.json" \
-            > /tmp/strategy_factory.json 2>/tmp/strategy_factory.err || echo '{}' \
-            > /tmp/strategy_factory.json
+          git show "origin/${factory_branch}:capital_entry_evidence.json" \
+            > /tmp/capital_entry_evidence.json 2>/tmp/capital_entry_evidence.err || echo '{}' \
+            > /tmp/capital_entry_evidence.json
           factory_epoch="$(git show -s --format=%ct "origin/${factory_branch}" 2>/dev/null || echo 0)"
           factory_age_hours="$(python3 -c \
             "print(max(0, int('${now_epoch}')-int('${factory_epoch}'))/3600 if int('${factory_epoch}') else 999999)")"
@@ -413,12 +421,17 @@ jobs:
           fi
           PYTHONPATH=src python3 scripts/live_entry_revalidation_probe.py \
             --profit-evidence-json /tmp/profit_evidence.json \
-            --factory-evidence-json /tmp/strategy_factory.json \
+            --operational-evidence-json /tmp/operational_canary_evidence.json \
+            --factory-evidence-json /tmp/capital_entry_evidence.json \
             --hardened-canary-json /tmp/entry_hardened_canary.json \
             --live-performance-json /tmp/entry_live_profit.json \
             --evidence-age-hours "${evidence_age_hours}" \
             --factory-evidence-age-hours "${factory_age_hours}" \
+            --operational-evidence-age-hours "${evidence_age_hours}" \
+            --expected-code-commit "${GITHUB_SHA}" \
+            --sentinel automation/rebalance-live.request \
             --live-portfolio deploy/canary-live-portfolio.toml \
+            --validated-portfolio deploy/global-trend-fixed-portfolio.toml \
             --fundability-preview-json /tmp/entry_fundability_preview.json \
             --execution-proxy-parity-json /tmp/entry_execution_proxy_parity.json \
             --capital-usd "${CAP}" \
@@ -435,7 +448,8 @@ jobs:
           {
             echo "evidence_age_hours=${evidence_age_hours} canary_exit=${canary_exit} profit_exit=${profit_exit} proxy_parity_exit=${proxy_parity_exit} fundability_exit=${fundability_exit}"
             cat /tmp/entry_revalidation.json
-            cat /tmp/profit_evidence.err /tmp/strategy_factory.err \
+            cat /tmp/profit_evidence.err /tmp/operational_canary_evidence.err \
+              /tmp/capital_entry_evidence.err \
               /tmp/entry_hardened_canary.err /tmp/entry_live_profit.err \
               /tmp/entry_execution_proxy_parity.err \
               /tmp/entry_fundability_preview.err 2>/dev/null

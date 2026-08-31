@@ -28,8 +28,8 @@
     "code_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
     "generated_at_utc": {"type": "string", "format": "date-time"},
     "candidate_id": {"const": "globalfixed-ensemble-3-6-9-12"},
-    "strategy_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-    "data_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "strategy_fingerprint": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "data_fingerprint": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "split": {
       "type": "object",
       "required": ["development_months", "holdout_months", "overlap_months"],
@@ -72,7 +72,7 @@
       "required": ["alpha_confirmed", "active_psr", "cost_sensitivity"],
       "properties": {
         "alpha_confirmed": {"const": false},
-        "active_psr": {"type": "number", "minimum": 0, "maximum": 1},
+        "active_psr": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
         "cost_sensitivity": {"type": "object"}
       }
     },
@@ -101,11 +101,12 @@
   "$defs": {
     "performance": {
       "type": "object",
-      "required": ["cagr", "sharpe", "max_drawdown"],
+      "required": ["n_months", "cagr_pct", "sharpe", "max_drawdown_pct"],
       "properties": {
-        "cagr": {"type": "number"},
+        "n_months": {"type": "integer", "minimum": 2},
+        "cagr_pct": {"type": "number"},
         "sharpe": {"type": "number"},
-        "max_drawdown": {"type": "number", "minimum": 0}
+        "max_drawdown_pct": {"type": "number", "minimum": 0}
       }
     }
   }

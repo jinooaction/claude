@@ -13,6 +13,9 @@ from auto_invest.portfolio.autoarm import strategy_fingerprint_digest
 from auto_invest.portfolio.edge_verdict import PAIRED_ACTIVE_RETURN_PSR_METHOD
 from auto_invest.portfolio.factory_evidence import assess_factory_evidence
 from auto_invest.portfolio.fundability import validate_fundability_evidence
+from auto_invest.portfolio.operational_canary_evidence import (
+    assess_operational_canary_evidence,
+)
 
 SCHEMA_VERSION = "1.0"
 ENTRY_READY = "ENTRY_READY"
@@ -57,11 +60,16 @@ def evaluate_live_entry(
     factory_evidence: Any = None,
     factory_evidence_age_hours: float | None = None,
     live_strategy_fingerprint: str | None = None,
+    validated_strategy_fingerprint: str | None = None,
     fundability_evidence: Any = None,
     expected_capital_usd: Decimal | None = None,
     execution_proxy_parity_passed: bool = False,
+    operational_evidence: Any = None,
+    operational_evidence_age_hours: float | None = None,
+    expected_code_commit: str | None = None,
+    entry_route: str | None = None,
 ) -> LiveEntryRevalidation:
-    """Allow first exposure only under a current exploration or factory contract."""
+    """Allow first exposure only under the sentinel's current typed entry contract."""
 
     performance = live_performance if isinstance(live_performance, Mapping) else {}
     fills_count = _int_or_none(performance.get("fills_count"))
@@ -153,10 +161,58 @@ def evaluate_live_entry(
         "factory_fundability": fundability_passed,
         "factory_execution_proxy_parity": execution_proxy_parity_passed,
     }
+    operational = operational_evidence if isinstance(operational_evidence, Mapping) else {}
+    operational_assessment = assess_operational_canary_evidence(
+        operational,
+        expected_code_commit=expected_code_commit,
+        expected_strategy_fingerprint=validated_strategy_fingerprint,
+        live_strategy_fingerprint=live_strategy_fingerprint,
+        evidence_age_hours=operational_evidence_age_hours,
+        max_evidence_age_hours=max_evidence_age_hours,
+    )
+    operational_checks = {
+        "operational_contract_complete": operational_assessment.eligible,
+        "operational_entry_route": entry_route == "operational_canary",
+        "operational_code_commit": operational_assessment.checks.get("code_commit", False),
+        "operational_strategy_fingerprint": operational_assessment.checks.get(
+            "strategy_fingerprint", False
+        ),
+        "operational_live_strategy_fingerprint": operational_assessment.checks.get(
+            "live_strategy_fingerprint", False
+        ),
+        "operational_hardened_canary": canary_passed,
+        "operational_evidence_fresh": operational_assessment.checks.get(
+            "evidence_fresh", False
+        ),
+        "operational_fundability": fundability_passed,
+        "operational_execution_proxy_parity": execution_proxy_parity_passed,
+        "operational_bounded_rung": operational_assessment.max_rung == 1
+        and operational_assessment.alpha_confirmed is False,
+    }
     exploration_ready = all(exploration_checks.values())
     factory_ready = bool(factory) and all(factory_checks.values())
-    if exploration_ready or factory_ready:
+    operational_ready = bool(operational) and all(operational_checks.values())
+    if entry_route == "operational_canary":
+        allowed = operational_ready
+    elif entry_route == "factory_research":
+        allowed = factory_ready
+    elif entry_route == "exploration":
+        allowed = exploration_ready
+    else:
+        # Legacy sentinels predate entry_route; retain the existing fail-closed
+        # contracts but never infer the new operational route.
+        allowed = exploration_ready or factory_ready
+    if allowed:
         reasons: tuple[str, ...] = ()
+    elif entry_route == "operational_canary":
+        reasons = tuple(key for key, passed in operational_checks.items() if not passed)
+    elif entry_route == "factory_research":
+        route_mismatch = ("entry_route_evidence_mismatch",) if not factory else ()
+        reasons = route_mismatch + tuple(
+            key for key, passed in factory_checks.items() if not passed
+        )
+    elif entry_route == "exploration":
+        reasons = tuple(key for key, passed in exploration_checks.items() if not passed)
     elif factory:
         reasons = tuple(key for key, passed in factory_checks.items() if not passed)
     else:
@@ -164,7 +220,13 @@ def evaluate_live_entry(
     evidence = {
         "candidate_id": deployment.get("candidate_id"),
         "entry_source": (
-            "strategy_factory" if factory_ready else "exploration" if exploration_ready else None
+            "operational_canary"
+            if operational_ready and entry_route == "operational_canary"
+            else "strategy_factory"
+            if factory_ready
+            else "exploration"
+            if exploration_ready
+            else None
         ),
         "forward_n_obs": n_obs,
         "forward_psr": psr,
@@ -178,6 +240,10 @@ def evaluate_live_entry(
         "factory_assessment": factory_assessment.as_dict(),
         "factory_evidence_age_hours": factory_evidence_age_hours,
         "factory_checks": factory_checks,
+        "operational_assessment": operational_assessment.as_dict(),
+        "operational_evidence_age_hours": operational_evidence_age_hours,
+        "operational_checks": operational_checks,
+        "entry_route": entry_route,
         "fundability": fundability_evidence,
         "execution_proxy_parity_passed": execution_proxy_parity_passed,
         "expected_capital_usd": (
@@ -185,8 +251,8 @@ def evaluate_live_entry(
         ),
     }
     return LiveEntryRevalidation(
-        allowed=not reasons,
-        state=ENTRY_READY if not reasons else ENTRY_BLOCKED,
+        allowed=allowed,
+        state=ENTRY_READY if allowed else ENTRY_BLOCKED,
         fills_count=0,
         reasons=reasons or ("all first-entry gates passed",),
         evidence=evidence,

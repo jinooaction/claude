@@ -2,7 +2,7 @@
 
 운영자 위임(2026-06-11): "1·2·3 모두 세계 최고 수준이 목표. 3번(자본·수단)도 자동과
 자율에 맡길 것. 기준은 계좌 잔고와 포트폴리오." — 자본 배치 규모 결정을 운영자 단건
-승인에서 **증거 게이트 공식**으로 위임한다(헌법 X.4 v9.0.0 개정). 운영자가 정하는 것은
+승인에서 **증거 게이트 공식**으로 위임한다(헌법 X.4 v11.0.0 개정). 운영자가 정하는 것은
 낙폭 예산(기본 20%) 하나이고, 시스템은 그 예산 아래에서 실계좌 순자산(NAV)의 단계적
 배치(사다리)를 자율 운영한다.
 
@@ -10,7 +10,7 @@
 
   단(rung)  배치 비율(실계좌 NAV 대비)   진입 조건
   0         0%   (무장 해제)            — (강등/정지의 종착점)
-  1         10%  (연구 캐너리)          사전등록 가족 전체 + 누적 고유 감사 + 지문 + hardening
+  1         10%  (제한 캐너리)          연구 가족 또는 운영 검증 증거 + 지문 + hardening
   2         20%  (탐색 캐너리)          기존 홀드아웃 + forward 40개 + hardening
   3         25%                         EDGE_CONFIRMED + 단 2 live 증거
   4         50%                         단 3에서 같은 live 증거 재충족
@@ -33,7 +33,7 @@
   4. 킬스위치(automation/AUTOARM_DISABLED)는 사다리 전체를 멈춘다.
   5. 낙폭 예산 자체는 운영자 소유 — 코드 기본값(20%)을 바꾸는 것은 운영자 결정.
 
-헌법 X.4(v9.0.0): 자본 사다리는 운영자의 상시 위임에 따른 자율 운영이다. 비위임 불변
+헌법 X.4(v11.0.0): 자본 사다리는 운영자의 상시 위임에 따른 자율 운영이다. 비위임 불변
 (I 캡 체계·II 화이트리스트·IV 감사·V 시크릿·VI 단계 승격 구조·VIII.A 장중 배포 금지·
 스펙 014 서킷 브레이커)은 그대로다. 입금(은행 이체)은 물리적으로 운영자만 가능하다.
 """
@@ -41,7 +41,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from decimal import ROUND_FLOOR, Decimal
 
@@ -64,7 +64,7 @@ RUNG_FRACTIONS: dict[int, Decimal] = {
 }
 MAX_RUNG = 5
 RUNG_ROLES_KO: dict[int, str] = {
-    1: " 연구",
+    1: " 검증",
     2: " 탐색",
 }
 
@@ -107,7 +107,7 @@ ACTION_DISABLED = "DISABLED"  # 킬스위치
 
 @dataclass(frozen=True)
 class LadderDecision:
-    """자본 사다리의 한 줄 결정 — 헌법 X.4 v9.0.0 포렌식 증거."""
+    """자본 사다리의 한 줄 결정 — 헌법 X.4 v11.0.0 포렌식 증거."""
 
     action: str
     current_rung: int
@@ -117,6 +117,7 @@ class LadderDecision:
     target_capital_usd: int | None  # 센티넬에 쓸 자본 (rung 0 이면 None)
     live_dd_pct: Decimal | None  # 단 진입 후 라이브 낙폭 (증거)
     live_obs: int | None  # 단 진입 후 라이브 관측 수 (증거)
+    entry_route: str | None  # operational_canary | factory_research | exploration
     new_sentinel_text: str | None  # 센티넬 변경이 필요할 때만 채워짐
 
     SCHEMA_VERSION = "1.0"
@@ -138,6 +139,7 @@ class LadderDecision:
             "target_capital_usd": self.target_capital_usd,
             "live_dd_pct": None if self.live_dd_pct is None else str(self.live_dd_pct),
             "live_obs": self.live_obs,
+            "entry_route": self.entry_route,
         }
 
 
@@ -145,6 +147,7 @@ class LadderDecision:
 _RUNG_RE = re.compile(r"^ladder_rung:\s*(\S+)\s*$", re.MULTILINE)
 _RUNG_ENTERED_RE = re.compile(r"^rung_entered:\s*(\S+)\s*$", re.MULTILINE)
 _ACCOUNT_NAV_RE = re.compile(r"^account_nav_usd:\s*(\S+)\s*$", re.MULTILINE)
+_ENTRY_ROUTE_RE = re.compile(r"^entry_route:\s*(\S+)\s*$", re.MULTILINE)
 
 
 def parse_ladder_fields(text: str) -> tuple[int | None, date | None, Decimal | None]:
@@ -177,6 +180,15 @@ def parse_ladder_fields(text: str) -> tuple[int | None, date | None, Decimal | N
     return rung, entered, nav
 
 
+def parse_entry_route(text: str) -> str | None:
+    """Read the typed capital-entry reason without inferring it from the rung."""
+    match = _ENTRY_ROUTE_RE.search(text)
+    if not match:
+        return None
+    value = match.group(1).strip()
+    return value if value in {"operational_canary", "factory_research", "exploration"} else None
+
+
 def rung_capital_usd(rung: int, account_nav_usd: Decimal) -> int:
     """단 비율 × 실계좌 NAV → 정수 USD (내림 — 보수적)."""
     frac = RUNG_FRACTIONS[rung]
@@ -192,12 +204,13 @@ def render_ladder_sentinel(
     run_seq: int,
     dd_budget_pct: Decimal,
     evidence: str,
+    entry_route: str | None = None,
 ) -> str:
     """사다리 상태를 담은 무장 센티넬 본문 (rung ≥ 1 = armed:true, rung 0 = armed:false).
 
     rebalance-live-canary.yml 이 파싱하는 라인(`armed:`, `capital_usd:`,
     `account_nav_usd:`)을 유지하고, 사다리 필드(`ladder_rung:`, `rung_entered:`)와
-    포렌식 헤더(위임 근거·증거·정지 수단)를 단다. 머지 커밋이 X.4 v9.0.0 기록이다.
+    포렌식 헤더(위임 근거·증거·정지 수단)를 단다. 머지 커밋이 X.4 v11.0.0 기록이다.
     """
     armed = rung >= 1
     return (
@@ -209,7 +222,7 @@ def render_ladder_sentinel(
         "#\n"
         "# 🪜 이 상태는 스펙 050 자본 사다리(증거 게이트 공식)가 결정했다 — 운영자 위임\n"
         '#   (2026-06-11): "자본·수단도 자동과 자율에 맡긴다. 기준은 계좌 잔고와 포트폴리오."\n'
-        f"#   헌법 X.4 v9.0.0. 사다리: {ladder_schedule_ko()} (실계좌 NAV 대비).\n"
+        f"#   헌법 X.4 v11.0.0. 사다리: {ladder_schedule_ko()} (실계좌 NAV 대비).\n"
         "#   승격 = 관측 ≥20 + ≥27일 + 낙폭 < 예산/2. 강등 = 낙폭 ≥ 예산/2(즉시).\n"
         "#   정지 = 낙폭 ≥ 예산(즉시, 무장 해제). 재사이징 = 계좌 NAV ±10% 드리프트.\n"
         "#\n"
@@ -220,13 +233,14 @@ def render_ladder_sentinel(
         "\n"
         f"armed: {'true' if armed else 'false'}\n"
         f"capital_usd: {capital_usd}\n"
-        "requested_by: spec-050-capital-ladder (operator delegation 2026-06-11)\n"
+        "requested_by: spec-050/176-capital-ladder (operator delegation 2026-06-11)\n"
         "stage: live-canary-portfolio\n"
         f"run_seq: {run_seq}\n"
         f"ladder_rung: {rung}\n"
         f"rung_entered: {rung_entered.isoformat()}\n"
         f"account_nav_usd: {account_nav_usd}\n"
         f"dd_budget_pct: {dd_budget_pct}\n"
+        f"entry_route: {entry_route or 'none'}\n"
         f'note: "🪜 자본 사다리 단 {rung} ({RUNG_FRACTIONS[rung] * 100}% of NAV '
         f'${account_nav_usd}). {evidence}"\n'
     )
@@ -304,6 +318,7 @@ def decide_ladder(
     today: date,
     exploration_verdict: dict | None = None,
     factory_verdict: dict | None = None,
+    operational_verdict: dict | None = None,
     live_performance: dict | None = None,
     entry_execution_ready: bool = False,
     standard_forward_calibration: dict | None = None,
@@ -316,12 +331,13 @@ def decide_ladder(
       1. 킬스위치 → DISABLED.
       2. 전략 지문 불일치 → BLOCKED (어떤 단에서도 검증 안 한 전략에 자본 배치 금지).
       3. 계좌 NAV 불능(None/≤0) → BLOCKED (사이징 불가 — 모르면 아무것도 안 바꾼다).
-      4. 단 0: 동등성+자금 구현성 뒤 공장 전체 관문이면 단 1(10%), 기존 탐색·forward면 단 2.
+      4. 단 0: 운영 검증 또는 공장 전체 관문이면 단 1(10%), 기존 탐색·forward면 단 2.
       5. 단 ≥1: 낙폭 ≥ 예산 → HALT / 낙폭 ≥ 예산/2 → DEMOTE /
          증거(관측·경과일·낙폭) 충족 + 단 < 4 → PROMOTE / NAV 드리프트 → RESIZE / STAY.
     """
     cur_sent = parse_sentinel(sentinel_text)
     rung_raw, entered, recorded_nav = parse_ladder_fields(sentinel_text)
+    entry_route = parse_entry_route(sentinel_text)
     # 하위 호환: 옛 autoarm 센티넬(armed:true, rung 없음)은 단 1 로 취급.
     rung = rung_raw if rung_raw is not None else (1 if cur_sent.armed else 0)
     rung = max(0, min(MAX_RUNG, rung))
@@ -352,6 +368,7 @@ def decide_ladder(
             target_capital_usd=capital,
             live_dd_pct=dd,
             live_obs=obs,
+            entry_route=entry_route,
             new_sentinel_text=sentinel,
         )
 
@@ -380,7 +397,20 @@ def decide_ladder(
             f"실계좌 NAV={account_nav_usd!r} — 사이징 불가. 모르면 아무것도 바꾸지 않는다.",
         )
 
-    def _changed(action: str, target: int, reason: str, evidence: str) -> LadderDecision:
+    def _changed(
+        action: str,
+        target: int,
+        reason: str,
+        evidence: str,
+        *,
+        target_entry_route: str | None = None,
+    ) -> LadderDecision:
+        if target == 0:
+            next_entry_route = None
+        elif target_entry_route is not None:
+            next_entry_route = target_entry_route
+        else:
+            next_entry_route = entry_route
         capital = rung_capital_usd(target, account_nav_usd)
         sentinel = render_ladder_sentinel(
             rung=target,
@@ -390,8 +420,10 @@ def decide_ladder(
             run_seq=run_seq + 1,
             dd_budget_pct=dd_budget_pct,
             evidence=evidence,
+            entry_route=next_entry_route,
         )
-        return _d(action, target, reason, capital=capital, sentinel=sentinel)
+        decision = _d(action, target, reason, capital=capital, sentinel=sentinel)
+        return replace(decision, entry_route=next_entry_route)
 
     # 4. 단 0 — 공장 연구 10%, 기존 탐색/forward 20% 계약을 구분한다.
     if rung == 0:
@@ -430,10 +462,17 @@ def decide_ladder(
             and factory_verdict.get("verdict") == "RESEARCH_CANARY_READY"
             and factory_verdict.get("fundability_passed") is True
         )
+        operational_ready = entry_execution_ready and (
+            isinstance(operational_verdict, dict)
+            and operational_verdict.get("verdict") == "OPERATIONAL_CANARY_READY"
+            and operational_verdict.get("fundability_passed") is True
+            and operational_verdict.get("alpha_confirmed") is False
+            and operational_verdict.get("max_rung") == 1
+        )
         if (
             v_label != EDGE_CONFIRMED
             or not entry_execution_ready
-        ) and not exploration_ready and not factory_ready:
+        ) and not exploration_ready and not factory_ready and not operational_ready:
             exploration_label = (
                 exploration_verdict.get("verdict")
                 if isinstance(exploration_verdict, dict)
@@ -442,11 +481,17 @@ def decide_ladder(
             factory_label = (
                 factory_verdict.get("verdict") if isinstance(factory_verdict, dict) else None
             )
+            operational_label = (
+                operational_verdict.get("verdict")
+                if isinstance(operational_verdict, dict)
+                else None
+            )
             return _d(
                 ACTION_WAIT_EDGE,
                 0,
                 f"단 0 + forward 판정={v_label!r}, 탐색 캐너리="
-                f"{exploration_label!r}, 연구 캐너리={factory_label!r}"
+                f"{exploration_label!r}, 연구 캐너리={factory_label!r}, "
+                f"운영 검증={operational_label!r}"
                 f", 실행 준비={entry_execution_ready} — 진입 증거 미충족"
                 + (
                     ", 표준/앵커드/탐색 경로 교정 미완료. 배치 보류."
@@ -456,6 +501,16 @@ def decide_ladder(
                 ),
             )
         n_obs = forward_verdict.get("n_obs")
+        if operational_ready and v_label != EDGE_CONFIRMED and not exploration_ready:
+            candidate = operational_verdict.get("candidate_id", "unknown")
+            return _changed(
+                ACTION_PROMOTE,
+                1,
+                f"정확 배포전략 {candidate}의 장기 시간 분리·하드닝·정확 지문·실행 "
+                "구현성 충족 → 운영 검증 캐너리 단 1 (NAV의 10%) 진입. 알파 확정 아님.",
+                f"operational canary ready({candidate}), alpha_confirmed=false. 단 0→1.",
+                target_entry_route="operational_canary",
+            )
         if factory_ready and v_label != EDGE_CONFIRMED and not exploration_ready:
             candidate = factory_verdict.get("candidate_id", "unknown")
             return _changed(
@@ -464,6 +519,7 @@ def decide_ladder(
                 f"자동 전략 공장 전체 관문·하드닝·정확 지문 충족({candidate}) → "
                 "연구 캐너리 단 1 (NAV의 10%) 진입.",
                 f"strategy factory ready({candidate}), 전략 지문 정합. 단 0→1.",
+                target_entry_route="factory_research",
             )
         if exploration_ready and v_label != EDGE_CONFIRMED:
             candidate = exploration_verdict.get("candidate_id", "unknown")
@@ -473,12 +529,14 @@ def decide_ladder(
                 f"정확 배포전략 {candidate}의 홀드아웃·forward floor·하드닝·지문 정합 "
                 "충족 → 탐색 캐너리 단 2 (NAV의 20%) 진입.",
                 f"exploration canary ready({candidate}), 전략 지문 정합. 단 0→2.",
+                target_entry_route="exploration",
             )
         return _changed(
             ACTION_PROMOTE,
             2,
             f"forward EDGE_CONFIRMED(관측 {n_obs}) + 정합 → 탐색 캐너리 단 2 (NAV 의 20%) 진입.",
             f"forward EDGE_CONFIRMED(관측 {n_obs}), 전략 지문 정합. 단 0→2.",
+            target_entry_route="exploration",
         )
 
     # 5. 첫 체결 전 탐색 승인이 최신 증거에서 사라졌으면 오래된 무장을 회수한다.
@@ -508,9 +566,21 @@ def decide_ladder(
         and factory_verdict.get("verdict") == "RESEARCH_CANARY_READY"
         and factory_verdict.get("fundability_passed") is True
     )
+    operational_ready = entry_execution_ready and (
+        isinstance(operational_verdict, dict)
+        and operational_verdict.get("verdict") == "OPERATIONAL_CANARY_READY"
+        and operational_verdict.get("fundability_passed") is True
+        and operational_verdict.get("alpha_confirmed") is False
+        and operational_verdict.get("max_rung") == 1
+    )
     fill_source = live_performance if isinstance(live_performance, dict) else live_growth
     live_fills = fill_source.get("fills_count") if isinstance(fill_source, dict) else None
-    research_entry_expired = rung == 1 and not factory_ready
+    if entry_route == "operational_canary":
+        research_entry_expired = rung == 1 and not operational_ready
+    elif entry_route == "exploration":
+        research_entry_expired = rung == 1 and not exploration_ready and not forward_confirmed
+    else:
+        research_entry_expired = rung == 1 and not factory_ready
     exploration_entry_expired = rung == 2 and not exploration_ready and v_label != EDGE_CONFIRMED
     if (research_entry_expired or exploration_entry_expired) and live_fills == 0:
         return _changed(
@@ -566,6 +636,7 @@ def decide_ladder(
             f"단 {rung} 증거 충족(관측 {obs} ≥ {PROMOTION_MIN_OBS}, 경과 {period_days}일 ≥ "
             f"{PROMOTION_MIN_CALENDAR_DAYS}, 낙폭 {dd}% < {demote_dd}%) → 단 {target} 승격.",
             f"관측 {obs}, 경과 {period_days}일, 낙폭 {dd}% < {demote_dd}%. 단 {rung}→{target}.",
+            target_entry_route="exploration" if target >= 2 else entry_route,
         )
 
     # 재사이징 — 단 유지 중 실계좌 NAV 드리프트(입금/성장/하락) ±10% 이상이면 자본 재계산.
@@ -577,6 +648,7 @@ def decide_ladder(
         resize_authorized = (
             not upward_resize
             or (rung == 1 and (factory_ready or forward_confirmed))
+            or (rung == 1 and operational_ready)
             or (rung >= 2 and forward_confirmed)
         )
         if drift_pct >= RESIZE_DRIFT_PCT and resize_authorized:
@@ -593,6 +665,7 @@ def decide_ladder(
                     f"계좌 NAV 드리프트 재사이징: 센티넬 ${current_cap} → ${capital} "
                     f"(단 {rung} 비율 유지, NAV ${account_nav_usd})."
                 ),
+                entry_route=entry_route,
             )
             return _d(
                 ACTION_RESIZE,

@@ -387,6 +387,17 @@ def build_candidate_factors(
     return factors, benchmark
 
 
+def build_deployment_factors(
+    rows: list[MonthlyRow], gold_levels: list[float]
+) -> list[float]:
+    """Return the exact preregistered 3/6/9/12-month live ensemble factors."""
+    deployment_legs = [
+        global_trend_factors(rows, gold_levels, window=window)
+        for window in (3, 6, 9, 12)
+    ]
+    return [sum(values) / len(values) for values in zip(*deployment_legs, strict=True)]
+
+
 def evaluate_profit_evidence(
     *,
     dates: Sequence[str],
@@ -499,13 +510,7 @@ def build_profit_evidence_report(
     holdout_year: int = 2007,
 ) -> ProfitEvidenceReport:
     factors, benchmark = build_candidate_factors(rows, gold_levels)
-    deployment_legs = [
-        global_trend_factors(rows, gold_levels, window=window)
-        for window in (3, 6, 9, 12)
-    ]
-    deployment_factors = [
-        sum(values) / len(values) for values in zip(*deployment_legs, strict=True)
-    ]
+    deployment_factors = build_deployment_factors(rows, gold_levels)
     return evaluate_profit_evidence(
         dates=[row.date for row in rows[1:]],
         candidate_factors=factors,

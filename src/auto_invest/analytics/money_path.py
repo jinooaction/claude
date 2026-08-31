@@ -48,7 +48,7 @@ from auto_invest.portfolio.capital_ladder import (
 )
 from auto_invest.portfolio.edge_verdict import PAIRED_ACTIVE_RETURN_PSR_METHOD
 
-SCHEMA_VERSION = "1.6"
+SCHEMA_VERSION = "1.7"
 
 # 자본 사다리 결정 라벨(capital_ladder 와 동일 — 재사용보다 명시로 결합도 낮춤).
 ACTION_PROMOTE = "PROMOTE"
@@ -338,6 +338,7 @@ class MoneyPathReport:
     headline: str  # 한 문장 요약(운영자가 먼저 읽는 줄)
     blocking_gate: str  # 지금 한 발을 막는 것(없으면 설명)
     current_rung: int
+    entry_route: str | None
     capital_pct: str  # 현재 단의 배치 비율(%)
     account_nav_usd: str | None
     deployed_capital_usd: int | None
@@ -358,6 +359,7 @@ class MoneyPathReport:
             "headline": self.headline,
             "blocking_gate": self.blocking_gate,
             "current_rung": self.current_rung,
+            "entry_route": self.entry_route,
             "capital_pct": self.capital_pct,
             "account_nav_usd": self.account_nav_usd,
             "deployed_capital_usd": self.deployed_capital_usd,
@@ -400,6 +402,7 @@ class MoneyPathReport:
             "| 항목 | 값 |",
             "|------|-----|",
             f"| 현재 단(rung) | {self.current_rung} / {MAX_RUNG} |",
+            f"| 진입 근거 | {self.entry_route or '(레거시/없음)'} |",
             f"| 배치 비율 | {self.capital_pct}% |",
             f"| 실계좌 NAV | {self.account_nav_usd or '(측정 불가)'} |",
             f"| 배치 자본(USD) | {cap} |",
@@ -1291,6 +1294,15 @@ def assess_money_path(
     deployed_capital = _int(ladder.get("target_capital_usd"))
     live_dd = _dec(ladder.get("live_dd_pct"))
     live_obs = _int(ladder.get("live_obs"))
+    entry_route = (
+        str(ladder.get("entry_route"))
+        if ladder.get("entry_route") in {
+            "operational_canary",
+            "factory_research",
+            "exploration",
+        }
+        else None
+    )
 
     raw_verdict = forward_verdict.get("verdict")
     anchored_verdict = forward_verdict.get("anchored_verdict")
@@ -1651,11 +1663,32 @@ def assess_money_path(
         obs_ok = live_obs is not None and live_obs >= PROMOTION_MIN_OBS
         days_ok = days_in_rung is not None and days_in_rung >= PROMOTION_MIN_CALENDAR_DAYS
         dd_ok = live_dd is not None and live_dd < demote_threshold
-        headline = (
-            f"💰 자본 배치됨 — 단{report_rung}(NAV {_capital_pct(report_rung)}%, "
-            f"${deployed_capital or 0}). 다음 단 게이트 추적 중."
-        )
-        if report_rung >= MAX_RUNG:
+        if entry_route == "operational_canary" and report_rung == 1:
+            headline = (
+                f"🧪 주문·체결 운영 검증 자본 배치 — 단1(NAV {_capital_pct(1)}%, "
+                f"${deployed_capital or 0}). 확정 알파가 아니며 단1이 상한이다."
+            )
+            blocking = (
+                "20% 승격은 별도 깨끗한 전진 40관측·PSR 0.80·칼마 우위·전체 경로 교정 필요."
+            )
+            gates.append(
+                GateCondition(
+                    "운영 검증과 알파 승격 분리",
+                    GATE_PENDING,
+                    "운영 검증 ready / alpha_confirmed=false",
+                    "깨끗한 전진 알파 계약 별도 통과",
+                    "현재 10%는 실제 주문·체결·정합·감사 배관 검증 전용이며 "
+                    "수익 우위 확정이 아니다.",
+                )
+            )
+        else:
+            headline = (
+                f"💰 자본 배치됨 — 단{report_rung}(NAV {_capital_pct(report_rung)}%, "
+                f"${deployed_capital or 0}). 다음 단 게이트 추적 중."
+            )
+        if entry_route == "operational_canary" and report_rung == 1:
+            pass
+        elif report_rung >= MAX_RUNG:
             blocking = "최상단(단3, NAV 100%) — 더 올릴 단 없음. 낙폭 예산만 방어."
         else:
             blocking = "다음 단 승격: 라이브 관측 ≥20 + 경과 ≥27일 + 낙폭 < 예산/2 (셋 다)."
@@ -1689,8 +1722,11 @@ def assess_money_path(
             )
         )
         next_action = (
-            "자율 시스템은 라이브 실적을 쌓으며 세 증거(관측·경과일·낙폭)가 모두 차면 다음 "
-            "단을 자동 승격한다. 낙폭이 예산/2 를 넘으면 증거 없이 즉시 강등."
+            "예약 라이브 실행으로 실제 주문·체결·정합·감사를 확인하되 단1을 유지한다. "
+            "20%는 깨끗한 전진 알파 계약을 따로 벌어야 한다."
+            if entry_route == "operational_canary" and report_rung == 1
+            else "자율 시스템은 라이브 실적을 쌓으며 세 증거(관측·경과일·낙폭)가 모두 차면 "
+            "다음 단을 자동 승격한다. 낙폭이 예산/2 를 넘으면 증거 없이 즉시 강등."
         )
     else:  # STAGE_DEFENDED
         headline = (
@@ -1741,6 +1777,7 @@ def assess_money_path(
         headline=headline,
         blocking_gate=blocking,
         current_rung=report_rung,
+        entry_route=entry_route,
         capital_pct=_capital_pct(report_rung),
         account_nav_usd=None if account_nav is None else str(account_nav),
         deployed_capital_usd=deployed_capital,

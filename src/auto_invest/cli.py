@@ -6461,10 +6461,20 @@ def ladder_decide_cmd(
         "--factory-evidence-json",
         help="버전별 전략 공장 전체 판정 JSON(선택). 완전 합격만 10% 연구 캐너리 후보.",
     ),
+    operational_evidence_json: Path = typer.Option(
+        None,
+        "--operational-evidence-json",
+        help="정확 배포전략의 10% 운영 검증 진입 증거 JSON(선택). 알파 확정 증거가 아님.",
+    ),
     factory_evidence_age_hours: float = typer.Option(
         None,
         "--factory-evidence-age-hours",
         help="자동 전략 공장 증거 나이(시간). 36시간 초과 또는 미확인이면 연구 진입 차단.",
+    ),
+    operational_evidence_age_hours: float = typer.Option(
+        None,
+        "--operational-evidence-age-hours",
+        help="운영 검증 증거 나이(시간). 36시간 초과 또는 미확인이면 진입 차단.",
     ),
     fundability_preview_json: Path = typer.Option(
         None,
@@ -6533,10 +6543,10 @@ def ladder_decide_cmd(
     """스펙 050 — 자본 사다리 결정(읽기 전용 판정, 주문 0건).
 
     운영자 위임(2026-06-11) 하 자본 배치 규모를 증거 게이트 공식으로 결정한다:
-    단0=0% → 단1=10% 연구 → 단2=20% 탐색 → 단3=25% → 단4=50% → 단5=100%.
+    단0=0% → 단1=10% 검증 → 단2=20% 탐색 → 단3=25% → 단4=50% → 단5=100%.
     내려가는 건 낙폭
     하나로 즉시(예산/2 강등·예산 정지), 올라가는 건 세 증거(관측·경과일·낙폭) 전부.
-    헌법 X.4 v9.0.0. 비위임 불변(캡·화이트리스트·감사·서킷 브레이커)은 그대로다.
+    헌법 X.4 v11.0.0. 비위임 불변(캡·화이트리스트·감사·서킷 브레이커)은 그대로다.
     """
     import json as _json
     import tomllib as _tomllib
@@ -6552,6 +6562,9 @@ def ladder_decide_cmd(
     )
     from auto_invest.portfolio.factory_evidence import assess_factory_evidence
     from auto_invest.portfolio.fundability import validate_fundability_evidence
+    from auto_invest.portfolio.operational_canary_evidence import (
+        assess_operational_canary_evidence,
+    )
 
     def _read_json(path: Path | None) -> dict | None:
         if path is None:
@@ -6566,6 +6579,7 @@ def ladder_decide_cmd(
     standard_forward_calibration = _read_json(standard_forward_calibration_json)
     profit_evidence = _read_json(profit_evidence_json)
     factory_evidence = _read_json(factory_evidence_json)
+    operational_evidence = _read_json(operational_evidence_json)
     factory_assessment = assess_factory_evidence(factory_evidence)
     hardened_canary = _read_json(hardened_canary_json)
     edge_source = "standard"
@@ -6649,6 +6663,39 @@ def ladder_decide_cmd(
     )
     entry_execution_ready = factory_fundability_pass and proxy_parity_pass
     factory_contract_ready = factory_contract_ready and entry_execution_ready
+    live_strategy_fingerprint = strategy_fingerprint_digest(live_cfg)
+    operational_assessment = assess_operational_canary_evidence(
+        operational_evidence,
+        expected_code_commit=expected_code_commit,
+        expected_strategy_fingerprint=strategy_fingerprint_digest(validated_cfg),
+        live_strategy_fingerprint=live_strategy_fingerprint,
+        evidence_age_hours=operational_evidence_age_hours,
+    )
+    operational_ready = (
+        operational_assessment.eligible
+        and isinstance(hardened_canary, dict)
+        and hardened_canary.get("verdict") == "PASS"
+        and entry_execution_ready
+    )
+    operational_verdict = {
+        "verdict": (
+            "OPERATIONAL_CANARY_READY"
+            if operational_ready
+            else "OPERATIONAL_CANARY_WAIT"
+        ),
+        "candidate_id": operational_assessment.candidate_id,
+        "assessment": operational_assessment.as_dict(),
+        "alpha_confirmed": False,
+        "max_rung": 1 if operational_ready else 0,
+        "capital_fraction": 0.1 if operational_ready else 0,
+        "hardened_canary_pass": (
+            isinstance(hardened_canary, dict) and hardened_canary.get("verdict") == "PASS"
+        ),
+        "fundability_passed": factory_fundability_pass,
+        "execution_proxy_parity_passed": proxy_parity_pass,
+        "evidence_age_hours": operational_evidence_age_hours,
+        "expected_operational_capital_usd": expected_research_capital,
+    }
     if isinstance(deployment_match, dict):
         ready = deployment_match.get("exploration_canary_ready") is True
         canary_pass = isinstance(hardened_canary, dict) and hardened_canary.get("verdict") == "PASS"
@@ -6709,6 +6756,7 @@ def ladder_decide_cmd(
         today=_dt.now(UTC).date(),
         exploration_verdict=exploration_verdict,
         factory_verdict=factory_verdict,
+        operational_verdict=operational_verdict,
         live_performance=live_performance,
         entry_execution_ready=entry_execution_ready,
         standard_forward_calibration=standard_forward_calibration,
@@ -6735,6 +6783,7 @@ def ladder_decide_cmd(
         out["edge_source"] = edge_source  # standard | anchored | both | none (포렌식)
         out["exploration_verdict"] = exploration_verdict
         out["factory_verdict"] = factory_verdict
+        out["operational_verdict"] = operational_verdict
         out["standard_forward_calibration"] = {
             "verdict": (
                 standard_forward_calibration.get("verdict")

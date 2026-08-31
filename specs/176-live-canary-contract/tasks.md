@@ -8,43 +8,43 @@
 
 - [x] T001 `specs/176-live-canary-contract/contracts/operational-canary-evidence.schema.json`을 JSON 파서와 계약 검사로 검증한다.
 - [x] T002 `spec.md`, `plan.md`, `research.md`, `data-model.md`, `quickstart.md`, `tasks.md`를 결과 실행 전에 커밋해 사후 기준 변경을 막는다.
-- [ ] T003 헌법 X.4에 10% 운영 검증 캐너리, 단 1 상한, 단 2 별도 승격 조건을 추가하고 버전을 올린 전용 안전 경계 커밋을 만든다.
+- [x] T003 헌법 X.4에 10% 운영 검증 캐너리, 단 1 상한, 단 2 별도 승격 조건을 추가하고 버전을 올린 전용 안전 경계 커밋을 만든다.
 
 ## 2단계 - 실패 시험으로 오류 재현
 
-- [ ] T004 [P] [US1] 운영 증거의 정상·역할·신선도·계보·지문·원시 숫자 재계산 실패 시험을 `tests/unit/test_operational_canary_evidence.py`에 작성한다.
-- [ ] T005 [P] [US1] 장기 성과는 통과하지만 `alpha_confirmed=false`, 10%, 최대 단 1인 시험과 비용 민감도 시험을 `tests/unit/test_operational_canary_evidence.py`에 작성한다.
-- [ ] T006 [P] [US2] 진단 `strategy_factory.json`과 자본 진입 파일의 역할·게시 경로가 분리되는 정적 실패 시험을 `tests/integration/test_strategy_factory_workflow.py`에 작성한다.
-- [ ] T007 [P] [US1] 단 0에서 운영 10% 진입, 운영 단 1의 자동 20% 승격 차단, 안전 실패 즉시 단 0 시험을 `tests/unit/test_capital_ladder.py`와 `tests/unit/test_ladder_decide_cli.py`에 작성한다.
-- [ ] T008 [P] [US3] 첫 매수의 운영 증거·지문·강화·체결 대리·정수 주·정합·킬스위치 실패 시험과 위험 축소 매도 보존 시험을 `tests/unit/test_live_entry_revalidation.py`에 작성한다.
-- [ ] T009 [US1] T004~T008이 새 계약 미구현 때문에 실패하는지 확인한다.
+- [x] T004 [P] [US1] 운영 증거의 정상·역할·신선도·계보·지문·원시 숫자 재계산 실패 시험을 `tests/unit/test_operational_canary_evidence.py`에 작성한다.
+- [x] T005 [P] [US1] 장기 성과는 통과하지만 `alpha_confirmed=false`, 10%, 최대 단 1인 시험과 비용 민감도 시험을 `tests/unit/test_operational_canary_evidence.py`에 작성한다.
+- [x] T006 [P] [US2] 진단 `strategy_factory.json`과 자본 진입 파일의 역할·게시 경로가 분리되는 정적 실패 시험을 `tests/integration/test_strategy_factory_workflow.py`에 작성한다.
+- [x] T007 [P] [US1] 단 0에서 운영 10% 진입, 운영 단 1의 자동 20% 승격 차단, 안전 실패 즉시 단 0 시험을 `tests/unit/test_capital_ladder.py`와 `tests/unit/test_ladder_decide_cli.py`에 작성한다.
+- [x] T008 [P] [US3] 첫 매수의 운영 증거·지문·강화·체결 대리·정수 주·정합·킬스위치 실패 시험과 위험 축소 매도 보존 시험을 `tests/unit/test_live_entry_revalidation.py`에 작성한다.
+- [x] T009 [US1] T004~T008이 새 계약 미구현 때문에 실패하는지 확인한다.
 
 ## 3단계 - 운영 검증 증거 구현
 
-- [ ] T010 [US1] 원시 월별 요인에서 CAGR·샤프·낙폭·초과수익 PSR·100/150bp 민감도를 재계산하는 `src/auto_invest/portfolio/operational_canary_evidence.py`를 구현한다.
-- [ ] T011 [US1] 기존 정확 배포 전략의 분할·비용·지문·강화·체결 대리·구현성을 묶는 운영 증거 제작을 `src/auto_invest/analytics/profit_evidence_engine.py`와 `scripts/profit_evidence_engine_probe.py`에 구현한다.
-- [ ] T012 [US1] 독립 명령줄 소비자 `scripts/operational_canary_evidence_gate.py`를 구현하고 JSON Schema와 원시 숫자를 모두 다시 검증한다.
-- [ ] T013 [US1] `.github/workflows/profit-evidence-engine.yml`이 현재 커밋의 `operational_canary_evidence.json`을 별도 sidecar로 발행하게 한다.
+- [x] T010 [US1] 원시 월별 요인에서 CAGR·샤프·낙폭·초과수익 PSR·100/150bp 민감도를 재계산하는 `src/auto_invest/portfolio/operational_canary_evidence.py`를 구현한다.
+- [x] T011 [US1] 기존 정확 배포 전략의 분할·비용·지문·강화·체결 대리·구현성을 묶는 운영 증거 제작을 `src/auto_invest/analytics/profit_evidence_engine.py`와 `scripts/profit_evidence_engine_probe.py`에 구현한다.
+- [x] T012 [US1] 독립 명령줄 소비자 `scripts/operational_canary_evidence_gate.py`를 구현하고 JSON Schema와 원시 숫자를 모두 다시 검증한다.
+- [x] T013 [US1] `.github/workflows/profit-evidence-engine.yml`이 현재 커밋의 `operational_canary_evidence.json`을 별도 sidecar로 발행하게 한다.
 
 ## 4단계 - 증거 역할과 자본 사다리 연결
 
-- [ ] T014 [US2] `.github/workflows/autonomous-strategy-factory.yml`이 진단 연구 파일과 `capital_entry_evidence.json`을 별도 역할·이름으로 게시하게 한다.
-- [ ] T015 [US1] `src/auto_invest/portfolio/capital_ladder.py`와 `src/auto_invest/cli.py`가 검증된 운영 증거로만 단 0→1을 허용하고 `entry_route`를 센티넬에 보존하게 한다.
-- [ ] T016 [US1] 운영 경로 단 1은 깨끗한 전진 알파 관문 없이는 단 2로 오르지 못하고, 위험 실패에서는 즉시 단 0으로 내려가게 한다.
-- [ ] T017 [US2] `.github/workflows/forward-edge-autoarm.yml`이 역할별 최신 sidecar를 내려받아 독립 검증 뒤 자본 판정기에 전달하게 한다.
-- [ ] T018 [US2] `src/auto_invest/analytics/money_path.py`가 역사적 유망성·운영 10%·알파 승격을 서로 다른 상태로 보고하게 한다.
+- [x] T014 [US2] `.github/workflows/autonomous-strategy-factory.yml`이 진단 연구 파일과 `capital_entry_evidence.json`을 별도 역할·이름으로 게시하게 한다.
+- [x] T015 [US1] `src/auto_invest/portfolio/capital_ladder.py`와 `src/auto_invest/cli.py`가 검증된 운영 증거로만 단 0→1을 허용하고 `entry_route`를 센티넬에 보존하게 한다.
+- [x] T016 [US1] 운영 경로 단 1은 깨끗한 전진 알파 관문 없이는 단 2로 오르지 못하고, 위험 실패에서는 즉시 단 0으로 내려가게 한다.
+- [x] T017 [US2] `.github/workflows/forward-edge-autoarm.yml`이 역할별 최신 sidecar를 내려받아 독립 검증 뒤 자본 판정기에 전달하게 한다.
+- [x] T018 [US2] `src/auto_invest/analytics/money_path.py`가 역사적 유망성·운영 10%·알파 승격을 서로 다른 상태로 보고하게 한다.
 
 ## 5단계 - 첫 실제 주문 재검사와 자동화
 
-- [ ] T019 [US3] `src/auto_invest/portfolio/live_entry_revalidation.py`와 `scripts/live_entry_revalidation_probe.py`가 첫 운영 매수 직전 최신 증거와 모든 안전 게이트를 재검사하게 한다.
-- [ ] T020 [US3] `.github/workflows/rebalance-live-canary.yml`이 첫 매수에서 운영 증거와 `entry_route`를 검증하고 기존 서명·nonce·지정가·정규장 주문만 사용하게 한다.
-- [ ] T021 [US3] 주문·체결·부분 체결·미체결·취소·오류와 사후 정합을 같은 실행 ID의 추가 전용 장부와 정화 sidecar에 남기는 회귀 시험을 통과시킨다.
+- [x] T019 [US3] `src/auto_invest/portfolio/live_entry_revalidation.py`와 `scripts/live_entry_revalidation_probe.py`가 첫 운영 매수 직전 최신 증거와 모든 안전 게이트를 재검사하게 한다.
+- [x] T020 [US3] `.github/workflows/rebalance-live-canary.yml`이 첫 매수에서 운영 증거와 `entry_route`를 검증하고 기존 서명·nonce·지정가·정규장 주문만 사용하게 한다.
+- [x] T021 [US3] 주문·체결·부분 체결·미체결·취소·오류와 사후 정합을 같은 실행 ID의 추가 전용 장부와 정화 sidecar에 남기는 회귀 시험을 통과시킨다.
 
 ## 6단계 - 로컬 검증과 PR
 
-- [ ] T022 T004~T008의 관련 단위·통합·워크플로 시험을 통과시킨다.
-- [ ] T023 `uv run pytest`와 `uv run ruff check src tests` 전체 검증을 통과시킨다.
-- [ ] T024 `uv run python scripts/agent_harness_probe.py --strict`와 `uv run python scripts/check_handoff_facts.py`를 통과시킨다.
+- [x] T022 T004~T008의 관련 단위·통합·워크플로 시험을 통과시킨다.
+- [x] T023 `uv run pytest`와 `uv run ruff check src tests` 전체 검증을 통과시킨다.
+- [x] T024 `uv run python scripts/agent_harness_probe.py --strict`와 `uv run python scripts/check_handoff_facts.py`를 통과시킨다.
 - [ ] T025 위험 등급 4, 문제 정의, 탐색 근거, 안전 경계, 롤백을 담은 PR 본문을 `scripts/check_pr_quality_gate.py`로 검증한다.
 - [ ] T026 브랜치를 푸시하고 PR을 만든 뒤 최신 `origin/main`과 머지 가능성·원격 검사를 재확인해 merge 방식으로 자동 머지한다.
 

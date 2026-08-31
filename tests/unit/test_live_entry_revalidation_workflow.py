@@ -14,8 +14,12 @@ def test_live_order_revalidates_before_signing_or_gateway_call() -> None:
     assert "steps.entry_revalidation.outputs.allowed == 'true'" in text
     assert "automation/profit-evidence-engine-last-run" in text
     assert "automation/autonomous-strategy-factory-last-run" in text
-    assert "--factory-evidence-json /tmp/strategy_factory.json" in text
+    assert "--factory-evidence-json /tmp/capital_entry_evidence.json" in text
+    assert "--operational-evidence-json /tmp/operational_canary_evidence.json" in text
+    assert "--expected-code-commit \"${GITHUB_SHA}\"" in text
+    assert "--sentinel automation/rebalance-live.request" in text
     assert "--live-portfolio deploy/canary-live-portfolio.toml" in text
+    assert "--validated-portfolio deploy/global-trend-fixed-portfolio.toml" in text
     assert "observe exploration-canary" in text
     assert "live-canary-profit ${CAP}" in text
     assert "observe live-canary-preview ${CAP}" in text

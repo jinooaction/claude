@@ -54,7 +54,9 @@ def test_ladder_decide_consumes_anchored_verdict() -> None:
     assert "--standard-forward-calibration-json /tmp/forward_gate_calibration.json" in text
     assert '--expected-code-commit "${GITHUB_SHA}"' in text
     assert "--profit-evidence-json /tmp/profit_evidence.json" in text
-    assert "--factory-evidence-json /tmp/strategy_factory.json" in text
+    assert "--factory-evidence-json /tmp/capital_entry_evidence.json" in text
+    assert "--operational-evidence-json /tmp/operational_canary_evidence.json" in text
+    assert "--operational-evidence-age-hours" in text
     assert "--factory-evidence-age-hours" in text
     assert "observe live-canary-preview ${research_capital}" in text
     assert "--fundability-preview-json /tmp/rung1_fundability_preview.json" in text
@@ -112,6 +114,7 @@ def test_factory_winner_is_assigned_disarmed_before_exact_hardening() -> None:
     assert assign < harden < decide
     assert '[[ "${ARMED:-false}" == "false" ]]' in text
     assert "scripts/factory_evidence_gate.py" in text
+    assert "scripts/operational_canary_evidence_gate.py" in text
     assert "FACTORY_CONTRACT_ELIGIBLE" in text
     assert "candidate_count // 0" not in text
     assert "selected_strategy_fingerprint" in text

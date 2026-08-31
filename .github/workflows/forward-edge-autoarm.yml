@@ -5,8 +5,8 @@ name: Capital ladder gate (forward edge -> rung promotions/demotions)
 # 운영자 위임(2026-06-11): "자본·수단도 자동과 자율에 맡긴다. 기준은 계좌 잔고와
 # 포트폴리오." (헌법 X.4 v9.0.0). 자본 배치 규모를 증거 게이트 공식으로 결정한다:
 #
-#   단0=0% → 단1=10% 연구 → 단2=20% 탐색 → 단3=25% → 단4=50% → 단5=100%
-#   - 단 0→1: 정확 배포전략의 공장 연구 10% 경로만 사용한다.
+#   단0=0% → 단1=10% 검증 → 단2=20% 탐색 → 단3=25% → 단4=50% → 단5=100%
+#   - 단 0→1: 역할이 분리된 공장 연구 또는 정확 배포전략 운영 검증 경로만 사용한다.
 #   - 단 0→2 또는 단 1→2: 같은 커밋에서 교정된 표준 forward EDGE_CONFIRMED를 요구한다.
 #   - 승격(단 n→n+1): 그 단에서 라이브 관측 ≥20 + ≥27일 경과 + 낙폭 < 예산/2(10%).
 #   - 강등: 낙폭 ≥ 예산/2(10%) → 한 단 아래(즉시). 정지: 낙폭 ≥ 예산(20%) → 단 0.
@@ -24,7 +24,7 @@ name: Capital ladder gate (forward edge -> rung promotions/demotions)
 #   - 결과는 사이드카 automation/edge-autoarm-last-run 으로 발행:
 #       git show origin/automation/edge-autoarm-last-run:LAST_RUN.md
 #
-# 헌법 X.4 v9.0.0: 자본 사다리는 운영자의 상시 위임에 따른 자율 운영. 비위임 불변
+# 헌법 X.4 v11.0.0: 자본 사다리는 운영자의 상시 위임에 따른 자율 운영. 비위임 불변
 # (K1 캡 체계·화이트리스트·감사·서킷 브레이커·낙폭 예산 소유권)은 그대로다.
 
 on:
@@ -63,25 +63,36 @@ jobs:
           fi
           jq '.deployment_match // {}' /tmp/profit_evidence.json
           if ! git show \
-              origin/automation/autonomous-strategy-factory-last-run:strategy_factory.json \
-              > /tmp/strategy_factory.json 2>/tmp/strategy_factory.err; then
-            echo '{}' > /tmp/strategy_factory.json
-            cat /tmp/strategy_factory.err || true
+              origin/automation/profit-evidence-engine-last-run:operational_canary_evidence.json \
+              > /tmp/operational_canary_evidence.json 2>/tmp/operational_canary_evidence.err; then
+            echo '{}' > /tmp/operational_canary_evidence.json
+            cat /tmp/operational_canary_evidence.err || true
+          fi
+          profit_epoch="$(git show -s --format=%ct \
+            origin/automation/profit-evidence-engine-last-run 2>/dev/null || echo 0)"
+          now_epoch="$(date +%s)"
+          python3 -c \
+            "print((int('${now_epoch}')-int('${profit_epoch}'))/3600 if int('${profit_epoch}') else 999999)" \
+            > /tmp/operational_evidence_age_hours
+          if ! git show \
+              origin/automation/autonomous-strategy-factory-last-run:capital_entry_evidence.json \
+              > /tmp/capital_entry_evidence.json 2>/tmp/capital_entry_evidence.err; then
+            echo '{}' > /tmp/capital_entry_evidence.json
+            cat /tmp/capital_entry_evidence.err || true
           fi
           factory_epoch="$(git show -s --format=%ct \
             origin/automation/autonomous-strategy-factory-last-run 2>/dev/null || echo 0)"
-          now_epoch="$(date +%s)"
           python3 -c \
             "print((int('${now_epoch}')-int('${factory_epoch}'))/3600 if int('${factory_epoch}') else 999999)" \
             > /tmp/strategy_factory_age_hours
-          jq '.decision // {}' /tmp/strategy_factory.json
+          jq '.decision // {}' /tmp/capital_entry_evidence.json
 
       - name: Validate versioned factory evidence contract (read-only)
         id: factory_contract
         run: |
           set +e
           uv run python scripts/factory_evidence_gate.py \
-            --evidence /tmp/strategy_factory.json \
+            --evidence /tmp/capital_entry_evidence.json \
             --json-out /tmp/factory_evidence_assessment.json
           status=$?
           set -e
@@ -95,6 +106,21 @@ jobs:
               > /tmp/factory_evidence_assessment.json
           fi
           cat /tmp/factory_evidence_assessment.json
+
+      - name: Validate operational canary evidence contract (read-only)
+        run: |
+          set +e
+          uv run python scripts/operational_canary_evidence_gate.py \
+            --evidence /tmp/operational_canary_evidence.json \
+            --expected-code-commit "${GITHUB_SHA}" \
+            --live-portfolio deploy/canary-live-portfolio.toml \
+            --validated-portfolio deploy/global-trend-fixed-portfolio.toml \
+            --evidence-age-hours "$(cat /tmp/operational_evidence_age_hours)" \
+            --json-out /tmp/operational_canary_assessment.json
+          status=$?
+          set -e
+          [[ "${status}" == "0" || "${status}" == "3" ]]
+          cat /tmp/operational_canary_assessment.json
 
       - name: Install SSH key
         env:
@@ -132,10 +158,10 @@ jobs:
           [[ "${ARMED:-false}" == "false" ]] || exit 0
           [[ "${FACTORY_CONTRACT_ELIGIBLE:-false}" == "true" ]] || exit 0
           [[ "$(awk '{print ($1 >= 0.0 && $1 <= 36.0) ? "fresh" : "stale"}' /tmp/strategy_factory_age_hours)" == "fresh" ]] || exit 0
-          jq -er '.decision.selected_deploy_config' /tmp/strategy_factory.json \
+          jq -er '.decision.selected_deploy_config' /tmp/capital_entry_evidence.json \
             > /tmp/factory_selected_portfolio.toml
           FACTORY_CONFIG=/tmp/factory_selected_portfolio.toml \
-          FACTORY_JSON=/tmp/strategy_factory.json uv run python - <<'PY'
+          FACTORY_JSON=/tmp/capital_entry_evidence.json uv run python - <<'PY'
           import json
           import os
           import tomllib
@@ -157,7 +183,7 @@ jobs:
             exit 0
           fi
           cp /tmp/factory_selected_portfolio.toml deploy/canary-live-portfolio.toml
-          candidate="$(jq -r '.decision.selected_candidate_id' /tmp/strategy_factory.json)"
+          candidate="$(jq -r '.decision.selected_candidate_id' /tmp/capital_entry_evidence.json)"
           BRANCH="automation/strategy-factory-assignment/${GITHUB_RUN_ID}"
           git config user.name "strategy-factory-assignment-bot"
           git config user.email "strategy-factory-assignment-bot@noreply.github.com"
@@ -393,7 +419,9 @@ jobs:
             --standard-forward-calibration-json /tmp/forward_gate_calibration.json \
             --expected-code-commit "${GITHUB_SHA}" \
             --profit-evidence-json /tmp/profit_evidence.json \
-            --factory-evidence-json /tmp/strategy_factory.json \
+            --operational-evidence-json /tmp/operational_canary_evidence.json \
+            --operational-evidence-age-hours "$(cat /tmp/operational_evidence_age_hours)" \
+            --factory-evidence-json /tmp/capital_entry_evidence.json \
             --factory-evidence-age-hours "$(cat /tmp/strategy_factory_age_hours)" \
             --fundability-preview-json /tmp/rung1_fundability_preview.json \
             --execution-proxy-parity-json /tmp/execution_proxy_parity.json \
@@ -619,6 +647,11 @@ jobs:
             echo "## 전략 공장 완전성 판정 JSON (read-only)"
             echo '```json'
             cat /tmp/factory_evidence_assessment.json 2>/dev/null || echo '{}'
+            echo '```'
+            echo ""
+            echo "## 운영 검증 캐너리 독립 판정 JSON (read-only)"
+            echo '```json'
+            cat /tmp/operational_canary_assessment.json 2>/dev/null || echo '{}'
             echo '```'
             echo ""
             echo "## 연구 단 1 구현 가능성 미리보기 (read-only, 주문 0건)"
