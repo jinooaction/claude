@@ -45,7 +45,7 @@
 - [x] T022 T004~T008의 관련 단위·통합·워크플로 시험을 통과시킨다.
 - [x] T023 `uv run pytest`와 `uv run ruff check src tests` 전체 검증을 통과시킨다.
 - [x] T024 `uv run python scripts/agent_harness_probe.py --strict`와 `uv run python scripts/check_handoff_facts.py`를 통과시킨다.
-- [ ] T025 위험 등급 4, 문제 정의, 탐색 근거, 안전 경계, 롤백을 담은 PR 본문을 `scripts/check_pr_quality_gate.py`로 검증한다.
+- [x] T025 위험 등급 4, 문제 정의, 탐색 근거, 안전 경계, 롤백을 담은 PR 본문을 `scripts/check_pr_quality_gate.py`로 검증한다.
 - [ ] T026 브랜치를 푸시하고 PR을 만든 뒤 최신 `origin/main`과 머지 가능성·원격 검사를 재확인해 merge 방식으로 자동 머지한다.
 
 ## 7단계 - 생산 배포와 실제 체결 완료
