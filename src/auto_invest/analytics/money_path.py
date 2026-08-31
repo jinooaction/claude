@@ -37,6 +37,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, timedelta
 from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal, InvalidOperation
+from zoneinfo import ZoneInfo
 
 from auto_invest.portfolio.capital_ladder import (
     DEFAULT_DD_BUDGET_PCT,
@@ -48,7 +49,7 @@ from auto_invest.portfolio.capital_ladder import (
 )
 from auto_invest.portfolio.edge_verdict import PAIRED_ACTIVE_RETURN_PSR_METHOD
 
-SCHEMA_VERSION = "1.7"
+SCHEMA_VERSION = "1.8"
 
 # 자본 사다리 결정 라벨(capital_ladder 와 동일 — 재사용보다 명시로 결합도 낮춤).
 ACTION_PROMOTE = "PROMOTE"
@@ -96,6 +97,9 @@ MICRO_GTAA_PATH = "micro-gtaa-live-canary"
 CAPITAL_LADDER_PATH = "capital-ladder-live-canary"
 MICRO_MAX_CAPITAL_USD = 1000
 MICRO_SCHEDULE_HOUR_UTC = 15
+LIVE_SCHEDULE_HOUR_NEW_YORK = 10
+LIVE_SCHEDULE_MINUTE = 17
+LIVE_SCHEDULE_TIMEZONE = ZoneInfo("America/New_York")
 HALT_RECOVERY_MAX_AGE_HOURS = 36
 HALT_RECOVERY_GATE = "fresh reconciliation evidence and global halt clear"
 MICRO_REQUIRED_GATES = (
@@ -787,7 +791,25 @@ def _bool(value: object) -> bool | None:
 
 
 def _next_live_schedule(now: datetime) -> str:
-    """다음 평일 15:00 UTC live-canary 예약 후보 시각."""
+    """다음 평일 뉴욕 현지 10:17 live-canary 예약 후보 시각."""
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=UTC)
+    local_now = now.astimezone(LIVE_SCHEDULE_TIMEZONE)
+    candidate = local_now.replace(
+        hour=LIVE_SCHEDULE_HOUR_NEW_YORK,
+        minute=LIVE_SCHEDULE_MINUTE,
+        second=0,
+        microsecond=0,
+    )
+    if local_now.weekday() >= 5 or local_now >= candidate:
+        candidate = candidate + timedelta(days=1)
+        while candidate.weekday() >= 5:
+            candidate = candidate + timedelta(days=1)
+    return candidate.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _next_micro_schedule(now: datetime) -> str:
+    """다음 평일 15:00 UTC micro-GTAA 예약 후보 시각."""
     if now.tzinfo is None:
         now = now.replace(tzinfo=UTC)
     now = now.astimezone(UTC)
@@ -799,11 +821,6 @@ def _next_live_schedule(now: datetime) -> str:
         while candidate.weekday() >= 5:
             candidate = candidate + timedelta(days=1)
     return candidate.strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
-def _next_micro_schedule(now: datetime) -> str:
-    """하위 호환 별칭: 두 live-canary 경로는 같은 평일 15:00 UTC 스케줄을 쓴다."""
-    return _next_live_schedule(now)
 
 
 def _micro_run_evidence(data: dict | None) -> MicroGtaaRunEvidence | None:

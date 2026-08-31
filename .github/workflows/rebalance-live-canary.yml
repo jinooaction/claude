@@ -25,9 +25,11 @@ name: Live canary portfolio rebalance (guarded, real money)
 
 on:
   schedule:
-    # 미국 정규장 중(평일 15:00 UTC ≈ 10:00 ET 오전 유동성) 실거래 재조정. 실주문은 *스케줄*
-    # 실행 + 센티넬 armed:true 일 때만 — 무장 머지(push)는 미리보기만(아래 LIVE 스텝 게이트).
-    - cron: "0 15 * * 1-5"
+    # 미국 정규장 중 뉴욕 현지 10:17(정각 혼잡 회피) 실거래 재조정. GitHub schedule은
+    # 매시 정각에 지연·누락될 수 있으므로 비정각을 쓴다. 실주문은 *스케줄* 실행 + 센티넬
+    # armed:true 일 때만 — 무장 머지(push)는 미리보기만(아래 LIVE 스텝 게이트).
+    - cron: "17 10 * * 1-5"
+      timezone: "America/New_York"
   workflow_dispatch:
     inputs:
       capital:
