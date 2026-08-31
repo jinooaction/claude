@@ -55,6 +55,37 @@ def _exit(code: int) -> None:
     raise typer.Exit(code)
 
 
+def _live_rebalance_session_refusal(
+    *,
+    mode: str,
+    dry_run: bool,
+    now=None,  # noqa: ANN001 - injectable clock for deterministic safety tests.
+) -> str | None:
+    """Return a fail-closed reason when a real rebalance is outside XNYS hours.
+
+    The GitHub schedule is only a wake-up signal and can be delayed for hours.
+    The money-moving CLI therefore rechecks the exchange calendar immediately
+    before any database migration or broker access.  Paper runs and previews do
+    not move money and remain available while the market is closed.
+    """
+    if mode != "live" or dry_run:
+        return None
+
+    from datetime import UTC, datetime
+
+    from auto_invest.worker.schedule import is_session_open, next_session_open
+
+    moment = now or datetime.now(UTC)
+    if is_session_open(moment):
+        return None
+    next_open = next_session_open(moment)
+    return (
+        "REFUSED: XNYS regular session is closed; live rebalance cannot submit orders. "
+        f"checked_at={moment.astimezone(UTC).isoformat()} "
+        f"next_open={next_open.isoformat()}"
+    )
+
+
 def _assert_autonomous_write_allowed(
     *,
     summary: str,
@@ -4714,6 +4745,11 @@ def rebalance_once_cmd(
             err=True,
         )
         _exit(64)
+
+    session_refusal = _live_rebalance_session_refusal(mode=mode, dry_run=dry_run)
+    if session_refusal is not None:
+        typer.echo(session_refusal, err=True)
+        _exit(75)
 
     _require_clean_migrations(db_path, allow_apply=True)
 
