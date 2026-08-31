@@ -36,7 +36,7 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 | 마지막 main 커밋 | `9ccb64b` — Merge pull request #712 from jinooaction/Codex/176-schedule-reliability |
 | main 테스트 | `Codex/176-preflight-report-truth`에서 현재 main을 포함해 `uv run pytest` → 3211 passed, 7 skipped, 실패 0. 6개는 `KIS_LIVE_TEST=1` 전용이며 생산 KIS 스모크에서 6/6 통과했다. 나머지 1개는 사다리 가동 전 상태 전용 시험이라 현재 단 1에서 건너뛴다. |
 | main 린트 | `Codex/176-preflight-report-truth`에서 `uv run ruff check src tests` → All checks passed. |
-| 열린 PR | 없음. `Codex/176-preflight-report-truth`에서 성공한 생산 첫 진입 재검증을 증거 없음으로 표시하는 운영 보고 오류를 보정 중이다. |
+| 열린 PR | #713 `fix(176): report production entry preflight truth`가 열려 있다. 성공한 생산 첫 진입 재검증을 증거 없음으로 표시하는 운영 보고 오류를 보정한다. |
 | 출시 완료 스펙 | 최신 기능: #712(스펙 176, 뉴욕 현지 10:17 비정각 실거래 예약), #709(스펙 176, 역할 분리 운영 증거와 NAV 10% 실거래 검증 캐너리), #706(스펙 175, 21가족 교정·PEAD 진단), #701(스펙 174, 회계 기반 횡단면 팩터), #699(스펙 173, 판정 경로 교정·월말월초 전략). |
 | 골격 스펙 | 없음. 스펙 176 코드·단 1 센티넬·비정각 예약은 출시됐고, 남은 완료 관문은 2026-08-31 뉴욕 10:17 정규장 주문·체결·감사·정합 확인이다. |
 | 최근 출시 작업 | 정확 배포 전략 `globalfixed-ensemble-3-6-9-12`를 알파 확정이 아닌 운영 검증으로 분류하고, 실계좌 NAV `$1427.63`의 10%를 내림한 `$142`만 단 1에 무장했다. 예상 주문은 IAUM 1주와 SCHX 2주이며 ORANY 28주는 비관리 보유로 자동 매도하지 않는다. #712는 혼잡한 정각 UTC 예약을 뉴욕 현지 10:17로 옮겼다. |
