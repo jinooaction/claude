@@ -161,6 +161,8 @@ def test_live_canary_schedule_avoids_top_of_hour_and_tracks_new_york_time() -> N
     text = _workflow_text()
     schedule = text.split("  schedule:", 1)[1].split("  workflow_dispatch:", 1)[0]
 
-    assert 'cron: "17 10-13 * * 1-5"' in schedule
+    assert 'cron: "17,29,41,53 10 * * 1-5"' in schedule
+    assert 'cron: "5,17,29,41,53 11-13 * * 1-5"' in schedule
+    assert schedule.count('timezone: "America/New_York"') == 2
     assert 'timezone: "America/New_York"' in schedule
     assert 'cron: "0 ' not in schedule

@@ -97,8 +97,11 @@ MICRO_GTAA_PATH = "micro-gtaa-live-canary"
 CAPITAL_LADDER_PATH = "capital-ladder-live-canary"
 MICRO_MAX_CAPITAL_USD = 1000
 MICRO_SCHEDULE_HOUR_UTC = 15
-LIVE_SCHEDULE_HOURS_NEW_YORK = (10, 11, 12, 13)
-LIVE_SCHEDULE_MINUTE = 17
+LIVE_SCHEDULE_START_HOUR_NEW_YORK = 10
+LIVE_SCHEDULE_START_MINUTE = 17
+LIVE_SCHEDULE_END_HOUR_NEW_YORK = 13
+LIVE_SCHEDULE_END_MINUTE = 53
+LIVE_SCHEDULE_INTERVAL_MINUTES = 12
 LIVE_SCHEDULE_TIMEZONE = ZoneInfo("America/New_York")
 HALT_RECOVERY_MAX_AGE_HOURS = 36
 HALT_RECOVERY_GATE = "fresh reconciliation evidence and global halt clear"
@@ -798,15 +801,22 @@ def _next_live_schedule(now: datetime) -> str:
     day = local_now
     while True:
         if day.weekday() < 5:
-            for hour in LIVE_SCHEDULE_HOURS_NEW_YORK:
-                candidate = day.replace(
-                    hour=hour,
-                    minute=LIVE_SCHEDULE_MINUTE,
-                    second=0,
-                    microsecond=0,
-                )
+            candidate = day.replace(
+                hour=LIVE_SCHEDULE_START_HOUR_NEW_YORK,
+                minute=LIVE_SCHEDULE_START_MINUTE,
+                second=0,
+                microsecond=0,
+            )
+            end = day.replace(
+                hour=LIVE_SCHEDULE_END_HOUR_NEW_YORK,
+                minute=LIVE_SCHEDULE_END_MINUTE,
+                second=0,
+                microsecond=0,
+            )
+            while candidate <= end:
                 if candidate > local_now:
                     return candidate.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+                candidate += timedelta(minutes=LIVE_SCHEDULE_INTERVAL_MINUTES)
         day = (day + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
 
 

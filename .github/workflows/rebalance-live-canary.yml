@@ -25,10 +25,12 @@ name: Live canary portfolio rebalance (guarded, real money)
 
 on:
   schedule:
-    # 미국 정규장 중 뉴욕 현지 10:17~13:17의 시간별 실행 기회. GitHub schedule 한 건은
-    # 비정각이어도 지연·누락될 수 있다. production 서버의 XNYS 거래일 선점이 첫 실행만
-    # 주문 경로로 보내고 후속 실행은 브로커 호출 없이 끝낸다.
-    - cron: "17 10-13 * * 1-5"
+    # 미국 정규장 중 뉴욕 현지 10:17~13:53의 12분 간격 비정각 실행 기회. GitHub schedule
+    # 한 건은 비정각이어도 지연·누락될 수 있다. production 서버의 XNYS 거래일 선점이 첫
+    # 실행만 주문 경로로 보내고 후속 실행은 브로커 호출 없이 끝낸다.
+    - cron: "17,29,41,53 10 * * 1-5"
+      timezone: "America/New_York"
+    - cron: "5,17,29,41,53 11-13 * * 1-5"
       timezone: "America/New_York"
   workflow_dispatch:
     inputs:
