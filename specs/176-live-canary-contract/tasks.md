@@ -75,8 +75,25 @@
   첫 주문 재검사가 이를 무시하는 실패 시험을 작성하고 의도한 이유로 실패시킨다.
 - [x] T042 [US3] 운영 증거의 10%와 라이브 fundability 설정의 `canary_capital_pct`를 직접 대조해
   누락·파싱 실패·불일치를 `operational_canary_capital_contract`로 실패 폐쇄하고 설정을 10%로 맞춘다.
-- [ ] T043 [US3] 관련·전체 시험과 품질 관문을 통과시키고 main 배포 뒤 exact-main 무주문
+- [x] T043 [US3] 관련·전체 시험과 품질 관문을 통과시키고 main 배포 뒤 exact-main 무주문
   사전점검에서 새 자본 계약을 포함한 `ENTRY_READY`를 다시 확인한다.
+- [x] T044 [US3] 비정각 예약도 약 9시간 지연되면 `rebalance-once --mode live`가 정규장 밖에서
+  브로커에 도달할 수 있는 오류를 재현하고, 정규장·장 마감 뒤·휴장·종이매매·미리보기 실패
+  시험을 `tests/unit/test_rebalance_live_session_guard.py`에 작성한다.
+- [x] T045 [US3] 실주문 CLI가 DB 마이그레이션과 브로커 접근 전에 서버 현재 시각을 XNYS
+  달력으로 검사하고, 닫힌 장에서는 다음 개장 시각과 종료 코드 75를 남기며 우회 옵션 없이
+  실패 폐쇄하게 한다.
+- [x] T047 [US3] 정규장 안에 시작한 뒤 처리 중 마감되는 경쟁 상태를 재현하고, `OrderRouter`가
+  실행 권한 잠금 뒤 각 실제 중개사 쓰기 직전에 XNYS를 다시 검사해 다음 주문을
+  `market_hours_gate`로 감사 거부하게 한다.
+- [x] T048 [US3] `rebalance-once`가 도중 마감 거부를 종료 코드 75로 반환하고,
+  `rebalance-micro-gtaa-canary.yml`을 포함한 실주문 호출자가 SSH 종료 코드를 단계 실패로
+  전파하게 한다.
+- [x] T049 [US3] 첫 주문 접수 뒤 다음 주문이 정규장 게이트로 막혀 LIVE 단계가 실패해도 후속
+  측정·보고를 항상 실행하고, 결과 JSON의 `SUBMITTED` 행을 세어 부분 실행으로 표시하게 한다.
+- [ ] T046 [US3] 관련·전체 시험, 린트, 엄격 하네스, HANDOFF 사실 검사, PR 품질 관문을 통과시켜
+  merge·배포하고 exact-main 무주문 사전점검에서 정규장 게이트가 실주문 경로에 포함됐는지
+  확인한다.
 
 ## 의존성과 완료 계약
 

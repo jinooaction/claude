@@ -55,6 +55,45 @@ def _exit(code: int) -> None:
     raise typer.Exit(code)
 
 
+def _live_rebalance_session_refusal(
+    *,
+    mode: str,
+    dry_run: bool,
+    now=None,  # noqa: ANN001 - injectable clock for deterministic safety tests.
+) -> str | None:
+    """Return a fail-closed reason when a real rebalance is outside XNYS hours.
+
+    The GitHub schedule is only a wake-up signal and can be delayed for hours.
+    The money-moving CLI therefore rechecks the exchange calendar immediately
+    before any database migration or broker access.  Paper runs and previews do
+    not move money and remain available while the market is closed.
+    """
+    if mode != "live" or dry_run:
+        return None
+
+    from datetime import UTC, datetime
+
+    from auto_invest.worker.schedule import is_session_open, next_session_open
+
+    moment = now or datetime.now(UTC)
+    if is_session_open(moment):
+        return None
+    next_open = next_session_open(moment)
+    return (
+        "REFUSED: XNYS regular session is closed; live rebalance cannot submit orders. "
+        f"checked_at={moment.astimezone(UTC).isoformat()} "
+        f"next_open={next_open.isoformat()}"
+    )
+
+
+def _rebalance_exit_code(outcome: object) -> int | None:
+    """Propagate a mid-run market-hours rejection to workflow callers."""
+    results = getattr(outcome, "results", ())
+    if any(getattr(result, "gate", None) == "market_hours_gate" for result in results):
+        return 75
+    return None
+
+
 def _assert_autonomous_write_allowed(
     *,
     summary: str,
@@ -4715,6 +4754,11 @@ def rebalance_once_cmd(
         )
         _exit(64)
 
+    session_refusal = _live_rebalance_session_refusal(mode=mode, dry_run=dry_run)
+    if session_refusal is not None:
+        typer.echo(session_refusal, err=True)
+        _exit(75)
+
     _require_clean_migrations(db_path, allow_apply=True)
 
     # Spec 034: optionally CONSTRUCT the universe from the current stored bars by
@@ -4851,6 +4895,10 @@ def rebalance_once_cmd(
                 caps=caps,  # type: ignore[arg-type]
                 halt_path=halt_path,
                 paper_mode=(mode == "paper"),
+                live_order_guard=lambda: _live_rebalance_session_refusal(
+                    mode=mode,
+                    dry_run=dry_run,
+                ),
             )
 
             async def _quote_provider(symbol: str):
@@ -4909,6 +4957,7 @@ def rebalance_once_cmd(
                 conn.close()
 
     outcome = asyncio.run(_go() if account_wide or not dry_run else _go_dry())
+    rebalance_exit_code = _rebalance_exit_code(outcome)
     mode_label = "dry-run" if dry_run else mode
 
     if as_json:
@@ -4958,6 +5007,7 @@ def rebalance_once_cmd(
                             "routed_qty": r.routed_qty,
                             "limit_price_usd": str(r.limit_price_usd),
                             "state": r.state,
+                            "gate": r.gate,
                             "reason": r.reason,
                         }
                         for r in outcome.results  # type: ignore[attr-defined]
@@ -4974,6 +5024,8 @@ def rebalance_once_cmd(
                 }
             )
         )
+        if rebalance_exit_code is not None:
+            _exit(rebalance_exit_code)
         return
 
     typer.echo(f"rebalance {outcome.portfolio_id}  mode={mode_label}")  # type: ignore[attr-defined]
@@ -5003,6 +5055,8 @@ def rebalance_once_cmd(
         typer.echo("withheld:")
         for w in outcome.withheld:  # type: ignore[attr-defined]
             typer.echo(f"  {w.side:4} {w.symbol:6} req={w.requested_qty} -> WITHHELD ({w.reason})")
+    if rebalance_exit_code is not None:
+        _exit(rebalance_exit_code)
 
 
 @app.command("walk-forward")

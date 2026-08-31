@@ -75,3 +75,16 @@ OPERATIONAL_CANARY
 - 전략 장부 동기화 결과
 - 계좌 정합 결과와 불일치 사유
 - 감사 장부 위치와 sidecar 실행 ID
+
+## LiveOrderSessionGate
+
+실주문 진입점이 실제 실행 시각으로 만드는 일회성 판정이다.
+
+- `mode`, `dry_run`: 실제 돈을 움직이는 호출인지 구분
+- `checked_at_utc`: 서버가 검사한 현재 UTC 시각
+- `XNYS regular session open`: 거래소 정규장 여부
+- `next_open_utc`: 닫힌 장에서 운영 진단에 남길 다음 개장 시각
+- 시작부터 닫힌 장의 결과: 주문·브로커 조회·DB 마이그레이션 0건, 종료 코드 75
+- 도중 마감 결과: 다음 중개사 쓰기 0건, `market_hours_gate` 거부 감사, 종료 코드 75
+- `check_scope`: CLI 시작 전 검사와 실행 권한 잠금 뒤 각 실제 중개사 쓰기 직전 검사
+- 종이매매·미리보기: 판정 대상이 아니므로 기존 동작 유지

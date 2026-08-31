@@ -86,6 +86,7 @@ async def _router(
     tmp_path: Path,
     *,
     halt_set: bool = False,
+    live_order_guard=None,  # noqa: ANN001 - injectable safety hook for tests.
 ) -> AsyncIterator[OrderRouter]:
     halt_path = tmp_path / "halt.flag"
     if halt_set:
@@ -112,6 +113,7 @@ async def _router(
             caps=_caps(),
             halt_path=halt_path,
             market="NASD",
+            live_order_guard=live_order_guard,
         )
 
     conn.close()
@@ -261,6 +263,45 @@ async def test_submit_order_happy_path(tmp_path: Path):
             ("INTENT", "SUBMITTING"),
             ("SUBMITTING", "SUBMITTED"),
         ]
+        assert _authority_lock_count(router.conn) == 0
+
+
+@pytest.mark.asyncio
+async def test_live_order_guard_rechecks_each_broker_submission(tmp_path: Path):
+    checks = iter([None, "XNYS regular session is closed"])
+
+    async with _router(tmp_path, live_order_guard=lambda: next(checks)) as router:
+        with respx.mock(base_url=BASE) as mock:
+            placed = mock.post("/uapi/overseas-stock/v1/trading/order").mock(
+                return_value=httpx.Response(200, json={"output": {"ODNO": "K-001"}})
+            )
+            first = await router.submit_order(
+                rule=_rule(rule_id="first"),
+                quote_price_usd=Decimal("99"),
+                total_capital_usd=Decimal("10000"),
+                current_symbol_exposure_usd=Decimal("0"),
+                current_global_exposure_usd=Decimal("0"),
+            )
+            second = await router.submit_order(
+                rule=_rule(rule_id="second"),
+                quote_price_usd=Decimal("99"),
+                total_capital_usd=Decimal("10000"),
+                current_symbol_exposure_usd=Decimal("0"),
+                current_global_exposure_usd=Decimal("0"),
+            )
+
+        assert first.state == "SUBMITTED"
+        assert second.state == "REJECTED_BY_GATE"
+        assert second.gate == "market_hours_gate"
+        assert second.reason == "XNYS regular session is closed"
+        assert placed.call_count == 1
+
+        rejected = [
+            row
+            for row in audit.read_all(router.conn)
+            if row["event_type"] == "ORDER_REJECTED_BY_GATE"
+        ]
+        assert audit.parse_payload(rejected[-1])["gate"] == "market_hours_gate"
         assert _authority_lock_count(router.conn) == 0
 
 
