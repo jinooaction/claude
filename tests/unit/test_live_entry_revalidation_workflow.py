@@ -10,7 +10,10 @@ def test_live_order_revalidates_before_signing_or_gateway_call() -> None:
     revalidate = text.index("Revalidate latest edge before the first strategy fill")
     authorize = text.index("Authorize request — scheduled runs place real orders")
     assert revalidate < authorize
-    assert "scripts/live_entry_revalidation_probe.py" in text
+    real_order = text.split("  live_portfolio_canary_real_orders:", 1)[1]
+    install = real_order.index("Install uv for local entry revalidation")
+    probe = real_order.index("uv run python scripts/live_entry_revalidation_probe.py")
+    assert install < probe
     assert "steps.entry_revalidation.outputs.allowed == 'true'" in text
     assert "automation/profit-evidence-engine-last-run" in text
     assert "automation/autonomous-strategy-factory-last-run" in text
