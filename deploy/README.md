@@ -155,6 +155,11 @@ sqlite3 /opt/auto-invest/data/auto_invest.db \
    ORDER BY seq;"
 ```
 
+GitHub Actions에서 같은 내용을 읽기 전용으로 확인할 때는 수동
+`Deploy audit log verification` 워크플로를 사용한다. 이 경로는 임의 원격 셸을 보내지 않고
+forced-command gateway의 `deploy-audit [correlation_id]`만 호출한다. 서버 helper는 요청 ID를
+다시 검증하고 위 데이터베이스를 `sqlite3 -readonly`로만 조회한다.
+
 ## 5. Rollback path (verification)
 
 Push a deliberately-broken change to a test branch and:

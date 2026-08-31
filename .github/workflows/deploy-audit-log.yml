@@ -2,7 +2,8 @@ name: Deploy audit log verification
 
 # 서버 audit_log 의 DEPLOY_* 행을 읽기 전용으로 조회해 사이드카에 발행한다.
 # 목적: "GitHub Actions 배포 성공"과 "서버 DB 감사 행" 사이의 마지막 증거 공백을 닫기.
-# 안전: sqlite3 -readonly 만 사용, systemctl/git/주문 경로/설정 파일을 건드리지 않는다.
+# 안전: forced-command gateway 의 고정 `deploy-audit` 명령만 사용한다. 서버 helper 는
+# sqlite3 -readonly 만 사용하며 systemctl/git/주문 경로/설정 파일을 건드리지 않는다.
 #
 # 사용법:
 #   gh workflow run deploy-audit-log.yml --ref main
@@ -58,68 +59,14 @@ jobs:
             exit 0
           fi
 
+          remote_command="deploy-audit"
+          if [[ -n "${requested}" ]]; then
+            remote_command="deploy-audit ${requested}"
+          fi
           port="${PORT:-22}"
           ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
               -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
-              "REQUESTED_CID='${requested}' bash -s" > /tmp/deploy_audit.log 2>&1 <<'REMOTE'
-          set -euo pipefail
-          db="/opt/auto-invest/data/auto_invest.db"
-          if [[ ! -r "${db}" ]]; then
-            echo "AUDIT_STATUS=missing_db"
-            echo "DB not readable: ${db}"
-            exit 3
-          fi
-
-          cid="${REQUESTED_CID:-}"
-          if [[ -z "${cid}" ]]; then
-            cid="$(sqlite3 -readonly "${db}" \
-              "SELECT correlation_id
-                 FROM audit_log
-                WHERE event_type LIKE 'DEPLOY_%'
-                  AND correlation_id IS NOT NULL
-                  AND correlation_id != ''
-                ORDER BY seq DESC
-                LIMIT 1;")"
-          fi
-
-          if [[ -z "${cid}" ]]; then
-            echo "AUDIT_STATUS=no_deploy_rows"
-            echo "No DEPLOY_* audit rows with correlation_id found."
-            exit 4
-          fi
-
-          row_count="$(sqlite3 -readonly "${db}" \
-            "SELECT COUNT(*)
-               FROM audit_log
-              WHERE correlation_id = '${cid}'
-                AND event_type LIKE 'DEPLOY_%';")"
-          terminal_event="$(sqlite3 -readonly "${db}" \
-            "SELECT event_type
-               FROM audit_log
-              WHERE correlation_id = '${cid}'
-                AND event_type LIKE 'DEPLOY_%'
-              ORDER BY seq DESC
-              LIMIT 1;")"
-
-          echo "AUDIT_STATUS=ok"
-          echo "AUDIT_CORRELATION_ID=${cid}"
-          echo "AUDIT_ROW_COUNT=${row_count}"
-          echo "AUDIT_TERMINAL_EVENT=${terminal_event}"
-          echo ""
-          echo "## DEPLOY audit rows"
-          sqlite3 -readonly -header -column "${db}" \
-            "SELECT seq,
-                    ts_utc,
-                    event_type,
-                    json_extract(payload_json, '$.phase') AS phase,
-                    substr(json_extract(payload_json, '$.sha_before'), 1, 12) AS sha_before,
-                    substr(json_extract(payload_json, '$.sha_after'), 1, 12) AS sha_after,
-                    json_extract(payload_json, '$.reason') AS reason
-               FROM audit_log
-              WHERE correlation_id = '${cid}'
-                AND event_type LIKE 'DEPLOY_%'
-              ORDER BY seq;"
-          REMOTE
+              "${remote_command}" > /tmp/deploy_audit.log 2>&1
           ssh_exit=$?
           echo "ssh_exit=${ssh_exit}" >> "$GITHUB_OUTPUT"
           sed -n 's/^AUDIT_STATUS=/audit_status=/p' /tmp/deploy_audit.log >> "$GITHUB_OUTPUT"

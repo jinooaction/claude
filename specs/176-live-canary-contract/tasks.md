@@ -113,6 +113,14 @@
   merge하고 장 마감 뒤 exact-main 배포를 확인한다.
 - [ ] T057 [US3] 다음 거래일에 최초 schedule run의 실제 주문·체결·감사·정합과 같은 날 후속
   schedule run의 원래 run ID·중복 주문 0건을 생산 증거로 확인한다.
+- [x] T058 [US3] 생산 배포 감사 run `33439750122`가 `REQUESTED_CID='' bash -s` 때문에
+  forced-command 경계에서 종료 코드 126으로 거부된 계약 오류를 기록하고, 임의 셸 금지·고정
+  명령·이중 입력 검증·읽기 전용 helper 설치의 실패 시험을 먼저 실행해 의도한 이유로 실패시킨다.
+- [x] T059 [US3] root 소유 `deploy-audit-on-instance.sh`와 gateway의 `deploy-audit` 고정 명령을
+  추가하고 workflow가 해당 명령만 호출하게 한다. helper는 고정 DB의 `DEPLOY_%` 행만
+  `sqlite3 -readonly`로 읽고 요청 ID를 다시 검증하며 관련 회귀 시험을 통과시킨다.
+- [ ] T060 [US3] 전체 시험·린트·엄격 하네스·HANDOFF 사실 검사·PR 품질 관문을 통과시키고
+  merge·exact-main 배포한 뒤 배포 감사 sidecar의 `DEPLOY_COMPLETED`를 확인한다.
 
 ## 의존성과 완료 계약
 

@@ -15,9 +15,12 @@ def _body() -> str:
 def test_deploy_audit_workflow_is_read_only_on_server() -> None:
     body = _body()
 
-    assert "sqlite3 -readonly" in body
-    assert "event_type LIKE 'DEPLOY_%'" in body
+    assert '"deploy-audit"' in body
+    assert '"deploy-audit ${requested}"' in body
     assert "AUDIT_TERMINAL_EVENT" in body
+    assert "bash -s" not in body
+    assert "REQUESTED_CID='" not in body
+    assert 'sqlite3 -readonly "${' not in body
 
     forbidden = [
         "systemctl start",
@@ -45,3 +48,11 @@ def test_deploy_audit_fails_unless_terminal_completed() -> None:
 
     assert 'AUDIT_TERMINAL:-}" != "DEPLOY_COMPLETED"' in body
     assert "latest deploy audit terminal event" in body
+
+
+def test_deploy_audit_validates_optional_correlation_id_before_ssh() -> None:
+    body = _body()
+
+    assert "^[0-9a-fA-F]{8,64}$" in body
+    assert 'remote_command="deploy-audit"' in body
+    assert 'remote_command="deploy-audit ${requested}"' in body

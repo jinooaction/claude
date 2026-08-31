@@ -147,3 +147,17 @@ CAGR·샤프·낙폭·초과수익 PSR·비용 민감도를 다시 계산한다.
 **기각한 대안**: `workflow_dispatch`를 실주문화하거나 `repository_dispatch`라는 새 주문 승인
 이벤트를 추가하면 공격·오작동 표면이 넓어진다. production 서버 타이머의 직접 주문은 GitHub
 서명 경계를 우회한다. 5분 간격은 회복 기회 증가 대비 불필요한 러너·미리보기 부하가 더 크다.
+
+## 결정 15 - 배포 감사도 고정된 읽기 전용 원격 명령으로 수행한다
+
+**결정**: `deploy-audit-log.yml`은 SSH로 임의 셸 본문을 보내지 않고 forced-command gateway의
+`deploy-audit [correlation_id]`만 호출한다. gateway와 root 소유 helper가 correlation ID를 각각
+8~64자리 16진수로 검사하고, helper는 고정 데이터베이스의 `DEPLOY_%` 행을 읽기 전용으로 조회한다.
+
+**근거**: 생산 run `33439750122`는 `REQUESTED_CID='' bash -s`를 호출해 보안 경계에서 종료 코드
+126으로 정상 거부됐다. 이는 배포 실패 증거가 아니라 관측기와 보안 경계의 계약 불일치다. 감사
+조회 자체를 허용 목록 명령으로 만들면 기존의 임의 원격 셸 금지를 보존하면서 배포 증거를 읽을 수 있다.
+
+**기각한 대안**: gateway가 환경 변수 접두사나 `bash -s`를 허용하게 넓히면 GitHub 키가 임의 root
+명령 실행 경로를 얻게 된다. workflow에 SQL을 계속 두거나 `deploy-journal` 문자열만으로 배포 성공을
+추론하면 서버 DB의 추가 전용 감사 사슬을 독립 검증하지 못한다.
