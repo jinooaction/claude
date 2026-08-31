@@ -115,6 +115,31 @@ def test_micro_gtaa_workflow_live_uses_account_wide_effective_side():
     assert 'exit "${ssh_exit}"' in block
 
 
+def test_micro_gtaa_partial_live_failure_still_measures_and_reports_submitted_orders():
+    text = _WORKFLOW.read_text(encoding="utf-8")
+    measure = re.search(
+        r"name: Measure micro live track.*?(?=\n\n      - name:|\Z)",
+        text,
+        flags=re.DOTALL,
+    )
+    assert measure is not None
+    assert "if: always() && steps.gate.outputs.blocked != 'true'" in measure.group(0)
+
+    publish_idx = text.index("Publish micro GTAA result to sidecar branch")
+    notify_idx = text.index("Notify Telegram — micro GTAA result")
+    publish = text[publish_idx:notify_idx]
+    assert 'live_submitted_count="$(python - <<\'PY\'' in publish
+    assert "부분 실행: 브로커 접수 ${live_submitted_count}건" in publish
+    assert "LIVE_OUTCOME: ${{ steps.live.outcome }}" in publish
+
+    notify = text[notify_idx:]
+    partial_idx = notify.index(
+        'elif submitted_count and os.environ.get("LIVE_OUTCOME") != "success":'
+    )
+    generic_failure_idx = notify.index('elif os.environ.get("LIVE_OUTCOME") != "success":')
+    assert partial_idx < generic_failure_idx
+
+
 def test_micro_gtaa_sidecar_publishes_preflight_evidence():
     text = _WORKFLOW.read_text(encoding="utf-8")
     assert "## 라이브 전 전략 의도 게이트" in text

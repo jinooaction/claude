@@ -486,7 +486,7 @@ jobs:
 
       - name: Measure micro live track
         id: measure
-        if: steps.gate.outputs.blocked != 'true'
+        if: always() && steps.gate.outputs.blocked != 'true'
         env:
           HOST: ${{ secrets.VULTR_SSH_HOST }}
           USER: ${{ secrets.VULTR_SSH_USER }}
@@ -617,6 +617,20 @@ jobs:
             echo '{"schema_version":1,"records":[]}' > opportunity_history.json
           cp /tmp/micro_opportunity_monitor.json opportunity_monitor.json 2>/dev/null || \
             echo '{"schema_version":1,"verdict":"NO_VALUED_REJECTIONS"}' > opportunity_monitor.json
+          live_submitted_count="$(python - <<'PY'
+          import json
+          from pathlib import Path
+
+          try:
+              payload = json.loads(Path("/tmp/micro_live.json").read_text(encoding="utf-8"))
+          except (FileNotFoundError, json.JSONDecodeError):
+              payload = {}
+          rows = payload.get("results") if isinstance(payload, dict) else []
+          if not isinstance(rows, list):
+              rows = []
+          print(sum(1 for row in rows if isinstance(row, dict) and row.get("state") == "SUBMITTED"))
+          PY
+          )"
           {
             echo "# 마이크로 GTAA 라이브 캐너리 — 최신 실행"
             echo ""
@@ -628,16 +642,18 @@ jobs:
             echo "| capital_usd | ${CAP:-?} |"
             echo "| blocked | ${BLOCKED:-?} |"
             echo "| event | ${EVENT:-?} |"
-            echo "| LIVE 스텝 | ${LIVE_OUTCOME:-skipped} (success=실주문 실행 / skipped=미실행) |"
+            echo "| LIVE 스텝 | ${LIVE_OUTCOME:-skipped} (브로커 접수 ${live_submitted_count}건; 아래 JSON 기준) |"
             echo "| warning_drawdown_pct | ${WARNING:-?} |"
             echo "| hard_stop_drawdown_pct | ${HARD_STOP:-?} |"
             echo ""
             if [[ "${ARMED:-false}" != "true" ]]; then
               echo "> 드라이런 미리보기만(armed=false) — 실주문 0건."
+            elif [[ "${live_submitted_count}" -gt 0 && "${LIVE_OUTCOME:-skipped}" != "success" ]]; then
+              echo "> 부분 실행: 브로커 접수 ${live_submitted_count}건 뒤 차단 또는 실패 — 측정·감사 로그를 계속 확인한다."
             elif [[ "${LIVE_OUTCOME:-skipped}" == "success" ]]; then
-              echo "> 무장 + 실주문 실행 — 아래 결과와 감사 로그를 확인해야 한다."
+              echo "> 무장 + 실주문 단계 성공 — 실제 접수 여부는 아래 결과와 감사 로그를 확인한다."
             else
-              echo "> 무장 상태이나 이번 실행은 실주문 없음(event=${EVENT:-?}). push 이벤트는 미리보기만 한다."
+              echo "> 실주문 단계가 건너뛰었거나 실패했다(event=${EVENT:-?}) — 주문 0건으로 단정하지 말고 아래 결과를 확인한다."
             fi
             echo ""
             echo "## 계좌 전체 재배치 상태"
@@ -975,6 +991,8 @@ jobs:
               headline = "미리보기만 실행(실주문 0건)"
           elif intent_gate_ok is False:
               headline = "전략 의도 게이트 차단(실주문 0건)"
+          elif submitted_count and os.environ.get("LIVE_OUTCOME") != "success":
+              headline = f"부분 실행: 브로커 접수 {submitted_count}건 뒤 차단 또는 실패"
           elif os.environ.get("LIVE_OUTCOME") != "success":
               headline = "실주문 단계 미실행 또는 실패"
           elif rejected_count:
