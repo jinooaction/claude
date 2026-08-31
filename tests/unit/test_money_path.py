@@ -33,6 +33,8 @@ from auto_invest.analytics.money_path import (
     STAGE_NO_EDGE_YET,
     MoneyPathReport,
     _capital_pct,
+    _next_live_schedule,
+    _next_micro_schedule,
     _project_trading_date,
     _trading_days_between,
     assess_live_money_state,
@@ -41,6 +43,15 @@ from auto_invest.analytics.money_path import (
 
 NOW = datetime(2026, 6, 13, 8, 0, 0, tzinfo=UTC)  # 2026-06-13 = 토요일
 MONDAY_BEFORE_MICRO_SCHEDULE = datetime(2026, 6, 22, 12, 55, 0, tzinfo=UTC)
+
+
+def test_live_schedule_uses_new_york_time_while_micro_keeps_legacy_utc() -> None:
+    summer = datetime(2026, 8, 31, 3, 30, 0, tzinfo=UTC)
+    winter = datetime(2026, 12, 7, 3, 30, 0, tzinfo=UTC)
+
+    assert _next_live_schedule(summer) == "2026-08-31T14:17:00Z"
+    assert _next_live_schedule(winter) == "2026-12-07T15:17:00Z"
+    assert _next_micro_schedule(summer) == "2026-08-31T15:00:00Z"
 
 
 def _ladder(
@@ -357,7 +368,7 @@ def test_live_money_state_prefers_armed_capital_ladder_over_disarmed_micro():
     assert state.path == "capital-ladder-live-canary"
     assert state.capital_usd == 293
     assert state.max_capital_usd == 293
-    assert state.next_scheduled_live_utc == "2026-06-15T15:00:00Z"
+    assert state.next_scheduled_live_utc == "2026-06-15T14:17:00Z"
     assert "production environment machine authorization" in state.required_gates
     assert "production environment approval" not in state.required_gates
 

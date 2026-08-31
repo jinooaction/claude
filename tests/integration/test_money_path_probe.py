@@ -379,7 +379,7 @@ def test_probe_prefers_armed_capital_ladder_live_path(tmp_path, capsys):
     assert state["can_submit_real_orders"] is True
     assert state["path"] == "capital-ladder-live-canary"
     assert state["capital_usd"] == 293
-    assert state["next_scheduled_live_utc"] == "2026-08-17T15:00:00Z"
+    assert state["next_scheduled_live_utc"] == "2026-08-17T14:17:00Z"
 
 
 def test_probe_micro_armed_state_is_top_level_json(tmp_path, capsys):

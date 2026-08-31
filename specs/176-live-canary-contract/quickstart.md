@@ -30,7 +30,7 @@ sidecar의 `capital_entry_evidence.json`을 각각 내려받는다. 역할, 코�
 1. 미국 정규장 밖에서 main 배포와 sidecar 갱신을 끝낸다.
 2. 자본 사다리가 단 0에서 `entry_route=operational_canary` 단 1로 바뀌었는지 확인한다.
 3. 최신 NAV 10%와 정수 주 주문 미리보기가 한도를 넘지 않는지 확인한다.
-4. 기존 예약 `rebalance-live-canary` 실행만 사용한다.
+4. 뉴욕 현지 10:17의 비정각 예약 `rebalance-live-canary` 실행만 사용한다.
 5. 주문 접수, KIS 체결 조회, 전략 장부, 계좌 정합, 감사 sidecar를 같은 실행 ID로 맞춘다.
 6. 체결이 없으면 완료하지 않고 다음 정규장 실행을 계속 관찰한다.
 

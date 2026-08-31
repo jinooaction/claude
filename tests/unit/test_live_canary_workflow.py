@@ -148,3 +148,12 @@ def test_live_canary_runs_do_not_overlap() -> None:
 
     assert "concurrency:\n  group: rebalance-live-canary" in text
     assert "cancel-in-progress: false" in text
+
+
+def test_live_canary_schedule_avoids_top_of_hour_and_tracks_new_york_time() -> None:
+    text = _workflow_text()
+    schedule = text.split("  schedule:", 1)[1].split("  workflow_dispatch:", 1)[0]
+
+    assert 'cron: "17 10 * * 1-5"' in schedule
+    assert 'timezone: "America/New_York"' in schedule
+    assert 'cron: "0 ' not in schedule
