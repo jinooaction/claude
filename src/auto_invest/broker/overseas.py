@@ -21,6 +21,8 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
 
+import httpx
+
 from auto_invest.broker.client import ResilientClient
 from auto_invest.broker.diagnostics import (
     KisOrderError,
@@ -176,9 +178,12 @@ async def get_quote_resolving_market(
     실패한다(검증된 글로벌 분산 추세 포트폴리오가 forward 페이퍼에서 NAV 를 못 쌓던 실제
     원인). 이 함수는 `backfill_daily_bars` 의 거래소 순차 탐색과 같은 방식으로 거래소를 자동
     해석해 심볼별 거래소를 하드코딩할 필요를 없앤다. 모든 거래소에서 빈 값이면 마지막
-    `QuoteUnavailable` 을 그대로 전파한다(호출자가 그 종목을 건너뛸 수 있게).
+    `QuoteUnavailable` 을 그대로 전파한다(호출자가 그 종목을 건너뛸 수 있게). KIS 가 미상장
+    거래소 조회에 빈 값 대신 5xx를 돌려주는 경우에는 다음 거래소를 계속 읽되, 어느 거래소도
+    성공하지 않으면 마지막 5xx를 다시 던져 실제 중개사 장애를 숨기지 않는다.
     """
     last_exc: QuoteUnavailable | None = None
+    last_http_exc: httpx.HTTPStatusError | None = None
     for excd in markets:
         try:
             return await get_quote(
@@ -191,6 +196,13 @@ async def get_quote_resolving_market(
             )
         except QuoteUnavailable as exc:
             last_exc = exc
+        except httpx.HTTPStatusError as exc:
+            if 500 <= exc.response.status_code < 600:
+                last_http_exc = exc
+                continue
+            raise
+    if last_http_exc is not None:
+        raise last_http_exc
     raise last_exc or QuoteUnavailable(
         f"{symbol}: KIS returned no usable last price on any of {markets}"
     )

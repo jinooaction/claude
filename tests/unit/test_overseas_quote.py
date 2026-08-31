@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from decimal import Decimal
 
+import httpx
 import pytest
 
 from auto_invest.broker.overseas import (
@@ -99,6 +100,30 @@ class _ExchangeAwareClient:
         return _Resp({"output": self._by_excd.get(excd, {"last": ""})})
 
 
+class _StatusExchangeClient(_ExchangeAwareClient):
+    """Return selected HTTP errors before normal exchange-aware responses."""
+
+    def __init__(
+        self,
+        output_by_excd: dict[str, dict],
+        status_by_excd: dict[str, int],
+    ) -> None:
+        super().__init__(output_by_excd)
+        self._status_by_excd = status_by_excd
+
+    async def request(self, method, path, *, headers=None, params=None):  # noqa: ANN001
+        excd = params["EXCD"]
+        self.calls.append(excd)
+        status = self._status_by_excd.get(excd)
+        if status is not None:
+            request = httpx.Request(method, f"https://broker.invalid{path}")
+            response = httpx.Response(status, request=request, json={"msg": "failed"})
+            raise httpx.HTTPStatusError(
+                f"status {status}", request=request, response=response
+            )
+        return _Resp({"output": self._by_excd.get(excd, {"last": ""})})
+
+
 def test_resolving_market_finds_symbol_on_ams() -> None:
     # SPY 는 NAS·NYS 엔 없고 AMS 에만 있다 — 고정 NAS 라면 실패했을 상황.
     client = _ExchangeAwareClient({"AMS": {"last": "540.12"}})
@@ -134,6 +159,52 @@ def test_resolving_market_all_blank_raises_quote_unavailable() -> None:
             )
         )
     assert client.calls == list(QUOTE_EXCHANGES)
+
+
+def test_resolving_market_continues_after_exchange_specific_5xx() -> None:
+    # 실제 생산 관측: IAUM 을 NAS 로 먼저 조회하면 KIS 가 빈 값 대신 500을 줄 수 있다.
+    client = _StatusExchangeClient(
+        {"AMS": {"last": "44.38"}},
+        {"NAS": 500},
+    )
+
+    q = asyncio.run(
+        get_quote_resolving_market(
+            client, access_token="t", app_key="k", app_secret="s", symbol="IAUM"
+        )
+    )
+
+    assert q.last_price_usd == Decimal("44.38")
+    assert q.resolved_market == "AMS"
+    assert client.calls == ["NAS", "NYS", "AMS"]
+
+
+def test_resolving_market_reraises_5xx_when_no_exchange_succeeds() -> None:
+    client = _StatusExchangeClient({}, {"NAS": 500})
+
+    with pytest.raises(httpx.HTTPStatusError) as raised:
+        asyncio.run(
+            get_quote_resolving_market(
+                client, access_token="t", app_key="k", app_secret="s", symbol="IAUM"
+            )
+        )
+
+    assert raised.value.response.status_code == 500
+    assert client.calls == list(QUOTE_EXCHANGES)
+
+
+def test_resolving_market_does_not_hide_4xx() -> None:
+    client = _StatusExchangeClient({"AMS": {"last": "44.38"}}, {"NAS": 401})
+
+    with pytest.raises(httpx.HTTPStatusError) as raised:
+        asyncio.run(
+            get_quote_resolving_market(
+                client, access_token="t", app_key="k", app_secret="s", symbol="IAUM"
+            )
+        )
+
+    assert raised.value.response.status_code == 401
+    assert client.calls == ["NAS"]
 
 
 # ── resolved_market 전파 + 주문 거래소 매핑 (라이브 주문이 종목별 올바른 거래소로 가도록) ──

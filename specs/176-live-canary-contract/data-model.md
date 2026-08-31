@@ -112,3 +112,14 @@ exact-main 배포 여부를 서버의 추가 전용 감사 장부에서 읽는 �
 - 출력: `AUDIT_STATUS`, `AUDIT_CORRELATION_ID`, `AUDIT_ROW_COUNT`, `AUDIT_TERMINAL_EVENT`
 - 성공: 최신 또는 지정 감사 사슬의 마지막 이벤트가 `DEPLOY_COMPLETED`
 - 금지: 원격 셸·표준 입력 스크립트·환경 접두사·DB 쓰기·systemd·git·주문 명령
+
+## QuoteMarketResolution
+
+미국 종목의 KIS 시세 거래소와 주문 거래소를 실제 응답으로 연결하는 읽기 판정이다.
+
+- 후보 시세 거래소: `NAS`, `NYS`, `AMS`
+- 성공: 양의 `last`를 반환한 첫 거래소와 시세를 `Quote.resolved_market`에 기록
+- 미상장 표현: 빈·비숫자 시세 또는 해당 거래소 조회의 5xx는 다음 후보를 계속 조회
+- 실패 폐쇄: 모든 후보 실패 중 5xx가 있으면 마지막 5xx를 전파, 모두 빈 시세면 `QuoteUnavailable`
+- 인증·요청 오류: 4xx는 다른 거래소로 숨기지 않고 즉시 전파
+- 주문 연결: 성공한 시세 거래소만 `NAS→NASD`, `NYS→NYSE`, `AMS→AMEX`로 변환

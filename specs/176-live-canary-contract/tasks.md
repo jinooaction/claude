@@ -109,7 +109,7 @@
 - [x] T055 [US3] 라이브 예약을 뉴욕 현지 10:17~13:53의 최대 12분 간격으로 늘리고,
   money-path의 다음 후보 표시를 같은 계약으로 맞춘다. 승인 이벤트·자본·서명·거래일 1회 선점은
   변경하지 않는다.
-- [ ] T056 [US3] 관련·전체 시험, 린트, 엄격 하네스, HANDOFF 사실 검사와 PR 품질 관문을 통과시켜
+- [x] T056 [US3] 관련·전체 시험, 린트, 엄격 하네스, HANDOFF 사실 검사와 PR 품질 관문을 통과시켜
   merge하고 장 마감 뒤 exact-main 배포를 확인한다.
 - [ ] T057 [US3] 다음 거래일에 최초 schedule run의 실제 주문·체결·감사·정합과 같은 날 후속
   schedule run의 원래 run ID·중복 주문 0건을 생산 증거로 확인한다.
@@ -119,8 +119,15 @@
 - [x] T059 [US3] root 소유 `deploy-audit-on-instance.sh`와 gateway의 `deploy-audit` 고정 명령을
   추가하고 workflow가 해당 명령만 호출하게 한다. helper는 고정 DB의 `DEPLOY_%` 행만
   `sqlite3 -readonly`로 읽고 요청 ID를 다시 검증하며 관련 회귀 시험을 통과시킨다.
-- [ ] T060 [US3] 전체 시험·린트·엄격 하네스·HANDOFF 사실 검사·PR 품질 관문을 통과시키고
+- [x] T060 [US3] 전체 시험·린트·엄격 하네스·HANDOFF 사실 검사·PR 품질 관문을 통과시키고
   merge·exact-main 배포한 뒤 배포 감사 sidecar의 `DEPLOY_COMPLETED`를 확인한다.
+- [x] T061 [US3] exact-main KIS smoke run `33442299948`에서 IAUM의 첫 `EXCD=NAS` 조회 500이
+  거래소 자동 해석을 중단해 5/6으로 실패한 생산 오류를 기록하고, 5xx 후속 후보·전 후보 실패·
+  4xx 즉시 실패의 회귀 시험을 먼저 실행해 의도한 이유로 실패시킨다.
+- [x] T062 [US3] `get_quote_resolving_market`이 5xx 뒤 제한된 다음 거래소를 읽어 유효 시세와 실제
+  거래소를 반환하되, 모든 후보 실패 시 마지막 5xx를 다시 전파하고 4xx를 즉시 전파하게 한다.
+- [ ] T063 [US3] 관련·전체 시험, 린트, 엄격 하네스, HANDOFF 사실 검사와 PR 품질 관문을 통과시켜
+  merge·exact-main 배포하고 생산 KIS smoke 6/6과 주문 없는 첫 진입 사전점검을 다시 확인한다.
 
 ## 의존성과 완료 계약
 
