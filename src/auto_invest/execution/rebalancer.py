@@ -101,6 +101,7 @@ class RebalanceOrderResult:
     limit_price_usd: Decimal
     state: str
     correlation_id: str
+    gate: str | None = None
     reason: str | None = None
 
 
@@ -592,6 +593,7 @@ async def execute_rebalance(
                 limit_price_usd=limit_price,
                 state=outcome.state,
                 correlation_id=outcome.correlation_id,
+                gate=outcome.gate,
                 reason=outcome.reason,
             )
         )

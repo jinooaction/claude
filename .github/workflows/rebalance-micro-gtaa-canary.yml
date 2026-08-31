@@ -478,9 +478,11 @@ jobs:
                  --mode live --confirm-live \
                  --capital ${CAP} --db data/auto_invest.db --env-file .env --json" \
               > /tmp/micro_live.json 2>/tmp/micro_live.err
-          echo "ssh_exit=$?" >> "$GITHUB_OUTPUT"
+          ssh_exit=$?
+          echo "ssh_exit=${ssh_exit}" >> "$GITHUB_OUTPUT"
           echo "--- live rebalance ---"; cat /tmp/micro_live.json
           echo "--- stderr ---"; cat /tmp/micro_live.err
+          exit "${ssh_exit}"
 
       - name: Measure micro live track
         id: measure

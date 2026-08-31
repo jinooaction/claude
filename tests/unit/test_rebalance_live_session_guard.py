@@ -8,7 +8,12 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from auto_invest.cli import _live_rebalance_session_refusal, app
+from auto_invest.cli import (
+    _live_rebalance_session_refusal,
+    _rebalance_exit_code,
+    app,
+)
+from auto_invest.execution.rebalancer import RebalanceOrderResult, RebalanceOutcome
 
 
 def test_live_order_is_allowed_during_regular_session() -> None:
@@ -123,3 +128,26 @@ momentum_period = 10
     assert result.exit_code == 75, result.output
     assert "XNYS regular session is closed" in result.output
     assert not db_path.exists()
+
+
+def test_mid_run_session_rejection_propagates_temporary_failure() -> None:
+    outcome = RebalanceOutcome(
+        portfolio_id="session-guard-test",
+        target_weights={},
+        planned=[],
+        results=[
+            RebalanceOrderResult(
+                symbol="AAPL",
+                side="BUY",
+                requested_qty=1,
+                routed_qty=1,
+                limit_price_usd=1,
+                state="REJECTED_BY_GATE",
+                correlation_id="ord-closed",
+                gate="market_hours_gate",
+                reason="XNYS regular session is closed",
+            )
+        ],
+    )
+
+    assert _rebalance_exit_code(outcome) == 75

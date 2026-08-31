@@ -86,6 +86,14 @@ def _live_rebalance_session_refusal(
     )
 
 
+def _rebalance_exit_code(outcome: object) -> int | None:
+    """Propagate a mid-run market-hours rejection to workflow callers."""
+    results = getattr(outcome, "results", ())
+    if any(getattr(result, "gate", None) == "market_hours_gate" for result in results):
+        return 75
+    return None
+
+
 def _assert_autonomous_write_allowed(
     *,
     summary: str,
@@ -4887,6 +4895,10 @@ def rebalance_once_cmd(
                 caps=caps,  # type: ignore[arg-type]
                 halt_path=halt_path,
                 paper_mode=(mode == "paper"),
+                live_order_guard=lambda: _live_rebalance_session_refusal(
+                    mode=mode,
+                    dry_run=dry_run,
+                ),
             )
 
             async def _quote_provider(symbol: str):
@@ -4945,6 +4957,7 @@ def rebalance_once_cmd(
                 conn.close()
 
     outcome = asyncio.run(_go() if account_wide or not dry_run else _go_dry())
+    rebalance_exit_code = _rebalance_exit_code(outcome)
     mode_label = "dry-run" if dry_run else mode
 
     if as_json:
@@ -4994,6 +5007,7 @@ def rebalance_once_cmd(
                             "routed_qty": r.routed_qty,
                             "limit_price_usd": str(r.limit_price_usd),
                             "state": r.state,
+                            "gate": r.gate,
                             "reason": r.reason,
                         }
                         for r in outcome.results  # type: ignore[attr-defined]
@@ -5010,6 +5024,8 @@ def rebalance_once_cmd(
                 }
             )
         )
+        if rebalance_exit_code is not None:
+            _exit(rebalance_exit_code)
         return
 
     typer.echo(f"rebalance {outcome.portfolio_id}  mode={mode_label}")  # type: ignore[attr-defined]
@@ -5039,6 +5055,8 @@ def rebalance_once_cmd(
         typer.echo("withheld:")
         for w in outcome.withheld:  # type: ignore[attr-defined]
             typer.echo(f"  {w.side:4} {w.symbol:6} req={w.requested_qty} -> WITHHELD ({w.reason})")
+    if rebalance_exit_code is not None:
+        _exit(rebalance_exit_code)
 
 
 @app.command("walk-forward")

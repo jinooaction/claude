@@ -359,6 +359,7 @@ class OrderRouter:
     execution_authority: ExecutionAuthority | None = None
     authority_lock_timeout_seconds: float = 5.0
     execution_state_provider: Callable[[], ExecutionState] | None = None
+    live_order_guard: Callable[[], str | None] | None = None
     # Spec 017 slice 2b: inverse-vol risk-parity group membership, built by the
     # worker from the static rule set (build_sizing_groups). None/empty -> no
     # grouping -> sizing is byte-equal to slices 1/2.
@@ -957,6 +958,44 @@ class OrderRouter:
                 state="PAPER_FILLED",
                 correlation_id=correlation_id,
             )
+
+        # Recheck the live-session boundary at the narrowest possible point:
+        # after the authority lock and all deterministic gates, immediately
+        # before the broker write. A scheduled rebalance may begin inside the
+        # session yet reach a later order after the closing bell.
+        if self.live_order_guard is not None:
+            refusal = self.live_order_guard()
+            if refusal is not None:
+                decision = GateDecision(
+                    allow=False,
+                    gate="market_hours_gate",
+                    reason=refusal,
+                    metadata={"market": "XNYS", "session": "REGULAR"},
+                )
+                audit.append(
+                    self.conn,
+                    OrderRejectedByGatePayload(
+                        gate=decision.gate,
+                        reason=decision.reason,
+                        metadata=decision.metadata,
+                    ),
+                    rule_id=rule.id,
+                    symbol=rule.symbol,
+                    correlation_id=correlation_id,
+                )
+                _record_transition(
+                    self.conn,
+                    correlation_id,
+                    "INTENT",
+                    "REJECTED_BY_GATE",
+                    decision.reason,
+                )
+                return OrderOutcome(
+                    state="REJECTED_BY_GATE",
+                    correlation_id=correlation_id,
+                    gate=decision.gate,
+                    reason=decision.reason,
+                )
 
         # Submit to broker. Record SUBMITTING before the network call so a crash
         # after broker acceptance but before local SUBMITTED persistence is

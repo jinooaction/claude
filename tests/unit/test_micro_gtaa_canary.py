@@ -111,6 +111,8 @@ def test_micro_gtaa_workflow_live_uses_account_wide_effective_side():
     assert "steps.preflight.outputs.effective_side" in block
     assert "--account-wide" in block
     assert "--side ${SIDE}" in block
+    assert "ssh_exit=$?" in block
+    assert 'exit "${ssh_exit}"' in block
 
 
 def test_micro_gtaa_sidecar_publishes_preflight_evidence():
