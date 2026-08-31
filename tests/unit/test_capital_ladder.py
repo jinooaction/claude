@@ -25,6 +25,7 @@ from auto_invest.portfolio.capital_ladder import (
     PROMOTION_MIN_OBS,
     decide_ladder,
     ladder_schedule_ko,
+    parse_entry_route,
     parse_ladder_fields,
     render_ladder_sentinel,
     rung_capital_usd,
@@ -106,9 +107,9 @@ def test_capital_ladder_reporting_comes_from_rung_fractions() -> None:
     assert rung_pct_text(1) == "10"
     assert rung_pct_text(5) == "100"
     assert ladder_schedule_ko() == (
-        "단0=0% → 단1=10% 연구 → 단2=20% 탐색 → 단3=25% → 단4=50% → 단5=100%"
+        "단0=0% → 단1=10% 검증 → 단2=20% 탐색 → 단3=25% → 단4=50% → 단5=100%"
     )
-    assert ladder_schedule_ko(start_rung=1).startswith("단1=10% 연구 → 단2=20% 탐색")
+    assert ladder_schedule_ko(start_rung=1).startswith("단1=10% 검증 → 단2=20% 탐색")
 
 _DISARMED = """# header
 armed: false
@@ -179,12 +180,14 @@ def test_parse_ladder_fields_roundtrip():
         run_seq=7,
         dd_budget_pct=DEFAULT_DD_BUDGET_PCT,
         evidence="test",
+        entry_route="exploration",
     )
     rung, entered, nav = parse_ladder_fields(text)
     assert rung == 2
     assert entered == _TODAY
     assert nav == _NAV
     assert "armed: true" in text
+    assert parse_entry_route(text) == "exploration"
 
 
 def test_render_rung0_is_disarmed():
@@ -196,6 +199,7 @@ def test_render_rung0_is_disarmed():
         run_seq=8,
         dd_budget_pct=DEFAULT_DD_BUDGET_PCT,
         evidence="halt",
+        entry_route=None,
     )
     assert "armed: false" in text
 
@@ -355,6 +359,62 @@ def test_factory_winner_without_fundability_never_arms() -> None:
     assert d.action == ACTION_WAIT_EDGE
     assert d.target_rung == 0
     assert not d.sentinel_changes
+
+
+def test_operational_evidence_enters_only_10pct_and_records_route() -> None:
+    d = _decide(
+        _DISARMED,
+        forward_verdict=_verdict("NO_EDGE", 4),
+        operational_verdict={
+            "verdict": "OPERATIONAL_CANARY_READY",
+            "candidate_id": "globalfixed-ensemble-3-6-9-12",
+            "fundability_passed": True,
+            "alpha_confirmed": False,
+            "max_rung": 1,
+        },
+    )
+
+    assert d.action == ACTION_PROMOTE
+    assert d.target_rung == 1
+    assert d.target_capital_usd == 1200
+    assert d.entry_route == "operational_canary"
+    assert "entry_route: operational_canary" in d.new_sentinel_text
+
+
+def test_operational_rung1_never_promotes_from_live_time_alone() -> None:
+    sentinel = _RUNG1 + "entry_route: operational_canary\n"
+    d = _decide(
+        sentinel,
+        forward_verdict=_verdict("NO_EDGE", 4),
+        operational_verdict={
+            "verdict": "OPERATIONAL_CANARY_READY",
+            "candidate_id": "globalfixed-ensemble-3-6-9-12",
+            "fundability_passed": True,
+            "alpha_confirmed": False,
+            "max_rung": 1,
+        },
+        live_growth=_growth(dd="1", obs=100, period_days="365"),
+        live_performance={"fills_count": 3},
+    )
+
+    assert d.action == ACTION_STAY
+    assert d.target_rung == 1
+    assert d.entry_route == "operational_canary"
+
+
+def test_unfilled_operational_rung_demotes_when_latest_evidence_expires() -> None:
+    sentinel = _RUNG1 + "entry_route: operational_canary\n"
+    d = _decide(
+        sentinel,
+        forward_verdict=_verdict("NO_EDGE", 4),
+        operational_verdict={"verdict": "OPERATIONAL_CANARY_WAIT"},
+        live_growth=_growth(dd="1", obs=1, period_days="1"),
+        live_performance={"fills_count": 0},
+    )
+
+    assert d.action == ACTION_DEMOTE
+    assert d.target_rung == 0
+    assert d.entry_route is None
 
 
 def test_exploration_wait_never_arms() -> None:

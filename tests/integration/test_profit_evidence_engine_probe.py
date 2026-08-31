@@ -92,6 +92,37 @@ def test_probe_writes_machine_readable_no_live_report(tmp_path: Path, capsys) ->
     assert json.loads(capsys.readouterr().out)["schema_version"] == "1.1"
 
 
+def test_probe_publishes_separate_typed_operational_evidence(tmp_path: Path) -> None:
+    shiller, gold = _public_csvs(tmp_path)
+    operational_out = tmp_path / "operational_canary_evidence.json"
+
+    assert _probe.main(
+        [
+            "--shiller-file",
+            str(shiller),
+            "--gold-file",
+            str(gold),
+            "--code-commit",
+            "a" * 40,
+            "--generated-at-utc",
+            "2026-08-31T01:00:00Z",
+            "--live-portfolio",
+            str(ROOT / "deploy/canary-live-portfolio.toml"),
+            "--validated-portfolio",
+            str(ROOT / "deploy/global-trend-fixed-portfolio.toml"),
+            "--operational-json-out",
+            str(operational_out),
+        ]
+    ) == 0
+
+    payload = json.loads(operational_out.read_text(encoding="utf-8"))
+    assert payload["role"] == "operational_canary_entry"
+    assert payload["candidate_id"] == "globalfixed-ensemble-3-6-9-12"
+    assert payload["decision"]["alpha_confirmed"] is False
+    assert payload["decision"]["max_rung"] <= 1
+    assert payload["decision"]["promotion_above_rung1_allowed"] is False
+
+
 def test_workflow_is_read_only_and_publishes_profit_evidence_sidecar() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
     assert "schedule:" in text and "workflow_dispatch:" in text
@@ -99,6 +130,12 @@ def test_workflow_is_read_only_and_publishes_profit_evidence_sidecar() -> None:
     assert "automation/profit-evidence-engine-last-run" in text
     assert "| timestamp_utc | $(date -u +%Y-%m-%dT%H:%M:%SZ) |" in text
     assert "rebalance-paper-forward-last-run:leaderboard.json" in text
+    assert "--operational-json-out /tmp/operational_canary_evidence.json" in text
+    assert "--validated-portfolio deploy/global-trend-fixed-portfolio.toml" in text
+    assert (
+        'cp /tmp/operational_canary_evidence.json '
+        '"${tmpdir}/operational_canary_evidence.json"'
+    ) in text
     assert "--mode live" not in text
     assert "--confirm-live" not in text
     assert "rebalance-once" not in text

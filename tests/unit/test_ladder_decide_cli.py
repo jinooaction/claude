@@ -38,6 +38,9 @@ from auto_invest.portfolio.execution_proxy_parity import (
     PREREGISTERED_EXECUTION_SYMBOL_MAP,
 )
 from auto_invest.portfolio.fundability import assess_fundability
+from auto_invest.portfolio.operational_canary_evidence import (
+    build_operational_canary_evidence,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 RUNNER = CliRunner()
@@ -211,6 +214,105 @@ def test_exact_exploration_evidence_remains_diagnostic_without_route_calibration
     assert payload["target_rung"] == 0
     assert payload["exploration_verdict"]["hardened_canary_pass"] is True
     assert payload["exploration_verdict"]["route_calibrated"] is False
+
+
+def test_operational_evidence_opens_only_rung1(tmp_path: Path) -> None:
+    live = ROOT / "deploy/canary-live-portfolio.toml"
+    config = PortfolioRebalanceConfig.model_validate(
+        tomllib.loads(live.read_text(encoding="utf-8"))["portfolio"]
+    )
+    fingerprint = strategy_fingerprint_digest(config)
+    dates: list[str] = []
+    year, month = 1991, 1
+    for _ in range(360):
+        dates.append(f"{year:04d}-{month:02d}-01")
+        month += 1
+        if month == 13:
+            year += 1
+            month = 1
+    operational = _json(
+        tmp_path,
+        "operational.json",
+        build_operational_canary_evidence(
+            dates=dates,
+            candidate_monthly_factors=[
+                1.012 if index % 2 == 0 else 0.998 for index in range(360)
+            ],
+            benchmark_monthly_factors=[
+                1.010 if index % 2 == 0 else 0.985 for index in range(360)
+            ],
+            development_months=180,
+            annual_cost_bps=50,
+            code_commit="a" * 40,
+            generated_at_utc="2026-08-31T01:00:00Z",
+            strategy_fingerprint=fingerprint,
+        ),
+    )
+    forward = _json(tmp_path, "forward.json", {"verdict": "NO_EDGE", "n_obs": 4})
+    canary = _json(tmp_path, "canary.json", {"verdict": "PASS"})
+    nav = _json(tmp_path, "nav.json", {"total_value_usd": "12000"})
+    fundability = assess_fundability(
+        target_weights={"AAA": Decimal("0.5"), "BBB": Decimal("0.5")},
+        holdings={},
+        prices={"AAA": Decimal("100"), "BBB": Decimal("100")},
+        order_prices={"AAA": Decimal("100"), "BBB": Decimal("100")},
+        planned_orders=[("AAA", "BUY", 5), ("BBB", "BUY", 6)],
+        capital_usd=Decimal("1200"),
+        invested_fraction=Decimal("0.99"),
+        caps=SizingCaps(
+            per_trade_pct=Decimal("50"),
+            per_symbol_pct=Decimal("60"),
+            global_exposure_pct=Decimal("100"),
+            canary_capital_pct=Decimal("10"),
+            canary_min_duration_days=14,
+            canary_acceptance_drawdown_pct=Decimal("10"),
+        ),
+    )
+    fundability_path = _json(
+        tmp_path, "fundability-operational.json", {"fundability": fundability.as_dict()}
+    )
+    sentinel = tmp_path / "sentinel-operational.request"
+    sentinel.write_text("armed: false\ncapital_usd: 0\nrun_seq: 1\n", encoding="utf-8")
+
+    result = RUNNER.invoke(
+        app,
+        [
+            "ladder-decide",
+            "--verdict-json",
+            str(forward),
+            "--operational-evidence-json",
+            str(operational),
+            "--operational-evidence-age-hours",
+            "2",
+            "--expected-code-commit",
+            "a" * 40,
+            "--fundability-preview-json",
+            str(fundability_path),
+            "--execution-proxy-parity-json",
+            str(_proxy_parity_json(tmp_path)),
+            "--hardened-canary-json",
+            str(canary),
+            "--account-nav-json",
+            str(nav),
+            "--live-portfolio",
+            str(live),
+            "--validated-portfolio",
+            str(ROOT / "deploy/global-trend-fixed-portfolio.toml"),
+            "--sentinel",
+            str(sentinel),
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["action"] == "PROMOTE"
+    assert payload["target_rung"] == 1
+    assert payload["target_capital_usd"] == 1200
+    assert payload["entry_route"] == "operational_canary"
+    assert payload["operational_verdict"]["alpha_confirmed"] is False
+    assert payload["operational_verdict"]["max_rung"] == 1
 
 
 def test_hardened_failure_keeps_real_money_disarmed(tmp_path: Path) -> None:

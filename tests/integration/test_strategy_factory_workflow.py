@@ -55,6 +55,10 @@ def test_workflow_runs_complete_batch_without_broker_or_order_command() -> None:
     assert "turn_of_month_equity_factory.json" in text
     assert "scripts/turn_of_month_equity_factory_probe.py" in text
     assert "accounting_factor_factory.json" in text
+    assert "capital_entry_evidence.json" in text
+    assert 'artifact_role: "capital_entry_evidence"' in text
+    assert 'cp /tmp/capital_entry_evidence.json "${tmpdir}/capital_entry_evidence.json"' in text
+    assert "strategy_factory.json \"${tmpdir}/capital_entry_evidence.json\"" not in text
     assert "scripts/accounting_factor_factory_probe.py" in text
     assert "scripts/pead_factory_probe.py" in text
     assert "scripts/pead_evidence_gate.py" in text

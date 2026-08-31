@@ -6,10 +6,6 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths:
-      - 'src/auto_invest/analytics/profit_evidence_engine.py'
-      - 'scripts/profit_evidence_engine_probe.py'
-      - '.github/workflows/profit-evidence-engine.yml'
 
 permissions:
   contents: write
@@ -46,12 +42,18 @@ jobs:
       - name: Evaluate held-out profit evidence
         run: |
           set -euo pipefail
+          generated_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           uv run python scripts/profit_evidence_engine_probe.py \
             --leaderboard /tmp/leaderboard.json \
             --annual-cost-bps 50 \
             --holdout-year 2007 \
             --summary-out /tmp/LAST_RUN.md \
             --json-out /tmp/profit_evidence.json \
+            --code-commit "${GITHUB_SHA}" \
+            --generated-at-utc "${generated_at}" \
+            --live-portfolio deploy/canary-live-portfolio.toml \
+            --validated-portfolio deploy/global-trend-fixed-portfolio.toml \
+            --operational-json-out /tmp/operational_canary_evidence.json \
             --json > /tmp/profit_evidence.stdout.json
           {
             echo ""
@@ -74,10 +76,11 @@ jobs:
           tmpdir=$(mktemp -d)
           cp /tmp/LAST_RUN.md "${tmpdir}/LAST_RUN.md"
           cp /tmp/profit_evidence.json "${tmpdir}/profit_evidence.json"
+          cp /tmp/operational_canary_evidence.json "${tmpdir}/operational_canary_evidence.json"
           git -C "${tmpdir}" init -q
           git -C "${tmpdir}" config user.name "profit-evidence-bot"
           git -C "${tmpdir}" config user.email "profit-evidence-bot@noreply.github.com"
-          git -C "${tmpdir}" add LAST_RUN.md profit_evidence.json
+          git -C "${tmpdir}" add LAST_RUN.md profit_evidence.json operational_canary_evidence.json
           git -C "${tmpdir}" commit -q -m "profit evidence run ${GITHUB_RUN_ID}"
           git -C "${tmpdir}" branch -M "${branch}"
           git -C "${tmpdir}" remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"

@@ -43,7 +43,16 @@ NOW = datetime(2026, 6, 13, 8, 0, 0, tzinfo=UTC)  # 2026-06-13 = 토요일
 MONDAY_BEFORE_MICRO_SCHEDULE = datetime(2026, 6, 22, 12, 55, 0, tzinfo=UTC)
 
 
-def _ladder(action="WAIT_EDGE", cur=0, tgt=0, nav="1518.21", cap=None, dd="0", obs=3):
+def _ladder(
+    action="WAIT_EDGE",
+    cur=0,
+    tgt=0,
+    nav="1518.21",
+    cap=None,
+    dd="0",
+    obs=3,
+    entry_route=None,
+):
     return {
         "schema_version": "1.0",
         "action": action,
@@ -54,6 +63,7 @@ def _ladder(action="WAIT_EDGE", cur=0, tgt=0, nav="1518.21", cap=None, dd="0", o
         "target_capital_usd": cap,
         "live_dd_pct": dd,
         "live_obs": obs,
+        "entry_route": entry_route,
     }
 
 
@@ -101,6 +111,27 @@ def test_legacy_edge_evidence_is_blocked_from_money_path() -> None:
     assert report.stage == STAGE_BLOCKED
     assert "구버전" in report.headline
     assert report.gates[0].status == GATE_FAIL
+
+
+def test_operational_canary_is_reported_as_bounded_plumbing_validation() -> None:
+    report = assess_money_path(
+        ladder=_ladder(
+            action="PROMOTE",
+            cur=0,
+            tgt=1,
+            cap=151,
+            entry_route="operational_canary",
+        ),
+        forward_verdict=_verdict("NO_EDGE", n_obs=4, psr="0.61"),
+        canary_armed=True,
+        now=NOW,
+    )
+
+    assert report.stage == STAGE_DEPLOYED
+    assert report.entry_route == "operational_canary"
+    assert "확정 알파가 아니며 단1이 상한" in report.headline
+    assert "40관측" in report.blocking_gate
+    assert "단1을 유지" in report.next_action
 
 
 def _micro_request(armed="true", capital="1000"):

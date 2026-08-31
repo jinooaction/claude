@@ -13,6 +13,7 @@ from pathlib import Path
 
 from auto_invest.config.rules import PortfolioRebalanceConfig
 from auto_invest.portfolio.autoarm import strategy_fingerprint_digest
+from auto_invest.portfolio.capital_ladder import parse_entry_route
 from auto_invest.portfolio.execution_proxy_parity import (
     validate_execution_proxy_parity_evidence,
 )
@@ -39,11 +40,16 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--profit-evidence-json", type=Path, required=True)
     parser.add_argument("--factory-evidence-json", type=Path)
+    parser.add_argument("--operational-evidence-json", type=Path)
     parser.add_argument("--hardened-canary-json", type=Path, required=True)
     parser.add_argument("--live-performance-json", type=Path, required=True)
     parser.add_argument("--evidence-age-hours", type=float, required=True)
     parser.add_argument("--factory-evidence-age-hours", type=float)
+    parser.add_argument("--operational-evidence-age-hours", type=float)
+    parser.add_argument("--expected-code-commit")
+    parser.add_argument("--sentinel", type=Path)
     parser.add_argument("--live-portfolio", type=Path)
+    parser.add_argument("--validated-portfolio", type=Path)
     parser.add_argument("--fundability-preview-json", type=Path, required=True)
     parser.add_argument("--execution-proxy-parity-json", type=Path, required=True)
     parser.add_argument("--capital-usd", type=Decimal, required=True)
@@ -51,6 +57,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     live_fingerprint = None
+    validated_fingerprint = None
     execution_symbol_map: dict[str, str] = {}
     if args.live_portfolio is not None:
         try:
@@ -65,6 +72,17 @@ def main(argv: list[str] | None = None) -> int:
             }
         except (OSError, KeyError, ValueError, tomllib.TOMLDecodeError):
             live_fingerprint = None
+    if args.validated_portfolio is not None:
+        try:
+            validated_raw = tomllib.loads(
+                args.validated_portfolio.read_text(encoding="utf-8")
+            )
+            validated_config = PortfolioRebalanceConfig.model_validate(
+                validated_raw["portfolio"]
+            )
+            validated_fingerprint = strategy_fingerprint_digest(validated_config)
+        except (OSError, KeyError, ValueError, tomllib.TOMLDecodeError):
+            validated_fingerprint = None
 
     fundability_preview = _read(args.fundability_preview_json)
     fundability_evidence = (
@@ -87,9 +105,22 @@ def main(argv: list[str] | None = None) -> int:
         ),
         factory_evidence_age_hours=args.factory_evidence_age_hours,
         live_strategy_fingerprint=live_fingerprint,
+        validated_strategy_fingerprint=validated_fingerprint,
         fundability_evidence=fundability_evidence,
         expected_capital_usd=args.capital_usd,
         execution_proxy_parity_passed=execution_proxy_parity_passed,
+        operational_evidence=(
+            _read(args.operational_evidence_json)
+            if args.operational_evidence_json is not None
+            else None
+        ),
+        operational_evidence_age_hours=args.operational_evidence_age_hours,
+        expected_code_commit=args.expected_code_commit,
+        entry_route=(
+            parse_entry_route(args.sentinel.read_text(encoding="utf-8"))
+            if args.sentinel is not None and args.sentinel.exists()
+            else None
+        ),
     )
     print(json.dumps(result.as_dict(), ensure_ascii=False, sort_keys=True))
     return 0 if result.allowed else 3

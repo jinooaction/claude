@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://auto-invest.local/contracts/operational-canary-evidence.schema.json",
+  "title": "Operational Canary Evidence",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "role",
+    "route",
+    "code_commit",
+    "generated_at_utc",
+    "candidate_id",
+    "strategy_fingerprint",
+    "data_fingerprint",
+    "split",
+    "cost_model",
+    "holdout",
+    "checks",
+    "diagnostics",
+    "decision",
+    "safety"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "role": {"const": "operational_canary_entry"},
+    "route": {"const": "historical-operational-canary-v1"},
+    "code_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "generated_at_utc": {"type": "string", "format": "date-time"},
+    "candidate_id": {"const": "globalfixed-ensemble-3-6-9-12"},
+    "strategy_fingerprint": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "data_fingerprint": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "split": {
+      "type": "object",
+      "required": ["development_months", "holdout_months", "overlap_months"],
+      "properties": {
+        "development_months": {"type": "integer", "minimum": 120},
+        "holdout_months": {"type": "integer", "minimum": 120},
+        "overlap_months": {"const": 0}
+      }
+    },
+    "cost_model": {
+      "type": "object",
+      "required": ["base_annual_bps", "diagnostic_annual_bps"],
+      "properties": {
+        "base_annual_bps": {"type": "number", "minimum": 50},
+        "diagnostic_annual_bps": {
+          "type": "array",
+          "contains": {"const": 100},
+          "minItems": 2
+        }
+      }
+    },
+    "holdout": {
+      "type": "object",
+      "required": ["months", "candidate_monthly_factors", "benchmark_monthly_factors", "candidate", "benchmark"],
+      "properties": {
+        "months": {"type": "array", "minItems": 120, "items": {"type": "string"}},
+        "candidate_monthly_factors": {"type": "array", "minItems": 120, "items": {"type": "number", "exclusiveMinimum": 0}},
+        "benchmark_monthly_factors": {"type": "array", "minItems": 120, "items": {"type": "number", "exclusiveMinimum": 0}},
+        "candidate": {"$ref": "#/$defs/performance"},
+        "benchmark": {"$ref": "#/$defs/performance"}
+      }
+    },
+    "checks": {
+      "type": "object",
+      "minProperties": 8,
+      "additionalProperties": {"type": "boolean"}
+    },
+    "diagnostics": {
+      "type": "object",
+      "required": ["alpha_confirmed", "active_psr", "cost_sensitivity"],
+      "properties": {
+        "alpha_confirmed": {"const": false},
+        "active_psr": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "cost_sensitivity": {"type": "object"}
+      }
+    },
+    "decision": {
+      "type": "object",
+      "required": ["verdict", "eligible", "alpha_confirmed", "capital_fraction", "max_rung", "promotion_above_rung1_allowed"],
+      "properties": {
+        "verdict": {"enum": ["OPERATIONAL_CANARY_READY", "BLOCKED"]},
+        "eligible": {"type": "boolean"},
+        "alpha_confirmed": {"const": false},
+        "capital_fraction": {"enum": [0, 0.1]},
+        "max_rung": {"enum": [0, 1]},
+        "promotion_above_rung1_allowed": {"const": false}
+      }
+    },
+    "safety": {
+      "type": "object",
+      "required": ["orders_submitted", "capital_changed", "live_strategy_changed"],
+      "properties": {
+        "orders_submitted": {"const": 0},
+        "capital_changed": {"const": false},
+        "live_strategy_changed": {"const": false}
+      }
+    }
+  },
+  "$defs": {
+    "performance": {
+      "type": "object",
+      "required": ["n_months", "cagr_pct", "sharpe", "max_drawdown_pct"],
+      "properties": {
+        "n_months": {"type": "integer", "minimum": 2},
+        "cagr_pct": {"type": "number"},
+        "sharpe": {"type": "number"},
+        "max_drawdown_pct": {"type": "number", "minimum": 0}
+      }
+    }
+  }
+}

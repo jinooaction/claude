@@ -395,6 +395,13 @@ jobs:
           test "$(jq -r '.global_audit_trial_count' /tmp/factory_evidence_v3.json)" = "800"
           test "$(jq -r '.program_multiplicity.method' /tmp/factory_evidence_v3.json)" = \
             "calibrated-family-risk-budget-v1"
+          jq '. + {
+            artifact_role: "capital_entry_evidence",
+            artifact_source: "accounting_factor_factory",
+            diagnostic_successor_may_not_replace: true
+          }' /tmp/accounting_factor_factory.json > /tmp/capital_entry_evidence.json
+          test "$(jq -r '.artifact_role' /tmp/capital_entry_evidence.json)" = \
+            "capital_entry_evidence"
           cat /tmp/ACCOUNTING_LAST_RUN.md
 
       - name: Run the preregistered 16-trial PEAD public replication
@@ -533,6 +540,8 @@ jobs:
             2>/dev/null || echo '{}' > "${tmpdir}/turn_of_month_equity_factory.json"
           cp /tmp/accounting_factor_factory.json "${tmpdir}/accounting_factor_factory.json" \
             2>/dev/null || echo '{}' > "${tmpdir}/accounting_factor_factory.json"
+          cp /tmp/capital_entry_evidence.json "${tmpdir}/capital_entry_evidence.json" \
+            2>/dev/null || echo '{}' > "${tmpdir}/capital_entry_evidence.json"
           cp /tmp/strategy_factory.json "${tmpdir}/pead_factory.json" \
             2>/dev/null || echo '{}' > "${tmpdir}/pead_factory.json"
           cp /tmp/pead_evidence.json "${tmpdir}/pead_evidence.json" \
@@ -586,6 +595,7 @@ jobs:
             options_variance_risk_premium_factory.json \
             turn_of_month_equity_factory.json \
             accounting_factor_factory.json \
+            capital_entry_evidence.json \
             pead_factory.json \
             pead_evidence.json \
             real_world_gate_controls.json \

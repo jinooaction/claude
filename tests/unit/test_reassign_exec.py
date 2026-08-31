@@ -253,7 +253,7 @@ def test_build_reassignment_produces_both_artifacts() -> None:
     assert out.challenger_universe == ("SPY", "IEF", "GLD")
     # 산출물 1: 새 라이브 설정(등가중 전략 이식).
     assert tomllib.loads(out.new_live_config_text)["portfolio"]["weight_scheme"] == "equal"
-    assert "단1=10% 연구" in out.new_live_config_text
+    assert "단1=10% 검증" in out.new_live_config_text
     assert "단2=20% 탐색" in out.new_live_config_text
     # 산출물 2: rung 0 센티넬(무장 해제 + 자본 0).
     s = out.rung0_sentinel_text

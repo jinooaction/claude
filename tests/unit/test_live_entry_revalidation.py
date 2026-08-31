@@ -25,8 +25,34 @@ from auto_invest.portfolio.live_entry_revalidation import (
     ENTRY_READY,
     evaluate_live_entry,
 )
+from auto_invest.portfolio.operational_canary_evidence import (
+    build_operational_canary_evidence,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def _operational_evidence(*, commit: str = "a" * 40, fingerprint: str) -> dict:
+    dates: list[str] = []
+    year, month = 1991, 1
+    for _ in range(360):
+        dates.append(f"{year:04d}-{month:02d}-01")
+        month += 1
+        if month == 13:
+            year += 1
+            month = 1
+    candidate = [1.012 if index % 2 == 0 else 0.998 for index in range(360)]
+    benchmark = [1.010 if index % 2 == 0 else 0.985 for index in range(360)]
+    return build_operational_canary_evidence(
+        dates=dates,
+        candidate_monthly_factors=candidate,
+        benchmark_monthly_factors=benchmark,
+        development_months=180,
+        annual_cost_bps=50,
+        code_commit=commit,
+        generated_at_utc="2026-08-31T01:00:00Z",
+        strategy_fingerprint=fingerprint,
+    )
 
 
 def _research_calibration() -> dict:
@@ -360,3 +386,78 @@ def test_incomplete_or_stale_factory_evidence_fails_closed() -> None:
     assert result.allowed is False
     assert "factory_contract_complete" in result.reasons
     assert "factory_evidence_fresh" in result.reasons
+
+
+def test_operational_route_allows_first_fill_but_never_claims_alpha() -> None:
+    fingerprint = "sha256:" + "a" * 64
+    result = evaluate_live_entry(
+        None,
+        {"verdict": "PASS"},
+        {"fills_count": 0},
+        evidence_age_hours=None,
+        operational_evidence=_operational_evidence(fingerprint=fingerprint),
+        operational_evidence_age_hours=2,
+        expected_code_commit="a" * 40,
+        live_strategy_fingerprint=fingerprint,
+        validated_strategy_fingerprint=fingerprint,
+        entry_route="operational_canary",
+        fundability_evidence=_fundability(),
+        expected_capital_usd=Decimal("1000"),
+        execution_proxy_parity_passed=True,
+    )
+
+    assert result.allowed is True
+    assert result.state == ENTRY_READY
+    assert result.evidence["entry_source"] == "operational_canary"
+    assert result.evidence["operational_assessment"]["alpha_confirmed"] is False
+    assert result.evidence["operational_assessment"]["max_rung"] == 1
+
+
+def test_operational_first_fill_fails_on_route_commit_fingerprint_or_staleness() -> None:
+    fingerprint = "sha256:" + "a" * 64
+    evidence = _operational_evidence(fingerprint=fingerprint)
+    common = {
+        "operational_evidence": evidence,
+        "live_strategy_fingerprint": fingerprint,
+        "validated_strategy_fingerprint": fingerprint,
+        "fundability_evidence": _fundability(),
+        "expected_capital_usd": Decimal("1000"),
+        "execution_proxy_parity_passed": True,
+    }
+    wrong_route = evaluate_live_entry(
+        None,
+        {"verdict": "PASS"},
+        {"fills_count": 0},
+        evidence_age_hours=None,
+        operational_evidence_age_hours=2,
+        expected_code_commit="a" * 40,
+        entry_route="factory_research",
+        **common,
+    )
+    wrong_commit = evaluate_live_entry(
+        None,
+        {"verdict": "PASS"},
+        {"fills_count": 0},
+        evidence_age_hours=None,
+        operational_evidence_age_hours=2,
+        expected_code_commit="b" * 40,
+        entry_route="operational_canary",
+        **common,
+    )
+    stale = evaluate_live_entry(
+        None,
+        {"verdict": "PASS"},
+        {"fills_count": 0},
+        evidence_age_hours=None,
+        operational_evidence_age_hours=40,
+        expected_code_commit="a" * 40,
+        entry_route="operational_canary",
+        **common,
+    )
+
+    assert wrong_route.allowed is False
+    assert "entry_route_evidence_mismatch" in wrong_route.reasons
+    assert wrong_commit.allowed is False
+    assert "operational_code_commit" in wrong_commit.reasons
+    assert stale.allowed is False
+    assert "operational_evidence_fresh" in stale.reasons

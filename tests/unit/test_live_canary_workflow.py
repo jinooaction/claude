@@ -83,6 +83,11 @@ def test_live_canary_real_orders_remain_behind_machine_and_production_gates() ->
     assert '"${gateway_action} ${GITHUB_RUN_ID}' in real_order
     assert "real orders=0" in real_order
     assert "${GITHUB_RUN_ATTEMPT}" in real_order
+    assert "operational_canary_evidence.json" in real_order
+    assert "capital_entry_evidence.json" in real_order
+    assert "--operational-evidence-json /tmp/operational_canary_evidence.json" in real_order
+    assert "--expected-code-commit \"${GITHUB_SHA}\"" in real_order
+    assert "--sentinel automation/rebalance-live.request" in real_order
 
     helper = (ROOT / "deploy" / "live-canary-on-instance.sh").read_text(encoding="utf-8")
     assert "--mode live" in helper
