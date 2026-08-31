@@ -87,6 +87,49 @@ _CANARY_ARMED_SIDECAR = _CANARY_SIDECAR.replace(
     "armed (무장 여부) | false", "armed (무장 여부) | true"
 )
 
+_PRODUCTION_CANARY_PREFLIGHT_READY_SIDECAR = (
+    "# 라이브 캐너리 포트폴리오 — 최신 실행 (가드형 실거래 채널)\n\n"
+    "| 항목 | 값 |\n|------|-----|\n"
+    "| run_id | 33353865976 |\n"
+    "| timestamp_utc | 2026-08-31T03:12:45Z |\n"
+    "| armed (무장 여부) | true |\n"
+    "| capital_usd | 142 |\n"
+    "| 첫 체결 전 최신 엣지 재검증 | success |\n"
+    "| event | workflow_dispatch |\n"
+    "| LIVE 스텝 | success (success=명령 종료 코드 0) |\n\n"
+    "## 드라이런 미리보기 — 무장 시 거래할 내역 (주문 0건)\n"
+    "```json\n"
+    "(preview job 이 직전 sidecar에 발행함)\n"
+    "```\n\n"
+    "## 첫 체결 전 최신 엣지 재검증\n"
+    "```json\n"
+    "evidence_age_hours=0.75 canary_exit=0 profit_exit=0 "
+    "proxy_parity_exit=0 fundability_exit=0\n"
+    + json.dumps(
+        {
+            "allowed": True,
+            "reasons": [],
+            "state": "ENTRY_READY",
+        },
+        ensure_ascii=False,
+    )
+    + "\n```\n"
+)
+
+_PRODUCTION_CANARY_PREFLIGHT_MALFORMED_SIDECAR = (
+    _PRODUCTION_CANARY_PREFLIGHT_READY_SIDECAR.replace(
+        json.dumps(
+            {
+                "allowed": True,
+                "reasons": [],
+                "state": "ENTRY_READY",
+            },
+            ensure_ascii=False,
+        ),
+        "(entry revalidation JSON missing)",
+    )
+)
+
 _MICRO_SIDECAR_OLD_FORMAT = (
     "# 마이크로 GTAA 라이브 캐너리 — 최신 실행\n\n"
     "| 항목 | 값 |\n|------|-----|\n"
@@ -380,6 +423,77 @@ def test_probe_prefers_armed_capital_ladder_live_path(tmp_path, capsys):
     assert state["path"] == "capital-ladder-live-canary"
     assert state["capital_usd"] == 293
     assert state["next_scheduled_live_utc"] == "2026-08-17T14:17:00Z"
+
+
+def test_probe_maps_production_first_entry_revalidation_to_preflight(tmp_path, capsys):
+    _write(tmp_path, "edge-autoarm", _edge_sidecar())
+    _write(
+        tmp_path,
+        "rebalance-live-canary",
+        _PRODUCTION_CANARY_PREFLIGHT_READY_SIDECAR,
+    )
+    _write(
+        tmp_path,
+        "reconciliation-halt-recovery",
+        _recovery_sidecar("2026-08-31T03:13:00Z"),
+    )
+    live_request = tmp_path / "rebalance-live.request"
+    live_request.write_text(_LIVE_REQUEST_ARMED, encoding="utf-8")
+
+    rc = probe_main(
+        [
+            "--sidecar-dir",
+            str(tmp_path),
+            "--json",
+            "--now",
+            "2026-08-31T04:00:00Z",
+            "--live-request",
+            str(live_request),
+            "--micro-request",
+            "",
+        ]
+    )
+
+    assert rc == 0
+    run = json.loads(capsys.readouterr().out)["live_money_state"]["last_run"]
+    assert run["run_id"] == "33353865976"
+    assert run["preflight_ok"] is True
+    assert run["preflight_reason"] == "ENTRY_READY"
+
+
+def test_probe_does_not_trust_success_row_without_revalidation_json(tmp_path, capsys):
+    _write(tmp_path, "edge-autoarm", _edge_sidecar())
+    _write(
+        tmp_path,
+        "rebalance-live-canary",
+        _PRODUCTION_CANARY_PREFLIGHT_MALFORMED_SIDECAR,
+    )
+    _write(
+        tmp_path,
+        "reconciliation-halt-recovery",
+        _recovery_sidecar("2026-08-31T03:13:00Z"),
+    )
+    live_request = tmp_path / "rebalance-live.request"
+    live_request.write_text(_LIVE_REQUEST_ARMED, encoding="utf-8")
+
+    rc = probe_main(
+        [
+            "--sidecar-dir",
+            str(tmp_path),
+            "--json",
+            "--now",
+            "2026-08-31T04:00:00Z",
+            "--live-request",
+            str(live_request),
+            "--micro-request",
+            "",
+        ]
+    )
+
+    assert rc == 0
+    run = json.loads(capsys.readouterr().out)["live_money_state"]["last_run"]
+    assert run["preflight_ok"] is None
+    assert run["preflight_reason"] == "preflight evidence absent"
 
 
 def test_probe_micro_armed_state_is_top_level_json(tmp_path, capsys):

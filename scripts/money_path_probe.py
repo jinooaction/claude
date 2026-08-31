@@ -138,21 +138,38 @@ def _live_step(raw: str | None) -> str | None:
 
 
 def parse_micro_sidecar(text: str | None) -> dict | None:
-    """micro GTAA LAST_RUN.md 에서 마지막 실행 증거를 읽는다.
+    """micro GTAA/표준 라이브 LAST_RUN.md 에서 마지막 실행 증거를 읽는다.
 
     #378 이전 사이드카에는 preflight 섹션이 없을 수 있다. 그 경우 None 으로 넘겨
-    코어가 'preflight evidence absent' 로 표시한다.
+    코어가 'preflight evidence absent' 로 표시한다. 표준 라이브는 같은 의미의 첫
+    체결 전 재검증을 별도 이름과 로그+JSON 형식으로 발행하므로 이를 명시적으로
+    표준 preflight 형태로 바꾼다. 표 행의 success 문자열만으로는 통과를 추론하지 않는다.
     """
     if not text:
         return None
     rows = _table_rows(text)
+    preflight = extract_json_after_header(text, "라이브 전 주문 전제 확인")
+    if preflight is None:
+        entry_revalidation = extract_json_after_header(text, "첫 체결 전 최신 엣지 재검증")
+        if isinstance(entry_revalidation, dict):
+            allowed = entry_revalidation.get("allowed")
+            if isinstance(allowed, bool):
+                reason = entry_revalidation.get("state")
+                if not reason:
+                    reasons = entry_revalidation.get("reasons")
+                    if isinstance(reasons, list):
+                        reason = "; ".join(str(item) for item in reasons if item)
+                preflight = {
+                    "ok": allowed,
+                    "reason": str(reason or "entry revalidation reason absent"),
+                }
     return {
         "run_id": rows.get("run_id"),
         "timestamp_utc": rows.get("timestamp_utc"),
         "event": rows.get("event"),
         "live_step": _live_step(rows.get("LIVE 스텝")),
         "intent_gate": extract_json_after_header(text, "라이브 전 전략 의도 게이트"),
-        "preflight": extract_json_after_header(text, "라이브 전 주문 전제 확인"),
+        "preflight": preflight,
         "breaker": extract_json_after_header(text, "라이브 전 손실 브레이커"),
         "live_result": extract_json_after_header(text, "라이브 재조정 결과"),
     }
@@ -218,15 +235,24 @@ def extract_json_after_header(text: str | None, header: str) -> dict | None:
     """마크다운에서 `header` 줄 다음에 오는 첫 ```json 펜스 블록을 파싱.
 
     header 는 '## 결정 JSON' 처럼 줄 시작 토큰의 일부(부분 일치). 없으면 None.
+    생산 실행 로그처럼 JSON 앞에 메타데이터 줄이 있으면 같은 펜스 안에서 줄 시작의
+    첫 JSON 객체만 한 번 더 찾는다. 헤더와 펜스 밖의 텍스트는 절대 소비하지 않는다.
     """
     if not text:
         return None
     lines = text.splitlines()
     start = None
+    # 같은 문구가 요약 표에도 나올 수 있다. 실제 마크다운 제목을 먼저 골라야 제목과
+    # 본문 사이에 끼어 있는 다른 펜스(예: 드라이런 미리보기)를 잘못 소비하지 않는다.
     for i, line in enumerate(lines):
-        if header in line:
+        if line.lstrip().startswith("#") and header in line:
             start = i
             break
+    if start is None:
+        for i, line in enumerate(lines):
+            if header in line:
+                start = i
+                break
     if start is None:
         return None
     # header 이후 첫 ```json … ``` 블록.
@@ -243,9 +269,19 @@ def extract_json_after_header(text: str | None, header: str) -> dict | None:
         buf.append(line)
     if not buf:
         return None
+    payload = "\n".join(buf)
     try:
-        obj = json.loads("\n".join(buf))
+        obj = json.loads(payload)
     except json.JSONDecodeError:
+        decoder = json.JSONDecoder()
+        for match in re.finditer(r"(?m)^\s*\{", payload):
+            brace = payload.find("{", match.start())
+            try:
+                obj, _ = decoder.raw_decode(payload, brace)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(obj, dict):
+                return obj
         return None
     return obj if isinstance(obj, dict) else None
 
