@@ -1,21 +1,21 @@
 {
   "benchmarks": {
     "incumbent_wide_trend_25bp": {
-      "cagr_pct": 2.694579,
+      "cagr_pct": 2.66851,
       "max_dd_pct": 5.51141,
-      "sharpe": 0.627812,
-      "total_return_pct": 5.948215
+      "sharpe": 0.62458,
+      "total_return_pct": 5.94342
     },
     "passive_equal_weight_25bp": {
-      "cagr_pct": 14.546174,
+      "cagr_pct": 14.390449,
       "max_dd_pct": 5.325608,
-      "sharpe": 1.808743,
-      "total_return_pct": 34.328868
+      "sharpe": 1.798002,
+      "total_return_pct": 34.279072
     }
   },
   "candidate_package": {
     "candidate_id": "candidate-low-turnover-daily-cross-asset-ml-v2",
-    "data": "sha256:1a7ba2a4589cd3719122eda7f320debeca97812000634a97af41936453b067fa",
+    "data": "sha256:316b63b8ced2d7eb6618d8ce0dad02934321a1761703eac8fd8ea65955ae87ce",
     "domain_key": "investment_edge",
     "eligible": false,
     "evidence_refs": [
@@ -40,9 +40,9 @@
     {
       "cost_bps": 10,
       "metrics": {
-        "cagr_pct": 9.747131,
+        "cagr_pct": 9.657628,
         "max_dd_pct": 9.124835,
-        "sharpe": 1.214449,
+        "sharpe": 1.209007,
         "total_return_pct": 22.398889
       },
       "turnover": 12.790537
@@ -50,9 +50,9 @@
     {
       "cost_bps": 25,
       "metrics": {
-        "cagr_pct": 8.783054,
+        "cagr_pct": 8.702751,
         "max_dd_pct": 9.227839,
-        "sharpe": 1.101468,
+        "sharpe": 1.096556,
         "total_return_pct": 20.074395
       },
       "turnover": 12.790537
@@ -60,30 +60,30 @@
     {
       "cost_bps": 50,
       "metrics": {
-        "cagr_pct": 7.193536,
+        "cagr_pct": 7.128238,
         "max_dd_pct": 9.399397,
-        "sharpe": 0.912296,
+        "sharpe": 0.908257,
         "total_return_pct": 16.294369
       },
       "turnover": 12.790537
     }
   ],
   "data": {
-    "common_week_end": "2026-08-28",
+    "common_week_end": "2026-08-31",
     "common_week_start": "2021-06-25",
-    "common_weeks": 271,
+    "common_weeks": 272,
     "daily_counts": {
-      "DBC": 1302,
-      "EEM": 1302,
-      "EFA": 1302,
-      "GLD": 1302,
-      "IEF": 1302,
-      "LQD": 1302,
-      "QQQ": 1302,
-      "SPY": 1302,
-      "TLT": 1302,
-      "UUP": 1302,
-      "VNQ": 1302
+      "DBC": 1303,
+      "EEM": 1303,
+      "EFA": 1303,
+      "GLD": 1303,
+      "IEF": 1303,
+      "LQD": 1303,
+      "QQQ": 1303,
+      "SPY": 1303,
+      "TLT": 1303,
+      "UUP": 1303,
+      "VNQ": 1303
     },
     "symbols": [
       "SPY",
@@ -101,7 +101,7 @@
   },
   "experiment_id": "low-turnover-daily-cross-asset-ml-v2",
   "fingerprints": {
-    "data": "sha256:1a7ba2a4589cd3719122eda7f320debeca97812000634a97af41936453b067fa",
+    "data": "sha256:316b63b8ced2d7eb6618d8ce0dad02934321a1761703eac8fd8ea65955ae87ce",
     "features": "sha256:b718803406484520f8584307a9c467c8339d7d4a9d85af564d768ef64646dfc1",
     "model": "sha256:f5f929ec8238d932511ae75b9f5395c8a8845a96794e5fefec4a7bad50b0dcc6"
   },
@@ -294,8 +294,8 @@
       "chronology_ok": true,
       "fold_id": 15,
       "ridge_rmse": 0.02528561184171035,
-      "test_end": "2026-08-21",
-      "test_rows": 11,
+      "test_end": "2026-08-28",
+      "test_rows": 22,
       "test_start": "2026-08-21",
       "train_label_end": "2026-08-14",
       "train_rows": 2376,
@@ -310,25 +310,25 @@
       "required": ">= 10"
     },
     {
-      "actual": 8.783054,
+      "actual": 8.702751,
       "gate_id": "positive_25bp_cagr",
       "passed": true,
       "required": "> 0"
     },
     {
-      "actual": -0.7072750000000001,
+      "actual": -0.701446,
       "gate_id": "sharpe_margin",
       "passed": false,
       "required": ">= 0.20 over both benchmarks"
     },
     {
-      "actual": 0.14901709503130073,
+      "actual": 0.14987494836822968,
       "gate_id": "psr",
       "passed": false,
       "required": ">= 0.95"
     },
     {
-      "actual": 0.8820799917026891,
+      "actual": 0.8813008612942298,
       "gate_id": "dsr",
       "passed": false,
       "required": ">= 0.95"
@@ -360,7 +360,7 @@
   ],
   "latest_allocation": {
     "cash_weight": 1.0,
-    "date": "2026-08-21",
+    "date": "2026-08-28",
     "weights": {
       "DBC": 0.0,
       "EEM": 0.0,
@@ -383,14 +383,14 @@
     "fold_win_rate": 0.4,
     "fold_wins": 6,
     "minimum_hold_weeks": 4,
-    "prediction_weeks": 113,
+    "prediction_weeks": 114,
     "ridge_mean_validation_rmse": 0.020698650855973468,
     "suppressed_trades": 65,
     "trade_threshold": 0.08,
     "trial_sharpes_annual": [
-      0.665755,
-      1.351062,
-      1.101468
+      0.656493,
+      1.344967,
+      1.096556
     ],
     "turnover_reduction_pct": 64.332022
   },
@@ -405,8 +405,8 @@
   },
   "schema_version": "1.1",
   "significance": {
-    "dsr_model_trials": 0.8820799917026891,
-    "psr_vs_better_benchmark": 0.14901709503130073
+    "dsr_model_trials": 0.8813008612942298,
+    "psr_vs_better_benchmark": 0.14987494836822968
   },
   "verdict": "NO_EDGE"
 }
