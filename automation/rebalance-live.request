@@ -6,22 +6,23 @@
 #
 # 🪜 이 상태는 스펙 050 자본 사다리(증거 게이트 공식)가 결정했다 — 운영자 위임
 #   (2026-06-11): "자본·수단도 자동과 자율에 맡긴다. 기준은 계좌 잔고와 포트폴리오."
-#   헌법 X.4 v9.0.0. 사다리: 단0=0% → 단1=10% 연구 → 단2=20% 탐색 → 단3=25% → 단4=50% → 단5=100% (실계좌 NAV 대비).
+#   헌법 X.4 v11.0.0. 사다리: 단0=0% → 단1=10% 검증 → 단2=20% 탐색 → 단3=25% → 단4=50% → 단5=100% (실계좌 NAV 대비).
 #   승격 = 관측 ≥20 + ≥27일 + 낙폭 < 예산/2. 강등 = 낙폭 ≥ 예산/2(즉시).
 #   정지 = 낙폭 ≥ 예산(즉시, 무장 해제). 재사이징 = 계좌 NAV ±10% 드리프트.
 #
-# 증거: 첫 전략 체결 0건 + 최신 탐색 자격 미달. 단 1->0, 재진입은 최신 forward 재검증부터.
+# 증거: operational canary ready(globalfixed-ensemble-3-6-9-12), alpha_confirmed=false. 단 0→1.
 #
 # 즉시 정지: automation/AUTOARM_DISABLED 파일을 main 에 두면 사다리가 멈춘다.
 # 낙폭 예산은 운영자 소유 — 변경은 운영자 결정.
 
-armed: false
-capital_usd: 0
-requested_by: spec-050-capital-ladder (operator delegation 2026-06-11)
+armed: true
+capital_usd: 142
+requested_by: spec-050/176-capital-ladder (operator delegation 2026-06-11)
 stage: live-canary-portfolio
-run_seq: 7
-ladder_rung: 0
-rung_entered: 2026-08-22
-account_nav_usd: 1457.59000000
+run_seq: 8
+ladder_rung: 1
+rung_entered: 2026-08-31
+account_nav_usd: 1427.63000000
 dd_budget_pct: 20.0
-note: "🪜 자본 사다리 단 0 (0% of NAV $1457.59000000). 첫 전략 체결 0건 + 최신 탐색 자격 미달. 단 1->0, 재진입은 최신 forward 재검증부터."
+entry_route: operational_canary
+note: "🪜 자본 사다리 단 1 (10.00% of NAV $1427.63000000). operational canary ready(globalfixed-ensemble-3-6-9-12), alpha_confirmed=false. 단 0→1."
