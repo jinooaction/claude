@@ -72,6 +72,27 @@ def gateway_env(tmp_path: Path) -> dict[str, object]:
     flock = fake_bin / "flock"
     flock.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
     flock.chmod(0o755)
+    uv_log = tmp_path / "uv.log"
+    uv = fake_bin / "uv"
+    uv.write_text(
+        "#!/usr/bin/env bash\n"
+        "set -euo pipefail\n"
+        "printf '%s\\n' \"$*\" >> \"${FAKE_UV_LOG}\"\n"
+        "if [[ \"$*\" == *'python -m auto_invest.execution.live_session'* ]]; then\n"
+        "  if [[ \"${FAKE_SESSION_EXIT:-0}\" != '0' ]]; then\n"
+        "    exit \"${FAKE_SESSION_EXIT}\"\n"
+        "  fi\n"
+        "  printf '%s\\n' \"${FAKE_SESSION_KEY:-2026-08-31}\"\n"
+        "  exit 0\n"
+        "fi\n"
+        "if [[ \"$*\" == *'auto-invest rebalance-once'* ]]; then\n"
+        "  printf '%s\\n' '{\"results\": []}'\n"
+        "  exit 0\n"
+        "fi\n"
+        "exit 99\n",
+        encoding="utf-8",
+    )
+    uv.chmod(0o755)
 
     env = os.environ.copy()
     env.update(
@@ -79,6 +100,8 @@ def gateway_env(tmp_path: Path) -> dict[str, object]:
             "REPO": str(repo),
             "PUBLIC_KEY": str(public_key),
             "NONCE_DIR": str(tmp_path / "nonces"),
+            "UV_BIN": str(uv),
+            "FAKE_UV_LOG": str(uv_log),
             "PATH": f"{fake_bin}:{env['PATH']}",
         }
     )
@@ -86,6 +109,7 @@ def gateway_env(tmp_path: Path) -> dict[str, object]:
         "repo": repo,
         "sentinel": sentinel,
         "private_key": private_key,
+        "uv_log": uv_log,
         "env": env,
     }
 
@@ -167,6 +191,47 @@ def _verify(
     )
 
 
+def _order(
+    gateway_env: dict[str, object],
+    tmp_path: Path,
+    *,
+    run_id: str,
+    nonce: str,
+) -> subprocess.CompletedProcess[str]:
+    repo = gateway_env["repo"]
+    assert isinstance(repo, Path)
+    private_key = gateway_env["private_key"]
+    assert isinstance(private_key, Path)
+    sha = _run("git", "rev-parse", "HEAD", cwd=repo).stdout.strip()
+    expiry = str(int(time.time()) + 300)
+    signed = _signature(
+        tmp_path,
+        private_key,
+        run_id=run_id,
+        sha=sha,
+        capital="293",
+        expires=expiry,
+        nonce=nonce,
+    )
+    env = gateway_env["env"]
+    assert isinstance(env, dict)
+    return subprocess.run(
+        [
+            "bash",
+            str(HELPER),
+            "order",
+            run_id,
+            sha,
+            "293",
+            expiry,
+            nonce,
+            signed,
+        ],
+        text=True,
+        capture_output=True,
+        env=env,
+        check=False,
+    )
 def test_signed_order_request_is_authorized_once(
     gateway_env: dict[str, object], tmp_path: Path
 ) -> None:
@@ -177,6 +242,80 @@ def test_signed_order_request_is_authorized_once(
     assert "LIVE_ORDER_AUTHORIZED" in first.stdout
     assert replay.returncode == 2
     assert "nonce already used" in replay.stderr
+
+
+def test_market_session_allows_exactly_one_order_command(
+    gateway_env: dict[str, object], tmp_path: Path
+) -> None:
+    first = _order(
+        gateway_env,
+        tmp_path,
+        run_id="31999999991",
+        nonce="31999999991-1",
+    )
+    duplicate = _order(
+        gateway_env,
+        tmp_path,
+        run_id="31999999992",
+        nonce="31999999992-1",
+    )
+    uv_log = gateway_env["uv_log"]
+    assert isinstance(uv_log, Path)
+
+    assert first.returncode == 0, first.stderr
+    assert "LIVE_ORDER_SESSION_CLAIMED" in first.stdout
+    assert duplicate.returncode == 0, duplicate.stderr
+    assert "LIVE_ORDER_SESSION_ALREADY_CLAIMED" in duplicate.stdout
+    assert "first_run_id=31999999991" in duplicate.stdout
+    assert uv_log.read_text(encoding="utf-8").count("auto-invest rebalance-once") == 1
+
+
+def test_closed_session_does_not_consume_daily_order_claim(
+    gateway_env: dict[str, object], tmp_path: Path
+) -> None:
+    env = gateway_env["env"]
+    assert isinstance(env, dict)
+    env["FAKE_SESSION_EXIT"] = "75"
+
+    result = _order(
+        gateway_env,
+        tmp_path,
+        run_id="31999999993",
+        nonce="31999999993-1",
+    )
+    uv_log = gateway_env["uv_log"]
+    assert isinstance(uv_log, Path)
+
+    assert result.returncode == 75
+    assert "auto-invest rebalance-once" not in uv_log.read_text(encoding="utf-8")
+    session_file = Path(str(env["NONCE_DIR"])) / "order-sessions.tsv"
+    assert not session_file.exists() or session_file.read_text(encoding="utf-8") == ""
+
+
+def test_next_market_session_gets_a_new_single_order_command(
+    gateway_env: dict[str, object], tmp_path: Path
+) -> None:
+    first = _order(
+        gateway_env,
+        tmp_path,
+        run_id="31999999994",
+        nonce="31999999994-1",
+    )
+    env = gateway_env["env"]
+    assert isinstance(env, dict)
+    env["FAKE_SESSION_KEY"] = "2026-09-01"
+    second = _order(
+        gateway_env,
+        tmp_path,
+        run_id="31999999995",
+        nonce="31999999995-1",
+    )
+    uv_log = gateway_env["uv_log"]
+    assert isinstance(uv_log, Path)
+
+    assert first.returncode == 0, first.stderr
+    assert second.returncode == 0, second.stderr
+    assert uv_log.read_text(encoding="utf-8").count("auto-invest rebalance-once") == 2
 
 
 def test_tampered_signature_is_rejected(
@@ -236,6 +375,8 @@ def test_gateway_exposes_signed_order_and_non_order_evidence_only() -> None:
     assert "live-canary-profit\\ *)" in repair
     assert "verify_signature" in helper
     assert "consume_nonce" in helper
+    assert "claim_order_session" in helper
+    assert "python -m auto_invest.execution.live_session" in helper
     assert "--mode live" in helper
     assert "--confirm-live" in helper
     assert "performance" in helper

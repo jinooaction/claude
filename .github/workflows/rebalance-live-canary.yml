@@ -25,10 +25,10 @@ name: Live canary portfolio rebalance (guarded, real money)
 
 on:
   schedule:
-    # 미국 정규장 중 뉴욕 현지 10:17(정각 혼잡 회피) 실거래 재조정. GitHub schedule은
-    # 매시 정각에 지연·누락될 수 있으므로 비정각을 쓴다. 실주문은 *스케줄* 실행 + 센티넬
-    # armed:true 일 때만 — 무장 머지(push)는 미리보기만(아래 LIVE 스텝 게이트).
-    - cron: "17 10 * * 1-5"
+    # 미국 정규장 중 뉴욕 현지 10:17~13:17의 시간별 실행 기회. GitHub schedule 한 건은
+    # 비정각이어도 지연·누락될 수 있다. production 서버의 XNYS 거래일 선점이 첫 실행만
+    # 주문 경로로 보내고 후속 실행은 브로커 호출 없이 끝낸다.
+    - cron: "17 10-13 * * 1-5"
       timezone: "America/New_York"
   workflow_dispatch:
     inputs:
@@ -209,7 +209,7 @@ jobs:
           echo "exit=${ssh_exit}"; cat /tmp/live_measure.log
 
       - name: Publish live canary result to sidecar branch
-        if: always()
+        if: always() && steps.gate.outputs.armed != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ARMED: ${{ steps.gate.outputs.armed }}
@@ -511,13 +511,18 @@ jobs:
               > /tmp/live_rebal.json 2>/tmp/live_rebal.err
           ssh_exit=$?
           echo "ssh_exit=${ssh_exit}" >> "$GITHUB_OUTPUT"
+          duplicate=false
+          if grep -q '^LIVE_ORDER_SESSION_ALREADY_CLAIMED ' /tmp/live_rebal.json; then
+            duplicate=true
+          fi
+          echo "duplicate=${duplicate}" >> "$GITHUB_OUTPUT"
           echo "--- live rebalance ---"; cat /tmp/live_rebal.json
           echo "--- stderr ---"; cat /tmp/live_rebal.err
           exit "${ssh_exit}"
 
       - name: Sync broker fills and read audit ledger
         id: fills
-        if: always()
+        if: always() && steps.live.outputs.duplicate != 'true'
         env:
           HOST: ${{ secrets.VULTR_SSH_HOST }}
           USER: ${{ secrets.VULTR_SSH_USER }}
@@ -547,7 +552,7 @@ jobs:
 
       - name: Measure live track after real orders
         id: measure
-        if: always()
+        if: always() && steps.live.outputs.duplicate != 'true'
         env:
           HOST: ${{ secrets.VULTR_SSH_HOST }}
           USER: ${{ secrets.VULTR_SSH_USER }}
@@ -585,7 +590,7 @@ jobs:
 
       - name: Reconcile account after the order attempt
         id: reconciliation
-        if: always()
+        if: always() && steps.live.outputs.duplicate != 'true'
         env:
           HOST: ${{ secrets.VULTR_SSH_HOST }}
           USER: ${{ secrets.VULTR_SSH_USER }}
@@ -603,7 +608,7 @@ jobs:
           exit "${ssh_exit}"
 
       - name: Publish production live canary result to sidecar branch
-        if: always()
+        if: always() && steps.live.outputs.duplicate != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ARMED: ${{ steps.gate.outputs.armed }}

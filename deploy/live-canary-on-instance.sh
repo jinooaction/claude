@@ -11,6 +11,8 @@ APP_USER="${APP_USER:-auto-invest}"
 PUBLIC_KEY="${PUBLIC_KEY:-/usr/local/share/auto-invest/live-order-signing-public.pem}"
 NONCE_DIR="${NONCE_DIR:-/var/lib/auto-invest-live-order}"
 NONCE_FILE="${NONCE_FILE:-${NONCE_DIR}/used-nonces}"
+SESSION_FILE="${SESSION_FILE:-${NONCE_DIR}/order-sessions.tsv}"
+UV_BIN="${UV_BIN:-/usr/local/bin/uv}"
 REPOSITORY="jinooaction/claude"
 WORKFLOW="rebalance-live-canary.yml"
 MAX_TTL_SEC=600
@@ -26,7 +28,12 @@ require_repo() {
 }
 
 run_cli() {
-    sudo -u "${APP_USER}" -H /usr/local/bin/uv run auto-invest "$@"
+    sudo -u "${APP_USER}" -H "${UV_BIN}" run auto-invest "$@"
+}
+
+market_session_key() {
+    sudo -u "${APP_USER}" -H "${UV_BIN}" run \
+        python -m auto_invest.execution.live_session
 }
 
 git_as_app() {
@@ -118,6 +125,39 @@ consume_nonce() {
     flock -u 9
 }
 
+claim_order_session() {
+    local run_id="$1" signed_sha="$2"
+    local session_key session_exit claimed_at existing first_run_id
+    set +e
+    session_key="$(market_session_key)"
+    session_exit=$?
+    set -e
+    if [[ "${session_exit}" != "0" ]]; then
+        return "${session_exit}"
+    fi
+    [[ "${session_key}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] \
+        || die "invalid XNYS session key"
+
+    install -d -m 0700 "${NONCE_DIR}"
+    touch "${SESSION_FILE}"
+    chmod 0600 "${SESSION_FILE}"
+    exec 8>>"${SESSION_FILE}"
+    flock -x 8
+    existing="$(awk -F '\t' -v key="${session_key}" '$1 == key { print; exit }' "${SESSION_FILE}")"
+    if [[ -n "${existing}" ]]; then
+        first_run_id="$(printf '%s\n' "${existing}" | awk -F '\t' '{ print $2 }')"
+        echo "LIVE_ORDER_SESSION_ALREADY_CLAIMED market_session=${session_key} first_run_id=${first_run_id}"
+        flock -u 8
+        return 0
+    fi
+
+    claimed_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf '%s\t%s\t%s\t%s\n' \
+        "${session_key}" "${run_id}" "${signed_sha}" "${claimed_at}" >&8
+    flock -u 8
+    echo "LIVE_ORDER_SESSION_CLAIMED market_session=${session_key} run_id=${run_id} claimed_at=${claimed_at}"
+}
+
 verify_order_request() {
     local run_id="$1" signed_sha="$2" capital="$3" expires="$4" nonce="$5" signature="$6"
     local now payload
@@ -151,8 +191,33 @@ validate_macro_evidence_revision() {
 
 place_order() {
     local run_id="$1" signed_sha="$2" capital="$3" expires="$4" nonce="$5" signature="$6"
-    local -a macro_args=()
+    local claim_output claim_exit
+    local -a cli_args
     verify_order_request "${run_id}" "${signed_sha}" "${capital}" "${expires}" "${nonce}" "${signature}"
+    set +e
+    claim_output="$(claim_order_session "${run_id}" "${signed_sha}")"
+    claim_exit=$?
+    set -e
+    if [[ -n "${claim_output}" ]]; then
+        echo "${claim_output}"
+    fi
+    if [[ "${claim_exit}" != "0" ]]; then
+        return "${claim_exit}"
+    fi
+    if [[ "${claim_output}" == LIVE_ORDER_SESSION_ALREADY_CLAIMED* ]]; then
+        return 0
+    fi
+
+    cli_args=(
+        rebalance-once
+        --portfolio deploy/canary-live-portfolio.toml
+        --mode live
+        --confirm-live
+        --account-wide
+        --capital "${capital}"
+        --db data/auto_invest.db
+        --env-file .env
+    )
     if grep -Fq '[portfolio.macro_policy]' deploy/canary-live-portfolio.toml; then
         local evidence="/tmp/auto-invest-macro-strategy-factory.json"
         git_as_app fetch origin automation/autonomous-strategy-factory-last-run --quiet \
@@ -163,18 +228,10 @@ place_order() {
             || die "missing macro strategy evidence"
         validate_macro_evidence_revision "${evidence}" "${signed_sha}"
         chmod 0644 "${evidence}"
-        macro_args=(--macro-evidence "${evidence}")
+        cli_args+=(--macro-evidence "${evidence}")
     fi
-    run_cli rebalance-once \
-        --portfolio deploy/canary-live-portfolio.toml \
-        --mode live \
-        --confirm-live \
-        --account-wide \
-        --capital "${capital}" \
-        --db data/auto_invest.db \
-        --env-file .env \
-        "${macro_args[@]}" \
-        --json
+    cli_args+=(--json)
+    run_cli "${cli_args[@]}"
 }
 
 sync_fills() {

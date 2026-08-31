@@ -54,6 +54,14 @@ def test_live_schedule_uses_new_york_time_while_micro_keeps_legacy_utc() -> None
     assert _next_micro_schedule(summer) == "2026-08-31T15:00:00Z"
 
 
+def test_live_schedule_reports_the_next_same_day_retry() -> None:
+    after_first = datetime(2026, 8, 31, 14, 20, 0, tzinfo=UTC)
+    after_last = datetime(2026, 8, 31, 17, 20, 0, tzinfo=UTC)
+
+    assert _next_live_schedule(after_first) == "2026-08-31T15:17:00Z"
+    assert _next_live_schedule(after_last) == "2026-09-01T14:17:00Z"
+
+
 def _ladder(
     action="WAIT_EDGE",
     cur=0,
