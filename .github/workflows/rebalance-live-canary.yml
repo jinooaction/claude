@@ -6,13 +6,14 @@ name: Live canary portfolio rebalance (guarded, real money)
 #   1. 기본은 **드라이런 미리보기**(rebalance-once --dry-run, 주문 0건) — "실거래로 무엇을
 #      살지"만 보여준다. 실주문은 센티넬 automation/rebalance-live.request 의 armed: true
 #      일 때만 나간다.
-#   2. **자본 권위 가드(스펙 050)**: 자본은 자본 사다리(증거 게이트 공식, 헌법 X.4 v5.0.0)가
+#   2. **자본 권위 가드(스펙 050)**: 자본은 자본 사다리(증거 게이트 공식, 헌법 X.4 v11.0.0)가
 #      기록한 실계좌 NAV 이하여야 한다 — 위임 상한은 계좌 잔고(운영자 2026-06-11). 사다리
 #      필드가 없는 레거시/수동 센티넬은 종전 소액 가드($1,000)가 그대로 적용된다.
 #   3. `--mode live` 는 `--confirm-live` 인터록 필요(CLI 가 강제). K1 캡이 천장. 스펙 014
 #      손실 서킷 브레이커(halt_gate)가 일손실·총낙폭 한도 초과 시 주문 거부(킬스위치).
 #   4. 추세 필터(스펙 036)가 추세 아래면 현금으로 빠진다(드로다운 방어).
-#   5. 라이브 거래 집합 무확대: SPY·MSFT·AAPL 만(헌법 II).
+#   5. 신호 집합은 SPY·IEF·GLD, 실제 주문 집합은 사전등록 대체 ETF
+#      SCHX·SPTI·IAUM만 허용한다(헌법 II, 스펙 176).
 #
 # ⚠ 무장(armed: true) 전 운영자가 룰 워커 충돌을 해소해야 한다(한 실계좌 전략 하나):
 #   같은 계좌에 canary-live-rules.toml 워커가 돌면 포트폴리오 재조정과 충돌한다. 무장 시
@@ -323,6 +324,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
+      - name: Install uv for local entry revalidation
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86
+
       - name: Validate production live gate outputs
         id: gate
         run: |
@@ -419,7 +423,7 @@ jobs:
           if [[ ! -s /tmp/entry_fundability_preview.json ]]; then
             echo '{}' > /tmp/entry_fundability_preview.json
           fi
-          PYTHONPATH=src python3 scripts/live_entry_revalidation_probe.py \
+          uv run python scripts/live_entry_revalidation_probe.py \
             --profit-evidence-json /tmp/profit_evidence.json \
             --operational-evidence-json /tmp/operational_canary_evidence.json \
             --factory-evidence-json /tmp/capital_entry_evidence.json \

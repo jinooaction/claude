@@ -46,17 +46,21 @@
 - [x] T023 `uv run pytest`와 `uv run ruff check src tests` 전체 검증을 통과시킨다.
 - [x] T024 `uv run python scripts/agent_harness_probe.py --strict`와 `uv run python scripts/check_handoff_facts.py`를 통과시킨다.
 - [x] T025 위험 등급 4, 문제 정의, 탐색 근거, 안전 경계, 롤백을 담은 PR 본문을 `scripts/check_pr_quality_gate.py`로 검증한다.
-- [ ] T026 브랜치를 푸시하고 PR을 만든 뒤 최신 `origin/main`과 머지 가능성·원격 검사를 재확인해 merge 방식으로 자동 머지한다.
+- [x] T026 브랜치를 푸시하고 PR을 만든 뒤 최신 `origin/main`과 머지 가능성·원격 검사를 재확인해 merge 방식으로 자동 머지한다.
 
 ## 7단계 - 생산 배포와 실제 체결 완료
 
-- [ ] T027 `deploy-status` 기술로 main dry-run worker 배포와 서버 코드 커밋 일치를 확인한다.
-- [ ] T028 생산 profit-evidence·strategy-factory sidecar를 갱신하고 운영 증거·자본 증거·진단 증거의 역할과 커밋을 각각 검증한다.
-- [ ] T029 자본 사다리가 최신 NAV의 10% 이하로 단 0→1, `entry_route=operational_canary`를 기록했는지 확인한다.
+- [x] T027 `deploy-status` 기술로 main dry-run worker 배포와 서버 코드 커밋 일치를 확인한다.
+- [x] T028 생산 profit-evidence·strategy-factory sidecar를 갱신하고 운영 증거·자본 증거·진단 증거의 역할과 커밋을 각각 검증한다.
+- [x] T029 자본 사다리가 최신 NAV의 10% 이하로 단 0→1, `entry_route=operational_canary`를 기록했는지 확인한다.
 - [ ] T030 [US3] 미국 정규장 예약 실행에서 실제 KIS 지정가 주문의 접수와 체결을 확인한다.
 - [ ] T031 [US3] 체결 수량·가격이 KIS 조회, 전략 장부, 추가 전용 감사 로그에서 일치하고 사후 계좌 정합이 통과했는지 확인한다.
 - [ ] T032 운영 경로가 여전히 최대 단 1이고 깨끗한 전진 알파 증거 없이 20%로 승격되지 않았는지 확인한다.
 - [ ] T033 `handoff` 기술로 `HANDOFF.md`의 main 커밋, 테스트, 배포, 실제 주문·체결·감사와 남은 관찰 지점을 갱신·검증·머지한다.
+- [ ] T034 [US3] 자동 센티넬 PR이 일반 PR·push 검사를 발화하지 않는 재귀 억제 오류를 재현하고,
+  머지 전 자체 품질 관문과 머지 뒤 exact-main 증거→무주문 사전점검 연쇄 실행을 추가한다.
+- [ ] T035 [US3] 생산 주문 작업의 로컬 첫 매수 재검증에 프로젝트 의존성이 설치되지 않아
+  `pydantic` import에서 실패하는 오류를 재현하고, 고정된 `uv` 런타임으로 실행하게 한다.
 
 ## 의존성과 완료 계약
 

@@ -3,7 +3,7 @@ name: Capital ladder gate (forward edge -> rung promotions/demotions)
 # 스펙 050 — 자본 사다리 게이트. 스펙 049(EDGE_CONFIRMED → 무장)를 승계·확장한다.
 #
 # 운영자 위임(2026-06-11): "자본·수단도 자동과 자율에 맡긴다. 기준은 계좌 잔고와
-# 포트폴리오." (헌법 X.4 v9.0.0). 자본 배치 규모를 증거 게이트 공식으로 결정한다:
+# 포트폴리오." (헌법 X.4 v11.0.0). 자본 배치 규모를 증거 게이트 공식으로 결정한다:
 #
 #   단0=0% → 단1=10% 검증 → 단2=20% 탐색 → 단3=25% → 단4=50% → 단5=100%
 #   - 단 0→1: 역할이 분리된 공장 연구 또는 정확 배포전략 운영 검증 경로만 사용한다.
@@ -33,6 +33,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: write       # GITHUB_TOKEN 머지 뒤 exact-main 증거와 무주문 사전점검을 명시 실행.
   contents: write       # 사이드카 force-push + 사다리 브랜치 push.
   pull-requests: write  # 사다리 PR open/merge.
 
@@ -43,7 +44,7 @@ concurrency:
 jobs:
   ladder:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
     steps:
       - name: Checkout (fresh main — correct configs + sentinel for the decision)
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -239,7 +240,7 @@ jobs:
           ## 안전 경계
 
           - Kernel 터치: 없음
-          - 안전 경계 변경: 있음, 헌법 X.4 v9.0.0의 연구 캐너리 적용
+          - 안전 경계 변경: 있음, 헌법 X.4 v11.0.0의 연구 캐너리 적용
           - 돈 경로 변경: 전략 후보 설정 변경, 현재 자본 0·주문 0
           - 감사 로그·비밀값·주문 제한 영향: 기존 경계를 그대로 사용
 
@@ -466,13 +467,37 @@ jobs:
           {
             echo "feat(050): 자본 사다리 ${ACTION} — 단 ${cur}→${tgt} (자본 \$${cap}, NAV \$${nav})"
             echo ""
-            echo "운영자 위임(2026-06-11) + 헌법 X.4 v9.0.0 자본 사다리의 증거 게이트 결정."
+            echo "운영자 위임(2026-06-11) + 헌법 X.4 v11.0.0 자본 사다리의 증거 게이트 결정."
             echo "결정: ${reason}"
             echo "실주문은 시장시간 스케줄에서만(이 머지는 미리보기). 즉시 정지:"
             echo "automation/AUTOARM_DISABLED."
           } > /tmp/commit_msg.txt
           git commit -q -F /tmp/commit_msg.txt
-          git push -u origin "${BRANCH}"
+          # 이 PR 은 GITHUB_TOKEN 으로 만들어져 pull_request CI가 재귀 발화하지 않는다.
+          # 자본 증가에는 일반 PR과 같은 전체 관문을 직접 적용한다. HALT/DEMOTE 또는
+          # 하향 RESIZE는 오래 걸리는 관문이 위험 축소를 늦추지 않도록 사다리 핵심 회귀만
+          # 즉시 검사한다. 코드·안전 경계 자체는 이 워크플로가 바꾸지 않는다.
+          current_cap="$(git show HEAD^:automation/rebalance-live.request 2>/dev/null \
+            | awk '/^capital_usd:/ {print $2; exit}')"
+          capital_increase="$(awk \
+            -v cur="${cur}" -v tgt="${tgt}" -v old="${current_cap:-0}" -v new="${cap}" \
+            'BEGIN { print ((tgt+0) > (cur+0) || (new+0) > (old+0)) ? "true" : "false" }')"
+          if [[ "${capital_increase}" == "true" ]]; then
+            uv run pytest
+            uv run ruff check src tests
+            uv run python scripts/agent_harness_probe.py --strict
+            uv run python scripts/check_handoff_facts.py
+            test_evidence="전체 pytest·ruff·엄격 하네스 14/14 PASS (자본 증가 관문)"
+            handoff_evidence="엄격 하네스에 포함된 HANDOFF 사실 검사 PASS"
+          else
+            uv run pytest \
+              tests/unit/test_capital_ladder.py \
+              tests/unit/test_ladder_decide_cli.py \
+              tests/unit/test_live_canary_workflow.py
+            uv run ruff check src tests
+            test_evidence="사다리·CLI·실거래 핵심 회귀와 전체 ruff PASS (위험 축소 우선)"
+            handoff_evidence="위험 축소는 문서 신선도가 지연시키지 않음; 다음 handoff가 사실을 갱신"
+          fi
           {
             echo "# 변경 요약"
             echo ""
@@ -488,7 +513,7 @@ jobs:
             echo ""
             echo "## 문제 정의"
             echo ""
-            echo "- 요청: 헌법 X.4 v9.0.0 자본 사다리의 증거 판정을 실행한다."
+            echo "- 요청: 헌법 X.4 v11.0.0 자본 사다리의 증거 판정을 실행한다."
             echo "- 실제 목표: 검증된 범위 안에서 자본을 단계적으로 배치하거나 즉시 줄인다."
             echo "- 비목표: whitelist, 캡, 낙폭 예산, 주문시간을 바꾸지 않는다."
             echo "- 위험: 잘못된 승격은 실계좌 노출을 늘린다."
@@ -508,20 +533,19 @@ jobs:
             echo ""
             echo "## 검증"
             echo ""
-            echo "- [ ] \`uv run pytest\` (PR CI가 실행)"
-            echo "- [ ] \`uv run ruff check src tests\` (PR CI가 실행)"
+            echo "- [x] ${test_evidence}"
             echo "- [x] 문서·설정 변경에 맞는 형식 검증: ladder-decide가 센티넬을 생성"
             echo "- [x] 등급 2 이상 실제 적용 경로 확인: 고정 workflow 경로"
             echo ""
             echo "## 하네스 검증"
             echo ""
-            echo "- 하네스 평가: 기능 PR의 \`uv run python scripts/agent_harness_probe.py --strict\` PASS, 이 PR은 상태 파일만 변경"
-            echo "- HANDOFF 검증: 기능 PR의 \`uv run python scripts/check_handoff_facts.py\` PASS, 이 PR은 상태 파일만 변경"
+            echo "- 하네스 평가: ${test_evidence}"
+            echo "- HANDOFF 검증: ${handoff_evidence}"
             echo ""
             echo "## 안전 경계"
             echo ""
             echo "- Kernel 터치: 없음"
-            echo "- 안전 경계 변경: 없음 (헌법 X.4 v9.0.0 실행)"
+            echo "- 안전 경계 변경: 없음 (헌법 X.4 v11.0.0 실행)"
             echo "- 돈 경로 변경: 있음"
             echo "- 감사 로그·비밀값·주문 제한 영향: 기존 경계를 그대로 사용"
             echo ""
@@ -534,9 +558,8 @@ jobs:
             echo "## 자동 머지 준비"
             echo ""
             echo "- [x] 작업 완료"
-            echo "- [ ] 테스트 통과 (PR CI 대기)"
-            echo "- [ ] 린트 깨끗함 (PR CI 대기)"
-            echo "- [ ] PR 머지 가능 상태 확인"
+            echo "- [x] ${test_evidence}"
+            echo "- [x] PR 머지 가능 상태 확인"
             echo "- [x] \`WIP\` 또는 \`DO NOT MERGE\` 표식 없음"
             echo "- [x] Kernel 터치 없음"
             echo ""
@@ -551,6 +574,8 @@ jobs:
             echo "- 강등·정지는 낙폭 하나로 즉시, 승격은 세 증거 전부 — 내려가긴 쉽고 올라가긴 어렵다."
             echo "- 즉시 정지: automation/AUTOARM_DISABLED 파일을 main 에 두면 사다리가 멈춘다."
           } > /tmp/pr_body.md
+          uv run python scripts/check_pr_quality_gate.py /tmp/pr_body.md
+          git push -u origin "${BRANCH}"
           pr_url="$(gh pr create --base main --head "${BRANCH}" \
             --title "feat(050): 자본 사다리 ${ACTION} — 단 ${cur}→${tgt} (\$${cap})" \
             --body-file /tmp/pr_body.md)"
@@ -559,6 +584,12 @@ jobs:
           # best-effort 자동 머지(운영자 위임 자율 채널). 막히면 PR 을 ready 로 남긴다.
           if gh pr merge "${pr_url}" --merge 2>/tmp/merge.err; then
             echo "merged=merged" >> "$GITHUB_OUTPUT"
+            merge_sha="$(gh pr view "${pr_url}" --json mergeCommit --jq '.mergeCommit.oid // empty')"
+            if [[ ! "${merge_sha}" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "머지됐지만 merge commit을 확정하지 못했다 — 후속 실행을 차단한다." >&2
+              exit 1
+            fi
+            echo "merge_sha=${merge_sha}" >> "$GITHUB_OUTPUT"
           elif gh pr merge "${pr_url}" --auto --merge 2>>/tmp/merge.err; then
             echo "merged=auto-merge-enabled" >> "$GITHUB_OUTPUT"
           else
@@ -566,6 +597,38 @@ jobs:
             echo "직접 머지 불가(브랜치 보호 등) — PR 을 ready 로 남김."
             cat /tmp/merge.err || true
           fi
+
+      - name: Refresh exact-main evidence and no-order preview after direct merge
+        if: steps.pr.outputs.merged == 'merged'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MERGE_SHA: ${{ steps.pr.outputs.merge_sha }}
+        run: |
+          set -euo pipefail
+          [[ "${MERGE_SHA}" =~ ^[0-9a-f]{40}$ ]]
+          # GITHUB_TOKEN 머지는 push 워크플로를 재귀 발화하지 않는다. 명시적
+          # workflow_dispatch는 GitHub가 허용하는 공식 연쇄 실행 경로다.
+          gh workflow run profit-evidence-engine.yml --ref main
+          evidence_run=""
+          for _ in $(seq 1 30); do
+            evidence_run="$(gh run list \
+              --workflow profit-evidence-engine.yml \
+              --event workflow_dispatch \
+              --branch main \
+              --limit 20 \
+              --json databaseId,headSha \
+              --jq ".[] | select(.headSha == \"${MERGE_SHA}\") | .databaseId" \
+              | head -1)"
+            [[ -n "${evidence_run}" ]] && break
+            sleep 2
+          done
+          if [[ -z "${evidence_run}" ]]; then
+            echo "exact-main profit evidence 실행을 찾지 못했다." >&2
+            exit 1
+          fi
+          gh run watch "${evidence_run}" --exit-status
+          # workflow_dispatch는 live workflow에서 언제나 manual-no-order-preflight다.
+          gh workflow run rebalance-live-canary.yml --ref main
 
       - name: Publish decision to sidecar branch
         if: always()
@@ -590,7 +653,7 @@ jobs:
           {
             echo "# 자본 사다리 게이트 — 최신 실행 (스펙 050; 스펙 049 승계)"
             echo ""
-            echo "헌법 X.4 v9.0.0. 단0=0% → 단1=10% 연구 → 단2=20% 탐색 → 단3=25% → 단4=50% → 단5=100%"
+            echo "헌법 X.4 v11.0.0. 단0=0% → 단1=10% 운영 검증 → 단2=20% 탐색 → 단3=25% → 단4=50% → 단5=100%"
             echo "(실계좌 NAV 대비). 내려가는 건 낙폭 하나로 즉시, 올라가는 건 세 증거 전부."
             echo "판정 계산은 read-only — 서버 상태 무변경, 주문 0건."
             echo ""

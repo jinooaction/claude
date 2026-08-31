@@ -155,3 +155,48 @@ def test_autoarm_pr_body_keeps_quality_gate_contract() -> None:
     assert "agent_harness_probe.py --strict" in text
     assert "check_handoff_facts.py" in text
     assert "--delete-branch" not in text
+
+
+def test_autoarm_generated_pr_runs_local_merge_gates_before_merge() -> None:
+    text = _text()
+    start = text.index("Open ladder PR (only when the sentinel changed)")
+    end = text.index("Refresh exact-main evidence and no-order preview after direct merge")
+    step = text[start:end]
+    test = step.index("uv run pytest")
+    lint = step.index("uv run ruff check src tests")
+    harness = step.index("uv run python scripts/agent_harness_probe.py --strict")
+    quality = step.index("uv run python scripts/check_pr_quality_gate.py /tmp/pr_body.md")
+    create = step.index("gh pr create --base main")
+    merge = step.index('gh pr merge "${pr_url}" --merge')
+
+    assert test < lint < harness < quality < create < merge
+
+
+def test_risk_reduction_is_not_delayed_by_full_promotion_gate() -> None:
+    text = _text()
+    start = text.index("Open ladder PR (only when the sentinel changed)")
+    end = text.index("Refresh exact-main evidence and no-order preview after direct merge")
+    step = text[start:end]
+    direction = step.index('capital_increase="$(awk')
+    full_gate = step.index('if [[ "${capital_increase}" == "true" ]]')
+    targeted_gate = step.index("tests/unit/test_capital_ladder.py")
+    merge = step.index('gh pr merge "${pr_url}" --merge')
+
+    assert direction < full_gate < targeted_gate < merge
+    assert "HALT/DEMOTE" in step
+    assert "위험 축소 우선" in step
+
+
+def test_direct_merge_refreshes_exact_main_evidence_before_no_order_preview() -> None:
+    text = _text()
+    ladder = text.index("Open ladder PR (only when the sentinel changed)")
+    merge = text.index('gh pr merge "${pr_url}" --merge', ladder)
+    refresh = text.index("Refresh exact-main evidence and no-order preview after direct merge")
+    evidence = text.index("gh workflow run profit-evidence-engine.yml --ref main", refresh)
+    watch = text.index('gh run watch "${evidence_run}" --exit-status', evidence)
+    preview = text.index("gh workflow run rebalance-live-canary.yml --ref main", watch)
+
+    assert merge < refresh < evidence < watch < preview
+    assert "actions: write" in text
+    assert "steps.pr.outputs.merged == 'merged'" in text
+    assert "manual-no-order-preflight" in text
