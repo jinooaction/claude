@@ -93,6 +93,7 @@ OPERATIONAL_CANARY
 
 같은 뉴욕 거래일의 복수 GitHub 예약을 실제 주문 한 번으로 축약하는 production 서버 장부다.
 
+- 입력 예약: 뉴욕 현지 10:17~13:53 사이 최대 12분 간격, 하루 최대 19개 실행 기회
 - `market_session`: XNYS가 실제로 열린 서버 현재 시각의 뉴욕 현지 날짜
 - `run_id`, `code_commit`, `claimed_at_utc`: 최초 선점 실행의 신원과 시각
 - 저장: production 비밀 경계 안의 추가 전용 파일, 파일 잠금 아래 원자 확인·추가
