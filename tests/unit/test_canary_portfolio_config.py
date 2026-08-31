@@ -8,6 +8,7 @@ canary-live-rules.toml 별도). 운영 설정의 오타·스키마 깨짐을 CI 
 from __future__ import annotations
 
 import tomllib
+from decimal import Decimal
 from pathlib import Path
 
 from auto_invest.cli import (
@@ -56,7 +57,7 @@ def test_live_portfolio_config_ensemble_canary_invariants():
     ③ top_n=3(셋 다 보유). ④ 다중 속도 추세 앙상블 ON(드로다운 방어).
     ⑤ 저회전(hold_replace). 라이브 거래 집합 변경은 운영자 게이트(헌법 II) — 무장 전엔 돈 0.
     """
-    _caps, wl, cfg = _load_portfolio_for_backtest(_CANARY_LIVE, env={"KIS_ACCOUNT_NO": "ACC-TEST"})
+    caps, wl, cfg = _load_portfolio_for_backtest(_CANARY_LIVE, env={"KIS_ACCOUNT_NO": "ACC-TEST"})
     assert set(cfg.universe) == {"SPY", "IEF", "GLD"}
     assert set(wl.symbols) == {"SCHX", "SPTI", "IAUM"}
     assert cfg.weight_scheme == "equal"
@@ -67,6 +68,7 @@ def test_live_portfolio_config_ensemble_canary_invariants():
     assert cfg.trend_filter.method == "sma"
     assert cfg.trend_filter.on_insufficient == "cash"
     assert cfg.trend_filter.ensemble_windows == (63, 126, 189, 252)
+    assert caps.canary_capital_pct == Decimal("10")
 
     account_enabled, liquidation, cash_buffer = _load_account_rebalance_settings(_CANARY_LIVE)
     symbol_map, lot_rounding = _load_execution_settings(_CANARY_LIVE)

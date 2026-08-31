@@ -50,6 +50,19 @@ def _float_or_none(value: Any) -> float | None:
         return None
 
 
+def _fundability_canary_capital_pct(evidence: Any) -> Decimal | None:
+    if not isinstance(evidence, Mapping):
+        return None
+    caps = evidence.get("caps")
+    if not isinstance(caps, Mapping):
+        return None
+    try:
+        value = Decimal(str(caps.get("canary_capital_pct")))
+    except (ArithmeticError, TypeError, ValueError):
+        return None
+    return value if value.is_finite() and value > 0 else None
+
+
 def evaluate_live_entry(
     profit_evidence: Any,
     hardened_canary: Any,
@@ -170,6 +183,12 @@ def evaluate_live_entry(
         evidence_age_hours=operational_evidence_age_hours,
         max_evidence_age_hours=max_evidence_age_hours,
     )
+    declared_canary_capital_pct = _fundability_canary_capital_pct(
+        fundability_evidence
+    )
+    expected_operational_capital_pct = (
+        Decimal(str(operational_assessment.capital_fraction)) * Decimal("100")
+    )
     operational_checks = {
         "operational_contract_complete": operational_assessment.eligible,
         "operational_entry_route": entry_route == "operational_canary",
@@ -185,6 +204,11 @@ def evaluate_live_entry(
             "evidence_fresh", False
         ),
         "operational_fundability": fundability_passed,
+        "operational_canary_capital_contract": (
+            operational_assessment.eligible
+            and expected_operational_capital_pct == Decimal("10.0")
+            and declared_canary_capital_pct == expected_operational_capital_pct
+        ),
         "operational_execution_proxy_parity": execution_proxy_parity_passed,
         "operational_bounded_rung": operational_assessment.max_rung == 1
         and operational_assessment.alpha_confirmed is False,
@@ -242,6 +266,12 @@ def evaluate_live_entry(
         "factory_checks": factory_checks,
         "operational_assessment": operational_assessment.as_dict(),
         "operational_evidence_age_hours": operational_evidence_age_hours,
+        "declared_canary_capital_pct": (
+            None
+            if declared_canary_capital_pct is None
+            else str(declared_canary_capital_pct)
+        ),
+        "expected_operational_capital_pct": str(expected_operational_capital_pct),
         "operational_checks": operational_checks,
         "entry_route": entry_route,
         "fundability": fundability_evidence,

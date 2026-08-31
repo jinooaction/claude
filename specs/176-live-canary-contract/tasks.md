@@ -71,6 +71,12 @@
   preflight 사실로 변환한 뒤 현재 생산 sidecar 원문에서 `ok=True`, `ENTRY_READY`를 재현한다.
 - [x] T040 [US3] 보정 커밋을 main에 배포한 뒤 읽기 전용 money-path를 다시 실행해 발행 sidecar의
   마지막 preflight도 `ok=True`, `reason=ENTRY_READY`로 표시되는지 확인한다.
+- [x] T041 [US3] 생산 설정의 레거시 `canary_capital_pct=5`가 명세상 단 1 NAV 10%와 다르지만
+  첫 주문 재검사가 이를 무시하는 실패 시험을 작성하고 의도한 이유로 실패시킨다.
+- [x] T042 [US3] 운영 증거의 10%와 라이브 fundability 설정의 `canary_capital_pct`를 직접 대조해
+  누락·파싱 실패·불일치를 `operational_canary_capital_contract`로 실패 폐쇄하고 설정을 10%로 맞춘다.
+- [ ] T043 [US3] 관련·전체 시험과 품질 관문을 통과시키고 main 배포 뒤 exact-main 무주문
+  사전점검에서 새 자본 계약을 포함한 `ENTRY_READY`를 다시 확인한다.
 
 ## 의존성과 완료 계약
 
