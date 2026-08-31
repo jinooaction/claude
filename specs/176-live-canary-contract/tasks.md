@@ -69,7 +69,7 @@
   재현하고, 성공 표 행만 있고 JSON이 없으면 통과로 추론하지 않는 실패 시험을 작성한다.
 - [x] T039 [US3] 헤더 범위의 첫 JSON 객체를 보수적으로 추출하고 `allowed`·`state`를 money-path
   preflight 사실로 변환한 뒤 현재 생산 sidecar 원문에서 `ok=True`, `ENTRY_READY`를 재현한다.
-- [ ] T040 [US3] 보정 커밋을 main에 배포한 뒤 읽기 전용 money-path를 다시 실행해 발행 sidecar의
+- [x] T040 [US3] 보정 커밋을 main에 배포한 뒤 읽기 전용 money-path를 다시 실행해 발행 sidecar의
   마지막 preflight도 `ok=True`, `reason=ENTRY_READY`로 표시되는지 확인한다.
 
 ## 의존성과 완료 계약
