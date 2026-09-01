@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def test_constitution_requires_calibrated_family_entry_and_exact_fundability() -> None:
     text = (ROOT / ".specify" / "memory" / "constitution.md").read_text(encoding="utf-8")
-    assert "**Version**: 11.0.0" in text
+    assert "**Version**: 12.0.0" in text
     assert "`gate_version=3.1` (`calibrated-family-entry-v3.1`)" in text
     assert "`gate_version=3.0`, legacy, and `gate_version=2.0` evidence are diagnostic-only" in text
     assert "`complete_family_trials`" in text
@@ -37,6 +37,17 @@ def test_constitution_requires_calibrated_family_entry_and_exact_fundability() -
     assert "MUST NEVER promote above rung 1" in text
     assert "drawdown ≥ budget/2 drops one rung" in text
     assert "drawdown ≥ budget disarms to rung 0" in text
+
+
+def test_constitution_limits_live_wakeup_to_two_shared_claim_sources() -> None:
+    text = (ROOT / ".specify" / "memory" / "constitution.md").read_text(encoding="utf-8")
+
+    assert "restricted to exactly two automated sources" in text
+    assert "rebalance-live-canary.yml" in text
+    assert "auto-invest-live-canary.timer" in text
+    assert "one root-owned market-session claim" in text
+    assert "at most one broker-writing execution" in text
+    assert "`workflow_dispatch`, `repository_dispatch`, arbitrary shell" in text
 
 
 def test_ladder_fractions_match_constitution() -> None:
