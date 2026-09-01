@@ -1,5 +1,5 @@
 {
-  "commit": "e3dc4e333dff930bbc31b6f6bb4c62f8f015d935",
+  "commit": "73d07485af8eed4de6154d7d3c5e7a5f428b39d0",
   "overall_status": "OK",
   "released_work": [
     {
@@ -888,7 +888,11 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "176-live-canary-contract"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "177-intraday-paper-challenger"
     }
   ],
-  "timestamp_utc": "2026-09-01T20:35:09.949044Z"
+  "timestamp_utc": "2026-09-01T23:27:17.064484Z"
 }
