@@ -98,6 +98,110 @@ def test_preregistered_two_active_proxies_fit_current_research_capital() -> None
     assert result.max_leg_weight_error <= Decimal("0.15")
 
 
+def test_below_one_share_target_does_not_veto_bounded_nonempty_portfolio() -> None:
+    result = assess_fundability(
+        target_weights={
+            "SCHX": Decimal("0.333334"),
+            "IAUM": Decimal("0.083333"),
+        },
+        holdings={},
+        prices={"SCHX": Decimal("30.09"), "IAUM": Decimal("43.28")},
+        order_prices={"SCHX": Decimal("30.09")},
+        planned_orders=[("SCHX", "BUY", 2)],
+        capital_usd=Decimal("142"),
+        invested_fraction=Decimal("0.99"),
+        caps=_caps(per_trade="50", per_symbol="60"),
+    )
+
+    assert result.active_target_count == 2
+    assert result.funded_target_count == 1
+    assert result.funded_target_ratio == Decimal("0.5")
+    assert result.whole_share_eligible_target_count == 1
+    assert result.funded_whole_share_target_count == 1
+    assert result.funded_whole_share_target_ratio == Decimal("1")
+    assert result.whole_share_ineligible_targets == {
+        "IAUM": {
+            "target_notional_usd": Decimal("11.71495314"),
+            "one_share_price_usd": Decimal("43.28"),
+        }
+    }
+    assert result.l1_weight_error <= Decimal("0.25")
+    assert result.max_leg_weight_error <= Decimal("0.15")
+    assert result.fundable is True
+    assert validate_fundability_evidence(
+        result.as_dict(), expected_capital_usd=Decimal("142")
+    )
+
+
+def test_all_below_one_share_targets_remain_unfundable() -> None:
+    result = assess_fundability(
+        target_weights={"AAA": Decimal("0.1"), "BBB": Decimal("0.1")},
+        holdings={},
+        prices={"AAA": Decimal("50"), "BBB": Decimal("50")},
+        order_prices={},
+        planned_orders=[],
+        capital_usd=Decimal("100"),
+        invested_fraction=Decimal("0.99"),
+        caps=_caps(),
+    )
+
+    assert result.whole_share_eligible_target_count == 0
+    assert result.fundable is False
+    assert "whole_share_eligible_targets_present" in result.reasons
+
+
+def test_unfunded_whole_share_eligible_target_remains_unfundable() -> None:
+    result = assess_fundability(
+        target_weights={"AAA": Decimal("0.1")},
+        holdings={},
+        prices={"AAA": Decimal("5")},
+        order_prices={},
+        planned_orders=[],
+        capital_usd=Decimal("100"),
+        invested_fraction=Decimal("0.99"),
+        caps=_caps(),
+    )
+
+    assert result.whole_share_eligible_target_count == 1
+    assert result.funded_whole_share_target_ratio == Decimal("0")
+    assert result.fundable is False
+    assert "funded_whole_share_target_ratio" in result.reasons
+
+
+def test_below_one_share_target_still_counts_toward_weight_error() -> None:
+    result = assess_fundability(
+        target_weights={"AAA": Decimal("0.2")},
+        holdings={},
+        prices={"AAA": Decimal("30")},
+        order_prices={},
+        planned_orders=[],
+        capital_usd=Decimal("100"),
+        invested_fraction=Decimal("0.99"),
+        caps=_caps(),
+    )
+
+    assert result.whole_share_eligible_target_count == 0
+    assert result.max_leg_weight_error == Decimal("0.198")
+    assert "max_leg_weight_error" in result.reasons
+
+
+def test_legacy_fundability_schema_cannot_inherit_new_denominator_semantics() -> None:
+    result = assess_fundability(
+        target_weights={"AAA": Decimal("0.5")},
+        holdings={},
+        prices={"AAA": Decimal("10")},
+        order_prices={"AAA": Decimal("10")},
+        planned_orders=[("AAA", "BUY", 5)],
+        capital_usd=Decimal("100"),
+        invested_fraction=Decimal("1"),
+        caps=_caps(),
+    )
+    legacy = result.as_dict()
+    legacy["schema_version"] = "1.0"
+
+    assert validate_fundability_evidence(legacy) is False
+
+
 def test_zero_order_minimum_notional_path_fails_funded_targets() -> None:
     result = assess_fundability(
         target_weights={"AAA": Decimal("0.5"), "BBB": Decimal("0.5")},
