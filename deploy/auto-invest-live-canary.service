@@ -1,0 +1,17 @@
+[Unit]
+Description=auto-invest independent live-canary scheduler fallback
+After=network-online.target
+Wants=network-online.target
+RefuseManualStart=yes
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=/opt/auto-invest
+ExecStart=/usr/local/sbin/auto-invest-live-canary-scheduler
+TimeoutStartSec=15min
+StandardOutput=journal
+StandardError=journal
+PrivateTmp=true
+UMask=0077

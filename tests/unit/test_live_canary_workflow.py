@@ -129,7 +129,17 @@ def test_live_canary_real_order_failures_reach_job_and_sidecar() -> None:
     assert 'exit "${ssh_exit}"' in measure_step
 
     publish_step = real_order.split("Publish production live canary result", 1)[1]
-    assert "if: always() && steps.live.outputs.duplicate != 'true'" in publish_step
+    assert "if: always()" in publish_step
+    assert "Read first server-scheduled execution evidence" in real_order
+    assert "live-canary-scheduled-status" in real_order
+    assert "live-canary-scheduled-status ${FIRST_RUN_ID}" in real_order
+    assert "steps.live.outputs.first_source == 'server_timer'" in real_order
+    assert "SERVER_EVIDENCE_OUTCOME" in publish_step
+    assert "cat /tmp/server_scheduled_status.json" in publish_step
+    assert ".run_id == $first_run_id" in real_order
+    assert "for attempt in 1 2 3" in real_order
+    assert "최초 server timer run_id" in publish_step
+    assert "is already published; preserving first sidecar" in publish_step
     assert "FILLS_OUTCOME: ${{ steps.fills.outcome }}" in publish_step
     assert "MEASURE_OUTCOME: ${{ steps.measure.outcome }}" in publish_step
     assert "cat /tmp/live_rebal.err" in publish_step

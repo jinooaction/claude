@@ -2,7 +2,10 @@
 # Fixed live-canary commands for the production instance.
 #
 # `order` is reachable only with a short-lived Ed25519 signature produced by the
-# GitHub production environment. `fills` and `profit` cannot submit/cancel orders.
+# GitHub production environment. `systemd-order` is reachable only as a direct
+# child of the fixed root-owned live-canary systemd unit. Both converge on the
+# same market-session claim. `fills`, `profit`, and `scheduled-status` cannot
+# submit/cancel orders.
 
 set -euo pipefail
 
@@ -12,6 +15,8 @@ PUBLIC_KEY="${PUBLIC_KEY:-/usr/local/share/auto-invest/live-order-signing-public
 NONCE_DIR="${NONCE_DIR:-/var/lib/auto-invest-live-order}"
 NONCE_FILE="${NONCE_FILE:-${NONCE_DIR}/used-nonces}"
 SESSION_FILE="${SESSION_FILE:-${NONCE_DIR}/order-sessions.tsv}"
+SCHEDULED_RUNS_DIR="${SCHEDULED_RUNS_DIR:-${NONCE_DIR}/scheduled-runs}"
+SCHEDULED_LAST_RUN_FILE="${SCHEDULED_LAST_RUN_FILE:-${NONCE_DIR}/last-scheduled-run-id}"
 UV_BIN="${UV_BIN:-/usr/local/bin/uv}"
 REPOSITORY="jinooaction/claude"
 WORKFLOW="rebalance-live-canary.yml"
@@ -126,8 +131,12 @@ consume_nonce() {
 }
 
 claim_order_session() {
-    local run_id="$1" signed_sha="$2"
-    local session_key session_exit claimed_at existing first_run_id
+    local run_id="$1" signed_sha="$2" source="$3"
+    local session_key session_exit claimed_at existing first_run_id first_source
+    case "${source}" in
+        github_schedule|server_timer) ;;
+        *) die "invalid live order source" ;;
+    esac
     set +e
     session_key="$(market_session_key)"
     session_exit=$?
@@ -146,16 +155,18 @@ claim_order_session() {
     existing="$(awk -F '\t' -v key="${session_key}" '$1 == key { print; exit }' "${SESSION_FILE}")"
     if [[ -n "${existing}" ]]; then
         first_run_id="$(printf '%s\n' "${existing}" | awk -F '\t' '{ print $2 }')"
-        echo "LIVE_ORDER_SESSION_ALREADY_CLAIMED market_session=${session_key} first_run_id=${first_run_id}"
+        first_source="$(printf '%s\n' "${existing}" | awk -F '\t' '{ print $5 }')"
+        [[ -n "${first_source}" ]] || first_source="legacy"
+        echo "LIVE_ORDER_SESSION_ALREADY_CLAIMED market_session=${session_key} first_run_id=${first_run_id} first_source=${first_source}"
         flock -u 8
         return 0
     fi
 
     claimed_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    printf '%s\t%s\t%s\t%s\n' \
-        "${session_key}" "${run_id}" "${signed_sha}" "${claimed_at}" >&8
+    printf '%s\t%s\t%s\t%s\t%s\n' \
+        "${session_key}" "${run_id}" "${signed_sha}" "${claimed_at}" "${source}" >&8
     flock -u 8
-    echo "LIVE_ORDER_SESSION_CLAIMED market_session=${session_key} run_id=${run_id} claimed_at=${claimed_at}"
+    echo "LIVE_ORDER_SESSION_CLAIMED market_session=${session_key} run_id=${run_id} source=${source} claimed_at=${claimed_at}"
 }
 
 verify_order_request() {
@@ -189,13 +200,43 @@ validate_macro_evidence_revision() {
         || die "macro evidence was not produced by signed main history"
 }
 
-place_order() {
-    local run_id="$1" signed_sha="$2" capital="$3" expires="$4" nonce="$5" signature="$6"
+require_systemd_invocation() {
+    [[ "$(id -u)" -eq 0 ]] || die "server timer order requires root"
+    [[ "${INVOCATION_ID:-}" =~ ^[0-9a-f]{32}$ ]] \
+        || die "missing or invalid systemd invocation id"
+    [[ "${PPID}" =~ ^[0-9]+$ ]] || die "invalid server timer parent"
+    grep -Eq '/auto-invest-live-canary\.service$' "/proc/${PPID}/cgroup" \
+        || die "server timer order must be a direct child of its fixed systemd unit"
+}
+
+verify_systemd_request() {
+    local run_id="$1" signed_sha="$2" capital="$3"
+    local deployed_sha main_sha
+    [[ "${run_id}" =~ ^[0-9]{14}$ ]] || die "invalid server timer run id"
+    [[ "${signed_sha}" =~ ^[0-9a-f]{40}$ ]] || die "invalid deployed commit"
+    validate_capital "${capital}"
+    require_systemd_invocation
+    require_repo
+    validate_sentinel_authority "${capital}"
+    [[ ! -e automation/AUTOARM_DISABLED ]] || die "AUTOARM_DISABLED kill switch is active"
+    [[ "$(sentinel_field ladder_rung)" == "1" ]] \
+        || die "server timer order is limited to ladder rung 1"
+    [[ "$(sentinel_field entry_route)" == "operational_canary" ]] \
+        || die "server timer order requires operational_canary entry route"
+    git_as_app fetch origin main --quiet || die "failed to refresh exact main"
+    deployed_sha="$(git_as_app rev-parse HEAD)"
+    main_sha="$(git_as_app rev-parse origin/main)"
+    [[ "${deployed_sha}" == "${signed_sha}" && "${main_sha}" == "${signed_sha}" ]] \
+        || die "server timer requires exact deployed main"
+    echo "LIVE_ORDER_AUTHORIZED source=server_timer run_id=${run_id} commit=${signed_sha} capital=${capital}"
+}
+
+place_order_authorized() {
+    local source="$1" run_id="$2" signed_sha="$3" capital="$4"
     local claim_output claim_exit
     local -a cli_args
-    verify_order_request "${run_id}" "${signed_sha}" "${capital}" "${expires}" "${nonce}" "${signature}"
     set +e
-    claim_output="$(claim_order_session "${run_id}" "${signed_sha}")"
+    claim_output="$(claim_order_session "${run_id}" "${signed_sha}" "${source}")"
     claim_exit=$?
     set -e
     if [[ -n "${claim_output}" ]]; then
@@ -232,6 +273,35 @@ place_order() {
     fi
     cli_args+=(--json)
     run_cli "${cli_args[@]}"
+}
+
+place_order() {
+    local run_id="$1" signed_sha="$2" capital="$3" expires="$4" nonce="$5" signature="$6"
+    verify_order_request "${run_id}" "${signed_sha}" "${capital}" "${expires}" "${nonce}" "${signature}"
+    place_order_authorized "github_schedule" "${run_id}" "${signed_sha}" "${capital}"
+}
+
+place_systemd_order() {
+    local run_id="$1" signed_sha="$2" capital="$3"
+    verify_systemd_request "${run_id}" "${signed_sha}" "${capital}"
+    place_order_authorized "server_timer" "${run_id}" "${signed_sha}" "${capital}"
+}
+
+scheduled_status() {
+    local run_id="${1:-}" summary
+    if [[ -z "${run_id}" ]]; then
+        [[ -f "${SCHEDULED_LAST_RUN_FILE}" && ! -L "${SCHEDULED_LAST_RUN_FILE}" ]] \
+            || die "no server-scheduled live canary evidence"
+        run_id="$(tr -d '\r\n' < "${SCHEDULED_LAST_RUN_FILE}")"
+    fi
+    [[ "${run_id}" =~ ^[0-9]{14}$ ]] || die "invalid scheduled run pointer"
+    summary="${SCHEDULED_RUNS_DIR}/${run_id}/summary.json"
+    [[ -f "${summary}" && ! -L "${summary}" ]] || die "missing scheduled run summary"
+    jq -e \
+        --arg run_id "${run_id}" \
+        '.schema_version == "1.0" and .run_id == $run_id and .source == "server_timer"' \
+        "${summary}" >/dev/null || die "invalid scheduled run summary"
+    cat "${summary}"
 }
 
 sync_fills() {
@@ -277,6 +347,10 @@ main() {
             [[ "$#" -eq 6 ]] || die "verify-order requires run_id commit capital expiry nonce signature"
             verify_order_request "$@"
             ;;
+        systemd-order)
+            [[ "$#" -eq 3 ]] || die "systemd-order requires run_id commit capital"
+            place_systemd_order "$@"
+            ;;
         fills)
             [[ "$#" -eq 0 || "$#" -eq 2 ]] || die "fills accepts zero args or start/end dates"
             sync_fills "$@"
@@ -284,6 +358,10 @@ main() {
         profit)
             [[ "$#" -eq 1 ]] || die "profit requires capital"
             measure_profit "$1"
+            ;;
+        scheduled-status)
+            [[ "$#" -le 1 ]] || die "scheduled-status takes at most one run id"
+            scheduled_status "${1:-}"
             ;;
         *)
             die "unknown live-canary command: ${command:-missing}"

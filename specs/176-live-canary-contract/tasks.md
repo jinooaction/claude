@@ -128,6 +128,27 @@
   거래소를 반환하되, 모든 후보 실패 시 마지막 5xx를 다시 전파하고 4xx를 즉시 전파하게 한다.
 - [x] T063 [US3] 관련·전체 시험, 린트, 엄격 하네스, HANDOFF 사실 검사와 PR 품질 관문을 통과시켜
   merge·exact-main 배포하고 생산 KIS smoke 6/6과 주문 없는 첫 진입 사전점검을 다시 확인한다.
+- [x] T064 [US3] 2026-08-31의 19개 GitHub 후보가 같은 공급자 장애로 장 마감 뒤 생성된 사실을
+  기록하고, GitHub 후보 수 증가가 독립 복구가 아니라는 원인과 안전한 server fallback 계약을
+  spec·research·plan·data-model·quickstart와 헌법 X.4 12.0.0에 먼저 확정한다.
+- [x] T065 [US3] root 소유 systemd 신원, exact-main, 첫 진입 재검증, XNYS, 센티넬, 공유 거래일
+  선점, 선점 뒤 무재시도, 고정 읽기 전용 증거를 요구하는 실패 시험을
+  `tests/unit/test_live_canary_server_scheduler.py`와 기존 gateway/workflow/unit 시험에 먼저 작성한다.
+- [x] T066 [US3] `auto-invest-live-canary.service`·`.timer`와 root 소유
+  `live-canary-scheduled-on-instance.sh`를 구현해 뉴욕 10:35 이후 독립 후보가 GitHub와 같은
+  첫 진입·위험·정규장·거래일 선점을 거쳐 하루 한 번만 주문하게 한다.
+- [x] T067 [US3] 공유 선점 장부에 `github_schedule|server_timer` 출처를 추가하고, server 최초
+  실행은 주문 단계 결과와 무관하게 체결 동기화·측정·정합과 추가 전용 정화 요약을 보존하게 한다.
+- [x] T068 [US3] SSH forced-command에 최신 또는 검증된 14자리 run ID만 받는
+  `live-canary-scheduled-status` 읽기를 추가하고
+  server `systemd-order`는 원격에서 계속 거부한다. 뒤늦은 GitHub 중복 run은 최초 server 실행을
+  읽어 sidecar에 발행하되 broker·fills·measure·reconciliation을 다시 호출하지 않게 한다.
+- [ ] T069 [US3] 관련 시험과 `uv run pytest`·ruff·엄격 하네스·HANDOFF 사실 검사·PR 본문 품질
+  관문을 통과시키고, constitution 전용 커밋을 포함한 위험 등급 4 PR을 merge한다.
+- [ ] T070 [US3] 장중 배포 금지를 지켜 장 마감 뒤 exact-main 배포와 server timer 활성·다음 발화
+  시각, KIS smoke 6/6, 주문 없는 exact-main 사전점검을 확인한다.
+- [ ] T071 [US3] 다음 거래일에 GitHub 또는 server timer 중 최초 유효 실행의 실제 주문·체결·감사·
+  정합과 다른 출처의 중복 broker write 0건, 동일 최초 run/source 증거를 생산에서 확인한다.
 
 ## 의존성과 완료 계약
 
@@ -135,5 +156,7 @@
 - T004~T009의 의도된 실패를 확인한 뒤 T010~T021을 구현한다.
 - T022~T026이 모두 통과한 뒤에만 main 배포와 자본 무장을 진행한다.
 - T030~T031의 실제 체결·감사·정합이 끝나기 전에는 사용자 목표를 완료로 표시하지 않는다.
+- T065 실패 시험 뒤에만 T066~T068을 구현하고, T069~T070 전에는 server timer를 생산 활성화하지 않는다.
+- T071의 이중 scheduler 생산 증거가 끝나기 전에는 예약 가동성 문제를 해결됐다고 표시하지 않는다.
 - 시장 휴장, 0개 목표 주문, 증거 불일치, 브로커 장애이면 주문을 만들지 않고 다음 정규장 관찰을 계속한다.
 - 10% 운영 캐너리는 수익 보장이 아니며, T032의 승격 차단이 유지돼야 한다.

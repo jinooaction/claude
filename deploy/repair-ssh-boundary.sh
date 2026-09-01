@@ -102,6 +102,7 @@ case "${cmd}" in
         echo "user=$(id -un)"
         echo "host=$(hostname)"
         echo "deploy_timer=$(systemctl is-active auto-invest-deploy.timer 2>/dev/null || true)"
+        echo "live_canary_timer=$(systemctl is-active auto-invest-live-canary.timer 2>/dev/null || true)"
         echo "worker=$(systemctl is-active auto-invest.service 2>/dev/null || true)"
         ;;
     sync-units)
@@ -245,6 +246,18 @@ case "${cmd}" in
         ;;
     live-canary-fills)
         exec sudo -n /usr/local/sbin/auto-invest-live-canary fills
+        ;;
+    live-canary-scheduled-status)
+        exec sudo -n /usr/local/sbin/auto-invest-live-canary scheduled-status
+        ;;
+    live-canary-scheduled-status\ *)
+        scheduled_run_id="${cmd#live-canary-scheduled-status }"
+        if [[ "${scheduled_run_id}" =~ ^[0-9]{14}$ ]]; then
+            exec sudo -n /usr/local/sbin/auto-invest-live-canary scheduled-status \
+                "${scheduled_run_id}"
+        fi
+        echo "refused command: ${cmd}" >&2
+        exit 126
         ;;
     live-canary-fills\ *)
         read -r action start_date end_date extra <<<"${cmd}"

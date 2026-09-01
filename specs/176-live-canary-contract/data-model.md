@@ -91,15 +91,32 @@ OPERATIONAL_CANARY
 
 ## LiveOrderSessionClaim
 
-같은 뉴욕 거래일의 복수 GitHub 예약을 실제 주문 한 번으로 축약하는 production 서버 장부다.
+같은 뉴욕 거래일의 GitHub 예약과 server timer를 실제 주문 한 번으로 축약하는 production 서버 장부다.
 
-- 입력 예약: 뉴욕 현지 10:17~13:53 사이 최대 12분 간격, 하루 최대 19개 실행 기회
+- 입력 예약: 뉴욕 현지 10:17~13:53의 GitHub 후보와 10:35 이후 root systemd fallback 후보
 - `market_session`: XNYS가 실제로 열린 서버 현재 시각의 뉴욕 현지 날짜
-- `run_id`, `code_commit`, `claimed_at_utc`: 최초 선점 실행의 신원과 시각
+- `run_id`, `source`, `code_commit`, `claimed_at_utc`: 최초 선점 실행의 신원·출처와 시각
+- `source`: `github_schedule` 또는 `server_timer`만 허용
 - 저장: production 비밀 경계 안의 추가 전용 파일, 파일 잠금 아래 원자 확인·추가
 - 최초 실행: `LIVE_ORDER_SESSION_CLAIMED` 뒤 기존 `rebalance-once` 호출
 - 중복 실행: `LIVE_ORDER_SESSION_ALREADY_CLAIMED`와 최초 run ID를 반환하고 브로커 호출 0건
 - 장외·휴장: 선점하지 않고 종료 코드 75, 다음 정상 예약 기회를 소모하지 않음
+
+## ScheduledLiveCanaryEvidence
+
+GitHub와 독립된 server timer 최초 실행이 남기는 정화된 추가 전용 증거다.
+
+- `schema_version`, `run_id`, `source=server_timer`, `market_session`
+- `started_at_utc`, `finished_at_utc`, `code_commit`, `capital_usd`
+- `entry_state`, `entry_allowed`, `claim_status`
+- `order_exit`, `orders_submitted`, `fills_exit`, `measurement_exit`, `reconciliation_exit`
+- `result`: 거래일 선점을 얻은 실행에 대해 `completed` 또는 `partial` 중 하나. 선점 전 차단과
+  중복은 journal에만 남기고 최신 성공·부분 실행 포인터를 덮어쓰지 않음
+- 저장: `/var/lib/auto-invest-live-order/scheduled-runs/<run_id>/summary.json`
+- 최신 포인터: root 소유 고정 파일에 run ID만 원자 교체하며 임의 경로나 심볼릭 링크를 따르지 않음
+- 관측: SSH forced-command의 고정 `live-canary-scheduled-status [14자리 run_id]`만 최신 또는
+  지정 요약을 읽음
+- 금지: 비밀값, 환경 전체, 임의 로그 경로, 임의 파일 읽기, 주문 명령 노출
 
 ## DeployAuditObservation
 
