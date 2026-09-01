@@ -95,8 +95,8 @@
 - [x] T031 전체 `uv run pytest`를 통과한다.
 - [x] T032 `uv run python scripts/agent_harness_probe.py --strict`와 `uv run python scripts/check_handoff_facts.py`를 통과한다.
 - [x] T033 PR 본문을 `.github/pull_request_template.md`에 맞춰 작성하고 `scripts/check_pr_quality_gate.py`를 통과한다.
-- [ ] T034 Spec 177 작업 상태와 실제 자료 부족·실거래 무변경 사실을 `HANDOFF.md`에 갱신한다.
-- [ ] T035 커밋·푸시·PR 검사·merge commit·off-hours exact-main 배포 상태를 확인한다.
+- [x] T034 Spec 177 작업 상태와 실제 자료 부족·실거래 무변경 사실을 `HANDOFF.md`에 갱신한다.
+- [x] T035 커밋·푸시·PR 검사·merge commit·off-hours exact-main 배포 상태를 확인한다.
 
 ## 의존성 순서
 
