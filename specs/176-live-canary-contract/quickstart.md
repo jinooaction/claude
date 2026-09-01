@@ -4,11 +4,14 @@
 
 ```bash
 uv run pytest tests/unit/test_operational_canary_evidence.py \
+  tests/unit/test_fundability.py \
   tests/unit/test_capital_ladder.py \
   tests/unit/test_live_entry_revalidation.py
 ```
 
 운영 증거가 참이어도 `alpha_confirmed=false`, `capital_fraction=0.10`, `max_rung=1`이어야 한다.
+생산 run `33540003731` 고정 입력에서는 SCHX만 정수 주 표현 가능 목표로 분류되고 IAUM은 전체
+오차 계산에 남아야 한다. 표현 가능 목표가 0개이거나 표현 가능한 목표가 미자금이면 실패해야 한다.
 
 ## 2. 전체 로컬 검사
 

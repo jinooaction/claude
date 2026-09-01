@@ -63,6 +63,20 @@ OPERATIONAL_CANARY
 - KIS 계좌 정합·halt·킬스위치·정규장
 - 기존 체결이 있으면 위험 축소 주문을 막지 않는 별도 분기
 
+## WholeShareFundabilityEvidence v1.1
+
+최신 목표와 실제 주문 계획을 같은 입력으로 재계산하는 첫 자본 상향 증거다.
+
+- `active_target_count`, `funded_target_count`, `funded_target_ratio`: 모든 양의 목표의 진단 수와 비율
+- `whole_share_eligible_target_count`: 목표금액이 현재 시세 한 주 이상인 양의 목표 수
+- `funded_whole_share_target_count`: 표현 가능 목표 중 주문 뒤 1주 이상인 목표 수
+- `funded_whole_share_target_ratio`: 표현 가능 목표의 자금 배치 비율, 최소 0.66
+- `whole_share_ineligible_targets`: 목표금액이 한 주보다 작은 목표와 목표금액·시세 진단
+- `projected_quantities`, `projected_weights`: 주문 뒤 정수 수량과 자본 대비 비중
+- `l1_weight_error`, `max_leg_weight_error`: 모든 양의 목표를 포함한 25%·15% 상한
+- `checks`: 양의 시세 100%, 표현 가능 목표 1개 이상, 표현 가능 목표 66%, 오차·노출 한도
+- 이전 `1.0` 증거는 새 의미로 추론하지 않고 첫 자본 판정에서 실패 폐쇄한다.
+
 ## LiveExecutionEvidence
 
 한 예약 실행의 주문·체결·정합·감사를 연결한다.
