@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Intraday paper challenger evidence",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "gate_version",
+    "family_id",
+    "generated_at_utc",
+    "code_commit",
+    "preregistration_sha256",
+    "data_quality",
+    "candidate_registry",
+    "evaluations",
+    "selection",
+    "decision",
+    "audit",
+    "safety"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "gate_version": {"const": "intraday-paper-v1"},
+    "family_id": {"const": "intraday-etf-long-flat-diagnostic-v1"},
+    "generated_at_utc": {"type": "string"},
+    "code_commit": {"type": "string"},
+    "preregistration_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "data_quality": {
+      "type": "object",
+      "required": ["complete", "synthetic", "dataset_fingerprint", "session_count", "reasons"],
+      "properties": {
+        "complete": {"type": "boolean"},
+        "synthetic": {"type": "boolean"},
+        "dataset_fingerprint": {"type": "string"},
+        "session_count": {"type": "integer", "minimum": 0},
+        "reasons": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "candidate_registry": {
+      "type": "array",
+      "minItems": 18,
+      "maxItems": 18,
+      "items": {
+        "type": "object",
+        "required": ["candidate_id", "family", "timeframe_minutes", "variant", "parameters", "strategy_fingerprint"]
+      }
+    },
+    "evaluations": {"type": "array", "maxItems": 18},
+    "selection": {
+      "type": "object",
+      "required": ["selected_candidate_id", "development_only", "candidate_count"]
+    },
+    "decision": {
+      "type": "object",
+      "required": ["verdict", "passed", "gates", "reasons", "next_step"],
+      "properties": {
+        "verdict": {"enum": ["PAPER_CHALLENGER", "NO_INTRADAY_EDGE", "INSUFFICIENT_EVIDENCE"]},
+        "passed": {"type": "boolean"},
+        "gates": {"type": "object"},
+        "reasons": {"type": "array", "items": {"type": "string"}},
+        "next_step": {"type": "string"}
+      }
+    },
+    "audit": {
+      "type": "object",
+      "required": ["ledger_row_count", "ledger_sha256"],
+      "properties": {
+        "ledger_row_count": {"type": "integer", "minimum": 0},
+        "ledger_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    },
+    "safety": {
+      "type": "object",
+      "required": ["capital_fraction", "live_eligible", "promotion_allowed", "orders_submitted", "broker_access", "live_configuration_mutation"],
+      "properties": {
+        "capital_fraction": {"const": 0},
+        "live_eligible": {"const": false},
+        "promotion_allowed": {"const": false},
+        "orders_submitted": {"const": 0},
+        "broker_access": {"const": false},
+        "live_configuration_mutation": {"const": false}
+      }
+    }
+  }
+}

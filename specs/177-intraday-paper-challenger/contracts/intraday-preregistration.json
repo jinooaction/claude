@@ -1,0 +1,118 @@
+{
+  "schema_version": "1.0",
+  "gate_version": "intraday-paper-v1",
+  "family_id": "intraday-etf-long-flat-diagnostic-v1",
+  "purpose": "diagnostic_only",
+  "universe": ["SPY", "QQQ", "IWM", "TLT", "GLD"],
+  "base_timeframe_minutes": 5,
+  "evaluation_timeframes_minutes": [15, 30, 60],
+  "session": {
+    "calendar": "XNYS",
+    "regular_hours_only": true,
+    "overnight_positions": false,
+    "entry_on_partial_final_bar": false
+  },
+  "portfolio": {
+    "initial_capital_usd": 100000,
+    "per_symbol_cap_fraction": 0.2,
+    "global_exposure_cap_fraction": 0.8,
+    "whole_shares_only": true,
+    "shorting": false,
+    "margin": false,
+    "leverage": false
+  },
+  "cost_models": {
+    "base": {
+      "commission_bps_per_side": 25,
+      "spread_bps_per_side": 1,
+      "slippage_bps_per_side": 5,
+      "max_volume_participation": 0.01
+    },
+    "stress": {
+      "commission_bps_per_side": 25,
+      "spread_bps_per_side": 3,
+      "slippage_bps_per_side": 12,
+      "max_volume_participation": 0.0025
+    }
+  },
+  "time_split": {
+    "method": "chronological_tail_holdouts_v1",
+    "minimum_total_sessions": 756,
+    "minimum_development_sessions": 504,
+    "block_sessions": 126,
+    "confirmation_sessions": 126,
+    "development_pbo_segments": 8
+  },
+  "minimum_evidence": {
+    "required_symbols": 5,
+    "minimum_total_sessions": 756,
+    "minimum_base_cost_closed_trades": 200
+  },
+  "selection": {
+    "metric": "development_base_cost_annualized_sharpe",
+    "tie_breakers": ["lower_max_drawdown", "lower_turnover", "candidate_id"],
+    "holdouts_used_for_selection": false
+  },
+  "acceptance": {
+    "block_net_return_gt": 0,
+    "confirmation_net_return_gt": 0,
+    "confirmation_annualized_sharpe_min": 1.0,
+    "confirmation_psr_min": 0.95,
+    "selected_dsr_min": 0.95,
+    "development_pbo_max": 0.25,
+    "confirmation_max_drawdown_pct_max": 15.0,
+    "confirmation_profit_factor_min": 1.1,
+    "confirmation_positive_quarter_fraction_min": 0.5,
+    "max_single_symbol_positive_contribution_fraction": 0.5,
+    "max_top_five_trade_positive_contribution_fraction": 0.35,
+    "stress_confirmation_net_return_gt": 0
+  },
+  "family_rules": {
+    "momentum": {
+      "signal": "closed_bar_return_over_lookback_at_or_above_threshold",
+      "exit": "maximum_hold_bars_or_session_close"
+    },
+    "opening_range_breakout": {
+      "signal": "closed_bar_close_above_first_n_bar_high_plus_buffer",
+      "exit": "session_close",
+      "maximum_entries_per_symbol_session": 1
+    },
+    "vwap_mean_reversion": {
+      "signal": "closed_bar_close_below_cumulative_vwap_by_threshold",
+      "exit": "close_at_or_above_vwap_or_maximum_hold_bars_or_session_close"
+    }
+  },
+  "candidates": [
+    {"candidate_id": "intraday-momentum-15m-fast", "family": "momentum", "timeframe_minutes": 15, "variant": "fast", "parameters": {"lookback_bars": 2, "hold_bars": 2, "threshold_bps": 0}},
+    {"candidate_id": "intraday-momentum-15m-slow", "family": "momentum", "timeframe_minutes": 15, "variant": "slow", "parameters": {"lookback_bars": 4, "hold_bars": 4, "threshold_bps": 5}},
+    {"candidate_id": "intraday-momentum-30m-fast", "family": "momentum", "timeframe_minutes": 30, "variant": "fast", "parameters": {"lookback_bars": 2, "hold_bars": 2, "threshold_bps": 0}},
+    {"candidate_id": "intraday-momentum-30m-slow", "family": "momentum", "timeframe_minutes": 30, "variant": "slow", "parameters": {"lookback_bars": 4, "hold_bars": 4, "threshold_bps": 5}},
+    {"candidate_id": "intraday-momentum-60m-fast", "family": "momentum", "timeframe_minutes": 60, "variant": "fast", "parameters": {"lookback_bars": 2, "hold_bars": 2, "threshold_bps": 0}},
+    {"candidate_id": "intraday-momentum-60m-slow", "family": "momentum", "timeframe_minutes": 60, "variant": "slow", "parameters": {"lookback_bars": 4, "hold_bars": 4, "threshold_bps": 5}},
+    {"candidate_id": "intraday-orb-15m-fast", "family": "opening_range_breakout", "timeframe_minutes": 15, "variant": "fast", "parameters": {"range_bars": 1, "breakout_buffer_bps": 0}},
+    {"candidate_id": "intraday-orb-15m-slow", "family": "opening_range_breakout", "timeframe_minutes": 15, "variant": "slow", "parameters": {"range_bars": 2, "breakout_buffer_bps": 5}},
+    {"candidate_id": "intraday-orb-30m-fast", "family": "opening_range_breakout", "timeframe_minutes": 30, "variant": "fast", "parameters": {"range_bars": 1, "breakout_buffer_bps": 0}},
+    {"candidate_id": "intraday-orb-30m-slow", "family": "opening_range_breakout", "timeframe_minutes": 30, "variant": "slow", "parameters": {"range_bars": 2, "breakout_buffer_bps": 5}},
+    {"candidate_id": "intraday-orb-60m-fast", "family": "opening_range_breakout", "timeframe_minutes": 60, "variant": "fast", "parameters": {"range_bars": 1, "breakout_buffer_bps": 0}},
+    {"candidate_id": "intraday-orb-60m-slow", "family": "opening_range_breakout", "timeframe_minutes": 60, "variant": "slow", "parameters": {"range_bars": 2, "breakout_buffer_bps": 5}},
+    {"candidate_id": "intraday-vwap-15m-fast", "family": "vwap_mean_reversion", "timeframe_minutes": 15, "variant": "fast", "parameters": {"deviation_bps": 50, "hold_bars": 2}},
+    {"candidate_id": "intraday-vwap-15m-slow", "family": "vwap_mean_reversion", "timeframe_minutes": 15, "variant": "slow", "parameters": {"deviation_bps": 100, "hold_bars": 4}},
+    {"candidate_id": "intraday-vwap-30m-fast", "family": "vwap_mean_reversion", "timeframe_minutes": 30, "variant": "fast", "parameters": {"deviation_bps": 50, "hold_bars": 2}},
+    {"candidate_id": "intraday-vwap-30m-slow", "family": "vwap_mean_reversion", "timeframe_minutes": 30, "variant": "slow", "parameters": {"deviation_bps": 100, "hold_bars": 4}},
+    {"candidate_id": "intraday-vwap-60m-fast", "family": "vwap_mean_reversion", "timeframe_minutes": 60, "variant": "fast", "parameters": {"deviation_bps": 50, "hold_bars": 2}},
+    {"candidate_id": "intraday-vwap-60m-slow", "family": "vwap_mean_reversion", "timeframe_minutes": 60, "variant": "slow", "parameters": {"deviation_bps": 100, "hold_bars": 4}}
+  ],
+  "forward_observation": {
+    "required_sessions": 60,
+    "automatic_start": false,
+    "automatic_live_promotion": false
+  },
+  "safety": {
+    "capital_fraction": 0,
+    "live_eligible": false,
+    "promotion_allowed": false,
+    "orders_submitted": 0,
+    "broker_access": false,
+    "live_configuration_mutation": false
+  }
+}
