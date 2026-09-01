@@ -143,9 +143,9 @@
   `live-canary-scheduled-status` 읽기를 추가하고
   server `systemd-order`는 원격에서 계속 거부한다. 뒤늦은 GitHub 중복 run은 최초 server 실행을
   읽어 sidecar에 발행하되 broker·fills·measure·reconciliation을 다시 호출하지 않게 한다.
-- [ ] T069 [US3] 관련 시험과 `uv run pytest`·ruff·엄격 하네스·HANDOFF 사실 검사·PR 본문 품질
+- [x] T069 [US3] 관련 시험과 `uv run pytest`·ruff·엄격 하네스·HANDOFF 사실 검사·PR 본문 품질
   관문을 통과시키고, constitution 전용 커밋을 포함한 위험 등급 4 PR을 merge한다.
-- [ ] T070 [US3] 장중 배포 금지를 지켜 장 마감 뒤 exact-main 배포와 server timer 활성·다음 발화
+- [x] T070 [US3] 장중 배포 금지를 지켜 장 마감 뒤 exact-main 배포와 server timer 활성·다음 발화
   시각, KIS smoke 6/6, 주문 없는 exact-main 사전점검을 확인한다.
 - [ ] T071 [US3] 다음 거래일에 GitHub 또는 server timer 중 최초 유효 실행의 실제 주문·체결·감사·
   정합과 다른 출처의 중복 broker write 0건, 동일 최초 run/source 증거를 생산에서 확인한다.
@@ -160,9 +160,9 @@
   일치 검증하게 한다.
 - [x] T075 [US3] 관련 fundability·rebalancer·첫 진입·자본 사다리 시험을 통과시키고 기존 시세·
   오차·현금·최소 주문·화이트리스트·노출·하향 경계가 완화되지 않았는지 확인한다.
-- [ ] T076 [US3] `uv run pytest`·ruff·엄격 하네스·HANDOFF 사실 검사·PR 본문 품질 관문을 통과시키고,
+- [x] T076 [US3] `uv run pytest`·ruff·엄격 하네스·HANDOFF 사실 검사·PR 본문 품질 관문을 통과시키고,
   새 헌법 전용 커밋과 구현 커밋을 PR #724에 반영해 장 마감 뒤 merge한다.
-- [ ] T077 [US3] exact-main 배포, server timer 활성, KIS smoke 6/6과 주문 없는 exact-main 사전점검에서
+- [x] T077 [US3] exact-main 배포, server timer 활성, KIS smoke 6/6과 주문 없는 exact-main 사전점검에서
   새 정수 주 증거 계약과 `ENTRY_READY`를 확인한다.
 - [ ] T078 [US3] 다음 첫 유효 자동 실행에서 실제 주문·체결·전략 감사·계좌 정합과 다른 scheduler의
   중복 broker write 0건을 생산 증거로 확인한다.
