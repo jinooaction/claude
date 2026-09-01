@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def test_constitution_requires_calibrated_family_entry_and_exact_fundability() -> None:
     text = (ROOT / ".specify" / "memory" / "constitution.md").read_text(encoding="utf-8")
-    assert "**Version**: 12.0.0" in text
+    assert "**Version**: 13.0.0" in text
     assert "`gate_version=3.1` (`calibrated-family-entry-v3.1`)" in text
     assert "`gate_version=3.0`, legacy, and `gate_version=2.0` evidence are diagnostic-only" in text
     assert "`complete_family_trials`" in text
@@ -21,7 +21,8 @@ def test_constitution_requires_calibrated_family_entry_and_exact_fundability() -
     assert "DSR >= 0.95 and raw-candidate Bonferroni" in text
     assert "research_family_count × 0.01 <= 0.20" in text
     assert "100% positive-target quote coverage" in text
-    assert "at least 66% funded positive target legs" in text
+    assert "at least 66% funded among those whole-share-expressible targets" in text
+    assert "A below-one-share target is excluded only from the funded-leg denominator" in text
     assert "L1 capital-weight error at most 25%" in text
     assert "maximum per-leg error at most 15%" in text
     assert "1 = 10% bounded canary (research-family or operational-verification entry)" in text
