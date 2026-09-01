@@ -1,5 +1,5 @@
 {
-  "commit": "73d07485af8eed4de6154d7d3c5e7a5f428b39d0",
+  "commit": "820adfb32c9f5ff06938637d0f27d1a9d6c03cc0",
   "overall_status": "OK",
   "released_work": [
     {
@@ -681,7 +681,8 @@
     "172-strategy-acceptance-path-audit",
     "173-independent-turn-of-month-edge",
     "174-accounting-cross-sectional-factors",
-    "175-pead-program-gate"
+    "175-pead-program-gate",
+    "177-intraday-paper-challenger"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -888,11 +889,7 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "176-live-canary-contract"
-    },
-    {
-      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "177-intraday-paper-challenger"
     }
   ],
-  "timestamp_utc": "2026-09-01T23:27:17.064484Z"
+  "timestamp_utc": "2026-09-01T23:32:04.959305Z"
 }
