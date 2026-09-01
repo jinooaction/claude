@@ -215,7 +215,7 @@ def test_zero_order_minimum_notional_path_fails_funded_targets() -> None:
     )
 
     assert result.fundable is False
-    assert "funded_target_ratio" in result.reasons
+    assert "funded_whole_share_target_ratio" in result.reasons
 
 
 def test_missing_quote_and_per_trade_cap_below_one_share_fail_closed() -> None:
