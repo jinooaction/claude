@@ -6,7 +6,7 @@ name: Live canary portfolio rebalance (guarded, real money)
 #   1. 기본은 **드라이런 미리보기**(rebalance-once --dry-run, 주문 0건) — "실거래로 무엇을
 #      살지"만 보여준다. 실주문은 센티넬 automation/rebalance-live.request 의 armed: true
 #      일 때만 나간다.
-#   2. **자본 권위 가드(스펙 050)**: 자본은 자본 사다리(증거 게이트 공식, 헌법 X.4 v11.0.0)가
+#   2. **자본 권위 가드(스펙 050)**: 자본은 자본 사다리(증거 게이트 공식, 헌법 X.4 v12.0.0)가
 #      기록한 실계좌 NAV 이하여야 한다 — 위임 상한은 계좌 잔고(운영자 2026-06-11). 사다리
 #      필드가 없는 레거시/수동 센티넬은 종전 소액 가드($1,000)가 그대로 적용된다.
 #   3. `--mode live` 는 `--confirm-live` 인터록 필요(CLI 가 강제). K1 캡이 천장. 스펙 014
@@ -514,12 +514,51 @@ jobs:
           ssh_exit=$?
           echo "ssh_exit=${ssh_exit}" >> "$GITHUB_OUTPUT"
           duplicate=false
+          first_source=none
+          first_run_id=none
           if grep -q '^LIVE_ORDER_SESSION_ALREADY_CLAIMED ' /tmp/live_rebal.json; then
             duplicate=true
+            first_source="$(sed -n 's/.* first_source=\([^ ]*\).*/\1/p' /tmp/live_rebal.json | head -1)"
+            first_run_id="$(sed -n 's/.* first_run_id=\([^ ]*\).*/\1/p' /tmp/live_rebal.json | head -1)"
+            case "${first_source}" in github_schedule|server_timer|legacy) ;; *) first_source=invalid ;; esac
+            [[ "${first_run_id}" =~ ^[0-9]+$ ]] || first_run_id=invalid
           fi
           echo "duplicate=${duplicate}" >> "$GITHUB_OUTPUT"
+          echo "first_source=${first_source}" >> "$GITHUB_OUTPUT"
+          echo "first_run_id=${first_run_id}" >> "$GITHUB_OUTPUT"
           echo "--- live rebalance ---"; cat /tmp/live_rebal.json
           echo "--- stderr ---"; cat /tmp/live_rebal.err
+          exit "${ssh_exit}"
+
+      - name: Read first server-scheduled execution evidence
+        id: server_evidence
+        if: always() && steps.live.outputs.duplicate == 'true' && steps.live.outputs.first_source == 'server_timer'
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+          FIRST_RUN_ID: ${{ steps.live.outputs.first_run_id }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          ssh_exit=1
+          for attempt in 1 2 3; do
+            ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
+                -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+                "live-canary-scheduled-status ${FIRST_RUN_ID}" \
+                > /tmp/server_scheduled_status.json 2>/tmp/server_scheduled_status.err
+            ssh_exit=$?
+            if [[ "${ssh_exit}" == "0" ]]; then
+              jq -e --arg first_run_id "${FIRST_RUN_ID}" \
+                '.schema_version == "1.0" and .source == "server_timer" and .run_id == $first_run_id' \
+                /tmp/server_scheduled_status.json >/dev/null
+              ssh_exit=$?
+            fi
+            [[ "${ssh_exit}" == "0" || "${attempt}" == "3" ]] && break
+            sleep 20
+          done
+          echo "ssh_exit=${ssh_exit}" >> "$GITHUB_OUTPUT"
+          cat /tmp/server_scheduled_status.json /tmp/server_scheduled_status.err
           exit "${ssh_exit}"
 
       - name: Sync broker fills and read audit ledger
@@ -610,7 +649,7 @@ jobs:
           exit "${ssh_exit}"
 
       - name: Publish production live canary result to sidecar branch
-        if: always() && steps.live.outputs.duplicate != 'true'
+        if: always() && (steps.live.outputs.duplicate != 'true' || steps.live.outputs.first_source == 'server_timer')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ARMED: ${{ steps.gate.outputs.armed }}
@@ -621,10 +660,23 @@ jobs:
           FILLS_OUTCOME: ${{ steps.fills.outcome }}
           MEASURE_OUTCOME: ${{ steps.measure.outcome }}
           RECONCILIATION_OUTCOME: ${{ steps.reconciliation.outcome }}
+          SERVER_EVIDENCE_OUTCOME: ${{ steps.server_evidence.outcome }}
+          DUPLICATE: ${{ steps.live.outputs.duplicate }}
+          FIRST_SOURCE: ${{ steps.live.outputs.first_source }}
+          FIRST_RUN_ID: ${{ steps.live.outputs.first_run_id }}
           EVENT: ${{ github.event_name }}
         run: |
           set -o pipefail
           BRANCH=automation/rebalance-live-canary-last-run
+          if [[ "${DUPLICATE:-false}" == "true" && "${FIRST_SOURCE:-}" == "server_timer" ]]; then
+            git fetch --depth=1 origin \
+              "+refs/heads/${BRANCH}:refs/remotes/origin/${BRANCH}" >/tmp/live_sidecar_fetch.log 2>&1 || true
+            if git show "origin/${BRANCH}:LAST_RUN.md" >/tmp/previous_live_sidecar.md 2>/dev/null \
+                && grep -Fq "| 최초 server timer run_id | ${FIRST_RUN_ID} |" /tmp/previous_live_sidecar.md; then
+              echo "Server timer execution ${FIRST_RUN_ID} is already published; preserving first sidecar."
+              exit 0
+            fi
+          fi
           tmpdir=$(mktemp -d); cd "${tmpdir}"; git init -q
           git config user.name "rebalance-live-bot"
           git config user.email "rebalance-live-bot@noreply.github.com"
@@ -644,6 +696,8 @@ jobs:
             echo "| 체결 동기화 | ${FILLS_OUTCOME:-skipped} |"
             echo "| 사후 측정 | ${MEASURE_OUTCOME:-skipped} |"
             echo "| 사후 계좌 정합성 | ${RECONCILIATION_OUTCOME:-skipped} |"
+            echo "| 최초 server timer 증거 조회 | ${SERVER_EVIDENCE_OUTCOME:-skipped} |"
+            echo "| 최초 server timer run_id | ${FIRST_RUN_ID:-none} |"
             echo ""
             if [[ "${LIVE_OUTCOME:-skipped}" == "success" ]]; then
               echo "> ⚠ **무장 + production 기계 승인 + 실행** — 예약이면 실주문, 수동이면 주문 없는 검증이다."
@@ -685,6 +739,12 @@ jobs:
             echo '```json'
             cat /tmp/post_trade_reconciliation.json 2>/dev/null || echo '{}'
             cat /tmp/post_trade_reconciliation.err 2>/dev/null || true
+            echo '```'
+            echo ""
+            echo "## 최초 server timer 실행 증거 (GitHub 중복 도착 시)"
+            echo '```json'
+            cat /tmp/server_scheduled_status.json 2>/dev/null || echo '{}'
+            cat /tmp/server_scheduled_status.err 2>/dev/null || true
             echo '```'
           } > LAST_RUN.md
           git checkout --orphan publish

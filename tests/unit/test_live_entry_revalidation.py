@@ -417,6 +417,49 @@ def test_operational_route_allows_first_fill_but_never_claims_alpha() -> None:
     assert result.evidence["operational_assessment"]["max_rung"] == 1
 
 
+def test_operational_route_accepts_bounded_below_one_share_target() -> None:
+    fingerprint = "sha256:" + "a" * 64
+    fundability = assess_fundability(
+        target_weights={
+            "SCHX": Decimal("0.333334"),
+            "IAUM": Decimal("0.083333"),
+        },
+        holdings={},
+        prices={"SCHX": Decimal("30.09"), "IAUM": Decimal("43.28")},
+        order_prices={"SCHX": Decimal("30.09")},
+        planned_orders=[("SCHX", "BUY", 2)],
+        capital_usd=Decimal("142"),
+        invested_fraction=Decimal("0.99"),
+        caps=SizingCaps(
+            per_trade_pct=Decimal("50"),
+            per_symbol_pct=Decimal("60"),
+            global_exposure_pct=Decimal("100"),
+            canary_capital_pct=Decimal("10"),
+            canary_min_duration_days=14,
+            canary_acceptance_drawdown_pct=Decimal("10"),
+        ),
+    )
+    result = evaluate_live_entry(
+        None,
+        {"verdict": "PASS"},
+        {"fills_count": 0},
+        evidence_age_hours=None,
+        operational_evidence=_operational_evidence(fingerprint=fingerprint),
+        operational_evidence_age_hours=2,
+        expected_code_commit="a" * 40,
+        live_strategy_fingerprint=fingerprint,
+        validated_strategy_fingerprint=fingerprint,
+        entry_route="operational_canary",
+        fundability_evidence=fundability.as_dict(),
+        expected_capital_usd=Decimal("142"),
+        execution_proxy_parity_passed=True,
+    )
+
+    assert result.allowed is True
+    assert result.state == ENTRY_READY
+    assert result.evidence["operational_checks"]["operational_fundability"] is True
+
+
 def test_operational_first_fill_rejects_declared_canary_capital_mismatch() -> None:
     fingerprint = "sha256:" + "a" * 64
     result = evaluate_live_entry(

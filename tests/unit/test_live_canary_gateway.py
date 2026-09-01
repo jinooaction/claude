@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import os
 import subprocess
 import time
@@ -267,6 +268,7 @@ def test_market_session_allows_exactly_one_order_command(
     assert duplicate.returncode == 0, duplicate.stderr
     assert "LIVE_ORDER_SESSION_ALREADY_CLAIMED" in duplicate.stdout
     assert "first_run_id=31999999991" in duplicate.stdout
+    assert "first_source=github_schedule" in duplicate.stdout
     assert uv_log.read_text(encoding="utf-8").count("auto-invest rebalance-once") == 1
 
 
@@ -287,7 +289,9 @@ def test_closed_session_does_not_consume_daily_order_claim(
     assert isinstance(uv_log, Path)
 
     assert result.returncode == 75
-    assert "auto-invest rebalance-once" not in uv_log.read_text(encoding="utf-8")
+    assert not uv_log.exists() or "auto-invest rebalance-once" not in uv_log.read_text(
+        encoding="utf-8"
+    )
     session_file = Path(str(env["NONCE_DIR"])) / "order-sessions.tsv"
     assert not session_file.exists() or session_file.read_text(encoding="utf-8") == ""
 
@@ -316,6 +320,104 @@ def test_next_market_session_gets_a_new_single_order_command(
     assert first.returncode == 0, first.stderr
     assert second.returncode == 0, second.stderr
     assert uv_log.read_text(encoding="utf-8").count("auto-invest rebalance-once") == 2
+
+
+def test_scheduled_status_reads_only_fixed_latest_server_summary(
+    gateway_env: dict[str, object],
+) -> None:
+    env = gateway_env["env"]
+    assert isinstance(env, dict)
+    state = Path(str(env["NONCE_DIR"]))
+    run_id = "20260901143500"
+    run_dir = state / "scheduled-runs" / run_id
+    run_dir.mkdir(parents=True)
+    summary = {
+        "schema_version": "1.0",
+        "run_id": run_id,
+        "source": "server_timer",
+        "market_session": "2026-09-01",
+    }
+    (run_dir / "summary.json").write_text(json.dumps(summary), encoding="utf-8")
+    (state / "last-scheduled-run-id").write_text(f"{run_id}\n", encoding="utf-8")
+
+    result = subprocess.run(
+        ["bash", str(HELPER), "scheduled-status"],
+        text=True,
+        capture_output=True,
+        env=env,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == summary
+
+    explicit = subprocess.run(
+        ["bash", str(HELPER), "scheduled-status", run_id],
+        text=True,
+        capture_output=True,
+        env=env,
+        check=False,
+    )
+    assert explicit.returncode == 0, explicit.stderr
+    assert json.loads(explicit.stdout) == summary
+
+
+def test_scheduled_status_rejects_pointer_symlink(
+    gateway_env: dict[str, object], tmp_path: Path
+) -> None:
+    env = gateway_env["env"]
+    assert isinstance(env, dict)
+    state = Path(str(env["NONCE_DIR"]))
+    state.mkdir(parents=True)
+    target = tmp_path / "untrusted-pointer"
+    target.write_text("20260901143500\n", encoding="utf-8")
+    (state / "last-scheduled-run-id").symlink_to(target)
+
+    result = subprocess.run(
+        ["bash", str(HELPER), "scheduled-status"],
+        text=True,
+        capture_output=True,
+        env=env,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert "no server-scheduled live canary evidence" in result.stderr
+
+
+def test_direct_systemd_order_command_fails_before_claim_or_broker(
+    gateway_env: dict[str, object],
+) -> None:
+    repo = gateway_env["repo"]
+    assert isinstance(repo, Path)
+    env = gateway_env["env"]
+    assert isinstance(env, dict)
+    sha = _run("git", "rev-parse", "HEAD", cwd=repo).stdout.strip()
+
+    result = subprocess.run(
+        [
+            "bash",
+            str(HELPER),
+            "systemd-order",
+            "20260901143500",
+            sha,
+            "293",
+        ],
+        text=True,
+        capture_output=True,
+        env=env,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert "systemd" in result.stderr or "requires root" in result.stderr
+    uv_log = gateway_env["uv_log"]
+    assert isinstance(uv_log, Path)
+    assert not uv_log.exists() or "auto-invest rebalance-once" not in uv_log.read_text(
+        encoding="utf-8"
+    )
+    session_file = Path(str(env["NONCE_DIR"])) / "order-sessions.tsv"
+    assert not session_file.exists()
 
 
 def test_tampered_signature_is_rejected(
@@ -373,9 +475,18 @@ def test_gateway_exposes_signed_order_and_non_order_evidence_only() -> None:
     assert "auto-invest-live-canary verify-order" in repair
     assert "live-canary-fills)" in repair
     assert "live-canary-profit\\ *)" in repair
+    assert "live-canary-scheduled-status)" in repair
+    assert "live-canary-scheduled-status\\ *)" in repair
+    gateway = repair.split("EOF_GATEWAY", 2)[1]
+    assert "systemd-order" not in gateway
     assert "verify_signature" in helper
     assert "consume_nonce" in helper
     assert "claim_order_session" in helper
+    assert "server_timer" in helper
+    assert "scheduled-status" in helper
+    assert "server timer order is limited to ladder rung 1" in helper
+    assert "server timer order requires operational_canary entry route" in helper
+    assert "AUTOARM_DISABLED kill switch is active" in helper
     assert "python -m auto_invest.execution.live_session" in helper
     assert "--mode live" in helper
     assert "--confirm-live" in helper

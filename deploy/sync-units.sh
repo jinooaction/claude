@@ -10,10 +10,10 @@
 #
 # 안전:
 #   - 워커(auto-invest.service)를 절대 재시작/시작하지 않는다 — 유닛 파일 설치 +
-#     daemon-reload + 타이머 enable 만. 주문 라우팅과 무관하므로 장중에도 안전하다
-#     (헌법 VIII.A '장중 배포 금지'는 워커 코드 교체/재시작에 대한 것이며, 유닛 정의
-#     설치는 해당 없음). auto-invest-tune.timer 는 22:00 UTC 에만 발화하고, 튜너 자신의
-#     market_hours_guard 가 장중 적용을 0건으로 막는다(이중 방어).
+#     daemon-reload + 타이머 enable 만. live-canary timer는 돈 경로이므로 설치 직후에도
+#     exact deployed main·root systemd 신원·첫 진입 재검증·XNYS·공유 거래일 선점이 모두
+#     통과해야만 주문할 수 있다. origin/main helper가 배포 HEAD보다 앞서면 exact-main에서
+#     실패 폐쇄한다. auto-invest-tune.timer 는 22:00 UTC 에만 발화한다.
 #   - 작업트리를 건드리지 않는다: `git show origin/main:<path>` 로 최신 내용만 읽어
 #     설치하므로 배포 상태기계의 dirty-tree 검사와 충돌하지 않는다(git checkout/pull/reset 미사용).
 #   - 멱등: install 덮어쓰기 + daemon-reload + enable --now 모두 반복 안전.
@@ -29,6 +29,8 @@ UNITS=(
     auto-invest-deploy.timer
     auto-invest-tune.service
     auto-invest-tune.timer
+    auto-invest-live-canary.service
+    auto-invest-live-canary.timer
     auto-invest-telegram-alerts.service
 )
 
@@ -56,8 +58,29 @@ for u in "${UNITS[@]}"; do
     fi
 done
 
+# Independent live-canary scheduler is a root-owned fixed helper. Installing it
+# from origin/main does not authorize an ahead-of-deploy order: the helper and
+# live order boundary both require /opt/auto-invest HEAD == origin/main before
+# the shared market-session claim can be consumed.
+scheduler_tmp="${tmpdir}/live-canary-scheduled-on-instance.sh.new"
+if sudo -u auto-invest git -C "$REPO" show \
+        "${REF}:deploy/live-canary-scheduled-on-instance.sh" >"${scheduler_tmp}" 2>/dev/null; then
+    install -m 0755 -o root -g root "${scheduler_tmp}" \
+        /usr/local/sbin/auto-invest-live-canary-scheduler
+    echo "[sync-units] installed root-owned live-canary scheduler helper"
+else
+    echo "[sync-units] skip (not in ${REF}): deploy/live-canary-scheduled-on-instance.sh"
+fi
+
 systemctl daemon-reload
 echo "[sync-units] daemon-reload done (${installed} unit file(s) installed)"
+if [ -f /etc/systemd/system/auto-invest-live-canary.service ] \
+        && [ -f /etc/systemd/system/auto-invest-live-canary.timer ]; then
+    systemd-analyze verify \
+        /etc/systemd/system/auto-invest-live-canary.service \
+        /etc/systemd/system/auto-invest-live-canary.timer
+    echo "[sync-units] live-canary systemd units verified"
+fi
 
 # sudoers 동기화: 비권한 `auto-invest` 사용자가 워커 유닛만 비대화식 제어(stop/start)하게
 # 허용한다 — 배포 상태기계가 `sudo -n systemctl …` 로 워커를 교체하는 결정론적 인가 경로
@@ -86,10 +109,14 @@ fi
 if [ -f /etc/systemd/system/auto-invest-tune.timer ]; then
     systemctl enable --now auto-invest-tune.timer
 fi
+if [ -f /etc/systemd/system/auto-invest-live-canary.timer ]; then
+    systemctl enable --now auto-invest-live-canary.timer
+fi
 systemctl enable auto-invest.service || true
 # Telegram alerts are optional and require operator-provided TELEGRAM_* secrets.
 # The unit is installed above but intentionally not enabled automatically.
 
 echo "[sync-units] timers:"
-systemctl list-timers auto-invest-deploy.timer auto-invest-tune.timer --no-pager || true
+systemctl list-timers auto-invest-deploy.timer auto-invest-tune.timer \
+    auto-invest-live-canary.timer --no-pager || true
 echo "[sync-units] OK"

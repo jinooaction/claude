@@ -21,6 +21,8 @@ EXPECTED_UNITS = (
     "auto-invest-deploy.timer",
     "auto-invest-tune.service",
     "auto-invest-tune.timer",
+    "auto-invest-live-canary.service",
+    "auto-invest-live-canary.timer",
 )
 
 
@@ -50,10 +52,20 @@ def test_installs_every_deploy_unit():
     assert "install -m 0644" in body
 
 
-def test_enables_both_timers_now():
+def test_enables_all_timers_now():
     body = _body()
     assert "enable --now auto-invest-deploy.timer" in body
     assert "enable --now auto-invest-tune.timer" in body
+    assert "enable --now auto-invest-live-canary.timer" in body
+
+
+def test_installs_root_owned_live_canary_scheduler_helper():
+    body = _body()
+    assert "deploy/live-canary-scheduled-on-instance.sh" in body
+    assert "/usr/local/sbin/auto-invest-live-canary-scheduler" in body
+    assert "install -m 0755" in body
+    assert "-o root -g root" in body
+    assert "systemd-analyze verify" in body
 
 
 def test_never_restarts_or_starts_the_worker():

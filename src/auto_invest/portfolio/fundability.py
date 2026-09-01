@@ -24,6 +24,10 @@ class FundabilityAssessment:
     active_target_count: int
     funded_target_count: int
     funded_target_ratio: Decimal
+    whole_share_eligible_target_count: int
+    funded_whole_share_target_count: int
+    funded_whole_share_target_ratio: Decimal
+    whole_share_ineligible_targets: dict[str, dict[str, Decimal]]
     quote_coverage_ratio: Decimal
     invested_fraction: Decimal
     target_weights: dict[str, Decimal]
@@ -40,7 +44,7 @@ class FundabilityAssessment:
     checks: dict[str, bool]
     reasons: tuple[str, ...]
 
-    SCHEMA_VERSION = "1.0"
+    SCHEMA_VERSION = "1.1"
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -51,6 +55,21 @@ class FundabilityAssessment:
             "active_target_count": self.active_target_count,
             "funded_target_count": self.funded_target_count,
             "funded_target_ratio": str(self.funded_target_ratio),
+            "whole_share_eligible_target_count": (
+                self.whole_share_eligible_target_count
+            ),
+            "funded_whole_share_target_count": (
+                self.funded_whole_share_target_count
+            ),
+            "funded_whole_share_target_ratio": str(
+                self.funded_whole_share_target_ratio
+            ),
+            "whole_share_ineligible_targets": {
+                symbol: {
+                    key: str(value) for key, value in diagnostics.items()
+                }
+                for symbol, diagnostics in self.whole_share_ineligible_targets.items()
+            },
             "quote_coverage_ratio": str(self.quote_coverage_ratio),
             "invested_fraction": str(self.invested_fraction),
             "target_weights": {
@@ -191,6 +210,33 @@ def assess_fundability(
     projected = {symbol: projected_all.get(symbol, 0) for symbol in active}
     funded_count = sum(1 for symbol in active if projected[symbol] > 0)
     funded_ratio = Decimal(funded_count) / Decimal(len(active)) if active else Decimal("0")
+    target_notionals = {
+        symbol: capital_usd * invested_fraction * weight
+        for symbol, weight in active.items()
+    }
+    whole_share_eligible = {
+        symbol
+        for symbol in active
+        if prices.get(symbol, Decimal("0")) > 0
+        and target_notionals[symbol] >= prices[symbol]
+    }
+    whole_share_ineligible = {
+        symbol: {
+            "target_notional_usd": target_notionals[symbol],
+            "one_share_price_usd": prices[symbol],
+        }
+        for symbol in active
+        if prices.get(symbol, Decimal("0")) > 0
+        and target_notionals[symbol] < prices[symbol]
+    }
+    funded_whole_share_count = sum(
+        1 for symbol in whole_share_eligible if projected[symbol] > 0
+    )
+    funded_whole_share_ratio = (
+        Decimal(funded_whole_share_count) / Decimal(len(whole_share_eligible))
+        if whole_share_eligible
+        else Decimal("0")
+    )
     l1_error = sum(errors, Decimal("0"))
     max_error = max(errors, default=Decimal("0"))
     checks = {
@@ -203,7 +249,11 @@ def assess_fundability(
         ),
         "quote_coverage": quote_ratio == Decimal("1"),
         "exposure_quote_coverage": exposure_quotes_complete,
-        "funded_target_ratio": funded_ratio >= MIN_FUNDED_TARGET_RATIO,
+        "whole_share_eligible_targets_present": bool(whole_share_eligible),
+        "funded_whole_share_target_ratio": bool(
+            whole_share_eligible
+            and funded_whole_share_ratio >= MIN_FUNDED_TARGET_RATIO
+        ),
         "l1_weight_error": l1_error <= MAX_L1_WEIGHT_ERROR,
         "max_leg_weight_error": max_error <= MAX_LEG_WEIGHT_ERROR,
         "exposure_caps": cap_compliant,
@@ -220,6 +270,10 @@ def assess_fundability(
         active_target_count=len(active),
         funded_target_count=funded_count,
         funded_target_ratio=funded_ratio,
+        whole_share_eligible_target_count=len(whole_share_eligible),
+        funded_whole_share_target_count=funded_whole_share_count,
+        funded_whole_share_target_ratio=funded_whole_share_ratio,
+        whole_share_ineligible_targets=whole_share_ineligible,
         quote_coverage_ratio=quote_ratio,
         invested_fraction=invested_fraction,
         target_weights=dict(active),
@@ -247,7 +301,7 @@ def validate_fundability_evidence(
 ) -> bool:
     """Recheck serialized preview evidence before an upward money decision."""
 
-    if not isinstance(evidence, Mapping) or evidence.get("schema_version") != "1.0":
+    if not isinstance(evidence, Mapping) or evidence.get("schema_version") != "1.1":
         return False
     def parse_decimal(value: object) -> Decimal:
         parsed = Decimal(str(value))

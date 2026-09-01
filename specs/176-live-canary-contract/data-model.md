@@ -63,6 +63,20 @@ OPERATIONAL_CANARY
 - KIS 계좌 정합·halt·킬스위치·정규장
 - 기존 체결이 있으면 위험 축소 주문을 막지 않는 별도 분기
 
+## WholeShareFundabilityEvidence v1.1
+
+최신 목표와 실제 주문 계획을 같은 입력으로 재계산하는 첫 자본 상향 증거다.
+
+- `active_target_count`, `funded_target_count`, `funded_target_ratio`: 모든 양의 목표의 진단 수와 비율
+- `whole_share_eligible_target_count`: 목표금액이 현재 시세 한 주 이상인 양의 목표 수
+- `funded_whole_share_target_count`: 표현 가능 목표 중 주문 뒤 1주 이상인 목표 수
+- `funded_whole_share_target_ratio`: 표현 가능 목표의 자금 배치 비율, 최소 0.66
+- `whole_share_ineligible_targets`: 목표금액이 한 주보다 작은 목표와 목표금액·시세 진단
+- `projected_quantities`, `projected_weights`: 주문 뒤 정수 수량과 자본 대비 비중
+- `l1_weight_error`, `max_leg_weight_error`: 모든 양의 목표를 포함한 25%·15% 상한
+- `checks`: 양의 시세 100%, 표현 가능 목표 1개 이상, 표현 가능 목표 66%, 오차·노출 한도
+- 이전 `1.0` 증거는 새 의미로 추론하지 않고 첫 자본 판정에서 실패 폐쇄한다.
+
 ## LiveExecutionEvidence
 
 한 예약 실행의 주문·체결·정합·감사를 연결한다.
@@ -91,15 +105,32 @@ OPERATIONAL_CANARY
 
 ## LiveOrderSessionClaim
 
-같은 뉴욕 거래일의 복수 GitHub 예약을 실제 주문 한 번으로 축약하는 production 서버 장부다.
+같은 뉴욕 거래일의 GitHub 예약과 server timer를 실제 주문 한 번으로 축약하는 production 서버 장부다.
 
-- 입력 예약: 뉴욕 현지 10:17~13:53 사이 최대 12분 간격, 하루 최대 19개 실행 기회
+- 입력 예약: 뉴욕 현지 10:17~13:53의 GitHub 후보와 10:35 이후 root systemd fallback 후보
 - `market_session`: XNYS가 실제로 열린 서버 현재 시각의 뉴욕 현지 날짜
-- `run_id`, `code_commit`, `claimed_at_utc`: 최초 선점 실행의 신원과 시각
+- `run_id`, `source`, `code_commit`, `claimed_at_utc`: 최초 선점 실행의 신원·출처와 시각
+- `source`: `github_schedule` 또는 `server_timer`만 허용
 - 저장: production 비밀 경계 안의 추가 전용 파일, 파일 잠금 아래 원자 확인·추가
 - 최초 실행: `LIVE_ORDER_SESSION_CLAIMED` 뒤 기존 `rebalance-once` 호출
 - 중복 실행: `LIVE_ORDER_SESSION_ALREADY_CLAIMED`와 최초 run ID를 반환하고 브로커 호출 0건
 - 장외·휴장: 선점하지 않고 종료 코드 75, 다음 정상 예약 기회를 소모하지 않음
+
+## ScheduledLiveCanaryEvidence
+
+GitHub와 독립된 server timer 최초 실행이 남기는 정화된 추가 전용 증거다.
+
+- `schema_version`, `run_id`, `source=server_timer`, `market_session`
+- `started_at_utc`, `finished_at_utc`, `code_commit`, `capital_usd`
+- `entry_state`, `entry_allowed`, `claim_status`
+- `order_exit`, `orders_submitted`, `fills_exit`, `measurement_exit`, `reconciliation_exit`
+- `result`: 거래일 선점을 얻은 실행에 대해 `completed` 또는 `partial` 중 하나. 선점 전 차단과
+  중복은 journal에만 남기고 최신 성공·부분 실행 포인터를 덮어쓰지 않음
+- 저장: `/var/lib/auto-invest-live-order/scheduled-runs/<run_id>/summary.json`
+- 최신 포인터: root 소유 고정 파일에 run ID만 원자 교체하며 임의 경로나 심볼릭 링크를 따르지 않음
+- 관측: SSH forced-command의 고정 `live-canary-scheduled-status [14자리 run_id]`만 최신 또는
+  지정 요약을 읽음
+- 금지: 비밀값, 환경 전체, 임의 로그 경로, 임의 파일 읽기, 주문 명령 노출
 
 ## DeployAuditObservation
 

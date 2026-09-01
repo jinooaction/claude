@@ -1,0 +1,31 @@
+[Unit]
+Description=auto-invest independent live-canary fallback timer
+
+[Timer]
+# GitHub remains primary at 10:17 New York. These non-overlapping local
+# opportunities begin 18 minutes later and converge on the same one-session
+# claim. The exchange-calendar gates still reject holidays and closed sessions.
+OnCalendar=Mon..Fri *-*-* 10:35:00 America/New_York
+OnCalendar=Mon..Fri *-*-* 10:47:00 America/New_York
+OnCalendar=Mon..Fri *-*-* 10:59:00 America/New_York
+OnCalendar=Mon..Fri *-*-* 11:11:00 America/New_York
+OnCalendar=Mon..Fri *-*-* 11:23:00 America/New_York
+OnCalendar=Mon..Fri *-*-* 11:35:00 America/New_York
+OnCalendar=Mon..Fri *-*-* 11:47:00 America/New_York
+OnCalendar=Mon..Fri *-*-* 11:59:00 America/New_York
+OnCalendar=Mon..Fri *-*-* 12:11:00 America/New_York
+OnCalendar=Mon..Fri *-*-* 12:23:00 America/New_York
+OnCalendar=Mon..Fri *-*-* 12:35:00 America/New_York
+OnCalendar=Mon..Fri *-*-* 12:47:00 America/New_York
+OnCalendar=Mon..Fri *-*-* 12:59:00 America/New_York
+OnCalendar=Mon..Fri *-*-* 13:11:00 America/New_York
+OnCalendar=Mon..Fri *-*-* 13:23:00 America/New_York
+OnCalendar=Mon..Fri *-*-* 13:35:00 America/New_York
+OnCalendar=Mon..Fri *-*-* 13:47:00 America/New_York
+OnCalendar=Mon..Fri *-*-* 13:59:00 America/New_York
+Persistent=false
+AccuracySec=30s
+Unit=auto-invest-live-canary.service
+
+[Install]
+WantedBy=timers.target
