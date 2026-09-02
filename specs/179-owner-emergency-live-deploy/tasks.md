@@ -88,7 +88,7 @@
 
 - [x] T025 `uv run pytest`와 `uv run ruff check src tests` 전체 검증을 통과시킨다.
 - [x] T026 `uv run python scripts/agent_harness_probe.py --strict`와 `uv run python scripts/check_handoff_facts.py`를 통과시킨다.
-- [ ] T027 위험 등급 4, K6/K-meta, 문제 정의, 대체·실패·되돌림을 담은 PR 본문을 `scripts/check_pr_quality_gate.py`로 검증한다.
+- [x] T027 위험 등급 4, K6/K-meta, 문제 정의, 대체·실패·되돌림을 담은 PR 본문을 `scripts/check_pr_quality_gate.py`로 검증한다.
 - [ ] T028 브랜치를 push하고 PR을 만든 뒤 최신 `origin/main`, 원격 checks, mergeability를 재확인해 merge commit 방식으로 자동 머지한다.
 - [ ] T029 exact latest main으로 오너 단회 긴급 workflow를 실행하고 KIS 6/6·미체결 0·승인/시작/완료 감사·90초 건강·주문 잠금 해제를 생산에서 확인한다.
 - [ ] T030 기존 GitHub schedule 또는 서버 timer의 첫 유효 자동 실행에서 신규 주문 접수·실제 체결·전략 추가 전용 감사·동일 실행 계좌 대사를 생산에서 확인한다.
