@@ -331,8 +331,9 @@ def test_market_hours_block_writes_failed_row(repo_setup, monkeypatch):
 
 
 @pytest.mark.parametrize("preauthorized", [False, True])
+@pytest.mark.parametrize("actor", ["jinooaction", "masonoh-kidsnote"])
 def test_market_hours_valid_owner_request_emits_authorized_before_started(
-    repo_setup, monkeypatch, tmp_path, preauthorized
+    repo_setup, monkeypatch, tmp_path, preauthorized, actor
 ):
     """Spec 179: exact one-shot owner approval opens only this deploy."""
     sha_after = _push_new_commit(
@@ -356,7 +357,7 @@ def test_market_hours_valid_owner_request_emits_authorized_before_started(
                 "schema_version": "1.0",
                 "request_id": "github-run-998877",
                 "target_sha": sha_after,
-                "actor": "jinooaction",
+                "actor": actor,
                 "workflow_run_id": "998877",
                 "source": "github-actions-workflow-dispatch",
                 "reason_sha256": "d" * 64,
@@ -386,7 +387,7 @@ def test_market_hours_valid_owner_request_emits_authorized_before_started(
                 audit.DeployEmergencyAuthorizedPayload(
                     request_id="github-run-998877",
                     target_sha=sha_after,
-                    actor="jinooaction",
+                    actor=actor,
                     workflow_run_id="998877",
                     source="github-actions-workflow-dispatch",
                     reason_sha256="d" * 64,

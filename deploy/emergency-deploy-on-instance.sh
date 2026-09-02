@@ -15,6 +15,7 @@ readonly STATE_DIR=/var/lib/auto-invest-live-order
 readonly INTERLOCK_PATH=/run/auto-invest-deploy/live-order-maintenance.lock
 readonly BROKER_WRITE_LOCK_PATH=/run/auto-invest-deploy/broker-write.lock
 readonly DB_PATH=/opt/auto-invest/data/auto_invest.db
+readonly BOOTSTRAP_PARENT=/tmp/auto-invest-emergency-deploy
 readonly MAX_TTL_SEC=900
 
 die() {
@@ -98,6 +99,95 @@ append_preauthorization() {
     printf '%s\n' "${correlation_id}"
 }
 
+validate_halted_interlock_for_recovery() {
+    local prior_request_id prior_workflow_run_id prior_target_sha
+    local expected_gid file_meta authorization_count correlation_id
+    local started_count deploy_row_count
+
+    [[ -f "${INTERLOCK_PATH}" && ! -L "${INTERLOCK_PATH}" ]] \
+        || die "existing maintenance interlock is not a safe regular file"
+    expected_gid="$(getent group "${APP_GROUP}" | cut -d: -f3)"
+    [[ "${expected_gid}" =~ ^[0-9]+$ ]] || die "failed to resolve application group"
+    file_meta="$(stat -c '%u:%g:%a' "${INTERLOCK_PATH}")" \
+        || die "failed to inspect existing maintenance interlock"
+    [[ "${file_meta}" == "0:${expected_gid}:640" ]] \
+        || die "existing maintenance interlock ownership or mode is invalid"
+    jq -e '
+        type == "object" and
+        keys == ["created_at_epoch","reason","request_id","state","target_sha","workflow_run_id"] and
+        (.request_id | type == "string" and test("^github-run-[1-9][0-9]*$")) and
+        (.target_sha | type == "string" and test("^[0-9a-f]{40}$")) and
+        (.workflow_run_id | type == "string" and test("^[1-9][0-9]*$")) and
+        (.created_at_epoch | type == "number" and . > 0 and floor == .) and
+        .state == "HALTED" and
+        .reason == "deploy terminal safety not proven"
+    ' "${INTERLOCK_PATH}" >/dev/null \
+        || die "existing maintenance interlock is not a recoverable HALTED record"
+
+    prior_request_id="$(jq -r '.request_id' "${INTERLOCK_PATH}")"
+    prior_workflow_run_id="$(jq -r '.workflow_run_id' "${INTERLOCK_PATH}")"
+    prior_target_sha="$(jq -r '.target_sha' "${INTERLOCK_PATH}")"
+    [[ "${prior_request_id}" == "github-run-${prior_workflow_run_id}" ]] \
+        || die "existing maintenance interlock request identity is inconsistent"
+
+    authorization_count="$(sqlite3 -readonly "${DB_PATH}" \
+        "SELECT COUNT(*) FROM audit_log
+          WHERE event_type = 'DEPLOY_EMERGENCY_AUTHORIZED'
+            AND json_extract(payload_json, '$.request_id') = '${prior_request_id}'
+            AND json_extract(payload_json, '$.target_sha') = '${prior_target_sha}'
+            AND json_extract(payload_json, '$.workflow_run_id') = '${prior_workflow_run_id}'
+            AND json_extract(payload_json, '$.actor') IN ('jinooaction','masonoh-kidsnote');")" \
+        || die "failed to inspect prior emergency authorization"
+    [[ "${authorization_count}" == "1" ]] \
+        || die "prior emergency authorization is missing or ambiguous"
+    correlation_id="$(sqlite3 -readonly "${DB_PATH}" \
+        "SELECT correlation_id FROM audit_log
+          WHERE event_type = 'DEPLOY_EMERGENCY_AUTHORIZED'
+            AND json_extract(payload_json, '$.request_id') = '${prior_request_id}';")" \
+        || die "failed to read prior emergency correlation"
+    [[ "${correlation_id}" =~ ^[0-9a-f]{32}$ ]] \
+        || die "prior emergency correlation is invalid or ambiguous"
+    started_count="$(sqlite3 -readonly "${DB_PATH}" \
+        "SELECT COUNT(*) FROM audit_log
+          WHERE correlation_id = '${correlation_id}'
+            AND event_type = 'DEPLOY_STARTED';")" \
+        || die "failed to inspect prior deploy start"
+    deploy_row_count="$(sqlite3 -readonly "${DB_PATH}" \
+        "SELECT COUNT(*) FROM audit_log
+          WHERE correlation_id = '${correlation_id}'
+            AND event_type LIKE 'DEPLOY_%';")" \
+        || die "failed to inspect prior deploy chain"
+    [[ "${started_count}" == "0" && "${deploy_row_count}" == "1" ]] \
+        || die "prior emergency reached or ambiguously crossed DEPLOY_STARTED"
+    echo "RECOVERING_PRESTART_HALTED request_id=${prior_request_id} target=${prior_target_sha}"
+}
+
+prepare_exact_target_runner() {
+    local target_sha="$1" remote_url remote_head checkout_head
+
+    remote_url="$(sudo -u "${APP_USER}" git -C "${REPO}" config --get remote.origin.url)" \
+        || die "failed to resolve production remote"
+    [[ -n "${remote_url}" ]] || die "production remote is empty"
+    install -d -m 1777 -o root -g root "${BOOTSTRAP_PARENT}"
+    bootstrap_repo="$(sudo -u "${APP_USER}" mktemp -d "${BOOTSTRAP_PARENT}/repo.XXXXXX")" \
+        || die "failed to create emergency bootstrap checkout"
+    [[ "${bootstrap_repo}" == "${BOOTSTRAP_PARENT}/repo."* ]] \
+        || die "unsafe emergency bootstrap path"
+    sudo -u "${APP_USER}" git clone --quiet --no-checkout \
+        "${remote_url}" "${bootstrap_repo}" \
+        || die "failed to clone exact emergency target"
+    sudo -u "${APP_USER}" git -C "${bootstrap_repo}" fetch origin main --quiet \
+        || die "failed to fetch exact emergency target"
+    remote_head="$(sudo -u "${APP_USER}" git -C "${bootstrap_repo}" rev-parse origin/main)"
+    [[ "${remote_head}" == "${target_sha}" ]] \
+        || die "bootstrap origin/main changed from the authorized target"
+    sudo -u "${APP_USER}" git -C "${bootstrap_repo}" checkout --quiet --detach \
+        "${target_sha}" || die "failed to checkout exact emergency target"
+    checkout_head="$(sudo -u "${APP_USER}" git -C "${bootstrap_repo}" rev-parse HEAD)"
+    [[ "${checkout_head}" == "${target_sha}" ]] \
+        || die "emergency bootstrap checkout is not the authorized target"
+}
+
 main() {
     require_root
     validate_args "$@"
@@ -105,7 +195,7 @@ main() {
     local issued_at="$4" expires_at="$5" reason_sha256="$6"
     local now main_sha request_id tmp="" smoke_tmp="" start_exit terminal_event
     local authorization_correlation_id="" safe_terminal=0 interlock_created=0
-    local request_installed=0
+    local request_installed=0 bootstrap_repo="" auto_invest_home=""
     local timer_was_active=0
 
     now="$(date +%s)"
@@ -131,6 +221,10 @@ main() {
         fi
         [[ -z "${tmp}" ]] || rm -f "${tmp}"
         [[ -z "${smoke_tmp}" ]] || rm -f "${smoke_tmp}"
+        if [[ -n "${bootstrap_repo}" \
+            && "${bootstrap_repo}" == "${BOOTSTRAP_PARENT}/repo."* ]]; then
+            rm -rf -- "${bootstrap_repo}"
+        fi
         if [[ "${interlock_created}" -eq 0 ]]; then
             return
         elif [[ "${safe_terminal}" -eq 1 ]]; then
@@ -146,14 +240,21 @@ main() {
     trap cleanup EXIT
 
     [[ ! -e "${REQUEST_PATH}" ]] || die "emergency request path is already occupied"
-    [[ ! -e "${INTERLOCK_PATH}" ]] || die "deploy maintenance interlock already exists"
-    install -m 0640 -o root -g "${APP_GROUP}" /dev/null "${INTERLOCK_PATH}"
-    interlock_created=1
+    [[ -f "${DB_PATH}" && ! -L "${DB_PATH}" ]] \
+        || die "missing or unsafe audit database"
     [[ -f "${BROKER_WRITE_LOCK_PATH}" && ! -L "${BROKER_WRITE_LOCK_PATH}" ]] \
         || die "missing or unsafe broker-write coordination lock"
-    exec 9<>"${INTERLOCK_PATH}"
+    if [[ -e "${INTERLOCK_PATH}" ]]; then
+        exec 9<>"${INTERLOCK_PATH}"
+        flock -n -x 9 || die "existing maintenance interlock is still owned"
+        validate_halted_interlock_for_recovery
+    else
+        install -m 0640 -o root -g "${APP_GROUP}" /dev/null "${INTERLOCK_PATH}"
+        exec 9<>"${INTERLOCK_PATH}"
+        flock -n -x 9 || die "another emergency deploy owns the maintenance interlock"
+    fi
+    interlock_created=1
     exec 8<>"${BROKER_WRITE_LOCK_PATH}"
-    flock -n -x 9 || die "another emergency deploy owns the maintenance interlock"
     flock -w 30 -x 8 || die "live broker write did not quiesce within 30 seconds"
 
     printf '{"request_id":"%s","target_sha":"%s","workflow_run_id":"%s","created_at_epoch":%s,"state":"QUIESCED"}\n' \
@@ -210,8 +311,22 @@ main() {
     grep -Eq 'open_unfilled[=:][[:space:]]*0([^0-9]|$)' "${smoke_tmp}" \
         || die "KIS smoke did not prove open_unfilled=0"
 
+    prepare_exact_target_runner "${target_sha}"
+    auto_invest_home="$(getent passwd "${APP_USER}" | cut -d: -f6)"
+    [[ -n "${auto_invest_home}" ]] || die "failed to resolve application home"
     set +e
-    systemctl start auto-invest-deploy.service
+    sudo -u "${APP_USER}" env \
+        "PATH=${PATH}" \
+        "HOME=${auto_invest_home}" \
+        "UV_CACHE_DIR=${auto_invest_home}/.cache/uv" \
+        /usr/local/bin/uv run --project "${bootstrap_repo}" auto-invest deploy \
+        --branch main \
+        --repo "${REPO}" \
+        --db "${DB_PATH}" \
+        --config "${REPO}/config/rules.toml" \
+        --env-path "${REPO}/.env" \
+        --supervisor systemd \
+        --health-window-s 90
     start_exit=$?
     set -e
     terminal_event="$(terminal_event_for_request "${request_id}" || true)"

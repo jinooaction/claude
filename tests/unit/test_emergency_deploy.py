@@ -42,20 +42,23 @@ def _write(path: Path, payload: dict[str, object]) -> None:
     path.chmod(0o600)
 
 
-def test_valid_exact_short_lived_root_equivalent_request(tmp_path: Path) -> None:
+@pytest.mark.parametrize("actor", ["jinooaction", "masonoh-kidsnote"])
+def test_valid_exact_short_lived_root_equivalent_request(
+    tmp_path: Path, actor: str
+) -> None:
     path = tmp_path / "request.json"
-    _write(path, _payload())
+    _write(path, _payload(actor=actor))
 
     request = validate_emergency_request(
         path,
         target_sha=TARGET,
         now_epoch=NOW,
         expected_uid=os.getuid(),
-        expected_actor="jinooaction",
     )
 
     assert request.request_id == "github-run-123456"
     assert request.target_sha == TARGET
+    assert request.actor == actor
     assert request.expires_at_epoch - request.issued_at_epoch == 600
 
 
@@ -87,7 +90,7 @@ def test_invalid_request_fails_closed(
             target_sha=TARGET,
             now_epoch=NOW,
             expected_uid=os.getuid(),
-            expected_actor="jinooaction",
+            allowed_actors=frozenset({"jinooaction"}),
         )
 
 

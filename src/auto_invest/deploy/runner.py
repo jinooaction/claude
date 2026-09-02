@@ -26,7 +26,7 @@ from typing import Literal
 
 from auto_invest.deploy import guards, steps
 from auto_invest.deploy.emergency import (
-    DEFAULT_EXPECTED_ACTOR,
+    DEFAULT_ALLOWED_ACTORS,
     DEFAULT_REQUEST_PATH,
     EmergencyDeployRequest,
     EmergencyRequestError,
@@ -58,7 +58,7 @@ class RunnerConfig:
     worker_stop_timeout_s: int = 10
     emergency_request_path: Path = DEFAULT_REQUEST_PATH
     emergency_request_owner_uid: int = 0
-    emergency_expected_actor: str = DEFAULT_EXPECTED_ACTOR
+    emergency_allowed_actors: frozenset[str] = DEFAULT_ALLOWED_ACTORS
 
 
 @dataclass(frozen=True)
@@ -155,7 +155,7 @@ class DeployRunner:
                     cfg.emergency_request_path,
                     target_sha=sha_after_target,
                     expected_uid=cfg.emergency_request_owner_uid,
-                    expected_actor=cfg.emergency_expected_actor,
+                    allowed_actors=cfg.emergency_allowed_actors,
                 )
                 conn = dbmod.get_connection(cfg.db_path)
                 try:

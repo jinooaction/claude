@@ -29,7 +29,11 @@ def test_root_helper_is_fixed_one_shot_and_preserves_failed_interlock() -> None:
     assert "systemctl stop auto-invest-live-canary.service" in body
     assert "systemctl stop auto-invest.service" in body
     assert "systemctl start auto-invest-live-canary.timer" in body
-    assert "systemctl start auto-invest-deploy.service" in body
+    assert "prepare_exact_target_runner" in body
+    assert '/usr/local/bin/uv run --project "${bootstrap_repo}" auto-invest deploy' in body
+    assert '--repo "${REPO}"' in body
+    assert '--db "${DB_PATH}"' in body
+    assert '--health-window-s 90' in body
     assert "install -m 0640 -o root -g" in body
     assert "DEPLOY_EMERGENCY_HALTED" in body
     assert "rm -f" in body
@@ -46,8 +50,20 @@ def test_root_helper_is_fixed_one_shot_and_preserves_failed_interlock() -> None:
         '"${KIS_SMOKE_HELPER}"'
     )
     assert body.index('"${KIS_SMOKE_HELPER}"') < body.index(
-        "systemctl start auto-invest-deploy.service"
+        'prepare_exact_target_runner "${target_sha}"'
     )
+
+
+def test_prestart_halted_recovery_is_closed_and_audit_bound() -> None:
+    body = HELPER.read_text(encoding="utf-8")
+    assert "validate_halted_interlock_for_recovery" in body
+    assert 'state == "HALTED"' in body
+    assert 'reason == "deploy terminal safety not proven"' in body
+    assert 'event_type = \'DEPLOY_EMERGENCY_AUTHORIZED\'' in body
+    assert 'event_type = \'DEPLOY_STARTED\'' in body
+    assert '"${started_count}" == "0"' in body
+    assert '"${deploy_row_count}" == "1"' in body
+    assert "existing maintenance interlock is still owned" in body
 
 
 def test_forced_gateway_exposes_only_validated_emergency_deploy() -> None:

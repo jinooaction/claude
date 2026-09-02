@@ -38,6 +38,12 @@
 
 ## 결정 7: 첫 배포 부트스트랩은 기존 고정 경계 안에서 한다
 
-- **Decision**: merge 후 기존 push 배포가 `sync-units`와 배포 서비스의 사전 helper 갱신을 수행한 뒤 정상 장중 차단되는 것을 이용한다. 그 다음 오너가 새 workflow 입력으로 고정 `emergency-deploy` 명령을 호출한다.
-- **Rationale**: 현재 서버가 아직 새 gateway를 모르는 순환 의존성을 임의 SSH로 깨지 않고, 이미 허용된 고정 `start-deploy`가 새 helper를 설치하게 한다.
-- **Alternatives considered**: 임의 원격 shell, 장 마감 대기, 수동 root 설치. 경계 우회 또는 사용자 요구 미충족이라 기각했다.
+- **Decision**: merge 후 기존 push 배포가 `sync-units`로 root helper를 갱신한다. helper는 정확한 승인 target을 격리 checkout하고 그 target의 기존 배포 상태기계를 응용 프로그램 사용자로 실행하되, 상태기계가 조작하는 저장소·DB·설정·환경·systemd 감독자·건강 창은 기존 고정 production 값만 사용한다.
+- **Rationale**: run `33671389870`은 helper와 KIS smoke는 새 코드였지만 `auto-invest-deploy.service`가 아직 설치된 구버전 Python 배포 실행기를 호출해 `DEPLOY_STARTED` 전에 멈췄다. 새 계약을 이해해야 새 계약을 배포할 수 있는 순환 의존을 exact-target 실행으로 끊되, 실제 pull·sync·migrate·restart·rollback·감사는 기존 상태기계에 남긴다.
+- **Alternatives considered**: production repo를 helper가 직접 checkout/reset하거나 임의 shell을 실행하는 방식은 기존 롤백·감사 경계를 우회한다. 구버전 서비스 재호출은 실제 장애를 반복한다.
+
+## 결정 8: 시작 전 HALTED만 새 단회 요청이 엄격히 인계한다
+
+- **Decision**: 이전 interlock이 root 소유 정규 파일이고 닫힌 HALTED 스키마이며 배타 잠금을 얻을 수 있고, 장부상 이전 request에 유일한 승인 1건과 시작 0건이 있을 때만 다음 정확한 등록 오너 요청이 같은 잠금을 인계한다.
+- **Rationale**: 시작 전 부트스트랩 실패는 production 변경이 없으므로 새 검증된 시도가 복구할 수 있다. 반대로 `DEPLOY_STARTED` 뒤의 상태는 pull·migration·worker 변경 가능성이 있어 자동 인계하면 안 된다.
+- **Alternatives considered**: 잠금 파일을 무조건 삭제하는 복구는 실행 중 배포와 주문을 겹치게 할 수 있고, 시간 만료만으로 푸는 방식은 장부의 실제 변경 상태를 증명하지 못한다.
