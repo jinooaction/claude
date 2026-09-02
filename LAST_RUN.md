@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-09-02T16:22:49.664079Z)
+# 완료 후보 소비 장부 (as of 2026-09-02T18:28:03.192588Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -132,6 +132,7 @@
 | 160-forward-paper-ledger-integrity | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 166-family-complete-v3-fundability | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 176-live-canary-contract | 체크박스 작업이 없거나 완료되지 않았습니다. |
+| 179-owner-emergency-live-deploy | 체크박스 작업이 없거나 완료되지 않았습니다. |
 
 ## 안전 경계
 
@@ -148,7 +149,7 @@
 
 ```json
 {
-  "commit": "8e0d4ffe13b4fc97cc259e3a8d781697d929a44d",
+  "commit": "8a1bafc4ffac883d0d9a6a14f7b9d3dee38ee2a3",
   "overall_status": "OK",
   "released_work": [
     {
@@ -1039,8 +1040,12 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "176-live-canary-contract"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "179-owner-emergency-live-deploy"
     }
   ],
-  "timestamp_utc": "2026-09-02T16:22:49.664079Z"
+  "timestamp_utc": "2026-09-02T18:28:03.192588Z"
 }
 ```
