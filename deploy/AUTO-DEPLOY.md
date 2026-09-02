@@ -91,8 +91,10 @@ spec 006 배포 상태기계 (안전 단계 전부 통과해야 워커 교체)
 - `reason`: 12~500자의 사유. 서버 감사에는 원문 대신 SHA-256 요약만 남는다.
 
 승인은 10분 뒤 만료되고 최대 허용 수명은 15분이며 한 번만 소비된다. 일반
-`start-deploy`가 장중 차단된 사실을 먼저 확인한 뒤, 고정 SSH 명령
-`emergency-deploy`만 호출한다. 서버의 root helper는 current main을 다시 확인하고
+`start-deploy`가 장중 차단됐거나 이미 정상 완료된 뒤에도 고정 SSH 명령
+`emergency-deploy`를 호출한다. 서버의 root helper가 current main과 stale 잠금 유무를
+직접 판정하므로, 정상 배포가 끝나고 stale 상태도 없으면 아무 변경 없이 종료한다. 실제
+긴급 배포가 필요한 경우 root helper는 current main을 다시 확인하고
 `DEPLOY_EMERGENCY_AUTHORIZED` 감사를 먼저 남기고
 `/run/auto-invest-deploy/live-order-maintenance.lock`을 만든다. 모든 실제 KIS 쓰기는
 `/run/auto-invest-deploy/broker-write.lock`의 공유 잠금을 잡고, 긴급 배포는 같은 파일의
@@ -108,6 +110,14 @@ spec 006 배포 상태기계 (안전 단계 전부 통과해야 워커 교체)
 증명하지 못하면 요청 파일은 폐기하지만 잠금은 `HALTED`로 유지하므로 자동 주문이
 재개되지 않는다. 이 경로는 수동 주문, 시장가 주문, 가격 추격, 자본 증액, 전략 승격,
 허용 종목 변경 또는 위험 관문 우회를 승인하지 않는다.
+
+이전 긴급 시도가 확인된 `DEPLOY_ROLLED_BACK` 뒤 shell 정리만 실패했고, 그 뒤 정상
+배포가 이미 정확한 최신 main을 90초 건강 검사와 함께 완료했다면 코드와 서비스를 다시
+바꾸지 않는 cleanup-only 복구를 사용한다. 이전 파일·rollback 체인, rollback 기준부터
+현재 main까지의 Git 계보, 현재 main의 유일한 정상 live 배포 완료, 그 사이 worker 시작,
+현재 worker/timer 활성, 두 배타 잠금, KIS `open_unfilled=0`을 모두 확인한다. 새
+`DEPLOY_EMERGENCY_AUTHORIZED`와 `DEPLOY_EMERGENCY_RECOVERY_COMPLETED`가 기록된 뒤에만
+이전 요청과 유지보수 잠금을 제거한다. 한 증거라도 없으면 이전 잠금과 요청을 그대로 둔다.
 
 ## (B) 안전망 타이머 — `auto-invest-deploy.timer` (이미 설치됨)
 

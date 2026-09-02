@@ -43,11 +43,11 @@ def test_deploy_audit_workflow_publishes_sidecar() -> None:
     assert "correlation_id" in body
 
 
-def test_deploy_audit_fails_unless_terminal_completed() -> None:
+def test_deploy_audit_accepts_only_completed_deploy_or_verified_recovery() -> None:
     body = _body()
 
-    assert 'AUDIT_TERMINAL:-}" != "DEPLOY_COMPLETED"' in body
-    assert "latest deploy audit terminal event" in body
+    assert "DEPLOY_COMPLETED|DEPLOY_EMERGENCY_RECOVERY_COMPLETED" in body
+    assert "not a completed deploy or verified emergency recovery" in body
 
 
 def test_deploy_audit_validates_optional_correlation_id_before_ssh() -> None:

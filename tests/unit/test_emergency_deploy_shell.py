@@ -48,10 +48,10 @@ def test_root_helper_is_fixed_one_shot_and_preserves_failed_interlock() -> None:
     assert body.index("INSERT INTO audit_log") < body.index(
         "systemctl stop auto-invest.service"
     )
-    assert body.index("systemctl stop auto-invest.service") < body.index(
+    assert body.index("systemctl stop auto-invest.service") < body.rindex(
         '"${KIS_SMOKE_HELPER}"'
     )
-    assert body.index('"${KIS_SMOKE_HELPER}"') < body.index(
+    assert body.rindex('"${KIS_SMOKE_HELPER}"') < body.index(
         'prepare_exact_target_runner "${target_sha}"'
     )
 
@@ -80,10 +80,42 @@ def test_terminal_rollback_orphan_recovery_is_closed_and_audit_bound() -> None:
     assert '"${unexpected_count}" == "0"' in body
     assert '"${terminal_event}" == "DEPLOY_ROLLED_BACK"' in body
     assert '"${production_head}" == "${rollback_sha_before}"' in body
+    assert '"${production_head}" == "${authorized_target_sha}"' in body
+    assert 'rollback_recovery_mode="completed-deploy"' in body
+    assert "merge-base --is-ancestor" in body
+    assert '"${deploy_started_count}" == "1"' in body
+    assert '"${deploy_completed_count}" == "1"' in body
+    assert '"${deploy_failed_count}" == "0"' in body
+    assert '"${deploy_rolled_back_count}" == "0"' in body
+    assert '"${deploy_terminal_event}" == "DEPLOY_COMPLETED"' in body
+    assert "worker_started_count" in body
+    assert "systemctl is-active --quiet auto-invest.service" in body
+    assert "systemctl is-active --quiet auto-invest-live-canary.timer" in body
+    assert "append_recovery_completed" in body
+    assert "DEPLOY_EMERGENCY_RECOVERY_COMPLETED" in body
+    assert "DEPLOY_EMERGENCY_INTERLOCK_PRESERVED" in body
     assert body.index("validate_terminal_rollback_orphan") < body.index(
         'rm -f "${REQUEST_PATH}"'
     )
-    assert body.count("cleanup\n        trap - EXIT") == 2
+    assert body.count("cleanup\n        trap - EXIT") == 3
+
+
+def test_exact_deployed_target_without_stale_state_is_no_mutation_noop() -> None:
+    body = HELPER.read_text(encoding="utf-8")
+    marker = "DEPLOY_EMERGENCY_NOT_NEEDED"
+    assert marker in body
+    assert body.index(marker) < body.index("install -d -m 0700")
+    assert body.index(marker) < body.index(
+        'authorization_correlation_id="$(append_preauthorization'
+    )
+
+
+def test_owner_workflow_always_delegates_stale_state_decision_to_root_helper() -> None:
+    body = WORKFLOW.read_text(encoding="utf-8")
+    assert "Normal deploy already completed; emergency exception was not consumed." not in body
+    assert 'if [[ "${START_EXIT}" != "0" ]]' in body
+    assert "emergency-deploy ${GITHUB_SHA}" in body
+    assert "DEPLOY_EMERGENCY_NOT_NEEDED" in body
 
 
 def test_terminal_rollback_request_filter_executes_in_object_scope() -> None:

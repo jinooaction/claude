@@ -33,15 +33,15 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `d60aefd0` — Merge pull request #736 from jinooaction/Codex/179-emergency-env-rollback |
-| main 테스트 | #736 exact 기능 트리에서 `uv run pytest` → 3329 passed, 7 skipped, 실패 0. |
-| main 린트 | #736 exact 기능 트리에서 `uv run ruff check src tests` → All checks passed. |
-| 열린 PR | rollback orphan 요청 시각 필터 보정 브랜치 `codex/179-orphan-jq-fix` — jq 객체 범위를 고정하고 실제 payload 필터 회귀시험을 검증 중. |
+| 마지막 main 커밋 | `d43c55b0` — Merge pull request #737 from jinooaction/Codex/179-orphan-jq-fix |
+| main 테스트 | #737 exact 기능 트리에서 `uv run pytest` → 3330 passed, 7 skipped, 실패 0. |
+| main 린트 | #737 exact 기능 트리에서 `uv run ruff check src tests` → All checks passed. |
+| 열린 PR | 없음. 격리 브랜치 `Codex/179-postrollback-deploy-recovery`에서 헌법 15.3.0과 후속 정상 배포 증거 기반의 오래된 잠금 회수를 검증 중. |
 | 출시 완료 스펙 | 최신 기능: #728(스펙 178, 읽기 전용 Flutter 운영자 상태 계약과 앱 설계), #726(스펙 177, 자본 0의 비용 현실형 장중 페이퍼 연구 엔진), #724(스펙 176, 독립 서버 예약과 정수주 표현 가능 목표 기준의 자금성 계약), #722(스펙 176, 거래소별 5xx 뒤 제한된 시세 탐색과 전 후보 장애 보존), #721(스펙 176, 고정 읽기 전용 배포 감사 명령), #719(스펙 176, 10:17~13:53 최대 12분 간격 19개 예약 기회), #717(스펙 176, 거래일 1회 주문 선점·최초 실행 증거 보존), #716(스펙 176, 시작 시점과 각 중개사 쓰기 직전 XNYS 정규장 실패 폐쇄·부분 실행 증거 보존), #715(스펙 176, 선언한 NAV 10%와 실제 주문 자본 일치), #714(스펙 176, 정확한 main 사전점검 인계), #712(스펙 176, 뉴욕 현지 비정각 실거래 예약), #709(스펙 176, 역할 분리 운영 증거와 NAV 10% 실거래 검증 캐너리), #706(스펙 175, 21가족 교정·PEAD 진단), #701(스펙 174, 회계 기반 횡단면 팩터), #699(스펙 173, 판정 경로 교정·월말월초 전략). |
 | 골격 스펙 | 스펙 178은 코드·계약·시뮬레이터와 실제 iPhone 설치·실행까지 완료됐다. 물리 화면 픽셀 캡처와 터치 탐색은 남았다. 스펙 177은 756세션 실제 5분봉 자료가 없어 `INSUFFICIENT_EVIDENCE`이며, 스펙 176은 실제 KIS 자동 주문·체결·감사·정합과 중복 주문 0건 확인이 남았다. |
 | 최근 출시 작업 | 기존 HTML을 유지하면서 형식 `1.0`, `read_only: true`인 `status.json`을 Pages에 발행했다. 별도 비공개 `jinooaction/auto_invest_mobile` Flutter 앱은 홈·자동화·설명 3개 탭, 30시간 신선도, 오프라인 마지막 성공 캐시와 실패 폐쇄 표시를 제공한다. |
-| 활성 작업 | #736 merge `d60aefd0`은 헌법 15.2.0과 terminal rollback orphan 복구를 main에 넣었다. run `33676023848`은 요청 시각 jq 범위 오류로 생산 변경·KIS·신규 감사 전에 실패 폐쇄됐다. 객체 범위 고정과 실제 payload 실행 시험을 진행 중이다. |
-| 안전 경계 | main과 작업 브랜치는 헌법 15.2.0이다. exact 등록 오너, main SHA, 파일·감사·rollback baseline이 모두 일치할 때만 orphan을 복구하며 수동 주문·자본 증액·전략 승격·허용목록·위험 관문 우회는 계속 금지된다. |
+| 활성 작업 | #737 merge `d43c55b0`은 jq 객체 범위 결함을 고쳤고 exact-main 정상 배포·KIS smoke 6/6까지 완료했다. 생산에는 run `33673819722`의 확인된 rollback 요청·QUIESCED 잠금이 남아 있어, 헌법 15.3.0의 후속 정상 배포 완료 증거 기반 cleanup-only 회수를 검증 중이다. |
+| 안전 경계 | main은 헌법 15.2.0, 작업 브랜치는 15.3.0이다. exact 등록 오너, current-main, 이전 rollback 체인, 후속 정상 live 배포·Git 계보·worker/timer·미체결 0건이 모두 일치할 때만 오래된 파일을 제거하며 수동 주문·서비스 수동 시작·자본 증액·전략 승격·허용목록·위험 관문 우회는 계속 금지된다. |
 
 ## 현재 진행 — 2026-09-03 KST (스펙 179 오너 단회 장중 긴급 배포)
 
@@ -91,15 +91,31 @@ jq 식이 객체 범위를 잃고 숫자 안에서 `issued_at_epoch`를 다시 �
 보정은 요청 객체를 `$request`로 고정하며, 유효 시각과 역전 시각 payload를 실제 jq 필터에
 통과시켜 정적 문자열 시험이 놓친 범위 오류를 재발 방지한다.
 
+PR #737 merge `d43c55b0` 뒤 정상 장외 배포 run `33677601810`과 읽기 전용 배포 감사
+run `33677693365`가 성공했고, 상관관계 `8281a7bdbd8726643eb1c00e64853a4c`는
+`DEPLOY_STARTED` → `DEPLOY_KERNEL_TOUCHED` → `DEPLOY_COMPLETED`의 건강한 live 배포를
+증명한다. exact-main KIS smoke `33677696074`도 6/6, 현금 `$934.27`, NAV `$1436.31`,
+미체결 0건을 확인했다. 다만 생산 HEAD가 이미 `d43c55b0`으로 전진해, 헌법 15.2.0의
+"rollback 기준과 현재 HEAD가 문자 그대로 같아야 함" 조건으로는 확인된 오래된 파일을
+회수할 수 없다.
+
+작업 브랜치의 헌법 15.3.0은 이전 rollback 파일·장부 불변식을 유지하면서, 생산 HEAD가
+정확한 current-main이고 rollback 기준의 Git 후손이며 그 대상의 후속 정상 live 배포 완료,
+배포 구간 worker 시작, 현재 worker/timer active, 두 배타 잠금, KIS 미체결 0건이 모두
+증명될 때만 `DEPLOY_EMERGENCY_AUTHORIZED`와 `DEPLOY_EMERGENCY_RECOVERY_COMPLETED`를
+추가한 뒤 오래된 요청·잠금만 제거한다. 이 cleanup-only 경로는 코드·서비스·worker·주문을
+변경하지 않는다. 증거가 하나라도 없으면 기존 파일을 그대로 보존한다.
+
 - **변하지 않은 것**: 수동 주문은 금지다. 실제 주문은 기존 GitHub schedule 또는 서버 timer만
   가능하고, `globalfixed-ensemble-3-6-9-12`, NAV 10%, 단 1, 지정가, 허용목록, 손실·노출 한도,
   킬스위치, 거래일 1회 선점, 추가 전용 감사, 계좌 대사를 그대로 통과해야 한다.
 - **검증**: main #735는 `uv run pytest` 3325 passed/7 skipped와 린트를 통과했다.
   rollback orphan 보정은 전체 `3329 passed, 7 skipped`, 린트·하네스·인계·PR 관문을 통과해
   #736으로 merge됐다. jq 범위 보정은 실제 payload 실행 시험을 포함해 다시 검증한다.
-- **현재 관문**: jq 범위 보정의 전체 시험·하네스·인계·PR 품질 관문을 통과시켜 merge·배포한다.
-  다음 정규장 exact-main 긴급 복구에서 terminal rollback orphan 인계, KIS 6/6·미체결 0,
-  승인/시작/완료 감사·90초 건강·잠금 해제를 확인한다. 완료 판정은 그 뒤 정상 자동
+- **현재 관문**: 헌법 15.3.0 cleanup-only 복구의 전체 시험·하네스·인계·PR 품질 관문을
+  통과시켜 merge·exact-main 정상 배포한 뒤 새 등록 오너 단회 요청으로 생산의 이전
+  rollback orphan 회수, KIS 6/6·미체결 0, 승인/복구완료 감사·timer 활성·주문 없는
+  사전점검을 확인한다. 완료 판정은 그 뒤 정상 자동
   예약의 실제 주문·체결·전략 감사·같은 실행 계좌 대사와 다른 예약 출처의 중복
   중개사 쓰기 0건까지 확인한 후에만 한다.
 
