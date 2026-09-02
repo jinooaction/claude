@@ -82,8 +82,9 @@
 - [x] T029 등급 2 관문인 `uv run python scripts/agent_harness_probe.py --strict`와 `uv run python scripts/check_handoff_facts.py`를 통과한다
 - [x] T030 Flutter `dart format`, `flutter analyze`, `flutter test`를 순차 통과한다
 - [ ] T031 Flutter iOS 릴리스 빌드·서명·연결된 실제 iPhone 설치·실행을 확인한다
-- [ ] T032 두 저장소의 변경을 커밋·푸시하고 auto-invest PR 본문 품질 관문을 검사한 뒤 조건 충족 시 merge 방식으로 자동 머지한다
-- [ ] T033 `HANDOFF.md`에 JSON 발행·앱 저장소·검증·남은 위험을 기록하고 사실 검사와 후속 PR/머지를 닫는다
+  - 릴리스 빌드·서명·시뮬레이터는 통과했다. 실제 iPhone은 무료 개발자 프로필의 기존 앱 3개 제한으로 설치가 막혀 사용자 선택을 기다린다.
+- [x] T032 두 저장소의 변경을 커밋·푸시하고 auto-invest PR 본문 품질 관문을 검사한 뒤 조건 충족 시 merge 방식으로 자동 머지한다
+- [x] T033 `HANDOFF.md`에 JSON 발행·앱 저장소·검증·남은 위험을 기록하고 사실 검사와 후속 PR/머지를 닫는다
 
 ## 의존성과 실행 순서
 
