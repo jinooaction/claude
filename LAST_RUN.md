@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-09-02T13:24:32.055533Z)
+# 완료 후보 소비 장부 (as of 2026-09-02T14:34:40.648675Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -9,7 +9,7 @@
 |------|-----|
 | overall_status | OK |
 | released_count | 61 |
-| scanned_specs | 119 |
+| scanned_specs | 120 |
 
 ## 완료 후보
 
@@ -132,7 +132,6 @@
 | 160-forward-paper-ledger-integrity | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 166-family-complete-v3-fundability | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 176-live-canary-contract | 체크박스 작업이 없거나 완료되지 않았습니다. |
-| 178-flutter-operator-mobile | 체크박스 작업이 없거나 완료되지 않았습니다. |
 
 ## 안전 경계
 
@@ -149,7 +148,7 @@
 
 ```json
 {
-  "commit": "cee9d343bd1fd2d0b2c78938da15cb1e311a5f5a",
+  "commit": "c5f61df04f3819bb803e0152702ce87cc05a44dd",
   "overall_status": "OK",
   "released_work": [
     {
@@ -832,7 +831,8 @@
     "173-independent-turn-of-month-edge",
     "174-accounting-cross-sectional-factors",
     "175-pead-program-gate",
-    "177-intraday-paper-challenger"
+    "177-intraday-paper-challenger",
+    "178-flutter-operator-mobile"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -1039,12 +1039,8 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "176-live-canary-contract"
-    },
-    {
-      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "178-flutter-operator-mobile"
     }
   ],
-  "timestamp_utc": "2026-09-02T13:24:32.055533Z"
+  "timestamp_utc": "2026-09-02T14:34:40.648675Z"
 }
 ```
