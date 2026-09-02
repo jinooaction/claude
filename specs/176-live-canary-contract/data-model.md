@@ -120,8 +120,9 @@ OPERATIONAL_CANARY
 
 GitHub와 독립된 server timer 최초 실행이 남기는 정화된 추가 전용 증거다.
 
-- `schema_version`, `run_id`, `source=server_timer`, `market_session`
-- `started_at_utc`, `finished_at_utc`, `code_commit`, `capital_usd`
+- `schema_version=1.1`, `run_id`, `source=server_timer`, `market_session`
+- `started_at_utc`, `finished_at_utc`, `code_commit`(현재 main),
+  `deployed_code_commit`(실제 실행 HEAD), `operational_equivalent=true`, `capital_usd`
 - `entry_state`, `entry_allowed`, `claim_status`
 - `order_exit`, `orders_submitted`, `fills_exit`, `measurement_exit`, `reconciliation_exit`
 - `result`: 거래일 선점을 얻은 실행에 대해 `completed` 또는 `partial` 중 하나. 선점 전 차단과
@@ -131,6 +132,19 @@ GitHub와 독립된 server timer 최초 실행이 남기는 정화된 추가 전
 - 관측: SSH forced-command의 고정 `live-canary-scheduled-status [14자리 run_id]`만 최신 또는
   지정 요약을 읽음
 - 금지: 비밀값, 환경 전체, 임의 로그 경로, 임의 파일 읽기, 주문 명령 노출
+
+## OperationalRevision
+
+server fallback이 공유 거래일 선점 전에 두 번 확인하는 실행 코드 정합 판정이다.
+
+- `main_commit`: 검사 시점 `origin/main`의 40자리 SHA이며 첫 진입 증거와 내부 주문 요청의 기준
+- `deployed_code_commit`: production 작업 트리 `HEAD`의 40자리 SHA이며 배포 감사의 기준
+- `deployed_is_main_ancestor`: 배포 커밋이 현재 main의 조상인지 여부
+- `changed_paths`: 두 커밋 사이의 모든 변경 경로
+- `allowed_non_runtime_paths`: `*.md`, `specs/**`, `.verify/**`, `.trigger/**` 고정 목록
+- `operational_equivalent`: 두 SHA가 같거나 조상 관계와 모든 경로 허용이 함께 참일 때만 참
+- 실패: fetch, commit 조회, merge-base, diff, 경로 분류, 현재 main 재확인 중 하나라도 실패하면 거짓
+- 감사 연결: `DEPLOY_COMPLETED`는 `deployed_code_commit`에 있어야 하며 현재 main으로 대신하지 않음
 
 ## DeployAuditObservation
 
