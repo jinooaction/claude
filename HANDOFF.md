@@ -33,15 +33,15 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `edd1d1c6` — Merge pull request #735 from jinooaction/codex/179-emergency-bootstrap |
-| main 테스트 | #735 exact 기능 트리에서 `uv run pytest` → 3325 passed, 7 skipped, 실패 0. |
-| main 린트 | #735 exact 기능 트리에서 `uv run ruff check src tests` → All checks passed. |
-| 열린 PR | 긴급 배포 rollback orphan 보정 브랜치 `codex/179-emergency-env-rollback` — 고정 env_path 로딩과 확인된 롤백 뒤 정리 복구를 구현·검증 중. |
+| 마지막 main 커밋 | `d60aefd0` — Merge pull request #736 from jinooaction/Codex/179-emergency-env-rollback |
+| main 테스트 | #736 exact 기능 트리에서 `uv run pytest` → 3329 passed, 7 skipped, 실패 0. |
+| main 린트 | #736 exact 기능 트리에서 `uv run ruff check src tests` → All checks passed. |
+| 열린 PR | rollback orphan 요청 시각 필터 보정 브랜치 `codex/179-orphan-jq-fix` — jq 객체 범위를 고정하고 실제 payload 필터 회귀시험을 검증 중. |
 | 출시 완료 스펙 | 최신 기능: #728(스펙 178, 읽기 전용 Flutter 운영자 상태 계약과 앱 설계), #726(스펙 177, 자본 0의 비용 현실형 장중 페이퍼 연구 엔진), #724(스펙 176, 독립 서버 예약과 정수주 표현 가능 목표 기준의 자금성 계약), #722(스펙 176, 거래소별 5xx 뒤 제한된 시세 탐색과 전 후보 장애 보존), #721(스펙 176, 고정 읽기 전용 배포 감사 명령), #719(스펙 176, 10:17~13:53 최대 12분 간격 19개 예약 기회), #717(스펙 176, 거래일 1회 주문 선점·최초 실행 증거 보존), #716(스펙 176, 시작 시점과 각 중개사 쓰기 직전 XNYS 정규장 실패 폐쇄·부분 실행 증거 보존), #715(스펙 176, 선언한 NAV 10%와 실제 주문 자본 일치), #714(스펙 176, 정확한 main 사전점검 인계), #712(스펙 176, 뉴욕 현지 비정각 실거래 예약), #709(스펙 176, 역할 분리 운영 증거와 NAV 10% 실거래 검증 캐너리), #706(스펙 175, 21가족 교정·PEAD 진단), #701(스펙 174, 회계 기반 횡단면 팩터), #699(스펙 173, 판정 경로 교정·월말월초 전략). |
 | 골격 스펙 | 스펙 178은 코드·계약·시뮬레이터와 실제 iPhone 설치·실행까지 완료됐다. 물리 화면 픽셀 캡처와 터치 탐색은 남았다. 스펙 177은 756세션 실제 5분봉 자료가 없어 `INSUFFICIENT_EVIDENCE`이며, 스펙 176은 실제 KIS 자동 주문·체결·감사·정합과 중복 주문 0건 확인이 남았다. |
 | 최근 출시 작업 | 기존 HTML을 유지하면서 형식 `1.0`, `read_only: true`인 `status.json`을 Pages에 발행했다. 별도 비공개 `jinooaction/auto_invest_mobile` Flutter 앱은 홈·자동화·설명 3개 탭, 30시간 신선도, 오프라인 마지막 성공 캐시와 실패 폐쇄 표시를 제공한다. |
-| 활성 작업 | #735는 헌법 15.1.0의 exact-target bootstrap을 main에 머지했다. run `33673819722`은 KIS 6/6 뒤 배포를 시작했지만 config dry-run의 env 전달 누락으로 확인된 롤백을 완료했고, shell cleanup 범위 오류로 요청·QUIESCED 잠금이 남았다. 헌법 15.2.0의 엄격한 terminal rollback orphan 복구를 진행 중이다. |
-| 안전 경계 | main은 헌법 15.1.0이고 작업 브랜치는 15.2.0이다. exact 등록 오너, main SHA, 파일·감사·rollback baseline이 모두 일치할 때만 orphan을 복구하며 수동 주문·자본 증액·전략 승격·허용목록·위험 관문 우회는 계속 금지된다. |
+| 활성 작업 | #736 merge `d60aefd0`은 헌법 15.2.0과 terminal rollback orphan 복구를 main에 넣었다. run `33676023848`은 요청 시각 jq 범위 오류로 생산 변경·KIS·신규 감사 전에 실패 폐쇄됐다. 객체 범위 고정과 실제 payload 실행 시험을 진행 중이다. |
+| 안전 경계 | main과 작업 브랜치는 헌법 15.2.0이다. exact 등록 오너, main SHA, 파일·감사·rollback baseline이 모두 일치할 때만 orphan을 복구하며 수동 주문·자본 증액·전략 승격·허용목록·위험 관문 우회는 계속 금지된다. |
 
 ## 현재 진행 — 2026-09-03 KST (스펙 179 오너 단회 장중 긴급 배포)
 
@@ -85,14 +85,20 @@ bootstrap 프로세스에서 KIS 비밀값 없음으로 실패했다. 기존 상
 shell에서 비밀값을 펼치지 않고 기존 redacting loader에 고정 production `.env` 경로를 직접
 전달한다. 정상·롤백 반환은 지역 증거가 살아 있을 때 cleanup을 먼저 수행한다.
 
+PR #736 merge `d60aefd0` 뒤 run `33676023848`은 rollback orphan 요청의 만료 시각을 검증하는
+jq 식이 객체 범위를 잃고 숫자 안에서 `issued_at_epoch`를 다시 찾으면서 실패했다. 이 실행은
+파일·장부 검증 중 생산 변경·KIS·새 승인 감사 전에 종료됐고 기존 interlock을 그대로 보존했다.
+보정은 요청 객체를 `$request`로 고정하며, 유효 시각과 역전 시각 payload를 실제 jq 필터에
+통과시켜 정적 문자열 시험이 놓친 범위 오류를 재발 방지한다.
+
 - **변하지 않은 것**: 수동 주문은 금지다. 실제 주문은 기존 GitHub schedule 또는 서버 timer만
   가능하고, `globalfixed-ensemble-3-6-9-12`, NAV 10%, 단 1, 지정가, 허용목록, 손실·노출 한도,
   킬스위치, 거래일 1회 선점, 추가 전용 감사, 계좌 대사를 그대로 통과해야 한다.
 - **검증**: main #735는 `uv run pytest` 3325 passed/7 skipped와 린트를 통과했다.
-  rollback orphan 보정은 deploy config·helper·배포 통합 관련 43개 시험, 셸 구문,
-  린트와 `git diff --check`를 통과했고 최신 전체 시험을 다시 실행한다.
-- **현재 관문**: rollback orphan 보정의 전체 시험·하네스·인계·PR 품질 관문을 통과시켜 merge한다.
-  이어 새 exact-main 긴급 배포에서 이전 terminal rollback orphan 인계, KIS 6/6·미체결 0,
+  rollback orphan 보정은 전체 `3329 passed, 7 skipped`, 린트·하네스·인계·PR 관문을 통과해
+  #736으로 merge됐다. jq 범위 보정은 실제 payload 실행 시험을 포함해 다시 검증한다.
+- **현재 관문**: jq 범위 보정의 전체 시험·하네스·인계·PR 품질 관문을 통과시켜 merge·배포한다.
+  다음 정규장 exact-main 긴급 복구에서 terminal rollback orphan 인계, KIS 6/6·미체결 0,
   승인/시작/완료 감사·90초 건강·잠금 해제를 확인한다. 완료 판정은 그 뒤 정상 자동
   예약의 실제 주문·체결·전략 감사·같은 실행 계좌 대사와 다른 예약 출처의 중복
   중개사 쓰기 0건까지 확인한 후에만 한다.

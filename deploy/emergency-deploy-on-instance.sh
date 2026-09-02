@@ -192,6 +192,7 @@ validate_terminal_rollback_orphan() {
     ' "${INTERLOCK_PATH}" >/dev/null \
         || die "existing maintenance interlock is not a recoverable QUIESCED record"
     jq -e '
+        . as $request |
         type == "object" and
         keys == ["actor","expires_at_epoch","issued_at_epoch","reason_sha256","request_id","schema_version","source","target_sha","workflow_run_id"] and
         .schema_version == "1.0" and
@@ -201,8 +202,9 @@ validate_terminal_rollback_orphan() {
         (.actor == "jinooaction" or .actor == "masonoh-kidsnote") and
         .source == "github-actions-workflow-dispatch" and
         (.reason_sha256 | type == "string" and test("^[0-9a-f]{64}$")) and
-        (.issued_at_epoch | type == "number" and . > 0 and floor == .) and
-        (.expires_at_epoch | type == "number" and . > .issued_at_epoch and floor == .)
+        ($request.issued_at_epoch | type == "number" and . > 0 and floor == .) and
+        ($request.expires_at_epoch | type == "number" and . > 0 and floor == .) and
+        ($request.expires_at_epoch > $request.issued_at_epoch)
     ' "${REQUEST_PATH}" >/dev/null \
         || die "existing emergency request is not a recoverable closed record"
 
