@@ -1,4 +1,17 @@
 <!--
+Sync Impact Report (v15.0.0 -> 15.0.1)
+==================
+Version change: 15.0.0 -> 15.0.1 (PATCH: VIII.A clarifies that emergency authority belongs to the real system owner, not necessarily the GitHub namespace owner. The only non-namespace owner currently registered is the exact GitHub actor `masonoh-kidsnote`, frozen in the default-branch workflow source and therefore changed only through the same reviewed Git/constitution path. The actor is never accepted from workflow input, repository variable, secret, environment override, or arbitrary collaborator role. All exact-main, one-shot, expiry, reason-digest, root interlock, zero-open-order, health, rollback, audit, and trading-safety requirements remain unchanged. This repairs the production identity mismatch exposed by run 33667656920 without widening emergency authority to writers or collaborators. this changes the safety perimeter.)
+Migration impact:
+  - The trusted workflow MUST accept only `github.repository_owner` or the exact constitution-registered system-owner actor `masonoh-kidsnote`.
+  - The registered actor identity MUST be immutable workflow source on the protected default branch; it MUST NOT come from user input, variables, secrets, persistent environment, collaborator permission, or a generic role lookup.
+  - Changing or adding a registered system owner requires another dedicated constitutional safety-perimeter amendment and full grade-4 validation.
+  - Run 33667656920 remains a valid fail-closed rejection before SSH, server mutation, or broker access; it is evidence of the corrected identity defect, not a successful deploy.
+Templates requiring updates:
+  ✅ spec 179 requirements, workflow identity validation, and regression tests require synchronized correction.
+  ✅ .specify/templates/{plan,spec,tasks}-template.md inspected and unchanged; they contain no emergency actor identity.
+  ⚠ .specify/memory/kernel.toml remains unchanged; the constitution and deployment workflow are already K-meta/K6.
+
 Sync Impact Report (v14.0.0 -> 15.0.0)
 ==================
 Version change: 14.0.0 -> 15.0.0 (MAJOR: VIII.A replaces the contradictory, undefined "declared emergency hotfix" sentence with a machine-enforced owner emergency live-deploy protocol. Ordinary live deploys remain prohibited during XNYS regular hours. A mid-session deploy is permitted only for one exact main commit under a repository-owner workflow approval that expires within 15 minutes, is consumed once, records a reason digest and workflow identity, acquires a root-owned broker-write interlock, proves zero open broker orders, preserves every I-VII and IX.B-2 production gate, emits append-only emergency and ordinary deploy audit events, and releases the interlock only after the unchanged >=90-second health gate succeeds or a verified rollback completes. Missing, stale, reused, mutable, mismatched, or unclassified authorization fails closed. No reusable force flag, arbitrary SSH command, manual order, capital increase, strategy promotion, whitelist change, risk-gate bypass, or price chasing is authorised. this changes the safety perimeter.)
@@ -369,8 +382,8 @@ All calls to external services (KIS, market data vendors, Anthropic) MUST implem
 #### VIII.A — No Live Deploys During Market Hours
 
 - Ordinary code changes affecting production trading MUST NOT be deployed during US regular trading hours (XNYS regular session).
-- A repository owner MAY authorize one emergency live deploy during an open XNYS session only when ALL of the following hold:
-  1. **One exact, one-shot request.** The trusted deployment workflow binds the request to the exact current `main` commit, repository-owner actor, workflow run ID, non-empty reason digest, issued-at time, and an expiry no later than 15 minutes. The request is consumed once. A persistent environment variable, generic `--force` flag, reusable token, arbitrary SSH command, or branch name is not authorization.
+- The GitHub repository owner or the exact constitution-registered system-owner actor `masonoh-kidsnote` MAY authorize one emergency live deploy during an open XNYS session only when ALL of the following hold. Registration is fixed in the protected default-branch workflow source; writer/collaborator status alone grants no authority. Adding or changing a registered actor requires a dedicated constitutional safety-perimeter amendment and full grade-4 validation.
+  1. **One exact, one-shot request.** The trusted deployment workflow binds the request to the exact current `main` commit, the triggering actor verified as either `github.repository_owner` or the exact registered system-owner actor above, workflow run ID, non-empty reason digest, issued-at time, and an expiry no later than 15 minutes. The actor identity MUST NOT be supplied or overridden through workflow input, repository variable, secret, environment, collaborator permission, or generic role lookup. The request is consumed once. A persistent environment variable, generic `--force` flag, reusable token, arbitrary SSH command, or branch name is not authorization.
   2. **Broker writes are quiesced first.** Before any code, dependency, schema, service, or worker mutation, the authorization audit exists and a root-owned maintenance interlock blocks both authorised live schedulers and the final broker-write boundary. The previous live schedulers and worker MUST then be stopped and verified inactive. Only after that quiescence may a read-only broker smoke check pass and report zero open orders; only after that proof may code, dependencies, schema, or the replacement worker change. Existing positions are preserved; the emergency deploy MUST NOT liquidate, resize, or otherwise trade them.
   3. **No other safety gate is bypassed.** Principles I–VII, the IX.B-2 production canary gate, exact target identity, clean source, migration safety, secrets isolation, audit integrity, rollback, and post-deploy health checks remain mandatory. Emergency timing is not order authorization and does not permit a manual order, capital increase, strategy promotion, whitelist expansion, relaxed loss limit, skipped reconciliation, or price chasing.
   4. **The exception is append-only and fail-closed.** `DEPLOY_EMERGENCY_AUTHORIZED` MUST be written before `DEPLOY_STARTED` and before production mutation, with the bounded authorization identity but no secret material. Missing, stale, reused, writable-by-untrusted-users, mismatched, ambiguous, or unverifiable evidence MUST refuse the deploy through the normal audited failure path.
@@ -384,7 +397,7 @@ All calls to external services (KIS, market data vendors, Anthropic) MUST implem
 
 Operator-triggered automated deploys are explicitly permitted (and preferred over hand-typed deploys) when ALL of the following hold:
 
-1. **Market-hours guard.** The automation MUST check the US market state via `exchange_calendars` (or equivalent) and refuse to proceed during regular hours unless every machine-verifiable requirement of VIII.A's one-shot repository-owner emergency protocol passes. The ordinary guard and the emergency validator MUST be in code, not in operator memory.
+1. **Market-hours guard.** The automation MUST check the US market state via `exchange_calendars` (or equivalent) and refuse to proceed during regular hours unless every machine-verifiable requirement of VIII.A's one-shot registered-owner emergency protocol passes. The ordinary guard and the emergency validator MUST be in code, not in operator memory.
 2. **Append-only audit events.** Every deploy attempt MUST emit:
    - `DEPLOY_EMERGENCY_AUTHORIZED` before `DEPLOY_STARTED` for an VIII.A emergency, recording the exact bounded authorization identity without secrets.
    - `DEPLOY_STARTED` before any code, dependency, or schema change.
@@ -422,7 +435,7 @@ A change set MAY be merged autonomously by ANY of these paths:
 
 1. **REPEALED** (was: "Kernel-untouched required for autonomous merge"). Kernel touches no longer block merge. The deploy guard (spec 006) MUST emit an informational `DEPLOY_KERNEL_TOUCHED` audit row when a Kernel touch lands; it MUST NOT abort the deploy on this signal alone.
 2. **Hardened canary as production-deploy gate (spec 007).** Before any change set reaches the production worker, it MUST pass spec 007's hardened-canary acceptance criteria: multi-metric, ≥30 trading-day window for L2 / ≥45 for L3, synthetic-shock replay, property-based fuzz of risk math. This gate protects real money. Until spec 007 ships, the existing 10-day spec-001 canary is the operator-facing upper bound on production autonomy; merges still land freely, but a human (or future tuner) decides when a merge is deploy-eligible.
-3. **VIII.A market-hours discipline.** Mid-session deploys remain forbidden whether the change set is Kernel-touching or not, except for the exact, one-shot, repository-owner emergency protocol defined in VIII.A. Kernel touch does not weaken or expand that protocol.
+3. **VIII.A market-hours discipline.** Mid-session deploys remain forbidden whether the change set is Kernel-touching or not, except for the exact, one-shot, registered-owner emergency protocol defined in VIII.A. Kernel touch does not weaken or expand that protocol.
 4. **REPEALED** (was: "L4 escalation → human-merge"). Spec 005's L4 classification now means "extra audit + forensic callout in the PR description"; the merge path is the same as L1-L3.
 5. **Operator-instructed session merges** (autonomous-workflow policy in CLAUDE.md) are first-class. The session's reasoning trace + the PR description + the merge commit message form the forensic record. No second human in the loop is required.
 
@@ -520,4 +533,4 @@ This constitution supersedes all other practices, conventions, and ad-hoc decisi
 
 **Compliance**: every `/speckit-plan` artifact MUST include a Constitution Check section verifying the plan does not violate principles I–X. Violations require explicit, written justification and a sign-off recorded in the audit log.
 
-**Version**: 15.0.0 | **Ratified**: 2026-05-01 | **Last Amended**: 2026-09-03
+**Version**: 15.0.1 | **Ratified**: 2026-05-01 | **Last Amended**: 2026-09-03
