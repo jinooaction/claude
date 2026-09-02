@@ -601,6 +601,32 @@ def render_status_page(
 """
 
 
+def build_mobile_status_payload(
+    *,
+    sidecar_dir: Path,
+    context: RenderContext,
+) -> dict:
+    """Build the versioned, sanitized document consumed by the mobile app."""
+
+    specs = default_specs()
+    observations = _read_observations(sidecar_dir, specs)
+    liveness_report = assess_liveness(specs, observations, context.generated_at)
+    operator_report = _read_operator_status(sidecar_dir)
+    return {
+        "schema_version": "1.0",
+        "generated_at_utc": context.generated_at.isoformat().replace("+00:00", "Z"),
+        "repository": context.repository,
+        "commit": context.commit,
+        "run_url": context.run_url,
+        "source": context.source,
+        "read_only": True,
+        "liveness": liveness_report.as_dict(),
+        "operator_status": (
+            operator_report.to_dict() if operator_report is not None else None
+        ),
+    }
+
+
 def _parse_now(raw: str | None) -> datetime:
     if raw:
         parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
@@ -612,6 +638,11 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--sidecar-dir", required=True)
     parser.add_argument("--output", default="docs/status.html")
+    parser.add_argument(
+        "--json-output",
+        default=None,
+        help="Also write the versioned mobile status JSON document.",
+    )
     parser.add_argument("--repository", default="jinooaction/claude")
     parser.add_argument("--commit", default="")
     parser.add_argument("--run-url", default=None)
@@ -631,18 +662,31 @@ def main(argv: list[str] | None = None) -> int:
 
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
+    context = RenderContext(
+        repository=args.repository,
+        commit=args.commit,
+        run_url=args.run_url,
+        generated_at=_parse_now(args.now),
+        source=args.source,
+    )
     html_text = render_status_page(
         sidecar_dir=Path(args.sidecar_dir),
-        context=RenderContext(
-            repository=args.repository,
-            commit=args.commit,
-            run_url=args.run_url,
-            generated_at=_parse_now(args.now),
-            source=args.source,
-        ),
+        context=context,
     )
     output.write_text(html_text, encoding="utf-8")
     print(f"Wrote {output}")
+    if args.json_output:
+        json_output = Path(args.json_output)
+        json_output.parent.mkdir(parents=True, exist_ok=True)
+        payload = build_mobile_status_payload(
+            sidecar_dir=Path(args.sidecar_dir),
+            context=context,
+        )
+        json_output.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        print(f"Wrote {json_output}")
     return 0
 
 

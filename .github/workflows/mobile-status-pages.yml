@@ -55,13 +55,14 @@ jobs:
             fi
           done < /tmp/mobile-status-manifest.tsv
 
-      - name: Generate status.html
+      - name: Generate status.html and status.json
         run: |
           set -uo pipefail
           mkdir -p /tmp/mobile-status-site
           PYTHONPATH=src python3 scripts/generate_mobile_status.py \
             --sidecar-dir /tmp/mobile-status-sidecars \
             --output /tmp/mobile-status-site/status.html \
+            --json-output /tmp/mobile-status-site/status.json \
             --repository "${GITHUB_REPOSITORY}" \
             --commit "${GITHUB_SHA}" \
             --run-url "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
@@ -79,7 +80,7 @@ jobs:
           git config user.name "mobile-status-bot"
           git config user.email "mobile-status-bot@noreply.github.com"
           git checkout --orphan publish -q
-          git add index.html status.html .nojekyll
+          git add index.html status.html status.json .nojekyll
           git commit -q -m "mobile status ${GITHUB_RUN_ID} @ ${GITHUB_SHA:0:7}"
           git push --force \
             "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \

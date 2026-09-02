@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import html as html_module
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -49,6 +51,7 @@ def test_mobile_status_generator_renders_html(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     output = tmp_path / "status.html"
+    json_output = tmp_path / "status.json"
 
     result = subprocess.run(
         [
@@ -58,6 +61,8 @@ def test_mobile_status_generator_renders_html(tmp_path: Path) -> None:
             str(sidecars),
             "--output",
             str(output),
+            "--json-output",
+            str(json_output),
             "--repository",
             "jinooaction/claude",
             "--commit",
@@ -82,6 +87,56 @@ def test_mobile_status_generator_renders_html(tmp_path: Path) -> None:
     assert "돈 경로 정렬 확인이 필요합니다." in html
     assert "실제 돈 경로는 PREVIEW_ONLY입니다." in html
 
+    mobile_status = json.loads(json_output.read_text(encoding="utf-8"))
+    assert mobile_status["schema_version"] == "1.0"
+    assert mobile_status["generated_at_utc"] == "2026-06-18T08:00:00Z"
+    assert mobile_status["repository"] == "jinooaction/claude"
+    assert mobile_status["commit"] == "abcdef123456"
+    assert mobile_status["source"] == "automation sidecars"
+    assert mobile_status["read_only"] is True
+    assert mobile_status["liveness"]["overall"] == "CRITICAL"
+    assert mobile_status["operator_status"]["overall_status"] == "ACTION_REQUIRED"
+    assert mobile_status["operator_status"]["dashboard_sections"][0]["key"] == "money"
+
+    embedded_liveness = _embedded_json(html, "status-data")
+    embedded_operator = _embedded_json(html, "operator-status-data")
+    assert mobile_status["liveness"] == embedded_liveness
+    assert mobile_status["operator_status"] == embedded_operator
+
+    serialized = json.dumps(mobile_status, ensure_ascii=False).lower()
+    for forbidden in ("kis_app_key", "kis_app_secret", "account_number", "access_token", "ssh_key"):
+        assert forbidden not in serialized
+
+
+def test_mobile_status_json_marks_missing_operator_status_as_null(tmp_path: Path) -> None:
+    sidecars = tmp_path / "sidecars"
+    sidecars.mkdir()
+    output = tmp_path / "status.html"
+    json_output = tmp_path / "status.json"
+
+    subprocess.run(
+        [
+            sys.executable,
+            "scripts/generate_mobile_status.py",
+            "--sidecar-dir",
+            str(sidecars),
+            "--output",
+            str(output),
+            "--json-output",
+            str(json_output),
+            "--commit",
+            "abcdef123456",
+            "--now",
+            "2026-06-18T08:00:00Z",
+        ],
+        check=True,
+    )
+
+    mobile_status = json.loads(json_output.read_text(encoding="utf-8"))
+    assert mobile_status["read_only"] is True
+    assert mobile_status["operator_status"] is None
+    assert mobile_status["liveness"]["overall"] == "CRITICAL"
+
 
 def test_mobile_status_manifest_lists_sidecars() -> None:
     result = subprocess.run(
@@ -99,3 +154,12 @@ def test_mobile_status_manifest_lists_sidecars() -> None:
 
     assert "kis-smoke\tautomation/kis-smoke-last-run\tLAST_RUN.md" in result.stdout
     assert "operator-status\tautomation/operator-status-last-run\tLAST_RUN.md" in result.stdout
+
+
+def _embedded_json(document: str, element_id: str) -> dict:
+    match = re.search(
+        rf'<script type="application/json" id="{element_id}">(.*?)</script>',
+        document,
+    )
+    assert match is not None
+    return json.loads(html_module.unescape(match.group(1)))
