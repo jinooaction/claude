@@ -55,6 +55,11 @@ uv run pytest tests/unit/test_live_canary_server_scheduler.py \
   tests/unit/test_sync_units.py
 ```
 
+고정 저장소 시험에서 배포 `HEAD` 뒤 `HANDOFF.md`만 추가된 현재 main은 통과해야 한다. 같은 위치에
+`src/`, `deploy/`, `.github/workflows/`, 설정 또는 분류되지 않은 파일을 추가하거나 계보를
+분기시키면 scheduler와 내부 `systemd-order`가 모두 선점·broker write 전에 실패해야 한다.
+서버 실행 요약 1.1은 `code_commit`과 `deployed_code_commit`을 함께 표시해야 한다.
+
 배포 뒤 `systemctl list-timers auto-invest-live-canary.timer`가 active이고 다음 시각이 뉴욕 현지
 10:35 이후인지 확인한다. `live-canary-scheduled-status [14자리 run_id]`는 고정된 최신 또는 지정
 요약만 읽어야 하며,

@@ -166,6 +166,22 @@
   새 정수 주 증거 계약과 `ENTRY_READY`를 확인한다.
 - [ ] T078 [US3] 다음 첫 유효 자동 실행에서 실제 주문·체결·전략 감사·계좌 정합과 다른 scheduler의
   중복 broker write 0건을 생산 증거로 확인한다.
+- [x] T079 [US3] 2026-09-02 exact deploy 뒤 문서 전용 main 머지로 독립 timer가 결과를 내지 못한
+  원인을 spec·plan·research·data-model·quickstart·tasks와 헌법 X.4 14.0.0에 먼저 고정하고,
+  현재 main 증거와 실제 배포 감사 커밋을 분리하는 안전 경계 전용 커밋을 만든다.
+- [x] T080 [US3] 배포 커밋 뒤 `HANDOFF.md`만 추가된 main 통과, `src/`·`deploy/`·workflow·설정·
+  기타 경로와 분기 계보 실패, scheduler와 내부 `systemd-order`의 이중 검사, 선점·broker write
+  0건을 고정 저장소 실패 시험으로 먼저 작성해 의도한 이유로 실패시킨다.
+- [x] T081 [US3] server scheduler가 배포 커밋 조상 관계와 고정 비실행 경로만 운영 동등하게
+  판정하고, 현재 main으로 첫 진입을 재검증하되 실제 배포 커밋의 `DEPLOY_COMPLETED`를 요구하게
+  한다. 내부 `systemd-order`가 현재 main 경쟁을 포함해 같은 검사를 다시 수행하고 요약 1.1에
+  두 커밋과 동등성 판정을 남기게 한다.
+- [x] T082 [US3] 관련·전체 시험, ruff, 엄격 하네스, HANDOFF 사실 검사와 PR 본문 품질 관문을
+  통과시키고 위험 등급 4 PR을 연다. 미국 정규장 중에는 merge·deploy하지 않는다.
+- [ ] T083 [US3] 장 마감 뒤 PR을 merge하고 exact latest main 배포, timer active·다음 발화,
+  KIS smoke 6/6과 주문 없는 latest-main `ENTRY_READY`를 확인한다.
+- [ ] T084 [US3] 다음 첫 유효 자동 실행에서 요약 1.1의 두 커밋, 주문·체결·전략 감사·정합과
+  다른 scheduler의 동일 최초 run/source·중복 broker write 0건을 생산 증거로 확인한다.
 
 ## 의존성과 완료 계약
 
@@ -177,5 +193,8 @@
 - T071의 이중 scheduler 생산 증거가 끝나기 전에는 예약 가동성 문제를 해결됐다고 표시하지 않는다.
 - T072의 계약 고정과 헌법 전용 커밋 뒤에만 T073~T074를 구현하고, T076~T077 전에는 새 계약을
   production에 활성화하지 않는다. T078 전에는 사용자 목표를 완료로 표시하지 않는다.
+- T079의 계약 고정과 헌법 전용 커밋 뒤에만 T080~T081을 구현하고, T082~T083 전에는 새 운영
+  리비전 계약을 production에 활성화하지 않는다. T084 전에는 scheduler 가동성과 사용자 목표를
+  완료로 표시하지 않는다.
 - 시장 휴장, 0개 목표 주문, 증거 불일치, 브로커 장애이면 주문을 만들지 않고 다음 정규장 관찰을 계속한다.
 - 10% 운영 캐너리는 수익 보장이 아니며, T032의 승격 차단이 유지돼야 한다.

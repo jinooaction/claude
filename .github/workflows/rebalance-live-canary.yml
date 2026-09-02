@@ -550,7 +550,11 @@ jobs:
             ssh_exit=$?
             if [[ "${ssh_exit}" == "0" ]]; then
               jq -e --arg first_run_id "${FIRST_RUN_ID}" \
-                '.schema_version == "1.0" and .source == "server_timer" and .run_id == $first_run_id' \
+                '.schema_version == "1.1" and .source == "server_timer" and
+                 .run_id == $first_run_id and
+                 (.code_commit | test("^[0-9a-f]{40}$")) and
+                 (.deployed_code_commit | test("^[0-9a-f]{40}$")) and
+                 .operational_equivalent == true' \
                 /tmp/server_scheduled_status.json >/dev/null
               ssh_exit=$?
             fi

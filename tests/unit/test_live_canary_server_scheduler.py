@@ -67,8 +67,8 @@ def test_scheduler_fails_closed_before_shared_claim() -> None:
     main = body.split("\nmain() {", 1)[1]
 
     root_idx = main.index("require_root_systemd")
-    exact_idx = main.index("validate_exact_main")
-    deploy_idx = main.index('validate_deploy_audit "${sha}"')
+    exact_idx = main.index("validate_operational_revision")
+    deploy_idx = main.index('validate_deploy_audit "${deployed_sha}"')
     market_idx = main.index("validate_market_session")
     duplicate_idx = main.index("existing_session_claim")
     entry_idx = main.index("run_entry_revalidation")
