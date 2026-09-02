@@ -176,7 +176,7 @@
   판정하고, 현재 main으로 첫 진입을 재검증하되 실제 배포 커밋의 `DEPLOY_COMPLETED`를 요구하게
   한다. 내부 `systemd-order`가 현재 main 경쟁을 포함해 같은 검사를 다시 수행하고 요약 1.1에
   두 커밋과 동등성 판정을 남기게 한다.
-- [ ] T082 [US3] 관련·전체 시험, ruff, 엄격 하네스, HANDOFF 사실 검사와 PR 본문 품질 관문을
+- [x] T082 [US3] 관련·전체 시험, ruff, 엄격 하네스, HANDOFF 사실 검사와 PR 본문 품질 관문을
   통과시키고 위험 등급 4 PR을 연다. 미국 정규장 중에는 merge·deploy하지 않는다.
 - [ ] T083 [US3] 장 마감 뒤 PR을 merge하고 exact latest main 배포, timer active·다음 발화,
   KIS smoke 6/6과 주문 없는 latest-main `ENTRY_READY`를 확인한다.
