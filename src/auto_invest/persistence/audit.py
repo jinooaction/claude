@@ -44,6 +44,7 @@ EventType = Literal[
     "LLM_CALL",
     "PRICE_TABLE_LOADED",
     "DEPLOY_BLOCKED_KERNEL_TOUCH",
+    "DEPLOY_EMERGENCY_AUTHORIZED",
     "DEPLOY_STARTED",
     "DEPLOY_COMPLETED",
     "DEPLOY_FAILED",
@@ -276,6 +277,7 @@ DeployPhase = Literal[
     "precondition_dirty_tree",
     "precondition_secrets",
     "market_hours_guard",
+    "emergency_authorization",
     "pull",
     "kernel_check",
     "sync",
@@ -289,6 +291,20 @@ DeployPhase = Literal[
 ]
 
 
+class DeployEmergencyAuthorizedPayload(AuditPayload):
+    """Constitution VIII.A: exact, short-lived, one-shot owner approval."""
+
+    event_type: Literal["DEPLOY_EMERGENCY_AUTHORIZED"] = "DEPLOY_EMERGENCY_AUTHORIZED"
+    request_id: str
+    target_sha: str
+    actor: str
+    workflow_run_id: str
+    source: Literal["github-actions-workflow-dispatch"]
+    reason_sha256: str
+    issued_at_epoch: int
+    expires_at_epoch: int
+
+
 class DeployStartedPayload(AuditPayload):
     """Per spec 006 FR-D03 — emitted before any side-effecting phase.
 
@@ -300,7 +316,7 @@ class DeployStartedPayload(AuditPayload):
     sha_before: str
     sha_after: str
     branch: str
-    triggered_by: Literal["manual", "auto-tuner"] = "manual"
+    triggered_by: Literal["manual", "auto-tuner", "operator-emergency"] = "manual"
     dry_run: bool = False
     allow_dirty: bool = False
     health_window_s: int = 90
@@ -350,7 +366,7 @@ class DeployKernelTouchedPayload(AuditPayload):
     sha_after: str
     touched_paths: list[str]
     touched_groups: list[str]
-    triggered_by: Literal["manual", "auto-tuner"] = "manual"
+    triggered_by: Literal["manual", "auto-tuner", "operator-emergency"] = "manual"
 
 
 class BacktestStartedPayload(AuditPayload):
@@ -932,6 +948,7 @@ AnyPayload = (
     | LlmCallPayload
     | PriceTableLoadedPayload
     | DeployBlockedKernelTouchPayload
+    | DeployEmergencyAuthorizedPayload
     | DeployStartedPayload
     | DeployCompletedPayload
     | DeployFailedPayload

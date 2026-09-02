@@ -9,6 +9,7 @@ is satisfied via monkeypatched env vars.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import time
 from datetime import UTC, datetime, timedelta
@@ -327,6 +328,144 @@ def test_market_hours_block_writes_failed_row(repo_setup, monkeypatch):
     assert len(deploy_rows) == 1
     assert deploy_rows[0]["event_type"] == "DEPLOY_FAILED"
     assert deploy_rows[0]["payload"]["phase"] == "market_hours_guard"
+
+
+@pytest.mark.parametrize("preauthorized", [False, True])
+def test_market_hours_valid_owner_request_emits_authorized_before_started(
+    repo_setup, monkeypatch, tmp_path, preauthorized
+):
+    """Spec 179: exact one-shot owner approval opens only this deploy."""
+    sha_after = _push_new_commit(
+        repo_setup["sibling"], {"src/emergency.py": "fixed = True\n"}, "emergency"
+    )
+    monkeypatch.setattr(
+        "auto_invest.deploy.guards.market_hours_guard",
+        lambda now=None: __import__(
+            "auto_invest.deploy.guards", fromlist=["MarketHoursDecision"]
+        ).MarketHoursDecision(
+            is_open=True,
+            next_close_utc="2026-09-02T20:00:00Z",
+            next_open_utc=None,
+        ),
+    )
+    now = int(time.time())
+    request_path = tmp_path / "emergency-request.json"
+    request_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0",
+                "request_id": "github-run-998877",
+                "target_sha": sha_after,
+                "actor": "jinooaction",
+                "workflow_run_id": "998877",
+                "source": "github-actions-workflow-dispatch",
+                "reason_sha256": "d" * 64,
+                "issued_at_epoch": now - 5,
+                "expires_at_epoch": now + 595,
+            }
+        ),
+        encoding="utf-8",
+    )
+    request_path.chmod(0o600)
+    cfg = RunnerConfig(
+        repo=repo_setup["repo"],
+        db_path=repo_setup["db_path"],
+        branch="main",
+        dry_run=True,
+        pid_path=repo_setup["db_path"].parent / "lock.pid",
+        emergency_request_path=request_path,
+        emergency_request_owner_uid=os.getuid(),
+    )
+    expected_correlation = None
+    if preauthorized:
+        expected_correlation = "9" * 32
+        conn = dbmod.get_connection(repo_setup["db_path"])
+        try:
+            audit.append(
+                conn,
+                audit.DeployEmergencyAuthorizedPayload(
+                    request_id="github-run-998877",
+                    target_sha=sha_after,
+                    actor="jinooaction",
+                    workflow_run_id="998877",
+                    source="github-actions-workflow-dispatch",
+                    reason_sha256="d" * 64,
+                    issued_at_epoch=now - 5,
+                    expires_at_epoch=now + 595,
+                ),
+                correlation_id=expected_correlation,
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    result = DeployRunner(config=cfg, supervisor=DryRunSupervisor()).run()
+
+    assert result.exit_code == 0, result.detail
+    rows = _read_all(repo_setup["db_path"])
+    deploy_rows = [row for row in rows if row["event_type"].startswith("DEPLOY_")]
+    assert [row["event_type"] for row in deploy_rows[:2]] == [
+        "DEPLOY_EMERGENCY_AUTHORIZED",
+        "DEPLOY_STARTED",
+    ]
+    assert len({row["correlation_id"] for row in deploy_rows}) == 1
+    assert deploy_rows[0]["payload"]["target_sha"] == sha_after
+    if expected_correlation is not None:
+        assert result.correlation_id == expected_correlation
+
+
+def test_market_hours_mismatched_emergency_request_fails_before_pull(
+    repo_setup, monkeypatch, tmp_path
+):
+    _push_new_commit(repo_setup["sibling"], {"src/nope.py": "x = 1\n"}, "target")
+    monkeypatch.setattr(
+        "auto_invest.deploy.guards.market_hours_guard",
+        lambda now=None: __import__(
+            "auto_invest.deploy.guards", fromlist=["MarketHoursDecision"]
+        ).MarketHoursDecision(
+            is_open=True,
+            next_close_utc="2026-09-02T20:00:00Z",
+            next_open_utc=None,
+        ),
+    )
+    now = int(time.time())
+    request_path = tmp_path / "emergency-request.json"
+    request_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0",
+                "request_id": "github-run-112233",
+                "target_sha": "f" * 40,
+                "actor": "jinooaction",
+                "workflow_run_id": "112233",
+                "source": "github-actions-workflow-dispatch",
+                "reason_sha256": "e" * 64,
+                "issued_at_epoch": now - 5,
+                "expires_at_epoch": now + 595,
+            }
+        ),
+        encoding="utf-8",
+    )
+    request_path.chmod(0o600)
+    cfg = RunnerConfig(
+        repo=repo_setup["repo"],
+        db_path=repo_setup["db_path"],
+        branch="main",
+        pid_path=repo_setup["db_path"].parent / "lock.pid",
+        emergency_request_path=request_path,
+        emergency_request_owner_uid=os.getuid(),
+    )
+
+    result = DeployRunner(config=cfg, supervisor=DryRunSupervisor()).run()
+
+    assert result.exit_code == 2
+    assert result.phase_terminal == "emergency_authorization"
+    assert subprocess.run(
+        ["git", "-C", str(repo_setup["repo"]), "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip() == repo_setup["sha_a"]
 
 
 def test_health_check_timeout_triggers_rollback(repo_setup, monkeypatch):

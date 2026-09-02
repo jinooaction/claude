@@ -33,6 +33,7 @@ OBSERVE_HELPER_PATH="${OBSERVE_HELPER_PATH:-/usr/local/sbin/auto-invest-observe}
 LIVE_CANARY_HELPER_PATH="${LIVE_CANARY_HELPER_PATH:-/usr/local/sbin/auto-invest-live-canary}"
 RECONCILIATION_RECOVERY_HELPER_PATH="${RECONCILIATION_RECOVERY_HELPER_PATH:-/usr/local/sbin/auto-invest-reconciliation-recovery}"
 DEPLOY_AUDIT_HELPER_PATH="${DEPLOY_AUDIT_HELPER_PATH:-/usr/local/sbin/auto-invest-deploy-audit}"
+EMERGENCY_DEPLOY_HELPER_PATH="${EMERGENCY_DEPLOY_HELPER_PATH:-/usr/local/sbin/auto-invest-emergency-deploy}"
 LIVE_ORDER_PUBLIC_KEY_PATH="${LIVE_ORDER_PUBLIC_KEY_PATH:-/usr/local/share/auto-invest/live-order-signing-public.pem}"
 SUDOERS_PATH="${SUDOERS_PATH:-/etc/sudoers.d/auto-invest-gh-deploy}"
 REPO_SYNC_UNITS="${REPO_SYNC_UNITS:-/opt/auto-invest/deploy/sync-units.sh}"
@@ -41,7 +42,11 @@ REPO_OBSERVE_HELPER="${REPO_OBSERVE_HELPER:-/opt/auto-invest/deploy/observe-on-i
 REPO_LIVE_CANARY_HELPER="${REPO_LIVE_CANARY_HELPER:-/opt/auto-invest/deploy/live-canary-on-instance.sh}"
 REPO_RECONCILIATION_RECOVERY_HELPER="${REPO_RECONCILIATION_RECOVERY_HELPER:-/opt/auto-invest/deploy/reconciliation-recovery-on-instance.sh}"
 REPO_DEPLOY_AUDIT_HELPER="${REPO_DEPLOY_AUDIT_HELPER:-/opt/auto-invest/deploy/deploy-audit-on-instance.sh}"
+REPO_EMERGENCY_DEPLOY_HELPER="${REPO_EMERGENCY_DEPLOY_HELPER:-/opt/auto-invest/deploy/emergency-deploy-on-instance.sh}"
 REPO_LIVE_ORDER_PUBLIC_KEY="${REPO_LIVE_ORDER_PUBLIC_KEY:-/opt/auto-invest/deploy/live-order-signing-public.pem}"
+RUNTIME_BOUNDARY_DIR="${RUNTIME_BOUNDARY_DIR:-/run/auto-invest-deploy}"
+BROKER_WRITE_LOCK_PATH="${BROKER_WRITE_LOCK_PATH:-${RUNTIME_BOUNDARY_DIR}/broker-write.lock}"
+APP_GROUP="${APP_GROUP:-auto-invest}"
 
 die() {
     echo "ERROR: $*" >&2
@@ -282,6 +287,23 @@ case "${cmd}" in
     reconciliation-halt-recovery)
         exec sudo -n /usr/local/sbin/auto-invest-reconciliation-recovery
         ;;
+    emergency-deploy\ *)
+        read -r action target_sha workflow_run_id actor issued_at expires_at reason_sha256 extra <<<"${cmd}"
+        if [[ "${action:-}" == "emergency-deploy" \
+            && -z "${extra:-}" \
+            && "${target_sha:-}" =~ ^[0-9a-f]{40}$ \
+            && "${workflow_run_id:-}" =~ ^[1-9][0-9]*$ \
+            && "${actor:-}" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,37}[A-Za-z0-9])?$ \
+            && "${issued_at:-}" =~ ^[1-9][0-9]*$ \
+            && "${expires_at:-}" =~ ^[1-9][0-9]*$ \
+            && "${reason_sha256:-}" =~ ^[0-9a-f]{64}$ ]]; then
+            exec sudo -n /usr/local/sbin/auto-invest-emergency-deploy \
+                "${target_sha}" "${workflow_run_id}" "${actor}" \
+                "${issued_at}" "${expires_at}" "${reason_sha256}"
+        fi
+        echo "refused command: ${cmd}" >&2
+        exit 126
+        ;;
     start-deploy)
         exec sudo -n /usr/bin/systemctl start auto-invest-deploy.service
         ;;
@@ -348,6 +370,25 @@ install_deploy_audit_helper() {
         "${DEPLOY_AUDIT_HELPER_PATH}"
 }
 
+install_emergency_deploy_helper() {
+    install_repo_file \
+        "deploy/emergency-deploy-on-instance.sh" \
+        "${REPO_EMERGENCY_DEPLOY_HELPER}" \
+        "${EMERGENCY_DEPLOY_HELPER_PATH}"
+}
+
+install_runtime_boundaries() {
+    install -d -m 0750 -o root -g "${APP_GROUP}" "${RUNTIME_BOUNDARY_DIR}"
+    [[ ! -L "${RUNTIME_BOUNDARY_DIR}" ]] || die "unsafe runtime boundary directory"
+    if [[ ! -e "${BROKER_WRITE_LOCK_PATH}" ]]; then
+        install -m 0660 -o root -g "${APP_GROUP}" /dev/null "${BROKER_WRITE_LOCK_PATH}"
+    fi
+    [[ -f "${BROKER_WRITE_LOCK_PATH}" && ! -L "${BROKER_WRITE_LOCK_PATH}" ]] \
+        || die "unsafe broker-write coordination lock"
+    chown root:"${APP_GROUP}" "${BROKER_WRITE_LOCK_PATH}"
+    chmod 0660 "${BROKER_WRITE_LOCK_PATH}"
+}
+
 install_live_order_public_key() {
     local tmp_file
     tmp_file="$(mktemp)"
@@ -402,7 +443,7 @@ install_sudoers() {
     tmp_file="$(mktemp)"
     cat > "${tmp_file}" <<EOF_SUDOERS
 # auto-invest deploy gateway: ${DEPLOY_USER} may run only fixed root-owned commands.
-${DEPLOY_USER} ALL=(root) NOPASSWD: ${SYNC_HELPER_PATH}, ${KIS_SMOKE_HELPER_PATH}, ${OBSERVE_HELPER_PATH}, ${LIVE_CANARY_HELPER_PATH}, ${RECONCILIATION_RECOVERY_HELPER_PATH}, ${DEPLOY_AUDIT_HELPER_PATH}, /usr/bin/systemctl start auto-invest-deploy.service, /usr/bin/journalctl -u auto-invest-deploy.service -n 120 --no-pager
+${DEPLOY_USER} ALL=(root) NOPASSWD: ${SYNC_HELPER_PATH}, ${KIS_SMOKE_HELPER_PATH}, ${OBSERVE_HELPER_PATH}, ${LIVE_CANARY_HELPER_PATH}, ${RECONCILIATION_RECOVERY_HELPER_PATH}, ${DEPLOY_AUDIT_HELPER_PATH}, ${EMERGENCY_DEPLOY_HELPER_PATH} *, /usr/bin/systemctl start auto-invest-deploy.service, /usr/bin/journalctl -u auto-invest-deploy.service -n 120 --no-pager
 EOF_SUDOERS
     visudo -cf "${tmp_file}" >/dev/null
     install -m 0440 -o root -g root "${tmp_file}" "${SUDOERS_PATH}"
@@ -468,6 +509,8 @@ main() {
         install_live_canary_helper
         install_reconciliation_recovery_helper
         install_deploy_audit_helper
+        install_emergency_deploy_helper
+        install_runtime_boundaries
         install_live_order_public_key
         install_sudoers
         echo "AUTO_INVEST_SSH_BOUNDARY_HELPERS_REFRESHED"
@@ -479,6 +522,7 @@ main() {
         echo "live_canary_helper=${LIVE_CANARY_HELPER_PATH}"
         echo "reconciliation_recovery_helper=${RECONCILIATION_RECOVERY_HELPER_PATH}"
         echo "deploy_audit_helper=${DEPLOY_AUDIT_HELPER_PATH}"
+        echo "emergency_deploy_helper=${EMERGENCY_DEPLOY_HELPER_PATH}"
         echo "live_order_public_key=${LIVE_ORDER_PUBLIC_KEY_PATH}"
         exit 0
     fi
@@ -490,6 +534,8 @@ main() {
     install_live_canary_helper
     install_reconciliation_recovery_helper
     install_deploy_audit_helper
+    install_emergency_deploy_helper
+    install_runtime_boundaries
     install_live_order_public_key
     install_deploy_user
     install_authorized_key
@@ -505,6 +551,7 @@ main() {
     echo "live_canary_helper=${LIVE_CANARY_HELPER_PATH}"
     echo "reconciliation_recovery_helper=${RECONCILIATION_RECOVERY_HELPER_PATH}"
     echo "deploy_audit_helper=${DEPLOY_AUDIT_HELPER_PATH}"
+    echo "emergency_deploy_helper=${EMERGENCY_DEPLOY_HELPER_PATH}"
     echo "live_order_public_key=${LIVE_ORDER_PUBLIC_KEY_PATH}"
 }
 

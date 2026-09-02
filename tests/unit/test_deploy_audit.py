@@ -9,11 +9,29 @@ from pydantic import ValidationError
 
 from auto_invest.persistence.audit import (
     DeployCompletedPayload,
+    DeployEmergencyAuthorizedPayload,
     DeployFailedPayload,
     DeployKernelTouchedPayload,
     DeployRolledBackPayload,
     DeployStartedPayload,
 )
+
+
+def test_emergency_authorized_payload_roundtrip():
+    payload = DeployEmergencyAuthorizedPayload(
+        request_id="github-run-123",
+        target_sha="a" * 40,
+        actor="jinooaction",
+        workflow_run_id="123",
+        source="github-actions-workflow-dispatch",
+        reason_sha256="b" * 64,
+        issued_at_epoch=1_788_368_000,
+        expires_at_epoch=1_788_368_600,
+    )
+
+    parsed = json.loads(payload.model_dump_json())
+    assert parsed["event_type"] == "DEPLOY_EMERGENCY_AUTHORIZED"
+    assert parsed["target_sha"] == "a" * 40
 
 
 def test_started_payload_roundtrip():

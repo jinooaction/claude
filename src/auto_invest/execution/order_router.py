@@ -39,7 +39,12 @@ from auto_invest.config.caps import SizingCaps
 from auto_invest.config.enums import OrderType, Side, StrategyStage
 from auto_invest.config.rules import TradingRule
 from auto_invest.config.whitelist import Whitelist
-from auto_invest.execution.authority import ExecutionAuthority, ExecutionAuthorityBusy
+from auto_invest.execution.authority import (
+    ExecutionAuthority,
+    ExecutionAuthorityBusy,
+    ExecutionMaintenanceActive,
+    maintenance_interlock_refusal,
+)
 from auto_invest.execution.execution_state import (
     ExecutionState,
     evaluate_execution_state,
@@ -358,6 +363,7 @@ class OrderRouter:
     paper_session_id: int | None = None
     execution_authority: ExecutionAuthority | None = None
     authority_lock_timeout_seconds: float = 5.0
+    broker_write_lock_path: Path | None = None
     execution_state_provider: Callable[[], ExecutionState] | None = None
     live_order_guard: Callable[[], str | None] | None = None
     # Spec 017 slice 2b: inverse-vol risk-parity group membership, built by the
@@ -377,6 +383,7 @@ class OrderRouter:
             app_secret=self.app_secret,
             account_no=self.account_no,
             lock_timeout_seconds=self.authority_lock_timeout_seconds,
+            broker_write_lock_path=self.broker_write_lock_path,
         )
 
     def _group_scale(self, rule: TradingRule) -> Decimal:
@@ -997,6 +1004,42 @@ class OrderRouter:
                     reason=decision.reason,
                 )
 
+        # Constitution VIII.A / spec 179: the deploy coordinator creates a
+        # root-owned marker before production mutation. Check it after every
+        # deterministic gate and immediately before the only broker-write
+        # surface. ExecutionAuthority repeats this check to close the race.
+        if refusal := maintenance_interlock_refusal():
+            decision = GateDecision(
+                allow=False,
+                gate="deploy_maintenance_interlock",
+                reason=refusal,
+                metadata={"scope": "all_live_broker_writes"},
+            )
+            audit.append(
+                self.conn,
+                OrderRejectedByGatePayload(
+                    gate=decision.gate,
+                    reason=decision.reason,
+                    metadata=decision.metadata,
+                ),
+                rule_id=rule.id,
+                symbol=rule.symbol,
+                correlation_id=correlation_id,
+            )
+            _record_transition(
+                self.conn,
+                correlation_id,
+                "INTENT",
+                "REJECTED_BY_GATE",
+                decision.reason,
+            )
+            return OrderOutcome(
+                state="REJECTED_BY_GATE",
+                correlation_id=correlation_id,
+                gate=decision.gate,
+                reason=decision.reason,
+            )
+
         # Submit to broker. Record SUBMITTING before the network call so a crash
         # after broker acceptance but before local SUBMITTED persistence is
         # treated as stale uncertainty on the next tick.
@@ -1007,6 +1050,37 @@ class OrderRouter:
             result = await self.execution_authority.submit_broker_order(
                 request=request,
                 market=order_exchange or self.market,
+            )
+        except ExecutionMaintenanceActive as exc:
+            decision = GateDecision(
+                allow=False,
+                gate="deploy_maintenance_interlock",
+                reason=str(exc),
+                metadata={"scope": "all_live_broker_writes", "race_recheck": True},
+            )
+            audit.append(
+                self.conn,
+                OrderRejectedByGatePayload(
+                    gate=decision.gate,
+                    reason=decision.reason,
+                    metadata=decision.metadata,
+                ),
+                rule_id=rule.id,
+                symbol=rule.symbol,
+                correlation_id=correlation_id,
+            )
+            _record_transition(
+                self.conn,
+                correlation_id,
+                "SUBMITTING",
+                "REJECTED_BY_GATE",
+                decision.reason,
+            )
+            return OrderOutcome(
+                state="REJECTED_BY_GATE",
+                correlation_id=correlation_id,
+                gate=decision.gate,
+                reason=decision.reason,
             )
         except Exception as exc:  # noqa: BLE001 — translate to audit row
             diagnostics = getattr(exc, "diagnostics", None)

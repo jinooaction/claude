@@ -28,6 +28,24 @@ on:
       - '.trigger/**'
       - 'automation/**'
   workflow_dispatch:
+    inputs:
+      owner_emergency:
+        description: "현재 main 한 커밋의 단회 장중 긴급 배포"
+        required: true
+        default: false
+        type: boolean
+      expected_sha:
+        description: "긴급 배포할 정확한 40자리 main SHA"
+        required: false
+        type: string
+      confirmation:
+        description: "긴급 배포 시 OWNER_EMERGENCY_LIVE_DEPLOY 입력"
+        required: false
+        type: string
+      reason:
+        description: "긴급 배포 이유(감사에는 SHA-256만 저장)"
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -45,7 +63,50 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
+      - name: Validate one-shot repository-owner emergency request
+        id: owner_emergency
+        if: github.event_name == 'workflow_dispatch' && inputs.owner_emergency
+        env:
+          ACTOR: ${{ github.actor }}
+          OWNER: ${{ github.repository_owner }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+          REASON: ${{ inputs.reason }}
+        run: |
+          set -euo pipefail
+          [[ "${GITHUB_REF}" == "refs/heads/main" ]] || {
+            echo "Owner emergency deploy is main-only." >&2
+            exit 2
+          }
+          [[ "${ACTOR}" == "${OWNER}" ]] || {
+            echo "Only the repository owner may authorize an emergency deploy." >&2
+            exit 2
+          }
+          [[ "${EXPECTED_SHA}" =~ ^[0-9a-f]{40}$ \
+              && "${EXPECTED_SHA}" == "${GITHUB_SHA}" ]] || {
+            echo "expected_sha must exactly match the workflow main commit." >&2
+            exit 2
+          }
+          [[ "${CONFIRMATION}" == "OWNER_EMERGENCY_LIVE_DEPLOY" ]] || {
+            echo "Emergency confirmation phrase does not match." >&2
+            exit 2
+          }
+          [[ "${#REASON}" -ge 12 && "${#REASON}" -le 500 ]] || {
+            echo "Emergency reason must contain 12-500 characters." >&2
+            exit 2
+          }
+          issued_at="$(date +%s)"
+          expires_at="$((issued_at + 600))"
+          reason_sha256="$(printf '%s' "${REASON}" | sha256sum | awk '{print $1}')"
+          {
+            echo "approved=true"
+            echo "issued_at=${issued_at}"
+            echo "expires_at=${expires_at}"
+            echo "reason_sha256=${reason_sha256}"
+          } >> "${GITHUB_OUTPUT}"
+
       - name: Install SSH key
+        if: github.event_name != 'workflow_dispatch' || inputs.owner_emergency != true || steps.owner_emergency.outcome == 'success'
         env:
           KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
           KNOWN_HOSTS: ${{ secrets.VULTR_SSH_KNOWN_HOSTS }}
@@ -58,6 +119,7 @@ jobs:
 
       - name: Sync systemd units + sudoers (install/refresh + enable timers)
         id: units
+        if: github.event_name != 'workflow_dispatch' || inputs.owner_emergency != true || steps.owner_emergency.outcome == 'success'
         env:
           HOST: ${{ secrets.VULTR_SSH_HOST }}
           USER: ${{ secrets.VULTR_SSH_USER }}
@@ -79,7 +141,7 @@ jobs:
 
       - name: Deploy via SSH (trigger off-hours-guarded oneshot)
         id: deploy
-        if: always()
+        if: always() && (github.event_name != 'workflow_dispatch' || inputs.owner_emergency != true || steps.owner_emergency.outcome == 'success')
         env:
           HOST: ${{ secrets.VULTR_SSH_HOST }}
           USER: ${{ secrets.VULTR_SSH_USER }}
@@ -108,16 +170,69 @@ jobs:
           cat /tmp/deploy_journal.txt
           echo "start_exit=${start_exit}" >> "$GITHUB_OUTPUT"
 
+      - name: Execute one-shot owner emergency live deploy
+        id: emergency_deploy
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.owner_emergency && steps.owner_emergency.outputs.approved == 'true'
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+          START_EXIT: ${{ steps.deploy.outputs.start_exit }}
+          ISSUED_AT: ${{ steps.owner_emergency.outputs.issued_at }}
+          EXPIRES_AT: ${{ steps.owner_emergency.outputs.expires_at }}
+          REASON_SHA256: ${{ steps.owner_emergency.outputs.reason_sha256 }}
+        run: |
+          set +e
+          if [[ "${START_EXIT}" == "0" ]]; then
+            echo "Normal deploy already completed; emergency exception was not consumed."
+            echo "emergency_exit=0" >> "$GITHUB_OUTPUT"
+            echo "emergency_used=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if ! grep -qiE 'market is open|market_hours_guard' \
+              /tmp/deploy_journal.txt 2>/dev/null; then
+            echo "Normal deploy failed for a non-market reason; emergency path refused." >&2
+            echo "emergency_exit=2" >> "$GITHUB_OUTPUT"
+            echo "emergency_used=false" >> "$GITHUB_OUTPUT"
+            exit 2
+          fi
+          port="${PORT:-22}"
+          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts \
+              -o ConnectTimeout=15 \
+              -p "${port}" \
+              -i ~/.ssh/id_ed25519 \
+              "${USER}@${HOST}" \
+              "emergency-deploy ${GITHUB_SHA} ${GITHUB_RUN_ID} ${GITHUB_ACTOR} ${ISSUED_AT} ${EXPIRES_AT} ${REASON_SHA256}" \
+              > /tmp/emergency_deploy.txt 2>&1
+          emergency_exit=$?
+          cat /tmp/emergency_deploy.txt
+          echo "emergency_exit=${emergency_exit}" >> "$GITHUB_OUTPUT"
+          echo "emergency_used=true" >> "$GITHUB_OUTPUT"
+          exit "${emergency_exit}"
+
       - name: Summarise result
         if: always()
         env:
           START_EXIT: ${{ steps.deploy.outputs.start_exit }}
           UNITS_EXIT: ${{ steps.units.outputs.units_exit }}
+          OWNER_EMERGENCY: ${{ github.event_name == 'workflow_dispatch' && inputs.owner_emergency }}
+          EMERGENCY_EXIT: ${{ steps.emergency_deploy.outputs.emergency_exit }}
+          EMERGENCY_USED: ${{ steps.emergency_deploy.outputs.emergency_used }}
         run: |
           journal="$(cat /tmp/deploy_journal.txt 2>/dev/null || echo '(no journal captured)')"
           units_log="$(cat /tmp/units_sync.txt 2>/dev/null || echo '(no unit-sync output captured)')"
           # 장중 연기는 실패가 아니다 — market_hours_guard 거부 신호를 찾는다.
-          if grep -qiE 'market is open|market_hours_guard' /tmp/deploy_journal.txt 2>/dev/null; then
+          emergency_log="$(cat /tmp/emergency_deploy.txt 2>/dev/null || echo '(emergency path not used)')"
+          if [[ "${OWNER_EMERGENCY}" == "true" \
+              && "${EMERGENCY_USED}" == "true" \
+              && "${EMERGENCY_EXIT}" == "0" ]]; then
+              status="✅ 오너 단회 장중 긴급 배포 성공"
+              effective_exit=0
+          elif [[ "${OWNER_EMERGENCY}" == "true" \
+              && "${EMERGENCY_EXIT:-2}" != "0" ]]; then
+              status="❌ 오너 단회 장중 긴급 배포 실패 — 주문 잠금 상태를 아래 로그에서 확인"
+              effective_exit=1
+          elif grep -qiE 'market is open|market_hours_guard' /tmp/deploy_journal.txt 2>/dev/null; then
               status="⏸ 장중 연기 — 타이머가 장 마감 후 자동 재배포"
               effective_exit=0
           elif [[ "${START_EXIT}" == "0" ]]; then
@@ -152,6 +267,13 @@ jobs:
               echo ""
               echo '```'
               echo "${units_log}"
+              echo '```'
+              echo "</details>"
+              echo ""
+              echo "<details><summary>owner emergency deploy 출력</summary>"
+              echo ""
+              echo '```'
+              echo "${emergency_log}"
               echo '```'
               echo "</details>"
           } >> "$GITHUB_STEP_SUMMARY"

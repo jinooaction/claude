@@ -25,6 +25,14 @@ from pathlib import Path
 from typing import Literal
 
 from auto_invest.deploy import guards, steps
+from auto_invest.deploy.emergency import (
+    DEFAULT_EXPECTED_ACTOR,
+    DEFAULT_REQUEST_PATH,
+    EmergencyDeployRequest,
+    EmergencyRequestError,
+    find_pending_preauthorization,
+    validate_emergency_request,
+)
 from auto_invest.deploy.supervisor import Supervisor
 from auto_invest.persistence import (
     audit,
@@ -48,6 +56,9 @@ class RunnerConfig:
     env_path: Path = Path(".env")
     pid_path: Path | None = None  # None means use default
     worker_stop_timeout_s: int = 10
+    emergency_request_path: Path = DEFAULT_REQUEST_PATH
+    emergency_request_owner_uid: int = 0
+    emergency_expected_actor: str = DEFAULT_EXPECTED_ACTOR
 
 
 @dataclass(frozen=True)
@@ -133,10 +144,34 @@ class DeployRunner:
             )
         sha_before = idem.sha_local
         sha_after_target = idem.sha_remote
+        emergency_request: EmergencyDeployRequest | None = None
+        emergency_correlation_id: str | None = None
 
         # 3. market hours
         mh = guards.market_hours_guard()
-        if not mh.allowed:
+        if cfg.emergency_request_path.exists():
+            try:
+                emergency_request = validate_emergency_request(
+                    cfg.emergency_request_path,
+                    target_sha=sha_after_target,
+                    expected_uid=cfg.emergency_request_owner_uid,
+                    expected_actor=cfg.emergency_expected_actor,
+                )
+                conn = dbmod.get_connection(cfg.db_path)
+                try:
+                    emergency_correlation_id = find_pending_preauthorization(
+                        conn, emergency_request
+                    )
+                finally:
+                    conn.close()
+            except EmergencyRequestError as exc:
+                return self._fail_precondition(
+                    sha_before,
+                    "emergency_authorization",
+                    f"{mh.refusal_reason()}; {exc}",
+                    2,
+                )
+        elif not mh.allowed:
             return self._fail_precondition(
                 sha_before, "market_hours_guard", mh.refusal_reason(), 2
             )
@@ -163,14 +198,33 @@ class DeployRunner:
 
         # 6. emit DEPLOY_STARTED
         started_ts = _utcnow_ms()
-        correlation_id = _make_correlation_id(sha_before, started_ts)
+        correlation_id = emergency_correlation_id or _make_correlation_id(
+            sha_before, started_ts
+        )
         self.emit(f"deploy correlation_id: {correlation_id}")
+        triggered_by: Literal["manual", "auto-tuner", "operator-emergency"] = (
+            "operator-emergency" if emergency_request is not None else cfg.triggered_by
+        )
+        if emergency_request is not None and emergency_correlation_id is None:
+            self._append(
+                audit.DeployEmergencyAuthorizedPayload(
+                    request_id=emergency_request.request_id,
+                    target_sha=emergency_request.target_sha,
+                    actor=emergency_request.actor,
+                    workflow_run_id=emergency_request.workflow_run_id,
+                    source="github-actions-workflow-dispatch",
+                    reason_sha256=emergency_request.reason_sha256,
+                    issued_at_epoch=emergency_request.issued_at_epoch,
+                    expires_at_epoch=emergency_request.expires_at_epoch,
+                ),
+                correlation_id=correlation_id,
+            )
         self._append(
             audit.DeployStartedPayload(
                 sha_before=sha_before,
                 sha_after=sha_after_target,
                 branch=cfg.branch,
-                triggered_by=cfg.triggered_by,
+                triggered_by=triggered_by,
                 dry_run=cfg.dry_run,
                 allow_dirty=cfg.allow_dirty,
                 health_window_s=cfg.health_window_s,
@@ -197,7 +251,7 @@ class DeployRunner:
                     sha_after=sha_after,
                     touched_paths=[t.path for t in kreport.touches],
                     touched_groups=list(kreport.touched_groups),
-                    triggered_by=cfg.triggered_by,
+                    triggered_by=triggered_by,
                 ),
                 correlation_id=correlation_id,
             )

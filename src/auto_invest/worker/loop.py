@@ -194,6 +194,7 @@ class Worker:
         app_secret: str,
         account_no: str,
         judgment_runner: Any | None = None,
+        broker_write_lock_path: Path | None = None,
     ) -> None:
         self.settings = settings
         self.broker = broker
@@ -248,6 +249,7 @@ class Worker:
                 app_key=app_key,
                 app_secret=app_secret,
                 account_no=account_no,
+                broker_write_lock_path=broker_write_lock_path,
             )
         )
 
