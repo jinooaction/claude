@@ -66,6 +66,24 @@ def test_prestart_halted_recovery_is_closed_and_audit_bound() -> None:
     assert "existing maintenance interlock is still owned" in body
 
 
+def test_terminal_rollback_orphan_recovery_is_closed_and_audit_bound() -> None:
+    body = HELPER.read_text(encoding="utf-8")
+    assert "validate_terminal_rollback_orphan" in body
+    assert 'state == "QUIESCED"' in body
+    assert '"${request_meta}" == "0:${expected_gid}:640"' in body
+    assert '"${started_count}" == "1"' in body
+    assert '"${failed_count}" == "1"' in body
+    assert '"${rolled_back_count}" == "1"' in body
+    assert '"${completed_count}" == "0"' in body
+    assert '"${unexpected_count}" == "0"' in body
+    assert '"${terminal_event}" == "DEPLOY_ROLLED_BACK"' in body
+    assert '"${production_head}" == "${rollback_sha_before}"' in body
+    assert body.index("validate_terminal_rollback_orphan") < body.index(
+        'rm -f "${REQUEST_PATH}"'
+    )
+    assert body.count("cleanup\n        trap - EXIT") == 2
+
+
 def test_forced_gateway_exposes_only_validated_emergency_deploy() -> None:
     body = REPAIR.read_text(encoding="utf-8")
     gateway = body.split("EOF_GATEWAY", 2)[1]

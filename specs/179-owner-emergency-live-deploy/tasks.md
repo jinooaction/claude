@@ -102,6 +102,10 @@
 - [x] T038 헌법 15.1.0과 Spec 179에 exact-target 격리 배포 실행기와 시작 전 HALTED 잠금의 엄격한 인계 계약을 전용 안전 경계 커밋으로 고정한다.
 - [x] T039 exact-target bootstrap, 등록 actor 집합, HALTED 유일 승인·시작 0건 인계를 구현하고 변조·임의 경로·시작 후 인계 실패 시험을 통과시킨다.
 - [ ] T040 전체 검증·PR 관문·merge 뒤 새 exact-main 단회 요청으로 생산 잠금을 안전 인계하고 배포·90초 건강·자동 timer 복구를 확인한다.
+- [x] T041 run `33673819722`에서 exact-target bootstrap과 KIS 6/6·미체결 0은 통과했지만 config dry-run이 systemd 주입에 의존해 비밀값 없음으로 실패하고, 확인된 롤백 뒤 shell 지역변수 소멸로 요청·QUIESCED 잠금 정리가 중단된 생산 결함을 확인한다.
+- [x] T042 헌법 15.2.0과 Spec 179에 terminal rollback orphan의 파일·장부·production HEAD 엄격 복구와 고정 env_path 직접 로딩 계약을 전용 안전 경계 커밋으로 고정한다.
+- [x] T043 deploy config 검사에 고정 env_path를 전달하고, 정확한 롤백 orphan만 중개사 쓰기 잠금 아래 복구하며 정상·롤백 반환 전 지역 증거 범위에서 cleanup하도록 구현·반례 시험한다.
+- [ ] T044 전체 검증·PR 관문·merge 뒤 새 exact-main 단회 요청으로 생산 rollback orphan을 안전 복구하고 배포·90초 건강·자동 timer 복구를 확인한다.
 
 ---
 

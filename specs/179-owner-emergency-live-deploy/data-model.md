@@ -53,7 +53,8 @@
 - `HEALTHY` 또는 `ROLLED_BACK`이 검증됐을 때만 제거된다.
 - `HALTED`는 자동 만료되지 않는다.
 - 새 등록 오너 단회 요청은 root 소유 정규 파일·닫힌 HALTED 스키마·배타 잠금과 이전 요청의 유일한 `DEPLOY_EMERGENCY_AUTHORIZED`·`DEPLOY_STARTED=0`을 함께 증명한 경우에만 잠금을 인계한다.
-- `DEPLOY_STARTED`가 하나라도 있거나 장부·파일이 모호하면 인계하지 않고 `HALTED`를 유지한다.
+- 요청 파일과 `QUIESCED` 잠금이 함께 남은 terminal rollback orphan은 두 파일의 root 소유·0640·닫힌 스키마·동일 신원, 배타 잠금, 승인 1·시작 1·실패 1·커널 변경 0~1·롤백 1·완료 0·예상 밖 사건 0, 최신 롤백, production HEAD와 롤백 기준 일치가 모두 증명될 때만 중개사 쓰기 잠금 아래에서 이전 요청을 제거한다.
+- 그 밖의 `DEPLOY_STARTED`, 불완전한 롤백, 장부·파일·생산 HEAD 모호성은 인계하지 않고 주문 잠금을 유지한다.
 
 ## DeployEmergencyAuthorizedAudit
 

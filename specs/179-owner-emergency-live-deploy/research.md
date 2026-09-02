@@ -47,3 +47,15 @@
 - **Decision**: 이전 interlock이 root 소유 정규 파일이고 닫힌 HALTED 스키마이며 배타 잠금을 얻을 수 있고, 장부상 이전 request에 유일한 승인 1건과 시작 0건이 있을 때만 다음 정확한 등록 오너 요청이 같은 잠금을 인계한다.
 - **Rationale**: 시작 전 부트스트랩 실패는 production 변경이 없으므로 새 검증된 시도가 복구할 수 있다. 반대로 `DEPLOY_STARTED` 뒤의 상태는 pull·migration·worker 변경 가능성이 있어 자동 인계하면 안 된다.
 - **Alternatives considered**: 잠금 파일을 무조건 삭제하는 복구는 실행 중 배포와 주문을 겹치게 할 수 있고, 시간 만료만으로 푸는 방식은 장부의 실제 변경 상태를 증명하지 못한다.
+
+## 결정 9: terminal rollback orphan은 파일·장부·생산 HEAD가 모두 일치할 때만 복구한다
+
+- **Decision**: 요청 파일과 QUIESCED interlock이 함께 남았더라도 root 소유·0640·닫힌 스키마·동일 신원·배타 잠금, 정확한 승인/시작/실패/선택적 커널 변경/롤백 사건 수, 최신 롤백, production HEAD와 롤백 기준 일치를 모두 증명한 뒤 중개사 쓰기 잠금 아래에서만 이전 요청을 제거한다.
+- **Rationale**: run `33673819722`은 기존 상태기계가 롤백을 완료했지만 shell EXIT trap이 main의 지역변수 소멸 뒤 실행돼 정리만 실패했다. 롤백 완료와 생산 기준 일치는 자동 복구할 수 있는 충분조건이지만, 둘 중 하나라도 없으면 주문 정지를 유지해야 한다.
+- **Alternatives considered**: SSH에서 수동으로 파일을 삭제하거나 시간 만료로 해제하면 실행 중·부분 롤백·다른 생산 HEAD를 구분하지 못하므로 기각했다.
+
+## 결정 10: 배포 config dry-run은 고정 env_path를 loader에 직접 전달한다
+
+- **Decision**: DeployRunner가 이미 검증한 고정 `env_path`를 `dry_run_config`에도 전달한다. root helper는 `.env`를 source·echo·export하지 않는다.
+- **Rationale**: systemd unit은 EnvironmentFile을 프로세스에 주입하지만 exact-target bootstrap은 의도적으로 별도 app-user 프로세스다. config loader는 이미 dotenv 읽기와 비밀값 등록·가림을 제공하므로 같은 경계를 재사용하는 것이 가장 작고 안전하다.
+- **Alternatives considered**: shell에서 `.env`를 source하거나 명령행 환경으로 펼치면 파싱 차이와 비밀값 노출 표면이 늘어나므로 기각했다.
