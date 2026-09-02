@@ -91,6 +91,7 @@ sqlite3 -readonly -header -column "${DB_PATH}" \
             substr(json_extract(payload_json, '$.sha_before'), 1, 12) AS sha_before,
             substr(json_extract(payload_json, '$.sha_after'), 1, 12) AS sha_after,
             json_extract(payload_json, '$.recovery_basis') AS recovery_basis,
+            substr(json_extract(payload_json, '$.recovered_production_sha'), 1, 12) AS recovered_production,
             json_extract(payload_json, '$.reason') AS reason
        FROM audit_log
       WHERE correlation_id = '${cid}'

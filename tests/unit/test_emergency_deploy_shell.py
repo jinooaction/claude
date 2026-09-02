@@ -63,8 +63,12 @@ def test_prestart_halted_recovery_is_closed_and_audit_bound() -> None:
     assert 'reason == "deploy terminal safety not proven"' in body
     assert 'event_type = \'DEPLOY_EMERGENCY_AUTHORIZED\'' in body
     assert 'event_type = \'DEPLOY_STARTED\'' in body
-    assert '"${started_count}" == "0"' in body
+    assert '"${started_count}" != "0"' in body
     assert '"${deploy_row_count}" == "1"' in body
+    assert '"${deploy_row_count}" == "2"' in body
+    assert '"${orphan_recovered_count}" == "1"' in body
+    assert "$.completed_deploy_correlation_id" in body
+    assert "$.recovered_production_sha" in body
     assert "existing maintenance interlock is still owned" in body
 
 
@@ -97,7 +101,34 @@ def test_terminal_rollback_orphan_recovery_is_closed_and_audit_bound() -> None:
     assert body.index("validate_terminal_rollback_orphan") < body.index(
         'rm -f "${REQUEST_PATH}"'
     )
-    assert body.count("cleanup\n        trap - EXIT") == 3
+    assert body.count("trap - EXIT") == 3
+
+
+def test_forward_recovery_handoff_is_ancestry_audit_and_broker_bound() -> None:
+    body = HELPER.read_text(encoding="utf-8")
+    assert "RECOVERING_POSTROLLBACK_FORWARD_HANDOFF" in body
+    assert '"${rollback_sha_before}" "${production_head}"' in body
+    assert '"${production_head}" "${authorized_target_sha}"' in body
+    assert "validated_recovery_production_sha" in body
+    assert 'rollback_recovery_mode="completed-deploy-handoff"' in body
+    assert "append_orphan_recovered" in body
+    assert "DEPLOY_EMERGENCY_ORPHAN_RECOVERED" in body
+    assert "subsequent-live-deploy-forward-handoff" in body
+    assert "forward_handoff_authorized" in body
+
+    handoff = body.split(
+        'flock -w 30 -x 8 || die "live broker write did not quiesce within 30 seconds"',
+        1,
+    )[1]
+    assert handoff.index('"${KIS_SMOKE_HELPER}"') < handoff.index(
+        'append_orphan_recovered \\'
+    )
+    assert handoff.index('append_orphan_recovered \\') < handoff.index(
+        'rm -f "${REQUEST_PATH}" "${smoke_tmp}"'
+    )
+    assert handoff.index('DEPLOY_EMERGENCY_ORPHAN_RECOVERED') < handoff.index(
+        'prepare_exact_target_runner "${target_sha}"'
+    )
 
 
 def test_exact_deployed_target_without_stale_state_is_no_mutation_noop() -> None:

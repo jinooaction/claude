@@ -93,6 +93,26 @@
 
 이 사건은 이번 `DEPLOY_EMERGENCY_AUTHORIZED`와 같은 새 `correlation_id`를 사용한다. 이 체인은 코드 배포가 아니라 잠금 복구이므로 `DEPLOY_STARTED`를 만들지 않는다.
 
+## DeployEmergencyOrphanRecoveredAudit
+
+생산이 rollback 기준과 새 승인 대상 사이의 검증된 건강한 일반 배포에 있을 때, 이전 orphan 잠금을 새 exact-target 긴급 배포로 인계한 추가 전용 비종료 사건이다.
+
+| 필드 | 형식 | 설명 |
+|---|---|---|
+| `event_type` | 문자열 | `DEPLOY_EMERGENCY_ORPHAN_RECOVERED` |
+| `request_id` | 문자열 | 이번 exact-target 등록 오너 요청 |
+| `target_sha` | 문자열 | 새 정확한 current-main 대상 |
+| `actor` | 문자열 | 정확한 등록 오너 actor |
+| `workflow_run_id` | 문자열 | 이번 신뢰 실행 ID |
+| `prior_request_id` | 문자열 | 남아 있던 rollback orphan 요청 |
+| `prior_correlation_id` | 문자열 | 검증한 rollback 감사 체인 |
+| `completed_deploy_correlation_id` | 문자열 | 현재 생산 SHA의 검증된 정상 live 배포 체인 |
+| `recovered_production_sha` | 문자열 | 잠금 인계 시점의 건강한 생산 HEAD |
+| `recovery_basis` | 문자열 | 정확히 `subsequent-live-deploy-forward-handoff` |
+| `open_unfilled` | 정수 | 정확히 `0` |
+
+이 사건은 성공 종료가 아니다. 같은 상관관계에서 뒤따르는 `DEPLOY_STARTED`와 최종 `DEPLOY_COMPLETED` 또는 `DEPLOY_ROLLED_BACK`이 있어야 잠금을 해제할 수 있다.
+
 ## EmergencyDeployOutcome
 
 | 상태 | 잠금 | 요청 | 감사 |
@@ -102,3 +122,4 @@
 | 복구 실패 | 유지 | 제거·소비됨 | AUTHORIZED -> STARTED -> FAILED -> FAILED(rollback) |
 | 사전 검증 실패 | 생성 전 또는 안전 제거 | 제거·미소비/거부 | FAILED(precondition) |
 | 후속 정상 배포 증명 뒤 잠금만 복구 | 기존 worker/timer를 유지한 채 제거 | 이전 orphan 제거 | AUTHORIZED -> EMERGENCY_RECOVERY_COMPLETED |
+| 건강한 중간 배포에서 새 대상 인계 | 같은 잠금 유지 | 이전 orphan 제거 뒤 새 요청 설치 | AUTHORIZED -> EMERGENCY_ORPHAN_RECOVERED -> STARTED -> COMPLETED/ROLLED_BACK |

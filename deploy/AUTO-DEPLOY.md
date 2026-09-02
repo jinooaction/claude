@@ -119,6 +119,15 @@ spec 006 배포 상태기계 (안전 단계 전부 통과해야 워커 교체)
 `DEPLOY_EMERGENCY_AUTHORIZED`와 `DEPLOY_EMERGENCY_RECOVERY_COMPLETED`가 기록된 뒤에만
 이전 요청과 유지보수 잠금을 제거한다. 한 증거라도 없으면 이전 잠금과 요청을 그대로 둔다.
 
+생산 HEAD가 rollback 기준보다 새롭지만 새 승인 대상 main보다 오래된 건강한 일반 배포라면,
+rollback 기준→현재 생산→새 대상의 Git 계보와 현재 생산 SHA의 정상 live 배포·구간 내 worker
+시작·현재 worker/timer·두 배타 잠금·KIS `open_unfilled=0`을 모두 증명한다. 새
+`DEPLOY_EMERGENCY_AUTHORIZED`와 비종료 `DEPLOY_EMERGENCY_ORPHAN_RECOVERED`를 추가한 뒤
+이전 요청만 제거하고 같은 유지보수 잠금을 유지한다. 이어 새 단회 요청을 설치하고 기존
+exact-target 배포·90초 건강·롤백 상태기계를 실행한다. 인계 사건만으로 성공이나 잠금 해제로
+판정하지 않으며, 새 `DEPLOY_STARTED` 전에 중단되면 정확한 승인 1건과 인계 1건이 있는
+`HALTED` 상태만 다음 등록 오너 단회 요청이 이어받을 수 있다.
+
 ## (B) 안전망 타이머 — `auto-invest-deploy.timer` (이미 설치됨)
 
 `deploy/README.md` § 2 참고. 30분마다(장중 제외) `auto-invest-deploy.service` 를

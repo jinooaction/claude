@@ -10,6 +10,7 @@ from pydantic import ValidationError
 from auto_invest.persistence.audit import (
     DeployCompletedPayload,
     DeployEmergencyAuthorizedPayload,
+    DeployEmergencyOrphanRecoveredPayload,
     DeployEmergencyRecoveryCompletedPayload,
     DeployFailedPayload,
     DeployKernelTouchedPayload,
@@ -62,6 +63,39 @@ def test_emergency_recovery_completed_payload_roundtrip():
             prior_correlation_id="b" * 32,
             completed_deploy_correlation_id="c" * 32,
             recovery_basis="subsequent-live-deploy-completed",
+            open_unfilled=1,  # type: ignore[arg-type]
+        )
+
+
+def test_emergency_orphan_recovered_payload_roundtrip():
+    payload = DeployEmergencyOrphanRecoveredPayload(
+        request_id="github-run-789",
+        target_sha="d" * 40,
+        actor="masonoh-kidsnote",
+        workflow_run_id="789",
+        prior_request_id="github-run-123",
+        prior_correlation_id="b" * 32,
+        completed_deploy_correlation_id="c" * 32,
+        recovered_production_sha="a" * 40,
+        recovery_basis="subsequent-live-deploy-forward-handoff",
+        open_unfilled=0,
+    )
+
+    parsed = json.loads(payload.model_dump_json())
+    assert parsed["event_type"] == "DEPLOY_EMERGENCY_ORPHAN_RECOVERED"
+    assert parsed["recovered_production_sha"] == "a" * 40
+
+    with pytest.raises(ValidationError):
+        DeployEmergencyOrphanRecoveredPayload(
+            request_id="github-run-789",
+            target_sha="d" * 40,
+            actor="masonoh-kidsnote",
+            workflow_run_id="789",
+            prior_request_id="github-run-123",
+            prior_correlation_id="b" * 32,
+            completed_deploy_correlation_id="c" * 32,
+            recovered_production_sha="a" * 40,
+            recovery_basis="subsequent-live-deploy-forward-handoff",
             open_unfilled=1,  # type: ignore[arg-type]
         )
 

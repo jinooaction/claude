@@ -196,6 +196,16 @@ KIS `open_unfilled=0` result. It appends a new authorization and
 not restart services, mutate code, or submit/cancel an order. Missing or ambiguous
 proof leaves the old interlock intact.
 
+If production is instead on a verified healthy ordinary-deploy commit between the
+rollback baseline and the new exact current-main target, the helper requires both
+Git ancestry links and binds the same deploy, worker, timer, lock, and fresh KIS
+`open_unfilled=0` proofs to that production SHA. It appends a new authorization and
+the non-terminal `DEPLOY_EMERGENCY_ORPHAN_RECOVERED`, removes only the stale prior
+request, keeps the same maintenance interlock, installs the new one-shot request,
+and continues through the unchanged exact-target deploy, 90-second health, and
+rollback state machine. The hand-off event alone is never success and never
+releases the interlock.
+
 ## 5. Rollback path (verification)
 
 Push a deliberately-broken change to a test branch and:

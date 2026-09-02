@@ -115,6 +115,9 @@
 - [x] T051 헌법 15.3.1과 Spec 179에 workflow 결과를 현재 배포 시도 구간에만 묶고 현재 stale-target 거부만 고정 root helper로 넘기는 계약을 전용 안전 경계 커밋으로 고정한다.
 - [x] T052 최신 서비스 시작 표식 뒤 구간만 추출해 장중 연기와 긴급 진입을 판정하고 과거 장중 문구의 거짓 성공을 막는 workflow 회귀 시험을 추가한다.
 - [ ] T053 전체 검증·PR 관문·merge 뒤 exact-main 등록 오너 요청으로 생산 rollback orphan 복구와 긴급 배포를 다시 확인한다.
+- [x] T054 헌법 15.4.0과 Spec 179에 검증된 건강한 중간 배포에서 새 exact-target 긴급 배포로 잠금을 인계하는 계약을 전용 안전 경계 커밋으로 고정한다.
+- [x] T055 Git 계보·후속 live 배포 장부·worker/timer·두 잠금·KIS 미체결 0건 아래에서만 비종료 `DEPLOY_EMERGENCY_ORPHAN_RECOVERED`를 기록하고 같은 잠금으로 기존 exact-target 상태기계를 계속하도록 구현·반례 시험한다.
+- [ ] T056 전체 검증·PR 관문·merge 뒤 등록 오너 단회 요청으로 생산의 건강한 중간 배포에서 최신 main으로 인계·배포·90초 건강·timer 복구를 확인한다.
 
 ---
 
