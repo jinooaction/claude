@@ -33,15 +33,15 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `e94fc972` — Merge pull request #739 from jinooaction/Codex/179-current-deploy-refusal |
-| main 테스트 | #739 exact 기능 트리에서 `uv run pytest` → 3336 passed, 7 skipped, 실패 0. |
-| main 린트 | #739 exact 기능 트리에서 `uv run ruff check src tests` → All checks passed. |
-| 열린 PR | 없음. 격리 브랜치 `Codex/179-forward-recovery-handoff`에서 헌법 15.4.0과 건강한 중간 생산 배포의 잠금 인계를 검증 중. |
+| 마지막 main 커밋 | `68211963` — Merge pull request #740 from jinooaction/Codex/179-forward-recovery-handoff |
+| main 테스트 | #740 exact 기능 트리에서 `uv run pytest` → 3339 passed, 7 skipped, 실패 0. |
+| main 린트 | #740 exact 기능 트리에서 `uv run ruff check src tests` → All checks passed. |
+| 열린 PR | 없음. 격리 브랜치 `Codex/179-kis-smoke-token-cache`에서 반복 KIS smoke의 유효 토큰 캐시 재사용을 검증 중. |
 | 출시 완료 스펙 | 최신 기능: #728(스펙 178, 읽기 전용 Flutter 운영자 상태 계약과 앱 설계), #726(스펙 177, 자본 0의 비용 현실형 장중 페이퍼 연구 엔진), #724(스펙 176, 독립 서버 예약과 정수주 표현 가능 목표 기준의 자금성 계약), #722(스펙 176, 거래소별 5xx 뒤 제한된 시세 탐색과 전 후보 장애 보존), #721(스펙 176, 고정 읽기 전용 배포 감사 명령), #719(스펙 176, 10:17~13:53 최대 12분 간격 19개 예약 기회), #717(스펙 176, 거래일 1회 주문 선점·최초 실행 증거 보존), #716(스펙 176, 시작 시점과 각 중개사 쓰기 직전 XNYS 정규장 실패 폐쇄·부분 실행 증거 보존), #715(스펙 176, 선언한 NAV 10%와 실제 주문 자본 일치), #714(스펙 176, 정확한 main 사전점검 인계), #712(스펙 176, 뉴욕 현지 비정각 실거래 예약), #709(스펙 176, 역할 분리 운영 증거와 NAV 10% 실거래 검증 캐너리), #706(스펙 175, 21가족 교정·PEAD 진단), #701(스펙 174, 회계 기반 횡단면 팩터), #699(스펙 173, 판정 경로 교정·월말월초 전략). |
 | 골격 스펙 | 스펙 178은 코드·계약·시뮬레이터와 실제 iPhone 설치·실행까지 완료됐다. 물리 화면 픽셀 캡처와 터치 탐색은 남았다. 스펙 177은 756세션 실제 5분봉 자료가 없어 `INSUFFICIENT_EVIDENCE`이며, 스펙 176은 실제 KIS 자동 주문·체결·감사·정합과 중복 주문 0건 확인이 남았다. |
 | 최근 출시 작업 | 기존 HTML을 유지하면서 형식 `1.0`, `read_only: true`인 `status.json`을 Pages에 발행했다. 별도 비공개 `jinooaction/auto_invest_mobile` Flutter 앱은 홈·자동화·설명 3개 탭, 30시간 신선도, 오프라인 마지막 성공 캐시와 실패 폐쇄 표시를 제공한다. |
-| 활성 작업 | #739 merge `e94fc972`는 현재 배포 시도만으로 workflow 결과를 판정하게 고쳤다. push run `33683762314`은 stale-target 불일치를 정확히 실패로 표시했고, 오너 run `33683840059`는 helper까지 도달했으나 생산 HEAD가 건강한 중간 커밋 `d43c55b0`이어서 기존 닫힌 계약에 따라 변경 전에 멈췄다. 헌법 15.4.0으로 이 검증된 중간 상태를 새 exact-target 요청에 인계하는 보정을 진행 중이다. |
-| 안전 경계 | main은 헌법 15.3.1, 작업 브랜치는 15.4.0이다. 새 경로는 rollback 기준→현재 생산→정확한 승인 대상의 Git 계보, 현재 생산 SHA의 정상 live 배포 장부, worker/timer, 두 배타 잠금, KIS 미체결 0건을 모두 요구한다. 인계 사건은 비종료이며 같은 잠금 아래 기존 exact-target 배포·90초 건강·롤백을 계속한다. 수동 주문·서비스 수동 시작·자본 증액·전략 승격·허용목록·위험 관문 우회는 계속 금지된다. |
+| 활성 작업 | #740 merge `68211963`은 건강한 중간 생산 배포에서 최신 exact target으로의 잠금 인계를 출시했다. 오너 run `33686633552`는 인계와 첫 KIS 6/6 뒤, 두 번째 smoke의 연속 OAuth 발급이 KIS 403을 받아 `DEPLOY_STARTED` 전에 HALTED로 안전 중단됐다. 같은 private token cache 재사용으로 이 중복 발급을 보정 중이다. |
+| 안전 경계 | main과 작업 브랜치는 헌법 15.4.0이다. Git 계보·정상 live 배포 장부·worker/timer·두 잠금·KIS 미체결 0건과 비종료 인계 계약은 유지한다. 새 보정은 유효 OAuth 토큰만 재사용하고 시세·현금·보유·미체결 조회는 매번 새로 수행한다. 수동 주문·서비스 수동 시작·자본 증액·전략 승격·허용목록·위험 관문 우회는 계속 금지된다. |
 
 ## 현재 진행 — 2026-09-03 KST (스펙 179 오너 단회 장중 긴급 배포)
 
@@ -127,14 +127,24 @@ live 배포·구간 내 worker 시작·현재 worker/timer·두 잠금·KIS 미�
 유지보수 잠금을 유지한 채 새 단회 요청과 기존 exact-target 배포·90초 건강·롤백 상태기계로
 이어간다. 인계 사건만으로 성공 또는 잠금 해제로 판정하지 않는다.
 
+PR #740 merge `68211963` 뒤 일반 push run `33686548933`은 새 root helper를 설치하고 기존
+stale-target 상태를 정확히 실패로 유지했다. 등록 오너 run `33686633552`는 생산 `d43c55b0`의
+양쪽 Git 계보와 배포 장부·worker/timer·두 잠금·첫 KIS 6/6·미체결 0건을 통과해
+`DEPLOY_EMERGENCY_ORPHAN_RECOVERED`를 남겼다. 이어 새 요청으로 전환한 뒤 두 번째 KIS smoke가
+같은 시각 새 OAuth 토큰을 다시 발급해 KIS 403을 받았고, `DEPLOY_STARTED` 전에 새 요청을
+제거하고 HALTED 잠금을 남겼다. 생산 코드와 주문은 바뀌지 않았다. 보정은 smoke 격리 checkout이
+worker의 고정 private token cache를 사용해 유효 토큰을 재사용하게 하되, 실제 읽기 전용
+시세·현금·보유·미체결 조회는 매번 새로 수행한다.
+
 - **변하지 않은 것**: 수동 주문은 금지다. 실제 주문은 기존 GitHub schedule 또는 서버 timer만
   가능하고, `globalfixed-ensemble-3-6-9-12`, NAV 10%, 단 1, 지정가, 허용목록, 손실·노출 한도,
   킬스위치, 거래일 1회 선점, 추가 전용 감사, 계좌 대사를 그대로 통과해야 한다.
-- **검증**: main #739는 `uv run pytest` 3336 passed/7 skipped와 린트·하네스·인계·PR 관문을
-  통과했다. 현재 15.4.0 인계 구현은 관련 shell·감사 payload 회귀부터 검증 중이다.
-- **현재 관문**: 헌법 15.4.0 인계 구현의 전체 시험·하네스·인계·PR 품질 관문을 통과시켜
-  merge한 뒤 새 등록 오너 단회 요청으로 생산의 건강한 중간 배포에서 최신 main으로 인계,
-  KIS 6/6·미체결 0, 승인/인계/시작/완료 감사, 90초 건강, timer 활성, 주문 없는 사전점검을
+- **검증**: main #740는 `uv run pytest` 3339 passed/7 skipped와 린트·하네스·인계·PR 관문을
+  통과했다. 토큰 캐시 보정은 `uv run pytest` 3340 passed/7 skipped, 린트, strict 하네스
+  14/14, HANDOFF 사실 검사, shell 문법과 diff 검사를 모두 통과했다.
+- **현재 관문**: 토큰 캐시 보정의 전체 시험·하네스·인계·PR 품질 관문을 통과시켜 merge한 뒤
+  새 등록 오너 단회 요청으로 HALTED 인계, KIS 6/6·미체결 0, exact-main 시작/완료 감사,
+  90초 건강, timer 활성, 주문 없는 사전점검을
   확인한다. 완료 판정은 그 뒤 정상 자동
   예약의 실제 주문·체결·전략 감사·같은 실행 계좌 대사와 다른 예약 출처의 중복
   중개사 쓰기 0건까지 확인한 후에만 한다.

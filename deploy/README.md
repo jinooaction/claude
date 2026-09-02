@@ -206,6 +206,12 @@ and continues through the unchanged exact-target deploy, 90-second health, and
 rollback state machine. The hand-off event alone is never success and never
 releases the interlock.
 
+Repeated read-only KIS smokes use the worker's fixed private token cache at
+`/opt/auto-invest/data/kis_token.json`. A valid cached token is reused; only a
+missing or near-expiry token follows the existing issue-and-atomic-save path.
+Every smoke still performs fresh quote, cash, position, and open-order reads,
+and the token cache does not grant order authority.
+
 ## 5. Rollback path (verification)
 
 Push a deliberately-broken change to a test branch and:

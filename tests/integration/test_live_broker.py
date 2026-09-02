@@ -3,7 +3,7 @@
 Gated by KIS_LIVE_TEST=1. NEVER runs in CI without explicit opt-in.
 Verifies that the overseas-equity adapter shapes match the real broker:
 
-  - issue token + fetch one AAPL quote (T064 원본)
+  - acquire or reuse a valid token + fetch one AAPL quote (T064 원본)
   - fetch USD purchasable cash (회귀: KIS 잔고 0원 표시 버그)
   - fetch positions snapshot (회귀: 보유 포트폴리오 stub)
   - fetch combined balance (cash + 평가금액 합)
@@ -18,9 +18,9 @@ GitHub Actions의 `KIS smoke (autonomous)` workflow가 매 main push와 매일
 03:00 UTC에 인스턴스로 SSH 접속해 자동 실행한다 — 회귀가 운영자 손을
 거치지 않고 즉시 잡힘 (자율 수행 정책 v3.0.0 IX.D).
 
-토큰 발급은 module-scoped fixture로 1회만 수행. KIS OAuth API 는 짧은
-시간 내 중복 토큰 발급에 대해 403 Forbidden 을 반환하므로, 5개 테스트
-가 각자 토큰을 발급하면 첫 번째는 성공해도 나머지는 throttle 에 막힘.
+토큰 조회는 module-scoped fixture로 1회만 수행하고 생산 helper에서는 worker와
+같은 전용 캐시를 재사용한다. KIS OAuth API 는 짧은 시간 내 중복 토큰 발급에
+대해 403 Forbidden 을 반환하므로 이미 유효한 토큰을 다시 발급하지 않는다.
 """
 
 from __future__ import annotations
@@ -29,11 +29,12 @@ import asyncio
 import os
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from pathlib import Path
 
 import httpx
 import pytest
 
-from auto_invest.broker.auth import issue_token
+from auto_invest.broker.auth import get_valid_token
 from auto_invest.broker.client import (
     AsyncTokenBucket,
     CircuitBreaker,
@@ -81,30 +82,33 @@ def _required_env(name: str) -> str:
 
 @pytest.fixture(scope="module")
 def kis_token_bundle() -> dict:
-    """KIS OAuth 토큰을 module 단위 1회 발급. 4개 테스트가 공유.
+    """유효한 KIS OAuth 토큰을 module 단위 1회 조회해 모든 테스트가 공유.
 
     KIS API 는 짧은 시간 내 중복 토큰 발급을 403 Forbidden 으로 거부함
     (rate limit). per-test 토큰 발급 패턴은 첫 번째 테스트만 성공하고
     나머지가 throttle 에 막히는 회귀를 일으킴 (run 26311865850 에서
     실제 관측).
 
-    Sync fixture 안에서 `asyncio.run` 으로 토큰 1회 발급 → dict 반환.
+    Sync fixture 안에서 `asyncio.run` 으로 캐시 확인/필요 시 1회 발급 → dict 반환.
     각 async 테스트는 자기 event loop 에서 dict 의 access_token 만
     재사용해 새 KIS endpoint 호출.
     """
     app_key = _required_env("KIS_APP_KEY")
     app_secret = _required_env("KIS_APP_SECRET")
 
-    async def _issue() -> object:
+    cache_path = Path(os.environ.get("KIS_TOKEN_CACHE_PATH", "data/kis_token.json"))
+
+    async def _get() -> object:
         async with httpx.AsyncClient(base_url=KIS_BASE_URL, timeout=30.0) as inner:
-            return await issue_token(
+            return await get_valid_token(
                 inner,
                 base_url=KIS_BASE_URL,
                 app_key=app_key,
                 app_secret=app_secret,
+                cache_path=cache_path,
             )
 
-    token = asyncio.run(_issue())
+    token = asyncio.run(_get())
     return _KisTokenBundle(
         {
             "access_token": token.access_token,

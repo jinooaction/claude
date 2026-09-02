@@ -128,6 +128,12 @@ exact-target 배포·90초 건강·롤백 상태기계를 실행한다. 인계 �
 판정하지 않으며, 새 `DEPLOY_STARTED` 전에 중단되면 정확한 승인 1건과 인계 1건이 있는
 `HALTED` 상태만 다음 등록 오너 단회 요청이 이어받을 수 있다.
 
+긴급 helper가 인계 전후로 KIS 읽기 전용 smoke를 반복해도 OAuth 토큰을 연속 발급하지
+않는다. smoke 전용 격리 checkout은 worker와 같은 고정 private token cache
+`/opt/auto-invest/data/kis_token.json`을 사용하며, 캐시가 유효할 때 이를 재사용한다. 캐시가
+없거나 만료됐을 때만 기존 토큰 발급·원자 저장 경로를 사용한다. 이 캐시는 주문 권한을 새로
+만들지 않으며 각 smoke의 실제 시세·현금·보유·미체결 조회는 그대로 다시 수행한다.
+
 ## (B) 안전망 타이머 — `auto-invest-deploy.timer` (이미 설치됨)
 
 `deploy/README.md` § 2 참고. 30분마다(장중 제외) `auto-invest-deploy.service` 를
