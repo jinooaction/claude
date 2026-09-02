@@ -64,11 +64,14 @@ def test_forced_gateway_exposes_only_validated_emergency_deploy() -> None:
     assert "bash -c" not in gateway
 
 
-def test_workflow_emergency_is_owner_exact_main_confirmed_and_short_lived() -> None:
+def test_workflow_emergency_is_registered_owner_exact_main_confirmed_and_short_lived() -> None:
     body = WORKFLOW.read_text(encoding="utf-8")
     assert "owner_emergency" in body
     assert "OWNER_EMERGENCY_LIVE_DEPLOY" in body
     assert "github.actor" in body and "github.repository_owner" in body
+    assert "REGISTERED_SYSTEM_OWNER: masonoh-kidsnote" in body
+    assert '${REGISTERED_SYSTEM_OWNER}' in body
+    assert "vars." not in body
     assert "github.event_name == 'workflow_dispatch'" in body
     assert "expected_sha" in body
     assert "reason_sha256" in body
@@ -81,6 +84,14 @@ def test_workflow_emergency_is_owner_exact_main_confirmed_and_short_lived() -> N
         "steps.owner_emergency.outcome == 'success'"
     )
     assert body.count(owner_success_guard) >= 3
+
+
+def test_workflow_does_not_accept_owner_identity_as_runtime_input() -> None:
+    body = WORKFLOW.read_text(encoding="utf-8")
+    inputs = body.split("permissions:", 1)[0]
+    assert "system_owner" not in inputs
+    assert "owner_actor" not in inputs
+    assert "authorized_actor" not in inputs
 
 
 def test_all_three_broker_write_boundaries_check_maintenance_interlock() -> None:

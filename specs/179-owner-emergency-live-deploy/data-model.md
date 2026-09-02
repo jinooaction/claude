@@ -9,7 +9,7 @@
 | `schema_version` | 문자열 | 정확히 `1.0` |
 | `request_id` | 문자열 | `github-run-<workflow_run_id>`; 감사 장부에서 유일 |
 | `target_sha` | 문자열 | 40자리 소문자 Git SHA, 현재 `origin/main`과 정확히 같음 |
-| `actor` | 문자열 | 워크플로가 확인한 저장소 오너 |
+| `actor` | 문자열 | 워크플로가 namespace 소유자 또는 헌법에 고정 등록된 시스템 오너로 확인한 actor |
 | `workflow_run_id` | 문자열 | 양의 십진 정수 |
 | `source` | 문자열 | 정확히 `github-actions-workflow-dispatch` |
 | `reason_sha256` | 문자열 | 이유 원문의 64자리 소문자 SHA-256 |
@@ -62,7 +62,7 @@
 | `event_type` | 문자열 | `DEPLOY_EMERGENCY_AUTHORIZED` |
 | `request_id` | 문자열 | 단회 요청 ID |
 | `target_sha` | 문자열 | 승인된 정확한 커밋 |
-| `actor` | 문자열 | 저장소 오너 |
+| `actor` | 문자열 | 정확한 등록 오너 actor |
 | `workflow_run_id` | 문자열 | 신뢰된 실행 ID |
 | `source` | 문자열 | 고정 승인 출처 |
 | `reason_sha256` | 문자열 | 이유 다이제스트 |
