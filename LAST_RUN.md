@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-09-02T19:53:43.431111Z)
+# 완료 후보 소비 장부 (as of 2026-09-02T20:09:40.270092Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -149,7 +149,7 @@
 
 ```json
 {
-  "commit": "d60aefd0026afbd54220b082c45da289659354a4",
+  "commit": "d43c55b02d96f53e9af80abcb5a0ba3f5b3ccb57",
   "overall_status": "OK",
   "released_work": [
     {
@@ -1046,6 +1046,6 @@
       "spec_id": "179-owner-emergency-live-deploy"
     }
   ],
-  "timestamp_utc": "2026-09-02T19:53:43.431111Z"
+  "timestamp_utc": "2026-09-02T20:09:40.270092Z"
 }
 ```
