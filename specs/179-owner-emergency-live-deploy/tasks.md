@@ -106,6 +106,9 @@
 - [x] T042 헌법 15.2.0과 Spec 179에 terminal rollback orphan의 파일·장부·production HEAD 엄격 복구와 고정 env_path 직접 로딩 계약을 전용 안전 경계 커밋으로 고정한다.
 - [x] T043 deploy config 검사에 고정 env_path를 전달하고, 정확한 롤백 orphan만 중개사 쓰기 잠금 아래 복구하며 정상·롤백 반환 전 지역 증거 범위에서 cleanup하도록 구현·반례 시험한다.
 - [ ] T044 전체 검증·PR 관문·merge 뒤 새 exact-main 단회 요청으로 생산 rollback orphan을 안전 복구하고 배포·90초 건강·자동 timer 복구를 확인한다.
+- [x] T045 run `33676023848`에서 terminal rollback 요청의 만료 시각 비교가 객체가 아닌 숫자 범위에서 `issued_at_epoch`를 조회해 생산 변경·KIS·신규 감사 전에 실패 폐쇄된 jq 범위 결함을 확인한다.
+- [x] T046 요청 객체를 jq 변수에 고정하고 유효·역전 시각 payload로 실제 필터를 실행하는 회귀 시험을 추가한다.
+- [ ] T047 전체 검증·PR 관문·merge 뒤 exact-main 배포 및 다음 정규장 오너 복구 요청으로 rollback orphan 해제·자동 timer 복구를 확인한다.
 
 ---
 

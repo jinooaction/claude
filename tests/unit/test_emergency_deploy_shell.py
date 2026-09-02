@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -82,6 +84,45 @@ def test_terminal_rollback_orphan_recovery_is_closed_and_audit_bound() -> None:
         'rm -f "${REQUEST_PATH}"'
     )
     assert body.count("cleanup\n        trap - EXIT") == 2
+
+
+def test_terminal_rollback_request_filter_executes_in_object_scope() -> None:
+    body = HELPER.read_text(encoding="utf-8")
+    scope_marker = "        . as $request |\n"
+    marker_index = body.index(scope_marker)
+    filter_start = body.rfind("    jq -e '\n", 0, marker_index) + len("    jq -e '\n")
+    filter_end = body.index("\n    ' \"${REQUEST_PATH}\"", marker_index)
+    request_filter = body[filter_start:filter_end]
+    payload = {
+        "schema_version": "1.0",
+        "request_id": "github-run-33673819722",
+        "target_sha": "e" * 40,
+        "actor": "masonoh-kidsnote",
+        "workflow_run_id": "33673819722",
+        "source": "github-actions-workflow-dispatch",
+        "reason_sha256": "a" * 64,
+        "issued_at_epoch": 1788377519,
+        "expires_at_epoch": 1788378119,
+    }
+
+    valid = subprocess.run(
+        ["jq", "-e", request_filter],
+        input=json.dumps(payload),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert valid.returncode == 0, valid.stderr
+
+    payload["expires_at_epoch"] = payload["issued_at_epoch"]
+    expired = subprocess.run(
+        ["jq", "-e", request_filter],
+        input=json.dumps(payload),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert expired.returncode != 0
 
 
 def test_forced_gateway_exposes_only_validated_emergency_deploy() -> None:
