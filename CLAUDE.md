@@ -215,14 +215,14 @@ After a successful merge, the session SHOULD:
 ---
 
 <!-- SPECKIT START -->
-**Active feature plan**: `specs/174-accounting-cross-sectional-factors/plan.md`
+**Active feature plan**: `specs/178-flutter-operator-mobile/plan.md`
 
 Active feature pointer: `.specify/feature.json` is the maintained pointer for
 the current worktree. Do not trust prose in this block as the source of truth
 for in-flight work; use the `git_ground_truth` start hook, latest `HANDOFF.md`,
 and `/sync` against `jinooaction/claude` `Codex/*` branches before continuing.
 
-현재 포인터: `specs/174-accounting-cross-sectional-factors/plan.md` — 공식 보관본과 최신본을 분리해 회계 팩터 16개를 사전등록 검증한다. 20번째 연구 가족까지의 오합격 예산을 지키며 자본·주문·허용목록·헌법·커널은 바꾸지 않는다.
+현재 포인터: `specs/178-flutter-operator-mobile/plan.md` — 정제된 공개 상태만 읽는 Flutter 운영자 앱과 버전이 붙은 JSON 계약을 만든다. 모바일 주문·실거래 활성화·중단 해제·자본·전략·허용목록·한도·헌법·커널은 바꾸지 않는다.
 
 머지 완료(베이스라인): spec 004 (LLM 판단 지점), 005 (자율 튜너), 006 (배포 자동화), 007 (하드닝 카나리), 008 (백테스트), 009 (paper-run), 010 (자동 룰 설계자), 011 (라이브 성과 측정). **주의: 일부 tasks.md 가 stale 0% 로 표시된 적 있음 — 코드/테스트를 믿을 것.**
 

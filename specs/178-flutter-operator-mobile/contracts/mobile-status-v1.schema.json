@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jinooaction.github.io/claude/contracts/mobile-status-v1.schema.json",
+  "title": "auto-invest mobile status v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "generated_at_utc",
+    "repository",
+    "commit",
+    "run_url",
+    "source",
+    "read_only",
+    "liveness",
+    "operator_status"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "generated_at_utc": { "type": "string", "format": "date-time" },
+    "repository": { "type": "string", "minLength": 1 },
+    "commit": { "type": "string", "minLength": 7 },
+    "run_url": { "type": ["string", "null"], "format": "uri" },
+    "source": { "type": "string", "minLength": 1 },
+    "read_only": { "const": true },
+    "liveness": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["schema_version", "as_of_utc", "overall", "checks"],
+      "properties": {
+        "schema_version": { "const": "1.0" },
+        "as_of_utc": { "type": "string", "format": "date-time" },
+        "overall": { "type": "string", "minLength": 1 },
+        "checks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["key", "status", "critical", "age_hours", "max_age_hours", "timestamp_utc", "detail"],
+            "properties": {
+              "key": { "type": "string", "minLength": 1 },
+              "status": { "type": "string", "minLength": 1 },
+              "critical": { "type": "boolean" },
+              "timestamp_utc": { "type": ["string", "null"], "format": "date-time" },
+              "age_hours": { "type": ["number", "null"], "minimum": 0 },
+              "max_age_hours": { "type": ["number", "null"], "minimum": 0 },
+              "detail": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "operator_status": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["schema_version", "run_id", "commit", "timestamp_utc", "overall_status", "headline_ko", "next_action_ko", "dashboard_sections"],
+          "properties": {
+            "schema_version": { "const": "1.0" },
+            "run_id": { "type": "string" },
+            "commit": { "type": "string" },
+            "timestamp_utc": { "type": "string", "format": "date-time" },
+            "overall_status": { "type": "string", "minLength": 1 },
+            "headline_ko": { "type": "string", "minLength": 1 },
+            "next_action_ko": { "type": "string", "minLength": 1 },
+            "dashboard_sections": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": true,
+                "required": ["key", "title_ko", "status", "body_ko"],
+                "properties": {
+                  "key": { "type": "string", "minLength": 1 },
+                  "title_ko": { "type": "string", "minLength": 1 },
+                  "status": { "type": "string", "minLength": 1 },
+                  "body_ko": { "type": "string" }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
