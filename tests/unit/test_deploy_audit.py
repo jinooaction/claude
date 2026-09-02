@@ -10,6 +10,7 @@ from pydantic import ValidationError
 from auto_invest.persistence.audit import (
     DeployCompletedPayload,
     DeployEmergencyAuthorizedPayload,
+    DeployEmergencyRecoveryCompletedPayload,
     DeployFailedPayload,
     DeployKernelTouchedPayload,
     DeployRolledBackPayload,
@@ -32,6 +33,37 @@ def test_emergency_authorized_payload_roundtrip():
     parsed = json.loads(payload.model_dump_json())
     assert parsed["event_type"] == "DEPLOY_EMERGENCY_AUTHORIZED"
     assert parsed["target_sha"] == "a" * 40
+
+
+def test_emergency_recovery_completed_payload_roundtrip():
+    payload = DeployEmergencyRecoveryCompletedPayload(
+        request_id="github-run-456",
+        target_sha="a" * 40,
+        actor="masonoh-kidsnote",
+        workflow_run_id="456",
+        prior_request_id="github-run-123",
+        prior_correlation_id="b" * 32,
+        completed_deploy_correlation_id="c" * 32,
+        recovery_basis="subsequent-live-deploy-completed",
+        open_unfilled=0,
+    )
+
+    parsed = json.loads(payload.model_dump_json())
+    assert parsed["event_type"] == "DEPLOY_EMERGENCY_RECOVERY_COMPLETED"
+    assert parsed["open_unfilled"] == 0
+
+    with pytest.raises(ValidationError):
+        DeployEmergencyRecoveryCompletedPayload(
+            request_id="github-run-456",
+            target_sha="a" * 40,
+            actor="masonoh-kidsnote",
+            workflow_run_id="456",
+            prior_request_id="github-run-123",
+            prior_correlation_id="b" * 32,
+            completed_deploy_correlation_id="c" * 32,
+            recovery_basis="subsequent-live-deploy-completed",
+            open_unfilled=1,  # type: ignore[arg-type]
+        )
 
 
 def test_started_payload_roundtrip():

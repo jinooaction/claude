@@ -95,6 +95,45 @@ def test_helper_reads_only_requested_valid_chain(tmp_path: Path) -> None:
     assert "deadbeef" not in result.stdout
 
 
+def test_helper_reads_verified_emergency_recovery_terminal(tmp_path: Path) -> None:
+    db_path = tmp_path / "audit.db"
+    _audit_db(db_path)
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.executemany(
+            "INSERT INTO audit_log VALUES (?, ?, ?, ?, ?)",
+            (
+                (
+                    5,
+                    "2026-09-03T01:00:00Z",
+                    "DEPLOY_EMERGENCY_AUTHORIZED",
+                    "cafebabe",
+                    '{}',
+                ),
+                (
+                    6,
+                    "2026-09-03T01:00:01Z",
+                    "DEPLOY_EMERGENCY_RECOVERY_COMPLETED",
+                    "cafebabe",
+                    '{"recovery_basis":"subsequent-live-deploy-completed"}',
+                ),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    helper = _test_helper(tmp_path, db_path)
+
+    result = subprocess.run(
+        [str(helper)], capture_output=True, text=True, check=False
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "AUDIT_CORRELATION_ID=cafebabe" in result.stdout
+    assert "AUDIT_TERMINAL_EVENT=DEPLOY_EMERGENCY_RECOVERY_COMPLETED" in result.stdout
+    assert "subsequent-live-deploy-completed" in result.stdout
+
+
 def test_helper_rejects_shell_text_before_database_access(tmp_path: Path) -> None:
     helper = _test_helper(tmp_path, tmp_path / "missing.db")
 

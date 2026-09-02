@@ -53,7 +53,7 @@
 - `HEALTHY` 또는 `ROLLED_BACK`이 검증됐을 때만 제거된다.
 - `HALTED`는 자동 만료되지 않는다.
 - 새 등록 오너 단회 요청은 root 소유 정규 파일·닫힌 HALTED 스키마·배타 잠금과 이전 요청의 유일한 `DEPLOY_EMERGENCY_AUTHORIZED`·`DEPLOY_STARTED=0`을 함께 증명한 경우에만 잠금을 인계한다.
-- 요청 파일과 `QUIESCED` 잠금이 함께 남은 terminal rollback orphan은 두 파일의 root 소유·0640·닫힌 스키마·동일 신원, 배타 잠금, 승인 1·시작 1·실패 1·커널 변경 0~1·롤백 1·완료 0·예상 밖 사건 0, 최신 롤백, production HEAD와 롤백 기준 일치가 모두 증명될 때만 중개사 쓰기 잠금 아래에서 이전 요청을 제거한다.
+- 요청 파일과 `QUIESCED` 잠금이 함께 남은 terminal rollback orphan은 두 파일의 root 소유·0640·닫힌 스키마·동일 신원, 배타 잠금, 승인 1·시작 1·실패 1·커널 변경 0~1·롤백 1·완료 0·예상 밖 사건 0, 최신 롤백이 모두 증명되어야 한다. production HEAD가 rollback 기준이면 기존 복구를 계속하고, 이미 정확한 current-main으로 전진했으면 rollback 기준의 Git 후손, rollback 뒤 current-main 일반 live 배포의 유일한 시작·완료와 실패/롤백 0, in-window worker 시작, 현재 worker/timer active, 미체결 0건을 추가로 증명한 cleanup-only 복구만 허용한다.
 - 그 밖의 `DEPLOY_STARTED`, 불완전한 롤백, 장부·파일·생산 HEAD 모호성은 인계하지 않고 주문 잠금을 유지한다.
 
 ## DeployEmergencyAuthorizedAudit
@@ -74,6 +74,25 @@
 
 `correlation_id`는 뒤따르는 `DEPLOY_STARTED`, `DEPLOY_COMPLETED` 또는 `DEPLOY_FAILED`, `DEPLOY_ROLLED_BACK`과 같다.
 
+## DeployEmergencyRecoveryCompletedAudit
+
+후속 정상 배포가 이미 생산을 전진시킨 terminal rollback orphan을 코드·서비스 재변경 없이 회수한 추가 전용 사건이다.
+
+| 필드 | 형식 | 설명 |
+|---|---|---|
+| `event_type` | 문자열 | `DEPLOY_EMERGENCY_RECOVERY_COMPLETED` |
+| `request_id` | 문자열 | 이번 exact-main 등록 오너 요청 |
+| `target_sha` | 문자열 | 현재 생산 HEAD와 같은 정확한 current-main |
+| `actor` | 문자열 | 정확한 등록 오너 actor |
+| `workflow_run_id` | 문자열 | 이번 신뢰 실행 ID |
+| `prior_request_id` | 문자열 | 남아 있던 rollback orphan 요청 |
+| `prior_correlation_id` | 문자열 | 검증한 rollback 감사 체인 |
+| `completed_deploy_correlation_id` | 문자열 | 현재 target의 검증된 정상 live 배포 체인 |
+| `recovery_basis` | 문자열 | 정확히 `subsequent-live-deploy-completed` |
+| `open_unfilled` | 정수 | 정확히 `0` |
+
+이 사건은 이번 `DEPLOY_EMERGENCY_AUTHORIZED`와 같은 새 `correlation_id`를 사용한다. 이 체인은 코드 배포가 아니라 잠금 복구이므로 `DEPLOY_STARTED`를 만들지 않는다.
+
 ## EmergencyDeployOutcome
 
 | 상태 | 잠금 | 요청 | 감사 |
@@ -82,3 +101,4 @@
 | 이전 버전 복구 성공 | 복구 건강 확인 뒤 제거 | 제거·소비됨 | AUTHORIZED -> STARTED -> FAILED -> ROLLED_BACK |
 | 복구 실패 | 유지 | 제거·소비됨 | AUTHORIZED -> STARTED -> FAILED -> FAILED(rollback) |
 | 사전 검증 실패 | 생성 전 또는 안전 제거 | 제거·미소비/거부 | FAILED(precondition) |
+| 후속 정상 배포 증명 뒤 잠금만 복구 | 기존 worker/timer를 유지한 채 제거 | 이전 orphan 제거 | AUTHORIZED -> EMERGENCY_RECOVERY_COMPLETED |

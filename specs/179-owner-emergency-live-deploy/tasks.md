@@ -109,6 +109,9 @@
 - [x] T045 run `33676023848`에서 terminal rollback 요청의 만료 시각 비교가 객체가 아닌 숫자 범위에서 `issued_at_epoch`를 조회해 생산 변경·KIS·신규 감사 전에 실패 폐쇄된 jq 범위 결함을 확인한다.
 - [x] T046 요청 객체를 jq 변수에 고정하고 유효·역전 시각 payload로 실제 필터를 실행하는 회귀 시험을 추가한다.
 - [ ] T047 전체 검증·PR 관문·merge 뒤 exact-main 배포 및 다음 정규장 오너 복구 요청으로 rollback orphan 해제·자동 timer 복구를 확인한다.
+- [x] T048 헌법 15.3.0과 Spec 179에 후속 정상 live 배포·Git 계보·worker/timer·KIS 증거에 기반한 cleanup-only rollback orphan 회수 계약을 전용 안전 경계 커밋으로 고정한다.
+- [x] T049 workflow가 정상 배포 성공 뒤에도 고정 helper에 stale 상태 판정을 맡기고, helper가 완료 감사·두 잠금·미체결 0건 아래에서 전용 복구 완료 사건 뒤 이전 파일만 제거하도록 구현·반례 시험한다.
+- [ ] T050 전체 검증·PR 관문·merge·exact-main 정상 배포 뒤 등록 오너 단회 요청으로 생산 orphan 회수, timer 재개, 주문 없는 preflight를 확인한다.
 
 ---
 

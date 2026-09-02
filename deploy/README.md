@@ -184,6 +184,18 @@ remains with state `HALTED`, and all live broker writes fail closed. This deploy
 authorization never authorizes a manual order or changes capital, strategy,
 whitelist, order type, risk limits, or promotion stage.
 
+The workflow still calls the fixed helper when the ordinary deploy has already
+completed. With no stale request or interlock, this is a no-mutation no-op. If a
+verified rollback request and `QUIESCED` interlock were left behind by interrupted
+shell cleanup, and a later ordinary live deploy already advanced production to the
+exact current main, cleanup-only recovery requires the original closed file and
+ledger proofs plus Git ancestry, one later successful target deploy, an in-window
+`WORKER_STARTED`, active worker and live timer, both exclusive locks, and a fresh
+KIS `open_unfilled=0` result. It appends a new authorization and
+`DEPLOY_EMERGENCY_RECOVERY_COMPLETED`, then removes only the stale files. It does
+not restart services, mutate code, or submit/cancel an order. Missing or ambiguous
+proof leaves the old interlock intact.
+
 ## 5. Rollback path (verification)
 
 Push a deliberately-broken change to a test branch and:

@@ -45,6 +45,7 @@ EventType = Literal[
     "PRICE_TABLE_LOADED",
     "DEPLOY_BLOCKED_KERNEL_TOUCH",
     "DEPLOY_EMERGENCY_AUTHORIZED",
+    "DEPLOY_EMERGENCY_RECOVERY_COMPLETED",
     "DEPLOY_STARTED",
     "DEPLOY_COMPLETED",
     "DEPLOY_FAILED",
@@ -303,6 +304,23 @@ class DeployEmergencyAuthorizedPayload(AuditPayload):
     reason_sha256: str
     issued_at_epoch: int
     expires_at_epoch: int
+
+
+class DeployEmergencyRecoveryCompletedPayload(AuditPayload):
+    """Constitution VIII.A: stale rollback lock released after later healthy deploy."""
+
+    event_type: Literal["DEPLOY_EMERGENCY_RECOVERY_COMPLETED"] = (
+        "DEPLOY_EMERGENCY_RECOVERY_COMPLETED"
+    )
+    request_id: str
+    target_sha: str
+    actor: str
+    workflow_run_id: str
+    prior_request_id: str
+    prior_correlation_id: str
+    completed_deploy_correlation_id: str
+    recovery_basis: Literal["subsequent-live-deploy-completed"]
+    open_unfilled: Literal[0] = 0
 
 
 class DeployStartedPayload(AuditPayload):
@@ -949,6 +967,7 @@ AnyPayload = (
     | PriceTableLoadedPayload
     | DeployBlockedKernelTouchPayload
     | DeployEmergencyAuthorizedPayload
+    | DeployEmergencyRecoveryCompletedPayload
     | DeployStartedPayload
     | DeployCompletedPayload
     | DeployFailedPayload

@@ -59,3 +59,9 @@
 - **Decision**: DeployRunner가 이미 검증한 고정 `env_path`를 `dry_run_config`에도 전달한다. root helper는 `.env`를 source·echo·export하지 않는다.
 - **Rationale**: systemd unit은 EnvironmentFile을 프로세스에 주입하지만 exact-target bootstrap은 의도적으로 별도 app-user 프로세스다. config loader는 이미 dotenv 읽기와 비밀값 등록·가림을 제공하므로 같은 경계를 재사용하는 것이 가장 작고 안전하다.
 - **Alternatives considered**: shell에서 `.env`를 source하거나 명령행 환경으로 펼치면 파싱 차이와 비밀값 노출 표면이 늘어나므로 기각했다.
+
+## 결정 11: rollback 뒤 정상 배포가 전진했으면 완료 감사와 현재 건강을 다시 증명해 잠금만 회수한다
+
+- **Decision**: 이전 rollback orphan의 닫힌 파일·장부 계약을 그대로 검증한 뒤, 생산 HEAD가 새 승인 대상 current-main과 같고 rollback 기준의 Git 후손이며, rollback 뒤 그 대상의 일반 live 배포가 시작 1·완료 1·실패/롤백 0·최신 완료로 끝났고 그 사이 worker 시작이 있으며 현재 worker와 timer가 active일 때만 cleanup-only 복구를 허용한다. 유지보수 잠금과 broker-write 잠금 아래에서 새 오너 승인, KIS 미체결 0건, 전용 복구 완료 사건을 순서대로 남긴 뒤 이전 두 파일만 제거한다.
+- **Rationale**: 정상 배포가 이미 코드와 90초 건강 검사를 완결했는데 오래된 rollback 기준과 literal HEAD 동일성만 요구하면 안전이 더 좋아지지 않고 주문 가동성만 영구 차단된다. 현재 실행 코드의 건강한 배포 증거와 rollback으로부터의 계보를 함께 요구하면 실제 상태를 기준으로 같은 수준 이상의 복구 증거를 얻는다.
+- **Alternatives considered**: SSH로 파일을 직접 지우는 방식은 감사·경쟁 방어가 없어서 기각했다. 정상 배포를 다시 실행하거나 worker를 재시작하는 방식은 불필요한 장중 변경과 새 장애 표면을 만들므로 기각했다. 현재 HEAD만 비교하는 방식은 건강·배포 완료를 증명하지 못해 기각했다.
