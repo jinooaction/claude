@@ -140,10 +140,54 @@ append_recovery_completed() {
         || die "failed to append emergency recovery audit"
 }
 
+append_orphan_recovered() {
+    local correlation_id="$1" request_id="$2" target_sha="$3" actor="$4"
+    local workflow_run_id="$5" prior_request_id="$6" prior_correlation_id="$7"
+    local completed_deploy_correlation_id="$8" recovered_production_sha="$9"
+    local audit_ts recovery_payload
+
+    [[ "${correlation_id}" =~ ^[0-9a-f]{32}$ \
+        && "${prior_correlation_id}" =~ ^[0-9a-f]{32}$ \
+        && "${completed_deploy_correlation_id}" =~ ^[0-9a-f]{32}$ \
+        && "${recovered_production_sha}" =~ ^[0-9a-f]{40}$ ]] \
+        || die "invalid forward recovery audit identity"
+    audit_ts="$(date -u +'%Y-%m-%dT%H:%M:%S.000Z')"
+    recovery_payload="$(jq -cn \
+        --arg event_type "DEPLOY_EMERGENCY_ORPHAN_RECOVERED" \
+        --arg request_id "${request_id}" \
+        --arg target_sha "${target_sha}" \
+        --arg actor "${actor}" \
+        --arg workflow_run_id "${workflow_run_id}" \
+        --arg prior_request_id "${prior_request_id}" \
+        --arg prior_correlation_id "${prior_correlation_id}" \
+        --arg completed_deploy_correlation_id "${completed_deploy_correlation_id}" \
+        --arg recovered_production_sha "${recovered_production_sha}" \
+        --arg recovery_basis "subsequent-live-deploy-forward-handoff" \
+        '{event_type:$event_type,request_id:$request_id,target_sha:$target_sha,
+          actor:$actor,workflow_run_id:$workflow_run_id,
+          prior_request_id:$prior_request_id,
+          prior_correlation_id:$prior_correlation_id,
+          completed_deploy_correlation_id:$completed_deploy_correlation_id,
+          recovered_production_sha:$recovered_production_sha,
+          recovery_basis:$recovery_basis,open_unfilled:0}')" \
+        || die "failed to build forward orphan recovery audit"
+
+    sqlite3 "${DB_PATH}" \
+        "PRAGMA busy_timeout=30000;
+         BEGIN IMMEDIATE;
+         INSERT INTO audit_log
+           (ts_utc,event_type,rule_id,symbol,payload_json,correlation_id)
+         VALUES
+           ('${audit_ts}','DEPLOY_EMERGENCY_ORPHAN_RECOVERED',NULL,NULL,
+            '${recovery_payload}','${correlation_id}');
+         COMMIT;" >/dev/null \
+        || die "failed to append forward orphan recovery audit"
+}
+
 validate_halted_interlock_for_recovery() {
     local prior_request_id prior_workflow_run_id prior_target_sha
     local expected_gid file_meta authorization_count correlation_id
-    local started_count deploy_row_count
+    local started_count deploy_row_count orphan_recovered_count
 
     [[ -f "${INTERLOCK_PATH}" && ! -L "${INTERLOCK_PATH}" ]] \
         || die "existing maintenance interlock is not a safe regular file"
@@ -198,8 +242,35 @@ validate_halted_interlock_for_recovery() {
           WHERE correlation_id = '${correlation_id}'
             AND event_type LIKE 'DEPLOY_%';")" \
         || die "failed to inspect prior deploy chain"
-    [[ "${started_count}" == "0" && "${deploy_row_count}" == "1" ]] \
-        || die "prior emergency reached or ambiguously crossed DEPLOY_STARTED"
+    orphan_recovered_count="$(sqlite3 -readonly "${DB_PATH}" \
+        "SELECT COUNT(*) FROM audit_log
+          WHERE correlation_id = '${correlation_id}'
+            AND event_type = 'DEPLOY_EMERGENCY_ORPHAN_RECOVERED'
+            AND json_extract(payload_json, '$.request_id') = '${prior_request_id}'
+            AND json_extract(payload_json, '$.target_sha') = '${prior_target_sha}'
+            AND json_extract(payload_json, '$.workflow_run_id') = '${prior_workflow_run_id}'
+            AND json_extract(payload_json, '$.actor') IN ('jinooaction','masonoh-kidsnote')
+            AND json_type(payload_json, '$.prior_request_id') = 'text'
+            AND json_extract(payload_json, '$.prior_request_id') GLOB 'github-run-[1-9]*'
+            AND substr(json_extract(payload_json, '$.prior_request_id'), 12)
+                NOT GLOB '*[^0-9]*'
+            AND length(json_extract(payload_json, '$.prior_correlation_id')) = 32
+            AND json_extract(payload_json, '$.prior_correlation_id') NOT GLOB '*[^0-9a-f]*'
+            AND length(json_extract(payload_json, '$.completed_deploy_correlation_id')) = 32
+            AND json_extract(payload_json, '$.completed_deploy_correlation_id') NOT GLOB '*[^0-9a-f]*'
+            AND length(json_extract(payload_json, '$.recovered_production_sha')) = 40
+            AND json_extract(payload_json, '$.recovered_production_sha') NOT GLOB '*[^0-9a-f]*'
+            AND json_extract(payload_json, '$.recovery_basis') =
+                'subsequent-live-deploy-forward-handoff'
+            AND json_extract(payload_json, '$.open_unfilled') = 0;")" \
+        || die "failed to inspect prior orphan hand-off"
+    if [[ "${started_count}" != "0" ]] \
+        || ! { [[ "${deploy_row_count}" == "1" \
+                    && "${orphan_recovered_count}" == "0" ]] \
+            || [[ "${deploy_row_count}" == "2" \
+                    && "${orphan_recovered_count}" == "1" ]]; }; then
+        die "prior emergency reached or ambiguously crossed DEPLOY_STARTED"
+    fi
     echo "RECOVERING_PRESTART_HALTED request_id=${prior_request_id} target=${prior_target_sha}"
 }
 
@@ -327,11 +398,12 @@ validate_terminal_rollback_orphan() {
         return
     fi
 
-    [[ "${production_head}" == "${authorized_target_sha}" ]] \
-        || die "production repo is neither rollback baseline nor exact authorized target"
     sudo -u "${APP_USER}" git -C "${REPO}" merge-base --is-ancestor \
-        "${rollback_sha_before}" "${authorized_target_sha}" \
-        || die "authorized target does not descend from the verified rollback baseline"
+        "${rollback_sha_before}" "${production_head}" \
+        || die "production repo does not descend from the verified rollback baseline"
+    sudo -u "${APP_USER}" git -C "${REPO}" merge-base --is-ancestor \
+        "${production_head}" "${authorized_target_sha}" \
+        || die "authorized target does not descend from the verified production HEAD"
     read -r completed_deploy_correlation deploy_started_seq deploy_completed_seq \
         deploy_sha_before <<<"$(sqlite3 -readonly -separator ' ' "${DB_PATH}" \
         "SELECT started.correlation_id, started.seq, completed.seq,
@@ -343,9 +415,9 @@ validate_terminal_rollback_orphan() {
             AND completed.event_type = 'DEPLOY_COMPLETED'
             AND started.seq > ${rollback_seq}
             AND completed.seq > started.seq
-            AND json_extract(started.payload_json, '$.sha_after') = '${authorized_target_sha}'
+            AND json_extract(started.payload_json, '$.sha_after') = '${production_head}'
             AND json_extract(started.payload_json, '$.triggered_by') IN ('manual','auto-tuner')
-            AND json_extract(completed.payload_json, '$.sha_after') = '${authorized_target_sha}'
+            AND json_extract(completed.payload_json, '$.sha_after') = '${production_head}'
             AND json_extract(completed.payload_json, '$.phase') = 'live'
           ORDER BY completed.seq DESC LIMIT 1;")" \
         || die "failed to locate later completed live deploy"
@@ -388,7 +460,7 @@ validate_terminal_rollback_orphan() {
         && "${deploy_terminal_event}" == "DEPLOY_COMPLETED" ]] \
         || die "later completed deploy chain is incomplete or ambiguous"
     sudo -u "${APP_USER}" git -C "${REPO}" merge-base --is-ancestor \
-        "${deploy_sha_before}" "${authorized_target_sha}" \
+        "${deploy_sha_before}" "${production_head}" \
         || die "later deploy target does not descend from its audited baseline"
     worker_started_count="$(sqlite3 -readonly "${DB_PATH}" \
         "SELECT COUNT(*) FROM audit_log
@@ -403,8 +475,14 @@ validate_terminal_rollback_orphan() {
     systemctl is-active --quiet auto-invest-live-canary.timer \
         || die "automatic live scheduler is not active after the later deploy"
     validated_completed_deploy_correlation_id="${completed_deploy_correlation}"
-    rollback_recovery_mode="completed-deploy"
-    echo "RECOVERING_POSTROLLBACK_COMPLETED_DEPLOY request_id=${prior_request_id} target=${authorized_target_sha}"
+    validated_recovery_production_sha="${production_head}"
+    if [[ "${production_head}" == "${authorized_target_sha}" ]]; then
+        rollback_recovery_mode="completed-deploy"
+        echo "RECOVERING_POSTROLLBACK_COMPLETED_DEPLOY request_id=${prior_request_id} target=${authorized_target_sha}"
+    else
+        rollback_recovery_mode="completed-deploy-handoff"
+        echo "RECOVERING_POSTROLLBACK_FORWARD_HANDOFF request_id=${prior_request_id} production=${production_head} target=${authorized_target_sha}"
+    fi
 }
 
 prepare_exact_target_runner() {
@@ -442,9 +520,11 @@ main() {
     local authorization_correlation_id="" safe_terminal=0 interlock_created=0
     local request_installed=0 bootstrap_repo="" auto_invest_home=""
     local timer_was_active=0 preserve_existing_interlock=0
+    local forward_handoff_authorized=0
     local recovered_terminal_rollback=0 rollback_recovery_mode=""
     local validated_prior_request_id="" validated_rollback_correlation_id=""
-    local validated_completed_deploy_correlation_id="" authorized_target_sha="$1"
+    local validated_completed_deploy_correlation_id="" validated_recovery_production_sha=""
+    local authorized_target_sha="$1"
 
     now="$(date +%s)"
     (( issued_at <= now )) || die "emergency request issued in the future"
@@ -483,6 +563,13 @@ main() {
             return
         elif [[ "${safe_terminal}" -eq 1 ]]; then
             rm -f "${INTERLOCK_PATH}"
+        elif [[ "${forward_handoff_authorized}" -eq 1 ]]; then
+            rm -f "${REQUEST_PATH}"
+            printf '{"request_id":"%s","target_sha":"%s","workflow_run_id":"%s","created_at_epoch":%s,"state":"HALTED","reason":"deploy terminal safety not proven"}\n' \
+                "${request_id}" "${target_sha}" "${workflow_run_id}" "${now}" >"${INTERLOCK_PATH}"
+            chmod 0640 "${INTERLOCK_PATH}"
+            chown root:"${APP_GROUP}" "${INTERLOCK_PATH}"
+            echo "DEPLOY_EMERGENCY_HALTED request_id=${request_id} target=${target_sha}" >&2
         elif [[ "${preserve_existing_interlock}" -eq 1 ]]; then
             echo "DEPLOY_EMERGENCY_INTERLOCK_PRESERVED target=${target_sha}" >&2
             return
@@ -520,38 +607,51 @@ main() {
     exec 8<>"${BROKER_WRITE_LOCK_PATH}"
     flock -w 30 -x 8 || die "live broker write did not quiesce within 30 seconds"
     if [[ "${recovered_terminal_rollback}" -eq 1 \
-        && "${rollback_recovery_mode}" == "completed-deploy" ]]; then
+        && "${rollback_recovery_mode}" == completed-deploy* ]]; then
         [[ "$(sudo -u "${APP_USER}" git -C "${REPO}" rev-parse HEAD)" \
-            == "${target_sha}" ]] \
-            || die "production HEAD changed before cleanup-only recovery"
+            == "${validated_recovery_production_sha}" ]] \
+            || die "production HEAD changed before verified orphan recovery"
         systemctl is-active --quiet auto-invest.service \
-            || die "production worker changed before cleanup-only recovery"
+            || die "production worker changed before verified orphan recovery"
         systemctl is-active --quiet auto-invest-live-canary.timer \
-            || die "automatic live scheduler changed before cleanup-only recovery"
+            || die "automatic live scheduler changed before verified orphan recovery"
         smoke_tmp="$(mktemp "${REQUEST_DIR}/.kis-smoke.XXXXXX")"
         authorization_correlation_id="$(append_preauthorization \
             "${request_id}" "${target_sha}" "${workflow_run_id}" "${actor}" \
             "${issued_at}" "${expires_at}" "${reason_sha256}")"
         [[ "${authorization_correlation_id}" =~ ^[0-9a-f]{32}$ ]] \
             || die "emergency recovery authorization audit was not proven"
-        if ! "${KIS_SMOKE_HELPER}" "${target_sha}" >"${smoke_tmp}" 2>&1; then
+        if ! "${KIS_SMOKE_HELPER}" "${validated_recovery_production_sha}" \
+            >"${smoke_tmp}" 2>&1; then
             cat "${smoke_tmp}"
-            die "KIS read-only smoke failed during cleanup-only recovery"
+            die "KIS read-only smoke failed during verified orphan recovery"
         fi
         cat "${smoke_tmp}"
         grep -Eq 'open_unfilled[=:][[:space:]]*0([^0-9]|$)' "${smoke_tmp}" \
             || die "KIS smoke did not prove open_unfilled=0"
-        append_recovery_completed \
+        if [[ "${rollback_recovery_mode}" == "completed-deploy" ]]; then
+            append_recovery_completed \
+                "${authorization_correlation_id}" "${request_id}" "${target_sha}" \
+                "${actor}" "${workflow_run_id}" "${validated_prior_request_id}" \
+                "${validated_rollback_correlation_id}" \
+                "${validated_completed_deploy_correlation_id}"
+            rm -f "${REQUEST_PATH}"
+            safe_terminal=1
+            echo "DEPLOY_EMERGENCY_RECOVERY_COMPLETED request_id=${request_id} target=${target_sha}"
+            cleanup
+            trap - EXIT
+            return 0
+        fi
+        append_orphan_recovered \
             "${authorization_correlation_id}" "${request_id}" "${target_sha}" \
             "${actor}" "${workflow_run_id}" "${validated_prior_request_id}" \
             "${validated_rollback_correlation_id}" \
-            "${validated_completed_deploy_correlation_id}"
-        rm -f "${REQUEST_PATH}"
-        safe_terminal=1
-        echo "DEPLOY_EMERGENCY_RECOVERY_COMPLETED request_id=${request_id} target=${target_sha}"
-        cleanup
-        trap - EXIT
-        return 0
+            "${validated_completed_deploy_correlation_id}" \
+            "${validated_recovery_production_sha}"
+        forward_handoff_authorized=1
+        rm -f "${REQUEST_PATH}" "${smoke_tmp}"
+        smoke_tmp=""
+        echo "DEPLOY_EMERGENCY_ORPHAN_RECOVERED request_id=${request_id} production=${validated_recovery_production_sha} target=${target_sha}"
     fi
     if [[ "${recovered_terminal_rollback}" -eq 1 ]]; then
         rm -f "${REQUEST_PATH}"
@@ -581,9 +681,11 @@ main() {
           expires_at_epoch:$expires_at_epoch}' >"${tmp}" \
         || die "failed to build emergency request"
 
-    authorization_correlation_id="$(append_preauthorization \
-        "${request_id}" "${target_sha}" "${workflow_run_id}" "${actor}" \
-        "${issued_at}" "${expires_at}" "${reason_sha256}")"
+    if [[ -z "${authorization_correlation_id}" ]]; then
+        authorization_correlation_id="$(append_preauthorization \
+            "${request_id}" "${target_sha}" "${workflow_run_id}" "${actor}" \
+            "${issued_at}" "${expires_at}" "${reason_sha256}")"
+    fi
     [[ "${authorization_correlation_id}" =~ ^[0-9a-f]{32}$ ]] \
         || die "emergency authorization audit was not proven"
     install -m 0640 -o root -g "${APP_GROUP}" "${tmp}" "${REQUEST_PATH}"

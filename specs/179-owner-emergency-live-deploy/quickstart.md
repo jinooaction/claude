@@ -32,15 +32,16 @@
 ## 5. 생산 인수 시험
 
 1. main 머지 뒤 기존 push 배포가 새 root helper와 unit을 동기화한 다음 일반 장중 차단으로 멈추는지 확인한다.
-2. namespace 소유자 또는 헌법 15.3.1에 정확히 등록된 시스템 오너가 정확한 main SHA, 확인 문구, 이유로 긴급 workflow를 한 번 실행한다.
+2. namespace 소유자 또는 헌법 15.4.0에 정확히 등록된 시스템 오너가 정확한 main SHA, 확인 문구, 이유로 긴급 workflow를 한 번 실행한다.
 3. KIS smoke `6/6`, `open_unfilled=0`, 승인/시작/완료 감사, exact-main 생산 HEAD, 90초 건강 검사를 확인한다.
 4. 이전 rollback orphan 뒤 정상 배포가 이미 끝난 경우에는 승인/복구완료 감사, Git 계보, in-window worker 시작, active worker/timer, KIS `open_unfilled=0`, stale 요청·잠금 제거와 코드·서비스 재변경 0건을 확인한다.
-5. 다음 GitHub schedule 또는 server timer 자동 실행에서 기존 10% 단 1 계약으로 실제 주문·체결·전략 감사·계좌 대사를 확인한다.
-6. 다른 scheduler가 같은 최초 run을 반환하고 중복 중개사 쓰기가 0건인지 확인한다.
+5. 생산이 rollback 기준과 새 main 사이의 건강한 커밋이면 승인/비종료 orphan 인계 감사, 양쪽 Git 계보, 현재 생산 SHA의 정상 live 배포·worker/timer, 두 잠금, KIS `open_unfilled=0`, 이전 요청 제거와 같은 잠금 아래 새 요청 설치·기존 exact-target 상태기계 진행을 확인한다.
+6. 다음 GitHub schedule 또는 server timer 자동 실행에서 기존 10% 단 1 계약으로 실제 주문·체결·전략 감사·계좌 대사를 확인한다.
+7. 다른 scheduler가 같은 최초 run을 반환하고 중복 중개사 쓰기가 0건인지 확인한다.
 
 ## 되돌림
 
 - 기능 문제가 있으면 별도 PR로 이전 구현을 되돌린다.
 - 생산 배포 실패는 기존 runner가 이전 SHA로 자동 복구하고 건강 상태를 확인한다.
 - 복구가 확인되지 않으면 유지보수 잠금을 지우지 않고 실주문을 멈춘 채 장애 원인을 노출한다.
-- 헌법 15.3.1의 예외·등록 오너·bootstrap·HALTED 및 terminal rollback orphan·후속 정상 배포 복구·현재 시도 판정 범위를 되돌리거나 바꿀 때도 K-meta 전용 개정 커밋과 새 버전이 필요하다.
+- 헌법 15.4.0의 예외·등록 오너·bootstrap·HALTED 및 terminal rollback orphan·후속 정상 배포 복구·건강한 중간 배포 인계·현재 시도 판정 범위를 되돌리거나 바꿀 때도 K-meta 전용 개정 커밋과 새 버전이 필요하다.

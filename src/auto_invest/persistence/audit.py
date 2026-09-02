@@ -46,6 +46,7 @@ EventType = Literal[
     "DEPLOY_BLOCKED_KERNEL_TOUCH",
     "DEPLOY_EMERGENCY_AUTHORIZED",
     "DEPLOY_EMERGENCY_RECOVERY_COMPLETED",
+    "DEPLOY_EMERGENCY_ORPHAN_RECOVERED",
     "DEPLOY_STARTED",
     "DEPLOY_COMPLETED",
     "DEPLOY_FAILED",
@@ -320,6 +321,24 @@ class DeployEmergencyRecoveryCompletedPayload(AuditPayload):
     prior_correlation_id: str
     completed_deploy_correlation_id: str
     recovery_basis: Literal["subsequent-live-deploy-completed"]
+    open_unfilled: Literal[0] = 0
+
+
+class DeployEmergencyOrphanRecoveredPayload(AuditPayload):
+    """Constitution VIII.A: verified stale rollback state handed to a new deploy."""
+
+    event_type: Literal["DEPLOY_EMERGENCY_ORPHAN_RECOVERED"] = (
+        "DEPLOY_EMERGENCY_ORPHAN_RECOVERED"
+    )
+    request_id: str
+    target_sha: str
+    actor: str
+    workflow_run_id: str
+    prior_request_id: str
+    prior_correlation_id: str
+    completed_deploy_correlation_id: str
+    recovered_production_sha: str
+    recovery_basis: Literal["subsequent-live-deploy-forward-handoff"]
     open_unfilled: Literal[0] = 0
 
 
@@ -968,6 +987,7 @@ AnyPayload = (
     | DeployBlockedKernelTouchPayload
     | DeployEmergencyAuthorizedPayload
     | DeployEmergencyRecoveryCompletedPayload
+    | DeployEmergencyOrphanRecoveredPayload
     | DeployStartedPayload
     | DeployCompletedPayload
     | DeployFailedPayload
