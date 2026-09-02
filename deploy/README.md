@@ -137,7 +137,7 @@ is tightening a `tier_b` KPI threshold in
 `config/llm_kpi_thresholds.toml`, recorded as an `AUTO_TUNED_L1`
 audit row (with the prior value, so it is reversible).
 
-## 4. Trigger a deploy manually (any time, off-hours only)
+## 4. Trigger a deploy manually (ordinary path: off-hours only)
 
 ```bash
 sudo -u auto-invest systemctl start auto-invest-deploy.service
@@ -159,6 +159,30 @@ GitHub Actions에서 같은 내용을 읽기 전용으로 확인할 때는 수�
 `Deploy audit log verification` 워크플로를 사용한다. 이 경로는 임의 원격 셸을 보내지 않고
 forced-command gateway의 `deploy-audit [correlation_id]`만 호출한다. 서버 helper는 요청 ID를
 다시 검증하고 위 데이터베이스를 `sqlite3 -readonly`로만 조회한다.
+
+### Repository-owner one-shot emergency deploy during XNYS hours
+
+Constitution VIII.A permits one narrow exception to the ordinary off-hours rule.
+The repository owner may run `Deploy on merge to main` with
+`owner_emergency=true`, the exact current 40-character main SHA, confirmation
+`OWNER_EMERGENCY_LIVE_DEPLOY`, and a 12-500 character reason. The workflow issues
+a short-lived, single-use request through the fixed `emergency-deploy` SSH
+command; there is no arbitrary remote shell and no reusable force switch.
+
+Before code mutation, the root helper appends `DEPLOY_EMERGENCY_AUTHORIZED`,
+creates `/run/auto-invest-deploy/live-order-maintenance.lock`, and waits for
+live broker writes to quiesce through the shared/exclusive
+`/run/auto-invest-deploy/broker-write.lock`. It then stops and verifies the
+previous scheduler timer, scheduler service, and long-running worker so the
+first deployment is safe even when the old code does not know the new lock.
+Only in that quiesced state does the read-only KIS smoke prove
+`open_unfilled=0` before code mutation.
+All ordinary deploy checks, migrations, the 90-second health gate, and rollback
+remain mandatory. The interlock is removed only after `DEPLOY_COMPLETED` or a
+verified `DEPLOY_ROLLED_BACK`. If neither terminal state can be proven, the file
+remains with state `HALTED`, and all live broker writes fail closed. This deploy
+authorization never authorizes a manual order or changes capital, strategy,
+whitelist, order type, risk limits, or promotion stage.
 
 ## 5. Rollback path (verification)
 
@@ -195,5 +219,6 @@ For a full audit trail, see
 - No Slack/email notifications; the audit log is the operator's
   notification surface.
 - No rollback-to-arbitrary-sha; only one commit back per R-D6.
-- No deploy during US regular hours, ever — guarded both by the
-  timer's calendar AND by the runner's `market_hours_guard`.
+- Ordinary deploys do not run during US regular hours. The only exception is the
+  repository-owner, exact-main, short-lived one-shot protocol above; it first
+  halts broker writes and preserves all other deploy and trading gates.

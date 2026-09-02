@@ -32,6 +32,7 @@ from auto_invest.broker.client import (
     ResilientClient,
 )
 from auto_invest.config.loader import ConfigError, load_config, load_secrets
+from auto_invest.execution.authority import DEFAULT_BROKER_WRITE_LOCK
 from auto_invest.execution.order_router import verify_stage_uniqueness
 from auto_invest.logging_config import configure_logging
 from auto_invest.persistence import db
@@ -2716,6 +2717,7 @@ async def _run_live(
             app_key=secrets["KIS_APP_KEY"],
             app_secret=secrets["KIS_APP_SECRET"],
             account_no=secrets["KIS_ACCOUNT_NO"],
+            broker_write_lock_path=DEFAULT_BROKER_WRITE_LOCK,
         )
 
         loop = asyncio.get_running_loop()
@@ -4895,6 +4897,9 @@ def rebalance_once_cmd(
                 caps=caps,  # type: ignore[arg-type]
                 halt_path=halt_path,
                 paper_mode=(mode == "paper"),
+                broker_write_lock_path=(
+                    DEFAULT_BROKER_WRITE_LOCK if mode == "live" else None
+                ),
                 live_order_guard=lambda: _live_rebalance_session_refusal(
                     mode=mode,
                     dry_run=dry_run,

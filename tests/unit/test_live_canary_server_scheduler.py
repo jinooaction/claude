@@ -92,6 +92,17 @@ def test_scheduler_fails_closed_before_shared_claim() -> None:
     assert "LIVE_CANARY_SERVER_TIMER_DUPLICATE" in body
 
 
+def test_scheduler_checks_deploy_maintenance_before_session_claim() -> None:
+    body = SCHEDULER.read_text(encoding="utf-8")
+    main = body.split("\nmain() {", 1)[1]
+
+    interlock_idx = main.index("refuse_deploy_maintenance")
+    market_idx = main.index("validate_market_session")
+    claim_idx = main.index("existing_session_claim")
+    assert interlock_idx < market_idx < claim_idx
+    assert "/run/auto-invest-deploy/live-order-maintenance.lock" in body
+
+
 def test_scheduler_preserves_post_attempt_evidence_without_retrying() -> None:
     body = SCHEDULER.read_text(encoding="utf-8")
 

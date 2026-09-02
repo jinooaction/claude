@@ -60,9 +60,18 @@ files = [
 ]
 
 [K6_market_hours_guard]
-description = "No live deploys during market hours (constitution principle VIII.A). Without K6, autonomous tuner can deploy mid-session."
+description = "Market-hours deploy control and the owner-emergency deploy/order interlock (constitution principle VIII.A). Without K6, code replacement can overlap a live broker write or an untrusted request can deploy mid-session."
 files = [
     "src/auto_invest/worker/schedule.py",
+    "src/auto_invest/deploy/emergency.py",
+    "src/auto_invest/deploy/runner.py",
+    "src/auto_invest/execution/authority.py",
+    "src/auto_invest/execution/order_router.py",
+    "deploy/emergency-deploy-on-instance.sh",
+    "deploy/live-canary-on-instance.sh",
+    "deploy/live-canary-scheduled-on-instance.sh",
+    "deploy/repair-ssh-boundary.sh",
+    ".github/workflows/deploy-on-merge.yml",
 ]
 
 [K_meta]

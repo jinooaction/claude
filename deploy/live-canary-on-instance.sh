@@ -17,6 +17,8 @@ NONCE_FILE="${NONCE_FILE:-${NONCE_DIR}/used-nonces}"
 SESSION_FILE="${SESSION_FILE:-${NONCE_DIR}/order-sessions.tsv}"
 SCHEDULED_RUNS_DIR="${SCHEDULED_RUNS_DIR:-${NONCE_DIR}/scheduled-runs}"
 SCHEDULED_LAST_RUN_FILE="${SCHEDULED_LAST_RUN_FILE:-${NONCE_DIR}/last-scheduled-run-id}"
+DEPLOY_MAINTENANCE_INTERLOCK="${DEPLOY_MAINTENANCE_INTERLOCK:-/run/auto-invest-deploy/live-order-maintenance.lock}"
+BROKER_WRITE_LOCK_PATH="${BROKER_WRITE_LOCK_PATH:-/run/auto-invest-deploy/broker-write.lock}"
 UV_BIN="${UV_BIN:-/usr/local/bin/uv}"
 REPOSITORY="jinooaction/claude"
 WORKFLOW="rebalance-live-canary.yml"
@@ -27,6 +29,19 @@ MAIN_CODE_COMMIT=""
 die() {
     echo "ERROR: $*" >&2
     exit 2
+}
+
+refuse_deploy_maintenance() {
+    [[ ! -e "${DEPLOY_MAINTENANCE_INTERLOCK}" ]] \
+        || die "live broker writes are halted for an owner emergency deploy"
+}
+
+acquire_broker_write_lock() {
+    [[ -f "${BROKER_WRITE_LOCK_PATH}" && ! -L "${BROKER_WRITE_LOCK_PATH}" ]] \
+        || die "missing or unsafe broker-write coordination lock"
+    exec 7<>"${BROKER_WRITE_LOCK_PATH}"
+    flock -n -s 7 || die "owner emergency deploy owns broker-write coordination lock"
+    refuse_deploy_maintenance
 }
 
 require_repo() {
@@ -247,6 +262,9 @@ place_order_authorized() {
     local source="$1" run_id="$2" signed_sha="$3" capital="$4"
     local claim_output claim_exit
     local -a cli_args
+    refuse_deploy_maintenance
+    acquire_broker_write_lock
+    refuse_deploy_maintenance
     set +e
     claim_output="$(claim_order_session "${run_id}" "${signed_sha}" "${source}")"
     claim_exit=$?

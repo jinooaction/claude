@@ -306,6 +306,43 @@ async def test_live_order_guard_rechecks_each_broker_submission(tmp_path: Path):
 
 
 @pytest.mark.asyncio
+async def test_deploy_maintenance_interlock_blocks_final_broker_write(
+    tmp_path: Path, monkeypatch
+):
+    marker = tmp_path / "live-order-maintenance.lock"
+    marker.write_text("HALTED\n", encoding="utf-8")
+    monkeypatch.setattr(
+        "auto_invest.execution.authority.DEFAULT_MAINTENANCE_INTERLOCK", marker
+    )
+
+    async with _router(tmp_path) as router:
+        with respx.mock(base_url=BASE, assert_all_called=False) as mock:
+            placed = mock.post("/uapi/overseas-stock/v1/trading/order").mock(
+                return_value=httpx.Response(200, json={"output": {"ODNO": "never"}})
+            )
+            outcome = await router.submit_order(
+                rule=_rule(),
+                quote_price_usd=Decimal("99"),
+                total_capital_usd=Decimal("10000"),
+                current_symbol_exposure_usd=Decimal("0"),
+                current_global_exposure_usd=Decimal("0"),
+            )
+
+        assert outcome.state == "REJECTED_BY_GATE"
+        assert outcome.gate == "deploy_maintenance_interlock"
+        assert placed.call_count == 0
+        rejected = [
+            row
+            for row in audit.read_all(router.conn)
+            if row["event_type"] == "ORDER_REJECTED_BY_GATE"
+        ]
+        assert audit.parse_payload(rejected[-1])["gate"] == (
+            "deploy_maintenance_interlock"
+        )
+        assert _authority_lock_count(router.conn) == 0
+
+
+@pytest.mark.asyncio
 async def test_submit_order_routes_to_per_symbol_exchange(tmp_path: Path):
     """order_exchange 가 주어지면 그 거래소(OVRS_EXCG_CD)로 주문이 나간다.
 

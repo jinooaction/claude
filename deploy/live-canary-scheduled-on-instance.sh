@@ -13,6 +13,7 @@ LIVE_HELPER="${LIVE_HELPER:-/usr/local/sbin/auto-invest-live-canary}"
 OBSERVE_HELPER="${OBSERVE_HELPER:-/usr/local/sbin/auto-invest-observe}"
 RECONCILIATION_HELPER="${RECONCILIATION_HELPER:-/usr/local/sbin/auto-invest-reconciliation-recovery}"
 STATE_DIR="${STATE_DIR:-/var/lib/auto-invest-live-order}"
+DEPLOY_MAINTENANCE_INTERLOCK="${DEPLOY_MAINTENANCE_INTERLOCK:-/run/auto-invest-deploy/live-order-maintenance.lock}"
 SCHEDULED_RUNS_DIR="${SCHEDULED_RUNS_DIR:-${STATE_DIR}/scheduled-runs}"
 LAST_RUN_FILE="${LAST_RUN_FILE:-${STATE_DIR}/last-scheduled-run-id}"
 SESSION_FILE="${SESSION_FILE:-${STATE_DIR}/order-sessions.tsv}"
@@ -22,6 +23,11 @@ MAIN_CODE_COMMIT=""
 die() {
     echo "ERROR: $*" >&2
     exit 2
+}
+
+refuse_deploy_maintenance() {
+    [[ ! -e "${DEPLOY_MAINTENANCE_INTERLOCK}" ]] \
+        || die "server timer broker writes are halted for an owner emergency deploy"
 }
 
 require_root_systemd() {
@@ -230,6 +236,7 @@ main() {
     local market_session orders_submitted result summary_tmp pointer_tmp
     local prior_claim prior_claim_exit
 
+    refuse_deploy_maintenance
     require_root_systemd
     validate_operational_revision
     deployed_sha="${DEPLOYED_CODE_COMMIT}"

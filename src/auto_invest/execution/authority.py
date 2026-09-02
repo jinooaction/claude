@@ -8,16 +8,73 @@ evaluate and submit broker writes from the same stale account snapshot.
 from __future__ import annotations
 
 import asyncio
+import fcntl
 import sqlite3
 import uuid
 from collections.abc import AsyncIterator, Callable
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 from auto_invest.broker.client import ResilientClient
 from auto_invest.broker.models import OrderRequest, OrderResult
 from auto_invest.broker.overseas import cancel_order, place_order
+
+DEFAULT_MAINTENANCE_INTERLOCK = Path(
+    "/run/auto-invest-deploy/live-order-maintenance.lock"
+)
+DEFAULT_BROKER_WRITE_LOCK = Path("/run/auto-invest-deploy/broker-write.lock")
+
+
+def maintenance_interlock_refusal() -> str | None:
+    """Return a fail-closed reason while an owner emergency deploy is active."""
+
+    try:
+        DEFAULT_MAINTENANCE_INTERLOCK.lstat()
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        return f"cannot verify deploy maintenance interlock: {type(exc).__name__}"
+    return "live broker writes are halted for an owner emergency deploy"
+
+
+class ExecutionMaintenanceActive(RuntimeError):
+    """Raised before a broker mutation while the deploy interlock exists."""
+
+
+@contextmanager
+def broker_write_coordination(path: Path | None):
+    """Hold the shared broker-write side of the deploy exclusion lock.
+
+    Production entry points pass the fixed root-prepared path. ``None`` exists
+    only for paper/test authorities that cannot write to a live broker.
+    """
+
+    if path is None:
+        yield
+        return
+    try:
+        lock_file = path.open("r+")
+    except OSError as exc:
+        raise ExecutionMaintenanceActive(
+            f"cannot open broker-write coordination lock: {type(exc).__name__}"
+        ) from exc
+    try:
+        try:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_SH | fcntl.LOCK_NB)
+        except (BlockingIOError, OSError) as exc:
+            raise ExecutionMaintenanceActive(
+                "owner emergency deploy owns the broker-write coordination lock"
+            ) from exc
+        if refusal := maintenance_interlock_refusal():
+            raise ExecutionMaintenanceActive(refusal)
+        yield
+    finally:
+        try:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+        finally:
+            lock_file.close()
 
 
 def _utcnow() -> datetime:
@@ -54,6 +111,7 @@ class ExecutionAuthority:
     lock_poll_seconds: float = 0.05
     now: Callable[[], datetime] = field(default=_utcnow)
     owner: str = field(default_factory=lambda: f"authority-{uuid.uuid4().hex}")
+    broker_write_lock_path: Path | None = None
 
     @asynccontextmanager
     async def account_lock(self, context: str) -> AsyncIterator[None]:
@@ -73,14 +131,15 @@ class ExecutionAuthority:
         market: str,
     ) -> OrderResult:
         """Submit a live order through the single broker-write surface."""
-        return await place_order(
-            self.broker,
-            access_token=self.access_token,
-            app_key=self.app_key,
-            app_secret=self.app_secret,
-            request=request,
-            market=market,
-        )
+        with broker_write_coordination(self.broker_write_lock_path):
+            return await place_order(
+                self.broker,
+                access_token=self.access_token,
+                app_key=self.app_key,
+                app_secret=self.app_secret,
+                request=request,
+                market=market,
+            )
 
     async def cancel_broker_order(
         self,
@@ -90,15 +149,16 @@ class ExecutionAuthority:
     ) -> None:
         """Cancel a live order through the single broker-write surface."""
         async with self.account_lock(f"cancel:{kis_order_id}:{market}"):
-            await cancel_order(
-                self.broker,
-                access_token=self.access_token,
-                app_key=self.app_key,
-                app_secret=self.app_secret,
-                account=self.account_no,
-                kis_order_id=kis_order_id,
-                market=market,
-            )
+            with broker_write_coordination(self.broker_write_lock_path):
+                await cancel_order(
+                    self.broker,
+                    access_token=self.access_token,
+                    app_key=self.app_key,
+                    app_secret=self.app_secret,
+                    account=self.account_no,
+                    kis_order_id=kis_order_id,
+                    market=market,
+                )
 
     def release(self) -> None:
         """Release this authority's row if it still owns it."""

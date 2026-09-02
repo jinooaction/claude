@@ -95,6 +95,9 @@ def gateway_env(tmp_path: Path) -> dict[str, object]:
     )
     uv.chmod(0o755)
 
+    broker_write_lock = tmp_path / "broker-write.lock"
+    broker_write_lock.touch()
+
     env = os.environ.copy()
     env.update(
         {
@@ -103,6 +106,10 @@ def gateway_env(tmp_path: Path) -> dict[str, object]:
             "NONCE_DIR": str(tmp_path / "nonces"),
             "UV_BIN": str(uv),
             "FAKE_UV_LOG": str(uv_log),
+            "BROKER_WRITE_LOCK_PATH": str(broker_write_lock),
+            "DEPLOY_MAINTENANCE_INTERLOCK": str(
+                tmp_path / "live-order-maintenance.lock"
+            ),
             "PATH": f"{fake_bin}:{env['PATH']}",
         }
     )

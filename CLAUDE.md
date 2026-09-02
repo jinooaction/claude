@@ -215,14 +215,14 @@ After a successful merge, the session SHOULD:
 ---
 
 <!-- SPECKIT START -->
-**Active feature plan**: `specs/178-flutter-operator-mobile/plan.md`
+**Active feature plan**: `specs/179-owner-emergency-live-deploy/plan.md`
 
 Active feature pointer: `.specify/feature.json` is the maintained pointer for
 the current worktree. Do not trust prose in this block as the source of truth
 for in-flight work; use the `git_ground_truth` start hook, latest `HANDOFF.md`,
 and `/sync` against `jinooaction/claude` `Codex/*` branches before continuing.
 
-현재 포인터: `specs/178-flutter-operator-mobile/plan.md` — 정제된 공개 상태만 읽는 Flutter 운영자 앱과 버전이 붙은 JSON 계약을 만든다. 모바일 주문·실거래 활성화·중단 해제·자본·전략·허용목록·한도·헌법·커널은 바꾸지 않는다.
+현재 포인터: `specs/179-owner-emergency-live-deploy/plan.md` — 일반 장중 배포 금지는 유지하면서 저장소 오너가 정확한 현재 main 커밋을 최대 15분 동안 한 번만 승인하는 긴급 배포 경로를 만든다. 배포 전 주문 잠금과 미체결 0건, 승인 감사, 기존 90초 건강 검사·복구를 필수로 하며 수동 주문·자본·전략·허용목록·한도는 바꾸지 않는다.
 
 머지 완료(베이스라인): spec 004 (LLM 판단 지점), 005 (자율 튜너), 006 (배포 자동화), 007 (하드닝 카나리), 008 (백테스트), 009 (paper-run), 010 (자동 룰 설계자), 011 (라이브 성과 측정). **주의: 일부 tasks.md 가 stale 0% 로 표시된 적 있음 — 코드/테스트를 믿을 것.**
 
