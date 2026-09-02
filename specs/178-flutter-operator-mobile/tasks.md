@@ -81,8 +81,8 @@
 - [x] T028 auto-invest 전체 `uv run pytest`와 `uv run ruff check src tests`를 통과한다
 - [x] T029 등급 2 관문인 `uv run python scripts/agent_harness_probe.py --strict`와 `uv run python scripts/check_handoff_facts.py`를 통과한다
 - [x] T030 Flutter `dart format`, `flutter analyze`, `flutter test`를 순차 통과한다
-- [ ] T031 Flutter iOS 릴리스 빌드·서명·연결된 실제 iPhone 설치·실행을 확인한다
-  - 릴리스 빌드·서명·시뮬레이터는 통과했다. 실제 iPhone은 무료 개발자 프로필의 기존 앱 3개 제한으로 설치가 막혀 사용자 선택을 기다린다.
+- [x] T031 Flutter iOS 릴리스 빌드·서명·연결된 실제 iPhone 설치·실행을 확인한다
+  - 운영자가 지정한 `대표실`만 제거한 뒤 `com.jinooaction.autoinvest` 설치·전면 실행과 기기 프로세스를 확인했다. `Price Radar`와 `SayMemo`는 그대로 남아 있다. QuickTime 물리 화면 캡처와 터치 탐색은 미실행이다.
 - [x] T032 두 저장소의 변경을 커밋·푸시하고 auto-invest PR 본문 품질 관문을 검사한 뒤 조건 충족 시 merge 방식으로 자동 머지한다
 - [x] T033 `HANDOFF.md`에 JSON 발행·앱 저장소·검증·남은 위험을 기록하고 사실 검사와 후속 PR/머지를 닫는다
 
