@@ -110,6 +110,7 @@ KIS_LIVE_TEST=1 sudo -E -u auto-invest \
         "KIS_APP_KEY=$KIS_APP_KEY" \
         "KIS_APP_SECRET=$KIS_APP_SECRET" \
         "KIS_ACCOUNT_NO=$KIS_ACCOUNT_NO" \
+        "KIS_TOKEN_CACHE_PATH=${LIVE_REPO}/data/kis_token.json" \
     /usr/local/bin/uv run --project "${SMOKE_REPO}" pytest \
         tests/integration/test_live_broker.py -v -s \
         -p no:cacheprovider 2>&1

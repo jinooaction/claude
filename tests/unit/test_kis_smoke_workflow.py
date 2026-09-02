@@ -23,6 +23,7 @@ def test_kis_smoke_helper_uses_isolated_checkout_instead_of_live_repo() -> None:
     assert 'git -C "${SMOKE_REPO}" checkout --quiet --detach "${TARGET_SHA}"' in body
     assert 'cd "${SMOKE_REPO}"' in body
     assert '/usr/local/bin/uv run --project "${SMOKE_REPO}" pytest' in body
+    assert '"KIS_TOKEN_CACHE_PATH=${LIVE_REPO}/data/kis_token.json"' in body
     assert 'read_env_value()' in body
     assert 'source "${LIVE_REPO}/.env"' not in body
 
@@ -89,3 +90,11 @@ def test_live_broker_token_bundle_repr_masks_fixture_secrets() -> None:
     assert "app-secret-value" not in rendered
     assert rendered.count("[REDACTED]") == 3
     assert "Bearer" in rendered
+
+
+def test_live_broker_smoke_reuses_the_fixed_token_cache() -> None:
+    body = LIVE_BROKER.read_text(encoding="utf-8")
+
+    assert "get_valid_token" in body
+    assert 'os.environ.get("KIS_TOKEN_CACHE_PATH", "data/kis_token.json")' in body
+    assert "issue_token(" not in body
