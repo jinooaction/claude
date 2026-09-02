@@ -33,15 +33,15 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `68211963` — Merge pull request #740 from jinooaction/Codex/179-forward-recovery-handoff |
-| main 테스트 | #740 exact 기능 트리에서 `uv run pytest` → 3339 passed, 7 skipped, 실패 0. |
-| main 린트 | #740 exact 기능 트리에서 `uv run ruff check src tests` → All checks passed. |
-| 열린 PR | 없음. 격리 브랜치 `Codex/179-kis-smoke-token-cache`에서 반복 KIS smoke의 유효 토큰 캐시 재사용을 검증 중. |
+| 마지막 main 커밋 | `bd23f75b` — Merge pull request #741 from jinooaction/Codex/179-kis-smoke-token-cache |
+| main 테스트 | #741 exact 기능 트리에서 `uv run pytest` → 3340 passed, 7 skipped, 실패 0. |
+| main 린트 | #741 exact 기능 트리에서 `uv run ruff check src tests` → All checks passed. |
+| 열린 PR | 없음. 격리 브랜치 `Codex/179-kis-smoke-production-proof`에서 #741의 생산 배포·KIS·사전점검 사실을 인계 중. |
 | 출시 완료 스펙 | 최신 기능: #728(스펙 178, 읽기 전용 Flutter 운영자 상태 계약과 앱 설계), #726(스펙 177, 자본 0의 비용 현실형 장중 페이퍼 연구 엔진), #724(스펙 176, 독립 서버 예약과 정수주 표현 가능 목표 기준의 자금성 계약), #722(스펙 176, 거래소별 5xx 뒤 제한된 시세 탐색과 전 후보 장애 보존), #721(스펙 176, 고정 읽기 전용 배포 감사 명령), #719(스펙 176, 10:17~13:53 최대 12분 간격 19개 예약 기회), #717(스펙 176, 거래일 1회 주문 선점·최초 실행 증거 보존), #716(스펙 176, 시작 시점과 각 중개사 쓰기 직전 XNYS 정규장 실패 폐쇄·부분 실행 증거 보존), #715(스펙 176, 선언한 NAV 10%와 실제 주문 자본 일치), #714(스펙 176, 정확한 main 사전점검 인계), #712(스펙 176, 뉴욕 현지 비정각 실거래 예약), #709(스펙 176, 역할 분리 운영 증거와 NAV 10% 실거래 검증 캐너리), #706(스펙 175, 21가족 교정·PEAD 진단), #701(스펙 174, 회계 기반 횡단면 팩터), #699(스펙 173, 판정 경로 교정·월말월초 전략). |
 | 골격 스펙 | 스펙 178은 코드·계약·시뮬레이터와 실제 iPhone 설치·실행까지 완료됐다. 물리 화면 픽셀 캡처와 터치 탐색은 남았다. 스펙 177은 756세션 실제 5분봉 자료가 없어 `INSUFFICIENT_EVIDENCE`이며, 스펙 176은 실제 KIS 자동 주문·체결·감사·정합과 중복 주문 0건 확인이 남았다. |
 | 최근 출시 작업 | 기존 HTML을 유지하면서 형식 `1.0`, `read_only: true`인 `status.json`을 Pages에 발행했다. 별도 비공개 `jinooaction/auto_invest_mobile` Flutter 앱은 홈·자동화·설명 3개 탭, 30시간 신선도, 오프라인 마지막 성공 캐시와 실패 폐쇄 표시를 제공한다. |
-| 활성 작업 | #740 merge `68211963`은 건강한 중간 생산 배포에서 최신 exact target으로의 잠금 인계를 출시했다. 오너 run `33686633552`는 인계와 첫 KIS 6/6 뒤, 두 번째 smoke의 연속 OAuth 발급이 KIS 403을 받아 `DEPLOY_STARTED` 전에 HALTED로 안전 중단됐다. 같은 private token cache 재사용으로 이 중복 발급을 보정 중이다. |
-| 안전 경계 | main과 작업 브랜치는 헌법 15.4.0이다. Git 계보·정상 live 배포 장부·worker/timer·두 잠금·KIS 미체결 0건과 비종료 인계 계약은 유지한다. 새 보정은 유효 OAuth 토큰만 재사용하고 시세·현금·보유·미체결 조회는 매번 새로 수행한다. 수동 주문·서비스 수동 시작·자본 증액·전략 승격·허용목록·위험 관문 우회는 계속 금지된다. |
+| 활성 작업 | #741 merge `bd23f75b`은 반복 KIS smoke가 worker의 고정 private token cache를 재사용하게 했다. push deploy `33688324334`와 감사 `33688455738`, KIS 6/6 `33688324322`, 주문 없는 사전점검 `33688514414`가 성공했다. 다음 자동 장중 실행의 실제 주문·체결·감사·대사·중복 차단을 추적한다. |
+| 안전 경계 | main과 작업 브랜치는 헌법 15.4.0이다. Git 계보·정상 live 배포 장부·worker/timer·두 잠금·KIS 미체결 0건과 비종료 인계 계약은 유지한다. 유효 OAuth 토큰만 재사용하고 시세·현금·보유·미체결 조회는 매번 새로 수행한다. 수동 주문·서비스 수동 시작·자본 증액·전략 승격·허용목록·위험 관문 우회는 계속 금지된다. |
 
 ## 현재 진행 — 2026-09-03 KST (스펙 179 오너 단회 장중 긴급 배포)
 
@@ -136,18 +136,30 @@ stale-target 상태를 정확히 실패로 유지했다. 등록 오너 run `3368
 worker의 고정 private token cache를 사용해 유효 토큰을 재사용하게 하되, 실제 읽기 전용
 시세·현금·보유·미체결 조회는 매번 새로 수행한다.
 
+PR #741 merge `bd23f75b`은 이 cache 보정을 출시했다. merge 시점에는 XNYS 정규장이 이미
+종료돼 일반 push 배포 run `33688324334`가 즉시 `68211963`에서 exact main `bd23f75b`로
+정상 전환했고, 별도 긴급 요청을 다시 만들 필요가 없었다. 읽기 전용 배포 감사 run
+`33688455738`은 상관관계 `65cea0df8f5f76c9fe7b6e9d9b138103`에 `DEPLOY_STARTED`와
+`DEPLOY_COMPLETED` 두 행을 확인했다. exact-main KIS smoke `33688324322`는 6/6, 현금
+`$934.27`, NAV `$1436.31`, 미체결 0건을 확인했다.
+
+주문 없는 production preflight `33688514414`는 `event=workflow_dispatch`,
+`decision=manual-no-order-preflight`로 성공했다. 첫 진입은 `ENTRY_READY`, 운용 1단 자본
+`$142`, fundability schema 1.1, whole-share eligible/funded 1/1이고 계획은
+`SCHX BUY 2 @ $30.18`이다. 사후 측정과 계좌 대사는 `CLEAR/OK`,
+`evidence_quality=VALID`, 중단 잠금 없음,
+`orders_submitted=0`이다. IAUM은 목표금액이 1주 미만이라 진단에만 남고 ORANY 28주는
+unmanaged라 자동 매도하지 않는다.
+
 - **변하지 않은 것**: 수동 주문은 금지다. 실제 주문은 기존 GitHub schedule 또는 서버 timer만
   가능하고, `globalfixed-ensemble-3-6-9-12`, NAV 10%, 단 1, 지정가, 허용목록, 손실·노출 한도,
   킬스위치, 거래일 1회 선점, 추가 전용 감사, 계좌 대사를 그대로 통과해야 한다.
 - **검증**: main #740는 `uv run pytest` 3339 passed/7 skipped와 린트·하네스·인계·PR 관문을
   통과했다. 토큰 캐시 보정은 `uv run pytest` 3340 passed/7 skipped, 린트, strict 하네스
   14/14, HANDOFF 사실 검사, shell 문법과 diff 검사를 모두 통과했다.
-- **현재 관문**: 토큰 캐시 보정의 전체 시험·하네스·인계·PR 품질 관문을 통과시켜 merge한 뒤
-  새 등록 오너 단회 요청으로 HALTED 인계, KIS 6/6·미체결 0, exact-main 시작/완료 감사,
-  90초 건강, timer 활성, 주문 없는 사전점검을
-  확인한다. 완료 판정은 그 뒤 정상 자동
-  예약의 실제 주문·체결·전략 감사·같은 실행 계좌 대사와 다른 예약 출처의 중복
-  중개사 쓰기 0건까지 확인한 후에만 한다.
+- **현재 관문**: 배포·KIS·주문 없는 생산 사전점검은 모두 끝났다. 2026-09-03 첫 유효
+  GitHub schedule 또는 14:35 UTC server timer의 실제 주문·체결·전략 감사·같은 실행 계좌
+  대사와 다른 예약 출처의 중복 중개사 쓰기 0건을 확인한 후에만 전체 목표를 완료한다.
 
 ## 최근 진행 — 2026-09-03 KST (스펙 176 독립 예약 운영 리비전 보정)
 

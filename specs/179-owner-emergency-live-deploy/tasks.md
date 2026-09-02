@@ -117,10 +117,10 @@
 - [ ] T053 전체 검증·PR 관문·merge 뒤 exact-main 등록 오너 요청으로 생산 rollback orphan 복구와 긴급 배포를 다시 확인한다.
 - [x] T054 헌법 15.4.0과 Spec 179에 검증된 건강한 중간 배포에서 새 exact-target 긴급 배포로 잠금을 인계하는 계약을 전용 안전 경계 커밋으로 고정한다.
 - [x] T055 Git 계보·후속 live 배포 장부·worker/timer·두 잠금·KIS 미체결 0건 아래에서만 비종료 `DEPLOY_EMERGENCY_ORPHAN_RECOVERED`를 기록하고 같은 잠금으로 기존 exact-target 상태기계를 계속하도록 구현·반례 시험한다.
-- [ ] T056 전체 검증·PR 관문·merge 뒤 등록 오너 단회 요청으로 생산의 건강한 중간 배포에서 최신 main으로 인계·배포·90초 건강·timer 복구를 확인한다.
+- [x] T056 run `33686633552`로 생산의 건강한 중간 배포에서 새 exact target으로의 검증된 orphan 인계와 첫 KIS 6/6을 확인하고, 이어 발견된 연속 OAuth 발급 결함은 T057~T059로 분리한다.
 - [x] T057 run `33686633552`에서 orphan 인계와 첫 KIS 6/6 뒤 두 번째 smoke가 새 OAuth 토큰을 발급해 KIS 403에 실패하고 `DEPLOY_STARTED` 전에 HALTED로 안전 중단된 원인을 확인한다.
 - [x] T058 read-only KIS smoke가 worker와 같은 고정 private token cache를 사용해 유효 토큰을 재사용하도록 보정하고, 격리 checkout·비밀값 가림·미체결 0건·재시도 금지 계약을 유지한다.
-- [ ] T059 전체 검증·PR 관문·merge 뒤 새 등록 오너 단회 요청으로 HALTED 인계·exact-main 배포·90초 건강·timer 복구를 확인한다.
+- [x] T059 전체 3340 passed/7 skipped·PR #741 관문·merge 뒤, XNYS 장 종료로 허용된 일반 push 배포 run `33688324334`가 exact main `bd23f75b`를 정상 배포하고 worker/timer를 복구했음을 audit `33688455738`, KIS 6/6 `33688324322`, 주문 없는 preflight `33688514414`로 확인한다. 생산이 이미 exact target이고 halt가 없어 불필요한 긴급 요청은 다시 만들지 않는다.
 
 ---
 
