@@ -34,7 +34,7 @@ sidecar의 `capital_entry_evidence.json`을 각각 내려받는다. 역할, 코�
 2. 자본 사다리가 단 0에서 `entry_route=operational_canary` 단 1로 바뀌었는지 확인한다.
 3. 최신 NAV 10%와 정수 주 주문 미리보기가 한도를 넘지 않는지 확인한다.
 4. 뉴욕 현지 10:17부터 13:53까지 최대 12분 간격의 비정각 GitHub 예약을 주 경로로 사용한다.
-   첫 후보 뒤에도 거래일 선점이 없으면 root 소유 `auto-invest-live-canary.timer`가 10:35 이후
+   첫 후보 뒤에도 거래일 선점이 없으면 root 소유 `auto-invest-live-canary.timer`가 10:35~15:35에
    독립 fallback을 깨운다. 두 출처는 같은 production 거래일 선점 장부를 사용해 첫 실행만 주문
    경로로 보내며 후속 실행은 중복으로 종료한다.
 5. 실제 시작이 지연됐으면 실주문 CLI의 XNYS 검사에서 차단되고 다음 개장 시각이 기록되는지
