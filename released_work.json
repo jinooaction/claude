@@ -1,5 +1,5 @@
 {
-  "commit": "820adfb32c9f5ff06938637d0f27d1a9d6c03cc0",
+  "commit": "2d6054eeb1be3d007766e7ed4e20afc1482e940a",
   "overall_status": "OK",
   "released_work": [
     {
@@ -889,7 +889,11 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "176-live-canary-contract"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "178-flutter-operator-mobile"
     }
   ],
-  "timestamp_utc": "2026-09-01T23:32:04.959305Z"
+  "timestamp_utc": "2026-09-02T12:54:58.458956Z"
 }
