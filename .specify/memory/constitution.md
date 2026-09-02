@@ -1,4 +1,20 @@
 <!--
+Sync Impact Report (v14.0.0 -> 15.0.0)
+==================
+Version change: 14.0.0 -> 15.0.0 (MAJOR: VIII.A replaces the contradictory, undefined "declared emergency hotfix" sentence with a machine-enforced owner emergency live-deploy protocol. Ordinary live deploys remain prohibited during XNYS regular hours. A mid-session deploy is permitted only for one exact main commit under a repository-owner workflow approval that expires within 15 minutes, is consumed once, records a reason digest and workflow identity, acquires a root-owned broker-write interlock, proves zero open broker orders, preserves every I-VII and IX.B-2 production gate, emits append-only emergency and ordinary deploy audit events, and releases the interlock only after the unchanged >=90-second health gate succeeds or a verified rollback completes. Missing, stale, reused, mutable, mismatched, or unclassified authorization fails closed. No reusable force flag, arbitrary SSH command, manual order, capital increase, strategy promotion, whitelist change, risk-gate bypass, or price chasing is authorised. this changes the safety perimeter.)
+Migration impact:
+  - The normal deploy path continues to refuse every XNYS-regular-session deploy without a valid one-shot owner emergency request.
+  - A new root-owned maintenance interlock MUST stop both automated live-order schedulers and the final broker-write boundary before production code mutation.
+  - Emergency authorization MUST bind exact target SHA, repository-owner actor, workflow run ID, reason digest, issue time, expiry no later than 15 minutes, and single-use identity; it MUST NOT be expressible as a persistent environment switch or generic force option.
+  - The authorization audit and maintenance interlock MUST exist before service or worker mutation. The previous live schedulers and worker are then stopped and verified inactive; only after that quiescence may read-only broker smoke prove zero open orders, and only after that proof may code change. Existing positions are preserved and are not liquidated by this protocol.
+  - `DEPLOY_EMERGENCY_AUTHORIZED` precedes `DEPLOY_STARTED`; normal completed, failed, kernel-touch, rollback, secret, canary, and health evidence remains required.
+  - Any failure keeps broker writes interlocked until the previous version is verified healthy or the system is explicitly halted with a surfaced reason.
+  - This exception changes deploy timing only. Rung-1 capital remains 10%; order authorization, session claims, limit orders, whitelist, loss budget, reconciliation, and Backtest -> Canary -> Full boundaries are unchanged.
+Templates requiring updates:
+  ⚠ spec 179 SDD artifacts, deploy runner, audit payloads, fixed SSH boundary, production workflow, live-order interlocks, tests, and operator documentation require synchronized implementation before this exception may be used.
+  ✅ .specify/templates/{plan,spec,tasks}-template.md inspected and unchanged; their generic Constitution Check already requires plans to account for the amended principle.
+  ⚠ .specify/memory/kernel.toml remains unchanged; the constitution and market-hours deploy guard are already K-meta/K6.
+
 Sync Impact Report (v13.0.0 -> 14.0.0)
 ==================
 Version change: 13.0.0 -> 14.0.0 (MAJOR: X.4 corrects the independent server timer's operational-revision test. A current main commit that only adds deployment-excluded, non-runtime paths MAY run on the already audited deployed ancestor, but only when the deployed commit is an ancestor of current origin/main and every intervening path is in the pre-existing frozen allowlist `*.md`, `specs/**`, `.verify/**`, or `.trigger/**`. Any source, deploy, workflow, configuration, automation, history-divergence, unreadable-diff, or unclassified change remains fail-closed. First-entry evidence is bound to current main; the deploy audit is bound to the actual deployed operational commit; both identities are recorded. This removes a document-only liveness veto without allowing ahead-of-deploy runtime code. All 10% rung-1, one-claim-per-XNYS-session, order, loss, whitelist, audit, secret, market-hours, and promotion boundaries are unchanged. this changes the safety perimeter.)
@@ -352,24 +368,31 @@ All calls to external services (KIS, market data vendors, Anthropic) MUST implem
 
 #### VIII.A — No Live Deploys During Market Hours
 
-- Code changes affecting trading logic MUST NOT be deployed during US regular trading hours (NYSE/NASDAQ regular session). Declared emergency hotfixes are the only exception and MUST be logged.
+- Ordinary code changes affecting production trading MUST NOT be deployed during US regular trading hours (XNYS regular session).
+- A repository owner MAY authorize one emergency live deploy during an open XNYS session only when ALL of the following hold:
+  1. **One exact, one-shot request.** The trusted deployment workflow binds the request to the exact current `main` commit, repository-owner actor, workflow run ID, non-empty reason digest, issued-at time, and an expiry no later than 15 minutes. The request is consumed once. A persistent environment variable, generic `--force` flag, reusable token, arbitrary SSH command, or branch name is not authorization.
+  2. **Broker writes are quiesced first.** Before any code, dependency, schema, service, or worker mutation, the authorization audit exists and a root-owned maintenance interlock blocks both authorised live schedulers and the final broker-write boundary. The previous live schedulers and worker MUST then be stopped and verified inactive. Only after that quiescence may a read-only broker smoke check pass and report zero open orders; only after that proof may code, dependencies, schema, or the replacement worker change. Existing positions are preserved; the emergency deploy MUST NOT liquidate, resize, or otherwise trade them.
+  3. **No other safety gate is bypassed.** Principles I–VII, the IX.B-2 production canary gate, exact target identity, clean source, migration safety, secrets isolation, audit integrity, rollback, and post-deploy health checks remain mandatory. Emergency timing is not order authorization and does not permit a manual order, capital increase, strategy promotion, whitelist expansion, relaxed loss limit, skipped reconciliation, or price chasing.
+  4. **The exception is append-only and fail-closed.** `DEPLOY_EMERGENCY_AUTHORIZED` MUST be written before `DEPLOY_STARTED` and before production mutation, with the bounded authorization identity but no secret material. Missing, stale, reused, writable-by-untrusted-users, mismatched, ambiguous, or unverifiable evidence MUST refuse the deploy through the normal audited failure path.
+  5. **Interlock release follows proof, not process exit.** The one-shot request is removed after the attempt. The maintenance interlock is released only after the unchanged health gate succeeds, or after the previous version is restored and independently verified healthy. If neither can be proved, broker writes remain halted with a surfaced reason.
 - All changes go through Git with descriptive commit messages.
 - Changes to this constitution MUST be a dedicated amendment commit with a version bump.
 
-**Rationale**: Mid-session deploys are the single most reliable way to introduce undefined behavior into a running strategy.
+**Rationale**: Mid-session deploys can introduce undefined behavior into a running strategy, so waiting for the normal off-hours path remains the default. A broken production liveness path can also prevent a time-sensitive, already-approved repair from reaching the system. The bounded emergency protocol makes that exceptional trade-off explicit, stops broker writes before mutation, and leaves enough evidence to prove exactly who authorized which commit and whether production recovered.
 
 #### VIII.B — Deploy Automation Requirements (added v1.1.0)
 
 Operator-triggered automated deploys are explicitly permitted (and preferred over hand-typed deploys) when ALL of the following hold:
 
-1. **Market-hours guard.** The automation MUST check the US market state via `exchange_calendars` (or equivalent) and refuse to proceed during regular hours. The guard MUST be in code, not in operator memory.
+1. **Market-hours guard.** The automation MUST check the US market state via `exchange_calendars` (or equivalent) and refuse to proceed during regular hours unless every machine-verifiable requirement of VIII.A's one-shot repository-owner emergency protocol passes. The ordinary guard and the emergency validator MUST be in code, not in operator memory.
 2. **Append-only audit events.** Every deploy attempt MUST emit:
+   - `DEPLOY_EMERGENCY_AUTHORIZED` before `DEPLOY_STARTED` for an VIII.A emergency, recording the exact bounded authorization identity without secrets.
    - `DEPLOY_STARTED` before any code, dependency, or schema change.
    - `DEPLOY_COMPLETED` on success after the post-deploy health check passes.
    - `DEPLOY_FAILED` on any abort, with `phase` and `reason` populated.
    These are first-class entries in the existing `audit_log` (principle IV); no parallel deploy log is permitted.
 3. **Health-check gate.** After restarting the worker, the automation MUST poll for evidence of liveness for at least 90 s (default; operator may configure a longer window per environment, never shorter) before declaring success: a fresh `WORKER_STARTED` audit row whose `ts_utc` is after `DEPLOY_STARTED.ts_utc`, no `ERROR` rows in the same window, and no `DATA_QUALITY_ISSUE` rows referencing telemetry mismatches. Rationale for 90 s: covers KIS auth refresh retry (~10 s), broker first-quote latency under load (~5 s), and at least two full asyncio loop ticks against a live market-data feed.
-4. **Rollback obligation.** On any health-check failure or migration failure, the automation MUST emit `DEPLOY_FAILED` and either (a) restore the previous worker version and confirm it boots, or (b) leave the system halted with a clear surfaced reason. The automation MUST NOT silently leave the worker stopped.
+4. **Rollback obligation.** On any health-check failure or migration failure, the automation MUST emit `DEPLOY_FAILED` and either (a) restore the previous worker version and confirm it boots, or (b) leave the system halted with a clear surfaced reason. The automation MUST NOT silently leave the worker stopped. During an VIII.A emergency, the broker-write maintenance interlock MUST remain engaged until one of those two terminal states is proven.
 5. **Tiered autonomy — see principle IX.** Whether a given deploy may be initiated autonomously (by spec 005's tuner) versus requires explicit human merge depends on whether the change touches the Kernel defined in principle IX. The market-hours guard, audit events, health-check gate, and rollback obligation (clauses 1–4) apply to ALL deploys, autonomous or human-initiated, equally.
 6. **Secrets isolation preserved.** Deploy automation MUST NOT log, persist, or transmit any secret material; it inherits principle V.
 
@@ -390,7 +413,7 @@ The Kernel is the closed set of files listed in the machine-readable manifest at
 | **K3** | LLM-only-at-judgment-points contract (principle III) | Modification uncaps LLM cost or moves call sites; same gate. |
 | **K4** | Append-only audit log (principle IV) | Modification could erase forensic trail; same gate. |
 | **K5** | Secret isolation (principle V) | Modification could leak KIS keys; same gate. |
-| **K6** | Market-hours deploy guard (principle VIII.A) | Modification could permit mid-session deploys; same gate. |
+| **K6** | Market-hours deploy guard and one-shot emergency validator (principle VIII.A) | Modification could permit an unauthorized mid-session deploy or weaken its interlock; same gate. |
 | **K-meta** | The Kernel manifest itself + this constitution | Modification reshapes the safety surface; same gate AND the commit message MUST include the literal string "this changes the safety perimeter" so a forensic grep can find every such event. |
 
 #### IX.B — Autonomous-merge eligibility (v3.0.0)
@@ -399,7 +422,7 @@ A change set MAY be merged autonomously by ANY of these paths:
 
 1. **REPEALED** (was: "Kernel-untouched required for autonomous merge"). Kernel touches no longer block merge. The deploy guard (spec 006) MUST emit an informational `DEPLOY_KERNEL_TOUCHED` audit row when a Kernel touch lands; it MUST NOT abort the deploy on this signal alone.
 2. **Hardened canary as production-deploy gate (spec 007).** Before any change set reaches the production worker, it MUST pass spec 007's hardened-canary acceptance criteria: multi-metric, ≥30 trading-day window for L2 / ≥45 for L3, synthetic-shock replay, property-based fuzz of risk math. This gate protects real money. Until spec 007 ships, the existing 10-day spec-001 canary is the operator-facing upper bound on production autonomy; merges still land freely, but a human (or future tuner) decides when a merge is deploy-eligible.
-3. **VIII.A market-hours guard unchanged.** Mid-session deploys remain forbidden whether the change set is Kernel-touching or not.
+3. **VIII.A market-hours discipline.** Mid-session deploys remain forbidden whether the change set is Kernel-touching or not, except for the exact, one-shot, repository-owner emergency protocol defined in VIII.A. Kernel touch does not weaken or expand that protocol.
 4. **REPEALED** (was: "L4 escalation → human-merge"). Spec 005's L4 classification now means "extra audit + forensic callout in the PR description"; the merge path is the same as L1-L3.
 5. **Operator-instructed session merges** (autonomous-workflow policy in CLAUDE.md) are first-class. The session's reasoning trace + the PR description + the merge commit message form the forensic record. No second human in the loop is required.
 
@@ -422,7 +445,7 @@ This DOES NOT relax the trading-safety invariants:
 - **Principle V** (secret isolation) — still non-negotiable, same gate.
 - **Principle VI** (Backtest → Canary → Full Live) — still non-negotiable; spec 008's backtest engine is the first stage, spec 007 the hardened canary is the second.
 - **Principle VII** (external API robustness) — still non-negotiable.
-- **Principle VIII.A** (no live deploys during market hours) — still non-negotiable.
+- **Principle VIII.A** (ordinary market-hours prohibition plus the exact one-shot owner emergency protocol) — still non-negotiable. Operator urgency alone cannot bypass the protocol's machine checks.
 
 What IX.D explicitly relaxes:
 
@@ -497,4 +520,4 @@ This constitution supersedes all other practices, conventions, and ad-hoc decisi
 
 **Compliance**: every `/speckit-plan` artifact MUST include a Constitution Check section verifying the plan does not violate principles I–X. Violations require explicit, written justification and a sign-off recorded in the audit log.
 
-**Version**: 14.0.0 | **Ratified**: 2026-05-01 | **Last Amended**: 2026-09-02
+**Version**: 15.0.0 | **Ratified**: 2026-05-01 | **Last Amended**: 2026-09-03
