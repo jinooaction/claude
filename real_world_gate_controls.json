@@ -1,0 +1,68 @@
+{
+  "code_commit": "2d6054eeb1be3d007766e7ed4e20afc1482e940a",
+  "control_fingerprint": "sha256:943d500a3622dcc78f5dcd884e27d5351012a8dd1bec5d484490ba768dbd18bf",
+  "controls": [
+    {
+      "actual_live_passed": true,
+      "annual_sharpe": 0.648641,
+      "control_id": "fama_french_market_excess",
+      "demeaned_live_passed": false,
+      "demeaned_psr": "0.500000",
+      "observations": 234,
+      "provider": "Kenneth French Data Library",
+      "psr": "0.996536",
+      "window": [
+        "2007-01",
+        "2026-06"
+      ]
+    },
+    {
+      "actual_live_passed": true,
+      "annual_sharpe": 0.440025,
+      "control_id": "aqr_diversified_tsmom",
+      "demeaned_live_passed": false,
+      "demeaned_psr": "0.500000",
+      "observations": 233,
+      "provider": "AQR Capital Management",
+      "psr": "0.974381",
+      "window": [
+        "2007-01",
+        "2026-05"
+      ]
+    }
+  ],
+  "freshness": {
+    "aqr_age_days": 94,
+    "aqr_last_month": "2026-05",
+    "fama_french_age_days": 64,
+    "fama_french_last_month": "2026-06"
+  },
+  "gate_version": "2.0",
+  "isolation": {
+    "candidate_trial_count_contribution": 0,
+    "promotion_candidate": false,
+    "purpose": "gate diagnostic only"
+  },
+  "promotion_control_passed": true,
+  "safety": [
+    "no broker API",
+    "no orders",
+    "no capital or whitelist change"
+  ],
+  "schema_version": "1.0",
+  "sources": {
+    "aqr_tsmom": {
+      "digest": "sha256:33470930e2269c0d97be4732ec2d9c27ddbc69ac8133b059a263e27400263eeb",
+      "url": "https://www.aqr.com/-/media/AQR/Documents/Insights/Data-Sets/Time-Series-Momentum-Factors-Monthly.xlsx"
+    },
+    "fama_french": {
+      "digest": "sha256:cd6d8e0d175b6f423862a6ad15a3073a6e4264b52b2ac9262396c79f707c6bcb",
+      "url": "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp/F-F_Research_Data_Factors_CSV.zip"
+    }
+  },
+  "threshold": {
+    "live_psr_min": 0.95
+  },
+  "timestamp_utc": "2026-09-02T13:03:51Z",
+  "verdict": "REAL_WORLD_CONTROLS_VALID"
+}

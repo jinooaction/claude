@@ -1,0 +1,194 @@
+{
+  "code_commit": "2d6054eeb1be3d007766e7ed4e20afc1482e940a",
+  "family_calibrations": {
+    "16": {
+      "family_size": 16,
+      "live_calibrated": true,
+      "minimum_80pct_detectable_sharpe": "0.60",
+      "null_false_acceptance_rate": 0.05,
+      "null_paper_admission_rate": 0.216,
+      "null_research_entry_acceptance_rate": 0.01,
+      "power_curve": {
+        "0.20": {
+          "live_detection_rate": 0.148,
+          "paper_admission_rate": 0.342,
+          "planted_candidate_selection_rate": 0.48,
+          "research_entry_detection_rate": 0.038
+        },
+        "0.30": {
+          "live_detection_rate": 0.294,
+          "paper_admission_rate": 0.566,
+          "planted_candidate_selection_rate": 0.82,
+          "research_entry_detection_rate": 0.178
+        },
+        "0.40": {
+          "live_detection_rate": 0.52,
+          "paper_admission_rate": 0.79,
+          "planted_candidate_selection_rate": 0.962,
+          "research_entry_detection_rate": 0.45
+        },
+        "0.50": {
+          "live_detection_rate": 0.706,
+          "paper_admission_rate": 0.922,
+          "planted_candidate_selection_rate": 0.982,
+          "research_entry_detection_rate": 0.688
+        },
+        "0.60": {
+          "live_detection_rate": 0.848,
+          "paper_admission_rate": 0.958,
+          "planted_candidate_selection_rate": 1.0,
+          "research_entry_detection_rate": 0.84
+        },
+        "0.80": {
+          "live_detection_rate": 0.966,
+          "paper_admission_rate": 0.998,
+          "planted_candidate_selection_rate": 1.0,
+          "research_entry_detection_rate": 0.966
+        }
+      },
+      "research_entry_calibrated": true,
+      "target_live_detection_rate": 0.848,
+      "target_planted_sharpe_annual": 0.6,
+      "target_research_entry_detection_rate": 0.84
+    },
+    "64": {
+      "family_size": 64,
+      "live_calibrated": true,
+      "minimum_80pct_detectable_sharpe": "0.60",
+      "null_false_acceptance_rate": 0.036,
+      "null_paper_admission_rate": 0.184,
+      "null_research_entry_acceptance_rate": 0.004,
+      "power_curve": {
+        "0.20": {
+          "live_detection_rate": 0.114,
+          "paper_admission_rate": 0.288,
+          "planted_candidate_selection_rate": 0.326,
+          "research_entry_detection_rate": 0.02
+        },
+        "0.30": {
+          "live_detection_rate": 0.254,
+          "paper_admission_rate": 0.534,
+          "planted_candidate_selection_rate": 0.65,
+          "research_entry_detection_rate": 0.106
+        },
+        "0.40": {
+          "live_detection_rate": 0.508,
+          "paper_admission_rate": 0.762,
+          "planted_candidate_selection_rate": 0.91,
+          "research_entry_detection_rate": 0.334
+        },
+        "0.50": {
+          "live_detection_rate": 0.742,
+          "paper_admission_rate": 0.914,
+          "planted_candidate_selection_rate": 0.982,
+          "research_entry_detection_rate": 0.646
+        },
+        "0.60": {
+          "live_detection_rate": 0.834,
+          "paper_admission_rate": 0.964,
+          "planted_candidate_selection_rate": 1.0,
+          "research_entry_detection_rate": 0.804
+        },
+        "0.80": {
+          "live_detection_rate": 0.962,
+          "paper_admission_rate": 0.988,
+          "planted_candidate_selection_rate": 1.0,
+          "research_entry_detection_rate": 0.962
+        }
+      },
+      "research_entry_calibrated": true,
+      "target_live_detection_rate": 0.834,
+      "target_planted_sharpe_annual": 0.6,
+      "target_research_entry_detection_rate": 0.804
+    }
+  },
+  "gate_version": "2.0",
+  "legacy": {
+    "description": "raw 576-trial DSR 0.95 plus PBO 0.10 plus holdout PSR 0.95",
+    "detection_rate": 0.082,
+    "false_acceptance_rate": 0.0
+  },
+  "program_extension": {
+    "calibrated": true,
+    "capital_entry_eligible": false,
+    "conservative_upper_bound": 0.2,
+    "detection_min": 0.8,
+    "diagnostic_program_null_rate": 0.138,
+    "failed_checks": [],
+    "false_acceptance_budget": 0.2,
+    "family_caps": {
+      "16": 0.01,
+      "64": 0.009
+    },
+    "family_mix": {
+      "16": 11,
+      "64": 10
+    },
+    "gate_version": "3.2",
+    "method": "family-size-bonferroni-v2",
+    "minimum_repetitions": 500,
+    "note": "diagnostic only; constitution gate 3.1 remains the capital-entry contract",
+    "planted_sharpe_annual": 0.6
+  },
+  "required": {
+    "detection_min": 0.8,
+    "false_acceptance_max": 0.05,
+    "family_false_acceptance_max": 0.01,
+    "maximum_research_families": 20,
+    "program_false_acceptance_budget": 0.2
+  },
+  "research_entry": {
+    "calibrated": true,
+    "calibration_seed": 60000,
+    "family_false_acceptance_max": 0.01,
+    "maximum_research_families": 20,
+    "method": "holdout-psr-plus-family-pbo-v1",
+    "minimum_repetitions": 500,
+    "program_false_acceptance_budget": 0.2
+  },
+  "research_entry_gate_version": "3.1",
+  "revised": {
+    "detection_rate": 0.834,
+    "false_acceptance_rate": 0.036,
+    "median_pbo_null": 0.515873,
+    "median_pbo_planted": 0.015873,
+    "planted_candidate_selection_rate": 1.0
+  },
+  "safety": [
+    "simulation only",
+    "no broker API",
+    "no orders",
+    "no capital change"
+  ],
+  "scenario": {
+    "calibrated_family_sizes": [
+      16,
+      64
+    ],
+    "candidate_correlation": 0.8,
+    "development_observations": 204,
+    "family_size": 64,
+    "holdout_observations": 235,
+    "planted_sharpe_annual": 0.6,
+    "power_sharpes_annual": [
+      0.2,
+      0.3,
+      0.4,
+      0.5,
+      0.6,
+      0.8
+    ],
+    "repetitions": 500,
+    "seed": 60000
+  },
+  "schema_version": "1.0",
+  "thresholds": {
+    "development_dsr_diagnostic_min": 0.95,
+    "development_pbo_diagnostic_max": 0.1,
+    "holdout_psr_min": 0.95,
+    "paper_psr_min": 0.8,
+    "research_entry_pbo_max": 0.25
+  },
+  "timestamp_utc": "2026-09-02T12:56:34Z",
+  "verdict": "CALIBRATED"
+}

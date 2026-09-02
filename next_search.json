@@ -1,0 +1,12 @@
+{
+  "batch_id": "pead-6cdaf0ff0512-2d6054eeb1be",
+  "failed_gates": [],
+  "multiplicity_trial_count": 16,
+  "next_batch_sequence": null,
+  "next_strategy_family": "forward-point-in-time-pead-observation",
+  "safety": "research only; no orders or capital change",
+  "schema_version": "1.0",
+  "search_space_exhausted": false,
+  "suppress_batch_id": "pead-6cdaf0ff0512-2d6054eeb1be",
+  "verdict": "PUBLISHED_EDGE"
+}
