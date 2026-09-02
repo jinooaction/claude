@@ -90,6 +90,7 @@
 - **FR-016**: 앞선 긴급 시도가 `DEPLOY_STARTED` 전에 실패해 `HALTED` 잠금을 남긴 경우, 다음 정확한 등록 오너 단회 요청은 루트 소유 정규 파일·닫힌 스키마·배타 잠금과 이전 요청의 유일한 `DEPLOY_EMERGENCY_AUTHORIZED`·`DEPLOY_STARTED=0`을 모두 증명할 때만 잠금을 인계할 수 있어야 한다. 시작됐거나 모호한 실패는 자동 인계해서는 안 된다.
 - **FR-017**: 앞선 긴급 시도가 `DEPLOY_ROLLED_BACK`으로 끝났지만 shell 정리가 끊겨 요청과 `QUIESCED` 잠금이 남은 경우, 다음 정확한 등록 오너 요청은 두 파일의 루트 소유·권한·닫힌 스키마·동일 신원, 배타 잠금, 승인 1·시작 1·실패 1·커널 변경 0~1·롤백 1·완료 0·그 밖의 배포 사건 0, 최신 롤백, 생산 HEAD와 롤백 기준의 일치를 모두 증명해야 한다. 중개사 쓰기 잠금을 얻은 뒤에만 이전 요청을 제거할 수 있다. 배포 설정 검사는 systemd 환경 주입에 의존하지 않고 고정 production `.env`를 기존 비밀값 가림 loader로 읽어야 한다.
 - **FR-018**: terminal rollback orphan 뒤 정상 배포가 생산 HEAD를 전진시킨 경우, 다음 정확한 등록 오너 요청은 기존 orphan의 모든 파일·신원·사건 불변식에 더해 생산 HEAD가 정확한 현재 `main` 대상임을 확인하고, rollback 기준에서 대상까지의 Git 계보, rollback 뒤 대상에 대한 일반 live 배포의 시작 1·완료 1·실패 0·롤백 0·커널 변경 0~1·예상 밖 배포 사건 0·최신 완료, 시작과 완료 사이 `WORKER_STARTED`, 현재 worker와 live timer 활성 상태를 증명해야 한다. 유지보수·중개사 쓰기 배타 잠금과 새 KIS 읽기 전용 smoke의 미체결 0건 아래에서 새 `DEPLOY_EMERGENCY_AUTHORIZED`와 `DEPLOY_EMERGENCY_RECOVERY_COMPLETED`를 추가한 뒤 이전 요청과 잠금만 제거해야 하며 코드·서비스·worker·주문을 변경해서는 안 된다. 정상 배포가 끝났고 stale 상태가 없으면 helper는 감사 가능한 무변경 no-op이어야 한다.
+- **FR-019**: workflow의 성공·장중 연기·실패·긴급 helper 진입 판정은 현재 `auto-invest-deploy.service` 시작 표식부터 생성된 최신 실행 구간만 사용해야 한다. 과거 실행의 장중 거부 문구는 현재 실패를 성공이나 연기로 바꿀 수 없다. 현재 구간의 정확한 `emergency request target does not match current main` 거부는 유효한 등록 오너 단회 요청에서만 고정 root helper 호출을 허용하며, 실제 복구나 생산 변경은 helper 내부 FR-016~FR-018 증거가 모두 통과한 경우에만 가능하다.
 
 ### Key Entities
 
@@ -113,6 +114,7 @@
 - **SC-009**: 구버전 배포 실행기가 설치된 재현 시험에서 정확한 target checkout 실행기는 승인→시작→기존 상태기계를 이어가며, 다른 SHA·actor·경로·실행 파일 또는 `DEPLOY_STARTED`가 있는 HALTED 인계 시험은 생산 변경 0건으로 실패 폐쇄한다.
 - **SC-010**: terminal rollback orphan 재현 시험에서 정확한 파일·장부·production HEAD만 복구되고, 사건 수·순서·종료·권한·스키마·HEAD 중 하나라도 다른 모든 반례는 요청 제거와 생산 변경 0건으로 실패 폐쇄한다.
 - **SC-011**: post-rollback 정상 배포 복구 시험에서 정확한 현재-main live 완료·Git 계보·in-window worker 시작·활성 서비스·활성 timer·미체결 0건이 모두 있는 경우에만 추가 전용 복구 완료 사건 뒤 stale 파일 2개가 제거되며, 각 증거가 하나라도 없으면 두 파일은 그대로 남고 코드·서비스·주문 변경은 0건이다.
+- **SC-012**: 과거 장중 거부와 현재 비장중 실패가 함께 있는 workflow 회귀 시험에서 결과는 실패이고, 현재 stale-target 거부와 유효한 등록 오너 요청이 함께 있는 시험에서만 root helper가 호출된다.
 
 ## Assumptions
 

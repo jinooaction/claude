@@ -33,15 +33,15 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `d43c55b0` — Merge pull request #737 from jinooaction/Codex/179-orphan-jq-fix |
-| main 테스트 | #737 exact 기능 트리에서 `uv run pytest` → 3330 passed, 7 skipped, 실패 0. |
-| main 린트 | #737 exact 기능 트리에서 `uv run ruff check src tests` → All checks passed. |
-| 열린 PR | 없음. 격리 브랜치 `Codex/179-postrollback-deploy-recovery`에서 헌법 15.3.0과 후속 정상 배포 증거 기반의 오래된 잠금 회수를 검증 중. |
+| 마지막 main 커밋 | `a9236da8` — Merge pull request #738 from jinooaction/Codex/179-postrollback-deploy-recovery |
+| main 테스트 | #738 exact 기능 트리에서 `uv run pytest` → 3334 passed, 7 skipped, 실패 0. |
+| main 린트 | #738 exact 기능 트리에서 `uv run ruff check src tests` → All checks passed. |
+| 열린 PR | 없음. 격리 브랜치 `Codex/179-current-deploy-refusal`에서 헌법 15.3.1과 현재 배포 시도에 묶인 workflow 결과 판정을 검증 중. |
 | 출시 완료 스펙 | 최신 기능: #728(스펙 178, 읽기 전용 Flutter 운영자 상태 계약과 앱 설계), #726(스펙 177, 자본 0의 비용 현실형 장중 페이퍼 연구 엔진), #724(스펙 176, 독립 서버 예약과 정수주 표현 가능 목표 기준의 자금성 계약), #722(스펙 176, 거래소별 5xx 뒤 제한된 시세 탐색과 전 후보 장애 보존), #721(스펙 176, 고정 읽기 전용 배포 감사 명령), #719(스펙 176, 10:17~13:53 최대 12분 간격 19개 예약 기회), #717(스펙 176, 거래일 1회 주문 선점·최초 실행 증거 보존), #716(스펙 176, 시작 시점과 각 중개사 쓰기 직전 XNYS 정규장 실패 폐쇄·부분 실행 증거 보존), #715(스펙 176, 선언한 NAV 10%와 실제 주문 자본 일치), #714(스펙 176, 정확한 main 사전점검 인계), #712(스펙 176, 뉴욕 현지 비정각 실거래 예약), #709(스펙 176, 역할 분리 운영 증거와 NAV 10% 실거래 검증 캐너리), #706(스펙 175, 21가족 교정·PEAD 진단), #701(스펙 174, 회계 기반 횡단면 팩터), #699(스펙 173, 판정 경로 교정·월말월초 전략). |
 | 골격 스펙 | 스펙 178은 코드·계약·시뮬레이터와 실제 iPhone 설치·실행까지 완료됐다. 물리 화면 픽셀 캡처와 터치 탐색은 남았다. 스펙 177은 756세션 실제 5분봉 자료가 없어 `INSUFFICIENT_EVIDENCE`이며, 스펙 176은 실제 KIS 자동 주문·체결·감사·정합과 중복 주문 0건 확인이 남았다. |
 | 최근 출시 작업 | 기존 HTML을 유지하면서 형식 `1.0`, `read_only: true`인 `status.json`을 Pages에 발행했다. 별도 비공개 `jinooaction/auto_invest_mobile` Flutter 앱은 홈·자동화·설명 3개 탭, 30시간 신선도, 오프라인 마지막 성공 캐시와 실패 폐쇄 표시를 제공한다. |
-| 활성 작업 | #737 merge `d43c55b0`은 jq 객체 범위 결함을 고쳤고 exact-main 정상 배포·KIS smoke 6/6까지 완료했다. 생산에는 run `33673819722`의 확인된 rollback 요청·QUIESCED 잠금이 남아 있어, 헌법 15.3.0의 후속 정상 배포 완료 증거 기반 cleanup-only 회수를 검증 중이다. |
-| 안전 경계 | main은 헌법 15.2.0, 작업 브랜치는 15.3.0이다. exact 등록 오너, current-main, 이전 rollback 체인, 후속 정상 live 배포·Git 계보·worker/timer·미체결 0건이 모두 일치할 때만 오래된 파일을 제거하며 수동 주문·서비스 수동 시작·자본 증액·전략 승격·허용목록·위험 관문 우회는 계속 금지된다. |
+| 활성 작업 | #738 merge `a9236da8`은 후속 정상 배포 증거 기반 cleanup-only 회수를 출시했다. push deploy `33681654115`은 현재 stale 요청 불일치로 실제 실패했지만 과거 장중 문구 때문에 녹색으로 오판됐고, 등록 오너 run `33681910356`은 현재 실패 구간만 보면 helper 호출 전에 실패 폐쇄됐다. 헌법 15.3.1 보정으로 두 판정 결함을 수정 중이다. |
+| 안전 경계 | main은 헌법 15.3.0, 작업 브랜치는 15.3.1이다. workflow는 현재 배포 시도 구간만 판정하고, 현재 stale-target 거부는 등록 오너 요청에서 고정 root helper 호출만 허용한다. helper의 exact 등록 오너·current-main·rollback 체인·Git 계보·잠금·worker/timer·미체결 0건 검증은 그대로이며 수동 주문·서비스 수동 시작·자본 증액·전략 승격·허용목록·위험 관문 우회는 계속 금지된다. |
 
 ## 현재 진행 — 2026-09-03 KST (스펙 179 오너 단회 장중 긴급 배포)
 
@@ -105,6 +105,14 @@ run `33677693365`가 성공했고, 상관관계 `8281a7bdbd8726643eb1c00e64853a4
 증명될 때만 `DEPLOY_EMERGENCY_AUTHORIZED`와 `DEPLOY_EMERGENCY_RECOVERY_COMPLETED`를
 추가한 뒤 오래된 요청·잠금만 제거한다. 이 cleanup-only 경로는 코드·서비스·worker·주문을
 변경하지 않는다. 증거가 하나라도 없으면 기존 파일을 그대로 보존한다.
+
+PR #738 merge `a9236da8` 뒤 push deploy run `33681654115`은 정상 배포가 stale 긴급 요청의
+대상 불일치로 실패했지만, 최근 120줄에 남은 과거 장중 거부 문구를 workflow가 현재 사유로
+오인해 녹색으로 끝났다. 등록 오너 run `33681910356`은 같은 정상 배포 실패 뒤 현재 실행 구간에
+장중 문구가 없자 root helper를 호출하기 전에 실패 폐쇄됐다. 헌법 15.3.1은 결과와 긴급 진입을
+최신 서비스 시작 표식 이후 현재 구간에만 묶고, 그 구간의 정확한 stale-target 거부만 유효한
+등록 오너 요청에서 root helper로 넘긴다. 이 문구는 복구 승인이 아니며 helper의 모든 파일·장부·
+Git·잠금·건강·timer·KIS 증거는 그대로 통과해야 한다.
 
 - **변하지 않은 것**: 수동 주문은 금지다. 실제 주문은 기존 GitHub schedule 또는 서버 timer만
   가능하고, `globalfixed-ensemble-3-6-9-12`, NAV 10%, 단 1, 지정가, 허용목록, 손실·노출 한도,
