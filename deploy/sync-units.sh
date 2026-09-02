@@ -12,8 +12,9 @@
 #   - 워커(auto-invest.service)를 절대 재시작/시작하지 않는다 — 유닛 파일 설치 +
 #     daemon-reload + 타이머 enable 만. live-canary timer는 돈 경로이므로 설치 직후에도
 #     exact deployed main·root systemd 신원·첫 진입 재검증·XNYS·공유 거래일 선점이 모두
-#     통과해야만 주문할 수 있다. origin/main helper가 배포 HEAD보다 앞서면 exact-main에서
-#     실패 폐쇄한다. auto-invest-tune.timer 는 22:00 UTC 에만 발화한다.
+#     통과해야만 주문할 수 있다. origin/main helper가 배포 HEAD보다 앞서면 배포 HEAD의 조상 관계와
+#     고정 비실행 경로만 허용하는 운영 리비전 검사를 통과해야 한다. 실행 경로 변경은 실패 폐쇄한다.
+#     auto-invest-tune.timer 는 22:00 UTC 에만 발화한다.
 #   - 작업트리를 건드리지 않는다: `git show origin/main:<path>` 로 최신 내용만 읽어
 #     설치하므로 배포 상태기계의 dirty-tree 검사와 충돌하지 않는다(git checkout/pull/reset 미사용).
 #   - 멱등: install 덮어쓰기 + daemon-reload + enable --now 모두 반복 안전.
@@ -59,9 +60,10 @@ for u in "${UNITS[@]}"; do
 done
 
 # Independent live-canary scheduler is a root-owned fixed helper. Installing it
-# from origin/main does not authorize an ahead-of-deploy order: the helper and
-# live order boundary both require /opt/auto-invest HEAD == origin/main before
-# the shared market-session claim can be consumed.
+# from origin/main does not authorize ahead-of-deploy runtime code: the helper
+# and live order boundary both require deployed HEAD to be current main or its
+# ancestor with only the frozen non-runtime path allowlist in between before the
+# shared market-session claim can be consumed.
 scheduler_tmp="${tmpdir}/live-canary-scheduled-on-instance.sh.new"
 if sudo -u auto-invest git -C "$REPO" show \
         "${REF}:deploy/live-canary-scheduled-on-instance.sh" >"${scheduler_tmp}" 2>/dev/null; then

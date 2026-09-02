@@ -169,10 +169,10 @@
 - [x] T079 [US3] 2026-09-02 exact deploy 뒤 문서 전용 main 머지로 독립 timer가 결과를 내지 못한
   원인을 spec·plan·research·data-model·quickstart·tasks와 헌법 X.4 14.0.0에 먼저 고정하고,
   현재 main 증거와 실제 배포 감사 커밋을 분리하는 안전 경계 전용 커밋을 만든다.
-- [ ] T080 [US3] 배포 커밋 뒤 `HANDOFF.md`만 추가된 main 통과, `src/`·`deploy/`·workflow·설정·
+- [x] T080 [US3] 배포 커밋 뒤 `HANDOFF.md`만 추가된 main 통과, `src/`·`deploy/`·workflow·설정·
   기타 경로와 분기 계보 실패, scheduler와 내부 `systemd-order`의 이중 검사, 선점·broker write
   0건을 고정 저장소 실패 시험으로 먼저 작성해 의도한 이유로 실패시킨다.
-- [ ] T081 [US3] server scheduler가 배포 커밋 조상 관계와 고정 비실행 경로만 운영 동등하게
+- [x] T081 [US3] server scheduler가 배포 커밋 조상 관계와 고정 비실행 경로만 운영 동등하게
   판정하고, 현재 main으로 첫 진입을 재검증하되 실제 배포 커밋의 `DEPLOY_COMPLETED`를 요구하게
   한다. 내부 `systemd-order`가 현재 main 경쟁을 포함해 같은 검사를 다시 수행하고 요약 1.1에
   두 커밋과 동등성 판정을 남기게 한다.

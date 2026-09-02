@@ -332,10 +332,13 @@ def test_scheduled_status_reads_only_fixed_latest_server_summary(
     run_dir = state / "scheduled-runs" / run_id
     run_dir.mkdir(parents=True)
     summary = {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "run_id": run_id,
         "source": "server_timer",
         "market_session": "2026-09-01",
+        "code_commit": "b" * 40,
+        "deployed_code_commit": "a" * 40,
+        "operational_equivalent": True,
     }
     (run_dir / "summary.json").write_text(json.dumps(summary), encoding="utf-8")
     (state / "last-scheduled-run-id").write_text(f"{run_id}\n", encoding="utf-8")

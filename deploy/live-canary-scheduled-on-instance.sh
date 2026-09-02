@@ -16,6 +16,8 @@ STATE_DIR="${STATE_DIR:-/var/lib/auto-invest-live-order}"
 SCHEDULED_RUNS_DIR="${SCHEDULED_RUNS_DIR:-${STATE_DIR}/scheduled-runs}"
 LAST_RUN_FILE="${LAST_RUN_FILE:-${STATE_DIR}/last-scheduled-run-id}"
 SESSION_FILE="${SESSION_FILE:-${STATE_DIR}/order-sessions.tsv}"
+DEPLOYED_CODE_COMMIT=""
+MAIN_CODE_COMMIT=""
 
 die() {
     echo "ERROR: $*" >&2
@@ -44,15 +46,32 @@ sentinel_field() {
         "${REPO}/automation/rebalance-live.request"
 }
 
-validate_exact_main() {
-    local deployed_sha main_sha
+is_deploy_ignored_path() {
+    case "$1" in
+        *.md|specs/*|.verify/*|.trigger/*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+validate_operational_revision() {
+    local deployed_sha main_sha path changed_paths
     [[ -d "${REPO}/.git" ]] || die "missing production repository"
     git_as_app fetch origin main --quiet || die "failed to refresh origin/main"
     deployed_sha="$(git_as_app rev-parse HEAD)" || die "missing deployed commit"
     main_sha="$(git_as_app rev-parse origin/main)" || die "missing origin/main"
-    [[ "${deployed_sha}" =~ ^[0-9a-f]{40}$ && "${deployed_sha}" == "${main_sha}" ]] \
-        || die "live-canary fallback requires exact deployed main"
-    printf '%s\n' "${deployed_sha}"
+    [[ "${deployed_sha}" =~ ^[0-9a-f]{40}$ && "${main_sha}" =~ ^[0-9a-f]{40}$ ]] \
+        || die "invalid operational revision commit"
+    git_as_app merge-base --is-ancestor "${deployed_sha}" "${main_sha}" \
+        || die "deployed commit is not an ancestor of current main"
+    changed_paths="$(git_as_app diff --name-only "${deployed_sha}" "${main_sha}")" \
+        || die "failed to classify operational revision paths"
+    while IFS= read -r path; do
+        [[ -z "${path}" ]] && continue
+        is_deploy_ignored_path "${path}" \
+            || die "server code differs from current main: ${path}"
+    done <<< "${changed_paths}"
+    DEPLOYED_CODE_COMMIT="${deployed_sha}"
+    MAIN_CODE_COMMIT="${main_sha}"
 }
 
 validate_deploy_audit() {
@@ -206,14 +225,16 @@ first_nonzero() {
 }
 
 main() {
-    local run_id started_at finished_at sha capital expected_session work_dir run_dir
+    local run_id started_at finished_at deployed_sha main_sha capital expected_session work_dir run_dir
     local order_exit fills_exit measure_exit profit_exit reconciliation_exit final_exit
     local market_session orders_submitted result summary_tmp pointer_tmp
     local prior_claim prior_claim_exit
 
     require_root_systemd
-    sha="$(validate_exact_main)"
-    validate_deploy_audit "${sha}"
+    validate_operational_revision
+    deployed_sha="${DEPLOYED_CODE_COMMIT}"
+    main_sha="${MAIN_CODE_COMMIT}"
+    validate_deploy_audit "${deployed_sha}"
     expected_session="$(validate_market_session)"
     capital="$(validate_sentinel)"
     set +e
@@ -233,11 +254,11 @@ main() {
     install -d -m 0750 -o root -g "${APP_USER}" "${work_dir}"
     trap 'rm -rf "${work_dir}"' EXIT
 
-    run_entry_revalidation "${sha}" "${capital}" "${work_dir}" \
+    run_entry_revalidation "${main_sha}" "${capital}" "${work_dir}" \
         || die "server timer first-entry revalidation failed"
 
     set +e
-    "${LIVE_HELPER}" systemd-order "${run_id}" "${sha}" "${capital}" \
+    "${LIVE_HELPER}" systemd-order "${run_id}" "${main_sha}" "${capital}" \
         >"${work_dir}/order.log" 2>"${work_dir}/order.err"
     order_exit=$?
     set -e
@@ -298,17 +319,19 @@ main() {
     finished_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     summary_tmp="${run_dir}/.summary.json.new"
     jq -n \
-        --arg schema_version "1.0" \
+        --arg schema_version "1.1" \
         --arg run_id "${run_id}" \
         --arg source "server_timer" \
         --arg market_session "${market_session}" \
         --arg started_at_utc "${started_at}" \
         --arg finished_at_utc "${finished_at}" \
-        --arg code_commit "${sha}" \
+        --arg code_commit "${main_sha}" \
+        --arg deployed_code_commit "${deployed_sha}" \
         --arg capital_usd "${capital}" \
         --arg entry_state "ENTRY_READY" \
         --arg claim_status "claimed" \
         --arg result "${result}" \
+        --argjson operational_equivalent true \
         --argjson entry_allowed true \
         --argjson order_exit "${order_exit}" \
         --argjson orders_submitted "${orders_submitted}" \
@@ -318,6 +341,8 @@ main() {
         '{schema_version:$schema_version,run_id:$run_id,source:$source,
           market_session:$market_session,started_at_utc:$started_at_utc,
           finished_at_utc:$finished_at_utc,code_commit:$code_commit,
+          deployed_code_commit:$deployed_code_commit,
+          operational_equivalent:$operational_equivalent,
           capital_usd:$capital_usd,entry_state:$entry_state,
           entry_allowed:$entry_allowed,claim_status:$claim_status,
           order_exit:$order_exit,orders_submitted:$orders_submitted,

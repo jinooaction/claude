@@ -21,6 +21,8 @@ UV_BIN="${UV_BIN:-/usr/local/bin/uv}"
 REPOSITORY="jinooaction/claude"
 WORKFLOW="rebalance-live-canary.yml"
 MAX_TTL_SEC=600
+DEPLOYED_CODE_COMMIT=""
+MAIN_CODE_COMMIT=""
 
 die() {
     echo "ERROR: $*" >&2
@@ -83,19 +85,34 @@ is_deploy_ignored_path() {
 
 validate_deployed_commit() {
     local signed_sha="$1"
-    local deployed_sha path
+    local authority_mode="${2:-signed-history}"
+    local deployed_sha main_sha path changed_paths
+    case "${authority_mode}" in
+        signed-history|current-main) ;;
+        *) die "invalid operational revision authority mode" ;;
+    esac
     git_as_app fetch origin main --quiet \
         || die "failed to refresh signed main commit"
     git_as_app cat-file -e "${signed_sha}^{commit}" 2>/dev/null \
         || die "signed commit is not available on the server"
     deployed_sha="$(git_as_app rev-parse HEAD)"
+    main_sha="$(git_as_app rev-parse origin/main)"
+    [[ "${deployed_sha}" =~ ^[0-9a-f]{40}$ && "${main_sha}" =~ ^[0-9a-f]{40}$ ]] \
+        || die "invalid operational revision commit"
+    if [[ "${authority_mode}" == "current-main" && "${signed_sha}" != "${main_sha}" ]]; then
+        die "server timer requires current main authority"
+    fi
     git_as_app merge-base --is-ancestor "${deployed_sha}" "${signed_sha}" \
         || die "deployed commit is not an ancestor of signed main"
+    changed_paths="$(git_as_app diff --name-only "${deployed_sha}" "${signed_sha}")" \
+        || die "failed to classify operational revision paths"
     while IFS= read -r path; do
         [[ -z "${path}" ]] && continue
         is_deploy_ignored_path "${path}" \
             || die "server code differs from signed main: ${path}"
-    done < <(git_as_app diff --name-only "${deployed_sha}" "${signed_sha}")
+    done <<< "${changed_paths}"
+    DEPLOYED_CODE_COMMIT="${deployed_sha}"
+    MAIN_CODE_COMMIT="${main_sha}"
 }
 
 verify_signature() {
@@ -211,9 +228,8 @@ require_systemd_invocation() {
 
 verify_systemd_request() {
     local run_id="$1" signed_sha="$2" capital="$3"
-    local deployed_sha main_sha
     [[ "${run_id}" =~ ^[0-9]{14}$ ]] || die "invalid server timer run id"
-    [[ "${signed_sha}" =~ ^[0-9a-f]{40}$ ]] || die "invalid deployed commit"
+    [[ "${signed_sha}" =~ ^[0-9a-f]{40}$ ]] || die "invalid current main commit"
     validate_capital "${capital}"
     require_systemd_invocation
     require_repo
@@ -223,12 +239,8 @@ verify_systemd_request() {
         || die "server timer order is limited to ladder rung 1"
     [[ "$(sentinel_field entry_route)" == "operational_canary" ]] \
         || die "server timer order requires operational_canary entry route"
-    git_as_app fetch origin main --quiet || die "failed to refresh exact main"
-    deployed_sha="$(git_as_app rev-parse HEAD)"
-    main_sha="$(git_as_app rev-parse origin/main)"
-    [[ "${deployed_sha}" == "${signed_sha}" && "${main_sha}" == "${signed_sha}" ]] \
-        || die "server timer requires exact deployed main"
-    echo "LIVE_ORDER_AUTHORIZED source=server_timer run_id=${run_id} commit=${signed_sha} capital=${capital}"
+    validate_deployed_commit "${signed_sha}" "current-main"
+    echo "LIVE_ORDER_AUTHORIZED source=server_timer run_id=${run_id} commit=${signed_sha} deployed_commit=${DEPLOYED_CODE_COMMIT} operational_equivalent=true capital=${capital}"
 }
 
 place_order_authorized() {
@@ -299,7 +311,10 @@ scheduled_status() {
     [[ -f "${summary}" && ! -L "${summary}" ]] || die "missing scheduled run summary"
     jq -e \
         --arg run_id "${run_id}" \
-        '.schema_version == "1.0" and .run_id == $run_id and .source == "server_timer"' \
+        '.schema_version == "1.1" and .run_id == $run_id and .source == "server_timer" and
+         (.code_commit | test("^[0-9a-f]{40}$")) and
+         (.deployed_code_commit | test("^[0-9a-f]{40}$")) and
+         .operational_equivalent == true' \
         "${summary}" >/dev/null || die "invalid scheduled run summary"
     cat "${summary}"
 }
