@@ -52,6 +52,8 @@
 - 루트 helper는 이전 버전이 이 파일을 모를 수 있으므로 기존 scheduler timer, 실행 중인 scheduler service, 장기 worker를 명시적으로 중지하고 비활성 상태를 확인한 뒤 KIS smoke를 수행한다.
 - `HEALTHY` 또는 `ROLLED_BACK`이 검증됐을 때만 제거된다.
 - `HALTED`는 자동 만료되지 않는다.
+- 새 등록 오너 단회 요청은 root 소유 정규 파일·닫힌 HALTED 스키마·배타 잠금과 이전 요청의 유일한 `DEPLOY_EMERGENCY_AUTHORIZED`·`DEPLOY_STARTED=0`을 함께 증명한 경우에만 잠금을 인계한다.
+- `DEPLOY_STARTED`가 하나라도 있거나 장부·파일이 모호하면 인계하지 않고 `HALTED`를 유지한다.
 
 ## DeployEmergencyAuthorizedAudit
 

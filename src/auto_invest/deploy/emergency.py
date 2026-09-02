@@ -18,7 +18,7 @@ from pathlib import Path
 
 MAX_TTL_SEC = 900
 DEFAULT_REQUEST_PATH = Path("/run/auto-invest-deploy/emergency-request.json")
-DEFAULT_EXPECTED_ACTOR = "jinooaction"
+DEFAULT_ALLOWED_ACTORS = frozenset({"jinooaction", "masonoh-kidsnote"})
 
 _SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 _DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -75,7 +75,7 @@ def validate_emergency_request(
     target_sha: str,
     now_epoch: int | None = None,
     expected_uid: int = 0,
-    expected_actor: str = DEFAULT_EXPECTED_ACTOR,
+    allowed_actors: frozenset[str] = DEFAULT_ALLOWED_ACTORS,
 ) -> EmergencyDeployRequest:
     """Validate file identity, exact target, owner, lifetime, and closed schema."""
 
@@ -120,8 +120,8 @@ def validate_emergency_request(
 
     if not _SHA_RE.fullmatch(target_sha) or request_target != target_sha:
         raise EmergencyRequestError("emergency request target does not match current main")
-    if not _ACTOR_RE.fullmatch(actor) or actor != expected_actor:
-        raise EmergencyRequestError("emergency request actor is not the repository owner")
+    if not _ACTOR_RE.fullmatch(actor) or actor not in allowed_actors:
+        raise EmergencyRequestError("emergency request actor is not a registered owner")
     if source != "github-actions-workflow-dispatch":
         raise EmergencyRequestError("invalid emergency request source")
     if not _RUN_ID_RE.fullmatch(workflow_run_id):

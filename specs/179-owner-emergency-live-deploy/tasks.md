@@ -89,15 +89,19 @@
 - [x] T025 `uv run pytest`와 `uv run ruff check src tests` 전체 검증을 통과시킨다.
 - [x] T026 `uv run python scripts/agent_harness_probe.py --strict`와 `uv run python scripts/check_handoff_facts.py`를 통과시킨다.
 - [x] T027 위험 등급 4, K6/K-meta, 문제 정의, 대체·실패·되돌림을 담은 PR 본문을 `scripts/check_pr_quality_gate.py`로 검증한다.
-- [ ] T028 브랜치를 push하고 PR을 만든 뒤 최신 `origin/main`, 원격 checks, mergeability를 재확인해 merge commit 방식으로 자동 머지한다.
+- [x] T028 브랜치를 push하고 PR을 만든 뒤 최신 `origin/main`, 원격 checks, mergeability를 재확인해 merge commit 방식으로 자동 머지한다.
 - [ ] T029 exact latest main으로 오너 단회 긴급 workflow를 실행하고 KIS 6/6·미체결 0·승인/시작/완료 감사·90초 건강·주문 잠금 해제를 생산에서 확인한다.
 - [ ] T030 기존 GitHub schedule 또는 서버 timer의 첫 유효 자동 실행에서 신규 주문 접수·실제 체결·전략 추가 전용 감사·동일 실행 계좌 대사를 생산에서 확인한다.
 - [ ] T031 다른 scheduler 출처가 같은 최초 run ID/source를 반환하고 중복 broker write 0건인지 생산에서 확인한다.
 - [ ] T032 `handoff` 기술로 `HANDOFF.md`와 Spec 176·179 tasks의 main·배포·실제 체결 사실을 갱신하고 전체 품질 관문·PR·merge를 완료한다.
 - [x] T033 생산 run 33667656920에서 GitHub namespace owner와 실제 시스템 오너가 다른 신원 결함이 SSH·서버·중개사 접근 전에 실패 폐쇄됐음을 확인한다.
 - [x] T034 헌법 15.0.1과 Spec 179에 정확한 등록 시스템 오너 actor 계약을 추가하고 입력·변수·secret·역할 기반 권한 확장을 금지한다.
-- [ ] T035 등록 시스템 오너 보정을 회귀·전체 검증하고 별도 안전 경계 PR로 merge한다.
+- [x] T035 등록 시스템 오너 보정을 회귀·전체 검증하고 별도 안전 경계 PR로 merge한다.
 - [ ] T036 등록 시스템 오너의 exact-main 단회 긴급 workflow가 생산 배포와 감사·건강·잠금 해제를 완료하는지 확인한다.
+- [x] T037 run `33671389870`에서 새 helper가 구버전 설치 배포 실행기를 호출해 KIS 6/6·미체결 0 뒤에도 `DEPLOY_STARTED` 전에 실패하는 최초 도입 순환 의존을 생산에서 확인한다.
+- [x] T038 헌법 15.1.0과 Spec 179에 exact-target 격리 배포 실행기와 시작 전 HALTED 잠금의 엄격한 인계 계약을 전용 안전 경계 커밋으로 고정한다.
+- [x] T039 exact-target bootstrap, 등록 actor 집합, HALTED 유일 승인·시작 0건 인계를 구현하고 변조·임의 경로·시작 후 인계 실패 시험을 통과시킨다.
+- [ ] T040 전체 검증·PR 관문·merge 뒤 새 exact-main 단회 요청으로 생산 잠금을 안전 인계하고 배포·90초 건강·자동 timer 복구를 확인한다.
 
 ---
 
