@@ -168,6 +168,14 @@ jobs:
               "${USER}@${HOST}" \
               "deploy-journal" \
               > /tmp/deploy_journal.txt 2>&1
+          awk '
+            /Starting auto-invest deploy automation \(one-shot\)/ {
+              current=""
+              seen=1
+            }
+            seen { current=current $0 ORS }
+            END { printf "%s", current }
+          ' /tmp/deploy_journal.txt > /tmp/deploy_current_journal.txt
           cat /tmp/deploy_start.txt
           cat /tmp/deploy_journal.txt
           echo "start_exit=${start_exit}" >> "$GITHUB_OUTPUT"
@@ -185,8 +193,19 @@ jobs:
           REASON_SHA256: ${{ steps.owner_emergency.outputs.reason_sha256 }}
         run: |
           set +e
-          if [[ "${START_EXIT}" != "0" ]] && ! grep -qiE 'market is open|market_hours_guard' \
-              /tmp/deploy_journal.txt 2>/dev/null; then
+          current_journal=/tmp/deploy_current_journal.txt
+          current_market_refusal=false
+          current_stale_target_refusal=false
+          if grep -qiE 'market is open|market_hours_guard' "${current_journal}" 2>/dev/null; then
+            current_market_refusal=true
+          fi
+          if grep -Fqi 'emergency request target does not match current main' \
+              "${current_journal}" 2>/dev/null; then
+            current_stale_target_refusal=true
+          fi
+          if [[ "${START_EXIT}" != "0" \
+              && "${current_market_refusal}" != "true" \
+              && "${current_stale_target_refusal}" != "true" ]]; then
             echo "Normal deploy failed for a non-market reason; emergency path refused." >&2
             echo "emergency_exit=2" >> "$GITHUB_OUTPUT"
             echo "emergency_used=false" >> "$GITHUB_OUTPUT"
@@ -220,8 +239,9 @@ jobs:
           EMERGENCY_USED: ${{ steps.emergency_deploy.outputs.emergency_used }}
         run: |
           journal="$(cat /tmp/deploy_journal.txt 2>/dev/null || echo '(no journal captured)')"
+          current_journal="$(cat /tmp/deploy_current_journal.txt 2>/dev/null || true)"
           units_log="$(cat /tmp/units_sync.txt 2>/dev/null || echo '(no unit-sync output captured)')"
-          # 장중 연기는 실패가 아니다 — market_hours_guard 거부 신호를 찾는다.
+          # 장중 연기는 현재 배포 시도의 market-hours 거부로만 판정한다.
           emergency_log="$(cat /tmp/emergency_deploy.txt 2>/dev/null || echo '(emergency path not used)')"
           if [[ "${OWNER_EMERGENCY}" == "true" \
               && "${EMERGENCY_USED}" == "true" \
@@ -232,7 +252,7 @@ jobs:
               && "${EMERGENCY_EXIT:-2}" != "0" ]]; then
               status="❌ 오너 단회 장중 긴급 배포 실패 — 주문 잠금 상태를 아래 로그에서 확인"
               effective_exit=1
-          elif grep -qiE 'market is open|market_hours_guard' /tmp/deploy_journal.txt 2>/dev/null; then
+          elif grep -qiE 'market is open|market_hours_guard' <<<"${current_journal}"; then
               status="⏸ 장중 연기 — 타이머가 장 마감 후 자동 재배포"
               effective_exit=0
           elif [[ "${START_EXIT}" == "0" ]]; then

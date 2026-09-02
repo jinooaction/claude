@@ -113,9 +113,53 @@ def test_exact_deployed_target_without_stale_state_is_no_mutation_noop() -> None
 def test_owner_workflow_always_delegates_stale_state_decision_to_root_helper() -> None:
     body = WORKFLOW.read_text(encoding="utf-8")
     assert "Normal deploy already completed; emergency exception was not consumed." not in body
-    assert 'if [[ "${START_EXIT}" != "0" ]]' in body
+    assert 'if [[ "${START_EXIT}" != "0"' in body
+    assert "current_stale_target_refusal" in body
+    assert "emergency request target does not match current main" in body
     assert "emergency-deploy ${GITHUB_SHA}" in body
     assert "DEPLOY_EMERGENCY_NOT_NEEDED" in body
+
+
+def test_workflow_classifies_only_the_current_deploy_attempt_journal() -> None:
+    body = WORKFLOW.read_text(encoding="utf-8")
+    assert "deploy_current_journal.txt" in body
+    assert "Starting auto-invest deploy automation \\(one-shot\\)" in body
+    assert 'grep -qiE \'market is open|market_hours_guard\' "${current_journal}"' in body
+    assert 'grep -qiE \'market is open|market_hours_guard\' <<<"${current_journal}"' in body
+    assert (
+        "grep -qiE 'market is open|market_hours_guard' "
+        "/tmp/deploy_journal.txt"
+    ) not in body
+
+
+def test_current_attempt_extractor_discards_historical_market_refusal() -> None:
+    body = WORKFLOW.read_text(encoding="utf-8")
+    marker = "          awk '\n"
+    start = body.index(marker) + len(marker)
+    end = body.index("\n          ' /tmp/deploy_journal.txt", start)
+    awk_program = body[start:end]
+    journal = "\n".join(
+        (
+            "Sep 02 19:54 systemd: Starting auto-invest deploy automation (one-shot)...",
+            "Sep 02 19:54 worker: deploy refused: US market is open",
+            "Sep 02 19:54 systemd: Failed to start auto-invest deploy automation (one-shot).",
+            "Sep 02 20:53 systemd: Starting auto-invest deploy automation (one-shot)...",
+            "Sep 02 20:53 worker: deploy refused: market closed; "
+            "emergency request target does not match current main",
+            "Sep 02 20:53 systemd: Failed to start auto-invest deploy automation (one-shot).",
+        )
+    )
+
+    result = subprocess.run(
+        ["awk", awk_program],
+        input=journal,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    assert "US market is open" not in result.stdout
+    assert "emergency request target does not match current main" in result.stdout
 
 
 def test_terminal_rollback_request_filter_executes_in_object_scope() -> None:
