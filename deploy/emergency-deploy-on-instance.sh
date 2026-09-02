@@ -162,6 +162,114 @@ validate_halted_interlock_for_recovery() {
     echo "RECOVERING_PRESTART_HALTED request_id=${prior_request_id} target=${prior_target_sha}"
 }
 
+validate_terminal_rollback_orphan() {
+    local prior_request_id prior_workflow_run_id prior_target_sha prior_actor
+    local expected_gid interlock_meta request_meta authorization_count correlation_id
+    local started_count failed_count kernel_count rolled_back_count completed_count
+    local unexpected_count terminal_event production_head rollback_sha_before
+
+    [[ -f "${INTERLOCK_PATH}" && ! -L "${INTERLOCK_PATH}" ]] \
+        || die "existing maintenance interlock is not a safe regular file"
+    [[ -f "${REQUEST_PATH}" && ! -L "${REQUEST_PATH}" ]] \
+        || die "existing emergency request is not a safe regular file"
+    expected_gid="$(getent group "${APP_GROUP}" | cut -d: -f3)"
+    [[ "${expected_gid}" =~ ^[0-9]+$ ]] || die "failed to resolve application group"
+    interlock_meta="$(stat -c '%u:%g:%a' "${INTERLOCK_PATH}")" \
+        || die "failed to inspect existing maintenance interlock"
+    request_meta="$(stat -c '%u:%g:%a' "${REQUEST_PATH}")" \
+        || die "failed to inspect existing emergency request"
+    [[ "${interlock_meta}" == "0:${expected_gid}:640" \
+        && "${request_meta}" == "0:${expected_gid}:640" ]] \
+        || die "orphan recovery file ownership or mode is invalid"
+    jq -e '
+        type == "object" and
+        keys == ["created_at_epoch","request_id","state","target_sha","workflow_run_id"] and
+        (.request_id | type == "string" and test("^github-run-[1-9][0-9]*$")) and
+        (.target_sha | type == "string" and test("^[0-9a-f]{40}$")) and
+        (.workflow_run_id | type == "string" and test("^[1-9][0-9]*$")) and
+        (.created_at_epoch | type == "number" and . > 0 and floor == .) and
+        .state == "QUIESCED"
+    ' "${INTERLOCK_PATH}" >/dev/null \
+        || die "existing maintenance interlock is not a recoverable QUIESCED record"
+    jq -e '
+        type == "object" and
+        keys == ["actor","expires_at_epoch","issued_at_epoch","reason_sha256","request_id","schema_version","source","target_sha","workflow_run_id"] and
+        .schema_version == "1.0" and
+        (.request_id | type == "string" and test("^github-run-[1-9][0-9]*$")) and
+        (.target_sha | type == "string" and test("^[0-9a-f]{40}$")) and
+        (.workflow_run_id | type == "string" and test("^[1-9][0-9]*$")) and
+        (.actor == "jinooaction" or .actor == "masonoh-kidsnote") and
+        .source == "github-actions-workflow-dispatch" and
+        (.reason_sha256 | type == "string" and test("^[0-9a-f]{64}$")) and
+        (.issued_at_epoch | type == "number" and . > 0 and floor == .) and
+        (.expires_at_epoch | type == "number" and . > .issued_at_epoch and floor == .)
+    ' "${REQUEST_PATH}" >/dev/null \
+        || die "existing emergency request is not a recoverable closed record"
+
+    prior_request_id="$(jq -r '.request_id' "${REQUEST_PATH}")"
+    prior_workflow_run_id="$(jq -r '.workflow_run_id' "${REQUEST_PATH}")"
+    prior_target_sha="$(jq -r '.target_sha' "${REQUEST_PATH}")"
+    prior_actor="$(jq -r '.actor' "${REQUEST_PATH}")"
+    [[ "$(jq -r '.request_id' "${INTERLOCK_PATH}")" == "${prior_request_id}" \
+        && "$(jq -r '.workflow_run_id' "${INTERLOCK_PATH}")" == "${prior_workflow_run_id}" \
+        && "$(jq -r '.target_sha' "${INTERLOCK_PATH}")" == "${prior_target_sha}" \
+        && "${prior_request_id}" == "github-run-${prior_workflow_run_id}" ]] \
+        || die "orphan recovery identities are inconsistent"
+
+    authorization_count="$(sqlite3 -readonly "${DB_PATH}" \
+        "SELECT COUNT(*) FROM audit_log
+          WHERE event_type = 'DEPLOY_EMERGENCY_AUTHORIZED'
+            AND json_extract(payload_json, '$.request_id') = '${prior_request_id}'
+            AND json_extract(payload_json, '$.target_sha') = '${prior_target_sha}'
+            AND json_extract(payload_json, '$.workflow_run_id') = '${prior_workflow_run_id}'
+            AND json_extract(payload_json, '$.actor') = '${prior_actor}';")" \
+        || die "failed to inspect orphan authorization"
+    [[ "${authorization_count}" == "1" ]] \
+        || die "orphan authorization is missing or ambiguous"
+    correlation_id="$(sqlite3 -readonly "${DB_PATH}" \
+        "SELECT correlation_id FROM audit_log
+          WHERE event_type = 'DEPLOY_EMERGENCY_AUTHORIZED'
+            AND json_extract(payload_json, '$.request_id') = '${prior_request_id}';")" \
+        || die "failed to read orphan correlation"
+    [[ "${correlation_id}" =~ ^[0-9a-f]{32}$ ]] \
+        || die "orphan correlation is invalid or ambiguous"
+    read -r started_count failed_count kernel_count rolled_back_count \
+        completed_count unexpected_count <<<"$(sqlite3 -readonly -separator ' ' "${DB_PATH}" \
+        "SELECT
+            SUM(event_type = 'DEPLOY_STARTED'),
+            SUM(event_type = 'DEPLOY_FAILED'),
+            SUM(event_type = 'DEPLOY_KERNEL_TOUCHED'),
+            SUM(event_type = 'DEPLOY_ROLLED_BACK'),
+            SUM(event_type = 'DEPLOY_COMPLETED'),
+            SUM(event_type NOT IN (
+                'DEPLOY_EMERGENCY_AUTHORIZED','DEPLOY_STARTED',
+                'DEPLOY_KERNEL_TOUCHED','DEPLOY_FAILED','DEPLOY_ROLLED_BACK'
+            ))
+          FROM audit_log WHERE correlation_id = '${correlation_id}';")" \
+        || die "failed to inspect orphan deploy chain"
+    [[ "${started_count}" == "1" && "${failed_count}" == "1" \
+        && ( "${kernel_count}" == "0" || "${kernel_count}" == "1" ) \
+        && "${rolled_back_count}" == "1" && "${completed_count}" == "0" \
+        && "${unexpected_count}" == "0" ]] \
+        || die "orphan deploy chain is incomplete or ambiguous"
+    terminal_event="$(sqlite3 -readonly "${DB_PATH}" \
+        "SELECT event_type FROM audit_log WHERE correlation_id = '${correlation_id}'
+          AND event_type LIKE 'DEPLOY_%' ORDER BY seq DESC LIMIT 1;")" \
+        || die "failed to read orphan terminal event"
+    [[ "${terminal_event}" == "DEPLOY_ROLLED_BACK" ]] \
+        || die "orphan deploy did not end in a verified rollback"
+    rollback_sha_before="$(sqlite3 -readonly "${DB_PATH}" \
+        "SELECT json_extract(payload_json, '$.sha_before') FROM audit_log
+          WHERE correlation_id = '${correlation_id}'
+            AND event_type = 'DEPLOY_ROLLED_BACK';")" \
+        || die "failed to read rollback baseline"
+    production_head="$(sudo -u "${APP_USER}" git -C "${REPO}" rev-parse HEAD)"
+    [[ "${rollback_sha_before}" =~ ^[0-9a-f]{40}$ \
+        && "${production_head}" == "${rollback_sha_before}" ]] \
+        || die "production repo does not match the verified rollback baseline"
+    echo "RECOVERING_TERMINAL_ROLLBACK request_id=${prior_request_id} target=${prior_target_sha}"
+}
+
 prepare_exact_target_runner() {
     local target_sha="$1" remote_url remote_head checkout_head
 
@@ -239,16 +347,22 @@ main() {
     }
     trap cleanup EXIT
 
-    [[ ! -e "${REQUEST_PATH}" ]] || die "emergency request path is already occupied"
     [[ -f "${DB_PATH}" && ! -L "${DB_PATH}" ]] \
         || die "missing or unsafe audit database"
     [[ -f "${BROKER_WRITE_LOCK_PATH}" && ! -L "${BROKER_WRITE_LOCK_PATH}" ]] \
         || die "missing or unsafe broker-write coordination lock"
+    local recovered_terminal_rollback=0
     if [[ -e "${INTERLOCK_PATH}" ]]; then
         exec 9<>"${INTERLOCK_PATH}"
         flock -n -x 9 || die "existing maintenance interlock is still owned"
-        validate_halted_interlock_for_recovery
+        if [[ -e "${REQUEST_PATH}" ]]; then
+            validate_terminal_rollback_orphan
+            recovered_terminal_rollback=1
+        else
+            validate_halted_interlock_for_recovery
+        fi
     else
+        [[ ! -e "${REQUEST_PATH}" ]] || die "orphan request exists without an interlock"
         install -m 0640 -o root -g "${APP_GROUP}" /dev/null "${INTERLOCK_PATH}"
         exec 9<>"${INTERLOCK_PATH}"
         flock -n -x 9 || die "another emergency deploy owns the maintenance interlock"
@@ -256,6 +370,10 @@ main() {
     interlock_created=1
     exec 8<>"${BROKER_WRITE_LOCK_PATH}"
     flock -w 30 -x 8 || die "live broker write did not quiesce within 30 seconds"
+    if [[ "${recovered_terminal_rollback}" -eq 1 ]]; then
+        rm -f "${REQUEST_PATH}"
+    fi
+    [[ ! -e "${REQUEST_PATH}" ]] || die "emergency request path is already occupied"
 
     printf '{"request_id":"%s","target_sha":"%s","workflow_run_id":"%s","created_at_epoch":%s,"state":"QUIESCED"}\n' \
         "${request_id}" "${target_sha}" "${workflow_run_id}" "${now}" >"${INTERLOCK_PATH}"
@@ -342,10 +460,14 @@ main() {
     fi
     if [[ "${start_exit}" -eq 0 && "${terminal_event}" == "DEPLOY_COMPLETED" ]]; then
         echo "DEPLOY_EMERGENCY_COMPLETED request_id=${request_id} target=${target_sha}"
+        cleanup
+        trap - EXIT
         return 0
     fi
     if [[ "${terminal_event}" == "DEPLOY_ROLLED_BACK" ]]; then
         echo "DEPLOY_EMERGENCY_ROLLED_BACK request_id=${request_id} target=${target_sha}" >&2
+        cleanup
+        trap - EXIT
         return 1
     fi
     die "emergency deploy failed without a proven healthy terminal state"

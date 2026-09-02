@@ -105,7 +105,7 @@ def repo_setup(tmp_path: Path, monkeypatch: Any) -> dict[str, Any]:
     # Patch dry_run_config to a no-op (no rules.toml in temp repo).
     monkeypatch.setattr(
         "auto_invest.deploy.steps.dry_run_config",
-        lambda _cfg: __import__(
+        lambda _cfg, env_path=None: __import__(
             "auto_invest.deploy.steps", fromlist=["StepResult"]
         ).StepResult(ok=True),
     )
@@ -172,6 +172,40 @@ def test_noop_writes_no_audit_and_returns_zero(repo_setup, monkeypatch):
     assert elapsed < 5.0  # generous on slow CI; test machine is faster
     rows = _read_all(repo_setup["db_path"])
     assert all(not row["event_type"].startswith("DEPLOY_") for row in rows)
+
+
+def test_runner_passes_fixed_env_path_to_config_dry_run(repo_setup, monkeypatch):
+    """Bootstrap processes load the same fixed env file as the systemd service."""
+    _push_new_commit(repo_setup["sibling"], {"src/env.py": "z = 3\n"}, "env")
+    expected_env = repo_setup["repo"] / ".env.production"
+    observed: dict[str, Path | None] = {}
+
+    def capture_env(_config_path: Path, env_path: Path | None = None):
+        observed["env_path"] = env_path
+        return __import__(
+            "auto_invest.deploy.steps", fromlist=["StepResult"]
+        ).StepResult(ok=True)
+
+    monkeypatch.setattr("auto_invest.deploy.steps.dry_run_config", capture_env)
+    monkeypatch.setattr(
+        "auto_invest.deploy.guards.market_hours_guard",
+        lambda now=None: __import__(
+            "auto_invest.deploy.guards", fromlist=["MarketHoursDecision"]
+        ).MarketHoursDecision(is_open=False, next_close_utc=None, next_open_utc=None),
+    )
+    cfg = RunnerConfig(
+        repo=repo_setup["repo"],
+        db_path=repo_setup["db_path"],
+        branch="main",
+        dry_run=True,
+        env_path=expected_env,
+        pid_path=repo_setup["db_path"].parent / "env-lock.pid",
+    )
+
+    result = DeployRunner(config=cfg, supervisor=DryRunSupervisor()).run()
+
+    assert result.exit_code == 0
+    assert observed["env_path"] == expected_env
 
 
 def test_dry_run_emits_started_and_completed(repo_setup, monkeypatch):

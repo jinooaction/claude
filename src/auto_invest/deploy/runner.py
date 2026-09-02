@@ -284,7 +284,7 @@ class DeployRunner:
             )
 
         # 12. dry_run_check (config)
-        dr_result = steps.dry_run_config(cfg.config_path)
+        dr_result = steps.dry_run_config(cfg.config_path, env_path=cfg.env_path)
         if not dr_result.ok:
             return self._fail_after_start(
                 correlation_id, sha_before, sha_after, "dry_run",

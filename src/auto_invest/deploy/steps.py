@@ -112,12 +112,12 @@ def migrate_live(db_path: Path) -> StepResult:
     return StepResult(ok=True)
 
 
-def dry_run_config(config_path: Path) -> StepResult:
+def dry_run_config(config_path: Path, env_path: Path | None = None) -> StepResult:
     """Parse the rules TOML the same way the worker does, but don't run."""
     from auto_invest.config.loader import ConfigError, load_config
 
     try:
-        load_config(config_path)
+        load_config(config_path, env_path=env_path)
     except ConfigError as exc:
         return StepResult(ok=False, detail=f"config invalid: {exc}")
     except FileNotFoundError as exc:
