@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def test_constitution_requires_calibrated_family_entry_and_exact_fundability() -> None:
     text = (ROOT / ".specify" / "memory" / "constitution.md").read_text(encoding="utf-8")
-    assert "**Version**: 15.0.0" in text
+    assert "**Version**: 15.0.1" in text
     assert "`gate_version=3.1` (`calibrated-family-entry-v3.1`)" in text
     assert "`gate_version=3.0`, legacy, and `gate_version=2.0` evidence are diagnostic-only" in text
     assert "`complete_family_trials`" in text

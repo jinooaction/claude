@@ -63,12 +63,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
-      - name: Validate one-shot repository-owner emergency request
+      - name: Validate one-shot registered-owner emergency request
         id: owner_emergency
         if: github.event_name == 'workflow_dispatch' && inputs.owner_emergency
         env:
           ACTOR: ${{ github.actor }}
           OWNER: ${{ github.repository_owner }}
+          REGISTERED_SYSTEM_OWNER: masonoh-kidsnote
           EXPECTED_SHA: ${{ inputs.expected_sha }}
           CONFIRMATION: ${{ inputs.confirmation }}
           REASON: ${{ inputs.reason }}
@@ -78,8 +79,9 @@ jobs:
             echo "Owner emergency deploy is main-only." >&2
             exit 2
           }
-          [[ "${ACTOR}" == "${OWNER}" ]] || {
-            echo "Only the repository owner may authorize an emergency deploy." >&2
+          [[ "${ACTOR}" == "${OWNER}" \
+              || "${ACTOR}" == "${REGISTERED_SYSTEM_OWNER}" ]] || {
+            echo "Only a constitution-registered owner may authorize an emergency deploy." >&2
             exit 2
           }
           [[ "${EXPECTED_SHA}" =~ ^[0-9a-f]{40}$ \

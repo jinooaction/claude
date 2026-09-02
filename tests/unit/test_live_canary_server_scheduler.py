@@ -32,7 +32,7 @@ def test_root_owned_service_and_new_york_fallback_timer_are_declared() -> None:
     assert "Requires=auto-invest-live-canary.service" not in timer
     assert "America/New_York" in timer
     assert "10:35:00" in timer
-    assert "13:59:00" in timer
+    assert "15:35:00" in timer
     assert "10:17:00" not in timer
     assert ":00:00 America/New_York" not in timer
     candidates = re.findall(
@@ -59,6 +59,14 @@ def test_root_owned_service_and_new_york_fallback_timer_are_declared() -> None:
         "13:35",
         "13:47",
         "13:59",
+        "14:11",
+        "14:23",
+        "14:35",
+        "14:47",
+        "14:59",
+        "15:11",
+        "15:23",
+        "15:35",
     ]
 
 

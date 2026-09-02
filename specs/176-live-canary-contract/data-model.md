@@ -107,7 +107,7 @@ OPERATIONAL_CANARY
 
 같은 뉴욕 거래일의 GitHub 예약과 server timer를 실제 주문 한 번으로 축약하는 production 서버 장부다.
 
-- 입력 예약: 뉴욕 현지 10:17~13:53의 GitHub 후보와 10:35 이후 root systemd fallback 후보
+- 입력 예약: 뉴욕 현지 10:17~13:53의 GitHub 후보와 10:35~15:35의 root systemd fallback 후보
 - `market_session`: XNYS가 실제로 열린 서버 현재 시각의 뉴욕 현지 날짜
 - `run_id`, `source`, `code_commit`, `claimed_at_utc`: 최초 선점 실행의 신원·출처와 시각
 - `source`: `github_schedule` 또는 `server_timer`만 허용

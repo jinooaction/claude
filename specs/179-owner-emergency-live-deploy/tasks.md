@@ -32,7 +32,7 @@
 
 ## Phase 3: User Story 1 - 특정 커밋을 지금 안전하게 배포 (Priority: P1) 🎯 MVP
 
-**Goal**: 정확한 current-main, 저장소 오너, 15분 이내 단회 요청만 장중 배포를 연다.
+**Goal**: 정확한 current-main, namespace 소유자 또는 헌법 등록 시스템 오너, 15분 이내 단회 요청만 장중 배포를 연다.
 
 **Independent Test**: 열린 XNYS에서 유효 요청만 배포가 진행되고 일반·만료·재사용·불일치 요청은 생산 변경 전 거부된다.
 
@@ -43,7 +43,7 @@
 - [x] T012 [US1] 열린 XNYS에서만 유효 요청을 소비하고 승인 사건을 시작 사건보다 먼저 남기는 경로를 `src/auto_invest/deploy/runner.py`에 구현한다.
 - [x] T013 [US1] 루트 소유 잠금·KIS 읽기 전용 smoke·고정 요청 생성·배포 서비스 실행·안전 정리를 `deploy/emergency-deploy-on-instance.sh`에 구현한다.
 - [x] T014 [US1] `emergency-deploy` 고정 명령과 최소 sudo 권한·helper 설치를 `deploy/repair-ssh-boundary.sh`에 추가한다.
-- [x] T015 [US1] 저장소 오너·확인 문구·정확한 SHA·이유를 검증하고 고정 긴급 명령만 호출하는 입력을 `.github/workflows/deploy-on-merge.yml`에 구현한다.
+- [x] T015 [US1] 등록 오너·확인 문구·정확한 SHA·이유를 검증하고 고정 긴급 명령만 호출하는 입력을 `.github/workflows/deploy-on-merge.yml`에 구현한다.
 - [x] T016 [US1] T004~T006과 기존 배포 회귀를 통과시켜 일반 장중 차단이 유지되는지 `tests/unit/test_emergency_deploy.py`와 `tests/integration/test_deploy_end_to_end.py`에서 확인한다.
 
 **Checkpoint**: 일반 장중 배포는 닫혀 있고 단회 오너 요청만 배포 실행기에 도달한다.
@@ -94,6 +94,10 @@
 - [ ] T030 기존 GitHub schedule 또는 서버 timer의 첫 유효 자동 실행에서 신규 주문 접수·실제 체결·전략 추가 전용 감사·동일 실행 계좌 대사를 생산에서 확인한다.
 - [ ] T031 다른 scheduler 출처가 같은 최초 run ID/source를 반환하고 중복 broker write 0건인지 생산에서 확인한다.
 - [ ] T032 `handoff` 기술로 `HANDOFF.md`와 Spec 176·179 tasks의 main·배포·실제 체결 사실을 갱신하고 전체 품질 관문·PR·merge를 완료한다.
+- [x] T033 생산 run 33667656920에서 GitHub namespace owner와 실제 시스템 오너가 다른 신원 결함이 SSH·서버·중개사 접근 전에 실패 폐쇄됐음을 확인한다.
+- [x] T034 헌법 15.0.1과 Spec 179에 정확한 등록 시스템 오너 actor 계약을 추가하고 입력·변수·secret·역할 기반 권한 확장을 금지한다.
+- [ ] T035 등록 시스템 오너 보정을 회귀·전체 검증하고 별도 안전 경계 PR로 merge한다.
+- [ ] T036 등록 시스템 오너의 exact-main 단회 긴급 workflow가 생산 배포와 감사·건강·잠금 해제를 완료하는지 확인한다.
 
 ---
 
