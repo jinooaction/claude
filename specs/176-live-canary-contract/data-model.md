@@ -164,12 +164,15 @@ server fallback이 공유 거래일 선점 전에 두 번 확인하는 실행 �
 
 유효한 server timer 실행이 주문 0건으로 끝났을 때 같은 실행의 결과를 정화해 읽는 진단이다.
 
-- `schema_version=1.0`, `source=server_timer_order_diagnostics`, 14자리 `run_id`
+- `schema_version=1.1`, `source=server_timer_order_diagnostics`, 14자리 `run_id`
 - `planned_order_count`, `result_count`, `withheld_order_count`: 각각 0~20의 정수 건수
 - `outcomes`: 허용 형식의 종목, `BUY|SELL`, 요청·라우팅 정수 수량, 닫힌 결과 상태, 안전한 gate
+- `broker_rejections`: 거부 종목별 `kis_rt_cd`, `kis_msg_cd`, HTTP 상태, 예외 종류,
+  `TTTT1002U|TTTT1006U`, `NASD|NYSE|AMEX`, `00|01` 또는 `null`인 고정 진단
 - `withheld_reason_codes`: 비관리 보유·현금 부족·방향 필터·기타 보류의 고정 코드
 - 입력: 최신 고정 포인터 또는 명시된 14자리 run ID의 root 전용 일반 파일
-- 금지: 원문 reason, 가격·현금·계좌·주문·상관 ID, 임의 경로·파일·로그, 주문·재시도·서비스 제어
+- 금지: 원문 reason·`msg1`·응답 본문, 가격·현금·계좌·주문·상관 ID, 임의 경로·파일·로그,
+  주문·재시도·서비스 제어
 - 의미: 주문 0건의 원인 분류이며 주문·체결·감사·대사 성공 증거를 대체하지 않음
 
 ## DeployAuditObservation
