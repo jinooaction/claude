@@ -141,7 +141,7 @@ jobs:
           fi
 
           if ! jq -e --arg run_id "${SERVER_RUN_ID}" '
-            .schema_version == "1.0" and
+            .schema_version == "1.1" and
             .source == "server_timer_order_diagnostics" and
             .run_id == $run_id and
             (.planned_order_count | type == "number" and . >= 0 and . <= 20) and
@@ -164,13 +164,32 @@ jobs:
                 ((keys | sort) == ([
                   "gate", "requested_qty", "routed_qty", "side", "state", "symbol"
                 ] | sort))) and
+            (.broker_rejections | type == "array" and length <= 20) and
+            ((.broker_rejections | length) ==
+              ([.outcomes[] | select(.state == "REJECTED_BY_BROKER")] | length)) and
+            all(.broker_rejections[];
+                (.symbol | test("^[A-Z][A-Z0-9.-]{0,9}$")) and
+                (.kis_rt_cd == null or (.kis_rt_cd | test("^[0-9]{1,4}$"))) and
+                (.kis_msg_cd == null or (.kis_msg_cd | test("^[A-Z0-9]{1,16}$"))) and
+                (.http_status == null or
+                  (.http_status | type == "number" and floor == . and . >= 100 and . <= 599)) and
+                (.exception_type == null or
+                  (.exception_type | test("^[A-Za-z][A-Za-z0-9_]{0,63}$"))) and
+                (.tr_id == null or (.tr_id | IN("TTTT1002U", "TTTT1006U"))) and
+                (.order_exchange == null or
+                  (.order_exchange | IN("NASD", "NYSE", "AMEX"))) and
+                (.order_division == null or (.order_division | IN("00", "01"))) and
+                ((keys | sort) == ([
+                  "exception_type", "http_status", "kis_msg_cd", "kis_rt_cd",
+                  "order_division", "order_exchange", "symbol", "tr_id"
+                ] | sort))) and
             (.withheld_reason_codes | type == "array" and length <= 20 and
               all(.[]; IN(
                 "unmanaged_holding", "insufficient_cash", "cash_shortfall_sell_first",
                 "side_filtered_sell_only", "side_filtered_buy_only", "other_withheld"
               ))) and
             ((keys | sort) == ([
-              "outcomes", "planned_order_count", "result_count", "run_id",
+              "broker_rejections", "outcomes", "planned_order_count", "result_count", "run_id",
               "schema_version", "source", "withheld_order_count",
               "withheld_reason_codes"
             ] | sort))

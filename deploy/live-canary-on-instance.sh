@@ -338,7 +338,7 @@ scheduled_status() {
 }
 
 scheduled_order_diagnostics() {
-    local run_id="${1:-}" run_dir order_log payload
+    local run_id="${1:-}" run_dir order_log payload diagnostics
     [[ -d "${SCHEDULED_RUNS_DIR}" && ! -L "${SCHEDULED_RUNS_DIR}" ]] \
         || die "missing scheduled evidence directory"
     if [[ -z "${run_id}" ]]; then
@@ -393,8 +393,8 @@ scheduled_order_diagnostics() {
         ] | all)
     ' >/dev/null || die "invalid scheduled order result"
 
-    printf '%s\n' "${payload}" | jq \
-        --arg schema_version "1.0" \
+    diagnostics="$(printf '%s\n' "${payload}" | jq \
+        --arg schema_version "1.1" \
         --arg source "server_timer_order_diagnostics" \
         --arg run_id "${run_id}" '
         def withheld_code:
@@ -412,7 +412,49 @@ scheduled_order_diagnostics() {
          outcomes:[.results[] | {
            symbol,side,requested_qty,routed_qty,state,gate
          }],
+         broker_rejections:[.results[]
+           | select(.state == "REJECTED_BY_BROKER")
+           | (.reason | try fromjson catch null) as $diagnostics
+           | {
+               symbol,
+               kis_rt_cd:($diagnostics.kis_rt_cd // null),
+               kis_msg_cd:($diagnostics.kis_msg_cd // null),
+               http_status:($diagnostics.http_status // null),
+               exception_type:($diagnostics.exception_type // null),
+               tr_id:($diagnostics.request_summary.tr_id // null),
+               order_exchange:($diagnostics.request_summary.body.OVRS_EXCG_CD // null),
+               order_division:($diagnostics.request_summary.body.ORD_DVSN // null)
+             }],
          withheld_reason_codes:([.withheld_orders[].reason | withheld_code] | unique)}'
+    )" || die "failed to sanitize scheduled order diagnostics"
+
+    printf '%s\n' "${diagnostics}" | jq -e '
+        .schema_version == "1.1" and
+        .source == "server_timer_order_diagnostics" and
+        (.broker_rejections | type == "array" and length <= 20) and
+        ([.broker_rejections[] |
+          (.symbol | type == "string" and test("^[A-Z][A-Z0-9.-]{0,9}$")) and
+          (.kis_rt_cd == null or
+            (.kis_rt_cd | type == "string" and test("^[0-9]{1,4}$"))) and
+          (.kis_msg_cd == null or
+            (.kis_msg_cd | type == "string" and test("^[A-Z0-9]{1,16}$"))) and
+          (.http_status == null or
+            (.http_status | type == "number" and floor == . and . >= 100 and . <= 599)) and
+          (.exception_type == null or
+            (.exception_type | type == "string" and test("^[A-Za-z][A-Za-z0-9_]{0,63}$"))) and
+          (.tr_id == null or (.tr_id | IN("TTTT1002U", "TTTT1006U"))) and
+          (.order_exchange == null or
+            (.order_exchange | IN("NASD", "NYSE", "AMEX"))) and
+          (.order_division == null or (.order_division | IN("00", "01"))) and
+          ((keys | sort) == ([
+            "exception_type", "http_status", "kis_msg_cd", "kis_rt_cd",
+            "order_division", "order_exchange", "symbol", "tr_id"
+          ] | sort))
+        ] | all) and
+        ([.outcomes[] | select(.state == "REJECTED_BY_BROKER")] | length) ==
+          (.broker_rejections | length)
+    ' >/dev/null || die "invalid sanitized broker rejection diagnostics"
+    printf '%s\n' "${diagnostics}"
 }
 
 systemd_property() {

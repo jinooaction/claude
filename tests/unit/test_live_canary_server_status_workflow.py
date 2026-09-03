@@ -60,6 +60,10 @@ def test_server_status_workflow_validates_and_sanitizes_before_publish() -> None
     assert '((.timer | keys | sort) == ([' in body
     assert '((.service | keys | sort) == ([' in body
     assert '.source == "server_timer_order_diagnostics"' in body
+    assert '.schema_version == "1.1"' in body
+    assert '"broker_rejections"' in body
+    assert '"kis_msg_cd"' in body
+    assert '"order_exchange"' in body
     assert "diagnostic_status=invalid_diagnostics" in body
 
 

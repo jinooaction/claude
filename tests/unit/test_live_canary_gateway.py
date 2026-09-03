@@ -450,7 +450,7 @@ def test_scheduled_order_diagnostics_exposes_only_closed_safe_fields(
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout)
     assert payload == {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "source": "server_timer_order_diagnostics",
         "run_id": run_id,
         "planned_order_count": 1,
@@ -466,11 +466,134 @@ def test_scheduled_order_diagnostics_exposes_only_closed_safe_fields(
                 "gate": "global_exposure_gate",
             }
         ],
+        "broker_rejections": [],
         "withheld_reason_codes": ["unmanaged_holding"],
     }
     assert "must-not-leak" not in result.stdout
     assert "934.27" not in result.stdout
     assert "30.20" not in result.stdout
+
+
+def test_scheduled_order_diagnostics_exposes_only_closed_broker_codes(
+    gateway_env: dict[str, object],
+) -> None:
+    env = gateway_env["env"]
+    assert isinstance(env, dict)
+    state = Path(str(env["NONCE_DIR"]))
+    run_id = "20260903161106"
+    run_dir = state / "scheduled-runs" / run_id
+    run_dir.mkdir(parents=True)
+    broker_reason = {
+        "exception_type": "KisOrderResponseError",
+        "http_status": 200,
+        "kis_rt_cd": "7",
+        "kis_msg_cd": "APBK1672",
+        "kis_msg1": "must-not-leak",
+        "response_body_preview": "account=must-not-leak",
+        "request_summary": {
+            "tr_id": "TTTT1002U",
+            "body": {
+                "OVRS_EXCG_CD": "NASD",
+                "ORD_DVSN": "00",
+                "OVRS_ORD_UNPR": "30.20",
+                "CANO": "******78",
+            },
+        },
+    }
+    raw = {
+        "fundability": {
+            "planned_orders": [{"symbol": "SCHX", "side": "BUY", "qty": 2}]
+        },
+        "results": [
+            {
+                "symbol": "SCHX",
+                "side": "BUY",
+                "requested_qty": 2,
+                "routed_qty": 2,
+                "limit_price_usd": "30.20",
+                "state": "REJECTED_BY_BROKER",
+                "gate": None,
+                "reason": json.dumps(broker_reason),
+            }
+        ],
+        "withheld_orders": [],
+    }
+    (run_dir / "order.log").write_text(json.dumps(raw) + "\n", encoding="utf-8")
+
+    result = subprocess.run(
+        ["bash", str(HELPER), "scheduled-order-diagnostics", run_id],
+        text=True,
+        capture_output=True,
+        env=env,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["broker_rejections"] == [
+        {
+            "symbol": "SCHX",
+            "kis_rt_cd": "7",
+            "kis_msg_cd": "APBK1672",
+            "http_status": 200,
+            "exception_type": "KisOrderResponseError",
+            "tr_id": "TTTT1002U",
+            "order_exchange": "NASD",
+            "order_division": "00",
+        }
+    ]
+    assert "must-not-leak" not in result.stdout
+    assert "30.20" not in result.stdout
+    assert "******78" not in result.stdout
+
+
+def test_scheduled_order_diagnostics_fails_closed_on_unknown_broker_field(
+    gateway_env: dict[str, object],
+) -> None:
+    env = gateway_env["env"]
+    assert isinstance(env, dict)
+    state = Path(str(env["NONCE_DIR"]))
+    run_id = "20260903161106"
+    run_dir = state / "scheduled-runs" / run_id
+    run_dir.mkdir(parents=True)
+    raw = {
+        "fundability": {"planned_orders": []},
+        "results": [
+            {
+                "symbol": "SCHX",
+                "side": "BUY",
+                "requested_qty": 2,
+                "routed_qty": 2,
+                "limit_price_usd": "30.20",
+                "state": "REJECTED_BY_BROKER",
+                "gate": None,
+                "reason": json.dumps(
+                    {
+                        "kis_rt_cd": "7",
+                        "kis_msg_cd": "APBK1672",
+                        "request_summary": {
+                            "tr_id": "TTTT1002U",
+                            "body": {"OVRS_EXCG_CD": "SECRET", "ORD_DVSN": "00"},
+                        },
+                    }
+                ),
+            }
+        ],
+        "withheld_orders": [],
+    }
+    (run_dir / "order.log").write_text(json.dumps(raw) + "\n", encoding="utf-8")
+
+    result = subprocess.run(
+        ["bash", str(HELPER), "scheduled-order-diagnostics", run_id],
+        text=True,
+        capture_output=True,
+        env=env,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert "invalid sanitized broker rejection diagnostics" in result.stderr
+    assert "SECRET" not in result.stdout + result.stderr
 
 
 def test_scheduled_order_diagnostics_fails_closed_on_unknown_state(
