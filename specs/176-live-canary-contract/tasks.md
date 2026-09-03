@@ -238,7 +238,7 @@
 - [x] T104 [US5] server summary와 고정 observer가 initial·same_session_retry 및 최초·복구 run
   신원을 구분하되 다른 scheduler의 broker/fill/measure/reconciliation 반복을 막도록
   deploy helper·workflow·계약 시험을 갱신한다.
-- [ ] T105 [US5] 관련 시험·전체 pytest·ruff·strict harness·HANDOFF 사실 검사·PR 본문 품질
+- [x] T105 [US5] 관련 시험·전체 pytest·ruff·strict harness·HANDOFF 사실 검사·PR 본문 품질
   관문을 통과시키고 위험 등급 4 PR을 merge·exact-main 배포·KIS smoke·주문 없는 preflight까지
   확인한다.
 - [ ] T106 [US5] 다음 실제 zero-acceptance 사고가 발생하면 같은 장의 다음 자동 server timer에서
