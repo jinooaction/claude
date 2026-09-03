@@ -220,7 +220,7 @@
 - [x] T098 [US3] 진단 1.1을 검증·merge·exact-main 배포해 생산 run의 두 주문이 공통으로
   `rt_cd=7`, `msg_cd=APBK1672`, HTTP 200, `TTTT1002U`, `AMEX`, `00`에서 거부됐음을 확정하고,
   KIS 공식 현재 구현과 비교해 공유 REST 헤더의 `custtype`·`tr_cont` 누락으로 원인 범위를 좁힌다.
-- [ ] T099 [US3] 공유 KIS REST 헤더에 호출자가 바꿀 수 없는 `custtype=P`, `tr_cont=""`를
+- [x] T099 [US3] 공유 KIS REST 헤더에 호출자가 바꿀 수 없는 `custtype=P`, `tr_cont=""`를
   추가하고 주문 캡처 회귀·관련 시험·전체 시험·ruff·엄격 하네스·HANDOFF 사실 검사·PR 품질 관문을
   통과시킨 뒤 merge·exact-main 배포·KIS smoke 6/6·주문 없는 `ENTRY_READY`를 확인한다.
 - [ ] T100 [US3] 다음 첫 유효 자동 정규장 실행에서 KIS 신규 주문 접수·실제 신규 체결·전략 추가
