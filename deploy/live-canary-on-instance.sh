@@ -337,6 +337,128 @@ scheduled_status() {
     cat "${summary}"
 }
 
+systemd_property() {
+    local unit="$1" property="$2" value
+    value="$(systemctl show "${unit}" --property="${property}" --value 2>/dev/null)" \
+        || die "failed to read live-canary systemd state"
+    [[ "${#value}" -le 160 && "${value}" != *$'\n'* && "${value}" != *$'\r'* ]] \
+        || die "invalid live-canary systemd state"
+    printf '%s\n' "${value}"
+}
+
+runtime_status() {
+    local timer_load timer_active timer_last timer_next
+    local service_load service_active service_result service_exit service_started service_finished
+    local journal_events journal_exit journal_readable events_json
+
+    timer_load="$(systemd_property auto-invest-live-canary.timer LoadState)"
+    timer_active="$(systemd_property auto-invest-live-canary.timer ActiveState)"
+    timer_last="$(systemd_property auto-invest-live-canary.timer LastTriggerUSec)"
+    timer_next="$(systemd_property auto-invest-live-canary.timer NextElapseUSecRealtime)"
+    service_load="$(systemd_property auto-invest-live-canary.service LoadState)"
+    service_active="$(systemd_property auto-invest-live-canary.service ActiveState)"
+    service_result="$(systemd_property auto-invest-live-canary.service Result)"
+    service_exit="$(systemd_property auto-invest-live-canary.service ExecMainStatus)"
+    service_started="$(systemd_property auto-invest-live-canary.service ExecMainStartTimestamp)"
+    service_finished="$(systemd_property auto-invest-live-canary.service ExecMainExitTimestamp)"
+
+    [[ "${timer_load}" =~ ^[a-z-]+$ && "${timer_active}" =~ ^[a-z-]+$ \
+        && "${service_load}" =~ ^[a-z-]+$ && "${service_active}" =~ ^[a-z-]+$ \
+        && "${service_result}" =~ ^[a-z-]+$ && "${service_exit}" =~ ^[0-9]+$ ]] \
+        || die "invalid live-canary systemd status fields"
+
+    set +e
+    journal_events="$(journalctl -u auto-invest-live-canary.service --since '24 hours ago' \
+        -n 400 --no-pager -o cat 2>/dev/null \
+        | awk '
+            /^LIVE_CANARY_SERVER_TIMER_DUPLICATE / {
+                print "duplicate_scheduler"; next
+            }
+            /^LIVE_ORDER_SESSION_ALREADY_CLAIMED / {
+                print "order_session_already_claimed"; next
+            }
+            /^ERROR: .*broker writes are halted for an owner emergency deploy$/ {
+                print "deploy_maintenance_halt"; next
+            }
+            /^ERROR: .*systemd invocation/ ||
+            /^ERROR: .*fixed systemd unit/ ||
+            /^ERROR: .*direct child of its fixed systemd unit$/ {
+                print "invalid_systemd_invocation"; next
+            }
+            /^ERROR: .*deployed commit/ ||
+            /^ERROR: .*origin.main/ ||
+            /^ERROR: .*operational revision/ ||
+            /^ERROR: server code differs from/ ||
+            /^ERROR: server timer requires current main authority$/ {
+                print "operational_revision_mismatch"; next
+            }
+            /^ERROR: production worker is not active$/ {
+                print "worker_inactive"; next
+            }
+            /^ERROR: .*deploy audit/ {
+                print "deploy_audit_invalid"; next
+            }
+            /^ERROR: .*XNYS/ || /^ERROR: invalid XNYS session key$/ {
+                print "market_session_invalid"; next
+            }
+            /^ERROR: .*sentinel/ || /^ERROR: AUTOARM_DISABLED kill switch is active$/ ||
+            /^ERROR: server fallback is limited to ladder rung 1$/ ||
+            /^ERROR: server fallback requires operational_canary entry route$/ {
+                print "live_authority_invalid"; next
+            }
+            /^ERROR: .*live order session ledger$/ {
+                print "order_session_ledger_invalid"; next
+            }
+            /^ERROR: duplicate scheduler run id$/ {
+                print "duplicate_scheduler_run_id"; next
+            }
+            /^ERROR: server timer first-entry revalidation failed$/ {
+                print "first_entry_revalidation_failed"; next
+            }
+            /^ERROR: .*scheduled evidence/ || /^ERROR: missing claimed market session$/ ||
+            /^ERROR: failed to build scheduled summary$/ {
+                print "scheduled_evidence_invalid"; next
+            }
+            /^ERROR:/ { print "unclassified_error" }
+        ' \
+        | tail -n 20)"
+    journal_exit=$?
+    set -e
+    journal_readable=false
+    if [[ "${journal_exit}" -eq 0 ]]; then
+        journal_readable=true
+    else
+        journal_events=""
+    fi
+    events_json="$(printf '%s' "${journal_events}" \
+        | jq -R -s 'if length == 0 then [] else split("\n") end')" \
+        || die "failed to sanitize live-canary journal"
+
+    jq -n \
+        --arg schema_version "1.0" \
+        --arg source "server_timer_runtime" \
+        --arg observed_at_utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        --arg timer_load_state "${timer_load}" \
+        --arg timer_active_state "${timer_active}" \
+        --arg timer_last_trigger_utc "${timer_last}" \
+        --arg timer_next_elapse_utc "${timer_next}" \
+        --arg service_load_state "${service_load}" \
+        --arg service_active_state "${service_active}" \
+        --arg service_result "${service_result}" \
+        --argjson service_exec_main_status "${service_exit}" \
+        --arg service_started_at_utc "${service_started}" \
+        --arg service_finished_at_utc "${service_finished}" \
+        --argjson journal_readable "${journal_readable}" \
+        --argjson recent_events "${events_json}" \
+        '{schema_version:$schema_version,source:$source,observed_at_utc:$observed_at_utc,
+          timer:{load_state:$timer_load_state,active_state:$timer_active_state,
+            last_trigger_utc:$timer_last_trigger_utc,next_elapse_utc:$timer_next_elapse_utc},
+          service:{load_state:$service_load_state,active_state:$service_active_state,
+            result:$service_result,exec_main_status:$service_exec_main_status,
+            started_at_utc:$service_started_at_utc,finished_at_utc:$service_finished_at_utc},
+          journal_readable:$journal_readable,recent_events:$recent_events}'
+}
+
 sync_fills() {
     local -a date_args=()
     if [[ "$#" -eq 2 ]]; then
@@ -395,6 +517,10 @@ main() {
         scheduled-status)
             [[ "$#" -le 1 ]] || die "scheduled-status takes at most one run id"
             scheduled_status "${1:-}"
+            ;;
+        runtime-status)
+            [[ "$#" -eq 0 ]] || die "runtime-status takes no arguments"
+            runtime_status
             ;;
         *)
             die "unknown live-canary command: ${command:-missing}"

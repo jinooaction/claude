@@ -178,24 +178,33 @@
   두 커밋과 동등성 판정을 남기게 한다.
 - [x] T082 [US3] 관련·전체 시험, ruff, 엄격 하네스, HANDOFF 사실 검사와 PR 본문 품질 관문을
   통과시키고 위험 등급 4 PR을 연다. 미국 정규장 중에는 merge·deploy하지 않는다.
-- [ ] T083 [US3] 장 마감 뒤 PR을 merge하고 exact latest main 배포, timer active·다음 발화,
+- [x] T083 [US3] 장 마감 뒤 PR을 merge하고 exact latest main 배포, timer active·다음 발화,
   KIS smoke 6/6과 주문 없는 latest-main `ENTRY_READY`를 확인한다.
 - [ ] T084 [US3] 다음 첫 유효 자동 실행에서 요약 1.1의 두 커밋, 주문·체결·전략 감사·정합과
   다른 scheduler의 동일 최초 run/source·중복 broker write 0건을 생산 증거로 확인한다.
 - [x] T085 [US3] 뉴욕 13:59 뒤 긴급 배포되면 당일 자동 기회가 없는 회복 공백을
   Spec 176에 기록하고, GitHub·수동 주문 경로를 늘리지 않은 채 root server timer만
   10:35~15:35의 12분 간격 26개 자동 후보로 연장한다.
-- [ ] T086 [US3] timer 후보 정확성, 15:35 상한, 기존 거래일 1회·수동 실주문 금지
+- [x] T086 [US3] timer 후보 정확성, 15:35 상한, 기존 거래일 1회·수동 실주문 금지
   회귀와 전체 시험·린트·하네스·PR 관문을 통과시켜 머지·장중 긴급 배포한다.
 - [ ] T087 [US3] 남은 15:11·15:23·15:35 중 첫 유효 server timer가 스스로 실제 주문·체결·
   전략 감사·계좌 대사를 완료하고 후속 후보가 중복 broker write 0건을 재현하는지 확인한다.
 - [x] T088 [US3] GitHub 예약 지연 중 독립 서버 timer 결과를 즉시 읽을 수 있도록, 기존 고정
   `live-canary-scheduled-status`만 호출하고 주문·서비스·timer 제어를 포함하지 않는 수동 읽기 전용
   관측 워크플로와 닫힌 summary 1.1·정화 sidecar·실패 폐쇄 시험을 추가한다.
-- [ ] T089 [US3] 관련·전체 시험, ruff, 엄격 하네스, HANDOFF 사실 검사와 PR 본문 품질 관문을
+- [x] T089 [US3] 관련·전체 시험, ruff, 엄격 하네스, HANDOFF 사실 검사와 PR 본문 품질 관문을
   통과시키고 등급 2 관측 PR을 merge한다.
 - [ ] T090 [US3] 다음 독립 서버 자동 후보 뒤 읽기 전용 관측 워크플로를 실행해 실제 server summary와
   기존 GitHub sidecar의 최초 run/source·주문·체결·감사·대사·중복 broker write 0건을 대조한다.
+- [x] T091 [US3] 2026-09-03 server timer가 active지만 `scheduled-status`가 종료 코드 2만 반환해
+  미발화와 선점 전 실패를 구분하지 못한 생산 공백을 spec·plan·research·data-model·quickstart에
+  기록하고, 고정 systemd 필드와 원문 없는 사건 코드만 허용하는 실패 시험을 먼저 작성한다.
+- [x] T092 [US3] root helper와 forced-command에 인자 없는 `live-canary-runtime-status`를 추가하고,
+  observer가 성공 요약이 없을 때만 닫힌 runtime JSON을 검증·정화 발행하되 최종 실패 판정과
+  주문·서비스·timer 비변경 경계를 유지하게 한다.
+- [ ] T093 [US3] 관련·전체 시험, ruff, strict 하네스, HANDOFF 사실 검사와 PR 품질 관문을 통과시켜
+  merge·exact-main 배포한 뒤 읽기 전용 observer에서 실제 timer 발화·서비스 종료값·고정 사건 코드를
+  확인하고 원인 보정을 같은 거래일 남은 자동 후보에 적용한다.
 
 ## 의존성과 완료 계약
 
@@ -214,5 +223,7 @@
   당일 회복과 사용자 목표를 완료로 표시하지 않는다.
 - T088 관측 경로는 주문·서비스를 실행하지 않아야 하며 T089 검증·merge 뒤에만 production 조회에
   사용한다. T090은 T071·T078·T084·T087의 생산 증거를 대체하지 않고 더 빠르게 회수한다.
+- T091 실패 시험 뒤에만 T092를 구현하고, T093의 production runtime 진단은 성공 요약이나
+  실제 체결 증거를 대체하지 않는다. 진단이 지목한 원인을 고친 뒤 자동 timer 후보로만 재검증한다.
 - 시장 휴장, 0개 목표 주문, 증거 불일치, 브로커 장애이면 주문을 만들지 않고 다음 정규장 관찰을 계속한다.
 - 10% 운영 캐너리는 수익 보장이 아니며, T032의 승격 차단이 유지돼야 한다.

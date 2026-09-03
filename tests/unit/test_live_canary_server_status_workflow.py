@@ -20,6 +20,7 @@ def test_server_status_workflow_has_only_manual_read_trigger() -> None:
     assert "\n  push:" not in body
     assert 'remote_command="live-canary-scheduled-status"' in body
     assert 'remote_command="live-canary-scheduled-status ${requested}"' in body
+    assert '"live-canary-runtime-status"' in body
     assert "^[0-9]{14}$" in body
 
 
@@ -52,6 +53,10 @@ def test_server_status_workflow_validates_and_sanitizes_before_publish() -> None
     assert "BRANCH=automation/" not in body
     assert "branch=automation/live-canary-server-status-last-run" in body
     assert "server_scheduled_status.json" in body
+    assert "server_runtime_status.json" in body
+    assert '.source == "server_timer_runtime"' in body
+    assert '((.timer | keys | sort) == ([' in body
+    assert '((.service | keys | sort) == ([' in body
 
 
 def test_server_status_workflow_fails_closed_without_valid_summary() -> None:
@@ -60,6 +65,8 @@ def test_server_status_workflow_fails_closed_without_valid_summary() -> None:
     assert "query_status=invalid_input" in body
     assert "query_status=unavailable" in body
     assert "query_status=invalid_summary" in body
+    assert "runtime_status=ok" in body
+    assert "runtime_status=invalid_runtime" in body
     assert "valid server timer summary was not observed" in body
     assert '"${QUERY_EXIT:-1}" != "0"' in body
     assert '"${QUERY_STATUS:-}" != "ok"' in body

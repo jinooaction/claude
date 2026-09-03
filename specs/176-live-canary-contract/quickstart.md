@@ -48,6 +48,9 @@ sidecar의 `capital_entry_evidence.json`을 각각 내려받는다. 역할, 코�
 10. GitHub 예약이 늦으면 `Live canary server timer status (read-only)` 워크플로를 수동 실행한다.
     성공 sidecar `automation/live-canary-server-status-last-run`의 `observation_status=ok`와
     `server_scheduled_status.json`을 확인한다. 이 조회는 서버 timer나 주문을 시작하지 않는다.
+11. 성공 요약이 없으면 같은 sidecar의 `server_runtime_status.json`에서 마지막·다음 timer 발화,
+    service 결과·종료값과 원문 없는 고정 사건 코드를 확인한다. 이 파일이 있어도 관측 workflow는 실패가 정상이며,
+    실제 주문 성공으로 해석하지 않는다. 임의 journal 조회나 service 수동 시작으로 재현하지 않는다.
 
 ## 5. 독립 scheduler 검증
 

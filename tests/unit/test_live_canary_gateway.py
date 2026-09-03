@@ -395,6 +395,69 @@ def test_scheduled_status_rejects_pointer_symlink(
     assert "no server-scheduled live canary evidence" in result.stderr
 
 
+def test_runtime_status_reports_only_fixed_systemd_fields_and_sanitized_errors(
+    gateway_env: dict[str, object],
+) -> None:
+    env = gateway_env["env"]
+    assert isinstance(env, dict)
+    fake_bin = Path(str(env["PATH"]).split(":", 1)[0])
+    systemctl = fake_bin / "systemctl"
+    systemctl.write_text(
+        "#!/usr/bin/env bash\n"
+        "set -euo pipefail\n"
+        "unit=${2:-}\n"
+        "property=${3#--property=}\n"
+        "case \"${unit}:${property}\" in\n"
+        "  auto-invest-live-canary.timer:LoadState) echo loaded ;;\n"
+        "  auto-invest-live-canary.timer:ActiveState) echo active ;;\n"
+        "  auto-invest-live-canary.timer:LastTriggerUSec) "
+        "echo 'Thu 2026-09-03 15:23:00 UTC' ;;\n"
+        "  auto-invest-live-canary.timer:NextElapseUSecRealtime) "
+        "echo 'Thu 2026-09-03 15:35:00 UTC' ;;\n"
+        "  auto-invest-live-canary.service:LoadState) echo loaded ;;\n"
+        "  auto-invest-live-canary.service:ActiveState) echo failed ;;\n"
+        "  auto-invest-live-canary.service:Result) echo exit-code ;;\n"
+        "  auto-invest-live-canary.service:ExecMainStatus) echo 2 ;;\n"
+        "  auto-invest-live-canary.service:ExecMainStartTimestamp) "
+        "echo 'Thu 2026-09-03 15:23:00 UTC' ;;\n"
+        "  auto-invest-live-canary.service:ExecMainExitTimestamp) "
+        "echo 'Thu 2026-09-03 15:23:01 UTC' ;;\n"
+        "  *) exit 1 ;;\n"
+        "esac\n",
+        encoding="utf-8",
+    )
+    systemctl.chmod(0o755)
+    journalctl = fake_bin / "journalctl"
+    journalctl.write_text(
+        "#!/usr/bin/env bash\n"
+        "echo 'ERROR: TOKEN=must-not-leak'\n"
+        "echo 'ERROR: server timer first-entry revalidation failed'\n",
+        encoding="utf-8",
+    )
+    journalctl.chmod(0o755)
+
+    result = subprocess.run(
+        ["bash", str(HELPER), "runtime-status"],
+        text=True,
+        capture_output=True,
+        env=env,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["schema_version"] == "1.0"
+    assert payload["source"] == "server_timer_runtime"
+    assert payload["timer"]["active_state"] == "active"
+    assert payload["service"]["result"] == "exit-code"
+    assert payload["service"]["exec_main_status"] == 2
+    assert payload["recent_events"] == [
+        "unclassified_error",
+        "first_entry_revalidation_failed",
+    ]
+    assert "must-not-leak" not in result.stdout
+
+
 def test_direct_systemd_order_command_fails_before_claim_or_broker(
     gateway_env: dict[str, object],
 ) -> None:
@@ -487,6 +550,7 @@ def test_gateway_exposes_signed_order_and_non_order_evidence_only() -> None:
     assert "live-canary-profit\\ *)" in repair
     assert "live-canary-scheduled-status)" in repair
     assert "live-canary-scheduled-status\\ *)" in repair
+    assert "live-canary-runtime-status)" in repair
     gateway = repair.split("EOF_GATEWAY", 2)[1]
     assert "systemd-order" not in gateway
     assert "verify_signature" in helper
@@ -494,6 +558,7 @@ def test_gateway_exposes_signed_order_and_non_order_evidence_only() -> None:
     assert "claim_order_session" in helper
     assert "server_timer" in helper
     assert "scheduled-status" in helper
+    assert "runtime-status" in helper
     assert "server timer order is limited to ladder rung 1" in helper
     assert "server timer order requires operational_canary entry route" in helper
     assert "AUTOARM_DISABLED kill switch is active" in helper

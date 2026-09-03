@@ -146,6 +146,20 @@ server fallback이 공유 거래일 선점 전에 두 번 확인하는 실행 �
 - 실패: fetch, commit 조회, merge-base, diff, 경로 분류, 현재 main 재확인 중 하나라도 실패하면 거짓
 - 감사 연결: `DEPLOY_COMPLETED`는 `deployed_code_commit`에 있어야 하며 현재 main으로 대신하지 않음
 
+## LiveCanaryRuntimeStatus
+
+성공·부분 실행 요약이 없을 때 독립 server timer의 발화와 조기 실패를 구분하는 읽기 전용 진단이다.
+
+- `schema_version=1.0`, `source=server_timer_runtime`, `observed_at_utc`
+- `timer`: `load_state`, `active_state`, `last_trigger_utc`, `next_elapse_utc`
+- `service`: `load_state`, `active_state`, `result`, 숫자 `exec_main_status`,
+  `started_at_utc`, `finished_at_utc`
+- `journal_readable`: 고정 journal 읽기 성공 여부
+- `recent_events`: 최근 24시간 저널 원문을 비밀값 없는 고정 사건 코드로 바꾼 최대 20개 항목
+- 호출: 인자 없는 SSH forced-command `live-canary-runtime-status`
+- 금지: 임의 unit·기간·필터·경로, 환경 전체, journal 전체, 주문·서비스·timer 제어
+- 의미: 실패 원인 진단이며 `ScheduledLiveCanaryEvidence`나 실제 체결 증거를 대체하지 않음
+
 ## DeployAuditObservation
 
 exact-main 배포 여부를 서버의 추가 전용 감사 장부에서 읽는 비변경 관측 결과다.
