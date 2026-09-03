@@ -1,0 +1,187 @@
+name: Live canary server timer status (read-only)
+
+# GitHub schedule 공급자가 늦더라도 독립 서버 timer의 최신 실행 요약을 읽기 전용으로 확인한다.
+# 이 workflow는 forced-command gateway의 고정 `live-canary-scheduled-status`만 호출한다.
+# 주문, 서비스 시작, timer 조작, 임의 원격 셸은 허용하지 않는다.
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Optional 14-digit server timer run ID. Empty means latest."
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  observe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Install SSH key
+        env:
+          KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.VULTR_SSH_KNOWN_HOSTS }}
+          SSH_USER: ${{ secrets.VULTR_SSH_USER }}
+        run: |
+          VULTR_SSH_PRIVATE_KEY="${KEY:-}" \
+          VULTR_SSH_KNOWN_HOSTS="${KNOWN_HOSTS:-}" \
+          VULTR_SSH_USER="${SSH_USER:-}" \
+          ./scripts/ci_secure_ssh.sh
+
+      - name: Read fixed server timer summary
+        id: status
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+          REQUESTED_RUN_ID: ${{ inputs.run_id }}
+        run: |
+          set +e
+          requested="${REQUESTED_RUN_ID:-}"
+          if [[ -n "${requested}" && ! "${requested}" =~ ^[0-9]{14}$ ]]; then
+            echo "query_exit=2" >> "$GITHUB_OUTPUT"
+            echo "query_status=invalid_input" >> "$GITHUB_OUTPUT"
+            echo "::error::run_id must be exactly 14 digits"
+            exit 0
+          fi
+
+          remote_command="live-canary-scheduled-status"
+          if [[ -n "${requested}" ]]; then
+            remote_command="live-canary-scheduled-status ${requested}"
+          fi
+          port="${PORT:-22}"
+          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts \
+              -o ConnectTimeout=15 -o BatchMode=yes \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "${remote_command}" \
+              > /tmp/live_canary_server_summary.json \
+              2> /tmp/live_canary_server_summary.err
+          query_exit=$?
+          echo "query_exit=${query_exit}" >> "$GITHUB_OUTPUT"
+          if [[ "${query_exit}" -ne 0 ]]; then
+            echo "query_status=unavailable" >> "$GITHUB_OUTPUT"
+            echo "::warning::server timer summary is unavailable (exit ${query_exit})"
+            exit 0
+          fi
+
+          if ! jq -e --arg requested "${requested}" '
+            .schema_version == "1.1" and
+            (.run_id | test("^[0-9]{14}$")) and
+            ($requested == "" or .run_id == $requested) and
+            .source == "server_timer" and
+            (.market_session | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$")) and
+            (.started_at_utc | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T")) and
+            (.finished_at_utc | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T")) and
+            (.code_commit | test("^[0-9a-f]{40}$")) and
+            (.deployed_code_commit | test("^[0-9a-f]{40}$")) and
+            .operational_equivalent == true and
+            (.capital_usd | test("^[0-9]+([.][0-9]+)?$")) and
+            .entry_state == "ENTRY_READY" and
+            .entry_allowed == true and
+            .claim_status == "claimed" and
+            (.order_exit | type == "number") and
+            (.orders_submitted | type == "number" and . >= 0) and
+            (.fills_exit | type == "number") and
+            (.measurement_exit | type == "number") and
+            (.reconciliation_exit | type == "number") and
+            (.result == "completed" or .result == "partial") and
+            ((keys | sort) == ([
+              "capital_usd", "claim_status", "code_commit", "deployed_code_commit",
+              "entry_allowed", "entry_state", "fills_exit", "finished_at_utc",
+              "market_session", "measurement_exit", "operational_equivalent",
+              "order_exit", "orders_submitted", "reconciliation_exit", "result",
+              "run_id", "schema_version", "source", "started_at_utc"
+            ] | sort))
+          ' /tmp/live_canary_server_summary.json >/dev/null; then
+            echo "query_status=invalid_summary" >> "$GITHUB_OUTPUT"
+            echo "::error::server timer summary failed the closed schema check"
+            exit 0
+          fi
+
+          echo "query_status=ok" >> "$GITHUB_OUTPUT"
+          echo "run_id=$(jq -r '.run_id' /tmp/live_canary_server_summary.json)" >> "$GITHUB_OUTPUT"
+          echo "source=$(jq -r '.source' /tmp/live_canary_server_summary.json)" >> "$GITHUB_OUTPUT"
+          echo "orders_submitted=$(jq -r '.orders_submitted' /tmp/live_canary_server_summary.json)" >> "$GITHUB_OUTPUT"
+          echo "result=$(jq -r '.result' /tmp/live_canary_server_summary.json)" >> "$GITHUB_OUTPUT"
+          jq . /tmp/live_canary_server_summary.json
+
+      - name: Publish sanitized observation sidecar
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          QUERY_EXIT: ${{ steps.status.outputs.query_exit }}
+          QUERY_STATUS: ${{ steps.status.outputs.query_status }}
+          SERVER_RUN_ID: ${{ steps.status.outputs.run_id }}
+          SERVER_SOURCE: ${{ steps.status.outputs.source }}
+          ORDERS_SUBMITTED: ${{ steps.status.outputs.orders_submitted }}
+          SERVER_RESULT: ${{ steps.status.outputs.result }}
+          REQUESTED_RUN_ID: ${{ inputs.run_id }}
+        run: |
+          set -euo pipefail
+          branch=automation/live-canary-server-status-last-run
+          publish_dir="$(mktemp -d)"
+          cd "${publish_dir}"
+          git init -q
+          git config user.name "live-canary-server-status-bot"
+          git config user.email "live-canary-server-status-bot@noreply.github.com"
+
+          jq -n \
+            --arg schema_version "1.0" \
+            --arg observation_status "${QUERY_STATUS:-unknown}" \
+            --arg observed_at_utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg workflow_run_id "${GITHUB_RUN_ID}" \
+            --arg workflow_head_sha "${GITHUB_SHA}" \
+            --arg requested_run_id "${REQUESTED_RUN_ID:-}" \
+            --arg query_exit "${QUERY_EXIT:-missing}" \
+            '{schema_version:$schema_version,observation_status:$observation_status,
+              observed_at_utc:$observed_at_utc,workflow_run_id:$workflow_run_id,
+              workflow_head_sha:$workflow_head_sha,requested_run_id:$requested_run_id,
+              query_exit:$query_exit}' > observation.json
+
+          if [[ "${QUERY_STATUS:-}" == "ok" ]]; then
+            cp /tmp/live_canary_server_summary.json server_scheduled_status.json
+          fi
+
+          {
+            echo "# Live canary server timer status — latest observation"
+            echo
+            echo "| 항목 | 값 |"
+            echo "|------|-----|"
+            echo "| workflow_run_id | ${GITHUB_RUN_ID} |"
+            echo "| workflow_head_sha | ${GITHUB_SHA} |"
+            echo "| observation_status | ${QUERY_STATUS:-unknown} |"
+            echo "| query_exit | ${QUERY_EXIT:-missing} |"
+            echo "| requested_run_id | ${REQUESTED_RUN_ID:-latest} |"
+            echo "| server_run_id | ${SERVER_RUN_ID:-unavailable} |"
+            echo "| server_source | ${SERVER_SOURCE:-unavailable} |"
+            echo "| orders_submitted | ${ORDERS_SUBMITTED:-unavailable} |"
+            echo "| server_result | ${SERVER_RESULT:-unavailable} |"
+          } > LAST_RUN.md
+
+          git checkout --orphan publish
+          python3 "${GITHUB_WORKSPACE}/scripts/redact_public_sidecar.py" .
+          git add LAST_RUN.md observation.json
+          if [[ -f server_scheduled_status.json ]]; then
+            git add server_scheduled_status.json
+          fi
+          git commit -q -m "observe live canary server timer ${GITHUB_RUN_ID}"
+          git push --force \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "publish:${branch}"
+
+      - name: Fail closed when no valid summary was read
+        if: always()
+        env:
+          QUERY_EXIT: ${{ steps.status.outputs.query_exit }}
+          QUERY_STATUS: ${{ steps.status.outputs.query_status }}
+        run: |
+          if [[ "${QUERY_EXIT:-1}" != "0" || "${QUERY_STATUS:-}" != "ok" ]]; then
+            echo "::error::valid server timer summary was not observed"
+            exit 1
+          fi

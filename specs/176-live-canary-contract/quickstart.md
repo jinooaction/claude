@@ -45,6 +45,9 @@ sidecar의 `capital_entry_evidence.json`을 각각 내려받는다. 역할, 코�
 8. 체결이 없으면 완료하지 않고 다음 정규장 실행을 계속 관찰한다.
 9. 중복 예약은 최초 run ID와 `source`를 보고한다. 최초 출처가 server timer면 고정
    `live-canary-scheduled-status` 결과를 뒤늦은 production sidecar가 같은 ID로 발행하는지 확인한다.
+10. GitHub 예약이 늦으면 `Live canary server timer status (read-only)` 워크플로를 수동 실행한다.
+    성공 sidecar `automation/live-canary-server-status-last-run`의 `observation_status=ok`와
+    `server_scheduled_status.json`을 확인한다. 이 조회는 서버 timer나 주문을 시작하지 않는다.
 
 ## 5. 독립 scheduler 검증
 
@@ -52,6 +55,7 @@ sidecar의 `capital_entry_evidence.json`을 각각 내려받는다. 역할, 코�
 uv run pytest tests/unit/test_live_canary_server_scheduler.py \
   tests/unit/test_live_canary_gateway.py \
   tests/unit/test_live_canary_workflow.py \
+  tests/unit/test_live_canary_server_status_workflow.py \
   tests/unit/test_sync_units.py
 ```
 
