@@ -86,20 +86,41 @@ jobs:
             (.capital_usd | test("^[0-9]+([.][0-9]+)?$")) and
             .entry_state == "ENTRY_READY" and
             .entry_allowed == true and
-            .claim_status == "claimed" and
+            (.claim_status == "claimed" or .claim_status == "retry_claimed") and
             (.order_exit | type == "number") and
             (.orders_submitted | type == "number" and . >= 0) and
             (.fills_exit | type == "number") and
             (.measurement_exit | type == "number") and
             (.reconciliation_exit | type == "number") and
             (.result == "completed" or .result == "partial") and
-            ((keys | sort) == ([
-              "capital_usd", "claim_status", "code_commit", "deployed_code_commit",
-              "entry_allowed", "entry_state", "fills_exit", "finished_at_utc",
-              "market_session", "measurement_exit", "operational_equivalent",
-              "order_exit", "orders_submitted", "reconciliation_exit", "result",
-              "run_id", "schema_version", "source", "started_at_utc"
-            ] | sort))
+            (if has("attempt_kind") then
+              (.attempt_kind == "initial" or .attempt_kind == "same_session_retry") and
+              (.first_run_id | test("^[0-9]{14}$")) and
+              (.retry_run_id == null or (.retry_run_id | test("^[0-9]{14}$"))) and
+              (if .attempt_kind == "initial" then
+                .claim_status == "claimed" and .first_run_id == .run_id and .retry_run_id == null
+               else
+                .claim_status == "retry_claimed" and .retry_run_id == .run_id and
+                .first_run_id != .run_id
+               end) and
+              ((keys | sort) == ([
+                "attempt_kind", "capital_usd", "claim_status", "code_commit",
+                "deployed_code_commit", "entry_allowed", "entry_state", "fills_exit",
+                "finished_at_utc", "first_run_id", "market_session", "measurement_exit",
+                "operational_equivalent", "order_exit", "orders_submitted",
+                "reconciliation_exit", "result", "retry_run_id", "run_id",
+                "schema_version", "source", "started_at_utc"
+              ] | sort))
+             else
+              .claim_status == "claimed" and
+              ((keys | sort) == ([
+                "capital_usd", "claim_status", "code_commit", "deployed_code_commit",
+                "entry_allowed", "entry_state", "fills_exit", "finished_at_utc",
+                "market_session", "measurement_exit", "operational_equivalent",
+                "order_exit", "orders_submitted", "reconciliation_exit", "result",
+                "run_id", "schema_version", "source", "started_at_utc"
+              ] | sort))
+             end)
           ' /tmp/live_canary_server_summary.json >/dev/null; then
             echo "query_status=invalid_summary" >> "$GITHUB_OUTPUT"
             echo "::error::server timer summary failed the closed schema check"
@@ -111,6 +132,9 @@ jobs:
           echo "source=$(jq -r '.source' /tmp/live_canary_server_summary.json)" >> "$GITHUB_OUTPUT"
           echo "orders_submitted=$(jq -r '.orders_submitted' /tmp/live_canary_server_summary.json)" >> "$GITHUB_OUTPUT"
           echo "result=$(jq -r '.result' /tmp/live_canary_server_summary.json)" >> "$GITHUB_OUTPUT"
+          echo "attempt_kind=$(jq -r '.attempt_kind // "legacy_initial"' /tmp/live_canary_server_summary.json)" >> "$GITHUB_OUTPUT"
+          echo "first_run_id=$(jq -r '.first_run_id // .run_id' /tmp/live_canary_server_summary.json)" >> "$GITHUB_OUTPUT"
+          echo "retry_run_id=$(jq -r '.retry_run_id // "none"' /tmp/live_canary_server_summary.json)" >> "$GITHUB_OUTPUT"
           jq . /tmp/live_canary_server_summary.json
 
       - name: Read sanitized zero-order diagnostics
@@ -280,6 +304,9 @@ jobs:
           SERVER_SOURCE: ${{ steps.status.outputs.source }}
           ORDERS_SUBMITTED: ${{ steps.status.outputs.orders_submitted }}
           SERVER_RESULT: ${{ steps.status.outputs.result }}
+          ATTEMPT_KIND: ${{ steps.status.outputs.attempt_kind }}
+          FIRST_RUN_ID: ${{ steps.status.outputs.first_run_id }}
+          RETRY_RUN_ID: ${{ steps.status.outputs.retry_run_id }}
           REQUESTED_RUN_ID: ${{ inputs.run_id }}
           RUNTIME_EXIT: ${{ steps.runtime.outputs.runtime_exit }}
           RUNTIME_STATUS: ${{ steps.runtime.outputs.runtime_status }}
@@ -341,6 +368,9 @@ jobs:
             echo "| server_source | ${SERVER_SOURCE:-unavailable} |"
             echo "| orders_submitted | ${ORDERS_SUBMITTED:-unavailable} |"
             echo "| server_result | ${SERVER_RESULT:-unavailable} |"
+            echo "| attempt_kind | ${ATTEMPT_KIND:-unavailable} |"
+            echo "| first_run_id | ${FIRST_RUN_ID:-unavailable} |"
+            echo "| retry_run_id | ${RETRY_RUN_ID:-none} |"
             echo "| order_diagnostic_status | ${DIAGNOSTIC_STATUS:-skipped} |"
             echo "| order_diagnostic_exit | ${DIAGNOSTIC_EXIT:-skipped} |"
             echo "| planned_order_count | ${PLANNED_ORDER_COUNT:-unavailable} |"

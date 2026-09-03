@@ -228,14 +228,14 @@
   production 증거로 확인한다. 수동 주문·수동 service 시작·기존 거래일 선점 삭제는 하지 않는다.
 - [x] T101 [US5] 헌법 15.5.0과 spec·plan·research·data-model·quickstart에 원래 선점을 보존하는
   exact-manifest 기반 server timer same-session 복구 계약을 고정하고 안전 경계 전용 커밋을 만든다.
-- [ ] T102 [US5] 최초 run의 일부 결과·접수 불명·접수·부분체결·체결·열린 주문·사후 실패,
+- [x] T102 [US5] 최초 run의 일부 결과·접수 불명·접수·부분체결·체결·열린 주문·사후 실패,
   GitHub 출처, manifest 누락·불일치·미배포 보정·기소비 슬롯이 모두 추가 CLI 0건으로 실패하는
   gateway·scheduler 회귀 시험을 `tests/unit/test_live_canary_gateway.py`와
   `tests/unit/test_live_canary_server_scheduler.py`에 먼저 작성한다.
-- [ ] T103 [US5] `deploy/live-canary-retry-incident.json`의 닫힌 manifest, root 추가 전용 retry
+- [x] T103 [US5] `deploy/live-canary-retry-incident.json`의 닫힌 manifest, root 추가 전용 retry
   장부와 배타 선점, fresh KIS open-order proof, 자동 server timer 전용 재진입을
   `deploy/live-canary-on-instance.sh`와 `deploy/live-canary-scheduled-on-instance.sh`에 구현한다.
-- [ ] T104 [US5] server summary와 고정 observer가 initial·same_session_retry 및 최초·복구 run
+- [x] T104 [US5] server summary와 고정 observer가 initial·same_session_retry 및 최초·복구 run
   신원을 구분하되 다른 scheduler의 broker/fill/measure/reconciliation 반복을 막도록
   deploy helper·workflow·계약 시험을 갱신한다.
 - [ ] T105 [US5] 관련 시험·전체 pytest·ruff·strict harness·HANDOFF 사실 검사·PR 본문 품질

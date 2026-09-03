@@ -50,6 +50,11 @@ def test_server_status_workflow_validates_and_sanitizes_before_publish() -> None
     assert '.source == "server_timer"' in body
     assert ".operational_equivalent == true" in body
     assert '((keys | sort) == ([' in body
+    assert '.attempt_kind == "same_session_retry"' in body
+    assert '.claim_status == "retry_claimed"' in body
+    assert 'echo "attempt_kind=$(jq -r' in body
+    assert 'echo "first_run_id=$(jq -r' in body
+    assert 'echo "retry_run_id=$(jq -r' in body
     assert "scripts/redact_public_sidecar.py" in body
     assert "BRANCH=automation/" not in body
     assert "branch=automation/live-canary-server-status-last-run" in body
@@ -65,6 +70,9 @@ def test_server_status_workflow_validates_and_sanitizes_before_publish() -> None
     assert '"kis_msg_cd"' in body
     assert '"order_exchange"' in body
     assert "diagnostic_status=invalid_diagnostics" in body
+    assert "| attempt_kind |" in body
+    assert "| first_run_id |" in body
+    assert "| retry_run_id |" in body
 
 
 def test_server_status_workflow_fails_closed_without_valid_summary() -> None:

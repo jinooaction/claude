@@ -17,6 +17,8 @@ DEPLOY_MAINTENANCE_INTERLOCK="${DEPLOY_MAINTENANCE_INTERLOCK:-/run/auto-invest-d
 SCHEDULED_RUNS_DIR="${SCHEDULED_RUNS_DIR:-${STATE_DIR}/scheduled-runs}"
 LAST_RUN_FILE="${LAST_RUN_FILE:-${STATE_DIR}/last-scheduled-run-id}"
 SESSION_FILE="${SESSION_FILE:-${STATE_DIR}/order-sessions.tsv}"
+RETRY_SESSION_FILE="${STATE_DIR}/order-session-retries.tsv"
+RETRY_MANIFEST_PATH="deploy/live-canary-retry-incident.json"
 DEPLOYED_CODE_COMMIT=""
 MAIN_CODE_COMMIT=""
 
@@ -120,8 +122,42 @@ validate_sentinel() {
     printf '%s\n' "${capital}"
 }
 
+same_session_retry_candidate() {
+    local session_key="$1" first_run_id="$2" first_source="$3" first_code_commit="$4"
+    local deployed_sha="$5" manifest existing_retry
+    [[ "${first_source}" == "server_timer" ]] || return 1
+    if [[ -e "${RETRY_SESSION_FILE}" ]]; then
+        [[ -f "${RETRY_SESSION_FILE}" && ! -L "${RETRY_SESSION_FILE}" ]] || return 1
+        exec 8<"${RETRY_SESSION_FILE}" || return 1
+        flock -s 8 || return 1
+        existing_retry="$(awk -F '\t' -v key="${session_key}" '$1 == key { print; exit }' \
+            "${RETRY_SESSION_FILE}")"
+        flock -u 8
+        exec 8<&-
+        [[ -z "${existing_retry}" ]] || return 1
+    fi
+    manifest="$(mktemp)" || return 1
+    if ! git_as_app show "${deployed_sha}:${RETRY_MANIFEST_PATH}" >"${manifest}" 2>/dev/null \
+        || ! jq -e \
+            --arg session "${session_key}" \
+            --arg first_run_id "${first_run_id}" \
+            --arg first_source "${first_source}" \
+            --arg first_code "${first_code_commit}" '
+            .schema_version == "1.0" and .enabled == true and
+            .market_session == $session and .first_run_id == $first_run_id and
+            .first_source == $first_source and .first_source == "server_timer" and
+            .first_code_commit == $first_code
+        ' "${manifest}" >/dev/null; then
+        rm -f "${manifest}"
+        return 1
+    fi
+    rm -f "${manifest}"
+    return 0
+}
+
 existing_session_claim() {
-    local session_key="$1" existing first_run_id first_source
+    local session_key="$1" deployed_sha="$2" existing first_run_id first_source
+    local first_code_commit retry_run_id retry_field=""
     [[ -e "${SESSION_FILE}" ]] || return 1
     [[ -f "${SESSION_FILE}" && ! -L "${SESSION_FILE}" ]] \
         || die "unsafe live order session ledger"
@@ -133,6 +169,7 @@ existing_session_claim() {
     exec 9<&-
     [[ -n "${existing}" ]] || return 1
     first_run_id="$(printf '%s\n' "${existing}" | awk -F '\t' '{ print $2 }')"
+    first_code_commit="$(printf '%s\n' "${existing}" | awk -F '\t' '{ print $3 }')"
     first_source="$(printf '%s\n' "${existing}" | awk -F '\t' '{ print $5 }')"
     [[ -n "${first_source}" ]] || first_source="legacy"
     [[ "${first_run_id}" =~ ^[0-9]+$ ]] || die "invalid existing session run id"
@@ -140,7 +177,20 @@ existing_session_claim() {
         github_schedule|server_timer|legacy) ;;
         *) die "invalid existing session source" ;;
     esac
-    echo "LIVE_CANARY_SERVER_TIMER_DUPLICATE market_session=${session_key} first_run_id=${first_run_id} first_source=${first_source}"
+    if same_session_retry_candidate \
+        "${session_key}" "${first_run_id}" "${first_source}" \
+        "${first_code_commit}" "${deployed_sha}"; then
+        echo "LIVE_CANARY_SERVER_TIMER_RETRY_CANDIDATE market_session=${session_key} first_run_id=${first_run_id} first_source=${first_source}"
+        return 3
+    fi
+    if [[ -f "${RETRY_SESSION_FILE}" && ! -L "${RETRY_SESSION_FILE}" ]]; then
+        retry_run_id="$(awk -F '\t' -v key="${session_key}" '$1 == key { print $5; exit }' \
+            "${RETRY_SESSION_FILE}")"
+        if [[ "${retry_run_id}" =~ ^[0-9]{14}$ ]]; then
+            retry_field=" retry_run_id=${retry_run_id}"
+        fi
+    fi
+    echo "LIVE_CANARY_SERVER_TIMER_DUPLICATE market_session=${session_key} first_run_id=${first_run_id} first_source=${first_source}${retry_field}"
     return 0
 }
 
@@ -234,6 +284,7 @@ main() {
     local run_id started_at finished_at deployed_sha main_sha capital expected_session work_dir run_dir
     local order_exit fills_exit measure_exit profit_exit reconciliation_exit final_exit
     local market_session orders_submitted result summary_tmp pointer_tmp
+    local attempt_kind claim_status first_run_id retry_run_id
     local prior_claim prior_claim_exit
 
     refuse_deploy_maintenance
@@ -245,14 +296,23 @@ main() {
     expected_session="$(validate_market_session)"
     capital="$(validate_sentinel)"
     set +e
-    prior_claim="$(existing_session_claim "${expected_session}")"
+    prior_claim="$(existing_session_claim "${expected_session}" "${deployed_sha}")"
     prior_claim_exit=$?
     set -e
     if [[ "${prior_claim_exit}" -eq 0 ]]; then
         echo "${prior_claim}"
         exit 0
     fi
-    [[ "${prior_claim_exit}" -eq 1 ]] || die "failed to inspect live order session ledger"
+    if [[ "${prior_claim_exit}" -eq 3 ]]; then
+        echo "${prior_claim}"
+        attempt_kind="same_session_retry"
+        first_run_id="$(sed -n 's/.* first_run_id=\([^ ]*\).*/\1/p' <<<"${prior_claim}")"
+    elif [[ "${prior_claim_exit}" -eq 1 ]]; then
+        attempt_kind="initial"
+        first_run_id=""
+    else
+        die "failed to inspect live order session ledger"
+    fi
     run_id="$(date -u +%Y%m%d%H%M%S)"
     started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     work_dir="/run/auto-invest-live-canary/${run_id}"
@@ -275,8 +335,20 @@ main() {
         echo "LIVE_CANARY_SERVER_TIMER_DUPLICATE run_id=${run_id}"
         exit 0
     fi
-    grep -q '^LIVE_ORDER_SESSION_CLAIMED ' "${work_dir}/order.log" \
-        || exit "${order_exit}"
+    if grep -q '^LIVE_ORDER_SESSION_RETRY_CLAIMED ' "${work_dir}/order.log"; then
+        attempt_kind="same_session_retry"
+        claim_status="retry_claimed"
+        first_run_id="$(sed -n 's/^LIVE_ORDER_SESSION_RETRY_CLAIMED .* first_run_id=\([^ ]*\).*/\1/p' \
+            "${work_dir}/order.log" | head -1)"
+        retry_run_id="${run_id}"
+    elif grep -q '^LIVE_ORDER_SESSION_CLAIMED ' "${work_dir}/order.log"; then
+        attempt_kind="initial"
+        claim_status="claimed"
+        first_run_id="${run_id}"
+        retry_run_id=""
+    else
+        exit "${order_exit}"
+    fi
 
     install -d -m 0700 -o root -g root "${STATE_DIR}" "${SCHEDULED_RUNS_DIR}"
     [[ ! -L "${STATE_DIR}" && ! -L "${SCHEDULED_RUNS_DIR}" ]] \
@@ -311,7 +383,8 @@ main() {
     reconciliation_exit=$?
     set -e
 
-    market_session="$(sed -n 's/^LIVE_ORDER_SESSION_CLAIMED market_session=\([^ ]*\).*/\1/p' \
+    market_session="$(sed -n -e 's/^LIVE_ORDER_SESSION_CLAIMED market_session=\([^ ]*\).*/\1/p' \
+        -e 's/^LIVE_ORDER_SESSION_RETRY_CLAIMED market_session=\([^ ]*\).*/\1/p' \
         "${work_dir}/order.log" | head -1)"
     [[ "${market_session}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] \
         || die "missing claimed market session"
@@ -336,7 +409,10 @@ main() {
         --arg deployed_code_commit "${deployed_sha}" \
         --arg capital_usd "${capital}" \
         --arg entry_state "ENTRY_READY" \
-        --arg claim_status "claimed" \
+        --arg claim_status "${claim_status}" \
+        --arg attempt_kind "${attempt_kind}" \
+        --arg first_run_id "${first_run_id}" \
+        --arg retry_run_id "${retry_run_id}" \
         --arg result "${result}" \
         --argjson operational_equivalent true \
         --argjson entry_allowed true \
@@ -352,6 +428,8 @@ main() {
           operational_equivalent:$operational_equivalent,
           capital_usd:$capital_usd,entry_state:$entry_state,
           entry_allowed:$entry_allowed,claim_status:$claim_status,
+          attempt_kind:$attempt_kind,first_run_id:$first_run_id,
+          retry_run_id:(if $retry_run_id == "" then null else $retry_run_id end),
           order_exit:$order_exit,orders_submitted:$orders_submitted,
           fills_exit:$fills_exit,measurement_exit:$measurement_exit,
           reconciliation_exit:$reconciliation_exit,result:$result}' \

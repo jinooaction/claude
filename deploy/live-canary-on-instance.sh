@@ -15,6 +15,7 @@ PUBLIC_KEY="${PUBLIC_KEY:-/usr/local/share/auto-invest/live-order-signing-public
 NONCE_DIR="${NONCE_DIR:-/var/lib/auto-invest-live-order}"
 NONCE_FILE="${NONCE_FILE:-${NONCE_DIR}/used-nonces}"
 SESSION_FILE="${SESSION_FILE:-${NONCE_DIR}/order-sessions.tsv}"
+RETRY_SESSION_FILE="${NONCE_DIR}/order-session-retries.tsv"
 SCHEDULED_RUNS_DIR="${SCHEDULED_RUNS_DIR:-${NONCE_DIR}/scheduled-runs}"
 SCHEDULED_LAST_RUN_FILE="${SCHEDULED_LAST_RUN_FILE:-${NONCE_DIR}/last-scheduled-run-id}"
 DEPLOY_MAINTENANCE_INTERLOCK="${DEPLOY_MAINTENANCE_INTERLOCK:-/run/auto-invest-deploy/live-order-maintenance.lock}"
@@ -25,6 +26,8 @@ WORKFLOW="rebalance-live-canary.yml"
 MAX_TTL_SEC=600
 DEPLOYED_CODE_COMMIT=""
 MAIN_CODE_COMMIT=""
+RETRY_MANIFEST_PATH="deploy/live-canary-retry-incident.json"
+RETRY_EXISTING_RUN_ID=""
 
 die() {
     echo "ERROR: $*" >&2
@@ -60,6 +63,245 @@ market_session_key() {
 
 git_as_app() {
     sudo -u "${APP_USER}" -H git -C "${REPO}" "$@"
+}
+
+file_owned_by_root() {
+    local owner
+    owner="$(stat -c '%u' "$1" 2>/dev/null || stat -f '%u' "$1" 2>/dev/null)" \
+        || return 1
+    [[ "${owner}" == "0" ]]
+}
+
+file_mode() {
+    stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1" 2>/dev/null
+}
+
+safe_root_evidence_file() {
+    local path="$1" mode
+    [[ -f "${path}" && ! -L "${path}" ]] || return 1
+    file_owned_by_root "${path}" || return 1
+    mode="$(file_mode "${path}")" || return 1
+    [[ "${mode}" == "600" ]]
+}
+
+sha256_file() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$1" | awk '{ print $1 }'
+    else
+        shasum -a 256 "$1" | awk '{ print $1 }'
+    fi
+}
+
+fresh_kis_open_order_proof() {
+    local deployed_sha="$1" smoke_output smoke_exit
+    smoke_output="$(mktemp)" || return 1
+    set +e
+    /usr/local/sbin/auto-invest-kis-smoke "${deployed_sha}" \
+        >"${smoke_output}" 2>&1
+    smoke_exit=$?
+    set -e
+    if [[ "${smoke_exit}" -ne 0 ]] \
+        || ! grep -Eq 'open_unfilled[=:][[:space:]]*0([^0-9]|$)' "${smoke_output}"; then
+        rm -f "${smoke_output}"
+        return 1
+    fi
+    rm -f "${smoke_output}"
+}
+
+existing_retry_run_id() {
+    local session_key="$1" existing=""
+    RETRY_EXISTING_RUN_ID=""
+    [[ -e "${RETRY_SESSION_FILE}" ]] || return 1
+    [[ -f "${RETRY_SESSION_FILE}" && ! -L "${RETRY_SESSION_FILE}" ]] || return 2
+    file_owned_by_root "${RETRY_SESSION_FILE}" || return 2
+    exec 5<"${RETRY_SESSION_FILE}" || return 2
+    flock -s 5 || {
+        exec 5<&-
+        return 2
+    }
+    existing="$(awk -F '\t' -v key="${session_key}" '$1 == key { print; exit }' \
+        "${RETRY_SESSION_FILE}")"
+    flock -u 5
+    exec 5<&-
+    [[ -n "${existing}" ]] || return 1
+    RETRY_EXISTING_RUN_ID="$(printf '%s\n' "${existing}" | awk -F '\t' '{ print $5 }')"
+    [[ "${RETRY_EXISTING_RUN_ID}" =~ ^[0-9]{14}$ ]] || return 2
+    return 0
+}
+
+claim_same_session_retry() {
+    local session_key="$1" first_run_id="$2" first_source="$3" first_code_commit="$4"
+    local retry_run_id="$5" deployed_sha="$6"
+    local run_dir summary order_log reconciliation manifest_tmp manifest_sha claimed_at
+    local retry_status existing
+
+    [[ "${first_source}" == "server_timer" ]] || return 1
+    [[ "${first_run_id}" =~ ^[0-9]{14}$ && "${retry_run_id}" =~ ^[0-9]{14}$ ]] \
+        || return 1
+    [[ "${first_code_commit}" =~ ^[0-9a-f]{40}$ \
+        && "${deployed_sha}" =~ ^[0-9a-f]{40}$ ]] || return 1
+    [[ "${retry_run_id}" != "${first_run_id}" ]] || return 1
+    existing_retry_run_id "${session_key}"
+    retry_status=$?
+    [[ "${retry_status}" -eq 1 ]] || return 1
+
+    run_dir="${SCHEDULED_RUNS_DIR}/${first_run_id}"
+    summary="${run_dir}/summary.json"
+    order_log="${run_dir}/order.log"
+    reconciliation="${run_dir}/reconciliation.json"
+    [[ -d "${SCHEDULED_RUNS_DIR}" && ! -L "${SCHEDULED_RUNS_DIR}" \
+        && -d "${run_dir}" && ! -L "${run_dir}" ]] || return 1
+    file_owned_by_root "${SCHEDULED_RUNS_DIR}" || return 1
+    file_owned_by_root "${run_dir}" || return 1
+    safe_root_evidence_file "${summary}" || return 1
+    safe_root_evidence_file "${order_log}" || return 1
+    safe_root_evidence_file "${reconciliation}" || return 1
+
+    jq -e \
+        --arg session "${session_key}" \
+        --arg first_run_id "${first_run_id}" \
+        --arg first_code "${first_code_commit}" '
+        .schema_version == "1.1" and
+        .run_id == $first_run_id and .source == "server_timer" and
+        .market_session == $session and .code_commit == $first_code and
+        .entry_state == "ENTRY_READY" and .entry_allowed == true and
+        .claim_status == "claimed" and .order_exit == 0 and
+        .orders_submitted == 0 and .fills_exit == 0 and
+        .measurement_exit == 0 and .reconciliation_exit == 0 and
+        .result == "completed" and
+        ((.attempt_kind // "initial") == "initial") and
+        ((.first_run_id // $first_run_id) == $first_run_id) and
+        ((.retry_run_id // null) == null)
+    ' "${summary}" >/dev/null || return 1
+    jq -e '
+        .status == "CLEAR" and .reconciliation_state == "OK" and
+        .evidence_quality == "VALID" and
+        .halt_present_before == false and .halt_present_after == false and
+        .orders_submitted == 0
+    ' "${reconciliation}" >/dev/null || return 1
+
+    manifest_tmp="$(mktemp)" || return 1
+    if ! git_as_app ls-tree "${deployed_sha}" -- "${RETRY_MANIFEST_PATH}" \
+            | grep -Eq '^100644 blob [0-9a-f]{40}[[:space:]]+deploy/live-canary-retry-incident\.json$' \
+        || ! git_as_app show "${deployed_sha}:${RETRY_MANIFEST_PATH}" >"${manifest_tmp}"; then
+        rm -f "${manifest_tmp}"
+        return 1
+    fi
+    if ! jq -e \
+        --arg session "${session_key}" \
+        --arg first_run_id "${first_run_id}" \
+        --arg first_source "${first_source}" \
+        --arg first_code "${first_code_commit}" '
+        ((keys | sort) == ([
+          "broker_rejection_signatures", "enabled", "first_code_commit",
+          "first_run_id", "first_source", "incident_id", "market_session",
+          "remediation_commit", "schema_version"
+        ] | sort)) and
+        .schema_version == "1.0" and .enabled == true and
+        (.incident_id | type == "string" and test("^[a-z0-9][a-z0-9-]{0,79}$")) and
+        .market_session == $session and .first_run_id == $first_run_id and
+        .first_source == $first_source and .first_source == "server_timer" and
+        .first_code_commit == $first_code and
+        (.remediation_commit | test("^[0-9a-f]{40}$")) and
+        (.broker_rejection_signatures | type == "array" and length > 0 and length <= 20) and
+        ([.broker_rejection_signatures[] |
+          ((keys | sort) == ([
+            "exception_type", "http_status", "kis_msg_cd", "kis_rt_cd",
+            "order_division", "order_exchange", "symbol", "tr_id"
+          ] | sort)) and
+          (.symbol | test("^[A-Z][A-Z0-9.-]{0,9}$")) and
+          (.kis_rt_cd | type == "string" and test("^[0-9]{1,4}$")) and
+          (.kis_msg_cd | type == "string" and test("^[A-Z0-9]{1,16}$")) and
+          (.http_status | type == "number" and floor == . and . >= 100 and . <= 599) and
+          (.exception_type | type == "string" and test("^[A-Za-z][A-Za-z0-9_]{0,63}$")) and
+          (.tr_id | IN("TTTT1002U", "TTTT1006U")) and
+          (.order_exchange | IN("NASD", "NYSE", "AMEX")) and
+          (.order_division | IN("00", "01"))
+        ] | all)
+    ' "${manifest_tmp}" >/dev/null; then
+        rm -f "${manifest_tmp}"
+        return 1
+    fi
+
+    local remediation_commit
+    remediation_commit="$(jq -r '.remediation_commit' "${manifest_tmp}")"
+    if [[ "${deployed_sha}" == "${first_code_commit}" \
+        || "${remediation_commit}" == "${first_code_commit}" ]] \
+        || ! git_as_app merge-base --is-ancestor "${first_code_commit}" "${deployed_sha}" \
+            >/dev/null 2>&1 \
+        || ! git_as_app merge-base --is-ancestor "${remediation_commit}" "${deployed_sha}" \
+            >/dev/null 2>&1; then
+        rm -f "${manifest_tmp}"
+        return 1
+    fi
+
+    if ! jq -R -s -e --slurpfile manifest "${manifest_tmp}" '
+        (split("\n") | map(select(startswith("{")) | try fromjson catch empty) | last) as $order |
+        ($manifest[0].broker_rejection_signatures | sort_by(.symbol)) as $expected |
+        ($order.fundability.planned_orders // []) as $planned |
+        ($order.results // []) as $results |
+        ($planned | length) > 0 and ($planned | length) <= 20 and
+        ($results | length) == ($planned | length) and
+        ([ $planned[] |
+          (.symbol | type == "string" and test("^[A-Z][A-Z0-9.-]{0,9}$")) and
+          (.side == "BUY" or .side == "SELL") and
+          (.qty | type == "number" and floor == . and . > 0)
+        ] | all) and
+        ([ $results[] |
+          .state == "REJECTED_BY_BROKER" and
+          (.requested_qty | type == "number" and floor == . and . > 0) and
+          (.reason | type == "string")
+        ] | all) and
+        ([$planned[] | {symbol, side, requested_qty:.qty}] | sort_by(.symbol, .side)) ==
+          ([$results[] | {symbol, side, requested_qty}] | sort_by(.symbol, .side)) and
+        ([$results[] |
+          (.reason | fromjson) as $reason |
+          {symbol,
+           kis_rt_cd:$reason.kis_rt_cd,
+           kis_msg_cd:$reason.kis_msg_cd,
+           http_status:$reason.http_status,
+           exception_type:$reason.exception_type,
+           tr_id:$reason.request_summary.tr_id,
+           order_exchange:$reason.request_summary.body.OVRS_EXCG_CD,
+           order_division:$reason.request_summary.body.ORD_DVSN}
+        ] | sort_by(.symbol)) == $expected
+    ' "${order_log}" >/dev/null; then
+        rm -f "${manifest_tmp}"
+        return 1
+    fi
+
+    if ! fresh_kis_open_order_proof "${deployed_sha}"; then
+        rm -f "${manifest_tmp}"
+        return 1
+    fi
+    manifest_sha="$(sha256_file "${manifest_tmp}")" || {
+        rm -f "${manifest_tmp}"
+        return 1
+    }
+    rm -f "${manifest_tmp}"
+    [[ "${manifest_sha}" =~ ^[0-9a-f]{64}$ ]] || return 1
+
+    touch "${RETRY_SESSION_FILE}" || return 1
+    chmod 0600 "${RETRY_SESSION_FILE}" || return 1
+    file_owned_by_root "${RETRY_SESSION_FILE}" || return 1
+    exec 6>>"${RETRY_SESSION_FILE}" || return 1
+    flock -x 6 || return 1
+    existing="$(awk -F '\t' -v key="${session_key}" '$1 == key { print; exit }' \
+        "${RETRY_SESSION_FILE}")"
+    if [[ -n "${existing}" ]]; then
+        RETRY_EXISTING_RUN_ID="$(printf '%s\n' "${existing}" | awk -F '\t' '{ print $5 }')"
+        flock -u 6
+        exec 6>&-
+        return 1
+    fi
+    claimed_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+        "${session_key}" "${first_run_id}" "${first_source}" "${first_code_commit}" \
+        "${retry_run_id}" "${deployed_sha}" "${manifest_sha}" "${claimed_at}" >&6
+    flock -u 6
+    exec 6>&-
+    echo "LIVE_ORDER_SESSION_RETRY_CLAIMED market_session=${session_key} first_run_id=${first_run_id} first_source=${first_source} retry_run_id=${retry_run_id} source=server_timer claimed_at=${claimed_at}"
+    return 0
 }
 
 validate_capital() {
@@ -164,7 +406,8 @@ consume_nonce() {
 
 claim_order_session() {
     local run_id="$1" signed_sha="$2" source="$3"
-    local session_key session_exit claimed_at existing first_run_id first_source
+    local session_key session_exit claimed_at existing first_run_id first_source first_code_commit
+    local deployed_sha retry_run_id_field retry_status
     case "${source}" in
         github_schedule|server_timer) ;;
         *) die "invalid live order source" ;;
@@ -187,9 +430,26 @@ claim_order_session() {
     existing="$(awk -F '\t' -v key="${session_key}" '$1 == key { print; exit }' "${SESSION_FILE}")"
     if [[ -n "${existing}" ]]; then
         first_run_id="$(printf '%s\n' "${existing}" | awk -F '\t' '{ print $2 }')"
+        first_code_commit="$(printf '%s\n' "${existing}" | awk -F '\t' '{ print $3 }')"
         first_source="$(printf '%s\n' "${existing}" | awk -F '\t' '{ print $5 }')"
         [[ -n "${first_source}" ]] || first_source="legacy"
-        echo "LIVE_ORDER_SESSION_ALREADY_CLAIMED market_session=${session_key} first_run_id=${first_run_id} first_source=${first_source}"
+        deployed_sha="${DEPLOYED_CODE_COMMIT:-${signed_sha}}"
+        if [[ "${source}" == "server_timer" && "${first_source}" == "server_timer" ]] \
+            && claim_same_session_retry \
+                "${session_key}" "${first_run_id}" "${first_source}" \
+                "${first_code_commit}" "${run_id}" "${deployed_sha}"; then
+            flock -u 8
+            return 0
+        fi
+        retry_run_id_field=""
+        set +e
+        existing_retry_run_id "${session_key}"
+        retry_status=$?
+        set -e
+        if [[ "${retry_status}" -eq 0 ]]; then
+            retry_run_id_field=" retry_run_id=${RETRY_EXISTING_RUN_ID}"
+        fi
+        echo "LIVE_ORDER_SESSION_ALREADY_CLAIMED market_session=${session_key} first_run_id=${first_run_id} first_source=${first_source}${retry_run_id_field}"
         flock -u 8
         return 0
     fi
@@ -332,7 +592,18 @@ scheduled_status() {
         '.schema_version == "1.1" and .run_id == $run_id and .source == "server_timer" and
          (.code_commit | test("^[0-9a-f]{40}$")) and
          (.deployed_code_commit | test("^[0-9a-f]{40}$")) and
-         .operational_equivalent == true' \
+         .operational_equivalent == true and
+         (if has("attempt_kind") then
+            (.attempt_kind == "initial" or .attempt_kind == "same_session_retry") and
+            (.first_run_id | test("^[0-9]{14}$")) and
+            (.retry_run_id == null or (.retry_run_id | test("^[0-9]{14}$"))) and
+            (if .attempt_kind == "initial" then
+               .claim_status == "claimed" and .first_run_id == .run_id and .retry_run_id == null
+             else
+               .claim_status == "retry_claimed" and .retry_run_id == .run_id and
+               .first_run_id != .run_id
+             end)
+          else true end)' \
         "${summary}" >/dev/null || die "invalid scheduled run summary"
     cat "${summary}"
 }
