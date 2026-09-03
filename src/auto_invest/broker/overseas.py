@@ -89,6 +89,9 @@ def _kis_headers(
     }
     if extra:
         headers.update(extra)
+    # KIS 공식 공통 REST 래퍼는 모든 요청에 개인 고객 구분과 연속거래
+    # 표식을 넣는다. 빈 값도 생략하지 않고 호출별 extra가 덮어쓰지 못하게 한다.
+    headers.update({"custtype": "P", "tr_cont": ""})
     return headers
 
 

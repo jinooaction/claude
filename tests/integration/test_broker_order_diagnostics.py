@@ -12,7 +12,7 @@ import respx
 
 from auto_invest.broker.client import AsyncTokenBucket, CircuitBreaker, ResilientClient
 from auto_invest.broker.models import OrderRequest
-from auto_invest.broker.overseas import KisOrderError, place_order
+from auto_invest.broker.overseas import KisOrderError, _kis_headers, place_order
 from auto_invest.config.caps import SizingCaps
 from auto_invest.config.enums import OrderType, Side, StrategyStage
 from auto_invest.config.rules import Action, PriceTrigger, TradingRule
@@ -46,6 +46,20 @@ def _order(side: Side = Side.BUY) -> OrderRequest:
     )
 
 
+def test_kis_protocol_headers_cannot_be_overridden_by_request_extras():
+    headers = _kis_headers(
+        access_token="tok",
+        app_key="app",
+        app_secret="sec",
+        tr_id="TTTT1002U",
+        extra={"custtype": "B", "tr_cont": "N", "content-type": "application/json"},
+    )
+
+    assert headers["custtype"] == "P"
+    assert headers["tr_cont"] == ""
+    assert headers["content-type"] == "application/json"
+
+
 @pytest.mark.asyncio
 async def test_place_order_normal_buy_payload_matches_kis_sample_fields():
     captured: dict[str, object] = {}
@@ -69,6 +83,8 @@ async def test_place_order_normal_buy_payload_matches_kis_sample_fields():
 
     assert result.kis_order_id == "KIS123"
     assert captured["headers"]["tr_id"] == "TTTT1002U"  # type: ignore[index]
+    assert captured["headers"]["custtype"] == "P"  # type: ignore[index]
+    assert captured["headers"]["tr_cont"] == ""  # type: ignore[index]
     body = captured["body"]
     assert body == {
         "CANO": "12345678",
