@@ -395,6 +395,124 @@ def test_scheduled_status_rejects_pointer_symlink(
     assert "no server-scheduled live canary evidence" in result.stderr
 
 
+def test_scheduled_order_diagnostics_exposes_only_closed_safe_fields(
+    gateway_env: dict[str, object],
+) -> None:
+    env = gateway_env["env"]
+    assert isinstance(env, dict)
+    state = Path(str(env["NONCE_DIR"]))
+    run_id = "20260903161106"
+    run_dir = state / "scheduled-runs" / run_id
+    run_dir.mkdir(parents=True)
+    raw = {
+        "portfolio_id": "secret-portfolio",
+        "purchasable_cash_usd": "934.27",
+        "fundability": {
+            "planned_orders": [{"symbol": "SCHX", "side": "BUY", "qty": 2}]
+        },
+        "results": [
+            {
+                "symbol": "SCHX",
+                "side": "BUY",
+                "requested_qty": 2,
+                "routed_qty": 2,
+                "limit_price_usd": "30.20",
+                "state": "REJECTED_BY_GATE",
+                "gate": "global_exposure_gate",
+                "reason": "account=must-not-leak token=must-not-leak",
+            }
+        ],
+        "withheld_orders": [
+            {
+                "symbol": "ORANY",
+                "side": "SELL",
+                "requested_qty": 28,
+                "reason": "unmanaged_holding",
+            }
+        ],
+    }
+    (run_dir / "order.log").write_text(
+        "LIVE_ORDER_SESSION_CLAIMED market_session=2026-09-03\n"
+        + json.dumps(raw)
+        + "\n",
+        encoding="utf-8",
+    )
+    (state / "last-scheduled-run-id").write_text(f"{run_id}\n", encoding="utf-8")
+
+    result = subprocess.run(
+        ["bash", str(HELPER), "scheduled-order-diagnostics"],
+        text=True,
+        capture_output=True,
+        env=env,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload == {
+        "schema_version": "1.0",
+        "source": "server_timer_order_diagnostics",
+        "run_id": run_id,
+        "planned_order_count": 1,
+        "result_count": 1,
+        "withheld_order_count": 1,
+        "outcomes": [
+            {
+                "symbol": "SCHX",
+                "side": "BUY",
+                "requested_qty": 2,
+                "routed_qty": 2,
+                "state": "REJECTED_BY_GATE",
+                "gate": "global_exposure_gate",
+            }
+        ],
+        "withheld_reason_codes": ["unmanaged_holding"],
+    }
+    assert "must-not-leak" not in result.stdout
+    assert "934.27" not in result.stdout
+    assert "30.20" not in result.stdout
+
+
+def test_scheduled_order_diagnostics_fails_closed_on_unknown_state(
+    gateway_env: dict[str, object],
+) -> None:
+    env = gateway_env["env"]
+    assert isinstance(env, dict)
+    state = Path(str(env["NONCE_DIR"]))
+    run_id = "20260903161106"
+    run_dir = state / "scheduled-runs" / run_id
+    run_dir.mkdir(parents=True)
+    raw = {
+        "fundability": {"planned_orders": []},
+        "results": [
+            {
+                "symbol": "SCHX",
+                "side": "BUY",
+                "requested_qty": 2,
+                "routed_qty": 2,
+                "limit_price_usd": "30.20",
+                "state": "SECRET_UNKNOWN_STATE",
+                "gate": None,
+                "reason": "must-not-leak",
+            }
+        ],
+        "withheld_orders": [],
+    }
+    (run_dir / "order.log").write_text(json.dumps(raw) + "\n", encoding="utf-8")
+
+    result = subprocess.run(
+        ["bash", str(HELPER), "scheduled-order-diagnostics", run_id],
+        text=True,
+        capture_output=True,
+        env=env,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert "invalid scheduled order result" in result.stderr
+    assert "must-not-leak" not in result.stdout + result.stderr
+
+
 def test_runtime_status_reports_only_fixed_systemd_fields_and_sanitized_errors(
     gateway_env: dict[str, object],
 ) -> None:
@@ -551,6 +669,8 @@ def test_gateway_exposes_signed_order_and_non_order_evidence_only() -> None:
     assert "live-canary-scheduled-status)" in repair
     assert "live-canary-scheduled-status\\ *)" in repair
     assert "live-canary-runtime-status)" in repair
+    assert "live-canary-scheduled-order-diagnostics)" in repair
+    assert "live-canary-scheduled-order-diagnostics\\ *)" in repair
     gateway = repair.split("EOF_GATEWAY", 2)[1]
     assert "systemd-order" not in gateway
     assert "verify_signature" in helper
@@ -559,6 +679,7 @@ def test_gateway_exposes_signed_order_and_non_order_evidence_only() -> None:
     assert "server_timer" in helper
     assert "scheduled-status" in helper
     assert "runtime-status" in helper
+    assert "scheduled-order-diagnostics" in helper
     assert "server timer order is limited to ladder rung 1" in helper
     assert "server timer order requires operational_canary entry route" in helper
     assert "AUTOARM_DISABLED kill switch is active" in helper

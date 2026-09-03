@@ -264,6 +264,18 @@ case "${cmd}" in
         echo "refused command: ${cmd}" >&2
         exit 126
         ;;
+    live-canary-scheduled-order-diagnostics)
+        exec sudo -n /usr/local/sbin/auto-invest-live-canary scheduled-order-diagnostics
+        ;;
+    live-canary-scheduled-order-diagnostics\ *)
+        scheduled_run_id="${cmd#live-canary-scheduled-order-diagnostics }"
+        if [[ "${scheduled_run_id}" =~ ^[0-9]{14}$ ]]; then
+            exec sudo -n /usr/local/sbin/auto-invest-live-canary \
+                scheduled-order-diagnostics "${scheduled_run_id}"
+        fi
+        echo "refused command: ${cmd}" >&2
+        exit 126
+        ;;
     live-canary-runtime-status)
         exec sudo -n /usr/local/sbin/auto-invest-live-canary runtime-status
         ;;

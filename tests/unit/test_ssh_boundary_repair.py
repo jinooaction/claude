@@ -90,6 +90,7 @@ def test_gateway_allows_only_fixed_commands_without_eval():
     assert re.search(r'observe\\ live-canary-preview\\ \*\)', code)
     assert re.search(r'observe\\ live-canary-measure\\ \*\)', code)
     assert re.search(r'live-canary-runtime-status\)', code)
+    assert re.search(r'live-canary-scheduled-order-diagnostics\)', code)
     assert re.search(r'observe\\ promote-readiness\)', code)
     assert not re.search(r'observe\\ promote-readiness\\ \*\)', code)
     assert re.search(r'observe\\ regime-stratify\\ \*\)', code)

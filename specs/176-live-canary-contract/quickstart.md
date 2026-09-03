@@ -51,6 +51,11 @@ sidecar의 `capital_entry_evidence.json`을 각각 내려받는다. 역할, 코�
 11. 성공 요약이 없으면 같은 sidecar의 `server_runtime_status.json`에서 마지막·다음 timer 발화,
     service 결과·종료값과 원문 없는 고정 사건 코드를 확인한다. 이 파일이 있어도 관측 workflow는 실패가 정상이며,
     실제 주문 성공으로 해석하지 않는다. 임의 journal 조회나 service 수동 시작으로 재현하지 않는다.
+12. 성공 요약이 있지만 `orders_submitted=0`이면 같은 sidecar의
+    `server_order_diagnostics.json`에서 해당 run ID의 계획 건수와 정화된 결과 상태·gate를 확인한다.
+    이 파일에는 가격·현금·계좌·원문 reason이 없어야 하며, 이를 근거로 거래일 선점을 수동 삭제하거나
+    서비스를 다시 시작하지 않는다. 원인을 고친 뒤에는 별도 안전 계약이 허용하는 다음 자동 후보로만
+    검증한다.
 
 ## 5. 독립 scheduler 검증
 

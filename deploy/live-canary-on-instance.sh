@@ -337,6 +337,84 @@ scheduled_status() {
     cat "${summary}"
 }
 
+scheduled_order_diagnostics() {
+    local run_id="${1:-}" run_dir order_log payload
+    [[ -d "${SCHEDULED_RUNS_DIR}" && ! -L "${SCHEDULED_RUNS_DIR}" ]] \
+        || die "missing scheduled evidence directory"
+    if [[ -z "${run_id}" ]]; then
+        [[ -f "${SCHEDULED_LAST_RUN_FILE}" && ! -L "${SCHEDULED_LAST_RUN_FILE}" ]] \
+            || die "no server-scheduled live canary evidence"
+        run_id="$(tr -d '\r\n' < "${SCHEDULED_LAST_RUN_FILE}")"
+    fi
+    [[ "${run_id}" =~ ^[0-9]{14}$ ]] || die "invalid scheduled run pointer"
+    run_dir="${SCHEDULED_RUNS_DIR}/${run_id}"
+    order_log="${run_dir}/order.log"
+    [[ -d "${run_dir}" && ! -L "${run_dir}" ]] \
+        || die "missing scheduled run evidence"
+    [[ -f "${order_log}" && ! -L "${order_log}" ]] \
+        || die "missing scheduled order evidence"
+
+    payload="$(jq -R -s -c '
+        split("\n")
+        | map(select(startswith("{")) | try fromjson catch empty)
+        | last // empty
+    ' "${order_log}")" || die "failed to parse scheduled order evidence"
+    [[ -n "${payload}" ]] || die "missing scheduled order result"
+
+    printf '%s\n' "${payload}" | jq -e '
+        (.results | type == "array" and length <= 20) and
+        (.withheld_orders | type == "array" and length <= 20) and
+        (.fundability | type == "object") and
+        (.fundability.planned_orders | type == "array" and length <= 20) and
+        ([.results[] |
+          (.symbol | type == "string" and test("^[A-Z][A-Z0-9.-]{0,9}$")) and
+          (.side == "BUY" or .side == "SELL") and
+          (.requested_qty | type == "number" and floor == . and . >= 0 and . <= 1000000) and
+          (.routed_qty | type == "number" and floor == . and . >= 0 and . <= 1000000) and
+          (.state | IN(
+            "SUBMITTED", "PARTIALLY_FILLED", "FILLED", "SUBMISSION_UNKNOWN",
+            "REJECTED_BY_GATE", "REJECTED_BY_BROKER", "SKIPPED_PER_TRADE_CAP",
+            "SKIPPED_BY_SIZING", "SKIPPED_BY_RANKING", "SKIPPED_BY_QUALITY",
+            "SKIPPED_BY_COMPOSITE", "SKIPPED_BY_JUDGMENT", "ERROR"
+          )) and
+          (.gate == null or
+            (.gate | type == "string" and test("^[a-z][a-z0-9_]{0,63}$"))) and
+          ((keys | sort) == ([
+            "gate", "limit_price_usd", "reason", "requested_qty", "routed_qty",
+            "side", "state", "symbol"
+          ] | sort))
+        ] | all) and
+        ([.withheld_orders[] |
+          (.symbol | type == "string" and test("^[A-Z][A-Z0-9.-]{0,9}$")) and
+          (.side == "BUY" or .side == "SELL") and
+          (.requested_qty | type == "number" and floor == . and . >= 0 and . <= 1000000) and
+          (.reason | type == "string") and
+          ((keys | sort) == (["reason", "requested_qty", "side", "symbol"] | sort))
+        ] | all)
+    ' >/dev/null || die "invalid scheduled order result"
+
+    printf '%s\n' "${payload}" | jq \
+        --arg schema_version "1.0" \
+        --arg source "server_timer_order_diagnostics" \
+        --arg run_id "${run_id}" '
+        def withheld_code:
+          if . == "unmanaged_holding" then "unmanaged_holding"
+          elif . == "insufficient_purchasable_cash" then "insufficient_cash"
+          elif . == "cash_shortfall_sell_first" then "cash_shortfall_sell_first"
+          elif . == "side_filtered_sell_only" then "side_filtered_sell_only"
+          elif . == "side_filtered_buy_only" then "side_filtered_buy_only"
+          else "other_withheld"
+          end;
+        {schema_version:$schema_version,source:$source,run_id:$run_id,
+         planned_order_count:(.fundability.planned_orders | length),
+         result_count:(.results | length),
+         withheld_order_count:(.withheld_orders | length),
+         outcomes:[.results[] | {
+           symbol,side,requested_qty,routed_qty,state,gate
+         }],
+         withheld_reason_codes:([.withheld_orders[].reason | withheld_code] | unique)}'
+}
+
 systemd_property() {
     local unit="$1" property="$2" value
     value="$(systemctl show "${unit}" --property="${property}" --value 2>/dev/null)" \
@@ -517,6 +595,11 @@ main() {
         scheduled-status)
             [[ "$#" -le 1 ]] || die "scheduled-status takes at most one run id"
             scheduled_status "${1:-}"
+            ;;
+        scheduled-order-diagnostics)
+            [[ "$#" -le 1 ]] \
+                || die "scheduled-order-diagnostics takes at most one run id"
+            scheduled_order_diagnostics "${1:-}"
             ;;
         runtime-status)
             [[ "$#" -eq 0 ]] || die "runtime-status takes no arguments"
