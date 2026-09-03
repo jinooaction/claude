@@ -137,7 +137,10 @@ def test_remote_gateway_exposes_status_but_not_systemd_order() -> None:
     assert "live-canary-scheduled-status)" in gateway
     assert "live-canary-scheduled-status\\ *)" in gateway
     assert "live-canary-runtime-status)" in gateway
+    assert "live-canary-scheduled-order-diagnostics)" in gateway
+    assert "live-canary-scheduled-order-diagnostics\\ *)" in gateway
     assert "^[0-9]{14}$" in gateway
     assert "scheduled-status" in gateway
     assert "runtime-status" in gateway
+    assert "scheduled-order-diagnostics" in gateway
     assert "systemd-order" not in gateway

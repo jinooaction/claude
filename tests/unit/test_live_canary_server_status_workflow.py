@@ -21,6 +21,7 @@ def test_server_status_workflow_has_only_manual_read_trigger() -> None:
     assert 'remote_command="live-canary-scheduled-status"' in body
     assert 'remote_command="live-canary-scheduled-status ${requested}"' in body
     assert '"live-canary-runtime-status"' in body
+    assert '"live-canary-scheduled-order-diagnostics ${SERVER_RUN_ID}"' in body
     assert "^[0-9]{14}$" in body
 
 
@@ -54,9 +55,12 @@ def test_server_status_workflow_validates_and_sanitizes_before_publish() -> None
     assert "branch=automation/live-canary-server-status-last-run" in body
     assert "server_scheduled_status.json" in body
     assert "server_runtime_status.json" in body
+    assert "server_order_diagnostics.json" in body
     assert '.source == "server_timer_runtime"' in body
     assert '((.timer | keys | sort) == ([' in body
     assert '((.service | keys | sort) == ([' in body
+    assert '.source == "server_timer_order_diagnostics"' in body
+    assert "diagnostic_status=invalid_diagnostics" in body
 
 
 def test_server_status_workflow_fails_closed_without_valid_summary() -> None:
@@ -70,3 +74,5 @@ def test_server_status_workflow_fails_closed_without_valid_summary() -> None:
     assert "valid server timer summary was not observed" in body
     assert '"${QUERY_EXIT:-1}" != "0"' in body
     assert '"${QUERY_STATUS:-}" != "ok"' in body
+    assert "zero-order run lacks valid sanitized diagnostics" in body
+    assert '"${DIAGNOSTIC_STATUS:-}" != "ok"' in body

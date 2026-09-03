@@ -2,7 +2,8 @@ name: Live canary server timer status (read-only)
 
 # GitHub schedule 공급자가 늦더라도 독립 서버 timer의 최신 실행 요약을 읽기 전용으로 확인한다.
 # 이 workflow는 forced-command gateway의 고정된 읽기 명령인
-# `live-canary-scheduled-status`와 `live-canary-runtime-status`만 호출한다.
+# `live-canary-scheduled-status`, `live-canary-scheduled-order-diagnostics`,
+# `live-canary-runtime-status`만 호출한다.
 # 주문, 서비스 시작, timer 조작, 임의 원격 셸은 허용하지 않는다.
 
 on:
@@ -112,6 +113,78 @@ jobs:
           echo "result=$(jq -r '.result' /tmp/live_canary_server_summary.json)" >> "$GITHUB_OUTPUT"
           jq . /tmp/live_canary_server_summary.json
 
+      - name: Read sanitized zero-order diagnostics
+        id: order_diagnostics
+        if: >-
+          always() && steps.status.outputs.query_status == 'ok' &&
+          steps.status.outputs.orders_submitted == '0'
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+          SERVER_RUN_ID: ${{ steps.status.outputs.run_id }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts \
+              -o ConnectTimeout=15 -o BatchMode=yes \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "live-canary-scheduled-order-diagnostics ${SERVER_RUN_ID}" \
+              > /tmp/live_canary_order_diagnostics.json \
+              2> /tmp/live_canary_order_diagnostics.err
+          diagnostic_exit=$?
+          echo "diagnostic_exit=${diagnostic_exit}" >> "$GITHUB_OUTPUT"
+          if [[ "${diagnostic_exit}" -ne 0 ]]; then
+            echo "diagnostic_status=unavailable" >> "$GITHUB_OUTPUT"
+            echo "::warning::zero-order diagnostics are unavailable (exit ${diagnostic_exit})"
+            exit 0
+          fi
+
+          if ! jq -e --arg run_id "${SERVER_RUN_ID}" '
+            .schema_version == "1.0" and
+            .source == "server_timer_order_diagnostics" and
+            .run_id == $run_id and
+            (.planned_order_count | type == "number" and . >= 0 and . <= 20) and
+            (.result_count | type == "number" and . >= 0 and . <= 20) and
+            (.withheld_order_count | type == "number" and . >= 0 and . <= 20) and
+            (.outcomes | type == "array") and
+            ((.outcomes | length) == .result_count) and
+            all(.outcomes[];
+                (.symbol | test("^[A-Z][A-Z0-9.-]{0,9}$")) and
+                (.side == "BUY" or .side == "SELL") and
+                (.requested_qty | type == "number" and . >= 0) and
+                (.routed_qty | type == "number" and . >= 0) and
+                (.state | IN(
+                  "SUBMITTED", "PARTIALLY_FILLED", "FILLED", "SUBMISSION_UNKNOWN",
+                  "REJECTED_BY_GATE", "REJECTED_BY_BROKER", "SKIPPED_PER_TRADE_CAP",
+                  "SKIPPED_BY_SIZING", "SKIPPED_BY_RANKING", "SKIPPED_BY_QUALITY",
+                  "SKIPPED_BY_COMPOSITE", "SKIPPED_BY_JUDGMENT", "ERROR"
+                )) and
+                (.gate == null or (.gate | test("^[a-z][a-z0-9_]{0,63}$"))) and
+                ((keys | sort) == ([
+                  "gate", "requested_qty", "routed_qty", "side", "state", "symbol"
+                ] | sort))) and
+            (.withheld_reason_codes | type == "array" and length <= 20 and
+              all(.[]; IN(
+                "unmanaged_holding", "insufficient_cash", "cash_shortfall_sell_first",
+                "side_filtered_sell_only", "side_filtered_buy_only", "other_withheld"
+              ))) and
+            ((keys | sort) == ([
+              "outcomes", "planned_order_count", "result_count", "run_id",
+              "schema_version", "source", "withheld_order_count",
+              "withheld_reason_codes"
+            ] | sort))
+          ' /tmp/live_canary_order_diagnostics.json >/dev/null; then
+            echo "diagnostic_status=invalid_diagnostics" >> "$GITHUB_OUTPUT"
+            echo "::error::zero-order diagnostics failed the closed schema check"
+            exit 0
+          fi
+
+          echo "diagnostic_status=ok" >> "$GITHUB_OUTPUT"
+          echo "planned_order_count=$(jq -r '.planned_order_count' /tmp/live_canary_order_diagnostics.json)" >> "$GITHUB_OUTPUT"
+          echo "result_count=$(jq -r '.result_count' /tmp/live_canary_order_diagnostics.json)" >> "$GITHUB_OUTPUT"
+          jq . /tmp/live_canary_order_diagnostics.json
+
       - name: Read fixed server timer runtime diagnostics
         id: runtime
         if: always() && steps.status.outputs.query_status != 'ok'
@@ -196,6 +269,10 @@ jobs:
           TIMER_NEXT_ELAPSE: ${{ steps.runtime.outputs.timer_next_elapse }}
           SERVICE_RESULT: ${{ steps.runtime.outputs.service_result }}
           SERVICE_EXIT: ${{ steps.runtime.outputs.service_exit }}
+          DIAGNOSTIC_STATUS: ${{ steps.order_diagnostics.outputs.diagnostic_status }}
+          DIAGNOSTIC_EXIT: ${{ steps.order_diagnostics.outputs.diagnostic_exit }}
+          PLANNED_ORDER_COUNT: ${{ steps.order_diagnostics.outputs.planned_order_count }}
+          RESULT_COUNT: ${{ steps.order_diagnostics.outputs.result_count }}
         run: |
           set -euo pipefail
           branch=automation/live-canary-server-status-last-run
@@ -227,6 +304,9 @@ jobs:
           if [[ "${RUNTIME_STATUS:-}" == "ok" ]]; then
             cp /tmp/live_canary_runtime_status.json server_runtime_status.json
           fi
+          if [[ "${DIAGNOSTIC_STATUS:-}" == "ok" ]]; then
+            cp /tmp/live_canary_order_diagnostics.json server_order_diagnostics.json
+          fi
 
           {
             echo "# Live canary server timer status — latest observation"
@@ -242,6 +322,10 @@ jobs:
             echo "| server_source | ${SERVER_SOURCE:-unavailable} |"
             echo "| orders_submitted | ${ORDERS_SUBMITTED:-unavailable} |"
             echo "| server_result | ${SERVER_RESULT:-unavailable} |"
+            echo "| order_diagnostic_status | ${DIAGNOSTIC_STATUS:-skipped} |"
+            echo "| order_diagnostic_exit | ${DIAGNOSTIC_EXIT:-skipped} |"
+            echo "| planned_order_count | ${PLANNED_ORDER_COUNT:-unavailable} |"
+            echo "| result_count | ${RESULT_COUNT:-unavailable} |"
             echo "| runtime_status | ${RUNTIME_STATUS:-skipped} |"
             echo "| runtime_exit | ${RUNTIME_EXIT:-skipped} |"
             echo "| timer_active | ${TIMER_ACTIVE:-unavailable} |"
@@ -260,18 +344,28 @@ jobs:
           if [[ -f server_runtime_status.json ]]; then
             git add server_runtime_status.json
           fi
+          if [[ -f server_order_diagnostics.json ]]; then
+            git add server_order_diagnostics.json
+          fi
           git commit -q -m "observe live canary server timer ${GITHUB_RUN_ID}"
           git push --force \
             "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
             "publish:${branch}"
 
-      - name: Fail closed when no valid summary was read
+      - name: Fail closed without valid summary or required zero-order diagnostics
         if: always()
         env:
           QUERY_EXIT: ${{ steps.status.outputs.query_exit }}
           QUERY_STATUS: ${{ steps.status.outputs.query_status }}
+          ORDERS_SUBMITTED: ${{ steps.status.outputs.orders_submitted }}
+          DIAGNOSTIC_STATUS: ${{ steps.order_diagnostics.outputs.diagnostic_status }}
         run: |
           if [[ "${QUERY_EXIT:-1}" != "0" || "${QUERY_STATUS:-}" != "ok" ]]; then
             echo "::error::valid server timer summary was not observed"
+            exit 1
+          fi
+          if [[ "${ORDERS_SUBMITTED:-}" == "0" \
+              && "${DIAGNOSTIC_STATUS:-}" != "ok" ]]; then
+            echo "::error::zero-order run lacks valid sanitized diagnostics"
             exit 1
           fi

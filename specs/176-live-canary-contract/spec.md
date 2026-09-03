@@ -306,6 +306,12 @@
   최근 24시간 journal 중 `ERROR:`·중복 선점 접두사 행을 비밀값 없는 고정 사건 코드 최대 20개로
   바꿔야 한다. journal 원문은 반환하지 않는다. 결과는 닫힌 JSON으로 재검증·정화하되 관측 작업
   자체는 계속 실패 폐쇄해야 한다.
+- **FR-033**: 유효한 server timer 요약의 `orders_submitted=0`이면 관측 워크플로는 선택된
+  14자리 run ID의 root 전용 `order.log`를 읽는 고정 `live-canary-scheduled-order-diagnostics`만
+  추가 호출해야 한다. 서버 helper는 CLI JSON을 닫힌 형식으로 검증하고 종목·매수/매도·요청 및
+  라우팅 수량·고정 결과 상태·고정 gate, 계획/결과/보류 건수와 정화된 보류 코드만 반환해야 한다.
+  가격·현금·계좌·주문 ID·상관 ID·원문 reason·환경값·임의 경로는 반환하지 않으며, 형식 불일치는
+  실패 폐쇄해야 한다. 이 읽기 진단은 새 주문, 재시도, 서비스·timer 제어 권한을 만들지 않는다.
 
 ## 핵심 개체
 
@@ -385,6 +391,10 @@
 - **SC-023**: 서버 성공 요약이 없는 고정 실패에서 읽기 전용 관측은 timer `LastTriggerUSec`·
   `NextElapseUSecRealtime`, service `Result`·`ExecMainStatus`와 허용된 오류만 발행한다. 환경값과
   허용 접두사 밖 journal 행은 0건이며, 워크플로는 이를 성공 주문 증거로 오인하지 않고 실패한다.
+- **SC-024**: 계획 주문 1건이 `REJECTED_BY_GATE` 또는 `REJECTED_BY_BROKER`로 끝난 고정
+  `order.log`에서 관측은 안전한 결과 상태와 gate를 해당 run ID에 묶어 재현한다. 원문 reason,
+  가격, 현금과 임의 추가 키는 공개 결과에 0건이어야 하며, 알 수 없는 상태·잘못된 수량·심볼릭
+  링크·다른 run ID는 실패한다. 읽기 전과 후 broker write와 서비스 시작은 모두 0건이다.
 
 ## 가정과 의존성
 
