@@ -33,10 +33,10 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `bd23f75b` — Merge pull request #741 from jinooaction/Codex/179-kis-smoke-token-cache |
-| main 테스트 | #741 exact 기능 트리에서 `uv run pytest` → 3340 passed, 7 skipped, 실패 0. |
-| main 린트 | #741 exact 기능 트리에서 `uv run ruff check src tests` → All checks passed. |
-| 열린 PR | 없음. 격리 브랜치 `Codex/179-kis-smoke-production-proof`에서 #741의 생산 배포·KIS·사전점검 사실을 인계 중. |
+| 마지막 main 커밋 | `125cdff7` — Merge pull request #743 from jinooaction/Codex/176-server-status-observer |
+| main 테스트 | #743 exact 기능 트리에서 `uv run pytest` → 3344 passed, 7 skipped, 실패 0. |
+| main 린트 | #743 exact 기능 트리에서 `uv run ruff check src tests` → All checks passed. |
+| 열린 PR | 없음. 격리 브랜치 `codex/176-server-timer-runtime-diagnostics`에서 서버 타이머의 읽기 전용 실행 진단을 보강 중. |
 | 출시 완료 스펙 | 최신 기능: #728(스펙 178, 읽기 전용 Flutter 운영자 상태 계약과 앱 설계), #726(스펙 177, 자본 0의 비용 현실형 장중 페이퍼 연구 엔진), #724(스펙 176, 독립 서버 예약과 정수주 표현 가능 목표 기준의 자금성 계약), #722(스펙 176, 거래소별 5xx 뒤 제한된 시세 탐색과 전 후보 장애 보존), #721(스펙 176, 고정 읽기 전용 배포 감사 명령), #719(스펙 176, 10:17~13:53 최대 12분 간격 19개 예약 기회), #717(스펙 176, 거래일 1회 주문 선점·최초 실행 증거 보존), #716(스펙 176, 시작 시점과 각 중개사 쓰기 직전 XNYS 정규장 실패 폐쇄·부분 실행 증거 보존), #715(스펙 176, 선언한 NAV 10%와 실제 주문 자본 일치), #714(스펙 176, 정확한 main 사전점검 인계), #712(스펙 176, 뉴욕 현지 비정각 실거래 예약), #709(스펙 176, 역할 분리 운영 증거와 NAV 10% 실거래 검증 캐너리), #706(스펙 175, 21가족 교정·PEAD 진단), #701(스펙 174, 회계 기반 횡단면 팩터), #699(스펙 173, 판정 경로 교정·월말월초 전략). |
 | 골격 스펙 | 스펙 178은 코드·계약·시뮬레이터와 실제 iPhone 설치·실행까지 완료됐다. 물리 화면 픽셀 캡처와 터치 탐색은 남았다. 스펙 177은 756세션 실제 5분봉 자료가 없어 `INSUFFICIENT_EVIDENCE`이며, 스펙 176은 실제 KIS 자동 주문·체결·감사·정합과 중복 주문 0건 확인이 남았다. |
 | 최근 출시 작업 | 기존 HTML을 유지하면서 형식 `1.0`, `read_only: true`인 `status.json`을 Pages에 발행했다. 별도 비공개 `jinooaction/auto_invest_mobile` Flutter 앱은 홈·자동화·설명 3개 탭, 30시간 신선도, 오프라인 마지막 성공 캐시와 실패 폐쇄 표시를 제공한다. |

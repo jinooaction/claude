@@ -264,6 +264,9 @@ case "${cmd}" in
         echo "refused command: ${cmd}" >&2
         exit 126
         ;;
+    live-canary-runtime-status)
+        exec sudo -n /usr/local/sbin/auto-invest-live-canary runtime-status
+        ;;
     live-canary-fills\ *)
         read -r action start_date end_date extra <<<"${cmd}"
         if [[ "${action:-}" == "live-canary-fills" \

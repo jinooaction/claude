@@ -306,3 +306,27 @@ broker write 전에 차단된다.
 **기각한 대안**: 서버 timer를 수동 시작하면 자동성 증거와 주문 권한 경계를 깨뜨린다. 임의 SSH나
 journal 조회를 허용하면 원격 명령 표면이 넓어진다. 다음 GitHub schedule만 기다리면 server timer의
 실패를 같은 공급자 지연 뒤에야 발견하므로 독립 복구의 운영 목적에 맞지 않는다.
+
+## 결정 21 - 성공 요약이 없을 때는 고정 systemd 실행 상태만 정화해 읽는다
+
+**결정**: 기존 root 소유 live helper에 인자를 받지 않는 `runtime-status`를 추가한다. 읽는 값은
+`auto-invest-live-canary.timer`의 load/active/last trigger/next elapse, 같은 service의
+load/active/result/exit/start/finish와 최근 24시간 journal 중 `ERROR:` 및 중복 선점 고정 접두사
+행을 비밀값 없는 고정 사건 코드 최대 20개로 바꾼 값으로 제한한다. observer는 성공 요약 조회가
+실패한 경우에만 이 고정 명령을 호출하고,
+닫힌 JSON을 재검증해 별도 정화 파일로 발행한다. 성공 요약이 없다는 최종 실패 상태는 유지한다.
+
+**근거**: 2026-09-03 14:35 이후 production timer는 `active`였지만 `scheduled-status`는 종료 코드
+2만 반환했다. 기존 scheduler는 거래일 선점을 얻은 뒤에야 요약을 만들기 때문에, timer 자체가
+울리지 않은 경우와 `refuse_deploy_maintenance`·systemd 신원·revision·audit·시장·sentinel·첫 진입
+검사 중 하나에서 조기 실패한 경우가 모두 같은 `unavailable`로 보였다. 원인을 모른 채 다음 날까지
+기다리거나 안전 관문을 추측으로 완화하지 않으려면 실행 상태의 최소 증거가 필요하다.
+
+**안전 경계**: 임의 unit·시간범위·journal 필터·경로를 입력받지 않는다. journal 전체나 오류 원문을
+반환하지 않고 스크립트가 생성하는 고정 상태를 분류 코드로만 반환한다. 주문·서비스·timer 제어,
+`systemd-order`, 환경 전체와 비밀값은 노출하지 않는다. 이 자료는 실패 진단일 뿐 실제 주문·체결·
+감사·대사의 성공 증거를 대신하지 않는다.
+
+**기각한 대안**: 원격 `journalctl`이나 임의 `systemctl`을 허용하면 SSH 경계가 넓어진다. 성공
+요약 형식을 조기 실패까지 섞어 확장하면 최초 선점·주문·사후 대사가 완료된 증거의 의미가 흐려진다.
+서버 서비스를 수동 시작해 재현하면 자동 예약 증거와 하루 1회 돈 경로를 훼손한다.

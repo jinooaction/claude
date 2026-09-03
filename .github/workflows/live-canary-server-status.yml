@@ -1,7 +1,8 @@
 name: Live canary server timer status (read-only)
 
 # GitHub schedule 공급자가 늦더라도 독립 서버 timer의 최신 실행 요약을 읽기 전용으로 확인한다.
-# 이 workflow는 forced-command gateway의 고정 `live-canary-scheduled-status`만 호출한다.
+# 이 workflow는 forced-command gateway의 고정된 읽기 명령인
+# `live-canary-scheduled-status`와 `live-canary-runtime-status`만 호출한다.
 # 주문, 서비스 시작, timer 조작, 임의 원격 셸은 허용하지 않는다.
 
 on:
@@ -111,6 +112,72 @@ jobs:
           echo "result=$(jq -r '.result' /tmp/live_canary_server_summary.json)" >> "$GITHUB_OUTPUT"
           jq . /tmp/live_canary_server_summary.json
 
+      - name: Read fixed server timer runtime diagnostics
+        id: runtime
+        if: always() && steps.status.outputs.query_status != 'ok'
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          set +e
+          port="${PORT:-22}"
+          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts \
+              -o ConnectTimeout=15 -o BatchMode=yes \
+              -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              "live-canary-runtime-status" \
+              > /tmp/live_canary_runtime_status.json \
+              2> /tmp/live_canary_runtime_status.err
+          runtime_exit=$?
+          echo "runtime_exit=${runtime_exit}" >> "$GITHUB_OUTPUT"
+          if [[ "${runtime_exit}" -ne 0 ]]; then
+            echo "runtime_status=unavailable" >> "$GITHUB_OUTPUT"
+            echo "::warning::server timer runtime diagnostics are unavailable (exit ${runtime_exit})"
+            exit 0
+          fi
+
+          if ! jq -e '
+            .schema_version == "1.0" and
+            .source == "server_timer_runtime" and
+            (.observed_at_utc | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T")) and
+            (.journal_readable | type == "boolean") and
+            (.recent_events | type == "array" and length <= 20 and
+              all(.[]; test("^[a-z_]+$"))) and
+            (.timer.load_state | test("^[a-z-]+$")) and
+            (.timer.active_state | test("^[a-z-]+$")) and
+            (.timer.last_trigger_utc | type == "string" and length <= 160) and
+            (.timer.next_elapse_utc | type == "string" and length <= 160) and
+            ((.timer | keys | sort) == ([
+              "active_state", "last_trigger_utc", "load_state", "next_elapse_utc"
+            ] | sort)) and
+            (.service.load_state | test("^[a-z-]+$")) and
+            (.service.active_state | test("^[a-z-]+$")) and
+            (.service.result | test("^[a-z-]+$")) and
+            (.service.exec_main_status | type == "number" and . >= 0) and
+            (.service.started_at_utc | type == "string" and length <= 160) and
+            (.service.finished_at_utc | type == "string" and length <= 160) and
+            ((.service | keys | sort) == ([
+              "active_state", "exec_main_status", "finished_at_utc", "load_state",
+              "result", "started_at_utc"
+            ] | sort)) and
+            ((keys | sort) == ([
+              "journal_readable", "observed_at_utc", "recent_events", "schema_version",
+              "service", "source", "timer"
+            ] | sort))
+          ' /tmp/live_canary_runtime_status.json >/dev/null; then
+            echo "runtime_status=invalid_runtime" >> "$GITHUB_OUTPUT"
+            echo "::error::server timer runtime diagnostics failed the closed schema check"
+            exit 0
+          fi
+
+          echo "runtime_status=ok" >> "$GITHUB_OUTPUT"
+          echo "timer_active=$(jq -r '.timer.active_state' /tmp/live_canary_runtime_status.json)" >> "$GITHUB_OUTPUT"
+          echo "timer_last_trigger=$(jq -r '.timer.last_trigger_utc' /tmp/live_canary_runtime_status.json)" >> "$GITHUB_OUTPUT"
+          echo "timer_next_elapse=$(jq -r '.timer.next_elapse_utc' /tmp/live_canary_runtime_status.json)" >> "$GITHUB_OUTPUT"
+          echo "service_result=$(jq -r '.service.result' /tmp/live_canary_runtime_status.json)" >> "$GITHUB_OUTPUT"
+          echo "service_exit=$(jq -r '.service.exec_main_status' /tmp/live_canary_runtime_status.json)" >> "$GITHUB_OUTPUT"
+          jq . /tmp/live_canary_runtime_status.json
+
       - name: Publish sanitized observation sidecar
         if: always()
         env:
@@ -122,6 +189,13 @@ jobs:
           ORDERS_SUBMITTED: ${{ steps.status.outputs.orders_submitted }}
           SERVER_RESULT: ${{ steps.status.outputs.result }}
           REQUESTED_RUN_ID: ${{ inputs.run_id }}
+          RUNTIME_EXIT: ${{ steps.runtime.outputs.runtime_exit }}
+          RUNTIME_STATUS: ${{ steps.runtime.outputs.runtime_status }}
+          TIMER_ACTIVE: ${{ steps.runtime.outputs.timer_active }}
+          TIMER_LAST_TRIGGER: ${{ steps.runtime.outputs.timer_last_trigger }}
+          TIMER_NEXT_ELAPSE: ${{ steps.runtime.outputs.timer_next_elapse }}
+          SERVICE_RESULT: ${{ steps.runtime.outputs.service_result }}
+          SERVICE_EXIT: ${{ steps.runtime.outputs.service_exit }}
         run: |
           set -euo pipefail
           branch=automation/live-canary-server-status-last-run
@@ -139,13 +213,19 @@ jobs:
             --arg workflow_head_sha "${GITHUB_SHA}" \
             --arg requested_run_id "${REQUESTED_RUN_ID:-}" \
             --arg query_exit "${QUERY_EXIT:-missing}" \
+            --arg runtime_status "${RUNTIME_STATUS:-skipped}" \
+            --arg runtime_exit "${RUNTIME_EXIT:-skipped}" \
             '{schema_version:$schema_version,observation_status:$observation_status,
               observed_at_utc:$observed_at_utc,workflow_run_id:$workflow_run_id,
               workflow_head_sha:$workflow_head_sha,requested_run_id:$requested_run_id,
-              query_exit:$query_exit}' > observation.json
+              query_exit:$query_exit,runtime_status:$runtime_status,
+              runtime_exit:$runtime_exit}' > observation.json
 
           if [[ "${QUERY_STATUS:-}" == "ok" ]]; then
             cp /tmp/live_canary_server_summary.json server_scheduled_status.json
+          fi
+          if [[ "${RUNTIME_STATUS:-}" == "ok" ]]; then
+            cp /tmp/live_canary_runtime_status.json server_runtime_status.json
           fi
 
           {
@@ -162,6 +242,13 @@ jobs:
             echo "| server_source | ${SERVER_SOURCE:-unavailable} |"
             echo "| orders_submitted | ${ORDERS_SUBMITTED:-unavailable} |"
             echo "| server_result | ${SERVER_RESULT:-unavailable} |"
+            echo "| runtime_status | ${RUNTIME_STATUS:-skipped} |"
+            echo "| runtime_exit | ${RUNTIME_EXIT:-skipped} |"
+            echo "| timer_active | ${TIMER_ACTIVE:-unavailable} |"
+            echo "| timer_last_trigger | ${TIMER_LAST_TRIGGER:-unavailable} |"
+            echo "| timer_next_elapse | ${TIMER_NEXT_ELAPSE:-unavailable} |"
+            echo "| service_result | ${SERVICE_RESULT:-unavailable} |"
+            echo "| service_exit | ${SERVICE_EXIT:-unavailable} |"
           } > LAST_RUN.md
 
           git checkout --orphan publish
@@ -169,6 +256,9 @@ jobs:
           git add LAST_RUN.md observation.json
           if [[ -f server_scheduled_status.json ]]; then
             git add server_scheduled_status.json
+          fi
+          if [[ -f server_runtime_status.json ]]; then
+            git add server_runtime_status.json
           fi
           git commit -q -m "observe live canary server timer ${GITHUB_RUN_ID}"
           git push --force \
