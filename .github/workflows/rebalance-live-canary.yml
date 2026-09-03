@@ -516,16 +516,22 @@ jobs:
           duplicate=false
           first_source=none
           first_run_id=none
+          retry_run_id=none
           if grep -q '^LIVE_ORDER_SESSION_ALREADY_CLAIMED ' /tmp/live_rebal.json; then
             duplicate=true
             first_source="$(sed -n 's/.* first_source=\([^ ]*\).*/\1/p' /tmp/live_rebal.json | head -1)"
             first_run_id="$(sed -n 's/.* first_run_id=\([^ ]*\).*/\1/p' /tmp/live_rebal.json | head -1)"
             case "${first_source}" in github_schedule|server_timer|legacy) ;; *) first_source=invalid ;; esac
             [[ "${first_run_id}" =~ ^[0-9]+$ ]] || first_run_id=invalid
+            parsed_retry_run_id="$(sed -n 's/.* retry_run_id=\([^ ]*\).*/\1/p' /tmp/live_rebal.json | head -1)"
+            if [[ "${parsed_retry_run_id}" =~ ^[0-9]{14}$ ]]; then
+              retry_run_id="${parsed_retry_run_id}"
+            fi
           fi
           echo "duplicate=${duplicate}" >> "$GITHUB_OUTPUT"
           echo "first_source=${first_source}" >> "$GITHUB_OUTPUT"
           echo "first_run_id=${first_run_id}" >> "$GITHUB_OUTPUT"
+          echo "retry_run_id=${retry_run_id}" >> "$GITHUB_OUTPUT"
           echo "--- live rebalance ---"; cat /tmp/live_rebal.json
           echo "--- stderr ---"; cat /tmp/live_rebal.err
           exit "${ssh_exit}"
@@ -538,23 +544,39 @@ jobs:
           USER: ${{ secrets.VULTR_SSH_USER }}
           PORT: ${{ secrets.VULTR_SSH_PORT }}
           FIRST_RUN_ID: ${{ steps.live.outputs.first_run_id }}
+          RETRY_RUN_ID: ${{ steps.live.outputs.retry_run_id }}
         run: |
           set +e
           port="${PORT:-22}"
+          evidence_run_id="${FIRST_RUN_ID}"
+          if [[ "${RETRY_RUN_ID:-none}" =~ ^[0-9]{14}$ ]]; then
+            evidence_run_id="${RETRY_RUN_ID}"
+          fi
           ssh_exit=1
           for attempt in 1 2 3; do
             ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 \
                 -p "${port}" -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
-                "live-canary-scheduled-status ${FIRST_RUN_ID}" \
+                "live-canary-scheduled-status ${evidence_run_id}" \
                 > /tmp/server_scheduled_status.json 2>/tmp/server_scheduled_status.err
             ssh_exit=$?
             if [[ "${ssh_exit}" == "0" ]]; then
-              jq -e --arg first_run_id "${FIRST_RUN_ID}" \
+              jq -e --arg first_run_id "${FIRST_RUN_ID}" --arg evidence_run_id "${evidence_run_id}" \
+                --arg retry_run_id "${RETRY_RUN_ID:-none}" \
                 '.schema_version == "1.1" and .source == "server_timer" and
-                 .run_id == $first_run_id and
+                 .run_id == $evidence_run_id and
                  (.code_commit | test("^[0-9a-f]{40}$")) and
                  (.deployed_code_commit | test("^[0-9a-f]{40}$")) and
-                 .operational_equivalent == true' \
+                 .operational_equivalent == true and
+                 (if $retry_run_id == "none" then
+                    ((.attempt_kind // "initial") == "initial") and
+                    ((.first_run_id // $first_run_id) == $first_run_id) and
+                    ((.retry_run_id // null) == null)
+                  else
+                    .attempt_kind == "same_session_retry" and
+                    .first_run_id == $first_run_id and
+                    .retry_run_id == $retry_run_id and
+                    .claim_status == "retry_claimed"
+                  end)' \
                 /tmp/server_scheduled_status.json >/dev/null
               ssh_exit=$?
             fi
@@ -668,6 +690,7 @@ jobs:
           DUPLICATE: ${{ steps.live.outputs.duplicate }}
           FIRST_SOURCE: ${{ steps.live.outputs.first_source }}
           FIRST_RUN_ID: ${{ steps.live.outputs.first_run_id }}
+          RETRY_RUN_ID: ${{ steps.live.outputs.retry_run_id }}
           EVENT: ${{ github.event_name }}
         run: |
           set -o pipefail
@@ -675,10 +698,16 @@ jobs:
           if [[ "${DUPLICATE:-false}" == "true" && "${FIRST_SOURCE:-}" == "server_timer" ]]; then
             git fetch --depth=1 origin \
               "+refs/heads/${BRANCH}:refs/remotes/origin/${BRANCH}" >/tmp/live_sidecar_fetch.log 2>&1 || true
-            if git show "origin/${BRANCH}:LAST_RUN.md" >/tmp/previous_live_sidecar.md 2>/dev/null \
-                && grep -Fq "| 최초 server timer run_id | ${FIRST_RUN_ID} |" /tmp/previous_live_sidecar.md; then
-              echo "Server timer execution ${FIRST_RUN_ID} is already published; preserving first sidecar."
-              exit 0
+            if git show "origin/${BRANCH}:LAST_RUN.md" >/tmp/previous_live_sidecar.md 2>/dev/null; then
+              if [[ "${RETRY_RUN_ID:-none}" =~ ^[0-9]{14}$ ]]; then
+                if grep -Fq "| 복구 server timer run_id | ${RETRY_RUN_ID} |" /tmp/previous_live_sidecar.md; then
+                  echo "Server timer recovery ${RETRY_RUN_ID} is already published; preserving sidecar."
+                  exit 0
+                fi
+              elif grep -Fq "| 최초 server timer run_id | ${FIRST_RUN_ID} |" /tmp/previous_live_sidecar.md; then
+                echo "Server timer execution ${FIRST_RUN_ID} is already published; preserving first sidecar."
+                exit 0
+              fi
             fi
           fi
           tmpdir=$(mktemp -d); cd "${tmpdir}"; git init -q
@@ -702,6 +731,7 @@ jobs:
             echo "| 사후 계좌 정합성 | ${RECONCILIATION_OUTCOME:-skipped} |"
             echo "| 최초 server timer 증거 조회 | ${SERVER_EVIDENCE_OUTCOME:-skipped} |"
             echo "| 최초 server timer run_id | ${FIRST_RUN_ID:-none} |"
+            echo "| 복구 server timer run_id | ${RETRY_RUN_ID:-none} |"
             echo ""
             if [[ "${LIVE_OUTCOME:-skipped}" == "success" ]]; then
               echo "> ⚠ **무장 + production 기계 승인 + 실행** — 예약이면 실주문, 수동이면 주문 없는 검증이다."
@@ -745,7 +775,7 @@ jobs:
             cat /tmp/post_trade_reconciliation.err 2>/dev/null || true
             echo '```'
             echo ""
-            echo "## 최초 server timer 실행 증거 (GitHub 중복 도착 시)"
+            echo "## 최초·복구 server timer 실행 증거 (GitHub 중복 도착 시)"
             echo '```json'
             cat /tmp/server_scheduled_status.json 2>/dev/null || echo '{}'
             cat /tmp/server_scheduled_status.err 2>/dev/null || true

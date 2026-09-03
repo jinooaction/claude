@@ -111,7 +111,7 @@ def test_scheduler_checks_deploy_maintenance_before_session_claim() -> None:
     assert "/run/auto-invest-deploy/live-order-maintenance.lock" in body
 
 
-def test_scheduler_preserves_post_attempt_evidence_without_retrying() -> None:
+def test_scheduler_preserves_post_attempt_evidence_and_only_closed_retry_path() -> None:
     body = SCHEDULER.read_text(encoding="utf-8")
 
     assert "LIVE_ORDER_SESSION_ALREADY_CLAIMED" in body
@@ -123,11 +123,28 @@ def test_scheduler_preserves_post_attempt_evidence_without_retrying() -> None:
     assert "summary.json" in body
     assert "last-scheduled-run-id" in body
     assert "orders_submitted" in body
+    assert "same_session_retry_candidate" in body
+    assert "LIVE_ORDER_SESSION_RETRY_CLAIMED" in body
+    assert "attempt_kind" in body
+    assert "first_run_id" in body
+    assert "retry_run_id" in body
+    assert "order-session-retries.tsv" in body
     assert "SUBMITTED|PARTIALLY_FILLED|FILLED|SUBMISSION_UNKNOWN" in body
     assert "source" in body and "server_timer" in body
     assert "market order" not in body.lower()
     assert "--mode live" not in body
     assert "--confirm-live" not in body
+
+
+def test_scheduler_does_not_open_retry_authority_to_manual_or_github_sources() -> None:
+    body = SCHEDULER.read_text(encoding="utf-8")
+    service = SERVICE.read_text(encoding="utf-8")
+
+    assert "first_source" in body
+    assert '"server_timer"' in body
+    assert "RefuseManualStart=yes" in service
+    assert "workflow_dispatch" not in body
+    assert "repository_dispatch" not in body
 
 
 def test_remote_gateway_exposes_status_but_not_systemd_order() -> None:

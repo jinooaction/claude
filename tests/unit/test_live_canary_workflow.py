@@ -132,11 +132,14 @@ def test_live_canary_real_order_failures_reach_job_and_sidecar() -> None:
     assert "if: always()" in publish_step
     assert "Read first server-scheduled execution evidence" in real_order
     assert "live-canary-scheduled-status" in real_order
-    assert "live-canary-scheduled-status ${FIRST_RUN_ID}" in real_order
+    assert "live-canary-scheduled-status ${evidence_run_id}" in real_order
+    assert "RETRY_RUN_ID" in real_order
+    assert "복구 server timer run_id" in publish_step
     assert "steps.live.outputs.first_source == 'server_timer'" in real_order
     assert "SERVER_EVIDENCE_OUTCOME" in publish_step
     assert "cat /tmp/server_scheduled_status.json" in publish_step
-    assert ".run_id == $first_run_id" in real_order
+    assert ".run_id == $evidence_run_id" in real_order
+    assert ".first_run_id == $first_run_id" in real_order
     assert "for attempt in 1 2 3" in real_order
     assert "최초 server timer run_id" in publish_step
     assert "is already published; preserving first sidecar" in publish_step

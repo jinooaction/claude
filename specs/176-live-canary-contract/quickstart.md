@@ -63,6 +63,12 @@ sidecar의 `capital_entry_evidence.json`을 각각 내려받는다. 역할, 코�
     `TTTT1002U`·지정가 본문이 함께 나가는지 확인한다. 배포 뒤 KIS smoke와 주문 없는 preflight로
     조회·첫 진입을 확인하되, 실주문은 수동으로 만들지 않는다. 다음 자동 정규장 실행에서 브로커
     접수·체결·전략 감사·계좌 대사가 모두 연결될 때만 해결로 판정한다.
+15. 같은 날 복구가 필요하면 기존 거래일 선점을 삭제하지 않는다. 먼저 server timer 최초 요약이
+    `orders_submitted=0`, 모든 계획 결과가 명시적 브로커 거부, 체결 동기화·측정·정합 정상,
+    열린 주문 0건인지 확인하고 정확한 사고 manifest와 보정 커밋을 코드 리뷰·배포한다.
+16. 다음 root timer가 자동 발화해 별도 복구 장부를 한 번 소비했는지 확인한다. service를 수동
+    시작하거나 GitHub 수동 이벤트로 실주문하지 않는다. 복구 실패 뒤에는 그날 세 번째 시도를
+    만들지 않는다.
 
 ## 5. 독립 scheduler 검증
 
@@ -78,6 +84,8 @@ uv run pytest tests/unit/test_live_canary_server_scheduler.py \
 `src/`, `deploy/`, `.github/workflows/`, 설정 또는 분류되지 않은 파일을 추가하거나 계보를
 분기시키면 scheduler와 내부 `systemd-order`가 모두 선점·broker write 전에 실패해야 한다.
 서버 실행 요약 1.1은 `code_commit`과 `deployed_code_commit`을 함께 표시해야 한다.
+복구 시험은 원래 `order-sessions.tsv` 행이 바뀌지 않고 별도 retry 장부만 한 줄 추가되며,
+접수 불명·부분체결·열린 주문·manifest 불일치·기소비 슬롯에서 추가 CLI 호출이 0건인지 확인한다.
 
 배포 뒤 `systemctl list-timers auto-invest-live-canary.timer`가 active이고 다음 시각이 뉴욕 현지
 10:35 이후인지 확인한다. `live-canary-scheduled-status [14자리 run_id]`는 고정된 최신 또는 지정

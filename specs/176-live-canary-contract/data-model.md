@@ -116,6 +116,29 @@ OPERATIONAL_CANARY
 - 중복 실행: `LIVE_ORDER_SESSION_ALREADY_CLAIMED`와 최초 run ID를 반환하고 브로커 호출 0건
 - 장외·휴장: 선점하지 않고 종료 코드 75, 다음 정상 예약 기회를 소모하지 않음
 
+## LiveOrderRetryIncidentManifest
+
+명시적 zero-acceptance 서버 사고와 검토된 보정을 배포 코드 안에서 연결하는 닫힌 선언이다.
+
+- `schema_version`, `incident_id`, `enabled`
+- `market_session`, `first_run_id`, `first_source=server_timer`
+- `first_code_commit`, `remediation_commit`
+- `broker_rejection_signatures`: 종목별 닫힌 `kis_rt_cd`, `kis_msg_cd`, HTTP, 예외,
+  TR ID, 거래소, 주문 구분
+- 유효성: exact key 집합·형식, tracked regular file, 최초·보정 커밋이 실제 배포 코드의 조상,
+  서로 다른 최초·배포 코드
+- 금지: 환경 override, 임의 경로, 자유문 reason, 계좌·가격·주문 ID·비밀값, GitHub/수동 출처
+
+## LiveOrderSessionRetryClaim
+
+원래 거래일 선점을 보존하면서 같은 세션 복구를 최대 한 번으로 제한하는 root 추가 전용 장부다.
+
+- `market_session`, `first_run_id`, `first_source`, `first_code_commit`
+- `retry_run_id`, `deployed_code_commit`, `manifest_sha256`, `claimed_at_utc`
+- 저장: root 소유 일반 파일, 배타 잠금 아래 기존 세션 행 확인 후 broker command 전에 한 줄 추가
+- 상태 전이: 없음 → `RETRY_CLAIMED` → 불변. 성공·실패 모두 되돌림 없음
+- 중복: 기존 행의 최초·복구 run 신원을 반환하고 broker write·fill sync·측정·정합 0건
+
 ## ScheduledLiveCanaryEvidence
 
 GitHub와 독립된 server timer 최초 실행이 남기는 정화된 추가 전용 증거다.
@@ -127,6 +150,8 @@ GitHub와 독립된 server timer 최초 실행이 남기는 정화된 추가 전
 - `order_exit`, `orders_submitted`, `fills_exit`, `measurement_exit`, `reconciliation_exit`
 - `result`: 거래일 선점을 얻은 실행에 대해 `completed` 또는 `partial` 중 하나. 선점 전 차단과
   중복은 journal에만 남기고 최신 성공·부분 실행 포인터를 덮어쓰지 않음
+- `attempt_kind=initial|same_session_retry`, `first_run_id`, 선택적 `retry_run_id`:
+  최초와 복구 실행을 구분하며 다른 출처가 broker 단계 없이 동일 신원을 관측하게 함
 - 저장: `/var/lib/auto-invest-live-order/scheduled-runs/<run_id>/summary.json`
 - 최신 포인터: root 소유 고정 파일에 run ID만 원자 교체하며 임의 경로나 심볼릭 링크를 따르지 않음
 - 관측: SSH forced-command의 고정 `live-canary-scheduled-status [14자리 run_id]`만 최신 또는
