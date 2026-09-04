@@ -20,6 +20,8 @@
   정지: 단 진입 후 라이브 낙폭 ≥ 예산   (기본 20%) → 단 0 + 무장 해제.
   재사이징: 단 유지 중 실계좌 NAV 가 ±10% 이상 변하면(입금/성장) 자본만 재계산(RESIZE)
             — 운영자 입금이 다음 게이트 실행에서 자동 반영된다.
+            첫 체결 전 운영1단은 현재 NAV10% 검증과 승인 예산의 작은 차이도 맞춘다
+            (spec180, 엄격한 전략0체결·현재 예산 검증 필요, 비율·단계 변경 없음).
 
 이 모듈은 **결정만** 한다 — 주문 0건, 돈 0 이동, 네트워크 0. 결정의 실행(센티넬 PR)은
 게이트 워크플로(forward-edge-autoarm.yml)가, 실주문은 rebalance-live-canary.yml 의
@@ -225,6 +227,7 @@ def render_ladder_sentinel(
         f"#   헌법 X.4 v11.0.0. 사다리: {ladder_schedule_ko()} (실계좌 NAV 대비).\n"
         "#   승격 = 관측 ≥20 + ≥27일 + 낙폭 < 예산/2. 강등 = 낙폭 ≥ 예산/2(즉시).\n"
         "#   정지 = 낙폭 ≥ 예산(즉시, 무장 해제). 재사이징 = 계좌 NAV ±10% 드리프트.\n"
+        "#   첫 체결 전 운영1단은 최신 검증·정확한 전략0체결 증거가 있으면 작은 예산 차이도 정합.\n"
         "#\n"
         f"# 증거: {evidence}\n"
         "#\n"
@@ -390,7 +393,7 @@ def decide_ladder(
         )
 
     # 3. 계좌 NAV 불능 — 사이징 불가면 상태를 바꾸지 않는다(승격도 강등도 아님).
-    if account_nav_usd is None or account_nav_usd <= 0:
+    if account_nav_usd is None or not account_nav_usd.is_finite() or account_nav_usd <= 0:
         return _d(
             ACTION_BLOCKED,
             rung,
@@ -642,6 +645,31 @@ def decide_ladder(
     # 재사이징 — 단 유지 중 실계좌 NAV 드리프트(입금/성장/하락) ±10% 이상이면 자본 재계산.
     expected = rung_capital_usd(rung, account_nav_usd)
     current_cap = cur_sent.capital_usd
+    # spec180: CLI verifies the current-NAV preview, whereas the order boundary
+    # uses the reviewed sentinel. Before first fill, a stale dollar budget must
+    # not survive solely because its drift is below the normal resize band.
+    # Do not infer zero fills from legacy/account-wide/ambiguous observations.
+    performance = live_performance if isinstance(live_performance, dict) else {}
+    checked_capital = (
+        operational_verdict.get("expected_operational_capital_usd")
+        if isinstance(operational_verdict, dict) else None
+    )
+    prefill_refresh = (
+        rung == 1
+        and entry_route == "operational_canary"
+        and operational_ready
+        and type(checked_capital) is int
+        and checked_capital == expected
+        and performance.get("schema_version") == "1.2"
+        and performance.get("mode") == "live"
+        and performance.get("measurement_scope") == "strategy"
+        and re.fullmatch(r"sha256:[0-9a-f]{64}", str(performance.get("measurement_contract_id")))
+        is not None
+        and type(performance.get("fills_count")) is int
+        and performance["fills_count"] == 0
+        and performance.get("data_quality_warnings") == []
+        and current_cap != expected
+    )
     if current_cap is not None and expected > 0:
         drift_pct = abs(Decimal(current_cap) - Decimal(expected)) / Decimal(expected) * 100
         upward_resize = expected > current_cap
@@ -651,7 +679,7 @@ def decide_ladder(
             or (rung == 1 and operational_ready)
             or (rung >= 2 and forward_confirmed)
         )
-        if drift_pct >= RESIZE_DRIFT_PCT and resize_authorized:
+        if (drift_pct >= RESIZE_DRIFT_PCT or prefill_refresh) and resize_authorized:
             keep_entered = entered if entered is not None else today
             capital = expected
             sentinel = render_ladder_sentinel(
@@ -662,7 +690,8 @@ def decide_ladder(
                 run_seq=run_seq + 1,
                 dd_budget_pct=dd_budget_pct,
                 evidence=(
-                    f"계좌 NAV 드리프트 재사이징: 센티넬 ${current_cap} → ${capital} "
+                    ("첫 체결 전 현재 검증 예산 정합: " if prefill_refresh else "")
+                    + f"계좌 NAV 드리프트 재사이징: 센티넬 ${current_cap} → ${capital} "
                     f"(단 {rung} 비율 유지, NAV ${account_nav_usd})."
                 ),
                 entry_route=entry_route,
@@ -672,7 +701,10 @@ def decide_ladder(
                 rung,
                 f"단 {rung} 유지, 자본 ${current_cap} → ${capital} 재계산"
                 f"(계좌 NAV ${account_nav_usd} 드리프트 {drift_pct.quantize(Decimal('0.1'))}%"
-                f" ≥ {RESIZE_DRIFT_PCT}%).",
+                + (
+                    ", 첫 체결 전 현재 검증 예산 정합)."
+                    if prefill_refresh else f" ≥ {RESIZE_DRIFT_PCT}%)."
+                ),
                 capital=capital,
                 sentinel=sentinel,
             )

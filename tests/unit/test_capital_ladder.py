@@ -10,6 +10,8 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
+import pytest
+
 from auto_invest.config.rules import PortfolioRebalanceConfig
 from auto_invest.portfolio.capital_ladder import (
     ACTION_BLOCKED,
@@ -604,3 +606,86 @@ def test_no_resize_within_drift_band():
     )
     assert d.action == ACTION_STAY
     assert not d.sentinel_changes
+
+
+def _prefill_refresh(*, sentinel=None, **overrides):
+    if sentinel is None:
+        sentinel = _RUNG1.replace("capital_usd: 1200", "capital_usd: 142")
+        sentinel += "entry_route: operational_canary\n"
+    arguments = dict(
+        account_nav_usd=Decimal("1434.91"),
+        forward_verdict=_verdict("NO_EDGE", 4),
+        operational_verdict={
+            "verdict": "OPERATIONAL_CANARY_READY",
+            "fundability_passed": True,
+            "alpha_confirmed": False,
+            "max_rung": 1,
+            "expected_operational_capital_usd": 143,
+        },
+        live_performance={
+            "schema_version": "1.2", "mode": "live",
+            "measurement_scope": "strategy", "measurement_contract_id": "sha256:" + "a" * 64,
+            "fills_count": 0, "data_quality_warnings": [],
+        },
+        live_growth=_growth(dd="0", obs=1, period_days="1"),
+    )
+    arguments.update(overrides)
+    return _decide(sentinel, **arguments)
+
+
+def test_prefill_operational_refresh_aligns_current_nav_without_promotion():
+    decision = _prefill_refresh()
+    assert decision.action == ACTION_RESIZE
+    assert decision.target_rung == 1
+    assert decision.target_capital_usd == 143
+    assert "rung_entered: 2026-05-10" in decision.new_sentinel_text
+    assert "run_seq: 7" in decision.new_sentinel_text
+    assert "account_nav_usd: 1434.91" in decision.new_sentinel_text
+    assert "entry_route: operational_canary" in decision.new_sentinel_text
+    repeated = _prefill_refresh(sentinel=decision.new_sentinel_text)
+    assert repeated.action == ACTION_STAY
+    assert not repeated.sentinel_changes
+
+
+@pytest.mark.parametrize("patch", [
+    {"fills_count": 1}, {"fills_count": False}, {"fills_count": "0"},
+    {"fills_count": 0.0}, {"fills_count": None}, {"mode": "paper"},
+    {"measurement_scope": "account"}, {"schema_version": "1.0"},
+    {"measurement_contract_id": None}, {"data_quality_warnings": ["missing quote"]},
+])
+def test_prefill_refresh_rejects_uncertain_or_non_strategy_evidence(patch):
+    evidence = {
+        "schema_version": "1.2", "mode": "live", "measurement_scope": "strategy",
+        "measurement_contract_id": "sha256:" + "a" * 64,
+        "fills_count": 0, "data_quality_warnings": [], **patch,
+    }
+    assert _prefill_refresh(live_performance=evidence).action == ACTION_STAY
+
+
+def test_prefill_refresh_requires_matching_current_budget():
+    assert _prefill_refresh(account_nav_usd=Decimal("1444.91")).action == ACTION_STAY
+
+
+def test_prefill_refresh_small_downward_change_preserves_ten_percent_ceiling():
+    verdict = {
+        "verdict": "OPERATIONAL_CANARY_READY", "fundability_passed": True,
+        "alpha_confirmed": False, "max_rung": 1, "expected_operational_capital_usd": 141,
+    }
+    result = _prefill_refresh(account_nav_usd=Decimal("1419.99"), operational_verdict=verdict)
+    assert result.action == ACTION_RESIZE
+    assert result.target_capital_usd == 141
+
+
+def test_prefill_refresh_does_not_infer_zero_from_missing_performance():
+    assert _prefill_refresh(live_performance=None).action == ACTION_STAY
+
+
+def test_prefill_refresh_preserves_safety_priority():
+    assert _prefill_refresh(kill_switch_present=True).action == ACTION_DISABLED
+    assert _prefill_refresh(live_growth=_growth(dd="21")).action == ACTION_HALT
+    assert _prefill_refresh(entry_execution_ready=False).action == ACTION_DEMOTE
+
+
+@pytest.mark.parametrize("nav", ["NaN", "Infinity", "-Infinity", "0", "-1"])
+def test_prefill_refresh_invalid_nav_fails_closed(nav):
+    assert _prefill_refresh(account_nav_usd=Decimal(nav)).action == ACTION_BLOCKED

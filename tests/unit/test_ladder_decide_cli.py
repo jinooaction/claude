@@ -10,6 +10,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 from auto_invest.analytics.backtest_overfitting import (
@@ -135,7 +136,7 @@ def _proxy_parity_json(tmp_path: Path) -> Path:
     return _json(tmp_path, "proxy-parity.json", body)
 
 
-def _invoke(tmp_path: Path, *, canary_verdict: str):
+def _invoke(tmp_path: Path, *, canary_verdict: str, nav_value: str = "12000"):
     forward = _json(
         tmp_path,
         "forward.json",
@@ -152,7 +153,7 @@ def _invoke(tmp_path: Path, *, canary_verdict: str):
         },
     )
     canary = _json(tmp_path, "canary.json", {"verdict": canary_verdict})
-    nav = _json(tmp_path, "nav.json", {"total_value_usd": "12000"})
+    nav = _json(tmp_path, "nav.json", {"total_value_usd": nav_value})
     fundability = assess_fundability(
         target_weights={"AAA": Decimal("0.5"), "BBB": Decimal("0.5")},
         holdings={},
@@ -216,7 +217,8 @@ def test_exact_exploration_evidence_remains_diagnostic_without_route_calibration
     assert payload["exploration_verdict"]["route_calibrated"] is False
 
 
-def test_operational_evidence_opens_only_rung1(tmp_path: Path) -> None:
+@pytest.mark.parametrize("prefill", [False, True])
+def test_operational_evidence_opens_only_rung1(tmp_path: Path, prefill: bool) -> None:
     live = ROOT / "deploy/canary-live-portfolio.toml"
     config = PortfolioRebalanceConfig.model_validate(
         tomllib.loads(live.read_text(encoding="utf-8"))["portfolio"]
@@ -272,7 +274,17 @@ def test_operational_evidence_opens_only_rung1(tmp_path: Path) -> None:
         tmp_path, "fundability-operational.json", {"fundability": fundability.as_dict()}
     )
     sentinel = tmp_path / "sentinel-operational.request"
-    sentinel.write_text("armed: false\ncapital_usd: 0\nrun_seq: 1\n", encoding="utf-8")
+    sentinel.write_text(
+        "armed: true\ncapital_usd: 1199\nrun_seq: 1\nladder_rung: 1\n"
+        "rung_entered: 2026-08-31\nentry_route: operational_canary\n"
+        if prefill else "armed: false\ncapital_usd: 0\nrun_seq: 1\n",
+        encoding="utf-8",
+    )
+    performance = _json(tmp_path, "prefill-performance.json", {
+        "schema_version": "1.2", "mode": "live", "measurement_scope": "strategy",
+        "measurement_contract_id": "sha256:" + "b" * 64,
+        "fills_count": 0, "data_quality_warnings": [],
+    })
 
     result = RUNNER.invoke(
         app,
@@ -282,6 +294,8 @@ def test_operational_evidence_opens_only_rung1(tmp_path: Path) -> None:
             str(forward),
             "--operational-evidence-json",
             str(operational),
+            "--live-performance-json",
+            str(performance),
             "--operational-evidence-age-hours",
             "2",
             "--expected-code-commit",
@@ -307,12 +321,19 @@ def test_operational_evidence_opens_only_rung1(tmp_path: Path) -> None:
 
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
-    assert payload["action"] == "PROMOTE"
+    assert payload["action"] == ("RESIZE" if prefill else "PROMOTE")
     assert payload["target_rung"] == 1
     assert payload["target_capital_usd"] == 1200
     assert payload["entry_route"] == "operational_canary"
     assert payload["operational_verdict"]["alpha_confirmed"] is False
     assert payload["operational_verdict"]["max_rung"] == 1
+
+
+@pytest.mark.parametrize("nav_value", ["NaN", "Infinity", "-Infinity"])
+def test_nonfinite_nav_is_blocked_without_cli_crash(tmp_path: Path, nav_value: str) -> None:
+    result = _invoke(tmp_path, canary_verdict="PASS", nav_value=nav_value)
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["action"] == "BLOCKED"
 
 
 def test_hardened_failure_keeps_real_money_disarmed(tmp_path: Path) -> None:
