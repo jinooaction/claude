@@ -165,7 +165,7 @@ jobs:
           fi
 
           if ! jq -e --arg run_id "${SERVER_RUN_ID}" '
-            .schema_version == "1.2" and
+            .schema_version == "1.3" and
             .source == "server_timer_order_diagnostics" and
             .run_id == $run_id and
             (.planned_order_count | type == "number" and . >= 0 and . <= 20) and
@@ -210,9 +210,24 @@ jobs:
                     "symbol", "market_session", "price", "quantity", "buying_power",
                     "currency", "order_type", "other", "unavailable"
                   ))) and
+                (.service_registration_scopes | type == "array" and
+                  length >= 1 and length <= 3 and length == (unique | length) and
+                  all(.[]; IN(
+                    "overseas_securities", "overseas_etp", "overseas_volatility_etn",
+                    "generic_service", "not_applicable", "unavailable"
+                  ))) and
+                (if (.message_topics | index("service_registration")) != null then
+                   (.service_registration_scopes | all(
+                     . != "not_applicable" and . != "unavailable"
+                   ))
+                 else
+                   (.service_registration_scopes == ["not_applicable"] or
+                     .service_registration_scopes == ["unavailable"])
+                 end) and
                 ((keys | sort) == ([
                   "exception_type", "http_status", "kis_msg_cd", "kis_rt_cd",
-                  "message_topics", "order_division", "order_exchange", "symbol", "tr_id"
+                  "message_topics", "order_division", "order_exchange",
+                  "service_registration_scopes", "symbol", "tr_id"
                 ] | sort))) and
             (.withheld_reason_codes | type == "array" and length <= 20 and
               all(.[]; IN(
