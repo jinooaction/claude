@@ -508,3 +508,8 @@ observer가 모두 발행을 거부한다. 생산의 이미 끝난 실행을 읽
 `service_registration_scopes=[overseas_etp]`를 반환했다. 따라서 현재 확인할 외부 관문은
 `해외 ETP 거래신청`이다. 이는 신청이 비활성임을 브로커 설정 API로 직접 읽은 결과가 아니라,
 이미 끝난 명시적 거부 원문을 닫힌 범위로 다시 분류한 결과이므로 운영자의 앱 확인은 계속 필요하다.
+
+후발 GitHub 정기 실행 `33901493966`은 exact latest main에서 기존 서버 최초·복구 실행 쌍과
+`first_source=server_timer`를 읽고 `LIVE_ORDER_SESSION_ALREADY_CLAIMED`로 종료했다. 브로커·체결
+동기화·측정·계좌 대사를 다시 호출하지 않아 이중 예약의 중복 쓰기 0건은 production에서 확인됐다.
+이는 서비스 신청 외부 관문이나 실제 신규 접수·체결을 대신하는 증거가 아니다.

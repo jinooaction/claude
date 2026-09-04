@@ -33,14 +33,14 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `7a69a5cb` — Merge pull request #754 from jinooaction/codex/176-kis-service-registration-scope |
-| main 테스트 | #754 exact 기능 트리에서 `uv run pytest` → 3373 passed, 7 skipped, 실패 0. |
-| main 린트 | #754 exact 기능 트리에서 `uv run ruff check src tests` → All checks passed. |
+| 마지막 main 커밋 | `e7f0f156` — Merge pull request #755 from jinooaction/codex/176-kis-service-registration-scope-handoff |
+| main 테스트 | #755 exact main에서 `uv run pytest` → 3373 passed, 7 skipped, 실패 0. |
+| main 린트 | #755 exact main에서 `uv run ruff check src tests` → All checks passed. |
 | 열린 PR | 없음. 다음 외부 관문은 KIS 앱의 `해외ETP 거래신청` 확인이다. |
 | 출시 완료 스펙 | 최신 기능: #754(스펙 176, 원문 없는 KIS 서비스 신청 범위 진단 1.3), #752(스펙 176, 브로커 자유문을 공개하지 않는 닫힌 거부 원인 주제 진단 1.2), #751(스펙 176, KIS REST 초기 버스트를 없앤 5회/초 직렬화와 정확한 사고 복구 승인), #749(스펙 176, 원래 선점을 보존하는 무접수 사고의 같은 장 1회 자동 복구), #747(스펙 176, 공식 KIS 공통 REST 헤더 `custtype=P`·`tr_cont=""` 고정), #746(스펙 176, 브로커 거부의 닫힌 KIS 코드·주문 분류 진단 1.1), #745(스펙 176, 자동 실행 주문 0건의 고정 읽기 전용 결과 진단), #744(스펙 176, 서버 timer 조기 실패의 고정 읽기 전용 실행 진단), #728(스펙 178, 읽기 전용 Flutter 운영자 상태 계약과 앱 설계), #726(스펙 177, 자본 0의 비용 현실형 장중 페이퍼 연구 엔진), #724(스펙 176, 독립 서버 예약과 정수주 표현 가능 목표 기준의 자금성 계약), #722(스펙 176, 거래소별 5xx 뒤 제한된 시세 탐색과 전 후보 장애 보존), #721(스펙 176, 고정 읽기 전용 배포 감사 명령), #719(스펙 176, 10:17~13:53 최대 12분 간격 19개 예약 기회), #717(스펙 176, 거래일 1회 주문 선점·최초 실행 증거 보존), #716(스펙 176, 시작 시점과 각 중개사 쓰기 직전 XNYS 정규장 실패 폐쇄·부분 실행 증거 보존), #715(스펙 176, 선언한 NAV 10%와 실제 주문 자본 일치), #714(스펙 176, 정확한 main 사전점검 인계), #712(스펙 176, 뉴욕 현지 비정각 실거래 예약), #709(스펙 176, 역할 분리 운영 증거와 NAV 10% 실거래 검증 캐너리). |
 | 골격 스펙 | 스펙 178은 코드·계약·시뮬레이터와 실제 iPhone 설치·실행까지 완료됐다. 물리 화면 픽셀 캡처와 터치 탐색은 남았다. 스펙 177은 756세션 실제 5분봉 자료가 없어 `INSUFFICIENT_EVIDENCE`이며, 스펙 176은 실제 KIS 자동 주문·체결·감사·정합과 중복 주문 0건 확인이 남았다. |
 | 최근 출시 작업 | 기존 HTML을 유지하면서 형식 `1.0`, `read_only: true`인 `status.json`을 Pages에 발행했다. 별도 비공개 `jinooaction/auto_invest_mobile` Flutter 앱은 홈·자동화·설명 3개 탭, 30시간 신선도, 오프라인 마지막 성공 캐시와 실패 폐쇄 표시를 제공한다. |
-| 활성 작업 | 진단 1.3의 production 관측은 IAUM·SCHX 모두 `service_registration_scopes=[overseas_etp]`를 지목했다. 운영자가 KIS 앱에서 `해외ETP 거래신청`을 완료 또는 활성 상태로 확인한 뒤 다음 자동 정규장 실행으로 실제 접수·체결·감사·대사를 검증한다. |
+| 활성 작업 | 진단 1.3은 IAUM·SCHX 모두 `service_registration_scopes=[overseas_etp]`를 지목했다. GitHub 정기 실행 `33901493966`은 이미 선점한 서버 실행을 재사용하며 중복 주문·체결 동기화·측정·대사를 0건으로 차단했다. 운영자가 KIS 앱에서 `해외ETP 거래신청`을 확인한 뒤 다음 자동 정규장 실행의 실제 접수·체결·감사·대사를 검증한다. |
 | 안전 경계 | main과 작업 브랜치는 헌법 15.5.0이다. 원래 거래일 선점은 불변이며, 정확한 무접수 사고에만 root 서버 예약이 별도 추가 전용 복구 슬롯을 한 번 쓸 수 있다. 접수 불명·접수·부분체결·체결·열린 주문·사후 실패는 복구를 막는다. 수동 주문·서비스 수동 시작·자본 증액·전략 승격·허용목록·위험 관문 우회는 계속 금지된다. |
 
 ## 현재 진행 — 2026-09-05 KST (KIS 계좌 거래서비스 신청 외부 관문)
@@ -64,6 +64,13 @@ exact-main 읽기 전용 observer run `33898481820`의 생산 진단 1.3은 IAUM
 주문 식별자는 0건이고, observer가 새 주문·재시도·service/timer 시작을 만든 것도 0건이다.
 주문 없는 production preflight run `33898595194`도 `ENTRY_READY`, 사후 측정 `CLEAR`,
 계좌 대사 `OK`, 증거 `VALID`, 주문 제출 0건으로 성공했다.
+
+2026-09-04 17:36 UTC GitHub 정기 실행 `33901493966`은 `event=schedule`, exact latest main
+`e7f0f156`에서 성공했다. 첫 진입은 다시 `ENTRY_READY`였지만 서버 예약이 이미 선점한 같은
+거래일을 `LIVE_ORDER_SESSION_ALREADY_CLAIMED`로 판정하고, 기존 `first_source=server_timer`와
+동일한 최초·복구 실행 쌍을 반환했다. 브로커 호출과 체결 동기화·측정·계좌 대사는 모두 건너뛰어
+후발 GitHub 출처의 중복 쓰기 0건을 생산에서 확인했다. 이 증거는 이중 예약 중복 차단 부분만
+완료하며, KIS 신규 주문 접수·실제 체결·전략 감사는 아직 0건이다.
 
 따라서 코드·배포·시세·자금성·주문 형식은 정상이며, 지금 남은 외부 관문은 KIS 앱의
 `메뉴 > 고객지원 > 거래서비스 신청 > 해외ETP 거래신청`이다. 이 값은 신청 상태를 직접 읽은
