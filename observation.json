@@ -1,0 +1,11 @@
+{
+  "observation_status": "ok",
+  "observed_at_utc": "2026-09-04T22:22:10Z",
+  "query_exit": "0",
+  "requested_run_id": "",
+  "runtime_exit": "skipped",
+  "runtime_status": "skipped",
+  "schema_version": "1.0",
+  "workflow_head_sha": "c3c41ff886750153f96bde0d0064e6d675b6d8eb",
+  "workflow_run_id": "[REDACTED_ACCOUNT]"
+}

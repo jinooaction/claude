@@ -1,0 +1,65 @@
+{
+  "broker_rejections": [
+    {
+      "exception_type": "KisOrderResponseError",
+      "http_status": 200,
+      "kis_msg_cd": "APBK1672",
+      "kis_rt_cd": "7",
+      "message_topics": [
+        "account",
+        "service_registration"
+      ],
+      "order_division": "00",
+      "order_exchange": "AMEX",
+      "service_registration_scopes": [
+        "overseas_etp"
+      ],
+      "symbol": "IAUM",
+      "tr_id": "TTTT1002U"
+    },
+    {
+      "exception_type": "KisOrderResponseError",
+      "http_status": 200,
+      "kis_msg_cd": "APBK1672",
+      "kis_rt_cd": "7",
+      "message_topics": [
+        "account",
+        "service_registration"
+      ],
+      "order_division": "00",
+      "order_exchange": "AMEX",
+      "service_registration_scopes": [
+        "overseas_etp"
+      ],
+      "symbol": "SCHX",
+      "tr_id": "TTTT1002U"
+    }
+  ],
+  "outcomes": [
+    {
+      "gate": null,
+      "requested_qty": 1,
+      "routed_qty": 1,
+      "side": "BUY",
+      "state": "REJECTED_BY_BROKER",
+      "symbol": "IAUM"
+    },
+    {
+      "gate": null,
+      "requested_qty": 2,
+      "routed_qty": 2,
+      "side": "BUY",
+      "state": "REJECTED_BY_BROKER",
+      "symbol": "SCHX"
+    }
+  ],
+  "planned_order_count": 2,
+  "result_count": 2,
+  "run_id": "[REDACTED_ACCOUNT]",
+  "schema_version": "1.3",
+  "source": "server_timer_order_diagnostics",
+  "withheld_order_count": 1,
+  "withheld_reason_codes": [
+    "unmanaged_holding"
+  ]
+}
