@@ -1,5 +1,5 @@
 {
-  "commit": "c3c41ff886750153f96bde0d0064e6d675b6d8eb",
+  "commit": "854d81f947e1c0c579996026f15171f6b9dfeaad",
   "overall_status": "OK",
   "released_work": [
     {
@@ -894,7 +894,11 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "179-owner-emergency-live-deploy"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "180-prefill-capital-parity"
     }
   ],
-  "timestamp_utc": "2026-09-04T18:07:27.499215Z"
+  "timestamp_utc": "2026-09-04T23:13:40.192011Z"
 }
