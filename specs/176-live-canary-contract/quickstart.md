@@ -69,6 +69,10 @@ sidecar의 `capital_entry_evidence.json`을 각각 내려받는다. 역할, 코�
 16. 다음 root timer가 자동 발화해 별도 복구 장부를 한 번 소비했는지 확인한다. service를 수동
     시작하거나 GitHub 수동 이벤트로 실주문하지 않는다. 복구 실패 뒤에는 그날 세 번째 시도를
     만들지 않는다.
+17. 진단에 `EGW00201`이 있으면 live rebalancer가 burst 없는 `5회/초, capacity=1` 제한기를
+    사용하는지 시험하고, 주문 호출의 `retry_transient=False`가 유지되는지 확인한다. 고친 뒤에도
+    최초 선점을 지우거나 주문을 수동 재전송하지 않고 exact 사고 manifest가 허용한 다음 자동
+    server timer 한 번으로만 검증한다.
 
 ## 5. 독립 scheduler 검증
 

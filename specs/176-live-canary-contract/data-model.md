@@ -209,6 +209,9 @@ KIS production REST 호출이 공식 현재 래퍼와 공유하는 고정 요청
 - 주문 고유 필드: 기존 `tr_id=TTTT1002U|TTTT1006U`, endpoint, `OVRS_EXCG_CD`,
   `ORD_DVSN=00`, 지정가 본문을 그대로 유지
 - 적용 범위: 공유 KIS REST 헤더를 사용하는 시세·잔고·주문 호출. 주문별 우회 헤더를 만들지 않음
+- production live rebalancer pacing: `rate_per_sec=5.0`, `capacity=1.0`; 첫 요청 뒤 모든
+  REST 요청 시작 사이 최소 0.2초, 초기 burst 1건
+- 주문 재전송: `retry_transient=false`; 5xx·전송 오류·`EGW00201`에도 같은 주문을 자동 반복하지 않음
 - 로컬 증거: 모의 주문 요청의 실제 헤더와 본문을 캡처해 두 고정값과 기존 주문 계약을 함께 검증
 - production 증거: 다음 자동 정규장 실행의 신규 브로커 접수·체결·추가 전용 감사·계좌 대사
 - 금지: `APBK1672` 자유문 의미 추측, 원문 응답 공개, 수동 주문, 기존 거래일 선점 삭제,
