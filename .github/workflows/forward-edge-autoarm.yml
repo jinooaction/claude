@@ -49,6 +49,10 @@ jobs:
     steps:
       - name: Checkout (fresh main — correct configs + sentinel for the decision)
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+        # HANDOFF-only merge의 부모와 변경 경로를 검사해야 한다. 얕은 이력은
+        # 정상 인계를 stale로 오판하므로 기존 품질 관문에 필요한 증거를 가져온다.
 
       - name: Install uv
         uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86

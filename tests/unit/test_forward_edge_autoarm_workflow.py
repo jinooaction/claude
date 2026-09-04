@@ -22,6 +22,13 @@ def _helper_text() -> str:
     return _HELPER.read_text(encoding="utf-8")
 
 
+def test_autoarm_fetches_history_for_handoff_parent_proof() -> None:
+    text = _text()
+    checkout = text[text.index("      - name: Checkout"):text.index("      - name: Install uv")]
+    assert "uses: actions/checkout@" in checkout
+    assert "\n        with:\n          fetch-depth: 0\n" in checkout
+
+
 def test_autoarm_computes_anchored_verdict_read_only() -> None:
     text = _text()
     helper = _helper_text()
