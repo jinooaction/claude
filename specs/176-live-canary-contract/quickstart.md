@@ -86,6 +86,8 @@ sidecar의 `capital_entry_evidence.json`을 각각 내려받는다. 역할, 코�
     운영자가 확인한다. `generic_service`면 공식 안내의 해외증권·해외 ETP 두 항목을 모두 확인하고,
     `not_applicable|unavailable`이면 추측으로 계좌를 바꾸지 않는다. 어느 값도 신청 완료 증거나
     수동 주문·재시도 허가는 아니다.
+    현재 production observer run `33898481820`은 IAUM·SCHX 모두 `overseas_etp`를 반환했으므로
+    운영자는 KIS 앱의 `해외ETP 거래신청`만 우선 확인한다.
 
 ## 5. 독립 scheduler 검증
 

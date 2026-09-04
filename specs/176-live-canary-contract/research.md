@@ -502,3 +502,9 @@ observer가 모두 발행을 거부한다. 생산의 이미 끝난 실행을 읽
 주문·재시도·service/timer 시작·거래일 선점·금융 약관 동의 권한을 추가하지 않는다. 범위가
 `generic_service`면 두 공식 신청을 운영자가 확인하고, 구체 범위가 나와도 본인 인증과 약관 동의는
 운영자만 수행한다.
+
+**생산 관측**: PR #754 merge `7a69a5cb`의 exact 배포 뒤 읽기 전용 observer run
+`33898481820`은 IAUM·SCHX 모두 기존 `message_topics=[account, service_registration]`과 함께
+`service_registration_scopes=[overseas_etp]`를 반환했다. 따라서 현재 확인할 외부 관문은
+`해외 ETP 거래신청`이다. 이는 신청이 비활성임을 브로커 설정 API로 직접 읽은 결과가 아니라,
+이미 끝난 명시적 거부 원문을 닫힌 범위로 다시 분류한 결과이므로 운영자의 앱 확인은 계속 필요하다.

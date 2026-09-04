@@ -226,13 +226,13 @@ KIS production REST 호출이 공식 현재 래퍼와 공유하는 고정 요청
 
 정화 진단이 코드 바깥의 계좌 서비스 신청을 지목할 때 사용하는 운영자 외부 관문이다.
 
-- production 근거: observer run `33892995912`의 IAUM·SCHX
-  `message_topics=[account, service_registration]`
-- 범위 진단: 스키마 1.3의 `service_registration_scopes`가 원문 없이 해외증권·해외 ETP·해외
-  변동성 ETN·범위 불명 중 하나 이상을 가리키며, 이는 신청 완료 상태가 아니라 확인 위치다.
-- 코드 건강성 근거: exact-main KIS smoke run `33893241198` 6/6, 주문 없는 preflight run
-  `33893825580`의 `ENTRY_READY`, 측정 `CLEAR`, 대사 `OK`, 증거 `VALID`, 주문 제출 0건
-- 운영자 확인 항목: KIS `해외증권 거래신청`, 해외 ETF용 `해외ETP 거래신청`
+- production 근거: observer run `33898481820`의 IAUM·SCHX
+  `message_topics=[account, service_registration]`, `service_registration_scopes=[overseas_etp]`
+- 범위 진단: 스키마 1.3의 닫힌 값은 현재 확인 위치를 KIS `해외 ETP 거래신청`으로 좁혔다.
+  이는 신청 완료 상태를 직접 읽은 증거가 아니다.
+- 코드 건강성 근거: exact-main KIS smoke run `33898208625` 6/6, 주문 없는 preflight run
+  `33898595194`의 `ENTRY_READY`, 측정 `CLEAR`, 대사 `OK`, 증거 `VALID`, 주문 제출 0건
+- 운영자 확인 항목: KIS `해외ETP 거래신청`
 - 시스템 권한: 신청 상태를 정화된 주제로 진단하고 다음 자동 실행을 관찰할 수 있음
 - 시스템 비권한: 본인 인증, 금융 약관 동의, 계좌 서비스 임의 활성화, 수동 주문
 - 해제 증거: 다음 유효 자동 scheduler의 신규 주문 접수·실제 체결·전략 감사·같은 실행 계좌 대사
