@@ -1,0 +1,63 @@
+{
+  "definition": "Rolling rejected-order opportunity history. Positive PnL means the rejected order would have been favorable at the mark; negative PnL means rejection avoided a worse mark-to-current outcome.",
+  "generated_at_utc": "2026-06-26T17:03:12Z",
+  "max_entries": 60,
+  "records": [
+    {
+      "armed": true,
+      "buy_intended_order_mark_pnl_usd": "-1.14",
+      "capital_usd": "[REDACTED]",
+      "event": "schedule",
+      "latest_signal": "INTENT_LOSS",
+      "live_outcome": "success",
+      "opportunity_as_of_utc": "2026-06-26T17:03:11Z",
+      "opportunity_report": {
+        "as_of_utc": "2026-06-26T17:03:11Z",
+        "buy_opportunity_pnl_usd": "-1.14",
+        "definition": "positive means the rejected order would be more favorable at the current mark; negative means rejection was more favorable before fees, tax, FX, and fill risk",
+        "mark_fetch_error": null,
+        "missing_mark_symbols": [],
+        "rejected_count": 2,
+        "rows": [
+          {
+            "current_mark_usd": "95.0350",
+            "intended_notional_usd": "285.69",
+            "intended_price_usd": "95.23",
+            "opportunity_pnl_usd": "-0.58",
+            "opportunity_return_pct": "-0.20%",
+            "qty": 3,
+            "reason": "{\"endpoint\": \"/uapi/overseas-stock/v1/trading/order\", \"exception_type\": \"KisOrderResponseError\", \"http_status\": 200, \"kis_msg1\": \"해외ETP 거래 미신청계좌는 해외ETP 거래가 불가합니다.\", \"kis_msg_cd\": \"APBK1672\", \"kis_rt_cd\": \"7\", \"message\": \"KIS order response missing accepted order id\", \"method\": \"POST\", \"request_summary\": {\"body\": {\"ACNT_PRDT_CD\": [REDACTED]]]]], \"CANO\": [REDACTED]]]]], \"CTAC_TLNO\": \"\", \"MGCO_APTM_ODNO\": \"\", \"ORD_DVSN\": \"00\", \"ORD_QTY\": \"3\", \"ORD_SVR_DVSN_CD\": \"0\", \"OVRS_EXCG_CD\": \"NASD\", \"OVRS_ORD_UNPR\": \"95.23\", \"PDNO\": \"IEF\", \"SLL_TYPE\": \"\"}, \"endpoint\": \"/uapi/overseas-stock/v1/trading/order\", \"method\": \"POST\", \"tr_id\": \"TTTT1002U\"}, \"response_body_preview\": \"{\\\"rt_cd\\\":\\\"7\\\",\\\"msg_cd\\\":\\\"APBK1672\\\",\\\"msg1\\\":\\\"해외ETP 거래 미신청계좌는 해외ETP 거래가 불가합니다.\\\"}\", \"response_json\": {\"msg1\": \"해외ETP 거래 미신청계좌는 해외ETP 거래가 불가합니다.\", \"msg_cd\": \"APBK1672\", \"rt_cd\": \"7\"}}",
+            "side": "BUY",
+            "state": "REJECTED_BY_BROKER",
+            "symbol": "IEF"
+          },
+          {
+            "current_mark_usd": "86.4950",
+            "intended_notional_usd": "260.04",
+            "intended_price_usd": "86.68",
+            "opportunity_pnl_usd": "-0.56",
+            "opportunity_return_pct": "-0.21%",
+            "qty": 3,
+            "reason": "{\"endpoint\": \"/uapi/overseas-stock/v1/trading/order\", \"exception_type\": \"KisOrderResponseError\", \"http_status\": 200, \"kis_msg1\": \"해외ETP 거래 미신청계좌는 해외ETP 거래가 불가합니다.\", \"kis_msg_cd\": \"APBK1672\", \"kis_rt_cd\": \"7\", \"message\": \"KIS order response missing accepted order id\", \"method\": \"POST\", \"request_summary\": {\"body\": {\"ACNT_PRDT_CD\": [REDACTED]]]]], \"CANO\": [REDACTED]]]]], \"CTAC_TLNO\": \"\", \"MGCO_APTM_ODNO\": \"\", \"ORD_DVSN\": \"00\", \"ORD_QTY\": \"3\", \"ORD_SVR_DVSN_CD\": \"0\", \"OVRS_EXCG_CD\": \"AMEX\", \"OVRS_ORD_UNPR\": \"86.68\", \"PDNO\": \"SPYM\", \"SLL_TYPE\": \"\"}, \"endpoint\": \"/uapi/overseas-stock/v1/trading/order\", \"method\": \"POST\", \"tr_id\": \"TTTT1002U\"}, \"response_body_preview\": \"{\\\"rt_cd\\\":\\\"7\\\",\\\"msg_cd\\\":\\\"APBK1672\\\",\\\"msg1\\\":\\\"해외ETP 거래 미신청계좌는 해외ETP 거래가 불가합니다.\\\"}\", \"response_json\": {\"msg1\": \"해외ETP 거래 미신청계좌는 해외ETP 거래가 불가합니다.\", \"msg_cd\": \"APBK1672\", \"rt_cd\": \"7\"}}",
+            "side": "BUY",
+            "state": "REJECTED_BY_BROKER",
+            "symbol": "SPYM"
+          }
+        ],
+        "schema_version": 1,
+        "sell_opportunity_pnl_usd": "+0.00",
+        "total_opportunity_pnl_usd": "-1.14",
+        "valued_count": 2
+      },
+      "recorded_at_utc": "2026-06-26T17:03:12Z",
+      "rejected_count": 2,
+      "run_id": "[REDACTED_ACCOUNT]",
+      "run_url": "https://github.com/jinooaction/claude/actions/runs/[REDACTED_ACCOUNT]",
+      "schema_version": 1,
+      "sell_intended_order_mark_pnl_usd": "+0.00",
+      "total_intended_order_mark_pnl_usd": "-1.14",
+      "valued_count": 2
+    }
+  ],
+  "schema_version": 1
+}
