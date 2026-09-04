@@ -248,12 +248,21 @@
   `APBK1672`, 두 주문 명시적 거부, 접수·열린 주문 0, 사후 측정·대사 정상 증거를 고정하고 KIS
   공식 최소 요청 간격과 기존 15-token 초기 burst의 차이를 spec·plan·research·data-model·
   quickstart에 기록한다.
-- [ ] T108 [US5] live rebalancer의 KIS REST 제한기를 burst 없는 5회/초·capacity 1로 고정하고
+- [x] T108 [US5] live rebalancer의 KIS REST 제한기를 burst 없는 5회/초·capacity 1로 고정하고
   주문 비재전송·기존 돈 경로 경계 회귀 시험을 먼저 통과시킨 뒤, 정확한 2026-09-04 사고 manifest와
   보정 커밋을 위험 등급 4 PR로 merge·오너 승인 장중 긴급 배포한다.
 - [ ] T109 [US5] 다음 자동 server timer가 기존 첫 선점을 보존한 채 복구 슬롯을 정확히 한 번
   소비해 실제 주문 접수·체결·전략 감사·계좌 대사를 남기고, 뒤 자동 후보와 GitHub scheduler가
   동일 first run/retry run을 반환하며 추가 broker write 0건인지 production에서 확인한다.
+- [x] T110 [US5] 2026-09-04 15:23 UTC 자동 복구가 슬롯을 한 번 소비하고 `EGW00201`을 제거했지만
+  IAUM·SCHX 모두 `APBK1672`로 명시적 거부되어 접수·열린 주문·신규 체결 0건, 사후 측정·대사
+  정상으로 끝난 사실과 KIS 공식 오류 목록의 코드 설명 부재를 기록한다.
+- [ ] T111 [US5] 기존 root 전용 `msg1`을 원문·부분 문자열·길이·해시 없이 닫힌 원인 주제로만
+  바꾸는 주문 진단 1.2를 실패 시험부터 구현하고, server helper와 observer가 같은 키·열거값·
+  거부 결과 수를 이중 검증하도록 한다.
+- [ ] T112 [US5] 관련·전체 시험, ruff, strict harness, HANDOFF 사실 검사, PR 본문 품질 관문을
+  통과시켜 merge·exact-main 배포한 뒤 읽기 전용 observer sidecar의 실제 `message_topics`로
+  다음 수정 지점을 확정한다. 주문·재시도·서비스·timer 시작은 0건이어야 한다.
 
 ## 의존성과 완료 계약
 
@@ -286,5 +295,7 @@
 - T107의 production 진단과 공식 pacing 대조 뒤에만 T108을 구현한다. T108의 exact manifest가
   배포되기 전에는 복구 슬롯이 실패 폐쇄되어야 하며, T109 전에는 주문 문제와 목표를 완료로
   표시하지 않는다.
+- T110의 공식 오류 목록 대조 뒤에만 T111을 구현한다. T112의 production 주제 관측 전에는
+  `APBK1672` 의미를 단정하거나 거래소·가격·주문 유형·계좌 설정을 추측으로 바꾸지 않는다.
 - 시장 휴장, 0개 목표 주문, 증거 불일치, 브로커 장애이면 주문을 만들지 않고 다음 정규장 관찰을 계속한다.
 - 10% 운영 캐너리는 수익 보장이 아니며, T032의 승격 차단이 유지돼야 한다.

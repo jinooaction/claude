@@ -383,6 +383,13 @@
   보수적인 5회/초 직렬화이며, 계좌·시세 조회 뒤 첫 주문과 연속 주문에도 동일하게 적용한다.
   주문 요청 자체는 전송 오류·5xx·`EGW00201`을 포함해 자동 재전송하지 않으며, 기존
   거래일 선점과 exact-manifest 1회 복구 계약만 재진입 권한을 가진다.
+- **FR-044**: 주문 0건 진단 스키마 1.2는 `REJECTED_BY_BROKER`의 자유문 `msg1`을 외부에
+  반환하지 않고, 각 메시지를 `account`, `service_registration`, `trading_permission`,
+  `exchange`, `symbol`, `market_session`, `price`, `quantity`, `buying_power`, `currency`,
+  `order_type`, `other`, `unavailable`의 닫힌 주제 집합으로만 분류해야 한다. 주제 분류는
+  원문·부분 문자열·길이·해시·계좌·가격·주문 식별자를 노출하지 않아야 하고, 주문·재시도·
+  서비스·타이머 제어 권한을 추가해서는 안 된다. 알 수 없는 주제·추가 키·거부 결과와 진단 수
+  불일치는 실패 폐쇄해야 하며, 이 분류만으로 주문 요청을 자동 수정하거나 재전송해서는 안 된다.
 
 ## 핵심 개체
 
@@ -488,6 +495,10 @@
 - **SC-030**: production live rebalancer의 KIS 제한기는 `rate_per_sec=5.0`, `capacity=1.0`으로
   고정되고 첫 요청 뒤 모든 후속 REST 요청이 최소 0.2초를 기다린다. 주문 호출의
   `retry_transient=False`는 그대로여야 하며, burst 용량 증가나 주문 자동 재전송 회귀는 실패한다.
+- **SC-031**: 계좌·서비스 신청·거래 권한·매수 가능 금액 문구와 계좌번호·가격·비밀 토큰을 함께
+  넣은 고정 `msg1`에서 진단 1.2는 허용 주제만 반환하고 원문 단어·숫자·부분 문자열·해시는 0건이다.
+  빈 메시지는 `unavailable`, 허용 키워드가 없는 메시지는 `other`로 분류하며, observer는 같은
+  닫힌 형식을 다시 검사한 뒤에만 sidecar에 발행한다.
 
 ## 가정과 의존성
 
