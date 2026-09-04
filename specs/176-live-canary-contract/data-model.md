@@ -220,6 +220,19 @@ KIS production REST 호출이 공식 현재 래퍼와 공유하는 고정 요청
 - 금지: `APBK1672` 자유문 의미 추측, 원문 응답 공개, 수동 주문, 기존 거래일 선점 삭제,
   시장가·다른 거래소·hashkey의 근거 없는 추가
 
+## KisAccountServiceRegistrationGate
+
+정화 진단이 코드 바깥의 계좌 서비스 신청을 지목할 때 사용하는 운영자 외부 관문이다.
+
+- production 근거: observer run `33892995912`의 IAUM·SCHX
+  `message_topics=[account, service_registration]`
+- 코드 건강성 근거: exact-main KIS smoke run `33893241198` 6/6, 주문 없는 preflight run
+  `33893825580`의 `ENTRY_READY`, 측정 `CLEAR`, 대사 `OK`, 증거 `VALID`, 주문 제출 0건
+- 운영자 확인 항목: KIS `해외증권 거래신청`, 해외 ETF용 `해외ETP 거래신청`
+- 시스템 권한: 신청 상태를 정화된 주제로 진단하고 다음 자동 실행을 관찰할 수 있음
+- 시스템 비권한: 본인 인증, 금융 약관 동의, 계좌 서비스 임의 활성화, 수동 주문
+- 해제 증거: 다음 유효 자동 scheduler의 신규 주문 접수·실제 체결·전략 감사·같은 실행 계좌 대사
+
 ## DeployAuditObservation
 
 exact-main 배포 여부를 서버의 추가 전용 감사 장부에서 읽는 비변경 관측 결과다.

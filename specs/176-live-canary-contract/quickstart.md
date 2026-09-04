@@ -76,6 +76,11 @@ sidecar의 `capital_entry_evidence.json`을 각각 내려받는다. 역할, 코�
 18. 자동 복구 뒤에도 `APBK1672`가 남으면 진단 1.2의 `message_topics`만 확인한다. `msg1` 원문,
     일부 문자열, 길이, 해시는 sidecar에 없어야 한다. 주제는 다음 조사 위치를 좁힐 뿐 자동 주문
     수정이나 추가 재시도 허가가 아니며, 이미 쓴 같은 날 복구 슬롯은 다시 열지 않는다.
+19. `message_topics`가 `account`, `service_registration`을 가리키면 한국투자 앱에서
+    `메뉴 > 고객지원 > 거래서비스 신청 > 해외증권 거래신청`을 확인한다. IAUM·SCHX처럼 해외
+    ETF를 주문하므로 `해외ETP 거래신청`도 완료 상태인지 확인한다. 이 단계는 본인 인증과 금융
+    약관 동의이므로 자동화하지 않는다. 완료 뒤 다음 정규장 자동 scheduler만 관찰하고 수동 주문이나
+    live service 수동 시작은 하지 않는다.
 
 ## 5. 독립 scheduler 검증
 
