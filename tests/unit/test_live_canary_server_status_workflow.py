@@ -66,11 +66,14 @@ def test_server_status_workflow_validates_and_sanitizes_before_publish() -> None
     assert '((.service | keys | sort) == ([' in body
     assert '.source == "server_timer_order_diagnostics"' in body
     assert '.schema_version == "1.1"' in body
-    assert '.schema_version == "1.2"' in body
+    assert '.schema_version == "1.3"' in body
     assert '"broker_rejections"' in body
     assert '"kis_msg_cd"' in body
     assert '"order_exchange"' in body
     assert '"message_topics"' in body
+    assert '"service_registration_scopes"' in body
+    assert '"overseas_securities"' in body
+    assert '"overseas_etp"' in body
     assert "diagnostic_status=invalid_diagnostics" in body
     assert "| attempt_kind |" in body
     assert "| first_run_id |" in body

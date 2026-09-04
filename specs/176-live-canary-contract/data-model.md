@@ -189,13 +189,15 @@ server fallback이 공유 거래일 선점 전에 두 번 확인하는 실행 �
 
 유효한 server timer 실행이 주문 0건으로 끝났을 때 같은 실행의 결과를 정화해 읽는 진단이다.
 
-- `schema_version=1.2`, `source=server_timer_order_diagnostics`, 14자리 `run_id`
+- `schema_version=1.3`, `source=server_timer_order_diagnostics`, 14자리 `run_id`
 - `planned_order_count`, `result_count`, `withheld_order_count`: 각각 0~20의 정수 건수
 - `outcomes`: 허용 형식의 종목, `BUY|SELL`, 요청·라우팅 정수 수량, 닫힌 결과 상태, 안전한 gate
 - `broker_rejections`: 거부 종목별 `kis_rt_cd`, `kis_msg_cd`, HTTP 상태, 예외 종류,
   `TTTT1002U|TTTT1006U`, `NASD|NYSE|AMEX`, `00|01` 또는 `null`인 고정 진단과
   `account|service_registration|trading_permission|exchange|symbol|market_session|price|quantity|buying_power|currency|order_type|other|unavailable`
-  중 중복 없는 `message_topics`
+  중 중복 없는 `message_topics`, 그리고
+  `overseas_securities|overseas_etp|overseas_volatility_etn|generic_service|not_applicable|unavailable`
+  중 중복 없는 `service_registration_scopes`
 - `withheld_reason_codes`: 비관리 보유·현금 부족·방향 필터·기타 보류의 고정 코드
 - 입력: 최신 고정 포인터 또는 명시된 14자리 run ID의 root 전용 일반 파일
 - 금지: 원문 reason·`msg1`·부분 문자열·길이·해시·응답 본문, 가격·현금·계좌·주문·상관 ID,
@@ -226,6 +228,8 @@ KIS production REST 호출이 공식 현재 래퍼와 공유하는 고정 요청
 
 - production 근거: observer run `33892995912`의 IAUM·SCHX
   `message_topics=[account, service_registration]`
+- 범위 진단: 스키마 1.3의 `service_registration_scopes`가 원문 없이 해외증권·해외 ETP·해외
+  변동성 ETN·범위 불명 중 하나 이상을 가리키며, 이는 신청 완료 상태가 아니라 확인 위치다.
 - 코드 건강성 근거: exact-main KIS smoke run `33893241198` 6/6, 주문 없는 preflight run
   `33893825580`의 `ENTRY_READY`, 측정 `CLEAR`, 대사 `OK`, 증거 `VALID`, 주문 제출 0건
 - 운영자 확인 항목: KIS `해외증권 거래신청`, 해외 ETF용 `해외ETP 거래신청`

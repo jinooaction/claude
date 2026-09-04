@@ -876,7 +876,7 @@ def test_scheduled_order_diagnostics_exposes_only_closed_safe_fields(
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout)
     assert payload == {
-        "schema_version": "1.2",
+        "schema_version": "1.3",
         "source": "server_timer_order_diagnostics",
         "run_id": run_id,
         "planned_order_count": 1,
@@ -974,6 +974,7 @@ def test_scheduled_order_diagnostics_exposes_only_closed_broker_codes(
                 "service_registration",
                 "trading_permission",
             ],
+            "service_registration_scopes": ["overseas_securities"],
         }
     ]
     assert "must-not-leak" not in result.stdout
@@ -994,6 +995,9 @@ def test_scheduled_order_diagnostics_uses_closed_fallback_message_topics(
     run_dir = state / "scheduled-runs" / run_id
     run_dir.mkdir(parents=True)
     reasons = [
+        {"kis_msg1": "해외ETP 거래 서비스 미신청 계좌"},
+        {"kis_msg1": "해외변동성ETN 약정 미등록"},
+        {"kis_msg1": "별도 서비스 등록 필요"},
         {"kis_msg1": "주문 가능 금액 부족"},
         {"kis_msg1": "분류되지 않은 내부 사유 secret-token"},
         {},
@@ -1011,7 +1015,11 @@ def test_scheduled_order_diagnostics_uses_closed_fallback_message_topics(
                 "gate": None,
                 "reason": json.dumps(reason),
             }
-            for symbol, reason in zip(("AAA", "BBB", "CCC"), reasons, strict=True)
+            for symbol, reason in zip(
+                ("AAA", "BBB", "CCC", "DDD", "EEE", "FFF"),
+                reasons,
+                strict=True,
+            )
         ],
         "withheld_orders": [],
     }
@@ -1028,10 +1036,26 @@ def test_scheduled_order_diagnostics_uses_closed_fallback_message_topics(
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout)
     assert [row["message_topics"] for row in payload["broker_rejections"]] == [
+        ["account", "service_registration"],
+        ["service_registration"],
+        ["service_registration"],
         ["buying_power"],
         ["other"],
         ["unavailable"],
     ]
+    assert [
+        row["service_registration_scopes"]
+        for row in payload["broker_rejections"]
+    ] == [
+        ["overseas_etp"],
+        ["overseas_volatility_etn"],
+        ["generic_service"],
+        ["not_applicable"],
+        ["not_applicable"],
+        ["unavailable"],
+    ]
+    assert "해외ETP" not in result.stdout
+    assert "해외변동성ETN" not in result.stdout
     assert "주문 가능 금액" not in result.stdout
     assert "secret-token" not in result.stdout
 
