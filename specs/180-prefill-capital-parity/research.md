@@ -20,3 +20,12 @@ expected_operational_capital_usd와 검증된 current-NAV preview를 전달한�
 - floor 수량: IAUM0도16.4999%p 오차라15%를 넘는다.
 - 모든 단계 drift 제거: 체결 후 불필요한 예산·측정 변경을 만든다.
 - 가격 상승으로143도 불가능하면 계속 차단한다. 다음 장의 실제 접수·체결은 별도 검증한다.
+
+## 자동 승인 환경의 추가 재현
+
+autoarm33929694159가 승인 전 전체 시험을 수행하는 동안 동일한 depth1 clone으로
+HANDOFF 검사를 재현했다. main f2e4f70의 첫 부모854d81f9가 얕은 이력에서는 보이지 않아
+DEGRADED였고 unshallow 뒤에는 같은 문서가 기존 기준으로 OK였다. 실행33929694159는
+불필요한 진행을 막기 위해 직접 중단했으며 승인PR은 생성되지 않았다.
+이는 HANDOFF 자체의 오류가 아니라 검증에 필요한 이력 공급 누락이다. checkout fetch-depth0과
+실제 Git 그래프 회귀로 보정하며 검사의 허용 기준은 바꾸지 않는다.

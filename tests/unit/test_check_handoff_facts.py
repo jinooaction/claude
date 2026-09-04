@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import sys
 from pathlib import Path
 
@@ -122,3 +123,36 @@ def test_handoff_fact_check_fails_missing_expected_validation(tmp_path, monkeypa
     assert report.status == "DEGRADED"
     pytest_fact = next(fact for fact in report.facts if fact.id == "main_pytest")
     assert pytest_fact.status == "FAIL"
+
+
+def test_real_shallow_clone_needs_history_for_handoff_only_parent(tmp_path):
+    checker = _load_checker()
+    upstream = tmp_path / "upstream"
+    upstream.mkdir()
+
+    def git(repo: Path, *args: str) -> str:
+        return subprocess.run(
+            ["git", "-c", "user.name=Test", "-c", "user.email=test@example.invalid",
+             "-c", "commit.gpgsign=false", "-C", str(repo), *args],
+            check=True, capture_output=True, text=True, timeout=15,
+        ).stdout.strip()
+
+    git(upstream, "init", "-q", "-b", "main")
+    (upstream / "runtime.py").write_text("pass\n", encoding="utf-8")
+    git(upstream, "add", "runtime.py")
+    git(upstream, "commit", "-qm", "runtime baseline")
+    baseline = git(upstream, "rev-parse", "--short", "HEAD")
+    git(upstream, "switch", "-qc", "handoff")
+    _handoff(upstream, f"`{baseline}` runtime baseline")
+    git(upstream, "add", "HANDOFF.md")
+    git(upstream, "commit", "-qm", "record runtime baseline")
+    git(upstream, "switch", "-q", "main")
+    git(upstream, "merge", "--no-ff", "-m", "handoff merge", "handoff")
+
+    clone = tmp_path / "shallow"
+    git(tmp_path, "clone", "-q", "--depth", "1", upstream.as_uri(), str(clone))
+    assert git(clone, "rev-parse", "--is-shallow-repository") == "true"
+    assert checker.evaluate(clone).status == "DEGRADED"
+    git(clone, "fetch", "-q", "--unshallow", "origin")
+    assert git(clone, "rev-parse", "--is-shallow-repository") == "false"
+    assert checker.evaluate(clone).status == "OK"

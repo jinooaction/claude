@@ -22,6 +22,9 @@
   audit33928739275 DEPLOY_COMPLETED, KIS33928671315 6/6, setup33928740976 active.
 - [ ] T008 autoarm 승인 PR·merge·배포·no-order preflight 생산 결과를 quickstart.md에 기록.
 - [ ] T009 실제 자동 접수·체결·감사·대사·중복차단을 확인해 specs/176-live-canary-contract/tasks.md와 HANDOFF.md 마무리.
+- [x] T010 [US2] 자동 승인 checkout의 전체 이력을 선언하고 실제 Git shallow clone에서는
+  인계 부모 증명이 실패하고 전체 이력에서는 통과하는 재현·회귀를 고정한다. FR-007 보정이다.
+- [ ] T011 [US2] T010 전체검증·PR·배포·인계를 반영한 뒤 T008 자동 승인을 새 main에서 재실행한다.
 
 ## Dependencies & Strategy
 

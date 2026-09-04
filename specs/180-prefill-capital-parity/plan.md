@@ -44,3 +44,11 @@
 
 코드 되돌림 PR로 특별 갱신만 제거한다. 승인 sentinel은 손으로 고치지 않고 기존 ladder의
 최신 증거로 판정한다. 감사·선점·체결 삭제 금지.
+
+## 승인 실행 환경 보정 (FR-007)
+
+2026-09-05 KST 승인 자동화와 같은 depth1 clone에서는 인계 전용 main의 부모가 보이지 않아
+정상 HANDOFF가 DEGRADED였다. 같은 clone을 unshallow하면 기존 검사 그대로 OK다.
+forward-edge-autoarm의 checkout에 fetch-depth0을 선언하고, 선언 시험과 외부 네트워크 없는
+실제 Git merge/shallow clone/fetch 회귀를 추가한다. 검사의 입력 증거만 보강하며 주문·자본·
+신선도·인계 정책은 바꾸지 않는다. 조회 실패는 체크아웃 실패로 닫히며 이전 선언으로 되돌릴 수 있다.
