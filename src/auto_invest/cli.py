@@ -6690,6 +6690,8 @@ def ladder_decide_cmd(
     if isinstance(nav_doc, dict) and nav_doc.get("total_value_usd") is not None:
         try:
             account_nav = _Dec(str(nav_doc["total_value_usd"]))
+            if not account_nav.is_finite():
+                account_nav = None
         except ArithmeticError:
             account_nav = None
     fundability_preview = _read_json(fundability_preview_json)

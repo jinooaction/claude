@@ -3,6 +3,8 @@ from __future__ import annotations
 from copy import deepcopy
 from decimal import Decimal
 
+import pytest
+
 from auto_invest.config.caps import SizingCaps
 from auto_invest.portfolio.fundability import (
     assess_fundability,
@@ -20,6 +22,27 @@ def _caps(*, per_trade: str = "50", per_symbol: str = "60") -> SizingCaps:
         canary_min_duration_days=14,
         canary_acceptance_drawdown_pct=Decimal("10"),
     )
+
+
+@pytest.mark.parametrize("capital,iaum,expected", [
+    ("142", "45", False), ("143", "45", True), ("143", "46", False),
+])
+def test_september_production_budget_parity_preserves_error_limits(capital, iaum, expected):
+    targets = {"IAUM": Decimal("0.166666"), "SCHX": Decimal("0.333334")}
+    prices = {"IAUM": Decimal(iaum), "SCHX": Decimal("30.4552")}
+    orders = rebalance_plan(
+        target_weights=targets, holdings={}, prices=prices, capital_usd=Decimal(capital),
+        invested_fraction=Decimal("0.99"), lot_rounding="nearest", min_notional_usd=Decimal("20"),
+    )
+    result = assess_fundability(
+        target_weights=targets, holdings={}, prices=prices, order_prices=prices,
+        planned_orders=[(o.symbol, o.side, o.qty) for o in orders],
+        capital_usd=Decimal(capital), invested_fraction=Decimal("0.99"), caps=_caps(),
+    )
+    assert result.fundable is expected
+    assert validate_fundability_evidence(
+        result.as_dict(), expected_capital_usd=Decimal(capital)
+    ) is expected
 
 
 def test_exact_whole_share_preview_is_fundable_and_self_verifying() -> None:
