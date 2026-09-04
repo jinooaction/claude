@@ -665,7 +665,7 @@ scheduled_order_diagnostics() {
     ' >/dev/null || die "invalid scheduled order result"
 
     diagnostics="$(printf '%s\n' "${payload}" | jq \
-        --arg schema_version "1.2" \
+        --arg schema_version "1.3" \
         --arg source "server_timer_order_diagnostics" \
         --arg run_id "${run_id}" '
         def withheld_code:
@@ -700,6 +700,22 @@ scheduled_order_diagnostics() {
             | unique
             | if length == 0 then ["other"] else . end
           end;
+        def service_registration_scopes:
+          if type != "string" or length == 0 then ["unavailable"]
+          elif (test("신청|미신청|등록|약정|서비스|service"; "i") | not)
+            then ["not_applicable"]
+          else
+            [
+              if test("해외[[:space:]]*(증권|주식)|외화[[:space:]]*증권|overseas[ _-]*(stock|securit)"; "i")
+                then "overseas_securities" else empty end,
+              if test("해외[[:space:]]*ETP|ETP[[:space:]]*(거래|신청|등록|서비스)|overseas[ _-]*etp"; "i")
+                then "overseas_etp" else empty end,
+              if test("해외[[:space:]]*변동성[[:space:]]*ETN|변동성.*ETN|volatility[ _-]*etn"; "i")
+                then "overseas_volatility_etn" else empty end
+            ]
+            | unique
+            | if length == 0 then ["generic_service"] else . end
+          end;
         {schema_version:$schema_version,source:$source,run_id:$run_id,
          planned_order_count:(.fundability.planned_orders | length),
          result_count:(.results | length),
@@ -719,13 +735,16 @@ scheduled_order_diagnostics() {
                tr_id:($diagnostics.request_summary.tr_id // null),
                order_exchange:($diagnostics.request_summary.body.OVRS_EXCG_CD // null),
                order_division:($diagnostics.request_summary.body.ORD_DVSN // null),
-               message_topics:(($diagnostics.kis_msg1 // null) | message_topics)
+               message_topics:(($diagnostics.kis_msg1 // null) | message_topics),
+               service_registration_scopes:(
+                 ($diagnostics.kis_msg1 // null) | service_registration_scopes
+               )
              }],
          withheld_reason_codes:([.withheld_orders[].reason | withheld_code] | unique)}'
     )" || die "failed to sanitize scheduled order diagnostics"
 
     printf '%s\n' "${diagnostics}" | jq -e '
-        .schema_version == "1.2" and
+        .schema_version == "1.3" and
         .source == "server_timer_order_diagnostics" and
         (.broker_rejections | type == "array" and length <= 20) and
         ([.broker_rejections[] |
@@ -749,9 +768,24 @@ scheduled_order_diagnostics() {
               "symbol", "market_session", "price", "quantity", "buying_power",
               "currency", "order_type", "other", "unavailable"
             ))) and
+          (.service_registration_scopes | type == "array" and
+            length >= 1 and length <= 3 and length == (unique | length) and
+            all(.[]; IN(
+              "overseas_securities", "overseas_etp", "overseas_volatility_etn",
+              "generic_service", "not_applicable", "unavailable"
+            ))) and
+          (if (.message_topics | index("service_registration")) != null then
+             (.service_registration_scopes | all(
+               . != "not_applicable" and . != "unavailable"
+             ))
+           else
+             (.service_registration_scopes == ["not_applicable"] or
+               .service_registration_scopes == ["unavailable"])
+           end) and
           ((keys | sort) == ([
             "exception_type", "http_status", "kis_msg_cd", "kis_rt_cd",
-            "message_topics", "order_division", "order_exchange", "symbol", "tr_id"
+            "message_topics", "order_division", "order_exchange",
+            "service_registration_scopes", "symbol", "tr_id"
           ] | sort))
         ] | all) and
         ([.outcomes[] | select(.state == "REJECTED_BY_BROKER")] | length) ==
