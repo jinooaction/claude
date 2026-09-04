@@ -2,7 +2,7 @@
 
 **Feature Branch**: `codex/180-prefill-capital-parity`  
 **Created**: 2026-09-05  
-**Status**: 구현 준비  
+**Status**: 기능 출시, 생산 예산 정합·실제 체결 검증 진행  
 **Input**: 오너 요청 — 시스템을 재점검하고 안전 한도 안에서 실제 자동매매 가능한 상태로 복구한다.
 
 ## User Scenarios & Testing

@@ -17,7 +17,9 @@
 
 ## Phase4 검증·출시
 
-- [ ] T007 quickstart.md의 전체검증·하네스·HANDOFF·PR 관문 및 merge·배포.
+- [x] T007 quickstart.md의 전체검증·하네스·HANDOFF·PR 관문 및 merge·배포. PR757,
+  main854d81f9, 전체3400/7, ruff·하네스14/14·HANDOFF·PR 관문 통과, deploy33928671285,
+  audit33928739275 DEPLOY_COMPLETED, KIS33928671315 6/6, setup33928740976 active.
 - [ ] T008 autoarm 승인 PR·merge·배포·no-order preflight 생산 결과를 quickstart.md에 기록.
 - [ ] T009 실제 자동 접수·체결·감사·대사·중복차단을 확인해 specs/176-live-canary-contract/tasks.md와 HANDOFF.md 마무리.
 
