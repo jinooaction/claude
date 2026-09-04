@@ -876,7 +876,7 @@ def test_scheduled_order_diagnostics_exposes_only_closed_safe_fields(
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout)
     assert payload == {
-        "schema_version": "1.1",
+        "schema_version": "1.2",
         "source": "server_timer_order_diagnostics",
         "run_id": run_id,
         "planned_order_count": 1,
@@ -914,7 +914,10 @@ def test_scheduled_order_diagnostics_exposes_only_closed_broker_codes(
         "http_status": 200,
         "kis_rt_cd": "7",
         "kis_msg_cd": "APBK1672",
-        "kis_msg1": "must-not-leak",
+        "kis_msg1": (
+            "계좌 12345678은 해외주식 서비스 미신청으로 주문 권한이 제한됩니다 "
+            "token=must-not-leak"
+        ),
         "response_body_preview": "account=must-not-leak",
         "request_summary": {
             "tr_id": "TTTT1002U",
@@ -966,11 +969,71 @@ def test_scheduled_order_diagnostics_exposes_only_closed_broker_codes(
             "tr_id": "TTTT1002U",
             "order_exchange": "NASD",
             "order_division": "00",
+            "message_topics": [
+                "account",
+                "service_registration",
+                "trading_permission",
+            ],
         }
     ]
     assert "must-not-leak" not in result.stdout
+    assert "12345678" not in result.stdout
+    assert "계좌" not in result.stdout
+    assert "미신청" not in result.stdout
     assert "30.20" not in result.stdout
     assert "******78" not in result.stdout
+
+
+def test_scheduled_order_diagnostics_uses_closed_fallback_message_topics(
+    gateway_env: dict[str, object],
+) -> None:
+    env = gateway_env["env"]
+    assert isinstance(env, dict)
+    state = Path(str(env["NONCE_DIR"]))
+    run_id = "20260904152303"
+    run_dir = state / "scheduled-runs" / run_id
+    run_dir.mkdir(parents=True)
+    reasons = [
+        {"kis_msg1": "주문 가능 금액 부족"},
+        {"kis_msg1": "분류되지 않은 내부 사유 secret-token"},
+        {},
+    ]
+    raw = {
+        "fundability": {"planned_orders": []},
+        "results": [
+            {
+                "symbol": symbol,
+                "side": "BUY",
+                "requested_qty": 1,
+                "routed_qty": 1,
+                "limit_price_usd": "1.00",
+                "state": "REJECTED_BY_BROKER",
+                "gate": None,
+                "reason": json.dumps(reason),
+            }
+            for symbol, reason in zip(("AAA", "BBB", "CCC"), reasons, strict=True)
+        ],
+        "withheld_orders": [],
+    }
+    (run_dir / "order.log").write_text(json.dumps(raw) + "\n", encoding="utf-8")
+
+    result = subprocess.run(
+        ["bash", str(HELPER), "scheduled-order-diagnostics", run_id],
+        text=True,
+        capture_output=True,
+        env=env,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert [row["message_topics"] for row in payload["broker_rejections"]] == [
+        ["buying_power"],
+        ["other"],
+        ["unavailable"],
+    ]
+    assert "주문 가능 금액" not in result.stdout
+    assert "secret-token" not in result.stdout
 
 
 def test_scheduled_order_diagnostics_fails_closed_on_unknown_broker_field(

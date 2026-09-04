@@ -665,7 +665,7 @@ scheduled_order_diagnostics() {
     ' >/dev/null || die "invalid scheduled order result"
 
     diagnostics="$(printf '%s\n' "${payload}" | jq \
-        --arg schema_version "1.1" \
+        --arg schema_version "1.2" \
         --arg source "server_timer_order_diagnostics" \
         --arg run_id "${run_id}" '
         def withheld_code:
@@ -675,6 +675,30 @@ scheduled_order_diagnostics() {
           elif . == "side_filtered_sell_only" then "side_filtered_sell_only"
           elif . == "side_filtered_buy_only" then "side_filtered_buy_only"
           else "other_withheld"
+          end;
+        def message_topics:
+          if type != "string" or length == 0 then ["unavailable"]
+          else
+            [
+              if test("\uacc4\uc88c|account"; "i") then "account" else empty end,
+              if test("신청|미신청|등록|약정|서비스|service"; "i")
+                then "service_registration" else empty end,
+              if test("권한|허용|제한|거래불가|매매불가|주문불가|permission|not allowed|restricted"; "i")
+                then "trading_permission" else empty end,
+              if test("거래소|exchange"; "i") then "exchange" else empty end,
+              if test("종목|symbol|ticker"; "i") then "symbol" else empty end,
+              if test("거래시간|주문시간|장중|개장|폐장|market.*time|session"; "i")
+                then "market_session" else empty end,
+              if test("가격|호가|단가|틱|상한|하한|price"; "i") then "price" else empty end,
+              if test("수량|quantity|qty"; "i") then "quantity" else empty end,
+              if test("주문[ ]*가능[ ]*금액|예수금|증거금|부족|buying[ _-]*power|purchasable"; "i")
+                then "buying_power" else empty end,
+              if test("환전|외화|통화|currency"; "i") then "currency" else empty end,
+              if test("주문구분|지정가|시장가|order[ _-]*type"; "i")
+                then "order_type" else empty end
+            ]
+            | unique
+            | if length == 0 then ["other"] else . end
           end;
         {schema_version:$schema_version,source:$source,run_id:$run_id,
          planned_order_count:(.fundability.planned_orders | length),
@@ -694,13 +718,14 @@ scheduled_order_diagnostics() {
                exception_type:($diagnostics.exception_type // null),
                tr_id:($diagnostics.request_summary.tr_id // null),
                order_exchange:($diagnostics.request_summary.body.OVRS_EXCG_CD // null),
-               order_division:($diagnostics.request_summary.body.ORD_DVSN // null)
+               order_division:($diagnostics.request_summary.body.ORD_DVSN // null),
+               message_topics:(($diagnostics.kis_msg1 // null) | message_topics)
              }],
          withheld_reason_codes:([.withheld_orders[].reason | withheld_code] | unique)}'
     )" || die "failed to sanitize scheduled order diagnostics"
 
     printf '%s\n' "${diagnostics}" | jq -e '
-        .schema_version == "1.1" and
+        .schema_version == "1.2" and
         .source == "server_timer_order_diagnostics" and
         (.broker_rejections | type == "array" and length <= 20) and
         ([.broker_rejections[] |
@@ -717,9 +742,16 @@ scheduled_order_diagnostics() {
           (.order_exchange == null or
             (.order_exchange | IN("NASD", "NYSE", "AMEX"))) and
           (.order_division == null or (.order_division | IN("00", "01"))) and
+          (.message_topics | type == "array" and length >= 1 and length <= 12 and
+            length == (unique | length) and
+            all(.[]; IN(
+              "account", "service_registration", "trading_permission", "exchange",
+              "symbol", "market_session", "price", "quantity", "buying_power",
+              "currency", "order_type", "other", "unavailable"
+            ))) and
           ((keys | sort) == ([
             "exception_type", "http_status", "kis_msg_cd", "kis_rt_cd",
-            "order_division", "order_exchange", "symbol", "tr_id"
+            "message_topics", "order_division", "order_exchange", "symbol", "tr_id"
           ] | sort))
         ] | all) and
         ([.outcomes[] | select(.state == "REJECTED_BY_BROKER")] | length) ==

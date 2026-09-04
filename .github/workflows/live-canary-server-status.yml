@@ -165,7 +165,7 @@ jobs:
           fi
 
           if ! jq -e --arg run_id "${SERVER_RUN_ID}" '
-            .schema_version == "1.1" and
+            .schema_version == "1.2" and
             .source == "server_timer_order_diagnostics" and
             .run_id == $run_id and
             (.planned_order_count | type == "number" and . >= 0 and . <= 20) and
@@ -203,9 +203,16 @@ jobs:
                 (.order_exchange == null or
                   (.order_exchange | IN("NASD", "NYSE", "AMEX"))) and
                 (.order_division == null or (.order_division | IN("00", "01"))) and
+                (.message_topics | type == "array" and length >= 1 and length <= 12 and
+                  length == (unique | length) and
+                  all(.[]; IN(
+                    "account", "service_registration", "trading_permission", "exchange",
+                    "symbol", "market_session", "price", "quantity", "buying_power",
+                    "currency", "order_type", "other", "unavailable"
+                  ))) and
                 ((keys | sort) == ([
                   "exception_type", "http_status", "kis_msg_cd", "kis_rt_cd",
-                  "order_division", "order_exchange", "symbol", "tr_id"
+                  "message_topics", "order_division", "order_exchange", "symbol", "tr_id"
                 ] | sort))) and
             (.withheld_reason_codes | type == "array" and length <= 20 and
               all(.[]; IN(
