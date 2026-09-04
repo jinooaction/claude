@@ -4882,7 +4882,10 @@ def rebalance_once_cmd(
             )
             broker = ResilientClient(
                 inner,
-                rate_limiter=AsyncTokenBucket(rate_per_sec=15.0, capacity=15.0),
+                # KIS production recommends at least 0.05 s between REST calls.
+                # This money-moving path uses a conservative 0.2 s interval and
+                # capacity=1 so account/quote reads cannot burst into the first order.
+                rate_limiter=AsyncTokenBucket(rate_per_sec=5.0, capacity=1.0),
                 breaker=CircuitBreaker(failure_threshold=5, cooldown_seconds=30.0),
                 max_retries=4,
             )

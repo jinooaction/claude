@@ -70,6 +70,28 @@ def test_rebalance_cli_checks_session_before_db_write_or_broker_access() -> None
     assert "--ignore-session-window" not in command
 
 
+def test_live_rebalance_serializes_kis_rest_without_initial_burst() -> None:
+    source = (Path(__file__).resolve().parents[2] / "src/auto_invest/cli.py").read_text(
+        encoding="utf-8"
+    )
+    command = source.split('@app.command("rebalance-once")', 1)[1].split(
+        '\n@app.command(', 1
+    )[0]
+
+    live = command.split("async def _go()", 1)[1]
+    assert "AsyncTokenBucket(rate_per_sec=5.0, capacity=1.0)" in live
+    assert "AsyncTokenBucket(rate_per_sec=15.0, capacity=15.0)" not in live
+
+
+def test_kis_order_write_is_never_replayed_by_http_retry() -> None:
+    source = (
+        Path(__file__).resolve().parents[2] / "src/auto_invest/broker/overseas.py"
+    ).read_text(encoding="utf-8")
+    order = source.split("async def place_order(", 1)[1].split("\n\nasync def ", 1)[0]
+
+    assert "retry_transient=False" in order
+
+
 def test_closed_session_cli_refusal_happens_before_db_or_broker(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
