@@ -19,3 +19,10 @@
 - KIS33928671315 6/6, cash934.27/NAV1434.91/ORANY28/open_unfilled0. setup33928740976은
   deploy_timer/live_canary_timer/worker active.
 - T008의 승인 예산 갱신 및 최신 no-order 검증, T009의 실제 자동 체결은 아직 미완료다.
+- PR759 merge aa6aa482534d2f192b197de04af2bb9008383b2e는 자동 승인 checkout의 전체 이력을
+  선언했다. 실제Git shallow/전체이력 회귀 포함 전체3402 passed/7 skipped, ruff·하네스14/14·
+  HANDOFF·PR 관문 통과. 중단된 autoarm33929694159의 판단은 RESIZE142→143이었으나
+  승인PR은 생성되지 않았으므로 T008/T011 재실행이 필요하다.
+- exact aa6aa482 deploy33931335050 성공. audit33931382855의
+  10fc4c29934c0707520b7a89add952f2는 DEPLOY_COMPLETED를 확인했다.
+  KIS33931381162는6/6, cash934.27/NAV1434.91/open_unfilled0이다.
