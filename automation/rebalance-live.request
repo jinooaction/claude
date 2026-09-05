@@ -9,20 +9,21 @@
 #   헌법 X.4 v11.0.0. 사다리: 단0=0% → 단1=10% 검증 → 단2=20% 탐색 → 단3=25% → 단4=50% → 단5=100% (실계좌 NAV 대비).
 #   승격 = 관측 ≥20 + ≥27일 + 낙폭 < 예산/2. 강등 = 낙폭 ≥ 예산/2(즉시).
 #   정지 = 낙폭 ≥ 예산(즉시, 무장 해제). 재사이징 = 계좌 NAV ±10% 드리프트.
+#   첫 체결 전 운영1단은 최신 검증·정확한 전략0체결 증거가 있으면 작은 예산 차이도 정합.
 #
-# 증거: operational canary ready(globalfixed-ensemble-3-6-9-12), alpha_confirmed=false. 단 0→1.
+# 증거: 첫 체결 전 현재 검증 예산 정합: 계좌 NAV 드리프트 재사이징: 센티넬 $142 → $143 (단 1 비율 유지, NAV $1434.91000000).
 #
 # 즉시 정지: automation/AUTOARM_DISABLED 파일을 main 에 두면 사다리가 멈춘다.
 # 낙폭 예산은 운영자 소유 — 변경은 운영자 결정.
 
 armed: true
-capital_usd: 142
+capital_usd: 143
 requested_by: spec-050/176-capital-ladder (operator delegation 2026-06-11)
 stage: live-canary-portfolio
-run_seq: 8
+run_seq: 9
 ladder_rung: 1
 rung_entered: 2026-08-31
-account_nav_usd: 1427.63000000
+account_nav_usd: 1434.91000000
 dd_budget_pct: 20.0
 entry_route: operational_canary
-note: "🪜 자본 사다리 단 1 (10.00% of NAV $1427.63000000). operational canary ready(globalfixed-ensemble-3-6-9-12), alpha_confirmed=false. 단 0→1."
+note: "🪜 자본 사다리 단 1 (10.00% of NAV $1434.91000000). 첫 체결 전 현재 검증 예산 정합: 계좌 NAV 드리프트 재사이징: 센티넬 $142 → $143 (단 1 비율 유지, NAV $1434.91000000)."
