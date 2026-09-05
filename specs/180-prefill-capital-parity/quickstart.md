@@ -12,6 +12,14 @@
 
 ## 생산 기록 (2026-09-05 KST)
 
+- FR-010은 PR765 merge7acd7093583d2b393257102484c549b03c33b032로 출시됐다.
+  head7ba9f21 전체3414/7(727.92초),ruff,harness14/14,HANDOFF,PR 관문 통과.
+  deploy33938162479·audit33938198034의7d3e5a546bdbacfc6bb393e8c07e3764에서02:07UTC
+  DEPLOY_COMPLETED, KIS33938189596 6/6. autoarm33938200698은현재main 확인과 운영증거
+  통과 후 STAY/rung1→1/센티넬변경false/새PR없음이다. no-order33938199313은exact7acd7093,
+  capital143,첫진입success,manual-no-order-preflight,CLEAR/OK/VALID/haltfalse/orders0이다.
+  T016 완료. 실제자동 접수·체결T009는 미완료이며 다음 유효거래일Sep8을 추적한다.
+
 - 최신: autoarm33935656168은 전체3405/7(1397.10초),ruff,하네스14/14,HANDOFF,본문 관문을
   통과해 PR763으로142→143/rung1/run_seq9를 승인했다. main fdb9149a1790fc57ed1f33739a4d2380cefb1507.
   deploy33937154453·감사33937198586(4c6227d2241200efa30f3170f8df9a5d)은01:46UTC
