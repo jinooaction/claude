@@ -26,3 +26,11 @@
 - exact aa6aa482 deploy33931335050 성공. audit33931382855의
   10fc4c29934c0707520b7a89add952f2는 DEPLOY_COMPLETED를 확인했다.
   KIS33931381162는6/6, cash934.27/NAV1434.91/open_unfilled0이다.
+- PR761 merge21f63d64160ed36e70a58cb28c65ebd0f665fe09는 승인 시험의 호스트 의존성과
+  생성 PR 증거 형식을 보정했다. head a17fabc에서 master 기본값·GitHub 색상 환경으로 전체
+  3405 passed/7 skipped(729.17초),ruff,하네스14/14,HANDOFF,PR 관문 통과.
+- exact deploy33934694258 성공. audit33934744194의 상관값
+  3dc3cb3b85d6409722f32556290e5ba4에서00:59UTC DEPLOY_COMPLETED 확인.
+  KIS33934742508은6/6,cash934.27/NAV1434.91/ORANY28/open_unfilled0이다.
+- autoarm33932341774는 승인PR 전 전체시험에서5실패로 종료됐으므로 승인액은142다.
+  새 인계 main에서 T008/T011/T013 자동 승인 재실행이 필요하며 실제체결T009도 미완료다.
