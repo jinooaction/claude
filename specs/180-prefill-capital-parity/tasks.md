@@ -20,14 +20,16 @@
 - [x] T007 quickstart.md의 전체검증·하네스·HANDOFF·PR 관문 및 merge·배포. PR757,
   main854d81f9, 전체3400/7, ruff·하네스14/14·HANDOFF·PR 관문 통과, deploy33928671285,
   audit33928739275 DEPLOY_COMPLETED, KIS33928671315 6/6, setup33928740976 active.
-- [ ] T008 autoarm 승인 PR·merge·배포·no-order preflight 생산 결과를 quickstart.md에 기록.
+- [x] T008 autoarm33935656168→PR763→main fdb9149a, deploy33937154453·감사33937198586·KIS33937196360 6/6·no-order33937207081의143 진입검증/CLEAR/OK/VALID/주문0을 확인.
 - [ ] T009 실제 자동 접수·체결·감사·대사·중복차단을 확인해 specs/176-live-canary-contract/tasks.md와 HANDOFF.md 마무리.
 - [x] T010 [US2] 자동 승인 checkout의 전체 이력을 선언하고 실제 Git shallow clone에서는
   인계 부모 증명이 실패하고 전체 이력에서는 통과하는 재현·회귀를 고정한다. FR-007 보정이다.
-- [ ] T011 [US2] T010 전체검증·PR·배포·인계를 반영한 뒤 T008 자동 승인을 새 main에서 재실행한다.
+- [x] T011 [US2] T010 전체검증·PR·배포·인계 후 T008 자동 승인33935656168에서 전체3405/7·하네스·HANDOFF·본문 관문 통과.
 - [x] T012 [US2] FR-008: 비-main 호스트 기본값과 색상 출력에서 동일한 승인 회귀 계약을 검사한다.
-- [ ] T013 [US2] 시험 이식성 보정의 전체검증·출시·인계 후 T008 자동 승인 전체 관문을 다시 확인한다.
+- [x] T013 [US2] 시험 이식성 보정의 전체검증·출시·인계 후 T008 자동 승인 전체 관문과143 생산 검증 확인.
 - [x] T014 [US2] FR-009: 실제 생성 승인 본문의 명령·결과를 기록하고 증가·축소 양쪽 품질 검사 회귀를 고정한다.
+- [x] T015 [US2] FR-010: 지연 이벤트의 main 불일치 재현과 읽기·판단·발행·머지 전 실패 폐쇄를 구현한다.
+- [ ] T016 [US2] FR-010 전체 검증·PR·배포와 최신 main 무주문 준비 상태를 확인한다. 오래된 강등 PR은 최신 증거와 함께 처리한다.
 
 ## Dependencies & Strategy
 

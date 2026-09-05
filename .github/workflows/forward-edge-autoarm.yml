@@ -54,6 +54,12 @@ jobs:
         # HANDOFF-only merge의 부모와 변경 경로를 검사해야 한다. 얕은 이력은
         # 정상 인계를 stale로 오판하므로 기존 품질 관문에 필요한 증거를 가져온다.
 
+      - name: Verify current main before reading evidence
+        run: |
+          set -euo pipefail
+          [[ "$(git rev-parse HEAD)" == "${GITHUB_SHA}" ]]
+          bash scripts/check_autoarm_main.sh
+
       - name: Install uv
         uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86
 
@@ -197,6 +203,7 @@ jobs:
           git add deploy/canary-live-portfolio.toml
           git commit -m "feat(150): stage factory winner ${candidate} at rung 0" \
             -m "this changes the safety perimeter"
+          bash scripts/check_autoarm_main.sh
           git push -u origin "${BRANCH}"
           cat > /tmp/factory_assignment_pr.md <<EOF
           # 변경 요약
@@ -264,9 +271,11 @@ jobs:
           - [x] `WIP` 또는 `DO NOT MERGE` 표식 없음
           - [x] Kernel 터치 없음
           EOF
+          bash scripts/check_autoarm_main.sh
           pr_url="$(gh pr create --base main --head "${BRANCH}" \
             --title "feat(150): 자본 0에서 공장 승자 ${candidate} 지정" \
             --body-file /tmp/factory_assignment_pr.md)"
+          bash scripts/check_autoarm_main.sh
           if gh pr merge "${pr_url}" --auto --merge; then
             echo "factory assignment waits for required PR checks before merge"
           else
@@ -419,6 +428,7 @@ jobs:
         if: steps.factory_assignment.outputs.changed != 'true'
         run: |
           set -uo pipefail
+          bash scripts/check_autoarm_main.sh
           uv run auto-invest ladder-decide \
             --verdict-json /tmp/verdict_global.json \
             --anchored-verdict-json /tmp/anchored_global.json \
@@ -582,6 +592,7 @@ jobs:
             echo "- 즉시 정지: automation/AUTOARM_DISABLED 파일을 main 에 두면 사다리가 멈춘다."
           } > /tmp/pr_body.md
           uv run python scripts/check_pr_quality_gate.py /tmp/pr_body.md
+          bash scripts/check_autoarm_main.sh
           git push -u origin "${BRANCH}"
           pr_url="$(gh pr create --base main --head "${BRANCH}" \
             --title "feat(050): 자본 사다리 ${ACTION} — 단 ${cur}→${tgt} (\$${cap})" \
@@ -589,6 +600,7 @@ jobs:
           echo "pr_url=${pr_url}" >> "$GITHUB_OUTPUT"
           echo "PR: ${pr_url}"
           # best-effort 자동 머지(운영자 위임 자율 채널). 막히면 PR 을 ready 로 남긴다.
+          bash scripts/check_autoarm_main.sh
           if gh pr merge "${pr_url}" --merge 2>/tmp/merge.err; then
             echo "merged=merged" >> "$GITHUB_OUTPUT"
             merge_sha="$(gh pr view "${pr_url}" --json mergeCommit --jq '.mergeCommit.oid // empty')"
