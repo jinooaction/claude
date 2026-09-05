@@ -2,7 +2,7 @@
 
 **Feature Branch**: `codex/181-intraday-runtime`
 **Created**: 2026-09-06
-**Status**: 구현 진행 — 실거래 완료 아님
+**Status**: 수집·진단 모의 소프트웨어 검증 완료, PR767 초안 — 실자료·실거래 미완료
 **Input**: "단타 자동 매매도 완성하라고 했다. 다시 구현 완료해."
 
 ## 문제 정의
