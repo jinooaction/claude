@@ -1,0 +1,356 @@
+{
+  "commit": "4a5f43add677155382487f23a8a47debd2daa378",
+  "generated_at_utc": "2026-09-05T11:51:23.681482Z",
+  "liveness": {
+    "as_of_utc": "2026-09-05T11:51:23Z",
+    "checks": [
+      {
+        "age_hours": 11.54,
+        "critical": true,
+        "detail": "전진 페이퍼 A/B 토너먼트(전진 엣지 관측 생산) — 신선(11.5h).",
+        "key": "rebalance-paper-forward",
+        "max_age_hours": 80.0,
+        "status": "OK",
+        "timestamp_utc": "2026-09-05T00:19:17Z"
+      },
+      {
+        "age_hours": 9.67,
+        "critical": true,
+        "detail": "자본 사다리 게이트(단 승격/강등 결정) — 신선(9.7h).",
+        "key": "edge-autoarm",
+        "max_age_hours": 80.0,
+        "status": "OK",
+        "timestamp_utc": "2026-09-05T02:10:58Z"
+      },
+      {
+        "age_hours": 4.38,
+        "critical": true,
+        "detail": "KIS 브로커 연결 생존(매일) — 신선(4.4h).",
+        "key": "kis-smoke",
+        "max_age_hours": 30.0,
+        "status": "OK",
+        "timestamp_utc": "2026-09-05T07:28:24Z"
+      },
+      {
+        "age_hours": 9.35,
+        "critical": true,
+        "detail": "라이브 캐너리 + 라이브 NAV 스냅샷 — 신선(9.3h).",
+        "key": "rebalance-live-canary",
+        "max_age_hours": 80.0,
+        "status": "OK",
+        "timestamp_utc": "2026-09-05T02:30:39Z"
+      },
+      {
+        "age_hours": 5.83,
+        "critical": false,
+        "detail": "공개 데이터 수집·교차검증(연구 전용) — 신선(5.8h).",
+        "key": "collect-public-data",
+        "max_age_hours": 80.0,
+        "status": "OK",
+        "timestamp_utc": "2026-09-05T06:01:53Z"
+      },
+      {
+        "age_hours": 10.55,
+        "critical": false,
+        "detail": "레짐 층화(연구 전용) — 신선(10.6h).",
+        "key": "regime-stratify",
+        "max_age_hours": 80.0,
+        "status": "OK",
+        "timestamp_utc": "2026-09-05T01:18:10Z"
+      },
+      {
+        "age_hours": 140.93,
+        "critical": false,
+        "detail": "7/8 레짐 후보 동결 후 월별 관찰(주문 없는 연구 전용) — 신선(140.9h).",
+        "key": "regime-challenger-forward",
+        "max_age_hours": 840.0,
+        "status": "OK",
+        "timestamp_utc": "2026-08-30T14:55:42Z"
+      },
+      {
+        "age_hours": 11.64,
+        "critical": false,
+        "detail": "풀라이브 승격 준비 평가(보고 전용) — 신선(11.6h).",
+        "key": "promote-readiness",
+        "max_age_hours": 30.0,
+        "status": "OK",
+        "timestamp_utc": "2026-09-05T00:12:59Z"
+      },
+      {
+        "age_hours": 0.24,
+        "critical": false,
+        "detail": "첫-자본까지의 길 종합·ETA(스펙 052, 보고 전용) — 신선(0.2h).",
+        "key": "money-path",
+        "max_age_hours": 30.0,
+        "status": "OK",
+        "timestamp_utc": "2026-09-05T11:36:57Z"
+      },
+      {
+        "age_hours": 0.04,
+        "critical": false,
+        "detail": "자본 경로 준비도 루프(스펙 076, 보고 전용) — 신선(0.0h).",
+        "key": "capital-path-readiness",
+        "max_age_hours": 30.0,
+        "status": "OK",
+        "timestamp_utc": "2026-09-05T11:49:03Z"
+      },
+      {
+        "age_hours": 9.41,
+        "critical": false,
+        "detail": "자율 작업 실행 루프(스펙 077, 다음 작업 패킷 보고 전용) — 신선(9.4h).",
+        "key": "autonomous-work-execution",
+        "max_age_hours": 30.0,
+        "status": "OK",
+        "timestamp_utc": "2026-09-05T02:26:50Z"
+      },
+      {
+        "age_hours": 9.41,
+        "critical": false,
+        "detail": "완료 후보 소비 장부(스펙 079, 보고 전용) — 신선(9.4h).",
+        "key": "released-work",
+        "max_age_hours": 30.0,
+        "status": "OK",
+        "timestamp_utc": "2026-09-05T02:26:47.987853Z"
+      },
+      {
+        "age_hours": 22.27,
+        "critical": false,
+        "detail": "운영자 상태 보고와 모바일 알림 루프(스펙 080, 보고 전용) — 신선(22.3h).",
+        "key": "operator-status",
+        "max_age_hours": 30.0,
+        "status": "OK",
+        "timestamp_utc": "2026-09-04T13:35:24.307618Z"
+      },
+      {
+        "age_hours": 22.28,
+        "critical": false,
+        "detail": "돈 경로 게이트 정렬 루프(스펙 078, 보고 전용) — 신선(22.3h).",
+        "key": "money-gate-alignment",
+        "max_age_hours": 30.0,
+        "status": "OK",
+        "timestamp_utc": "2026-09-04T13:34:33Z"
+      },
+      {
+        "age_hours": 4.38,
+        "critical": false,
+        "detail": "주문 거부·체결 품질 패키지(스펙 083, 보고 전용) — 신선(4.4h).",
+        "key": "execution-quality",
+        "max_age_hours": 30.0,
+        "status": "OK",
+        "timestamp_utc": "2026-09-05T07:28:43Z"
+      },
+      {
+        "age_hours": 9.4,
+        "critical": false,
+        "detail": "시간 분리·비용 차감 수익 후보 검증(스펙 138, 연구 전용) — 신선(9.4h).",
+        "key": "profit-evidence-engine",
+        "max_age_hours": 30.0,
+        "status": "OK",
+        "timestamp_utc": "2026-09-05T02:27:06Z"
+      },
+      {
+        "age_hours": 70.75,
+        "critical": false,
+        "detail": "64개 후보 전체 다중검정 자동 전략 탐색(스펙 150, 연구 전용) — 70.8h 경과(한계 30h 의 2배 초과). 워크플로가 멈췄을 가능성이 높다.",
+        "key": "autonomous-strategy-factory",
+        "max_age_hours": 30.0,
+        "status": "STALE",
+        "timestamp_utc": "2026-09-02T13:06:16Z"
+      },
+      {
+        "age_hours": 12.63,
+        "critical": false,
+        "detail": "영구 자율 성장 루프(스펙 067, 고레버리지 돌파 후보 보고 전용) — 신선(12.6h).",
+        "key": "autonomous-evolution",
+        "max_age_hours": 30.0,
+        "status": "OK",
+        "timestamp_utc": "2026-09-04T23:13:42Z"
+      },
+      {
+        "age_hours": 12.63,
+        "critical": false,
+        "detail": "자율 승격 루프(스펙 068, 후보→검증 단계 분류 보고 전용) — 신선(12.6h).",
+        "key": "autonomous-promotion",
+        "max_age_hours": 30.0,
+        "status": "OK",
+        "timestamp_utc": "2026-09-04T23:13:44Z"
+      },
+      {
+        "age_hours": 12.63,
+        "critical": false,
+        "detail": "후보 구현 공장(스펙 070, BACKTEST_REQUIRED 후보→검증 패키지) — 신선(12.6h).",
+        "key": "candidate-implementation-factory",
+        "max_age_hours": 30.0,
+        "status": "OK",
+        "timestamp_utc": "2026-09-04T23:13:43Z"
+      },
+      {
+        "age_hours": 12.62,
+        "critical": false,
+        "detail": "후보 결과 실행기(스펙 071, 검증 패키지→결과 evidence) — 신선(12.6h).",
+        "key": "candidate-result-executor",
+        "max_age_hours": 30.0,
+        "status": "OK",
+        "timestamp_utc": "2026-09-04T23:14:27Z"
+      },
+      {
+        "age_hours": 12.63,
+        "critical": false,
+        "detail": "자율 승격 실행 루프(스펙 069, forward/canary 큐 연결) — 신선(12.6h).",
+        "key": "autonomous-promotion-actions",
+        "max_age_hours": 30.0,
+        "status": "OK",
+        "timestamp_utc": "2026-09-04T23:13:43Z"
+      },
+      {
+        "age_hours": 11.47,
+        "critical": false,
+        "detail": "promotion 전용 forward paper 검증(스펙 069, paper only) — 신선(11.5h).",
+        "key": "promotion-forward",
+        "max_age_hours": 80.0,
+        "status": "OK",
+        "timestamp_utc": "2026-09-05T00:23:15Z"
+      },
+      {
+        "age_hours": 6.93,
+        "critical": false,
+        "detail": "promotion 전용 hardened canary 검증(스펙 069, live order 없음) — 신선(6.9h).",
+        "key": "promotion-canary",
+        "max_age_hours": 80.0,
+        "status": "OK",
+        "timestamp_utc": "2026-09-05T04:55:44Z"
+      },
+      {
+        "age_hours": 7.24,
+        "critical": false,
+        "detail": "자율 전략 재지정 폐회로(스펙 055, 챔피언→라이브 5중 게이트) — 신선(7.2h).",
+        "key": "reassign",
+        "max_age_hours": 80.0,
+        "status": "OK",
+        "timestamp_utc": "2026-09-05T04:37:11Z"
+      }
+    ],
+    "overall": "DEGRADED",
+    "schema_version": "1.0"
+  },
+  "operator_status": {
+    "alert_decision": {
+      "alert_level": "ACTION_REQUIRED",
+      "message_ko": "auto-invest 운영자 알림: ACTION_REQUIRED\n돈 경로 sidecar들이 차단 상태를 보고합니다.\n\n다음 행동: edge-autoarm workflow와 sidecar 발행 경로를 먼저 복구한다.\n\n개입 필요 표면:\n- money-gate-alignment: 돈 경로 sidecar들이 차단 상태를 보고합니다.\n\n상태판: https://jinooaction.github.io/claude/status.html\n\n읽기 전용 알림입니다. 주문, 자본, live 설정은 변경하지 않았습니다.",
+      "reason_ko": "개입 필요 표면 1개가 있습니다.",
+      "send_status": "SENT",
+      "should_send": true
+    },
+    "commit": "a1898dabcec535a2680bd9fed0a85bb630e4725f",
+    "dashboard_sections": [
+      {
+        "body_ko": "실제 주문 경로가 무장 상태입니다. 최신 주문 sidecar와 감사 로그를 함께 봐야 합니다.",
+        "key": "money",
+        "status": "REAL_ORDER_PATH_ARMED",
+        "title_ko": "실제 돈 경로"
+      },
+      {
+        "body_ko": "다음 자율 작업은 실거래 관찰과 병렬인 신규 엣지 challenger입니다.",
+        "key": "autonomous-work",
+        "status": "EXECUTION_READY",
+        "title_ko": "다음 자율 작업"
+      },
+      {
+        "body_ko": "돈 경로 sidecar들이 차단 상태를 보고합니다.",
+        "key": "alignment",
+        "status": "BLOCKED",
+        "title_ko": "돈 경로 정렬"
+      },
+      {
+        "body_ko": "돈 경로 sidecar들이 차단 상태를 보고합니다.",
+        "key": "action-needed",
+        "status": "OK",
+        "title_ko": "개입 필요"
+      }
+    ],
+    "dashboard_url": "https://jinooaction.github.io/claude/status.html",
+    "headline_ko": "돈 경로 sidecar들이 차단 상태를 보고합니다.",
+    "next_action_ko": "edge-autoarm workflow와 sidecar 발행 경로를 먼저 복구한다.",
+    "overall_status": "ACTION_REQUIRED",
+    "run_id": "[REDACTED_ACCOUNT]",
+    "safety_invariants": [
+      "no broker API call",
+      "no orders",
+      "no capital allocation",
+      "no live strategy change",
+      "no whitelist/caps change",
+      "no server SSH",
+      "no secret persistence",
+      "operator visibility only"
+    ],
+    "schema_version": "1.0",
+    "surfaces": [
+      {
+        "key": "pipeline-liveness",
+        "next_action_ko": "",
+        "parse_status": "ok",
+        "present": true,
+        "severity": "info",
+        "source_ref": "automation/pipeline-liveness-last-run:LAST_RUN.md",
+        "status": "OK",
+        "summary_ko": "핵심 자동화 생존 감시는 정상입니다."
+      },
+      {
+        "key": "money-path",
+        "next_action_ko": "micro GTAA와 live canary 최신 sidecar를 확인한다.",
+        "parse_status": "ok",
+        "present": true,
+        "severity": "attention",
+        "source_ref": "automation/money-path-last-run:LAST_RUN.md",
+        "status": "REAL_ORDER_PATH_ARMED",
+        "summary_ko": "실제 주문 경로가 무장 상태입니다. 최신 주문 sidecar와 감사 로그를 함께 봐야 합니다."
+      },
+      {
+        "key": "capital-path-readiness",
+        "next_action_ko": "",
+        "parse_status": "ok",
+        "present": true,
+        "severity": "info",
+        "source_ref": "automation/capital-path-readiness-last-run:capital_path_readiness.json",
+        "status": "CAPITAL_ARMABLE",
+        "summary_ko": "자본 준비도는 CAPITAL_ARMABLE, 실제 돈 상태는 REAL_ORDER_PATH_ARMED입니다."
+      },
+      {
+        "key": "money-gate-alignment",
+        "next_action_ko": "edge-autoarm workflow와 sidecar 발행 경로를 먼저 복구한다.",
+        "parse_status": "ok",
+        "present": true,
+        "severity": "action",
+        "source_ref": "automation/money-gate-alignment-last-run:money_gate_alignment.json",
+        "status": "BLOCKED",
+        "summary_ko": "돈 경로 sidecar들이 차단 상태를 보고합니다."
+      },
+      {
+        "key": "autonomous-work-execution",
+        "next_action_ko": "공개 데이터·레짐·비용·paper forward를 사용해 기존 후보와 다른 신호군을 시간 분리 walk-forward로 검증하고, 통과하지 못하면 live 승격 없이 기각한다.",
+        "parse_status": "ok",
+        "present": true,
+        "severity": "info",
+        "source_ref": "automation/autonomous-work-execution-last-run:autonomous_work_execution.json",
+        "status": "EXECUTION_READY",
+        "summary_ko": "다음 자율 작업은 실거래 관찰과 병렬인 신규 엣지 challenger입니다."
+      },
+      {
+        "key": "released-work",
+        "next_action_ko": "",
+        "parse_status": "ok",
+        "present": true,
+        "severity": "info",
+        "source_ref": "automation/released-work-last-run:released_work.json",
+        "status": "OK",
+        "summary_ko": "완료 후보 장부 상태는 OK, 완료 후보 61개입니다."
+      }
+    ],
+    "timestamp_utc": "2026-09-04T13:35:24.307618Z"
+  },
+  "read_only": true,
+  "repository": "jinooaction/claude",
+  "run_url": "https://github.com/jinooaction/claude/actions/runs/33964435172",
+  "schema_version": "1.0",
+  "source": "automation sidecars"
+}

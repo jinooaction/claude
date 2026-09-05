@@ -1,0 +1,719 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>auto-invest 모바일 상태판</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --surface: #ffffff;
+      --surface-soft: #eef2f5;
+      --text: #17202a;
+      --muted: #617080;
+      --border: #d9e0e7;
+      --ok: #16835a;
+      --late: #b7791f;
+      --bad: #c93434;
+      --pending: #52677a;
+      --focus: #1f6feb;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #101418;
+        --surface: #171d23;
+        --surface-soft: #202832;
+        --text: #eef3f7;
+        --muted: #9aa8b5;
+        --border: #303b45;
+        --ok: #43c18f;
+        --late: #d89b3d;
+        --bad: #f36a6a;
+        --pending: #9aa8b5;
+        --focus: #78aaff;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.45;
+    }
+    a {
+      color: var(--focus);
+      text-decoration: none;
+    }
+    a:focus-visible, button:focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 3px;
+    }
+    main {
+      width: min(980px, 100%);
+      margin: 0 auto;
+      padding: 16px;
+    }
+    header {
+      padding: 18px 0 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(1.45rem, 6vw, 2.4rem);
+      letter-spacing: 0;
+    }
+    h2 {
+      margin: 24px 0 10px;
+      font-size: 1rem;
+      letter-spacing: 0;
+    }
+    p { margin: 0; }
+    .hero {
+      display: grid;
+      gap: 12px;
+      padding: 16px;
+      margin-top: 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    .overall {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .overall strong {
+      font-size: clamp(2rem, 13vw, 4rem);
+      line-height: 1;
+    }
+    .overall.ok strong { color: var(--ok); }
+    .overall.degraded strong { color: var(--late); }
+    .overall.critical strong { color: var(--bad); }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .meta-item {
+      min-width: 0;
+      padding: 10px;
+      background: var(--surface-soft);
+      border-radius: 8px;
+    }
+    .meta-item span {
+      display: block;
+      color: var(--muted);
+      font-size: .76rem;
+    }
+    .meta-item strong {
+      display: block;
+      margin-top: 2px;
+      overflow-wrap: anywhere;
+      font-size: .92rem;
+    }
+    .status-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      padding: 12px;
+      margin: 8px 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left-width: 5px;
+      border-radius: 8px;
+    }
+    .status-row.ok { border-left-color: var(--ok); }
+    .status-row.late { border-left-color: var(--late); }
+    .status-row.stale, .status-row.missing { border-left-color: var(--bad); }
+    .status-row.pending { border-left-color: var(--pending); }
+    .row-main h3 {
+      margin: 0 0 3px;
+      font-size: 1rem;
+    }
+    .row-main p {
+      color: var(--muted);
+      font-size: .82rem;
+    }
+    .row-state {
+      min-width: 92px;
+      text-align: right;
+    }
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: var(--surface-soft);
+      font-size: .78rem;
+      font-weight: 700;
+    }
+    .row-state strong {
+      display: block;
+      margin-top: 4px;
+      font-size: .86rem;
+    }
+    .row-state small {
+      display: block;
+      max-width: 150px;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: .7rem;
+      overflow-wrap: anywhere;
+    }
+    .row-links {
+      grid-column: 1 / -1;
+      display: flex;
+      gap: 12px;
+      padding-top: 4px;
+      font-size: .88rem;
+    }
+    .note {
+      margin: 18px 0 32px;
+      padding: 12px;
+      color: var(--muted);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: .88rem;
+    }
+    .operator-panel {
+      display: grid;
+      gap: 12px;
+      margin-top: 16px;
+      padding: 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 5px solid var(--pending);
+      border-radius: 8px;
+    }
+    .operator-panel.ok { border-left-color: var(--ok); }
+    .operator-panel.degraded { border-left-color: var(--late); }
+    .operator-panel.critical { border-left-color: var(--bad); }
+    .operator-panel h2 {
+      margin: 2px 0 6px;
+      font-size: 1.45rem;
+    }
+    .operator-next {
+      padding: 12px;
+      background: var(--surface-soft);
+      border-radius: 8px;
+    }
+    .operator-next span, .operator-section span, .action-list span {
+      display: block;
+      color: var(--muted);
+      font-size: .76rem;
+      font-weight: 700;
+    }
+    .operator-next strong {
+      display: block;
+      margin-top: 4px;
+      overflow-wrap: anywhere;
+    }
+    .operator-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+    .operator-section {
+      min-width: 0;
+      padding: 10px;
+      background: var(--surface-soft);
+      border-radius: 8px;
+    }
+    .operator-section strong {
+      display: block;
+      margin-top: 2px;
+      font-size: .9rem;
+    }
+    .operator-section p {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: .82rem;
+      overflow-wrap: anywhere;
+    }
+    .action-list ul {
+      margin: 6px 0 0;
+      padding-left: 18px;
+      color: var(--muted);
+    }
+    .action-list li {
+      margin: 4px 0;
+      overflow-wrap: anywhere;
+    }
+    @media (min-width: 720px) {
+      main { padding: 28px; }
+      .hero { grid-template-columns: 1.2fr 1fr; align-items: center; }
+      .meta-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .status-row { grid-template-columns: minmax(0, 1fr) 170px 100px; }
+      .row-links { grid-column: auto; justify-content: flex-end; }
+      .operator-panel { grid-template-columns: minmax(0, 1fr) 1fr; }
+      .operator-grid, .action-list { grid-column: 1 / -1; }
+      .operator-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>auto-invest 상태판</h1>
+      <p>모바일에서 자동화 생존 상태를 빠르게 확인하는 읽기 전용 화면입니다.</p>
+    </header>
+
+    <section class="hero" aria-labelledby="overall-title">
+      <div>
+        <p id="overall-title">전체 상태</p>
+        <div class="overall degraded">
+          <strong>주의</strong>
+        </div>
+        <p>핵심 주문 경로는 막히지 않았지만, 일부 보조 보고가 늦었습니다.</p>
+      </div>
+      <div class="meta-grid" aria-label="생성 정보">
+        <div class="meta-item">
+          <span>생성 시각</span><strong>2026-09-05 11:51 UTC</strong>
+        </div>
+        <div class="meta-item">
+          <span>기준 커밋</span><strong>4a5f43a</strong>
+        </div>
+        <div class="meta-item">
+          <span>데이터 원천</span><strong>automation sidecars</strong>
+        </div>
+        <div class="meta-item">
+          <span>저장소</span><strong><a href="https://github.com/jinooaction/claude">jinooaction/claude</a></strong>
+        </div>
+      </div>
+    </section>
+
+    
+    <section class="operator-panel critical" aria-labelledby="operator-title">
+      <div>
+        <p id="operator-title">운영자 요약</p>
+        <h2>ACTION_REQUIRED</h2>
+        <p>돈 경로 sidecar들이 차단 상태를 보고합니다.</p>
+      </div>
+      <div class="operator-next">
+        <span>다음 행동</span>
+        <strong>edge-autoarm workflow와 sidecar 발행 경로를 먼저 복구한다.</strong>
+      </div>
+      <div class="operator-grid">
+        <article class="operator-section">
+  <span>실제 돈 경로</span>
+  <strong>REAL_ORDER_PATH_ARMED</strong>
+  <p>실제 주문 경로가 무장 상태입니다. 최신 주문 sidecar와 감사 로그를 함께 봐야 합니다.</p>
+</article>
+<article class="operator-section">
+  <span>다음 자율 작업</span>
+  <strong>EXECUTION_READY</strong>
+  <p>다음 자율 작업은 실거래 관찰과 병렬인 신규 엣지 challenger입니다.</p>
+</article>
+<article class="operator-section">
+  <span>돈 경로 정렬</span>
+  <strong>BLOCKED</strong>
+  <p>돈 경로 sidecar들이 차단 상태를 보고합니다.</p>
+</article>
+<article class="operator-section">
+  <span>개입 필요</span>
+  <strong>OK</strong>
+  <p>돈 경로 sidecar들이 차단 상태를 보고합니다.</p>
+</article>
+      </div>
+      <div class="action-list">
+        <span>개입 필요</span>
+        <ul><li><strong>money-gate-alignment</strong>: 돈 경로 sidecar들이 차단 상태를 보고합니다.</li></ul>
+      </div>
+    </section>
+
+
+    <h2>핵심 자동화</h2>
+    <article class="status-row ok">
+  <div class="row-main">
+    <h3>전진 페이퍼</h3>
+    <p>전진 페이퍼 A/B 토너먼트(전진 엣지 관측 생산)</p>
+  </div>
+  <div class="row-state">
+    <span class="badge">정상</span>
+    <strong>11.5시간 전</strong>
+    <small>2026-09-05T00:19:17Z</small>
+  </div>
+  <div class="row-links">
+    <a href="https://github.com/jinooaction/claude/actions/workflows/rebalance-paper-forward.yml">실행</a>
+    <a href="https://github.com/jinooaction/claude/blob/automation/rebalance-paper-forward-last-run/LAST_RUN.md">기록</a>
+  </div>
+</article>
+<article class="status-row ok">
+  <div class="row-main">
+    <h3>자본 사다리</h3>
+    <p>자본 사다리 게이트(단 승격/강등 결정)</p>
+  </div>
+  <div class="row-state">
+    <span class="badge">정상</span>
+    <strong>9.7시간 전</strong>
+    <small>2026-09-05T02:10:58Z</small>
+  </div>
+  <div class="row-links">
+    <a href="https://github.com/jinooaction/claude/actions/workflows/forward-edge-autoarm.yml">실행</a>
+    <a href="https://github.com/jinooaction/claude/blob/automation/edge-autoarm-last-run/LAST_RUN.md">기록</a>
+  </div>
+</article>
+<article class="status-row ok">
+  <div class="row-main">
+    <h3>KIS 연결</h3>
+    <p>KIS 브로커 연결 생존(매일)</p>
+  </div>
+  <div class="row-state">
+    <span class="badge">정상</span>
+    <strong>4.4시간 전</strong>
+    <small>2026-09-05T07:28:24Z</small>
+  </div>
+  <div class="row-links">
+    <a href="https://github.com/jinooaction/claude/actions/workflows/kis-smoke.yml">실행</a>
+    <a href="https://github.com/jinooaction/claude/blob/automation/kis-smoke-last-run/LAST_RUN.md">기록</a>
+  </div>
+</article>
+<article class="status-row ok">
+  <div class="row-main">
+    <h3>라이브 캐너리</h3>
+    <p>라이브 캐너리 + 라이브 NAV 스냅샷</p>
+  </div>
+  <div class="row-state">
+    <span class="badge">정상</span>
+    <strong>9.3시간 전</strong>
+    <small>2026-09-05T02:30:39Z</small>
+  </div>
+  <div class="row-links">
+    <a href="https://github.com/jinooaction/claude/actions/workflows/rebalance-live-canary.yml">실행</a>
+    <a href="https://github.com/jinooaction/claude/blob/automation/rebalance-live-canary-last-run/LAST_RUN.md">기록</a>
+  </div>
+</article>
+
+    <h2>보조 보고</h2>
+    <article class="status-row ok">
+  <div class="row-main">
+    <h3>공개 데이터</h3>
+    <p>공개 데이터 수집·교차검증(연구 전용)</p>
+  </div>
+  <div class="row-state">
+    <span class="badge">정상</span>
+    <strong>5.8시간 전</strong>
+    <small>2026-09-05T06:01:53Z</small>
+  </div>
+  <div class="row-links">
+    <a href="https://github.com/jinooaction/claude/actions/workflows/collect-public-data.yml">실행</a>
+    <a href="https://github.com/jinooaction/claude/blob/automation/public-data/LAST_RUN.md">기록</a>
+  </div>
+</article>
+<article class="status-row ok">
+  <div class="row-main">
+    <h3>레짐 층화</h3>
+    <p>레짐 층화(연구 전용)</p>
+  </div>
+  <div class="row-state">
+    <span class="badge">정상</span>
+    <strong>10.6시간 전</strong>
+    <small>2026-09-05T01:18:10Z</small>
+  </div>
+  <div class="row-links">
+    <a href="https://github.com/jinooaction/claude/actions/workflows/regime-stratify.yml">실행</a>
+    <a href="https://github.com/jinooaction/claude/blob/automation/regime-stratify-last-run/LAST_RUN.md">기록</a>
+  </div>
+</article>
+<article class="status-row ok">
+  <div class="row-main">
+    <h3>regime-challenger-forward</h3>
+    <p>7/8 레짐 후보 동결 후 월별 관찰(주문 없는 연구 전용)</p>
+  </div>
+  <div class="row-state">
+    <span class="badge">정상</span>
+    <strong>140.9시간 전</strong>
+    <small>2026-08-30T14:55:42Z</small>
+  </div>
+  <div class="row-links">
+    실행
+    <a href="https://github.com/jinooaction/claude/blob/automation/regime-challenger-forward-last-run/LAST_RUN.md">기록</a>
+  </div>
+</article>
+<article class="status-row ok">
+  <div class="row-main">
+    <h3>승격 준비</h3>
+    <p>풀라이브 승격 준비 평가(보고 전용)</p>
+  </div>
+  <div class="row-state">
+    <span class="badge">정상</span>
+    <strong>11.6시간 전</strong>
+    <small>2026-09-05T00:12:59Z</small>
+  </div>
+  <div class="row-links">
+    <a href="https://github.com/jinooaction/claude/actions/workflows/promote-readiness.yml">실행</a>
+    <a href="https://github.com/jinooaction/claude/blob/automation/promote-readiness-last-run/LAST_RUN.md">기록</a>
+  </div>
+</article>
+<article class="status-row ok">
+  <div class="row-main">
+    <h3>첫 자본 경로</h3>
+    <p>첫-자본까지의 길 종합·ETA(스펙 052, 보고 전용)</p>
+  </div>
+  <div class="row-state">
+    <span class="badge">정상</span>
+    <strong>14분 전</strong>
+    <small>2026-09-05T11:36:57Z</small>
+  </div>
+  <div class="row-links">
+    <a href="https://github.com/jinooaction/claude/actions/workflows/money-path.yml">실행</a>
+    <a href="https://github.com/jinooaction/claude/blob/automation/money-path-last-run/LAST_RUN.md">기록</a>
+  </div>
+</article>
+<article class="status-row ok">
+  <div class="row-main">
+    <h3>capital-path-readiness</h3>
+    <p>자본 경로 준비도 루프(스펙 076, 보고 전용)</p>
+  </div>
+  <div class="row-state">
+    <span class="badge">정상</span>
+    <strong>2분 전</strong>
+    <small>2026-09-05T11:49:03Z</small>
+  </div>
+  <div class="row-links">
+    실행
+    <a href="https://github.com/jinooaction/claude/blob/automation/capital-path-readiness-last-run/LAST_RUN.md">기록</a>
+  </div>
+</article>
+<article class="status-row ok">
+  <div class="row-main">
+    <h3>autonomous-work-execution</h3>
+    <p>자율 작업 실행 루프(스펙 077, 다음 작업 패킷 보고 전용)</p>
+  </div>
+  <div class="row-state">
+    <span class="badge">정상</span>
+    <strong>9.4시간 전</strong>
+    <small>2026-09-05T02:26:50Z</small>
+  </div>
+  <div class="row-links">
+    실행
+    <a href="https://github.com/jinooaction/claude/blob/automation/autonomous-work-execution-last-run/LAST_RUN.md">기록</a>
+  </div>
+</article>
+<article class="status-row ok">
+  <div class="row-main">
+    <h3>released-work</h3>
+    <p>완료 후보 소비 장부(스펙 079, 보고 전용)</p>
+  </div>
+  <div class="row-state">
+    <span class="badge">정상</span>
+    <strong>9.4시간 전</strong>
+    <small>2026-09-05T02:26:47.987853Z</small>
+  </div>
+  <div class="row-links">
+    실행
+    <a href="https://github.com/jinooaction/claude/blob/automation/released-work-last-run/LAST_RUN.md">기록</a>
+  </div>
+</article>
+<article class="status-row ok">
+  <div class="row-main">
+    <h3>운영자 상태</h3>
+    <p>운영자 상태 보고와 모바일 알림 루프(스펙 080, 보고 전용)</p>
+  </div>
+  <div class="row-state">
+    <span class="badge">정상</span>
+    <strong>22.3시간 전</strong>
+    <small>2026-09-04T13:35:24.307618Z</small>
+  </div>
+  <div class="row-links">
+    <a href="https://github.com/jinooaction/claude/actions/workflows/operator-mobile-alerts.yml">실행</a>
+    <a href="https://github.com/jinooaction/claude/blob/automation/operator-status-last-run/LAST_RUN.md">기록</a>
+  </div>
+</article>
+<article class="status-row ok">
+  <div class="row-main">
+    <h3>money-gate-alignment</h3>
+    <p>돈 경로 게이트 정렬 루프(스펙 078, 보고 전용)</p>
+  </div>
+  <div class="row-state">
+    <span class="badge">정상</span>
+    <strong>22.3시간 전</strong>
+    <small>2026-09-04T13:34:33Z</small>
+  </div>
+  <div class="row-links">
+    실행
+    <a href="https://github.com/jinooaction/claude/blob/automation/money-gate-alignment-last-run/LAST_RUN.md">기록</a>
+  </div>
+</article>
+<article class="status-row ok">
+  <div class="row-main">
+    <h3>execution-quality</h3>
+    <p>주문 거부·체결 품질 패키지(스펙 083, 보고 전용)</p>
+  </div>
+  <div class="row-state">
+    <span class="badge">정상</span>
+    <strong>4.4시간 전</strong>
+    <small>2026-09-05T07:28:43Z</small>
+  </div>
+  <div class="row-links">
+    실행
+    <a href="https://github.com/jinooaction/claude/blob/automation/execution-quality-last-run/LAST_RUN.md">기록</a>
+  </div>
+</article>
+<article class="status-row ok">
+  <div class="row-main">
+    <h3>profit-evidence-engine</h3>
+    <p>시간 분리·비용 차감 수익 후보 검증(스펙 138, 연구 전용)</p>
+  </div>
+  <div class="row-state">
+    <span class="badge">정상</span>
+    <strong>9.4시간 전</strong>
+    <small>2026-09-05T02:27:06Z</small>
+  </div>
+  <div class="row-links">
+    실행
+    <a href="https://github.com/jinooaction/claude/blob/automation/profit-evidence-engine-last-run/LAST_RUN.md">기록</a>
+  </div>
+</article>
+<article class="status-row stale">
+  <div class="row-main">
+    <h3>autonomous-strategy-factory</h3>
+    <p>64개 후보 전체 다중검정 자동 전략 탐색(스펙 150, 연구 전용)</p>
+  </div>
+  <div class="row-state">
+    <span class="badge">오래됨</span>
+    <strong>70.8시간 전</strong>
+    <small>2026-09-02T13:06:16Z</small>
+  </div>
+  <div class="row-links">
+    실행
+    <a href="https://github.com/jinooaction/claude/blob/automation/autonomous-strategy-factory-last-run/LAST_RUN.md">기록</a>
+  </div>
+</article>
+<article class="status-row ok">
+  <div class="row-main">
+    <h3>autonomous-evolution</h3>
+    <p>영구 자율 성장 루프(스펙 067, 고레버리지 돌파 후보 보고 전용)</p>
+  </div>
+  <div class="row-state">
+    <span class="badge">정상</span>
+    <strong>12.6시간 전</strong>
+    <small>2026-09-04T23:13:42Z</small>
+  </div>
+  <div class="row-links">
+    실행
+    <a href="https://github.com/jinooaction/claude/blob/automation/autonomous-evolution-last-run/LAST_RUN.md">기록</a>
+  </div>
+</article>
+<article class="status-row ok">
+  <div class="row-main">
+    <h3>autonomous-promotion</h3>
+    <p>자율 승격 루프(스펙 068, 후보→검증 단계 분류 보고 전용)</p>
+  </div>
+  <div class="row-state">
+    <span class="badge">정상</span>
+    <strong>12.6시간 전</strong>
+    <small>2026-09-04T23:13:44Z</small>
+  </div>
+  <div class="row-links">
+    실행
+    <a href="https://github.com/jinooaction/claude/blob/automation/autonomous-promotion-last-run/LAST_RUN.md">기록</a>
+  </div>
+</article>
+<article class="status-row ok">
+  <div class="row-main">
+    <h3>candidate-implementation-factory</h3>
+    <p>후보 구현 공장(스펙 070, BACKTEST_REQUIRED 후보→검증 패키지)</p>
+  </div>
+  <div class="row-state">
+    <span class="badge">정상</span>
+    <strong>12.6시간 전</strong>
+    <small>2026-09-04T23:13:43Z</small>
+  </div>
+  <div class="row-links">
+    실행
+    <a href="https://github.com/jinooaction/claude/blob/automation/candidate-implementation-factory-last-run/LAST_RUN.md">기록</a>
+  </div>
+</article>
+<article class="status-row ok">
+  <div class="row-main">
+    <h3>candidate-result-executor</h3>
+    <p>후보 결과 실행기(스펙 071, 검증 패키지→결과 evidence)</p>
+  </div>
+  <div class="row-state">
+    <span class="badge">정상</span>
+    <strong>12.6시간 전</strong>
+    <small>2026-09-04T23:14:27Z</small>
+  </div>
+  <div class="row-links">
+    실행
+    <a href="https://github.com/jinooaction/claude/blob/automation/candidate-implementation-results/LAST_RUN.md">기록</a>
+  </div>
+</article>
+<article class="status-row ok">
+  <div class="row-main">
+    <h3>autonomous-promotion-actions</h3>
+    <p>자율 승격 실행 루프(스펙 069, forward/canary 큐 연결)</p>
+  </div>
+  <div class="row-state">
+    <span class="badge">정상</span>
+    <strong>12.6시간 전</strong>
+    <small>2026-09-04T23:13:43Z</small>
+  </div>
+  <div class="row-links">
+    실행
+    <a href="https://github.com/jinooaction/claude/blob/automation/autonomous-promotion-actions-last-run/LAST_RUN.md">기록</a>
+  </div>
+</article>
+<article class="status-row ok">
+  <div class="row-main">
+    <h3>promotion-forward</h3>
+    <p>promotion 전용 forward paper 검증(스펙 069, paper only)</p>
+  </div>
+  <div class="row-state">
+    <span class="badge">정상</span>
+    <strong>11.5시간 전</strong>
+    <small>2026-09-05T00:23:15Z</small>
+  </div>
+  <div class="row-links">
+    실행
+    <a href="https://github.com/jinooaction/claude/blob/automation/promotion-forward-last-run/LAST_RUN.md">기록</a>
+  </div>
+</article>
+<article class="status-row ok">
+  <div class="row-main">
+    <h3>promotion-canary</h3>
+    <p>promotion 전용 hardened canary 검증(스펙 069, live order 없음)</p>
+  </div>
+  <div class="row-state">
+    <span class="badge">정상</span>
+    <strong>6.9시간 전</strong>
+    <small>2026-09-05T04:55:44Z</small>
+  </div>
+  <div class="row-links">
+    실행
+    <a href="https://github.com/jinooaction/claude/blob/automation/promotion-canary-last-run/LAST_RUN.md">기록</a>
+  </div>
+</article>
+<article class="status-row ok">
+  <div class="row-main">
+    <h3>전략 재지정</h3>
+    <p>자율 전략 재지정 폐회로(스펙 055, 챔피언→라이브 5중 게이트)</p>
+  </div>
+  <div class="row-state">
+    <span class="badge">정상</span>
+    <strong>7.2시간 전</strong>
+    <small>2026-09-05T04:37:11Z</small>
+  </div>
+  <div class="row-links">
+    <a href="https://github.com/jinooaction/claude/actions/workflows/reassign-on-tournament.yml">실행</a>
+    <a href="https://github.com/jinooaction/claude/blob/automation/reassign-last-run/LAST_RUN.md">기록</a>
+  </div>
+</article>
+
+    <section class="note" aria-label="안전 설명">
+      이 화면은 GitHub Actions와 automation 사이드카의 공개 실행 기록만 읽습니다.
+      KIS 비밀값, 계좌번호, 주문 권한, 서버 데이터베이스에는 접근하지 않습니다.
+      실거래 가능 여부의 최종 판단은 라이브 서버의 halt 상태와 감사 로그 확인이 필요합니다.
+      빠른 이동: <a href="https://github.com/jinooaction/claude/actions">전체 Actions</a> · <a href="https://github.com/jinooaction/claude/actions/runs/33964435172">생성 실행</a>
+    </section>
+
+    <script type="application/json" id="status-data">{&quot;schema_version&quot;:&quot;1.0&quot;,&quot;as_of_utc&quot;:&quot;2026-09-05T11:51:23Z&quot;,&quot;overall&quot;:&quot;DEGRADED&quot;,&quot;checks&quot;:[{&quot;key&quot;:&quot;rebalance-paper-forward&quot;,&quot;status&quot;:&quot;OK&quot;,&quot;critical&quot;:true,&quot;age_hours&quot;:11.54,&quot;max_age_hours&quot;:80.0,&quot;timestamp_utc&quot;:&quot;2026-09-05T00:19:17Z&quot;,&quot;detail&quot;:&quot;전진 페이퍼 A/B 토너먼트(전진 엣지 관측 생산) — 신선(11.5h).&quot;},{&quot;key&quot;:&quot;edge-autoarm&quot;,&quot;status&quot;:&quot;OK&quot;,&quot;critical&quot;:true,&quot;age_hours&quot;:9.67,&quot;max_age_hours&quot;:80.0,&quot;timestamp_utc&quot;:&quot;2026-09-05T02:10:58Z&quot;,&quot;detail&quot;:&quot;자본 사다리 게이트(단 승격/강등 결정) — 신선(9.7h).&quot;},{&quot;key&quot;:&quot;kis-smoke&quot;,&quot;status&quot;:&quot;OK&quot;,&quot;critical&quot;:true,&quot;age_hours&quot;:4.38,&quot;max_age_hours&quot;:30.0,&quot;timestamp_utc&quot;:&quot;2026-09-05T07:28:24Z&quot;,&quot;detail&quot;:&quot;KIS 브로커 연결 생존(매일) — 신선(4.4h).&quot;},{&quot;key&quot;:&quot;rebalance-live-canary&quot;,&quot;status&quot;:&quot;OK&quot;,&quot;critical&quot;:true,&quot;age_hours&quot;:9.35,&quot;max_age_hours&quot;:80.0,&quot;timestamp_utc&quot;:&quot;2026-09-05T02:30:39Z&quot;,&quot;detail&quot;:&quot;라이브 캐너리 + 라이브 NAV 스냅샷 — 신선(9.3h).&quot;},{&quot;key&quot;:&quot;collect-public-data&quot;,&quot;status&quot;:&quot;OK&quot;,&quot;critical&quot;:false,&quot;age_hours&quot;:5.83,&quot;max_age_hours&quot;:80.0,&quot;timestamp_utc&quot;:&quot;2026-09-05T06:01:53Z&quot;,&quot;detail&quot;:&quot;공개 데이터 수집·교차검증(연구 전용) — 신선(5.8h).&quot;},{&quot;key&quot;:&quot;regime-stratify&quot;,&quot;status&quot;:&quot;OK&quot;,&quot;critical&quot;:false,&quot;age_hours&quot;:10.55,&quot;max_age_hours&quot;:80.0,&quot;timestamp_utc&quot;:&quot;2026-09-05T01:18:10Z&quot;,&quot;detail&quot;:&quot;레짐 층화(연구 전용) — 신선(10.6h).&quot;},{&quot;key&quot;:&quot;regime-challenger-forward&quot;,&quot;status&quot;:&quot;OK&quot;,&quot;critical&quot;:false,&quot;age_hours&quot;:140.93,&quot;max_age_hours&quot;:840.0,&quot;timestamp_utc&quot;:&quot;2026-08-30T14:55:42Z&quot;,&quot;detail&quot;:&quot;7/8 레짐 후보 동결 후 월별 관찰(주문 없는 연구 전용) — 신선(140.9h).&quot;},{&quot;key&quot;:&quot;promote-readiness&quot;,&quot;status&quot;:&quot;OK&quot;,&quot;critical&quot;:false,&quot;age_hours&quot;:11.64,&quot;max_age_hours&quot;:30.0,&quot;timestamp_utc&quot;:&quot;2026-09-05T00:12:59Z&quot;,&quot;detail&quot;:&quot;풀라이브 승격 준비 평가(보고 전용) — 신선(11.6h).&quot;},{&quot;key&quot;:&quot;money-path&quot;,&quot;status&quot;:&quot;OK&quot;,&quot;critical&quot;:false,&quot;age_hours&quot;:0.24,&quot;max_age_hours&quot;:30.0,&quot;timestamp_utc&quot;:&quot;2026-09-05T11:36:57Z&quot;,&quot;detail&quot;:&quot;첫-자본까지의 길 종합·ETA(스펙 052, 보고 전용) — 신선(0.2h).&quot;},{&quot;key&quot;:&quot;capital-path-readiness&quot;,&quot;status&quot;:&quot;OK&quot;,&quot;critical&quot;:false,&quot;age_hours&quot;:0.04,&quot;max_age_hours&quot;:30.0,&quot;timestamp_utc&quot;:&quot;2026-09-05T11:49:03Z&quot;,&quot;detail&quot;:&quot;자본 경로 준비도 루프(스펙 076, 보고 전용) — 신선(0.0h).&quot;},{&quot;key&quot;:&quot;autonomous-work-execution&quot;,&quot;status&quot;:&quot;OK&quot;,&quot;critical&quot;:false,&quot;age_hours&quot;:9.41,&quot;max_age_hours&quot;:30.0,&quot;timestamp_utc&quot;:&quot;2026-09-05T02:26:50Z&quot;,&quot;detail&quot;:&quot;자율 작업 실행 루프(스펙 077, 다음 작업 패킷 보고 전용) — 신선(9.4h).&quot;},{&quot;key&quot;:&quot;released-work&quot;,&quot;status&quot;:&quot;OK&quot;,&quot;critical&quot;:false,&quot;age_hours&quot;:9.41,&quot;max_age_hours&quot;:30.0,&quot;timestamp_utc&quot;:&quot;2026-09-05T02:26:47.987853Z&quot;,&quot;detail&quot;:&quot;완료 후보 소비 장부(스펙 079, 보고 전용) — 신선(9.4h).&quot;},{&quot;key&quot;:&quot;operator-status&quot;,&quot;status&quot;:&quot;OK&quot;,&quot;critical&quot;:false,&quot;age_hours&quot;:22.27,&quot;max_age_hours&quot;:30.0,&quot;timestamp_utc&quot;:&quot;2026-09-04T13:35:24.307618Z&quot;,&quot;detail&quot;:&quot;운영자 상태 보고와 모바일 알림 루프(스펙 080, 보고 전용) — 신선(22.3h).&quot;},{&quot;key&quot;:&quot;money-gate-alignment&quot;,&quot;status&quot;:&quot;OK&quot;,&quot;critical&quot;:false,&quot;age_hours&quot;:22.28,&quot;max_age_hours&quot;:30.0,&quot;timestamp_utc&quot;:&quot;2026-09-04T13:34:33Z&quot;,&quot;detail&quot;:&quot;돈 경로 게이트 정렬 루프(스펙 078, 보고 전용) — 신선(22.3h).&quot;},{&quot;key&quot;:&quot;execution-quality&quot;,&quot;status&quot;:&quot;OK&quot;,&quot;critical&quot;:false,&quot;age_hours&quot;:4.38,&quot;max_age_hours&quot;:30.0,&quot;timestamp_utc&quot;:&quot;2026-09-05T07:28:43Z&quot;,&quot;detail&quot;:&quot;주문 거부·체결 품질 패키지(스펙 083, 보고 전용) — 신선(4.4h).&quot;},{&quot;key&quot;:&quot;profit-evidence-engine&quot;,&quot;status&quot;:&quot;OK&quot;,&quot;critical&quot;:false,&quot;age_hours&quot;:9.4,&quot;max_age_hours&quot;:30.0,&quot;timestamp_utc&quot;:&quot;2026-09-05T02:27:06Z&quot;,&quot;detail&quot;:&quot;시간 분리·비용 차감 수익 후보 검증(스펙 138, 연구 전용) — 신선(9.4h).&quot;},{&quot;key&quot;:&quot;autonomous-strategy-factory&quot;,&quot;status&quot;:&quot;STALE&quot;,&quot;critical&quot;:false,&quot;age_hours&quot;:70.75,&quot;max_age_hours&quot;:30.0,&quot;timestamp_utc&quot;:&quot;2026-09-02T13:06:16Z&quot;,&quot;detail&quot;:&quot;64개 후보 전체 다중검정 자동 전략 탐색(스펙 150, 연구 전용) — 70.8h 경과(한계 30h 의 2배 초과). 워크플로가 멈췄을 가능성이 높다.&quot;},{&quot;key&quot;:&quot;autonomous-evolution&quot;,&quot;status&quot;:&quot;OK&quot;,&quot;critical&quot;:false,&quot;age_hours&quot;:12.63,&quot;max_age_hours&quot;:30.0,&quot;timestamp_utc&quot;:&quot;2026-09-04T23:13:42Z&quot;,&quot;detail&quot;:&quot;영구 자율 성장 루프(스펙 067, 고레버리지 돌파 후보 보고 전용) — 신선(12.6h).&quot;},{&quot;key&quot;:&quot;autonomous-promotion&quot;,&quot;status&quot;:&quot;OK&quot;,&quot;critical&quot;:false,&quot;age_hours&quot;:12.63,&quot;max_age_hours&quot;:30.0,&quot;timestamp_utc&quot;:&quot;2026-09-04T23:13:44Z&quot;,&quot;detail&quot;:&quot;자율 승격 루프(스펙 068, 후보→검증 단계 분류 보고 전용) — 신선(12.6h).&quot;},{&quot;key&quot;:&quot;candidate-implementation-factory&quot;,&quot;status&quot;:&quot;OK&quot;,&quot;critical&quot;:false,&quot;age_hours&quot;:12.63,&quot;max_age_hours&quot;:30.0,&quot;timestamp_utc&quot;:&quot;2026-09-04T23:13:43Z&quot;,&quot;detail&quot;:&quot;후보 구현 공장(스펙 070, BACKTEST_REQUIRED 후보→검증 패키지) — 신선(12.6h).&quot;},{&quot;key&quot;:&quot;candidate-result-executor&quot;,&quot;status&quot;:&quot;OK&quot;,&quot;critical&quot;:false,&quot;age_hours&quot;:12.62,&quot;max_age_hours&quot;:30.0,&quot;timestamp_utc&quot;:&quot;2026-09-04T23:14:27Z&quot;,&quot;detail&quot;:&quot;후보 결과 실행기(스펙 071, 검증 패키지→결과 evidence) — 신선(12.6h).&quot;},{&quot;key&quot;:&quot;autonomous-promotion-actions&quot;,&quot;status&quot;:&quot;OK&quot;,&quot;critical&quot;:false,&quot;age_hours&quot;:12.63,&quot;max_age_hours&quot;:30.0,&quot;timestamp_utc&quot;:&quot;2026-09-04T23:13:43Z&quot;,&quot;detail&quot;:&quot;자율 승격 실행 루프(스펙 069, forward/canary 큐 연결) — 신선(12.6h).&quot;},{&quot;key&quot;:&quot;promotion-forward&quot;,&quot;status&quot;:&quot;OK&quot;,&quot;critical&quot;:false,&quot;age_hours&quot;:11.47,&quot;max_age_hours&quot;:80.0,&quot;timestamp_utc&quot;:&quot;2026-09-05T00:23:15Z&quot;,&quot;detail&quot;:&quot;promotion 전용 forward paper 검증(스펙 069, paper only) — 신선(11.5h).&quot;},{&quot;key&quot;:&quot;promotion-canary&quot;,&quot;status&quot;:&quot;OK&quot;,&quot;critical&quot;:false,&quot;age_hours&quot;:6.93,&quot;max_age_hours&quot;:80.0,&quot;timestamp_utc&quot;:&quot;2026-09-05T04:55:44Z&quot;,&quot;detail&quot;:&quot;promotion 전용 hardened canary 검증(스펙 069, live order 없음) — 신선(6.9h).&quot;},{&quot;key&quot;:&quot;reassign&quot;,&quot;status&quot;:&quot;OK&quot;,&quot;critical&quot;:false,&quot;age_hours&quot;:7.24,&quot;max_age_hours&quot;:80.0,&quot;timestamp_utc&quot;:&quot;2026-09-05T04:37:11Z&quot;,&quot;detail&quot;:&quot;자율 전략 재지정 폐회로(스펙 055, 챔피언→라이브 5중 게이트) — 신선(7.2h).&quot;}]}</script>
+    <script type="application/json" id="operator-status-data">{&quot;schema_version&quot;:&quot;1.0&quot;,&quot;run_id&quot;:&quot;[REDACTED_ACCOUNT]&quot;,&quot;commit&quot;:&quot;a1898dabcec535a2680bd9fed0a85bb630e4725f&quot;,&quot;timestamp_utc&quot;:&quot;2026-09-04T13:35:24.307618Z&quot;,&quot;overall_status&quot;:&quot;ACTION_REQUIRED&quot;,&quot;headline_ko&quot;:&quot;돈 경로 sidecar들이 차단 상태를 보고합니다.&quot;,&quot;next_action_ko&quot;:&quot;edge-autoarm workflow와 sidecar 발행 경로를 먼저 복구한다.&quot;,&quot;dashboard_url&quot;:&quot;https://jinooaction.github.io/claude/status.html&quot;,&quot;alert_decision&quot;:{&quot;alert_level&quot;:&quot;ACTION_REQUIRED&quot;,&quot;should_send&quot;:true,&quot;reason_ko&quot;:&quot;개입 필요 표면 1개가 있습니다.&quot;,&quot;message_ko&quot;:&quot;auto-invest 운영자 알림: ACTION_REQUIRED\n돈 경로 sidecar들이 차단 상태를 보고합니다.\n\n다음 행동: edge-autoarm workflow와 sidecar 발행 경로를 먼저 복구한다.\n\n개입 필요 표면:\n- money-gate-alignment: 돈 경로 sidecar들이 차단 상태를 보고합니다.\n\n상태판: https://jinooaction.github.io/claude/status.html\n\n읽기 전용 알림입니다. 주문, 자본, live 설정은 변경하지 않았습니다.&quot;,&quot;send_status&quot;:&quot;SENT&quot;},&quot;surfaces&quot;:[{&quot;key&quot;:&quot;pipeline-liveness&quot;,&quot;source_ref&quot;:&quot;automation/pipeline-liveness-last-run:LAST_RUN.md&quot;,&quot;present&quot;:true,&quot;parse_status&quot;:&quot;ok&quot;,&quot;status&quot;:&quot;OK&quot;,&quot;severity&quot;:&quot;info&quot;,&quot;summary_ko&quot;:&quot;핵심 자동화 생존 감시는 정상입니다.&quot;,&quot;next_action_ko&quot;:&quot;&quot;},{&quot;key&quot;:&quot;money-path&quot;,&quot;source_ref&quot;:&quot;automation/money-path-last-run:LAST_RUN.md&quot;,&quot;present&quot;:true,&quot;parse_status&quot;:&quot;ok&quot;,&quot;status&quot;:&quot;REAL_ORDER_PATH_ARMED&quot;,&quot;severity&quot;:&quot;attention&quot;,&quot;summary_ko&quot;:&quot;실제 주문 경로가 무장 상태입니다. 최신 주문 sidecar와 감사 로그를 함께 봐야 합니다.&quot;,&quot;next_action_ko&quot;:&quot;micro GTAA와 live canary 최신 sidecar를 확인한다.&quot;},{&quot;key&quot;:&quot;capital-path-readiness&quot;,&quot;source_ref&quot;:&quot;automation/capital-path-readiness-last-run:capital_path_readiness.json&quot;,&quot;present&quot;:true,&quot;parse_status&quot;:&quot;ok&quot;,&quot;status&quot;:&quot;CAPITAL_ARMABLE&quot;,&quot;severity&quot;:&quot;info&quot;,&quot;summary_ko&quot;:&quot;자본 준비도는 CAPITAL_ARMABLE, 실제 돈 상태는 REAL_ORDER_PATH_ARMED입니다.&quot;,&quot;next_action_ko&quot;:&quot;&quot;},{&quot;key&quot;:&quot;money-gate-alignment&quot;,&quot;source_ref&quot;:&quot;automation/money-gate-alignment-last-run:money_gate_alignment.json&quot;,&quot;present&quot;:true,&quot;parse_status&quot;:&quot;ok&quot;,&quot;status&quot;:&quot;BLOCKED&quot;,&quot;severity&quot;:&quot;action&quot;,&quot;summary_ko&quot;:&quot;돈 경로 sidecar들이 차단 상태를 보고합니다.&quot;,&quot;next_action_ko&quot;:&quot;edge-autoarm workflow와 sidecar 발행 경로를 먼저 복구한다.&quot;},{&quot;key&quot;:&quot;autonomous-work-execution&quot;,&quot;source_ref&quot;:&quot;automation/autonomous-work-execution-last-run:autonomous_work_execution.json&quot;,&quot;present&quot;:true,&quot;parse_status&quot;:&quot;ok&quot;,&quot;status&quot;:&quot;EXECUTION_READY&quot;,&quot;severity&quot;:&quot;info&quot;,&quot;summary_ko&quot;:&quot;다음 자율 작업은 실거래 관찰과 병렬인 신규 엣지 challenger입니다.&quot;,&quot;next_action_ko&quot;:&quot;공개 데이터·레짐·비용·paper forward를 사용해 기존 후보와 다른 신호군을 시간 분리 walk-forward로 검증하고, 통과하지 못하면 live 승격 없이 기각한다.&quot;},{&quot;key&quot;:&quot;released-work&quot;,&quot;source_ref&quot;:&quot;automation/released-work-last-run:released_work.json&quot;,&quot;present&quot;:true,&quot;parse_status&quot;:&quot;ok&quot;,&quot;status&quot;:&quot;OK&quot;,&quot;severity&quot;:&quot;info&quot;,&quot;summary_ko&quot;:&quot;완료 후보 장부 상태는 OK, 완료 후보 61개입니다.&quot;,&quot;next_action_ko&quot;:&quot;&quot;}],&quot;dashboard_sections&quot;:[{&quot;key&quot;:&quot;money&quot;,&quot;title_ko&quot;:&quot;실제 돈 경로&quot;,&quot;status&quot;:&quot;REAL_ORDER_PATH_ARMED&quot;,&quot;body_ko&quot;:&quot;실제 주문 경로가 무장 상태입니다. 최신 주문 sidecar와 감사 로그를 함께 봐야 합니다.&quot;},{&quot;key&quot;:&quot;autonomous-work&quot;,&quot;title_ko&quot;:&quot;다음 자율 작업&quot;,&quot;status&quot;:&quot;EXECUTION_READY&quot;,&quot;body_ko&quot;:&quot;다음 자율 작업은 실거래 관찰과 병렬인 신규 엣지 challenger입니다.&quot;},{&quot;key&quot;:&quot;alignment&quot;,&quot;title_ko&quot;:&quot;돈 경로 정렬&quot;,&quot;status&quot;:&quot;BLOCKED&quot;,&quot;body_ko&quot;:&quot;돈 경로 sidecar들이 차단 상태를 보고합니다.&quot;},{&quot;key&quot;:&quot;action-needed&quot;,&quot;title_ko&quot;:&quot;개입 필요&quot;,&quot;status&quot;:&quot;OK&quot;,&quot;body_ko&quot;:&quot;돈 경로 sidecar들이 차단 상태를 보고합니다.&quot;}],&quot;safety_invariants&quot;:[&quot;no broker API call&quot;,&quot;no orders&quot;,&quot;no capital allocation&quot;,&quot;no live strategy change&quot;,&quot;no whitelist/caps change&quot;,&quot;no server SSH&quot;,&quot;no secret persistence&quot;,&quot;operator visibility only&quot;]}</script>
+  </main>
+</body>
+</html>
