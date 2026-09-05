@@ -2,6 +2,9 @@
 
 from pathlib import Path
 
+import pytest
+from click import unstyle
+from typer import rich_utils
 from typer.testing import CliRunner
 
 from auto_invest import cli
@@ -20,8 +23,17 @@ def test_legacy_backfill_cache_default_stays_database_adjacent(tmp_path: Path) -
     assert cli._resolve_backfill_token_cache(database, None) == database.parent / "kis_token.json"
 
 
-def test_backfill_help_exposes_explicit_token_cache_option() -> None:
-    result = CliRunner().invoke(cli.app, ["backfill-bars", "--help"])
+@pytest.mark.parametrize("colored", [False, True])
+def test_backfill_help_exposes_explicit_token_cache_option(
+    monkeypatch: pytest.MonkeyPatch, colored: bool,
+) -> None:
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.setenv("TERM", "xterm-256color")
+    monkeypatch.setattr(rich_utils, "FORCE_TERMINAL", colored)
+    monkeypatch.setattr(rich_utils, "COLOR_SYSTEM", "standard" if colored else None)
+    result = CliRunner().invoke(cli.app, ["backfill-bars", "--help"], color=colored)
 
     assert result.exit_code == 0, result.output
-    assert "--token-cache" in result.output
+    if colored:
+        assert "\x1b[" in result.output
+    assert "--token-cache" in unstyle(result.output)

@@ -31,7 +31,9 @@ def _run(*args: str, cwd: Path | None = None) -> subprocess.CompletedProcess[str
 def gateway_env(tmp_path: Path) -> dict[str, object]:
     repo = tmp_path / "repo"
     repo.mkdir()
-    _run("git", "init", "-q", cwd=repo)
+    # The production helper fetches main. Exercise a non-main host default
+    # while explicitly creating the fixture's required branch on every OS.
+    _run("git", "-c", "init.defaultBranch=master", "init", "-q", "-b", "main", cwd=repo)
     _run("git", "config", "user.name", "test", cwd=repo)
     _run("git", "config", "user.email", "test@example.com", cwd=repo)
     (repo / "automation").mkdir()
