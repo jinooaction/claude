@@ -1,5 +1,5 @@
 {
-  "commit": "aa6aa482534d2f192b197de04af2bb9008383b2e",
+  "commit": "21f63d64160ed36e70a58cb28c65ebd0f665fe09",
   "overall_status": "OK",
   "released_work": [
     {
@@ -900,5 +900,5 @@
       "spec_id": "180-prefill-capital-parity"
     }
   ],
-  "timestamp_utc": "2026-09-04T23:57:16.318058Z"
+  "timestamp_utc": "2026-09-05T00:58:32.433462Z"
 }
