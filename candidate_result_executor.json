@@ -1,0 +1,372 @@
+{
+  "commit": "4a5f43add677155382487f23a8a47debd2daa378",
+  "counts": {
+    "blocked": 0,
+    "fail": 1,
+    "pass": 0,
+    "pending": 1
+  },
+  "diagnostic_counts": {
+    "insufficient_pass_evidence": 1,
+    "mixed_horizon_evidence": 1
+  },
+  "missing_inputs": [],
+  "overall_status": "degraded",
+  "results": [
+    {
+      "block_reason_ko": "장기와 최근 전략 증거가 섞여 있어 추가 forward 검증이 필요하다.",
+      "candidate_id": "candidate-1ed634d8bf6d",
+      "diagnostics": [
+        {
+          "code": "insufficient_pass_evidence",
+          "details": {},
+          "evidence_source": "output",
+          "next_actions": [
+            {
+              "action_code": "emit_machine_readable_verdict",
+              "owner": "future_spec",
+              "safe_to_auto_run": false,
+              "summary_ko": "검증 명령이 명확한 pass/fail verdict와 핵심 통계를 내도록 보강한다."
+            }
+          ],
+          "retryable": false,
+          "severity": "warning",
+          "summary_ko": "실행 출력에 통과 verdict가 충분히 없다."
+        },
+        {
+          "code": "mixed_horizon_evidence",
+          "details": {},
+          "evidence_source": "output",
+          "next_actions": [
+            {
+              "action_code": "continue_forward_validation",
+              "owner": "automation",
+              "safe_to_auto_run": true,
+              "summary_ko": "통과한 장기 증거를 보존하고 최근 forward 기준이 충족될 때까지 관측한다."
+            }
+          ],
+          "retryable": false,
+          "severity": "warning",
+          "summary_ko": "장기 통과와 최근 실패 증거가 함께 있어 전진 검증이 더 필요하다."
+        }
+      ],
+      "executions": [
+        {
+          "command": [
+            "uv",
+            "run",
+            "auto-invest",
+            "portfolio-walk-forward",
+            "--portfolio",
+            "deploy/micro-gtaa-live-portfolio.toml",
+            "--trailing-years",
+            "5",
+            "--history-root",
+            "/tmp/candidate_result_history/micro-gtaa/hist",
+            "--db",
+            "data/candidate-factory/candidate-1ed634d8bf6d.db",
+            "--halt-path",
+            "data/candidate-factory/candidate-1ed634d8bf6d.halt.flag",
+            "--json"
+          ],
+          "exit_code": 0,
+          "stderr_excerpt": "",
+          "stdout_excerpt": "{\"dataset_version\": \"64fca16f0066e0629f2b2afc324476dd151320c851a4aad04d1b180b143c46cc\", \"data_newest_session\": \"2026-09-04\", \"data_age_days\": 1, \"data_staleness\": \"fresh\", \"eval_window\": [\"2022-06-16\", \"2026-09-04\"], \"n_segments\": 3, \"segments_strategy_wins\": 1, \"mean_strategy_sharpe\": \"1.725878\", \"mean_benchmark_sharpe\": \"1.971776\", \"pooled_strategy_sharpe_annual\": \"1.940645\", \"num_trials\": 1, \"strategy_psr\": \"0.999423\", \"strategy_dsr\": \"0.999423\", \"verdict\": \"\\uac15\\uac74\\ud55c \\uc5e3\\uc9c0 \\uc5c6\\uc74c: \\uad6c\\uac04 \\uacfc\\ubc18 \\uc2e4\\ud328(1/3); \\ud3c9\\uade0 \\uc0e4\\ud504\\uac00 \\ub2e8\\uc21c \\ubcf4\\uc720 \\uc774\\ud558. \\ub77c\\uc774\\ube0c \\ubc30\\ud3ec \\uc815\\ub2f9\\ud654 \\uc548 \\ub428.\"}",
+          "timed_out": false
+        },
+        {
+          "command": [
+            "uv",
+            "run",
+            "python",
+            "scripts/deep_walk_forward_probe.py",
+            "--segment-months",
+            "60"
+          ],
+          "exit_code": 0,
+          "stderr_excerpt": "내려받기 https://raw.githubusercontent.com/datasets/s-and-p-500/main/data/data.csv …\n내려받기 https://raw.githubusercontent.com/datasets/gold-prices/main/data/monthly.csv …\n  1971~: 주식·채권 668개월 (1971-01-01 … 2026-08-01)",
+          "stdout_excerpt": "깊은 OOS walk-forward — 추세 후보 vs 등가중 3자산 단순 보유 (주식·채권·금 1/3씩, 추세 게이트 없음)\n  추세 SMA 10개월 · 구간 60개월 · 총 667개월 · 11개 구간\n\n후보                                 판정              전체샤프    전체칼마    전체낙폭%     구간샤프승     구간방어승    최악구간%\n-----------------------------------------------------------------------------------------------------\n(벤치마크) 등가중 단순보유                    기준              1.23    0.45     20.7         —         —      3.9\n주식 추세만 (스펙 042)                    — 엣지 없음         1.38    0.66     18.9    6/11      3/11        7.7\n2자산 분산 추세 주+채 (스펙 043)             🏆 수익 엣지         1.78    1.50      6.6    9/11      6/11        6.1\n3자산 고정가중 추세 +금 (스펙 047)            🏆 수익 엣지         1.77    1.18      9.5   10/11      8/11        5.8\n3자산 역변동성 추세 +금 (스펙 047, 라이브)       🛡 방어 엣지         1.81    1.75      5.3   11/11      8/11        4.8\n-----------------------------------------------------------------------------------------------------\n\n챔피언: 3자산 역변동성 추세 +금 (스펙 047, 라이브) — 🛡 방어 엣지\n  자본 방어(낙폭↓·칼마↑·샤프 비악화);",
+          "timed_out": false
+        }
+      ],
+      "historical_backtest": "pending",
+      "next_actions": [
+        {
+          "action_code": "emit_machine_readable_verdict",
+          "owner": "future_spec",
+          "safe_to_auto_run": false,
+          "summary_ko": "검증 명령이 명확한 pass/fail verdict와 핵심 통계를 내도록 보강한다."
+        },
+        {
+          "action_code": "continue_forward_validation",
+          "owner": "automation",
+          "safe_to_auto_run": true,
+          "summary_ko": "통과한 장기 증거를 보존하고 최근 forward 기준이 충족될 때까지 관측한다."
+        }
+      ],
+      "output_summary_ko": "통과 증거를 보존하고 실패 축만 대기 상태로 분리했다.",
+      "package_id": "pkg-c9a284fa4235",
+      "package_kind": "strategy_backtest",
+      "raw_metrics": {
+        "data_age_days": 1,
+        "data_newest_session": "2026-09-04",
+        "data_staleness": "fresh",
+        "dataset_version": "64fca16f0066e0629f2b2afc324476dd151320c851a4aad04d1b180b143c46cc",
+        "eval_window": [
+          "2022-06-16",
+          "2026-09-04"
+        ],
+        "evidence_by_command": [
+          {
+            "command": [
+              "uv",
+              "run",
+              "auto-invest",
+              "portfolio-walk-forward",
+              "--portfolio",
+              "deploy/micro-gtaa-live-portfolio.toml",
+              "--trailing-years",
+              "5",
+              "--history-root",
+              "/tmp/candidate_result_history/micro-gtaa/hist",
+              "--db",
+              "data/candidate-factory/candidate-1ed634d8bf6d.db",
+              "--halt-path",
+              "data/candidate-factory/candidate-1ed634d8bf6d.halt.flag",
+              "--json"
+            ],
+            "metrics": {
+              "data_age_days": 1,
+              "data_newest_session": "2026-09-04",
+              "data_staleness": "fresh",
+              "dataset_version": "64fca16f0066e0629f2b2afc324476dd151320c851a4aad04d1b180b143c46cc",
+              "eval_window": [
+                "2022-06-16",
+                "2026-09-04"
+              ],
+              "mean_benchmark_sharpe": "1.971776",
+              "mean_strategy_sharpe": "1.725878",
+              "n_segments": 3,
+              "num_trials": 1,
+              "pooled_strategy_sharpe_annual": "1.940645",
+              "segments_strategy_wins": 1,
+              "strategy_dsr": "0.999423",
+              "strategy_psr": "0.999423",
+              "verdict": "강건한 엣지 없음: 구간 과반 실패(1/3); 평균 샤프가 단순 보유 이하. 라이브 배포 정당화 안 됨."
+            },
+            "role": "recent_oos",
+            "status": "fail"
+          },
+          {
+            "command": [
+              "uv",
+              "run",
+              "python",
+              "scripts/deep_walk_forward_probe.py",
+              "--segment-months",
+              "60"
+            ],
+            "metrics": {
+              "executions": [
+                {
+                  "command": [
+                    "uv",
+                    "run",
+                    "python",
+                    "scripts/deep_walk_forward_probe.py",
+                    "--segment-months",
+                    "60"
+                  ],
+                  "exit_code": 0,
+                  "stderr_excerpt": "내려받기 https://raw.githubusercontent.com/datasets/s-and-p-500/main/data/data.csv …\n내려받기 https://raw.githubusercontent.com/datasets/gold-prices/main/data/monthly.csv …\n  1971~: 주식·채권 668개월 (1971-01-01 … 2026-08-01)",
+                  "stdout_excerpt": "깊은 OOS walk-forward — 추세 후보 vs 등가중 3자산 단순 보유 (주식·채권·금 1/3씩, 추세 게이트 없음)\n  추세 SMA 10개월 · 구간 60개월 · 총 667개월 · 11개 구간\n\n후보                                 판정              전체샤프    전체칼마    전체낙폭%     구간샤프승     구간방어승    최악구간%\n-----------------------------------------------------------------------------------------------------\n(벤치마크) 등가중 단순보유                    기준              1.23    0.45     20.7         —         —      3.9\n주식 추세만 (스펙 042)                    — 엣지 없음         1.38    0.66     18.9    6/11      3/11        7.7\n2자산 분산 추세 주+채 (스펙 043)             🏆 수익 엣지         1.78    1.50      6.6    9/11      6/11        6.1\n3자산 고정가중 추세 +금 (스펙 047)            🏆 수익 엣지         1.77    1.18      9.5   10/11      8/11        5.8\n3자산 역변동성 추세 +금 (스펙 047, 라이브)       🛡 방어 엣지         1.81    1.75      5.3   11/11      8/11        4.8\n-----------------------------------------------------------------------------------------------------\n\n챔피언: 3자산 역변동성 추세 +금 (스펙 047, 라이브) — 🛡 방어 엣지\n  자본 방어(낙폭↓·칼마↑·샤프 비악화);",
+                  "timed_out": false
+                }
+              ]
+            },
+            "role": "historical_backtest",
+            "status": "pending"
+          }
+        ],
+        "mean_benchmark_sharpe": "1.971776",
+        "mean_strategy_sharpe": "1.725878",
+        "n_segments": 3,
+        "num_trials": 1,
+        "pooled_strategy_sharpe_annual": "1.940645",
+        "segments_strategy_wins": 1,
+        "strategy_dsr": "0.999423",
+        "strategy_psr": "0.999423",
+        "verdict": "강건한 엣지 없음: 구간 과반 실패(1/3); 평균 샤프가 단순 보유 이하. 라이브 배포 정당화 안 됨."
+      },
+      "recent_oos": "fail",
+      "retryable": false,
+      "source_ref": "candidate-result-executor:pkg-c9a284fa4235",
+      "status": "pending",
+      "walk_forward": "fail"
+    },
+    {
+      "block_reason_ko": "모든 필수 전략 증거 축이 엣지 없음 또는 실패를 보고했다.",
+      "candidate_id": "candidate-cc96b35062da",
+      "executions": [
+        {
+          "command": [
+            "uv",
+            "run",
+            "auto-invest",
+            "portfolio-walk-forward",
+            "--portfolio",
+            "deploy/global-trend-wide-portfolio.toml",
+            "--trailing-years",
+            "5",
+            "--history-root",
+            "/tmp/candidate_result_history/global-trend-wide/hist",
+            "--db",
+            "data/candidate-factory/candidate-cc96b35062da-wide.db",
+            "--halt-path",
+            "data/candidate-factory/candidate-cc96b35062da.halt.flag",
+            "--json"
+          ],
+          "exit_code": 0,
+          "stderr_excerpt": "",
+          "stdout_excerpt": "{\"dataset_version\": \"bfdc82af6b2efbb6797dd4652b24377152868c5241434ac0933674db49c1900c\", \"data_newest_session\": \"2026-09-04\", \"data_age_days\": 1, \"data_staleness\": \"fresh\", \"eval_window\": [\"2021-09-04\", \"2026-09-04\"], \"n_segments\": 4, \"segments_strategy_wins\": 1, \"mean_strategy_sharpe\": \"0.823936\", \"mean_benchmark_sharpe\": \"0.983047\", \"pooled_strategy_sharpe_annual\": \"1.021577\", \"num_trials\": 1, \"strategy_psr\": \"0.977876\", \"strategy_dsr\": \"0.977876\", \"verdict\": \"\\uac15\\uac74\\ud55c \\uc5e3\\uc9c0 \\uc5c6\\uc74c: \\uad6c\\uac04 \\uacfc\\ubc18 \\uc2e4\\ud328(1/4); \\ud3c9\\uade0 \\uc0e4\\ud504\\uac00 \\ub2e8\\uc21c \\ubcf4\\uc720 \\uc774\\ud558. \\ub77c\\uc774\\ube0c \\ubc30\\ud3ec \\uc815\\ub2f9\\ud654 \\uc548 \\ub428.\"}",
+          "timed_out": false
+        },
+        {
+          "command": [
+            "uv",
+            "run",
+            "auto-invest",
+            "portfolio-walk-forward",
+            "--portfolio",
+            "deploy/multi-asset-trend-portfolio.toml",
+            "--trailing-years",
+            "5",
+            "--history-root",
+            "/tmp/candidate_result_history/multi-asset-trend/hist",
+            "--db",
+            "data/candidate-factory/candidate-cc96b35062da-multi.db",
+            "--halt-path",
+            "data/candidate-factory/candidate-cc96b35062da.halt.flag",
+            "--json"
+          ],
+          "exit_code": 0,
+          "stderr_excerpt": "",
+          "stdout_excerpt": "{\"dataset_version\": \"8867575af0957e9b76f04a47fb564143b2f95431a72cb5a90874575b33bee776\", \"data_newest_session\": \"2026-09-04\", \"data_age_days\": 1, \"data_staleness\": \"fresh\", \"eval_window\": [\"2022-08-29\", \"2026-09-04\"], \"n_segments\": 3, \"segments_strategy_wins\": 1, \"mean_strategy_sharpe\": \"0.695776\", \"mean_benchmark_sharpe\": \"1.408702\", \"pooled_strategy_sharpe_annual\": \"0.828138\", \"num_trials\": 1, \"strategy_psr\": \"0.920167\", \"strategy_dsr\": \"0.920167\", \"verdict\": \"\\uac15\\uac74\\ud55c \\uc5e3\\uc9c0 \\uc5c6\\uc74c: \\uad6c\\uac04 \\uacfc\\ubc18 \\uc2e4\\ud328(1/3); \\ud3c9\\uade0 \\uc0e4\\ud504\\uac00 \\ub2e8\\uc21c \\ubcf4\\uc720 \\uc774\\ud558; \\ub514\\ud50c\\ub808\\uc774\\ud2f0\\ub4dc \\uc0e4\\ud504 \\ubbf8\\ub2ec(DSR=0.920167 < 0.95) \\u2014 \\uc2dc\\ub3c4 \\ud69f\\uc218 \\ubcf4\\uc815 \\ud6c4 \\uc6b0\\uc5f0\\uacfc \\uad6c\\ubcc4 \\uc548 \\ub428. \\ub77c\\uc774\\ube0c \\ubc30\\ud3ec \\uc815\\ub2f9\\ud654 \\uc548 \\ub428.\"}",
+          "timed_out": false
+        }
+      ],
+      "historical_backtest": "fail",
+      "output_summary_ko": "장기·최근·전진 검증이 모두 실패했다.",
+      "package_id": "pkg-8aae8cb99874",
+      "package_kind": "portfolio_backtest",
+      "raw_metrics": {
+        "data_age_days": 1,
+        "data_newest_session": "2026-09-04",
+        "data_staleness": "fresh",
+        "dataset_version": "bfdc82af6b2efbb6797dd4652b24377152868c5241434ac0933674db49c1900c",
+        "eval_window": [
+          "2021-09-04",
+          "2026-09-04"
+        ],
+        "evidence_by_command": [
+          {
+            "command": [
+              "uv",
+              "run",
+              "auto-invest",
+              "portfolio-walk-forward",
+              "--portfolio",
+              "deploy/global-trend-wide-portfolio.toml",
+              "--trailing-years",
+              "5",
+              "--history-root",
+              "/tmp/candidate_result_history/global-trend-wide/hist",
+              "--db",
+              "data/candidate-factory/candidate-cc96b35062da-wide.db",
+              "--halt-path",
+              "data/candidate-factory/candidate-cc96b35062da.halt.flag",
+              "--json"
+            ],
+            "metrics": {
+              "data_age_days": 1,
+              "data_newest_session": "2026-09-04",
+              "data_staleness": "fresh",
+              "dataset_version": "bfdc82af6b2efbb6797dd4652b24377152868c5241434ac0933674db49c1900c",
+              "eval_window": [
+                "2021-09-04",
+                "2026-09-04"
+              ],
+              "mean_benchmark_sharpe": "0.983047",
+              "mean_strategy_sharpe": "0.823936",
+              "n_segments": 4,
+              "num_trials": 1,
+              "pooled_strategy_sharpe_annual": "1.021577",
+              "segments_strategy_wins": 1,
+              "strategy_dsr": "0.977876",
+              "strategy_psr": "0.977876",
+              "verdict": "강건한 엣지 없음: 구간 과반 실패(1/4); 평균 샤프가 단순 보유 이하. 라이브 배포 정당화 안 됨."
+            },
+            "role": "recent_oos",
+            "status": "fail"
+          },
+          {
+            "command": [
+              "uv",
+              "run",
+              "auto-invest",
+              "portfolio-walk-forward",
+              "--portfolio",
+              "deploy/multi-asset-trend-portfolio.toml",
+              "--trailing-years",
+              "5",
+              "--history-root",
+              "/tmp/candidate_result_history/multi-asset-trend/hist",
+              "--db",
+              "data/candidate-factory/candidate-cc96b35062da-multi.db",
+              "--halt-path",
+              "data/candidate-factory/candidate-cc96b35062da.halt.flag",
+              "--json"
+            ],
+            "metrics": {
+              "data_age_days": 1,
+              "data_newest_session": "2026-09-04",
+              "data_staleness": "fresh",
+              "dataset_version": "8867575af0957e9b76f04a47fb564143b2f95431a72cb5a90874575b33bee776",
+              "eval_window": [
+                "2022-08-29",
+                "2026-09-04"
+              ],
+              "mean_benchmark_sharpe": "1.408702",
+              "mean_strategy_sharpe": "0.695776",
+              "n_segments": 3,
+              "num_trials": 1,
+              "pooled_strategy_sharpe_annual": "0.828138",
+              "segments_strategy_wins": 1,
+              "strategy_dsr": "0.920167",
+              "strategy_psr": "0.920167",
+              "verdict": "강건한 엣지 없음: 구간 과반 실패(1/3); 평균 샤프가 단순 보유 이하; 디플레이티드 샤프 미달(DSR=0.920167 < 0.95) — 시도 횟수 보정 후 우연과 구별 안 됨. 라이브 배포 정당화 안 됨."
+            },
+            "role": "recent_oos",
+            "status": "fail"
+          }
+        ],
+        "mean_benchmark_sharpe": "0.983047",
+        "mean_strategy_sharpe": "0.823936",
+        "n_segments": 4,
+        "num_trials": 1,
+        "pooled_strategy_sharpe_annual": "1.021577",
+        "segments_strategy_wins": 1,
+        "strategy_dsr": "0.977876",
+        "strategy_psr": "0.977876",
+        "verdict": "강건한 엣지 없음: 구간 과반 실패(1/4); 평균 샤프가 단순 보유 이하. 라이브 배포 정당화 안 됨."
+      },
+      "recent_oos": "fail",
+      "source_ref": "candidate-result-executor:pkg-8aae8cb99874",
+      "status": "fail",
+      "walk_forward": "fail"
+    }
+  ],
+  "run_id": "[REDACTED_ACCOUNT]",
+  "schema_version": "1.0",
+  "timestamp_utc": "2026-09-05T12:04:18Z"
+}
