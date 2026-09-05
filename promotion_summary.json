@@ -1,0 +1,646 @@
+{
+  "assessments": [
+    {
+      "allowed_next_action": "학습 장부에서 폐기된 후보로 유지한다.",
+      "blocked_reason_ko": "기존 폐기 결정이 있고 재검토 조건이 없다.",
+      "candidate": {
+        "candidate_id": "candidate-1ed634d8bf6d",
+        "domain_key": "strategy_design",
+        "evidence_refs": [
+          "money-path",
+          "rebalance-micro-gtaa",
+          "rebalance-paper-forward"
+        ],
+        "next_action_ko": "learning_ledger.json 결정으로 자동 후보 재활성화를 보류한다. 사유: 기계 판독 검증 결과에 실패가 있어 승격 증거로 병합하지 않는다. 근거 패키지: autonomous-promotion:[REDACTED_ACCOUNT]",
+        "priority_score": 618,
+        "promotion_evidence": {
+          "factory_block_reason_ko": "기계 판독 검증 결과에 실패가 있어 승격 증거로 병합하지 않는다.",
+          "factory_diagnostics": [
+            {
+              "code": "insufficient_pass_evidence",
+              "details": {},
+              "evidence_source": "output",
+              "next_actions": [
+                {
+                  "action_code": "emit_machine_readable_verdict",
+                  "owner": "future_spec",
+                  "safe_to_auto_run": false,
+                  "summary_ko": "검증 명령이 명확한 pass/fail verdict와 핵심 통계를 내도록 보강한다."
+                }
+              ],
+              "retryable": false,
+              "severity": "warning",
+              "summary_ko": "실행 출력에 통과 verdict가 충분히 없다."
+            },
+            {
+              "code": "mixed_horizon_evidence",
+              "details": {},
+              "evidence_source": "output",
+              "next_actions": [
+                {
+                  "action_code": "continue_forward_validation",
+                  "owner": "automation",
+                  "safe_to_auto_run": true,
+                  "summary_ko": "통과한 장기 증거를 보존하고 최근 forward 기준이 충족될 때까지 관측한다."
+                }
+              ],
+              "retryable": false,
+              "severity": "warning",
+              "summary_ko": "장기 통과와 최근 실패 증거가 함께 있어 전진 검증이 더 필요하다."
+            }
+          ],
+          "factory_kind": "strategy_backtest",
+          "factory_next_actions": [
+            {
+              "action_code": "emit_machine_readable_verdict",
+              "owner": "future_spec",
+              "safe_to_auto_run": false,
+              "summary_ko": "검증 명령이 명확한 pass/fail verdict와 핵심 통계를 내도록 보강한다."
+            },
+            {
+              "action_code": "continue_forward_validation",
+              "owner": "automation",
+              "safe_to_auto_run": true,
+              "summary_ko": "통과한 장기 증거를 보존하고 최근 forward 기준이 충족될 때까지 관측한다."
+            }
+          ],
+          "factory_package_id": "pkg-c9a284fa4235",
+          "factory_retryable": false,
+          "factory_source": "candidate-implementation-factory",
+          "factory_status": "blocked"
+        },
+        "risk_grade": 2,
+        "safety_impact": [],
+        "source_status": "rejected",
+        "title_ko": "micro GTAA 의도 손익 재검토와 대체 전략 연구"
+      },
+      "candidate_id": "candidate-1ed634d8bf6d",
+      "evidence_layers": [
+        {
+          "detail_ko": "과거 여러 구간에서 전략 논리와 비용 내성을 검증한다.",
+          "name": "historical_backtest",
+          "source_ref": null,
+          "status": "missing"
+        },
+        {
+          "detail_ko": "최근 regime에서 완전히 죽은 전략인지 확인한다.",
+          "name": "recent_oos",
+          "source_ref": null,
+          "status": "missing"
+        },
+        {
+          "detail_ko": "여러 표본외 구간으로 과최적화 위험을 줄인다.",
+          "name": "walk_forward",
+          "source_ref": null,
+          "status": "pass"
+        },
+        {
+          "detail_ko": "전략 고정 후 아직 보지 않은 미래 데이터로 검증한다.",
+          "name": "forward_paper",
+          "source_ref": "rebalance-paper-forward",
+          "status": "missing"
+        },
+        {
+          "detail_ko": "실제 브로커·계좌·주문·체결 경로를 소액으로 검증한다.",
+          "name": "small_live_canary",
+          "source_ref": "promotion-canary, reassign 또는 live canary sidecar",
+          "status": "missing"
+        }
+      ],
+      "execution_validation_complete": false,
+      "next_gate": null,
+      "priority_score": 618,
+      "stage": "DISCARD",
+      "strategy_validation_complete": false
+    },
+    {
+      "allowed_next_action": "released-work 장부가 완료한 후보이므로 승격하지 않는다.",
+      "blocked_reason_ko": "released-work 장부가 완료 후보로 표시했다: 완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "candidate": {
+        "candidate_id": "candidate-fd04772a23c5",
+        "domain_key": "live_readiness",
+        "evidence_refs": [
+          "money-path",
+          "edge-autoarm",
+          "reassign"
+        ],
+        "next_action_ko": "released-work 장부가 이 후보를 완료 처리했다: 완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+        "priority_score": 597,
+        "promotion_evidence": {},
+        "risk_grade": 2,
+        "safety_impact": [],
+        "source_status": "released",
+        "title_ko": "돈 경로 준비도와 기존 게이트 정렬"
+      },
+      "candidate_id": "candidate-fd04772a23c5",
+      "evidence_layers": [
+        {
+          "detail_ko": "과거 여러 구간에서 전략 논리와 비용 내성을 검증한다.",
+          "name": "historical_backtest",
+          "source_ref": null,
+          "status": "missing"
+        },
+        {
+          "detail_ko": "최근 regime에서 완전히 죽은 전략인지 확인한다.",
+          "name": "recent_oos",
+          "source_ref": null,
+          "status": "missing"
+        },
+        {
+          "detail_ko": "여러 표본외 구간으로 과최적화 위험을 줄인다.",
+          "name": "walk_forward",
+          "source_ref": null,
+          "status": "pass"
+        },
+        {
+          "detail_ko": "전략 고정 후 아직 보지 않은 미래 데이터로 검증한다.",
+          "name": "forward_paper",
+          "source_ref": "rebalance-paper-forward",
+          "status": "missing"
+        },
+        {
+          "detail_ko": "실제 브로커·계좌·주문·체결 경로를 소액으로 검증한다.",
+          "name": "small_live_canary",
+          "source_ref": "promotion-canary, reassign 또는 live canary sidecar",
+          "status": "missing"
+        }
+      ],
+      "execution_validation_complete": false,
+      "next_gate": null,
+      "priority_score": 597,
+      "stage": "DISCARD",
+      "strategy_validation_complete": false
+    },
+    {
+      "allowed_next_action": "released-work 장부가 완료한 후보이므로 승격하지 않는다.",
+      "blocked_reason_ko": "released-work 장부가 완료 후보로 표시했다: 완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "candidate": {
+        "candidate_id": "candidate-source-diversification-sidecar-bottleneck",
+        "domain_key": "agent_ops",
+        "evidence_refs": [
+          "released-work",
+          "pipeline-liveness",
+          "capital-path-readiness",
+          "promotion-summary"
+        ],
+        "next_action_ko": "학습 장부, released-work, pipeline-liveness, capital-path-readiness sidecar를 정적 템플릿 밖 후보 생성 입력으로 승격하고, 반복 실패와 관찰 병목을 다음 SDD 후보로 결정론적으로 변환한다.",
+        "priority_score": 594,
+        "promotion_evidence": {},
+        "risk_grade": 2,
+        "safety_impact": [],
+        "source_status": "new",
+        "title_ko": "증거 기반 후보 소스 다변화"
+      },
+      "candidate_id": "candidate-source-diversification-sidecar-bottleneck",
+      "evidence_layers": [
+        {
+          "detail_ko": "과거 여러 구간에서 전략 논리와 비용 내성을 검증한다.",
+          "name": "historical_backtest",
+          "source_ref": null,
+          "status": "missing"
+        },
+        {
+          "detail_ko": "최근 regime에서 완전히 죽은 전략인지 확인한다.",
+          "name": "recent_oos",
+          "source_ref": null,
+          "status": "missing"
+        },
+        {
+          "detail_ko": "여러 표본외 구간으로 과최적화 위험을 줄인다.",
+          "name": "walk_forward",
+          "source_ref": null,
+          "status": "pass"
+        },
+        {
+          "detail_ko": "전략 고정 후 아직 보지 않은 미래 데이터로 검증한다.",
+          "name": "forward_paper",
+          "source_ref": "rebalance-paper-forward",
+          "status": "missing"
+        },
+        {
+          "detail_ko": "실제 브로커·계좌·주문·체결 경로를 소액으로 검증한다.",
+          "name": "small_live_canary",
+          "source_ref": "promotion-canary, reassign 또는 live canary sidecar",
+          "status": "missing"
+        }
+      ],
+      "execution_validation_complete": false,
+      "next_gate": null,
+      "priority_score": 594,
+      "stage": "DISCARD",
+      "strategy_validation_complete": false
+    },
+    {
+      "allowed_next_action": "학습 장부에서 폐기된 후보로 유지한다.",
+      "blocked_reason_ko": "기존 폐기 결정이 있고 재검토 조건이 없다.",
+      "candidate": {
+        "candidate_id": "candidate-cc96b35062da",
+        "domain_key": "portfolio_design",
+        "evidence_refs": [
+          "reassign",
+          "rebalance-paper-forward"
+        ],
+        "next_action_ko": "learning_ledger.json 결정으로 자동 후보 재활성화를 보류한다. 사유: 기계 판독 검증 결과에 실패가 있어 승격 증거로 병합하지 않는다. 근거 패키지: autonomous-promotion:[REDACTED_ACCOUNT]",
+        "priority_score": 574,
+        "promotion_evidence": {
+          "factory_block_reason_ko": "기계 판독 검증 결과에 실패가 있어 승격 증거로 병합하지 않는다.",
+          "factory_kind": "portfolio_backtest",
+          "factory_package_id": "pkg-8aae8cb99874",
+          "factory_source": "candidate-implementation-factory",
+          "factory_status": "blocked"
+        },
+        "risk_grade": 2,
+        "safety_impact": [],
+        "source_status": "rejected",
+        "title_ko": "비상관 포트폴리오 후보 비교력 강화"
+      },
+      "candidate_id": "candidate-cc96b35062da",
+      "evidence_layers": [
+        {
+          "detail_ko": "과거 여러 구간에서 전략 논리와 비용 내성을 검증한다.",
+          "name": "historical_backtest",
+          "source_ref": null,
+          "status": "missing"
+        },
+        {
+          "detail_ko": "최근 regime에서 완전히 죽은 전략인지 확인한다.",
+          "name": "recent_oos",
+          "source_ref": null,
+          "status": "missing"
+        },
+        {
+          "detail_ko": "여러 표본외 구간으로 과최적화 위험을 줄인다.",
+          "name": "walk_forward",
+          "source_ref": null,
+          "status": "pass"
+        },
+        {
+          "detail_ko": "전략 고정 후 아직 보지 않은 미래 데이터로 검증한다.",
+          "name": "forward_paper",
+          "source_ref": "rebalance-paper-forward",
+          "status": "missing"
+        },
+        {
+          "detail_ko": "실제 브로커·계좌·주문·체결 경로를 소액으로 검증한다.",
+          "name": "small_live_canary",
+          "source_ref": "promotion-canary, reassign 또는 live canary sidecar",
+          "status": "missing"
+        }
+      ],
+      "execution_validation_complete": false,
+      "next_gate": null,
+      "priority_score": 574,
+      "stage": "DISCARD",
+      "strategy_validation_complete": false
+    },
+    {
+      "allowed_next_action": "released-work 장부가 완료한 후보이므로 승격하지 않는다.",
+      "blocked_reason_ko": "released-work 장부가 완료 후보로 표시했다: 완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "candidate": {
+        "candidate_id": "candidate-88a7e7f07361",
+        "domain_key": "agent_ops",
+        "evidence_refs": [
+          "pipeline-liveness",
+          "handoff"
+        ],
+        "next_action_ko": "released-work 장부가 이 후보를 완료 처리했다: 완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+        "priority_score": 568,
+        "promotion_evidence": {},
+        "risk_grade": 2,
+        "safety_impact": [],
+        "source_status": "released",
+        "title_ko": "자율 루프 sidecar와 handoff 생존성"
+      },
+      "candidate_id": "candidate-88a7e7f07361",
+      "evidence_layers": [
+        {
+          "detail_ko": "과거 여러 구간에서 전략 논리와 비용 내성을 검증한다.",
+          "name": "historical_backtest",
+          "source_ref": null,
+          "status": "missing"
+        },
+        {
+          "detail_ko": "최근 regime에서 완전히 죽은 전략인지 확인한다.",
+          "name": "recent_oos",
+          "source_ref": null,
+          "status": "missing"
+        },
+        {
+          "detail_ko": "여러 표본외 구간으로 과최적화 위험을 줄인다.",
+          "name": "walk_forward",
+          "source_ref": null,
+          "status": "pass"
+        },
+        {
+          "detail_ko": "전략 고정 후 아직 보지 않은 미래 데이터로 검증한다.",
+          "name": "forward_paper",
+          "source_ref": "rebalance-paper-forward",
+          "status": "missing"
+        },
+        {
+          "detail_ko": "실제 브로커·계좌·주문·체결 경로를 소액으로 검증한다.",
+          "name": "small_live_canary",
+          "source_ref": "promotion-canary, reassign 또는 live canary sidecar",
+          "status": "missing"
+        }
+      ],
+      "execution_validation_complete": false,
+      "next_gate": null,
+      "priority_score": 568,
+      "stage": "DISCARD",
+      "strategy_validation_complete": false
+    },
+    {
+      "allowed_next_action": "released-work 장부가 완료한 후보이므로 승격하지 않는다.",
+      "blocked_reason_ko": "released-work 장부가 완료 후보로 표시했다: 완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "candidate": {
+        "candidate_id": "candidate-e481b0309206",
+        "domain_key": "analysis",
+        "evidence_refs": [
+          "regime-stratify",
+          "public-data",
+          "promote-readiness"
+        ],
+        "next_action_ko": "released-work 장부가 이 후보를 완료 처리했다: 완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+        "priority_score": 560,
+        "promotion_evidence": {},
+        "risk_grade": 2,
+        "safety_impact": [],
+        "source_status": "released",
+        "title_ko": "레짐·성과 분석을 후보 점수화 입력으로 승격"
+      },
+      "candidate_id": "candidate-e481b0309206",
+      "evidence_layers": [
+        {
+          "detail_ko": "과거 여러 구간에서 전략 논리와 비용 내성을 검증한다.",
+          "name": "historical_backtest",
+          "source_ref": null,
+          "status": "missing"
+        },
+        {
+          "detail_ko": "최근 regime에서 완전히 죽은 전략인지 확인한다.",
+          "name": "recent_oos",
+          "source_ref": null,
+          "status": "missing"
+        },
+        {
+          "detail_ko": "여러 표본외 구간으로 과최적화 위험을 줄인다.",
+          "name": "walk_forward",
+          "source_ref": null,
+          "status": "pass"
+        },
+        {
+          "detail_ko": "전략 고정 후 아직 보지 않은 미래 데이터로 검증한다.",
+          "name": "forward_paper",
+          "source_ref": "rebalance-paper-forward",
+          "status": "missing"
+        },
+        {
+          "detail_ko": "실제 브로커·계좌·주문·체결 경로를 소액으로 검증한다.",
+          "name": "small_live_canary",
+          "source_ref": "promotion-canary, reassign 또는 live canary sidecar",
+          "status": "missing"
+        }
+      ],
+      "execution_validation_complete": false,
+      "next_gate": null,
+      "priority_score": 560,
+      "stage": "DISCARD",
+      "strategy_validation_complete": false
+    },
+    {
+      "allowed_next_action": "released-work 장부가 완료한 후보이므로 승격하지 않는다.",
+      "blocked_reason_ko": "released-work 장부가 완료 후보로 표시했다: 완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "candidate": {
+        "candidate_id": "candidate-fa66202bf496",
+        "domain_key": "review",
+        "evidence_refs": [
+          "handoff",
+          "pipeline-liveness"
+        ],
+        "next_action_ko": "released-work 장부가 이 후보를 완료 처리했다: 완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+        "priority_score": 559,
+        "promotion_evidence": {},
+        "risk_grade": 2,
+        "safety_impact": [],
+        "source_status": "released",
+        "title_ko": "학습 장부로 폐기·보류 후보 재발굴 차단"
+      },
+      "candidate_id": "candidate-fa66202bf496",
+      "evidence_layers": [
+        {
+          "detail_ko": "과거 여러 구간에서 전략 논리와 비용 내성을 검증한다.",
+          "name": "historical_backtest",
+          "source_ref": null,
+          "status": "missing"
+        },
+        {
+          "detail_ko": "최근 regime에서 완전히 죽은 전략인지 확인한다.",
+          "name": "recent_oos",
+          "source_ref": null,
+          "status": "missing"
+        },
+        {
+          "detail_ko": "여러 표본외 구간으로 과최적화 위험을 줄인다.",
+          "name": "walk_forward",
+          "source_ref": null,
+          "status": "pass"
+        },
+        {
+          "detail_ko": "전략 고정 후 아직 보지 않은 미래 데이터로 검증한다.",
+          "name": "forward_paper",
+          "source_ref": "rebalance-paper-forward",
+          "status": "missing"
+        },
+        {
+          "detail_ko": "실제 브로커·계좌·주문·체결 경로를 소액으로 검증한다.",
+          "name": "small_live_canary",
+          "source_ref": "promotion-canary, reassign 또는 live canary sidecar",
+          "status": "missing"
+        }
+      ],
+      "execution_validation_complete": false,
+      "next_gate": null,
+      "priority_score": 559,
+      "stage": "DISCARD",
+      "strategy_validation_complete": false
+    },
+    {
+      "allowed_next_action": "released-work 장부가 완료한 후보이므로 승격하지 않는다.",
+      "blocked_reason_ko": "released-work 장부가 완료 후보로 표시했다: 완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "candidate": {
+        "candidate_id": "candidate-dff4f9344b02",
+        "domain_key": "execution_quality",
+        "evidence_refs": [
+          "execution-quality",
+          "rebalance-micro-gtaa",
+          "kis-smoke"
+        ],
+        "next_action_ko": "released-work 장부가 이 후보를 완료 처리했다: 완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+        "priority_score": 527,
+        "promotion_evidence": {},
+        "risk_grade": 2,
+        "safety_impact": [],
+        "source_status": "released",
+        "title_ko": "주문 거부·체결 품질 손익 관측"
+      },
+      "candidate_id": "candidate-dff4f9344b02",
+      "evidence_layers": [
+        {
+          "detail_ko": "과거 여러 구간에서 전략 논리와 비용 내성을 검증한다.",
+          "name": "historical_backtest",
+          "source_ref": null,
+          "status": "missing"
+        },
+        {
+          "detail_ko": "최근 regime에서 완전히 죽은 전략인지 확인한다.",
+          "name": "recent_oos",
+          "source_ref": null,
+          "status": "missing"
+        },
+        {
+          "detail_ko": "여러 표본외 구간으로 과최적화 위험을 줄인다.",
+          "name": "walk_forward",
+          "source_ref": null,
+          "status": "pass"
+        },
+        {
+          "detail_ko": "전략 고정 후 아직 보지 않은 미래 데이터로 검증한다.",
+          "name": "forward_paper",
+          "source_ref": "rebalance-paper-forward",
+          "status": "missing"
+        },
+        {
+          "detail_ko": "실제 브로커·계좌·주문·체결 경로를 소액으로 검증한다.",
+          "name": "small_live_canary",
+          "source_ref": "promotion-canary, reassign 또는 live canary sidecar",
+          "status": "missing"
+        }
+      ],
+      "execution_validation_complete": false,
+      "next_gate": null,
+      "priority_score": 527,
+      "stage": "DISCARD",
+      "strategy_validation_complete": false
+    },
+    {
+      "allowed_next_action": "released-work 장부가 완료한 후보이므로 승격하지 않는다.",
+      "blocked_reason_ko": "released-work 장부가 완료 후보로 표시했다: 완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "candidate": {
+        "candidate_id": "candidate-6ee3370e933d",
+        "domain_key": "data_quality",
+        "evidence_refs": [
+          "pipeline-liveness"
+        ],
+        "next_action_ko": "released-work 장부가 이 후보를 완료 처리했다: 완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+        "priority_score": 524,
+        "promotion_evidence": {},
+        "risk_grade": 2,
+        "safety_impact": [],
+        "source_status": "released",
+        "title_ko": "오래된 증거와 성과 실패 분리"
+      },
+      "candidate_id": "candidate-6ee3370e933d",
+      "evidence_layers": [
+        {
+          "detail_ko": "과거 여러 구간에서 전략 논리와 비용 내성을 검증한다.",
+          "name": "historical_backtest",
+          "source_ref": null,
+          "status": "missing"
+        },
+        {
+          "detail_ko": "최근 regime에서 완전히 죽은 전략인지 확인한다.",
+          "name": "recent_oos",
+          "source_ref": null,
+          "status": "missing"
+        },
+        {
+          "detail_ko": "여러 표본외 구간으로 과최적화 위험을 줄인다.",
+          "name": "walk_forward",
+          "source_ref": null,
+          "status": "pass"
+        },
+        {
+          "detail_ko": "전략 고정 후 아직 보지 않은 미래 데이터로 검증한다.",
+          "name": "forward_paper",
+          "source_ref": "rebalance-paper-forward",
+          "status": "missing"
+        },
+        {
+          "detail_ko": "실제 브로커·계좌·주문·체결 경로를 소액으로 검증한다.",
+          "name": "small_live_canary",
+          "source_ref": "promotion-canary, reassign 또는 live canary sidecar",
+          "status": "missing"
+        }
+      ],
+      "execution_validation_complete": false,
+      "next_gate": null,
+      "priority_score": 524,
+      "stage": "DISCARD",
+      "strategy_validation_complete": false
+    },
+    {
+      "allowed_next_action": "released-work 장부가 완료한 후보이므로 승격하지 않는다.",
+      "blocked_reason_ko": "released-work 장부가 완료 후보로 표시했다: 완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+      "candidate": {
+        "candidate_id": "candidate-facf2fa31834",
+        "domain_key": "data_collection",
+        "evidence_refs": [
+          "public-data"
+        ],
+        "next_action_ko": "released-work 장부가 이 후보를 완료 처리했다: 완료된 Speckit 작업 산출물에서 명시적으로 완료 후보로 기록되었습니다.",
+        "priority_score": 494,
+        "promotion_evidence": {},
+        "risk_grade": 2,
+        "safety_impact": [],
+        "source_status": "released",
+        "title_ko": "공개 데이터 수집·교차 검증 확장"
+      },
+      "candidate_id": "candidate-facf2fa31834",
+      "evidence_layers": [
+        {
+          "detail_ko": "과거 여러 구간에서 전략 논리와 비용 내성을 검증한다.",
+          "name": "historical_backtest",
+          "source_ref": null,
+          "status": "missing"
+        },
+        {
+          "detail_ko": "최근 regime에서 완전히 죽은 전략인지 확인한다.",
+          "name": "recent_oos",
+          "source_ref": null,
+          "status": "missing"
+        },
+        {
+          "detail_ko": "여러 표본외 구간으로 과최적화 위험을 줄인다.",
+          "name": "walk_forward",
+          "source_ref": null,
+          "status": "pass"
+        },
+        {
+          "detail_ko": "전략 고정 후 아직 보지 않은 미래 데이터로 검증한다.",
+          "name": "forward_paper",
+          "source_ref": "rebalance-paper-forward",
+          "status": "missing"
+        },
+        {
+          "detail_ko": "실제 브로커·계좌·주문·체결 경로를 소액으로 검증한다.",
+          "name": "small_live_canary",
+          "source_ref": "promotion-canary, reassign 또는 live canary sidecar",
+          "status": "missing"
+        }
+      ],
+      "execution_validation_complete": false,
+      "next_gate": null,
+      "priority_score": 494,
+      "stage": "DISCARD",
+      "strategy_validation_complete": false
+    }
+  ],
+  "commit": "4a5f43add677155382487f23a8a47debd2daa378",
+  "missing_evidence": [],
+  "operator_review": [],
+  "overall_status": "ok",
+  "run_id": "[REDACTED_ACCOUNT]",
+  "schema_version": "1.0",
+  "timestamp_utc": "2026-09-05T12:06:59Z"
+}
