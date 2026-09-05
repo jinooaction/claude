@@ -33,7 +33,7 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `aa6aa482` — Merge pull request #759 from jinooaction/codex/180-autoarm-history-evidence |
+| 마지막 main 커밋 | `0ff5e687` — Merge pull request #760 from jinooaction/codex/180-autoarm-history-handoff |
 | main 테스트 | #759 최종 기능 head28dfb05에서 `uv run pytest` → 3402 passed, 7 skipped, 실패 0. |
 | main 린트 | #759 최종 기능 head28dfb05에서 `uv run ruff check src tests` → All checks passed. |
 | 열린 PR | 스펙 180 PR #757~#759 머지 완료. 최신 인계 반영 후 자동 승인 재실행 준비 중이며 실제 열린 PR은 GitHub에서 확인한다. |
@@ -44,6 +44,13 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 | 안전 경계 | main과 작업 브랜치는 헌법 15.5.0이다. 원래 거래일 선점은 불변이며, 정확한 무접수 사고에만 root 서버 예약이 별도 추가 전용 복구 슬롯을 한 번 쓸 수 있다. 접수 불명·접수·부분체결·체결·열린 주문·사후 실패는 복구를 막는다. 수동 주문·서비스 수동 시작·자본 비율 상향·전략 승격·허용목록·위험 관문 우회는 계속 금지된다. |
 
 ## 현재 진행 — 2026-09-05 KST (스펙180 예산 정합 보정)
+
+main0ff5e687의 배포33932284247과 profit evidence33932282839는 성공했다. 재실행
+autoarm33932341774는 승인 PR 생성 전 전체시험에서3397통과/5실패/7생략으로 종료됐다.
+Git 기본 브랜치가 main이라는 시험의 가정4건과 ANSI 도움말 검사1건을 수정한다(FR-008).
+승인액은 아직142이며 새 승인PR·예산 변경·실제 주문은 없다. T008/T011/T013은 미완료다.
+후속 PR 본문도 실제 셸로 생성해 증가·축소 양쪽 품질 검사 실패를 재현했다. 명령 이름을
+누락하던 문자열을 고치며, 미실행은 그대로 명시하고 검사기나 검증 범위는 바꾸지 않는다(FR-009).
 
 PR759는 23:57 UTC main aa6aa482로 머지됐다. 전체3402/7·ruff·하네스14/14·HANDOFF·PR
 관문을 통과했다. 자본 승인 checkout이 전체 이력을 가져오므로 문서 전용 main의 부모를 기존

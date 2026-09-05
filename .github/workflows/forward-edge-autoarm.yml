@@ -493,7 +493,8 @@ jobs:
             uv run python scripts/agent_harness_probe.py --strict
             uv run python scripts/check_handoff_facts.py
             test_evidence="전체 pytest·ruff·엄격 하네스 14/14 PASS (자본 증가 관문)"
-            handoff_evidence="엄격 하네스에 포함된 HANDOFF 사실 검사 PASS"
+            harness_evidence="uv run python scripts/agent_harness_probe.py --strict → OK 14/14"
+            handoff_evidence="uv run python scripts/check_handoff_facts.py → OK"
           else
             uv run pytest \
               tests/unit/test_capital_ladder.py \
@@ -501,7 +502,8 @@ jobs:
               tests/unit/test_live_canary_workflow.py
             uv run ruff check src tests
             test_evidence="사다리·CLI·실거래 핵심 회귀와 전체 ruff PASS (위험 축소 우선)"
-            handoff_evidence="위험 축소는 문서 신선도가 지연시키지 않음; 다음 handoff가 사실을 갱신"
+            harness_evidence="uv run python scripts/agent_harness_probe.py --strict 미실행: 기존 위험 축소 우선 경로는 핵심 회귀만 검사"
+            handoff_evidence="uv run python scripts/check_handoff_facts.py 미실행: 기존 위험 축소는 문서 신선도가 지연시키지 않음; 다음 handoff가 사실을 갱신"
           fi
           {
             echo "# 변경 요약"
@@ -544,7 +546,7 @@ jobs:
             echo ""
             echo "## 하네스 검증"
             echo ""
-            echo "- 하네스 평가: ${test_evidence}"
+            echo "- 하네스 평가: ${harness_evidence}"
             echo "- HANDOFF 검증: ${handoff_evidence}"
             echo ""
             echo "## 안전 경계"

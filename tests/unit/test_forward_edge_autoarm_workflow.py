@@ -7,7 +7,14 @@ YAML 은 셸 조립이 많으므로 텍스트 불변식으로 핵심 계약을 �
 
 from __future__ import annotations
 
+import os
+import re
+import subprocess
+import sys
+import textwrap
 from pathlib import Path
+
+import pytest
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _WORKFLOW = _REPO_ROOT / ".github" / "workflows" / "forward-edge-autoarm.yml"
@@ -27,6 +34,49 @@ def test_autoarm_fetches_history_for_handoff_parent_proof() -> None:
     checkout = text[text.index("      - name: Checkout"):text.index("      - name: Install uv")]
     assert "uses: actions/checkout@" in checkout
     assert "\n        with:\n          fetch-depth: 0\n" in checkout
+
+
+@pytest.mark.parametrize("increase", [True, False])
+def test_generated_ladder_pr_body_passes_real_quality_gate(
+    tmp_path: Path, increase: bool,
+) -> None:
+    step = _text().split("Open ladder PR (only when the sentinel changed)", 1)[1]
+    step = step.split("Refresh exact-main evidence and no-order preview after direct merge", 1)[0]
+    gate = step.split('if [[ "${capital_increase}" == "true" ]]; then', 1)[1]
+    branch = gate.split("          else\n", 1)[0] if increase else (
+        gate.split("          else\n", 1)[1].split("          fi\n", 1)[0]
+    )
+    assignments = re.findall(
+        r'^\s*((?:test_evidence|harness_evidence|handoff_evidence)=".*")$',
+        branch, re.MULTILINE,
+    )
+    body_start = step.index('          {\n            echo "# 변경 요약"')
+    body_end = step.index('          } > /tmp/pr_body.md', body_start)
+    body = textwrap.dedent(step[body_start:body_end + len('          } > /tmp/pr_body.md')])
+    generated = tmp_path / "body.md"
+    decision = tmp_path / "decision.json"
+    decision.write_text("{}", encoding="utf-8")
+    body = body.replace("/tmp/pr_body.md", str(generated)).replace(
+        "/tmp/decision.json", str(decision),
+    )
+    subprocess.run(
+        ["bash", "-euc", "\n".join(assignments) + "\n" + body],
+        env={**os.environ, "ACTION": "RESIZE", "cur": "1", "tgt": "1",
+             "cap": "143" if increase else "141", "nav": "1434.91", "reason": "test"},
+        check=True, capture_output=True, text=True,
+    )
+    result = subprocess.run(
+        [sys.executable, str(_REPO_ROOT / "scripts/check_pr_quality_gate.py"), str(generated)],
+        check=False, capture_output=True, text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    rendered = generated.read_text(encoding="utf-8")
+    if increase:
+        assert "agent_harness_probe.py --strict → OK 14/14" in rendered
+        assert "check_handoff_facts.py → OK" in rendered
+    else:
+        assert "agent_harness_probe.py --strict 미실행" in rendered
+        assert "check_handoff_facts.py 미실행" in rendered
 
 
 def test_autoarm_computes_anchored_verdict_read_only() -> None:
