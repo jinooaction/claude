@@ -1,0 +1,86 @@
+{
+  "account_nav_verified": false,
+  "all_symbols_reference_fundable": false,
+  "any_reference_share_fundable": true,
+  "approval_recorded": false,
+  "assumptions": [
+    "REFERENCE_PRICES_ONLY",
+    "HYPOTHETICAL_DEDICATED_CASH_EQUALS_CAPITAL",
+    "NO_HOLDINGS_ALL_SYMBOLS_HAVE_ENTRY_SIGNAL",
+    "ACCOUNT_NAV_AT_LEAST_PROPOSED_CAPITAL_NOT_VERIFIED",
+    "ACTUAL_ENGINE_MAY_APPLY_LOWER_ACCOUNT_AND_ROUTER_LIMITS"
+  ],
+  "capital_change_usd": "0.00",
+  "execution_quote_verified": false,
+  "existing_engine_daily_stop_trigger_usd": "12.0000",
+  "existing_engine_order_cap_usd": "120.0000",
+  "existing_engine_symbol_cap_usd": "120.0000",
+  "existing_engine_total_exposure_cap_usd": "480.0000",
+  "hypothetical_remaining_cash_usd": "517.50325",
+  "input_sha256": "1490038661f65076b4769250cf425101caffa9ce90fc9b6bddaa78b5e2ee2b4d",
+  "live_eligible": false,
+  "mode": "capital_review_only",
+  "orders_submitted": 0,
+  "proposed_capital_limit_usd": "600.00",
+  "quote_age_seconds": 167872,
+  "quote_as_of": "2026-09-05T00:15:00+00:00",
+  "quote_source": "2026-09-07 web finance 참고 스냅샷. IWM 원시 시각은 2026-09-04T23:57:45Z, 나머지는 2026-09-05T00:15:00Z. 실주문 시세가 아님.",
+  "readiness_not_established": [
+    "VERIFIED_ACCOUNT_NAV_AND_UNENCUMBERED_USD_CASH",
+    "QUALIFIED_HISTORY_STRATEGY_FORWARD_AND_EXECUTION_PARITY",
+    "SEPARATE_INTRADAY_CAPITAL_AND_STRATEGY_APPROVAL",
+    "PRODUCTION_INTRADAY_AUTHORITY_AND_ACCOUNT_GATEWAY",
+    "PRODUCTION_ORDER_FILL_EXIT_RECONCILIATION_EVIDENCE"
+  ],
+  "schema_version": 1,
+  "sizing_target_per_symbol_usd": "96.0000",
+  "source_sha256": {
+    "intraday.py": "5895d3e71aa3077fb611f97865cb91fe0d9435b0732a9c9e27b2fb2e14fc702a",
+    "intraday_capital_review.py": "7aa80567da7e0effdf6bb1ba9031ec011bf8d9d31a3be49a44b02477477b4f8e",
+    "intraday_signals.py": "ea4dd9560262ae60e130b42f72eedd421d4a49eda58bab082c460b3ecce2644c"
+  },
+  "status": "REVIEW_COMPLETE",
+  "stop_is_loss_guarantee": false,
+  "symbols": [
+    {
+      "hypothetical_reserved_cash_usd": "0.00000",
+      "hypothetical_shares": 0,
+      "illustrative_buy_limit_usd": "770.65",
+      "minimum_capital_for_one_reference_share_usd": "4816.57",
+      "reference_price_usd": "770.19",
+      "symbol": "SPY"
+    },
+    {
+      "hypothetical_reserved_cash_usd": "0.00000",
+      "hypothetical_shares": 0,
+      "illustrative_buy_limit_usd": "719.39",
+      "minimum_capital_for_one_reference_share_usd": "4496.19",
+      "reference_price_usd": "718.96",
+      "symbol": "QQQ"
+    },
+    {
+      "hypothetical_reserved_cash_usd": "0.00000",
+      "hypothetical_shares": 0,
+      "illustrative_buy_limit_usd": "296.18",
+      "minimum_capital_for_one_reference_share_usd": "1851.13",
+      "reference_price_usd": "296.01",
+      "symbol": "IWM"
+    },
+    {
+      "hypothetical_reserved_cash_usd": "82.49675",
+      "hypothetical_shares": 1,
+      "illustrative_buy_limit_usd": "82.25",
+      "minimum_capital_for_one_reference_share_usd": "514.07",
+      "reference_price_usd": "82.21",
+      "symbol": "TLT"
+    },
+    {
+      "hypothetical_reserved_cash_usd": "0.00000",
+      "hypothetical_shares": 0,
+      "illustrative_buy_limit_usd": "407.01",
+      "minimum_capital_for_one_reference_share_usd": "2543.82",
+      "reference_price_usd": "406.77",
+      "symbol": "GLD"
+    }
+  ]
+}

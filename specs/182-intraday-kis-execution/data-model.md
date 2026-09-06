@@ -8,3 +8,9 @@ ExecutionEvent는 claim·kind·정화JSON의 추가전용기록이다.
 실제 FILLED 또는 미완결 종료 EXPIRED는 fill_sync가 확정하고 CANCEL 감사를 기록한다.
 단타 체결 시각은 확인한 시각이다. 시간대가 확인되지 않은 주문접수 시각을 체결 시각으로 쓰지 않는다.
 귀속보유는 단타rule ID의 확정fills합계로 계산한다. 다른 전략 보유는 팔지 않는다.
+
+CapitalReview 입력은 schema_version=1, currency=USD, quote_as_of, quote_source,
+prices(정확한 5종목의 양수 소수 문자열)이다. 예산은 명령의 소수 문자열로 별도 받는다.
+출력은 mode=capital_review_only, 자금 변경/주문 0, live_eligible=false다.
+예산·16% 목표·20/20/80 한도·2% 정지 발동 기준·가상 수량·최소 1주 예산을 담는다.
+입력 파일 지문과 계산기/기존 실행 소스 지문을 남긴다. 승인으로 전이되는 상태는 없다.
