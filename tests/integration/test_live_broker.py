@@ -131,6 +131,42 @@ def _make_broker(client: httpx.AsyncClient) -> ResilientClient:
 
 
 @pytest.mark.asyncio
+async def test_live_kis_intraday_account_read_contract(kis_token_bundle: dict) -> None:
+    """Strict account GETs; no NAV synthesis, allocation, or broker writes."""
+    from auto_invest.broker.intraday_account import (
+        AccountReadError,
+        observe_account,
+        public_contract_result,
+    )
+    from auto_invest.execution.preparation import confirmed_budget
+
+    account = _required_env("KIS_ACCOUNT_NO")
+    try:
+        budget = confirmed_budget()
+        async with httpx.AsyncClient(
+            base_url=KIS_BASE_URL, timeout=10.0, follow_redirects=False
+        ) as http:
+            snapshot = await observe_account(
+                _make_broker(http),
+                account=account,
+                access_token=kis_token_bundle["access_token"],
+                app_key=kis_token_bundle["app_key"],
+                app_secret=kis_token_bundle["app_secret"],
+            )
+    except Exception as exc:
+        code = str(exc) if isinstance(exc, AccountReadError) else type(exc).__name__
+        pytest.fail("intraday account read contract: " + code, pytrace=False)
+    result = public_contract_result(snapshot)
+    result.update(
+        budget_parameters_confirmed=True,
+        capital_limit_usd=budget["capital_limit_usd"],
+        daily_stop_trigger_usd=budget["daily_stop_trigger_usd"],
+        capital_change_usd="0.00",
+    )
+    print("\nIntraday account read contract: " + json.dumps(result))
+
+
+@pytest.mark.asyncio
 async def test_live_kis_intraday_data_contract(kis_token_bundle: dict, tmp_path) -> None:
     """Recent complete 5-minute session using server credentials; never an order."""
     from auto_invest.market_data.intraday import DataError, ReadTransport, probe_kis_session

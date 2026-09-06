@@ -52,3 +52,21 @@ VIII 정상 검증/병합, IX/X 커널·자본·반복 주문 권한 불변.
 파일: analytics/intraday_capital_review.py, scripts/intraday_capital_review.py,
 tests/unit/test_intraday_capital_review.py, specs/182-intraday-kis-execution/capital-review/.
 검토 입력→폐쇄형 형식 검사→예산별 가상 수량/한도→JSON stdout 경로다.
+
+## US5/US6 후속 계획
+
+확정 예산을 contracts/confirmed-budget.json으로 보존하고 execution/preparation.py가
+폐쇄형 계약을 검사한다. CLI preflight는 그 설정과 기존 주문 수명 모의 검증을 실행한다.
+모의 가격과 수량만 축소하여 기존 부분체결·취소·추가체결·청산 시나리오를600달러로
+재현한다. 실제 실행기·router·권한 코드는 변경하지 않는다.
+
+broker/intraday_account.py는 기존 ResilientClient의 제한·유한 재시도·회로차단을
+재사용하는 GET 전용 수집 함수다. strict 숫자·통화·페이지·시각 검사와 오류 코드만
+노출하며 실제 NAV를 합성하지 않는다. tests/integration/test_live_broker.py의
+기존 읽기 전용 서버 검사 진입점을 재사용한다. 새 SSH/스케줄러/비밀값 경로는 없다.
+
+계획 조사 역할은 KIS 공식 NAV/구매가능금액/보유/미체결 문서 확인에만 위임했다.
+Constitution Check: I/II/VI/IX/X 자본 실제 배정·실거래 승인·위험/종목/전진관찰 경계
+불변. III LLM 주문 판단 없음. IV/V 감사·장부·비밀값 유지. VII 기존 제한/재시도와
+닫힌 형식 오류 사용. VIII 정상 장외 배포. 제거 기능 없음.
+되돌림은 새 사전점검/읽기 수집 사용 중지이며 실제 주문·체결·감사는 그대로 둔다.

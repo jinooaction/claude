@@ -52,6 +52,29 @@ inquire-present-balance에는 미국 장중 반영 지연 안내가 있어 tot_a
 - https://apiportal.koreainvestment.com/apiservice-apiservice?/uapi/overseas-stock/v1/trading/inquire-psamount
 - https://apiportal.koreainvestment.com/apiservice-apiservice?/uapi/overseas-stock/v1/trading/inquire-present-balance
 
+## 확정 한도와 계좌 관측 결정 (2026-09-07)
+
+운영자600/12 준비 기준 확정을 기록했다. 실제 실행기의 손실 계산은 체결금액의
+0.25% 추정비용도 포함한다. 600달러 가상계좌에서5주×20달러 매수 후17.65달러면
+가격손실11.75+비용0.25=12로 정지한다.17.66은11.95로 아직 정지하지 않는다.
+시험을 이 경계에 맞추며 기존 실행기의 손실 공식을 변경하지 않는다.
+
+독립 공식 문서 조사에서 foreign-margin(TTTC2101R)의 통화별 예수금·미결제매수/
+매도·미수·증거금·일반주문가능금액을 확인했다. 장중 갱신 기준과 NAV 산식이 없어
+서로 합산하지 않고 원필드 의미별로 분리한다. 결제기준잔고는 지연 시세이고,
+체결기준잔고의 실시간 예외는 애프터연장 가입 여부와 정산시간 조건을 확인해야 한다.
+따라서 nav=None을 유지한다. 순자산을 추정해 실행 승인하는 대안은 채택하지 않는다.
+- https://apiportal.koreainvestment.com/apiservice-apiservice?/uapi/overseas-stock/v1/trading/foreign-margin
+- https://apiportal.koreainvestment.com/apiservice-apiservice?/uapi/overseas-stock/v1/trading/inquire-paymt-stdr-balance
+
+inquire-balance의D/E는 마지막 페이지이며 FK검색조건이 남을 수 있다.
+inquire-nccs 포털과 예제의 연속조회 설명은 일치하지 않는다. 헤더만으로
+완료를 선언하지 않고 커서가 전진하면 계속 읽으며 반복/상한은 불완전으로 거절한다.
+[]는 빈 목록으로 지원하되 누락/null/빈문자/빈객체는 실제 증거 없이 정상화하지 않는다.
+모든 요청은GET, NASD미국전체 조회이며 기존 ResilientClient를 사용한다.
+- https://github.com/koreainvestment/open-trading-api/blob/main/examples_llm/overseas_stock/inquire_balance/inquire_balance.py
+- https://github.com/koreainvestment/open-trading-api/blob/main/examples_llm/overseas_stock/inquire_nccs/inquire_nccs.py
+
 execution/intraday_signals.py는 기존 사전등록 신호와 실제 귀속 보유를 연결한다.
 전체 5종목의 연속된 확정봉과 소스지문을 검사한다. 종료 청산은 신호 자료 장애에도
 계좌 재관측을 먼저 수행한다. 매수·매도 모두 5분 미체결이면 취소 확인을 기다린다.

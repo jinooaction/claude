@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "currency": "USD",
+  "approval_scope": "preparation_parameters",
+  "capital_limit_usd": "600.00",
+  "order_limit_usd": "120.00",
+  "symbol_limit_usd": "120.00",
+  "total_exposure_limit_usd": "480.00",
+  "daily_stop_trigger_usd": "12.00",
+  "orders_enabled": false,
+  "confirmed_on": "2026-09-07",
+  "confirmation_reference": "운영자: 응 확정하고 완성해줘"
+}
