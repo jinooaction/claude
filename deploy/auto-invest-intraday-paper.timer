@@ -4,6 +4,8 @@ Description=Wake independent intraday diagnostic collection every minute
 [Timer]
 OnBootSec=60
 OnUnitActiveSec=60
+# Re-arm after a slow/failed cycle which was still active at the minute boundary.
+OnUnitInactiveSec=60
 AccuracySec=1
 Unit=auto-invest-intraday-paper.service
 

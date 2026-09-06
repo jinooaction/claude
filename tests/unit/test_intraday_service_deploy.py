@@ -17,6 +17,7 @@ def test_diagnostic_unit_is_installed_scheduled_and_cannot_access_account_db():
     assert "Type=oneshot" in service and "StateDirectoryMode=0700" in service
     assert "InaccessiblePaths=-/opt/auto-invest/data/auto_invest.db" in service
     assert "OnUnitActiveSec=60" in timer
+    assert "OnUnitInactiveSec=60" in timer
     assert "enable --now auto-invest-intraday-paper.timer" in sync
     assert "auto-invest-intraday-paper.service" in sync
     assert "--confirm-live" not in service
