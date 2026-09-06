@@ -1,0 +1,36 @@
+# 연구 결정
+
+## 공급자
+
+Alpaca Basic의 역사 자료는 2016년부터이며 SIP end가 15분 이상 과거면 무료 권한으로
+접근 가능하다. 계정 키는 필요하다. IEX 실시간은 SIP와 다르므로 대체하지 않는다.
+근거: https://docs.alpaca.markets/us/docs/market-data-faq 및
+https://docs.alpaca.markets/us/docs/about-market-data-api (2026-09-06 확인).
+GET `/v2/stocks/bars`, 5Min, sip, split, limit10000, next_page_token을 끝까지 읽는다.
+근거: https://docs.alpaca.markets/us/reference/stockbars
+
+KIS는 `/uapi/overseas-price/v1/quotations/inquire-time-itemchartprice`, HHDFS76950200,
+NMIN5, PINC1, NREC120, NEXT/KEYB를 사용한다. 약 한 달 보존이며 나스닥 부분시장
+시세와 정정 가능성을 기록한다. 756세션의 대체 자료가 아니다.
+근거: https://apiportal.koreainvestment.com/apiservice 및
+https://github.com/koreainvestment/open-trading-api/tree/main/examples_llm/overseas_stock/inquire_time_itemchartprice
+
+## 지속 모의 운용
+
+177 전체 기간 재생을 매번 실행하면 늦게 온 과거 봉으로 거래를 새로 만들 위험이 있다.
+별도 입력 커서·처리 시각·주문 생성 시각을 기록하고 다음 봉만 체결 가능하게 한다.
+다섯 종목 같은 시각의 봉을 원자적 배치로 처리한다. 고정 후보별 독립 가상 계좌다.
+자료·주문·청산 모형이 다르므로 기존 연구 지문으로 실거래 승격하지 않는다.
+
+## 단계 완료
+
+계정 접근, 실제 3년 자료, 역사 합격, 전진 60세션, 별도 실주문 경계는 외부/후속 조건이다.
+이 조건을 단위 시험이나 합성 자료로 대체하지 않는다. 모든 미완료를 tasks에 유지한다.
+
+## 실제 접근 확인 — 2026-09-06 KST
+
+로컬에서 collect 명령을 Alpaca와 KIS 각각 실행했다. 두 명령 모두 exit2,
+`DATA_ACCESS_REQUIRED`다. 현재 프로세스 환경에 해당 공급자 키가 없고, 조회 요청이나
+실주문은 발생하지 않았다. 기존 production KIS 키 부재를 뜻하지 않으며 그 비밀값을
+로컬로 복사하지 않았다. Alpaca 계정 보유 여부는 운영자에게 비동기로 질문했다.
+키를 채팅에 붙여넣지 않는다. 본 결과는 네트워크 계약의 실자료 성공 증거가 아니다.
