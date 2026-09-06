@@ -1,0 +1,31 @@
+[Unit]
+Description=auto-invest intraday data and diagnostic paper cycle (no real orders)
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/opt/auto-invest/src/auto_invest/analytics/intraday_service.py
+ConditionPathExists=/opt/auto-invest/.venv/bin/python
+
+[Service]
+Type=oneshot
+User=auto-invest
+Group=auto-invest
+WorkingDirectory=/opt/auto-invest
+EnvironmentFile=/opt/auto-invest/.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONPATH=/opt/auto-invest/src
+ExecStart=/opt/auto-invest/.venv/bin/python /opt/auto-invest/scripts/intraday_runtime.py service
+StateDirectory=auto-invest-intraday
+StateDirectoryMode=0700
+UMask=0077
+TimeoutStartSec=120
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+# OAuth uses atomic replacement in its existing private cache directory.
+ReadWritePaths=/var/lib/auto-invest-intraday /opt/auto-invest/data
+InaccessiblePaths=-/opt/auto-invest/data/auto_invest.db -/opt/auto-invest/data/auto_invest.db-wal -/opt/auto-invest/data/auto_invest.db-shm
+MemoryMax=512M
+CPUQuota=50%
+StandardOutput=journal
+StandardError=journal

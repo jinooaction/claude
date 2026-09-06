@@ -513,6 +513,15 @@ main() {
     local cmd="${1:-}"
     shift || true
     case "${cmd}" in
+        intraday-paper-status)
+            [[ "$#" -eq 0 ]] || die "intraday-paper-status takes no args"
+            require_repo
+            echo "INTRADAY_TIMER=$(systemctl is-active auto-invest-intraday-paper.timer 2>/dev/null || true)"
+            echo "INTRADAY_SERVICE_RESULT=$(systemctl show auto-invest-intraday-paper.service --property=Result --value)"
+            echo "INTRADAY_PRODUCTION_COMMIT=$(sudo -u "${APP_USER}" git rev-parse HEAD)"
+            sudo -u "${APP_USER}" -H /opt/auto-invest/.venv/bin/python \
+                scripts/intraday_runtime.py service-status
+            ;;
         halt-status)
             [[ "$#" -eq 0 ]] || die "halt-status takes no args"
             halt_status

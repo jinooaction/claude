@@ -1,0 +1,43 @@
+name: Intraday paper service status (read-only)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '25 21 * * 1-5'
+
+permissions:
+  contents: read
+
+jobs:
+  observe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Install existing restricted SSH identity
+        env:
+          VULTR_SSH_PRIVATE_KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+          VULTR_SSH_KNOWN_HOSTS: ${{ secrets.VULTR_SSH_KNOWN_HOSTS }}
+          VULTR_SSH_USER: ${{ secrets.VULTR_SSH_USER }}
+        run: ./scripts/ci_secure_ssh.sh
+      - name: Read diagnostic status only
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts \
+              -o ConnectTimeout=15 -o BatchMode=yes -p "${PORT:-22}" \
+              -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
+              'observe intraday-paper-status' | tee /tmp/intraday-status.txt
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          lines = Path('/tmp/intraday-status.txt').read_text().splitlines()
+          assert 'INTRADAY_TIMER=active' in lines, 'diagnostic timer inactive'
+          status = json.loads(lines[-1])
+          assert status['status'] in {'WAIT_SESSION', 'DIAGNOSTIC_PAPER', 'ENTRY_HALTED'}
+          assert status['orders_submitted'] == 0 and status['live_eligible'] is False
+          assert status['forward_promotion_eligible'] is False
+          assert 0 <= status['age_seconds'] <= 180
+          PY

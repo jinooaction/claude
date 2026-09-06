@@ -59,3 +59,16 @@ KIS 자료는 역사 SIP와 섞지 않는다. 소급 수집 자료를 전진 관
 안에서 동일 서버 토큰 캐시로 수집하고 정화 요약만 출력한다. 분봉 API 원문·키는
 공개 로그에 출력하지 않는다. `tests/unit/test_intraday_data.py`에서 주말·장중·
 누락·정상 봉 수를 먼저 검증한다. 기존 gateway/helper는 변경하지 않는다.
+
+## 서버 운용 후속 설계 (2026-09-07)
+
+FR011~014는 `intraday_service.py`의 단회 supervisor, 고정 `service`/`service-status`
+CLI, 독립 systemd timer/service와 기존 sync-units/observe gateway에 연결한다.
+supervisor는 비차단 flock을 취득하고 소스 지문별 상태 디렉터리를 고른다.
+정규장 단회 run은 기존 execute/run을 재사용하며 장외 archive는 완결 세션만
+별도 불변 디렉터리에 저장한다. 실패 기록은 추가 전용, 현재 상태만 atomic replace다.
+상태 소비자는 허용 필드와 시각을 검증한다. 기존 관측 helper의 고정 명령만 추가하며
+인수·임의 경로·셸·주문 권한은 늘리지 않는다. 서비스는 기존 .env와 OAuth 캐시를
+재사용하고 실제 계좌 DB는 systemd에서 접근을 차단한다.
+관련 계약 시험 → 구현 → 전체 시험/린트/하네스 → PR/배포 → 상태 관측으로 검증한다.
+자료 계정이 없거나 합격 증거가 없으면 T012~T016은 열어두며 대체 합격을 만들지 않는다.

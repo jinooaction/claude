@@ -127,6 +127,9 @@ case "${cmd}" in
     observe\ halt-status)
         exec sudo -n /usr/local/sbin/auto-invest-observe halt-status
         ;;
+    observe\ intraday-paper-status)
+        exec sudo -n /usr/local/sbin/auto-invest-observe intraday-paper-status
+        ;;
     observe\ signal-ic\ trend)
         exec sudo -n /usr/local/sbin/auto-invest-observe signal-ic trend
         ;;
