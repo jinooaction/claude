@@ -292,7 +292,8 @@ def test_observe_helper_exposes_only_observation_and_paper_commands():
     assert "--dry-run" in body
     assert "--confirm-live" not in body
     assert "submit" not in body.lower()
-    assert "systemctl" not in body
+    # The diagnostic observer may query units; mutation verbs remain forbidden.
+    assert set(re.findall(r"systemctl\s+(\S+)", body)) <= {"is-active", "show"}
     assert "AUTO_INVEST_MODE=live" not in body
     assert "AUTO_INVEST_CAPITAL" not in body
     assert "eval " not in body

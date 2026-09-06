@@ -12,3 +12,14 @@
 키 누락은 `DATA_ACCESS_REQUIRED`다. 반복 실패는 프로세스를 종료하여 감시자가 인식한다.
 
 자료 공급자 변경, 실행 모형 변경, synthetic 변경은 기존 장부에 합치지 않는다.
+
+`service`는 systemd가 기존 환경으로 실행하는 단회 감독 명령이다. 기본 저장 위치는
+`/var/lib/auto-invest-intraday`, 공유 토큰은 `data/kis_token.json`이다. 배타 잠금을
+얻지 못하면 BUSY이며 기존 상태를 덮어쓰지 않는다. 성공/실패는 원자적 상태 JSON에
+기록하고 API 실패는 다음 예약에서 복구한다. 장외에는 마지막 완결 세션 원본만
+보관하며 소급 데이터를 전진 판단에 반영하지 않는다.
+
+`service-status`는 상태 파일만 읽는다. 미실행 NOT_STARTED, 180초 초과 STALE,
+오형식 INVALID_STATUS를 구분한다. 고정 원격 명령 `observe intraday-paper-status`는
+인수 없이 timer 상태, service 결과, 생산 커밋과 이 JSON을 반환한다. 원격 명령으로
+수집/서비스 시작/주문 실행은 할 수 없다. 60세션 자격은 항상 0으로 표시한다.

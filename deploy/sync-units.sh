@@ -33,6 +33,8 @@ UNITS=(
     auto-invest-live-canary.service
     auto-invest-live-canary.timer
     auto-invest-telegram-alerts.service
+    auto-invest-intraday-paper.service
+    auto-invest-intraday-paper.timer
 )
 
 if install -d -m 0700 -o root -g root "$TMP_ROOT" 2>/dev/null; then
@@ -115,6 +117,13 @@ if [ -f /etc/systemd/system/auto-invest-live-canary.timer ]; then
     systemctl enable --now auto-invest-live-canary.timer
 fi
 systemctl enable auto-invest.service || true
+# Separate diagnostic-only timer; its service has no real-order command.
+if [ -f /etc/systemd/system/auto-invest-intraday-paper.timer ] \
+        && [ -f /etc/systemd/system/auto-invest-intraday-paper.service ]; then
+    systemd-analyze verify /etc/systemd/system/auto-invest-intraday-paper.service \
+        /etc/systemd/system/auto-invest-intraday-paper.timer
+    systemctl enable --now auto-invest-intraday-paper.timer
+fi
 # Telegram alerts are optional and require operator-provided TELEGRAM_* secrets.
 # The unit is installed above but intentionally not enabled automatically.
 
