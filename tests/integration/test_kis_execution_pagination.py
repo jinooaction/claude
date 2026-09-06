@@ -24,7 +24,7 @@ def row(**updates):
     }
 
 
-async def query(handler):
+async def query(handler, *, strict_contract=True):
     async with httpx.AsyncClient(
         base_url="https://kis.invalid", transport=httpx.MockTransport(handler)
     ) as http:
@@ -41,7 +41,7 @@ async def query(handler):
             app_secret="test",
             account="1234567801",
             order_date_yyyymmdd="20260908",
-            strict_contract=True,
+            strict_contract=strict_contract,
         )
 
 
@@ -110,11 +110,12 @@ async def test_repeated_cursor_rejects_partial_history():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("strict_contract", [True, False])
 @pytest.mark.parametrize(
     "status,qty,terminal",
     [("완료", "3", True), ("거부", "3", False), ("전송", "3", False), ("완료", "1", False)],
 )
-async def test_cancel_rows_require_confirmed_full_remainder(status, qty, terminal):
+async def test_cancel_rows_require_confirmed_full_remainder(status, qty, terminal, strict_contract):
     cancel = row(
         odno="C1",
         orgn_odno="1",
@@ -124,7 +125,8 @@ async def test_cancel_rows_require_confirmed_full_remainder(status, qty, termina
         ft_ccld_qty="0",
     )
     result = await query(
-        lambda request: httpx.Response(200, json={"rt_cd": "0", "output": [row(), cancel]})
+        lambda request: httpx.Response(200, json={"rt_cd": "0", "output": [row(), cancel]}),
+        strict_contract=strict_contract,
     )
     assert len(result) == 1
     assert result[0].filled_qty == 2 and result[0].terminal is terminal

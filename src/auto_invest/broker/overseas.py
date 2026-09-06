@@ -1152,7 +1152,10 @@ async def get_order_executions(
         headers["tr_cont"] = "N"
     else:
         raise ValueError("EXECUTIONS_PAGE_LIMIT")
-    if strict_contract:
+    if strict_contract or cursors or any(
+        _first_str(row, "rvse_cncl_dvsn", "RVSE_CNCL_DVSN") in {"01", "02"}
+        for row in rows
+    ):
         return _parse_execution_snapshots(rows, market)
     return [ex.model_copy(update={"market": market}) for ex in _parse_executions(rows)]
 
