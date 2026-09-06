@@ -410,6 +410,7 @@ class IntradayExecutor:
                     correlation_id=order["correlation_id"],
                     market=order["order_exchange"] or EXCHANGES[order["symbol"]],
                     reason="intraday_exit" if exit_only else "intraday_target_or_ttl",
+                    before_write_guard=lambda: self._write_guard(entry=False),
                 )
                 actions.append(dict(kind="CANCEL_REQUEST", result=phase))
         if orders:

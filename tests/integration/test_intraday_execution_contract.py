@@ -195,6 +195,26 @@ async def test_stale_sell_requests_cancel_and_uses_observed_fill_time(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_cancel_rechecks_guard_inside_authority_before_claim(tmp_path):
+    from auto_invest.execution.cancellation import request_cancellation
+
+    async with rehearsal_session(tmp_path / "test.db") as book:
+        await book.engine.step(book.decision(5))
+        corr = book.engine.conn.execute("SELECT correlation_id FROM orders").fetchone()[0]
+        result = await request_cancellation(
+            book.engine.router.execution_authority,
+            correlation_id=corr,
+            market="AMEX",
+            reason="test",
+            before_write_guard=lambda: "STALE_ACCOUNT",
+        )
+        assert result == "DEFERRED_BEFORE_WRITE" and len(book.requests) == 1
+        assert not book.engine.conn.execute(
+            "SELECT 1 FROM audit_log WHERE event_type='ORDER_CANCEL_REQUEST'"
+        ).fetchone()
+
+
+@pytest.mark.asyncio
 async def test_close_cancels_buy_then_liquidates_only_confirmed_shares(tmp_path):
     from datetime import timedelta
 
