@@ -26,6 +26,7 @@ GitHub Actions의 `KIS smoke (autonomous)` workflow가 매 main push와 매일
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -130,6 +131,30 @@ def _make_broker(client: httpx.AsyncClient) -> ResilientClient:
 
 
 @pytest.mark.asyncio
+async def test_live_kis_intraday_data_contract(kis_token_bundle: dict, tmp_path) -> None:
+    """Recent complete 5-minute session using server credentials; never an order."""
+    from auto_invest.market_data.intraday import DataError, ReadTransport, probe_kis_session
+
+    # The module fixture has already prepared the shared token cache. Do not copy keys.
+    cache_path = Path(os.environ.get("KIS_TOKEN_CACHE_PATH", "data/kis_token.json"))
+    try:
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=False) as client:
+            result = await probe_kis_session(
+                ReadTransport(client),
+                os.environ,
+                datetime.now(UTC),
+                cache_path,
+                tmp_path / "intraday-bars",
+            )
+    except Exception as exc:
+        code = str(exc) if isinstance(exc, DataError) else type(exc).__name__
+        pytest.fail("intraday data contract: " + code, pytrace=False)
+    assert result["orders_submitted"] == 0
+    assert result["live_eligible"] is False
+    print("\nIntraday data contract: " + json.dumps(result, sort_keys=True))
+
+
+@pytest.mark.asyncio
 async def test_live_kis_token_and_quote(kis_token_bundle: dict) -> None:
     """Token (fixture) + AAPL quote (T064 원본).
 
@@ -183,8 +208,7 @@ async def test_live_kis_execution_proxy_parity_and_quotes(
     conn = db.get_connection(bars_db)
     db.migrate(conn)
     symbols = sorted(
-        set(PREREGISTERED_EXECUTION_SYMBOL_MAP)
-        | set(PREREGISTERED_EXECUTION_SYMBOL_MAP.values())
+        set(PREREGISTERED_EXECUTION_SYMBOL_MAP) | set(PREREGISTERED_EXECUTION_SYMBOL_MAP.values())
     )
     try:
         async with httpx.AsyncClient(base_url=KIS_BASE_URL, timeout=30.0) as inner:
@@ -327,10 +351,7 @@ async def test_live_kis_combined_balance(kis_token_bundle: dict) -> None:
         f"total_value({balance.total_value_usd}) < cash({balance.cash_usd}) — "
         "보유 종목 평가금액이 음수가 됐다는 뜻이므로 회귀."
     )
-    print(
-        f"\nLive KIS balance: cash=${balance.cash_usd}, "
-        f"total=${balance.total_value_usd}"
-    )
+    print(f"\nLive KIS balance: cash=${balance.cash_usd}, total=${balance.total_value_usd}")
 
 
 @pytest.mark.asyncio

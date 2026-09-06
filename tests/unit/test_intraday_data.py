@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx
@@ -9,6 +9,7 @@ from auto_invest.market_data.intraday import (
     ReadTransport,
     collect_alpaca,
     normalize,
+    utc,
     write_batch,
 )
 
@@ -172,3 +173,62 @@ async def test_auth_and_rate_failure_codes(code, expected_calls):
             )
         assert "secret" not in str(exc.value)
         assert len(seen) == expected_calls
+
+
+@pytest.mark.parametrize(
+    "moment,expected",
+    [
+        ("2026-09-06T02:00:00Z", "2026-09-04"),
+        ("2026-09-08T14:00:00Z", "2026-09-04"),
+        ("2026-09-08T20:01:00Z", "2026-09-08"),
+    ],
+)
+def test_last_completed_intraday_session(moment, expected):
+    from auto_invest.market_data.intraday import last_completed_session
+
+    assert str(last_completed_session(utc(moment))) == expected
+
+
+@pytest.mark.asyncio
+async def test_kis_session_probe_requires_complete_grid(tmp_path, monkeypatch):
+    import auto_invest.market_data.intraday as data
+
+    session = data.last_completed_session(utc("2026-09-06T02:00:00Z"))
+    opening = data.CALENDAR.session_open(session).to_pydatetime()
+    bars = [
+        dict(
+            symbol=s,
+            timestamp_utc=data.iso(opening + timedelta(minutes=i * 5)),
+            open=100.0,
+            high=101.0,
+            low=99.0,
+            close=100.0,
+            volume=10000,
+        )
+        for i in range(78)
+        for s in data.SYMBOLS
+    ]
+    batch = dict(
+        provider="kis-nasdaq-partial-unadjusted",
+        synthetic=False,
+        bars=bars,
+        pages=[],
+        retrieved_at_utc="2026-09-06T02:00:00Z",
+    )
+
+    async def collected(*args, **kwargs):
+        return batch
+
+    monkeypatch.setattr(data, "collect_kis", collected)
+    result = await data.probe_kis_session(
+        None, {}, utc("2026-09-06T02:00:00Z"), tmp_path / "token", tmp_path / "complete"
+    )
+    assert result["bars_per_symbol"] == dict.fromkeys(data.SYMBOLS, 78)
+    assert result["orders_submitted"] == 0 and not result["live_eligible"]
+    assert (tmp_path / "complete/manifest.json").exists()
+    batch["bars"] = bars[:-1]
+    with pytest.raises(data.DataError, match="INCOMPLETE_SESSION_GRID"):
+        await data.probe_kis_session(
+            None, {}, utc("2026-09-06T02:00:00Z"), tmp_path / "token", tmp_path / "incomplete"
+        )
+    assert not (tmp_path / "incomplete").exists()

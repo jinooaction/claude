@@ -51,3 +51,11 @@ KIS 자료는 역사 SIP와 섞지 않는다. 소급 수집 자료를 전진 관
 
 여러 데이터 공급자를 붙이지만 각각 역할이 다르다: 장기 역사 vs 계좌 시세 관측.
 공통 신규 HTTP 계층은 고정된 읽기/인증 endpoint만 노출한다. 범용 주문 프록시가 아니다.
+
+## 서버 실제 자료 계약 점검
+
+`market_data/intraday.py`에 마지막 완결 세션 선택과 정확한 5종목×세션 시간 집합
+검사를 추가한다. `tests/integration/test_live_broker.py`의 기존 KIS_LIVE_TEST 경계
+안에서 동일 서버 토큰 캐시로 수집하고 정화 요약만 출력한다. 분봉 API 원문·키는
+공개 로그에 출력하지 않는다. `tests/unit/test_intraday_data.py`에서 주말·장중·
+누락·정상 봉 수를 먼저 검증한다. 기존 gateway/helper는 변경하지 않는다.

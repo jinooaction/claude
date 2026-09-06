@@ -306,6 +306,44 @@ async def collect_kis(transport, env, start, end, now, cache_path, *, max_pages=
     return _deduplicate(batch)
 
 
+def last_completed_session(now: datetime):
+    """Only completed XNYS sessions; allow a minute for the closing bar to settle."""
+    if now.tzinfo is None:
+        raise DataError("INVALID_UTC")
+    session = CALENDAR.date_to_session(now.astimezone(NY).date(), direction="previous")
+    if CALENDAR.session_close(session).to_pydatetime() + timedelta(minutes=1) > now:
+        session = CALENDAR.previous_session(session)
+    return session.date()
+
+
+async def probe_kis_session(transport, env, now, cache_path, output_dir) -> dict:
+    """Read-only production contract probe, not strategy/promotion evidence."""
+    session = last_completed_session(now)
+    opening = CALENDAR.session_open(session).to_pydatetime()
+    closing = CALENDAR.session_close(session).to_pydatetime()
+    batch = await collect_kis(transport, env, opening, closing, now, cache_path)
+    count = int((closing - opening).total_seconds() // 300)
+    expected = {
+        (iso(opening + timedelta(minutes=5 * i)), symbol)
+        for i in range(count)
+        for symbol in SYMBOLS
+    }
+    actual = [(row["timestamp_utc"], row["symbol"]) for row in batch["bars"]]
+    if len(actual) != len(expected) or set(actual) != expected:
+        raise DataError("INCOMPLETE_SESSION_GRID")
+    write_batch(output_dir, batch)
+    return dict(
+        status="INTRADAY_DATA_CONTRACT_OK",
+        session=str(session),
+        provider=batch["provider"],
+        bars_per_symbol=dict.fromkeys(SYMBOLS, count),
+        dataset_sha256=digest(encode(batch)),
+        orders_submitted=0,
+        live_eligible=False,
+        forward_promotion_eligible=False,
+    )
+
+
 def write_batch(path: Path, batch: dict) -> None:
     """New private directory only; manifest is written last as the completeness marker."""
     path.mkdir(mode=0o700, parents=True, exist_ok=False)
