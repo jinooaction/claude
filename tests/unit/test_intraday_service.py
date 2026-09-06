@@ -89,6 +89,38 @@ async def test_service_holiday_archives_once_never_replays_or_orders(tmp_path, m
 
 
 @pytest.mark.asyncio
+async def test_partial_archive_survives_and_does_not_block_next_cycle(tmp_path, monkeypatch):
+    import importlib.util
+    from pathlib import Path
+    from types import SimpleNamespace
+
+    spec = importlib.util.spec_from_file_location("partial_cli", "scripts/intraday_runtime.py")
+    cli = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cli)
+    calls = []
+
+    async def probe(transport, env, now, cache, output):
+        output.mkdir(parents=True)
+        (output / "source.json").write_text('preserved source')
+        calls.append(output)
+        if len(calls) == 1:
+            raise OSError('disk failure')
+        (output / "manifest.json").write_text('{}')
+
+    async def execute(args):
+        return dict(status="WAIT_SESSION")
+
+    monkeypatch.setattr(cli, "probe_kis_session", probe)
+    monkeypatch.setattr(cli, "execute", execute)
+    args = SimpleNamespace(service_root=tmp_path, token_cache=Path("unused"))
+    assert (await cli.service_cycle(args, now=NOW))["status"] == "FAILED"
+    assert (await cli.service_cycle(args, now=NOW))["archive_status"] == "COMPLETE"
+    assert calls[0].is_dir()  # interrupted raw evidence remains; never deleted/overwritten
+    assert not calls[1].exists()  # successful staging moved atomically to session directory
+    assert len(list(tmp_path.rglob('2026-09-04/manifest.json'))) == 1
+
+
+@pytest.mark.asyncio
 async def test_service_failure_is_sanitized_and_next_cycle_recovers(tmp_path, monkeypatch):
     import importlib.util
     from pathlib import Path

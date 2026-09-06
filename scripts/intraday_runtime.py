@@ -81,10 +81,14 @@ async def service_cycle(args, *, now=None):
                     # A failed partial write is preserved; do not overwrite its raw evidence.
                     if archive.exists():
                         raise DataError("ARCHIVE_INCOMPLETE")
+                    archive.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+                    staging = archive.with_name(completed + "-partial-" + uuid4().hex)
                     async with httpx.AsyncClient(timeout=20, follow_redirects=False) as client:
                         await probe_kis_session(
-                            ReadTransport(client), os.environ, now, args.token_cache, archive
+                            ReadTransport(client), os.environ, now, args.token_cache, staging
                         )
+                    # An interrupted staging directory remains evidence, but cannot block retry.
+                    staging.rename(archive)
                 result.update(archived_session=completed, archive_status="COMPLETE")
             return publish(root, result, datetime.now(UTC))
         except Exception as exc:
