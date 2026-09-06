@@ -55,7 +55,10 @@ T012~T016은 미완료다. 아래 초안·미배포 문구는 출시 전 경과 
 
 배포 감사34008062141은 상관값dad34692a86f9190cb67bf07c6061c38의
 DEPLOY_STARTED→DEPLOY_COMPLETED(03:03:10UTC), 실제 대상9f99501을 확인했다.
-인계 문서 전체 검증과 새 main 무주문34008063612는 진행 중이다.
+새 main 무주문34008063612는 success, workflow_dispatch/manual-no-order-preflight,
+capital143, ENTRY_READY, fundability1.1, postCLEAR/reconciliationOK/evidenceVALID,
+haltfalse/orders0이다. 계획은 IAUM1@44.29와SCHX2@30.42이며 실제 주문이 아니다.
+인계 문서 전체 검증은 진행 중이다.
 
 운영자의 재개 지시에 따라 독립 소프트웨어 출시와 전체 단타 실거래 완료를 분리한다.
 과거의 "전체 요청 미완료라 PR767을 계속 초안 유지" 판단은 폐기한다. 실제 데이터·
