@@ -17,7 +17,7 @@
 
 ## Phase 4 — 소프트웨어 검증과 출시
 - [x] T017 기존 서버 KIS 읽기 전용 smoke에 마지막 완결 세션 분봉 계약 검사를 연결하고 정상·누락·주말·장중 선택 회귀시험을 통과한다. 관련31개 통과; 생산 응답은 출시 뒤 별도 확인한다.
-- [x] T010 관련 시험·전체 pytest·ruff·strict harness·HANDOFF 사실 검사를 통과한다. 전체 3435 passed/7 skipped(761.77초), 관련48, ruff, 하네스14/14, HANDOFF OK.
+- [x] T010 관련 시험·전체 pytest·ruff·strict harness·HANDOFF 사실 검사를 통과한다. 최신 코드592c106에서 전체 3439 passed/8 skipped(778.75초), 후속 관련31, ruff, 하네스14/14, HANDOFF OK. 생략은 실제 KIS 검사7개와 가동 전 전용 검사1개다.
 - [ ] T011 `HANDOFF.md`에 구현 상태와 미완료 실운용 조건을 남기고 PR 품질 관문·merge·필요 배포를 확인한다.
 
 ## Phase 5 — US4 실제 자료와 실거래 완료 (증거 전 체크 금지)
