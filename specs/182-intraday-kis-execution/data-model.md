@@ -14,3 +14,9 @@ prices(정확한 5종목의 양수 소수 문자열)이다. 예산은 명령의 
 출력은 mode=capital_review_only, 자금 변경/주문 0, live_eligible=false다.
 예산·16% 목표·20/20/80 한도·2% 정지 발동 기준·가상 수량·최소 1주 예산을 담는다.
 입력 파일 지문과 계산기/기존 실행 소스 지문을 남긴다. 승인으로 전이되는 상태는 없다.
+
+ConfirmedPreparationBudget은 USD 자본600/주문120/종목120/총노출480/하루정지12와
+준비기준 확정 출처다. orders_enabled=false, approval_scope=preparation_parameters다.
+AccountSnapshot은 관측시작UTC, 관측종료UTC, USD 구매가능금액, 보유 수량/평가액,
+미체결 주문ID/수량/방향을 담는다. NAV는 None, 계좌전체검증과 실거래 가능은 false다.
+공개 검사 결과에는 금액·계좌번호·주문ID 원문 대신 계약 성공과 행 개수만 남긴다.

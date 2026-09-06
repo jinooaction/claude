@@ -1,0 +1,289 @@
+from datetime import UTC, datetime, timedelta
+
+import httpx
+import pytest
+
+from auto_invest.broker.client import AsyncTokenBucket, CircuitBreaker, ResilientClient
+from auto_invest.broker.intraday_account import (
+    AccountReadError,
+    observe_account,
+    public_contract_result,
+)
+
+NOW = datetime(2026, 9, 7, tzinfo=UTC)
+
+
+def replies():
+    return {
+        "inquire-balance": dict(
+            rt_cd="0",
+            ctx_area_fk200="",
+            ctx_area_nk200="",
+            output1=[
+                dict(
+                    ovrs_pdno="TLT",
+                    ovrs_cblc_qty="1.00000000",
+                    ord_psbl_qty="1",
+                    tr_crcy_cd="USD",
+                    ovrs_excg_cd="NASD",
+                    now_pric2="82.21",
+                    ovrs_stck_evlu_amt="82.21",
+                )
+            ],
+        ),
+        "inquire-nccs": dict(rt_cd="0", output=[], ctx_area_fk200="", ctx_area_nk200=""),
+        "inquire-psamount": dict(
+            rt_cd="0", output=dict(ovrs_ord_psbl_amt="600", frcr_ord_psbl_amt1="999999")
+        ),
+        "foreign-margin": dict(
+            rt_cd="0",
+            output=[
+                dict(
+                    crcy_cd="USD",
+                    frcr_dncl_amt1="700",
+                    ustl_buy_amt="100",
+                    ustl_sll_amt="10",
+                    frcr_rcvb_amt="0",
+                    frcr_mgn_amt="50",
+                    frcr_gnrl_ord_psbl_amt="600",
+                )
+            ],
+        ),
+    }
+
+
+async def read(handler, **kwargs):
+    async with httpx.AsyncClient(
+        base_url="https://kis.invalid", transport=httpx.MockTransport(handler)
+    ) as http:
+        client = ResilientClient(
+            http,
+            rate_limiter=AsyncTokenBucket(1000, 1000),
+            breaker=CircuitBreaker(3, 30),
+            max_retries=0,
+        )
+        return await observe_account(
+            client,
+            account="1234567801",
+            access_token="secret-token",
+            app_key="secret-key",
+            app_secret="secret-secret",
+            **kwargs,
+        )
+
+
+@pytest.mark.asyncio
+async def test_get_only_no_nav_or_cash_field_fallback():
+    data = replies()
+    requests = []
+
+    def handle(request):
+        requests.append(request)
+        assert request.method == "GET"
+        assert request.headers["custtype"] == "P"
+        return httpx.Response(200, json=data[request.url.path.split("/")[-1]])
+
+    snapshot = await read(handle, now=lambda: NOW)
+    assert len(requests) == 4
+    assert snapshot["usd_orderable_amount"] == "600"
+    assert snapshot["reported_cash_components"]["frcr_dncl_amt1"] == "700"
+    assert snapshot["nav"] is None and snapshot["nav_verified"] is False
+    assert snapshot["live_eligible"] is False
+    assert snapshot["full_account_scope_verified"] is False
+    assert snapshot["positions"]["TLT"]["quantity"] == 1
+    public = str(public_contract_result(snapshot))
+    for forbidden in ("1234567801", "TLT", "600", "secret"):
+        assert forbidden not in public
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("endpoint", ["inquire-balance", "inquire-nccs"])
+async def test_continuation_preserves_cursor_and_header(endpoint):
+    data = replies()
+    calls = []
+
+    def handle(request):
+        path = request.url.path.split("/")[-1]
+        if path != endpoint:
+            return httpx.Response(200, json=data[path])
+        calls.append(request)
+        body = dict(data[path])
+        if len(calls) == 1:
+            body["ctx_area_fk200"], body["ctx_area_nk200"] = " FK ", " NK "
+            body["output1" if path == "inquire-balance" else "output"] = []
+            return httpx.Response(200, json=body, headers={"tr_cont": "M"})
+        assert request.headers["tr_cont"] == "N"
+        assert request.url.params["CTX_AREA_FK200"] == " FK "
+        assert request.url.params["CTX_AREA_NK200"] == " NK "
+        return httpx.Response(200, json=body, headers={"tr_cont": "D"})
+
+    snapshot = await read(handle, now=lambda: NOW)
+    assert snapshot["pagination_complete"] is True
+    assert len(calls) == 2
+
+
+@pytest.mark.asyncio
+async def test_balance_terminal_header_may_retain_search_context():
+    data = replies()
+    data["inquire-balance"]["ctx_area_fk200"] = "retained-search"
+    snapshot = await read(
+        lambda request: httpx.Response(
+            200, json=data[request.url.path.split("/")[-1]], headers={"tr_cont": "D"}
+        ),
+        now=lambda: NOW,
+    )
+    assert snapshot["pagination_complete"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("limit", [1, 3])
+async def test_incomplete_or_repeated_cursor_never_returns_partial_account(limit):
+    data = replies()
+    data["inquire-balance"].update(ctx_area_fk200="same", ctx_area_nk200="same")
+    with pytest.raises(AccountReadError, match="ACCOUNT_(PAGE_LIMIT|CURSOR_STALLED)"):
+        await read(
+            lambda request: httpx.Response(
+                200, json=data[request.url.path.split("/")[-1]], headers={"tr_cont": "M"}
+            ),
+            now=lambda: NOW,
+            max_pages=limit,
+        )
+
+
+@pytest.mark.asyncio
+async def test_nccs_terminal_header_does_not_ignore_nonempty_cursor():
+    data = replies()
+    data["inquire-nccs"].update(ctx_area_fk200="same", ctx_area_nk200="same")
+    with pytest.raises(AccountReadError, match="ACCOUNT_CURSOR_STALLED"):
+        await read(
+            lambda request: httpx.Response(
+                200, json=data[request.url.path.split("/")[-1]], headers={"tr_cont": "D"}
+            ),
+            now=lambda: NOW,
+        )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("value", [None, "", {}, "secret broker error"])
+async def test_missing_or_ambiguous_empty_orders_rejected(value):
+    data = replies()
+    data["inquire-nccs"]["output"] = value
+    with pytest.raises(AccountReadError, match="INVALID_INQUIRE_NCCS_ROWS"):
+        await read(
+            lambda request: httpx.Response(200, json=data[request.url.path.split("/")[-1]]),
+            now=lambda: NOW,
+        )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("ovrs_cblc_qty", "1.5"),
+        ("ovrs_cblc_qty", "-1"),
+        ("now_pric2", "NaN"),
+        ("ord_psbl_qty", "2"),
+        ("tr_crcy_cd", "KRW"),
+    ],
+)
+async def test_invalid_holding_is_not_silently_truncated_or_converted(field, value):
+    data = replies()
+    data["inquire-balance"]["output1"][0][field] = value
+    with pytest.raises(AccountReadError):
+        await read(
+            lambda request: httpx.Response(200, json=data[request.url.path.split("/")[-1]]),
+            now=lambda: NOW,
+        )
+
+
+@pytest.mark.asyncio
+async def test_missing_foreign_currency_amount_never_uses_integrated_buying_power():
+    data = replies()
+    del data["inquire-psamount"]["output"]["ovrs_ord_psbl_amt"]
+    with pytest.raises(AccountReadError, match="INVALID_OVRS_ORD_PSBL_AMT"):
+        await read(
+            lambda request: httpx.Response(200, json=data[request.url.path.split("/")[-1]]),
+            now=lambda: NOW,
+        )
+
+
+@pytest.mark.asyncio
+async def test_broker_free_text_is_never_in_error():
+    with pytest.raises(AccountReadError) as error:
+        await read(
+            lambda _: httpx.Response(200, json={"rt_cd": "1", "msg1": "secret-key"}),
+            now=lambda: NOW,
+        )
+    assert str(error.value) == "ACCOUNT_BROKER_REJECTED"
+
+
+@pytest.mark.asyncio
+async def test_whole_poll_age_not_last_call_age():
+    clock = [NOW]
+    data = replies()
+
+    def handler(request):
+        clock[0] += timedelta(seconds=10)
+        return httpx.Response(200, json=data[request.url.path.split("/")[-1]])
+
+    with pytest.raises(AccountReadError, match="STALE_ACCOUNT_OBSERVATION"):
+        await read(handler, now=lambda: clock[0])
+
+
+@pytest.mark.asyncio
+async def test_empty_holdings_and_open_partial_order_are_separate():
+    data = replies()
+    data["inquire-balance"]["output1"] = []
+    data["inquire-nccs"]["output"] = dict(
+        odno="order-123",
+        pdno="SPY",
+        nccs_qty="3",
+        ft_ord_qty="5",
+        ft_ccld_qty="2",
+        sll_buy_dvsn_cd="02",
+        tr_crcy_cd="USD",
+        ovrs_excg_cd="AMEX",
+    )
+    snapshot = await read(
+        lambda request: httpx.Response(200, json=data[request.url.path.split("/")[-1]]),
+        now=lambda: NOW,
+    )
+    assert snapshot["positions"] == {}
+    assert snapshot["open_orders"][0]["remaining_quantity"] == 3
+    assert snapshot["open_orders"][0]["filled_quantity"] == 2
+    assert "order-123" not in str(public_contract_result(snapshot))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("defect", ["duplicate", "excess", "fraction", "side"])
+async def test_invalid_open_orders_block_snapshot(defect):
+    data = replies()
+    order = dict(
+        odno="123",
+        pdno="TLT",
+        nccs_qty="3",
+        ft_ord_qty="5",
+        ft_ccld_qty="2",
+        sll_buy_dvsn_cd="02",
+    )
+    data["inquire-nccs"]["output"] = [order]
+    if defect == "duplicate":
+        data["inquire-nccs"]["output"].append(dict(order))
+    elif defect == "excess":
+        order["nccs_qty"] = "4"
+    elif defect == "fraction":
+        order["nccs_qty"] = "1.5"
+    else:
+        order["sll_buy_dvsn_cd"] = "unknown"
+    with pytest.raises(AccountReadError):
+        await read(
+            lambda request: httpx.Response(200, json=data[request.url.path.split("/")[-1]]),
+            now=lambda: NOW,
+        )
+
+
+@pytest.mark.asyncio
+async def test_transport_failure_does_not_expose_headers():
+    with pytest.raises(AccountReadError) as error:
+        await read(lambda _: httpx.Response(503, text="secret-token"), now=lambda: NOW)
+    assert str(error.value) == "ACCOUNT_TRANSPORT_OR_JSON_ERROR"

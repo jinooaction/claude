@@ -121,8 +121,9 @@ class Rehearsal:
 
 
 @asynccontextmanager
-async def rehearsal_session(path: Path):
+async def rehearsal_session(path: Path, *, capital_limit=Decimal("10000"), mark=Decimal("100")):
     book = Rehearsal()
+    book.initial_cash, book.mark = capital_limit, mark
     conn = db.get_connection(path)
     db.migrate(conn)
     async with httpx.AsyncClient(
@@ -169,7 +170,7 @@ async def rehearsal_session(path: Path):
             fingerprint=FINGERPRINT,
             observe=book.observe,
             authority_guard=lambda: None,
-            capital_limit=Decimal("10000"),
+            capital_limit=capital_limit,
             now=lambda: book.now,
         )
         try:
@@ -178,23 +179,25 @@ async def rehearsal_session(path: Path):
             conn.close()
 
 
-async def rehearse():
+async def rehearse(*, capital_limit=Decimal("10000"), mark=Decimal("100")):
     with TemporaryDirectory(prefix="intraday-rehearsal-") as directory:
-        async with rehearsal_session(Path(directory) / "rehearsal.db") as book:
+        async with rehearsal_session(
+            Path(directory) / "rehearsal.db", capital_limit=capital_limit, mark=mark
+        ) as book:
             engine = book.engine
             first = await engine.step(book.decision(5))
             assert first["actions"][0]["kind"] == "SUBMITTED", first
-            book.fill("1", 2, "99")
+            book.fill("1", 2, str(mark * Decimal(".99")))
             partial = await engine.step(book.decision(5))
             assert partial["status"] == "WAIT_BROKER", partial
             cancelling = await engine.step(book.decision(0))
             assert cancelling["actions"][0]["result"] == "ACKNOWLEDGED", cancelling
             # A fill arrives after cancellation was accepted.
-            book.fill("1", 3, "99.30", terminal=True)
+            book.fill("1", 3, str(mark * Decimal(".993")), terminal=True)
             liquidation = await engine.step(book.decision(0))
             assert liquidation["actions"][0]["kind"] == "SUBMITTED", liquidation
             assert book.orders["2"]["qty"] == 3
-            book.fill("2", 3, "100")
+            book.fill("2", 3, str(mark))
             done = await engine.step(book.decision(0))
             assert done["status"] == "PROCESSED", done
             assert engine._owned() == {}
@@ -205,6 +208,8 @@ async def rehearse():
                 mode="offline_rehearsal",
                 orders_submitted=0,
                 live_eligible=False,
+                simulated_capital_limit_usd=str(capital_limit),
+                simulated_mark_usd=str(mark),
                 simulated_broker_requests=len(book.requests),
                 final_owned_positions=engine._owned(),
                 partial_cancel_late_fill_liquidation="PASS",
