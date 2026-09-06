@@ -31,6 +31,7 @@ jobs:
               -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \
               'observe intraday-paper-status' | tee /tmp/intraday-status.txt
           python3 - <<'PY'
+          import hashlib
           import json
           from pathlib import Path
           lines = Path('/tmp/intraday-status.txt').read_text().splitlines()
@@ -40,4 +41,15 @@ jobs:
           assert status['orders_submitted'] == 0 and status['live_eligible'] is False
           assert status['forward_promotion_eligible'] is False
           assert 0 <= status['age_seconds'] <= 180
+          sources = [
+              'scripts/intraday_runtime.py',
+              'specs/177-intraday-paper-challenger/contracts/intraday-preregistration.json',
+              'src/auto_invest/analytics/intraday_runtime.py',
+              'src/auto_invest/analytics/intraday_service.py',
+              'src/auto_invest/analytics/intraday_paper_challenger.py',
+              'src/auto_invest/market_data/intraday.py',
+          ]
+          hashes = ['sha256:' + hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in sources]
+          expected = hashlib.sha256(json.dumps(hashes, separators=(',', ':')).encode()).hexdigest()
+          assert status['identity'] == expected, 'service code differs from observed main'
           PY
