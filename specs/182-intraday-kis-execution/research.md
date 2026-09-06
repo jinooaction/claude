@@ -75,6 +75,19 @@ inquire-nccs 포털과 예제의 연속조회 설명은 일치하지 않는다. 
 - https://github.com/koreainvestment/open-trading-api/blob/main/examples_llm/overseas_stock/inquire_balance/inquire_balance.py
 - https://github.com/koreainvestment/open-trading-api/blob/main/examples_llm/overseas_stock/inquire_nccs/inquire_nccs.py
 
+## 실서버 페이지 종료 보정
+
+PR775/224558c의 실제 읽기34067976976은 새 계좌검사만 ACCOUNT_CURSOR_STALLED로
+실패했고 기존7개는 통과했다. 원문 커서를 공개하거나 실패를 정상 계좌로 바꾸지 않았다.
+공식 legacy/Sample01/kis_ovrseastk.py의 get_overseas_inquire_nccs를 추가 확인했다.
+같은 inquire-nccs/TTTS3018R/NASD/SORT_SQN=DS 경로이며 함수는D/E를 마지막 페이지,
+M/F를 다음 페이지로 구분한다. 마지막 페이지에서 FK/NK 공란을 요구하지 않는다.
+따라서 balance에만 적용했던D/E 완료를nccs에도 적용한다. 빈 헤더에서 남은 커서,
+M/F의 무진행/반복, 비정상 헤더·필드·페이지 상한은 계속 거절한다.
+오류 시 endpoint/페이지수/행수/헤더/커서 공란 여부·반복 여부만 진단한다.
+계좌번호·커서 원문·주문ID·보유 내역은 진단에 포함하지 않는다.
+- https://github.com/koreainvestment/open-trading-api/blob/main/legacy/Sample01/kis_ovrseastk.py
+
 execution/intraday_signals.py는 기존 사전등록 신호와 실제 귀속 보유를 연결한다.
 전체 5종목의 연속된 확정봉과 소스지문을 검사한다. 종료 청산은 신호 자료 장애에도
 계좌 재관측을 먼저 수행한다. 매수·매도 모두 5분 미체결이면 취소 확인을 기다린다.

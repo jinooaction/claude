@@ -20,6 +20,10 @@ ENDPOINTS = {
 class AccountReadError(ValueError):
     """Only closed, locally defined codes, never the broker's free-form error."""
 
+    def __init__(self, code, *, shape=None):
+        super().__init__(code)
+        self.shape = shape or {}
+
 
 def _number(row, field, *, whole=False, positive=False):
     value = row.get(field)
@@ -118,14 +122,26 @@ async def observe_account(
             if any(not isinstance(body.get(k), str) for k in keys):
                 raise AccountReadError("ACCOUNT_CURSOR_MISSING")
             next_cursor = tuple(body[k] for k in keys)
-            # Balance explicitly documents D/E as terminal; FK can remain populated.
-            if endpoint == "inquire-balance" and continuation in {"D", "E"}:
+            # Both official account examples use D/E as terminal; returned search
+            # context is not proof of another page. M/F still requires progress.
+            if continuation in {"D", "E"}:
                 return rows
             has_cursor = any(part.strip() for part in next_cursor)
             if continuation not in {"M", "F"} and not has_cursor:
                 return rows
             if not has_cursor or next_cursor == cursor or next_cursor in seen:
-                raise AccountReadError("ACCOUNT_CURSOR_STALLED")
+                raise AccountReadError(
+                    "ACCOUNT_CURSOR_STALLED",
+                    shape=dict(
+                        endpoint=endpoint,
+                        page_number=page + 1,
+                        row_count=len(raw),
+                        tr_cont=continuation,
+                        fk_empty=not next_cursor[0].strip(),
+                        nk_empty=not next_cursor[1].strip(),
+                        cursor_repeated=next_cursor == cursor or next_cursor in seen,
+                    ),
+                )
             seen.add(next_cursor)
             cursor = next_cursor
         raise AccountReadError("ACCOUNT_PAGE_LIMIT")
