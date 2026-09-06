@@ -1,0 +1,43 @@
+# 연구 및 결정
+
+Alpaca 계정은 없으며 KIS 기존 수집을 유지한다. KIS 공식 레거시 예제의 최대
+약1개월과 최신 PINC/KEYB 페이지 계약을 확인했다. 3년 자료를 보장하지 않는다.
+- https://raw.githubusercontent.com/koreainvestment/open-trading-api/main/legacy/rest/get_ovsstk_chart_price.py
+- https://raw.githubusercontent.com/koreainvestment/open-trading-api/main/examples_llm/overseas_stock/inquire_time_itemchartprice/inquire_time_itemchartprice.py
+
+KIS 무료 Nasdaq 부분 시세는 마감 후 차트가 갱신된다. 당시 원본과 소급자료를 분리한다.
+- https://file.koreainvestment.com/Storage/customer/guide/regards/service_03_1%283%29.htm
+
+Dukascopy 무료 export와5ETF는 있지만 CFD호가/호가수량이며 웹약관상 자동수집 제한도
+있다. 실제 ETF체결거래량으로 변환하거나 무허가 대량수집하지 않는다.
+- https://www.dukascopy.com/swiss/english/marketwatch/historical/
+- https://www.dukascopy.com/swiss/english/legal-pages/terms-of-use/
+
+2026-09-07 KIS 취소 공식계약은 PDNO·ORD_QTY·ORD_SVR_DVSN_CD와 업무성공을
+요구한다. 기존 함수의 종목누락·수량0·업무결과 미확인·기본재시도와 worker의
+즉시CANCELLED/재호가를 수정한다. 접수와 최종상태를 구분한다.
+- https://raw.githubusercontent.com/koreainvestment/open-trading-api/main/examples_llm/overseas_stock/order_rvsecncl/order_rvsecncl.py
+
+기존 router/authority/fill_sync를 공유한다. 단타 별도guard는 기본차단하며
+기존 X.4 사다리 승인을 상속하지 않는다. 테스트에는 실제키가 필요없다.
+
+체결 조회 공식 예제와 포털 공개 문서를 대조했다. SORT_SQN=DS,
+ORD_GNO_BRNO 공란, tr_cont=F/M이면 ctx_area_fk200/nk200 원문을 다음 요청에
+보존하고 tr_cont=N으로 연속 조회한다. 반복 커서·100페이지 초과·업무 거절은
+불완전 자료로 차단한다. NASD는 미국 전체를 포함하므로 실제 응답 거래소를 보존한다.
+- https://raw.githubusercontent.com/koreainvestment/open-trading-api/main/examples_llm/overseas_stock/inquire_ccnl/inquire_ccnl.py
+- https://apiportal.koreainvestment.com/apiservice-apiservice?/uapi/overseas-stock/v1/trading/inquire-ccnl
+
+새 단타 경로는 strict_contract를 사용한다. 누적 스냅샷을 합산하지 않고 가장 큰
+누적량을 취한다. 취소행은 orgn_odno로 연결하며, 취소유형02·처리완료·동일종목/방향·
+남은 수량 이상 취소 확인을 함께 요구한다. 취소 거부/전송은 종료가 아니다.
+주문접수 날짜는 현지 날짜이며 시간의 UTC 근거가 없어 단타는 관측시각을 기록한다.
+불명확한 주문은 가격·수량이 같아도 자동 연결하지 않는다. 기존 일반 호출의
+날짜 해석/부분행 호환은 유지하며, 단타 주문은 기존 워커의 추정 복구에서도 제외한다.
+부분 체결 증분 단가는 누적 체결금액에서 이미 기록한 금액을 빼서 계산한다.
+
+execution/intraday_signals.py는 기존 사전등록 신호와 실제 귀속 보유를 연결한다.
+전체 5종목의 연속된 확정봉과 소스지문을 검사한다. 종료 청산은 신호 자료 장애에도
+계좌 재관측을 먼저 수행한다. 매수·매도 모두 5분 미체결이면 취소 확인을 기다린다.
+계좌/배포 잠금을 얻기 전 실패한 취소는 요청을 소비하지 않는다. 잠금 안에서
+REQUESTED를 기록한 뒤 결과가 불명확하면 자동 재전송하지 않는다.

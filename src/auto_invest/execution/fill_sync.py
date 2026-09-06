@@ -152,6 +152,7 @@ def plan_fill_ingestion(
     open_orders: list[OpenOrder],
     executions: list[BrokerExecution],
     recorded_qty_by_corr: dict[str, int],
+    recorded_notional_by_corr: dict[str, Decimal] | None = None,
 ) -> FillPlan:
     """순수 계획 함수 — 부수효과 없음(FR-007).
 
@@ -168,22 +169,34 @@ def plan_fill_ingestion(
         broker_filled = execution.filled_qty
         recorded = recorded_qty_by_corr.get(order.correlation_id, 0)
         delta = broker_filled - recorded
+        if (
+            execution.symbol.upper() != order.symbol.upper()
+            or (execution.side is not None and execution.side.value != order.side)
+            or broker_filled > order.ordered_qty
+        ):
+            plan.warnings.append(f"{order.correlation_id}: broker identity or quantity mismatch")
+            continue
 
         if delta < 0:
             plan.warnings.append(
                 f"{order.correlation_id}: 브로커 누적 체결 {broker_filled} < "
                 f"기 기록 {recorded} — 되돌림/이상치, 기록 보류"
             )
+            continue
         elif delta > 0:
             price = execution.avg_fill_price_usd
-            if price <= 0:
-                plan.warnings.append(
-                    f"{order.correlation_id}: 체결가 {price} 비양수 — FILL 보류"
-                )
+            if price.is_finite() and recorded_notional_by_corr is not None:
+                previous_notional = recorded_notional_by_corr.get(order.correlation_id)
+                if recorded and previous_notional is None:
+                    plan.warnings.append(f"{order.correlation_id}: previous fill notional missing")
+                    continue
+                price = (price * broker_filled - (previous_notional or Decimal("0"))) / delta
+            if not price.is_finite() or price <= 0:
+                plan.warnings.append(f"{order.correlation_id}: 체결가 {price} 비양수 — FILL 보류")
+                continue
             else:
-                # delta 는 cumulative 평균 체결가로 기록한다. 한 주문이 짧은 시간에
-                # 비슷한 가격으로 채워지는 일반적인 경우 정확하며, 누적량 기반
-                # kis_fill_id 로 멱등이 보장된다.
+                # The broker reports cumulative average. Subtract the exact
+                # already-recorded notional before dividing by the new shares.
                 plan.fills.append(
                     PlannedFill(
                         correlation_id=order.correlation_id,
@@ -208,9 +221,7 @@ def plan_fill_ingestion(
         elif execution.terminal and broker_filled < order.ordered_qty:
             to_state = "EXPIRED"
             audit_cancel = True
-            reason = (
-                f"broker terminal, filled {broker_filled}/{order.ordered_qty}"
-            )
+            reason = f"broker terminal, filled {broker_filled}/{order.ordered_qty}"
         elif broker_filled > 0:
             to_state = "PARTIALLY_FILLED"
             reason = f"partial {broker_filled}/{order.ordered_qty}"
@@ -294,9 +305,7 @@ def _load_unknown_submissions(conn: sqlite3.Connection) -> list[UnknownSubmissio
     ]
 
 
-def _recorded_qty_by_corr(
-    conn: sqlite3.Connection, correlation_ids: list[str]
-) -> dict[str, int]:
+def _recorded_qty_by_corr(conn: sqlite3.Connection, correlation_ids: list[str]) -> dict[str, int]:
     if not correlation_ids:
         return {}
     placeholders = ",".join("?" for _ in correlation_ids)
@@ -566,6 +575,7 @@ async def sync_fills(
     now: datetime | None = None,
     order_start_date_yyyymmdd: str | None = None,
     order_end_date_yyyymmdd: str | None = None,
+    strict_contract: bool = False,
 ) -> FillSyncResult:
     """라이브 열린 주문의 체결을 브로커에서 당겨와 장부에 반영한다(읽기-기반 적재).
 
@@ -597,6 +607,7 @@ async def sync_fills(
             order_date_yyyymmdd=query_start,
             end_date_yyyymmdd=query_end,
             markets=markets,
+            **({"strict_contract": True} if strict_contract else {}),
         )
     except Exception as exc:  # noqa: BLE001 — 거래 무중단: 격리해 ERROR 로 기록.
         audit.append(
@@ -619,7 +630,9 @@ async def sync_fills(
         )
 
     recovery_plan = plan_submission_unknown_recovery(
-        unknown_submissions,
+        []
+        if strict_contract
+        else [order for order in unknown_submissions if not order.rule_id.startswith("intraday:")],
         executions,
         fallback_market=markets[0] if markets else US_ORDER_EXCHANGES[0],
     )
@@ -633,10 +646,15 @@ async def sync_fills(
 
     open_orders = _load_open_orders(conn)
     recorded = _recorded_qty_by_corr(conn, [o.correlation_id for o in open_orders])
-    plan = plan_fill_ingestion(open_orders, executions, recorded)
-    fills_applied, qty_applied, transitions = apply_fill_plan(
-        conn, plan, ts_iso=_iso_ms(moment)
-    )
+    notionals: dict[str, Decimal] = {}
+    for row in conn.execute("SELECT order_correlation_id,qty,price_usd FROM fills"):
+        corr = row["order_correlation_id"]
+        if corr in recorded:
+            notionals[corr] = notionals.get(corr, Decimal("0")) + (
+                int(row["qty"]) * Decimal(row["price_usd"])
+            )
+    plan = plan_fill_ingestion(open_orders, executions, recorded, notionals)
+    fills_applied, qty_applied, transitions = apply_fill_plan(conn, plan, ts_iso=_iso_ms(moment))
 
     for w in plan.warnings:
         audit.append(conn, ErrorPayload(where="fill_sync", message=w))

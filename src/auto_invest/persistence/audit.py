@@ -82,6 +82,7 @@ EventType = Literal[
     "EFFECTIVE_CAPITAL_UPDATED",
     "ORDER_TTL_CANCELLED",
     "ORDER_REQUOTED",
+    "ORDER_CANCEL_REQUEST",
 ]
 
 
@@ -90,6 +91,14 @@ class AuditPayload(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
     event_type: EventType
+
+
+class OrderCancelRequestPayload(AuditPayload):
+    """A cancellation attempt, never proof of terminal broker state."""
+    event_type: Literal["ORDER_CANCEL_REQUEST"] = "ORDER_CANCEL_REQUEST"
+    phase: Literal["REQUESTED", "ACKNOWLEDGED", "UNCERTAIN"]
+    reason: str
+    kis_order_id: str
 
 
 class WorkerStartedPayload(AuditPayload):
@@ -1023,6 +1032,7 @@ AnyPayload = (
     | EffectiveCapitalUpdatedPayload
     | OrderTtlCancelledPayload
     | OrderRequotedPayload
+    | OrderCancelRequestPayload
 )
 
 
