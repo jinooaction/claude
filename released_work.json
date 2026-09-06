@@ -1,5 +1,5 @@
 {
-  "commit": "41d98422cd742023ebf217160dbd59eb9a7de286",
+  "commit": "18521b99c82d57bff29a543deaebf360779061a3",
   "overall_status": "OK",
   "released_work": [
     {
@@ -902,7 +902,11 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "181-intraday-runtime"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "182-intraday-kis-execution"
     }
   ],
-  "timestamp_utc": "2026-09-06T16:33:59.929404Z"
+  "timestamp_utc": "2026-09-06T18:37:07.911518Z"
 }
