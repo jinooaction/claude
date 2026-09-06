@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-09-05T12:28:59.210438Z)
+# 완료 후보 소비 장부 (as of 2026-09-06T03:02:45.970662Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -134,6 +134,7 @@
 | 176-live-canary-contract | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 179-owner-emergency-live-deploy | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 180-prefill-capital-parity | 체크박스 작업이 없거나 완료되지 않았습니다. |
+| 181-intraday-runtime | 체크박스 작업이 없거나 완료되지 않았습니다. |
 
 ## 안전 경계
 
@@ -150,7 +151,7 @@
 
 ```json
 {
-  "commit": "4a5f43add677155382487f23a8a47debd2daa378",
+  "commit": "9f99501d49f20f56908b27a142667e18e770d125",
   "overall_status": "OK",
   "released_work": [
     {
@@ -1049,8 +1050,12 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "180-prefill-capital-parity"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "181-intraday-runtime"
     }
   ],
-  "timestamp_utc": "2026-09-05T12:28:59.210438Z"
+  "timestamp_utc": "2026-09-06T03:02:45.970662Z"
 }
 ```

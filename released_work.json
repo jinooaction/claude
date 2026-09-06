@@ -1,5 +1,5 @@
 {
-  "commit": "4a5f43add677155382487f23a8a47debd2daa378",
+  "commit": "9f99501d49f20f56908b27a142667e18e770d125",
   "overall_status": "OK",
   "released_work": [
     {
@@ -898,7 +898,11 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "180-prefill-capital-parity"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "181-intraday-runtime"
     }
   ],
-  "timestamp_utc": "2026-09-05T12:28:59.210438Z"
+  "timestamp_utc": "2026-09-06T03:02:45.970662Z"
 }
