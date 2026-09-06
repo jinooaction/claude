@@ -36,6 +36,22 @@ ORD_GNO_BRNO 공란, tr_cont=F/M이면 ctx_area_fk200/nk200 원문을 다음 요
 날짜 해석/부분행 호환은 유지하며, 단타 주문은 기존 워커의 추정 복구에서도 제외한다.
 부분 체결 증분 단가는 누적 체결금액에서 이미 기록한 금액을 빼서 계산한다.
 
+## 자본 검토 결정 (2026-09-07)
+
+기존 신호는 capital×0.16과 cash/1.003 중 작은 금액으로 정수주를 산다.
+100달러로는 예시 ETF 어느 종목도 1주가 안 된다. 600달러 예시는 TLT만
+1주가 가능하며, 이를 5종목 분산 운용 가능이나 적합한 투자금으로 표현하지 않는다.
+예산을 자동 상향하거나 저렴한 다른 ETF로 바꾸는 대안은 채택하지 않는다.
+가격은 공개 참고 스냅샷이고 실제 주문 시세가 아니다.
+
+독립 KIS 계약 조사 결과 구매가능금액은 총 현금/NAV와 같지 않다.
+inquire-psamount의 ovrs_ord_psbl_amt와 frcr_ord_psbl_amt1도 의미가 다르다.
+inquire-present-balance에는 미국 장중 반영 지연 안내가 있어 tot_asst_amt/환율을
+실시간 USD NAV로 인정할 근거가 부족하다. 기존 합산 잔고를 새 단타 승인에 쓰지 않는다.
+이 단계는 계좌 연결 구현 대신 검토 계산을 완성하고 NAV 미검증을 명시한다.
+- https://apiportal.koreainvestment.com/apiservice-apiservice?/uapi/overseas-stock/v1/trading/inquire-psamount
+- https://apiportal.koreainvestment.com/apiservice-apiservice?/uapi/overseas-stock/v1/trading/inquire-present-balance
+
 execution/intraday_signals.py는 기존 사전등록 신호와 실제 귀속 보유를 연결한다.
 전체 5종목의 연속된 확정봉과 소스지문을 검사한다. 종료 청산은 신호 자료 장애에도
 계좌 재관측을 먼저 수행한다. 매수·매도 모두 5분 미체결이면 취소 확인을 기다린다.

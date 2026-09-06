@@ -33,7 +33,7 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `18521b9` — Merge pull request #771 from jinooaction/codex/182-intraday-kis-execution |
+| 마지막 main 커밋 | `43d3618` — Merge pull request #772 from jinooaction/codex/182-production-proof |
 | main 테스트 | #771 실행 코드600a161 전체3500 passed/8 skipped,실패0(799.45초). 실제 읽기 전용 KIS34052281711은7/7(20.41초). |
 | main 린트 | #771 실행 코드600a161에서 `uv run ruff check src tests scripts/intraday_execution.py` 통과. |
 | 열린 PR | #771 병합 완료. `codex/182-production-proof`는 생산 증거 인계만 기록하며 열린 PR은 GitHub에서 다시 확인한다. |
@@ -44,6 +44,16 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 | 안전 경계 | main과 작업 브랜치는 헌법 15.5.0이다. 원래 거래일 선점은 불변이며, 정확한 무접수 사고에만 root 서버 예약이 별도 추가 전용 복구 슬롯을 한 번 쓸 수 있다. 접수 불명·접수·부분체결·체결·열린 주문·사후 실패는 복구를 막는다. 수동 주문·서비스 수동 시작·자본 비율 상향·전략 승격·허용목록·위험 관문 우회는 계속 금지된다. |
 
 ## 현재 진행 — 2026-09-07 KST (스펙182 KIS 단타 실행·복구 검증)
+
+후속 자본 검토는 `codex/182-kis-account-connector`에서 진행한다. 운영자는
+배정안을 제안하고 절차대로 진행하라고 했으며 구체적인 금액은 아직 결정하지 않았다.
+검토 CLI와 100/600달러 보고서를 추가했다. 600달러에서 참고 시세상 TLT1주만
+계산되며 100달러는 전 종목0주다. 이것은 실제 배정·매수 신호·자본 승인이 아니다.
+관련41개·린트·하네스14/14·HANDOFF 검사가 통과했다. 전체 회귀와 병합은 진행 중이다.
+검토안은 specs/182-intraday-kis-execution/capital-review/README.md에서 재현한다.
+KIS 읽기 전용34064890546도7/7(16.50초) 통과했고 주문0건이다.
+기존 구매가능금액+보유평가 합계를 검증된 실시간 NAV로 사용하지 않는다.
+현재 연구·전진관찰·단타 생산 계좌관측/권한 연결·체결 증거 조건은 그대로다.
 
 PR771은18521b9로 병합됐다. 정상 배포34052281701이 성공했고,
 감사34052386141은 ef018f9332f6c8d06c904d130d83cc7f의
