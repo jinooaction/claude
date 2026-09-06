@@ -2,7 +2,7 @@
 
 **Feature Branch**: `codex/182-intraday-kis-execution`
 **Created**: 2026-09-07
-**Status**: 구현 중
+**Status**: 실행·복구 코드 검증 완료, 생산 실거래 전체완료 조건 미충족
 **Input**: Alpaca 계정 없이 기존 한국투자증권 중심으로 단타 자동매매를 끝까지 완성한다.
 
 ## 문제 정의
