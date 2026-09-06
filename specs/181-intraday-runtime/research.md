@@ -34,3 +34,16 @@ https://github.com/koreainvestment/open-trading-api/tree/main/examples_llm/overs
 실주문은 발생하지 않았다. 기존 production KIS 키 부재를 뜻하지 않으며 그 비밀값을
 로컬로 복사하지 않았다. Alpaca 계정 보유 여부는 운영자에게 비동기로 질문했다.
 키를 채팅에 붙여넣지 않는다. 본 결과는 네트워크 계약의 실자료 성공 증거가 아니다.
+
+## 기존 서버 계정으로 확인한 실제 자료 — 2026-09-06
+
+PR767 main9f99501의 KIS smoke34007993027은7/7 통과했다. 기존 서버 키와
+토큰 캐시로 2026-09-04 완결 세션 SPY/QQQ/IWM/TLT/GLD 각각78개의5분봉을
+읽었고 정확한390개 시각·종목 집합을 검증했다. 요약 상태는
+`INTRADAY_DATA_CONTRACT_OK`, 공급자는 `kis-nasdaq-partial-unadjusted`다.
+수집 배치 지문은
+`sha256:3056d3d75df8b3c49d1659940f9cd0f26284ce590e265ad65aba2da3eae98bc1`다.
+원본은 서버 pytest 임시 디렉터리에만 저장했다. 공개 로그에는 지문과 봉 수만
+남겼으며 영구 연구 자료 보관을 완료했다고 주장하지 않는다.
+실제 주문0, live/forward promotion=false다. 현재 계정으로 최근 분봉 접근은
+가능하다. 756세션 SIP 역사, 지속 운용, 전략 합격과60세션 관찰은 별도 미완료다.
