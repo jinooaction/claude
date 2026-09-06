@@ -69,17 +69,13 @@ def _rule(
         priority=10,
         enabled=enabled,
         trigger=PriceTrigger(direction="<=", threshold=Decimal("1"), cooldown_seconds=60),
-        action=Action(
-            side=Side.BUY, order_type=OrderType.LIMIT, qty=1, limit_price="100.00"
-        ),
+        action=Action(side=Side.BUY, order_type=OrderType.LIMIT, qty=1, limit_price="100.00"),
         lifecycle=lifecycle,
     )
 
 
 @asynccontextmanager
-async def _worker(
-    tmp_path: Path, rules: tuple[TradingRule, ...]
-) -> AsyncIterator[Worker]:
+async def _worker(tmp_path: Path, rules: tuple[TradingRule, ...]) -> AsyncIterator[Worker]:
     settings = WorkerSettings(
         config=LoadedConfig(
             caps=_caps(),
@@ -101,8 +97,12 @@ async def _worker(
             max_retries=1,
         )
         worker = Worker(
-            settings, broker=broker, access_token="tok", app_key="app",
-            app_secret="sec", account_no=ACCOUNT,
+            settings,
+            broker=broker,
+            access_token="tok",
+            app_key="app",
+            app_secret="sec",
+            account_no=ACCOUNT,
         )
         try:
             yield worker
@@ -122,9 +122,7 @@ def _seed_order(
     order_type: str = "LIMIT",
     state: str = "SUBMITTED",
 ) -> None:
-    submitted = (NOW - timedelta(seconds=age_seconds)).strftime(
-        "%Y-%m-%dT%H:%M:%S.000Z"
-    )
+    submitted = (NOW - timedelta(seconds=age_seconds)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
     worker.conn.execute(
         """
         INSERT INTO orders
@@ -167,7 +165,7 @@ async def test_ttl_cancel_respects_execution_authority_lock(tmp_path: Path) -> N
         with respx.mock(base_url=BASE, assert_all_called=False) as mock:
             mock.get(CCNL).mock(return_value=_empty_ccnl())
             cancel_route = mock.post(CANCEL).mock(
-                return_value=httpx.Response(200, json={"output": {}})
+                return_value=httpx.Response(200, json={"rt_cd": "0", "output": {"ODNO": "C1"}})
             )
             async with worker.execution_authority.account_lock("external writer"):
                 report = await worker.tick(NOW)
@@ -180,24 +178,22 @@ async def test_ttl_cancel_respects_execution_authority_lock(tmp_path: Path) -> N
 
 @pytest.mark.asyncio
 async def test_tick_cancels_ttl_expired_order(tmp_path: Path) -> None:
-    """TTL 초과 미체결 주문 → cancel_order 호출 + CANCELLED 전이 + ORDER_TTL_CANCELLED 1건."""
+    """취소 접수는 종료가 아니며 다음 broker 체결 확인까지 원주문을 보존한다."""
     rule = _rule(lifecycle=OrderLifecycleConfig(ttl_seconds=60))
     async with _worker(tmp_path, (rule,)) as worker:
         _seed_order(worker, corr="ord-ttl", kis="K1", age_seconds=120)
         with respx.mock(base_url=BASE) as mock:
             mock.get(CCNL).mock(return_value=_empty_ccnl())
             cancel_route = mock.post(CANCEL).mock(
-                return_value=httpx.Response(200, json={"output": {}})
+                return_value=httpx.Response(200, json={"rt_cd": "0", "output": {"ODNO": "C1"}})
             )
             report = await worker.tick(NOW)
         assert report.skipped_reason is None
         assert cancel_route.called
-        assert _state(worker, "ord-ttl") == "CANCELLED"
-        evs = _events(worker, "ORDER_TTL_CANCELLED")
-        assert len(evs) == 1
-        assert evs[0]["kis_order_id"] == "K1"
-        assert evs[0]["ttl_seconds"] == 60
-        assert evs[0]["age_seconds"] >= 120
+        assert _state(worker, "ord-ttl") == "SUBMITTED"
+        evs = _events(worker, "ORDER_CANCEL_REQUEST")
+        assert [e["phase"] for e in evs] == ["REQUESTED", "ACKNOWLEDGED"]
+        assert _events(worker, "ORDER_TTL_CANCELLED") == []
 
 
 @pytest.mark.asyncio
@@ -209,7 +205,7 @@ async def test_tick_leaves_fresh_order_untouched(tmp_path: Path) -> None:
         with respx.mock(base_url=BASE, assert_all_called=False) as mock:
             mock.get(CCNL).mock(return_value=_empty_ccnl())
             cancel_route = mock.post(CANCEL).mock(
-                return_value=httpx.Response(200, json={"output": {}})
+                return_value=httpx.Response(200, json={"rt_cd": "0", "output": {"ODNO": "C1"}})
             )
             await worker.tick(NOW)
         assert cancel_route.called is False
@@ -224,13 +220,11 @@ async def test_tick_leaves_fresh_order_untouched(tmp_path: Path) -> None:
 async def test_tick_requotes_drifted_order(tmp_path: Path) -> None:
     """드리프트 초과 지정가 → 취소 + ORDER_REQUOTED + submit_order 재호출(게이트 재통과)."""
     rule = _rule(
-        lifecycle=OrderLifecycleConfig(
-            requote_drift_pct=Decimal("2"), requote_after_seconds=30
-        )
+        lifecycle=OrderLifecycleConfig(requote_drift_pct=Decimal("2"), requote_after_seconds=30)
     )
     async with _worker(tmp_path, (rule,)) as worker:
         _seed_order(worker, corr="ord-drift", kis="K1", age_seconds=60, limit="100.00")
-        with respx.mock(base_url=BASE) as mock:
+        with respx.mock(base_url=BASE, assert_all_called=False) as mock:
             mock.get(CCNL).mock(return_value=_empty_ccnl())
             mock.get(QUOTE).mock(
                 return_value=httpx.Response(
@@ -239,7 +233,7 @@ async def test_tick_requotes_drifted_order(tmp_path: Path) -> None:
                 )
             )
             cancel_route = mock.post(CANCEL).mock(
-                return_value=httpx.Response(200, json={"output": {}})
+                return_value=httpx.Response(200, json={"rt_cd": "0", "output": {"ODNO": "C1"}})
             )
             place_route = mock.post(PLACE).mock(
                 return_value=httpx.Response(200, json={"output": {"ODNO": "K2"}})
@@ -247,17 +241,13 @@ async def test_tick_requotes_drifted_order(tmp_path: Path) -> None:
             report = await worker.tick(NOW)
         assert report.skipped_reason is None
         assert cancel_route.called
-        assert place_route.called  # 재제출이 게이트 체인을 통과해 브로커에 도달.
-        assert _state(worker, "ord-drift") == "CANCELLED"
-        reqs = _events(worker, "ORDER_REQUOTED")
-        assert len(reqs) == 1
-        assert reqs[0]["old_kis_order_id"] == "K1"
-        assert Decimal(reqs[0]["mid_price_usd"]) == Decimal("103")
-        assert Decimal(reqs[0]["drift_pct"]) == Decimal("3")
-        assert reqs[0]["old_limit_price_usd"] == "100.00"
-        # 재제출된 새 주문이 INTENT→SUBMITTED 정상 경로를 탔다.
-        subs = _events(worker, "ORDER_SUBMITTED")
-        assert any(s["kis_order_id"] == "K2" for s in subs)
+        assert not place_route.called
+        assert _state(worker, "ord-drift") == "SUBMITTED"
+        assert _events(worker, "ORDER_REQUOTED") == []
+        assert [e["phase"] for e in _events(worker, "ORDER_CANCEL_REQUEST")] == [
+            "REQUESTED",
+            "ACKNOWLEDGED",
+        ]
 
 
 @pytest.mark.asyncio
@@ -276,7 +266,7 @@ async def test_tick_no_requote_within_tolerance(tmp_path: Path) -> None:
                 )
             )
             cancel_route = mock.post(CANCEL).mock(
-                return_value=httpx.Response(200, json={"output": {}})
+                return_value=httpx.Response(200, json={"rt_cd": "0", "output": {"ODNO": "C1"}})
             )
             await worker.tick(NOW)
         assert cancel_route.called is False
@@ -314,7 +304,7 @@ async def test_no_lifecycle_config_is_noop(tmp_path: Path) -> None:
                 return_value=httpx.Response(200, json={"output": {"last": "103"}})
             )
             cancel_route = mock.post(CANCEL).mock(
-                return_value=httpx.Response(200, json={"output": {}})
+                return_value=httpx.Response(200, json={"rt_cd": "0", "output": {"ODNO": "C1"}})
             )
             await worker.tick(NOW)
         assert quote_route.called is False
@@ -359,9 +349,7 @@ async def test_marketable_limit_used_on_submit(tmp_path: Path) -> None:
     )
     async with _router(tmp_path) as router:
         with respx.mock(base_url=BASE) as mock:
-            mock.post(PLACE).mock(
-                return_value=httpx.Response(200, json={"output": {"ODNO": "K9"}})
-            )
+            mock.post(PLACE).mock(return_value=httpx.Response(200, json={"output": {"ODNO": "K9"}}))
             await router.submit_order(
                 rule=rule,
                 quote_price_usd=Decimal("100"),
@@ -371,9 +359,7 @@ async def test_marketable_limit_used_on_submit(tmp_path: Path) -> None:
                 current_symbol_exposure_usd=Decimal("0"),
                 current_global_exposure_usd=Decimal("0"),
             )
-        intent = next(
-            r for r in audit.read_all(router.conn) if r["event_type"] == "ORDER_INTENT"
-        )
+        intent = next(r for r in audit.read_all(router.conn) if r["event_type"] == "ORDER_INTENT")
         p = _json.loads(intent["payload_json"])
         # ask 100 + 20bps = 100.20 (표현식 "100.00" 이 아님).
         assert p["limit_price_usd"] == "100.20"
@@ -407,12 +393,12 @@ async def test_ttl_cancel_uses_recorded_order_exchange(tmp_path: Path) -> None:
         with respx.mock(base_url=BASE) as mock:
             mock.get(CCNL).mock(return_value=_empty_ccnl())
             cancel_route = mock.post(CANCEL).mock(
-                return_value=httpx.Response(200, json={"output": {}})
+                return_value=httpx.Response(200, json={"rt_cd": "0", "output": {"ODNO": "C1"}})
             )
             await worker.tick(NOW)
         assert cancel_route.called
         assert _request_body(cancel_route.calls[0])["OVRS_EXCG_CD"] == "AMEX"
-        assert _state(worker, "ord-amex") == "CANCELLED"
+        assert _state(worker, "ord-amex") == "SUBMITTED"
 
 
 @pytest.mark.asyncio
@@ -425,27 +411,26 @@ async def test_ttl_cancel_falls_back_to_default_exchange(tmp_path: Path) -> None
         with respx.mock(base_url=BASE) as mock:
             mock.get(CCNL).mock(return_value=_empty_ccnl())
             cancel_route = mock.post(CANCEL).mock(
-                return_value=httpx.Response(200, json={"output": {}})
+                return_value=httpx.Response(200, json={"rt_cd": "0", "output": {"ODNO": "C1"}})
             )
             await worker.tick(NOW)
         assert cancel_route.called
         assert _request_body(cancel_route.calls[0])["OVRS_EXCG_CD"] == "NASD"
-        assert _state(worker, "ord-legacy") == "CANCELLED"
+        assert _state(worker, "ord-legacy") == "SUBMITTED"
 
 
 @pytest.mark.asyncio
-async def test_requote_resubmits_on_recorded_exchange(tmp_path: Path) -> None:
-    """재호가는 취소와 재제출 둘 다 원주문이 나갔던 거래소(AMEX)로 가고, 재제출된
-    새 주문의 라우팅도 같은 거래소로 기록된다(다음 취소도 올바른 거래소)."""
+async def test_requote_cancel_uses_recorded_exchange_without_immediate_resubmit(
+    tmp_path: Path,
+) -> None:
+    """원주문 거래소로 취소하고, 최종 확인 전에는 새 주문을 내지 않는다."""
     rule = _rule(
-        lifecycle=OrderLifecycleConfig(
-            requote_drift_pct=Decimal("2"), requote_after_seconds=30
-        )
+        lifecycle=OrderLifecycleConfig(requote_drift_pct=Decimal("2"), requote_after_seconds=30)
     )
     async with _worker(tmp_path, (rule,)) as worker:
         _seed_order(worker, corr="ord-rq", kis="K1", age_seconds=60, limit="100.00")
         _seed_routing(worker, "ord-rq", "AMEX")
-        with respx.mock(base_url=BASE) as mock:
+        with respx.mock(base_url=BASE, assert_all_called=False) as mock:
             mock.get(CCNL).mock(return_value=_empty_ccnl())
             mock.get(QUOTE).mock(
                 return_value=httpx.Response(
@@ -454,18 +439,27 @@ async def test_requote_resubmits_on_recorded_exchange(tmp_path: Path) -> None:
                 )
             )
             cancel_route = mock.post(CANCEL).mock(
-                return_value=httpx.Response(200, json={"output": {}})
+                return_value=httpx.Response(200, json={"rt_cd": "0", "output": {"ODNO": "C1"}})
             )
             place_route = mock.post(PLACE).mock(
                 return_value=httpx.Response(200, json={"output": {"ODNO": "K2"}})
             )
             await worker.tick(NOW)
         assert _request_body(cancel_route.calls[0])["OVRS_EXCG_CD"] == "AMEX"
-        assert _request_body(place_route.calls[0])["OVRS_EXCG_CD"] == "AMEX"
-        rows = worker.conn.execute(
-            "SELECT order_exchange FROM order_routing WHERE correlation_id != 'ord-rq'"
-        ).fetchall()
-        assert [r["order_exchange"] for r in rows] == ["AMEX"]
+        assert _request_body(cancel_route.calls[0])["PDNO"] == "AAPL"
+        assert not place_route.called
+        assert _state(worker, "ord-rq") == "SUBMITTED"
+        # A new worker invocation must not replay the same cancellation write.
+        with respx.mock(base_url=BASE, assert_all_called=False) as mock:
+            mock.get(CCNL).mock(return_value=_empty_ccnl())
+            mock.get(QUOTE).mock(
+                return_value=httpx.Response(
+                    200, json={"output": {"last": "103", "bidp": "102.9", "askp": "103.1"}}
+                )
+            )
+            cancel_again = mock.post(CANCEL)
+            await worker._manage_order_lifecycle(NOW)
+            assert not cancel_again.called
 
 
 @pytest.mark.asyncio
@@ -475,9 +469,7 @@ async def test_submit_records_order_routing(tmp_path: Path) -> None:
     rule = _rule(rule_id="rt", enabled=True)
     async with _router(tmp_path) as router:
         with respx.mock(base_url=BASE) as mock:
-            mock.post(PLACE).mock(
-                return_value=httpx.Response(200, json={"output": {"ODNO": "K1"}})
-            )
+            mock.post(PLACE).mock(return_value=httpx.Response(200, json={"output": {"ODNO": "K1"}}))
             resolved = await router.submit_order(
                 rule=rule,
                 quote_price_usd=Decimal("100"),
@@ -515,9 +507,7 @@ async def test_marketable_limit_falls_back_without_quote(tmp_path: Path) -> None
     )
     async with _router(tmp_path) as router:
         with respx.mock(base_url=BASE) as mock:
-            mock.post(PLACE).mock(
-                return_value=httpx.Response(200, json={"output": {"ODNO": "K8"}})
-            )
+            mock.post(PLACE).mock(return_value=httpx.Response(200, json={"output": {"ODNO": "K8"}}))
             await router.submit_order(
                 rule=rule,
                 quote_price_usd=Decimal("100"),
@@ -527,8 +517,6 @@ async def test_marketable_limit_falls_back_without_quote(tmp_path: Path) -> None
                 current_symbol_exposure_usd=Decimal("0"),
                 current_global_exposure_usd=Decimal("0"),
             )
-        intent = next(
-            r for r in audit.read_all(router.conn) if r["event_type"] == "ORDER_INTENT"
-        )
+        intent = next(r for r in audit.read_all(router.conn) if r["event_type"] == "ORDER_INTENT")
         p = _json.loads(intent["payload_json"])
         assert p["limit_price_usd"] == "100.00"  # 표현식 폴백.

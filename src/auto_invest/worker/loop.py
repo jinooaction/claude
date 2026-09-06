@@ -48,7 +48,6 @@ from auto_invest.execution.lifecycle import (
 from auto_invest.execution.order_router import (
     OrderOutcome,
     OrderRouter,
-    _record_transition,
     verify_stage_uniqueness,
 )
 from auto_invest.market_data.feed import backfill_daily_bars, store_synthetic_bar
@@ -58,8 +57,6 @@ from auto_invest.persistence import positions as positions_mod
 from auto_invest.persistence.audit import (
     CircuitBreakerTrippedPayload,
     EffectiveCapitalUpdatedPayload,
-    OrderRequotedPayload,
-    OrderTtlCancelledPayload,
     PaperRunStartedPayload,
     PaperRunStoppedPayload,
     RuleLoadPayload,
@@ -725,10 +722,9 @@ class Worker:
     async def _manage_order_lifecycle(self, now: datetime) -> None:
         """미체결 주문 수명 관리(스펙 030) — TTL 만료 취소 + 가격 드리프트 재호가.
 
-        lifecycle 설정 있는 룰의 열린 주문만 대상. 취소는 브로커 cancel_order 가 성공한
-        뒤에만 로컬 상태를 CANCELLED 로 전이한다(취소 실패는 다음 체결 동기화가 정합화).
-        재호가는 추가로 router.submit_order 로 게이트 체인을 다시 통과시켜 재제출한다
-        (K1 캡 무변경). 모든 예외는 격리되어 거래 루프를 멈추지 않는다(거래 무중단)."""
+        lifecycle 설정 있는 룰의 열린 주문만 대상. 취소 접수를 영속 감사에 기록하고
+        최종 상태는 다음 체결 동기화에서 확정한다. 즉시 재제출하지 않으며, 확정 뒤
+        다음 정상 신호가 router 관문을 다시 통과한다. 예외는 격리한다."""
         try:
             orders = load_open_orders_for_lifecycle(self.conn)
         except Exception:  # noqa: BLE001 — 조회 실패는 이번 틱 수명 관리만 건너뜀.
@@ -788,86 +784,19 @@ class Worker:
         quotes: dict[str, QuoteSnapshot],
         now: datetime,
     ) -> None:
-        """한 수명 관리 액션의 부수효과: 브로커 취소 → 상태 전이 → 감사 (→ 재호가 재제출).
+        """취소를 한 번 요청하고 실제 종료는 다음 fill_sync에 맡긴다.
 
-        브로커 취소가 먼저다 — 성공해야 로컬 상태를 바꾼다(실패 시 예외가 호출자로 올라가
-        격리되고 상태는 안 바뀐다 → 다음 체결 동기화가 실제 체결/종료를 정합화). 부분 체결분은
-        이미 fills 에 기록돼 누락되지 않는다."""
+        접수만으로 CANCELLED를 만들거나 재호가하면 추가 체결이 사라질 수 있다.
+        원주문 노출은 최종 확인까지 유지하고 다음 정상 판단에서 목표를 다시 계산한다.
+        """
+        from auto_invest.execution.cancellation import request_cancellation
+
         o = action.order
-        # KIS 정정취소는 OVRS_EXCG_CD 가 원주문 거래소와 일치해야 한다. 제출 시점에
-        # 기록된 거래소(order_routing)를 쓰고, 기록 없는 과거 주문만 기본값 폴백 —
-        # SPY·GLD(AMEX) 같은 비기본 거래소 주문의 취소가 오라우팅되지 않게 한다.
         if self.execution_authority is None:
             return
-        await self.execution_authority.cancel_broker_order(
-            kis_order_id=o.kis_order_id,
-            market=o.order_exchange or self.settings.market_order,
-        )
-        ts = _utcnow_iso_ms_for_payload()
-        if action.kind == "cancel_ttl":
-            _record_transition(
-                self.conn, o.correlation_id, o.state, "CANCELLED", "ttl_expired"
-            )
-            audit.append(
-                self.conn,
-                OrderTtlCancelledPayload(
-                    kis_order_id=o.kis_order_id,
-                    age_seconds=action.age_seconds,
-                    ttl_seconds=action.ttl_seconds or 0,
-                    cancelled_at_utc=ts,
-                ),
-                rule_id=o.rule_id,
-                symbol=o.symbol,
-                correlation_id=o.correlation_id,
-            )
-            return
-
-        # requote — 취소 + 감사 + 게이트 체인 재통과 재제출.
-        _record_transition(
-            self.conn, o.correlation_id, o.state, "CANCELLED", "requote"
-        )
-        audit.append(
-            self.conn,
-            OrderRequotedPayload(
-                old_kis_order_id=o.kis_order_id,
-                old_limit_price_usd=(
-                    str(o.limit_price_usd) if o.limit_price_usd is not None else None
-                ),
-                mid_price_usd=(
-                    str(action.mid_usd) if action.mid_usd is not None else None
-                ),
-                drift_pct=(
-                    str(action.drift_pct) if action.drift_pct is not None else None
-                ),
-                requoted_at_utc=ts,
-            ),
-            rule_id=o.rule_id,
-            symbol=o.symbol,
-            correlation_id=o.correlation_id,
-        )
-        rule = rule_by_id.get(o.rule_id)
-        quote = quotes.get(o.symbol)
-        if rule is None or quote is None:
-            return  # 룰/호가 없으면 재제출 불가(취소까지만 — 다음 틱 자연 재발화 가능).
-        price = quote.last_usd if quote.last_usd is not None else action.mid_usd
-        if price is None or price <= 0:
-            return
-        # 게이트 체인 재통과 — K1 캡(per-trade/per-symbol/global)이 그대로 바인딩되므로
-        # 재호가가 노출을 안전 경계 위로 올릴 수 없다. 새 주문은 별도 correlation_id 로
-        # INTENT→SUBMITTED 정상 경로를 탄다.
-        await self.router.submit_order(
-            rule=rule,
-            quote_price_usd=price,
-            quote_ask_usd=quote.ask_usd,
-            quote_bid_usd=quote.bid_usd,
-            total_capital_usd=self._effective_capital_usd,
-            current_symbol_exposure_usd=self._symbol_exposure_usd(o.symbol, price),
-            current_global_exposure_usd=self._global_exposure_usd(
-                symbol=o.symbol, quote_price=price
-            ),
-            # 재제출은 원주문이 나갔던 거래소로 — None(기록 없음)이면 라우터가 기본
-            # 거래소 폴백(단일 거래소 룰 워커는 byte 동일, 회귀 0).
-            order_exchange=o.order_exchange,
+        await request_cancellation(
+            self.execution_authority, correlation_id=o.correlation_id,
+            market=o.order_exchange or self.settings.market_order, reason=action.kind,
         )
 
     # ---------------------------------------------- circuit breaker (spec 014)

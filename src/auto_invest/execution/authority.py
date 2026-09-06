@@ -146,10 +146,26 @@ class ExecutionAuthority:
         *,
         kis_order_id: str,
         market: str,
-    ) -> None:
+        before_write: Callable[[], bool] | None = None,
+    ) -> bool:
         """Cancel a live order through the single broker-write surface."""
         async with self.account_lock(f"cancel:{kis_order_id}:{market}"):
             with broker_write_coordination(self.broker_write_lock_path):
+                rows = self.conn.execute(
+                    """SELECT o.symbol, o.qty - COALESCE((
+                        SELECT SUM(f.qty) FROM fills f
+                        WHERE f.order_correlation_id=o.correlation_id), 0) AS remaining,
+                        r.order_exchange
+                    FROM orders o LEFT JOIN order_routing r USING(correlation_id)
+                    WHERE o.kis_order_id=? AND o.state IN ('SUBMITTED','PARTIALLY_FILLED')""",
+                    (kis_order_id,),
+                ).fetchall()
+                if len(rows) != 1 or rows[0]["remaining"] <= 0:
+                    raise ValueError("cancel requires one known open order")
+                if rows[0]["order_exchange"] not in (None, market):
+                    raise ValueError("cancel exchange differs from original order")
+                if before_write is not None and not before_write():
+                    return False
                 await cancel_order(
                     self.broker,
                     access_token=self.access_token,
@@ -157,8 +173,11 @@ class ExecutionAuthority:
                     app_secret=self.app_secret,
                     account=self.account_no,
                     kis_order_id=kis_order_id,
+                    symbol=rows[0]["symbol"],
+                    qty=rows[0]["remaining"],
                     market=market,
                 )
+                return True
 
     def release(self) -> None:
         """Release this authority's row if it still owns it."""

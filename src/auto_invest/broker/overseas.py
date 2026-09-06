@@ -412,31 +412,64 @@ async def cancel_order(
     app_secret: str,
     account: str,
     kis_order_id: str,
+    symbol: str,
+    qty: int,
     market: str = "NASD",
 ) -> None:
-    """Cancel an open KIS order by id."""
+    """Request cancellation once. Acceptance is NOT final cancellation."""
+    if not symbol or type(qty) is not int or qty <= 0 or not kis_order_id:
+        raise ValueError("cancellation requires original symbol, id and remaining quantity")
     cano, acnt_prdt = _split_account(account)
-    await client.request(
-        "POST",
-        "/uapi/overseas-stock/v1/trading/order-rvsecncl",
-        headers=_kis_headers(
-            access_token=access_token,
-            app_key=app_key,
-            app_secret=app_secret,
-            tr_id=TR_ID_CANCEL,
-            extra={"content-type": "application/json"},
-        ),
-        json={
-            "CANO": cano,
-            "ACNT_PRDT_CD": acnt_prdt,
-            "OVRS_EXCG_CD": market,
-            "ORGN_ODNO": kis_order_id,
-            "RVSE_CNCL_DVSN_CD": "02",  # 02 = cancel; 01 = modify
-            "ORD_QTY": "0",
-            "OVRS_ORD_UNPR": "0",
-            "MGCO_APTM_ODNO": "",
-        },
-    )
+    endpoint = "/uapi/overseas-stock/v1/trading/order-rvsecncl"
+    body = {
+        "CANO": cano,
+        "ACNT_PRDT_CD": acnt_prdt,
+        "OVRS_EXCG_CD": market,
+        "PDNO": symbol,
+        "ORGN_ODNO": kis_order_id,
+        "RVSE_CNCL_DVSN_CD": "02",
+        "ORD_QTY": str(qty),
+        "OVRS_ORD_UNPR": "0",
+        "MGCO_APTM_ODNO": "",
+        "ORD_SVR_DVSN_CD": "0",
+    }
+    summary = dict(method="POST", endpoint=endpoint, tr_id=TR_ID_CANCEL, body=body)
+    try:
+        response = await client.request(
+            "POST",
+            endpoint,
+            retry_transient=False,
+            headers=_kis_headers(
+                access_token=access_token,
+                app_key=app_key,
+                app_secret=app_secret,
+                tr_id=TR_ID_CANCEL,
+                extra={"content-type": "application/json"},
+            ),
+            json=body,
+        )
+    except Exception as exc:
+        raise KisOrderError(
+            "KIS cancel response uncertain",
+            diagnostics=diagnostics_from_exception(exc, request_summary=summary),
+        ) from exc
+    try:
+        data = response.json()
+    except ValueError as exc:
+        raise KisOrderError(
+            "KIS cancel response invalid",
+            diagnostics=diagnostics_from_response(response, request_summary=summary),
+        ) from exc
+    if (
+        not isinstance(data, dict)
+        or data.get("rt_cd") != "0"
+        or not isinstance(data.get("output"), dict)
+        or not data["output"].get("ODNO")
+    ):
+        raise KisOrderError(
+            "KIS cancel acceptance unconfirmed",
+            diagnostics=diagnostics_from_response(response, request_summary=summary),
+        )
 
 
 async def _inquire_balance_output1(
@@ -667,11 +700,7 @@ def _coerce_summary(raw: object) -> dict:
 
 def _row_eval_amount_usd(row: dict) -> Decimal:
     """보유 종목 row의 외화 평가금액(USD)을 추출."""
-    val = (
-        row.get("frcr_evlu_amt2")
-        or row.get("ovrs_stck_evlu_amt")
-        or row.get("evlu_amt")
-    )
+    val = row.get("frcr_evlu_amt2") or row.get("ovrs_stck_evlu_amt") or row.get("evlu_amt")
     if val:
         return Decimal(str(val))
     # 평가금액 필드가 없으면 수량 * 현재가로 추정.
@@ -953,6 +982,93 @@ def _parse_executions(rows: list[dict]) -> list[BrokerExecution]:
     return executions
 
 
+def _parse_execution_snapshots(rows: list[dict], market: str) -> list[BrokerExecution]:
+    """Read cumulative snapshots once; link only confirmed full remainder cancels.
+
+    Broker order time has no verified UTC contract and is deliberately omitted.
+    Cancellation requests (including rejected requests) are never original fills.
+    """
+    best: dict[str, BrokerExecution] = {}
+    cancellations = []
+    for row in rows:
+        if _first_str(row, "rvse_cncl_dvsn", "RVSE_CNCL_DVSN") in {"01", "02"}:
+            cancellations.append(row)
+            continue
+        number = _first_str(row, "odno", "ODNO")
+        if not number or not _first_str(row, "pdno", "PDNO", "ovrs_pdno"):
+            raise ValueError("EXECUTIONS_IDENTITY_MISSING")
+        for keys in (("ft_ccld_qty", "ccld_qty", "tot_ccld_qty"), ("nccs_qty", "ord_psbl_qty")):
+            raw = _first_str(row, *keys)
+            try:
+                value = Decimal(raw) if raw is not None else Decimal("NaN")
+                valid = value.is_finite() and value >= 0 and value == value.to_integral_value()
+            except InvalidOperation:
+                valid = False
+            if not valid:
+                raise ValueError("EXECUTIONS_QUANTITY_INVALID")
+        execution = _parse_executions([row])[0].model_copy(
+            update={
+                "ordered_at_utc": None,
+                "terminal": (_first_str(row, "prcs_stat_name", "ord_stat_name") or "").lower()
+                in {
+                    "취소",
+                    "취소완료",
+                    "거부",
+                    "거절",
+                    "만료",
+                    "cancelled",
+                    "canceled",
+                    "rejected",
+                    "expired",
+                },
+                "market": _first_str(row, "ovrs_excg_cd", "OVRS_EXCG_CD") or market,
+            }
+        )
+        if execution.side is None or (
+            execution.filled_qty
+            and (not execution.avg_fill_price_usd.is_finite() or execution.avg_fill_price_usd <= 0)
+        ):
+            raise ValueError("EXECUTIONS_FILL_INVALID")
+        previous = best.get(number)
+        if previous is not None:
+            if (
+                previous.symbol != execution.symbol
+                or previous.side != execution.side
+                or (
+                    previous.filled_qty == execution.filled_qty
+                    and previous.avg_fill_price_usd != execution.avg_fill_price_usd
+                )
+            ):
+                raise ValueError("EXECUTIONS_SNAPSHOT_CONFLICT")
+            if previous.filled_qty > execution.filled_qty:
+                continue
+            execution = execution.model_copy(
+                update={"terminal": previous.terminal or execution.terminal}
+            )
+        best[number] = execution
+    for row in cancellations:
+        if (
+            _first_str(row, "rvse_cncl_dvsn", "RVSE_CNCL_DVSN") != "02"
+            or _first_str(row, "prcs_stat_name", "PRCS_STAT_NAME") != "완료"
+        ):
+            continue
+        original = best.get(_first_str(row, "orgn_odno", "ORGN_ODNO") or "")
+        if original is None:
+            continue
+        if original.symbol != (
+            _first_str(row, "pdno", "PDNO") or ""
+        ) or original.side != _exec_side(row):
+            raise ValueError("EXECUTIONS_CANCEL_IDENTITY_MISMATCH")
+        cancel_qty = _to_int(_first_str(row, "ft_ord_qty", "ord_qty"))
+        if (
+            original.unfilled_qty is not None
+            and cancel_qty > 0
+            and cancel_qty >= original.unfilled_qty
+        ):
+            best[original.kis_order_id] = original.model_copy(update={"terminal": True})
+    return list(best.values())
+
+
 async def get_order_executions(
     client: ResilientClient,
     *,
@@ -963,6 +1079,7 @@ async def get_order_executions(
     order_date_yyyymmdd: str,
     end_date_yyyymmdd: str | None = None,
     market: str = "NASD",
+    strict_contract: bool = False,
 ) -> list[BrokerExecution]:
     """해외주식 주문체결내역(inquire-ccnl)을 조회해 정규화된 체결 상태 목록을 반환.
 
@@ -978,35 +1095,68 @@ async def get_order_executions(
         raise ValueError("end_date_yyyymmdd must be on or after order_date_yyyymmdd")
 
     cano, acnt_prdt = _split_account(account)
-    response = await client.request(
-        "GET",
-        "/uapi/overseas-stock/v1/trading/inquire-ccnl",
-        headers=_kis_headers(
-            access_token=access_token,
-            app_key=app_key,
-            app_secret=app_secret,
-            tr_id=TR_ID_EXECUTIONS,
-        ),
-        params={
-            "CANO": cano,
-            "ACNT_PRDT_CD": acnt_prdt,
-            "OVRS_EXCG_CD": market,
-            "PDNO": "%",
-            "ORD_STRT_DT": order_date_yyyymmdd,
-            "ORD_END_DT": end_date,
-            "SLL_BUY_DVSN": "00",
-            "CCLD_NCCS_DVSN": "00",
-            "SORT_SQN_DVSN": "00",
-            "ORD_DT": "",
-            "ODNO": "",
-            "CTX_AREA_FK200": "",
-            "CTX_AREA_NK200": "",
-        },
+    headers = _kis_headers(
+        access_token=access_token,
+        app_key=app_key,
+        app_secret=app_secret,
+        tr_id=TR_ID_EXECUTIONS,
     )
-    body = response.json()
-    rows = body.get("output") or body.get("output1") or []
-    if isinstance(rows, dict):
-        rows = [rows]
+    params = {
+        "CANO": cano,
+        "ACNT_PRDT_CD": acnt_prdt,
+        "OVRS_EXCG_CD": market,
+        "PDNO": "%",
+        "ORD_STRT_DT": order_date_yyyymmdd,
+        "ORD_END_DT": end_date,
+        "SLL_BUY_DVSN": "00",
+        "CCLD_NCCS_DVSN": "00",
+        "SORT_SQN": "DS",
+        "ORD_DT": "",
+        "ORD_GNO_BRNO": "",
+        "ODNO": "",
+        "CTX_AREA_FK200": "",
+        "CTX_AREA_NK200": "",
+    }
+    rows = []
+    cursors = set()
+    for _ in range(100):
+        response = await client.request(
+            "GET",
+            "/uapi/overseas-stock/v1/trading/inquire-ccnl",
+            headers=headers,
+            params=params,
+        )
+        body = response.json()
+        if not isinstance(body, dict) or body.get("rt_cd", "" if strict_contract else "0") != "0":
+            raise ValueError("EXECUTIONS_RESPONSE_REJECTED")
+        page = body.get("output", body.get("output1"))
+        if isinstance(page, dict) and not strict_contract:
+            page = [page]
+        if not isinstance(page, list) or any(not isinstance(row, dict) for row in page):
+            raise ValueError("EXECUTIONS_RESPONSE_INVALID")
+        rows.extend(page)
+        continuation = response.headers.get("tr_cont", "").strip()
+        if continuation not in {"M", "F"}:
+            if continuation not in {"", "D", "E"}:
+                raise ValueError("EXECUTIONS_CONTINUATION_INVALID")
+            break
+        cursor = (body.get("ctx_area_fk200"), body.get("ctx_area_nk200"))
+        if (
+            any(not isinstance(value, str) for value in cursor)
+            or not any(value.strip() for value in cursor)
+            or cursor in cursors
+        ):
+            raise ValueError("EXECUTIONS_CONTINUATION_STALLED")
+        cursors.add(cursor)
+        params.update(CTX_AREA_FK200=cursor[0], CTX_AREA_NK200=cursor[1])
+        headers["tr_cont"] = "N"
+    else:
+        raise ValueError("EXECUTIONS_PAGE_LIMIT")
+    if strict_contract or cursors or any(
+        _first_str(row, "rvse_cncl_dvsn", "RVSE_CNCL_DVSN") in {"01", "02"}
+        for row in rows
+    ):
+        return _parse_execution_snapshots(rows, market)
     return [ex.model_copy(update={"market": market}) for ex in _parse_executions(rows)]
 
 
@@ -1023,7 +1173,9 @@ def _merge_executions(
     for executions in per_market:
         for ex in executions:
             prev = best.get(ex.kis_order_id)
-            if prev is None or ex.filled_qty > prev.filled_qty:
+            if prev is None or ex.filled_qty > prev.filled_qty or (
+                ex.filled_qty == prev.filled_qty and ex.terminal and not prev.terminal
+            ):
                 best[ex.kis_order_id] = ex
     return list(best.values())
 
@@ -1038,6 +1190,7 @@ async def get_order_executions_resolving_market(
     order_date_yyyymmdd: str,
     end_date_yyyymmdd: str | None = None,
     markets: Sequence[str] = US_ORDER_EXCHANGES,
+    strict_contract: bool = False,
 ) -> list[BrokerExecution]:
     """주문체결내역을 *여러 거래소* 에 걸쳐 합쳐 조회(주문번호별 중복 제거).
 
@@ -1056,6 +1209,7 @@ async def get_order_executions_resolving_market(
             order_date_yyyymmdd=order_date_yyyymmdd,
             end_date_yyyymmdd=end_date_yyyymmdd,
             market=market,
+            strict_contract=strict_contract,
         )
         for market in markets
     ]
