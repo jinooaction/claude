@@ -12,7 +12,7 @@
 - [x] T007 [US3] `scripts/intraday_execution.py` 네트워크없는 KIS전체계약 재현.
 - [x] T008 [US3] `tests/integration/test_intraday_execution_contract.py` CLI·router/authority/fill_sync·원본보존 검증.
 ## 출시
-- [ ] T009 전체pytest/ruff/하네스/HANDOFF/PR검사, `HANDOFF.md` 갱신, 병합·정상배포 확인.
+- [x] T009 전체3500/8·ruff·하네스14/14·HANDOFF·PR검사, PR771/18521b9 병합, 정상배포34052281701/감사34052386141/서비스관측34052387436 확인.
 ## 전체완료 외부/후속조건
 - [ ] T010 181 T012~T014의 실제역사자료·전략합격·60세션·동등성 증거.
 - [ ] T011 단타전략·자본승인 후 별도 반복실주문 헌법경계·강화캐너리·생산gateway 설치.
