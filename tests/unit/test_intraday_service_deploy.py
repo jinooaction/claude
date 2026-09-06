@@ -1,6 +1,10 @@
 import re
 import subprocess
+import textwrap
+from datetime import UTC, datetime
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -37,3 +41,37 @@ def test_fixed_observer_gateway_rejects_arguments_and_shell_injection(tmp_path):
     assert '"$#" -eq 0' in body
     assert "service-status" in body
     assert "systemctl start" not in body and "enable" not in body
+
+
+def test_workflow_accepts_real_status_protocol_and_rejects_wrong_source(tmp_path):
+    import json
+
+    from auto_invest.analytics.intraday_service import (
+        publish,
+        read_service_status,
+        service_identity,
+    )
+
+    workflow = (ROOT / ".github/workflows/intraday-paper-status.yml").read_text()
+    program = textwrap.dedent(
+        workflow.split("python3 - <<'PY'\n", 1)[1].split("          PY", 1)[0]
+    )
+    report = tmp_path / "report.txt"
+    program = program.replace("/tmp/intraday-status.txt", str(report))
+    sources = [
+        ROOT / "scripts/intraday_runtime.py",
+        ROOT / "specs/177-intraday-paper-challenger/contracts/intraday-preregistration.json",
+        ROOT / "src/auto_invest/analytics/intraday_runtime.py",
+        ROOT / "src/auto_invest/analytics/intraday_service.py",
+        ROOT / "src/auto_invest/analytics/intraday_paper_challenger.py",
+        ROOT / "src/auto_invest/market_data/intraday.py",
+    ]
+    now = datetime.now(UTC)
+    publish(tmp_path, dict(status="WAIT_SESSION", identity=service_identity(sources)), now)
+    status = read_service_status(tmp_path, now)
+    report.write_text("INTRADAY_TIMER=active\n" + json.dumps(status))
+    exec(compile(program, "workflow-status", "exec"), {})
+    status["identity"] = "0" * 64
+    report.write_text("INTRADAY_TIMER=active\n" + json.dumps(status))
+    with pytest.raises(AssertionError, match="service code differs"):
+        exec(compile(program, "workflow-status", "exec"), {})

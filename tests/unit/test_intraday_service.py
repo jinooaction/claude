@@ -101,11 +101,11 @@ async def test_partial_archive_survives_and_does_not_block_next_cycle(tmp_path, 
 
     async def probe(transport, env, now, cache, output):
         output.mkdir(parents=True)
-        (output / "source.json").write_text('preserved source')
+        (output / "source.json").write_text("preserved source")
         calls.append(output)
         if len(calls) == 1:
-            raise OSError('disk failure')
-        (output / "manifest.json").write_text('{}')
+            raise OSError("disk failure")
+        (output / "manifest.json").write_text("{}")
 
     async def execute(args):
         return dict(status="WAIT_SESSION")
@@ -117,7 +117,7 @@ async def test_partial_archive_survives_and_does_not_block_next_cycle(tmp_path, 
     assert (await cli.service_cycle(args, now=NOW))["archive_status"] == "COMPLETE"
     assert calls[0].is_dir()  # interrupted raw evidence remains; never deleted/overwritten
     assert not calls[1].exists()  # successful staging moved atomically to session directory
-    assert len(list(tmp_path.rglob('2026-09-04/manifest.json'))) == 1
+    assert len(list(tmp_path.rglob("2026-09-04/manifest.json"))) == 1
 
 
 @pytest.mark.asyncio
