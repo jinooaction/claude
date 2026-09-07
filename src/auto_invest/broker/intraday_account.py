@@ -232,10 +232,25 @@ async def observe_account(
             )
         )
     usd_margin = []
+    unclassified_margin_rows = 0
     for row in margin_rows:
         currency = row.get("crcy_cd")
+        # The official foreign-margin example excludes empty currency rows.
+        # Preserve their existence without assigning their amounts to USD.
+        if isinstance(currency, str) and not currency.strip():
+            unclassified_margin_rows += 1
+            continue
         if not isinstance(currency, str) or not re.fullmatch(r"[A-Z]{3}", currency.strip()):
-            raise AccountReadError("INVALID_MARGIN_CURRENCY")
+            raise AccountReadError(
+                "INVALID_MARGIN_CURRENCY",
+                shape=dict(
+                    currency_field_present="crcy_cd" in row,
+                    currency_kind=type(currency).__name__,
+                    row_keys=sorted(
+                        key for key in row if re.fullmatch(r"[a-z][a-z0-9_]{1,40}", key)
+                    )[:64],
+                ),
+            )
         if currency.strip() == "USD":
             usd_margin.append(row)
     if len(usd_margin) > 1:
@@ -263,6 +278,7 @@ async def observe_account(
         usd_orderable_amount=str(orderable),
         reported_cash_components=cash_components,
         usd_margin_reported=bool(usd_margin),
+        unclassified_margin_row_count=unclassified_margin_rows,
         positions=positions,
         unverified_assets=unverified_assets,
         open_orders=orders,
@@ -275,7 +291,8 @@ async def observe_account(
         orders_submitted=0,
         issues=["USD_NAV_CONTRACT_UNVERIFIED", "FRACTIONAL_AND_OTHER_ACCOUNT_SCOPE_UNVERIFIED"]
         + (["UNSUPPORTED_ACCOUNT_ASSETS_PRESENT"] if unverified_assets else [])
-        + ([] if usd_margin else ["USD_MARGIN_COMPONENTS_NOT_REPORTED"]),
+        + ([] if usd_margin else ["USD_MARGIN_COMPONENTS_NOT_REPORTED"])
+        + (["UNCLASSIFIED_MARGIN_ROWS_PRESENT"] if unclassified_margin_rows else []),
     )
 
 
@@ -288,13 +305,14 @@ def public_contract_result(snapshot):
             if snapshot["unverified_assets"]
             else (
                 "INTRADAY_ACCOUNT_READ_CONTRACT_OK"
-                if snapshot["usd_margin_reported"]
+                if snapshot["usd_margin_reported"] and not snapshot["unclassified_margin_row_count"]
                 else "INTRADAY_ACCOUNT_READ_WITH_UNVERIFIED_CASH"
             )
         ),
         position_count=len(snapshot["positions"]),
         unverified_asset_count=len(snapshot["unverified_assets"]),
         usd_margin_reported=snapshot["usd_margin_reported"],
+        unclassified_margin_row_count=snapshot["unclassified_margin_row_count"],
         open_order_count=len(snapshot["open_orders"]),
         pagination_complete=snapshot["pagination_complete"],
         nav_verified=False,
