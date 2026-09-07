@@ -143,6 +143,16 @@ PR780/d05b92e의 실제34076749615는 INVALID_MARGIN_CURRENCY로 거절됐다
 남기고 금액·계좌 원문은 숨긴다. 공란 행의 금액을 어느 통화에도 합산하지 않는다.
 - https://github.com/koreainvestment/open-trading-api/blob/main/legacy/Sample01/kis_ovrseastk.py#L914
 
+## 최종 외부 확인 사항 — 같은 USD10행
+
+PR781/d602525의 실제34077759009는 공란 통화 행 처리를 넘어 USD10행을 확인했고
+USD_MARGIN_ROW_COUNT로 차단됐다(기존7개 통과/신규1개 실패,21.96초).
+공식 foreign-margin 규격의 행 식별 관련 필드는 국가명/통화뿐이며 유일성,
+동일 통화 합산·중복 제거·대표행 선택 규칙은 없다. 구형 예제는 공란 통화만
+제외하고 최신 예제도 행 연결만 한다. 근거 없는 첫행 선택·합산을 하지 않는다.
+문의 초안은 capital-review/kis-cash-contract-inquiry.md이며 미발송이다.
+공식 답변 전 T020/T027은 미완료다. 전체 계좌 NAV·실거래 가능 false를 유지한다.
+
 execution/intraday_signals.py는 기존 사전등록 신호와 실제 귀속 보유를 연결한다.
 전체 5종목의 연속된 확정봉과 소스지문을 검사한다. 종료 청산은 신호 자료 장애에도
 계좌 재관측을 먼저 수행한다. 매수·매도 모두 5분 미체결이면 취소 확인을 기다린다.
