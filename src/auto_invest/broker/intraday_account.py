@@ -47,10 +47,14 @@ def _identifier(row, field):
     return value.strip()
 
 
-def _usd(row, endpoint):
+def _usd_currency(row):
     currency = row.get("tr_crcy_cd", "USD")
     if not isinstance(currency, str) or currency.strip() != "USD":
         raise AccountReadError("NON_USD_ROW")
+
+
+def _usd(row, endpoint):
+    _usd_currency(row)
     market = row.get("ovrs_excg_cd", "NASD")
     # KIS documents NASD as all US markets and NAS as Nasdaq on live accounts.
     if not isinstance(market, str) or market.strip() not in {"NASD", "NAS", "NYSE", "AMEX"}:
@@ -172,14 +176,29 @@ async def observe_account(
         raise AccountReadError("ACCOUNT_PURCHASABLE_ROW_COUNT")
     _usd(cash_rows[0], "inquire-psamount")
     orderable = _number(cash_rows[0], "ovrs_ord_psbl_amt")
-    positions = {}
+    positions, unverified_assets = {}, {}
     for row in balance_rows:
+        if isinstance(row.get("ovrs_excg_cd"), str) and row["ovrs_excg_cd"].strip() == "OTCB":
+            _usd_currency(row)
+            symbol = _identifier(row, "ovrs_pdno")
+            if symbol in positions or symbol in unverified_assets:
+                raise AccountReadError("DUPLICATE_ACCOUNT_POSITION")
+            unverified_assets[symbol] = dict(
+                reported_quantity=str(_number(row, "ovrs_cblc_qty")),
+                reported_market_code="OTCB",
+                reported_valuation_usd=None,
+                valuation_verified=False,
+                exchange_verified=False,
+                tradability_verified=False,
+                reason="UNSUPPORTED_EXECUTION_MARKET",
+            )
+            continue
         _usd(row, "inquire-balance")
         qty = _number(row, "ovrs_cblc_qty", whole=True)
         if not qty:
             continue
         symbol = _identifier(row, "ovrs_pdno")
-        if symbol in positions:
+        if symbol in positions or symbol in unverified_assets:
             raise AccountReadError("DUPLICATE_ACCOUNT_POSITION")
         sellable = _number(row, "ord_psbl_qty", whole=True)
         if sellable > qty:
@@ -236,6 +255,7 @@ async def observe_account(
         usd_orderable_amount=str(orderable),
         reported_cash_components=cash_components,
         positions=positions,
+        unverified_assets=unverified_assets,
         open_orders=orders,
         pagination_complete=True,
         nav=None,
@@ -244,7 +264,8 @@ async def observe_account(
         execution_marks_verified=False,
         live_eligible=False,
         orders_submitted=0,
-        issues=["USD_NAV_CONTRACT_UNVERIFIED", "FRACTIONAL_AND_OTHER_ACCOUNT_SCOPE_UNVERIFIED"],
+        issues=["USD_NAV_CONTRACT_UNVERIFIED", "FRACTIONAL_AND_OTHER_ACCOUNT_SCOPE_UNVERIFIED"]
+        + (["UNSUPPORTED_ACCOUNT_ASSETS_PRESENT"] if unverified_assets else []),
     )
 
 
@@ -252,8 +273,13 @@ def public_contract_result(snapshot):
     """Publish only contract/count facts; no account, position or order identifiers."""
     return dict(
         schema_version=182,
-        status="INTRADAY_ACCOUNT_READ_CONTRACT_OK",
+        status=(
+            "INTRADAY_ACCOUNT_READ_WITH_UNVERIFIED_ASSETS"
+            if snapshot["unverified_assets"]
+            else "INTRADAY_ACCOUNT_READ_CONTRACT_OK"
+        ),
         position_count=len(snapshot["positions"]),
+        unverified_asset_count=len(snapshot["unverified_assets"]),
         open_order_count=len(snapshot["open_orders"]),
         pagination_complete=snapshot["pagination_complete"],
         nav_verified=False,

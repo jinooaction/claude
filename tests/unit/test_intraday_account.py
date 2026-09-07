@@ -248,6 +248,85 @@ async def test_market_diagnostic_never_publishes_account_or_long_token(market):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("quantity", ["1", "0.5", "0"])
+async def test_observed_otcb_assets_remain_unverified_and_separate(quantity):
+    data = replies()
+    data["inquire-balance"]["output1"].append(
+        dict(ovrs_pdno="OTC.TEST", ovrs_cblc_qty=quantity, ovrs_excg_cd="OTCB", tr_crcy_cd="USD")
+    )
+    snapshot = await read(
+        lambda request: httpx.Response(200, json=data[request.url.path.split("/")[-1]]),
+        now=lambda: NOW,
+    )
+    assert set(snapshot["positions"]) == {"TLT"}
+    asset = snapshot["unverified_assets"]["OTC.TEST"]
+    assert asset["reported_quantity"] == quantity
+    assert asset["reported_market_code"] == "OTCB"
+    assert asset["reported_valuation_usd"] is None
+    assert not asset["valuation_verified"] and not asset["tradability_verified"]
+    assert not asset["exchange_verified"]
+    assert snapshot["nav"] is None and not snapshot["full_account_scope_verified"]
+    assert "UNSUPPORTED_ACCOUNT_ASSETS_PRESENT" in snapshot["issues"]
+    public = public_contract_result(snapshot)
+    assert public["status"] == "INTRADAY_ACCOUNT_READ_WITH_UNVERIFIED_ASSETS"
+    assert public["unverified_asset_count"] == 1
+    assert public["position_count"] == 1
+    assert public["live_eligible"] is False
+    assert "OTC.TEST" not in str(public)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("quantity", ["-1", "NaN", None, "999999999999999999999"])
+async def test_unverified_asset_invalid_quantity_still_blocks(quantity):
+    data = replies()
+    data["inquire-balance"]["output1"][0].update(ovrs_excg_cd="OTCB", ovrs_cblc_qty=quantity)
+    with pytest.raises(AccountReadError, match="INVALID_OVRS_CBLC_QTY"):
+        await read(
+            lambda request: httpx.Response(200, json=data[request.url.path.split("/")[-1]]),
+            now=lambda: NOW,
+        )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("order", ["normal_first", "otcb_first", "both_otcb"])
+async def test_duplicate_assets_across_scopes_never_hide_holdings(order):
+    data = replies()
+    original = data["inquire-balance"]["output1"][0]
+    opaque = dict(original, ovrs_excg_cd="OTCB")
+    rows = [original, opaque] if order == "normal_first" else [opaque, original]
+    if order == "both_otcb":
+        rows = [opaque, dict(opaque)]
+    data["inquire-balance"]["output1"] = rows
+    with pytest.raises(AccountReadError, match="DUPLICATE_ACCOUNT_POSITION"):
+        await read(
+            lambda request: httpx.Response(200, json=data[request.url.path.split("/")[-1]]),
+            now=lambda: NOW,
+        )
+
+
+@pytest.mark.asyncio
+async def test_unverified_asset_non_usd_still_blocks():
+    data = replies()
+    data["inquire-balance"]["output1"][0].update(ovrs_excg_cd="OTCB", tr_crcy_cd="HKD")
+    with pytest.raises(AccountReadError, match="NON_USD_ROW"):
+        await read(
+            lambda request: httpx.Response(200, json=data[request.url.path.split("/")[-1]]),
+            now=lambda: NOW,
+        )
+
+
+@pytest.mark.asyncio
+async def test_otcb_open_orders_are_not_promoted_to_supported_market():
+    data = replies()
+    data["inquire-nccs"]["output"] = [dict(ovrs_excg_cd="OTCB", tr_crcy_cd="USD")]
+    with pytest.raises(AccountReadError, match="NON_US_MARKET"):
+        await read(
+            lambda request: httpx.Response(200, json=data[request.url.path.split("/")[-1]]),
+            now=lambda: NOW,
+        )
+
+
+@pytest.mark.asyncio
 async def test_missing_foreign_currency_amount_never_uses_integrated_buying_power():
     data = replies()
     del data["inquire-psamount"]["output"]["ovrs_ord_psbl_amt"]

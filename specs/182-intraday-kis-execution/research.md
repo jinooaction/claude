@@ -109,6 +109,20 @@ PR777/2745f99의 실제 읽기34073693815도 NON_US_MARKET/OTHER로 실패했다
 숫자 계좌번호, 긴 토큰, 자유문, 다른 자료형은 REDACTED로 남는다. 이 형식 검사로
 계좌 조회가 허용되는 것은 아니며 기존 거절은 그대로 유지한다.
 
+## 실제 OTCB 자산과 조회 범위
+
+PR778/e6674c8의 실제34074654444에서 실패 위치는 inquire-balance, 코드OTCB로
+확인됐다(기존7개 통과,20.36초). NAS/공백 가정이 실제 원인은 아니었다.
+KIS present-balance 공식 요청표는 미국840에 PINK SHEETS03/OTCBB04를 포함한다.
+따라서 미국 잔고 보고가 세 거래소에만 한정된다고 가정할 수 없다. 다만 이것이
+응답 OTCB와 OTCBB의 정확한 매핑을 증명하지 않으므로 원래 코드를 보존한다.
+공식 권리조회 안내는 상장폐지 후 OTC 이동 종목의 유선 매도 제한을 설명한다.
+현재 자산이 그 경우인지는 확인하지 않았으며 보유 사실을 API 주문 가능성으로
+해석하지 않는다. OTCB 행은 식별자·보고 수량만 별도 미검증 자산으로 보존하고
+평가액/NAV/거래가능을 추정하지 않는다. 다른 오류·미체결 시장 차단은 그대로다.
+- https://github.com/koreainvestment/open-trading-api/blob/main/examples_llm/overseas_stock/inquire_present_balance/inquire_present_balance.py
+- https://securities.koreainvestment.com/main/bond/right/OverseaRight.jsp?cmd=OverseaRight_list9
+
 execution/intraday_signals.py는 기존 사전등록 신호와 실제 귀속 보유를 연결한다.
 전체 5종목의 연속된 확정봉과 소스지문을 검사한다. 종료 청산은 신호 자료 장애에도
 계좌 재관측을 먼저 수행한다. 매수·매도 모두 5분 미체결이면 취소 확인을 기다린다.

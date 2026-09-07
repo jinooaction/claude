@@ -22,3 +22,5 @@ live_eligible=false, simulated_broker_requests와 invariant결과는 별도 표�
 주문 수명을 재현한다. 성공 exit0은 준비 코드 검사 성공이며 live_eligible=false다.
 임의 한도·실거래·승인 스위치는 없다. 기존 rehearse 명령은 원래 동작을 유지한다.
 실제 계좌 GET 수집 계약은 기존 KIS_LIVE_TEST 읽기 검사를 통해 서버에서 검증한다.
+OTCB 자산 행이 있으면 읽기 시험 성공도 INTRADAY_ACCOUNT_READ_WITH_UNVERIFIED_ASSETS를
+출력하며 미검증 자산 수를 표시한다. 이는 조회 형식 확인일 뿐 계좌 준비/거래 승인이 아니다.
