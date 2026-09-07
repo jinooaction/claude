@@ -225,6 +225,26 @@ async def test_unknown_or_invalid_exchange_still_blocks(market):
             now=lambda: NOW,
         )
     assert "secret-free-text" not in str(error.value.shape)
+    assert error.value.shape["endpoint"] == "inquire-balance"
+    if market == "SEHK":
+        assert error.value.shape["market_code"] == "SEHK"
+    else:
+        assert error.value.shape["market_code"] == "REDACTED"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("market", ["12345678", "SECRET123456789"])
+async def test_market_diagnostic_never_publishes_account_or_long_token(market):
+    data = replies()
+    data["inquire-psamount"]["output"]["ovrs_excg_cd"] = market
+    with pytest.raises(AccountReadError) as error:
+        await read(
+            lambda request: httpx.Response(200, json=data[request.url.path.split("/")[-1]]),
+            now=lambda: NOW,
+        )
+    assert error.value.shape == dict(
+        endpoint="inquire-psamount", market_category="OTHER", market_code="REDACTED"
+    )
 
 
 @pytest.mark.asyncio

@@ -100,6 +100,15 @@ AMEX=아멕스를 구분한다. 누락했던 NAS를 추가하고 고정 문자�
 후속 서버 조회 성공 여부로 검증한다. 요청용 NASD와 실제 주문 라우팅은 변경하지 않는다.
 - https://github.com/koreainvestment/open-trading-api/blob/main/examples_user/overseas_stock/overseas_stock_functions.py
 
+## 실제 거래소 식별자 진단
+
+PR777/2745f99의 실제 읽기34073693815도 NON_US_MARKET/OTHER로 실패했다
+(기존7개 통과,20.70초). NAS/공백 보정이 실제 오류를 해결했다고 주장하지 않는다.
+정상 미국 코드의 허용 목록을 더 넓히지 않고 실패 발생 endpoint와 거래소 식별자만
+진단한다. ovrs_excg_cd는 공개 프로토콜 코드이며 [A-Z][A-Z0-9]{1,7} 형식만 출력한다.
+숫자 계좌번호, 긴 토큰, 자유문, 다른 자료형은 REDACTED로 남는다. 이 형식 검사로
+계좌 조회가 허용되는 것은 아니며 기존 거절은 그대로 유지한다.
+
 execution/intraday_signals.py는 기존 사전등록 신호와 실제 귀속 보유를 연결한다.
 전체 5종목의 연속된 확정봉과 소스지문을 검사한다. 종료 청산은 신호 자료 장애에도
 계좌 재관측을 먼저 수행한다. 매수·매도 모두 5분 미체결이면 취소 확인을 기다린다.
