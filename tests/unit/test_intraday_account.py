@@ -123,12 +123,14 @@ async def test_continuation_preserves_cursor_and_header(endpoint):
 
 
 @pytest.mark.asyncio
-async def test_balance_terminal_header_may_retain_search_context():
+@pytest.mark.parametrize("endpoint", ["inquire-balance", "inquire-nccs"])
+@pytest.mark.parametrize("header", ["D", "E"])
+async def test_terminal_header_may_retain_search_context(endpoint, header):
     data = replies()
-    data["inquire-balance"]["ctx_area_fk200"] = "retained-search"
+    data[endpoint].update(ctx_area_fk200="retained-search", ctx_area_nk200="retained-key")
     snapshot = await read(
         lambda request: httpx.Response(
-            200, json=data[request.url.path.split("/")[-1]], headers={"tr_cont": "D"}
+            200, json=data[request.url.path.split("/")[-1]], headers={"tr_cont": header}
         ),
         now=lambda: NOW,
     )
@@ -151,16 +153,19 @@ async def test_incomplete_or_repeated_cursor_never_returns_partial_account(limit
 
 
 @pytest.mark.asyncio
-async def test_nccs_terminal_header_does_not_ignore_nonempty_cursor():
+async def test_nccs_unclassified_header_does_not_ignore_nonempty_cursor():
     data = replies()
     data["inquire-nccs"].update(ctx_area_fk200="same", ctx_area_nk200="same")
-    with pytest.raises(AccountReadError, match="ACCOUNT_CURSOR_STALLED"):
+    with pytest.raises(AccountReadError, match="ACCOUNT_CURSOR_STALLED") as error:
         await read(
             lambda request: httpx.Response(
-                200, json=data[request.url.path.split("/")[-1]], headers={"tr_cont": "D"}
+                200, json=data[request.url.path.split("/")[-1]], headers={"tr_cont": ""}
             ),
             now=lambda: NOW,
         )
+    assert error.value.shape["endpoint"] == "inquire-nccs"
+    assert error.value.shape["cursor_repeated"] is True
+    assert "same" not in str(error.value.shape)
 
 
 @pytest.mark.asyncio

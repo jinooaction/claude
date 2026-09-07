@@ -155,6 +155,8 @@ async def test_live_kis_intraday_account_read_contract(kis_token_bundle: dict) -
             )
     except Exception as exc:
         code = str(exc) if isinstance(exc, AccountReadError) else type(exc).__name__
+        if isinstance(exc, AccountReadError) and exc.shape:
+            print("Intraday account page shape: " + json.dumps(exc.shape, sort_keys=True))
         pytest.fail("intraday account read contract: " + code, pytrace=False)
     result = public_contract_result(snapshot)
     result.update(
