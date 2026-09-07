@@ -88,6 +88,18 @@ M/F의 무진행/반복, 비정상 헤더·필드·페이지 상한은 계속 �
 계좌번호·커서 원문·주문ID·보유 내역은 진단에 포함하지 않는다.
 - https://github.com/koreainvestment/open-trading-api/blob/main/legacy/Sample01/kis_ovrseastk.py
 
+## 실서버 거래소 코드 보정
+
+PR776/72e8b03의 실제 읽기34072779392는 페이지 종료 오류를 넘었지만
+NON_US_MARKET로 거절됐다(기존7개 통과). 공식 사용자용 해외주식 함수의
+inquire_balance 문서는 실전 NASD=미국 전체, NAS=나스닥, NYSE=뉴욕,
+AMEX=아멕스를 구분한다. 누락했던 NAS를 추가하고 고정 문자열의 양끝 공백을
+제거한 뒤 같은 미국 거래소 목록과 USD만 허용한다. 다른 코드·빈값·다른 자료형은
+계속 거절한다. 실패 원문 코드 대신 닫힌 분류만 진단한다.
+실제 실패 응답의 원문 거래소 값은 공개하지 않았으므로 NAS/공백이 원인이었는지는
+후속 서버 조회 성공 여부로 검증한다. 요청용 NASD와 실제 주문 라우팅은 변경하지 않는다.
+- https://github.com/koreainvestment/open-trading-api/blob/main/examples_user/overseas_stock/overseas_stock_functions.py
+
 execution/intraday_signals.py는 기존 사전등록 신호와 실제 귀속 보유를 연결한다.
 전체 5종목의 연속된 확정봉과 소스지문을 검사한다. 종료 청산은 신호 자료 장애에도
 계좌 재관측을 먼저 수행한다. 매수·매도 모두 5분 미체결이면 취소 확인을 기다린다.

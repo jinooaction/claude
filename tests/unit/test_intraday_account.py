@@ -202,6 +202,32 @@ async def test_invalid_holding_is_not_silently_truncated_or_converted(field, val
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("market", ["NAS", " NAS ", "NASD", "NYSE", "AMEX"])
+async def test_documented_us_account_exchange_codes(market):
+    data = replies()
+    data["inquire-balance"]["output1"][0].update(ovrs_excg_cd=market, tr_crcy_cd=" USD ")
+    snapshot = await read(
+        lambda request: httpx.Response(200, json=data[request.url.path.split("/")[-1]]),
+        now=lambda: NOW,
+    )
+    assert snapshot["positions"]["TLT"]["quantity"] == 1
+    assert snapshot["nav_verified"] is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("market", ["SEHK", "", None, [], "secret-free-text"])
+async def test_unknown_or_invalid_exchange_still_blocks(market):
+    data = replies()
+    data["inquire-balance"]["output1"][0]["ovrs_excg_cd"] = market
+    with pytest.raises(AccountReadError, match="NON_US_MARKET") as error:
+        await read(
+            lambda request: httpx.Response(200, json=data[request.url.path.split("/")[-1]]),
+            now=lambda: NOW,
+        )
+    assert "secret-free-text" not in str(error.value.shape)
+
+
+@pytest.mark.asyncio
 async def test_missing_foreign_currency_amount_never_uses_integrated_buying_power():
     data = replies()
     del data["inquire-psamount"]["output"]["ovrs_ord_psbl_amt"]
