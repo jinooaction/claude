@@ -27,3 +27,9 @@ OTCB 자산 행이 있으면 읽기 시험 성공도 INTRADAY_ACCOUNT_READ_WITH_
 USD 구성 내역이 없으면 usd_margin_reported=false가 함께 출력된다. 미검증 자산이
 없어도 USD 내역 미제공은 INTRADAY_ACCOUNT_READ_WITH_UNVERIFIED_CASH다.
 공란 통화 행도 unclassified_margin_row_count로 공개 집계되며 미검증 현금 경고를 남긴다.
+
+USD 여러 행은 조회 오류가 아니다. usd_margin_row_count와
+USD_MARGIN_AGGREGATION_UNVERIFIED를 공개하며 금액을 합산하지 않는다.
+account_read_complete=true와 cash_aggregation_verified=false는 동시에 가능하다.
+공개 issues에 모든 미검증 사유가 남으므로 자산 경고도 현금 경고를 가리지 않는다.
+행 수와 무관하게 NAV와 live_eligible는 false, 실제 주문은0이다.

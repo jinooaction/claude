@@ -29,3 +29,12 @@ usd_margin_reported=false, USD_MARGIN_COMPONENTS_NOT_REPORTED로 표시한다.
 공개 결과의 usd_margin_reported도 false이며 계좌 검증·거래 준비로 승격되지 않는다.
 unclassified_margin_row_count는 통화 문자열이 공란인 행의 수다. 그 행의 금액을
 USD·합계·현금0으로 해석하지 않고 UNCLASSIFIED_MARGIN_ROWS_PRESENT를 남긴다.
+
+reported_cash_component_rows는 응답 순서의 USD 구성금액 목록이다. 각 항목은
+frcr_dncl_amt1, ustl_buy_amt, ustl_sll_amt, frcr_rcvb_amt, frcr_mgn_amt,
+frcr_gnrl_ord_psbl_amt의 검증된 문자열만 포함한다. 원문 전체나 국가명을 복제하지 않는다.
+같은 값도 별도 행으로 보존한다. usd_margin_row_count는 목록 길이이며,
+reported_cash_components는 길이1일 때만 해당 항목, 나머지는 None이다.
+cash_aggregation_verified는 항상 false, 여러 행이면 USD_MARGIN_AGGREGATION_UNVERIFIED다.
+공개 account_read_complete=true는 GET 조회/형식 계약 완료다. 공개 issues는 고정 코드
+목록이며 자산 경고가 현금 경고를 숨기지 않는다. 금액/계좌 식별자는 공개하지 않는다.
