@@ -20,3 +20,7 @@ ConfirmedPreparationBudget은 USD 자본600/주문120/종목120/총노출480/하
 AccountSnapshot은 관측시작UTC, 관측종료UTC, USD 구매가능금액, 보유 수량/평가액,
 미체결 주문ID/수량/방향을 담는다. NAV는 None, 계좌전체검증과 실거래 가능은 false다.
 공개 검사 결과에는 금액·계좌번호·주문ID 원문 대신 계약 성공과 행 개수만 남긴다.
+unverified_assets는 실제 OTCB 행을 종목별로 분리 보존한다. 보고 수량은 소수 문자열,
+reported_market_code=OTCB, valuation_verified=false, reported_valuation_usd=None이다.
+정상 보유·주문 대상에 합치거나 평가액0으로 치환하지 않는다. 공개 결과는
+unverified_asset_count와 INTRADAY_ACCOUNT_READ_WITH_UNVERIFIED_ASSETS로 구별한다.
