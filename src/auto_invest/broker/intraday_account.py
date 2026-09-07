@@ -47,7 +47,7 @@ def _identifier(row, field):
     return value.strip()
 
 
-def _usd(row):
+def _usd(row, endpoint):
     currency = row.get("tr_crcy_cd", "USD")
     if not isinstance(currency, str) or currency.strip() != "USD":
         raise AccountReadError("NON_USD_ROW")
@@ -59,7 +59,15 @@ def _usd(row):
             category = market.strip() if market.strip() in {"NYS", "AMS", "SEHK"} else "OTHER"
             if not market.strip():
                 category = "EMPTY"
-        raise AccountReadError("NON_US_MARKET", shape=dict(market_category=category))
+        # An exchange identifier is public protocol metadata, not account data.
+        # Publish only a short uppercase code; never arbitrary response text.
+        public_code = "REDACTED"
+        if isinstance(market, str) and re.fullmatch(r"[A-Z][A-Z0-9]{1,7}", market.strip()):
+            public_code = market.strip()
+        raise AccountReadError(
+            "NON_US_MARKET",
+            shape=dict(endpoint=endpoint, market_category=category, market_code=public_code),
+        )
 
 
 async def observe_account(
@@ -162,11 +170,11 @@ async def observe_account(
     margin_rows = await collect("foreign-margin")
     if len(cash_rows) != 1:
         raise AccountReadError("ACCOUNT_PURCHASABLE_ROW_COUNT")
-    _usd(cash_rows[0])
+    _usd(cash_rows[0], "inquire-psamount")
     orderable = _number(cash_rows[0], "ovrs_ord_psbl_amt")
     positions = {}
     for row in balance_rows:
-        _usd(row)
+        _usd(row, "inquire-balance")
         qty = _number(row, "ovrs_cblc_qty", whole=True)
         if not qty:
             continue
@@ -184,7 +192,7 @@ async def observe_account(
         )
     orders, seen_orders = [], set()
     for row in order_rows:
-        _usd(row)
+        _usd(row, "inquire-nccs")
         remaining = _number(row, "nccs_qty", whole=True, positive=True)
         ordered = _number(row, "ft_ord_qty", whole=True, positive=True)
         filled = _number(row, "ft_ccld_qty", whole=True)
