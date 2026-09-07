@@ -130,7 +130,7 @@ Alpaca는 선택 자료원이며 기존 KIS 수집은 계속 사용한다. 756�
 FR-020: foreign-margin의 유효한 통화별 응답에 USD 행이 없으면
 reported_cash_components=None, usd_margin_reported=false와 명시적 경고를 남긴다.
 현금0이나 구매가능금액으로 치환하지 않는다. 통화 코드 양끝 공백은 제거하되
-잘못된 통화 형식·중복 USD 행·USD 행 내부 금액 누락/오류는 거절한다.
+잘못된 통화 형식·USD 행 내부 금액 누락/오류는 거절한다.
 공개 결과도 USD 내역 제공 여부를 표시하며 NAV·계좌 전체·주문 가능은 false다.
 FR-021: 공식 foreign-margin 구형 예제의 빈 통화 행은 통화별 금액 계산에서
 제외하고 unclassified_margin_row_count로 공개 집계한다. 합계나 USD로 추정하지
@@ -138,3 +138,14 @@ FR-021: 공식 foreign-margin 구형 예제의 빈 통화 행은 통화별 금�
 
 완료 기준은 확정 설정, 한도 적용 모의 검증, 실제 읽기 계좌 계약이다.
 T010~T012의 과거자료·전진 관찰·생산 주문 증거는 단축하거나 모조하지 않는다.
+
+FR-022 (2026-09-08): 통화 코드는 행 식별자가 아니다. 동일 통화 여러 행을 조회
+오류로 거절하던 가정을 제거한다. 모든 USD 행의 6개 구성금액을 각각 검증하여
+입력 순서대로 reported_cash_component_rows에 보존한다. 동일 금액도 중복 삭제하지
+않고, 합산·첫 행 선택·국가별 선택을 하지 않는다. 단일 행일 때만 기존
+reported_cash_components를 제공한다. 여러 행이면 이 필드는 None이며
+USD_MARGIN_AGGREGATION_UNVERIFIED 경고와 usd_margin_row_count를 남긴다.
+cash_aggregation_verified=false는 단일 행에도 유지한다.
+공개 결과는 account_read_complete와 미검증 사유 목록을 별도로 제공한다.
+자산 경고와 현금 경고가 동시에 있으면 둘 다 목록에 표시한다. 전체 조회 계약
+완료는 집계/NAV 검증과 별개이며 T020에 고객센터의 집계 답변을 요구하지 않는다.

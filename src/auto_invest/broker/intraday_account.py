@@ -253,12 +253,11 @@ async def observe_account(
             )
         if currency.strip() == "USD":
             usd_margin.append(row)
-    if len(usd_margin) > 1:
-        raise AccountReadError("USD_MARGIN_ROW_COUNT", shape=dict(usd_margin_rows=len(usd_margin)))
-    cash_components = None
-    if usd_margin:
-        cash_components = {
-            field: str(_number(usd_margin[0], field))
+    # A currency is not a row identity. Keep every reported USD row in order;
+    # neither identical values nor a country name establish a deduplication key.
+    cash_component_rows = [
+        {
+            field: str(_number(row, field))
             for field in (
                 "frcr_dncl_amt1",
                 "ustl_buy_amt",
@@ -268,6 +267,9 @@ async def observe_account(
                 "frcr_gnrl_ord_psbl_amt",
             )
         }
+        for row in usd_margin
+    ]
+    cash_components = cash_component_rows[0] if len(cash_component_rows) == 1 else None
     check_age()
     return dict(
         schema_version=182,
@@ -277,6 +279,9 @@ async def observe_account(
         currency="USD",
         usd_orderable_amount=str(orderable),
         reported_cash_components=cash_components,
+        reported_cash_component_rows=cash_component_rows,
+        usd_margin_row_count=len(cash_component_rows),
+        cash_aggregation_verified=False,
         usd_margin_reported=bool(usd_margin),
         unclassified_margin_row_count=unclassified_margin_rows,
         positions=positions,
@@ -292,6 +297,7 @@ async def observe_account(
         issues=["USD_NAV_CONTRACT_UNVERIFIED", "FRACTIONAL_AND_OTHER_ACCOUNT_SCOPE_UNVERIFIED"]
         + (["UNSUPPORTED_ACCOUNT_ASSETS_PRESENT"] if unverified_assets else [])
         + ([] if usd_margin else ["USD_MARGIN_COMPONENTS_NOT_REPORTED"])
+        + (["USD_MARGIN_AGGREGATION_UNVERIFIED"] if len(usd_margin) > 1 else [])
         + (["UNCLASSIFIED_MARGIN_ROWS_PRESENT"] if unclassified_margin_rows else []),
     )
 
@@ -305,16 +311,21 @@ def public_contract_result(snapshot):
             if snapshot["unverified_assets"]
             else (
                 "INTRADAY_ACCOUNT_READ_CONTRACT_OK"
-                if snapshot["usd_margin_reported"] and not snapshot["unclassified_margin_row_count"]
+                if snapshot["usd_margin_row_count"] == 1
+                and not snapshot["unclassified_margin_row_count"]
                 else "INTRADAY_ACCOUNT_READ_WITH_UNVERIFIED_CASH"
             )
         ),
         position_count=len(snapshot["positions"]),
         unverified_asset_count=len(snapshot["unverified_assets"]),
         usd_margin_reported=snapshot["usd_margin_reported"],
+        usd_margin_row_count=snapshot["usd_margin_row_count"],
+        cash_aggregation_verified=False,
         unclassified_margin_row_count=snapshot["unclassified_margin_row_count"],
         open_order_count=len(snapshot["open_orders"]),
         pagination_complete=snapshot["pagination_complete"],
+        account_read_complete=True,
+        issues=list(snapshot["issues"]),
         nav_verified=False,
         live_eligible=False,
         orders_submitted=0,

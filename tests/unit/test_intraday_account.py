@@ -358,17 +358,71 @@ async def test_margin_currency_padding_preserves_reported_amounts():
 
 
 @pytest.mark.asyncio
-async def test_duplicate_usd_margin_is_not_summed_or_hidden():
+@pytest.mark.parametrize("count", [2, 10, 100])
+@pytest.mark.parametrize("distinct", [False, True])
+async def test_multiple_usd_rows_are_preserved_not_summed_selected_or_deduplicated(count, distinct):
     data = replies()
-    data["foreign-margin"]["output"].append(
-        dict(data["foreign-margin"]["output"][0], crcy_cd=" USD ")
+    original = data["foreign-margin"]["output"][0]
+    data["foreign-margin"]["output"] = [
+        dict(
+            original,
+            crcy_cd=" USD ",
+            natn_name="private-country-label",
+            frcr_dncl_amt1=str(700 + index if distinct else 700),
+        )
+        for index in range(count)
+    ]
+    snapshot = await read(
+        lambda request: httpx.Response(200, json=data[request.url.path.split("/")[-1]]),
+        now=lambda: NOW,
     )
-    with pytest.raises(AccountReadError, match="USD_MARGIN_ROW_COUNT") as error:
+    assert snapshot["reported_cash_components"] is None
+    assert snapshot["reported_cash_component_rows"] == [
+        {key: value for key, value in row.items() if key not in {"crcy_cd", "natn_name"}}
+        for row in data["foreign-margin"]["output"]
+    ]
+    assert snapshot["usd_orderable_amount"] == "600"
+    assert snapshot["nav"] is None
+    public = public_contract_result(snapshot)
+    assert public["account_read_complete"] is True
+    assert public["status"] == "INTRADAY_ACCOUNT_READ_WITH_UNVERIFIED_CASH"
+    assert public["usd_margin_row_count"] == count
+    assert "USD_MARGIN_AGGREGATION_UNVERIFIED" in public["issues"]
+    assert not public["cash_aggregation_verified"] and not public["live_eligible"]
+    for private in ("700", "600", "private-country-label", "TLT", "frcr_dncl_amt1"):
+        assert private not in str(public)
+
+
+@pytest.mark.asyncio
+async def test_multirow_cash_warning_remains_visible_with_unverified_assets():
+    data = replies()
+    data["inquire-balance"]["output1"][0]["ovrs_excg_cd"] = "OTCB"
+    data["foreign-margin"]["output"] *= 10
+    snapshot = await read(
+        lambda request: httpx.Response(200, json=data[request.url.path.split("/")[-1]]),
+        now=lambda: NOW,
+    )
+    public = public_contract_result(snapshot)
+    assert public["status"] == "INTRADAY_ACCOUNT_READ_WITH_UNVERIFIED_ASSETS"
+    assert public["usd_margin_row_count"] == 10
+    assert public["unverified_asset_count"] == 1
+    assert "USD_MARGIN_AGGREGATION_UNVERIFIED" in public["issues"]
+    assert "UNSUPPORTED_ACCOUNT_ASSETS_PRESENT" in public["issues"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("invalid", [None, "NaN", "-1", "secret-value"])
+async def test_every_usd_row_is_validated_including_later_rows(invalid):
+    data = replies()
+    original = data["foreign-margin"]["output"][0]
+    data["foreign-margin"]["output"] = [dict(original) for _ in range(10)]
+    data["foreign-margin"]["output"][-1]["frcr_dncl_amt1"] = invalid
+    with pytest.raises(AccountReadError, match="INVALID_FRCR_DNCL_AMT1") as error:
         await read(
             lambda request: httpx.Response(200, json=data[request.url.path.split("/")[-1]]),
             now=lambda: NOW,
         )
-    assert error.value.shape == {"usd_margin_rows": 2}
+    assert "secret-value" not in str(error.value)
 
 
 @pytest.mark.asyncio
