@@ -48,10 +48,18 @@ def _identifier(row, field):
 
 
 def _usd(row):
-    if row.get("tr_crcy_cd", "USD") != "USD":
+    currency = row.get("tr_crcy_cd", "USD")
+    if not isinstance(currency, str) or currency.strip() != "USD":
         raise AccountReadError("NON_USD_ROW")
-    if row.get("ovrs_excg_cd", "NASD") not in {"NASD", "NYSE", "AMEX"}:
-        raise AccountReadError("NON_US_MARKET")
+    market = row.get("ovrs_excg_cd", "NASD")
+    # KIS documents NASD as all US markets and NAS as Nasdaq on live accounts.
+    if not isinstance(market, str) or market.strip() not in {"NASD", "NAS", "NYSE", "AMEX"}:
+        category = "INVALID_TYPE"
+        if isinstance(market, str):
+            category = market.strip() if market.strip() in {"NYS", "AMS", "SEHK"} else "OTHER"
+            if not market.strip():
+                category = "EMPTY"
+        raise AccountReadError("NON_US_MARKET", shape=dict(market_category=category))
 
 
 async def observe_account(
