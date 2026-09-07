@@ -132,6 +132,17 @@ PR779/0b8992b의 실제34075774149는 OTCB 처리를 넘어 USD_MARGIN_ROW_COUNT
 해석하지 않는다. 중복 USD·잘못된 코드·USD 행 내부 금액 오류는 계속 거절한다.
 USD 구성 내역을 제공받았는지는 공개 결과에도 남기며 전체 NAV/주문 준비는 false다.
 
+## 공식 빈 통화 행 계약
+
+PR780/d05b92e의 실제34076749615는 INVALID_MARGIN_CURRENCY로 거절됐다
+(기존7개 통과,20.82초). 공식 legacy 외화증거금 함수는
+같은 foreign-margin/TTTC2101R 응답에서 current_data.crcy_cd != "" 행만 남긴다.
+따라서 빈 통화 문자열은 통화별 금액 계산에서 제외하고 존재 여부는 별도 집계한다.
+그 행의 의미는 공식 설명이 없어 합계/자리채움/USD라고 단정하지 않는다.
+누락/null/다른 자료형은 공란으로 바꾸지 않으며 진단에는 필드 존재/자료형/필드명만
+남기고 금액·계좌 원문은 숨긴다. 공란 행의 금액을 어느 통화에도 합산하지 않는다.
+- https://github.com/koreainvestment/open-trading-api/blob/main/legacy/Sample01/kis_ovrseastk.py#L914
+
 execution/intraday_signals.py는 기존 사전등록 신호와 실제 귀속 보유를 연결한다.
 전체 5종목의 연속된 확정봉과 소스지문을 검사한다. 종료 청산은 신호 자료 장애에도
 계좌 재관측을 먼저 수행한다. 매수·매도 모두 5분 미체결이면 취소 확인을 기다린다.

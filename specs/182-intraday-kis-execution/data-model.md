@@ -27,3 +27,5 @@ unverified_asset_count와 INTRADAY_ACCOUNT_READ_WITH_UNVERIFIED_ASSETS로 구별
 USD 외화증거금 내역 미제공은 reported_cash_components=None,
 usd_margin_reported=false, USD_MARGIN_COMPONENTS_NOT_REPORTED로 표시한다.
 공개 결과의 usd_margin_reported도 false이며 계좌 검증·거래 준비로 승격되지 않는다.
+unclassified_margin_row_count는 통화 문자열이 공란인 행의 수다. 그 행의 금액을
+USD·합계·현금0으로 해석하지 않고 UNCLASSIFIED_MARGIN_ROWS_PRESENT를 남긴다.

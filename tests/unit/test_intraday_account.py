@@ -372,7 +372,7 @@ async def test_duplicate_usd_margin_is_not_summed_or_hidden():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("currency", [None, "", "US", "secret-data", 840])
+@pytest.mark.parametrize("currency", [None, "US", "secret-data", 840])
 async def test_malformed_margin_currency_still_blocks(currency):
     data = replies()
     data["foreign-margin"]["output"][0]["crcy_cd"] = currency
@@ -381,6 +381,47 @@ async def test_malformed_margin_currency_still_blocks(currency):
             lambda request: httpx.Response(200, json=data[request.url.path.split("/")[-1]]),
             now=lambda: NOW,
         )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("currency", ["", "   "])
+@pytest.mark.parametrize("has_usd", [True, False])
+async def test_blank_currency_rows_are_counted_never_assigned_to_usd(currency, has_usd):
+    data = replies()
+    if not has_usd:
+        data["foreign-margin"]["output"] = []
+    data["foreign-margin"]["output"].append(dict(crcy_cd=currency, frcr_dncl_amt1="9999999"))
+    snapshot = await read(
+        lambda request: httpx.Response(200, json=data[request.url.path.split("/")[-1]]),
+        now=lambda: NOW,
+    )
+    assert snapshot["unclassified_margin_row_count"] == 1
+    assert snapshot["usd_margin_reported"] is has_usd
+    if has_usd:
+        assert snapshot["reported_cash_components"]["frcr_dncl_amt1"] == "700"
+    else:
+        assert snapshot["reported_cash_components"] is None
+    assert "UNCLASSIFIED_MARGIN_ROWS_PRESENT" in snapshot["issues"]
+    public = public_contract_result(snapshot)
+    assert public["status"] == "INTRADAY_ACCOUNT_READ_WITH_UNVERIFIED_CASH"
+    assert public["unclassified_margin_row_count"] == 1
+    assert not public["nav_verified"] and not public["live_eligible"]
+    assert "9999999" not in str(public)
+
+
+@pytest.mark.asyncio
+async def test_missing_currency_field_is_not_an_empty_currency_row():
+    data = replies()
+    del data["foreign-margin"]["output"][0]["crcy_cd"]
+    with pytest.raises(AccountReadError, match="INVALID_MARGIN_CURRENCY") as error:
+        await read(
+            lambda request: httpx.Response(200, json=data[request.url.path.split("/")[-1]]),
+            now=lambda: NOW,
+        )
+    assert error.value.shape["currency_field_present"] is False
+    assert error.value.shape["currency_kind"] == "NoneType"
+    assert "frcr_dncl_amt1" in error.value.shape["row_keys"]
+    assert "700" not in str(error.value.shape)
 
 
 @pytest.mark.asyncio
