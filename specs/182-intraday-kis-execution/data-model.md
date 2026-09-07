@@ -24,3 +24,6 @@ unverified_assets는 실제 OTCB 행을 종목별로 분리 보존한다. 보고
 reported_market_code=OTCB, valuation_verified=false, reported_valuation_usd=None이다.
 정상 보유·주문 대상에 합치거나 평가액0으로 치환하지 않는다. 공개 결과는
 unverified_asset_count와 INTRADAY_ACCOUNT_READ_WITH_UNVERIFIED_ASSETS로 구별한다.
+USD 외화증거금 내역 미제공은 reported_cash_components=None,
+usd_margin_reported=false, USD_MARGIN_COMPONENTS_NOT_REPORTED로 표시한다.
+공개 결과의 usd_margin_reported도 false이며 계좌 검증·거래 준비로 승격되지 않는다.

@@ -24,3 +24,5 @@ live_eligible=false, simulated_broker_requests와 invariant결과는 별도 표�
 실제 계좌 GET 수집 계약은 기존 KIS_LIVE_TEST 읽기 검사를 통해 서버에서 검증한다.
 OTCB 자산 행이 있으면 읽기 시험 성공도 INTRADAY_ACCOUNT_READ_WITH_UNVERIFIED_ASSETS를
 출력하며 미검증 자산 수를 표시한다. 이는 조회 형식 확인일 뿐 계좌 준비/거래 승인이 아니다.
+USD 구성 내역이 없으면 usd_margin_reported=false가 함께 출력된다. 미검증 자산이
+없어도 USD 내역 미제공은 INTRADAY_ACCOUNT_READ_WITH_UNVERIFIED_CASH다.

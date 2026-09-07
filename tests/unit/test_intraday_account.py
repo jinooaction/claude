@@ -327,6 +327,74 @@ async def test_otcb_open_orders_are_not_promoted_to_supported_market():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("rows", [[], [{"crcy_cd": "HKD"}]])
+async def test_unreported_usd_margin_is_unknown_not_zero_or_orderable_cash(rows):
+    data = replies()
+    data["foreign-margin"]["output"] = rows
+    snapshot = await read(
+        lambda request: httpx.Response(200, json=data[request.url.path.split("/")[-1]]),
+        now=lambda: NOW,
+    )
+    assert snapshot["reported_cash_components"] is None
+    assert snapshot["usd_margin_reported"] is False
+    assert snapshot["usd_orderable_amount"] == "600"
+    assert "USD_MARGIN_COMPONENTS_NOT_REPORTED" in snapshot["issues"]
+    assert snapshot["nav"] is None and not snapshot["full_account_scope_verified"]
+    public = public_contract_result(snapshot)
+    assert public["status"] == "INTRADAY_ACCOUNT_READ_WITH_UNVERIFIED_CASH"
+    assert not public["usd_margin_reported"] and not public["live_eligible"]
+
+
+@pytest.mark.asyncio
+async def test_margin_currency_padding_preserves_reported_amounts():
+    data = replies()
+    data["foreign-margin"]["output"][0]["crcy_cd"] = " USD "
+    snapshot = await read(
+        lambda request: httpx.Response(200, json=data[request.url.path.split("/")[-1]]),
+        now=lambda: NOW,
+    )
+    assert snapshot["usd_margin_reported"]
+    assert snapshot["reported_cash_components"]["frcr_dncl_amt1"] == "700"
+
+
+@pytest.mark.asyncio
+async def test_duplicate_usd_margin_is_not_summed_or_hidden():
+    data = replies()
+    data["foreign-margin"]["output"].append(
+        dict(data["foreign-margin"]["output"][0], crcy_cd=" USD ")
+    )
+    with pytest.raises(AccountReadError, match="USD_MARGIN_ROW_COUNT") as error:
+        await read(
+            lambda request: httpx.Response(200, json=data[request.url.path.split("/")[-1]]),
+            now=lambda: NOW,
+        )
+    assert error.value.shape == {"usd_margin_rows": 2}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("currency", [None, "", "US", "secret-data", 840])
+async def test_malformed_margin_currency_still_blocks(currency):
+    data = replies()
+    data["foreign-margin"]["output"][0]["crcy_cd"] = currency
+    with pytest.raises(AccountReadError, match="INVALID_MARGIN_CURRENCY"):
+        await read(
+            lambda request: httpx.Response(200, json=data[request.url.path.split("/")[-1]]),
+            now=lambda: NOW,
+        )
+
+
+@pytest.mark.asyncio
+async def test_reported_usd_margin_with_missing_amount_is_not_treated_as_unreported():
+    data = replies()
+    del data["foreign-margin"]["output"][0]["frcr_dncl_amt1"]
+    with pytest.raises(AccountReadError, match="INVALID_FRCR_DNCL_AMT1"):
+        await read(
+            lambda request: httpx.Response(200, json=data[request.url.path.split("/")[-1]]),
+            now=lambda: NOW,
+        )
+
+
+@pytest.mark.asyncio
 async def test_missing_foreign_currency_amount_never_uses_integrated_buying_power():
     data = replies()
     del data["inquire-psamount"]["output"]["ovrs_ord_psbl_amt"]
