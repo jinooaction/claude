@@ -31,6 +31,18 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 ## 한눈 요약표 — 2026-09-08 KST 문의 없는 직접 잔고 대조 검증 완료
 
+개발 브랜치184 진행: `codex/184-intraday-operator-program`에서 사용자 실행 명령과
+엄격한 실제 시세 입력을 구현 중이다. `scripts/intraday_operator.py`의
+`run/status/stop/quotes/buying-power`와 [사용 안내](specs/184-intraday-operator-program/quickstart.md)를
+추가했다. 새 기능57개 시험(실제 로컬 웹소켓, 기존 모의 장부20회 재시작·중복 없음 포함),
+기존 주문·모의 운용·실시간 워커 회귀를 합친155개(10.90초),
+린트·하네스14/14·HANDOFF 검사는 통과했다. 전체 검사는 진행 중이다.
+이 코드는 아직 main 출시·서버 배포가 아니며, 단타 실주문 전체 연결(T009/T010)은 미완료다.
+실제 KIS 웹소켓 서버의 `/tryitout` 연결 후 정상 종료를 확인했다(인증·구독·시세0).
+로컬에는 KIS 비밀값이 없어 새 입력기의 인증 후 실제 KIS 응답 검증은 하지 않았다.
+기존 또는 전용 계좌 사용 여부를 사용자에게 확인 중이다. 별도 계좌만으로 전체 현금
+완전성이 검증되는 것은 아니며, 현재 전체 현금/NAV 대신 시작 잔고를 추정하는 우회는 없다.
+
 | 항목 | 상태 |
 |------|------|
 | 마지막 main 커밋 | `8196656` — Merge pull request #791 from jinooaction/codex/182-direct-balance-continuation |
