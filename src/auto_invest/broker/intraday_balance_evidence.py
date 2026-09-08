@@ -124,9 +124,18 @@ async def observe_balance_evidence(
             )
             for key in OUTPUTS:
                 accumulated[key].extend(page_rows[key])
-            continuation = response.headers.get("tr_cont", "").strip()
-            if continuation not in {"D", "E", "M", "F"}:
-                raise AccountReadError("BALANCE_CONTINUATION_HEADER")
+            raw_continuation = response.headers.get("tr_cont")
+            continuation = raw_continuation.strip() if raw_continuation is not None else None
+            # These endpoints' official clients continue only on M/F. An explicit
+            # empty header means no continuation; a missing header is not evidence.
+            if continuation not in {"", "D", "E", "M", "F"}:
+                raise AccountReadError(
+                    "BALANCE_CONTINUATION_HEADER",
+                    shape=dict(
+                        endpoint=endpoint,
+                        continuation_kind="MISSING" if continuation is None else "UNKNOWN",
+                    ),
+                )
             if continuation in {"M", "F"}:
                 continue
             currencies, blank = _currency_rows(accumulated["output2"])
@@ -137,6 +146,7 @@ async def observe_balance_evidence(
                 blank_currency_rows=blank,
                 currency_page_digests=currency_page_digests,
                 pagination_complete=True,
+                pagination_end="NO_CONTINUATION" if continuation == "" else "EXPLICIT_END",
             )
         raise AccountReadError("BALANCE_PAGE_LIMIT")
 
@@ -186,6 +196,7 @@ def public_balance_evidence(snapshot):
                     row["currency"] == "USD" for row in snapshot[key]["currency_rows"]
                 ),
                 pagination_complete=snapshot[key]["pagination_complete"],
+                pagination_end=snapshot[key]["pagination_end"],
             )
             for key in ("current_before", "settlement", "current_after")
         },

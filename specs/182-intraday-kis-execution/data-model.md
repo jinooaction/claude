@@ -1,4 +1,6 @@
 # 자료 모형
+각 관측의 pagination_end는 EXPLICIT_END(D/E) 또는 NO_CONTINUATION(명시적 공란)이다.
+헤더 누락과 알 수 없는 비공란 값은 고정 분류의 오류로 반환한다.
 BalanceEvidence는 관측시작/종료UTC, 한국 결제기준일, 출처별3개 output행 수와
 통화별 보고 금액 행을 갖는다. output2만 crcy_cd/frcr_dncl_amt_2를 추출한다.
 빈 통화는 별도 개수로 보존한다. 같은 USD 행도 중복 제거/합산하지 않는다.
