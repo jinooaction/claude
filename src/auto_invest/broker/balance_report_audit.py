@@ -110,6 +110,8 @@ def _audit(before, after):
     aggregate = {field: Decimal(0) for field in (
         "frcr_pchs_amt", "frcr_evlu_amt2", "evlu_pfls_amt2",
     )}
+    native = dict.fromkeys(aggregate, Decimal(0))
+    minor_unit_bound = Decimal(0)
     aggregate_valid = unique_positions and currency_coverage
     # Do not infer the quotation unit for per-100 currencies from the name.
     fx_supported = all(c == "USD" for c in holding_currencies)
@@ -135,8 +137,10 @@ def _audit(before, after):
         if not nonnegative or any(v is None for v in parsed.values()):
             aggregate_valid = False
         else:
+            minor_unit_bound += Decimal("0.01") * parsed["bass_exrt"]
             for field in aggregate:
                 aggregate[field] += parsed[field] * parsed["bass_exrt"]
+                native[field] += parsed[field]
 
     start_errors = len(invalid)
     for index, row in enumerate(currencies):
@@ -163,6 +167,18 @@ def _audit(before, after):
         else:
             compare(name, aggregate[field] if aggregate_valid else None,
                     summary.get(total), rounding=Decimal(len(positions)))
+            # Numerical hypotheses only: never increase tolerance or certify units.
+            if (aggregate_valid and summary.get(total) is not None
+                    and checks[-1]["status"] == "MISMATCH"
+                    and all(c["status"] == "MATCH" for c in checks[:3])):
+                residual = summary[total] - aggregate[field]
+                checks[-1]["diagnostic"] = dict(
+                    native_sum_relation=("EQUAL" if native[field] == summary[total]
+                                         else "DIFFERENT"),
+                    reported_vs_converted=("LOWER" if residual < 0 else "HIGHER"),
+                    within_one_cent_per_row_fx_bound=abs(residual) <= minor_unit_bound,
+                    cause_verified=False,
+                )
     value, cost = summary.get("evlu_amt_smtl"), summary.get("pchs_amt_smtl")
     compare("summary_profit", value - cost if value is not None and cost is not None else None,
             summary.get("evlu_pfls_amt_smtl"), rounding=Decimal(1))
