@@ -1,7 +1,7 @@
 # Codex 작업 운영 규칙
 
 <!-- SPECKIT START -->
-현재 명세 계획: [KIS 단타 실행·복구](specs/182-intraday-kis-execution/plan.md).
+현재 명세 계획: [모바일 자금·전략 운영판](specs/183-mobile-capital-strategy-dashboard/plan.md).
 <!-- SPECKIT END -->
 
 이 저장소의 기본 방식은 자율 진행이다. 운영자가 한 번 작업을 지시하면, 실제 막힘이 생기거나 작업이 끝날 때까지 중간 허락을 묻지 말고 진행한다.

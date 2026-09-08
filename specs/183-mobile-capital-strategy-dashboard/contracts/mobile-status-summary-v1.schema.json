@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jinooaction.github.io/claude/contracts/mobile-status-summary-v1.schema.json",
+  "title": "auto-invest mobile status additive summaries",
+  "type": "object",
+  "required": ["schema_version", "generated_at_utc", "read_only", "liveness"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "generated_at_utc": {"type": "string", "format": "date-time"},
+    "read_only": {"const": true},
+    "liveness": {"type": "object"},
+    "operator_status": {"type": ["object", "null"]},
+    "capital_summary": {"$ref": "#/$defs/capitalSummary"},
+    "strategy_summary": {"$ref": "#/$defs/strategySummary"}
+  },
+  "$defs": {
+    "nullableMoney": {
+      "type": ["string", "null"],
+      "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$"
+    },
+    "sourceHeader": {
+      "type": "object",
+      "required": ["schema_version", "as_of_utc", "max_age_minutes"],
+      "properties": {
+        "schema_version": {"const": "1.0"},
+        "as_of_utc": {"type": ["string", "null"], "format": "date-time"},
+        "max_age_minutes": {"type": "integer", "minimum": 1}
+      }
+    },
+    "capitalSummary": {
+      "allOf": [
+        {"$ref": "#/$defs/sourceHeader"},
+        {
+          "type": "object",
+          "required": ["account", "live_allocation", "intraday_budget", "performance", "risk"],
+          "properties": {
+            "account": {
+              "type": "object",
+              "required": ["status", "currency", "total_assets_usd", "purchasable_cash_usd", "holdings_market_value_usd", "reason_code", "reason_ko", "protection"],
+              "properties": {
+                "status": {"enum": ["VERIFIED", "UNVERIFIED", "UNAVAILABLE"]},
+                "currency": {"const": "USD"},
+                "total_assets_usd": {"$ref": "#/$defs/nullableMoney"},
+                "purchasable_cash_usd": {"$ref": "#/$defs/nullableMoney"},
+                "holdings_market_value_usd": {"$ref": "#/$defs/nullableMoney"},
+                "reason_code": {"type": "string"},
+                "reason_ko": {"type": "string"},
+                "protection": {"const": "DEVICE_AUTH_REQUIRED"}
+              }
+            },
+            "live_allocation": {"type": ["object", "null"]},
+            "intraday_budget": {"type": ["object", "null"]},
+            "performance": {"type": ["object", "null"]},
+            "risk": {"type": ["object", "null"]}
+          }
+        }
+      ]
+    },
+    "strategySummary": {
+      "allOf": [
+        {"$ref": "#/$defs/sourceHeader"},
+        {
+          "type": "object",
+          "required": ["active", "intraday", "research", "last_execution"],
+          "properties": {
+            "active": {"type": ["object", "null"]},
+            "intraday": {"type": ["object", "null"]},
+            "research": {"type": ["object", "null"]},
+            "last_execution": {"type": ["object", "null"]}
+          }
+        }
+      ]
+    }
+  }
+}
