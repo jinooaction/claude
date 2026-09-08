@@ -127,6 +127,7 @@ class IntradayExecutor:
         capital_limit: Decimal = Decimal("0"),
         now: Callable[[], datetime] = lambda: datetime.now(UTC),
         external_holdings: Mapping[str, int] | None = None,
+        entry_guard: Callable[[], str | None] | None = None,
     ):
         if not re.fullmatch("[a-f0-9]{64}", fingerprint) or router.paper_mode:
             raise ValueError("EXECUTOR_CONFIGURATION")
@@ -149,6 +150,7 @@ class IntradayExecutor:
         self.router, self.conn = router, router.conn
         self.fingerprint, self.observe, self.now = fingerprint, observe, now
         self.guard = authority_guard or (lambda: "INTRADAY_AUTHORIZATION_REQUIRED")
+        self.entry_guard = entry_guard or (lambda: None)
         _decimal(capital_limit, zero=True)
         self.capital_limit = capital_limit
         self._entry = True
@@ -201,9 +203,47 @@ class IntradayExecutor:
             return "STALE_EXECUTION_MARK"
         return None
 
+    def drain_requested(self):
+        row = self.conn.execute(
+            "SELECT kind FROM intraday_execution_events WHERE claim_id=? "
+            "AND kind IN ('STOP_REQUESTED','STOP_COMPLETED') ORDER BY id DESC LIMIT 1",
+            (self.prefix + "control",),
+        ).fetchone()
+        return bool(row and row["kind"] == "STOP_REQUESTED")
+
+    def _drain_id(self):
+        row = self.conn.execute(
+            "SELECT id FROM intraday_execution_events WHERE claim_id=? "
+            "AND kind='STOP_REQUESTED' ORDER BY id DESC LIMIT 1",
+            (self.prefix + "control",),
+        ).fetchone()
+        return row["id"] if row else None
+
+    def request_drain(self):
+        """Persist intent only; a broker-confirmed flat observation completes it."""
+        if not self.drain_requested():
+            self._event(self.prefix + "control", "STOP_REQUESTED")
+
+    def management_state(self):
+        """Local counts for status; never a substitute for broker reconciliation."""
+        rows = self.conn.execute(
+            "SELECT state FROM orders WHERE substr(rule_id,1,?)=?",
+            (len(self.prefix), self.prefix),
+        ).fetchall()
+        return dict(
+            owned_symbols=len(self._owned()),
+            pending_orders=sum(row["state"] in OPEN for row in rows),
+            drain_requested=self.drain_requested(),
+        )
+
     def _write_guard(self, *, entry, cancellation=False):
         if refusal := self.guard():
             return refusal
+        if entry:
+            if self.drain_requested():
+                return "OPERATOR_STOP_REQUESTED"
+            if refusal := self.entry_guard():
+                return refusal
         now = self.now()
         day = str(now.astimezone(NY).date())
         if not CALENDAR.is_session(day):
@@ -349,6 +389,13 @@ class IntradayExecutor:
         return await self.step(prepare)
 
     async def step(self, decision: Decision | Callable[[], Awaitable[Decision]]) -> dict:
+        return await self._locked_step(decision)
+
+    async def manage(self) -> dict:
+        """Maintain existing orders and exits even when bar collection is unavailable."""
+        return await self._locked_step(None)
+
+    async def _locked_step(self, decision) -> dict:
         if refusal := self.guard():
             return dict(status="DENIED", reason=refusal, actions=[])
         fd = os.open(self.lock_path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
@@ -373,7 +420,8 @@ class IntradayExecutor:
             os.close(fd)
 
     async def _step(self, d):
-        validate_decision(d, self.fingerprint)
+        if d is not None:
+            validate_decision(d, self.fingerprint)
         now = self.now()
         if now.tzinfo is None:
             raise ValueError("CLOCK_INVALID")
@@ -384,13 +432,18 @@ class IntradayExecutor:
         closing = CALENDAR.session_close(str(session)).to_pydatetime()
         if not opening <= now < closing:
             return dict(status="WAIT_SESSION", actions=[])
-        exit_only = now >= closing - timedelta(minutes=15)
-        if not exit_only and not 0 <= (now - d.bar_end).total_seconds() <= 300:
+        exit_only = now >= closing - timedelta(minutes=15) or self.drain_requested()
+        if d is not None and not exit_only and not 0 <= (now - d.bar_end).total_seconds() <= 300:
             raise ValueError("STALE_SIGNAL")
-        if not exit_only and d.bar_end < opening + timedelta(minutes=5):
+        if d is not None and not exit_only and d.bar_end < opening + timedelta(minutes=5):
             raise ValueError("INCOMPLETE_SESSION_SIGNAL")
-        view, orders = await self._refresh(set(d.targets), now)
+        view, orders = await self._refresh(set(d.targets) if d is not None else set(), now)
         owned = self._owned()
+        if d is None and not owned and not orders:
+            if self.drain_requested():
+                self._event(self.prefix + "control", "STOP_COMPLETED")
+                return dict(status="STOPPED", actions=[])
+            return dict(status="FLAT", actions=[])
         carried = {}
         for row in self.conn.execute(
             "SELECT o.symbol,o.side,f.qty,f.executed_at_utc FROM fills f JOIN orders o "
@@ -418,7 +471,9 @@ class IntradayExecutor:
             exit_only = (
                 exit_only or bool(loss_halted) or self.router.halt_path.exists() or carryover
             )
-            targets = {s: 0 for s in owned} if exit_only else dict(d.targets)
+            targets = {s: 0 for s in owned} if exit_only else (
+                dict(d.targets) if d is not None else None
+            )
             result = await self._manage_pending(orders, targets, exit_only)
             result.setdefault("reason", refusal)
             return result
@@ -468,9 +523,15 @@ class IntradayExecutor:
             self._event(day_id, "LOSS_HALT")
             halted = True
         exit_only = exit_only or bool(halted) or self.router.halt_path.exists() or carryover
-        targets = {s: 0 for s in owned} if exit_only else dict(d.targets)
+        targets = {s: 0 for s in owned} if exit_only else (
+            dict(d.targets) if d is not None else dict(owned)
+        )
         if orders:
-            return await self._manage_pending(orders, targets, exit_only)
+            return await self._manage_pending(
+                orders, targets if exit_only or d is not None else None, exit_only
+            )
+        if d is None and not exit_only:
+            return dict(status="MANAGED", actions=[])
         actions = []
         ordered_symbols = sorted(targets, key=lambda s: targets[s] - owned.get(s, 0))
         for symbol in ordered_symbols:
@@ -510,7 +571,13 @@ class IntradayExecutor:
                 actions.append(dict(kind="DENIED", symbol=symbol, reason="CASH_OR_EXPOSURE"))
                 continue
             key = self.prefix + _json(
-                [str(session), "close" if exit_only else d.bar_end.isoformat(), symbol, side.value]
+                [
+                    str(session),
+                    ("drain:" + str(self._drain_id()) if self.drain_requested() else "close")
+                    if exit_only else d.bar_end.isoformat(),
+                    symbol,
+                    side.value,
+                ]
             )
             claim = hashlib.sha256(key.encode()).hexdigest()
             previous = self.conn.execute(
@@ -585,9 +652,16 @@ class IntradayExecutor:
                 if stamp
                 else 999
             )
-            target = targets.get(order["symbol"], owned.get(order["symbol"], 0))
+            target = (
+                targets.get(order["symbol"], owned.get(order["symbol"], 0))
+                if targets is not None else None
+            )
             if age >= 300 or (
-                order["side"] == "BUY" and (exit_only or target <= owned.get(order["symbol"], 0))
+                order["side"] == "BUY" and (
+                    exit_only or (
+                        target is not None and target <= owned.get(order["symbol"], 0)
+                    )
+                )
             ):
                 if refusal := self._write_guard(entry=False, cancellation=True):
                     return dict(status="HALTED", reason=refusal, actions=actions)

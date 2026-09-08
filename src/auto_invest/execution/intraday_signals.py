@@ -20,6 +20,7 @@ def execution_fingerprint(candidate, provider):
     sources = [
         Path(__file__),
         Path(__file__).with_name("intraday.py"),
+        Path(__file__).with_name("intraday_runtime.py"),
         Path(__file__).parents[1] / "analytics/intraday_paper_challenger.py",
         Path(__file__).parents[1] / "analytics/intraday_runtime.py",
     ]

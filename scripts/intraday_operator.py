@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""한국투자 단타 모의 운용·실시간 시세·주문별 구매력의 사용자 실행 창."""
+"""한국투자 단타 모의 운용·시세·구매력·실주문 운용기 상태와 정리 요청."""
 
 from __future__ import annotations
 
@@ -27,6 +27,7 @@ from auto_invest.broker.intraday_inputs import (
     approval_key,
     buying_power,
 )
+from auto_invest.execution import intraday_runtime as execution_runtime
 from auto_invest.market_data.intraday import DataError
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -46,6 +47,10 @@ def runtime_execute():
 
 
 async def execute(args):
+    if args.command == "execution-status":
+        return execution_runtime.status(args.db)
+    if args.command == "execution-stop":
+        return execution_runtime.request_stop(args.db)
     if args.command == "status":
         return status(args.root)
     if args.command == "stop":
@@ -142,6 +147,12 @@ def parser():
             command.add_argument("--poll-seconds", type=int, default=60)
             command.add_argument("--cycles", type=int, default=0)
             command.add_argument("--token-cache", type=Path, default=Path("data/kis_token.json"))
+    for name in ("execution-status", "execution-stop"):
+        command = commands.add_parser(
+            name,
+            help="상태 조회" if name == "execution-status" else "중지·정리 요청",
+        )
+        command.add_argument("--db", type=Path, required=True)
     command = commands.add_parser("quotes")
     command.add_argument("--seconds", type=int, default=30)
     command = commands.add_parser("buying-power")
@@ -158,7 +169,10 @@ def main():
     except (InputError, DataError) as exc:
         result = dict(status="FAILED", reason=str(exc), orders_submitted=0)
     except KeyboardInterrupt:
-        result = dict(status="STOPPED", orders_submitted=0)
+        result = dict(
+            status="INTERRUPTED" if args.command.startswith("execution-") else "STOPPED",
+            orders_submitted=0,
+        )
     except Exception:
         result = dict(status="FAILED", reason="OPERATOR_FAILED", orders_submitted=0)
     emit(result)
