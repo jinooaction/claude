@@ -76,9 +76,9 @@
 - [x] T027 백엔드 관련 pytest와 Ruff를 실행하고 샘플 공개 산출물에서 비밀값·계좌번호·원시 감사 자료가 0건인지 검사한다.
 - [x] T028 앱 `flutter analyze`, 전체 `flutter test`, `flutter build ios --release --no-codesign`를 순서대로 실행한다.
 - [x] T029 백엔드 `uv run pytest`, `uv run ruff check src tests`, `agent_harness_probe.py --strict`, `check_handoff_facts.py` 전체 관문을 실행한다.
-- [ ] T030 두 저장소 변경을 각각 커밋·푸시하고 품질 관문을 채운 풀 리퀘스트를 만든 뒤 통과 시 merge 방식으로 병합한다.
+- [x] T030 두 저장소 변경을 각각 커밋·푸시하고 품질 관문을 채운 풀 리퀘스트를 만든 뒤 통과 시 merge 방식으로 병합한다.
 - [ ] T031 앱을 실제 iPhone에 서명 설치·실행하고 앱 레코드, 프로세스, 네 탭, 잠금·보호막을 확인한다.
-- [ ] T032 백엔드 `HANDOFF.md`와 기능 183 완료 기록을 최신 main·검증·앱 배포 증거로 갱신하고 `/handoff` 관문을 수행한다.
+- [x] T032 백엔드 `HANDOFF.md`와 기능 183 완료 기록을 최신 main·검증·앱 배포 증거로 갱신하고 `/handoff` 관문을 수행한다.
 
 ## 의존 관계
 
