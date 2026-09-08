@@ -18,3 +18,11 @@
 는 한도·손실 정지 경계와 KIS 계좌GET 계약을 검사한다.
 실서버 검증은 기존 kis-smoke.yml이며 새 계좌 검사도 GET만 사용한다.
 과거자료/전진검증/검증된NAV/생산주문은 이 시험 결과와 구분한다.
+
+## 실행 관측 입력 검사
+
+`uv run pytest tests/unit/test_intraday_execution.py tests/unit/test_intraday_preparation.py tests/integration/test_intraday_execution_contract.py`
+
+매도가능수량·시세 발생시각의 누락/범위, 새 매수·매도 차단, 기존 취소 보존,
+잠금 대기 중 노후화, on_bars 종료 취소를 확인한다. 모의 공급자의 시각은 모의 시각이며
+KIS REST 수신 시각을 실제 발생시각으로 인정하는 생산 변환기는 추가하지 않는다.

@@ -20,7 +20,11 @@ FP = "a" * 64
 def test_invalid_mark_rejected(value):
     with pytest.raises(ValueError):
         validate_observation(
-            Observation(NOW, Decimal("1000"), Decimal("1000"), {}, {"SPY": value}, ()), NOW, {"SPY"}
+            Observation(
+                NOW, Decimal("1000"), Decimal("1000"), {}, {"SPY": value}, (), {}, {"SPY": NOW}
+            ),
+            NOW,
+            {"SPY"},
         )
 
 
@@ -48,6 +52,8 @@ def test_observation_timestamp_fail_closed(offset):
                 {},
                 {"SPY": Decimal("100")},
                 (),
+                {},
+                {"SPY": NOW},
             ),
             NOW,
             {"SPY"},
@@ -83,6 +89,64 @@ def signal_fixture():
         for s in SYMBOLS
     ]
     return candidate, bars, opening + timedelta(minutes=45)
+
+
+@pytest.mark.parametrize(
+    "sellable",
+    [{}, {"SPY": -1}, {"SPY": 6}, {"SPY": True}, {"SPY": 1.5}, {"TLT": 1}],
+)
+def test_sellable_observation_is_required_and_bounded(sellable):
+    with pytest.raises(ValueError, match="INVALID_SELLABLE_POSITION"):
+        validate_observation(
+            Observation(
+                NOW, Decimal("500"), Decimal("1000"), {"SPY": 5},
+                {"SPY": Decimal("100")}, (), sellable, {"SPY": NOW},
+            ),
+            NOW,
+            {"SPY"},
+        )
+
+
+@pytest.mark.parametrize("offset", [-31, 1])
+def test_fresh_receipt_does_not_refresh_old_or_future_market_time(offset):
+    with pytest.raises(ValueError, match="STALE_EXECUTION_MARK"):
+        validate_observation(
+            Observation(
+                NOW, Decimal("1000"), Decimal("1000"), {},
+                {"SPY": Decimal("100")}, (), {}, {"SPY": NOW + timedelta(seconds=offset)},
+            ),
+            NOW,
+            {"SPY"},
+        )
+
+
+@pytest.mark.parametrize(
+    "times", [{}, {"TLT": NOW}, {"SPY": "2026-09-08"}, {"SPY": NOW.replace(tzinfo=None)}]
+)
+def test_market_time_must_be_typed_zoned_and_match_prices(times):
+    with pytest.raises(ValueError, match="STALE_EXECUTION_MARK"):
+        validate_observation(
+            Observation(
+                NOW, Decimal("1000"), Decimal("1000"), {},
+                {"SPY": Decimal("100")}, (), {}, times,
+            ),
+            NOW,
+            {"SPY"},
+        )
+
+
+@pytest.mark.parametrize("sellable", [0, 2, 5])
+@pytest.mark.parametrize("offset", [-30, 0])
+def test_valid_sellable_and_market_time_boundary(sellable, offset):
+    validate_observation(
+        Observation(
+            NOW, Decimal("500"), Decimal("1000"), {"SPY": 5},
+            {"SPY": Decimal("100")}, (), {"SPY": sellable},
+            {"SPY": NOW + timedelta(seconds=offset)},
+        ),
+        NOW,
+        {"SPY"},
+    )
 
 
 def test_strategy_signal_uses_confirmed_positions_and_closed_bars():

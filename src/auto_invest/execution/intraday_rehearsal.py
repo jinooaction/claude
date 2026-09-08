@@ -109,6 +109,8 @@ class Rehearsal:
             positions,
             {s: self.mark for s in ("SPY", "QQQ", "IWM", "TLT", "GLD")},
             tuple(open_ids),
+            dict(positions),
+            {s: self.now for s in ("SPY", "QQQ", "IWM", "TLT", "GLD")},
         )
 
     def decision(self, target, *, end=None):

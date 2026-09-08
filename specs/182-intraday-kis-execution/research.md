@@ -171,3 +171,18 @@ REQUESTED를 기록한 뒤 결과가 불명확하면 자동 재전송하지 않�
 조회 구현 완료의 선행 조건이 아니다. 실제 실행 NAV·전체계좌 범위는 계속 미검증이다.
 - https://github.com/koreainvestment/open-trading-api/blob/main/legacy/Sample01/kis_ovrseastk.py#L914
 - https://github.com/koreainvestment/open-trading-api/blob/main/examples_llm/overseas_stock/foreign_margin/foreign_margin.py
+
+## US7 실행 연결 설계 재검토
+
+IntradayExecutor.on_bars와 기존 통합 시험이 후보→신호→router/authority를 이미 연결한다.
+비활성 factory만 추가하는 것은 누락 해소가 아니다. 실제 누락은 매도가능수량의
+전달과 시세 발생시각 검증이다. 현금/NAV나 OTCB를 추정 제외하여 생산 입력을 만드는
+대안은 폐기했다. 위 두 입력을 기존 실행기에 필수로 추가하되 생산 권한은 만들지 않는다.
+
+KIS REST price/price-detail의 공식 예제에는 발생시각이 없다. 현재 get_quote의
+quoted_at_utc는 수신 시각이므로 단타 mark_times로 사용할 수 없다.
+웹소켓 HDFSCNT0에는 현지 XYMD/XHMS와 한국 KYMD/KHMS가 명시돼 있다.
+발생시각 입력은 가능하지만 실제 전송·필드 배열 버전·시장 전체 동등성 검증이 남는다.
+REST 호가 dymd/dhms는 공식 시간대 확인 없이 UTC로 추정하지 않는다.
+- https://github.com/koreainvestment/open-trading-api/blob/main/examples_llm/overseas_stock/price/chk_price.py
+- https://github.com/koreainvestment/open-trading-api/blob/main/examples_llm/overseas_stock/delayed_ccnl/delayed_ccnl.py

@@ -109,6 +109,225 @@ async def test_default_authorization_blocks_every_broker_request(tmp_path):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("available", [0, 2])
+@pytest.mark.parametrize("closing", [False, True])
+async def test_unsellable_holdings_do_not_consume_claim_and_recover(tmp_path, available, closing):
+    from dataclasses import replace
+
+    async with rehearsal_session(tmp_path / "test.db") as book:
+        await book.engine.step(book.decision(5))
+        book.fill("1", 5, "100")
+        if closing:
+            book.now = book.now.replace(hour=19, minute=45)
+
+        async def limited():
+            view = await book.observe()
+            return replace(view, sellable_positions={"SPY": available})
+
+        book.engine.observe = limited
+        before = book.conn.execute("SELECT COUNT(*) FROM intraday_execution_claims").fetchone()[0]
+        result = await book.engine.step(book.decision(0))
+        assert result["actions"] == [
+            dict(kind="DENIED", symbol="SPY", reason="SELLABLE_QUANTITY_INSUFFICIENT")
+        ]
+        assert len(book.requests) == 1
+        after = book.conn.execute("SELECT COUNT(*) FROM intraday_execution_claims").fetchone()[0]
+        assert after == before
+        assert book.engine._owned() == {"SPY": 5}
+        book.engine.observe = book.observe
+        result = await book.engine.step(book.decision(0))
+        assert result["actions"][0]["kind"] == "SUBMITTED"
+        assert book.orders["2"]["qty"] == 5
+
+
+@pytest.mark.asyncio
+async def test_fresh_account_with_old_market_time_never_submits(tmp_path):
+    from dataclasses import replace
+    from datetime import timedelta
+
+    async with rehearsal_session(tmp_path / "test.db") as book:
+        async def old_market():
+            view = await book.observe()
+            return replace(
+                view, mark_times={s: book.now - timedelta(seconds=31) for s in view.marks}
+            )
+
+        book.engine.observe = old_market
+        result = await book.engine.step(book.decision(5))
+        assert result["reason"] == "STALE_EXECUTION_MARK"
+        assert book.requests == []
+
+
+@pytest.mark.asyncio
+async def test_market_time_rechecked_after_authority_wait(tmp_path):
+    from contextlib import asynccontextmanager
+    from dataclasses import replace
+    from datetime import timedelta
+
+    async with rehearsal_session(tmp_path / "test.db") as book:
+        async def almost_old():
+            view = await book.observe()
+            return replace(
+                view, mark_times={s: book.now - timedelta(seconds=29) for s in view.marks}
+            )
+
+        book.engine.observe = almost_old
+        original_lock = book.engine.router.execution_authority.account_lock
+
+        @asynccontextmanager
+        async def delayed_lock(context):
+            async with original_lock(context):
+                book.now += timedelta(seconds=2)
+                yield
+
+        book.engine.router.execution_authority.account_lock = delayed_lock
+        result = await book.engine.step(book.decision(5))
+        assert book.requests == []
+        assert result["actions"][0]["kind"] == "REJECTED_BY_GATE"
+        payloads = " ".join(
+            row[0] for row in book.conn.execute("SELECT payload_json FROM audit_log")
+        )
+        assert "STALE_EXECUTION_MARK" in payloads
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stale_account", [False, True])
+async def test_old_price_keeps_expired_order_cancel_but_not_old_account(tmp_path, stale_account):
+    from dataclasses import replace
+    from datetime import timedelta
+
+    async with rehearsal_session(tmp_path / "test.db") as book:
+        await book.engine.step(book.decision(5))
+        book.now += timedelta(days=1, minutes=5)
+
+        async def stale():
+            view = await book.observe()
+            return replace(
+                view,
+                observed_at=book.now - timedelta(seconds=31) if stale_account else book.now,
+                mark_times={s: book.now - timedelta(seconds=31) for s in view.marks},
+            )
+
+        book.engine.observe = stale
+        before = book.conn.execute("SELECT COUNT(*) FROM intraday_execution_claims").fetchone()[0]
+        result = await book.engine.step(book.decision(5))
+        if stale_account:
+            assert result["reason"] == "STALE_ACCOUNT"
+            assert len(book.requests) == 1
+        else:
+            assert result["reason"] == "STALE_EXECUTION_MARK"
+            assert result["actions"] == [dict(kind="CANCEL_REQUEST", result="ACKNOWLEDGED")]
+            assert len(book.requests) == 2
+            assert book.requests[-1][0].endswith("/order-rvsecncl")
+            again = await book.engine.step(book.decision(5))
+            assert again["actions"][0]["result"] == "WAIT_BROKER_CONFIRMATION"
+            assert len(book.requests) == 2
+        after = book.conn.execute("SELECT COUNT(*) FROM intraday_execution_claims").fetchone()[0]
+        assert after == before  # No daily NAV/P&L baseline from an old price.
+
+
+@pytest.mark.asyncio
+async def test_old_price_never_submits_new_sell(tmp_path):
+    from dataclasses import replace
+    from datetime import timedelta
+
+    async with rehearsal_session(tmp_path / "test.db") as book:
+        await book.engine.step(book.decision(5))
+        book.fill("1", 5, "100")
+
+        async def stale():
+            view = await book.observe()
+            return replace(
+                view, mark_times={s: book.now - timedelta(seconds=31) for s in view.marks}
+            )
+
+        book.engine.observe = stale
+        result = await book.engine.step(book.decision(0))
+        assert result["reason"] == "STALE_EXECUTION_MARK"
+        assert len(book.requests) == 1
+
+
+@pytest.mark.asyncio
+async def test_cancel_account_expiry_reason_is_not_hidden_by_old_price(tmp_path):
+    from dataclasses import replace
+    from datetime import timedelta
+
+    async with rehearsal_session(tmp_path / "test.db") as book:
+        await book.engine.step(book.decision(5))
+        book.now += timedelta(minutes=5)
+
+        async def old_market():
+            view = await book.observe()
+            return replace(
+                view, mark_times={s: book.now - timedelta(seconds=31) for s in view.marks}
+            )
+
+        original = book.engine._manage_pending
+
+        async def delayed(*args):
+            book.now += timedelta(seconds=31)
+            return await original(*args)
+
+        book.engine.observe = old_market
+        book.engine._manage_pending = delayed
+        result = await book.engine.step(book.decision(5))
+        assert result["status"] == "HALTED"
+        assert result["reason"] == "STALE_ACCOUNT"
+        assert len(book.requests) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("delay", [2, 31])
+async def test_cancel_wait_checks_account_age_not_market_age(tmp_path, delay):
+    from contextlib import asynccontextmanager
+    from dataclasses import replace
+    from datetime import timedelta
+
+    async with rehearsal_session(tmp_path / "test.db") as book:
+        await book.engine.step(book.decision(5))
+        book.now += timedelta(minutes=5)
+
+        async def almost_old():
+            view = await book.observe()
+            return replace(
+                view, mark_times={s: book.now - timedelta(seconds=29) for s in view.marks}
+            )
+
+        book.engine.observe = almost_old
+        original_lock = book.engine.router.execution_authority.account_lock
+
+        @asynccontextmanager
+        async def delayed_lock(context):
+            async with original_lock(context):
+                book.now += timedelta(seconds=delay)
+                yield
+
+        book.engine.router.execution_authority.account_lock = delayed_lock
+        result = await book.engine.step(book.decision(5))
+        expected = "ACKNOWLEDGED" if delay == 2 else "DEFERRED_BEFORE_WRITE"
+        assert result["actions"][0]["result"] == expected
+        assert len(book.requests) == (2 if delay == 2 else 1)
+
+
+@pytest.mark.asyncio
+async def test_future_time_in_one_of_many_prices_is_not_hidden_by_minimum(tmp_path):
+    from dataclasses import replace
+    from datetime import timedelta
+
+    async with rehearsal_session(tmp_path / "test.db") as book:
+        async def mixed():
+            view = await book.observe()
+            return replace(
+                view, mark_times=dict(view.mark_times, TLT=book.now + timedelta(seconds=1))
+            )
+
+        book.engine.observe = mixed
+        result = await book.engine.step(book.decision(5))
+        assert result["reason"] == "STALE_EXECUTION_MARK"
+        assert not book.requests
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("failure", ["cancel_timeout", "cancel_reject"])
 async def test_uncertain_cancel_never_retries_or_discards_late_fill(tmp_path, failure):
     async with rehearsal_session(tmp_path / "test.db") as book:
@@ -243,7 +462,7 @@ async def test_position_mismatch_and_exposure_cap(tmp_path):
         observed = await book.observe()
 
         async def wrong():
-            return replace(observed, positions={"SPY": 1})
+            return replace(observed, positions={"SPY": 1}, sellable_positions={"SPY": 1})
 
         book.engine.observe = wrong
         result = await book.engine.step(book.decision(5))
@@ -402,6 +621,21 @@ async def test_preregistered_bar_signal_reaches_kis_router(tmp_path):
         request = book.requests[0][1]
         assert request["ORD_DVSN"] == "00"
         assert int(request["ORD_QTY"]) == 14
+        from dataclasses import replace
+
+        book.now = book.now.replace(hour=19, minute=45)
+
+        async def stale():
+            view = await book.observe()
+            return replace(
+                view, mark_times={s: book.now - timedelta(seconds=31) for s in view.marks}
+            )
+
+        engine.observe = stale
+        result = await engine.on_bars(candidate, provider=provider, bars=[])
+        assert result["reason"] == "STALE_EXECUTION_MARK"
+        assert result["actions"][0]["result"] == "ACKNOWLEDGED"
+        assert len(book.orders) == 1
 
 
 def test_cli_has_no_live_option_and_reports_offline_evidence():
