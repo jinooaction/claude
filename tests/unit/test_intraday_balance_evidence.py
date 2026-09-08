@@ -213,13 +213,26 @@ async def test_repeated_or_exhausted_pages_fail(limit, reason):
         (httpx.Response(200, json=dict(rt_cd="1", msg1="private-error")), "BROKER_REJECTED"),
         (httpx.Response(200, json=payload(), headers={"tr_cont": "Z"}), "CONTINUATION_HEADER"),
         (httpx.Response(200, json=payload()), "CONTINUATION_HEADER"),
-        (httpx.Response(200, json=payload(), headers={"tr_cont": ""}), "CONTINUATION_HEADER"),
     ],
 )
 async def test_errors_never_return_partial_or_broker_error_text(response, reason):
     with pytest.raises(AccountReadError, match="BALANCE_" + reason) as error:
         await read(lambda r: copy.deepcopy(response), now=lambda: NOW)
     assert "private" not in str(error.value) + str(error.value.shape)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("header", ["", " ", "D", "E"])
+async def test_official_non_continuation_end_is_distinct_from_missing_header(header):
+    snapshot = await read(
+        lambda r: httpx.Response(200, json=payload(), headers={"tr_cont": header}),
+        now=lambda: NOW,
+    )
+    for observed in public_balance_evidence(snapshot)["observations"].values():
+        assert observed["pagination_complete"] is True
+        assert observed["pagination_end"] == (
+            "EXPLICIT_END" if header.strip() else "NO_CONTINUATION"
+        )
 
 
 @pytest.mark.asyncio

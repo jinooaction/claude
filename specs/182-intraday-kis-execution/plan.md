@@ -7,6 +7,9 @@
 Python/httpx/기존 ResilientClient를 재사용하며 새 패키지·비밀값·SSH·스케줄 경로는 없다.
 broker/intraday_balance_evidence.py에서 고정2종 GET을 현재→결제→현재 순서로 읽는다.
 페이지 중간 오류는 부분 성공으로 반환하지 않는다. 보고 금액은 문자열 Decimal로 보존한다.
+공식 샘플의 M/F 외 종료에서 명시적 공란과 D/E를 허용하되 헤더 누락은 거절한다.
+pagination_end의 고정 분류를 공개하여 실제 종료 표현을 확인한다. 기존 계약의
+종료 판정 보정이며 추가 권한·집계·현금/NAV 승격은 없다.
 현재잔고 두 관측의 통화행 변화와 단일 USD 필드의 수치만 비교하며 의미 동일성은 주장하지 않는다.
 tests/integration/test_live_broker.py의 별도 선택적 읽기 검사로 실제 응답을 확인한다.
 Constitution Check I/II/III/IV/V/VI/VII/VIII/IX/X: 주문·자본·허용목록·감사 불변,
