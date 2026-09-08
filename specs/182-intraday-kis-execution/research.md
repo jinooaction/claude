@@ -174,6 +174,38 @@ REQUESTED를 기록한 뒤 결과가 불명확하면 자동 재전송하지 않�
 
 ## US7 실행 연결 설계 재검토
 
+## US8 문의를 필수로 삼지 않는 직접 조회 — 2026-09-08
+
+선택: CTRP6504R/CTRP6010R의 output2 보고 금액을 직접 읽고 수치 대조한다.
+이유: foreign-margin USD10행의 합산 규칙을 기다리지 않고 기존 계좌에서 실제 근거를 수집할 수 있다.
+두 API 모두 외화02·일반/미니스탁 전체00을 지원하고 현재잔고는 국가000/시장00이다.
+연속조회는 CTX 없이 tr_cont 공백→N, 응답 M/F 다음·D/E 끝이다.
+공식 샘플의 깊이 초과/실패 부분 반환을 정상 성공으로 가져오지 않는다.
+
+중요 차이: CTRP6504R output2.frcr_dncl_amt_2의 공식 설명은 외화사용가능금액이며,
+CTRP6010R 같은 필드는 외화예수금액2라는 이름만 있고 의미 설명은 공란이다.
+current output1 cblc_qty13은 결제보유, ccld_qty_smtl1이 체결현재보유다.
+같은 frcr_evlu_amt2도 output1의 외화평가와 output2의 출금가능원화가 서로 다르다.
+따라서 필드명만으로 모든 output을 합치거나 구매가능금액/예수금/총자산을 동치로 쓰지 않는다.
+금액은 signed Decimal이며 0 클램프·합산·첫 행 선택·중복제거 없이 보존한다.
+
+거절한 대안: 두 금액이 같으면 cash/NAV를 검증 완료로 처리하기.
+공식 현재잔고 개요7항에서 일반/통합증거금 미국 내역은 장중 미반영,
+통합증거금의 외화 주문금액만 먼저 반영돼 평가가 어긋날 수 있음을 명시한다.
+애프터연장 계좌에도 정산/거래량 지연 예외가 있고 결제잔고는 지연시세다.
+따라서 수신시각을 실제 평가시각으로 바꿀 수 없으며, 이 조회가 전체 계좌 누락 검증도 대신하지 않는다.
+문의는 대체 근거로 남기되 개발과 실제 읽기 검증을 기다리게 하는 조건에서 제외한다.
+
+공식 근거:
+- https://apiportal.koreainvestment.com/api/apis/public/detail?accessUrl=%2Fuapi%2Foverseas-stock%2Fv1%2Ftrading%2Finquire-present-balance
+- https://apiportal.koreainvestment.com/api/apis/guide/property/09baff2a-6e9d-4502-ba66-d7bb94094b67
+- https://apiportal.koreainvestment.com/api/apis/public/detail?accessUrl=%2Fuapi%2Foverseas-stock%2Fv1%2Ftrading%2Finquire-paymt-stdr-balance
+- https://apiportal.koreainvestment.com/api/apis/guide/property/8e78ed2f-8c3d-424e-b400-82fc94ca4a6b
+- https://github.com/koreainvestment/open-trading-api/tree/main/examples_llm/overseas_stock/inquire_present_balance
+- https://github.com/koreainvestment/open-trading-api/tree/main/examples_llm/overseas_stock/inquire_paymt_stdr_balance
+
+### US7 기존 연결 조사 경과
+
 IntradayExecutor.on_bars와 기존 통합 시험이 후보→신호→router/authority를 이미 연결한다.
 비활성 factory만 추가하는 것은 누락 해소가 아니다. 실제 누락은 매도가능수량의
 전달과 시세 발생시각 검증이다. 현금/NAV나 OTCB를 추정 제외하여 생산 입력을 만드는

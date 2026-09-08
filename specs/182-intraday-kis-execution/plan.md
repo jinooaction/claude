@@ -1,5 +1,19 @@
 # 구현 계획: KIS 단타 실행
 
+## US8 직접 잔고 대조 후속 — 2026-09-08
+
+기존 출시 계획을 setup-plan.sh로 덮어쓰지 않고 후속 명세→계획→작업→구현으로 확장한다.
+계획 Phase0 공식 계약 조사를 별도 연구 역할에 위임하고 로컬 구현은 직렬로 진행한다.
+Python/httpx/기존 ResilientClient를 재사용하며 새 패키지·비밀값·SSH·스케줄 경로는 없다.
+broker/intraday_balance_evidence.py에서 고정2종 GET을 현재→결제→현재 순서로 읽는다.
+페이지 중간 오류는 부분 성공으로 반환하지 않는다. 보고 금액은 문자열 Decimal로 보존한다.
+현재잔고 두 관측의 통화행 변화와 단일 USD 필드의 수치만 비교하며 의미 동일성은 주장하지 않는다.
+tests/integration/test_live_broker.py의 별도 선택적 읽기 검사로 실제 응답을 확인한다.
+Constitution Check I/II/III/IV/V/VI/VII/VIII/IX/X: 주문·자본·허용목록·감사 불변,
+기존 제한/회로차단·비밀 정화 사용, 장외 일반 배포. 위험등급3 외부 API 계약 추가다.
+문의 대기만 제거하고 검증되지 않은 NAV를 사용하는 대안은 거절한다.
+되돌림은 새 대조 사용을 중지하며 기존 조회/장부/실행기와 모바일 출시는 보존한다.
+
 **Branch**: `codex/182-intraday-kis-execution` | **Date**: 2026-09-07
 **Spec**: [spec.md](spec.md)
 

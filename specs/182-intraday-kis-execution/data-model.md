@@ -1,4 +1,13 @@
 # 자료 모형
+BalanceEvidence는 관측시작/종료UTC, 한국 결제기준일, 출처별3개 output행 수와
+통화별 보고 금액 행을 갖는다. output2만 crcy_cd/frcr_dncl_amt_2를 추출한다.
+빈 통화는 별도 개수로 보존한다. 같은 USD 행도 중복 제거/합산하지 않는다.
+current_read_stable은 처음과 마지막 현재잔고 output2가 동일함을 뜻한다.
+reported_usd_field_comparison은 EQUAL/DIFFERENT/UNAVAILABLE이다.
+수치 동일성은 가용현금·예수금·NAV의 의미 동일성을 뜻하지 않는다.
+공개 결과에는 수치/통화/종목/계좌 원문 없이 개수와 판정만 포함한다.
+nav_verified/cash_verified/live_eligible는 모두 false, orders_submitted는0이다.
+
 Decision은 후보지문·확정봉UTC시각·종목별목표수량·고정지정가다.
 AccountView는 조회시각·현금·평가액·계좌보유·가격·증권사미체결을 담는다.
 실행claim은 지문/세션/봉/종목/목적으로 만든ID와 입력지문이며 추가전용이다.
