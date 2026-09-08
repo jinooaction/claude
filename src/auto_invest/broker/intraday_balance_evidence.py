@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
+from auto_invest.broker.balance_report_audit import audit_report, select_records
 from auto_invest.broker.intraday_account import AccountReadError
 from auto_invest.broker.overseas import _kis_headers, _split_account
 
@@ -147,6 +148,7 @@ async def observe_balance_evidence(
                 currency_page_digests=currency_page_digests,
                 pagination_complete=True,
                 pagination_end="NO_CONTINUATION" if continuation == "" else "EXPLICIT_END",
+                audit_records=select_records(accumulated) if endpoint == CURRENT else None,
             )
         raise AccountReadError("BALANCE_PAGE_LIMIT")
 
@@ -173,6 +175,7 @@ async def observe_balance_evidence(
         current_after=last,
         current_read_stable=stable,
         reported_usd_field_comparison=comparison,
+        report_audit=audit_report(first["audit_records"], last["audit_records"]),
         cash_verified=False,
         nav_verified=False,
         full_account_scope_verified=False,
@@ -188,6 +191,7 @@ def public_balance_evidence(snapshot):
         status="BALANCE_REPORTS_OBSERVED",
         current_read_stable=snapshot["current_read_stable"],
         reported_usd_field_comparison=snapshot["reported_usd_field_comparison"],
+        report_audit=snapshot["report_audit"],
         observations={
             key: dict(
                 output_row_counts=snapshot[key]["output_row_counts"],

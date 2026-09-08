@@ -223,3 +223,22 @@ quoted_at_utc는 수신 시각이므로 단타 mark_times로 사용할 수 없�
 REST 호가 dymd/dhms는 공식 시간대 확인 없이 UTC로 추정하지 않는다.
 - https://github.com/koreainvestment/open-trading-api/blob/main/examples_llm/overseas_stock/price/chk_price.py
 - https://github.com/koreainvestment/open-trading-api/blob/main/examples_llm/overseas_stock/delayed_ccnl/delayed_ccnl.py
+
+## US9 산술 검증 근거 — 2026-09-09
+
+공식 CTRP6504R 상세와 속성 JSON을 다시 직접 읽었다. 속성004.005는 체결현재수량,
+004.007~009는 외화 매입·평가·그 차이인 손익, 004.012는 원화 평가 환율,
+006.001~003은 해외유가증권 매입·평가·손익의 원화 합계다. 이 관계를 실제로 계산한다.
+005.005는 이름이 예수금이어도 설명은 외화사용가능금액이며, output2.frcr_evlu_amt2는
+출금가능원화다. 이를 보유 평가액에 더하지 않는다. 요약의 총자산·미결제·총외화잔고
+필드에는 구성 합산식 설명이 없다. foreign-margin의 행별 금액에도 통화중복 합산 규칙이 없다.
+명세가 비어 있다는 사실을 새 코드만으로 해소됐다고 주장하지 않는다.
+
+원화 환산 행별 반올림 규칙도 없으므로 정확 일치만 MATCH이며 행당1원 이하 차이는
+ROUNDING_DIFFERENCE로 별도 검사 불가다. USD 외 통화는 환율 호가 단위를 추정하지 않는다.
+공식 개요7항은 일반/통합증거금 미국 매매의 장중 반영 차이를 명시한다.
+따라서 보고서 산술 MATCH는 현재 실주문용 NAV 검증과 다르다.
+
+출처: https://apiportal.koreainvestment.com/api/apis/guide/property/09baff2a-6e9d-4502-ba66-d7bb94094b67
+및 같은 API 상세, foreign-margin 공식 상세. 전체 응답은 개인정보가 섞일 수 있어
+저장소에 복사하지 않고 계산에 사용한 공개 필드 의미만 이 문서에 기록한다.

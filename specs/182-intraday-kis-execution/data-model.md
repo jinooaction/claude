@@ -55,3 +55,9 @@ cash_aggregation_verified는 항상 false, 여러 행이면 USD_MARGIN_AGGREGATI
 시간대 있는 datetime이다. 증권사 발생시각을 보존하며 관측/최종 주문 시점 대비
 0~30초 범위만 사용한다. 두 필드 모두 필수다. 기존 GET AccountSnapshot을
 Observation으로 승격하는 형변환은 없으며 모의 공급자만 모의 자료로 이를 채운다.
+
+US9의 audit_records는 현재잔고의 output1/2/3에서 검증에 필요한 허용 필드만
+복사한 메모리 자료다. 파일·공개 로그에 저장하지 않는다. report_audit는 금액 없는
+검사명·MATCH/MISMATCH/INCOMPLETE/CHANGED·행 번호·오류 필드를 제공한다.
+최대100개 검사 상세와30개 오입력 상세만 공개하지만 총개수·상태별 개수와 전체 판정은
+모든 행을 반영한다. 실행 NAV 검증과 현금 합산 계약 상태는 별도 필드다.

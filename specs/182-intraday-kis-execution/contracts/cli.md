@@ -48,3 +48,8 @@ account_read_complete=true와 cash_aggregation_verified=false는 동시에 가�
 rehearse/preflight의 모의 공급자는 매도가능수량과 각 가격의 모의 발생시각도
 기존 실행기에 전달한다. CLI 인수·출력 모드·비밀값 무접근은 유지된다.
 새 실제 주문 시작 명령이나 KIS 실시간 시세를 받았다는 출력은 추가하지 않는다.
+
+`uv run python scripts/intraday_balance_check.py`는 기존 세 GET 결과에 report_audit를
+추가한다. 개별 산술 대조와 누락·변경을 표시하며 새 인수나 비밀값 경로는 없다.
+조회 exit0과 산술 MATCH 및 전체 계좌/실행 NAV 승인은 서로 다른 상태다.
+기존 서버 test_live_kis_intraday_balance_evidence도 같은 결과를 공개한다.
