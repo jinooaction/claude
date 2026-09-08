@@ -1,4 +1,12 @@
 # 검증
+
+실제 계좌의 읽기 전용 대조는 기존 인증 환경에서 다음 명령으로 실행한다.
+`uv run python scripts/intraday_balance_check.py`
+새 `report_audit`에 항목별 일치(MATCH), 불일치(MISMATCH), 검사 불가(INCOMPLETE),
+조회 중 변경(CHANGED)이 표시된다. 계좌 금액과 종목은 공개 출력에 포함하지 않는다.
+`status=BALANCE_REPORTS_OBSERVED`와 종료0은 조회 성공이며 산술 합격을 뜻하지 않는다.
+산술 MATCH도 현금 합산 계약·전체 계좌 범위·실시간 평가시각의 검증을 대신하지 않는다.
+
 1. `uv run pytest tests/unit/test_intraday_execution.py tests/integration/test_intraday_execution_contract.py`
 2. `uv run python scripts/intraday_execution.py rehearse`
 3. `uv run pytest`, `uv run ruff check src tests`
