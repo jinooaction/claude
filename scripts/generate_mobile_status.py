@@ -14,6 +14,10 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from auto_invest.analytics.mobile_operator_snapshot import (
+    build_mobile_operator_summaries,
+    mobile_summary_sidecar_specs,
+)
 from auto_invest.analytics.operator_status import OperatorStatusReport, parse_operator_status
 from auto_invest.analytics.pipeline_liveness import (
     CRITICAL,
@@ -178,6 +182,15 @@ def _render_json_script(report_dict: dict) -> str:
     )
 
 
+def _render_json_script_with_id(report_dict: dict, element_id: str) -> str:
+    payload = json.dumps(report_dict, ensure_ascii=False, separators=(",", ":"))
+    return (
+        f'<script type="application/json" id="{html.escape(element_id)}">'
+        f"{html.escape(payload)}"
+        "</script>"
+    )
+
+
 def _render_optional_json_script(report: OperatorStatusReport | None) -> str:
     if report is None:
         return ""
@@ -187,6 +200,110 @@ def _render_optional_json_script(report: OperatorStatusReport | None) -> str:
         f"{html.escape(payload)}"
         "</script>"
     )
+
+
+def _money_label(value: object) -> str:
+    if not isinstance(value, str):
+        return "확인 대기"
+    try:
+        amount = float(value)
+    except ValueError:
+        return "확인 대기"
+    return f"${amount:,.2f}"
+
+
+def _plain_label(value: object, suffix: str = "") -> str:
+    if value is None or isinstance(value, bool):
+        return "확인 대기"
+    if isinstance(value, (str, int, float)):
+        return f"{value}{suffix}"
+    return "확인 대기"
+
+
+def _render_capital_strategy_blocks(capital: dict, strategy: dict) -> str:
+    account = capital["account"]
+    allocation = capital.get("live_allocation") or {}
+    budget = capital.get("intraday_budget") or {}
+    performance = capital.get("performance") or {}
+    risk = capital.get("risk") or {}
+    active = strategy.get("active") or {}
+    intraday = strategy.get("intraday") or {}
+    research = strategy.get("research") or {}
+    execution = strategy.get("last_execution") or {}
+    account_status = "확인 대기" if account["status"] != "VERIFIED" else "검증 완료"
+    alpha_label = "미확정" if active.get("alpha_confirmed") is not True else "확정"
+    target_symbols = ", ".join(active.get("target_symbols") or []) or "확인 대기"
+    blockers = " ".join(active.get("blockers_ko") or []) or "확인 대기"
+    allocation_rung = _plain_label(allocation.get("rung"))
+    allocation_pct = _plain_label(allocation.get("capital_pct"), "%")
+    measurement_scope = str(performance.get("measurement_scope") or "확인 대기")
+    fills_label = _plain_label(performance.get("fills_count"), "건")
+    total_pnl = _money_label(performance.get("total_pnl_usd"))
+    halt_drawdown = _plain_label(risk.get("halt_drawdown_pct"), "%")
+    halt_loss = _money_label(risk.get("loss_at_halt_usd"))
+    capital_as_of = str(capital.get("as_of_utc") or "확인 불가")
+    strategy_as_of = str(strategy.get("as_of_utc") or "확인 불가")
+    return f"""
+    <section aria-labelledby="capital-title">
+      <h2 id="capital-title">자금 현황</h2>
+      <div class="summary-grid">
+        <article class="summary-card warning">
+          <span>총계좌 자산 · 보호 대상</span>
+          <strong>{html.escape(account_status)}</strong>
+          <p>{html.escape(account['reason_ko'])}</p>
+        </article>
+        <article class="summary-card green">
+          <span>현재 운용 한도 · 합산 자산 아님</span>
+          <strong>{html.escape(_money_label(allocation.get('allocated_capital_usd')))}</strong>
+          <p>단 {allocation_rung} · NAV 대비 {allocation_pct}</p>
+        </article>
+        <article class="summary-card blue">
+          <span>단타 준비 예산 · 아직 미배치</span>
+          <strong>{html.escape(_money_label(budget.get('capital_limit_usd')))}</strong>
+          <p>일일 중단 {_money_label(budget.get('daily_stop_trigger_usd'))} · 실거래 꺼짐</p>
+        </article>
+        <article class="summary-card coral">
+          <span>전략 범위 실제 투자금 · {html.escape(measurement_scope)}</span>
+          <strong>{html.escape(_money_label(performance.get('gross_invested_usd')))}</strong>
+          <p>체결 {fills_label} · 총손익 {total_pnl}</p>
+        </article>
+        <article class="summary-card neutral">
+          <span>위험 한도</span>
+          <strong>강등 {_plain_label(risk.get('demote_drawdown_pct'), '%')}</strong>
+          <p>중단 {halt_drawdown} · 중단 손실 {halt_loss}</p>
+        </article>
+      </div>
+      <p class="source-time">자금 원천: {html.escape(capital_as_of)}</p>
+    </section>
+
+    <section aria-labelledby="strategy-title">
+      <h2 id="strategy-title">전략 현황</h2>
+      <div class="summary-grid">
+        <article class="summary-card green">
+          <span>운영 검증용 캐너리</span>
+          <strong>{html.escape(str(active.get('strategy_id') or '확인 대기'))}</strong>
+          <p>알파 {alpha_label} · 대상 {html.escape(target_symbols)}</p>
+          <p>{html.escape(blockers)}</p>
+        </article>
+        <article class="summary-card blue">
+          <span>단타 준비 경로</span>
+          <strong>{html.escape(str(intraday.get('status') or '확인 대기'))}</strong>
+          <p>주문 {_plain_label(intraday.get('orders_submitted'), '건')} · 실거래 꺼짐</p>
+        </article>
+        <article class="summary-card neutral">
+          <span>연구 공장</span>
+          <strong>{html.escape(str(research.get('status') or '확인 대기'))}</strong>
+          <p>{html.escape(str(research.get('candidate_id') or '승격 후보 없음'))}</p>
+        </article>
+        <article class="summary-card warning">
+          <span>최근 실행</span>
+          <strong>{html.escape(str(execution.get('status') or '확인 대기'))}</strong>
+          <p>{html.escape(str(execution.get('timestamp_utc') or '기준 시각 없음'))}</p>
+        </article>
+      </div>
+      <p class="source-time">전략 원천: {html.escape(strategy_as_of)}</p>
+    </section>
+"""
 
 
 def _operator_status_class(status: str) -> str:
@@ -261,6 +378,8 @@ def render_status_page(
     *,
     sidecar_dir: Path,
     context: RenderContext,
+    budget_path: Path | None = None,
+    preflight_path: Path | None = None,
 ) -> str:
     specs = default_specs()
     observations = _read_observations(sidecar_dir, specs)
@@ -268,6 +387,12 @@ def render_status_page(
     operator_report = _read_operator_status(sidecar_dir)
     specs_by_key = {spec.key: spec for spec in specs}
     report_dict = report.as_dict()
+    capital_summary, strategy_summary = build_mobile_operator_summaries(
+        sidecar_dir=sidecar_dir,
+        budget_path=budget_path,
+        preflight_path=preflight_path,
+        now=context.generated_at,
+    )
 
     generated_at = context.generated_at.strftime("%Y-%m-%d %H:%M UTC")
     commit_short = context.commit[:7] if context.commit else "unknown"
@@ -289,6 +414,10 @@ def render_status_page(
     )
     run_link = _html_link("생성 실행", context.run_url)
     operator_block = _render_operator_block(operator_report)
+    capital_strategy_blocks = _render_capital_strategy_blocks(
+        capital_summary,
+        strategy_summary,
+    )
 
     return f"""<!doctype html>
 <html lang="ko">
@@ -535,6 +664,40 @@ def render_status_page(
       margin: 4px 0;
       overflow-wrap: anywhere;
     }}
+    .summary-grid {{
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }}
+    .summary-card {{
+      min-width: 0;
+      padding: 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 5px solid var(--pending);
+      border-radius: 8px;
+    }}
+    .summary-card.green {{ border-left-color: var(--ok); }}
+    .summary-card.blue {{ border-left-color: var(--focus); }}
+    .summary-card.coral, .summary-card.warning {{ border-left-color: var(--late); }}
+    .summary-card span, .source-time {{
+      color: var(--muted);
+      font-size: .76rem;
+      font-weight: 700;
+    }}
+    .summary-card strong {{
+      display: block;
+      margin: 4px 0;
+      font-size: 1.18rem;
+      overflow-wrap: anywhere;
+    }}
+    .summary-card p {{
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: .82rem;
+      overflow-wrap: anywhere;
+    }}
+    .source-time {{ margin-top: 8px; }}
     @media (min-width: 720px) {{
       main {{ padding: 28px; }}
       .hero {{ grid-template-columns: 1.2fr 1fr; align-items: center; }}
@@ -544,6 +707,7 @@ def render_status_page(
       .operator-panel {{ grid-template-columns: minmax(0, 1fr) 1fr; }}
       .operator-grid, .action-list {{ grid-column: 1 / -1; }}
       .operator-grid {{ grid-template-columns: repeat(4, minmax(0, 1fr)); }}
+      .summary-grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
     }}
   </style>
 </head>
@@ -578,6 +742,8 @@ def render_status_page(
       </div>
     </section>
 
+    {capital_strategy_blocks}
+
     {operator_block}
 
     <h2>핵심 자동화</h2>
@@ -595,6 +761,8 @@ def render_status_page(
 
     {_render_json_script(report_dict)}
     {_render_optional_json_script(operator_report)}
+    {_render_json_script_with_id(capital_summary, "capital-summary-data")}
+    {_render_json_script_with_id(strategy_summary, "strategy-summary-data")}
   </main>
 </body>
 </html>
@@ -605,6 +773,8 @@ def build_mobile_status_payload(
     *,
     sidecar_dir: Path,
     context: RenderContext,
+    budget_path: Path | None = None,
+    preflight_path: Path | None = None,
 ) -> dict:
     """Build the versioned, sanitized document consumed by the mobile app."""
 
@@ -612,6 +782,12 @@ def build_mobile_status_payload(
     observations = _read_observations(sidecar_dir, specs)
     liveness_report = assess_liveness(specs, observations, context.generated_at)
     operator_report = _read_operator_status(sidecar_dir)
+    capital_summary, strategy_summary = build_mobile_operator_summaries(
+        sidecar_dir=sidecar_dir,
+        budget_path=budget_path,
+        preflight_path=preflight_path,
+        now=context.generated_at,
+    )
     return {
         "schema_version": "1.0",
         "generated_at_utc": context.generated_at.isoformat().replace("+00:00", "Z"),
@@ -624,6 +800,8 @@ def build_mobile_status_payload(
         "operator_status": (
             operator_report.to_dict() if operator_report is not None else None
         ),
+        "capital_summary": capital_summary,
+        "strategy_summary": strategy_summary,
     }
 
 
@@ -649,6 +827,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--source", default="automation sidecars")
     parser.add_argument("--now", default=None)
     parser.add_argument(
+        "--budget-path",
+        default="specs/182-intraday-kis-execution/contracts/confirmed-budget.json",
+        help="Confirmed preparation-only intraday budget JSON.",
+    )
+    parser.add_argument(
+        "--preflight-path",
+        default="specs/182-intraday-kis-execution/capital-review/preflight-confirmed.json",
+        help="Read-only intraday preparation preflight JSON.",
+    )
+    parser.add_argument(
         "--manifest",
         action="store_true",
         help="Print key<TAB>branch<TAB>filename for required sidecars and exit.",
@@ -656,7 +844,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.manifest:
-        for spec in default_specs():
+        manifest_specs = {
+            spec.key: spec
+            for spec in (*default_specs(), *mobile_summary_sidecar_specs())
+        }
+        for spec in manifest_specs.values():
             print(f"{spec.key}\t{spec.branch}\t{spec.filename}")
         return 0
 
@@ -672,6 +864,8 @@ def main(argv: list[str] | None = None) -> int:
     html_text = render_status_page(
         sidecar_dir=Path(args.sidecar_dir),
         context=context,
+        budget_path=Path(args.budget_path),
+        preflight_path=Path(args.preflight_path),
     )
     output.write_text(html_text, encoding="utf-8")
     print(f"Wrote {output}")
@@ -681,6 +875,8 @@ def main(argv: list[str] | None = None) -> int:
         payload = build_mobile_status_payload(
             sidecar_dir=Path(args.sidecar_dir),
             context=context,
+            budget_path=Path(args.budget_path),
+            preflight_path=Path(args.preflight_path),
         )
         json_output.write_text(
             json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",

@@ -6,6 +6,16 @@ name: Mobile status page (GitHub Pages)
 # 정적 HTML을 만든다. KIS, 서버 SSH, 비밀값, SQLite audit_log, 주문 경로에는 접근하지 않는다.
 
 on:
+  workflow_run:
+    # 핵심 자금·전략 원본 완료 직후 공개 요약을 다시 만든다. 원본 워크플로를 재실행하거나
+    # 주문 경로를 호출하지 않으며, 성공·실패 모두 최신 sidecar 상태를 반영한다.
+    workflows:
+      - "Money-path readiness (첫-자본까지의 길 종합)"
+      - "Live canary portfolio rebalance (guarded, real money)"
+      - "Live profit evidence (실계좌 체결과 첫 수익 증거)"
+      - "Autonomous strategy factory (PEAD published-edge diagnostic)"
+    types: [completed]
+    branches: [main]
   schedule:
     # 생존 감시(07:30 UTC)와 money-path(08:00 UTC) 이후 최신 요약을 Pages에 반영.
     - cron: "20 8 * * *"
@@ -17,8 +27,11 @@ on:
       - '.github/workflows/mobile-status-pages.yml'
       - 'src/auto_invest/analytics/pipeline_liveness.py'
       - 'src/auto_invest/analytics/operator_status.py'
+      - 'src/auto_invest/analytics/mobile_operator_snapshot.py'
       - 'scripts/operator_status_probe.py'
       - '.github/workflows/operator-mobile-alerts.yml'
+      - 'specs/182-intraday-kis-execution/contracts/confirmed-budget.json'
+      - 'specs/182-intraday-kis-execution/capital-review/preflight-confirmed.json'
 
 permissions:
   contents: write
@@ -34,6 +47,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: main
 
       - name: Collect sidecars (read-only)
         run: |

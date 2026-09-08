@@ -29,14 +29,14 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 상세 규칙은 Codex 세션에서는 `AGENTS.md`, Claude 세션에서는 `CLAUDE.md` 본문 참조.
 
-## 한눈 요약표 — 2026-09-08 KST 문의 발송 승인과 실제 접수 경로 확인
+## 한눈 요약표 — 2026-09-08 KST 문의 승인·모바일 자금 전략판 구현 중
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `a2ce6ef` — Merge pull request #786 from jinooaction/codex/182-observation-completion-proof |
+| 마지막 main 커밋 | `6284f8ed` — Merge pull request #787 from jinooaction/codex/182-kis-inquiry-authorized |
 | main 테스트 | #785 코드a18ebdb 전체3660 passed/9 skipped, 실패0(767.15초). 실행 관측 관련81개 통과. 기존 KIS34170209460은8/8이며 이번 수정은 계좌 GET 코드를 변경하지 않아 재실행하지 않았다. |
 | main 린트 | #785 코드a18ebdb에서 `uv run ruff check src tests` 통과. |
-| 열린 PR | #785/#786 병합 완료, 2026-09-08 작업 시작 시 열린 PR 없음. `codex/182-kis-inquiry-authorized`에서 문의 발송 승인과 접수 경로를 인계한다. 열린 PR은 GitHub에서 다시 확인한다. |
+| 열린 PR | #788은 스펙183 모바일 자금·전략 상태판을 구현하고 전체 검증 중이다. Flutter 앱 PR #3은 병합 완료됐다. 열린 PR은 GitHub에서 다시 확인한다. |
 | 출시 완료 스펙 | 스펙182 확정600/12·모의 주문·실제 GET 조회(T020/T028) 완료(#775~783). 집계/NAV(T027)와 실거래(T010~T012)는 미완료. 기존182 실행 라이브러리(#771), 자본 검토(#773), 178 앱, 177/181 서버 진단 모의 수집은 아래 경과를 참조한다. |
 | 골격 스펙 | 스펙 178은 코드·계약·시뮬레이터와 실제 iPhone 설치·실행까지 완료됐다. 물리 화면 픽셀 캡처와 터치 탐색은 남았다. 스펙 177은 756세션 실제 5분봉 자료가 없어 `INSUFFICIENT_EVIDENCE`이며, 스펙 176은 실제 KIS 자동 주문·체결·감사·정합과 중복 주문 0건 확인이 남았다. |
 | 최근 출시 작업 | 기존 HTML을 유지하면서 형식 `1.0`, `read_only: true`인 `status.json`을 Pages에 발행했다. 별도 비공개 `jinooaction/auto_invest_mobile` Flutter 앱은 홈·자동화·설명 3개 탭, 30시간 신선도, 오프라인 마지막 성공 캐시와 실패 폐쇄 표시를 제공한다. |
