@@ -44,6 +44,8 @@ class Observation:
     positions: dict[str, int]
     marks: dict[str, Decimal]
     open_order_ids: tuple[str, ...]
+    sellable_positions: dict[str, int]
+    mark_times: dict[str, datetime]
 
 
 def _decimal(value, *, zero=False):
@@ -74,7 +76,9 @@ def validate_decision(d: Decision, fingerprint: str):
             raise ValueError("LIMIT_TICK")
 
 
-def validate_observation(v: Observation, now: datetime, required: set[str]):
+def validate_observation(
+    v: Observation, now: datetime, required: set[str], *, require_fresh_marks=True
+):
     if v.observed_at.tzinfo is None or not 0 <= (now - v.observed_at).total_seconds() <= 30:
         raise ValueError("STALE_ACCOUNT")
     _decimal(v.cash, zero=True)
@@ -84,10 +88,23 @@ def validate_observation(v: Observation, now: datetime, required: set[str]):
     for qty in v.positions.values():
         if type(qty) is not int or qty < 0:
             raise ValueError("INVALID_POSITION")
+    if set(v.sellable_positions) != set(v.positions) or any(
+        type(qty) is not int or not 0 <= qty <= v.positions[symbol]
+        for symbol, qty in v.sellable_positions.items()
+    ):
+        raise ValueError("INVALID_SELLABLE_POSITION")
     if (required | {s for s, q in v.positions.items() if q}) - set(v.marks):
         raise ValueError("MISSING_MARKS")
     for mark in v.marks.values():
         _decimal(mark)
+    if set(v.mark_times) != set(v.marks) or any(
+        not isinstance(stamp, datetime)
+        or stamp.tzinfo is None
+        or stamp.utcoffset() is None
+        or (require_fresh_marks and not 0 <= (now - stamp).total_seconds() <= 30)
+        for stamp in v.mark_times.values()
+    ):
+        raise ValueError("STALE_EXECUTION_MARK")
     if len(v.open_order_ids) != len(set(v.open_order_ids)) or any(
         not isinstance(s, str) or not s for s in v.open_order_ids
     ):
@@ -118,6 +135,7 @@ class IntradayExecutor:
         self.capital_limit = capital_limit
         self._entry = True
         self._last_view_at = None
+        self._last_mark_times = ()
         self.prefix = "intraday:" + fingerprint + ":"
         database = self.conn.execute("PRAGMA database_list").fetchone()[2]
         if not database:
@@ -158,7 +176,14 @@ class IntradayExecutor:
             (claim, kind, _json(payload)),
         )
 
-    def _write_guard(self, *, entry):
+    def _mark_refusal(self, now):
+        if not self._last_mark_times or any(
+            not 0 <= (now - stamp).total_seconds() <= 30 for stamp in self._last_mark_times
+        ):
+            return "STALE_EXECUTION_MARK"
+        return None
+
+    def _write_guard(self, *, entry, cancellation=False):
         if refusal := self.guard():
             return refusal
         now = self.now()
@@ -173,6 +198,8 @@ class IntradayExecutor:
             return "ENTRY_NOT_AUTHORIZED"
         if self._last_view_at is None or not 0 <= (now - self._last_view_at).total_seconds() <= 30:
             return "STALE_ACCOUNT"
+        if not cancellation:
+            return self._mark_refusal(now)
         return None
 
     def _owned(self):
@@ -216,8 +243,11 @@ class IntradayExecutor:
         if result.error or result.warnings:
             raise ValueError("FILL_SYNC_UNCERTAIN")
         view = await self.observe()
-        validate_observation(view, self.now(), required)
+        # Existing-order cancellation needs fresh reconciled account data, not
+        # a new valuation price. Pricing is checked before any new order or P&L.
+        validate_observation(view, self.now(), required, require_fresh_marks=False)
         self._last_view_at = view.observed_at
+        self._last_mark_times = tuple(view.mark_times.values())
         local = {
             r["symbol"]: r["qty"]
             for r in self.conn.execute("SELECT symbol,qty FROM current_positions")
@@ -353,6 +383,21 @@ class IntradayExecutor:
         carryover = any(q > 0 and owned.get(s, 0) for s, q in carried.items())
         if any(view.positions.get(s, 0) < q for s, q in owned.items()):
             raise ValueError("OWNERSHIP_MISMATCH")
+        if refusal := self._mark_refusal(self.now()):
+            if not orders:
+                raise ValueError(refusal)
+            day_id = self.prefix + str(session)
+            loss_halted = self.conn.execute(
+                "SELECT 1 FROM intraday_execution_events WHERE claim_id=? AND kind='LOSS_HALT'",
+                (day_id,),
+            ).fetchone()
+            exit_only = (
+                exit_only or bool(loss_halted) or self.router.halt_path.exists() or carryover
+            )
+            targets = {s: 0 for s in owned} if exit_only else dict(d.targets)
+            result = await self._manage_pending(orders, targets, exit_only)
+            result.setdefault("reason", refusal)
+            return result
         profit = sum(q * view.marks[s] for s, q in owned.items())
         for row in self.conn.execute(
             "SELECT o.side,f.qty,f.price_usd FROM fills f JOIN orders o "
@@ -390,37 +435,17 @@ class IntradayExecutor:
             halted = True
         exit_only = exit_only or bool(halted) or self.router.halt_path.exists() or carryover
         targets = {s: 0 for s in owned} if exit_only else dict(d.targets)
-        actions = []
-        # Protect pending exposure until the broker's terminal observation.
-        for order in orders:
-            stamp = order["submitted_at_utc"]
-            age = (
-                (now - datetime.fromisoformat(stamp.replace("Z", "+00:00"))).total_seconds()
-                if stamp
-                else 999
-            )
-            target = targets.get(order["symbol"], owned.get(order["symbol"], 0))
-            if age >= 300 or (
-                order["side"] == "BUY" and (exit_only or target <= owned.get(order["symbol"], 0))
-            ):
-                if refusal := self._write_guard(entry=False):
-                    return dict(status="HALTED", reason=refusal, actions=actions)
-                phase = await request_cancellation(
-                    self.router.execution_authority,
-                    correlation_id=order["correlation_id"],
-                    market=order["order_exchange"] or EXCHANGES[order["symbol"]],
-                    reason="intraday_exit" if exit_only else "intraday_target_or_ttl",
-                    before_write_guard=lambda: self._write_guard(entry=False),
-                )
-                actions.append(dict(kind="CANCEL_REQUEST", result=phase))
         if orders:
-            return dict(status="WAIT_BROKER", actions=actions)
+            return await self._manage_pending(orders, targets, exit_only)
+        actions = []
         ordered_symbols = sorted(targets, key=lambda s: targets[s] - owned.get(s, 0))
         for symbol in ordered_symbols:
             # Reobserve after every prior order. No batch uses a stale cash snapshot.
             view, orders = await self._refresh(set(targets), self.now())
             if orders:
                 return dict(status="WAIT_BROKER", actions=actions)
+            if refusal := self._mark_refusal(self.now()):
+                return dict(status="HALTED", reason=refusal, actions=actions)
             owned = self._owned()
             delta = targets[symbol] - owned.get(symbol, 0)
             if not delta:
@@ -434,6 +459,11 @@ class IntradayExecutor:
             )
             if side is Side.SELL and -delta > owned.get(symbol, 0):
                 raise ValueError("SELL_EXCEEDS_OWNERSHIP")
+            if side is Side.SELL and -delta > view.sellable_positions.get(symbol, 0):
+                actions.append(
+                    dict(kind="DENIED", symbol=symbol, reason="SELLABLE_QUANTITY_INSUFFICIENT")
+                )
+                continue
             notional = abs(delta) * max(mark, limit)
             capital = min(view.nav, self.capital_limit)
             global_exposure = sum(q * view.marks[s] for s, q in view.positions.items())
@@ -506,3 +536,29 @@ class IntradayExecutor:
             )
             actions.append(dict(kind=outcome.state, symbol=symbol))
         return dict(status="EXIT_ONLY" if exit_only else "PROCESSED", actions=actions)
+
+    async def _manage_pending(self, orders, targets, exit_only):
+        """Only manage already reconciled orders; never calculate a new price."""
+        actions, owned = [], self._owned()
+        for order in orders:
+            stamp = order["submitted_at_utc"]
+            age = (
+                (self.now() - datetime.fromisoformat(stamp.replace("Z", "+00:00"))).total_seconds()
+                if stamp
+                else 999
+            )
+            target = targets.get(order["symbol"], owned.get(order["symbol"], 0))
+            if age >= 300 or (
+                order["side"] == "BUY" and (exit_only or target <= owned.get(order["symbol"], 0))
+            ):
+                if refusal := self._write_guard(entry=False, cancellation=True):
+                    return dict(status="HALTED", reason=refusal, actions=actions)
+                phase = await request_cancellation(
+                    self.router.execution_authority,
+                    correlation_id=order["correlation_id"],
+                    market=order["order_exchange"] or EXCHANGES[order["symbol"]],
+                    reason="intraday_exit" if exit_only else "intraday_target_or_ttl",
+                    before_write_guard=lambda: self._write_guard(entry=False, cancellation=True),
+                )
+                actions.append(dict(kind="CANCEL_REQUEST", result=phase))
+        return dict(status="WAIT_BROKER", actions=actions)

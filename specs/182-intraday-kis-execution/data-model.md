@@ -38,3 +38,9 @@ reported_cash_components는 길이1일 때만 해당 항목, 나머지는 None�
 cash_aggregation_verified는 항상 false, 여러 행이면 USD_MARGIN_AGGREGATION_UNVERIFIED다.
 공개 account_read_complete=true는 GET 조회/형식 계약 완료다. 공개 issues는 고정 코드
 목록이며 자산 경고가 현금 경고를 숨기지 않는다. 금액/계좌 식별자는 공개하지 않는다.
+
+실행 Observation.sellable_positions는 positions와 같은 종목 집합의 정수 수량이다.
+0 <= sellable <= holding을 요구한다. mark_times는 marks와 같은 종목 집합의
+시간대 있는 datetime이다. 증권사 발생시각을 보존하며 관측/최종 주문 시점 대비
+0~30초 범위만 사용한다. 두 필드 모두 필수다. 기존 GET AccountSnapshot을
+Observation으로 승격하는 형변환은 없으며 모의 공급자만 모의 자료로 이를 채운다.

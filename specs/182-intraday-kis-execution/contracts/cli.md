@@ -33,3 +33,7 @@ USD_MARGIN_AGGREGATION_UNVERIFIED를 공개하며 금액을 합산하지 않는�
 account_read_complete=true와 cash_aggregation_verified=false는 동시에 가능하다.
 공개 issues에 모든 미검증 사유가 남으므로 자산 경고도 현금 경고를 가리지 않는다.
 행 수와 무관하게 NAV와 live_eligible는 false, 실제 주문은0이다.
+
+rehearse/preflight의 모의 공급자는 매도가능수량과 각 가격의 모의 발생시각도
+기존 실행기에 전달한다. CLI 인수·출력 모드·비밀값 무접근은 유지된다.
+새 실제 주문 시작 명령이나 KIS 실시간 시세를 받았다는 출력은 추가하지 않는다.
