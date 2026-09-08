@@ -1,4 +1,14 @@
 # 명령 계약
+
+`uv run python scripts/intraday_balance_check.py`
+공식 서버의 체결기준→결제기준→체결기준 잔고 GET 대조다. KIS_APP_KEY,
+KIS_APP_SECRET, KIS_ACCOUNT_NO와 기존 KIS_TOKEN_CACHE_PATH 환경을 사용한다.
+필수 환경 누락은 DATA_ACCESS_REQUIRED/exit2이며 요청·캐시 생성이 없다.
+정상은 BALANCE_REPORTS_OBSERVED/exit0이며 행 수·안정성·보고 수치의 비교 결과만 출력한다.
+조회 실패는 닫힌 오류/exit2이며 일부 페이지를 성공으로 반환하지 않는다.
+EQUAL은 수치만 같다는 뜻이고 현금/NAV/실거래 검증은 false다. URL·주문·활성화 인수는 없다.
+운영자는 별도 키 발급이나 복사 없이 기존 서버 KIS smoke에서 같은 함수를 사용할 수 있다.
+
 `uv run python scripts/intraday_execution.py rehearse`
 계좌·URL·키·--live 인수를 받지 않는다. 임시DB와 MockTransport로만 실행한다.
 매수→부분체결→취소접수→추가체결→최종취소→청산을 확인한다.

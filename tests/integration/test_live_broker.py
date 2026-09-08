@@ -131,6 +131,38 @@ def _make_broker(client: httpx.AsyncClient) -> ResilientClient:
 
 
 @pytest.mark.asyncio
+async def test_live_kis_intraday_balance_evidence(kis_token_bundle: dict) -> None:
+    """Direct reporting bases, GET only; equal fields never authorize trading."""
+    from auto_invest.broker.intraday_account import AccountReadError
+    from auto_invest.broker.intraday_balance_evidence import (
+        observe_balance_evidence,
+        public_balance_evidence,
+    )
+
+    account = _required_env("KIS_ACCOUNT_NO")
+    try:
+        async with httpx.AsyncClient(
+            base_url=KIS_BASE_URL, timeout=10.0, follow_redirects=False
+        ) as http:
+            snapshot = await observe_balance_evidence(
+                _make_broker(http),
+                account=account,
+                access_token=kis_token_bundle["access_token"],
+                app_key=kis_token_bundle["app_key"],
+                app_secret=kis_token_bundle["app_secret"],
+            )
+    except Exception as exc:
+        code = str(exc) if isinstance(exc, AccountReadError) else type(exc).__name__
+        if isinstance(exc, AccountReadError) and exc.shape:
+            print("Balance evidence shape: " + json.dumps(exc.shape, sort_keys=True))
+        pytest.fail("balance evidence: " + code, pytrace=False)
+    print(
+        "\nDirect balance evidence: "
+        + json.dumps(public_balance_evidence(snapshot), sort_keys=True)
+    )
+
+
+@pytest.mark.asyncio
 async def test_live_kis_intraday_account_read_contract(kis_token_bundle: dict) -> None:
     """Strict account GETs; no NAV synthesis, allocation, or broker writes."""
     from auto_invest.broker.intraday_account import (
