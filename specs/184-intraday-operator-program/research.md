@@ -29,8 +29,14 @@
 입출금·환전·배당 입금·이자 전체 사건 원장 및 전후 잔액은 제공하지 않는다.
 `period-rights`는 계좌 실제 입금이 아닌 종목 권리 일정이다. 현재 공개 목록에서
 시작 현금 이후 모든 현금 변동을 재현하는 해외주식 API를 찾지 못했다.
-전용 계좌 선언만으로 이 관측 완전성을 증명하지 않는다. 사용할 계좌 범위는 사용자에게
-확인 중이며, 기존 계좌를 단타 전용으로 간주하거나 이미 확정한600/12를 다시 질문하지 않는다.
+전용 계좌 선언만으로 이 관측 완전성을 증명하지 않는다. 2026-09-08 사용자가
+기존 한국투자 계좌 계속 사용을 확정했다. 기존 계좌를 단타 전용으로 간주하거나
+이미 확정한600/12를 다시 질문하지 않는다.
+
+현재 코드 확인 결과 일일 잔고 대조는 `reconciliation/external_holdings.py`의 명시적
+기준표를 체결 장부에 더하지만 단타 `IntradayExecutor._refresh`는 이를 빠뜨리고 있다.
+동일한 계약을 적용해 기존 보유가 있다는 이유만으로 막히는 차이를 해소한다.
+기준표는 단타 체결이나 실제 현금 증거가 아니며 누락 자산을 자동 등록하지 않는다.
 
 - https://apiportal.koreainvestment.com/api/apis/public/detail?accessUrl=%2Fuapi%2Foverseas-stock%2Fv1%2Ftrading%2Finquire-period-trans
 - https://github.com/koreainvestment/open-trading-api/blob/main/examples_llm/overseas_stock/period_rights/period_rights.py

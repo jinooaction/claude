@@ -11,11 +11,12 @@ import hashlib
 import json
 import os
 import re
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
+from types import MappingProxyType
 
 from auto_invest.config.enums import OrderType, Side, StrategyStage
 from auto_invest.config.rules import Action, PriceTrigger, TradingRule
@@ -125,9 +126,26 @@ class IntradayExecutor:
         authority_guard: Callable[[], str | None] | None = None,
         capital_limit: Decimal = Decimal("0"),
         now: Callable[[], datetime] = lambda: datetime.now(UTC),
+        external_holdings: Mapping[str, int] | None = None,
     ):
         if not re.fullmatch("[a-f0-9]{64}", fingerprint) or router.paper_mode:
             raise ValueError("EXECUTOR_CONFIGURATION")
+        if external_holdings is not None and not isinstance(external_holdings, Mapping):
+            raise ValueError("INVALID_EXTERNAL_HOLDINGS")
+        baseline = dict(external_holdings) if external_holdings is not None else {}
+        if any(
+            not isinstance(symbol, str)
+            or not symbol
+            or symbol != symbol.strip().upper()
+            or type(qty) is not int
+            or qty <= 0
+            for symbol, qty in baseline.items()
+        ):
+            raise ValueError("INVALID_EXTERNAL_HOLDINGS")
+        # Explicit versioned baseline, never inferred from broker/local differences.
+        # Copy before freezing so caller mutations cannot silently change ownership.
+        self.external_holdings = MappingProxyType(baseline)
+        self.external_holdings_digest = hashlib.sha256(_json(baseline).encode()).hexdigest()
         self.router, self.conn = router, router.conn
         self.fingerprint, self.observe, self.now = fingerprint, observe, now
         self.guard = authority_guard or (lambda: "INTRADAY_AUTHORIZATION_REQUIRED")
@@ -253,6 +271,9 @@ class IntradayExecutor:
             for r in self.conn.execute("SELECT symbol,qty FROM current_positions")
             if r["qty"]
         }
+        for symbol, qty in self.external_holdings.items():
+            local[symbol] = local.get(symbol, 0) + qty
+        local = {s: q for s, q in local.items() if q}
         if local != {s: q for s, q in view.positions.items() if q}:
             raise ValueError("POSITION_RECONCILIATION_MISMATCH")
         rows = [
@@ -381,7 +402,10 @@ class IntradayExecutor:
                     row["qty"] if row["side"] == "BUY" else -row["qty"]
                 )
         carryover = any(q > 0 and owned.get(s, 0) for s, q in carried.items())
-        if any(view.positions.get(s, 0) < q for s, q in owned.items()):
+        if any(
+            view.positions.get(s, 0) - self.external_holdings.get(s, 0) < q
+            for s, q in owned.items()
+        ):
             raise ValueError("OWNERSHIP_MISMATCH")
         if refusal := self._mark_refusal(self.now()):
             if not orders:
@@ -413,7 +437,17 @@ class IntradayExecutor:
         if previous is None:
             self.conn.execute(
                 "INSERT INTO intraday_execution_claims VALUES(?,?,?)",
-                (day_id, self.fingerprint, _json(dict(nav=str(view.nav), profit=str(profit)))),
+                (
+                    day_id,
+                    self.fingerprint,
+                    _json(
+                        dict(
+                            nav=str(view.nav),
+                            profit=str(profit),
+                            external_holdings_digest=self.external_holdings_digest,
+                        )
+                    ),
+                ),
             )
             starting_nav = view.nav
             starting_profit = profit
@@ -532,7 +566,11 @@ class IntradayExecutor:
                 order_exchange=EXCHANGES[symbol],
             )
             self._event(
-                claim, "ROUTER_RESULT", state=outcome.state, correlation_id=outcome.correlation_id
+                claim,
+                "ROUTER_RESULT",
+                state=outcome.state,
+                correlation_id=outcome.correlation_id,
+                external_holdings_digest=self.external_holdings_digest,
             )
             actions.append(dict(kind=outcome.state, symbol=symbol))
         return dict(status="EXIT_ONLY" if exit_only else "PROCESSED", actions=actions)
