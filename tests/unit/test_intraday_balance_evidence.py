@@ -65,6 +65,8 @@ async def test_three_gets_preserve_bases_signed_amounts_and_never_report_nav():
     for key in ("cash_verified", "nav_verified", "full_account_scope_verified", "live_eligible"):
         assert snapshot[key] is public[key] is False
     assert public["orders_submitted"] == 0
+    assert public["report_audit"]["status"] == "INCOMPLETE"
+    assert public["report_audit"]["invalid_field_count"] > 0
     text = json.dumps(public)
     for private in (
         "601.37",
