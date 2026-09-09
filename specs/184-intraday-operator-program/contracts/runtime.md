@@ -71,8 +71,9 @@ SELF_TEST_PASSED 또는 FAILED와 검사 항목을 반환하며 실패는 종료
 `intraday_runtime.run`은 독립 수집 작업보다 관리 주기를 우선하며 새 DB를 만들지 않는다.
 `execution-status --db PATH`와 `execution-stop --db PATH`는 실주문 운용기의 상태 조회와
 정리 요청이다. 실행 중인 운용기가 없으면 NOT_STARTED/NOT_RUNNING이며 실주문을 시작하지 않는다.
-현재 사용자 `run`은 기존 모의 운용이다. 실제 계좌 공급자·권한 연결이 없는데 이름만 실주문으로
-바꾼 실행 명령은 제공하지 않는다.
+현재 사용자 `run`은 기존 모의 운용이다. `execution-start`는 기존 장부/설정과 내부
+자격 재검사·KIS 인증/시세/봉·실제 운용기를 연결한다. 전체 계좌와 체결 검증이 미완료인
+현 상태는 시작 거절이다. 명령의 존재나 모의 의존성 시험을 실계좌 준비 완료로 표시하지 않는다.
 # 전진 관찰 기록 재계산 계약
 
 `execution.intraday_forward.assess_forward`는 읽기 전용 SQLite 복사에서 각 사건의

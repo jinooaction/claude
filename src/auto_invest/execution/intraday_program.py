@@ -1,7 +1,9 @@
 """Explicit assembly of the intraday program; no authority is issued here."""
 
 import asyncio
+import hashlib
 import inspect
+import json
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, replace
 from decimal import Decimal
@@ -16,6 +18,22 @@ from auto_invest.execution.intraday_selection import ResearchSelection
 from auto_invest.execution.intraday_signals import execution_fingerprint
 from auto_invest.execution.preparation import confirmed_budget
 from auto_invest.market_data.intraday import SYMBOLS
+
+
+def runtime_identity(router, baseline):
+    """Bind the operating approval to the actual ledger, halt path and risk config."""
+    database = router.conn.execute("PRAGMA database_list").fetchone()[2]
+    payload = dict(
+        database=str(Path(database).resolve()), halt_path=str(router.halt_path.resolve()),
+        whitelist=router.whitelist.model_dump(mode="json"),
+        caps=router.caps.model_dump(mode="json"), external_holdings=baseline,
+    )
+    # Whitelist uses sets; JSON list ordering must not change an approval identity.
+    for name, value in payload["whitelist"].items():
+        if isinstance(value, list):
+            payload["whitelist"][name] = sorted(value)
+    raw = json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+    return "sha256:" + hashlib.sha256(raw).hexdigest()
 
 
 @dataclass(frozen=True)
@@ -88,9 +106,11 @@ def build_kis_program(*, router, token_cache, archives, forward_database, regist
     """
     if router.execution_authority is None:
         raise ValueError("PROGRAM_ROUTER_CONFIGURATION_INVALID")
+    baseline = dict(external_holdings or {})
+    runtime_digest = runtime_identity(router, baseline)
     qualification = prepare_qualification(
         archives=archives, forward_database=forward_database, registration=registration,
-        account=router.account_no, capital_limit=capital_limit,
+        account=router.account_no, capital_limit=capital_limit, runtime_digest=runtime_digest,
     )
     if refusal := qualification():
         raise ValueError(refusal)
@@ -98,10 +118,20 @@ def build_kis_program(*, router, token_cache, archives, forward_database, regist
     observer = KISExecutionObserver(
         router.execution_authority, feed.snapshot, token_cache=token_cache, now=now,
     )
+
+    async def refresh_auth():
+        await observer.refresh_credentials()
+        router.access_token = router.execution_authority.access_token
+
+    def qualify():
+        if runtime_identity(router, baseline) != runtime_digest:
+            return "PROGRAM_RUNTIME_CONFIGURATION_CHANGED"
+        return qualification()
+
     program = build_program(
-        selection=qualification.selection, router=router, observe=observer, qualify=qualification,
+        selection=qualification.selection, router=router, observe=observer, qualify=qualify,
         collect_bars=collect_bars, capital_limit=capital_limit,
-        external_holdings=external_holdings, now=now,
+        external_holdings=baseline, now=now, refresh_auth=refresh_auth,
     )
 
     async def approval():
@@ -118,7 +148,7 @@ def build_kis_program(*, router, token_cache, archives, forward_database, regist
 
 def build_program(
     *, selection, router, observe, qualify, collect_bars, capital_limit,
-    external_holdings=None, now,
+    external_holdings=None, now, refresh_auth=None,
 ):
     """Compose trusted in-process dependencies; no user-imported plugin or PASS flag.
 
@@ -177,5 +207,6 @@ def build_program(
     engine = IntradayExecutor(
         router, fingerprint=identity, observe=observe, authority_guard=guard,
         capital_limit=capital_limit, now=now, external_holdings=external_holdings,
+        refresh_auth=refresh_auth,
     )
     return IntradayProgram(engine, selection, collect_bars)

@@ -129,6 +129,7 @@ class IntradayExecutor:
         now: Callable[[], datetime] = lambda: datetime.now(UTC),
         external_holdings: Mapping[str, int] | None = None,
         entry_guard: Callable[[], str | None] | None = None,
+        refresh_auth: Callable[[], Awaitable[None]] | None = None,
     ):
         if not re.fullmatch("[a-f0-9]{64}", fingerprint) or router.paper_mode:
             raise ValueError("EXECUTOR_CONFIGURATION")
@@ -152,6 +153,7 @@ class IntradayExecutor:
         self.fingerprint, self.observe, self.now = fingerprint, observe, now
         self.guard = authority_guard or (lambda: "INTRADAY_AUTHORIZATION_REQUIRED")
         self.entry_guard = entry_guard or (lambda: None)
+        self.refresh_auth = refresh_auth
         _decimal(capital_limit, zero=True)
         self.capital_limit = capital_limit
         self._entry = True
@@ -275,6 +277,10 @@ class IntradayExecutor:
 
     async def _refresh(self, required, now):
         r = self.router
+        if self.refresh_auth is not None:
+            await self.refresh_auth()
+            if refusal := self.guard():
+                raise ValueError(refusal)
         earliest = self.conn.execute(
             "SELECT MIN(submitted_at_utc) FROM orders WHERE state IN "
             "('SUBMITTED','PARTIALLY_FILLED','SUBMISSION_UNKNOWN','SUBMITTING')"

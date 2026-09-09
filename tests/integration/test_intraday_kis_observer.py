@@ -107,7 +107,7 @@ async def test_authentication_error_is_closed_and_does_not_attempt_account_reads
 
     async with httpx.AsyncClient(base_url=REST_URL, transport=httpx.MockTransport(handle)) as http:
         owner = authority(http)
-        with pytest.raises(ObservationError, match="^ACCOUNT_INPUT_UNAVAILABLE$"):
+        with pytest.raises(ObservationError, match="^ACCOUNT_AUTHENTICATION_UNAVAILABLE$"):
             await KISExecutionObserver(owner, lambda: {}, token_cache=tmp_path / "token.json")()
         assert owner.access_token == "expired"
     assert len(calls) == 1

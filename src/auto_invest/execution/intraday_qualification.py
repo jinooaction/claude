@@ -70,6 +70,7 @@ class ExecutionQualification:
     capital_limit: Decimal
     registration_digest: str
     complete_sessions: int
+    runtime_digest: str
 
     def __call__(self):
         """Synchronous last-boundary check; no broker calls or authority issuance."""
@@ -85,6 +86,7 @@ class ExecutionQualification:
                 research_digest=selected.research_digest,
                 dataset_fingerprint=selected.dataset_fingerprint,
                 registration_digest=self.registration_digest,
+                runtime_digest=self.runtime_digest,
                 capital_limit_usd=format(self.capital_limit.normalize(), "f"),
             )
             evidence_fields = {
@@ -110,7 +112,8 @@ class ExecutionQualification:
 
 
 def prepare_qualification(*, archives: Path, forward_database: Path,
-                          registration: Path, account: str, capital_limit: Decimal):
+                          registration: Path, account: str, capital_limit: Decimal,
+                          runtime_digest: str):
     """Run expensive evidence checks once, then return a revocable server guard.
 
     Receipt of a returned object does not imply authorization: call it before
@@ -119,6 +122,9 @@ def prepare_qualification(*, archives: Path, forward_database: Path,
     """
     if not isinstance(account, str) or not re.fullmatch(r"[0-9]{10}", account):
         raise DataError("QUALIFICATION_ACCOUNT_INVALID")
+    if (not isinstance(runtime_digest, str)
+            or not re.fullmatch(r"sha256:[0-9a-f]{64}", runtime_digest)):
+        raise DataError("QUALIFICATION_RUNTIME_INVALID")
     budget = confirmed_budget(
         ROOT / "specs/182-intraday-kis-execution/contracts/confirmed-budget.json",
     )
@@ -151,7 +157,7 @@ def prepare_qualification(*, archives: Path, forward_database: Path,
                 raise DataError("QUALIFICATION_PARITY_NOT_VERIFIED")
         return ExecutionQualification(
             selected, "sha256:" + hashlib.sha256(account.encode()).hexdigest(),
-            capital_limit, digest(record), forward["complete_sessions"],
+            capital_limit, digest(record), forward["complete_sessions"], runtime_digest,
         )
     except DataError:
         raise

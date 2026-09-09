@@ -2,12 +2,13 @@
 
 현재 실행 가능한 것은 **KIS 시세를 이용한 모의 자동 운용, 실제 체결시각이 있는 시세 조회,
 종목·지정가별 구매가능 상한 조회**입니다. 실주문 자동 운용 완성본은 아닙니다.
-실주문 엔진은 있지만 전체 계좌 관측·전략 적격성·운용 권한과의 연결이 남아 있습니다.
+실행 시작 명령은 연결됐지만 전체 계좌 계산·체결 동등성 검증이 미완료라 현재 생산
+시작은 차단됩니다. 아래 명령의 존재를 실거래 준비 완료로 해석하지 않습니다.
 
 프로젝트 폴더에서 `uv sync --locked`로 설치합니다. Alpaca 계정은 사용하지 않습니다.
 사용 계좌는 기존 한국투자 계좌로 확정했습니다. 새 계좌를 만들 필요가 없습니다.
 기존 보유는 단타 매매분과 구분합니다. 실행 엔진의 기준표 연동과 소유 분리 검사는 통과했으며,
-위 실행 명령의 실주문 연결은 아직 남아 있습니다.
+최종 계좌 검증과 적격 조건의 연결은 아직 남아 있습니다.
 기존 운영 환경의 `KIS_APP_KEY`, `KIS_APP_SECRET`를 사용합니다. 구매력 조회에는
 `KIS_ACCOUNT_NO`도 필요합니다. 비밀값을 명령 인수·채팅·저장소에 적지 마세요.
 이 명령은 `.env`를 자동 검색하지 않습니다. 기존 비밀값 관리 환경에서 실행합니다.
@@ -61,6 +62,26 @@ uv run python scripts/intraday_operator.py buying-power --symbol SPY --limit-pri
 30초 안에 모든 종목의 유효 시세가 없으면 종료 코드2로 미완전 상태를 알립니다.
 
 ## 주문 엔진의 상태와 중지 요청
+
+`execution-start`는 같은 장부를 이용한 시작/재개 명령입니다. 다음 경로는 모두 예시입니다.
+이미 사용하는 장부·설정·기준표와 검증 자료를 지정하며, 없는 장부를 자동 생성하지 않습니다.
+이 안내에서 실제 실행을 수행한 것은 아닙니다.
+
+```sh
+uv run python scripts/intraday_operator.py execution-start \
+  --db /path/to/trading.db --rules /path/to/rules.toml \
+  --archives /path/to/archives --forward-db /path/to/forward.db \
+  --registration /path/to/freeze.json --external-holdings /path/to/holdings.toml \
+  --halt-path /path/to/halt.flag --token-cache /path/to/token.json
+```
+
+시작에는 기존 세 가지 KIS 환경값이 모두 필요합니다. 자격 실패는 외부 접속 전에
+종료 코드2로 거절합니다. 현재 체결 동등성 검사가 미구현이므로 실제 자료가 충분해져도
+`QUALIFICATION_PARITY_NOT_VERIFIED`를 승인 파일로 덮을 수 없습니다.
+서버 운영 승인은 장부·중지 파일·위험 설정·보유 기준표 지문에도 묶입니다.
+`Ctrl+C`나 종료 신호는 정리 요청이며, 같은 명령으로 재시작하면 기존 기록을 이어갑니다.
+정리 완료가 확인된 `STOPPED`만 정상 종료 코드0입니다. 오류 후 주문 결과가 불확실하면
+`order_outcome_verified=false`를 표시하며 주문0으로 단정하지 않습니다.
 
 실제 주문 엔진을 호출하는 운용 모듈에 상태 확인과 중지 요청을 추가했습니다.
 아래 명령은 그 운용 모듈이 사용하는 공용 거래 DB의 정확한 경로를 지정해야 합니다.

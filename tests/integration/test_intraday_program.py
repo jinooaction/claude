@@ -3,6 +3,7 @@ from dataclasses import replace
 from datetime import timedelta
 from decimal import Decimal
 from pathlib import Path
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -149,6 +150,14 @@ async def test_kis_assembly_uses_its_router_for_real_reads_and_refuses_unverifie
     from auto_invest.execution.intraday_program import build_kis_program
 
     calls = []
+    synchronized_tokens = []
+
+    async def sync(conn, broker, **kwargs):
+        synchronized_tokens.append(kwargs["access_token"])
+        assert kwargs["access_token"] == "fresh"
+        return SimpleNamespace(error=None, warnings=[])
+
+    monkeypatch.setattr("auto_invest.execution.intraday.sync_fills", sync)
 
     def handle(request):
         calls.append(request)
@@ -196,7 +205,10 @@ async def test_kis_assembly_uses_its_router_for_real_reads_and_refuses_unverifie
             assert not book.orders
             assert program.engine.observe.authority is config["router"].execution_authority
             assert config["router"].execution_authority.access_token == "fresh"
+            config["router"].halt_path = tmp_path / "different-halt"
+            assert program.engine.guard() == "PROGRAM_AUTHORITY_REFUSED"
     assert [r.method for r in calls] == ["POST"] + ["GET"] * 4
+    assert synchronized_tokens == ["fresh"]
 
 
 def configuration(book):

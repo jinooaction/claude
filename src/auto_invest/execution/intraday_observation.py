@@ -157,20 +157,24 @@ class KISExecutionObserver(ExecutionObserver):
 
     async def _read(self):
         async with self._read_lock:
-            self._check_connection()
-            token = await get_valid_token(
-                self.http, base_url=REST_URL,
-                app_key=self.authority.app_key, app_secret=self.authority.app_secret,
-                cache_path=self.token_cache, now=self.now(),
-            )
-            # The authority used for writes must receive the very same token.
-            # Recheck after the await before updating it or reading an account.
-            self._check_connection()
-            self.authority.access_token = token.access_token
+            await self.refresh_credentials()
             result = await observe_account(
-                self.broker, access_token=token.access_token,
+                self.broker, access_token=self.authority.access_token,
                 app_key=self.authority.app_key, app_secret=self.authority.app_secret,
                 account=self.account, now=self.now,
             )
             self._check_connection()
             return result
+
+    async def refresh_credentials(self):
+        self._check_connection()
+        try:
+            token = await asyncio.wait_for(get_valid_token(
+                self.http, base_url=REST_URL,
+                app_key=self.authority.app_key, app_secret=self.authority.app_secret,
+                cache_path=self.token_cache, now=self.now(),
+            ), READ_TIMEOUT_SECONDS)
+        except Exception:
+            raise ObservationError("ACCOUNT_AUTHENTICATION_UNAVAILABLE") from None
+        self._check_connection()
+        self.authority.access_token = token.access_token

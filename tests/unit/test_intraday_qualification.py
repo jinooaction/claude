@@ -48,7 +48,8 @@ def prepared(tmp_path, monkeypatch):
     monkeypatch.setattr(q, "select_research", select)
     monkeypatch.setattr(q, "assess_registered_forward", assess)
     args = dict(archives=tmp_path, forward_database=tmp_path / "forward.db",
-                registration=record, account="1234567801", capital_limit=Decimal("600.00"))
+                registration=record, account="1234567801", capital_limit=Decimal("600.00"),
+                runtime_digest="sha256:" + "d" * 64)
     return args, selection, forward, calls
 
 
@@ -60,6 +61,7 @@ def grant(qualification):
         account_digest=qualification.account_digest, execution_identity=selected.execution_identity,
         research_digest=selected.research_digest, dataset_fingerprint=selected.dataset_fingerprint,
         registration_digest=qualification.registration_digest, capital_limit_usd="600",
+        runtime_digest=qualification.runtime_digest,
         valid_from=(now - timedelta(minutes=1)).isoformat(),
         valid_until=(now + timedelta(minutes=1)).isoformat(),
         broker_execution_parity_digest="sha256:" + "a" * 64,
@@ -111,7 +113,8 @@ def test_current_forward_without_execution_parity_cannot_be_overridden_by_approv
 
 @pytest.mark.parametrize("field", [
     "account_digest", "execution_identity", "research_digest", "dataset_fingerprint",
-    "registration_digest", "capital_limit_usd", "scope", "broker_execution_parity_digest",
+    "registration_digest", "runtime_digest", "capital_limit_usd", "scope",
+    "broker_execution_parity_digest",
     "hardened_canary_digest", "deployment_audit_digest",
 ])
 def test_changed_authorization_identity_is_refused(prepared, monkeypatch, field):

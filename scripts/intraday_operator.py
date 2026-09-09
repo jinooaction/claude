@@ -48,6 +48,24 @@ def runtime_execute():
 
 
 async def execute(args):
+    if args.command == "execution-start":
+        from auto_invest.execution.intraday_launch import launch
+
+        stop = asyncio.Event()
+        loop = asyncio.get_running_loop()
+        signals = (signal.SIGINT, signal.SIGTERM)
+        for sig in signals:
+            loop.add_signal_handler(sig, stop.set)
+        try:
+            return await launch(
+                database=args.db, rules=args.rules, archives=args.archives,
+                forward_database=args.forward_db, registration=args.registration,
+                external_holdings=args.external_holdings, halt_path=args.halt_path,
+                token_cache=args.token_cache, stop_event=stop,
+            )
+        finally:
+            for sig in signals:
+                loop.remove_signal_handler(sig)
     if args.command == "self-test":
         from auto_invest.execution.intraday_selftest import self_test
 
@@ -156,6 +174,10 @@ async def execute(args):
 def parser():
     result = argparse.ArgumentParser(description=__doc__)
     commands = result.add_subparsers(dest="command", required=True)
+    command = commands.add_parser("execution-start", help="기존 계좌·장부의 실행 시작/재개")
+    for name in ("db", "rules", "archives", "forward-db", "registration",
+                 "external-holdings", "halt-path", "token-cache"):
+        command.add_argument("--" + name, type=Path, required=True)
     commands.add_parser("self-test", help="외부 접속 없는 주문 엔진·중지·재시작 자체 시험")
     command = commands.add_parser("history-review", help="보관 자료 결합·연구 검증")
     command.add_argument("--archives", type=Path, required=True)
@@ -184,18 +206,27 @@ def parser():
 
 def main():
     args = parser().parse_args()
+
+    def failed(reason):
+        result = dict(status="FAILED", reason=reason)
+        if args.command == "execution-start":
+            result["order_outcome_verified"] = False
+        else:
+            result["orders_submitted"] = 0
+        return result
+
     try:
         result = asyncio.run(execute(args))
     except (InputError, DataError) as exc:
-        result = dict(status="FAILED", reason=str(exc), orders_submitted=0)
+        result = failed(str(exc))
     except KeyboardInterrupt:
-        result = dict(
-            status="INTERRUPTED" if args.command.startswith("execution-") else "STOPPED",
-            orders_submitted=0,
-        )
+        result = failed("OPERATOR_INTERRUPTED")
+        result["status"] = "INTERRUPTED" if args.command.startswith("execution-") else "STOPPED"
     except Exception:
-        result = dict(status="FAILED", reason="OPERATOR_FAILED", orders_submitted=0)
+        result = failed("OPERATOR_FAILED")
     emit(result)
+    if args.command == "execution-start":
+        return 0 if result.get("phase") == "STOPPED" else 2
     if args.command == "quotes" and not result.get("complete"):
         return 2
     return 2 if result.get("status", result.get("phase")) in {"FAILED", "ALREADY_RUNNING"} else 0
