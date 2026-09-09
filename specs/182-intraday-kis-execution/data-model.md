@@ -61,3 +61,15 @@ US9의 audit_records는 현재잔고의 output1/2/3에서 검증에 필요한 �
 검사명·MATCH/MISMATCH/INCOMPLETE/CHANGED·행 번호·오류 필드를 제공한다.
 최대100개 검사 상세와30개 오입력 상세만 공개하지만 총개수·상태별 개수와 전체 판정은
 모든 행을 반영한다. 실행 NAV 검증과 현금 합산 계약 상태는 별도 필드다.
+
+원화 MISMATCH의 diagnostic은 안정된 USD 전체 자료에서만 제공한다.
+native_sum_relation(EQUAL/DIFFERENT), reported_vs_converted(LOWER/HIGHER),
+within_one_cent_per_row_fx_bound(bool), cause_verified(false)로 구성된다.
+센트 범위는 각 행 금액 정밀도에 대한 가설이며 가격 오차·회계 기준·실제 허용 오차를
+확정하지 않는다. 실제 차액과 환율은 공개하지 않으며 원래 판정은 그대로 유지한다.
+
+US10 account_assets는 SETTLEMENT_ACCOUNT_ASSET_TABLE 기준의 별도 공개 보고다.
+공식20/17행을 검증한 뒤 합계 제외 category_count는19/16이며, nonzero_category_count는
+금액이 하나라도0이 아닌 분류 수다. 같은 열의 분류 합5개·요약 순자산 대조1개·안정성1개를
+MATCH/MISMATCH/CHANGED로 표시한다. 원본 금액은 Decimal 메모리에만 보존한다.
+reported_category_table_complete는 이 보고서의 분류 형식 완료이며 장중 NAV 검증이 아니다.
