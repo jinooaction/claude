@@ -62,20 +62,26 @@ def _audit(before, after):
             equal = sum((row[field] for row in categories), Decimal(0)) == total[field]
             checks.append(dict(check="category_sum_" + field,
                                status="MATCH" if equal else "MISMATCH"))
-        checks.append(dict(
+        # No official identity connects this table's real_nass_amt with output2.
+        # Equal numbers would not establish that identity either.
+        comparison = dict(
             check="table_net_assets_vs_summary",
-            status="MATCH" if total["real_nass_amt"] == after["summary"]["nass_tot_amt"]
-            else "MISMATCH",
-        ))
+            relation=("UNAVAILABLE" if before != after else
+                      "EQUAL" if total["real_nass_amt"] == after["summary"]["nass_tot_amt"]
+                      else "DIFFERENT"),
+            equivalence_verified=False,
+            reason="REPORT_CHANGED" if before != after else "AGGREGATION_CONTRACT_UNVERIFIED",
+        )
     statuses = {check["status"] for check in checks}
     return dict(
-        schema_version=1,
+        schema_version=2,
         status=next((s for s in ("CHANGED", "MISMATCH") if s in statuses), "MATCH"),
         reporting_basis="SETTLEMENT_ACCOUNT_ASSET_TABLE",
         reported_category_table_complete=True,
         category_count=len(categories),
         nonzero_category_count=sum(any(row[f] != 0 for f in TABLE_FIELDS) for row in categories),
         checks=checks,
+        comparisons=[comparison],
         execution_nav_verified=False,
         execution_nav_reasons=["SETTLEMENT_BASIS_NOT_INTRADAY",
                                "BROKER_VALUATION_TIMESTAMP_NOT_PROVIDED",

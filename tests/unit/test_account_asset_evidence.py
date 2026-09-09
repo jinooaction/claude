@@ -63,7 +63,7 @@ async def test_reads_complete_official_tables_and_sums_with_no_execution_authori
     assert result["status"] == "MATCH"
     assert result["category_count"] == count
     assert result["nonzero_category_count"] == 1
-    assert len(result["checks"]) == 7
+    assert len(result["checks"]) == 6
     assert result["execution_nav_verified"] is False
     assert result["orders_submitted"] == 0
     public = json.dumps(result)
@@ -83,11 +83,18 @@ async def test_every_category_is_included_in_its_column_total(field):
 
 
 @pytest.mark.asyncio
-async def test_summary_net_assets_are_independently_compared():
+@pytest.mark.parametrize("amount,relation", [("111", "DIFFERENT"), ("110", "EQUAL")])
+async def test_unknown_cross_summary_identity_cannot_fail_or_certify_the_table(amount, relation):
     body = payload()
-    body["output2"]["nass_tot_amt"] = "111"
+    body["output2"]["nass_tot_amt"] = amount
     result = await read(lambda r: httpx.Response(200, json=body, headers={"tr_cont": "E"}))
-    assert result["checks"][-1]["status"] == "MISMATCH"
+    assert result["status"] == "MATCH"
+    assert result["schema_version"] == 2
+    assert result["comparisons"] == [dict(
+        check="table_net_assets_vs_summary", relation=relation,
+        equivalence_verified=False, reason="AGGREGATION_CONTRACT_UNVERIFIED",
+    )]
+    assert result["execution_nav_verified"] is False
 
 
 @pytest.mark.asyncio
@@ -105,7 +112,10 @@ async def test_changed_asset_or_cash_fields_are_not_a_stable_account(part, field
             row[field] = "112"
         return httpx.Response(200, json=body, headers={"tr_cont": "D"})
 
-    assert (await read(handle))["status"] == "CHANGED"
+    result = await read(handle)
+    assert result["status"] == "CHANGED"
+    assert result["comparisons"][0]["relation"] == "UNAVAILABLE"
+    assert result["comparisons"][0]["reason"] == "REPORT_CHANGED"
 
 
 @pytest.mark.asyncio
