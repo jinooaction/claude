@@ -62,3 +62,8 @@ US10부터 같은 balance-check 명령은 기존 해외 세 GET 후 전체 자�
 별도 account_assets 결과를 함께 출력한다. 각 관측 배치는 독립30초 제한이며 다른 기준을
 동일 시점 NAV로 합산하지 않는다. 전체 자산 오류도 종료2/FAILED이며 부분 성공으로
 가리지 않는다. 기존 서버 읽기 검사에는 test_live_kis_account_asset_table을 추가한다.
+
+US11의 report_audit/account_assets는 schema_version=2다. checks와 status는 보고서
+내부 검증이며 별도 comparisons는 서로 다른 출력의 숫자 관계일 뿐이다. 소비자는
+DIFFERENT를 계좌 대사 실패로, EQUAL을 실시간 NAV 인증으로 바꾸면 안 된다. 미지원
+버전을 임의 해석하지 않는다. 공개 GET 횟수·금액 비노출·실행권한 부재는 유지한다.

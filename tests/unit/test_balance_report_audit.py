@@ -30,6 +30,10 @@ def checks(value):
     return {r["check"]: r for r in value["checks"]}
 
 
+def comparisons(value):
+    return {r["check"]: r for r in value["comparisons"]}
+
+
 def test_fractional_otc_rows_and_signed_cash_are_audited_without_execution_promotion():
     data = report()
     result = audit_report(data, copy.deepcopy(data))
@@ -67,7 +71,7 @@ def test_duplicate_positions_are_not_deduplicated_or_double_counted():
     result = audit_report(data, copy.deepcopy(data))
     assert result["status"] == "INCOMPLETE"
     assert checks(result)["positions_unique"]["status"] == "INCOMPLETE"
-    assert checks(result)["valuation_krw"]["status"] == "INCOMPLETE"
+    assert comparisons(result)["valuation_krw"]["relation"] == "UNAVAILABLE"
 
 
 def test_duplicate_summary_and_currency_rows_remain_ambiguous():
@@ -96,8 +100,8 @@ def test_rounding_uncertainty_is_reported_not_silently_accepted():
     data = report()
     data["output3"][0]["evlu_amt_smtl"] = "32500.4"
     result = audit_report(data, copy.deepcopy(data))
-    assert checks(result)["valuation_krw"]["status"] == "INCOMPLETE"
-    assert checks(result)["valuation_krw"]["reason"] == "ROUNDING_DIFFERENCE"
+    assert comparisons(result)["valuation_krw"]["relation"] == "DIFFERENT"
+    assert checks(result)["summary_profit"]["reason"] == "ROUNDING_DIFFERENCE"
     assert result["status"] != "MATCH"
 
 
@@ -106,7 +110,7 @@ def test_unconfirmed_fx_unit_does_not_assume_one_yen_or_dong():
     data["output1"][0]["buy_crcy_cd"] = "JPY"
     data["output2"][0]["crcy_cd"] = "JPY"
     result = audit_report(data, copy.deepcopy(data))
-    assert checks(result)["valuation_krw"]["reason"] == "FX_UNIT_UNVERIFIED"
+    assert comparisons(result)["valuation_krw"]["reason"] == "FX_UNIT_UNVERIFIED"
     assert result["status"] == "INCOMPLETE"
 
 
@@ -166,8 +170,9 @@ def test_mismatch_diagnostics_separate_units_and_precision_without_acceptance(
     data = report()
     data["output3"][0]["evlu_amt_smtl"] = reported
     result = audit_report(data, data)
-    check = checks(result)["valuation_krw"]
-    assert check["status"] == "MISMATCH"
+    check = comparisons(result)["valuation_krw"]
+    assert check["relation"] == "DIFFERENT"
+    assert check["equivalence_verified"] is False
     assert check["diagnostic"] == dict(
         native_sum_relation=native, reported_vs_converted=direction,
         within_one_cent_per_row_fx_bound=within, cause_verified=False,
@@ -192,4 +197,19 @@ def test_ambiguous_report_does_not_produce_mismatch_cause_diagnostics(case):
     else:
         data["output1"][0]["buy_crcy_cd"] = "JPY"
         before = copy.deepcopy(data)
-    assert all("diagnostic" not in c for c in audit_report(before, data)["checks"])
+    assert all("diagnostic" not in c for c in audit_report(before, data)["comparisons"])
+
+
+@pytest.mark.parametrize("multiplier", [1, 2])
+def test_equal_or_different_cross_output_sums_do_not_certify_an_aggregation_formula(multiplier):
+    data = report()
+    for field in ("pchs_amt_smtl", "evlu_amt_smtl", "evlu_pfls_amt_smtl"):
+        data["output3"][0][field] = str(int(data["output3"][0][field]) * multiplier)
+    result = audit_report(data, data)
+    assert result["schema_version"] == 2
+    assert result["status"] == "MATCH"
+    assert all(c["status"] == "MATCH" for c in result["checks"])
+    assert len(result["comparisons"]) == 3
+    assert all(c["relation"] == ("EQUAL" if multiplier == 1 else "DIFFERENT")
+               and c["equivalence_verified"] is False for c in result["comparisons"])
+    assert result["execution_nav_verified"] is False

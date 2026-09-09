@@ -156,6 +156,11 @@ async def test_live_kis_intraday_balance_evidence(kis_token_bundle: dict) -> Non
         if isinstance(exc, AccountReadError) and exc.shape:
             print("Balance evidence shape: " + json.dumps(exc.shape, sort_keys=True))
         pytest.fail("balance evidence: " + code, pytrace=False)
+    audit = snapshot["report_audit"]
+    assert audit["schema_version"] == 2
+    assert len(audit["comparisons"]) == 3
+    assert all(c["equivalence_verified"] is False for c in audit["comparisons"])
+    assert audit["execution_nav_verified"] is False
     print(
         "\nDirect balance evidence: "
         + json.dumps(public_balance_evidence(snapshot), sort_keys=True)
@@ -180,6 +185,10 @@ async def test_live_kis_account_asset_table(kis_token_bundle: dict) -> None:
         if isinstance(exc, AccountReadError) and exc.shape:
             print("Account asset shape: " + json.dumps(exc.shape, sort_keys=True))
         pytest.fail("account asset table: " + code, pytrace=False)
+    assert result["schema_version"] == 2
+    assert len(result["checks"]) == 6 and len(result["comparisons"]) == 1
+    assert result["comparisons"][0]["equivalence_verified"] is False
+    assert result["execution_nav_verified"] is False
     print("\nAccount asset evidence: " + json.dumps(result, sort_keys=True))
 
 

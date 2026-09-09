@@ -250,6 +250,24 @@ ROUNDING_DIFFERENCE로 별도 검사 불가다. USD 외 통화는 환율 호가 
 만들 수 있다. 같은 자료에서 환산 전 합과 일치하는지, 차이가 각 행 1센트 환산 합
 이내인지 구분하되 원래 불일치와 원인 미확정을 유지한다. 새 GET이나 원문 로그는 없다.
 
+## US11 집계 비교 가정 재검토 — 2026-09-09
+
+공식 CTRP6548R 상세의 real_nass_amt(004.005)와 nass_tot_amt(005.002)는
+이름 이외의 계산식 설명이 없다. 같은 output2에 tot_asst_amt도 따로 있으며,
+pchs_amt_smtl/evlu_amt_smtl의 설명은 유가매입/유가평가금액이다. 공식 예제는
+output1을 HTS0891 결제기준 자산비중 표로 설명할 뿐 두 순자산의 동일성을 주장하지 않는다.
+따라서 기존 수치 차이는 유효한 관측이나 등식 검증 실패로 해석할 근거는 부족하다.
+
+해외 현재잔고도 원화 환산 필드라는 근거는 있지만 전체 행 합과 요약의 정확한 집계 범위,
+반영 시점, 반올림 계약까지 제공하지 않는다. 앞선3개 차이를 증권사 오류로 확정할 수 없다.
+실제 원인을 알아냈다고 주장하거나 우연히 맞는 공식을 선택하지 않고, 보고서 내부 검사와
+미입증 교차 출력 비교를 구분한다. 현금 계약과 실행 NAV를 새로 인증하는 변경은 아니다.
+
+출처:
+- https://apiportal.koreainvestment.com/api/apis/public/detail?accessUrl=%2Fuapi%2Fdomestic-stock%2Fv1%2Ftrading%2Finquire-account-balance
+- https://github.com/koreainvestment/open-trading-api/blob/main/examples_llm/domestic_stock/inquire_account_balance/inquire_account_balance.py
+- US9에 기록한 공식 CTRP6504R 필드·정산 기준.
+
 ## US10 국내외 전체 자산 분류를 위한 별도 공식 API
 
 CTRP6548R `/uapi/domestic-stock/v1/trading/inquire-account-balance`는 해외잔고와
