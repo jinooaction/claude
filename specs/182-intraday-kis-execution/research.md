@@ -268,6 +268,10 @@ output1을 HTS0891 결제기준 자산비중 표로 설명할 뿐 두 순자산�
 - https://github.com/koreainvestment/open-trading-api/blob/main/examples_llm/domestic_stock/inquire_account_balance/inquire_account_balance.py
 - US9에 기록한 공식 CTRP6504R 필드·정산 기준.
 
+버전2 실제34307196553(main6e66d04)은10개 시험 통과, 자산표의 내부6개 검사 MATCH,
+해외 내부15 MATCH/1 INCOMPLETE(요약 손익1원 이내 차이), 교차 비교4개 DIFFERENT다.
+기존 숫자 차이를 유지하면서 검증된 등식과 가설을 분리한 결과다. 현금/NAV 인증은 아니다.
+
 ## US10 국내외 전체 자산 분류를 위한 별도 공식 API
 
 CTRP6548R `/uapi/domestic-stock/v1/trading/inquire-account-balance`는 해외잔고와
