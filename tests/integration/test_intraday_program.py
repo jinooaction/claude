@@ -3,6 +3,7 @@ from datetime import timedelta
 from decimal import Decimal
 from pathlib import Path
 
+import httpx
 import pytest
 
 from auto_invest.analytics.intraday_paper_challenger import (
@@ -20,6 +21,45 @@ from auto_invest.market_data.intraday import SYMBOLS, iso
 
 PROVIDER = "kis-nasdaq-partial-unadjusted"
 PREREG = Path("specs/177-intraday-paper-challenger/contracts/intraday-preregistration.json")
+
+
+@pytest.mark.asyncio
+async def test_kis_assembly_uses_its_router_for_real_reads_and_refuses_unverified_scope(tmp_path):
+    from auto_invest.broker.intraday_inputs import REST_URL
+    from auto_invest.execution.intraday_program import build_kis_program
+
+    calls = []
+
+    def handle(request):
+        calls.append(request)
+        if request.url.path == "/oauth2/tokenP":
+            return httpx.Response(200, json=dict(access_token="fresh", expires_in=86400))
+        assert request.method == "GET"
+        rows = {
+            "inquire-balance": dict(output1=[], ctx_area_fk200="", ctx_area_nk200=""),
+            "inquire-nccs": dict(output=[], ctx_area_fk200="", ctx_area_nk200=""),
+            "inquire-psamount": dict(output={"ovrs_ord_psbl_amt": "99999"}),
+            "foreign-margin": dict(output=[]),
+        }
+        return httpx.Response(200, json=dict(rt_cd="0", **rows[request.url.path.rsplit("/", 1)[1]]))
+
+    async with rehearsal_session(tmp_path / "simulation.db") as book:
+        config = configuration(book)
+        config.pop("observe")
+        async with httpx.AsyncClient(
+            base_url=REST_URL, transport=httpx.MockTransport(handle),
+        ) as http:
+            config["router"].broker._client = http
+            program = build_kis_program(
+                **config, quote_snapshot=lambda: {}, token_cache=tmp_path / "cache/token.json",
+            )
+            assert calls == []
+            result = await program.engine.manage()
+            assert result == dict(status="HALTED", reason="ACCOUNT_SCOPE_UNVERIFIED", actions=[])
+            assert not book.orders
+            assert program.engine.observe.authority is config["router"].execution_authority
+            assert config["router"].execution_authority.access_token == "fresh"
+    assert [r.method for r in calls] == ["POST"] + ["GET"] * 4
 
 
 def configuration(book):

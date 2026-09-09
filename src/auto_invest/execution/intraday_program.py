@@ -6,6 +6,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from auto_invest.execution.intraday import IntradayExecutor
+from auto_invest.execution.intraday_observation import KISExecutionObserver
 from auto_invest.execution.intraday_runtime import run
 from auto_invest.execution.intraday_selection import ResearchSelection
 from auto_invest.execution.intraday_signals import execution_fingerprint
@@ -24,6 +25,25 @@ class IntradayProgram:
             self.engine, candidate=self.selection.candidate, provider=self.selection.provider,
             collect_bars=self.collect_bars, **runtime_options,
         )
+
+
+def build_kis_program(*, selection, router, quote_snapshot, token_cache, qualify,
+                      collect_bars, capital_limit, external_holdings=None, now):
+    """Bind real authenticated account reads to the same router's authority.
+
+    Construction performs no network access or broker writes. Account valuation
+    and qualification still have to pass before the executor can submit orders.
+    """
+    if router.execution_authority is None:
+        raise ValueError("PROGRAM_ROUTER_CONFIGURATION_INVALID")
+    observer = KISExecutionObserver(
+        router.execution_authority, quote_snapshot, token_cache=token_cache, now=now,
+    )
+    return build_program(
+        selection=selection, router=router, observe=observer, qualify=qualify,
+        collect_bars=collect_bars, capital_limit=capital_limit,
+        external_holdings=external_holdings, now=now,
+    )
 
 
 def build_program(

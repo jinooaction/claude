@@ -9,8 +9,11 @@ import re
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from auto_invest.broker.intraday_inputs import EXCHANGES, PREFIXES, SourceQuote
+from auto_invest.broker.auth import get_valid_token
+from auto_invest.broker.intraday_account import observe_account
+from auto_invest.broker.intraday_inputs import EXCHANGES, PREFIXES, REST_URL, SourceQuote
 from auto_invest.execution.intraday import Observation, validate_observation
+from auto_invest.logging_config import register_secret
 
 READ_TIMEOUT_SECONDS = 30
 
@@ -118,3 +121,56 @@ class ExecutionObserver:
             raise
         except Exception:
             raise ObservationError("ACCOUNT_INPUT_UNAVAILABLE") from None
+
+
+class KISExecutionObserver(ExecutionObserver):
+    """Read using the executor's own account, client and refreshed credentials.
+
+    Authentication may POST to tokenP; all account requests are GET. Successful
+    authentication never changes the account reader's verification conclusions.
+    """
+
+    def __init__(self, authority, quote_snapshot, *, token_cache, now=lambda: datetime.now(UTC)):
+        self.authority = authority
+        self.account = authority.account_no
+        self.broker = authority.broker
+        self.http = self.broker._client
+        self.token_cache = token_cache
+        self._credential_identity = (authority.app_key, authority.app_secret)
+        self._read_lock = asyncio.Lock()
+        self._check_connection()
+        for value in (self.account, *self._credential_identity):
+            register_secret(value)
+        super().__init__(self._read, quote_snapshot, now=now)
+
+    def _check_connection(self):
+        if (self.authority.account_no != self.account
+                or self.authority.broker is not self.broker
+                or self.broker._client is not self.http
+                or (self.authority.app_key, self.authority.app_secret)
+                != self._credential_identity
+                or str(self.http.base_url).rstrip("/") != REST_URL.rstrip("/")
+                or self.http.follow_redirects
+                or not re.fullmatch(r"[0-9]{10}", self.account)
+                or any(not isinstance(v, str) or not v for v in self._credential_identity)):
+            raise ObservationError("ACCOUNT_CONNECTION_INVALID")
+
+    async def _read(self):
+        async with self._read_lock:
+            self._check_connection()
+            token = await get_valid_token(
+                self.http, base_url=REST_URL,
+                app_key=self.authority.app_key, app_secret=self.authority.app_secret,
+                cache_path=self.token_cache, now=self.now(),
+            )
+            # The authority used for writes must receive the very same token.
+            # Recheck after the await before updating it or reading an account.
+            self._check_connection()
+            self.authority.access_token = token.access_token
+            result = await observe_account(
+                self.broker, access_token=token.access_token,
+                app_key=self.authority.app_key, app_secret=self.authority.app_secret,
+                account=self.account, now=self.now,
+            )
+            self._check_connection()
+            return result
