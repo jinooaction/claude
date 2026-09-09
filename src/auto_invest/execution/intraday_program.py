@@ -1,10 +1,13 @@
 """Explicit assembly of the intraday program; no authority is issued here."""
 
+import asyncio
 import inspect
-from dataclasses import dataclass
+from contextlib import asynccontextmanager, suppress
+from dataclasses import dataclass, replace
 from decimal import Decimal
 from pathlib import Path
 
+from auto_invest.broker.intraday_inputs import StrictQuoteFeed, approval_key
 from auto_invest.execution.intraday import IntradayExecutor
 from auto_invest.execution.intraday_observation import KISExecutionObserver
 from auto_invest.execution.intraday_runtime import run
@@ -19,15 +22,63 @@ class IntradayProgram:
     engine: IntradayExecutor
     selection: ResearchSelection
     collect_bars: object
+    quote_feed: StrictQuoteFeed | None = None
+    quote_approval: object = None
 
     async def run(self, **runtime_options):
-        return await run(
-            self.engine, candidate=self.selection.candidate, provider=self.selection.provider,
-            collect_bars=self.collect_bars, **runtime_options,
-        )
+        async def execute(**resources):
+            return await run(
+                self.engine, candidate=self.selection.candidate, provider=self.selection.provider,
+                collect_bars=self.collect_bars, **runtime_options, **resources,
+            )
+
+        if self.quote_feed is None:
+            return await execute()
+        if not callable(self.quote_approval):
+            raise ValueError("PROGRAM_QUOTE_APPROVAL_REQUIRED")
+        terminal = False
+        started = False
+
+        async def serve():
+            nonlocal terminal
+            try:
+                await self.quote_feed.serve(approval=self.quote_approval)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                # Broker response text and authentication details stay private.
+                pass
+            finally:
+                terminal = True
+
+        @asynccontextmanager
+        async def inputs():
+            nonlocal started
+            previous = self.engine.entry_guard
+
+            def entry_guard():
+                if terminal or set(self.quote_feed.snapshot()) != set(SYMBOLS):
+                    return "QUOTE_STREAM_UNAVAILABLE"
+                return previous()
+
+            self.engine.entry_guard = entry_guard
+            started = True
+            quotes = asyncio.create_task(serve())
+            try:
+                yield
+            finally:
+                quotes.cancel()
+                try:
+                    with suppress(asyncio.CancelledError):
+                        await quotes
+                finally:
+                    self.engine.entry_guard = previous
+
+        result = await execute(resource_manager=inputs())
+        return dict(result, quote_state="CLOSED" if started else "NOT_STARTED")
 
 
-def build_kis_program(*, selection, router, quote_snapshot, token_cache, qualify,
+def build_kis_program(*, selection, router, token_cache, qualify,
                       collect_bars, capital_limit, external_holdings=None, now):
     """Bind real authenticated account reads to the same router's authority.
 
@@ -36,14 +87,26 @@ def build_kis_program(*, selection, router, quote_snapshot, token_cache, qualify
     """
     if router.execution_authority is None:
         raise ValueError("PROGRAM_ROUTER_CONFIGURATION_INVALID")
+    feed = StrictQuoteFeed(now=now)
     observer = KISExecutionObserver(
-        router.execution_authority, quote_snapshot, token_cache=token_cache, now=now,
+        router.execution_authority, feed.snapshot, token_cache=token_cache, now=now,
     )
-    return build_program(
+    program = build_program(
         selection=selection, router=router, observe=observer, qualify=qualify,
         collect_bars=collect_bars, capital_limit=capital_limit,
         external_holdings=external_holdings, now=now,
     )
+
+    async def approval():
+        observer._check_connection()
+        key = await approval_key(
+            observer.broker, app_key=observer.authority.app_key,
+            app_secret=observer.authority.app_secret,
+        )
+        observer._check_connection()
+        return key
+
+    return replace(program, quote_feed=feed, quote_approval=approval)
 
 
 def build_program(

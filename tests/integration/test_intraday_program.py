@@ -1,3 +1,4 @@
+import asyncio
 from dataclasses import replace
 from datetime import timedelta
 from decimal import Decimal
@@ -21,6 +22,123 @@ from auto_invest.market_data.intraday import SYMBOLS, iso
 
 PROVIDER = "kis-nasdaq-partial-unadjusted"
 PREREG = Path("specs/177-intraday-paper-challenger/contracts/intraday-preregistration.json")
+
+
+class LifecycleFeed:
+    def __init__(self, *, fail=False):
+        self.started = asyncio.Event()
+        self.closed = asyncio.Event()
+        self.calls = 0
+        self.fail = fail
+
+    def snapshot(self):
+        # Lifecycle fixture deliberately retains keys after failure: terminal
+        # task status must prevent entry independently of a stale cache.
+        return dict.fromkeys(SYMBOLS)
+
+    async def serve(self, *, approval):
+        self.calls += 1
+        self.started.set()
+        try:
+            await approval()
+            if self.fail:
+                raise RuntimeError("private credential details")
+            await asyncio.Event().wait()
+        finally:
+            self.closed.set()
+
+
+async def offline_approval():
+    return "offline"
+
+
+@pytest.mark.asyncio
+async def test_program_owns_quotes_only_after_database_lock_and_closes_on_stop(tmp_path):
+    async with rehearsal_session(tmp_path / "simulation.db") as book:
+        config = configuration(book)
+
+        async def collect():
+            await asyncio.Event().wait()
+
+        config["collect_bars"] = collect
+        feed = LifecycleFeed()
+        program = replace(build_program(**config), quote_feed=feed, quote_approval=offline_approval)
+        original = program.engine.entry_guard
+        stop = asyncio.Event()
+        task = asyncio.create_task(program.run(stop_event=stop, poll_seconds=.01))
+        try:
+            await asyncio.wait_for(feed.started.wait(), 2)
+            guard = program.engine.entry_guard
+            duplicate = await program.run(max_cycles=1)
+            assert duplicate["phase"] == "ALREADY_RUNNING"
+            assert duplicate["quote_state"] == "NOT_STARTED"
+            assert feed.calls == 1
+            assert program.engine.entry_guard is guard
+            stop.set()
+            done = await asyncio.wait_for(task, 2)
+            assert done["phase"] == "STOPPED"
+            assert done["quote_state"] == "CLOSED"
+            assert feed.closed.is_set()
+            assert program.engine.entry_guard is original
+            assert not book.orders
+        finally:
+            if not task.done():
+                task.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await task
+
+
+@pytest.mark.asyncio
+async def test_terminal_quote_task_blocks_entry_even_if_cache_retains_symbols(tmp_path):
+    async with rehearsal_session(tmp_path / "simulation.db") as book:
+        config = configuration(book)
+
+        async def collect():
+            await asyncio.Event().wait()
+
+        config["collect_bars"] = collect
+        feed = LifecycleFeed(fail=True)
+        program = replace(build_program(**config), quote_feed=feed, quote_approval=offline_approval)
+        stop = asyncio.Event()
+        task = asyncio.create_task(program.run(stop_event=stop, poll_seconds=.01))
+        try:
+            await asyncio.wait_for(feed.closed.wait(), 2)
+            assert program.engine.entry_guard() == "QUOTE_STREAM_UNAVAILABLE"
+            assert not task.done()  # Existing order management still owns the ledger.
+            stop.set()
+            result = await asyncio.wait_for(task, 2)
+            assert "private" not in str(result)
+            assert result["phase"] == "STOPPED"
+            assert not book.orders
+        finally:
+            if not task.done():
+                task.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await task
+
+
+@pytest.mark.asyncio
+async def test_cancellation_closes_quote_task_and_preserves_drain_for_restart(tmp_path):
+    async with rehearsal_session(tmp_path / "simulation.db") as book:
+        config = configuration(book)
+
+        async def collect():
+            await asyncio.Event().wait()
+
+        config["collect_bars"] = collect
+        feed = LifecycleFeed()
+        program = replace(build_program(**config), quote_feed=feed, quote_approval=offline_approval)
+        original = program.engine.entry_guard
+        task = asyncio.create_task(program.run(poll_seconds=.01))
+        await asyncio.wait_for(feed.started.wait(), 2)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert feed.closed.is_set()
+        assert program.engine.entry_guard is original
+        assert program.engine.drain_requested()
+        assert (await program.run(max_cycles=1))["phase"] == "STOPPED"
+        assert not program.engine.drain_requested()
 
 
 @pytest.mark.asyncio
@@ -51,7 +169,7 @@ async def test_kis_assembly_uses_its_router_for_real_reads_and_refuses_unverifie
         ) as http:
             config["router"].broker._client = http
             program = build_kis_program(
-                **config, quote_snapshot=lambda: {}, token_cache=tmp_path / "cache/token.json",
+                **config, token_cache=tmp_path / "cache/token.json",
             )
             assert calls == []
             result = await program.engine.manage()

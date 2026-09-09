@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import os
-from contextlib import suppress
+from contextlib import AsyncExitStack, suppress
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
@@ -66,6 +66,7 @@ async def run(
     collection_timeout: float = 45,
     max_cycles: int = 0,
     stop_event: asyncio.Event | None = None,
+    resource_manager=None,
 ) -> dict:
     """Use an already configured, authorized engine and the common trading DB.
 
@@ -162,7 +163,10 @@ async def run(
     )
     collector = None
     consumed = 0
+    resources = AsyncExitStack()
     try:
+        if resource_manager is not None:
+            await resources.enter_async_context(resource_manager)
         while True:
             if stopping():
                 engine.request_drain()
@@ -240,5 +244,8 @@ async def run(
                 with suppress(asyncio.CancelledError):
                     await collector
         finally:
-            engine.entry_guard = previous_entry_guard
-            owner.__exit__(None, None, None)
+            try:
+                await resources.aclose()
+            finally:
+                engine.entry_guard = previous_entry_guard
+                owner.__exit__(None, None, None)
