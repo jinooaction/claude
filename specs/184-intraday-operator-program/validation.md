@@ -2,9 +2,9 @@
 
 ## 최신 전체 검증 — 2026-09-10
 
-검증한 코드 `89eea0e82eb21bfbeb1e492641fe895e975aaa69`:
+검증한 코드 `4c989eb` (전략 서명과 공통 가격 계산 포함):
 
-- `uv run pytest -q`: **3969 passed, 12 skipped**, 774.75초, 종료0.
+- `uv run pytest -q`: **3988 passed, 12 skipped**, 786.05초, 종료0.
 - 제외: 명시적 `KIS_LIVE_TEST=1`이 필요한 실제 KIS 연동11개와 이미 가동된 사다리에
   적용되지 않는 가동 전 상태 시험1개. 실제 계좌/주문 검증을 통과한 것으로 해석하지 않는다.
 - `uv run ruff check src tests scripts/intraday_operator.py`: 통과.
