@@ -13,6 +13,7 @@ from auto_invest.broker.auth import get_valid_token
 from auto_invest.broker.intraday_account import observe_account
 from auto_invest.broker.intraday_inputs import EXCHANGES, PREFIXES, REST_URL, SourceQuote
 from auto_invest.execution.intraday import Observation, validate_observation
+from auto_invest.execution.intraday_cash_ledger import CashLedgerError, compute_net_cash
 from auto_invest.logging_config import register_secret
 
 READ_TIMEOUT_SECONDS = 30
@@ -70,6 +71,14 @@ def build_observation(account, quotes, *, now):
         nav = _amount(account.get("nav"))
     elif basis == "net_cash_and_listed_equities":
         net_cash = _amount(account.get("net_cash"), signed=True)
+    elif basis == "cash_ledger_and_listed_equities":
+        try:
+            net_cash = compute_net_cash(
+                account.get("cash_ledger"), observation_started_at=started,
+                observation_completed_at=completed,
+            )
+        except CashLedgerError as exc:
+            raise ObservationError(str(exc)) from None
     else:
         raise ObservationError("ACCOUNT_VALUATION_BASIS_INVALID")
     positions, sellable = {}, {}
@@ -106,7 +115,7 @@ def build_observation(account, quotes, *, now):
         if not source <= received <= clock:
             raise ObservationError("ACCOUNT_QUOTE_TIME_INVALID")
         marks[symbol], times[symbol] = quote.last, source
-    if basis == "net_cash_and_listed_equities":
+    if basis in {"net_cash_and_listed_equities", "cash_ledger_and_listed_equities"}:
         held = {symbol for symbol, qty in positions.items() if qty}
         if len(held) > 10000 or any(positions[symbol] > 10**18 for symbol in held):
             raise ObservationError("ACCOUNT_POSITIONS_INVALID")

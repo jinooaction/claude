@@ -84,6 +84,12 @@ dmst_frcr_fee1/frcr_fee1이며 금액/수량은 정확한 소수 문자열이다
 중복될 수 있어 합산하지 않는다. pagination_complete는 요청 범위의 페이지 끝을 뜻하며
 계좌 전체·현금·개별 체결 비용의 검증을 뜻하지 않는다. 공개 보고서는 행/페이지 수만 낸다.
 
+CashLedger는 내부 공급자의 USD 순현금 opening/closing 스냅샷과 원본 events다.
+각 스냅샷은 원본 sequence, 시간대 포함 at, net_cash를 갖는다. 사건은 고유 id,
+원본 sequence/at/currency/kind와 net_cash_delta/net_cash_after를 보존한다.
+명세 정산에 포함된 비용을 추가 FEE로 중복 생성하지 않는다. 이 값의 산술 일치는
+원본 계좌 범위 인증이 아니며 검증 플래그를 발급하지 않는다.
+
 ArchiveReview는 실제 session_count, required_sessions(756), missing_sessions,
 missing_calendar_sessions, incomplete_archive_count, provider, synthetic,
 dataset_fingerprint, 기존177 decision으로 구성한다. observation_type은

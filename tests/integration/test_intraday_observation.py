@@ -54,6 +54,47 @@ def test_buying_power_cannot_replace_execution_cash():
         build_observation(raw, quotes(), now=NOW)
 
 
+def ledger_account():
+    raw = account(positions={"SPY": dict(quantity=2, sellable_quantity=2)})
+    raw.update(valuation_basis="cash_ledger_and_listed_equities", net_cash="99999",
+               nav="99999", nav_verified=False, execution_cash="559.9",
+               cash_ledger=dict(
+                   currency="USD",
+                   opening=dict(sequence=5, at=NOW.isoformat(), net_cash="600"),
+                   closing=dict(sequence=6, at=NOW.isoformat(), net_cash="559.9"),
+                   events=[dict(id="original-6", sequence=6, at=NOW.isoformat(),
+                                kind="SETTLEMENT", currency="USD", net_cash_delta="-40.1",
+                                net_cash_after="559.9")],
+               ))
+    return raw
+
+
+def test_cash_event_replay_feeds_nav_without_trusting_reported_net_cash():
+    raw = ledger_account()
+    view = build_observation(raw, quotes(), now=NOW)
+    assert view.cash == Decimal("559.9")
+    assert view.nav == Decimal("599.9")
+    assert view.positions == {"SPY": 2}
+    assert build_observation(raw, quotes(), now=NOW) == view
+
+
+def test_bad_cash_ledger_cannot_fall_back_to_reported_cash_or_nav():
+    raw = ledger_account()
+    raw["cash_ledger"]["events"] = []
+    with pytest.raises(ObservationError, match="CASH_LEDGER_SEQUENCE_INVALID"):
+        build_observation(raw, quotes(), now=NOW)
+
+
+@pytest.mark.parametrize("field", [
+    "pagination_complete", "full_account_scope_verified", "cash_aggregation_verified",
+])
+def test_cash_arithmetic_does_not_grant_source_verification(field):
+    raw = ledger_account()
+    raw[field] = False
+    with pytest.raises(ObservationError, match="UNVERIFIED"):
+        build_observation(raw, quotes(), now=NOW)
+
+
 def calculated_account():
     raw = account(positions={"SPY": dict(quantity=2, sellable_quantity=2)})
     raw.update(valuation_basis="net_cash_and_listed_equities", net_cash="600",

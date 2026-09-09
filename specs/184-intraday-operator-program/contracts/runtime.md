@@ -79,6 +79,18 @@ SELF_TEST_PASSED 또는 FAILED와 검사 항목을 반환하며 실패는 종료
 현재 사용자 `run`은 기존 모의 운용이다. `execution-start`는 기존 장부/설정과 내부
 자격 재검사·KIS 인증/시세/봉·실제 운용기를 연결한다. 전체 계좌와 체결 검증이 미완료인
 현 상태는 시작 거절이다. 명령의 존재나 모의 의존성 시험을 실계좌 준비 완료로 표시하지 않는다.
+# 순현금 사건 재계산 계약
+
+`cash_ledger_and_listed_equities`는 내부 계좌 공급자의 cash_ledger를 받는다.
+currency=USD, opening/closing={sequence, at, net_cash}, events=[{id, sequence, at,
+currency, kind, net_cash_delta, net_cash_after}]이며 금액은 부호 있는 정확한 소수 문자열이다.
+kind는 SETTLEMENT/TRANSFER/FX/DIVIDEND/INTEREST/FEE/LIABILITY_ADJUSTMENT 중 하나다.
+sequence는 원본 전체 사건의 순서 번호로, 정규화 후 임의 부여하지 않는다. 끝 번호와
+시작 번호의 차이는 사건 수와 같아야 하고 원본 순서/각 잔액/최종 잔액을 모두 대조한다.
+closing.at은 이번 관측 시작~완료 구간 안에 있어야 한다. 순현금은 채무·미결제까지
+포함하며 주문에 쓸 현금과 구분한다. 이 계산은 공급자의 전체 계좌·현금 범위 검증을
+대체하지 않고 사용자 파일을 인증하지 않는다. KIS 원본 연결은 미완료다.
+
 # 전진 관찰 기록 재계산 계약
 
 `execution.intraday_forward.assess_forward`는 읽기 전용 SQLite 복사에서 각 사건의

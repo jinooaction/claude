@@ -23,6 +23,7 @@ def execution_fingerprint(candidate, provider):
         Path(__file__).with_name("intraday.py"),
         Path(__file__).with_name("intraday_runtime.py"),
         Path(__file__).with_name("intraday_observation.py"),
+        Path(__file__).with_name("intraday_cash_ledger.py"),
         Path(__file__).with_name("intraday_selection.py"),
         Path(__file__).with_name("intraday_program.py"),
         Path(__file__).with_name("intraday_forward.py"),
