@@ -56,6 +56,12 @@
   봉 수집 결과, 관리 결과, 중지 의도, 정리 완료를 구분하고 계좌 비밀값을 저장하지 않는다.
 # 보관 자료의 연구 연결
 
+새 FILL 감사는 timestamp_basis(OBSERVED/PROVIDED_EXECUTION/UNSPECIFIED)와
+observed_at_utc를 기록한다. UNSPECIFIED는 기존 생성기의 기본값이며 기존 저장된 JSON에
+필드가 없는 경우도 미확인이다. OBSERVED의 executed_at_utc는 장부 기록 호환용 관측 시각이다.
+PROVIDED_EXECUTION도 입력 시각의 출처 구분이며 별도 실제 체결 증명으로 자동 승격하지 않는다.
+기존 fills/감사 행은 변경하지 않고 새 체결에만 출처를 추가한다.
+
 TransactionReport는 등록일 구간, 요청 시장, 수집 시작/완료 시각, 페이지 수,
 원본 거래 행(source_rows), 정규화한 거래 행과 페이지별 요약 행을 보존한다. 거래 행은 trad_dt/sttl_dt,
 pdno/crcy_cd/sll_buy_dvsn_cd, ccld_qty/tr_frcr_amt2/frcr_excc_amt_1/

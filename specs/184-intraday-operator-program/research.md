@@ -42,6 +42,15 @@
 - https://github.com/koreainvestment/open-trading-api/blob/main/examples_llm/overseas_stock/period_rights/period_rights.py
 # 보관 자료 연결 조사
 
+2026-09-10 시각 출처 조사: 공식 inquire_ccnl/chk_inquire_ccnl.py는 ord_dt와 ord_tmd를
+주문일자/주문시각으로 명시한다. 현재 overseas._exec_ordered_at_utc도 해당 필드를
+읽지만 fill_sync는 이를 체결 시각으로 복사했다. 과거 날짜의 주문이 나중에 관측된
+시험에서 이 잘못된 동작을 성공으로 검사하고 있었다. 주문 시각 복사를 제거하고
+관측 출처를 남긴다. 이 수정은 원본에 없는 실제 체결 시각을 복원하는 것이 아니다.
+주문 복구의 시간대 해석 문제는 별도 조사 대상이며 이 수정으로 해결됐다고 주장하지 않는다.
+
+- https://github.com/koreainvestment/open-trading-api/blob/main/examples_llm/overseas_stock/inquire_ccnl/chk_inquire_ccnl.py
+
 2026-09-10 거래/수수료 원본 조사: 공식 inquire_period_trans.py는 CTOS4001R과
 등록일 ERLM_STRT_DT/ERLM_END_DT, FK100/NK100 연속 조회를 사용한다. chk 예제는
 output1에 매매/결제일·상품·통화·체결수량·거래외화금액·외화정산금액·국내/해외

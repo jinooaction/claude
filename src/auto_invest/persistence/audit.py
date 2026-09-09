@@ -185,6 +185,10 @@ class FillPayload(AuditPayload):
     price_usd: str
     executed_at_utc: str
     commission_usd: str | None = None
+    # Legacy timestamps may be order times or observation times. Neither is
+    # authenticated execution-time evidence. Never upgrade old rows implicitly.
+    timestamp_basis: Literal["UNSPECIFIED", "OBSERVED", "PROVIDED_EXECUTION"] = "UNSPECIFIED"
+    observed_at_utc: str | None = None
 
 
 class CancelPayload(AuditPayload):

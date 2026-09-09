@@ -19,6 +19,17 @@ FR020은 execution/intraday_observation.py에서 기존 계좌 읽기 함수와 
 
 ## 기술 환경
 
+FR033, 등급3·K4 감사 기록 영역. fill_sync가 BrokerExecution.ordered_at_utc를
+PlannedFill.executed_at_utc에 복사하는 오류를 제거한다. 체결 자체의 시각이 없으면
+기존 기록용 시각은 조회 시각이며 FILL 감사에 timestamp_basis=OBSERVED,
+observed_at_utc를 추가한다. 기존 수량/금액·중복 방지·상태 전이는 유지한다.
+명시적 체결 시각은 PROVIDED_EXECUTION으로 구분하고 시간대가 없거나 미래이면
+트랜잭션 전체를 거절한다. 기존 감사 모델의 기본 출처는 UNSPECIFIED다.
+fill_sync와 감사 모델 소스를 실행 지문에 포함한다. 역사 조회의 주문시각을 재현하는
+기존 오검증 시험을 관측 출처 확인으로 바꾸고 실제 임시 DB/감사 보존·오류 롤백을 시험한다.
+되돌림은 신규 실행을 중지하고 버전을 되돌리는 것이며 새로 기록한 출처/기존 장부는
+삭제하지 않는다. 실제 발생 시각을 확보하는 후속 대조까지 완료한 것으로 표시하지 않는다.
+
 FR032, 등급3. broker/intraday_transactions.py가 기존 제한/재시도 클라이언트로
 CTOS4001R을 읽고 FK100/NK100 연속 조회를 끝까지 수행한다. 읽기 전체30초 제한과
 모든 페이지 오류의 전부 실패를 적용한다. 기존 잔고 점검 명령에 선택적 등록일 구간을

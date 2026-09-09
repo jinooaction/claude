@@ -85,6 +85,51 @@ def _ccnl(rows: list[dict]) -> httpx.Response:
     return httpx.Response(200, json={"output": rows})
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("source", [None, datetime(2026, 9, 10, 14, tzinfo=UTC)])
+async def test_new_fill_records_time_basis_and_duplicate_keeps_original_evidence(tmp_path, source):
+    async with _broker(tmp_path) as (_, conn):
+        _seed_order(conn, qty=1)
+        plan = FillPlan(fills=[PlannedFill(
+            correlation_id="ord-1", kis_order_id="K1", symbol="AAPL", side="BUY",
+            rule_id="r1", qty=1, price_usd=Decimal("150"), kis_fill_id="K1:1",
+            executed_at_utc=source,
+        )])
+        stamp = "2026-09-10T15:00:00.000Z"
+        apply_fill_plan(conn, plan, ts_iso=stamp)
+        before = list(conn.execute("SELECT * FROM audit_log ORDER BY seq"))
+        event = audit.parse_payload(conn.execute(
+            "SELECT * FROM audit_log WHERE event_type='FILL'"
+        ).fetchone())
+        assert event["observed_at_utc"] == stamp
+        assert event["timestamp_basis"] == ("OBSERVED" if source is None else "PROVIDED_EXECUTION")
+        assert event["executed_at_utc"] == (
+            stamp if source is None else "2026-09-10T14:00:00.000Z"
+        )
+        apply_fill_plan(conn, plan, ts_iso="2026-09-11T15:00:00.000Z")
+        assert list(conn.execute("SELECT * FROM audit_log ORDER BY seq")) == before
+        assert conn.execute("SELECT COUNT(*) FROM fills").fetchone()[0] == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("source", [
+    datetime(2026, 9, 10, 14), datetime(2026, 9, 10, 16, tzinfo=UTC),
+])
+async def test_unusable_provided_fill_time_rolls_back_without_changing_book(tmp_path, source):
+    async with _broker(tmp_path) as (_, conn):
+        _seed_order(conn, qty=1)
+        before = list(conn.execute("SELECT * FROM audit_log ORDER BY seq"))
+        plan = FillPlan(fills=[PlannedFill(
+            correlation_id="ord-1", kis_order_id="K1", symbol="AAPL", side="BUY",
+            rule_id="r1", qty=1, price_usd=Decimal("150"), kis_fill_id="K1:1",
+            executed_at_utc=source,
+        )])
+        with pytest.raises(ValueError, match="^FILL_TIMESTAMP_INVALID$"):
+            apply_fill_plan(conn, plan, ts_iso="2026-09-10T15:00:00.000Z")
+        assert conn.execute("SELECT COUNT(*) FROM fills").fetchone()[0] == 0
+        assert list(conn.execute("SELECT * FROM audit_log ORDER BY seq")) == before
+
+
 def _recovered_events(conn, corr: str) -> list[dict]:
     return [
         audit.parse_payload(r)
@@ -172,7 +217,7 @@ async def test_full_fill_recorded(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_historical_window_recovers_fill_with_broker_timestamp(
+async def test_historical_window_does_not_mislabel_order_time_as_fill_time(
     tmp_path: Path,
 ) -> None:
     async with _broker(tmp_path) as (client, conn):
@@ -213,7 +258,13 @@ async def test_historical_window_recovers_fill_with_broker_timestamp(
             "SELECT price_usd, executed_at_utc FROM fills WHERE kis_fill_id='K1:1'"
         ).fetchone()
         assert fill["price_usd"] == "150.25"
-        assert fill["executed_at_utc"] == "2026-06-23T17:20:16.000Z"
+        assert fill["executed_at_utc"] == "2026-08-16T00:00:00.000Z"
+        events = [audit.parse_payload(event) for event in conn.execute(
+            "SELECT * FROM audit_log WHERE event_type='FILL'"
+        )]
+        assert len(events) == 1
+        assert events[0]["timestamp_basis"] == "OBSERVED"
+        assert events[0]["observed_at_utc"] == fill["executed_at_utc"]
 
 
 @pytest.mark.asyncio

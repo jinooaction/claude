@@ -207,7 +207,9 @@ def plan_fill_ingestion(
                         qty=delta,
                         price_usd=price,
                         kis_fill_id=f"{order.kis_order_id}:{broker_filled}",
-                        executed_at_utc=execution.ordered_at_utc,
+                        # KIS ord_dt/ord_tmd describe the order, not its fills.
+                        # A cumulative quantity report has no execution instant.
+                        executed_at_utc=None,
                     )
                 )
 
@@ -475,6 +477,13 @@ def _apply_fill(conn: sqlite3.Connection, fill: PlannedFill, ts_iso: str) -> boo
     `kis_fill_id` rows are already represented in the ledger, so they must not
     append another audit event or move the rebuildable position cache.
     """
+    observed_at = datetime.fromisoformat(ts_iso.replace("Z", "+00:00"))
+    if fill.executed_at_utc is not None and (
+        fill.executed_at_utc.tzinfo is None
+        or fill.executed_at_utc.utcoffset() is None
+        or fill.executed_at_utc > observed_at
+    ):
+        raise ValueError("FILL_TIMESTAMP_INVALID")
     fill_ts_iso = (
         _iso_ms(fill.executed_at_utc.astimezone(UTC))
         if fill.executed_at_utc is not None
@@ -504,6 +513,10 @@ def _apply_fill(conn: sqlite3.Connection, fill: PlannedFill, ts_iso: str) -> boo
             qty=fill.qty,
             price_usd=str(fill.price_usd),
             executed_at_utc=fill_ts_iso,
+            timestamp_basis=(
+                "PROVIDED_EXECUTION" if fill.executed_at_utc is not None else "OBSERVED"
+            ),
+            observed_at_utc=ts_iso,
         ),
         rule_id=fill.rule_id,
         symbol=fill.symbol,
