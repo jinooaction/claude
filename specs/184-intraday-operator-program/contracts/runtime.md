@@ -35,6 +35,11 @@ freeze_authentication_verified=true가 되며 execution_parity_verified/live_eli
 
 `ExecutionObserver(read_account, quote_snapshot)`는 기존 엔진의 observe에 연결하는
 프로그램 내부 소비자다. 사용자 JSON을 읽어 검증 플래그를 발급하지 않는다.
+valuation_basis=net_cash_and_listed_equities일 때 순현금 net_cash와 전체 보유의 원본
+가격으로 NAV를 직접 계산한다. net_cash는 채무·미결제·모든 현금 변동을 반영한 USD
+숫자 문자열이고 음수도 가능하다. execution_cash와 서로 대체하지 않는다. 이 경로는
+보고 nav/nav_verified에 의존하지 않지만 전체 범위·현금 검증은 여전히 요구한다.
+기준이 없거나 verified_report이면 기존 검증된 NAV 계약을 유지하며 다른 기준은 거절한다.
 현재 KIS observe_account는 full_account_scope_verified=false를 반환하므로
 ACCOUNT_SCOPE_UNVERIFIED로 차단된다. 이 연결만으로 생산 NAV 공급자가 완성된 것은 아니다.
 원본 발생시각 보존·현금 필드 대체 금지·보유/주문 완결 검사 후 기존 엔진의 관측 검사를

@@ -32,9 +32,12 @@
   원본 사전등록 바이트를 한 번 복사해 연구와 후보 구성에서 같은 내용을 사용한다.
 
 - ExecutionObserver는 신뢰하는 프로그램 내부 비동기 계좌 읽기 함수와 동기 시세 캐시를
-  기존 Observation으로 변환한다. 전체 페이지·계좌 범위·현금 합산·NAV 검증은 bool true,
+  기존 Observation으로 변환한다. 전체 페이지·계좌 범위·현금 합산 검증은 bool true,
   unverified_assets는 빈 dict여야 한다. execution_cash/nav는 USD 숫자 문자열이고
   구매가능 금액·사용자 승인으로 대체하지 않는다. 이 모델은 증명 발급기가 아니다.
+  기본 verified_report 경로는 nav_verified=true를 요구한다. 명시적인
+  net_cash_and_listed_equities 경로는 부채/미결제 등을 포함한 순현금 net_cash와
+  전체 보유×가격을 더해 nav를 만든다. 보고 nav와 nav_verified는 사용하지 않는다.
 - 계좌 조회 시작·완료와 수집 전체는30초 이내여야 하며 호출도30초에 취소한다.
   기존 보유·매도 가능 수량·열린 주문 식별자는 보존하고 임의 정규화로 누락하지 않는다.
   시세 발생시각은 그대로 유지한다. 오래된 유효 시세는 계좌 기반 취소를 막지 않지만

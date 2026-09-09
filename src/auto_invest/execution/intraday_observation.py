@@ -7,7 +7,7 @@ The current KIS diagnostic reader fails this contract; buying power is never cas
 import asyncio
 import re
 from datetime import UTC, datetime
-from decimal import Decimal
+from decimal import Decimal, localcontext
 
 from auto_invest.broker.auth import get_valid_token
 from auto_invest.broker.intraday_account import observe_account
@@ -32,21 +32,26 @@ def _stamp(value):
         raise ObservationError("ACCOUNT_TIME_INVALID") from None
 
 
-def _amount(value):
-    if not isinstance(value, str) or not re.fullmatch(r"[0-9]{1,18}(\.[0-9]{1,12})?", value):
+def _amount(value, *, signed=False):
+    pattern = r"-?[0-9]{1,18}(\.[0-9]{1,12})?" if signed else r"[0-9]{1,18}(\.[0-9]{1,12})?"
+    if not isinstance(value, str) or not re.fullmatch(pattern, value):
         raise ObservationError("ACCOUNT_AMOUNT_INVALID")
     return Decimal(value)
 
 
 def build_observation(account, quotes, *, now):
-    """Consume a validated reader result; do not derive or approve account totals."""
+    """Consume verified cash/scope; optionally value every reported equity here.
+
+    net_cash includes all non-equity balances and liabilities, while
+    execution_cash is cash available to the executor. Selecting the calculation
+    basis does not establish either value's provenance or scope verification.
+    """
     if not isinstance(account, dict) or account.get("currency") != "USD":
         raise ObservationError("ACCOUNT_CURRENCY_OR_SHAPE")
     for field, reason in (
         ("pagination_complete", "ACCOUNT_PAGINATION_UNVERIFIED"),
         ("full_account_scope_verified", "ACCOUNT_SCOPE_UNVERIFIED"),
         ("cash_aggregation_verified", "ACCOUNT_CASH_UNVERIFIED"),
-        ("nav_verified", "ACCOUNT_NAV_UNVERIFIED"),
     ):
         if account.get(field) is not True:
             raise ObservationError(reason)
@@ -57,7 +62,16 @@ def build_observation(account, quotes, *, now):
     clock = _stamp(now)
     if not started <= completed <= clock or not 0 <= (clock - started).total_seconds() <= 30:
         raise ObservationError("ACCOUNT_BATCH_STALE")
-    cash, nav = _amount(account.get("execution_cash")), _amount(account.get("nav"))
+    cash = _amount(account.get("execution_cash"))
+    basis = account.get("valuation_basis", "verified_report")
+    if basis == "verified_report":
+        if account.get("nav_verified") is not True:
+            raise ObservationError("ACCOUNT_NAV_UNVERIFIED")
+        nav = _amount(account.get("nav"))
+    elif basis == "net_cash_and_listed_equities":
+        net_cash = _amount(account.get("net_cash"), signed=True)
+    else:
+        raise ObservationError("ACCOUNT_VALUATION_BASIS_INVALID")
     positions, sellable = {}, {}
     raw_positions = account.get("positions")
     if not isinstance(raw_positions, dict):
@@ -92,6 +106,19 @@ def build_observation(account, quotes, *, now):
         if not source <= received <= clock:
             raise ObservationError("ACCOUNT_QUOTE_TIME_INVALID")
         marks[symbol], times[symbol] = quote.last, source
+    if basis == "net_cash_and_listed_equities":
+        held = {symbol for symbol, qty in positions.items() if qty}
+        if len(held) > 10000 or any(positions[symbol] > 10**18 for symbol in held):
+            raise ObservationError("ACCOUNT_POSITIONS_INVALID")
+        if held - marks.keys():
+            raise ObservationError("ACCOUNT_NAV_MARK_MISSING")
+        if any(not isinstance(marks[symbol], Decimal) or not marks[symbol].is_finite()
+               or not 0 < marks[symbol] < Decimal("1e18")
+               or marks[symbol].as_tuple().exponent < -12 for symbol in held):
+            raise ObservationError("ACCOUNT_NAV_MARK_INVALID")
+        with localcontext() as context:
+            context.prec = 80
+            nav = net_cash + sum((positions[symbol] * marks[symbol] for symbol in held), Decimal(0))
     view = Observation(started, cash, nav, positions, marks, order_ids, sellable, times)
     try:
         # Cancellation may use fresh account data with an older source quote.
