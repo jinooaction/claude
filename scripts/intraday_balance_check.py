@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Run a private-account GET comparison, publishing only counts and conclusions."""
 
+import argparse
 import asyncio
 import json
 import os
@@ -16,9 +17,17 @@ from auto_invest.broker.intraday_balance_evidence import (
     observe_balance_evidence,
     public_balance_evidence,
 )
+from auto_invest.broker.intraday_transactions import (
+    observe_transactions,
+    public_transactions,
+    validate_window,
+)
 
 
-async def run():
+async def run(*, transactions_from=None, transactions_through=None):
+    include_transactions = transactions_from is not None or transactions_through is not None
+    if include_transactions:
+        validate_window(transactions_from, transactions_through)
     required = ("KIS_APP_KEY", "KIS_APP_SECRET", "KIS_ACCOUNT_NO")
     if any(not os.environ.get(key) for key in required):
         return dict(status="DATA_ACCESS_REQUIRED", orders_submitted=0, live_eligible=False), 2
@@ -48,12 +57,29 @@ async def run():
             client, account=os.environ["KIS_ACCOUNT_NO"], access_token=token.access_token,
             app_key=os.environ["KIS_APP_KEY"], app_secret=os.environ["KIS_APP_SECRET"],
         )
-    return dict(public_balance_evidence(snapshot), account_assets=account_assets), 0
+        transactions = None
+        if include_transactions:
+            transactions = public_transactions(await observe_transactions(
+                client, account=os.environ["KIS_ACCOUNT_NO"], access_token=token.access_token,
+                app_key=os.environ["KIS_APP_KEY"], app_secret=os.environ["KIS_APP_SECRET"],
+                start_date=transactions_from, end_date=transactions_through,
+            ))
+    result = dict(public_balance_evidence(snapshot), account_assets=account_assets)
+    if transactions is not None:
+        result["transactions"] = transactions
+    return result, 0
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--transactions-from", help="Registration start date, YYYYMMDD")
+    parser.add_argument("--transactions-through", help="Registration end date, YYYYMMDD")
+    args = parser.parse_args()
     try:
-        result, code = asyncio.run(run())
+        result, code = asyncio.run(run(
+            transactions_from=args.transactions_from,
+            transactions_through=args.transactions_through,
+        ))
     except Exception as exc:
         result = dict(
             status="FAILED",

@@ -56,6 +56,13 @@
   봉 수집 결과, 관리 결과, 중지 의도, 정리 완료를 구분하고 계좌 비밀값을 저장하지 않는다.
 # 보관 자료의 연구 연결
 
+TransactionReport는 등록일 구간, 요청 시장, 수집 시작/완료 시각, 페이지 수,
+원본 거래 행(source_rows), 정규화한 거래 행과 페이지별 요약 행을 보존한다. 거래 행은 trad_dt/sttl_dt,
+pdno/crcy_cd/sll_buy_dvsn_cd, ccld_qty/tr_frcr_amt2/frcr_excc_amt_1/
+dmst_frcr_fee1/frcr_fee1이며 금액/수량은 정확한 소수 문자열이다. 각 페이지의 요약은
+중복될 수 있어 합산하지 않는다. pagination_complete는 요청 범위의 페이지 끝을 뜻하며
+계좌 전체·현금·개별 체결 비용의 검증을 뜻하지 않는다. 공개 보고서는 행/페이지 수만 낸다.
+
 ArchiveReview는 실제 session_count, required_sessions(756), missing_sessions,
 missing_calendar_sessions, incomplete_archive_count, provider, synthetic,
 dataset_fingerprint, 기존177 decision으로 구성한다. observation_type은

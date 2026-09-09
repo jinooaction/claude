@@ -42,6 +42,17 @@
 - https://github.com/koreainvestment/open-trading-api/blob/main/examples_llm/overseas_stock/period_rights/period_rights.py
 # 보관 자료 연결 조사
 
+2026-09-10 거래/수수료 원본 조사: 공식 inquire_period_trans.py는 CTOS4001R과
+등록일 ERLM_STRT_DT/ERLM_END_DT, FK100/NK100 연속 조회를 사용한다. chk 예제는
+output1에 매매/결제일·상품·통화·체결수량·거래외화금액·외화정산금액·국내/해외
+외화수수료를 정의한다. 주문번호는 이 매핑에 없으므로 행을 개별 주문에 임의 대응하지 않는다.
+등록일 범위를 매매일 범위로 주장하지 않으며 요약을 페이지마다 합산하지 않는다.
+공식 예제의 중간 오류 시 기존 부분 결과 반환은 실행 검증에 부적합해 채택하지 않는다.
+이 경로는 KIS 계산식 문의 없이 읽을 수 있는 원본이다. 실제 현금·비용 검증 연결은 후속이다.
+
+- https://github.com/koreainvestment/open-trading-api/blob/main/examples_llm/overseas_stock/inquire_period_trans/inquire_period_trans.py
+- https://github.com/koreainvestment/open-trading-api/blob/main/examples_llm/overseas_stock/inquire_period_trans/chk_inquire_period_trans.py
+
 현재181 service_cycle은 소스 식별자별 sessions/YYYY-MM-DD에 write_batch 결과를
 보관한다. 실패한 YYYY-MM-DD-partial-uuid 폴더도 보존하므로 결합기는 명시적으로
 개수를 기록하고 완료 거래일로 세지 않아야 한다. 기존177 자료 검증기는 개별 봉·CSV

@@ -112,6 +112,15 @@ uv run python scripts/intraday_operator.py execution-stop --db /path/to/trading.
 돌아갈 수 있습니다. 실주문 스위치·자금 배정·실제 주문은 이 명령이 변경하지 않습니다.
 # 날짜별 보관 자료로 전략 검증 실행
 
+거래/수수료 원본의 읽기 점검은 기존 잔고 점검 명령에 두 날짜 옵션을 함께 지정한다.
+아래 날짜는 조회 예시이며 **등록일** 기준이다. 공개 결과는 건수만 보여주고 금액·종목은
+출력하지 않는다. 기존 계좌 인증을 쓰는 GET 조회이며 실제 주문은 보내지 않는다.
+부분 조회는 실패한다. 이 명령의 성공은 현금이나 개별 체결 비용 검증 완료가 아니다.
+
+```sh
+uv run python scripts/intraday_balance_check.py --transactions-from 20260901 --transactions-through 20260910
+```
+
 이미 보관된 자료를 결합해 기존 연구 검증기로 넘길 수 있습니다. `--archives`는
 YYYY-MM-DD 폴더들이 들어 있는 sessions 폴더이고 `--out`은 아직 없는 새 폴더입니다.
 다음 경로는 예시이며 실제 보관 위치로 바꿉니다. 계좌 키나 새 계정은 필요하지 않습니다.
