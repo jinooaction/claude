@@ -152,3 +152,44 @@ def test_large_report_is_bounded_but_late_failure_affects_verdict():
     assert len(result["checks"]) == 100 and result["checks_truncated"]
     assert result["check_counts"]["MISMATCH"] > 0
     assert sum(result["check_counts"].values()) == result["check_count"]
+
+
+@pytest.mark.parametrize("reported,direction,within,native", [
+    ("32513", "HIGHER", True, "DIFFERENT"),
+    ("32487", "LOWER", True, "DIFFERENT"),
+    ("32513.01", "HIGHER", False, "DIFFERENT"),
+    ("25", "LOWER", False, "EQUAL"),
+])
+def test_mismatch_diagnostics_separate_units_and_precision_without_acceptance(
+    reported, direction, within, native,
+):
+    data = report()
+    data["output3"][0]["evlu_amt_smtl"] = reported
+    result = audit_report(data, data)
+    check = checks(result)["valuation_krw"]
+    assert check["status"] == "MISMATCH"
+    assert check["diagnostic"] == dict(
+        native_sum_relation=native, reported_vs_converted=direction,
+        within_one_cent_per_row_fx_bound=within, cause_verified=False,
+    )
+    assert reported not in json.dumps(result)
+    assert result["execution_nav_verified"] is False
+
+
+@pytest.mark.parametrize("case", ["changing", "duplicate", "missing", "currency"])
+def test_ambiguous_report_does_not_produce_mismatch_cause_diagnostics(case):
+    data = report()
+    data["output3"][0]["evlu_amt_smtl"] = "32510"
+    before = copy.deepcopy(data)
+    if case == "changing":
+        before["output2"][0]["frcr_buy_mgn_amt"] = "99"
+    elif case == "duplicate":
+        data["output1"] *= 2
+        before = copy.deepcopy(data)
+    elif case == "missing":
+        data["output1"][0].pop("bass_exrt")
+        before = copy.deepcopy(data)
+    else:
+        data["output1"][0]["buy_crcy_cd"] = "JPY"
+        before = copy.deepcopy(data)
+    assert all("diagnostic" not in c for c in audit_report(before, data)["checks"])
