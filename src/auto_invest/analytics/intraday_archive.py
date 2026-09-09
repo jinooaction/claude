@@ -1,7 +1,9 @@
 """Connect immutable daily archives to the existing broker-free research evaluator."""
 
+import argparse
 import json
 import re
+import subprocess
 from dataclasses import replace
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -140,3 +142,31 @@ def review_archives(archives: Path, output: Path, preregistration: Path, code_co
     marker.write_bytes(encode(result))
     marker.rename(output / "review.json")
     return result
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="보관 자료 결합·기존 전략 연구 검증")
+    parser.add_argument("--archives", type=Path, required=True)
+    parser.add_argument("--out", type=Path, required=True)
+    args = parser.parse_args(argv)
+    root = Path(__file__).resolve().parents[3]
+    try:
+        commit = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=root, text=True, stderr=subprocess.DEVNULL,
+        ).strip()
+        result = review_archives(
+            args.archives, args.out,
+            root / "specs/177-intraday-paper-challenger/contracts/intraday-preregistration.json",
+            commit,
+        )
+    except Exception as exc:
+        result = dict(status="FAILED", reason=str(exc) if isinstance(exc, DataError)
+                      else "ARCHIVE_REVIEW_FAILED", live_eligible=False, orders_submitted=0)
+        print(json.dumps(result, ensure_ascii=False, sort_keys=True))
+        return 2
+    print(json.dumps(result, ensure_ascii=False, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

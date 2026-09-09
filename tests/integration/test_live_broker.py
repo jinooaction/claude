@@ -192,6 +192,37 @@ async def test_live_kis_account_asset_table(kis_token_bundle: dict) -> None:
     print("\nAccount asset evidence: " + json.dumps(result, sort_keys=True))
 
 
+def test_live_intraday_archived_research(tmp_path) -> None:
+    """Read the installed collector's archive; research output stays in the test temp dir."""
+    import re
+    import subprocess
+
+    from auto_invest.analytics.intraday_archive import review_archives
+    from auto_invest.analytics.intraday_service import read_service_status
+    from auto_invest.market_data.intraday import DataError
+
+    root = Path("/var/lib/auto-invest-intraday")
+    repo = Path(__file__).resolve().parents[2]
+    try:
+        status = read_service_status(root, datetime.now(UTC))
+        identity = status.get("identity", "")
+        if (not re.fullmatch(r"[0-9a-f]{64}", identity)
+                or not 0 <= status.get("age_seconds", -1) <= 180):
+            raise DataError("ARCHIVE_SERVER_STATUS_INVALID")
+        commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
+        result = review_archives(
+            root / identity / "sessions", tmp_path / "history-review",
+            repo / "specs/177-intraday-paper-challenger/contracts/intraday-preregistration.json",
+            commit,
+        )
+    except Exception as exc:
+        code = str(exc) if isinstance(exc, DataError) else type(exc).__name__
+        pytest.fail("archive research read: " + code, pytrace=False)
+    assert result["orders_submitted"] == 0 and result["live_eligible"] is False
+    assert result["session_count"] > 0
+    print("\nIntraday archive research: " + json.dumps(result, sort_keys=True))
+
+
 @pytest.mark.asyncio
 async def test_live_kis_intraday_account_read_contract(kis_token_bundle: dict) -> None:
     """Strict account GETs; no NAV synthesis, allocation, or broker writes."""
