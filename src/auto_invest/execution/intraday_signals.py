@@ -27,6 +27,7 @@ def execution_fingerprint(candidate, provider):
         Path(__file__).with_name("intraday_program.py"),
         Path(__file__).with_name("intraday_forward.py"),
         Path(__file__).with_name("intraday_registration.py"),
+        Path(__file__).with_name("intraday_qualification.py"),
         Path(__file__).parents[1] / "analytics/intraday_paper_challenger.py",
         Path(__file__).parents[1] / "analytics/intraday_runtime.py",
         Path(__file__).parents[1] / "market_data/intraday_pricing.py",

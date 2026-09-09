@@ -10,6 +10,7 @@ from pathlib import Path
 from auto_invest.broker.intraday_inputs import StrictQuoteFeed, approval_key
 from auto_invest.execution.intraday import IntradayExecutor
 from auto_invest.execution.intraday_observation import KISExecutionObserver
+from auto_invest.execution.intraday_qualification import prepare_qualification
 from auto_invest.execution.intraday_runtime import run
 from auto_invest.execution.intraday_selection import ResearchSelection
 from auto_invest.execution.intraday_signals import execution_fingerprint
@@ -78,7 +79,7 @@ class IntradayProgram:
         return dict(result, quote_state="CLOSED" if started else "NOT_STARTED")
 
 
-def build_kis_program(*, selection, router, token_cache, qualify,
+def build_kis_program(*, router, token_cache, archives, forward_database, registration,
                       collect_bars, capital_limit, external_holdings=None, now):
     """Bind real authenticated account reads to the same router's authority.
 
@@ -87,12 +88,18 @@ def build_kis_program(*, selection, router, token_cache, qualify,
     """
     if router.execution_authority is None:
         raise ValueError("PROGRAM_ROUTER_CONFIGURATION_INVALID")
+    qualification = prepare_qualification(
+        archives=archives, forward_database=forward_database, registration=registration,
+        account=router.account_no, capital_limit=capital_limit,
+    )
+    if refusal := qualification():
+        raise ValueError(refusal)
     feed = StrictQuoteFeed(now=now)
     observer = KISExecutionObserver(
         router.execution_authority, feed.snapshot, token_cache=token_cache, now=now,
     )
     program = build_program(
-        selection=selection, router=router, observe=observer, qualify=qualify,
+        selection=qualification.selection, router=router, observe=observer, qualify=qualification,
         collect_bars=collect_bars, capital_limit=capital_limit,
         external_holdings=external_holdings, now=now,
     )

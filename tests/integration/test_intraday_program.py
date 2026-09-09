@@ -142,7 +142,9 @@ async def test_cancellation_closes_quote_task_and_preserves_drain_for_restart(tm
 
 
 @pytest.mark.asyncio
-async def test_kis_assembly_uses_its_router_for_real_reads_and_refuses_unverified_scope(tmp_path):
+async def test_kis_assembly_uses_its_router_for_real_reads_and_refuses_unverified_scope(
+    tmp_path, monkeypatch,
+):
     from auto_invest.broker.intraday_inputs import REST_URL
     from auto_invest.execution.intraday_program import build_kis_program
 
@@ -164,12 +166,29 @@ async def test_kis_assembly_uses_its_router_for_real_reads_and_refuses_unverifie
     async with rehearsal_session(tmp_path / "simulation.db") as book:
         config = configuration(book)
         config.pop("observe")
+        selection = config.pop("selection")
+        config.pop("qualify")
+
+        class Qualification:
+            def __init__(self):
+                self.selection = selection
+
+            def __call__(self):
+                return None
+
+        def prepare(**kwargs):
+            assert kwargs["account"] == config["router"].account_no
+            assert kwargs["capital_limit"] == config["capital_limit"]
+            return Qualification()
+
+        monkeypatch.setattr("auto_invest.execution.intraday_program.prepare_qualification", prepare)
         async with httpx.AsyncClient(
             base_url=REST_URL, transport=httpx.MockTransport(handle),
         ) as http:
             config["router"].broker._client = http
             program = build_kis_program(
-                **config, token_cache=tmp_path / "cache/token.json",
+                **config, token_cache=tmp_path / "cache/token.json", archives=tmp_path,
+                forward_database=tmp_path / "forward.db", registration=tmp_path / "freeze.json",
             )
             assert calls == []
             result = await program.engine.manage()
