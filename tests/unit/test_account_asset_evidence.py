@@ -238,6 +238,7 @@ async def test_operator_command_reads_both_reports_and_keeps_amounts_private(
     if include_transactions:
         assert result["transactions"]["row_count"] == 1
         assert result["transactions"]["execution_parity_verified"] is False
+        assert result["transactions"]["settlement_audit"]["status"] == "MATCH"
         assert requests[-1].url.params["ERLM_STRT_DT"] == "20260901"
     assert result["account_assets"]["status"] == "MATCH"
     assert result["nav_verified"] is False

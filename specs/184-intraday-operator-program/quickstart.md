@@ -116,6 +116,9 @@ uv run python scripts/intraday_operator.py execution-stop --db /path/to/trading.
 아래 날짜는 조회 예시이며 **등록일** 기준이다. 공개 결과는 건수만 보여주고 금액·종목은
 출력하지 않는다. 기존 계좌 인증을 쓰는 GET 조회이며 실제 주문은 보내지 않는다.
 부분 조회는 실패한다. 이 명령의 성공은 현금이나 개별 체결 비용 검증 완료가 아니다.
+transactions.settlement_audit는 거래금액·보고 수수료·정산금액의 산술 일치 여부다.
+MATCH도 계좌 현금이나 실제 주문별 비용 승인이 아니며, MISMATCH/NO_TRANSACTIONS는
+검증된 합계를 만들지 않는다. 통화별 상세 합계와 원본 금액은 공개 출력에서 제외한다.
 
 ```sh
 uv run python scripts/intraday_balance_check.py --transactions-from 20260901 --transactions-through 20260910

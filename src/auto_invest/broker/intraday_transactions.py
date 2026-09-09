@@ -7,7 +7,7 @@ component; attaching them to individual fills requires a separate reconciliation
 import asyncio
 import re
 from datetime import UTC, date, datetime
-from decimal import Decimal
+from decimal import Decimal, localcontext
 
 from auto_invest.broker.intraday_account import AccountReadError
 from auto_invest.broker.overseas import _kis_headers, _split_account
@@ -61,6 +61,50 @@ def _row(raw):
     if Decimal(result["ccld_qty"]) <= 0:
         raise AccountReadError("TRANSACTIONS_INVALID_QUANTITY")
     return result
+
+
+def audit_settlements(rows):
+    """Check report arithmetic, not completeness of account cash or actual fees.
+
+    A match only means that the two reported fee components explain the reported
+    settlement difference. It cannot identify individual orders, other cash flows,
+    fee schedules or whether these registration-date rows cover a trade window.
+    """
+    if not isinstance(rows, list) or len(rows) > 100_000:
+        raise AccountReadError("TRANSACTIONS_INVALID_OUTPUT")
+    totals, mismatches = {}, []
+    with localcontext() as context:
+        context.prec = 64
+        for index, raw in enumerate(rows):
+            if not isinstance(raw, dict):
+                raise AccountReadError("TRANSACTIONS_INVALID_OUTPUT")
+            value = _row(raw)
+            gross, settled, domestic, foreign = (
+                Decimal(value[key]) for key in (
+                    "tr_frcr_amt2", "frcr_excc_amt_1", "dmst_frcr_fee1", "frcr_fee1",
+                )
+            )
+            buying = value["sll_buy_dvsn_cd"] == "02"
+            fees = domestic + foreign
+            expected = gross + fees if buying else gross - fees
+            if settled != expected:
+                mismatches.append(index)
+            currency = totals.setdefault(value["crcy_cd"], dict.fromkeys((
+                "gross_buy", "gross_sell", "domestic_fee", "foreign_fee", "net_settlement",
+            ), Decimal(0)))
+            currency["gross_buy" if buying else "gross_sell"] += gross
+            currency["domestic_fee"] += domestic
+            currency["foreign_fee"] += foreign
+            currency["net_settlement"] += -settled if buying else settled
+    verified = bool(rows) and not mismatches
+    return dict(
+        status="NO_TRANSACTIONS" if not rows else "MATCH" if verified else "MISMATCH",
+        row_count=len(rows), matched_row_count=len(rows) - len(mismatches),
+        mismatched_row_count=len(mismatches), currency_count=len(totals),
+        arithmetic_verified=verified, mismatched_row_indices=mismatches,
+        currency_totals={currency: {key: str(value) for key, value in amounts.items()}
+                         for currency, amounts in totals.items()} if verified else None,
+    )
 
 
 async def observe_transactions(
@@ -134,6 +178,7 @@ async def observe_transactions(
                     requested_exchange=exchange, rows=rows, source_rows=source_rows,
                     summary_pages=summaries,
                     page_count=page + 1, pagination_complete=True,
+                    settlement_audit=audit_settlements(rows),
                     cash_verified=False, execution_parity_verified=False,
                 )
             following = tuple(body.get(key) for key in ("ctx_area_fk100", "ctx_area_nk100"))
@@ -151,6 +196,10 @@ def public_transactions(snapshot):
     return dict(
         status="TRANSACTION_REPORT_OBSERVED", row_count=len(snapshot["rows"]),
         page_count=snapshot["page_count"], pagination_complete=snapshot["pagination_complete"],
+        settlement_audit={key: snapshot["settlement_audit"][key] for key in (
+            "status", "row_count", "matched_row_count", "mismatched_row_count",
+            "currency_count", "arithmetic_verified",
+        )},
         cash_verified=False, execution_parity_verified=False,
         live_eligible=False, orders_submitted=0,
     )

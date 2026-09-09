@@ -56,6 +56,12 @@
   봉 수집 결과, 관리 결과, 중지 의도, 정리 완료를 구분하고 계좌 비밀값을 저장하지 않는다.
 # 보관 자료의 연구 연결
 
+SettlementAudit는 status(MATCH/MISMATCH/NO_TRANSACTIONS), 행/일치/불일치/통화 수,
+arithmetic_verified, 비공개 불일치 행 위치와 currency_totals를 가진다. 통화별 합계는
+gross_buy/gross_sell/domestic_fee/foreign_fee/net_settlement이며 순정산은 매도 정산액
+합계에서 매수 정산액 합계를 뺀 값이다. 빈 명세/한 행이라도 불일치하면 합계는 None이다.
+공개 출력은 판정/건수만 포함하며 계좌 현금·정식 체결 비용 검증은 계속 별도다.
+
 새 FILL 감사는 timestamp_basis(OBSERVED/PROVIDED_EXECUTION/UNSPECIFIED)와
 observed_at_utc를 기록한다. UNSPECIFIED는 기존 생성기의 기본값이며 기존 저장된 JSON에
 필드가 없는 경우도 미확인이다. OBSERVED의 executed_at_utc는 장부 기록 호환용 관측 시각이다.
