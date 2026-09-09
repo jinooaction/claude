@@ -1,5 +1,47 @@
 # 조사 결정
 
+## 2026-09-10 화면 접근 없는 전체 거래내역 원본 경로 확인
+
+기존 코드 재사용 확인: performance.engine.net_cash_flow_usd는 매수/매도 체결대금만
+합산하고 비용·외부 현금 변동을 포함하지 않으며 모르는 매매 방향은 무시한다.
+portfolio.nav.compute_nav는 현금이 없으면0, 시세가 없으면 평균매입가로 대체하는
+진단 경로다. 두 함수를 단타의 검증된 순현금/실행 NAV 제공자로 그대로 연결하지 않는다.
+FR036은 누락 순현금·원본 가격을 거절하므로 이 기존 진단용 대체 동작을 가져오지 않는다.
+
+공식 eFriend Plus 도움말7451은 계좌별 거래내역에 입출금·입출고·매매·외화·
+현금/현물 상환이 포함되고 엑셀 저장과 다음 페이지 조회가 가능하다고 설명한다.
+웹 도움말은 상품유형/거래구분 전체 선택과 엑셀 저장을 별도로 안내한다. 따라서
+OpenAPI 일별 매매 명세만으로 전체 현금 변동을 수집할 수 없다는 사실을, KIS가 전체
+거래 원본을 제공하지 않거나 화면 권한이 개발에 필수라는 결론으로 확대하지 않는다.
+
+공개 해외증권 출력 양식 MyAccTrade_A_IB_70001_1_P1.jsp에서 실제 매핑을 확인했다:
+TR_DT(거래일), INQR_SYNS_NAME(거래종류), ACNT_SYNS_TR_QTY(거래수량),
+APLY_EXRT(환율), TR_AMT3(거래금액), DMST_FRCR_FEE2(수수료),
+AF_CBLC_QTY2(유가잔고), CMA_ICLD_DNCL_AMT(잔액),
+AF_FRCR_DNCL_AMT(외환잔액), EXCC_AMT1(정산금액), BRKG_TR_TRTX(거래세),
+ACPL_TAX_AMT_2(세금), VAL(부가세)다. 일반 출력 P2에는 AF_DNCL_AMT(예수금),
+RCVB_OCCR_AMT(미수발생), RCVB_PYBK_AMT(미수변제), RDPT_AMT(상환금액),
+RDPT_INT_AMT(상환이자), REAL_TR_DTIME(거래시각)도 별도 존재한다.
+
+이들은 공개된 빈 출력 템플릿의 필드 이름이며 실계좌 응답이나 완성된 입력 계약이 아니다.
+P1의 외환잔액을 USD로 단정하지 않는다. 공개 양식 상단은 원 단위로 표시되므로
+정산금액·수수료를 외화 거래금액과 임의 합산하지 않는다. 업무별 부호·통화·행 순서·
+페이지 완결성과 시작/종료 잔액은 실제 저장 원본 또는 인증된 응답에서 검증할 항목이다.
+웹 도움말의 특정 시간대 입출금 반영 지연도 보존하며 조회 시각을 변동 발생 시각으로
+대체하지 않는다. 서식 내 조회기준 일시는 그 자체로 전체 사건의 실시간 반영 증거가 아니다.
+
+공식 전체 메뉴 링크에서 MyAccTrade.jsp 경로를 확인했으며 정상 GET은 로그인 화면으로
+이동했다. 로그인이나 계좌 조회를 실행하지 않았고 인증 경계를 우회하지 않는다. 다음
+입력 설계는 공개 필드와 제공되는 저장 원본을 기준으로 하며 KIS 문의·화면 복구를
+모든 구현의 선행 조건으로 요구하지 않는다. 현금/전체 범위 제공자와 실행 자격의
+미구현은 계속 별도 추적하며 템플릿 확인만으로 완료 표시하지 않는다.
+
+- https://www.truefriend.com/plus_help/7451.html
+- https://www.truefriend.com/main/help/popup_mypage04.jsp?d1=1&d2=4
+- https://www.truefriend.com/main/banking/inquiry/_view/MyAccTrade_A_IB_70001_1_P1.jsp
+- https://www.truefriend.com/main/banking/inquiry/_view/MyAccTrade_A_IB_70001_1_P2.jsp
+- https://www.truefriend.com/templets/truefriend/allMenu.jsp
+
 ## 2026-09-10 체결통보 원본의 실제 한계 확인
 
 공식 포털의 실시간체결통보 속성 원본(fef3c007-4a03-4b3b-9d08-310b88912877)을
