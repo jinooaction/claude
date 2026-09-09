@@ -1,5 +1,5 @@
 {
-  "commit": "8e2e5ceb276bdd480154a162d7af7ee3dea2c2f0",
+  "commit": "9fbdef843dafe5a565846134ae8b1fca6672941a",
   "overall_status": "OK",
   "released_work": [
     {
@@ -683,7 +683,8 @@
     "174-accounting-cross-sectional-factors",
     "175-pead-program-gate",
     "177-intraday-paper-challenger",
-    "178-flutter-operator-mobile"
+    "178-flutter-operator-mobile",
+    "185-intraday-archive-review"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -910,11 +911,7 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "183-mobile-capital-strategy-dashboard"
-    },
-    {
-      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "185-intraday-archive-review"
     }
   ],
-  "timestamp_utc": "2026-09-09T12:55:22.089249Z"
+  "timestamp_utc": "2026-09-09T12:59:44.797497Z"
 }
