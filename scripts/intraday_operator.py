@@ -48,6 +48,10 @@ def runtime_execute():
 
 
 async def execute(args):
+    if args.command == "self-test":
+        from auto_invest.execution.intraday_selftest import self_test
+
+        return await self_test()
     if args.command == "history-review":
         from auto_invest.analytics.intraday_archive import review_archives
 
@@ -152,6 +156,7 @@ async def execute(args):
 def parser():
     result = argparse.ArgumentParser(description=__doc__)
     commands = result.add_subparsers(dest="command", required=True)
+    commands.add_parser("self-test", help="외부 접속 없는 주문 엔진·중지·재시작 자체 시험")
     command = commands.add_parser("history-review", help="보관 자료 결합·연구 검증")
     command.add_argument("--archives", type=Path, required=True)
     command.add_argument("--out", type=Path, required=True)

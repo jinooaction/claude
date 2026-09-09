@@ -16,6 +16,17 @@
 
 ## 시작, 확인, 중지
 
+설치 후 계좌 키 없이 프로그램 자체 시험을 실행할 수 있습니다.
+
+```sh
+uv run python scripts/intraday_operator.py self-test
+```
+
+`SELF_TEST_PASSED`는 시험용 증권사 응답으로 부분 체결·늦은 체결·재시작·중지 정리가
+통과했다는 뜻입니다. 실제 계좌나 네트워크에 연결하지 않으며 사용자 장부를 받지 않습니다.
+실제 거래 자격이나 실계좌 검증 통과를 뜻하지 않습니다. 실패하면 종료 코드2와 실패 항목을
+표시합니다. 아래 `run`은 기존 모의 운용을 시작하는 별도 명령입니다.
+
 ```sh
 uv run python scripts/intraday_operator.py run
 ```
