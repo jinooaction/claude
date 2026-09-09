@@ -1,5 +1,19 @@
 # 실행 계약
 
+`intraday_registration.register(archives, preregistration)`는 고정 사본으로 원본 연구를
+재계산하고 현재 코드/시각을 사용해 연구 고정 서명 바이트를 반환한다. 이전 합격 보고서,
+입력 날짜, 입력 코드 해시, 사용자 키 경로는 받지 않는다. 키는
+`/etc/auto-invest/intraday-forward.key`의 root 소유 일반 파일32바이트이며 타인 읽기와
+그룹/타인 쓰기를 거절한다. 0400/0600/0640 등 허용 권한에서도 호출자의 실제 읽기
+권한이 필요하다. 키를 로그·등록 결과에 싣거나 이번 개발에서 생성/설치하지 않는다.
+
+`assess_registered_forward`는 등록 서명과 현재 연구/실행/사전등록 지문을 검증하고
+같은 사전등록 사본으로 기존 전진 장부 재계산을 호출한다. 등록을 검증했을 때만
+freeze_authentication_verified=true가 되며 execution_parity_verified/live_eligible는
+여전히 false다. 서버 시계·키 보관자는 신뢰 경계이며 악의적인 키 관리자나 과거 시계
+오류까지 검출하는 외부 시간 인증 서비스는 아니다. 키 교체는 이전 등록을 무효화한다.
+실제 서버 키 설치와 등록 수명주기/실행 권한 연결은 아직 수행하지 않았다.
+
 `build_program(selection, router, observe, qualify, collect_bars, capital_limit, now)`는
 내부 의존성을 조립한다. 불일치 연구·자격 검사 누락·계좌/브로커/DB 불일치·600 USD 초과는
 기존 엔진 생성 전에 거절한다. 생성 후에도 계좌·자본·소스 지문과 명시적 자격 검사를
