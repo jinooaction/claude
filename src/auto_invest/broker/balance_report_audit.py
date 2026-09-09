@@ -50,7 +50,7 @@ def audit_report(before, after):
 
 
 def _audit(before, after):
-    checks, invalid = [], []
+    checks, invalid, comparisons = [], [], []
 
     def record(name, status, reason=None, row=None):
         result = dict(check=name, status=status)
@@ -162,31 +162,40 @@ def _audit(before, after):
         ("valuation_krw", "frcr_evlu_amt2", "evlu_amt_smtl"),
         ("profit_krw", "evlu_pfls_amt2", "evlu_pfls_amt_smtl"),
     ):
-        if not fx_supported:
-            record(name, "INCOMPLETE", "FX_UNIT_UNVERIFIED")
+        comparison = dict(check=name, equivalence_verified=False)
+        reported = summary.get(total)
+        if any(c["status"] != "MATCH" for c in checks[:3]):
+            comparison.update(relation="UNAVAILABLE", reason="REPORT_CHANGED")
+        elif not fx_supported:
+            comparison.update(relation="UNAVAILABLE", reason="FX_UNIT_UNVERIFIED")
+        elif not aggregate_valid or reported is None:
+            comparison.update(relation="UNAVAILABLE", reason="MISSING_OR_INVALID_COMPONENT")
         else:
-            compare(name, aggregate[field] if aggregate_valid else None,
-                    summary.get(total), rounding=Decimal(len(positions)))
-            # Numerical hypotheses only: never increase tolerance or certify units.
-            if (aggregate_valid and summary.get(total) is not None
-                    and checks[-1]["status"] == "MISMATCH"
-                    and all(c["status"] == "MATCH" for c in checks[:3])):
-                residual = summary[total] - aggregate[field]
-                checks[-1]["diagnostic"] = dict(
-                    native_sum_relation=("EQUAL" if native[field] == summary[total]
+            residual = reported - aggregate[field]
+            comparison.update(
+                relation="EQUAL" if residual == 0 else "DIFFERENT",
+                reason="AGGREGATION_CONTRACT_UNVERIFIED",
+            )
+            # These cross-output relations have no proven aggregation identity.
+            # Preserve the numerical evidence without treating it as a failed ledger.
+            if residual != 0:
+                comparison["diagnostic"] = dict(
+                    native_sum_relation=("EQUAL" if native[field] == reported
                                          else "DIFFERENT"),
                     reported_vs_converted=("LOWER" if residual < 0 else "HIGHER"),
                     within_one_cent_per_row_fx_bound=abs(residual) <= minor_unit_bound,
                     cause_verified=False,
                 )
+        comparisons.append(comparison)
     value, cost = summary.get("evlu_amt_smtl"), summary.get("pchs_amt_smtl")
     compare("summary_profit", value - cost if value is not None and cost is not None else None,
             summary.get("evlu_pfls_amt_smtl"), rounding=Decimal(1))
     statuses = {c["status"] for c in checks}
     status = next((s for s in ("CHANGED", "MISMATCH", "INCOMPLETE") if s in statuses), "MATCH")
     return dict(
-        schema_version=1, status=status, positions_checked=len(positions),
+        schema_version=2, status=status, positions_checked=len(positions),
         checks=checks[:100], check_count=len(checks), checks_truncated=len(checks) > 100,
+        comparisons=comparisons,
         check_counts={s: sum(c["status"] == s for c in checks)
                       for s in ("MATCH", "MISMATCH", "INCOMPLETE", "CHANGED")},
         invalid_field_count=len(invalid), invalid_fields=invalid[:30],
