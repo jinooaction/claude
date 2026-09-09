@@ -56,6 +56,12 @@
   봉 수집 결과, 관리 결과, 중지 의도, 정리 완료를 구분하고 계좌 비밀값을 저장하지 않는다.
 # 보관 자료의 연구 연결
 
+CostInputComparison은 status, scope=SUPPLIED_BROKER_REPORTS, 대응 주문/조회 주문/
+명세 행 수, 고정 issues, report_totals_match를 가진다. 실제 체결이 있는 조회 주문의
+ID를 로컬 주문과 대조하며 명세 합계는 종목/방향별 수량/거래금액이다. 같은 명세에 여러
+주문이 합쳐져도 per_order_fees_verified는 false다. 계좌 현금·정식 체결 자격·조회 기간의
+완전성·DB 계좌 소속을 증명하지 않으며 실제 입력의 승인 대신 사용하지 않는다.
+
 SettlementAudit는 status(MATCH/MISMATCH/NO_TRANSACTIONS), 행/일치/불일치/통화 수,
 arithmetic_verified, 비공개 불일치 행 위치와 currency_totals를 가진다. 통화별 합계는
 gross_buy/gross_sell/domestic_fee/foreign_fee/net_settlement이며 순정산은 매도 정산액

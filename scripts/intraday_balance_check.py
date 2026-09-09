@@ -22,10 +22,19 @@ from auto_invest.broker.intraday_transactions import (
     public_transactions,
     validate_window,
 )
+from auto_invest.broker.overseas import get_order_executions_resolving_market
+from auto_invest.execution.intraday_cost_reconciliation import (
+    CostReconciliationError,
+    reconcile_cost_inputs,
+)
 
 
-async def run(*, transactions_from=None, transactions_through=None):
+async def run(*, transactions_from=None, transactions_through=None, execution_db=None):
     include_transactions = transactions_from is not None or transactions_through is not None
+    if execution_db is not None:
+        validate_window(transactions_from, transactions_through)
+        if not Path(execution_db).is_file():
+            raise CostReconciliationError("COST_LEDGER_UNAVAILABLE")
     if include_transactions:
         validate_window(transactions_from, transactions_through)
     required = ("KIS_APP_KEY", "KIS_APP_SECRET", "KIS_ACCOUNT_NO")
@@ -59,11 +68,22 @@ async def run(*, transactions_from=None, transactions_through=None):
         )
         transactions = None
         if include_transactions:
-            transactions = public_transactions(await observe_transactions(
+            transaction_snapshot = await observe_transactions(
                 client, account=os.environ["KIS_ACCOUNT_NO"], access_token=token.access_token,
                 app_key=os.environ["KIS_APP_KEY"], app_secret=os.environ["KIS_APP_SECRET"],
                 start_date=transactions_from, end_date=transactions_through,
-            ))
+            )
+            transactions = public_transactions(transaction_snapshot)
+            if execution_db is not None:
+                executions = await get_order_executions_resolving_market(
+                    client, account=os.environ["KIS_ACCOUNT_NO"], access_token=token.access_token,
+                    app_key=os.environ["KIS_APP_KEY"], app_secret=os.environ["KIS_APP_SECRET"],
+                    order_date_yyyymmdd=transactions_from, end_date_yyyymmdd=transactions_through,
+                    strict_contract=True,
+                )
+                transactions["ledger_comparison"] = reconcile_cost_inputs(
+                    Path(execution_db), executions, transaction_snapshot["rows"],
+                )
     result = dict(public_balance_evidence(snapshot), account_assets=account_assets)
     if transactions is not None:
         result["transactions"] = transactions
@@ -74,16 +94,21 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--transactions-from", help="Registration start date, YYYYMMDD")
     parser.add_argument("--transactions-through", help="Registration end date, YYYYMMDD")
+    parser.add_argument(
+        "--execution-db", type=Path, help="Existing execution DB; read-only comparison",
+    )
     args = parser.parse_args()
     try:
         result, code = asyncio.run(run(
             transactions_from=args.transactions_from,
             transactions_through=args.transactions_through,
+            execution_db=args.execution_db,
         ))
     except Exception as exc:
         result = dict(
             status="FAILED",
-            reason=str(exc) if isinstance(exc, AccountReadError) else type(exc).__name__,
+            reason=str(exc) if isinstance(exc, (AccountReadError, CostReconciliationError))
+            else type(exc).__name__,
             orders_submitted=0,
             live_eligible=False,
         )

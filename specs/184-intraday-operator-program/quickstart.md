@@ -120,6 +120,12 @@ transactions.settlement_audit는 거래금액·보고 수수료·정산금액의
 MATCH도 계좌 현금이나 실제 주문별 비용 승인이 아니며, MISMATCH/NO_TRANSACTIONS는
 검증된 합계를 만들지 않는다. 통화별 상세 합계와 원본 금액은 공개 출력에서 제외한다.
 
+같은 명령에 `--execution-db /path/to/existing-execution.db`를 더하면 기존 장부를
+읽기 전용으로 대조한다. 두 날짜 옵션이 모두 필요하며 없는 DB를 만들지 않는다.
+같은 인증의 주문체결 GET 조회를 추가하고 주문번호별 장부 수량/금액→명세 합계를 비교한다.
+ledger_comparison의 MATCH는 제공된 조회들 사이의 일치다. 등록일과 주문일의 전체
+거래 범위나 장부 계좌 소속을 인증하지 않으며 개별 주문 수수료·현금·실거래 승인이 아니다.
+
 ```sh
 uv run python scripts/intraday_balance_check.py --transactions-from 20260901 --transactions-through 20260910
 ```

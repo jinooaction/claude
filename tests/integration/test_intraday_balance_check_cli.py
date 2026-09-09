@@ -38,3 +38,16 @@ def test_invalid_transaction_window_fails_before_authentication(tmp_path, args):
     assert result.returncode == 2
     assert json.loads(result.stdout)["reason"].startswith("TRANSACTIONS_")
     assert not list(tmp_path.iterdir())
+
+
+def test_missing_execution_database_is_rejected_before_authentication(tmp_path):
+    script = Path(__file__).resolve().parents[2] / "scripts/intraday_balance_check.py"
+    path = tmp_path / "missing.db"
+    env = {key: value for key, value in os.environ.items() if not key.startswith("KIS_")}
+    result = subprocess.run([
+        sys.executable, str(script), "--transactions-from", "20260910",
+        "--transactions-through", "20260910", "--execution-db", str(path),
+    ], cwd=tmp_path, env=env, capture_output=True, text=True, timeout=10)
+    assert result.returncode == 2
+    assert json.loads(result.stdout)["reason"] == "COST_LEDGER_UNAVAILABLE"
+    assert not path.exists()
