@@ -1,5 +1,11 @@
 # 실행 계약
 
+`build_program(selection, router, observe, qualify, collect_bars, capital_limit, now)`는
+내부 의존성을 조립한다. 불일치 연구·자격 검사 누락·계좌/브로커/DB 불일치·600 USD 초과는
+기존 엔진 생성 전에 거절한다. 생성 후에도 계좌·자본·소스 지문과 명시적 자격 검사를
+주문 경계에서 반복한다. 이 함수는 자격을 발급하지 않으며 실제 자격 공급자의 완료를
+대신하지 않는다. 반환한 program.run()은 기존 상태·잠금·중지·재시작 운용기를 호출한다.
+
 `select_research(archives, preregistration, code_commit)`는 이전 합격 보고서를 인자로
 받지 않는다. review_archives로 원본 지문·봉 완결성을 검증하고 기존 연구기를 다시
 실행한다. 통과할 때만 원래 등록 후보를 반환하며 부족·불합격은 후보 없음으로 반환한다.
