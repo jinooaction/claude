@@ -88,6 +88,10 @@ async def test_persistent_drain_cancels_late_fill_and_completes_only_after_sell_
     async with rehearsal_session(database) as book:
         await book.engine.step(book.decision(5))
         book.fill("1", 2, "100")
+        partial = await book.observe()
+        assert partial.cash == Decimal("9799.50")
+        assert partial.nav == Decimal("9999.50")
+        assert await book.observe() == partial
         book.engine.request_drain()
         book.engine.request_drain()
         assert book.conn.execute(
@@ -99,6 +103,9 @@ async def test_persistent_drain_cancels_late_fill_and_completes_only_after_sell_
         orders = book.orders
     async with rehearsal_session(database) as book:
         book.orders = orders
+        late = await book.observe()
+        assert late.cash == Decimal("9699.25")
+        assert late.nav == Decimal("9999.25")
         assert book.engine.drain_requested()
         result = await book.engine.manage()
         assert result["status"] == "EXIT_ONLY", result
@@ -110,6 +117,9 @@ async def test_persistent_drain_cancels_late_fill_and_completes_only_after_sell_
         assert (await book.engine.manage()) == dict(status="STOPPED", actions=[])
         assert not book.engine.drain_requested()
         assert book.engine._owned() == {}
+        liquidated = await book.observe()
+        assert liquidated.cash == liquidated.nav == Decimal("9998.50")
+        assert await book.observe() == liquidated
 
 
 @pytest.mark.asyncio
