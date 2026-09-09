@@ -265,3 +265,12 @@ ELS/DLS·WRAP·신탁·RP/발행어음·해외주식·해외채권·금현물·C
 - https://apiportal.koreainvestment.com/api/apis/public/detail?accessUrl=%2Fuapi%2Fdomestic-stock%2Fv1%2Ftrading%2Finquire-account-balance
 - https://github.com/koreainvestment/open-trading-api/blob/main/examples_llm/domestic_stock/inquire_account_balance/inquire_account_balance.py
 - https://github.com/koreainvestment/open-trading-api/blob/main/examples_llm/domestic_stock/inquire_account_balance/chk_inquire_account_balance.py
+
+실제34298665338에서 계좌01의19분류+합계가 모두 제공되고 숫자 형식도 통과했다.
+0이 아닌 분류3개, 분류별5열 합계 및 두 조회 안정성은 정확 일치했다. 표의 순자산
+합계와 별도 nass_tot_amt는 달랐다. 서로 다른 두 필드의 숫자 비교 결과이며 상세
+집계식이 공개되지 않은 상태에서 증권사 오류나 잘못된 계좌 잔액으로 단정하지 않는다.
+공식0891 도움말의 force_help/pro_help 주소는 조회할 수 없었고 검색에서도 추가
+공식 산식을 확보하지 못했다. 정의를 추정해 차액을 보정하거나 MISMATCH를 합격으로
+바꾸지 않는다. 기존 해외 보고서의 원화3개 차이도 유지된다. 현재 확정할 수 있는
+범위는 선택 계좌의 결제기준 분류표 형식·열 합계이며 장중 USD 현금/NAV는 아니다.
