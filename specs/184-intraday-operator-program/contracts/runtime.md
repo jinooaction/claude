@@ -1,5 +1,12 @@
 # 실행 계약
 
+`ExecutionObserver(read_account, quote_snapshot)`는 기존 엔진의 observe에 연결하는
+프로그램 내부 소비자다. 사용자 JSON을 읽어 검증 플래그를 발급하지 않는다.
+현재 KIS observe_account는 full_account_scope_verified=false를 반환하므로
+ACCOUNT_SCOPE_UNVERIFIED로 차단된다. 이 연결만으로 생산 NAV 공급자가 완성된 것은 아니다.
+원본 발생시각 보존·현금 필드 대체 금지·보유/주문 완결 검사 후 기존 엔진의 관측 검사를
+재사용한다. 입력 실패에는 고정 ObservationError만 사용하고 상위 취소 신호는 전파한다.
+
 `self-test`: 외부 입력 없이 고정 시험 전송·새 임시 DB로 부분 체결과 취소, 늦은 체결,
 중지 상태 저장, DB 재열기와 최종 정리를 실제 엔진·운용기로 검증한다. --db 옵션은 없다.
 SELF_TEST_PASSED 또는 FAILED와 검사 항목을 반환하며 실패는 종료 코드2다.

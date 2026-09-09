@@ -9,6 +9,14 @@
 않고 성공·실패를 고정 출력으로 반환한다. 기존 명령은 유지하며 복구는 새 명령 사용 중지다.
 시험 전송은 코드에 고정하며 실제 접속으로 변경하는 옵션은 제공하지 않는다.
 
+FR020은 execution/intraday_observation.py에서 기존 계좌 읽기 함수와 시세 스냅샷을
+기존 Observation으로 변환한다. 공급자 계약 검사·30초 전체 소요·원본 발생시각·보유/주문
+정규화를 수행하고 기존 validate_observation을 재사용한다. 기존 observe_account는
+미검증 현금/NAV를 보고하므로 이 공급자로는 명확한 입력 오류가 반환된다. 정상 경로는
+모의 공급자→변환기→실제 IntradayExecutor→MockTransport로 검증하며 현재 KIS 생산
+검증이 완료된 것으로 기록하지 않는다. 기존 프로그램 내 공급자는 신뢰 경계이며
+외부 JSON의 true 값이나 사용자 승인만으로 검증 공급자를 만들지 않는다.
+
 ## 기술 환경
 
 Python 3.11+, httpx, SQLite, asyncio, websockets 15~17의 asyncio 전송.
