@@ -1,5 +1,11 @@
 # 자료 모델
 
+- ResearchSelection은 재계산 결과의 후보(부족/불합격이면 없음), 공급자, 실행 코드 커밋,
+  자료 지문·연구 결과 지문·현재 실행 지문·판정·실제 세션 수/부족분을 묶는다.
+  KIS 이외 공급자는 자동 변환하지 않으며 execution_identity=None을 유지한다.
+  public()은 항상 live_eligible=false이며 실제 자격/전진 실적을 발급하지 않는다.
+  원본 사전등록 바이트를 한 번 복사해 연구와 후보 구성에서 같은 내용을 사용한다.
+
 - ExecutionObserver는 신뢰하는 프로그램 내부 비동기 계좌 읽기 함수와 동기 시세 캐시를
   기존 Observation으로 변환한다. 전체 페이지·계좌 범위·현금 합산·NAV 검증은 bool true,
   unverified_assets는 빈 dict여야 한다. execution_cash/nav는 USD 숫자 문자열이고

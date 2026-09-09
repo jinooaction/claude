@@ -1,5 +1,11 @@
 # 실행 계약
 
+`select_research(archives, preregistration, code_commit)`는 이전 합격 보고서를 인자로
+받지 않는다. review_archives로 원본 지문·봉 완결성을 검증하고 기존 연구기를 다시
+실행한다. 통과할 때만 원래 등록 후보를 반환하며 부족·불합격은 후보 없음으로 반환한다.
+결과의 실행 지문에는 실제 후보 매개변수와 관측/선택 코드가 포함된다. 재계산 출력은
+새 임시 폴더에만 생성하고 원본 보관 자료는 수정하지 않는다. 계좌/주문 자격은 별도다.
+
 `ExecutionObserver(read_account, quote_snapshot)`는 기존 엔진의 observe에 연결하는
 프로그램 내부 소비자다. 사용자 JSON을 읽어 검증 플래그를 발급하지 않는다.
 현재 KIS observe_account는 full_account_scope_verified=false를 반환하므로
