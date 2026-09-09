@@ -7,6 +7,11 @@
 `status=BALANCE_REPORTS_OBSERVED`와 종료0은 조회 성공이며 산술 합격을 뜻하지 않는다.
 산술 MATCH도 현금 합산 계약·전체 계좌 범위·실시간 평가시각의 검증을 대신하지 않는다.
 
+account_assets는 국내외 자산·예수금 등을 포함하는 별도 결제기준 분류표 대조다.
+현재 계좌 상품의 공식19/16개 분류와 합계, 두 조회의 안정성을 검증한다. 같은 명령에서
+자동 수행하며 추가 계좌·가입·키는 필요없다. 숫자가 빠지거나 분류표가 바뀌면 명확히
+조회 실패로 남긴다. 이 분류표의 MATCH도 실시간 USD 현금·실주문 승인은 아니다.
+
 1. `uv run pytest tests/unit/test_intraday_execution.py tests/integration/test_intraday_execution_contract.py`
 2. `uv run python scripts/intraday_execution.py rehearse`
 3. `uv run pytest`, `uv run ruff check src tests`

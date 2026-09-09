@@ -8,6 +8,7 @@ from pathlib import Path
 
 import httpx
 
+from auto_invest.broker.account_asset_evidence import observe_account_assets
 from auto_invest.broker.auth import get_valid_token
 from auto_invest.broker.client import AsyncTokenBucket, CircuitBreaker, ResilientClient
 from auto_invest.broker.intraday_account import AccountReadError
@@ -43,7 +44,11 @@ async def run():
             app_key=os.environ["KIS_APP_KEY"],
             app_secret=os.environ["KIS_APP_SECRET"],
         )
-    return public_balance_evidence(snapshot), 0
+        account_assets = await observe_account_assets(
+            client, account=os.environ["KIS_ACCOUNT_NO"], access_token=token.access_token,
+            app_key=os.environ["KIS_APP_KEY"], app_secret=os.environ["KIS_APP_SECRET"],
+        )
+    return dict(public_balance_evidence(snapshot), account_assets=account_assets), 0
 
 
 def main():

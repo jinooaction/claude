@@ -249,3 +249,19 @@ ROUNDING_DIFFERENCE로 별도 검사 불가다. USD 외 통화는 환율 호가 
 원화 환산이다. 필드명만 믿고 단위를 바꾸거나 센트 오차를 허용하면 잘못된 합격을
 만들 수 있다. 같은 자료에서 환산 전 합과 일치하는지, 차이가 각 행 1센트 환산 합
 이내인지 구분하되 원래 불일치와 원인 미확정을 유지한다. 새 GET이나 원문 로그는 없다.
+
+## US10 국내외 전체 자산 분류를 위한 별도 공식 API
+
+CTRP6548R `/uapi/domestic-stock/v1/trading/inquire-account-balance`는 해외잔고와
+다른 API다. 공식 개요는 HTS0891 계좌 자산비중(결제기준), output1 속성은 일반20행,
+21번 계좌17행의 순서와 마지막 합계를 명시한다. 일반 표는 주식·펀드/MMW·IMA·채권·
+ELS/DLS·WRAP·신탁·RP/발행어음·해외주식·해외채권·금현물·CD/CP·전자단기사채·
+타사상품·외화전자단기사채·외화ELS/DLS·외화·예수금·청약자예수금·합계다.
+공식 요청은 계좌번호/상품코드, INQR_DVSN_1/BSPR_BF_DT_APLY_YN 공란이다.
+예제 상품19/21은 필수 제한이 아니며 공식 속성은 계좌 뒤2자리로 정의한다.
+기존01 계좌를 그대로 사용한다. 요약의 모든 금액에는 충분한 합산식 설명이 없으므로
+분류표 같은 열 합과 명시된 순자산 합만 대조한다. 장중 현재 NAV 계약은 아니다.
+
+- https://apiportal.koreainvestment.com/api/apis/public/detail?accessUrl=%2Fuapi%2Fdomestic-stock%2Fv1%2Ftrading%2Finquire-account-balance
+- https://github.com/koreainvestment/open-trading-api/blob/main/examples_llm/domestic_stock/inquire_account_balance/inquire_account_balance.py
+- https://github.com/koreainvestment/open-trading-api/blob/main/examples_llm/domestic_stock/inquire_account_balance/chk_inquire_account_balance.py
