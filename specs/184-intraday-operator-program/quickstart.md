@@ -78,3 +78,18 @@ uv run python scripts/intraday_operator.py execution-stop --db /path/to/trading.
 모든 `run/status/stop` 명령에 동일한 `--root`를 지정합니다. 같은 폴더의 중복 실행은 거절합니다.
 기존 서버 장부를 이동하거나 지우지 않습니다. 새 실행기를 중지하면 이전 실행 명령으로
 돌아갈 수 있습니다. 실주문 스위치·자금 배정·실제 주문은 이 명령이 변경하지 않습니다.
+# 날짜별 보관 자료로 전략 검증 실행
+
+이미 보관된 자료를 결합해 기존 연구 검증기로 넘길 수 있습니다. `--archives`는
+YYYY-MM-DD 폴더들이 들어 있는 sessions 폴더이고 `--out`은 아직 없는 새 폴더입니다.
+다음 경로는 예시이며 실제 보관 위치로 바꿉니다. 계좌 키나 새 계정은 필요하지 않습니다.
+
+```sh
+uv run python scripts/intraday_operator.py history-review --archives /path/to/sessions --out /path/to/new-review
+```
+
+review.json에서 실제 완결 거래일 수와 부족분을 확인합니다. research.json은 기존177
+전략 검사 결과이고 ledger.csv는 연구용 모의 체결입니다. 원본 보관 파일은 바뀌지 않습니다.
+원본 지문·가격 파일 불일치, 완료 날짜의 자료 누락, 다른 공급자 혼합은 실패합니다.
+기존 수집기의 임시 보관 폴더는 별도 개수로 표시하며 검증 일수에는 더하지 않습니다.
+중간 거래일이 빠져도 자료 부족으로 남깁니다. 이 명령은 실주문이나 정식 전진 검증을 시작하지 않습니다.

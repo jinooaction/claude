@@ -10,6 +10,7 @@ import importlib.util
 import json
 import os
 import signal
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -47,6 +48,17 @@ def runtime_execute():
 
 
 async def execute(args):
+    if args.command == "history-review":
+        from auto_invest.analytics.intraday_archive import review_archives
+
+        commit = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True,
+        ).strip()
+        return review_archives(
+            args.archives, args.out,
+            ROOT / "specs/177-intraday-paper-challenger/contracts/intraday-preregistration.json",
+            commit,
+        )
     if args.command == "execution-status":
         return execution_runtime.status(args.db)
     if args.command == "execution-stop":
@@ -140,6 +152,9 @@ async def execute(args):
 def parser():
     result = argparse.ArgumentParser(description=__doc__)
     commands = result.add_subparsers(dest="command", required=True)
+    command = commands.add_parser("history-review", help="보관 자료 결합·연구 검증")
+    command.add_argument("--archives", type=Path, required=True)
+    command.add_argument("--out", type=Path, required=True)
     for name in ("run", "status", "stop"):
         command = commands.add_parser(name)
         command.add_argument("--root", type=Path, default=Path("data/intraday-operator"))

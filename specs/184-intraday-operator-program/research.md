@@ -40,3 +40,13 @@
 
 - https://apiportal.koreainvestment.com/api/apis/public/detail?accessUrl=%2Fuapi%2Foverseas-stock%2Fv1%2Ftrading%2Finquire-period-trans
 - https://github.com/koreainvestment/open-trading-api/blob/main/examples_llm/overseas_stock/period_rights/period_rights.py
+# 보관 자료 연결 조사
+
+현재181 service_cycle은 소스 식별자별 sessions/YYYY-MM-DD에 write_batch 결과를
+보관한다. 실패한 YYYY-MM-DD-partial-uuid 폴더도 보존하므로 결합기는 명시적으로
+개수를 기록하고 완료 거래일로 세지 않아야 한다. 기존177 자료 검증기는 개별 봉·CSV
+지문·완결 세션을 검사하지만 여러 보관 폴더를 연결하지 않는다. 기존 연구 검증기는
+정식 전진 관측을 수행하지 않는다. 새 연결은 원본과 CSV를 대조하고 하나의 연구 입력으로
+합치며 756세션 기준·18개 후보·비용·선택 로직은 기존 구현을 재사용한다.
+현재 API의 과거30일 조회 제한, 데이터의 부분 시장 성격, 실제 자료 부재를 이 연결로
+해결했다고 주장하지 않는다. 정식60세션 연결과 실주문 입력·권한은 별도 미완료다.

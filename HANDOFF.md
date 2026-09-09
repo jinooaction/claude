@@ -31,6 +31,13 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 ## 한눈 요약표 — 2026-09-09 KST 실제 잔고 산술 대조
 
+184 T016 후속: 날짜별 보관 자료를 기존177 연구 검증기로 연결하는 history-review를
+구현했다. 원본/CSV 지문·내용·완결 거래일·동일 공급자를 검증하고 새 폴더에만 결합한다.
+거래일 수·부족분·기간 내 누락을 실제 파일에서 계산하며 진단용 고정0을 사용하지 않는다.
+신규17개 포함 관련26개, 전체3906 passed/11 skipped(796.72초) 통과.
+실제 서버 자료 검증은 독립 스펙185의 정상 배포 후 수행한다.
+기존 수집기·실주문 경계는 변경하지 않고 T009/T010의 완료를 대신하지 않는다.
+
 개발 브랜치184 진행: 초안 PR793, 코드`3756aee`, `codex/184-intraday-operator-program`에서 사용자 실행 명령과
 엄격한 실제 시세 입력을 구현 중이다. `scripts/intraday_operator.py`의
 `run/status/stop/quotes/buying-power`와 [사용 안내](specs/184-intraday-operator-program/quickstart.md)를

@@ -14,3 +14,11 @@
   사건을 추가한다. 완료보다 뒤에 있는 요청은 재시작에서도 정리를 계속하게 한다.
 - 실주문 운용 상태는 공용 DB 경로에 종속된 상태 폴더와 별도 수명주기 잠금을 사용한다.
   봉 수집 결과, 관리 결과, 중지 의도, 정리 완료를 구분하고 계좌 비밀값을 저장하지 않는다.
+# 보관 자료의 연구 연결
+
+ArchiveReview는 실제 session_count, required_sessions(756), missing_sessions,
+missing_calendar_sessions, incomplete_archive_count, provider, synthetic,
+dataset_fingerprint, 기존177 decision으로 구성한다. observation_type은
+HISTORICAL_RESEARCH이며 live_eligible=false, orders_submitted=0이다.
+합성 여부·부분 시장 수정 정책을 원본에서 보존하고 합성 또는 누락 자료를 연구 합격으로
+바꾸지 않는다. source.json의 archives에는 날짜별 원본/manifest 지문을 남긴다.
