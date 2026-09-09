@@ -5,13 +5,14 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import timedelta
-from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal
+from decimal import Decimal
 from pathlib import Path
 
 from auto_invest.analytics.intraday_paper_challenger import _entry_signal, _exit_signal
 from auto_invest.analytics.intraday_runtime import PaperRuntime
 from auto_invest.execution.intraday import Decision
 from auto_invest.market_data.intraday import CALENDAR, NY, SYMBOLS, normalize, utc
+from auto_invest.market_data.intraday_pricing import limit_price
 
 
 def execution_fingerprint(candidate, provider):
@@ -28,6 +29,7 @@ def execution_fingerprint(candidate, provider):
         Path(__file__).with_name("intraday_registration.py"),
         Path(__file__).parents[1] / "analytics/intraday_paper_challenger.py",
         Path(__file__).parents[1] / "analytics/intraday_runtime.py",
+        Path(__file__).parents[1] / "market_data/intraday_pricing.py",
     ]
     identity = dict(
         candidate=candidate.as_dict(),
@@ -120,12 +122,10 @@ def compile_decision(
             and not (candidate.family == "opening_range_breakout" and symbol in entered_symbols)
             and _entry_signal(candidate, series, len(series) - 1)
         ):
-            limit = (price * Decimal("1.0006")).quantize(Decimal(".01"), rounding=ROUND_FLOOR)
+            limit = limit_price(price, buy=True)
             notional = min(capital * Decimal(".16"), cash / Decimal("1.003"))
             targets[symbol] = int(notional / limit)
             cash -= targets[symbol] * limit * Decimal("1.003")
         buying = targets[symbol] > qty
-        limits[symbol] = (price * Decimal("1.0006" if buying else ".9994")).quantize(
-            Decimal(".01"), rounding=ROUND_FLOOR if buying else ROUND_CEILING
-        )
+        limits[symbol] = limit_price(price, buy=buying)
     return Decision(execution_fingerprint(candidate, provider), end, targets, limits)

@@ -13,6 +13,20 @@ from auto_invest.execution.intraday_rehearsal import FINGERPRINT, rehearsal_sess
 
 
 @pytest.mark.asyncio
+async def test_drain_sell_preserves_exact_six_basis_point_limit(tmp_path):
+    async with rehearsal_session(
+        tmp_path / "drain.db", capital_limit=Decimal("600"), mark=Decimal("25"),
+    ) as book:
+        await book.engine.step(book.decision(1))
+        book.fill("1", 1, "25", terminal=True)
+        book.engine.request_drain()
+        await book.engine.manage()
+        assert book.orders["2"]["sll_buy_dvsn_cd"] == "01"
+        assert Decimal(book.orders["2"]["ft_ord_unpr3"]) == Decimal("24.99")
+        assert book.orders["2"]["qty"] == 1
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "response",
     [

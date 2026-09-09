@@ -11,6 +11,7 @@ import json
 import math
 import sqlite3
 from datetime import datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
 
 from auto_invest.analytics.intraday_paper_challenger import (
@@ -30,6 +31,7 @@ from auto_invest.market_data.intraday import (
     normalize,
     utc,
 )
+from auto_invest.market_data.intraday_pricing import limit_price
 
 MODEL = "limit-next-5m-v1"
 INITIAL = 100_000.0
@@ -128,6 +130,9 @@ class PaperRuntime:
             runtime_source=digest(Path(__file__).read_bytes()),
             signal_source=digest(
                 Path(__file__).with_name("intraday_paper_challenger.py").read_bytes()
+            ),
+            pricing_source=digest(
+                (Path(__file__).parents[1] / "market_data/intraday_pricing.py").read_bytes()
             ),
             config=digest(encode(preregistration)),
             provider=provider,
@@ -318,7 +323,7 @@ class PaperRuntime:
                         limit = (
                             existing["limit"]
                             if existing and existing["side"] == "SELL"
-                            else math.ceil(rows[symbol]["close"] * 0.9994 * 100) / 100
+                            else float(limit_price(Decimal(str(rows[symbol]["close"])), buy=False))
                         )
                         account["pending"][symbol] = dict(
                             side="SELL", qty=qty, limit=limit, eligible=iso(end)
@@ -334,7 +339,7 @@ class PaperRuntime:
                             and symbol in account["entered"]
                         ):
                             continue
-                        limit = math.floor(rows[symbol]["close"] * 1.0006 * 100) / 100
+                        limit = float(limit_price(Decimal(str(rows[symbol]["close"])), buy=True))
                         allocation = min(
                             self._nav(account, rows) * 0.16, account["cash"] / (1 + COMMISSION)
                         )

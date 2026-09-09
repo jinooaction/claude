@@ -24,6 +24,7 @@ from auto_invest.execution.cancellation import request_cancellation
 from auto_invest.execution.fill_sync import sync_fills
 from auto_invest.execution.order_router import OrderRouter
 from auto_invest.market_data.intraday import CALENDAR, NY, SYMBOLS
+from auto_invest.market_data.intraday_pricing import limit_price
 
 EXCHANGES = {"SPY": "AMEX", "QQQ": "NASD", "IWM": "AMEX", "TLT": "NASD", "GLD": "AMEX"}
 OPEN = {"INTENT", "SUBMITTING", "SUBMISSION_UNKNOWN", "SUBMITTED", "PARTIALLY_FILLED"}
@@ -548,7 +549,7 @@ class IntradayExecutor:
             side = Side.BUY if delta > 0 else Side.SELL
             mark = view.marks[symbol]
             limit = (
-                (mark * Decimal(".9994")).quantize(Decimal(".01"))
+                limit_price(mark, buy=False)
                 if exit_only
                 else d.limits[symbol]
             )
