@@ -58,6 +58,126 @@ def signals(book):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("partial_cancel", [False, True])
+async def test_one_collected_signal_resumes_remaining_symbols_after_fill(tmp_path, partial_cancel):
+    async with rehearsal_session(tmp_path / "batch.db") as book:
+        candidate, bars = signals(book)
+        original_manage = book.engine.manage
+        collections = 0
+
+        async def collect():
+            nonlocal collections
+            collections += 1
+            return bars
+
+        async def manage():
+            for number, order in list(book.orders.items()):
+                if int(order["nccs_qty"]):
+                    partial = partial_cancel and number == "1"
+                    book.fill(number, 2 if partial else order["qty"], "109", terminal=partial)
+            return await original_manage()
+
+        book.engine.manage = manage
+        await run(book.engine, candidate=candidate, provider=PROVIDER, collect_bars=collect,
+                  poll_seconds=.01, collection_seconds=300, max_cycles=10)
+        assert collections == 1
+        assert len(book.orders) == len(SYMBOLS)
+        assert {order["pdno"] for order in book.orders.values()} == set(SYMBOLS)
+        assert all(order["sll_buy_dvsn_cd"] == "02" for order in book.orders.values())
+        if partial_cancel:
+            assert int(book.orders["1"]["ft_ccld_qty"]) == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("interruption", ["stop", "stale", "source_failure"])
+async def test_waiting_signal_retry_preserves_input_and_stop_guards(tmp_path, interruption):
+    async with rehearsal_session(tmp_path / "interrupted-batch.db") as book:
+        candidate, bars = signals(book)
+        original_manage = book.engine.manage
+        stop = asyncio.Event()
+        first_order = asyncio.Event()
+        collections = 0
+        interrupted = False
+
+        async def collect():
+            nonlocal collections
+            collections += 1
+            if interruption == "source_failure" and collections > 1:
+                await first_order.wait()
+                raise RuntimeError("offline source failure")
+            return bars
+
+        async def manage():
+            nonlocal interrupted
+            if book.orders and not interrupted:
+                interrupted = True
+                first_order.set()
+                order = book.orders["1"]
+                book.fill("1", order["qty"], "109")
+                if interruption == "stop":
+                    stop.set()
+                elif interruption == "stale":
+                    book.now += timedelta(seconds=91)
+                else:
+                    await asyncio.sleep(.03)
+            for number, order in list(book.orders.items()):
+                if order["sll_buy_dvsn_cd"] == "01":
+                    book.fill(number, order["qty"], "109")
+            return await original_manage()
+
+        book.engine.manage = manage
+        async with asyncio.timeout(3) as deadline:
+            result = await run(
+                book.engine, candidate=candidate, provider=PROVIDER, collect_bars=collect,
+                poll_seconds=.01,
+                collection_seconds=.01 if interruption == "source_failure" else 300,
+                max_cycles=8, stop_event=stop,
+            )
+        assert not deadline.expired(), "runtime swallowed cancellation while closing collector"
+        buys = [order for order in book.orders.values() if order["sll_buy_dvsn_cd"] == "02"]
+        assert interrupted and len(buys) == 1
+        if interruption == "stop":
+            assert result["phase"] == "STOPPED" and book.engine._owned() == {}
+        elif interruption == "source_failure":
+            assert result["signal_state"] == "UNAVAILABLE"
+
+
+@pytest.mark.asyncio
+async def test_parent_cancel_during_collector_cleanup_is_not_reported_as_normal_exit(tmp_path):
+    database = tmp_path / "cancel-during-close.db"
+    async with rehearsal_session(database) as book:
+        cleanup_started = asyncio.Event()
+        never = asyncio.Event()
+
+        async def collect():
+            try:
+                await never.wait()
+            except asyncio.CancelledError:
+                cleanup_started.set()
+                await never.wait()
+                raise
+
+        task = asyncio.create_task(run(
+            book.engine, candidate=None, provider=PROVIDER, collect_bars=collect,
+            poll_seconds=.01, max_cycles=2,
+        ))
+        try:
+            await asyncio.wait_for(cleanup_started.wait(), 3)
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await asyncio.wait_for(task, 3)
+            current = status(database)
+            assert current["phase"] == "INTERRUPTED" and not current["running"]
+            assert book.engine.drain_requested()
+            assert book.requests == []
+        finally:
+            never.set()
+            if not task.done():
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+
+
+@pytest.mark.asyncio
 async def test_management_preserves_young_buy_and_cancels_only_at_ttl(tmp_path):
     async with rehearsal_session(tmp_path / "test.db") as book:
         await book.engine.step(book.decision(5))

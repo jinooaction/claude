@@ -146,7 +146,8 @@ async def run(
     async def collect():
         while True:
             try:
-                bars = await asyncio.wait_for(collect_bars(), collection_timeout)
+                async with asyncio.timeout(collection_timeout):
+                    bars = await collect_bars()
                 if not isinstance(bars, list) or not 1 <= len(bars) <= 10000:
                     raise ValueError
                 source.update(bars=[dict(row) for row in bars], error=None)
@@ -164,6 +165,17 @@ async def run(
     collector = None
     consumed = 0
     resources = AsyncExitStack()
+
+    async def close_collector():
+        collector.cancel()
+        try:
+            await collector
+        except asyncio.CancelledError:
+            # Ignore the child's acknowledged cancellation, not cancellation
+            # of this runtime while it is waiting for the child to close.
+            if asyncio.current_task().cancelling():
+                raise
+
     try:
         if resource_manager is not None:
             await resources.enter_async_context(resource_manager)
@@ -171,9 +183,7 @@ async def run(
             if stopping():
                 engine.request_drain()
                 if collector is not None:
-                    collector.cancel()
-                    with suppress(asyncio.CancelledError):
-                        await collector
+                    await close_collector()
                     collector = None
             result = await engine.manage()
             state.update(
@@ -202,13 +212,18 @@ async def run(
                 if collector is None:
                     collector = asyncio.create_task(collect())
                 if source["bars"] is not None and source["generation"] > consumed:
-                    consumed = source["generation"]
+                    generation = source["generation"]
                     # A stop arriving during management is checked again here
                     # and by the engine at the broker's last write boundary.
                     if not stopping():
                         result = await engine.on_bars(
                             candidate, provider=provider, bars=source["bars"]
                         )
+                        # A broker wait may leave later symbols unprocessed.
+                        # Retry through the full engine checks after management;
+                        # existing claims prevent reissuing a completed order.
+                        if result["status"] != "WAIT_BROKER":
+                            consumed = generation
                         state["last_result"] = result
                         state["entries_enabled"] = (
                             result["status"] == "PROCESSED" and not stopping()
@@ -240,9 +255,12 @@ async def run(
     finally:
         try:
             if collector is not None:
-                collector.cancel()
-                with suppress(asyncio.CancelledError):
-                    await collector
+                await close_collector()
+        except asyncio.CancelledError:
+            engine.request_drain()
+            state["entries_enabled"] = False
+            save("INTERRUPTED")
+            raise
         finally:
             try:
                 await resources.aclose()
