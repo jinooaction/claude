@@ -1,6 +1,7 @@
 # 자료 모델
 
-- IntradayProgram.valuation_feed는 전략 quote_feed와 분리된 기존 보유 평가 연결이다.
+- KIS 프로그램의 quote_feed는 단일 계좌 시세 연결의 전략5종목 전용 뷰다.
+  관측 변환기는 같은 연결의 전체 평가 뷰를 읽는다. 물리 웹소켓은 하나다.
   거래소 탐색의 REST Quote는 구독 주소 결정에만 사용한다. 가격은 원본 발생시각이
   있는 SourceQuote만 반환하며 종료 시 비운다. baseline 지문이 구독 대상도 묶는다.
 

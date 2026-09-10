@@ -129,13 +129,8 @@ def build_kis_program(*, router, token_cache, archives, forward_database, regist
     valuation_feed = None
     if valuation_symbols:
         valuation_feed = _ValuationFeed(observer, valuation_symbols, now)
-
-        def account_quotes():
-            # Valuation prices never enter the strategy stream's exact-universe
-            # check or extend Decision/whitelist order permissions.
-            return {**feed.snapshot(), **valuation_feed.snapshot()}
-
-        observer.quote_snapshot = account_quotes
+        observer.quote_snapshot = valuation_feed.snapshot
+        feed = _StrategyQuoteView(valuation_feed)
 
     async def refresh_auth():
         await observer.refresh_credentials()
@@ -161,15 +156,26 @@ def build_kis_program(*, router, token_cache, archives, forward_database, regist
         observer._check_connection()
         return key
 
-    return replace(program, quote_feed=feed, quote_approval=approval,
-                   valuation_feed=valuation_feed)
+    # One physical connection and one approval, with separate consumer views.
+    return replace(program, quote_feed=feed, quote_approval=approval)
+
+
+class _StrategyQuoteView:
+    def __init__(self, account_feed):
+        self.account_feed = account_feed
+
+    def snapshot(self):
+        return {s: q for s, q in self.account_feed.snapshot().items() if s in SYMBOLS}
+
+    async def serve(self, *, approval):
+        await self.account_feed.serve(approval=approval)
 
 
 class _ValuationFeed:
     """Discover listed-market subscriptions without using receipt-timed REST prices."""
 
     def __init__(self, observer, symbols, now):
-        if not 1 <= len(symbols) <= 40:
+        if not 1 <= len(symbols) <= 40 - len(SYMBOLS):
             raise ValueError("PROGRAM_VALUATION_SUBSCRIPTION_LIMIT")
         self.observer, self.symbols, self.now = observer, tuple(symbols), now
         self.feed = None
@@ -191,7 +197,8 @@ class _ValuationFeed:
                 )
                 observer._check_connection()
                 markets[symbol] = QUOTE_TO_ORDER_EXCHANGE[quote.resolved_market]
-            self.feed = StrictQuoteFeed(self.symbols, valuation_exchanges=markets, now=self.now)
+            self.feed = StrictQuoteFeed(tuple(SYMBOLS) + self.symbols,
+                                        valuation_exchanges=markets, now=self.now)
             await self.feed.serve(approval=approval)
         finally:
             # A discovery failure or terminated stream must never retain prices.

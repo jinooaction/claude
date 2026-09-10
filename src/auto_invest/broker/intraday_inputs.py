@@ -166,12 +166,14 @@ class StrictQuoteFeed:
             self.exchanges = dict(EXCHANGES)
             self.subscribed = {subscription_key(s): s for s in symbols}
         else:
-            self.exchanges = dict(valuation_exchanges)
-            if (set(self.exchanges) != set(symbols) or len(symbols) > 40
+            additional = dict(valuation_exchanges)
+            if (not set(additional) <= set(symbols) or len(symbols) > 40
                     or any(not isinstance(s, str) or not re.fullmatch(r"[A-Z][A-Z0-9.]{0,19}", s)
-                           or m not in PREFIXES for s, m in self.exchanges.items())
-                    or set(symbols) & set(EXCHANGES)):
+                           or m not in PREFIXES for s, m in additional.items())
+                    or set(additional) & set(EXCHANGES)
+                    or set(symbols) - (set(additional) | set(EXCHANGES))):
                 raise InputError("INVALID_VALUATION_SUBSCRIPTIONS")
+            self.exchanges = {s: EXCHANGES[s] for s in symbols if s in EXCHANGES} | additional
             self.subscribed = {PREFIXES[self.exchanges[s]] + s: s for s in symbols}
         self.now: Callable[[], datetime] = now
         self.quotes: dict[str, SourceQuote] = {}

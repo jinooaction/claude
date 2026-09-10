@@ -13,7 +13,7 @@ from auto_invest.broker.intraday_inputs import (
     StrictQuoteFeed,
     subscription_key,
 )
-from auto_invest.execution.intraday_program import _ValuationFeed
+from auto_invest.execution.intraday_program import _StrategyQuoteView, _ValuationFeed
 
 NOW = datetime(2026, 9, 10, 15, 0, tzinfo=UTC)
 
@@ -23,6 +23,7 @@ async def test_rest_discovers_market_but_only_source_timed_stream_values_account
     clock = [NOW]
     calls = []
     ready = asyncio.Event()
+    connections = []
 
     def handler(request):
         calls.append(request)
@@ -32,6 +33,7 @@ async def test_rest_discovers_market_but_only_source_timed_stream_values_account
         )))
 
     async def stream(feed, *, approval):
+        connections.append(feed)
         await approval()
         feed.connected = True
         for key, symbol in feed.subscribed.items():
@@ -59,15 +61,17 @@ async def test_rest_discovers_market_but_only_source_timed_stream_values_account
         )
         valuation = _ValuationFeed(observer, ["SCHX", "IAUM"], lambda: clock[0])
         assert valuation.snapshot() == {}
-        task = asyncio.create_task(valuation.serve(approval=refresh))
+        task = asyncio.create_task(_StrategyQuoteView(valuation).serve(approval=refresh))
         try:
             await asyncio.wait_for(ready.wait(), 2)
             values = valuation.snapshot()
-            assert set(values) == {"SCHX", "IAUM"}
+            assert set(values) == set(EXCHANGES) | {"SCHX", "IAUM"}
             assert all(q.last == 40 and q.source_at == NOW for q in values.values())
-            assert all(q.exchange == "AMEX" for q in values.values())
+            assert all(values[s].exchange == "AMEX" for s in ("SCHX", "IAUM"))
+            assert set(_StrategyQuoteView(valuation).snapshot()) == set(EXCHANGES)
+            assert len(connections) == 1 and len(connections[0].subscribed) == 7
             assert set(StrictQuoteFeed().subscribed.values()) == set(EXCHANGES)
-            for symbol in values:
+            for symbol in ("SCHX", "IAUM"):
                 with pytest.raises(InputError, match="SYMBOL_NOT_ALLOWED"):
                     subscription_key(symbol)
             clock[0] += timedelta(seconds=31)
@@ -105,3 +109,14 @@ async def test_unresolved_otc_price_is_not_zero_or_a_receipt_timed_mark():
 def test_valuation_subscriptions_do_not_expand_strategy_or_guess_otc_exchange(mapping):
     with pytest.raises(InputError):
         StrictQuoteFeed(tuple(mapping), valuation_exchanges=mapping)
+
+
+def test_total_subscription_limit_includes_strategy_symbols_before_network():
+    with pytest.raises(ValueError, match="SUBSCRIPTION_LIMIT"):
+        _ValuationFeed(None, [f"X{i}" for i in range(36)], lambda: NOW)
+    external = {f"X{i}": "AMEX" for i in range(35)}
+    feed = StrictQuoteFeed(tuple(EXCHANGES) + tuple(external), valuation_exchanges=external)
+    assert len(feed.subscribed) == 40
+    with pytest.raises(InputError, match="SUBSCRIPTIONS"):
+        StrictQuoteFeed(tuple(EXCHANGES) + tuple(external) + ("MORE",),
+                        valuation_exchanges=external | {"MORE": "AMEX"})
