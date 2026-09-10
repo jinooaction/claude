@@ -104,9 +104,11 @@ class SourceQuote:
         )
 
 
-def parse_trades(raw: str | bytes, *, subscribed: Mapping[str, str], received_at: datetime):
+def parse_trades(raw: str | bytes, *, subscribed: Mapping[str, str], received_at: datetime,
+                 exchanges=None):
     """Validate an entire frame atomically; no 25-field or receipt-time fallback."""
     received = _aware(received_at)
+    markets = EXCHANGES if exchanges is None else exchanges
     if not isinstance(raw, str | bytes) or len(raw) > 65536:
         raise InputError("INVALID_FRAME")
     try:
@@ -125,7 +127,9 @@ def parse_trades(raw: str | bytes, *, subscribed: Mapping[str, str], received_at
     for offset in range(0, len(fields), 26):
         row = fields[offset:offset + 26]
         rsym, symbol = row[:2]
-        if subscribed.get(rsym) != symbol or rsym != subscription_key(symbol):
+        market = markets.get(symbol)
+        if (subscribed.get(rsym) != symbol or market not in PREFIXES
+                or rsym != PREFIXES[market] + symbol):
             raise InputError("UNSUBSCRIBED_QUOTE")
         if row[25] != "1":
             raise InputError("NON_REGULAR_QUOTE")
@@ -141,7 +145,7 @@ def parse_trades(raw: str | bytes, *, subscribed: Mapping[str, str], received_at
         if bid and ask and bid > ask:
             raise InputError("CROSSED_QUOTE")
         result.append(SourceQuote(
-            symbol, EXCHANGES[symbol], rsym, last, bid or None, ask or None,
+            symbol, market, rsym, last, bid or None, ask or None,
             source, received, row[6], row[7], row[4], row[5], row[25],
         ))
     return tuple(result)
@@ -154,10 +158,21 @@ class StrictQuoteFeed:
     Production defaults are fixed; tests may inject a local transport factory.
     """
 
-    def __init__(self, symbols=tuple(EXCHANGES), *, now=lambda: datetime.now(UTC)):
+    def __init__(self, symbols=tuple(EXCHANGES), *, now=lambda: datetime.now(UTC),
+                 valuation_exchanges=None):
         if not symbols or len(set(symbols)) != len(symbols):
             raise InputError("INVALID_SUBSCRIPTIONS")
-        self.subscribed = {subscription_key(s): s for s in symbols}
+        if valuation_exchanges is None:
+            self.exchanges = dict(EXCHANGES)
+            self.subscribed = {subscription_key(s): s for s in symbols}
+        else:
+            self.exchanges = dict(valuation_exchanges)
+            if (set(self.exchanges) != set(symbols) or len(symbols) > 40
+                    or any(not isinstance(s, str) or not re.fullmatch(r"[A-Z][A-Z0-9.]{0,19}", s)
+                           or m not in PREFIXES for s, m in self.exchanges.items())
+                    or set(symbols) & set(EXCHANGES)):
+                raise InputError("INVALID_VALUATION_SUBSCRIPTIONS")
+            self.subscribed = {PREFIXES[self.exchanges[s]] + s: s for s in symbols}
         self.now: Callable[[], datetime] = now
         self.quotes: dict[str, SourceQuote] = {}
         self.connected = False
@@ -195,7 +210,8 @@ class StrictQuoteFeed:
                 raise
             except (ValueError, TypeError, KeyError, AttributeError):
                 raise InputError("INVALID_OR_REJECTED_CONTROL") from None
-        trades = parse_trades(raw, subscribed=self.subscribed, received_at=self.now())
+        trades = parse_trades(raw, subscribed=self.subscribed, received_at=self.now(),
+                              exchanges=self.exchanges)
         pending = dict(self.quotes)
         for trade in trades:
             if trade.rsym not in self.acknowledged:

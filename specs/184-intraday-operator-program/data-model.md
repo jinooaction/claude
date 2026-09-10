@@ -1,5 +1,9 @@
 # 자료 모델
 
+- IntradayProgram.valuation_feed는 전략 quote_feed와 분리된 기존 보유 평가 연결이다.
+  거래소 탐색의 REST Quote는 구독 주소 결정에만 사용한다. 가격은 원본 발생시각이
+  있는 SourceQuote만 반환하며 종료 시 비운다. baseline 지문이 구독 대상도 묶는다.
+
 - AccountHistory는 계좌 해시, 관측 배치 순번, 시작/종료 시각, COMPLETE/FAILED,
   인증 제외 응답 데이터, 조회 조건, 실행 장부 전후 건수/최종 순번, 이전/현재 해시를 저장한다.
   순번은 로컬 관측 순서일 뿐 증권사 거래의 연속 번호가 아니다. 첫 관측을 보존하지만

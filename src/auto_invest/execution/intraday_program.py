@@ -10,6 +10,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from auto_invest.broker.intraday_inputs import StrictQuoteFeed, approval_key
+from auto_invest.broker.overseas import QUOTE_TO_ORDER_EXCHANGE, get_quote_resolving_market
 from auto_invest.execution.intraday import IntradayExecutor
 from auto_invest.execution.intraday_observation import KISExecutionObserver
 from auto_invest.execution.intraday_qualification import prepare_qualification
@@ -43,6 +44,7 @@ class IntradayProgram:
     collect_bars: object
     quote_feed: StrictQuoteFeed | None = None
     quote_approval: object = None
+    valuation_feed: object = None
 
     async def run(self, **runtime_options):
         async def execute(**resources):
@@ -58,10 +60,10 @@ class IntradayProgram:
         terminal = False
         started = False
 
-        async def serve():
+        async def serve(feed):
             nonlocal terminal
             try:
-                await self.quote_feed.serve(approval=self.quote_approval)
+                await feed.serve(approval=self.quote_approval)
             except asyncio.CancelledError:
                 raise
             except Exception:
@@ -82,14 +84,19 @@ class IntradayProgram:
 
             self.engine.entry_guard = entry_guard
             started = True
-            quotes = asyncio.create_task(serve())
+            feeds = [self.quote_feed]
+            if self.valuation_feed is not None:
+                feeds.append(self.valuation_feed)
+            quotes = [asyncio.create_task(serve(feed)) for feed in feeds]
             try:
                 yield
             finally:
-                quotes.cancel()
+                for task in quotes:
+                    task.cancel()
                 try:
-                    with suppress(asyncio.CancelledError):
-                        await quotes
+                    for task in quotes:
+                        with suppress(asyncio.CancelledError):
+                            await task
                 finally:
                     self.engine.entry_guard = previous
 
@@ -118,6 +125,17 @@ def build_kis_program(*, router, token_cache, archives, forward_database, regist
     observer = KISExecutionObserver(
         router.execution_authority, feed.snapshot, token_cache=token_cache, now=now,
     )
+    valuation_symbols = sorted(set(baseline) - set(SYMBOLS))
+    valuation_feed = None
+    if valuation_symbols:
+        valuation_feed = _ValuationFeed(observer, valuation_symbols, now)
+
+        def account_quotes():
+            # Valuation prices never enter the strategy stream's exact-universe
+            # check or extend Decision/whitelist order permissions.
+            return {**feed.snapshot(), **valuation_feed.snapshot()}
+
+        observer.quote_snapshot = account_quotes
 
     async def refresh_auth():
         await observer.refresh_credentials()
@@ -143,7 +161,41 @@ def build_kis_program(*, router, token_cache, archives, forward_database, regist
         observer._check_connection()
         return key
 
-    return replace(program, quote_feed=feed, quote_approval=approval)
+    return replace(program, quote_feed=feed, quote_approval=approval,
+                   valuation_feed=valuation_feed)
+
+
+class _ValuationFeed:
+    """Discover listed-market subscriptions without using receipt-timed REST prices."""
+
+    def __init__(self, observer, symbols, now):
+        if not 1 <= len(symbols) <= 40:
+            raise ValueError("PROGRAM_VALUATION_SUBSCRIPTION_LIMIT")
+        self.observer, self.symbols, self.now = observer, tuple(symbols), now
+        self.feed = None
+
+    def snapshot(self):
+        return self.feed.snapshot() if self.feed is not None else {}
+
+    async def serve(self, *, approval):
+        observer = self.observer
+        markets = {}
+        try:
+            await observer.refresh_credentials()
+            for symbol in self.symbols:
+                observer._check_connection()
+                quote = await get_quote_resolving_market(
+                    observer.broker, access_token=observer.authority.access_token,
+                    app_key=observer.authority.app_key, app_secret=observer.authority.app_secret,
+                    symbol=symbol,
+                )
+                observer._check_connection()
+                markets[symbol] = QUOTE_TO_ORDER_EXCHANGE[quote.resolved_market]
+            self.feed = StrictQuoteFeed(self.symbols, valuation_exchanges=markets, now=self.now)
+            await self.feed.serve(approval=approval)
+        finally:
+            # A discovery failure or terminated stream must never retain prices.
+            self.feed = None
 
 
 def build_program(

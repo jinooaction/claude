@@ -54,7 +54,10 @@ async def offline_approval():
 
 
 @pytest.mark.asyncio
-async def test_program_owns_quotes_only_after_database_lock_and_closes_on_stop(tmp_path):
+@pytest.mark.parametrize("with_valuation", [False, True])
+async def test_program_owns_quotes_only_after_database_lock_and_closes_on_stop(
+    tmp_path, with_valuation,
+):
     async with rehearsal_session(tmp_path / "simulation.db") as book:
         config = configuration(book)
 
@@ -63,12 +66,19 @@ async def test_program_owns_quotes_only_after_database_lock_and_closes_on_stop(t
 
         config["collect_bars"] = collect
         feed = LifecycleFeed()
-        program = replace(build_program(**config), quote_feed=feed, quote_approval=offline_approval)
+        valuation = LifecycleFeed() if with_valuation else None
+        if valuation is not None:
+            valuation.snapshot = lambda: dict.fromkeys(("SCHX", "IAUM"))
+        program = replace(build_program(**config), quote_feed=feed, quote_approval=offline_approval,
+                          valuation_feed=valuation)
         original = program.engine.entry_guard
         stop = asyncio.Event()
         task = asyncio.create_task(program.run(stop_event=stop, poll_seconds=.01))
         try:
             await asyncio.wait_for(feed.started.wait(), 2)
+            if valuation is not None:
+                await asyncio.wait_for(valuation.started.wait(), 2)
+                assert program.engine.entry_guard() != "QUOTE_STREAM_UNAVAILABLE"
             guard = program.engine.entry_guard
             duplicate = await program.run(max_cycles=1)
             assert duplicate["phase"] == "ALREADY_RUNNING"
@@ -80,6 +90,8 @@ async def test_program_owns_quotes_only_after_database_lock_and_closes_on_stop(t
             assert done["phase"] == "STOPPED"
             assert done["quote_state"] == "CLOSED"
             assert feed.closed.is_set()
+            if valuation is not None:
+                assert valuation.closed.is_set() and valuation.calls == 1
             assert program.engine.entry_guard is original
             assert not book.orders
         finally:
