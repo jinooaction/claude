@@ -12,7 +12,11 @@ import httpx
 from auto_invest.broker.account_asset_evidence import observe_account_assets
 from auto_invest.broker.auth import get_valid_token
 from auto_invest.broker.client import AsyncTokenBucket, CircuitBreaker, ResilientClient
-from auto_invest.broker.intraday_account import AccountReadError
+from auto_invest.broker.intraday_account import (
+    AccountReadError,
+    observe_account,
+    public_contract_result,
+)
 from auto_invest.broker.intraday_balance_evidence import (
     observe_balance_evidence,
     public_balance_evidence,
@@ -23,16 +27,19 @@ from auto_invest.broker.intraday_transactions import (
     validate_window,
 )
 from auto_invest.broker.overseas import get_order_executions_resolving_market
+from auto_invest.execution.intraday_account_history import AccountHistory, AccountHistoryError
 from auto_invest.execution.intraday_cost_reconciliation import (
     CostReconciliationError,
     reconcile_cost_inputs,
 )
 
 
-async def run(*, transactions_from=None, transactions_through=None, execution_db=None):
+async def _query(*, transactions_from=None, transactions_through=None, execution_db=None,
+                 history=None):
     include_transactions = transactions_from is not None or transactions_through is not None
     if execution_db is not None:
-        validate_window(transactions_from, transactions_through)
+        if include_transactions or history is None:
+            validate_window(transactions_from, transactions_through)
         if not Path(execution_db).is_file():
             raise CostReconciliationError("COST_LEDGER_UNAVAILABLE")
     if include_transactions:
@@ -55,6 +62,8 @@ async def run(*, transactions_from=None, transactions_through=None, execution_db
             breaker=CircuitBreaker(failure_threshold=3, cooldown_seconds=30.0),
             max_retries=2,
         )
+        if history is not None:
+            client = history.client(client)
         snapshot = await observe_balance_evidence(
             client,
             account=os.environ["KIS_ACCOUNT_NO"],
@@ -66,6 +75,12 @@ async def run(*, transactions_from=None, transactions_through=None, execution_db
             client, account=os.environ["KIS_ACCOUNT_NO"], access_token=token.access_token,
             app_key=os.environ["KIS_APP_KEY"], app_secret=os.environ["KIS_APP_SECRET"],
         )
+        current_account = None
+        if history is not None:
+            current_account = public_contract_result(await observe_account(
+                client, account=os.environ["KIS_ACCOUNT_NO"], access_token=token.access_token,
+                app_key=os.environ["KIS_APP_KEY"], app_secret=os.environ["KIS_APP_SECRET"],
+            ))
         transactions = None
         if include_transactions:
             transaction_snapshot = await observe_transactions(
@@ -85,9 +100,35 @@ async def run(*, transactions_from=None, transactions_through=None, execution_db
                     Path(execution_db), executions, transaction_snapshot["rows"],
                 )
     result = dict(public_balance_evidence(snapshot), account_assets=account_assets)
+    if current_account is not None:
+        result["current_account"] = current_account
     if transactions is not None:
         result["transactions"] = transactions
     return result, 0
+
+
+async def run(*, transactions_from=None, transactions_through=None, execution_db=None,
+              history_db=None):
+    if transactions_from is not None or transactions_through is not None:
+        validate_window(transactions_from, transactions_through)
+    history = None
+    if history_db is not None and all(os.environ.get(key) for key in (
+        "KIS_APP_KEY", "KIS_APP_SECRET", "KIS_ACCOUNT_NO",
+    )):
+        history = AccountHistory(history_db, os.environ["KIS_ACCOUNT_NO"],
+                                 execution_db=execution_db)
+    try:
+        result, code = await _query(
+            transactions_from=transactions_from, transactions_through=transactions_through,
+            execution_db=execution_db, history=history,
+        )
+    except BaseException:
+        if history is not None:
+            history.finish("FAILED")
+        raise
+    if history is not None:
+        result["history"] = history.finish("COMPLETE" if code == 0 else "FAILED")
+    return result, code
 
 
 def main():
@@ -97,17 +138,24 @@ def main():
     parser.add_argument(
         "--execution-db", type=Path, help="Existing execution DB; read-only comparison",
     )
+    parser.add_argument(
+        "--history-db", type=Path,
+        help="Private account observation journal; records from now, no historical window required",
+    )
     args = parser.parse_args()
     try:
         result, code = asyncio.run(run(
             transactions_from=args.transactions_from,
             transactions_through=args.transactions_through,
             execution_db=args.execution_db,
+            history_db=args.history_db,
         ))
     except Exception as exc:
         result = dict(
             status="FAILED",
-            reason=str(exc) if isinstance(exc, (AccountReadError, CostReconciliationError))
+            reason=str(exc) if isinstance(exc, (
+                AccountReadError, CostReconciliationError, AccountHistoryError,
+            ))
             else type(exc).__name__,
             orders_submitted=0,
             live_eligible=False,
