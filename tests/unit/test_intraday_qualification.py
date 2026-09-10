@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 from dataclasses import replace
@@ -5,16 +6,93 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 
+import httpx
 import pytest
 
 from auto_invest.analytics.intraday_paper_challenger import (
     build_candidate_registry,
     load_preregistration,
 )
+from auto_invest.broker.intraday_inputs import REST_URL
 from auto_invest.execution import intraday_qualification as q
+from auto_invest.execution.intraday_rehearsal import rehearsal_session
 from auto_invest.execution.intraday_selection import ResearchSelection
 from auto_invest.execution.intraday_signals import execution_fingerprint
 from auto_invest.market_data.intraday import DataError
+
+pytestmark = pytest.mark.asyncio
+
+
+@pytest.mark.parametrize("change", [None, "account", "strategy", "window", "fees", "ledger"])
+async def test_real_get_parsers_and_ledger_reach_qualification(prepared, tmp_path, change):
+    # Research/forward acceptance is isolated by prepared; everything from HTTP
+    # response parsing through SQLite reconciliation and qualification is real.
+    args, selected, forward, _ = prepared
+    forward["session_dates"] = ["2026-09-10", "2026-09-11"]
+    calls = []
+    async with rehearsal_session(tmp_path / "source.db") as book:
+        authority = book.engine.router.execution_authority
+        conn = authority.conn
+        conn.execute("""INSERT INTO orders
+            (correlation_id, rule_id, symbol, side, order_type, qty, state,
+             kis_order_id, limit_price_usd, submitted_at_utc)
+            VALUES ('cost-local', ?, 'SPY', 'BUY', 'LIMIT', 2, 'FILLED',
+                    'cost-broker', '102', '2026-09-10T14:00:00Z')""",
+                     ("intraday:" + ("wrong" if change == "strategy"
+                                     else selected.execution_identity) + ":SPY",))
+        conn.execute("""INSERT INTO fills
+            (order_correlation_id, kis_fill_id, qty, price_usd, executed_at_utc)
+            VALUES ('cost-local', 'cost-fill', 2, '101', '2026-09-10T14:01:00Z')""")
+        conn.commit()
+
+        def handle(request):
+            calls.append(request)
+            if request.url.path == "/oauth2/tokenP":
+                return httpx.Response(200, json=dict(access_token="fresh", expires_in=86400))
+            assert request.method == "GET"
+            assert request.headers["authorization"] == "Bearer fresh"
+            assert request.url.params["CANO"] == authority.account_no[:8]
+            if request.url.path.endswith("inquire-ccnl"):
+                rows = [dict(odno="cost-broker", pdno="SPY", sll_buy_dvsn_cd="02",
+                             ovrs_excg_cd="AMEX", ft_ccld_qty="2", nccs_qty="0",
+                             ft_ccld_unpr3="101", ord_dvsn="00", ord_unpr="102")]
+                return httpx.Response(200, json=dict(rt_cd="0", output=rows))
+            assert request.url.path.endswith("inquire-period-trans")
+            if change == "ledger":
+                conn.execute("UPDATE orders SET limit_price_usd='103' "
+                             "WHERE correlation_id='cost-local'")
+                conn.commit()
+            row = dict(trad_dt="20260910", sttl_dt="20260911", pdno="SPY", crcy_cd="USD",
+                       sll_buy_dvsn_cd="02", ccld_qty="2", tr_frcr_amt2="202",
+                       frcr_excc_amt_1="202.02", dmst_frcr_fee1="0.01", frcr_fee1="0.01")
+            if change == "fees":
+                row.update(frcr_excc_amt_1="212", dmst_frcr_fee1="9.99")
+            if change == "window":
+                row["sttl_dt"] = "20260912"
+            return httpx.Response(200, headers={"tr_cont": "D"},
+                                  json=dict(rt_cd="0", output1=[row], output2=[]))
+
+        async with httpx.AsyncClient(base_url=REST_URL,
+                                    transport=httpx.MockTransport(handle)) as http:
+            authority.broker._client = http
+            args["account"] = authority.account_no if change != "account" else "9999999901"
+            source = q.ExecutionCostSource(authority, token_cache=tmp_path / "token.json",
+                                           runtime_digest=args["runtime_digest"])
+            args["execution_source"] = source
+            if change:
+                reason = ("QUALIFICATION_EXECUTION_BINDING_MISMATCH" if change == "account"
+                          else "QUALIFICATION_EXECUTION_COSTS_NOT_ACCEPTED")
+                with pytest.raises(DataError, match=reason):
+                    await q.prepare_qualification(**args)
+            else:
+                result = await q.prepare_qualification(**args)
+                assessment = result.execution_cost
+                assert not assessment.issues
+                assert all(json.loads(assessment.checks_json).values())
+                assert not assessment.public()["execution_parity_verified"]
+                assert "ORDER_TRADE_DATE_LINK_NOT_PROVIDED" in assessment.missing_model_conditions
+            assert len(calls) == 8  # token + 3 exchanges twice + transaction report
+            assert not book.orders
 
 
 @pytest.fixture
@@ -26,7 +104,7 @@ def prepared(tmp_path, monkeypatch):
                                   "PAPER_CHALLENGER", 756, 0)
     forward = dict(freeze_authentication_verified=True, minimum_observation_count_met=True,
                    complete_sessions=60, required_sessions=60, invalid_sessions=0,
-                   execution_parity_verified=True)
+                   execution_parity_verified=False, session_dates=["2026-09-01", "2026-09-10"])
     record = tmp_path / "freeze.json"
     record.write_bytes(b"frozen-record")
     calls = []
@@ -50,6 +128,19 @@ def prepared(tmp_path, monkeypatch):
     args = dict(archives=tmp_path, forward_database=tmp_path / "forward.db",
                 registration=record, account="1234567801", capital_limit=Decimal("600.00"),
                 runtime_digest="sha256:" + "d" * 64)
+    source = object.__new__(q.ExecutionCostSource)
+
+    async def assess_cost(selected, dates, commission):
+        # Unit isolation of authorization consumption; actual GET/recalculation
+        # coverage is in the execution evidence integration tests.
+        return q.ExecutionCostAssessment(
+            "sha256:" + hashlib.sha256(args["account"].encode()).hexdigest(),
+            selected.execution_identity, args["runtime_digest"], ("20260901", "20260910"),
+            "sha256:" + "e" * 64, "{}", (), ("SOURCE_EXECUTION_TIMING_NOT_PROVIDED",),
+        )
+
+    source.assess = assess_cost
+    args["execution_source"] = source
     return args, selection, forward, calls
 
 
@@ -64,22 +155,32 @@ def grant(qualification):
         runtime_digest=qualification.runtime_digest,
         valid_from=(now - timedelta(minutes=1)).isoformat(),
         valid_until=(now + timedelta(minutes=1)).isoformat(),
-        broker_execution_parity_digest="sha256:" + "a" * 64,
+        broker_execution_parity_digest=qualification.execution_cost.digest,
         hardened_canary_digest="sha256:" + "b" * 64,
         deployment_audit_digest="sha256:" + "c" * 64,
     )
 
 
-def test_recomputation_is_required_and_server_authorization_is_separate(prepared, monkeypatch):
+async def test_well_formed_but_unrelated_broker_digest_is_rejected(prepared, monkeypatch):
+    result = await q.prepare_qualification(**prepared[0])
+    approval = grant(result)
+    approval["broker_execution_parity_digest"] = "sha256:" + "f" * 64
+    monkeypatch.setattr(q, "_read_authorization", lambda: approval)
+    assert result() == "QUALIFICATION_AUTHORIZATION_MISMATCH"
+
+
+async def test_recomputation_is_required_and_server_authorization_is_separate(
+    prepared, monkeypatch,
+):
     args, _, _, calls = prepared
-    result = q.prepare_qualification(**args)
+    result = await q.prepare_qualification(**args)
     assert [name for name, _ in calls] == ["research", "forward"]
     assert not calls[0][1].exists()
     monkeypatch.setattr(q, "_read_authorization", lambda: {})
     assert result() == "QUALIFICATION_AUTHORIZATION_MISMATCH"
     approved = grant(result)
     monkeypatch.setattr(q, "_read_authorization", lambda: approved)
-    assert result() is None
+    assert result() == "QUALIFICATION_EXECUTION_MODEL_EVIDENCE_MISSING"
     approved["authorization_id"] = ""
     assert result() == "QUALIFICATION_AUTHORIZATION_MISMATCH"
 
@@ -89,26 +190,26 @@ def test_recomputation_is_required_and_server_authorization_is_separate(prepared
     ("invalid_sessions", 1), ("invalid_sessions", False),
     ("freeze_authentication_verified", False), ("minimum_observation_count_met", "true"),
 ])
-def test_bad_forward_evidence_never_produces_a_guard(prepared, field, value):
+async def test_bad_forward_evidence_never_produces_a_guard(prepared, field, value):
     args, _, forward, _ = prepared
     forward[field] = value
     with pytest.raises(DataError, match="QUALIFICATION_FORWARD_NOT_ACCEPTED"):
-        q.prepare_qualification(**args)
+        await q.prepare_qualification(**args)
 
 
-def test_failed_research_never_reaches_forward_assessment(prepared, monkeypatch):
+async def test_failed_research_never_reaches_forward_assessment(prepared, monkeypatch):
     args, selection, _, calls = prepared
     monkeypatch.setattr(q, "select_research", lambda *a: replace(selection, candidate=None))
     with pytest.raises(DataError, match="QUALIFICATION_RESEARCH_NOT_ACCEPTED"):
-        q.prepare_qualification(**args)
+        await q.prepare_qualification(**args)
     assert calls == []
 
 
-def test_current_forward_without_execution_parity_cannot_be_overridden_by_approval(prepared):
+async def test_current_forward_without_execution_parity_uses_separate_cost_source(prepared):
     args, _, forward, _ = prepared
     forward["execution_parity_verified"] = False
-    with pytest.raises(DataError, match="QUALIFICATION_PARITY_NOT_VERIFIED"):
-        q.prepare_qualification(**args)
+    result = await q.prepare_qualification(**args)
+    assert result.execution_cost.missing_model_conditions
 
 
 @pytest.mark.parametrize("field", [
@@ -117,27 +218,27 @@ def test_current_forward_without_execution_parity_cannot_be_overridden_by_approv
     "broker_execution_parity_digest",
     "hardened_canary_digest", "deployment_audit_digest",
 ])
-def test_changed_authorization_identity_is_refused(prepared, monkeypatch, field):
-    result = q.prepare_qualification(**prepared[0])
+async def test_changed_authorization_identity_is_refused(prepared, monkeypatch, field):
+    result = await q.prepare_qualification(**prepared[0])
     approved = grant(result)
     approved[field] = "changed"
     monkeypatch.setattr(q, "_read_authorization", lambda: approved)
     assert result() == "QUALIFICATION_AUTHORIZATION_MISMATCH"
 
 
-def test_expiry_and_strategy_change_are_checked_at_each_call(prepared, monkeypatch):
-    result = q.prepare_qualification(**prepared[0])
+async def test_expiry_and_strategy_change_are_checked_at_each_call(prepared, monkeypatch):
+    result = await q.prepare_qualification(**prepared[0])
     approved = grant(result)
     monkeypatch.setattr(q, "_read_authorization", lambda: approved)
-    assert result() is None
+    assert result() == "QUALIFICATION_EXECUTION_MODEL_EVIDENCE_MISSING"
     approved["valid_until"] = (datetime.now(UTC) - timedelta(seconds=1)).isoformat()
     assert result() == "QUALIFICATION_AUTHORIZATION_EXPIRED"
     monkeypatch.setattr(q, "execution_fingerprint", lambda *a: "changed")
     assert result() == "QUALIFICATION_STRATEGY_CHANGED"
 
 
-def test_unavailable_error_is_closed(prepared, monkeypatch):
-    result = q.prepare_qualification(**prepared[0])
+async def test_unavailable_error_is_closed(prepared, monkeypatch):
+    result = await q.prepare_qualification(**prepared[0])
 
     def fail():
         raise OSError("private path and contents")
@@ -146,7 +247,7 @@ def test_unavailable_error_is_closed(prepared, monkeypatch):
     assert result() == "QUALIFICATION_AUTHORIZATION_UNAVAILABLE"
 
 
-def test_protected_file_missing_world_writable_or_symlink_is_refused(tmp_path, monkeypatch):
+async def test_protected_file_missing_world_writable_or_symlink_is_refused(tmp_path, monkeypatch):
     path = tmp_path / "authorization.json"
     monkeypatch.setattr(q, "AUTHORIZATION_PATH", path)
     with pytest.raises(DataError, match="INTRADAY_AUTHORIZATION_UNAVAILABLE"):
@@ -162,7 +263,7 @@ def test_protected_file_missing_world_writable_or_symlink_is_refused(tmp_path, m
         q._read_authorization()
 
 
-def test_root_file_parser_rejects_duplicate_keys_and_oversize(tmp_path, monkeypatch):
+async def test_root_file_parser_rejects_duplicate_keys_and_oversize(tmp_path, monkeypatch):
     path = tmp_path / "authorization.json"
     monkeypatch.setattr(q, "AUTHORIZATION_PATH", path)
     real = os.fstat

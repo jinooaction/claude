@@ -155,8 +155,9 @@ async def test_cancellation_closes_quote_task_and_preserves_drain_for_restart(tm
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("shared", [False, True])
 async def test_kis_assembly_uses_its_router_for_real_reads_and_refuses_unverified_scope(
-    tmp_path, monkeypatch,
+    tmp_path, monkeypatch, shared,
 ):
     from auto_invest.broker.intraday_inputs import REST_URL
     from auto_invest.execution.intraday_program import build_kis_program
@@ -186,6 +187,11 @@ async def test_kis_assembly_uses_its_router_for_real_reads_and_refuses_unverifie
 
     async with rehearsal_session(tmp_path / "simulation.db") as book:
         config = configuration(book)
+        if shared:
+            config["router"].conn.execute("""INSERT INTO current_positions
+                (symbol, qty, avg_cost_usd, last_updated_utc)
+                VALUES ('SCHX', 2, '20', '2026-09-10T14:00:00Z')""")
+            config["router"].conn.commit()
         config.pop("observe")
         selection = config.pop("selection")
         config.pop("qualify")
@@ -197,7 +203,7 @@ async def test_kis_assembly_uses_its_router_for_real_reads_and_refuses_unverifie
             def __call__(self):
                 return None
 
-        def prepare(**kwargs):
+        async def prepare(**kwargs):
             assert kwargs["account"] == config["router"].account_no
             assert kwargs["capital_limit"] == config["capital_limit"]
             return Qualification()
@@ -207,11 +213,14 @@ async def test_kis_assembly_uses_its_router_for_real_reads_and_refuses_unverifie
             base_url=REST_URL, transport=httpx.MockTransport(handle),
         ) as http:
             config["router"].broker._client = http
-            program = build_kis_program(
+            program = await build_kis_program(
                 **config, token_cache=tmp_path / "cache/token.json", archives=tmp_path,
                 forward_database=tmp_path / "forward.db", registration=tmp_path / "freeze.json",
             )
             assert calls == []
+            if shared:
+                assert program.quote_feed.account_feed.symbols == ("SCHX",)
+                assert dict(program.engine.external_holdings) == {}
             result = await program.engine.manage()
             assert result == dict(status="HALTED", reason="ACCOUNT_SCOPE_UNVERIFIED", actions=[])
             assert not book.orders

@@ -17,6 +17,11 @@ from decimal import Decimal
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from auto_invest.analytics.intraday_paper_challenger import load_preregistration
+from auto_invest.execution.intraday_execution_evidence import (
+    ExecutionCostAssessment,
+    ExecutionCostSource,
+)
 from auto_invest.execution.intraday_registration import assess_registered_forward
 from auto_invest.execution.intraday_selection import ResearchSelection, select_research
 from auto_invest.execution.intraday_signals import execution_fingerprint
@@ -71,6 +76,7 @@ class ExecutionQualification:
     registration_digest: str
     complete_sessions: int
     runtime_digest: str
+    execution_cost: ExecutionCostAssessment
 
     def __call__(self):
         """Synchronous last-boundary check; no broker calls or authority issuance."""
@@ -79,6 +85,11 @@ class ExecutionQualification:
             if (selected.candidate is None or selected.execution_identity != execution_fingerprint(
                     selected.candidate, selected.provider)):
                 return "QUALIFICATION_STRATEGY_CHANGED"
+            if (self.execution_cost.account_digest != self.account_digest
+                    or self.execution_cost.execution_identity != selected.execution_identity
+                    or self.execution_cost.runtime_digest != self.runtime_digest
+                    or self.execution_cost.issues):
+                return "QUALIFICATION_EXECUTION_BINDING_MISMATCH"
             grant = _read_authorization()
             identity = dict(
                 account_digest=self.account_digest,
@@ -88,9 +99,10 @@ class ExecutionQualification:
                 registration_digest=self.registration_digest,
                 runtime_digest=self.runtime_digest,
                 capital_limit_usd=format(self.capital_limit.normalize(), "f"),
+                broker_execution_parity_digest=self.execution_cost.digest,
             )
             evidence_fields = {
-                "broker_execution_parity_digest", "hardened_canary_digest",
+                "hardened_canary_digest",
                 "deployment_audit_digest",
             }
             if (set(grant) != set(identity) | evidence_fields | {
@@ -106,14 +118,16 @@ class ExecutionQualification:
             now = datetime.now(UTC)
             if not utc(grant["valid_from"]) <= now < utc(grant["valid_until"]):
                 return "QUALIFICATION_AUTHORIZATION_EXPIRED"
+            if self.execution_cost.missing_model_conditions:
+                return "QUALIFICATION_EXECUTION_MODEL_EVIDENCE_MISSING"
             return None
         except Exception:
             return "QUALIFICATION_AUTHORIZATION_UNAVAILABLE"
 
 
-def prepare_qualification(*, archives: Path, forward_database: Path,
+async def prepare_qualification(*, archives: Path, forward_database: Path,
                           registration: Path, account: str, capital_limit: Decimal,
-                          runtime_digest: str):
+                          runtime_digest: str, execution_source=None):
     """Run expensive evidence checks once, then return a revocable server guard.
 
     Receipt of a returned object does not imply authorization: call it before
@@ -153,11 +167,25 @@ def prepare_qualification(*, archives: Path, forward_database: Path,
                     or type(forward.get("invalid_sessions")) is not int
                     or forward.get("invalid_sessions") != 0):
                 raise DataError("QUALIFICATION_FORWARD_NOT_ACCEPTED")
-            if forward.get("execution_parity_verified") is not True:
-                raise DataError("QUALIFICATION_PARITY_NOT_VERIFIED")
+            if not isinstance(execution_source, ExecutionCostSource):
+                raise DataError("QUALIFICATION_EXECUTION_SOURCE_REQUIRED")
+            cost = await execution_source.assess(
+                selected, forward.get("session_dates", []),
+                load_preregistration(prereg)["cost_models"]["base"]["commission_bps_per_side"],
+            )
+            account_digest = "sha256:" + hashlib.sha256(account.encode()).hexdigest()
+            dates = sorted(day.replace("-", "") for day in forward.get("session_dates", []))
+            if (not isinstance(cost, ExecutionCostAssessment) or not dates
+                    or cost.account_digest != account_digest
+                    or cost.execution_identity != selected.execution_identity
+                    or cost.runtime_digest != runtime_digest
+                    or cost.window != (dates[0], dates[-1])):
+                raise DataError("QUALIFICATION_EXECUTION_BINDING_MISMATCH")
+            if cost.issues:
+                raise DataError("QUALIFICATION_EXECUTION_COSTS_NOT_ACCEPTED")
         return ExecutionQualification(
             selected, "sha256:" + hashlib.sha256(account.encode()).hexdigest(),
-            capital_limit, digest(record), forward["complete_sessions"], runtime_digest,
+            capital_limit, digest(record), forward["complete_sessions"], runtime_digest, cost,
         )
     except DataError:
         raise

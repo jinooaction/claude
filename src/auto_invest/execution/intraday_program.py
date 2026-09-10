@@ -12,6 +12,7 @@ from pathlib import Path
 from auto_invest.broker.intraday_inputs import StrictQuoteFeed, approval_key
 from auto_invest.broker.overseas import QUOTE_TO_ORDER_EXCHANGE, get_quote_resolving_market
 from auto_invest.execution.intraday import IntradayExecutor
+from auto_invest.execution.intraday_execution_evidence import ExecutionCostSource
 from auto_invest.execution.intraday_observation import KISExecutionObserver
 from auto_invest.execution.intraday_qualification import prepare_qualification
 from auto_invest.execution.intraday_runtime import run
@@ -104,20 +105,22 @@ class IntradayProgram:
         return dict(result, quote_state="CLOSED" if started else "NOT_STARTED")
 
 
-def build_kis_program(*, router, token_cache, archives, forward_database, registration,
+async def build_kis_program(*, router, token_cache, archives, forward_database, registration,
                       collect_bars, capital_limit, external_holdings=None, now):
     """Bind real authenticated account reads to the same router's authority.
 
-    Construction performs no network access or broker writes. Account valuation
+    Preparation may authenticate and read cost evidence, never broker writes. Account valuation
     and qualification still have to pass before the executor can submit orders.
     """
     if router.execution_authority is None:
         raise ValueError("PROGRAM_ROUTER_CONFIGURATION_INVALID")
     baseline = dict(external_holdings or {})
     runtime_digest = runtime_identity(router, baseline)
-    qualification = prepare_qualification(
+    qualification = await prepare_qualification(
         archives=archives, forward_database=forward_database, registration=registration,
         account=router.account_no, capital_limit=capital_limit, runtime_digest=runtime_digest,
+        execution_source=ExecutionCostSource(router.execution_authority, token_cache=token_cache,
+                                             runtime_digest=runtime_digest),
     )
     if refusal := qualification():
         raise ValueError(refusal)
@@ -125,7 +128,10 @@ def build_kis_program(*, router, token_cache, archives, forward_database, regist
     observer = KISExecutionObserver(
         router.execution_authority, feed.snapshot, token_cache=token_cache, now=now,
     )
-    valuation_symbols = sorted(set(baseline) - set(SYMBOLS))
+    shared_holdings = {row["symbol"] for row in router.conn.execute(
+        "SELECT symbol FROM current_positions WHERE qty > 0"
+    )}
+    valuation_symbols = sorted((set(baseline) | shared_holdings) - set(SYMBOLS))
     valuation_feed = None
     if valuation_symbols:
         valuation_feed = _ValuationFeed(observer, valuation_symbols, now)

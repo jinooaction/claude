@@ -87,7 +87,7 @@ async def launch(*, database, rules, archives, forward_database, registration,
                 batch = await collect_kis(transport, secrets, opening, end, now, token_cache)
                 return batch["bars"]
 
-            program = build_kis_program(
+            program = await build_kis_program(
                 router=router, token_cache=token_cache, archives=archives,
                 forward_database=forward_database, registration=registration,
                 collect_bars=collect, capital_limit=Decimal(budget["capital_limit_usd"]),

@@ -47,7 +47,7 @@ async def test_failed_qualification_closes_ledger_without_network_or_token_cache
 ):
     seen = []
 
-    def assemble(**kwargs):
+    async def assemble(**kwargs):
         router = kwargs["router"]
         seen.append(router.conn)
         assert router.account_no == "1234567801"
@@ -75,7 +75,7 @@ async def test_launcher_preserves_stop_event_and_closes_resources_on_runtime_err
 ):
     handles = []
 
-    def assemble(**kwargs):
+    async def assemble(**kwargs):
         handles.append(kwargs["router"].conn)
 
         async def run(**options):
@@ -186,7 +186,7 @@ async def test_launcher_runs_actual_engine_stops_and_reopens_same_ledger(inputs,
         book.conn.execute("CREATE TABLE preservation_marker (value TEXT)")
         book.conn.execute("INSERT INTO preservation_marker VALUES ('keep')")
 
-        def assemble(**kwargs):
+        async def assemble(**kwargs):
             return build_program(
                 selection=selected, router=kwargs["router"], observe=book.observe,
                 qualify=lambda: None, collect_bars=kwargs["collect_bars"],
