@@ -84,6 +84,12 @@ dmst_frcr_fee1/frcr_fee1이며 금액/수량은 정확한 소수 문자열이다
 중복될 수 있어 합산하지 않는다. pagination_complete는 요청 범위의 페이지 끝을 뜻하며
 계좌 전체·현금·개별 체결 비용의 검증을 뜻하지 않는다. 공개 보고서는 행/페이지 수만 낸다.
 
+StrategyExitIntent는 기존 intraday_execution_events의 STRATEGY_EXIT_REQUESTED 사건이다.
+claim_id는 실행 지문 접두사+종목+해당 보유 회차 첫 매수 f.seq에 묶이고 payload는
+symbol/buy_fill_seq/limit이다. 보유가0이 된 이후 다음 매수는 새 회차이므로 과거 의도가
+적용되지 않는다. 원본 사건은 갱신/삭제하지 않는다. 현재 회차 중복·잘못된 값은 거절하며
+사용자 중지/마감/손실 정리는 별도 기존 경로를 쓴다.
+
 CashLedger는 내부 공급자의 USD 순현금 opening/closing 스냅샷과 원본 events다.
 각 스냅샷은 원본 sequence, 시간대 포함 at, net_cash를 갖는다. 사건은 고유 id,
 원본 sequence/at/currency/kind와 net_cash_delta/net_cash_after를 보존한다.

@@ -275,6 +275,50 @@ class IntradayExecutor:
             raise ValueError("OWNERSHIP_MISMATCH")
         return owned
 
+    def _holding_cycles(self):
+        inventory, cycles = {}, {}
+        for row in self.conn.execute(
+            "SELECT o.symbol,o.side,f.qty,f.seq FROM fills f JOIN orders o "
+            "ON o.correlation_id=f.order_correlation_id WHERE substr(o.rule_id,1,?)=? "
+            "ORDER BY f.seq", (len(self.prefix), self.prefix),
+        ):
+            symbol = row["symbol"]
+            if row["side"] == "BUY":
+                if not inventory.get(symbol, 0):
+                    cycles[symbol] = row["seq"]
+                inventory[symbol] = inventory.get(symbol, 0) + row["qty"]
+            else:
+                inventory[symbol] = inventory.get(symbol, 0) - row["qty"]
+        return {symbol: cycles[symbol] for symbol, qty in inventory.items() if qty > 0}
+
+    def _strategy_exits(self, cycles):
+        result = {}
+        for symbol, cycle in cycles.items():
+            key = self.prefix + f"strategy-exit:{symbol}:{cycle}"
+            rows = self.conn.execute(
+                "SELECT kind,payload FROM intraday_execution_events WHERE claim_id=? LIMIT 2",
+                (key,),
+            ).fetchall()
+            if not rows:
+                continue
+            try:
+                payload = json.loads(rows[0]["payload"])
+                if (len(rows) != 1 or rows[0]["kind"] != "STRATEGY_EXIT_REQUESTED"
+                        or set(payload) != {"symbol", "buy_fill_seq", "limit"}
+                        or payload["symbol"] != symbol
+                        or type(payload["buy_fill_seq"]) is not int
+                        or payload["buy_fill_seq"] != cycle
+                        or not isinstance(payload["limit"], str)):
+                    raise ValueError
+                limit = Decimal(payload["limit"])
+                _decimal(limit)
+                if limit != limit.quantize(Decimal(".01")):
+                    raise ValueError
+                result[symbol] = limit
+            except Exception:
+                raise ValueError("STRATEGY_EXIT_STATE_INVALID") from None
+        return result
+
     async def _refresh(self, required, now):
         r = self.router
         if self.refresh_auth is not None:
@@ -381,7 +425,7 @@ class IntradayExecutor:
                     inventory[symbol] = inventory.get(symbol, 0) + row["qty"]
                 else:
                     inventory[symbol] = inventory.get(symbol, 0) - row["qty"]
-            return compile_decision(
+            decision = compile_decision(
                 candidate,
                 provider=provider,
                 bars=bars,
@@ -392,6 +436,18 @@ class IntradayExecutor:
                 capital=min(view.nav, self.capital_limit),
                 cash=view.cash,
             )
+            validate_decision(decision, self.fingerprint)
+            cycles = self._holding_cycles()
+            exits = self._strategy_exits(cycles)
+            for symbol, quantity in owned.items():
+                if quantity and decision.targets.get(symbol) == 0 and symbol not in exits:
+                    cycle = cycles[symbol]
+                    self._event(
+                        self.prefix + f"strategy-exit:{symbol}:{cycle}",
+                        "STRATEGY_EXIT_REQUESTED", symbol=symbol, buy_fill_seq=cycle,
+                        limit=str(decision.limits[symbol]),
+                    )
+            return decision
 
         return await self.step(prepare)
 
@@ -478,9 +534,13 @@ class IntradayExecutor:
             exit_only = (
                 exit_only or bool(loss_halted) or self.router.halt_path.exists() or carryover
             )
+            strategy_exits = {} if exit_only else self._strategy_exits(self._holding_cycles())
             targets = {s: 0 for s in owned} if exit_only else (
                 dict(d.targets) if d is not None else None
             )
+            if strategy_exits:
+                targets = dict(targets or owned)
+                targets.update({s: 0 for s in strategy_exits})
             result = await self._manage_pending(orders, targets, exit_only)
             result.setdefault("reason", refusal)
             return result
@@ -530,14 +590,18 @@ class IntradayExecutor:
             self._event(day_id, "LOSS_HALT")
             halted = True
         exit_only = exit_only or bool(halted) or self.router.halt_path.exists() or carryover
+        cycles = {} if exit_only else self._holding_cycles()
+        strategy_exits = self._strategy_exits(cycles)
         targets = {s: 0 for s in owned} if exit_only else (
             dict(d.targets) if d is not None else dict(owned)
         )
+        if not exit_only:
+            targets.update({s: 0 for s in strategy_exits})
         if orders:
             return await self._manage_pending(
-                orders, targets if exit_only or d is not None else None, exit_only
+                orders, targets if exit_only or d is not None or strategy_exits else None, exit_only
             )
-        if d is None and not exit_only:
+        if d is None and not exit_only and not strategy_exits:
             return dict(status="MANAGED", actions=[])
         actions = []
         ordered_symbols = sorted(targets, key=lambda s: targets[s] - owned.get(s, 0))
@@ -557,7 +621,7 @@ class IntradayExecutor:
             limit = (
                 limit_price(mark, buy=False)
                 if exit_only
-                else d.limits[symbol]
+                else strategy_exits[symbol] if symbol in strategy_exits else d.limits[symbol]
             )
             if side is Side.SELL and -delta > owned.get(symbol, 0):
                 raise ValueError("SELL_EXCEEDS_OWNERSHIP")
@@ -577,11 +641,19 @@ class IntradayExecutor:
             ):
                 actions.append(dict(kind="DENIED", symbol=symbol, reason="CASH_OR_EXPOSURE"))
                 continue
+            if exit_only:
+                decision_key = (
+                    "drain:" + str(self._drain_id()) if self.drain_requested() else "close"
+                )
+            elif symbol in strategy_exits:
+                period = now.replace(minute=now.minute // 5 * 5, second=0, microsecond=0)
+                decision_key = f"strategy-exit:{cycles[symbol]}:" + period.isoformat()
+            else:
+                decision_key = d.bar_end.isoformat()
             key = self.prefix + _json(
                 [
                     str(session),
-                    ("drain:" + str(self._drain_id()) if self.drain_requested() else "close")
-                    if exit_only else d.bar_end.isoformat(),
+                    decision_key,
                     symbol,
                     side.value,
                 ]
