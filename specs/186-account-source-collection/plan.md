@@ -6,5 +6,11 @@
 4. 관련 시험 후 전체 회귀·린트·하네스·인계·PR 관문을 수행한다. 안전 경계 변경 커밋에 this changes the safety perimeter를 기록한다.
 5. 독립 출시 후 서버 원본의 수집 범위와 계산 계약을 검토해184 입력기로 이어간다. 공개 보고서에는 금액을 내보내지 않는다.
 
+6. FR006: 기록 성공 후 같은 메모리 원본에 구조 분석기를 적용해 진단 결과에 연결한다.
+   누락/잘못된 숫자는0으로 바꾸지 않는다. 중복 계산은 유효한 현금 구성5개로만 수행하며
+   나머지 주문가능/환율 필드는 개별 분포만 기록한다. 원본 장부와 검증 판정은 보존한다.
+   공식 필드 근거: https://raw.githubusercontent.com/koreainvestment/open-trading-api/main/examples_llm/overseas_stock/foreign_margin/chk_foreign_margin.py
+   실패 시 원본을 보존하고 구조 분석 불가로 표시한다. 되돌림은 출력 연결 제거이며 기록을 삭제하지 않는다.
+
 ## 근거
 현재 deploy/kis-smoke-on-instance.sh는 목표 커밋이 origin/main의 조상인지 검사한다. PR793 전체를 미완료 상태로 병합하는 대신 원본 수집만 독립적으로 완성한다.
