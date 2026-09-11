@@ -9,6 +9,7 @@ bar boundary. All executions of a symbol share that bar's volume budget.
 import re
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal, localcontext
+from zoneinfo import ZoneInfo
 
 
 class ObservationModelError(ValueError):
@@ -145,6 +146,8 @@ def assess_model_quantities(orders, bars, participation):
                 stamp = _time(order["signal_bar_end"])
                 if (not isinstance(identity, str) or not identity or identity in seen
                         or order["decision_kind"] not in {"SIGNAL", "STRATEGY_EXIT"}
+                        or order.get("reported_order_date") != stamp.astimezone(
+                            ZoneInfo("America/New_York")).date().isoformat()
                         or stamp.second or stamp.microsecond or stamp.minute % 5
                         or type(requested) is not int or not 0 < requested <= 10**12
                         or type(filled) is not int or not 0 <= filled <= requested):

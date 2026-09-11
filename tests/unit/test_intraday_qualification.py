@@ -23,7 +23,7 @@ from auto_invest.market_data.intraday import DataError
 pytestmark = pytest.mark.asyncio
 
 
-@pytest.mark.parametrize("fault", [None, "offset_days", "missing_date"])
+@pytest.mark.parametrize("fault", [None, "offset_days", "missing_date", "unconfirmed_close"])
 async def test_repeated_orders_match_dated_groups_without_fee_allocation(
         prepared, tmp_path, fault, monkeypatch):
     from auto_invest.persistence import audit
@@ -43,17 +43,19 @@ async def test_repeated_orders_match_dated_groups_without_fee_allocation(
         rows = []
         for index, day in enumerate(("09", "09", "10")):
             number = str(index)
+            requested = 2 if fault == "unconfirmed_close" and index == 0 else 1
             rule = "intraday:" + selected.execution_identity + ":" + number
             conn.execute("""INSERT INTO orders
                 (correlation_id,rule_id,symbol,side,order_type,qty,state,kis_order_id,
-                 limit_price_usd,submitted_at_utc) VALUES(?,?,'SPY','BUY','LIMIT',1,
-                 'FILLED',?,'102',?)""", (number, rule, number, f"2026-09-{day}T14:01:00Z"))
+                 limit_price_usd,submitted_at_utc) VALUES(?,?,'SPY','BUY','LIMIT',?,
+                 'FILLED',?,'102',?)""", (number, rule, requested, number,
+                                        f"2026-09-{day}T14:01:00Z"))
             conn.execute("INSERT INTO fills(order_correlation_id,kis_fill_id,qty,price_usd,"
                          "executed_at_utc) VALUES(?,?,1,'101',?)",
                          (number, number, f"2026-09-{day}T14:01:00Z"))
             conn.execute("INSERT INTO intraday_execution_claims VALUES(?,?,?)", (
                 number, selected.execution_identity, json.dumps(dict(symbol="SPY", side="BUY",
-                    qty=1, limit="102", signal_bar_end=f"2026-09-{day}T14:00:00Z",
+                    qty=requested, limit="102", signal_bar_end=f"2026-09-{day}T14:00:00Z",
                     decision_kind="SIGNAL")),
             ))
             conn.execute("INSERT INTO order_state_history(order_correlation_id,from_state,"
@@ -64,7 +66,8 @@ async def test_repeated_orders_match_dated_groups_without_fee_allocation(
                 broker_response_received_at_utc=f"2026-09-{day}T14:02:00Z"),
                 correlation_id=number, symbol="SPY", rule_id=rule)
             rows.append(dict(odno=number, pdno="SPY", sll_buy_dvsn_cd="02", ovrs_excg_cd="AMEX",
-                             ord_dt=f"202609{day}", ft_ord_qty="1", ft_ccld_qty="1", nccs_qty="0",
+                             ord_dt=f"202609{day}", ft_ord_qty=str(requested),
+                             ft_ccld_qty="1", nccs_qty="0",
                              ft_ccld_unpr3="101", ord_dvsn="00", ord_unpr="102"))
         conn.commit()
         if fault == "missing_date":
@@ -101,8 +104,9 @@ async def test_repeated_orders_match_dated_groups_without_fee_allocation(
                 qualification = await q.prepare_qualification(**args)
             result = source.last_assessment
         if fault:
-            reason = ("DATED_TRANSACTION_EXECUTION_TOTAL_MISMATCH" if fault == "offset_days"
-                      else "MULTIPLE_ORDERS_WITHOUT_REPORTED_DATES")
+            reason = dict(offset_days="DATED_TRANSACTION_EXECUTION_TOTAL_MISMATCH",
+                          missing_date="MULTIPLE_ORDERS_WITHOUT_REPORTED_DATES",
+                          unconfirmed_close="BROKER_ORDER_NOT_CLOSED")[fault]
             assert reason in result.issues
         else:
             assert not result.issues
@@ -419,7 +423,7 @@ async def test_qualification_actually_consumes_replayed_bars(
             response_received=f"2026-09-10T14:{response_minute}:00Z",
         )
         return replace(cost, intervals_json=json.dumps([entry]), orders_json=json.dumps([
-            dict(entry, ordered_quantity=2, filled_quantity=2),
+            dict(entry, ordered_quantity=2, filled_quantity=2, reported_order_date="2026-09-10"),
         ]))
 
     args["execution_source"].assess = costs

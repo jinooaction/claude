@@ -188,6 +188,9 @@ def assess_sources(*, database, account, selection, runtime_digest, window, exec
             issues.add("BROKER_LEDGER_ORDER_QUANTITY_MISMATCH")
         if value.unfilled_qty != 0 and not value.terminal:
             issues.add("BROKER_ORDER_NOT_CLOSED")
+        if (value.reported_order_quantity is not None
+                and value.filled_qty < value.reported_order_quantity and not value.terminal):
+            issues.add("BROKER_ORDER_NOT_CLOSED")
         if not value.filled_qty:
             continue
         key = (value.symbol, value.side.value if value.side else None)
@@ -315,6 +318,8 @@ def assess_sources(*, database, account, selection, runtime_digest, window, exec
     model_orders = [dict(order_id=value.kis_order_id, symbol=value.symbol,
                         ordered_quantity=value.reported_order_quantity,
                         filled_quantity=value.filled_qty,
+                        reported_order_date=(value.reported_order_date.isoformat()
+                                             if value.reported_order_date is not None else None),
                         **_signal_context(before, local_by_id.get(value.kis_order_id, {}),
                                           prefix, selection.execution_identity))
                     for value in executions]

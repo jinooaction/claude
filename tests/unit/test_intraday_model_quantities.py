@@ -8,7 +8,8 @@ from auto_invest.execution.intraday_observation_models import assess_model_quant
 
 def order(**changes):
     return dict(dict(order_id="order", symbol="SPY", signal_bar_end="2026-09-10T14:00:00Z",
-                     decision_kind="SIGNAL", ordered_quantity=5, filled_quantity=2), **changes)
+                     decision_kind="SIGNAL", ordered_quantity=5, filled_quantity=2,
+                     reported_order_date="2026-09-10"), **changes)
 
 
 def bars(volume=299):
@@ -29,6 +30,14 @@ def test_full_partial_and_zero_fills_match_integer_model(volume, filled, verifie
 def test_unfilled_order_cannot_be_omitted_from_comparison():
     orders = [order(), order(order_id="unfilled", filled_quantity=0)]
     assert not assess_model_quantities(orders, bars(), "0.01")["model_fill_quantity_verified"]
+
+
+@pytest.mark.parametrize("day", [None, "2026-09-09"])
+def test_zero_fill_cannot_use_a_different_or_unknown_order_day(day):
+    result = assess_model_quantities([
+        order(filled_quantity=0, reported_order_date=day),
+    ], bars(0), "0.01")
+    assert not result["model_fill_quantity_verified"]
 
 
 @pytest.mark.parametrize("changes", [dict(ordered_quantity=None), dict(ordered_quantity=True),
