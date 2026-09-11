@@ -225,9 +225,15 @@ def assess_sources(*, database, account, selection, runtime_digest, window, exec
                     execution_identity=selection.execution_identity, runtime_digest=runtime_digest,
                     research_digest=selection.research_digest,
                     dataset_fingerprint=selection.dataset_fingerprint, window=window)
+    correlations = {order["correlation_id"] for order in local}
+    scoped_ledger = dict(orders=local)
+    for table in ("fills", "order_state_history", "fill_audits"):
+        key = "correlation_id" if table == "fill_audits" else "order_correlation_id"
+        scoped_ledger[table] = [row for row in before.get(table, [])
+                                if row[key] in correlations]
     digest = _digest(dict(identity=identity, checks=checks, issues=sorted(issues), missing=missing,
                           executions=[v.model_dump(mode="json") for v in executions],
-                          transactions=rows, ledger=before,
+                          transactions=rows, ledger=scoped_ledger,
                           commission_bps=str(commission_bps)))
     return ExecutionCostAssessment(identity["account_digest"], selection.execution_identity,
                                    runtime_digest, window, digest, _encode(checks),

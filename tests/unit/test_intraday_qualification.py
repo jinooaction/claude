@@ -116,6 +116,23 @@ async def test_real_get_parsers_and_ledger_reach_qualification(
                     assert intervals[0]["response_received"] == "2026-09-10T14:02:00+00:00"
                 assert "ORDER_TRADE_DATE_LINK_NOT_PROVIDED" in assessment.missing_model_conditions
             assert len(calls) == 8  # token + 3 exchanges twice + transaction report
+            if change is None:
+                conn.execute("""INSERT INTO orders
+                    (correlation_id,rule_id,symbol,side,order_type,qty,state,kis_order_id,
+                     limit_price_usd,submitted_at_utc)
+                    VALUES ('outside','other','QQQ','BUY','LIMIT',1,'FILLED','outside-broker',
+                            '100','2026-09-09T14:00:00Z')""")
+                conn.execute("""INSERT INTO fills
+                    (order_correlation_id,kis_fill_id,qty,price_usd,executed_at_utc)
+                    VALUES ('outside','outside-fill',1,'100','2026-09-09T14:01:00Z')""")
+                conn.commit()
+                repeated = await q.prepare_qualification(**args)
+                assert repeated.execution_cost.digest == assessment.digest
+                conn.execute("UPDATE orders SET submitted_at_utc='2026-09-10T14:00:00Z' "
+                             "WHERE correlation_id='outside'")
+                conn.commit()
+                with pytest.raises(DataError, match="QUALIFICATION_EXECUTION_COSTS_NOT_ACCEPTED"):
+                    await q.prepare_qualification(**args)
             assert not book.orders
 
 
@@ -143,7 +160,7 @@ def prepared(tmp_path, monkeypatch):
     def assess(database, raw, selected, prereg, **kwargs):
         assert kwargs == {"include_interval_bars": True}
         assert selected is selection and raw == b"frozen-record"
-        assert prereg == calls[0][1]
+        assert prereg == calls[-1][1]
         calls.append(("forward", prereg))
         return forward
 
