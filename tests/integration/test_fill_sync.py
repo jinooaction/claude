@@ -222,8 +222,10 @@ async def test_historical_window_does_not_mislabel_order_time_as_fill_time(
 ) -> None:
     async with _broker(tmp_path) as (client, conn):
         _seed_order(conn, qty=1)
+        request_times = []
 
         def _historical(request: httpx.Request) -> httpx.Response:
+            request_times.append(datetime.now(UTC))
             assert request.url.params["ORD_STRT_DT"] == "20260623"
             assert request.url.params["ORD_END_DT"] == "20260623"
             return _ccnl(
@@ -265,6 +267,17 @@ async def test_historical_window_does_not_mislabel_order_time_as_fill_time(
         assert len(events) == 1
         assert events[0]["timestamp_basis"] == "OBSERVED"
         assert events[0]["observed_at_utc"] == fill["executed_at_utc"]
+        received = datetime.fromisoformat(events[0]["broker_response_received_at_utc"])
+        assert max(request_times) <= received <= datetime.now(UTC)
+        assert received != datetime.fromisoformat(events[0]["observed_at_utc"])
+    reopened = db.get_connection(tmp_path / "t.db")
+    try:
+        event = audit.parse_payload(reopened.execute(
+            "SELECT * FROM audit_log WHERE event_type='FILL'"
+        ).fetchone())
+        assert datetime.fromisoformat(event["broker_response_received_at_utc"]) == received
+    finally:
+        reopened.close()
 
 
 @pytest.mark.asyncio

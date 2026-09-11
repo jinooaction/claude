@@ -1,5 +1,12 @@
 # 자료 모델
 
+- FillPayload.broker_response_received_at_utc: 실제 GET이 끝난 뒤 잡은 로컬 UTC 시각.
+  논리적 observed_at_utc 및 executed_at_utc와 별개이며 기존 행에는 없을 수 있다.
+  비용 스냅샷의 fill_audits를 모든 fills와 체결번호/수량/가격/주문/전략으로 대조한 경우만
+  가장 늦은 수신 시각으로 구간 상한을 좁힌다. 일부 누락/불일치는 현재 GET 상한을 쓴다.
+- ExecutionQualification.interval_model_json: 동일 독립 재생의 완결 세션 봉에 대한
+  구간 계산 결과. registered_forward_replay_verified는 시장 원본 인증을 뜻하지 않는다.
+
 - settled_cash_calculation: CALCULATED/UNSUPPORTED/INVALID와 범위, 내부 cash 또는
   실패 reason. CALCULATED도 full_account_verified=false이며 공개 결과에는 cash가 없다.
 - ExecutionCostAssessment.intervals_json: 전송 전 상태 시각과 양수 체결 조회 응답 수신

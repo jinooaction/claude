@@ -32,8 +32,48 @@ def _digest(value):
 
 
 def _ledger(connection):
-    return {table: [dict(row) for row in connection.execute(f"SELECT * FROM {table} ORDER BY seq")]
+    result = {table: [dict(row) for row in connection.execute(
+        f"SELECT * FROM {table} ORDER BY seq")]
             for table in ("orders", "fills", "order_state_history")}
+    result["fill_audits"] = [dict(row) for row in connection.execute(
+        "SELECT * FROM audit_log WHERE event_type='FILL' ORDER BY seq"
+    )]
+    return result
+
+
+def _recorded_upper_bound(ledger, order, lower, current):
+    """Narrow only when every recorded fill has matching post-response evidence.
+
+    Old logical observation times are deliberately ignored. Missing or invalid
+    evidence falls back to the fresh authenticated GET's wider interval.
+    """
+    try:
+        ceiling = datetime.fromisoformat(current.replace("Z", "+00:00"))
+        fills = [row for row in ledger["fills"]
+                 if row["order_correlation_id"] == order["correlation_id"]]
+        events = [json.loads(row["payload_json"]) for row in ledger.get("fill_audits", [])
+                  if row["correlation_id"] == order["correlation_id"]
+                  and row["symbol"] == order["symbol"] and row["rule_id"] == order["rule_id"]]
+        if not fills or len(fills) != len(events):
+            return current
+        by_id = {event["kis_fill_id"]: event for event in events}
+        if len(by_id) != len(events):
+            return current
+        times = []
+        for fill in fills:
+            event = by_id[fill["kis_fill_id"]]
+            if (type(event["qty"]) is not int or event["qty"] != fill["qty"]
+                    or Decimal(event["price_usd"]) != Decimal(fill["price_usd"])):
+                return current
+            stamp = datetime.fromisoformat(
+                event["broker_response_received_at_utc"].replace("Z", "+00:00")
+            )
+            if stamp.utcoffset() is None or not lower <= stamp <= ceiling:
+                return current
+            times.append(stamp)
+        return max(times).isoformat()
+    except (KeyError, TypeError, ValueError, AttributeError, ArithmeticError):
+        return current
 
 
 @dataclass(frozen=True)
@@ -179,7 +219,8 @@ def assess_sources(*, database, account, selection, runtime_digest, window, exec
         intervals.append(dict(order_id=execution.kis_order_id, symbol=execution.symbol,
                               quantity=execution.filled_qty,
                               before_submission=lower.isoformat(),
-                              response_received=response_received))
+                              response_received=_recorded_upper_bound(
+                                  before, order, lower, response_received)))
     identity = dict(account_digest="sha256:" + hashlib.sha256(account.encode()).hexdigest(),
                     execution_identity=selection.execution_identity, runtime_digest=runtime_digest,
                     research_digest=selection.research_digest,

@@ -189,6 +189,8 @@ class FillPayload(AuditPayload):
     # authenticated execution-time evidence. Never upgrade old rows implicitly.
     timestamp_basis: Literal["UNSPECIFIED", "OBSERVED", "PROVIDED_EXECUTION"] = "UNSPECIFIED"
     observed_at_utc: str | None = None
+    # Captured after the actual GET completes, distinct from a logical tick.
+    broker_response_received_at_utc: str | None = None
 
 
 class CancelPayload(AuditPayload):

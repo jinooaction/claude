@@ -24,7 +24,9 @@ pytestmark = pytest.mark.asyncio
 
 
 @pytest.mark.parametrize("change", [None, "account", "strategy", "window", "fees", "ledger"])
-async def test_real_get_parsers_and_ledger_reach_qualification(prepared, tmp_path, change):
+@pytest.mark.parametrize("stored_bound", [False, True])
+async def test_real_get_parsers_and_ledger_reach_qualification(
+        prepared, tmp_path, change, stored_bound):
     # Research/forward acceptance is isolated by prepared; everything from HTTP
     # response parsing through SQLite reconciliation and qualification is real.
     args, selected, forward, _ = prepared
@@ -49,6 +51,16 @@ async def test_real_get_parsers_and_ledger_reach_qualification(prepared, tmp_pat
             (order_correlation_id, from_state, to_state, ts_utc)
             VALUES ('cost-local', 'INTENT', 'SUBMITTING', '2026-09-10T14:01:00Z')""")
         conn.commit()
+
+        if stored_bound:
+            from auto_invest.persistence import audit
+            audit.append(conn, audit.FillPayload(
+                kis_fill_id="cost-fill", qty=2, price_usd="101",
+                executed_at_utc="2026-09-10T14:01:00Z",
+                broker_response_received_at_utc="2026-09-10T14:02:00+00:00",
+            ), correlation_id="cost-local", symbol="SPY",
+                rule_id="intraday:" + selected.execution_identity + ":SPY")
+            conn.commit()
 
         def handle(request):
             calls.append(request)
@@ -100,6 +112,8 @@ async def test_real_get_parsers_and_ledger_reach_qualification(prepared, tmp_pat
                 assert intervals[0]["before_submission"] == "2026-09-10T14:01:00+00:00"
                 assert intervals[0]["quantity"] == 2
                 assert intervals[0]["response_received"]
+                if stored_bound:
+                    assert intervals[0]["response_received"] == "2026-09-10T14:02:00+00:00"
                 assert "ORDER_TRADE_DATE_LINK_NOT_PROVIDED" in assessment.missing_model_conditions
             assert len(calls) == 8  # token + 3 exchanges twice + transaction report
             assert not book.orders

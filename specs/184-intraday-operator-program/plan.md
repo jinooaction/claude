@@ -1,5 +1,11 @@
 # 구현 계획: 단타 실행 프로그램
 
+FR047, 등급3/K4 감사 모델: sync_fills의 GET 완료 시각을 apply_fill_plan으로 전달하고
+FillPayload에 선택적 broker_response_received_at_utc를 추가한다. 값 없는 기존 기록은
+그대로 읽는다. 비용 증명 스냅샷에 FILL 감사를 포함하고 전체 체결 대응을 확인한 경우만
+가장 늦은 수신 상한을 사용한다. 부분 체결/중복/이전 기록/시계 오류/재시작을 검사한다.
+복구는 코드 되돌림이며 기존 장부·감사·시간 필드·권한·한도를 유지한다.
+
 FR046, 등급3: assess_forward의 선택적 내부 봉 출력은 완결 세션만 포함하며 기본 공개
 보고서에는 없다. assess_registered_forward가 동일 서명/원본 재생 경로로 이를 요청한다.
 prepare_qualification은 원본 봉과 실제 비용 증명의 구간으로 assess_interval_volume을

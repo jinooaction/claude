@@ -470,7 +470,8 @@ def apply_submission_recovery_plan(
     return len(plan.recoveries)
 
 
-def _apply_fill(conn: sqlite3.Connection, fill: PlannedFill, ts_iso: str) -> bool:
+def _apply_fill(conn: sqlite3.Connection, fill: PlannedFill, ts_iso: str,
+                response_received: str | None = None) -> bool:
     """Apply one FILL inside the caller's transaction.
 
     Returns True only when the fill row was newly inserted. Duplicate
@@ -517,6 +518,7 @@ def _apply_fill(conn: sqlite3.Connection, fill: PlannedFill, ts_iso: str) -> boo
                 "PROVIDED_EXECUTION" if fill.executed_at_utc is not None else "OBSERVED"
             ),
             observed_at_utc=ts_iso,
+            broker_response_received_at_utc=response_received,
         ),
         rule_id=fill.rule_id,
         symbol=fill.symbol,
@@ -539,7 +541,8 @@ def _iso_ms(dt: datetime) -> str:
 
 
 def apply_fill_plan(
-    conn: sqlite3.Connection, plan: FillPlan, *, ts_iso: str | None = None
+    conn: sqlite3.Connection, plan: FillPlan, *, ts_iso: str | None = None,
+    response_received: str | None = None,
 ) -> tuple[int, int, int]:
     """계획을 DB에 적용한다. (적용된 FILL 수, 적용 수량 합, 전이 수) 반환.
 
@@ -557,7 +560,7 @@ def apply_fill_plan(
     fills_applied = 0
     try:
         for fill in plan.fills:
-            if _apply_fill(conn, fill, ts_iso):
+            if _apply_fill(conn, fill, ts_iso, response_received):
                 fills_applied += 1
                 qty_applied += fill.qty
         for tr in plan.transitions:
@@ -622,6 +625,7 @@ async def sync_fills(
             markets=markets,
             **({"strict_contract": True} if strict_contract else {}),
         )
+        response_received = datetime.now(UTC).isoformat()
     except Exception as exc:  # noqa: BLE001 — 거래 무중단: 격리해 ERROR 로 기록.
         audit.append(
             conn,
@@ -667,7 +671,9 @@ async def sync_fills(
                 int(row["qty"]) * Decimal(row["price_usd"])
             )
     plan = plan_fill_ingestion(open_orders, executions, recorded, notionals)
-    fills_applied, qty_applied, transitions = apply_fill_plan(conn, plan, ts_iso=_iso_ms(moment))
+    fills_applied, qty_applied, transitions = apply_fill_plan(
+        conn, plan, ts_iso=_iso_ms(moment), response_received=response_received,
+    )
 
     for w in plan.warnings:
         audit.append(conn, ErrorPayload(where="fill_sync", message=w))
