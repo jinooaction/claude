@@ -1,5 +1,28 @@
 # 조사 결정
 
+## 2026-09-12 공식 HTS 총자산 계산 설명 재발견
+
+공식 해외주식 HTS 안내 PDF의40쪽(페이지 인덱스39)은 해외증권 총자산을
+원화예수금+외화예수금+해외주식평가금액+미결제매도금액-미결제매수금액으로 설명한다.
+35쪽은 주문가능금액이 예수금에서 증거금과 제비용을 차감한 값임을 설명한다.
+이는 새 계산 대조 후보의 공식 근거이며, 계산식 자체를 전혀 찾지 못했다는 전제로
+자료 요청만 반복하지 않는다. 다만 과거 HTS 안내이므로 현재 OpenAPI 필드의 통화·범위·
+CMA 포함 여부까지 자동 확정한 것은 아니다. PDF의 과거 시세/매도대금 재사용 안내를
+현재 거래 규칙으로 적용하지 않는다.
+
+현재 공식 예제의 output3은 dncl_amt, cma_evlu_amt, tot_dncl_amt, frcr_evlu_tota,
+evlu_amt_smtl, ustl_sll_amt_smtl, ustl_buy_amt_smtl, tot_asst_amt, tot_loan_amt를
+제공한다. 다음 대조는 저장된 동일 응답에서 총예수금/외화평가/주식평가/미결제 구성의
+유효성을 확인하고 설명된 산술과 비교하는 것이다. 대출을 중복 차감하거나 통화가
+다른 숫자를 합산하지 않는다. 숫자가 일치하더라도 전체 계좌 범위와 평가 시각 증명이
+되지 않으며 기존 국내/기타 자산과 OTC 평가 문제를 별도로 유지한다.
+
+- https://file.truefriend.com/Storage/research/hts_guest_0130.pdf (35·40쪽)
+- https://raw.githubusercontent.com/koreainvestment/open-trading-api/main/examples_llm/overseas_stock/inquire_present_balance/chk_inquire_present_balance.py
+
+현재 서버 원본은186/PR803에서 확보했고, PR805의 금액 비노출 구조 분석 검증이
+진행 중이다. 그 결과와 위 공식 설명을 함께 사용해184의 계산 계약을 좁힌다.
+
 ## 2026-09-10 기존 서버 체결 장부와 시작 시점 방식
 
 최신 automation/live-profit-evidence-last-run을 원격에서 다시 읽었다. 관측 시각
