@@ -23,7 +23,8 @@ from auto_invest.market_data.intraday import DataError
 pytestmark = pytest.mark.asyncio
 
 
-@pytest.mark.parametrize("change", [None, "account", "strategy", "window", "fees", "ledger"])
+@pytest.mark.parametrize("change", [None, "account", "strategy", "window", "fees", "ledger",
+                                    "order_date", "missing_order_date"])
 @pytest.mark.parametrize("stored_bound", [False, True])
 async def test_real_get_parsers_and_ledger_reach_qualification(
         prepared, tmp_path, change, stored_bound):
@@ -76,8 +77,11 @@ async def test_real_get_parsers_and_ledger_reach_qualification(
             assert request.url.params["CANO"] == authority.account_no[:8]
             if request.url.path.endswith("inquire-ccnl"):
                 rows = [dict(odno="cost-broker", pdno="SPY", sll_buy_dvsn_cd="02",
+                             ord_dt="20260909" if change == "order_date" else "20260910",
                              ovrs_excg_cd="AMEX", ft_ccld_qty="2", nccs_qty="0",
                              ft_ccld_unpr3="101", ord_dvsn="00", ord_unpr="102")]
+                if change == "missing_order_date":
+                    rows[0].pop("ord_dt")
                 return httpx.Response(200, json=dict(rt_cd="0", output=rows))
             assert request.url.path.endswith("inquire-period-trans")
             if change == "ledger":
@@ -101,7 +105,7 @@ async def test_real_get_parsers_and_ledger_reach_qualification(
             source = q.ExecutionCostSource(authority, token_cache=tmp_path / "token.json",
                                            runtime_digest=args["runtime_digest"])
             args["execution_source"] = source
-            if change:
+            if change and change != "missing_order_date":
                 reason = ("QUALIFICATION_EXECUTION_BINDING_MISMATCH" if change == "account"
                           else "QUALIFICATION_EXECUTION_COSTS_NOT_ACCEPTED")
                 with pytest.raises(DataError, match=reason):
@@ -110,7 +114,11 @@ async def test_real_get_parsers_and_ledger_reach_qualification(
                 result = await q.prepare_qualification(**args)
                 assessment = result.execution_cost
                 assert not assessment.issues
-                assert all(json.loads(assessment.checks_json).values())
+                checks = json.loads(assessment.checks_json)
+                assert checks.pop("reported_order_trade_dates_match") is (
+                    change != "missing_order_date"
+                )
+                assert all(checks.values())
                 assert not assessment.public()["execution_parity_verified"]
                 intervals = json.loads(assessment.intervals_json)
                 assert len(intervals) == 1

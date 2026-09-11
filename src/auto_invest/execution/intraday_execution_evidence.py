@@ -196,6 +196,7 @@ def assess_sources(*, database, account, selection, runtime_digest, window, exec
     if any(len(values) != 1 for values in grouped.values()):
         issues.add("MULTIPLE_ORDERS_WITHOUT_FEE_IDENTITY")
     fee_ok = True
+    date_ok = True
     reported_fees = {}
     with localcontext() as context:
         context.prec = 80
@@ -208,13 +209,17 @@ def assess_sources(*, database, account, selection, runtime_digest, window, exec
             ) == key]
             if len(values) != 1 or not matching:
                 fee_ok = False
+                date_ok = False
                 continue
-            ordered = values[0].ordered_at_utc
+            ordered = values[0].reported_order_date
+            if ordered is None:
+                date_ok = False
             if any(
                 (ordered is not None and row["trad_dt"] != ordered.strftime("%Y%m%d"))
                 or not window[0] <= row["trad_dt"] <= row["sttl_dt"] <= window[1]
                 for row in matching
             ):
+                date_ok = False
                 issues.add("ORDER_TRADE_SETTLEMENT_DATES_NOT_MATCHED")
             fees = sum((Decimal(row["dmst_frcr_fee1"]) + Decimal(row["frcr_fee1"])
                         for row in matching), Decimal(0))
@@ -228,6 +233,7 @@ def assess_sources(*, database, account, selection, runtime_digest, window, exec
     checks = dict(order_and_amounts_match=comparison["report_totals_match"],
                   reported_settlement_arithmetic=settlement["arithmetic_verified"],
                   reported_fee_bound=fee_ok, limit_price_conformity=price_ok,
+                  reported_order_trade_dates_match=bool(grouped) and date_ok,
                   order_report_scope_verified=not issues)
     # BrokerExecution carries order time, not actual execution time. Neither an
     # arithmetic match nor an operator digest proves model fill timing/volume.

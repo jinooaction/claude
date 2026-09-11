@@ -8,7 +8,7 @@ would only require a new adapter.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -83,3 +83,4 @@ class BrokerExecution(BaseModel):
     order_type: OrderType | None = None
     order_price_usd: Decimal | None = None
     ordered_at_utc: datetime | None = None
+    reported_order_date: date | None = None

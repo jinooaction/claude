@@ -1,5 +1,10 @@
 # 자료 모델
 
+- BrokerExecution.reported_order_date: 엄격한 누적 조회 파서가 보존한 원문 달력 날짜.
+  선택적 date이며 ordered_at_utc는 계속None이다. 원래 행끼리 날짜가 다르면 같은 주문
+  번호라도 합치지 않는다. reported_order_trade_dates_match는 단일 주문에 대응하는
+  보고 행의 매매일 일치이며, 날짜 누락은False다. 등록일 조회의 전체 범위 증명은 아니다.
+
 - 관측 구간의 side/average_fill_price/reported_fees: 같은 인증 실행 조회와 단일
   종목/방향/주문 보고서 대조에서 얻은 값. 비용 지문의 원본 조회/수수료에 결합한다.
   next_bar_price_bound_verified/next_bar_fee_bound_verified는 원래 신호 직후 봉 시가를

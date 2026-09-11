@@ -997,6 +997,15 @@ def _parse_execution_snapshots(rows: list[dict], market: str) -> list[BrokerExec
         number = _first_str(row, "odno", "ODNO")
         if not number or not _first_str(row, "pdno", "PDNO", "ovrs_pdno"):
             raise ValueError("EXECUTIONS_IDENTITY_MISSING")
+        raw_day = _first_str(row, "ord_dt", "ORD_DT")
+        reported_day = None
+        if raw_day is not None:
+            try:
+                if len(raw_day) != 8 or not raw_day.isascii() or not raw_day.isdigit():
+                    raise ValueError
+                reported_day = date.fromisoformat(raw_day)
+            except ValueError:
+                raise ValueError("EXECUTIONS_ORDER_DATE_INVALID") from None
         for keys in (("ft_ccld_qty", "ccld_qty", "tot_ccld_qty"), ("nccs_qty", "ord_psbl_qty")):
             raw = _first_str(row, *keys)
             try:
@@ -1009,6 +1018,7 @@ def _parse_execution_snapshots(rows: list[dict], market: str) -> list[BrokerExec
         execution = _parse_executions([row])[0].model_copy(
             update={
                 "ordered_at_utc": None,
+                "reported_order_date": reported_day,
                 "terminal": (_first_str(row, "prcs_stat_name", "ord_stat_name") or "").lower()
                 in {
                     "취소",
@@ -1034,6 +1044,7 @@ def _parse_execution_snapshots(rows: list[dict], market: str) -> list[BrokerExec
             if (
                 previous.symbol != execution.symbol
                 or previous.side != execution.side
+                or previous.reported_order_date != execution.reported_order_date
                 or (
                     previous.filled_qty == execution.filled_qty
                     and previous.avg_fill_price_usd != execution.avg_fill_price_usd
