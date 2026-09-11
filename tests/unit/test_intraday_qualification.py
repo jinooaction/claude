@@ -24,7 +24,7 @@ pytestmark = pytest.mark.asyncio
 
 
 @pytest.mark.parametrize("change", [None, "account", "strategy", "window", "fees", "ledger",
-                                    "order_date", "missing_order_date"])
+                                    "order_date", "missing_order_date", "quantity", "unfilled"])
 @pytest.mark.parametrize("stored_bound", [False, True])
 async def test_real_get_parsers_and_ledger_reach_qualification(
         prepared, tmp_path, change, stored_bound):
@@ -68,6 +68,20 @@ async def test_real_get_parsers_and_ledger_reach_qualification(
                 rule_id="intraday:" + selected.execution_identity + ":SPY")
             conn.commit()
 
+        if change == "unfilled":
+            conn.execute("""INSERT INTO orders
+                (correlation_id,rule_id,symbol,side,order_type,qty,state,kis_order_id,
+                 limit_price_usd,submitted_at_utc)
+                VALUES ('unfilled-local',?,'QQQ','BUY','LIMIT',2,'CANCELLED','unfilled-broker',
+                        '102','2026-09-10T14:00:00Z')""",
+                         ("intraday:" + selected.execution_identity + ":QQQ",))
+            conn.execute("INSERT INTO intraday_execution_claims VALUES(?,?,?)", (
+                "QQQ", selected.execution_identity,
+                json.dumps(dict(symbol="QQQ", side="BUY", qty=2, limit="102",
+                                signal_bar_end="2026-09-10T14:00:00Z", decision_kind="SIGNAL")),
+            ))
+            conn.commit()
+
         def handle(request):
             calls.append(request)
             if request.url.path == "/oauth2/tokenP":
@@ -78,10 +92,14 @@ async def test_real_get_parsers_and_ledger_reach_qualification(
             if request.url.path.endswith("inquire-ccnl"):
                 rows = [dict(odno="cost-broker", pdno="SPY", sll_buy_dvsn_cd="02",
                              ord_dt="20260909" if change == "order_date" else "20260910",
+                             ft_ord_qty="3" if change == "quantity" else "2",
                              ovrs_excg_cd="AMEX", ft_ccld_qty="2", nccs_qty="0",
                              ft_ccld_unpr3="101", ord_dvsn="00", ord_unpr="102")]
                 if change == "missing_order_date":
                     rows[0].pop("ord_dt")
+                if change == "unfilled":
+                    rows.append(dict(rows[0], odno="unfilled-broker", pdno="QQQ",
+                                     ft_ccld_qty="0", ft_ccld_unpr3="0", prcs_stat_name="취소완료"))
                 return httpx.Response(200, json=dict(rt_cd="0", output=rows))
             assert request.url.path.endswith("inquire-period-trans")
             if change == "ledger":
@@ -105,7 +123,7 @@ async def test_real_get_parsers_and_ledger_reach_qualification(
             source = q.ExecutionCostSource(authority, token_cache=tmp_path / "token.json",
                                            runtime_digest=args["runtime_digest"])
             args["execution_source"] = source
-            if change and change != "missing_order_date":
+            if change and change not in {"missing_order_date", "unfilled"}:
                 reason = ("QUALIFICATION_EXECUTION_BINDING_MISMATCH" if change == "account"
                           else "QUALIFICATION_EXECUTION_COSTS_NOT_ACCEPTED")
                 with pytest.raises(DataError, match=reason):
@@ -127,6 +145,15 @@ async def test_real_get_parsers_and_ledger_reach_qualification(
                 assert intervals[0]["side"] == "BUY"
                 assert intervals[0]["average_fill_price"] == "101"
                 assert intervals[0]["reported_fees"] == "0.02"
+                orders = json.loads(assessment.orders_json)
+                by_id = {order["order_id"]: order for order in orders}
+                filled_order = by_id["cost-broker"]
+                assert filled_order["ordered_quantity"] == filled_order["filled_quantity"] == 2
+                assert filled_order["signal_bar_end"] == "2026-09-10T14:00:00Z"
+                if change == "unfilled":
+                    assert len(orders) == 2
+                    assert by_id["unfilled-broker"]["filled_quantity"] == 0
+                    assert by_id["unfilled-broker"]["ordered_quantity"] == 2
                 assert intervals[0]["response_received"]
                 assert intervals[0]["signal_bar_end"] == "2026-09-10T14:00:00Z"
                 timing = assessment.assess_interval_volume(
@@ -241,13 +268,16 @@ async def test_qualification_actually_consumes_replayed_bars(
 
     async def costs(*values):
         cost = await original(*values)
-        return replace(cost, intervals_json=json.dumps([dict(
+        entry = dict(
             order_id="order", symbol="SPY", quantity=2,
             side="BUY", average_fill_price="100.06", reported_fees=fee,
             signal_bar_end="2026-09-10T14:00:00Z", decision_kind="SIGNAL",
             before_submission="2026-09-10T14:01:00Z",
             response_received=f"2026-09-10T14:{response_minute}:00Z",
-        )]))
+        )
+        return replace(cost, intervals_json=json.dumps([entry]), orders_json=json.dumps([
+            dict(entry, ordered_quantity=2, filled_quantity=2),
+        ]))
 
     args["execution_source"].assess = costs
     result = await q.prepare_qualification(**args)
@@ -256,6 +286,7 @@ async def test_qualification_actually_consumes_replayed_bars(
     assert model["next_bar_timing_verified"] is timing_verified
     assert model["next_bar_price_bound_verified"] is timing_verified
     assert model["next_bar_fee_bound_verified"] is (timing_verified and fee_verified)
+    assert model["model_fill_quantity_verified"] is verified
     assert model["registered_forward_replay_verified"]
     assert model["market_source_authentication_verified"] is source_verified
     assert model["source_attestation_basis"] == "TRUSTED_SERVER_COLLECTOR"

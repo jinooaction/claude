@@ -90,6 +90,44 @@ def assess_next_bar_costs(intervals, bars, cost_model):
                 cost_issues=sorted(issues))
 
 
+def assess_model_quantities(orders, bars, participation):
+    """Compare all reported orders, including zero fills, with the model's integer cap."""
+    issues = set()
+    try:
+        if (not isinstance(orders, list) or not 0 < len(orders) <= 10000
+                or not isinstance(bars, list) or len(bars) > 160000):
+            raise ObservationModelError("MODEL_INPUT_SIZE_INVALID")
+        rate = _amount(participation)
+        if not 0 < rate <= 1:
+            raise ObservationModelError("MODEL_PARTICIPATION_INVALID")
+        indexed, seen = {}, set()
+        for bar in bars:
+            key = (bar["symbol"], _time(bar["timestamp_utc"]))
+            if key in indexed or type(bar["volume"]) is not int or not 0 <= bar["volume"] <= 10**18:
+                raise ObservationModelError("MODEL_BAR_INVALID")
+            indexed[key] = bar["volume"]
+        with localcontext() as context:
+            context.prec = 80
+            for order in orders:
+                identity = order["order_id"]
+                requested, filled = order["ordered_quantity"], order["filled_quantity"]
+                stamp = _time(order["signal_bar_end"])
+                if (not isinstance(identity, str) or not identity or identity in seen
+                        or order["decision_kind"] not in {"SIGNAL", "STRATEGY_EXIT"}
+                        or stamp.second or stamp.microsecond or stamp.minute % 5
+                        or type(requested) is not int or not 0 < requested <= 10**12
+                        or type(filled) is not int or not 0 <= filled <= requested):
+                    raise ObservationModelError("MODEL_ORDER_INVALID")
+                seen.add(identity)
+                volume = indexed[(order["symbol"], stamp)]
+                expected = min(requested, int(Decimal(volume) * rate))
+                if filled != expected:
+                    issues.add("MODEL_FILL_QUANTITY_MISMATCH")
+    except (ObservationModelError, KeyError, TypeError, ValueError, ArithmeticError):
+        issues.add("MODEL_ORDER_QUANTITIES_UNVERIFIED")
+    return dict(model_fill_quantity_verified=not issues, quantity_issues=sorted(issues))
+
+
 def _amount(value):
     if not isinstance(value, str) or not re.fullmatch(r"-?[0-9]{1,18}(\.[0-9]{1,12})?", value):
         raise ObservationModelError("MODEL_AMOUNT_INVALID")

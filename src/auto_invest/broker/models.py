@@ -84,3 +84,4 @@ class BrokerExecution(BaseModel):
     order_price_usd: Decimal | None = None
     ordered_at_utc: datetime | None = None
     reported_order_date: date | None = None
+    reported_order_quantity: int | None = Field(default=None, ge=1)

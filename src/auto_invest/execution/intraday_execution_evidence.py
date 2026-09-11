@@ -21,6 +21,7 @@ from auto_invest.execution.intraday_cost_reconciliation import reconcile_cost_in
 from auto_invest.execution.intraday_observation import KISExecutionObserver
 from auto_invest.execution.intraday_observation_models import (
     assess_intervals,
+    assess_model_quantities,
     assess_next_bar_costs,
     assess_next_bar_timing,
 )
@@ -114,6 +115,7 @@ class ExecutionCostAssessment:
     issues: tuple[str, ...]
     missing_model_conditions: tuple[str, ...]
     intervals_json: str = "[]"
+    orders_json: str = "[]"
 
     def assess_interval_volume(self, bars, *, participation, observed_at, cost_model=None):
         if self.issues:
@@ -122,10 +124,12 @@ class ExecutionCostAssessment:
                                   participation=participation, observed_at=observed_at)
         result.update(assess_next_bar_timing(json.loads(self.intervals_json)))
         result.update(assess_next_bar_costs(json.loads(self.intervals_json), bars, cost_model))
+        result.update(assess_model_quantities(json.loads(self.orders_json), bars, participation))
         return dict(result, account_digest=self.account_digest,
                     execution_identity=self.execution_identity, cost_digest=self.digest,
                     interval_digest=_digest(dict(cost_digest=self.digest,
-                        intervals=json.loads(self.intervals_json), bars=bars,
+                        intervals=json.loads(self.intervals_json),
+                        orders=json.loads(self.orders_json), bars=bars,
                         participation=participation, observed_at=observed_at,
                         cost_model=cost_model)),
                     market_source_authentication_verified=False)
@@ -175,6 +179,9 @@ def assess_sources(*, database, account, selection, runtime_digest, window, exec
     local_by_id = {row["kis_order_id"]: row for row in local}
     for value in executions:
         order = local_by_id.get(value.kis_order_id)
+        if (value.reported_order_quantity is not None and order is not None
+                and value.reported_order_quantity != order["qty"]):
+            issues.add("BROKER_LEDGER_ORDER_QUANTITY_MISMATCH")
         if value.unfilled_qty != 0 and not value.terminal:
             issues.add("BROKER_ORDER_NOT_CLOSED")
         if not value.filled_qty:
@@ -281,9 +288,16 @@ def assess_sources(*, database, account, selection, runtime_digest, window, exec
                           executions=[v.model_dump(mode="json") for v in executions],
                           transactions=rows, ledger=scoped_ledger,
                           commission_bps=str(commission_bps)))
+    model_orders = [dict(order_id=value.kis_order_id, symbol=value.symbol,
+                        ordered_quantity=value.reported_order_quantity,
+                        filled_quantity=value.filled_qty,
+                        **_signal_context(before, local_by_id.get(value.kis_order_id, {}),
+                                          prefix, selection.execution_identity))
+                    for value in executions]
     return ExecutionCostAssessment(identity["account_digest"], selection.execution_identity,
                                    runtime_digest, window, digest, _encode(checks),
-                                   tuple(sorted(issues)), missing, _encode(intervals))
+                                   tuple(sorted(issues)), missing, _encode(intervals),
+                                   _encode(model_orders))
 
 
 class ExecutionCostSource:

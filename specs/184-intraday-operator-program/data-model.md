@@ -1,5 +1,12 @@
 # 자료 모델
 
+- BrokerExecution.reported_order_quantity: 엄격한 조회에서 읽은 원래 주문 수량.
+  누락은None, 제공된 잘못된 수량/체결량보다 작은 수량/같은 주문의 변경은 거절한다.
+- ExecutionCostAssessment.orders_json: 미체결을 포함한 모든 조회 주문의 원래 수량,
+  실제 체결 수량과 장부 의도의 원래 신호. interval_digest에도 포함한다.
+  model_fill_quantity_verified는 다음 봉의 정수주 모델 수량과 모든 주문을 대조한
+  부분 결과이며 quantity_issues에 차이/누락을 보존한다. 실행 승인과 구분한다.
+
 - BrokerExecution.reported_order_date: 엄격한 누적 조회 파서가 보존한 원문 달력 날짜.
   선택적 date이며 ordered_at_utc는 계속None이다. 원래 행끼리 날짜가 다르면 같은 주문
   번호라도 합치지 않는다. reported_order_trade_dates_match는 단일 주문에 대응하는
