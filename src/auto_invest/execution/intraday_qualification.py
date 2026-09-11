@@ -80,6 +80,52 @@ class ExecutionQualification:
     execution_cost: ExecutionCostAssessment
     interval_model_json: str = "{}"
 
+    def execution_model_verified(self):
+        """Conformance of closed orders to the computed model, not strategy promotion.
+
+        Only prepare_qualification constructs this evidence from authenticated
+        sources; there is no file/CLI input for a caller-supplied passing report.
+        The raw cost report alone still cannot attest execution model parity.
+        """
+        try:
+            cost = self.execution_cost
+            if cost.issues or set(cost.missing_model_conditions) - {
+                "SOURCE_EXECUTION_TIMING_NOT_PROVIDED", "MODEL_FILL_VOLUME_REPLAY_NOT_PROVIDED",
+                "ORDER_TRADE_DATE_LINK_NOT_PROVIDED",
+            }:
+                return False
+            model = json.loads(self.interval_model_json, object_pairs_hook=_unique)
+            checks = json.loads(cost.checks_json, object_pairs_hook=_unique)
+            if (not isinstance(model, dict) or not isinstance(checks, dict)
+                    or model.get("model") != "ALL_POSSIBLE_FIVE_MINUTE_BARS_V1"
+                    or model.get("source_attestation_basis") != "TRUSTED_SERVER_COLLECTOR"
+                    or model.get("account_digest") != self.account_digest
+                    or model.get("execution_identity") != self.selection.execution_identity
+                    or model.get("cost_digest") != cost.digest
+                    or cost.account_digest != self.account_digest
+                    or cost.execution_identity != self.selection.execution_identity
+                    or cost.runtime_digest != self.runtime_digest):
+                return False
+            if any(model.get(field) is not True for field in (
+                "interval_volume_verified", "next_bar_timing_verified",
+                "model_fill_quantity_verified",
+                "next_bar_price_bound_verified", "next_bar_fee_bound_verified",
+                "registered_forward_replay_verified", "market_source_authentication_verified",
+            )) or any(model.get(field) != [] for field in (
+                "issues", "timing_issues", "quantity_issues", "cost_issues",
+            )):
+                return False
+            return all(value is True for value in checks.values()) and all(
+                checks.get(field) is True for field in (
+                    "order_and_amounts_match", "reported_settlement_arithmetic",
+                    "reported_fee_bound",
+                    "limit_price_conformity", "reported_order_trade_dates_match",
+                    "order_report_scope_verified",
+                )
+            )
+        except (TypeError, ValueError, AttributeError):
+            return False
+
     def __call__(self):
         """Synchronous last-boundary check; no broker calls or authority issuance."""
         try:
@@ -120,7 +166,7 @@ class ExecutionQualification:
             now = datetime.now(UTC)
             if not utc(grant["valid_from"]) <= now < utc(grant["valid_until"]):
                 return "QUALIFICATION_AUTHORIZATION_EXPIRED"
-            if self.execution_cost.missing_model_conditions:
+            if not self.execution_model_verified():
                 return "QUALIFICATION_EXECUTION_MODEL_EVIDENCE_MISSING"
             return None
         except Exception:

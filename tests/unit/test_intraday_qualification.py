@@ -25,11 +25,15 @@ pytestmark = pytest.mark.asyncio
 
 @pytest.mark.parametrize("fault", [None, "offset_days", "missing_date"])
 async def test_repeated_orders_match_dated_groups_without_fee_allocation(
-        prepared, tmp_path, fault):
+        prepared, tmp_path, fault, monkeypatch):
     from auto_invest.persistence import audit
 
     args, selected, forward, _ = prepared
     forward["session_dates"] = ["2026-09-09", "2026-09-11"]
+    # Research/forward authentication are isolated here; their independent
+    # signed-source replay tests cover those producers. HTTP/ledger/model/guard
+    # below are real, and no production authorization file is created.
+    forward["market_source_authentication_verified"] = True
     forward["_interval_bars_json"] = json.dumps([
         dict(symbol="SPY", timestamp_utc=f"2026-09-{day}T14:00:00Z", open=101, volume=1000)
         for day in ("09", "10")
@@ -110,6 +114,56 @@ async def test_repeated_orders_match_dated_groups_without_fee_allocation(
             assert model["next_bar_fee_bound_verified"]
             assert model["next_bar_price_bound_verified"]
             assert not model["full_execution_parity_verified"]
+            assert qualification.execution_model_verified()
+            approval = grant(qualification)
+            monkeypatch.setattr(q, "_read_authorization", lambda: approval)
+            assert qualification() is None
+            for field in (
+                "interval_volume_verified", "next_bar_timing_verified",
+                "model_fill_quantity_verified",
+                "next_bar_price_bound_verified", "next_bar_fee_bound_verified",
+                "registered_forward_replay_verified", "market_source_authentication_verified",
+            ):
+                for wrong in (False, None, 1):
+                    changed = replace(qualification, interval_model_json=json.dumps(
+                        dict(model, **{field: wrong}),
+                    ))
+                    assert changed() == "QUALIFICATION_EXECUTION_MODEL_EVIDENCE_MISSING", field
+            for field in ("account_digest", "execution_identity", "cost_digest",
+                          "source_attestation_basis", "model"):
+                changed = replace(qualification, interval_model_json=json.dumps(
+                    dict(model, **{field: "different"}),
+                ))
+                assert not changed.execution_model_verified(), field
+            for field in ("issues", "timing_issues", "quantity_issues", "cost_issues"):
+                changed = replace(qualification, interval_model_json=json.dumps(
+                    dict(model, **{field: ["UNRESOLVED"]}),
+                ))
+                assert not changed.execution_model_verified(), field
+            checks = json.loads(result.checks_json)
+            for field in checks:
+                changed = replace(qualification, execution_cost=replace(result,
+                    checks_json=json.dumps(dict(checks, **{field: False})),
+                ))
+                assert not changed.execution_model_verified(), field
+            unknown = replace(qualification, execution_cost=replace(result,
+                missing_model_conditions=("NEW_UNSUPPORTED_CONDITION",),
+            ))
+            assert unknown() == "QUALIFICATION_EXECUTION_MODEL_EVIDENCE_MISSING"
+            extra_check = replace(qualification, execution_cost=replace(result,
+                checks_json=json.dumps(dict(checks, new_requirement=False)),
+            ))
+            assert not extra_check.execution_model_verified()
+            duplicate = replace(qualification, interval_model_json=(
+                qualification.interval_model_json[:-1] + ',"interval_volume_verified":true}'
+            ))
+            assert not duplicate.execution_model_verified()
+            empty_claim = replace(qualification, interval_model_json="{}",
+                                  execution_cost=replace(result, missing_model_conditions=()))
+            assert empty_claim() == "QUALIFICATION_EXECUTION_MODEL_EVIDENCE_MISSING"
+            monkeypatch.setattr(q, "_read_authorization", lambda: {})
+            assert qualification.execution_model_verified()
+            assert qualification() == "QUALIFICATION_AUTHORIZATION_MISMATCH"
 
 
 @pytest.mark.parametrize("change", [None, "account", "strategy", "window", "fees", "ledger",
