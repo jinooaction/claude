@@ -118,4 +118,23 @@ pytest_exit=$?
 if [[ "${pytest_exit}" -ne 0 ]]; then
     echo "::warning::KIS smoke failed after one token issue; not retrying full live tests to avoid KIS OAuth throttle and duplicate live-read noise."
 fi
+
+# Account source capture uses the same approved checkout and credentials. The
+# private journal persists outside the temporary checkout; stdout is counts only.
+# Older approved commits without the recorder remain valid smoke targets.
+if [[ "${pytest_exit}" -eq 0 && -f "${SMOKE_REPO}/src/auto_invest/execution/intraday_account_history.py" ]]; then
+    sudo -u auto-invest env \
+        "KIS_APP_KEY=$KIS_APP_KEY" \
+        "KIS_APP_SECRET=$KIS_APP_SECRET" \
+        "KIS_ACCOUNT_NO=$KIS_ACCOUNT_NO" \
+        "KIS_TOKEN_CACHE_PATH=${LIVE_REPO}/data/kis_token.json" \
+        /usr/local/bin/uv run --project "${SMOKE_REPO}" python \
+        "${SMOKE_REPO}/scripts/intraday_balance_check.py" \
+        --history-db "${LIVE_REPO}/data/account-source.db"
+    capture_exit=$?
+    if [[ "${capture_exit}" -ne 0 ]]; then
+        echo "::warning::Private account source capture failed; no retry or account verification promotion."
+        exit 2
+    fi
+fi
 exit "${pytest_exit}"
