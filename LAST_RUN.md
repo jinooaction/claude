@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-09-11T13:22:36.015113Z)
+# 완료 후보 소비 장부 (as of 2026-09-11T17:56:16.749639Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -137,6 +137,7 @@
 | 181-intraday-runtime | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 182-intraday-kis-execution | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 183-mobile-capital-strategy-dashboard | 체크박스 작업이 없거나 완료되지 않았습니다. |
+| 186-account-source-collection | 체크박스 작업이 없거나 완료되지 않았습니다. |
 
 ## 안전 경계
 
@@ -153,7 +154,7 @@
 
 ```json
 {
-  "commit": "9fbdef843dafe5a565846134ae8b1fca6672941a",
+  "commit": "8ec597b9ebe777573c5c5302dec149b06b9ea86c",
   "overall_status": "OK",
   "released_work": [
     {
@@ -1065,8 +1066,12 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "183-mobile-capital-strategy-dashboard"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "186-account-source-collection"
     }
   ],
-  "timestamp_utc": "2026-09-11T13:22:36.015113Z"
+  "timestamp_utc": "2026-09-11T17:56:16.749639Z"
 }
 ```
