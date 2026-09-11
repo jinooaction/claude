@@ -34,7 +34,7 @@ async def test_real_launcher_reaches_execution_reader_and_closes_on_missing_evid
                                  execution_fingerprint(candidate, provider),
                                  "PAPER_CHALLENGER", 756, 0)
     monkeypatch.setattr(qualification, "select_research", lambda *a: selected)
-    monkeypatch.setattr(qualification, "assess_registered_forward", lambda *a: dict(
+    monkeypatch.setattr(qualification, "assess_registered_forward", lambda *a, **k: dict(
         freeze_authentication_verified=True, minimum_observation_count_met=True,
         complete_sessions=60, required_sessions=60, invalid_sessions=0,
         session_dates=["2026-09-10", "2026-09-11"],

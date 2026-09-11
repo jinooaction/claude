@@ -14,7 +14,7 @@ from auto_invest.market_data.intraday import CALENDAR, NY, DataError, iso, utc
 
 
 def assess_forward(database: Path, selection: ResearchSelection, preregistration: Path,
-                   *, frozen_at, now):
+                   *, frozen_at, now, include_interval_bars=False):
     """The launching integration must authenticate frozen_at separately.
 
     This function establishes log consistency and temporal coverage, not that an
@@ -55,6 +55,7 @@ def assess_forward(database: Path, selection: ResearchSelection, preregistration
             if candidate is None or candidate.as_dict() != selection.candidate.as_dict():
                 raise DataError("FORWARD_REGISTRATION_MISMATCH")
             sessions = {}
+            interval_bars = []
             count = 0
             for row in snapshot.execute("SELECT * FROM intraday_events ORDER BY id"):
                 count += 1
@@ -77,6 +78,8 @@ def assess_forward(database: Path, selection: ResearchSelection, preregistration
                 # replayed for integrity but never counted as forward evidence.
                 if opening < frozen:
                     continue
+                if include_interval_bars:
+                    interval_bars.extend(payload["bars"].values())
                 entry = sessions.setdefault(session, dict(stamps=[], bad=False, closed=False))
                 entry["stamps"].append(stamp)
                 state = payload["state"]
@@ -101,7 +104,7 @@ def assess_forward(database: Path, selection: ResearchSelection, preregistration
                     invalid.append(str(session))
                 else:
                     complete.append(str(session))
-            return dict(
+            result = dict(
                 status="FORWARD_LOG_REPLAYED", replayed_events=count,
                 complete_sessions=len(complete), invalid_sessions=len(invalid),
                 partial_sessions=len(partial), required_sessions=required,
@@ -111,6 +114,13 @@ def assess_forward(database: Path, selection: ResearchSelection, preregistration
                 freeze_authentication_verified=False, execution_parity_verified=False,
                 live_eligible=False, orders_submitted=0,
             )
+            if include_interval_bars:
+                complete_dates = set(complete)
+                result["_interval_bars_json"] = json.dumps([
+                    bar for bar in interval_bars
+                    if str(utc(bar["timestamp_utc"]).astimezone(NY).date()) in complete_dates
+                ], sort_keys=True, separators=(",", ":"), allow_nan=False)
+            return result
         except (sqlite3.Error, KeyError, TypeError, IndexError, json.JSONDecodeError) as exc:
             raise DataError("FORWARD_LOG_INVALID") from exc
         finally:

@@ -1,5 +1,12 @@
 # 구현 계획: 단타 실행 프로그램
 
+FR046, 등급3: assess_forward의 선택적 내부 봉 출력은 완결 세션만 포함하며 기본 공개
+보고서에는 없다. assess_registered_forward가 동일 서명/원본 재생 경로로 이를 요청한다.
+prepare_qualification은 원본 봉과 실제 비용 증명의 구간으로 assess_interval_volume을
+호출하고 interval_model_json에 결과를 고정한다. 호출 여부/거래량 경계/미완결 제외/
+기존 자격 차단 유지 시험을 추가한다. 새 외부 요청·주문·승인 발급 없이 연결하며,
+되돌림은 해당 커밋 복구다. 기존 기록·권한·금액 제한은 변경하지 않는다.
+
 FR044/045, 등급3: intraday_observation_models의 순수 계산기를 실제 observe_account와
 ExecutionCostSource에 연결한다. 기존 USD 원본 분류 이후에만 현금 계산을 호출하며 공개
 결과에는 금액을 제외한다. 실행 장부 스냅샷에 order_state_history를 포함하고 양수 체결

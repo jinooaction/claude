@@ -63,6 +63,21 @@ def test_complete_session_replays_and_preserves_original(tmp_path):
     assert check(path, frozen_at=CLOSE)["complete_sessions"] == 0
 
 
+def test_interval_bars_come_only_from_complete_replayed_sessions(tmp_path):
+    path = tmp_path / "paper.db"
+    make_log(path)
+    assert "_interval_bars_json" not in check(path)
+    result = assess_forward(path, selection(), PREREG, frozen_at=OPEN,
+                            now=CLOSE + timedelta(minutes=5), include_interval_bars=True)
+    bars = json.loads(result["_interval_bars_json"])
+    assert len(bars) == 78 * len(SYMBOLS)
+    assert {bar["symbol"] for bar in bars} == set(SYMBOLS)
+    assert all(bar["volume"] == 100000 for bar in bars)
+    partial = assess_forward(path, selection(), PREREG, frozen_at=CLOSE,
+                             now=CLOSE + timedelta(minutes=5), include_interval_bars=True)
+    assert json.loads(partial["_interval_bars_json"]) == []
+
+
 @pytest.mark.parametrize("mode,synthetic", [("replay", False), ("forward", True)])
 def test_diagnostic_identity_cannot_become_forward_evidence(tmp_path, mode, synthetic):
     path = tmp_path / "paper.db"

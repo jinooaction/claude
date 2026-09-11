@@ -126,7 +126,8 @@ def prepared(tmp_path, monkeypatch):
         calls.append(("research", prereg))
         return selection
 
-    def assess(database, raw, selected, prereg):
+    def assess(database, raw, selected, prereg, **kwargs):
+        assert kwargs == {"include_interval_bars": True}
         assert selected is selection and raw == b"frozen-record"
         assert prereg == calls[0][1]
         calls.append(("forward", prereg))
@@ -169,6 +170,35 @@ def grant(qualification):
         hardened_canary_digest="sha256:" + "b" * 64,
         deployment_audit_digest="sha256:" + "c" * 64,
     )
+
+
+@pytest.mark.parametrize("volume,verified", [(200, True), (199, False)])
+async def test_qualification_actually_consumes_replayed_bars(
+        prepared, monkeypatch, volume, verified):
+    args, _, forward, _ = prepared
+    forward["_interval_bars_json"] = json.dumps([
+        dict(symbol="SPY", timestamp_utc=f"2026-09-10T14:{minute}:00Z", volume=volume)
+        for minute in ("00", "05")
+    ])
+    original = args["execution_source"].assess
+
+    async def costs(*values):
+        cost = await original(*values)
+        return replace(cost, intervals_json=json.dumps([dict(
+            order_id="order", symbol="SPY", quantity=2,
+            before_submission="2026-09-10T14:01:00Z",
+            response_received="2026-09-10T14:07:00Z",
+        )]))
+
+    args["execution_source"].assess = costs
+    result = await q.prepare_qualification(**args)
+    model = json.loads(result.interval_model_json)
+    assert model["interval_volume_verified"] is verified
+    assert model["registered_forward_replay_verified"]
+    assert not model["market_source_authentication_verified"]
+    assert model["cost_digest"] == result.execution_cost.digest
+    monkeypatch.setattr(q, "_read_authorization", lambda: grant(result))
+    assert result() == "QUALIFICATION_EXECUTION_MODEL_EVIDENCE_MISSING"
 
 
 async def test_well_formed_but_unrelated_broker_digest_is_rejected(prepared, monkeypatch):

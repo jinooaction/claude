@@ -113,11 +113,13 @@ def verify_registration(record: bytes, selection: ResearchSelection, preregistra
         raise DataError("REGISTRATION_FORMAT_INVALID") from None
 
 
-def assess_registered_forward(database, record, selection, preregistration):
+def assess_registered_forward(database, record, selection, preregistration,
+                              *, include_interval_bars=False):
     with TemporaryDirectory(prefix="intraday-registered-check-") as directory:
         source = Path(directory) / "preregistration.json"
         source.write_bytes(preregistration.read_bytes())
         frozen = verify_registration(record, selection, source)
         result = assess_forward(database, selection, source,
-                                frozen_at=frozen, now=datetime.now(UTC))
+                                frozen_at=frozen, now=datetime.now(UTC),
+                                include_interval_bars=include_interval_bars)
     return dict(result, freeze_authentication_verified=True)

@@ -22,6 +22,7 @@ from auto_invest.execution.intraday_execution_evidence import (
     ExecutionCostAssessment,
     ExecutionCostSource,
 )
+from auto_invest.execution.intraday_observation_models import ObservationModelError
 from auto_invest.execution.intraday_registration import assess_registered_forward
 from auto_invest.execution.intraday_selection import ResearchSelection, select_research
 from auto_invest.execution.intraday_signals import execution_fingerprint
@@ -77,6 +78,7 @@ class ExecutionQualification:
     complete_sessions: int
     runtime_digest: str
     execution_cost: ExecutionCostAssessment
+    interval_model_json: str = "{}"
 
     def __call__(self):
         """Synchronous last-boundary check; no broker calls or authority issuance."""
@@ -157,7 +159,8 @@ async def prepare_qualification(*, archives: Path, forward_database: Path,
                     or selected.verdict != "PAPER_CHALLENGER"
                     or selected.provider != "kis-nasdaq-partial-unadjusted"):
                 raise DataError("QUALIFICATION_RESEARCH_NOT_ACCEPTED")
-            forward = assess_registered_forward(forward_database, record, selected, prereg)
+            forward = assess_registered_forward(forward_database, record, selected, prereg,
+                                                include_interval_bars=True)
             if (forward.get("freeze_authentication_verified") is not True
                     or forward.get("minimum_observation_count_met") is not True
                     or type(forward.get("complete_sessions")) is not int
@@ -183,9 +186,30 @@ async def prepare_qualification(*, archives: Path, forward_database: Path,
                 raise DataError("QUALIFICATION_EXECUTION_BINDING_MISMATCH")
             if cost.issues:
                 raise DataError("QUALIFICATION_EXECUTION_COSTS_NOT_ACCEPTED")
+            bars_json = forward.get("_interval_bars_json")
+            if bars_json is None:
+                interval_model = dict(interval_volume_verified=False,
+                                      issues=["FORWARD_INTERVAL_BARS_UNAVAILABLE"])
+            elif cost.intervals_json == "[]":
+                interval_model = dict(interval_volume_verified=False,
+                                      issues=["EXECUTION_INTERVAL_BOUNDS_UNAVAILABLE"])
+            else:
+                try:
+                    interval_model = cost.assess_interval_volume(
+                        json.loads(bars_json),
+                        participation=str(load_preregistration(prereg)["cost_models"]["base"][
+                            "max_volume_participation"]),
+                        observed_at=datetime.now(UTC).isoformat(),
+                    )
+                    # Same independently replayed snapshot and signed freeze;
+                    # this does not cryptographically authenticate market data.
+                    interval_model["registered_forward_replay_verified"] = True
+                except ObservationModelError as error:
+                    interval_model = dict(interval_volume_verified=False, issues=[str(error)])
         return ExecutionQualification(
             selected, "sha256:" + hashlib.sha256(account.encode()).hexdigest(),
             capital_limit, digest(record), forward["complete_sessions"], runtime_digest, cost,
+            json.dumps(interval_model, sort_keys=True, separators=(",", ":"), allow_nan=False),
         )
     except DataError:
         raise

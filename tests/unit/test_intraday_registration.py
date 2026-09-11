@@ -97,7 +97,8 @@ def test_signed_freeze_is_passed_to_replay_without_granting_execution(
     record = issue(tmp_path)
     seen = []
 
-    def replay(database, selection, preregistration, *, frozen_at, now):
+    def replay(database, selection, preregistration, *, frozen_at, now, include_interval_bars):
+        assert include_interval_bars is False
         assert preregistration != PREREG
         assert preregistration.read_bytes() == PREREG.read_bytes()
         seen.append(frozen_at)
