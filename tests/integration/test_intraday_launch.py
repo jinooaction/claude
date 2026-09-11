@@ -5,11 +5,83 @@ import sqlite3
 from decimal import Decimal
 from types import SimpleNamespace
 
+import httpx
 import pytest
 
 from auto_invest.execution import intraday_launch as launch
 from auto_invest.market_data.intraday import DataError
 from auto_invest.persistence import db
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("interrupted", [False, True])
+async def test_real_launcher_reaches_execution_reader_and_closes_on_missing_evidence(
+    inputs, monkeypatch, interrupted,
+):
+    from auto_invest.analytics.intraday_paper_challenger import (
+        build_candidate_registry,
+        load_preregistration,
+    )
+    from auto_invest.execution import intraday_qualification as qualification
+    from auto_invest.execution.intraday_selection import ResearchSelection
+    from auto_invest.execution.intraday_signals import execution_fingerprint
+
+    # Isolate historical research only. Launcher, assembler, authority, token
+    # refresh, GET parsers, cost source and SQLite closure are production code.
+    candidate = build_candidate_registry(load_preregistration(qualification.PREREGISTRATION))[0]
+    provider = "kis-nasdaq-partial-unadjusted"
+    selected = ResearchSelection(candidate, provider, "a" * 40, "dataset", "research",
+                                 execution_fingerprint(candidate, provider),
+                                 "PAPER_CHALLENGER", 756, 0)
+    monkeypatch.setattr(qualification, "select_research", lambda *a: selected)
+    monkeypatch.setattr(qualification, "assess_registered_forward", lambda *a: dict(
+        freeze_authentication_verified=True, minimum_observation_count_met=True,
+        complete_sessions=60, required_sessions=60, invalid_sessions=0,
+        session_dates=["2026-09-10", "2026-09-11"],
+    ))
+    inputs["registration"].write_bytes(b"isolated-research-fixture")
+    calls, connections = [], []
+    original_open = launch._open_existing
+
+    def track_open(path):
+        connection = original_open(path)
+        connections.append(connection)
+        return connection
+
+    monkeypatch.setattr(launch, "_open_existing", track_open)
+
+    async def respond(self, method, url, **kwargs):
+        calls.append((method, url))
+        request = httpx.Request(method, str(self.base_url.join(url)))
+        if url.endswith("/oauth2/tokenP"):
+            return httpx.Response(200, request=request,
+                                  json=dict(access_token="fixture-fresh", expires_in=86400))
+        assert method == "GET", "No order, cancel, or capital write is allowed"
+        assert kwargs["headers"]["authorization"] == "Bearer fixture-fresh"
+        if interrupted:
+            raise asyncio.CancelledError
+        if url.endswith("inquire-ccnl"):
+            body = dict(rt_cd="0", output=[])
+        else:
+            assert url.endswith("inquire-period-trans")
+            body = dict(rt_cd="0", output1=[], output2=[])
+        return httpx.Response(200, request=request, headers={"tr_cont": "D"}, json=body)
+
+    monkeypatch.setattr(httpx.AsyncClient, "request", respond)
+    for _ in range(2):
+        if interrupted:
+            with pytest.raises(asyncio.CancelledError):
+                await launch.launch(**inputs)
+        else:
+            with pytest.raises(DataError, match="QUALIFICATION_EXECUTION_COSTS_NOT_ACCEPTED"):
+                await launch.launch(**inputs)
+        with pytest.raises(sqlite3.ProgrammingError):
+            connections[-1].execute("SELECT 1")
+    assert len([call for call in calls if call[0] == "GET"]) == (2 if interrupted else 14)
+    assert all(method == "GET" or url.endswith("/oauth2/tokenP") for method, url in calls)
+    with sqlite3.connect(inputs["database"]) as check:
+        assert check.execute("SELECT COUNT(*) FROM orders").fetchone()[0] == 0
+        assert check.execute("SELECT COUNT(*) FROM fills").fetchone()[0] == 0
 
 
 @pytest.fixture
