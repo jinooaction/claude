@@ -19,6 +19,7 @@ from auto_invest.broker.intraday_transactions import audit_settlements, observe_
 from auto_invest.broker.overseas import get_order_executions_resolving_market
 from auto_invest.execution.intraday_cost_reconciliation import reconcile_cost_inputs
 from auto_invest.execution.intraday_observation import KISExecutionObserver
+from auto_invest.execution.intraday_observation_models import assess_intervals
 from auto_invest.market_data.intraday import DataError
 
 
@@ -32,7 +33,7 @@ def _digest(value):
 
 def _ledger(connection):
     return {table: [dict(row) for row in connection.execute(f"SELECT * FROM {table} ORDER BY seq")]
-            for table in ("orders", "fills")}
+            for table in ("orders", "fills", "order_state_history")}
 
 
 @dataclass(frozen=True)
@@ -45,6 +46,19 @@ class ExecutionCostAssessment:
     checks_json: str
     issues: tuple[str, ...]
     missing_model_conditions: tuple[str, ...]
+    intervals_json: str = "[]"
+
+    def assess_interval_volume(self, bars, *, participation, observed_at):
+        if self.issues:
+            raise DataError("INTERVAL_COST_BINDING_NOT_ACCEPTED")
+        result = assess_intervals(json.loads(self.intervals_json), bars,
+                                  participation=participation, observed_at=observed_at)
+        return dict(result, account_digest=self.account_digest,
+                    execution_identity=self.execution_identity, cost_digest=self.digest,
+                    interval_digest=_digest(dict(cost_digest=self.digest,
+                        intervals=json.loads(self.intervals_json), bars=bars,
+                        participation=participation, observed_at=observed_at)),
+                    market_source_authentication_verified=False)
 
     def public(self):
         return dict(scope="CLOSED_SINGLE_STRATEGY_ORDER_REPORT_COSTS",
@@ -55,7 +69,7 @@ class ExecutionCostAssessment:
 
 
 def assess_sources(*, database, account, selection, runtime_digest, window, executions,
-                   transactions, before, after, commission_bps):
+                   transactions, before, after, commission_bps, response_received=None):
     """Recompute evidence; report flags from earlier processing are ignored."""
     comparison = reconcile_cost_inputs(database, executions, transactions["rows"])
     rows = transactions["rows"]
@@ -147,16 +161,36 @@ def assess_sources(*, database, account, selection, runtime_digest, window, exec
     # arithmetic match nor an operator digest proves model fill timing/volume.
     missing = ("SOURCE_EXECUTION_TIMING_NOT_PROVIDED", "MODEL_FILL_VOLUME_REPLAY_NOT_PROVIDED",
                "ORDER_TRADE_DATE_LINK_NOT_PROVIDED")
+    intervals = []
+    for execution in executions:
+        if not execution.filled_qty:
+            continue
+        order = local_by_id.get(execution.kis_order_id)
+        starts = [row["ts_utc"] for row in before.get("order_state_history", [])
+                  if order is not None and row["order_correlation_id"] == order["correlation_id"]
+                  and row["to_state"] == "SUBMITTING"]
+        if not starts or response_received is None:
+            intervals = []
+            break
+        lower = min(datetime.fromisoformat(stamp.replace("Z", "+00:00")) for stamp in starts)
+        if lower.utcoffset() is None:
+            intervals = []
+            break
+        intervals.append(dict(order_id=execution.kis_order_id, symbol=execution.symbol,
+                              quantity=execution.filled_qty,
+                              before_submission=lower.isoformat(),
+                              response_received=response_received))
     identity = dict(account_digest="sha256:" + hashlib.sha256(account.encode()).hexdigest(),
                     execution_identity=selection.execution_identity, runtime_digest=runtime_digest,
                     research_digest=selection.research_digest,
                     dataset_fingerprint=selection.dataset_fingerprint, window=window)
     digest = _digest(dict(identity=identity, checks=checks, issues=sorted(issues), missing=missing,
                           executions=[v.model_dump(mode="json") for v in executions],
-                          transactions=rows, ledger=before, commission_bps=str(commission_bps)))
+                          transactions=rows, ledger=before,
+                          commission_bps=str(commission_bps)))
     return ExecutionCostAssessment(identity["account_digest"], selection.execution_identity,
                                    runtime_digest, window, digest, _encode(checks),
-                                   tuple(sorted(issues)), missing)
+                                   tuple(sorted(issues)), missing, _encode(intervals))
 
 
 class ExecutionCostSource:
@@ -196,6 +230,7 @@ class ExecutionCostSource:
                         self.observer.broker, **arguments, order_date_yyyymmdd=window[0],
                         end_date_yyyymmdd=window[1], strict_contract=True,
                     )
+                    response_received = datetime.now(UTC).isoformat()
                     transactions = await observe_transactions(
                         self.observer.broker, **arguments, start_date=window[0], end_date=window[1],
                     )
@@ -212,6 +247,7 @@ class ExecutionCostSource:
                     runtime_digest=self.runtime_digest, window=window, executions=executions,
                     transactions=transactions, before=before, after=after,
                     commission_bps=commission_bps,
+                    response_received=response_received,
                 )
                 return self.last_assessment
         except DataError:

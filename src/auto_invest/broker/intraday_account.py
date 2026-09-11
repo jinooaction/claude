@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 
 from auto_invest.broker.overseas import _kis_headers, _split_account
+from auto_invest.execution.intraday_observation_models import settled_usd_cash
 
 ROOT = "/uapi/overseas-stock/v1/trading/"
 ENDPOINTS = {
@@ -280,6 +281,9 @@ async def observe_account(
         usd_orderable_amount=str(orderable),
         reported_cash_components=cash_components,
         reported_cash_component_rows=cash_component_rows,
+        settled_cash_calculation=settled_usd_cash(
+            cash_component_rows, unclassified_rows=unclassified_margin_rows,
+        ),
         usd_margin_row_count=len(cash_component_rows),
         cash_aggregation_verified=False,
         usd_margin_reported=bool(usd_margin),
@@ -320,6 +324,8 @@ def public_contract_result(snapshot):
         unverified_asset_count=len(snapshot["unverified_assets"]),
         usd_margin_reported=snapshot["usd_margin_reported"],
         usd_margin_row_count=snapshot["usd_margin_row_count"],
+        settled_cash_calculation={key: value for key, value in
+                                  snapshot["settled_cash_calculation"].items() if key != "cash"},
         cash_aggregation_verified=False,
         unclassified_margin_row_count=snapshot["unclassified_margin_row_count"],
         open_order_count=len(snapshot["open_orders"]),

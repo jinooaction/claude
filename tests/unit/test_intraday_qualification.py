@@ -45,6 +45,11 @@ async def test_real_get_parsers_and_ledger_reach_qualification(prepared, tmp_pat
             VALUES ('cost-local', 'cost-fill', 2, '101', '2026-09-10T14:01:00Z')""")
         conn.commit()
 
+        conn.execute("""INSERT INTO order_state_history
+            (order_correlation_id, from_state, to_state, ts_utc)
+            VALUES ('cost-local', 'INTENT', 'SUBMITTING', '2026-09-10T14:01:00Z')""")
+        conn.commit()
+
         def handle(request):
             calls.append(request)
             if request.url.path == "/oauth2/tokenP":
@@ -90,6 +95,11 @@ async def test_real_get_parsers_and_ledger_reach_qualification(prepared, tmp_pat
                 assert not assessment.issues
                 assert all(json.loads(assessment.checks_json).values())
                 assert not assessment.public()["execution_parity_verified"]
+                intervals = json.loads(assessment.intervals_json)
+                assert len(intervals) == 1
+                assert intervals[0]["before_submission"] == "2026-09-10T14:01:00+00:00"
+                assert intervals[0]["quantity"] == 2
+                assert intervals[0]["response_received"]
                 assert "ORDER_TRADE_DATE_LINK_NOT_PROVIDED" in assessment.missing_model_conditions
             assert len(calls) == 8  # token + 3 exchanges twice + transaction report
             assert not book.orders

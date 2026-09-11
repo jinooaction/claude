@@ -1,5 +1,12 @@
 # 자료 모델
 
+- settled_cash_calculation: CALCULATED/UNSUPPORTED/INVALID와 범위, 내부 cash 또는
+  실패 reason. CALCULATED도 full_account_verified=false이며 공개 결과에는 cash가 없다.
+- ExecutionCostAssessment.intervals_json: 전송 전 상태 시각과 양수 체결 조회 응답 수신
+  시각·주문번호·종목·누적 체결 수량. 별도 구간 지문으로 묶으며 생성 실패 시 빈 구간이다.
+  assess_interval_volume은 제공된 완결 봉에 대한 보수적인 구간 수량 검사 결과만 반환한다.
+  원본 봉의 계좌/연구 출처 인증과 전체 실행 동등성/운영 승격을 제공하지 않는다.
+
 - ExecutionCostAssessment는 동일 계좌/전략/실행 설정/기간의 원본 대조 계산 지문,
   개별 산술 조건, 오류, 미제공 모델 증명을 불변 값으로 보유한다. 공개 값에 원본 금액이나
   계좌 번호는 없다. 날짜 연결/실제 체결 시각/모델 거래량 증명은 현재 미제공이며

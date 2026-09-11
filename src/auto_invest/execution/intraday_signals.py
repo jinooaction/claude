@@ -30,6 +30,7 @@ def execution_fingerprint(candidate, provider):
         Path(__file__).with_name("intraday_registration.py"),
         Path(__file__).with_name("intraday_qualification.py"),
         Path(__file__).with_name("intraday_execution_evidence.py"),
+        Path(__file__).with_name("intraday_observation_models.py"),
         Path(__file__).with_name("intraday_cost_reconciliation.py"),
         Path(__file__).parents[1] / "broker/intraday_transactions.py",
         Path(__file__).with_name("intraday_launch.py"),
