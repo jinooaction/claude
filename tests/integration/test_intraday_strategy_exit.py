@@ -1,5 +1,6 @@
 """Real strategy exits must survive an unfilled order and ledger reopening."""
 
+import json
 from dataclasses import replace
 from datetime import timedelta
 from decimal import Decimal
@@ -103,6 +104,16 @@ async def test_cancelled_strategy_exit_keeps_original_price_after_reopen(
         assert book.orders["3"]["sll_buy_dvsn_cd"] == "01"
         assert book.orders["3"]["qty"] == 5 - partial
         assert book.orders["3"]["ft_ord_unpr3"] == limit
+        intents = [json.loads(row[0]) for row in book.conn.execute(
+            "SELECT payload FROM intraday_execution_claims WHERE fingerprint=?",
+            (book.engine.fingerprint,),
+        )]
+        exits = [intent for intent in intents if intent.get("side") == "SELL"]
+        assert len(exits) == 2
+        assert all(intent["decision_kind"] == "STRATEGY_EXIT" for intent in exits)
+        assert {intent["signal_bar_end"] for intent in exits} == {
+            (OPEN + timedelta(minutes=45)).isoformat(),
+        }
         again = await book.engine.on_bars(candidate, provider=PROVIDER, bars=bars(10, last=98))
         assert again["status"] == "WAIT_BROKER" and len(book.orders) == 3
         book.fill("3", 5 - partial, limit)

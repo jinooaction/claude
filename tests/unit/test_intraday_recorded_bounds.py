@@ -4,7 +4,31 @@ from datetime import datetime
 
 import pytest
 
-from auto_invest.execution.intraday_execution_evidence import _recorded_upper_bound
+from auto_invest.execution.intraday_execution_evidence import _recorded_upper_bound, _signal_context
+
+
+@pytest.mark.parametrize("change", [None, "legacy", "duplicate", "fingerprint", "id", "symbol",
+                                    "side", "qty", "limit", "malformed"])
+def test_signal_context_must_match_exact_order(change):
+    order = dict(rule_id="intraday:identity:claim", symbol="SPY", side="BUY", qty=2,
+                 limit_price_usd="102")
+    payload = dict(symbol="SPY", side="BUY", qty=2, limit="102",
+                   signal_bar_end="2026-09-10T14:00:00Z", decision_kind="SIGNAL")
+    claim = dict(id="claim", fingerprint="identity", payload=json.dumps(payload))
+    if change in {"fingerprint", "id"}:
+        claim[change] = "different"
+    elif change in {"symbol", "side", "qty", "limit"}:
+        payload[change] = 3 if change == "qty" else "different"
+        claim["payload"] = json.dumps(payload)
+    elif change == "malformed":
+        claim["payload"] = "["
+    claims = [] if change == "legacy" else [claim]
+    if change == "duplicate":
+        claims.append(claim)
+    result = _signal_context(dict(execution_claims=claims), order, "intraday:identity:", "identity")
+    assert bool(result) is (change is None)
+    if result:
+        assert result == {key: payload[key] for key in ("signal_bar_end", "decision_kind")}
 
 
 @pytest.mark.parametrize("change", [None, "legacy", "partial", "duplicate", "quantity",

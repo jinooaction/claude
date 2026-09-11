@@ -1,5 +1,11 @@
 # 구현 계획: 단타 실행 프로그램
 
+FR050, 등급3: intraday_execution_claims와 STRATEGY_EXIT_REQUESTED에 signal_bar_end를
+추가하고 이전 행은 그대로 읽는다. 비용 스냅샷의 의도 기록을 주문 식별자/방향/수량/가격과
+대조해 관측 구간에 연결한다. 신호 봉 종료와 실제 구간의 포함 관계를 자격 소비 결과에
+추가한다. 청산 재시작·경계·누락·의도 불일치 반례를 검사하고 기존 주문 승인 차단을
+보존한다. 되돌림은 코드 복구이며 원본 기록/권한/자본 변경은 없다.
+
 FR049, 등급3: 별도 고정 root 소유 시장 수집 키를 쓰는 collect_attested_kis가 직접
 HTTP 연결과 시계를 소유한다. --attest-market-data를 기존 모의 운용 명령에 전달하며
 PaperRuntime의 선택적 collection_proof를 재생하고 완결 세션의 출처 검증 결과를

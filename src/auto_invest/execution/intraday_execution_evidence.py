@@ -19,7 +19,10 @@ from auto_invest.broker.intraday_transactions import audit_settlements, observe_
 from auto_invest.broker.overseas import get_order_executions_resolving_market
 from auto_invest.execution.intraday_cost_reconciliation import reconcile_cost_inputs
 from auto_invest.execution.intraday_observation import KISExecutionObserver
-from auto_invest.execution.intraday_observation_models import assess_intervals
+from auto_invest.execution.intraday_observation_models import (
+    assess_intervals,
+    assess_next_bar_timing,
+)
 from auto_invest.market_data.intraday import DataError
 
 
@@ -38,7 +41,30 @@ def _ledger(connection):
     result["fill_audits"] = [dict(row) for row in connection.execute(
         "SELECT * FROM audit_log WHERE event_type='FILL' ORDER BY seq"
     )]
+    result["execution_claims"] = [dict(row) for row in connection.execute(
+        "SELECT * FROM intraday_execution_claims ORDER BY id"
+    )] if connection.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='intraday_execution_claims'"
+    ).fetchone() else []
     return result
+
+
+def _signal_context(ledger, order, prefix, fingerprint):
+    """Bind the persisted intent to this exact broker order; old rows stay unknown."""
+    try:
+        claims = [row for row in ledger.get("execution_claims", [])
+                  if prefix + row["id"] == order["rule_id"]
+                  and row["fingerprint"] == fingerprint]
+        if len(claims) != 1:
+            return {}
+        value = json.loads(claims[0]["payload"])
+        if (value["symbol"] != order["symbol"] or value["side"] != order["side"]
+                or type(value["qty"]) is not int or value["qty"] != order["qty"]
+                or Decimal(value["limit"]) != Decimal(order["limit_price_usd"])):
+            return {}
+        return {key: value.get(key) for key in ("signal_bar_end", "decision_kind")}
+    except (KeyError, TypeError, ValueError, ArithmeticError):
+        return {}
 
 
 def _recorded_upper_bound(ledger, order, lower, current):
@@ -93,6 +119,7 @@ class ExecutionCostAssessment:
             raise DataError("INTERVAL_COST_BINDING_NOT_ACCEPTED")
         result = assess_intervals(json.loads(self.intervals_json), bars,
                                   participation=participation, observed_at=observed_at)
+        result.update(assess_next_bar_timing(json.loads(self.intervals_json)))
         return dict(result, account_digest=self.account_digest,
                     execution_identity=self.execution_identity, cost_digest=self.digest,
                     interval_digest=_digest(dict(cost_digest=self.digest,
@@ -220,13 +247,18 @@ def assess_sources(*, database, account, selection, runtime_digest, window, exec
                               quantity=execution.filled_qty,
                               before_submission=lower.isoformat(),
                               response_received=_recorded_upper_bound(
-                                  before, order, lower, response_received)))
+                                  before, order, lower, response_received),
+                              **_signal_context(
+                                  before, order, prefix, selection.execution_identity)))
     identity = dict(account_digest="sha256:" + hashlib.sha256(account.encode()).hexdigest(),
                     execution_identity=selection.execution_identity, runtime_digest=runtime_digest,
                     research_digest=selection.research_digest,
                     dataset_fingerprint=selection.dataset_fingerprint, window=window)
     correlations = {order["correlation_id"] for order in local}
     scoped_ledger = dict(orders=local)
+    rule_ids = {order["rule_id"] for order in local}
+    scoped_ledger["execution_claims"] = [row for row in before.get("execution_claims", [])
+        if prefix + row["id"] in rule_ids]
     for table in ("fills", "order_state_history", "fill_audits"):
         key = "correlation_id" if table == "fill_audits" else "order_correlation_id"
         scoped_ledger[table] = [row for row in before.get(table, [])

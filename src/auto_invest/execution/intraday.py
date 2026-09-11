@@ -304,7 +304,10 @@ class IntradayExecutor:
             try:
                 payload = json.loads(rows[0]["payload"])
                 if (len(rows) != 1 or rows[0]["kind"] != "STRATEGY_EXIT_REQUESTED"
-                        or set(payload) != {"symbol", "buy_fill_seq", "limit"}
+                        or set(payload) not in (
+                            {"symbol", "buy_fill_seq", "limit"},
+                            {"symbol", "buy_fill_seq", "limit", "signal_bar_end"},
+                        )
                         or payload["symbol"] != symbol
                         or type(payload["buy_fill_seq"]) is not int
                         or payload["buy_fill_seq"] != cycle
@@ -314,6 +317,11 @@ class IntradayExecutor:
                 _decimal(limit)
                 if limit != limit.quantize(Decimal(".01")):
                     raise ValueError
+                if "signal_bar_end" in payload:
+                    stamp = datetime.fromisoformat(payload["signal_bar_end"])
+                    if (stamp.utcoffset() != timedelta(0) or stamp.second or stamp.microsecond
+                            or stamp.minute % 5):
+                        raise ValueError
                 result[symbol] = limit
             except Exception:
                 raise ValueError("STRATEGY_EXIT_STATE_INVALID") from None
@@ -446,6 +454,7 @@ class IntradayExecutor:
                         self.prefix + f"strategy-exit:{symbol}:{cycle}",
                         "STRATEGY_EXIT_REQUESTED", symbol=symbol, buy_fill_seq=cycle,
                         limit=str(decision.limits[symbol]),
+                        signal_bar_end=decision.bar_end.isoformat(),
                     )
             return decision
 
@@ -687,7 +696,20 @@ class IntradayExecutor:
             if previous:
                 actions.append(dict(kind="DUPLICATE_OR_PENDING", symbol=symbol))
                 continue
-            payload = _json(dict(symbol=symbol, side=side.value, qty=abs(delta), limit=str(limit)))
+            signal_bar_end = None
+            decision_kind = "DRAIN" if exit_only else "SIGNAL"
+            if not exit_only:
+                if symbol in strategy_exits:
+                    decision_kind = "STRATEGY_EXIT"
+                    original = self.conn.execute(
+                        "SELECT payload FROM intraday_execution_events WHERE claim_id=?",
+                        (self.prefix + f"strategy-exit:{symbol}:{cycles[symbol]}",),
+                    ).fetchone()
+                    signal_bar_end = json.loads(original[0]).get("signal_bar_end")
+                else:
+                    signal_bar_end = d.bar_end.isoformat()
+            payload = _json(dict(symbol=symbol, side=side.value, qty=abs(delta), limit=str(limit),
+                                 signal_bar_end=signal_bar_end, decision_kind=decision_kind))
             self.conn.execute(
                 "INSERT INTO intraday_execution_claims VALUES(?,?,?)",
                 (claim, self.fingerprint, payload),

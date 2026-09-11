@@ -7,6 +7,7 @@ from auto_invest.execution.intraday_execution_evidence import ExecutionCostAsses
 from auto_invest.execution.intraday_observation_models import (
     ObservationModelError,
     assess_intervals,
+    assess_next_bar_timing,
     settled_usd_cash,
 )
 
@@ -39,6 +40,32 @@ def interval(**changes):
     return dict(dict(order_id="o1", symbol="SPY", quantity=2,
                      before_submission="2026-09-10T14:01:00Z",
                      response_received="2026-09-10T14:07:00Z"), **changes)
+
+
+@pytest.mark.parametrize(("changes", "verified"), [
+    ({}, True),
+    ({"decision_kind": "STRATEGY_EXIT"}, True),
+    ({"decision_kind": "DRAIN"}, False),
+    ({"signal_bar_end": None}, False),
+    ({"signal_bar_end": "2026-09-10T14:00:00"}, False),
+    ({"signal_bar_end": "2026-09-10T14:01:00Z"}, False),
+    ({"before_submission": "2026-09-10T13:59:59Z"}, False),
+    ({"response_received": "2026-09-10T14:05:00Z"}, False),
+    ({"response_received": "2026-09-10T14:07:00Z"}, False),
+    ({"response_received": "2026-09-10T14:00:30Z"}, False),
+])
+def test_next_bar_requires_entire_closed_interval(changes, verified):
+    evidence = interval(signal_bar_end="2026-09-10T14:00:00Z", decision_kind="SIGNAL",
+                        response_received="2026-09-10T14:04:59.999999Z")
+    evidence.update(changes)
+    result = assess_next_bar_timing([evidence])
+    assert result["next_bar_timing_verified"] is verified
+    assert bool(result["timing_issues"]) is not verified
+
+
+@pytest.mark.parametrize("evidence", [[], None, [{}], [None], ["bad"]])
+def test_missing_signal_evidence_is_not_timing_proof(evidence):
+    assert not assess_next_bar_timing(evidence)["next_bar_timing_verified"]
 
 
 def bars():

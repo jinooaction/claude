@@ -15,6 +15,28 @@ class ObservationModelError(ValueError):
     pass
 
 
+def assess_next_bar_timing(intervals):
+    """Prove containment in the original signal's next bar, not an exact fill time."""
+    issues = set()
+    if not isinstance(intervals, list) or not 0 < len(intervals) <= 10000:
+        return dict(next_bar_timing_verified=False, timing_issues=["SIGNAL_INTERVALS_UNAVAILABLE"])
+    for interval in intervals:
+        try:
+            if interval.get("decision_kind") not in {"SIGNAL", "STRATEGY_EXIT"}:
+                issues.add("SIGNAL_CONTEXT_UNAVAILABLE")
+                continue
+            signal = _time(interval.get("signal_bar_end"))
+            lower = _time(interval["before_submission"])
+            upper = _time(interval["response_received"])
+            if signal.second or signal.microsecond or signal.minute % 5:
+                issues.add("SIGNAL_BAR_ALIGNMENT_INVALID")
+            elif not signal <= lower <= upper < signal + timedelta(minutes=5):
+                issues.add("EXECUTION_INTERVAL_OUTSIDE_NEXT_BAR")
+        except (AttributeError, TypeError, KeyError, OverflowError, ObservationModelError):
+            issues.add("SIGNAL_CONTEXT_INVALID")
+    return dict(next_bar_timing_verified=not issues, timing_issues=sorted(issues))
+
+
 def _amount(value):
     if not isinstance(value, str) or not re.fullmatch(r"-?[0-9]{1,18}(\.[0-9]{1,12})?", value):
         raise ObservationModelError("MODEL_AMOUNT_INVALID")
