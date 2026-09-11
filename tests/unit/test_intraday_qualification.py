@@ -116,6 +116,9 @@ async def test_real_get_parsers_and_ledger_reach_qualification(
                 assert len(intervals) == 1
                 assert intervals[0]["before_submission"] == "2026-09-10T14:01:00+00:00"
                 assert intervals[0]["quantity"] == 2
+                assert intervals[0]["side"] == "BUY"
+                assert intervals[0]["average_fill_price"] == "101"
+                assert intervals[0]["reported_fees"] == "0.02"
                 assert intervals[0]["response_received"]
                 assert intervals[0]["signal_bar_end"] == "2026-09-10T14:00:00Z"
                 timing = assessment.assess_interval_volume(
@@ -216,12 +219,14 @@ def grant(qualification):
 @pytest.mark.parametrize("volume,verified", [(200, True), (199, False)])
 @pytest.mark.parametrize("source_verified", [False, True])
 @pytest.mark.parametrize("response_minute,timing_verified", [("04", True), ("07", False)])
+@pytest.mark.parametrize("fee,fee_verified", [("0.50", True), ("0.50001", False)])
 async def test_qualification_actually_consumes_replayed_bars(
-        prepared, monkeypatch, volume, verified, source_verified, response_minute, timing_verified):
+        prepared, monkeypatch, volume, verified, source_verified, response_minute, timing_verified,
+        fee, fee_verified):
     args, _, forward, _ = prepared
     forward["market_source_authentication_verified"] = source_verified
     forward["_interval_bars_json"] = json.dumps([
-        dict(symbol="SPY", timestamp_utc=f"2026-09-10T14:{minute}:00Z", volume=volume)
+        dict(symbol="SPY", timestamp_utc=f"2026-09-10T14:{minute}:00Z", volume=volume, open=100)
         for minute in ("00", "05")
     ])
     original = args["execution_source"].assess
@@ -230,6 +235,7 @@ async def test_qualification_actually_consumes_replayed_bars(
         cost = await original(*values)
         return replace(cost, intervals_json=json.dumps([dict(
             order_id="order", symbol="SPY", quantity=2,
+            side="BUY", average_fill_price="100.06", reported_fees=fee,
             signal_bar_end="2026-09-10T14:00:00Z", decision_kind="SIGNAL",
             before_submission="2026-09-10T14:01:00Z",
             response_received=f"2026-09-10T14:{response_minute}:00Z",
@@ -240,6 +246,8 @@ async def test_qualification_actually_consumes_replayed_bars(
     model = json.loads(result.interval_model_json)
     assert model["interval_volume_verified"] is verified
     assert model["next_bar_timing_verified"] is timing_verified
+    assert model["next_bar_price_bound_verified"] is timing_verified
+    assert model["next_bar_fee_bound_verified"] is (timing_verified and fee_verified)
     assert model["registered_forward_replay_verified"]
     assert model["market_source_authentication_verified"] is source_verified
     assert model["source_attestation_basis"] == "TRUSTED_SERVER_COLLECTOR"

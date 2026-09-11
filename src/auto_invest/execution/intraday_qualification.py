@@ -200,6 +200,7 @@ async def prepare_qualification(*, archives: Path, forward_database: Path,
                         participation=str(load_preregistration(prereg)["cost_models"]["base"][
                             "max_volume_participation"]),
                         observed_at=datetime.now(UTC).isoformat(),
+                        cost_model=load_preregistration(prereg)["cost_models"]["base"],
                     )
                     # Same independently replayed snapshot and signed freeze;
                     # this does not cryptographically authenticate market data.

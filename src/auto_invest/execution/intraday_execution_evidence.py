@@ -21,6 +21,7 @@ from auto_invest.execution.intraday_cost_reconciliation import reconcile_cost_in
 from auto_invest.execution.intraday_observation import KISExecutionObserver
 from auto_invest.execution.intraday_observation_models import (
     assess_intervals,
+    assess_next_bar_costs,
     assess_next_bar_timing,
 )
 from auto_invest.market_data.intraday import DataError
@@ -114,17 +115,19 @@ class ExecutionCostAssessment:
     missing_model_conditions: tuple[str, ...]
     intervals_json: str = "[]"
 
-    def assess_interval_volume(self, bars, *, participation, observed_at):
+    def assess_interval_volume(self, bars, *, participation, observed_at, cost_model=None):
         if self.issues:
             raise DataError("INTERVAL_COST_BINDING_NOT_ACCEPTED")
         result = assess_intervals(json.loads(self.intervals_json), bars,
                                   participation=participation, observed_at=observed_at)
         result.update(assess_next_bar_timing(json.loads(self.intervals_json)))
+        result.update(assess_next_bar_costs(json.loads(self.intervals_json), bars, cost_model))
         return dict(result, account_digest=self.account_digest,
                     execution_identity=self.execution_identity, cost_digest=self.digest,
                     interval_digest=_digest(dict(cost_digest=self.digest,
                         intervals=json.loads(self.intervals_json), bars=bars,
-                        participation=participation, observed_at=observed_at)),
+                        participation=participation, observed_at=observed_at,
+                        cost_model=cost_model)),
                     market_source_authentication_verified=False)
 
     def public(self):
@@ -193,6 +196,7 @@ def assess_sources(*, database, account, selection, runtime_digest, window, exec
     if any(len(values) != 1 for values in grouped.values()):
         issues.add("MULTIPLE_ORDERS_WITHOUT_FEE_IDENTITY")
     fee_ok = True
+    reported_fees = {}
     with localcontext() as context:
         context.prec = 80
         rate = Decimal(str(commission_bps)) / 10000
@@ -214,6 +218,7 @@ def assess_sources(*, database, account, selection, runtime_digest, window, exec
                 issues.add("ORDER_TRADE_SETTLEMENT_DATES_NOT_MATCHED")
             fees = sum((Decimal(row["dmst_frcr_fee1"]) + Decimal(row["frcr_fee1"])
                         for row in matching), Decimal(0))
+            reported_fees[values[0].kis_order_id] = str(fees)
             gross = sum((Decimal(row["tr_frcr_amt2"]) for row in matching), Decimal(0))
             fee_ok &= fees <= gross * rate
     if not fee_ok:
@@ -245,6 +250,9 @@ def assess_sources(*, database, account, selection, runtime_digest, window, exec
             break
         intervals.append(dict(order_id=execution.kis_order_id, symbol=execution.symbol,
                               quantity=execution.filled_qty,
+                              side=execution.side.value if execution.side else None,
+                              average_fill_price=str(execution.avg_fill_price_usd),
+                              reported_fees=reported_fees.get(execution.kis_order_id),
                               before_submission=lower.isoformat(),
                               response_received=_recorded_upper_bound(
                                   before, order, lower, response_received),

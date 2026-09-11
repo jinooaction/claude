@@ -37,6 +37,59 @@ def assess_next_bar_timing(intervals):
     return dict(next_bar_timing_verified=not issues, timing_issues=sorted(issues))
 
 
+def assess_next_bar_costs(intervals, bars, cost_model):
+    """Compare reported execution costs to the research reference, not fill gross.
+
+    This is a cost bound for matched executions, not complete strategy parity.
+    Source authentication and report completeness belong to the caller.
+    """
+    issues = set()
+    price_ok = fee_ok = True
+    try:
+        if not assess_next_bar_timing(intervals)["next_bar_timing_verified"]:
+            raise ObservationModelError("NEXT_BAR_TIMING_UNVERIFIED")
+        if not isinstance(bars, list) or len(bars) > 160000:
+            raise ObservationModelError("MODEL_INPUT_SIZE_INVALID")
+        rates = [_amount(str(cost_model[key])) for key in (
+            "spread_bps_per_side", "slippage_bps_per_side", "commission_bps_per_side",
+        )]
+        if any(not 0 <= rate <= 10000 for rate in rates):
+            raise ObservationModelError("MODEL_COST_RATE_INVALID")
+        indexed = {}
+        for bar in bars:
+            key = (bar["symbol"], _time(bar["timestamp_utc"]))
+            if key in indexed:
+                raise ObservationModelError("MODEL_BAR_INVALID")
+            indexed[key] = bar
+        with localcontext() as context:
+            context.prec = 80
+            adverse, commission = (rates[0] + rates[1]) / 10000, rates[2] / 10000
+            if adverse >= 1:
+                raise ObservationModelError("MODEL_COST_RATE_INVALID")
+            for entry in intervals:
+                bar = indexed.get((entry["symbol"], _time(entry["signal_bar_end"])))
+                if bar is None:
+                    raise ObservationModelError("NEXT_BAR_REFERENCE_UNAVAILABLE")
+                reference = _amount(str(bar["open"]))
+                price, fees = _amount(entry["average_fill_price"]), _amount(entry["reported_fees"])
+                qty, side = entry["quantity"], entry["side"]
+                if (reference <= 0 or price <= 0 or fees < 0 or type(qty) is not int
+                        or not 0 < qty <= 10**12 or side not in {"BUY", "SELL"}):
+                    raise ObservationModelError("MODEL_EXECUTION_COST_INVALID")
+                if not (price <= reference * (1 + adverse) if side == "BUY"
+                        else price >= reference * (1 - adverse)):
+                    price_ok = False
+                    issues.add("NEXT_BAR_PRICE_BOUND_EXCEEDED")
+                if fees > reference * qty * commission:
+                    fee_ok = False
+                    issues.add("NEXT_BAR_FEE_BOUND_EXCEEDED")
+    except (ObservationModelError, KeyError, TypeError, ValueError, ArithmeticError):
+        price_ok = fee_ok = False
+        issues.add("NEXT_BAR_COST_INPUT_UNVERIFIED")
+    return dict(next_bar_price_bound_verified=price_ok, next_bar_fee_bound_verified=fee_ok,
+                cost_issues=sorted(issues))
+
+
 def _amount(value):
     if not isinstance(value, str) or not re.fullmatch(r"-?[0-9]{1,18}(\.[0-9]{1,12})?", value):
         raise ObservationModelError("MODEL_AMOUNT_INVALID")

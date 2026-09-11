@@ -1,5 +1,12 @@
 # 자료 모델
 
+- 관측 구간의 side/average_fill_price/reported_fees: 같은 인증 실행 조회와 단일
+  종목/방향/주문 보고서 대조에서 얻은 값. 비용 지문의 원본 조회/수수료에 결합한다.
+  next_bar_price_bound_verified/next_bar_fee_bound_verified는 원래 신호 직후 봉 시가를
+  기준으로 연구 spread+slippage와 commission 한도를 검사한 부분 결과다. 가격 방향과
+  수수료 기준 대금은 독립 검사하며, cost_issues에 누락/한도 초과를 기록한다.
+  기본 비용 모델도 interval_digest에 포함한다. 출처 인증/전체 실행 동등성은 별도다.
+
 - intraday_execution_claims.payload.signal_bar_end/decision_kind: 실제 주문의 원래 신호 봉
   종료 시각과 SIGNAL/STRATEGY_EXIT/DRAIN 구분. 전략 청산은 원래 사건에도 시각을 저장해
   부분 체결·취소·재시작 후 새 주문에 그대로 전달한다. 과거 시각 없는 사건은 추정하지 않는다.
