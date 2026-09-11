@@ -42,6 +42,25 @@ def test_fee_limit_uses_reference_not_actual_execution_gross():
     assert result["cost_issues"] == ["NEXT_BAR_FEE_BOUND_EXCEEDED"]
 
 
+@pytest.mark.parametrize("fee,verified", [("0.04", True), ("0.040000000001", False)])
+def test_group_fees_are_compared_once_without_allocating_to_orders(fee, verified):
+    entries = [evidence(order_id="one", reported_fees=None),
+               evidence(order_id="two", reported_fees=None)]
+    result = assess_next_bar_costs(entries, bars(), MODEL, fee_groups=[
+        dict(order_ids=["one", "two"], reported_fees=fee),
+    ])
+    assert result["next_bar_price_bound_verified"]
+    assert result["next_bar_fee_bound_verified"] is verified
+
+
+@pytest.mark.parametrize("groups", [[], [dict(order_ids=["other"], reported_fees="0")],
+    [dict(order_ids=["order", "order"], reported_fees="0")],
+    [dict(order_ids=["order"], reported_fees="0")] * 2])
+def test_group_partition_must_cover_each_execution_once(groups):
+    result = assess_next_bar_costs([evidence()], bars(), MODEL, fee_groups=groups)
+    assert not result["next_bar_fee_bound_verified"]
+
+
 @pytest.mark.parametrize("changes", [
     dict(response_received="2026-09-10T14:05:00Z"), dict(signal_bar_end=None),
     dict(average_fill_price="NaN"), dict(reported_fees=None), dict(reported_fees="-1"),

@@ -23,6 +23,95 @@ from auto_invest.market_data.intraday import DataError
 pytestmark = pytest.mark.asyncio
 
 
+@pytest.mark.parametrize("fault", [None, "offset_days", "missing_date"])
+async def test_repeated_orders_match_dated_groups_without_fee_allocation(
+        prepared, tmp_path, fault):
+    from auto_invest.persistence import audit
+
+    args, selected, forward, _ = prepared
+    forward["session_dates"] = ["2026-09-09", "2026-09-11"]
+    forward["_interval_bars_json"] = json.dumps([
+        dict(symbol="SPY", timestamp_utc=f"2026-09-{day}T14:00:00Z", open=101, volume=1000)
+        for day in ("09", "10")
+    ])
+    async with rehearsal_session(tmp_path / "repeated.db") as book:
+        authority, conn = book.engine.router.execution_authority, book.conn
+        rows = []
+        for index, day in enumerate(("09", "09", "10")):
+            number = str(index)
+            rule = "intraday:" + selected.execution_identity + ":" + number
+            conn.execute("""INSERT INTO orders
+                (correlation_id,rule_id,symbol,side,order_type,qty,state,kis_order_id,
+                 limit_price_usd,submitted_at_utc) VALUES(?,?,'SPY','BUY','LIMIT',1,
+                 'FILLED',?,'102',?)""", (number, rule, number, f"2026-09-{day}T14:01:00Z"))
+            conn.execute("INSERT INTO fills(order_correlation_id,kis_fill_id,qty,price_usd,"
+                         "executed_at_utc) VALUES(?,?,1,'101',?)",
+                         (number, number, f"2026-09-{day}T14:01:00Z"))
+            conn.execute("INSERT INTO intraday_execution_claims VALUES(?,?,?)", (
+                number, selected.execution_identity, json.dumps(dict(symbol="SPY", side="BUY",
+                    qty=1, limit="102", signal_bar_end=f"2026-09-{day}T14:00:00Z",
+                    decision_kind="SIGNAL")),
+            ))
+            conn.execute("INSERT INTO order_state_history(order_correlation_id,from_state,"
+                         "to_state,ts_utc) VALUES(?,'INTENT','SUBMITTING',?)",
+                         (number, f"2026-09-{day}T14:01:00Z"))
+            audit.append(conn, audit.FillPayload(kis_fill_id=number, qty=1, price_usd="101",
+                executed_at_utc=f"2026-09-{day}T14:01:00Z",
+                broker_response_received_at_utc=f"2026-09-{day}T14:02:00Z"),
+                correlation_id=number, symbol="SPY", rule_id=rule)
+            rows.append(dict(odno=number, pdno="SPY", sll_buy_dvsn_cd="02", ovrs_excg_cd="AMEX",
+                             ord_dt=f"202609{day}", ft_ord_qty="1", ft_ccld_qty="1", nccs_qty="0",
+                             ft_ccld_unpr3="101", ord_dvsn="00", ord_unpr="102"))
+        conn.commit()
+        if fault == "missing_date":
+            rows[0].pop("ord_dt")
+
+        def handle(request):
+            if request.url.path == "/oauth2/tokenP":
+                return httpx.Response(200, json=dict(access_token="fresh", expires_in=86400))
+            assert request.method == "GET"
+            if request.url.path.endswith("inquire-ccnl"):
+                return httpx.Response(200, json=dict(rt_cd="0", output=rows))
+            assert request.url.path.endswith("inquire-period-trans")
+            report = []
+            for day, qty in (("09", 1 if fault == "offset_days" else 2),
+                             ("10", 2 if fault == "offset_days" else 1)):
+                report.append(dict(trad_dt=f"202609{day}", sttl_dt="20260911", pdno="SPY",
+                    crcy_cd="USD", sll_buy_dvsn_cd="02", ccld_qty=str(qty),
+                    tr_frcr_amt2=str(qty * 101),
+                    frcr_excc_amt_1=str(Decimal(qty * 101) + Decimal(".1")),
+                    dmst_frcr_fee1="0.1", frcr_fee1="0"))
+            return httpx.Response(200, headers={"tr_cont": "D"},
+                                  json=dict(rt_cd="0", output1=report, output2=[]))
+
+        async with httpx.AsyncClient(base_url=REST_URL,
+                                    transport=httpx.MockTransport(handle)) as http:
+            authority.broker._client = http
+            source = q.ExecutionCostSource(authority, token_cache=tmp_path / "token.json",
+                                           runtime_digest=args["runtime_digest"])
+            args.update(account=authority.account_no, execution_source=source)
+            if fault:
+                with pytest.raises(DataError, match="QUALIFICATION_EXECUTION_COSTS_NOT_ACCEPTED"):
+                    await q.prepare_qualification(**args)
+            else:
+                qualification = await q.prepare_qualification(**args)
+            result = source.last_assessment
+        if fault:
+            reason = ("DATED_TRANSACTION_EXECUTION_TOTAL_MISMATCH" if fault == "offset_days"
+                      else "MULTIPLE_ORDERS_WITHOUT_REPORTED_DATES")
+            assert reason in result.issues
+        else:
+            assert not result.issues
+            groups = json.loads(result.fee_groups_json)
+            assert sorted(len(group["order_ids"]) for group in groups) == [1, 2]
+            intervals = json.loads(result.intervals_json)
+            assert sum(entry["reported_fees"] is None for entry in intervals) == 2
+            model = json.loads(qualification.interval_model_json)
+            assert model["next_bar_fee_bound_verified"]
+            assert model["next_bar_price_bound_verified"]
+            assert not model["full_execution_parity_verified"]
+
+
 @pytest.mark.parametrize("change", [None, "account", "strategy", "window", "fees", "ledger",
                                     "order_date", "missing_order_date", "quantity", "unfilled"])
 @pytest.mark.parametrize("stored_bound", [False, True])

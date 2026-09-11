@@ -1,8 +1,8 @@
 """Authenticated order/report/ledger comparison, separate from full model parity.
 
-Supported report scope: one strategy, USD, closed orders, unique broker order
-IDs and one executed order per symbol/side over the entire requested window.
-Fees are summed for that order, never allocated among multiple orders.
+Supported report scope: one strategy, USD, closed orders and unique broker order
+IDs. Dated orders are matched by trade day/symbol/side; grouped fees are never
+allocated among orders. Missing dates support only the older single-order diagnostic.
 """
 
 import asyncio
@@ -116,6 +116,7 @@ class ExecutionCostAssessment:
     missing_model_conditions: tuple[str, ...]
     intervals_json: str = "[]"
     orders_json: str = "[]"
+    fee_groups_json: str | None = None
 
     def assess_interval_volume(self, bars, *, participation, observed_at, cost_model=None):
         if self.issues:
@@ -123,7 +124,10 @@ class ExecutionCostAssessment:
         result = assess_intervals(json.loads(self.intervals_json), bars,
                                   participation=participation, observed_at=observed_at)
         result.update(assess_next_bar_timing(json.loads(self.intervals_json)))
-        result.update(assess_next_bar_costs(json.loads(self.intervals_json), bars, cost_model))
+        fee_groups = json.loads(self.fee_groups_json) if self.fee_groups_json is not None else None
+        result.update(assess_next_bar_costs(
+            json.loads(self.intervals_json), bars, cost_model, fee_groups=fee_groups,
+        ))
         result.update(assess_model_quantities(json.loads(self.orders_json), bars, participation))
         return dict(result, account_digest=self.account_digest,
                     execution_identity=self.execution_identity, cost_digest=self.digest,
@@ -131,7 +135,7 @@ class ExecutionCostAssessment:
                         intervals=json.loads(self.intervals_json),
                         orders=json.loads(self.orders_json), bars=bars,
                         participation=participation, observed_at=observed_at,
-                        cost_model=cost_model)),
+                        cost_model=cost_model, fee_groups=fee_groups)),
                     market_source_authentication_verified=False)
 
     def public(self):
@@ -200,11 +204,10 @@ def assess_sources(*, database, account, selection, runtime_digest, window, exec
             price_ok = False
     if not price_ok:
         issues.add("ORDER_LIMIT_OR_FILL_PRICE_MISMATCH")
-    if any(len(values) != 1 for values in grouped.values()):
-        issues.add("MULTIPLE_ORDERS_WITHOUT_FEE_IDENTITY")
     fee_ok = True
     date_ok = True
     reported_fees = {}
+    fee_groups = []
     with localcontext() as context:
         context.prec = 80
         rate = Decimal(str(commission_bps)) / 10000
@@ -214,25 +217,46 @@ def assess_sources(*, database, account, selection, runtime_digest, window, exec
             matching = [row for row in rows if (
                 row["pdno"], "BUY" if row["sll_buy_dvsn_cd"] == "02" else "SELL"
             ) == key]
-            if len(values) != 1 or not matching:
+            if not matching:
                 fee_ok = False
                 date_ok = False
                 continue
-            ordered = values[0].reported_order_date
-            if ordered is None:
+            dated = {}
+            if any(value.reported_order_date is None for value in values):
                 date_ok = False
+                if len(values) != 1:
+                    fee_ok = False
+                    issues.add("MULTIPLE_ORDERS_WITHOUT_REPORTED_DATES")
+                    continue
+                dated[None] = values
+            else:
+                for value in values:
+                    dated.setdefault(value.reported_order_date.strftime("%Y%m%d"), []).append(value)
+                if {row["trad_dt"] for row in matching} != dated.keys():
+                    date_ok = False
+                    issues.add("ORDER_TRADE_SETTLEMENT_DATES_NOT_MATCHED")
             if any(
-                (ordered is not None and row["trad_dt"] != ordered.strftime("%Y%m%d"))
-                or not window[0] <= row["trad_dt"] <= row["sttl_dt"] <= window[1]
+                not window[0] <= row["trad_dt"] <= row["sttl_dt"] <= window[1]
                 for row in matching
             ):
                 date_ok = False
                 issues.add("ORDER_TRADE_SETTLEMENT_DATES_NOT_MATCHED")
-            fees = sum((Decimal(row["dmst_frcr_fee1"]) + Decimal(row["frcr_fee1"])
-                        for row in matching), Decimal(0))
-            reported_fees[values[0].kis_order_id] = str(fees)
-            gross = sum((Decimal(row["tr_frcr_amt2"]) for row in matching), Decimal(0))
-            fee_ok &= fees <= gross * rate
+            for day, orders in dated.items():
+                selected_rows = [row for row in matching if day is None or row["trad_dt"] == day]
+                fees = sum((Decimal(row["dmst_frcr_fee1"]) + Decimal(row["frcr_fee1"])
+                            for row in selected_rows), Decimal(0))
+                gross = sum((Decimal(row["tr_frcr_amt2"]) for row in selected_rows), Decimal(0))
+                quantity = sum((Decimal(row["ccld_qty"]) for row in selected_rows), Decimal(0))
+                if (not selected_rows or quantity != sum(value.filled_qty for value in orders)
+                        or gross != sum((value.filled_qty * value.avg_fill_price_usd
+                                         for value in orders), Decimal(0))):
+                    issues.add("DATED_TRANSACTION_EXECUTION_TOTAL_MISMATCH")
+                if len(orders) == 1:
+                    reported_fees[orders[0].kis_order_id] = str(fees)
+                fee_groups.append(dict(trade_date=day, symbol=key[0], side=key[1],
+                                       order_ids=sorted(value.kis_order_id for value in orders),
+                                       reported_fees=str(fees)))
+                fee_ok &= fees <= gross * rate
     if not fee_ok:
         issues.add("REPORTED_COST_EXCEEDS_MODEL_OR_AMBIGUOUS")
     if (transactions["registration_start_date"], transactions["registration_end_date"]) != window:
@@ -297,7 +321,7 @@ def assess_sources(*, database, account, selection, runtime_digest, window, exec
     return ExecutionCostAssessment(identity["account_digest"], selection.execution_identity,
                                    runtime_digest, window, digest, _encode(checks),
                                    tuple(sorted(issues)), missing, _encode(intervals),
-                                   _encode(model_orders))
+                                   _encode(model_orders), _encode(fee_groups))
 
 
 class ExecutionCostSource:

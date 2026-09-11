@@ -1,5 +1,11 @@
 # 자료 모델
 
+- ExecutionCostAssessment.fee_groups_json: 날짜/종목/방향, 대응 주문 식별자 목록,
+  보고 수수료 합계. 같은 날짜의 수량/대금을 원본 주문들과 대조한 뒤 생성한다.
+  다중 주문의 intervals_json.reported_fees는None이며 임의로 배분하지 않는다.
+  비용 모델은 모든 체결 주문의 정확한 묶음 분할을 검사하고 기준 대금 합으로 한도를
+  비교한다. 묶음도 interval_digest에 포함한다. 날짜 없는 단일 주문은 기존 진단만 유지한다.
+
 - BrokerExecution.reported_order_quantity: 엄격한 조회에서 읽은 원래 주문 수량.
   누락은None, 제공된 잘못된 수량/체결량보다 작은 수량/같은 주문의 변경은 거절한다.
 - ExecutionCostAssessment.orders_json: 미체결을 포함한 모든 조회 주문의 원래 수량,

@@ -37,7 +37,7 @@ def assess_next_bar_timing(intervals):
     return dict(next_bar_timing_verified=not issues, timing_issues=sorted(issues))
 
 
-def assess_next_bar_costs(intervals, bars, cost_model):
+def assess_next_bar_costs(intervals, bars, cost_model, *, fee_groups=None):
     """Compare reported execution costs to the research reference, not fill gross.
 
     This is a cost bound for matched executions, not complete strategy parity.
@@ -66,23 +66,54 @@ def assess_next_bar_costs(intervals, bars, cost_model):
             adverse, commission = (rates[0] + rates[1]) / 10000, rates[2] / 10000
             if adverse >= 1:
                 raise ObservationModelError("MODEL_COST_RATE_INVALID")
+            reference_amounts = {}
             for entry in intervals:
                 bar = indexed.get((entry["symbol"], _time(entry["signal_bar_end"])))
                 if bar is None:
                     raise ObservationModelError("NEXT_BAR_REFERENCE_UNAVAILABLE")
                 reference = _amount(str(bar["open"]))
-                price, fees = _amount(entry["average_fill_price"]), _amount(entry["reported_fees"])
+                price = _amount(entry["average_fill_price"])
                 qty, side = entry["quantity"], entry["side"]
-                if (reference <= 0 or price <= 0 or fees < 0 or type(qty) is not int
+                if (reference <= 0 or price <= 0 or type(qty) is not int
                         or not 0 < qty <= 10**12 or side not in {"BUY", "SELL"}):
                     raise ObservationModelError("MODEL_EXECUTION_COST_INVALID")
                 if not (price <= reference * (1 + adverse) if side == "BUY"
                         else price >= reference * (1 - adverse)):
                     price_ok = False
                     issues.add("NEXT_BAR_PRICE_BOUND_EXCEEDED")
-                if fees > reference * qty * commission:
-                    fee_ok = False
-                    issues.add("NEXT_BAR_FEE_BOUND_EXCEEDED")
+                identity = entry["order_id"]
+                if not isinstance(identity, str) or not identity or identity in reference_amounts:
+                    raise ObservationModelError("MODEL_ORDER_INVALID")
+                reference_amounts[identity] = reference * qty
+                if fee_groups is None:
+                    fees = _amount(entry["reported_fees"])
+                    if fees < 0:
+                        raise ObservationModelError("MODEL_EXECUTION_COST_INVALID")
+                    if fees > reference * qty * commission:
+                        fee_ok = False
+                        issues.add("NEXT_BAR_FEE_BOUND_EXCEEDED")
+            if fee_groups is not None:
+                if not isinstance(fee_groups, list) or not 0 < len(fee_groups) <= 10000:
+                    raise ObservationModelError("MODEL_FEE_GROUP_INVALID")
+                covered = set()
+                for group in fee_groups:
+                    identities = group["order_ids"]
+                    if (not isinstance(identities, list) or not identities
+                            or any(not isinstance(value, str) for value in identities)
+                            or len(identities) != len(set(identities))
+                            or covered.intersection(identities)):
+                        raise ObservationModelError("MODEL_FEE_GROUP_INVALID")
+                    fees = _amount(group["reported_fees"])
+                    if fees < 0:
+                        raise ObservationModelError("MODEL_EXECUTION_COST_INVALID")
+                    reference_total = sum((reference_amounts[value] for value in identities),
+                                          Decimal(0))
+                    covered.update(identities)
+                    if fees > reference_total * commission:
+                        fee_ok = False
+                        issues.add("NEXT_BAR_FEE_BOUND_EXCEEDED")
+                if covered != reference_amounts.keys():
+                    raise ObservationModelError("MODEL_FEE_GROUP_INVALID")
     except (ObservationModelError, KeyError, TypeError, ValueError, ArithmeticError):
         price_ok = fee_ok = False
         issues.add("NEXT_BAR_COST_INPUT_UNVERIFIED")
