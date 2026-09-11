@@ -204,6 +204,10 @@ async def prepare_qualification(*, archives: Path, forward_database: Path,
                     # Same independently replayed snapshot and signed freeze;
                     # this does not cryptographically authenticate market data.
                     interval_model["registered_forward_replay_verified"] = True
+                    interval_model["market_source_authentication_verified"] = (
+                        forward.get("market_source_authentication_verified") is True
+                    )
+                    interval_model["source_attestation_basis"] = "TRUSTED_SERVER_COLLECTOR"
                 except ObservationModelError as error:
                     interval_model = dict(interval_volume_verified=False, issues=[str(error)])
         return ExecutionQualification(

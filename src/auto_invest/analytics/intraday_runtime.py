@@ -204,7 +204,7 @@ class PaperRuntime:
             },
         )
 
-    def process(self, bars: list[dict], observed: datetime) -> bool:
+    def process(self, bars: list[dict], observed: datetime, *, collection_proof=None) -> bool:
         if len(bars) != 5 or {b.get("symbol") for b in bars} != set(SYMBOLS):
             raise DataError("BAR_COVERAGE")
         rows = {}
@@ -370,6 +370,10 @@ class PaperRuntime:
                 actions=actions,
                 state=state,
             )
+            if collection_proof is not None:
+                if not isinstance(collection_proof, dict) or len(encode(collection_proof)) > 4096:
+                    raise DataError("COLLECTION_PROOF_FORMAT")
+                payload["collection_proof"] = collection_proof
             conn.execute(
                 "INSERT INTO intraday_events(timestamp,previous_hash,hash,payload) VALUES(?,?,?,?)",
                 (stamp, previous, digest(encode([previous, payload])), encode(payload).decode()),

@@ -11,6 +11,7 @@ from auto_invest.analytics.intraday_runtime import PaperRuntime, _connect, _veri
 from auto_invest.execution.intraday_selection import ResearchSelection
 from auto_invest.execution.intraday_signals import execution_fingerprint
 from auto_invest.market_data.intraday import CALENDAR, NY, DataError, iso, utc
+from auto_invest.market_data.intraday_attestation import verify_collection
 
 
 def assess_forward(database: Path, selection: ResearchSelection, preregistration: Path,
@@ -65,7 +66,8 @@ def assess_forward(database: Path, selection: ResearchSelection, preregistration
                 observed, stamp = utc(payload["observed"]), utc(payload["timestamp"])
                 if observed > clock:
                     raise DataError("FORWARD_OBSERVATION_IN_FUTURE")
-                replay.process(list(payload["bars"].values()), observed)
+                proof = payload.get("collection_proof")
+                replay.process(list(payload["bars"].values()), observed, collection_proof=proof)
                 actual = replay.conn.execute(
                     "SELECT hash FROM intraday_events ORDER BY id DESC LIMIT 1"
                 ).fetchone()
@@ -80,7 +82,12 @@ def assess_forward(database: Path, selection: ResearchSelection, preregistration
                     continue
                 if include_interval_bars:
                     interval_bars.extend(payload["bars"].values())
-                entry = sessions.setdefault(session, dict(stamps=[], bad=False, closed=False))
+                entry = sessions.setdefault(session, dict(
+                    stamps=[], bad=False, closed=False, source_verified=True,
+                ))
+                entry["source_verified"] &= bool(
+                    proof is not None and verify_collection(proof, payload["bars"], observed)
+                )
                 entry["stamps"].append(stamp)
                 state = payload["state"]
                 account = state["accounts"][candidate.candidate_id]
@@ -113,6 +120,10 @@ def assess_forward(database: Path, selection: ResearchSelection, preregistration
                 minimum_observation_count_met=len(complete) >= required,
                 freeze_authentication_verified=False, execution_parity_verified=False,
                 live_eligible=False, orders_submitted=0,
+                market_source_authentication_verified=bool(complete) and all(
+                    entry["source_verified"] for session, entry in sessions.items()
+                    if str(session) in complete
+                ),
             )
             if include_interval_bars:
                 complete_dates = set(complete)

@@ -14,6 +14,7 @@ from auto_invest.analytics.intraday_runtime import PaperRuntime, _verify, encode
 from auto_invest.execution.intraday_forward import assess_forward
 from auto_invest.execution.intraday_selection import ResearchSelection
 from auto_invest.execution.intraday_signals import execution_fingerprint
+from auto_invest.market_data import intraday_attestation as attestation
 from auto_invest.market_data.intraday import CALENDAR, SYMBOLS, DataError, digest, iso
 
 PREREG = Path("specs/177-intraday-paper-challenger/contracts/intraday-preregistration.json")
@@ -29,14 +30,23 @@ def selection():
                              "PAPER_CHALLENGER", 756, 0)
 
 
-def make_log(path, *, count=78, mode="forward", synthetic=False, delay=0):
+def make_log(path, *, count=78, mode="forward", synthetic=False, delay=0, proof_kind=None):
     runtime = PaperRuntime(path, load_preregistration(PREREG), PROVIDER, synthetic, mode)
     try:
         for n in range(count):
             stamp = OPEN + timedelta(minutes=5 * n)
             bars = [dict(symbol=s, timestamp_utc=iso(stamp), open=100, high=101,
                          low=99, close=100, volume=100000) for s in SYMBOLS]
-            runtime.process(bars, stamp + timedelta(minutes=5, seconds=delay))
+            observed = stamp + timedelta(minutes=5, seconds=delay)
+            proof = None
+            if proof_kind and not (proof_kind == "mixed" and n == 0):
+                normalized = {bar["symbol"]: dict(bar, **{
+                    k: float(bar[k]) for k in ("open", "high", "low", "close")
+                }) for bar in bars}
+                proof = attestation._seal(normalized, observed, observed, b"k" * 32)
+                if proof_kind == "tampered":
+                    proof["signature"] = "0" * 64
+            runtime.process(bars, observed, collection_proof=proof)
     finally:
         runtime.close()
 
@@ -76,6 +86,23 @@ def test_interval_bars_come_only_from_complete_replayed_sessions(tmp_path):
     partial = assess_forward(path, selection(), PREREG, frozen_at=CLOSE,
                              now=CLOSE + timedelta(minutes=5), include_interval_bars=True)
     assert json.loads(partial["_interval_bars_json"]) == []
+
+
+@pytest.mark.parametrize("proof_kind", ["valid", "mixed", "tampered"])
+def test_complete_replay_requires_every_collection_proof(tmp_path, monkeypatch, proof_kind):
+    monkeypatch.setattr(attestation, "_read_key", lambda: b"k" * 32)
+    path = tmp_path / "paper.db"
+    make_log(path, proof_kind=proof_kind)
+    before = path.read_bytes()
+    if proof_kind == "tampered":
+        with pytest.raises(DataError, match="COLLECTION_ATTESTATION_INVALID"):
+            check(path)
+    else:
+        result = check(path)
+        assert result["complete_sessions"] == 1
+        assert result["market_source_authentication_verified"] is (proof_kind == "valid")
+        assert not result["execution_parity_verified"]
+    assert path.read_bytes() == before
 
 
 @pytest.mark.parametrize("mode,synthetic", [("replay", False), ("forward", True)])

@@ -41,6 +41,7 @@ def execution_fingerprint(candidate, provider):
         Path(__file__).parents[1] / "analytics/intraday_paper_challenger.py",
         Path(__file__).parents[1] / "analytics/intraday_runtime.py",
         Path(__file__).parents[1] / "market_data/intraday_pricing.py",
+        Path(__file__).parents[1] / "market_data/intraday_attestation.py",
     ]
     identity = dict(
         candidate=candidate.as_dict(),

@@ -101,6 +101,7 @@ async def execute(args):
         async def cycle():
             result = await existing_execute(SimpleNamespace(
                 command="run", provider="kis", state=args.root / "paper.db",
+                attest_market_data=getattr(args, "attest_market_data", False),
                 out=args.root / "batches", token_cache=args.token_cache, poll_seconds=60, cycles=1,
             ))
             if result.get("status") == "WAIT_SESSION" and (args.root / "paper.db").is_file():
@@ -187,6 +188,7 @@ def parser():
         command.add_argument("--root", type=Path, default=Path("data/intraday-operator"))
         if name == "run":
             command.add_argument("--poll-seconds", type=int, default=60)
+            command.add_argument("--attest-market-data", action="store_true")
             command.add_argument("--cycles", type=int, default=0)
             command.add_argument("--token-cache", type=Path, default=Path("data/kis_token.json"))
     for name in ("execution-status", "execution-stop"):

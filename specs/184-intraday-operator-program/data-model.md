@@ -1,5 +1,11 @@
 # 자료 모델
 
+- collection_proof: 서버 수집기 코드 지문, 정규화된5종목 봉 지문, 수집 시작/완료 UTC,
+  schema/scope와 서버 키 서명. 모의 사건의 해시에 포함하고 독립 재생에도 그대로 전달한다.
+  모든 완결 세션의 모든 봉에 유효한 증명이 있을 때만 서버 수집 출처 확인이 참이다.
+  그 결과는 ExecutionQualification.interval_model_json의 출처 항목으로 전달하며
+  source_attestation_basis=TRUSTED_SERVER_COLLECTOR로 신뢰 근거를 구분한다.
+
 - FillPayload.broker_response_received_at_utc: 실제 GET이 끝난 뒤 잡은 로컬 UTC 시각.
   논리적 observed_at_utc 및 executed_at_utc와 별개이며 기존 행에는 없을 수 있다.
   비용 스냅샷의 fill_audits를 모든 fills와 체결번호/수량/가격/주문/전략으로 대조한 경우만

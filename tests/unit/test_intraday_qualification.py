@@ -204,9 +204,11 @@ def grant(qualification):
 
 
 @pytest.mark.parametrize("volume,verified", [(200, True), (199, False)])
+@pytest.mark.parametrize("source_verified", [False, True])
 async def test_qualification_actually_consumes_replayed_bars(
-        prepared, monkeypatch, volume, verified):
+        prepared, monkeypatch, volume, verified, source_verified):
     args, _, forward, _ = prepared
+    forward["market_source_authentication_verified"] = source_verified
     forward["_interval_bars_json"] = json.dumps([
         dict(symbol="SPY", timestamp_utc=f"2026-09-10T14:{minute}:00Z", volume=volume)
         for minute in ("00", "05")
@@ -226,7 +228,8 @@ async def test_qualification_actually_consumes_replayed_bars(
     model = json.loads(result.interval_model_json)
     assert model["interval_volume_verified"] is verified
     assert model["registered_forward_replay_verified"]
-    assert not model["market_source_authentication_verified"]
+    assert model["market_source_authentication_verified"] is source_verified
+    assert model["source_attestation_basis"] == "TRUSTED_SERVER_COLLECTOR"
     assert model["cost_digest"] == result.execution_cost.digest
     monkeypatch.setattr(q, "_read_authorization", lambda: grant(result))
     assert result() == "QUALIFICATION_EXECUTION_MODEL_EVIDENCE_MISSING"
