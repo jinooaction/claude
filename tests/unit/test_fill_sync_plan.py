@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+import pytest
+
 from auto_invest.broker.models import BrokerExecution
 from auto_invest.execution.fill_sync import OpenOrder, plan_fill_ingestion
 
@@ -90,6 +92,30 @@ def test_negative_delta_is_skipped_with_warning() -> None:
     plan = plan_fill_ingestion([order], [_exec(filled=50)], {"ord-1": 80})
     assert plan.fills == []
     assert any("되돌림" in w or "이상치" in w for w in plan.warnings)
+
+
+@pytest.mark.parametrize("price,notionals", [
+    ("151", {"ord-1": Decimal("6000")}),
+    ("150", {}),
+    ("0", {"ord-1": Decimal("6000")}),
+])
+def test_same_quantity_cannot_hide_changed_or_missing_notional(price, notionals):
+    plan = plan_fill_ingestion(
+        [_order(state="PARTIALLY_FILLED")],
+        [_exec(filled=40, price=price, terminal=True)],
+        {"ord-1": 40}, notionals,
+    )
+    assert plan.fills == [] and plan.transitions == []
+    assert plan.warnings
+
+
+def test_same_quantity_matching_notional_can_finish_without_duplicate_fill():
+    plan = plan_fill_ingestion(
+        [_order(state="PARTIALLY_FILLED")], [_exec(filled=40, terminal=True)],
+        {"ord-1": 40}, {"ord-1": Decimal("6000")},
+    )
+    assert plan.fills == [] and plan.warnings == []
+    assert [transition.to_state for transition in plan.transitions] == ["EXPIRED"]
 
 
 def test_nonpositive_price_skips_fill_with_warning() -> None:

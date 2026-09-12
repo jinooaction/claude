@@ -5,13 +5,14 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import timedelta
-from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal
+from decimal import Decimal
 from pathlib import Path
 
 from auto_invest.analytics.intraday_paper_challenger import _entry_signal, _exit_signal
 from auto_invest.analytics.intraday_runtime import PaperRuntime
 from auto_invest.execution.intraday import Decision
 from auto_invest.market_data.intraday import CALENDAR, NY, SYMBOLS, normalize, utc
+from auto_invest.market_data.intraday_pricing import limit_price
 
 
 def execution_fingerprint(candidate, provider):
@@ -20,11 +21,42 @@ def execution_fingerprint(candidate, provider):
     sources = [
         Path(__file__),
         Path(__file__).with_name("intraday.py"),
+        Path(__file__).with_name("intraday_runtime.py"),
+        Path(__file__).with_name("intraday_observation.py"),
+        Path(__file__).with_name("intraday_cash_ledger.py"),
+        Path(__file__).with_name("intraday_selection.py"),
+        Path(__file__).with_name("intraday_program.py"),
+        Path(__file__).with_name("intraday_forward.py"),
+        Path(__file__).with_name("intraday_registration.py"),
+        Path(__file__).with_name("intraday_qualification.py"),
+        Path(__file__).with_name("intraday_execution_evidence.py"),
+        Path(__file__).with_name("intraday_observation_models.py"),
+        Path(__file__).with_name("intraday_cost_reconciliation.py"),
+        Path(__file__).parents[1] / "broker/intraday_transactions.py",
+        Path(__file__).with_name("intraday_launch.py"),
+        Path(__file__).with_name("fill_sync.py"),
+        Path(__file__).parents[1] / "persistence/fill_amounts.py",
+        Path(__file__).parents[1] / "persistence/migrations/0005_fill_notionals.sql",
+        Path(__file__).parents[1] / "broker/intraday_inputs.py",
+        Path(__file__).parents[1] / "broker/intraday_account.py",
+        Path(__file__).parents[1] / "broker/domestic_account.py",
+        Path(__file__).parents[1] / "broker/intraday_holdings_coverage.py",
+        Path(__file__).parents[1] / "broker/intraday_account_frame.py",
+        Path(__file__).parents[1] / "broker/intraday_asset_scope.py",
+        Path(__file__).parents[1] / "broker/account_asset_evidence.py",
+        Path(__file__).parents[1] / "broker/intraday_balance_evidence.py",
+        Path(__file__).parents[1] / "broker/intraday_reported_cash.py",
+        Path(__file__).parents[1] / "broker/intraday_cash_baseline.py",
+        Path(__file__).parents[1] / "broker/account_source_profile.py",
+        Path(__file__).parents[1] / "broker/overseas.py",
+        Path(__file__).parents[1] / "persistence/audit.py",
         Path(__file__).parents[1] / "analytics/intraday_paper_challenger.py",
         Path(__file__).parents[1] / "analytics/intraday_runtime.py",
+        Path(__file__).parents[1] / "market_data/intraday_pricing.py",
+        Path(__file__).parents[1] / "market_data/intraday_attestation.py",
     ]
     identity = dict(
-        candidate=candidate.strategy_fingerprint,
+        candidate=candidate.as_dict(),
         provider=provider,
         sources=[hashlib.sha256(p.read_bytes()).hexdigest() for p in sources],
     )
@@ -114,12 +146,10 @@ def compile_decision(
             and not (candidate.family == "opening_range_breakout" and symbol in entered_symbols)
             and _entry_signal(candidate, series, len(series) - 1)
         ):
-            limit = (price * Decimal("1.0006")).quantize(Decimal(".01"), rounding=ROUND_FLOOR)
+            limit = limit_price(price, buy=True)
             notional = min(capital * Decimal(".16"), cash / Decimal("1.003"))
             targets[symbol] = int(notional / limit)
             cash -= targets[symbol] * limit * Decimal("1.003")
         buying = targets[symbol] > qty
-        limits[symbol] = (price * Decimal("1.0006" if buying else ".9994")).quantize(
-            Decimal(".01"), rounding=ROUND_FLOOR if buying else ROUND_CEILING
-        )
+        limits[symbol] = limit_price(price, buy=buying)
     return Decision(execution_fingerprint(candidate, provider), end, targets, limits)

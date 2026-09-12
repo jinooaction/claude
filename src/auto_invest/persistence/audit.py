@@ -185,6 +185,15 @@ class FillPayload(AuditPayload):
     price_usd: str
     executed_at_utc: str
     commission_usd: str | None = None
+    reported_notional_usd: str | None = None
+    reported_cumulative_qty: int | None = None
+    reported_cumulative_avg_price_usd: str | None = None
+    # Legacy timestamps may be order times or observation times. Neither is
+    # authenticated execution-time evidence. Never upgrade old rows implicitly.
+    timestamp_basis: Literal["UNSPECIFIED", "OBSERVED", "PROVIDED_EXECUTION"] = "UNSPECIFIED"
+    observed_at_utc: str | None = None
+    # Captured after the actual GET completes, distinct from a logical tick.
+    broker_response_received_at_utc: str | None = None
 
 
 class CancelPayload(AuditPayload):

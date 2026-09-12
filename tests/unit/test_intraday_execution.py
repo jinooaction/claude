@@ -91,6 +91,24 @@ def signal_fixture():
     return candidate, bars, opening + timedelta(minutes=45)
 
 
+def test_execution_identity_includes_runtime_control_code(monkeypatch):
+    from pathlib import Path
+
+    from auto_invest.execution.intraday_signals import execution_fingerprint
+
+    candidate, _, _ = signal_fixture()
+    provider = "kis-nasdaq-partial-unadjusted"
+    original = Path.read_bytes
+    before = execution_fingerprint(candidate, provider)
+
+    def changed(path):
+        content = original(path)
+        return content + b"\n# control change" if path.name == "intraday_runtime.py" else content
+
+    monkeypatch.setattr(Path, "read_bytes", changed)
+    assert execution_fingerprint(candidate, provider) != before
+
+
 @pytest.mark.parametrize(
     "sellable",
     [{}, {"SPY": -1}, {"SPY": 6}, {"SPY": True}, {"SPY": 1.5}, {"TLT": 1}],

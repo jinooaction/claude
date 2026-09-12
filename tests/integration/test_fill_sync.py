@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -13,6 +14,7 @@ import pytest
 import respx
 
 from auto_invest.broker.client import AsyncTokenBucket, CircuitBreaker, ResilientClient
+from auto_invest.broker.models import BrokerExecution
 from auto_invest.config.enums import Side
 from auto_invest.execution import fill_sync as fill_sync_mod
 from auto_invest.execution.fill_sync import (
@@ -24,6 +26,7 @@ from auto_invest.execution.fill_sync import (
 )
 from auto_invest.persistence import audit, db
 from auto_invest.persistence import positions as positions_mod
+from auto_invest.persistence.fill_amounts import fill_amounts
 
 BASE = "https://api.example"
 ACCOUNT = "1234567801"
@@ -83,6 +86,154 @@ def _seed_order(
 
 def _ccnl(rows: list[dict]) -> httpx.Response:
     return httpx.Response(200, json={"output": rows})
+
+
+@pytest.mark.asyncio
+async def test_changed_average_on_repoll_preserves_book_until_reconciled(tmp_path, monkeypatch):
+    price, terminal = "150", False
+
+    async def executions(*args, **kwargs):
+        return [BrokerExecution(kis_order_id="K1", symbol="AAPL", filled_qty=40,
+                                avg_fill_price_usd=Decimal(price), terminal=terminal)]
+
+    monkeypatch.setattr(fill_sync_mod, "get_order_executions_resolving_market", executions)
+    async with _broker(tmp_path) as (client, conn):
+        _seed_order(conn)
+
+        async def poll():
+            return await sync_fills(conn, client, access_token="token", app_key="key",
+                                    app_secret="secret", account=ACCOUNT)
+
+        first = await poll()
+        assert first.fills_applied == 1 and not first.warnings
+        before = [tuple(row) for row in conn.execute("SELECT * FROM fills")]
+        price, terminal = "151", True
+        for _ in range(2):
+            result = await poll()
+            assert result.warnings and result.transitions == 0 and result.fills_applied == 0
+            assert conn.execute("SELECT state FROM orders").fetchone()[0] == "PARTIALLY_FILLED"
+            assert [tuple(row) for row in conn.execute("SELECT * FROM fills")] == before
+        errors = conn.execute(
+            "SELECT COUNT(*) FROM audit_log WHERE event_type='ERROR'"
+        ).fetchone()[0]
+        assert errors == 2
+        price = "150"
+        recovered = await poll()
+        assert not recovered.warnings and recovered.transitions == 1
+        assert conn.execute("SELECT state FROM orders").fetchone()[0] == "EXPIRED"
+        assert [tuple(row) for row in conn.execute("SELECT * FROM fills")] == before
+
+
+@pytest.mark.asyncio
+async def test_exact_cumulative_amount_survives_partial_fill_restart_and_cost_comparison(
+    tmp_path, monkeypatch,
+):
+    from auto_invest.execution.intraday_cost_reconciliation import reconcile_cost_inputs
+
+    quantity, average, terminal = 1, "100", False
+
+    async def executions(*args, **kwargs):
+        return [BrokerExecution(kis_order_id="K1", symbol="AAPL", side=Side.BUY,
+            market="NASD", filled_qty=quantity, avg_fill_price_usd=Decimal(average),
+            terminal=terminal)]
+
+    monkeypatch.setattr(fill_sync_mod, "get_order_executions_resolving_market", executions)
+
+    async def poll(client, conn):
+        return await sync_fills(conn, client, access_token="token", app_key="key",
+                                app_secret="secret", account=ACCOUNT)
+
+    async with _broker(tmp_path) as (client, conn):
+        _seed_order(conn, qty=10)
+        assert (await poll(client, conn)).fills_applied == 1
+        quantity, average = 4, "100.01"
+        assert (await poll(client, conn)).fills_applied == 1
+        amounts = fill_amounts(conn)
+        assert amounts == {"K1:1": Decimal("100"), "K1:4": Decimal("300.04")}
+        event = audit.parse_payload(conn.execute(
+            "SELECT * FROM audit_log WHERE event_type='FILL' ORDER BY seq DESC LIMIT 1"
+        ).fetchone())
+        assert event["reported_notional_usd"] == "300.04"
+        assert event["reported_cumulative_qty"] == 4
+        assert event["reported_cumulative_avg_price_usd"] == "100.01"
+        for statement in ("UPDATE fill_notionals SET notional_usd='1'",
+                          "DELETE FROM fill_notionals"):
+            with pytest.raises(sqlite3.IntegrityError, match="append-only"):
+                conn.execute(statement)
+    async with _broker(tmp_path) as (client, conn):
+        terminal = True
+        result = await poll(client, conn)
+        assert result.transitions == 1 and result.fills_applied == 0 and not result.warnings
+        assert fill_amounts(conn) == amounts
+        report = reconcile_cost_inputs(tmp_path / "t.db", await executions(), [dict(
+            trad_dt="20260910", sttl_dt="20260911", pdno="AAPL", crcy_cd="USD",
+            sll_buy_dvsn_cd="02", ccld_qty="4", tr_frcr_amt2="400.04",
+            frcr_excc_amt_1="401.04", dmst_frcr_fee1="1", frcr_fee1="0",
+        )])
+        assert report["status"] == "MATCH"
+
+
+@pytest.mark.asyncio
+async def test_invalid_notional_rolls_back_fill_and_evidence(tmp_path):
+    async with _broker(tmp_path) as (_, conn):
+        _seed_order(conn, qty=1)
+        before = [tuple(row) for row in conn.execute("SELECT * FROM audit_log")]
+        plan = FillPlan(fills=[PlannedFill(
+            correlation_id="ord-1", kis_order_id="K1", symbol="AAPL", side="BUY",
+            rule_id="r1", qty=1, price_usd=Decimal("100"), kis_fill_id="K1:1",
+            notional_usd=Decimal("99"), cumulative_qty=1,
+            cumulative_avg_price_usd=Decimal("100"),
+        )])
+        with pytest.raises(ValueError, match="FILL_NOTIONAL_CUMULATIVE_MISMATCH"):
+            apply_fill_plan(conn, plan, ts_iso="2026-09-10T15:00:00.000Z")
+        assert conn.execute("SELECT COUNT(*) FROM fills").fetchone()[0] == 0
+        assert conn.execute("SELECT COUNT(*) FROM fill_notionals").fetchone()[0] == 0
+        assert [tuple(row) for row in conn.execute("SELECT * FROM audit_log")] == before
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("source", [None, datetime(2026, 9, 10, 14, tzinfo=UTC)])
+async def test_new_fill_records_time_basis_and_duplicate_keeps_original_evidence(tmp_path, source):
+    async with _broker(tmp_path) as (_, conn):
+        _seed_order(conn, qty=1)
+        plan = FillPlan(fills=[PlannedFill(
+            correlation_id="ord-1", kis_order_id="K1", symbol="AAPL", side="BUY",
+            rule_id="r1", qty=1, price_usd=Decimal("150"), kis_fill_id="K1:1",
+            executed_at_utc=source,
+        )])
+        stamp = "2026-09-10T15:00:00.000Z"
+        apply_fill_plan(conn, plan, ts_iso=stamp)
+        before = list(conn.execute("SELECT * FROM audit_log ORDER BY seq"))
+        event = audit.parse_payload(conn.execute(
+            "SELECT * FROM audit_log WHERE event_type='FILL'"
+        ).fetchone())
+        assert event["observed_at_utc"] == stamp
+        assert event["timestamp_basis"] == ("OBSERVED" if source is None else "PROVIDED_EXECUTION")
+        assert event["executed_at_utc"] == (
+            stamp if source is None else "2026-09-10T14:00:00.000Z"
+        )
+        apply_fill_plan(conn, plan, ts_iso="2026-09-11T15:00:00.000Z")
+        assert list(conn.execute("SELECT * FROM audit_log ORDER BY seq")) == before
+        assert conn.execute("SELECT COUNT(*) FROM fills").fetchone()[0] == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("source", [
+    datetime(2026, 9, 10, 14), datetime(2026, 9, 10, 16, tzinfo=UTC),
+])
+async def test_unusable_provided_fill_time_rolls_back_without_changing_book(tmp_path, source):
+    async with _broker(tmp_path) as (_, conn):
+        _seed_order(conn, qty=1)
+        before = list(conn.execute("SELECT * FROM audit_log ORDER BY seq"))
+        plan = FillPlan(fills=[PlannedFill(
+            correlation_id="ord-1", kis_order_id="K1", symbol="AAPL", side="BUY",
+            rule_id="r1", qty=1, price_usd=Decimal("150"), kis_fill_id="K1:1",
+            executed_at_utc=source,
+        )])
+        with pytest.raises(ValueError, match="^FILL_TIMESTAMP_INVALID$"):
+            apply_fill_plan(conn, plan, ts_iso="2026-09-10T15:00:00.000Z")
+        assert conn.execute("SELECT COUNT(*) FROM fills").fetchone()[0] == 0
+        assert list(conn.execute("SELECT * FROM audit_log ORDER BY seq")) == before
 
 
 def _recovered_events(conn, corr: str) -> list[dict]:
@@ -172,13 +323,15 @@ async def test_full_fill_recorded(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_historical_window_recovers_fill_with_broker_timestamp(
+async def test_historical_window_does_not_mislabel_order_time_as_fill_time(
     tmp_path: Path,
 ) -> None:
     async with _broker(tmp_path) as (client, conn):
         _seed_order(conn, qty=1)
+        request_times = []
 
         def _historical(request: httpx.Request) -> httpx.Response:
+            request_times.append(datetime.now(UTC))
             assert request.url.params["ORD_STRT_DT"] == "20260623"
             assert request.url.params["ORD_END_DT"] == "20260623"
             return _ccnl(
@@ -213,7 +366,24 @@ async def test_historical_window_recovers_fill_with_broker_timestamp(
             "SELECT price_usd, executed_at_utc FROM fills WHERE kis_fill_id='K1:1'"
         ).fetchone()
         assert fill["price_usd"] == "150.25"
-        assert fill["executed_at_utc"] == "2026-06-23T17:20:16.000Z"
+        assert fill["executed_at_utc"] == "2026-08-16T00:00:00.000Z"
+        events = [audit.parse_payload(event) for event in conn.execute(
+            "SELECT * FROM audit_log WHERE event_type='FILL'"
+        )]
+        assert len(events) == 1
+        assert events[0]["timestamp_basis"] == "OBSERVED"
+        assert events[0]["observed_at_utc"] == fill["executed_at_utc"]
+        received = datetime.fromisoformat(events[0]["broker_response_received_at_utc"])
+        assert max(request_times) <= received <= datetime.now(UTC)
+        assert received != datetime.fromisoformat(events[0]["observed_at_utc"])
+    reopened = db.get_connection(tmp_path / "t.db")
+    try:
+        event = audit.parse_payload(reopened.execute(
+            "SELECT * FROM audit_log WHERE event_type='FILL'"
+        ).fetchone())
+        assert datetime.fromisoformat(event["broker_response_received_at_utc"]) == received
+    finally:
+        reopened.close()
 
 
 @pytest.mark.asyncio

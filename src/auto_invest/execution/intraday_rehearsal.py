@@ -11,6 +11,7 @@ from tempfile import TemporaryDirectory
 
 import httpx
 
+from auto_invest.analytics.intraday_runtime import COMMISSION
 from auto_invest.broker.client import AsyncTokenBucket, CircuitBreaker, ResilientClient
 from auto_invest.config.caps import SizingCaps
 from auto_invest.config.whitelist import Whitelist
@@ -98,7 +99,11 @@ class Rehearsal:
             qty = int(order["ft_ccld_qty"])
             sign = 1 if order["sll_buy_dvsn_cd"] == "02" else -1
             positions[order["pdno"]] = positions.get(order["pdno"], 0) + sign * qty
-            cash -= sign * qty * Decimal(order["ft_ccld_unpr3"])
+            notional = qty * Decimal(order["ft_ccld_unpr3"])
+            # Rebuild from cumulative executions, including modeled fees on
+            # both sides. Repeated observations and restarts must not charge
+            # a partial fill twice. This is not an actual KIS fee schedule.
+            cash -= sign * notional + notional * Decimal(str(COMMISSION))
             if int(order["nccs_qty"]) and not order.get("prcs_stat_name"):
                 open_ids.append(number)
         positions = {s: q for s, q in positions.items() if q}

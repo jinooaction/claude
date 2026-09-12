@@ -191,7 +191,10 @@ async def test_negative_net_assets_and_zero_categories_are_preserved():
 
 
 @pytest.mark.asyncio
-async def test_operator_command_reads_both_reports_and_keeps_amounts_private(monkeypatch):
+@pytest.mark.parametrize("include_transactions", [False, True])
+async def test_operator_command_reads_both_reports_and_keeps_amounts_private(
+    monkeypatch, include_transactions,
+):
     path = Path(__file__).resolve().parents[2] / "scripts/intraday_balance_check.py"
     spec = importlib.util.spec_from_file_location("asset_balance_cli", path)
     module = importlib.util.module_from_spec(spec)
@@ -200,7 +203,14 @@ async def test_operator_command_reads_both_reports_and_keeps_amounts_private(mon
 
     def handle(request):
         requests.append(request)
-        if request.url.path == ASSETS_URL:
+        if request.url.path.endswith("inquire-period-trans"):
+            assert request.url.params["OVRS_EXCG_CD"] == ""
+            body = dict(rt_cd="0", output1=[dict(
+                trad_dt="20260908", sttl_dt="20260909", pdno="SPY", crcy_cd="USD",
+                sll_buy_dvsn_cd="02", ccld_qty="1", tr_frcr_amt2="601.37",
+                frcr_excc_amt_1="602", dmst_frcr_fee1="0.63", frcr_fee1="0",
+            )], output2=[], ctx_area_fk100="", ctx_area_nk100="")
+        elif request.url.path == ASSETS_URL:
             body = payload()
         else:
             body = dict(rt_cd="0", output1=[], output2=[dict(
@@ -220,14 +230,21 @@ async def test_operator_command_reads_both_reports_and_keeps_amounts_private(mon
     for key, value in dict(KIS_APP_KEY="PRIVATE_KEY", KIS_APP_SECRET="PRIVATE_SECRET",
                            KIS_ACCOUNT_NO="1234567801").items():
         monkeypatch.setenv(key, value)
-    result, code = await module.run()
-    assert code == 0 and len(requests) == 5
+    result, code = await module.run(**(dict(
+        transactions_from="20260901", transactions_through="20260910",
+    ) if include_transactions else {}))
+    assert code == 0 and len(requests) == (6 if include_transactions else 5)
     assert all(r.method == "GET" for r in requests)
-    assert [r.url.path.rsplit("/", 1)[-1] for r in requests] == [
+    assert [r.url.path.rsplit("/", 1)[-1] for r in requests[:5]] == [
         "inquire-present-balance", "inquire-paymt-stdr-balance",
         "inquire-account-balance", "inquire-account-balance", "inquire-present-balance",
     ]
+    if include_transactions:
+        assert result["transactions"]["row_count"] == 1
+        assert result["transactions"]["execution_parity_verified"] is False
+        assert result["transactions"]["settlement_audit"]["status"] == "MATCH"
+        assert requests[-1].url.params["ERLM_STRT_DT"] == "20260901"
     assert result["account_assets"]["status"] == "MATCH"
     assert result["nav_verified"] is False
-    for private in ("PRIVATE", "601.37", "12345678", "110"):
+    for private in ("PRIVATE", "601.37", "12345678", "110", "SPY", "0.63"):
         assert private not in json.dumps(result)
