@@ -69,28 +69,32 @@ async def _query(*, transactions_from=None, transactions_through=None, execution
         )
         if history is not None:
             client = history.client(client)
+        current_account = domestic_account = account_assets = None
+
+        async def intermediate_reads():
+            nonlocal current_account, domestic_account, account_assets
+            if history is not None:
+                current_account = public_contract_result(await observe_account(
+                    client, account=os.environ["KIS_ACCOUNT_NO"], access_token=token.access_token,
+                    app_key=os.environ["KIS_APP_KEY"], app_secret=os.environ["KIS_APP_SECRET"],
+                ))
+                domestic_account = public_domestic_account(await observe_domestic_account(
+                    client, account=os.environ["KIS_ACCOUNT_NO"], access_token=token.access_token,
+                    app_key=os.environ["KIS_APP_KEY"], app_secret=os.environ["KIS_APP_SECRET"],
+                ))
+            account_assets = await observe_account_assets(
+                client, account=os.environ["KIS_ACCOUNT_NO"], access_token=token.access_token,
+                app_key=os.environ["KIS_APP_KEY"], app_secret=os.environ["KIS_APP_SECRET"],
+            )
+
         snapshot = await observe_balance_evidence(
             client,
             account=os.environ["KIS_ACCOUNT_NO"],
             access_token=token.access_token,
             app_key=os.environ["KIS_APP_KEY"],
             app_secret=os.environ["KIS_APP_SECRET"],
+            between_current_reads=intermediate_reads,
         )
-        account_assets = await observe_account_assets(
-            client, account=os.environ["KIS_ACCOUNT_NO"], access_token=token.access_token,
-            app_key=os.environ["KIS_APP_KEY"], app_secret=os.environ["KIS_APP_SECRET"],
-        )
-        current_account = None
-        domestic_account = None
-        if history is not None:
-            current_account = public_contract_result(await observe_account(
-                client, account=os.environ["KIS_ACCOUNT_NO"], access_token=token.access_token,
-                app_key=os.environ["KIS_APP_KEY"], app_secret=os.environ["KIS_APP_SECRET"],
-            ))
-            domestic_account = public_domestic_account(await observe_domestic_account(
-                client, account=os.environ["KIS_ACCOUNT_NO"], access_token=token.access_token,
-                app_key=os.environ["KIS_APP_KEY"], app_secret=os.environ["KIS_APP_SECRET"],
-            ))
         transactions = None
         if include_transactions:
             transaction_snapshot = await observe_transactions(

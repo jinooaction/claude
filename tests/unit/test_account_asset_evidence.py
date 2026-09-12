@@ -234,7 +234,10 @@ async def test_operator_command_reads_both_reports_and_keeps_amounts_private(
     ) if include_transactions else {}))
     assert code == 0 and len(requests) == (6 if include_transactions else 5)
     assert all(r.method == "GET" for r in requests)
-    assert [r.url.path for r in requests[3:5]] == [ASSETS_URL, ASSETS_URL]
+    assert [r.url.path.rsplit("/", 1)[-1] for r in requests[:5]] == [
+        "inquire-present-balance", "inquire-paymt-stdr-balance",
+        "inquire-account-balance", "inquire-account-balance", "inquire-present-balance",
+    ]
     if include_transactions:
         assert result["transactions"]["row_count"] == 1
         assert result["transactions"]["execution_parity_verified"] is False
