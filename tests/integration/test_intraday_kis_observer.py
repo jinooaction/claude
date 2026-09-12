@@ -12,11 +12,12 @@ from auto_invest.execution.intraday_observation import KISExecutionObserver, Obs
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("unsettled", [False, True])
 @pytest.mark.parametrize("reported_value,reported_quantity", [
     ("120", "3"), ("0", "3"), (None, "3"), ("120", "0.5"),
 ])
 async def test_cash_baseline_reaches_normal_account_reader_without_promoting_account(
-    tmp_path, reported_value, reported_quantity,
+    tmp_path, reported_value, reported_quantity, unsettled,
 ):
     calls = []
 
@@ -46,9 +47,14 @@ async def test_cash_baseline_reaches_normal_account_reader_without_promoting_acc
                     "dncl_amt", "cma_evlu_amt", "tot_loan_amt", "ustl_buy_amt_smtl",
                     "ustl_sll_amt_smtl"), "0"))
             data["output3"]["tot_dncl_amt"] = "73145"
+            if unsettled:
+                data["output2"][0].update(frcr_dncl_amt_2="401.37", frcr_buy_mgn_amt="200")
+                data["output3"].update(ustl_buy_amt_smtl="100000", ustl_sll_amt_smtl="25000")
         elif endpoint == "foreign-margin":
             row = dict(dict.fromkeys(CASH_FIELDS, "0"), crcy_cd="USD",
                        frcr_dncl_amt1="601.37", frcr_gnrl_ord_psbl_amt="601.37")
+            if unsettled:
+                row.update(ustl_buy_amt="100", ustl_sll_amt="25", frcr_mgn_amt="200")
             data = dict(output=[dict(row) for _ in range(10)])
         else:
             return account_response(request)
@@ -58,10 +64,18 @@ async def test_cash_baseline_reaches_normal_account_reader_without_promoting_acc
         observer = KISExecutionObserver(authority(http), lambda: {},
             token_cache=tmp_path / "token.json", now=lambda: datetime(2026, 9, 12, tzinfo=UTC))
         result = await observer._read()
-    assert result["reported_cash_baseline"]["cash"] == "601.37"
-    assert result["reported_cash_baseline"]["status"] == "CALCULATED"
-    assert result["reported_cash_valuation"]["amount_usd"] == "674.515000000000"
-    assert result["reported_cash_valuation"]["balances"] == {"KRW": "73145", "USD": "601.37"}
+    baseline = result["reported_cash_baseline"]
+    assert baseline["status"] == ("UNAVAILABLE" if unsettled else "CALCULATED")
+    assert baseline["cash"] == (None if unsettled else "601.37")
+    assert baseline["settlement_cash"]["cash"] == ("526.37" if unsettled else "601.37")
+    assert result["reported_cash_valuation"]["amount_usd"] == (
+        "599.515000000000" if unsettled else "674.515000000000")
+    assert result["reported_cash_valuation"]["balances"] == {
+        "KRW": "73145", "USD": "526.37" if unsettled else "601.37"}
+    if unsettled:
+        assert result["reported_cash_valuation"]["fees_inclusion_verified"] is False
+        assert result["reported_cash_valuation"]["scope"] == (
+            "RECONCILED_KRW_USD_REPORTED_SETTLEMENT_CASH")
     assert result["full_account_scope_verified"] is False
     assert result["cash_aggregation_verified"] is False
     assert result["nav"] is None and result["nav_verified"] is False

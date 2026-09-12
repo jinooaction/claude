@@ -3,6 +3,7 @@
 import asyncio
 import re
 from datetime import UTC, datetime
+from decimal import Decimal, localcontext
 
 from auto_invest.broker.account_source_profile import CASH_FIELDS, _number
 from auto_invest.broker.intraday_account import AccountReadError
@@ -141,6 +142,98 @@ def normalize_cash_baseline(records, *, observed_at):
     return result
 
 
+def _settlement_current(data):
+    usd = []
+    for row in _rows(data, "output2"):
+        code = row.get("crcy_cd")
+        _require(isinstance(code, str) and re.fullmatch(r"[A-Z]{3}", code.strip()),
+                 "SETTLEMENT_CURRENCY_INVALID")
+        values = tuple(_value(row, field) for field in (
+            "frcr_dncl_amt_2", "frcr_buy_mgn_amt", "frcr_etc_mgna",
+        ))
+        if code.strip() == "USD":
+            usd.append(values)
+        else:
+            _require(all(value == 0 for value in values), "SETTLEMENT_OTHER_CURRENCY_PRESENT")
+    _require(len(usd) == 1, "SETTLEMENT_USD_ROW_NOT_UNIQUE")
+    summaries = _rows(data, "output3")
+    _require(len(summaries) == 1, "SETTLEMENT_SUMMARY_NOT_UNIQUE")
+    summary = summaries[0]
+    _require(_value(summary, "cma_evlu_amt") == _value(summary, "tot_loan_amt") == 0,
+             "SETTLEMENT_OTHER_ASSET_OR_LIABILITY_PRESENT")
+    numbers = tuple(_number(summary.get(field)) for field in (
+        "dncl_amt", "tot_dncl_amt", "ustl_buy_amt_smtl", "ustl_sll_amt_smtl",
+    ))
+    _require(None not in numbers, "SETTLEMENT_SUMMARY_AMOUNT_INVALID")
+    _require(all(value >= 0 for value in numbers[2:]), "SETTLEMENT_SUMMARY_AMOUNT_INVALID")
+    return usd[0], numbers
+
+
+def normalize_usd_settlement_cash(records, *, observed_at):
+    """Reported deposit + unsettled sales - purchases, under reconciled cash anchors.
+
+    Reservation affects spendable cash, not net assets a second time. This is
+    the report's settlement-leg arithmetic, not proof of fee inclusion, account
+    coverage, or that a broker uses this presentation in every account state.
+    """
+    result = dict(status="UNAVAILABLE", cash=None, full_account_verified=False,
+                  scope="RECONCILED_USD_REPORTED_SETTLEMENT_LEGS", live_eligible=False)
+    try:
+        _require(isinstance(records, list) and len(records) == 3, "SETTLEMENT_BATCH_SHAPE")
+        clock, previous = _stamp(observed_at), None
+        for record, endpoint in zip(records, (CURRENT, MARGIN, CURRENT), strict=True):
+            _require(isinstance(record, dict) and record.get("endpoint") == endpoint,
+                     "SETTLEMENT_REQUEST_SCOPE")
+            continuation = record.get("continuation")
+            _require(isinstance(continuation, str) and continuation in {"", "D", "E"},
+                     "SETTLEMENT_INCOMPLETE_REPORT")
+            start, end = _stamp(record.get("started_at")), _stamp(record.get("received_at"))
+            _require(start <= end <= clock and (previous is None or previous <= start)
+                     and 0 <= (clock - start).total_seconds() <= 30, "SETTLEMENT_TIME_INVALID")
+            previous = end
+            data = record.get("data")
+            _require(record.get("http_status") == 200 and isinstance(data, dict)
+                     and data.get("rt_cd") == "0", "SETTLEMENT_BROKER_RESPONSE_INVALID")
+        before, after = records[0]["data"], records[-1]["data"]
+        current, summary = _settlement_current(before)
+        _require((current, summary) == _settlement_current(after), "SETTLEMENT_REPORT_CHANGED")
+        with localcontext() as context:
+            context.prec = 80
+            available, buy_reserve, other_reserve = current
+            reserve = buy_reserve + other_reserve
+            deposit = available + reserve
+            vectors, count = set(), 0
+            for row in _rows(records[1]["data"], "output"):
+                code = row.get("crcy_cd")
+                _require(isinstance(code, str) and (
+                    not code.strip() or re.fullmatch(r"[A-Z]{3}", code.strip())),
+                    "SETTLEMENT_CURRENCY_INVALID")
+                values = tuple(_value(row, field) for field in CASH_FIELDS)
+                if code.strip() == "USD":
+                    count += 1
+                    _require(values[0] == deposit and values[4] == reserve,
+                             "SETTLEMENT_CASH_ANCHOR_DIFFERS")
+                    _require(values[3] == 0, "SETTLEMENT_RECEIVABLE_PRESENT")
+                    vectors.add(values)
+                else:
+                    _require(all(value == 0 for value in values),
+                             "SETTLEMENT_OTHER_CURRENCY_PRESENT")
+            _require(count > 0 and len(vectors) == 1, "SETTLEMENT_COMPONENTS_NOT_COMMON")
+            values = vectors.pop()
+            cash = values[0] + values[2] - values[1]
+            _require(abs(cash) < Decimal("1e18"), "SETTLEMENT_AMOUNT_OUT_OF_RANGE")
+        result.update(status="CALCULATED", cash=str(cash), usd_margin_row_count=count,
+                      reported_components=dict(zip(CASH_FIELDS, map(str, values), strict=True)),
+                      available_usd=str(available), reserved_usd=str(reserve),
+                      observation_started_at=_stamp(records[0]["started_at"]).isoformat(),
+                      observation_completed_at=_stamp(records[-1]["received_at"]).isoformat(),
+                      fees_inclusion_verified=False)
+        result.update(_matched_cash_metadata(before, after))
+    except BaselineUnavailable as error:
+        result["reason"] = str(error)
+    return result
+
+
 async def observe_cash_baseline(client, *, access_token, app_key, app_secret, account,
                                 now=lambda: datetime.now(UTC)):
     """Own the fixed GET sequence; no operator-supplied reports or approval flags."""
@@ -182,4 +275,7 @@ async def _collect_cash_baseline(client, *, access_token, app_key, app_secret, a
         records.append(dict(endpoint=endpoint, started_at=start.isoformat(),
                             received_at=_stamp(now()).isoformat(), http_status=response.status_code,
                             continuation=response.headers.get("tr_cont", "").strip(), data=data))
-    return normalize_cash_baseline(records, observed_at=now())
+    clock = now()
+    result = normalize_cash_baseline(records, observed_at=clock)
+    result["settlement_cash"] = normalize_usd_settlement_cash(records, observed_at=clock)
+    return result

@@ -18,8 +18,12 @@ def normalize_reported_cash(baseline, domestic, *, observed_at):
                   scope="RECONCILED_KRW_USD_ZERO_ADJUSTMENT_CASH",
                   full_account_verified=False, live_eligible=False)
     try:
+        if isinstance(baseline, dict) and baseline.get("status") != "CALCULATED":
+            baseline = baseline.get("settlement_cash")
         _require(isinstance(baseline, dict) and baseline.get("status") == "CALCULATED"
-                 and baseline.get("scope") == "REPORTED_ZERO_ADJUSTMENT_USD_BASELINE",
+                 and isinstance(baseline.get("scope"), str)
+                 and baseline.get("scope") in {"REPORTED_ZERO_ADJUSTMENT_USD_BASELINE",
+                                                "RECONCILED_USD_REPORTED_SETTLEMENT_LEGS"},
                  "CASH_USD_BASELINE_UNAVAILABLE")
         _require(isinstance(domestic, dict) and domestic.get("currency") == "KRW"
                  and domestic.get("reporting_basis") == "KIS_DOMESTIC_CURRENT_BALANCE"
@@ -53,7 +57,10 @@ def normalize_reported_cash(baseline, domestic, *, observed_at):
         _require(cash == _number(baseline.get("reported_krw_total_deposit")),
                  "CASH_KRW_REPORTS_DIFFER")
         usd, rate = _number(baseline.get("cash")), _number(baseline.get("reported_usd_krw_rate"))
-        _require(usd is not None and usd >= 0, "CASH_USD_AMOUNT_INVALID")
+        settlement = baseline["scope"] == "RECONCILED_USD_REPORTED_SETTLEMENT_LEGS"
+        _require(not settlement or isinstance(baseline.get("reported_components"), dict),
+                 "CASH_SETTLEMENT_COMPONENTS_INVALID")
+        _require(usd is not None and (settlement or usd >= 0), "CASH_USD_AMOUNT_INVALID")
         _require(rate is not None and rate > 0, "CASH_REPORTED_FX_UNAVAILABLE")
         with localcontext() as context:
             context.prec = 80
@@ -67,6 +74,10 @@ def normalize_reported_cash(baseline, domestic, *, observed_at):
                           executable_quote=False),
                       observation_started_at=start.isoformat(),
                       observation_completed_at=domestic_end.isoformat())
+        if settlement:
+            result.update(scope="RECONCILED_KRW_USD_REPORTED_SETTLEMENT_CASH",
+                          usd_settlement_components=dict(baseline["reported_components"]),
+                          fees_inclusion_verified=False)
     except BaselineUnavailable as error:
         result["reason"] = str(error)
     return result
