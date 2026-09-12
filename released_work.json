@@ -1,5 +1,5 @@
 {
-  "commit": "aeace15519b25c81a18aef73aec26c75bcf20525",
+  "commit": "ec493ce054b5465b7d79849a8c90634075c2edf2",
   "overall_status": "OK",
   "released_work": [
     {
@@ -684,7 +684,8 @@
     "175-pead-program-gate",
     "177-intraday-paper-challenger",
     "178-flutter-operator-mobile",
-    "185-intraday-archive-review"
+    "185-intraday-archive-review",
+    "186-account-source-collection"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -911,11 +912,7 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "183-mobile-capital-strategy-dashboard"
-    },
-    {
-      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "186-account-source-collection"
     }
   ],
-  "timestamp_utc": "2026-09-12T11:18:05.386609Z"
+  "timestamp_utc": "2026-09-12T11:21:52.995886Z"
 }
