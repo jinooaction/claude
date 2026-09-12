@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal, localcontext
 from pathlib import Path
+from time import monotonic
 from types import MappingProxyType
 
 from auto_invest.config.enums import OrderType, Side, StrategyStage
@@ -205,6 +206,9 @@ class IntradayExecutor:
         self._entry = True
         self._last_view_at = None
         self._last_mark_times = ()
+        self._cancel_orders = None
+        self._cancel_read_at = None
+        self._cancel_read_clock = None
         self.prefix = "intraday:" + fingerprint + ":"
         database = self.conn.execute("PRAGMA database_list").fetchone()[2]
         if not database:
@@ -374,6 +378,9 @@ class IntradayExecutor:
         return result
 
     async def _refresh(self, required, now):
+        self._cancel_orders = None
+        self._cancel_read_at = None
+        self._cancel_read_clock = None
         r = self.router
         if self.refresh_auth is not None:
             await self.refresh_auth()
@@ -391,6 +398,8 @@ class IntradayExecutor:
                 .astimezone(NY)
                 .strftime("%Y%m%d"),
             )
+        reports = []
+        read_at, read_clock = self.now(), monotonic()
         result = await sync_fills(
             self.conn,
             r.broker,
@@ -402,9 +411,11 @@ class IntradayExecutor:
             strict_contract=True,
             order_start_date_yyyymmdd=first_date,
             order_end_date_yyyymmdd=now.astimezone(NY).strftime("%Y%m%d"),
+            execution_snapshot=reports.extend,
         )
         if result.error or result.warnings:
             raise ValueError("FILL_SYNC_UNCERTAIN")
+        self._capture_cancel_orders(reports, read_at, read_clock)
         view = await self.observe()
         # Existing-order cancellation needs fresh reconciled account data, not
         # a new valuation price. Pricing is checked before any new order or P&L.
@@ -436,6 +447,52 @@ class IntradayExecutor:
         if any(not row["rule_id"].startswith(self.prefix) for row in rows):
             raise ValueError("OTHER_STRATEGY_OPEN_ORDER")
         return view, rows
+
+    def _capture_cancel_orders(self, reports, read_at, read_clock):
+        """Order-only evidence never establishes account cash, NAV or holdings."""
+        by_id = {report.kis_order_id: report for report in reports}
+        if len(by_id) != len(reports):
+            return
+        rows = [dict(row) for row in self.conn.execute(
+            "SELECT o.*,r.order_exchange FROM orders o LEFT JOIN order_routing r "
+            "USING(correlation_id) WHERE substr(o.rule_id,1,?)=?",
+            (len(self.prefix), self.prefix),
+        ) if row["state"] in OPEN]
+        if not rows:
+            return
+        for row in rows:
+            report = by_id.get(row["kis_order_id"])
+            filled = self.conn.execute(
+                "SELECT COALESCE(SUM(qty),0) FROM fills WHERE order_correlation_id=?",
+                (row["correlation_id"],),
+            ).fetchone()[0]
+            if (row["state"] not in {"SUBMITTED", "PARTIALLY_FILLED"}
+                    or report is None or report.side is None or report.terminal
+                    or report.symbol != row["symbol"] or report.side.value != row["side"]
+                    or report.market != (row["order_exchange"] or EXCHANGES.get(row["symbol"]))
+                    or report.reported_order_quantity != row["qty"]
+                    or report.filled_qty != filled or report.unfilled_qty != row["qty"] - filled
+                    or not report.unfilled_qty):
+                return
+            row["reported_filled_quantity"] = report.filled_qty
+            row["reported_remaining_quantity"] = report.unfilled_qty
+        self._cancel_orders = rows
+        self._cancel_read_at, self._cancel_read_clock = read_at, read_clock
+
+    def _cancel_only_guard(self):
+        if refusal := self.guard():
+            return refusal
+        now = self.now()
+        day = str(now.astimezone(NY).date())
+        if (not CALENDAR.is_session(day)
+                or not CALENDAR.session_open(day).to_pydatetime() <= now
+                < CALENDAR.session_close(day).to_pydatetime()):
+            return "MARKET_CLOSED"
+        if (self._cancel_read_at is None or self._cancel_read_clock is None
+                or not 0 <= (now - self._cancel_read_at).total_seconds() <= 30
+                or not 0 <= monotonic() - self._cancel_read_clock <= 30):
+            return "STALE_ORDER_OBSERVATION"
+        return None
 
     async def on_bars(self, candidate, *, provider, bars):
         """Compile the preregistered strategy from bars and actual fill ownership."""
@@ -555,7 +612,26 @@ class IntradayExecutor:
             raise ValueError("STALE_SIGNAL")
         if d is not None and not exit_only and d.bar_end < opening + timedelta(minutes=5):
             raise ValueError("INCOMPLETE_SESSION_SIGNAL")
-        view, orders = await self._refresh(set(d.targets) if d is not None else set(), now)
+        try:
+            view, orders = await self._refresh(set(d.targets) if d is not None else set(), now)
+        except ValueError as exc:
+            if (d is not None or str(exc) not in {"ACCOUNT_SCOPE_UNVERIFIED",
+                    "ACCOUNT_CASH_UNVERIFIED", "ACCOUNT_NAV_UNVERIFIED"}
+                    or self._cancel_orders is None):
+                raise
+            if refusal := self._cancel_only_guard():
+                raise ValueError(refusal) from None
+            self._event("system", "ORDER_ONLY_RECONCILED", reason=str(exc),
+                        observation_started_at=self._cancel_read_at.isoformat(),
+                        orders=[{key: row[key] for key in (
+                            "correlation_id", "kis_order_id", "symbol", "side", "qty",
+                            "order_exchange",
+                            "reported_filled_quantity", "reported_remaining_quantity",
+                        )} for row in self._cancel_orders])
+            result = await self._manage_pending(self._cancel_orders, None, exit_only,
+                                                orders_only=True)
+            result.setdefault("reason", str(exc))
+            return result
         owned = self._owned()
         if d is None and not owned and not orders:
             if self.drain_requested():
@@ -798,7 +874,7 @@ class IntradayExecutor:
             actions.append(dict(kind=outcome.state, symbol=symbol))
         return dict(status="EXIT_ONLY" if exit_only else "PROCESSED", actions=actions)
 
-    async def _manage_pending(self, orders, targets, exit_only):
+    async def _manage_pending(self, orders, targets, exit_only, *, orders_only=False):
         """Only manage already reconciled orders; never calculate a new price."""
         actions, owned = [], self._owned()
         for order in orders:
@@ -819,14 +895,16 @@ class IntradayExecutor:
                     )
                 )
             ):
-                if refusal := self._write_guard(entry=False, cancellation=True):
+                write_guard = (self._cancel_only_guard if orders_only
+                               else lambda: self._write_guard(entry=False, cancellation=True))
+                if refusal := write_guard():
                     return dict(status="HALTED", reason=refusal, actions=actions)
                 phase = await request_cancellation(
                     self.router.execution_authority,
                     correlation_id=order["correlation_id"],
                     market=order["order_exchange"] or EXCHANGES[order["symbol"]],
                     reason="intraday_exit" if exit_only else "intraday_target_or_ttl",
-                    before_write_guard=lambda: self._write_guard(entry=False, cancellation=True),
+                    before_write_guard=write_guard,
                 )
                 actions.append(dict(kind="CANCEL_REQUEST", result=phase))
         return dict(status="WAIT_BROKER", actions=actions)

@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from decimal import Decimal, localcontext
@@ -632,6 +632,7 @@ async def sync_fills(
     order_start_date_yyyymmdd: str | None = None,
     order_end_date_yyyymmdd: str | None = None,
     strict_contract: bool = False,
+    execution_snapshot: Callable[[tuple[BrokerExecution, ...]], None] | None = None,
 ) -> FillSyncResult:
     """라이브 열린 주문의 체결을 브로커에서 당겨와 장부에 반영한다(읽기-기반 적재).
 
@@ -718,6 +719,9 @@ async def sync_fills(
 
     for w in plan.warnings:
         audit.append(conn, ErrorPayload(where="fill_sync", message=w))
+
+    if execution_snapshot is not None and not recovery_plan.warnings and not plan.warnings:
+        execution_snapshot(tuple(executions))
 
     return FillSyncResult(
         polled=True,
