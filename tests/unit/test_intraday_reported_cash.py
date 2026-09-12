@@ -39,6 +39,14 @@ def test_reconciled_cash_preserves_each_currency_and_declares_fx_policy():
     assert (baseline, domestic) == before
 
 
+def test_current_cash_frame_can_enclose_domestic_read_and_preserves_latest_receipt():
+    baseline, domestic = inputs()
+    baseline["observation_completed_at"] = NOW.isoformat()
+    result = normalize_reported_cash(baseline, domestic, observed_at=NOW)
+    assert result["status"] == "CALCULATED"
+    assert result["observation_completed_at"] == NOW.isoformat()
+
+
 @pytest.mark.parametrize("cash,expected", [("1", "601.703333333333"),
                                           ("-1", "601.036666666666")])
 def test_signed_cash_conversion_rounds_down_independently_of_ambient_precision(cash, expected):

@@ -34,7 +34,9 @@ def normalize_reported_cash(baseline, domestic, *, observed_at):
         domestic_start, domestic_end = (_stamp(domestic.get(key)) for key in
                                         ("observation_started_at", "observation_completed_at"))
         clock = _stamp(observed_at)
-        _require(start <= end <= domestic_start <= domestic_end <= clock
+        sequential = start <= end <= domestic_start <= domestic_end <= clock
+        enclosed = start <= domestic_start <= domestic_end <= end <= clock
+        _require((sequential or enclosed)
                  and 0 <= (clock - start).total_seconds() <= 30, "CASH_REPORT_INTERVAL_INVALID")
         summary = domestic.get("summary")
         _require(isinstance(summary, dict), "CASH_DOMESTIC_SUMMARY_INVALID")
@@ -73,7 +75,7 @@ def normalize_reported_cash(baseline, domestic, *, observed_at):
                           basis="KIS_FIRST_POSTED_RATE", rounding="FLOOR_12_DECIMALS",
                           executable_quote=False),
                       observation_started_at=start.isoformat(),
-                      observation_completed_at=domestic_end.isoformat())
+                      observation_completed_at=max(end, domestic_end).isoformat())
         if settlement:
             result.update(scope="RECONCILED_KRW_USD_REPORTED_SETTLEMENT_CASH",
                           usd_settlement_components=dict(baseline["reported_components"]),

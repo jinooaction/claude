@@ -1,9 +1,11 @@
-from datetime import UTC, datetime
+import asyncio
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 import httpx
 import pytest
 
+from auto_invest.broker.account_asset_evidence import SUMMARY_FIELDS, TABLE_FIELDS
 from auto_invest.broker.account_source_profile import CASH_FIELDS
 from auto_invest.broker.client import AsyncTokenBucket, CircuitBreaker, ResilientClient
 from auto_invest.broker.domestic_account import SUMMARY_FIELDS as DOMESTIC_SUMMARY_FIELDS
@@ -20,11 +22,14 @@ async def test_cash_baseline_reaches_normal_account_reader_without_promoting_acc
     tmp_path, reported_value, reported_quantity, unsettled,
 ):
     calls = []
+    clock = datetime(2026, 9, 12, tzinfo=UTC)
 
     def handle(request):
+        nonlocal clock
         calls.append(request)
         if request.url.path == "/oauth2/tokenP":
             return httpx.Response(200, json=dict(access_token="fresh", expires_in=86400))
+        clock += timedelta(seconds=1)
         assert request.headers["authorization"] == "Bearer fresh"
         assert request.url.params["CANO"] == "12345678"
         assert request.url.params["ACNT_PRDT_CD"] == "01"
@@ -67,7 +72,7 @@ async def test_cash_baseline_reaches_normal_account_reader_without_promoting_acc
 
     async with httpx.AsyncClient(base_url=REST_URL, transport=httpx.MockTransport(handle)) as http:
         observer = KISExecutionObserver(authority(http), lambda: {},
-            token_cache=tmp_path / "token.json", now=lambda: datetime(2026, 9, 12, tzinfo=UTC))
+            token_cache=tmp_path / "token.json", now=lambda: clock)
         result = await observer._read()
     baseline = result["reported_cash_baseline"]
     assert baseline["status"] == ("UNAVAILABLE" if unsettled else "CALCULATED")
@@ -92,12 +97,24 @@ async def test_cash_baseline_reaches_normal_account_reader_without_promoting_acc
         assert result["reported_asset_values"] == {}
     else:
         assert result["reported_asset_values"]["ORANY"] == dict(quantity=3,
-            amount_usd=reported_value, observation_started_at=result["observation_started_at"],
-            observation_completed_at=result["observation_completed_at"])
+            amount_usd=reported_value,
+            observation_started_at=(clock - timedelta(seconds=8)).isoformat(),
+            observation_completed_at=(clock - timedelta(seconds=4)).isoformat())
     domestic = result["reported_domestic_account"]
     assert domestic["positions"] == {} and domestic["pagination_complete"]
     assert domestic["currency"] == "KRW" and not domestic["full_account_verified"]
-    assert [request.method for request in calls] == ["POST"] + ["GET"] * 8
+    assert [request.method for request in calls] == ["POST"] + ["GET"] * 9
+    assert [r.url.path.rsplit("/", 1)[1] for r in calls[1:]] == [
+        "inquire-present-balance", "inquire-balance", "inquire-nccs", "inquire-psamount",
+        "foreign-margin", "inquire-balance", "inquire-account-balance",
+        "inquire-account-balance", "inquire-present-balance",
+    ]
+    assert result["account_frame"]["request_count"] == 9
+    assert result["observation_started_at"] == (clock - timedelta(seconds=9)).isoformat()
+    assert result["observation_completed_at"] == clock.isoformat()
+    assert result["reported_cash_valuation"]["observation_completed_at"] == clock.isoformat()
+    assert len(result["account_frame"]["asset_reports"]) == 2
+    assert result["reported_account_assets"]["reporting_basis"] == "SETTLEMENT_ACCOUNT_ASSET_TABLE"
 
 
 def authority(http):
@@ -111,6 +128,10 @@ def authority(http):
 
 
 def account_response(request):
+    if request.url.path.endswith("/inquire-account-balance"):
+        return httpx.Response(200, headers={"tr_cont": "D"}, json=dict(rt_cd="0",
+            output1=[dict.fromkeys(TABLE_FIELDS + ("whol_weit_rt",), "0") for _ in range(20)],
+            output2=dict.fromkeys(SUMMARY_FIELDS, "0")))
     if request.url.path == "/uapi/domestic-stock/v1/trading/inquire-balance":
         return httpx.Response(200, headers={"tr_cont": "D"}, json=dict(rt_cd="0", output1=[],
             output2=[dict.fromkeys(DOMESTIC_SUMMARY_FIELDS, "0")],
@@ -146,7 +167,7 @@ async def test_real_authentication_and_reader_share_token_but_do_not_approve_nav
             with pytest.raises(ObservationError, match="^ACCOUNT_SCOPE_UNVERIFIED$"):
                 await observer()
             assert owner.access_token == "fresh"
-    assert [r.method for r in calls] == ["POST"] + ["GET"] * 16
+    assert [r.method for r in calls] == ["POST"] + ["GET"] * 18
     assert all(r.method == "GET" or r.url.path == "/oauth2/tokenP" for r in calls)
     assert (tmp_path / "token.json").stat().st_mode & 0o777 == 0o600
 
@@ -236,3 +257,135 @@ async def test_domestic_failure_never_returns_a_partial_account_as_complete(tmp_
             await observer()
     assert calls[-1].url.path == "/uapi/domestic-stock/v1/trading/inquire-balance"
     assert all(request.method == "GET" or request.url.path == "/oauth2/tokenP" for request in calls)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failed_request", range(1, 10))
+async def test_each_frame_request_failure_prevents_partial_account_return(tmp_path, failed_request):
+    reads = 0
+
+    def handle(request):
+        nonlocal reads
+        if request.url.path == "/oauth2/tokenP":
+            return httpx.Response(200, json=dict(access_token="fresh", expires_in=86400))
+        reads += 1
+        if reads == failed_request:
+            return httpx.Response(403, json=dict(msg1="PRIVATE_FRAME_ERROR"))
+        return account_response(request)
+
+    async with httpx.AsyncClient(base_url=REST_URL, transport=httpx.MockTransport(handle)) as http:
+        observer = KISExecutionObserver(authority(http), lambda: {}, token_cache=tmp_path / "token")
+        with pytest.raises(ObservationError, match="^ACCOUNT_INPUT_UNAVAILABLE$"):
+            await observer()
+    assert reads == failed_request
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("fault", ["reverse", "stale", "account", "credentials", "redirect"])
+async def test_frame_stops_at_first_changed_connection_or_invalid_clock(tmp_path, fault):
+    reads = 0
+    clock = datetime(2026, 9, 12, tzinfo=UTC)
+
+    def handle(request):
+        nonlocal reads, clock
+        if request.url.path == "/oauth2/tokenP":
+            return httpx.Response(200, json=dict(access_token="fresh", expires_in=86400))
+        reads += 1
+        if reads == 4:
+            if fault in {"reverse", "stale"}:
+                clock += timedelta(seconds=-1 if fault == "reverse" else 31)
+            elif fault == "account":
+                owner.account_no = "8765432101"
+            elif fault == "credentials":
+                owner.app_secret = "changed"
+            else:
+                http.follow_redirects = True
+        return account_response(request)
+
+    async with httpx.AsyncClient(base_url=REST_URL, transport=httpx.MockTransport(handle)) as http:
+        owner = authority(http)
+        observer = KISExecutionObserver(owner, lambda: {}, token_cache=tmp_path / "token",
+                                       now=lambda: clock)
+        with pytest.raises(ObservationError, match="^ACCOUNT_INPUT_UNAVAILABLE$"):
+            await observer()
+    assert reads == 4
+
+
+@pytest.mark.asyncio
+async def test_cancelling_frame_cancels_pending_transport_and_prevents_further_reads(tmp_path):
+    entered, cancelled = asyncio.Event(), asyncio.Event()
+    reads = 0
+
+    async def handle(request):
+        nonlocal reads
+        if request.url.path == "/oauth2/tokenP":
+            return httpx.Response(200, json=dict(access_token="fresh", expires_in=86400))
+        reads += 1
+        if reads == 4:
+            entered.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                cancelled.set()
+        return account_response(request)
+
+    async with httpx.AsyncClient(base_url=REST_URL, transport=httpx.MockTransport(handle)) as http:
+        observer = KISExecutionObserver(authority(http), lambda: {}, token_cache=tmp_path / "token")
+        task = asyncio.create_task(observer._read())
+        await asyncio.wait_for(entered.wait(), 2)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert cancelled.is_set() and reads == 4
+
+
+@pytest.mark.asyncio
+async def test_wall_clock_timeout_cancels_transport_even_with_frozen_source_clock(
+    tmp_path, monkeypatch,
+):
+    import auto_invest.broker.intraday_account_frame as module
+
+    monkeypatch.setattr(module, "READ_TIMEOUT_SECONDS", 0.02)
+    cancelled = asyncio.Event()
+    reads = 0
+
+    async def handle(request):
+        nonlocal reads
+        if request.url.path == "/oauth2/tokenP":
+            return httpx.Response(200, json=dict(access_token="fresh", expires_in=86400))
+        reads += 1
+        try:
+            await asyncio.Event().wait()
+        finally:
+            cancelled.set()
+
+    async with httpx.AsyncClient(base_url=REST_URL, transport=httpx.MockTransport(handle)) as http:
+        observer = KISExecutionObserver(authority(http), lambda: {}, token_cache=tmp_path / "token",
+                                       now=lambda: datetime(2026, 9, 12, tzinfo=UTC))
+        with pytest.raises(ObservationError, match="^ACCOUNT_INPUT_UNAVAILABLE$"):
+            await observer()
+    assert cancelled.is_set() and reads == 1
+
+
+@pytest.mark.asyncio
+async def test_current_holdings_changed_during_frame_are_preserved_but_never_matched(tmp_path):
+    currents = 0
+
+    def handle(request):
+        nonlocal currents
+        if request.url.path == "/oauth2/tokenP":
+            return httpx.Response(200, json=dict(access_token="fresh", expires_in=86400))
+        if request.url.path.endswith("/inquire-present-balance"):
+            currents += 1
+            rows = [] if currents == 1 else [dict(pdno="AAPL", buy_crcy_cd="USD",
+                ovrs_excg_cd="NAS", ccld_qty_smtl1="1", ord_psbl_qty1="1", loan_rmnd="0")]
+            return httpx.Response(200, headers={"tr_cont": "D"},
+                                  json=dict(rt_cd="0", output1=rows, output2=[], output3={}))
+        return account_response(request)
+
+    async with httpx.AsyncClient(base_url=REST_URL, transport=httpx.MockTransport(handle)) as http:
+        observer = KISExecutionObserver(authority(http), lambda: {}, token_cache=tmp_path / "token")
+        result = await observer._read()
+    assert result["reported_cash_baseline"]["current_holdings"]["reason"] == "HOLDINGS_CHANGED"
+    assert result["reported_holdings_coverage"]["status"] == "UNAVAILABLE"
+    assert not result["full_account_scope_verified"] and not result["nav_verified"]

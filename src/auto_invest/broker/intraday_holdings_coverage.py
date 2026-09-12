@@ -108,8 +108,11 @@ def compare_current_holdings(current, ordinary, *, observed_at):
         current_start, current_end = (_time(current.get(key)) for key in
                                       ("observation_started_at", "observation_completed_at"))
         clock = _time(observed_at)
-        _require(start <= end <= current_start <= current_end <= clock
-                 and 0 <= (clock - start).total_seconds() <= 30, "HOLDINGS_INTERVAL_INVALID")
+        sequential = start <= end <= current_start <= current_end <= clock
+        enclosed = current_start <= start <= end <= current_end <= clock
+        _require((sequential or enclosed)
+                 and 0 <= (clock - min(start, current_start)).total_seconds() <= 30,
+                 "HOLDINGS_INTERVAL_INVALID")
         positions, reported = ordinary.get("positions"), ordinary.get("unverified_assets")
         _require(isinstance(positions, dict) and isinstance(reported, dict)
                  and len(positions) + len(reported) <= 2000

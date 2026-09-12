@@ -106,6 +106,8 @@ def test_candidate_parameter_mutation_changes_execution_identity():
     "intraday_account.py", "intraday_cash_baseline.py", "account_source_profile.py",
     "domestic_account.py",
     "intraday_holdings_coverage.py",
+    "intraday_account_frame.py",
+    "account_asset_evidence.py", "intraday_balance_evidence.py",
     "intraday_reported_cash.py",
 ])
 def test_new_input_sources_are_bound_to_execution_identity(monkeypatch, filename):

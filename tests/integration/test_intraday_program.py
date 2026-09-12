@@ -12,6 +12,7 @@ from auto_invest.analytics.intraday_paper_challenger import (
     build_candidate_registry,
     load_preregistration,
 )
+from auto_invest.broker.account_asset_evidence import SUMMARY_FIELDS, TABLE_FIELDS
 from auto_invest.broker.domestic_account import SUMMARY_FIELDS as DOMESTIC_SUMMARY_FIELDS
 from auto_invest.broker.intraday_inputs import EXCHANGES, PREFIXES, SourceQuote
 from auto_invest.execution.intraday import Decision
@@ -178,6 +179,10 @@ async def test_kis_assembly_uses_its_router_for_real_reads_and_refuses_unverifie
         if request.url.path == "/oauth2/tokenP":
             return httpx.Response(200, json=dict(access_token="fresh", expires_in=86400))
         assert request.method == "GET"
+        if request.url.path.endswith("/inquire-account-balance"):
+            return httpx.Response(200, headers={"tr_cont": "D"}, json=dict(rt_cd="0",
+                output1=[dict.fromkeys(TABLE_FIELDS + ("whol_weit_rt",), "0") for _ in range(20)],
+                output2=dict.fromkeys(SUMMARY_FIELDS, "0")))
         if request.url.path == "/uapi/domestic-stock/v1/trading/inquire-balance":
             return httpx.Response(200, headers={"tr_cont": "D"}, json=dict(rt_cd="0", output1=[],
                 output2=[dict.fromkeys(DOMESTIC_SUMMARY_FIELDS, "0")],
@@ -234,7 +239,7 @@ async def test_kis_assembly_uses_its_router_for_real_reads_and_refuses_unverifie
             assert config["router"].execution_authority.access_token == "fresh"
             config["router"].halt_path = tmp_path / "different-halt"
             assert program.engine.guard() == "PROGRAM_AUTHORITY_REFUSED"
-    assert [r.method for r in calls] == ["POST"] + ["GET"] * 8
+    assert [r.method for r in calls] == ["POST"] + ["GET"] * 9
     assert synchronized_tokens == ["fresh"]
 
 

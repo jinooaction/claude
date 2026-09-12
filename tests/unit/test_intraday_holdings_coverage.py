@@ -59,6 +59,18 @@ def test_price_changes_are_not_quantity_changes_and_receive_no_source_timestamp(
     assert compare_current_holdings(current, ordinary(), observed_at=NOW)["status"] == "MATCH"
 
 
+@pytest.mark.parametrize("start,end,expected", [(-5, -2, "MATCH"), (-20, -4, "UNAVAILABLE"),
+                                              (-2, 1, "UNAVAILABLE"), (-2, -5, "UNAVAILABLE")])
+def test_ordinary_read_must_be_enclosed_or_sequential_never_partially_overlap(start, end, expected):
+    current = normalize_current_holdings(records(), observed_at=NOW)
+    current["observation_started_at"] = (NOW - timedelta(seconds=10)).isoformat()
+    current["observation_completed_at"] = NOW.isoformat()
+    view = ordinary()
+    view["observation_started_at"] = (NOW + timedelta(seconds=start)).isoformat()
+    view["observation_completed_at"] = (NOW + timedelta(seconds=end)).isoformat()
+    assert compare_current_holdings(current, view, observed_at=NOW)["status"] == expected
+
+
 def test_missing_valuation_is_preserved_without_losing_valid_quantity_coverage():
     source = records()
     for record in (source[0], source[-1]):
