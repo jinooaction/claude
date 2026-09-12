@@ -556,5 +556,6 @@ NAV 검증은 false이며 T009/T010의 완료를 대신하지 않는다.
 HANDOFF 사실 검사 통과. 로그는 `/tmp/claude-184-asset-scope-focused.log`와
 `/tmp/claude-184-asset-scope-intraday.log`다. 누락·지원 외 분류·채무·합계 차이·시각
 역전·전후 매입 구성 변화와 정상 계좌 읽기 연결, 소스 변경 지문을 검증했다.
-전체 회귀는 `/tmp/claude-184-asset-scope-full.log`에 실행 중이다.
+전체 회귀는 코드b7e2935에서4655 passed/12 skipped(792.29초), 종료0.
+`/tmp/claude-184-asset-scope-full.log`. 실제 KIS11개와 가동 전 상태 전용1개 제외.
 분류 대조 성공은 현재 전체 자산 범위 인증이나 미결제 비용 포함 인증이 아니다.
