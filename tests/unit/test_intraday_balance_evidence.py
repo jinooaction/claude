@@ -1,3 +1,4 @@
+import asyncio
 import copy
 import json
 from datetime import UTC, datetime, timedelta
@@ -14,6 +15,42 @@ from auto_invest.broker.intraday_balance_evidence import (
 )
 
 NOW = datetime(2026, 9, 8, 15, 1, tzinfo=UTC)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("fault", ["none", "failure", "stale", "timeout", "cancel"])
+async def test_intermediate_collection_is_bracketed_and_failure_never_finishes_frame(fault):
+    events = []
+    clock = NOW
+
+    def handle(request):
+        nonlocal clock
+        events.append(request.url.path.rsplit("/", 1)[-1])
+        if fault == "timeout" and len(events) == 2:
+            clock += timedelta(seconds=29.99)
+        return httpx.Response(200, headers={"tr_cont": "D"}, json=payload())
+
+    async def intermediate():
+        nonlocal clock
+        events.append("intermediate")
+        if fault == "failure":
+            raise AccountReadError("INTERMEDIATE_TEST_FAILURE")
+        if fault == "stale":
+            clock += timedelta(seconds=31)
+        if fault == "timeout":
+            await asyncio.Event().wait()
+        if fault == "cancel":
+            raise asyncio.CancelledError
+
+    if fault == "none":
+        result = await read(handle, now=lambda: clock, between_current_reads=intermediate)
+        assert result["full_account_scope_verified"] is False
+        assert events == [CURRENT, SETTLED, "intermediate", CURRENT]
+    else:
+        error = asyncio.CancelledError if fault == "cancel" else AccountReadError
+        with pytest.raises(error):
+            await read(handle, now=lambda: clock, between_current_reads=intermediate)
+        assert events == [CURRENT, SETTLED, "intermediate"]
 
 
 def payload(amount="601.37"):

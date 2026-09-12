@@ -1,5 +1,6 @@
 """GET-only balance evidence; equal reported fields do not establish execution NAV."""
 
+import asyncio
 import hashlib
 import json
 import re
@@ -53,6 +54,7 @@ async def observe_balance_evidence(
     account,
     now=lambda: datetime.now(UTC),
     max_pages=10,
+    between_current_reads=None,
 ):
     """Preserve both reporting bases and detect changes between sequential reads.
 
@@ -154,6 +156,13 @@ async def observe_balance_evidence(
 
     first = await collect(CURRENT)
     settlement = await collect(SETTLED)
+    if between_current_reads is not None:
+        remaining = 30 - (check_age() - started).total_seconds()
+        try:
+            await asyncio.wait_for(between_current_reads(), timeout=remaining)
+        except TimeoutError:
+            raise AccountReadError("BALANCE_INTERMEDIATE_TIMEOUT") from None
+        check_age()
     last = await collect(CURRENT)
     completed = check_age()
     stable = first["currency_page_digests"] == last["currency_page_digests"]

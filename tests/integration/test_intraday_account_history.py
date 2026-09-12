@@ -113,7 +113,13 @@ async def test_actual_parsers_capture_baseline_and_resume_without_historical_dat
         assert domestic_comparison["domestic_reference_status"] == "AVAILABLE"
         assert not domestic_comparison["cash_aggregation_verified"]
         assert len(domestic_comparison["comparisons"]) == 5
-        recorded = json.loads(rows(history)[-1][2])["responses"][-1]
+        responses = json.loads(rows(history)[-1][2])["responses"]
+        assert [row["endpoint"].rsplit("/", 1)[-1] for row in responses] == [
+            "inquire-present-balance", "inquire-paymt-stdr-balance", "inquire-balance",
+            "inquire-nccs", "inquire-psamount", "foreign-margin", "inquire-balance",
+            "inquire-account-balance", "inquire-account-balance", "inquire-present-balance",
+        ]
+        recorded = responses[6]
         assert recorded["endpoint"] == "/uapi/domestic-stock/v1/trading/inquire-balance"
         assert recorded["params"]["FUND_STTL_ICLD_YN"] == "Y"
         assert recorded["data"]["output2"][0]["tot_loan_amt"] == "0"
@@ -130,7 +136,8 @@ async def test_actual_parsers_capture_baseline_and_resume_without_historical_dat
         components = result["account_components"]
         assert components["excluded_response_count"] == 0
         assert len(components["responses"]) == 6
-        holdings = components["responses"][-1]
+        holdings = next(row for row in components["responses"]
+                        if row["kind"] == "ORDINARY_US_HOLDINGS")
         assert holdings["kind"] == "ORDINARY_US_HOLDINGS"
         assert holdings["groups"]["LISTED_US"]["fields"]["ovrs_cblc_qty"]["POSITIVE"] == 1
         assert components["execution_nav_verified"] is False
@@ -141,7 +148,7 @@ async def test_actual_parsers_capture_baseline_and_resume_without_historical_dat
     assert last["responses"][0]["data"]["output2"][0]["frcr_dncl_amt_2"] == "590.12"
     assert last["ledger_before"] == last["ledger_after"]
     assert last["ledger_before"]["fills"] == dict(count=2, last_sequence=2)
-    assert last["responses"][5]["data"]["output1"][0]["ovrs_cblc_qty"] == "3"
+    assert last["responses"][2]["data"]["output1"][0]["ovrs_cblc_qty"] == "3"
     assert execution.read_bytes() == before
     assert history.stat().st_mode & 0o777 == 0o600
     for secret in (ACCOUNT, "PRIVATE_KEY", "PRIVATE_SECRET", "PRIVATE_TOKEN"):

@@ -223,7 +223,10 @@ async def test_operator_command_reads_both_reports_and_keeps_amounts_private(mon
     result, code = await module.run()
     assert code == 0 and len(requests) == 5
     assert all(r.method == "GET" for r in requests)
-    assert [r.url.path for r in requests[-2:]] == [ASSETS_URL, ASSETS_URL]
+    assert [r.url.path.rsplit("/", 1)[-1] for r in requests] == [
+        "inquire-present-balance", "inquire-paymt-stdr-balance",
+        "inquire-account-balance", "inquire-account-balance", "inquire-present-balance",
+    ]
     assert result["account_assets"]["status"] == "MATCH"
     assert result["nav_verified"] is False
     for private in ("PRIVATE", "601.37", "12345678", "110"):
