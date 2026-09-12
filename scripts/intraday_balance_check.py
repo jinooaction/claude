@@ -11,6 +11,7 @@ import httpx
 
 from auto_invest.broker.account_asset_evidence import observe_account_assets
 from auto_invest.broker.account_cash_comparison import compare_cash_sources
+from auto_invest.broker.account_component_profile import profile_account_components
 from auto_invest.broker.account_source_profile import profile_margin_responses
 from auto_invest.broker.auth import get_valid_token
 from auto_invest.broker.client import AsyncTokenBucket, CircuitBreaker, ResilientClient
@@ -132,6 +133,7 @@ async def run(*, transactions_from=None, transactions_through=None, execution_db
         result["history"] = history.finish("COMPLETE" if code == 0 else "FAILED")
         result["source_structure"] = profile_margin_responses(history.responses)
         result["cash_source_comparison"] = compare_cash_sources(history.responses)
+        result["account_components"] = profile_account_components(history.responses)
     return result, code
 
 
