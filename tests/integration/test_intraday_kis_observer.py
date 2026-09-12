@@ -31,6 +31,8 @@ async def test_cash_baseline_reaches_normal_account_reader_without_promoting_acc
         if request.url.path == "/uapi/domestic-stock/v1/trading/inquire-balance":
             data = dict(output1=[], output2=[dict.fromkeys(DOMESTIC_SUMMARY_FIELDS, "0")],
                         ctx_area_fk100="", ctx_area_nk100="")
+            data["output2"][0].update(dict.fromkeys(("dnca_tot_amt", "nxdy_excc_amt",
+                "prvs_rcdl_excc_amt", "nass_amt", "tot_evlu_amt"), "73145"))
         elif endpoint == "inquire-balance":
             row = dict(ovrs_pdno="ORANY", ovrs_excg_cd="OTCB", tr_crcy_cd="USD",
                        ovrs_cblc_qty=reported_quantity, ord_psbl_qty="0", now_pric2="40")
@@ -39,9 +41,11 @@ async def test_cash_baseline_reaches_normal_account_reader_without_promoting_acc
             data = dict(output1=[row], ctx_area_fk200="", ctx_area_nk200="")
         elif endpoint == "inquire-present-balance":
             data = dict(output2=[dict(crcy_cd="USD", frcr_dncl_amt_2="601.37",
-                frcr_buy_mgn_amt="0", frcr_etc_mgna="0")], output3=dict.fromkeys((
+                frcr_buy_mgn_amt="0", frcr_etc_mgna="0", frst_bltn_exrt="1000")],
+                output3=dict.fromkeys((
                     "dncl_amt", "cma_evlu_amt", "tot_loan_amt", "ustl_buy_amt_smtl",
                     "ustl_sll_amt_smtl"), "0"))
+            data["output3"]["tot_dncl_amt"] = "73145"
         elif endpoint == "foreign-margin":
             row = dict(dict.fromkeys(CASH_FIELDS, "0"), crcy_cd="USD",
                        frcr_dncl_amt1="601.37", frcr_gnrl_ord_psbl_amt="601.37")
@@ -56,6 +60,8 @@ async def test_cash_baseline_reaches_normal_account_reader_without_promoting_acc
         result = await observer._read()
     assert result["reported_cash_baseline"]["cash"] == "601.37"
     assert result["reported_cash_baseline"]["status"] == "CALCULATED"
+    assert result["reported_cash_valuation"]["amount_usd"] == "674.515000000000"
+    assert result["reported_cash_valuation"]["balances"] == {"KRW": "73145", "USD": "601.37"}
     assert result["full_account_scope_verified"] is False
     assert result["cash_aggregation_verified"] is False
     assert result["nav"] is None and result["nav_verified"] is False

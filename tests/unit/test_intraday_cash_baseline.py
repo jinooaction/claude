@@ -17,6 +17,28 @@ from auto_invest.broker.intraday_cash_baseline import (
 NOW = datetime(2026, 9, 12, 12, tzinfo=UTC)
 
 
+@pytest.mark.parametrize("field,value,expected", [
+    ("tot_dncl_amt", "73145.0", "73145"),
+    ("tot_dncl_amt", "73144", None),
+    ("frst_bltn_exrt", "1000.00", "1000"),
+    ("frst_bltn_exrt", "1001", None),
+    ("frst_bltn_exrt", "NaN", None),
+    ("frst_bltn_exrt", "0", None),
+])
+def test_optional_cash_metadata_requires_equal_before_and_after_values(field, value, expected):
+    source = records()
+    for record in (source[0], source[-1]):
+        record["data"]["output3"]["tot_dncl_amt"] = "73145"
+        record["data"]["output2"][0]["frst_bltn_exrt"] = "1000"
+    row = (source[-1]["data"]["output3"] if field == "tot_dncl_amt" else
+           source[-1]["data"]["output2"][0])
+    row[field] = value
+    result = normalize_cash_baseline(source, observed_at=NOW)
+    key = "reported_krw_total_deposit" if field == "tot_dncl_amt" else "reported_usd_krw_rate"
+    assert result[key] == expected
+    assert result["status"] == "CALCULATED" and result["cash"] == "601.37"
+
+
 def records():
     currency = dict(crcy_cd="USD", frcr_dncl_amt_2="601.37",
                     frcr_buy_mgn_amt="0", frcr_etc_mgna="0")

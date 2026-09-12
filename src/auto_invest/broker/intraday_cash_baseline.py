@@ -71,6 +71,23 @@ def _current_cash(data):
     return usd[0]
 
 
+def _matched_cash_metadata(before, after):
+    """Keep optional report fields only when both independently read values agree."""
+    summaries = [_rows(data, "output3")[0] for data in (before, after)]
+    usd = [next(row for row in _rows(data, "output2") if row["crcy_cd"].strip() == "USD")
+           for data in (before, after)]
+    result = {}
+    for name, rows, field, positive in (
+        ("reported_krw_total_deposit", summaries, "tot_dncl_amt", False),
+        ("reported_usd_krw_rate", usd, "frst_bltn_exrt", True),
+    ):
+        values = [_number(row.get(field)) for row in rows]
+        valid = (None not in values and values[0] == values[1]
+                 and (not positive or values[0] > 0))
+        result[name] = str(values[0]) if valid else None
+    return result
+
+
 def normalize_cash_baseline(records, *, observed_at):
     result = dict(status="UNAVAILABLE", cash=None, full_account_verified=False,
                   scope="REPORTED_ZERO_ADJUSTMENT_USD_BASELINE", live_eligible=False)
@@ -118,6 +135,7 @@ def normalize_cash_baseline(records, *, observed_at):
         result.update(status="CALCULATED", cash=str(cash), usd_margin_row_count=usd_count,
                       observation_started_at=_stamp(records[0]["started_at"]).isoformat(),
                       observation_completed_at=_stamp(records[-1]["received_at"]).isoformat())
+        result.update(_matched_cash_metadata(records[0]["data"], records[-1]["data"]))
     except BaselineUnavailable as error:
         result["reason"] = str(error)
     return result

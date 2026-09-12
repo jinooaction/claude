@@ -14,6 +14,7 @@ from auto_invest.broker.domestic_account import observe_domestic_account
 from auto_invest.broker.intraday_account import observe_account
 from auto_invest.broker.intraday_cash_baseline import observe_cash_baseline
 from auto_invest.broker.intraday_inputs import EXCHANGES, PREFIXES, REST_URL, SourceQuote
+from auto_invest.broker.intraday_reported_cash import normalize_reported_cash
 from auto_invest.execution.intraday import (
     Observation,
     ReportedAssetValue,
@@ -260,6 +261,10 @@ class KISExecutionObserver(ExecutionObserver):
                 account=self.account, now=self.now,
             )
             self._check_connection()
+            result["reported_cash_valuation"] = normalize_reported_cash(
+                result["reported_cash_baseline"], result["reported_domestic_account"],
+                observed_at=self.now(),
+            )
             return result
 
     async def refresh_credentials(self):
