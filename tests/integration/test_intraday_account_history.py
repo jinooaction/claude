@@ -73,6 +73,19 @@ def setup(tmp_path, monkeypatch):
             body = dict(rt_cd="0", output1=[], output2=[dict(
                 crcy_cd="USD", frcr_dncl_amt_2=state["amount"],
             )], output3=dict(tot_asst_amt="PRIVATE_REPORTED_TOTAL"))
+            if state.get("model_ready"):
+                body["output2"][0].update(frcr_buy_mgn_amt="0", frcr_etc_mgna="0",
+                                          frst_bltn_exrt="1000")
+                body["output3"] = dict.fromkeys(("dncl_amt", "tot_dncl_amt", "cma_evlu_amt",
+                    "tot_loan_amt", "ustl_buy_amt_smtl", "ustl_sll_amt_smtl"), "0")
+                body["output1"] = [dict(pdno="SPY", buy_crcy_cd="USD", ovrs_excg_cd="NASD",
+                    ccld_qty_smtl1="3", ord_psbl_qty1="3", loan_rmnd="0", frcr_evlu_amt2="123")]
+                if state.get("model_fault") == "cash_change" and state["calls"] == 10:
+                    body["output2"][0]["frcr_dncl_amt_2"] = "600"
+                if state.get("model_fault") == "quantity_change" and state["calls"] == 10:
+                    body["output1"][0]["ccld_qty_smtl1"] = "4"
+        if endpoint == "foreign-margin" and state.get("model_fault") == "receivable":
+            body["output"][0]["frcr_rcvb_amt"] = "1"
         return httpx.Response(200, json=body, headers={"tr_cont": "D"})
 
     async def token(*args, **kwargs):
@@ -93,6 +106,40 @@ def setup(tmp_path, monkeypatch):
 def rows(path):
     with sqlite3.connect(path) as connection:
         return connection.execute("SELECT * FROM account_observations ORDER BY seq").fetchall()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("fault", [None, "cash_change", "quantity_change", "receivable"])
+async def test_actual_owned_reports_reach_cash_and_holdings_models_without_extra_gets(setup, fault):
+    module, history, execution, before, state = setup
+    state.update(model_ready=True, model_fault=fault)
+    result, code = await module.run(history_db=history, execution_db=execution)
+    models = result["account_models"]
+    assert code == 0 and state["calls"] == 10 and models["additional_requests"] == 0
+    assert result["history"]["status"] == "COMPLETE"
+    assert result["history"]["response_count"] == 10
+    assert execution.read_bytes() == before
+    assert not models["full_account_scope_verified"] and not models["cash_aggregation_verified"]
+    assert not models["nav_verified"] and not models["live_eligible"]
+    if fault in {"cash_change", "receivable"}:
+        assert models["zero_adjustment_cash"]["status"] == "UNAVAILABLE"
+        assert models["reported_settlement_cash"]["status"] == "UNAVAILABLE"
+        assert models["reported_cash_valuation"]["status"] == "UNAVAILABLE"
+    else:
+        for part in ("zero_adjustment_cash", "reported_settlement_cash", "reported_cash_valuation"):
+            assert models[part]["status"] == "CALCULATED"
+    if fault == "quantity_change":
+        assert models["current_holdings"]["reason"] == "HOLDINGS_CHANGED"
+        assert models["holdings_coverage"]["status"] == "UNAVAILABLE"
+    else:
+        assert models["current_holdings"]["status"] == "OBSERVED"
+        assert models["holdings_coverage"]["status"] == "MATCH"
+    encoded = json.dumps(result)
+    for private in (
+        "PRIVATE", "SPY", state["amount"], ACCOUNT, "amount_usd", "reported_components",
+    ):
+        assert private not in encoded
+    assert "SPY" in json.loads(rows(history)[0][2])["responses"][2]["data"]["output1"][0].values()
 
 
 @pytest.mark.asyncio
