@@ -182,6 +182,7 @@ async def test_kis_assembly_uses_its_router_for_real_reads_and_refuses_unverifie
             "inquire-nccs": dict(output=[], ctx_area_fk200="", ctx_area_nk200=""),
             "inquire-psamount": dict(output={"ovrs_ord_psbl_amt": "99999"}),
             "foreign-margin": dict(output=[]),
+            "inquire-present-balance": dict(output2=[], output3={}),
         }
         return httpx.Response(200, json=dict(rt_cd="0", **rows[request.url.path.rsplit("/", 1)[1]]))
 
@@ -228,7 +229,7 @@ async def test_kis_assembly_uses_its_router_for_real_reads_and_refuses_unverifie
             assert config["router"].execution_authority.access_token == "fresh"
             config["router"].halt_path = tmp_path / "different-halt"
             assert program.engine.guard() == "PROGRAM_AUTHORITY_REFUSED"
-    assert [r.method for r in calls] == ["POST"] + ["GET"] * 4
+    assert [r.method for r in calls] == ["POST"] + ["GET"] * 7
     assert synchronized_tokens == ["fresh"]
 
 
