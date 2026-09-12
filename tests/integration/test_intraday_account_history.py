@@ -111,6 +111,13 @@ async def test_actual_parsers_capture_baseline_and_resume_without_historical_dat
         assert all(row["common_deposit_vs_reported_usd"] == "EQUAL"
                    for row in comparison["comparisons"])
         assert comparison["cash_aggregation_verified"] is False
+        components = result["account_components"]
+        assert components["excluded_response_count"] == 0
+        assert len(components["responses"]) == 6
+        holdings = components["responses"][-1]
+        assert holdings["kind"] == "ORDINARY_US_HOLDINGS"
+        assert holdings["groups"]["LISTED_US"]["fields"]["ovrs_cblc_qty"]["POSITIVE"] == 1
+        assert components["execution_nav_verified"] is False
     records = rows(history)
     assert len(records) == 2
     first, last = [json.loads(row[2]) for row in records]
