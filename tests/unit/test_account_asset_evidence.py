@@ -204,6 +204,7 @@ async def test_operator_command_reads_both_reports_and_keeps_amounts_private(
     def handle(request):
         requests.append(request)
         if request.url.path.endswith("inquire-period-trans"):
+            assert request.url.params["OVRS_EXCG_CD"] == ""
             body = dict(rt_cd="0", output1=[dict(
                 trad_dt="20260908", sttl_dt="20260909", pdno="SPY", crcy_cd="USD",
                 sll_buy_dvsn_cd="02", ccld_qty="1", tr_frcr_amt2="601.37",

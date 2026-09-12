@@ -131,6 +131,7 @@ async def test_existing_command_connects_actual_transaction_and_execution_reader
     def handle(request):
         calls.append(request)
         if request.url.path.endswith("inquire-period-trans"):
+            assert request.url.params["OVRS_EXCG_CD"] == ""
             payload = dict(rt_cd="0", output1=[transaction()], output2=[])
         elif request.url.path.endswith("inquire-ccnl"):
             payload = dict(rt_cd="0", output=[dict(

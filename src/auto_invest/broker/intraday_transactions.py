@@ -109,18 +109,19 @@ def audit_settlements(rows):
 
 async def observe_transactions(
     client, *, account, access_token, app_key, app_secret, start_date, end_date,
-    exchange="NASD", max_pages=20, now=lambda: datetime.now(UTC),
+    exchange="", max_pages=20, now=lambda: datetime.now(UTC),
 ):
     """GET the requested reporting scope, failing without any partial result.
 
     Dates are registration-date filters, not proof of a complete trade-date
-    window. NASD is preserved as the requested scope, not promoted to all assets.
+    window. The current CTOS4001R property contract requires an empty exchange
+    filter. This is the endpoint's all-exchange report, not all account cash flows.
     Caller supplies the existing rate-limited client and credential authority.
     """
     validate_window(start_date, end_date)
     if not isinstance(account, str) or not re.fullmatch(r"[0-9]{10}", account):
         raise AccountReadError("TRANSACTIONS_INVALID_ACCOUNT")
-    if exchange not in {"NASD", "NYSE", "AMEX"}:
+    if not isinstance(exchange, str) or exchange != "":
         raise AccountReadError("TRANSACTIONS_INVALID_EXCHANGE")
     if type(max_pages) is not int or not 1 <= max_pages <= 100:
         raise AccountReadError("TRANSACTIONS_INVALID_PAGE_LIMIT")

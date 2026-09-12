@@ -196,3 +196,14 @@ evlu_amt_smtl은 해외유가증권 평가의 원화 환산액이다. frcr_evlu_
 설명은 비어 있다. 합계에 대한 추정 식을 숫자가 맞도록 선택하거나 현재 보고의
 수신 시각을 보유자산의 실제 가격 발생 시각으로 주장하지 않는다.
 출처: https://apiportal.koreainvestment.com/api/apis/guide/property/09baff2a-6e9d-4502-ba66-d7bb94094b67
+# 2026-09-12 거래내역 필터 재확인
+
+현재 공식 property 명세에서 CTOS4001R의 OVRS_EXCG_CD는 공백으로 명시된다.
+같은 저장소의 legacy 예제는 공란을 전체, NASD를 미국으로 설명한다. 최신 LLM 예제의
+NAS 값은 이 명세와 달라 그대로 채택하지 않는다. 현재 구현의 NASD 기본값과
+NASD/NYSE/AMEX 제한은 이 조회의 전체 원본 확보를 막으므로 공백으로 보정한다.
+이 변경은 해외주식 거래내역 범위를 넓히지만 입출금·환전 등 모든 현금 사건이나
+등록일과 매매일 범위의 동등성을 증명하지 않는다.
+
+- https://apiportal.koreainvestment.com/api/apis/public/detail?accessUrl=%2Fuapi%2Foverseas-stock%2Fv1%2Ftrading%2Finquire-period-trans
+- https://github.com/koreainvestment/open-trading-api/blob/main/legacy/Sample01/kis_ovrseastk.py

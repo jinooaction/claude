@@ -95,12 +95,43 @@ async def test_all_pages_preserve_duplicate_rows_fractional_quantity_and_fee_com
     assert calls[1].headers["tr_cont"] == "N"
     assert calls[1].url.params["CTX_AREA_NK100"] == "cursor"
     assert calls[0].url.params["ERLM_STRT_DT"] == "20260901"
+    assert all(request.url.params["OVRS_EXCG_CD"] == "" for request in calls)
+    assert result["requested_exchange"] == ""
     public = public_transactions(result)
     assert public["row_count"] == 2 and not public["cash_verified"]
     assert public["settlement_audit"]["arithmetic_verified"] is True
     assert "currency_totals" not in public["settlement_audit"]
     assert not public["execution_parity_verified"]
     assert all(value not in str(public) for value in ("SPY", "75.25", "20260908", "12345678"))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("exchange", ["NASD", "NAS", "NYSE", "AMEX", " ", None, []])
+async def test_unsupported_exchange_filters_fail_before_any_request(exchange):
+    def handle(request):
+        pytest.fail("Invalid report filters must not reach the broker")
+
+    async with httpx.AsyncClient(base_url="https://offline.invalid",
+                                transport=httpx.MockTransport(handle)) as client:
+        with pytest.raises(AccountReadError, match="^TRANSACTIONS_INVALID_EXCHANGE$"):
+            await observe_transactions(client, **ARGS, exchange=exchange)
+
+
+@pytest.mark.asyncio
+async def test_all_exchange_report_keeps_non_usd_rows_without_claiming_cash_completeness():
+    euro = dict(row(), crcy_cd="EUR", pdno="OTHER")
+
+    def handle(request):
+        assert request.url.params["OVRS_EXCG_CD"] == ""
+        return httpx.Response(200, headers={"tr_cont": "D"},
+                              json=body(output1=[row(), euro]))
+
+    async with httpx.AsyncClient(base_url="https://offline.invalid",
+                                transport=httpx.MockTransport(handle)) as client:
+        result = await observe_transactions(client, **ARGS)
+    assert result["rows"] == [row(), euro]
+    assert set(result["settlement_audit"]["currency_totals"]) == {"USD", "EUR"}
+    assert result["cash_verified"] is result["execution_parity_verified"] is False
 
 
 @pytest.mark.asyncio
