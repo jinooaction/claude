@@ -47,6 +47,11 @@ async def test_cash_baseline_reaches_normal_account_reader_without_promoting_acc
                     "dncl_amt", "cma_evlu_amt", "tot_loan_amt", "ustl_buy_amt_smtl",
                     "ustl_sll_amt_smtl"), "0"))
             data["output3"]["tot_dncl_amt"] = "73145"
+            holding = dict(pdno="ORANY", buy_crcy_cd="USD", ovrs_excg_cd="OTCB",
+                           ccld_qty_smtl1=reported_quantity, ord_psbl_qty1="0", loan_rmnd="0")
+            if reported_value is not None:
+                holding["frcr_evlu_amt2"] = reported_value
+            data["output1"] = [holding]
             if unsettled:
                 data["output2"][0].update(frcr_dncl_amt_2="401.37", frcr_buy_mgn_amt="200")
                 data["output3"].update(ustl_buy_amt_smtl="100000", ustl_sll_amt_smtl="25000")
@@ -78,6 +83,9 @@ async def test_cash_baseline_reaches_normal_account_reader_without_promoting_acc
             "RECONCILED_KRW_USD_REPORTED_SETTLEMENT_CASH")
     assert result["full_account_scope_verified"] is False
     assert result["cash_aggregation_verified"] is False
+    assert result["reported_holdings_coverage"]["status"] == "MATCH"
+    assert result["reported_holdings_coverage"]["positive_holding_count"] == 1
+    assert not result["reported_holdings_coverage"]["full_account_verified"]
     assert result["nav"] is None and result["nav_verified"] is False
     assert result["unverified_assets"]["ORANY"]["tradability_verified"] is False
     if reported_value is None or reported_quantity == "0.5":

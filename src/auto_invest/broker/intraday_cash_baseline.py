@@ -7,6 +7,7 @@ from decimal import Decimal, localcontext
 
 from auto_invest.broker.account_source_profile import CASH_FIELDS, _number
 from auto_invest.broker.intraday_account import AccountReadError
+from auto_invest.broker.intraday_holdings_coverage import normalize_current_holdings
 from auto_invest.broker.overseas import _kis_headers, _split_account
 
 ROOT = "/uapi/overseas-stock/v1/trading/"
@@ -278,4 +279,5 @@ async def _collect_cash_baseline(client, *, access_token, app_key, app_secret, a
     clock = now()
     result = normalize_cash_baseline(records, observed_at=clock)
     result["settlement_cash"] = normalize_usd_settlement_cash(records, observed_at=clock)
+    result["current_holdings"] = normalize_current_holdings(records, observed_at=clock)
     return result

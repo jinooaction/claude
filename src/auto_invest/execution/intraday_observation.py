@@ -13,6 +13,7 @@ from auto_invest.broker.auth import get_valid_token
 from auto_invest.broker.domestic_account import observe_domestic_account
 from auto_invest.broker.intraday_account import observe_account
 from auto_invest.broker.intraday_cash_baseline import observe_cash_baseline
+from auto_invest.broker.intraday_holdings_coverage import compare_current_holdings
 from auto_invest.broker.intraday_inputs import EXCHANGES, PREFIXES, REST_URL, SourceQuote
 from auto_invest.broker.intraday_reported_cash import normalize_reported_cash
 from auto_invest.execution.intraday import (
@@ -263,6 +264,10 @@ class KISExecutionObserver(ExecutionObserver):
             self._check_connection()
             result["reported_cash_valuation"] = normalize_reported_cash(
                 result["reported_cash_baseline"], result["reported_domestic_account"],
+                observed_at=self.now(),
+            )
+            result["reported_holdings_coverage"] = compare_current_holdings(
+                result["reported_cash_baseline"]["current_holdings"], result,
                 observed_at=self.now(),
             )
             return result

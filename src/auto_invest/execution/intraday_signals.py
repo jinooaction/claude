@@ -38,6 +38,7 @@ def execution_fingerprint(candidate, provider):
         Path(__file__).parents[1] / "broker/intraday_inputs.py",
         Path(__file__).parents[1] / "broker/intraday_account.py",
         Path(__file__).parents[1] / "broker/domestic_account.py",
+        Path(__file__).parents[1] / "broker/intraday_holdings_coverage.py",
         Path(__file__).parents[1] / "broker/intraday_reported_cash.py",
         Path(__file__).parents[1] / "broker/intraday_cash_baseline.py",
         Path(__file__).parents[1] / "broker/account_source_profile.py",
