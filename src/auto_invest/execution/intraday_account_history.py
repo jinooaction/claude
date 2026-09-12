@@ -101,6 +101,7 @@ class AccountHistory:
                             "/uapi/overseas-stock/v1/trading/inquire-present-balance",
                             "/uapi/overseas-stock/v1/trading/inquire-paymt-stdr-balance",
                             "/uapi/domestic-stock/v1/trading/inquire-account-balance",
+                            "/uapi/domestic-stock/v1/trading/inquire-balance",
                             "/uapi/overseas-stock/v1/trading/inquire-period-trans",
                             "/uapi/overseas-stock/v1/trading/inquire-ccnl",
                             "/uapi/overseas-stock/v1/trading/inquire-balance",
