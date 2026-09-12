@@ -46,7 +46,15 @@ def setup(tmp_path, monkeypatch):
         if state["calls"] == state["fail_at"]:
             return httpx.Response(500, json=dict(msg1="PRIVATE_BROKER_ERROR"))
         endpoint = request.url.path.split("/")[-1]
-        if request.url.path == "/uapi/domestic-stock/v1/trading/inquire-balance":
+        if endpoint == "inquire-period-trans":
+            assert request.url.params["OVRS_EXCG_CD"] == ""
+            day = request.url.params["ERLM_END_DT"]
+            body = dict(rt_cd="0", output1=[dict(
+                trad_dt=day, sttl_dt=day, pdno="SPY", crcy_cd="USD", sll_buy_dvsn_cd="02",
+                ccld_qty="3", tr_frcr_amt2="123", frcr_excc_amt_1="123.15",
+                dmst_frcr_fee1="0.10", frcr_fee1="0.05",
+            )], output2=[])
+        elif request.url.path == "/uapi/domestic-stock/v1/trading/inquire-balance":
             assert request.url.params["FUND_STTL_ICLD_YN"] == "Y"
             body = dict(rt_cd="0", output1=[],
                         output2=[dict.fromkeys(DOMESTIC_SUMMARY_FIELDS, "0")],
@@ -118,6 +126,69 @@ def setup(tmp_path, monkeypatch):
 def rows(path):
     with sqlite3.connect(path) as connection:
         return connection.execute("SELECT * FROM account_observations ORDER BY seq").fetchall()
+
+
+@pytest.mark.asyncio
+async def test_recent_transactions_are_private_and_precede_the_current_account_frame(setup):
+    from datetime import datetime
+
+    module, history, execution, before, state = setup
+    state["model_ready"] = True
+    result, code = await module.run(history_db=history, execution_db=execution,
+                                    recent_transactions=True)
+    assert code == 0 and state["calls"] == 11
+    assert result["history"]["status"] == "COMPLETE"
+    assert result["transactions"]["settlement_audit"]["status"] == "MATCH"
+    assert result["transactions"]["requested_registration_window_days"] == 3
+    assert result["transactions"]["cash_verified"] is False
+    assert result["account_models"]["reported_asset_scope"]["status"] == "MATCH"
+    assert result["account_models"]["reported_cash_valuation"]["status"] == "CALCULATED"
+    reports = json.loads(rows(history)[0][2])["responses"]
+    assert reports[0]["endpoint"].endswith("inquire-period-trans")
+    assert reports[1]["endpoint"].endswith("inquire-present-balance")
+    assert reports[-1]["endpoint"].endswith("inquire-present-balance")
+    params = reports[0]["params"]
+    start, end = (datetime.strptime(params[key], "%Y%m%d") for key in
+                  ("ERLM_STRT_DT", "ERLM_END_DT"))
+    assert (end - start).days == 2 and params["OVRS_EXCG_CD"] == ""
+    assert reports[0]["data"]["output1"][0]["frcr_excc_amt_1"] == "123.15"
+    for private in ("PRIVATE", "SPY", "123.15", ACCOUNT, params["ERLM_END_DT"]):
+        assert private not in json.dumps(result)
+    assert execution.read_bytes() == before
+
+
+@pytest.mark.asyncio
+async def test_transaction_failure_is_recorded_and_does_not_return_account_success(setup):
+    module, history, execution, before, state = setup
+    state["fail_at"] = 1
+    with pytest.raises(AccountReadError, match="TRANSACTIONS_TRANSPORT_OR_JSON_ERROR"):
+        await module.run(history_db=history, execution_db=execution, recent_transactions=True)
+    assert state["calls"] == 1 and execution.read_bytes() == before
+    payload = json.loads(rows(history)[0][2])
+    assert payload["status"] == "FAILED" and len(payload["responses"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_recent_transactions_require_private_history_before_authentication(setup):
+    module, history, execution, before, state = setup
+    with pytest.raises(AccountHistoryError, match="HISTORY_DATABASE_REQUIRED"):
+        await module.run(recent_transactions=True)
+    assert state["calls"] == 0 and not history.exists() and execution.read_bytes() == before
+
+
+def test_existing_server_command_collects_transactions_without_new_host_options(
+    setup, monkeypatch, capsys,
+):
+    module, history, execution, before, state = setup
+    state["model_ready"] = True
+    monkeypatch.setattr("sys.argv", [module.__file__, "--history-db", str(history),
+                                   "--execution-db", str(execution)])
+    assert module.main() == 0
+    result = json.loads(capsys.readouterr().out)
+    assert state["calls"] == 11 and result["history"]["response_count"] == 11
+    assert result["transactions"]["settlement_audit"]["status"] == "MATCH"
+    assert result["account_models"]["reported_asset_scope"]["status"] == "MATCH"
+    assert result["orders_submitted"] == 0 and execution.read_bytes() == before
 
 
 @pytest.mark.asyncio
