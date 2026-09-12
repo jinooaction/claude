@@ -107,6 +107,7 @@ def test_candidate_parameter_mutation_changes_execution_identity():
     "domestic_account.py",
     "intraday_holdings_coverage.py",
     "intraday_account_frame.py",
+    "intraday_asset_scope.py",
     "account_asset_evidence.py", "intraday_balance_evidence.py",
     "intraday_reported_cash.py",
 ])

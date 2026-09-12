@@ -66,6 +66,16 @@ async def test_cash_baseline_reaches_normal_account_reader_without_promoting_acc
             if unsettled:
                 row.update(ustl_buy_amt="100", ustl_sll_amt="25", frcr_mgn_amt="200")
             data = dict(output=[dict(row) for _ in range(10)])
+        elif endpoint == "inquire-account-balance":
+            data = dict(output1=[dict.fromkeys(TABLE_FIELDS + ("whol_weit_rt",), "0")
+                                 for _ in range(20)], output2=dict.fromkeys(SUMMARY_FIELDS, "0"))
+            for index, amount in ((8, "120"), (16, "601370"), (17, "73145")):
+                data["output1"][index].update(
+                    pchs_amt=amount, evlu_amt=amount, real_nass_amt=amount)
+            for field in TABLE_FIELDS:
+                data["output1"][-1][field] = str(sum(
+                    int(row[field]) for row in data["output1"][:-1]))
+            data["output2"].update(dncl_amt="73145", tot_dncl_amt="73145")
         else:
             return account_response(request)
         return httpx.Response(200, headers={"tr_cont": "D"}, json=dict(rt_cd="0", **data))
@@ -91,6 +101,9 @@ async def test_cash_baseline_reaches_normal_account_reader_without_promoting_acc
     assert result["reported_holdings_coverage"]["status"] == "MATCH"
     assert result["reported_holdings_coverage"]["positive_holding_count"] == 1
     assert not result["reported_holdings_coverage"]["full_account_verified"]
+    assert result["reported_asset_scope"]["status"] == "MATCH"
+    assert result["reported_asset_scope"]["category_count"] == 19
+    assert not result["reported_asset_scope"]["full_account_scope_verified"]
     assert result["nav"] is None and result["nav_verified"] is False
     assert result["unverified_assets"]["ORANY"]["tradability_verified"] is False
     if reported_value is None or reported_quantity == "0.5":

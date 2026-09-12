@@ -11,6 +11,7 @@ from decimal import Decimal, localcontext
 
 from auto_invest.broker.auth import get_valid_token
 from auto_invest.broker.intraday_account_frame import observe_account_frame
+from auto_invest.broker.intraday_asset_scope import reconcile_asset_categories
 from auto_invest.broker.intraday_holdings_coverage import compare_current_holdings
 from auto_invest.broker.intraday_inputs import EXCHANGES, PREFIXES, REST_URL, SourceQuote
 from auto_invest.broker.intraday_reported_cash import normalize_reported_cash
@@ -255,6 +256,11 @@ class KISExecutionObserver(ExecutionObserver):
             result["reported_holdings_coverage"] = compare_current_holdings(
                 result["reported_cash_baseline"]["current_holdings"], result,
                 observed_at=self.now(),
+            )
+            result["reported_asset_scope"] = reconcile_asset_categories(
+                result["account_frame"]["asset_reports"], result["reported_cash_valuation"],
+                result["reported_holdings_coverage"], observed_at=self.now(),
+                product=self.account[-2:],
             )
             for key in ("observation_started_at", "observation_completed_at"):
                 result[key] = result["account_frame"][key]

@@ -550,3 +550,11 @@ ACCOUNT_INPUT_UNAVAILABLE로 실패했다. 응답과 GET 횟수를 실제 입력
 ruff 통과, 하네스14/14, HANDOFF 사실 검사 통과. 전체 회귀와 신규 입력기의 실제
 서버 검증은 아직 하지 않았다. 정상 입력 결과에 보고 현금이 도달해도 전체 범위와
 NAV 검증은 false이며 T009/T010의 완료를 대신하지 않는다.
+# FR065 자산 분류 대조 검증
+
+관련106 passed(1.36초), 단타1075 passed/4 skipped(45.13초), 린트와 하네스14/14,
+HANDOFF 사실 검사 통과. 로그는 `/tmp/claude-184-asset-scope-focused.log`와
+`/tmp/claude-184-asset-scope-intraday.log`다. 누락·지원 외 분류·채무·합계 차이·시각
+역전·전후 매입 구성 변화와 정상 계좌 읽기 연결, 소스 변경 지문을 검증했다.
+전체 회귀는 `/tmp/claude-184-asset-scope-full.log`에 실행 중이다.
+분류 대조 성공은 현재 전체 자산 범위 인증이나 미결제 비용 포함 인증이 아니다.
