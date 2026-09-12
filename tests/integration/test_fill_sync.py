@@ -13,6 +13,7 @@ import pytest
 import respx
 
 from auto_invest.broker.client import AsyncTokenBucket, CircuitBreaker, ResilientClient
+from auto_invest.broker.models import BrokerExecution
 from auto_invest.config.enums import Side
 from auto_invest.execution import fill_sync as fill_sync_mod
 from auto_invest.execution.fill_sync import (
@@ -83,6 +84,42 @@ def _seed_order(
 
 def _ccnl(rows: list[dict]) -> httpx.Response:
     return httpx.Response(200, json={"output": rows})
+
+
+@pytest.mark.asyncio
+async def test_changed_average_on_repoll_preserves_book_until_reconciled(tmp_path, monkeypatch):
+    price, terminal = "150", False
+
+    async def executions(*args, **kwargs):
+        return [BrokerExecution(kis_order_id="K1", symbol="AAPL", filled_qty=40,
+                                avg_fill_price_usd=Decimal(price), terminal=terminal)]
+
+    monkeypatch.setattr(fill_sync_mod, "get_order_executions_resolving_market", executions)
+    async with _broker(tmp_path) as (client, conn):
+        _seed_order(conn)
+
+        async def poll():
+            return await sync_fills(conn, client, access_token="token", app_key="key",
+                                    app_secret="secret", account=ACCOUNT)
+
+        first = await poll()
+        assert first.fills_applied == 1 and not first.warnings
+        before = [tuple(row) for row in conn.execute("SELECT * FROM fills")]
+        price, terminal = "151", True
+        for _ in range(2):
+            result = await poll()
+            assert result.warnings and result.transitions == 0 and result.fills_applied == 0
+            assert conn.execute("SELECT state FROM orders").fetchone()[0] == "PARTIALLY_FILLED"
+            assert [tuple(row) for row in conn.execute("SELECT * FROM fills")] == before
+        errors = conn.execute(
+            "SELECT COUNT(*) FROM audit_log WHERE event_type='ERROR'"
+        ).fetchone()[0]
+        assert errors == 2
+        price = "150"
+        recovered = await poll()
+        assert not recovered.warnings and recovered.transitions == 1
+        assert conn.execute("SELECT state FROM orders").fetchone()[0] == "EXPIRED"
+        assert [tuple(row) for row in conn.execute("SELECT * FROM fills")] == before
 
 
 @pytest.mark.asyncio

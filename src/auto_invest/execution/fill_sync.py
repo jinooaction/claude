@@ -213,6 +213,16 @@ def plan_fill_ingestion(
                     )
                 )
 
+        elif recorded and recorded_notional_by_corr is not None:
+            previous_notional = recorded_notional_by_corr.get(order.correlation_id)
+            price = execution.avg_fill_price_usd
+            if (previous_notional is None or not price.is_finite() or price <= 0
+                    or price * broker_filled != previous_notional):
+                plan.warnings.append(
+                    f"{order.correlation_id}: unchanged fill quantity has unverified notional"
+                )
+                continue
+
         # 상태 전이: 누적 체결량 기준(브로커가 진실).
         to_state: str | None = None
         audit_cancel = False
