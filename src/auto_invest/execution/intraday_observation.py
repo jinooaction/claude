@@ -13,7 +13,12 @@ from auto_invest.broker.auth import get_valid_token
 from auto_invest.broker.intraday_account import observe_account
 from auto_invest.broker.intraday_cash_baseline import observe_cash_baseline
 from auto_invest.broker.intraday_inputs import EXCHANGES, PREFIXES, REST_URL, SourceQuote
-from auto_invest.execution.intraday import Observation, validate_observation
+from auto_invest.execution.intraday import (
+    Observation,
+    ReportedAssetValue,
+    validate_observation,
+    validate_reported_assets,
+)
 from auto_invest.execution.intraday_cash_ledger import CashLedgerError, compute_net_cash
 from auto_invest.logging_config import register_secret
 
@@ -47,6 +52,8 @@ def build_observation(account, quotes, *, now):
     net_cash includes all non-equity balances and liabilities, while
     execution_cash is cash available to the executor. Selecting the calculation
     basis does not establish either value's provenance or scope verification.
+    Non-strategy holdings may use explicit broker-reported valuations. Their
+    query intervals never stand in for source timestamps on executable quotes.
     """
     if not isinstance(account, dict) or account.get("currency") != "USD":
         raise ObservationError("ACCOUNT_CURRENCY_OR_SHAPE")
@@ -70,7 +77,7 @@ def build_observation(account, quotes, *, now):
         if account.get("nav_verified") is not True:
             raise ObservationError("ACCOUNT_NAV_UNVERIFIED")
         nav = _amount(account.get("nav"))
-    elif basis == "net_cash_and_listed_equities":
+    elif basis in {"net_cash_and_listed_equities", "net_cash_and_reported_equities"}:
         net_cash = _amount(account.get("net_cash"), signed=True)
     elif basis == "cash_ledger_and_listed_equities":
         try:
@@ -116,20 +123,41 @@ def build_observation(account, quotes, *, now):
         if not source <= received <= clock:
             raise ObservationError("ACCOUNT_QUOTE_TIME_INVALID")
         marks[symbol], times[symbol] = quote.last, source
-    if basis in {"net_cash_and_listed_equities", "cash_ledger_and_listed_equities"}:
+    reported = {}
+    raw_reported = account.get("reported_asset_values", {})
+    if (not isinstance(raw_reported, dict) or len(raw_reported) > 10000
+            or (raw_reported and basis != "net_cash_and_reported_equities")):
+        raise ObservationError("ACCOUNT_REPORTED_ASSETS_BASIS")
+    for symbol, row in raw_reported.items():
+        if not isinstance(row, dict):
+            raise ObservationError("ACCOUNT_REPORTED_ASSETS_SHAPE")
+        reported[symbol] = ReportedAssetValue(
+            row.get("quantity"), _amount(row.get("amount_usd")),
+            _stamp(row.get("observation_started_at")),
+            _stamp(row.get("observation_completed_at")),
+        )
+    try:
+        validate_reported_assets(reported, positions, marks, observed_at=started,
+                                 now=completed, required=set())
+    except ValueError:
+        raise ObservationError("ACCOUNT_REPORTED_ASSETS_INVALID") from None
+    if basis in {"net_cash_and_listed_equities", "cash_ledger_and_listed_equities",
+                 "net_cash_and_reported_equities"}:
         held = {symbol for symbol, qty in positions.items() if qty}
         if len(held) > 10000 or any(positions[symbol] > 10**18 for symbol in held):
             raise ObservationError("ACCOUNT_POSITIONS_INVALID")
-        if held - marks.keys():
+        if held - (marks.keys() | reported.keys()):
             raise ObservationError("ACCOUNT_NAV_MARK_MISSING")
         if any(not isinstance(marks[symbol], Decimal) or not marks[symbol].is_finite()
                or not 0 < marks[symbol] < Decimal("1e18")
-               or marks[symbol].as_tuple().exponent < -12 for symbol in held):
+               or marks[symbol].as_tuple().exponent < -12 for symbol in held - reported.keys()):
             raise ObservationError("ACCOUNT_NAV_MARK_INVALID")
         with localcontext() as context:
             context.prec = 80
-            nav = net_cash + sum((positions[symbol] * marks[symbol] for symbol in held), Decimal(0))
-    view = Observation(started, cash, nav, positions, marks, order_ids, sellable, times)
+            nav = net_cash + sum((reported[symbol].amount_usd if symbol in reported
+                                 else positions[symbol] * marks[symbol]
+                                 for symbol in held), Decimal(0))
+    view = Observation(started, cash, nav, positions, marks, order_ids, sellable, times, reported)
     try:
         # Cancellation may use fresh account data with an older source quote.
         # The engine checks these original timestamps before pricing any order.

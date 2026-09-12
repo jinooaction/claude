@@ -12,9 +12,9 @@ import json
 import os
 import re
 from collections.abc import Awaitable, Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal
+from decimal import Decimal, localcontext
 from pathlib import Path
 from types import MappingProxyType
 
@@ -39,6 +39,16 @@ class Decision:
 
 
 @dataclass(frozen=True)
+class ReportedAssetValue:
+    """Broker-reported USD holding value; query times are not market-price times."""
+
+    quantity: int
+    amount_usd: Decimal
+    observation_started_at: datetime
+    observation_completed_at: datetime
+
+
+@dataclass(frozen=True)
 class Observation:
     observed_at: datetime
     cash: Decimal
@@ -48,6 +58,7 @@ class Observation:
     open_order_ids: tuple[str, ...]
     sellable_positions: dict[str, int]
     mark_times: dict[str, datetime]
+    reported_asset_values: dict[str, ReportedAssetValue] = field(default_factory=dict)
 
 
 def _decimal(value, *, zero=False):
@@ -55,6 +66,37 @@ def _decimal(value, *, zero=False):
         raise ValueError("INVALID_MONEY")
     if not zero and not value:
         raise ValueError("INVALID_MONEY")
+
+
+def validate_reported_assets(values, positions, marks, *, observed_at, now, required):
+    if not isinstance(values, dict) or len(values) > 10000:
+        raise ValueError("REPORTED_ASSET_SHAPE")
+    if set(values) & (set(SYMBOLS) | set(required) | set(marks)):
+        raise ValueError("REPORTED_ASSET_SCOPE")
+    for symbol, value in values.items():
+        if (not isinstance(symbol, str) or not re.fullmatch(r"[A-Z0-9][A-Z0-9._-]{0,31}", symbol)
+                or not isinstance(value, ReportedAssetValue)
+                or type(value.quantity) is not int or value.quantity <= 0
+                or positions.get(symbol) != value.quantity):
+            raise ValueError("REPORTED_ASSET_QUANTITY")
+        _decimal(value.amount_usd, zero=True)
+        if value.amount_usd >= Decimal("1e18") or value.amount_usd.as_tuple().exponent < -12:
+            raise ValueError("REPORTED_ASSET_AMOUNT")
+        start, end = value.observation_started_at, value.observation_completed_at
+        if (any(not isinstance(stamp, datetime) or stamp.utcoffset() is None
+                for stamp in (start, end))
+                or not observed_at <= start <= end <= now
+                or not 0 <= (now - start).total_seconds() <= 30):
+            raise ValueError("REPORTED_ASSET_TIME")
+
+
+def portfolio_exposure(view):
+    """Sum a validated view once per positive holding, without inventing quotes."""
+    with localcontext() as context:
+        context.prec = 80
+        return sum((view.reported_asset_values[symbol].amount_usd
+                    if symbol in view.reported_asset_values else quantity * view.marks[symbol]
+                    for symbol, quantity in view.positions.items() if quantity), Decimal(0))
 
 
 def validate_decision(d: Decision, fingerprint: str):
@@ -95,7 +137,10 @@ def validate_observation(
         for symbol, qty in v.sellable_positions.items()
     ):
         raise ValueError("INVALID_SELLABLE_POSITION")
-    if (required | {s for s, q in v.positions.items() if q}) - set(v.marks):
+    validate_reported_assets(v.reported_asset_values, v.positions, v.marks,
+                            observed_at=v.observed_at, now=now, required=required)
+    if (required | {s for s, q in v.positions.items() if q}) - (
+            set(v.marks) | set(v.reported_asset_values)):
         raise ValueError("MISSING_MARKS")
     for mark in v.marks.values():
         _decimal(mark)
@@ -641,7 +686,15 @@ class IntradayExecutor:
                 continue
             notional = abs(delta) * max(mark, limit)
             capital = min(view.nav, self.capital_limit)
-            global_exposure = sum(q * view.marks[s] for s, q in view.positions.items())
+            global_exposure = portfolio_exposure(view)
+            if view.reported_asset_values:
+                self._event(day_id, "REPORTED_VALUATION_USED", currency="USD",
+                    nav=str(view.nav), global_exposure=str(global_exposure),
+                    reported_assets={name: dict(quantity=value.quantity,
+                        amount_usd=str(value.amount_usd),
+                        observation_started_at=value.observation_started_at.isoformat(),
+                        observation_completed_at=value.observation_completed_at.isoformat())
+                        for name, value in view.reported_asset_values.items()})
             if side is Side.BUY and (
                 notional > capital * Decimal(".20")
                 or view.positions.get(symbol, 0) * mark + notional > capital * Decimal(".20")

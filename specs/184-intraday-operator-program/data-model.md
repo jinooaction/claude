@@ -1,5 +1,15 @@
 # 자료 모델
 
+- Observation.reported_asset_values: 단타 허용 종목 밖의 보유에만 적용하는
+  ReportedAssetValue(quantity, amount_usd, observation_started_at, observation_completed_at).
+  조회 구간은 계좌 관측 안의30초 이내이며 가격 발생 시각을 의미하지 않는다. 보유 수량이
+  같아야 하며 marks/mark_times와 중복할 수 없다. net_cash_and_reported_equities 기준은
+  검증된 순현금+실행 시세 평가+이 보고 평가를 합산한다. 원본 보고0은 허용하되 누락을
+  0으로 대체하지 않는다. 전체 범위/현금 확인은 별도이며 실제 KIS 공급자는 후속이다.
+- REPORTED_VALUATION_USED: 주문 한도 검사에 사용한 USD NAV/전체 노출, 보고 자산의
+  수량/평가액/조회 구간을 비공개 intraday_execution_events에 추가한다. 기존 행은
+  변경하지 않으며 이 기록을 승인이나 가격 발생 시각으로 해석하지 않는다.
+
 - ExecutionQualification.execution_model_verified(): 같은 계좌/전략/비용 지문으로
   재계산된 시점/거래량/수량/가격/묶음 수수료/날짜/원본 출처를 종합한다. 알려진 구형
   미구현 표시만 이 종합으로 대체하고 추가 미지원 사유나 실패 체크는 거절한다.
