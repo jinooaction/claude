@@ -19,7 +19,10 @@ NOW = datetime(2026, 9, 10, 15, 0, tzinfo=UTC)
 
 
 @pytest.mark.asyncio
-async def test_rest_discovers_market_but_only_source_timed_stream_values_account(monkeypatch):
+@pytest.mark.parametrize("has_reported_asset", [False, True])
+async def test_rest_discovers_market_but_only_source_timed_stream_values_account(
+    monkeypatch, has_reported_asset,
+):
     clock = [NOW]
     calls = []
     ready = asyncio.Event()
@@ -52,14 +55,21 @@ async def test_rest_discovers_market_but_only_source_timed_stream_values_account
     async def refresh():
         return None
 
+    async def read():
+        report = dict(quantity=3, amount_usd="120", observation_started_at=NOW.isoformat(),
+                      observation_completed_at=NOW.isoformat())
+        return dict(reported_asset_values={"ORANY": report} if has_reported_asset else {},
+                    unverified_assets={"ORANY": {}} if has_reported_asset else {})
+
     monkeypatch.setattr(StrictQuoteFeed, "serve", stream)
     async with httpx.AsyncClient(base_url="https://kis.invalid",
                                  transport=httpx.MockTransport(handler)) as broker:
         observer = SimpleNamespace(
-            broker=broker, refresh_credentials=refresh, _check_connection=lambda: None,
+            broker=broker, refresh_credentials=refresh, _read=read, _check_connection=lambda: None,
             authority=SimpleNamespace(access_token="test", app_key="test", app_secret="test"),
         )
-        valuation = _ValuationFeed(observer, ["SCHX", "IAUM"], lambda: clock[0])
+        symbols = ["SCHX", "IAUM"] + (["ORANY"] if has_reported_asset else [])
+        valuation = _ValuationFeed(observer, symbols, lambda: clock[0])
         assert valuation.snapshot() == {}
         task = asyncio.create_task(_StrategyQuoteView(valuation).serve(approval=refresh))
         try:
@@ -89,11 +99,14 @@ async def test_unresolved_otc_price_is_not_zero_or_a_receipt_timed_mark():
     async def refresh():
         return None
 
+    async def read():
+        return dict(reported_asset_values={}, unverified_assets={})
+
     async with httpx.AsyncClient(base_url="https://kis.invalid", transport=httpx.MockTransport(
         lambda request: httpx.Response(200, json=dict(output=dict(last=""))),
     )) as broker:
         observer = SimpleNamespace(
-            broker=broker, refresh_credentials=refresh, _check_connection=lambda: None,
+            broker=broker, refresh_credentials=refresh, _read=read, _check_connection=lambda: None,
             authority=SimpleNamespace(access_token="test", app_key="test", app_secret="test"),
         )
         valuation = _ValuationFeed(observer, ["ORANY"], lambda: NOW)
@@ -101,6 +114,22 @@ async def test_unresolved_otc_price_is_not_zero_or_a_receipt_timed_mark():
         with pytest.raises(QuoteUnavailable):
             await valuation.serve(approval=refresh)
         assert valuation.snapshot() == {}
+
+
+@pytest.mark.asyncio
+async def test_known_unsupported_holding_without_report_is_not_hidden_from_subscription():
+    async def read():
+        return dict(reported_asset_values={}, unverified_assets={"ORANY": {
+            "reported_market_code": "OTCB", "reported_valuation_usd": None}})
+
+    async def approval():
+        raise AssertionError("No stream should start")
+
+    observer = SimpleNamespace(_read=read, _check_connection=lambda: None)
+    feed = _ValuationFeed(observer, ["ORANY"], lambda: NOW)
+    with pytest.raises(ValueError, match="^PROGRAM_REPORTED_ASSET_UNAVAILABLE$"):
+        await feed.serve(approval=approval)
+    assert feed.snapshot() == {}
 
 
 @pytest.mark.parametrize("mapping", [

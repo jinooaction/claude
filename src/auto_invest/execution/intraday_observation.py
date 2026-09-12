@@ -29,6 +29,23 @@ class ObservationError(ValueError):
     """Closed local reasons only; never expose a broker response."""
 
 
+def _reported_asset_inputs(snapshot):
+    """Extract provided values only; leave scope and unverified assets untouched."""
+    values = {}
+    for symbol, asset in snapshot["unverified_assets"].items():
+        if (symbol in EXCHANGES or asset.get("reported_market_code") != "OTCB"
+                or asset.get("reported_valuation_usd") is None):
+            continue
+        quantity = _amount(asset.get("reported_quantity"))
+        if not quantity or quantity != quantity.to_integral_value():
+            continue
+        amount = _amount(asset["reported_valuation_usd"])
+        values[symbol] = dict(quantity=int(quantity), amount_usd=str(amount),
+            observation_started_at=snapshot["observation_started_at"],
+            observation_completed_at=snapshot["observation_completed_at"])
+    return values
+
+
 def _stamp(value):
     try:
         parsed = datetime.fromisoformat(value) if isinstance(value, str) else value
@@ -229,6 +246,7 @@ class KISExecutionObserver(ExecutionObserver):
                 account=self.account, now=self.now,
             )
             self._check_connection()
+            result["reported_asset_values"] = _reported_asset_inputs(result)
             result["reported_cash_baseline"] = await observe_cash_baseline(
                 self.broker, access_token=self.authority.access_token,
                 app_key=self.authority.app_key, app_secret=self.authority.app_secret,

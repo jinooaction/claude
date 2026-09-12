@@ -178,7 +178,7 @@ class _StrategyQuoteView:
 
 
 class _ValuationFeed:
-    """Discover listed-market subscriptions without using receipt-timed REST prices."""
+    """Subscribe to executable quotes; reported-only holdings keep their own values."""
 
     def __init__(self, observer, symbols, now):
         if not 1 <= len(symbols) <= 40 - len(SYMBOLS):
@@ -193,8 +193,13 @@ class _ValuationFeed:
         observer = self.observer
         markets = {}
         try:
-            await observer.refresh_credentials()
+            account = await asyncio.wait_for(observer._read(), 30)
+            observer._check_connection()
             for symbol in self.symbols:
+                if symbol in account["reported_asset_values"]:
+                    continue
+                if symbol in account["unverified_assets"]:
+                    raise ValueError("PROGRAM_REPORTED_ASSET_UNAVAILABLE")
                 observer._check_connection()
                 quote = await get_quote_resolving_market(
                     observer.broker, access_token=observer.authority.access_token,
@@ -203,7 +208,7 @@ class _ValuationFeed:
                 )
                 observer._check_connection()
                 markets[symbol] = QUOTE_TO_ORDER_EXCHANGE[quote.resolved_market]
-            self.feed = StrictQuoteFeed(tuple(SYMBOLS) + self.symbols,
+            self.feed = StrictQuoteFeed(tuple(SYMBOLS) + tuple(markets),
                                         valuation_exchanges=markets, now=self.now)
             await self.feed.serve(approval=approval)
         finally:

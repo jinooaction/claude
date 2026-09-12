@@ -11,7 +11,12 @@ from auto_invest.execution.intraday_observation import KISExecutionObserver, Obs
 
 
 @pytest.mark.asyncio
-async def test_cash_baseline_reaches_normal_account_reader_without_promoting_account(tmp_path):
+@pytest.mark.parametrize("reported_value,reported_quantity", [
+    ("120", "3"), ("0", "3"), (None, "3"), ("120", "0.5"),
+])
+async def test_cash_baseline_reaches_normal_account_reader_without_promoting_account(
+    tmp_path, reported_value, reported_quantity,
+):
     calls = []
 
     def handle(request):
@@ -22,7 +27,13 @@ async def test_cash_baseline_reaches_normal_account_reader_without_promoting_acc
         assert request.url.params["CANO"] == "12345678"
         assert request.url.params["ACNT_PRDT_CD"] == "01"
         endpoint = request.url.path.rsplit("/", 1)[1]
-        if endpoint == "inquire-present-balance":
+        if endpoint == "inquire-balance":
+            row = dict(ovrs_pdno="ORANY", ovrs_excg_cd="OTCB", tr_crcy_cd="USD",
+                       ovrs_cblc_qty=reported_quantity, ord_psbl_qty="0", now_pric2="40")
+            if reported_value is not None:
+                row["ovrs_stck_evlu_amt"] = reported_value
+            data = dict(output1=[row], ctx_area_fk200="", ctx_area_nk200="")
+        elif endpoint == "inquire-present-balance":
             data = dict(output2=[dict(crcy_cd="USD", frcr_dncl_amt_2="601.37",
                 frcr_buy_mgn_amt="0", frcr_etc_mgna="0")], output3=dict.fromkeys((
                     "dncl_amt", "cma_evlu_amt", "tot_loan_amt", "ustl_buy_amt_smtl",
@@ -44,6 +55,13 @@ async def test_cash_baseline_reaches_normal_account_reader_without_promoting_acc
     assert result["full_account_scope_verified"] is False
     assert result["cash_aggregation_verified"] is False
     assert result["nav"] is None and result["nav_verified"] is False
+    assert result["unverified_assets"]["ORANY"]["tradability_verified"] is False
+    if reported_value is None or reported_quantity == "0.5":
+        assert result["reported_asset_values"] == {}
+    else:
+        assert result["reported_asset_values"]["ORANY"] == dict(quantity=3,
+            amount_usd=reported_value, observation_started_at=result["observation_started_at"],
+            observation_completed_at=result["observation_completed_at"])
     assert [request.method for request in calls] == ["POST"] + ["GET"] * 7
 
 
