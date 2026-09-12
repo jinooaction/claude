@@ -16,6 +16,7 @@ from auto_invest.broker.account_source_profile import profile_margin_responses
 from auto_invest.broker.auth import get_valid_token
 from auto_invest.broker.client import AsyncTokenBucket, CircuitBreaker, ResilientClient
 from auto_invest.broker.domestic_account import observe_domestic_account, public_domestic_account
+from auto_invest.broker.domestic_cash_comparison import compare_domestic_cash_sources
 from auto_invest.broker.intraday_account import (
     AccountReadError,
     observe_account,
@@ -140,6 +141,7 @@ async def run(*, transactions_from=None, transactions_through=None, execution_db
         result["history"] = history.finish("COMPLETE" if code == 0 else "FAILED")
         result["source_structure"] = profile_margin_responses(history.responses)
         result["cash_source_comparison"] = compare_cash_sources(history.responses)
+        result["domestic_cash_comparison"] = compare_domestic_cash_sources(history.responses)
         result["account_components"] = profile_account_components(history.responses)
     return result, code
 
