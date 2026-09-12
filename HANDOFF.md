@@ -1,5 +1,12 @@
 # auto-invest — 다음 세션 인수인계 (main 베이스라인)
 
+186 FR014 실제 확인: PR821/main896d31d, 실행34700917080 성공·KIS11개 통과.
+최근3개 UTC 등록일 거래내역1페이지/0행 NO_TRANSACTIONS. 원본 장부 순번13,
+11응답 COMPLETE·주문0. 기존 현금 CALCULATED,3종목/자산19분류 MATCH와 전후
+안정도 유지됐다. `/tmp/claude-186-transactions-live.log`. 테스트 시간은 일부 비밀값
+마스킹으로 가려져 복원하지 않는다. 빈 내역을 수수료0/전체 거래 이력 완전성으로
+해석하지 않는다. 거래 후 비용 포함 관계와184 전체 계좌/T009/T010은 미완료다.
+
 186 FR014 전체 회귀: 코드bc07c68에서4101 passed/12 skipped(755.59초), 종료0.
 `/tmp/claude-186-transactions-full.log`. 실제 KIS11개와 가동 전 상태 전용1개 제외.
 아래 이번 전체 검사 후속 기록은 갱신한다. 실제 새 거래내역 수집은 배포 후 확인한다.
@@ -188,10 +195,10 @@ git ls-remote --heads origin 'Codex/*' | awk '{print $2}'
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `923a8be` — Merge pull request #819 from jinooaction/codex/account-source-collection |
-| main 테스트 | 코드a61690f/main923a8be 전체4066 passed/12 skipped(759.50초). 제외는 실제 KIS11개와 사전 가동 상태 전용1개. 실제34699060401은11개 통과,10응답·순번12 COMPLETE·주문0, 자산19분류/3종목 대조 MATCH와 원화달러 현금 계산 성공. |
-| main 린트 | 코드a61690f/main923a8be의 `uv run ruff check src tests` 및 하네스14/14 검사 통과. |
-| 열린 PR | #793은 스펙184 초안이다. 코드b7e2935 전체4655 passed/12 skipped(792.29초), 인계8e7eff7까지 푸시했다. 정상 전체 계좌 계산 연결과 T009/T010은 미완료. |
+| 마지막 main 커밋 | `896d31d` — Merge pull request #821 from jinooaction/codex/account-source-collection |
+| main 테스트 | 코드bc07c68/main896d31d 전체4101 passed/12 skipped(755.59초). 실제34700917080 KIS11개 통과,11응답·순번13 COMPLETE·주문0. 최근3개 등록일 거래내역0행, 기존 현금/보유/자산 대조 유지. |
+| main 린트 | 코드bc07c68/main896d31d의 `uv run ruff check src tests` 및 하네스14/14 검사 통과. |
+| 열린 PR | #793은 스펙184 초안이다. 코드03f8500 전체4665 passed/12 skipped(784.88초), 인계5434ca6까지 푸시했다. 정상 전체 계좌 계산 연결과 T009/T010은 미완료. |
 | 출시 완료 스펙 | 스펙182 US8~US11 직접 조회·내부 검증·미입증 숫자 비교 분리가 실제10개 읽기 시험까지 완료됐다(#790~#799). 스펙183 모바일 운영판과 기존182 확정600/12·모의 주문은 유지한다. 장중 현금/NAV(T027)와 단타 실거래(T010~T012)는 미완료다. |
 | 골격 스펙 | 스펙 178은 코드·계약·시뮬레이터와 실제 iPhone 설치·실행까지 완료됐다. 물리 화면 픽셀 캡처와 터치 탐색은 남았다. 스펙 177은 756세션 실제 5분봉 자료가 없어 `INSUFFICIENT_EVIDENCE`이며, 스펙 176은 실제 KIS 자동 주문·체결·감사·정합과 중복 주문 0건 확인이 남았다. |
 | 최근 출시 작업 | 스펙185 보관 자료 연구 연결을 PR801로 출시했다. 실제2일·부족754일·누락0일,11개 읽기 시험·배포34353848826·감사34353974622 성공. 원본·기존 수집기·주문 권한 유지. |
