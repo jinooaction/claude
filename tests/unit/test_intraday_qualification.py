@@ -333,6 +333,18 @@ async def test_real_get_parsers_and_ledger_reach_qualification(
 
 @pytest.fixture
 def prepared(tmp_path, monkeypatch):
+    from auto_invest.execution import intraday_execution_evidence
+
+    class ReceiptClock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            # Fixed historical orders need a fixed receipt clock too. A real
+            # wall clock eventually moves beyond the fixture's observation
+            # time (and the model's maximum interval); neither is a code fault.
+            value = datetime(2026, 9, 12, tzinfo=UTC)
+            return value.astimezone(tz) if tz else value.replace(tzinfo=None)
+
+    monkeypatch.setattr(intraday_execution_evidence, "datetime", ReceiptClock)
     candidate = build_candidate_registry(load_preregistration(q.PREREGISTRATION))[0]
     provider = "kis-nasdaq-partial-unadjusted"
     selection = ResearchSelection(candidate, provider, "a" * 40, "dataset", "research",
