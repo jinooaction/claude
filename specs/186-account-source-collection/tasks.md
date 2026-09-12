@@ -5,7 +5,8 @@
 - [ ] T017 FR011 전체 검사·독립 main 반영·실제 원본 조회 결과 확인.
   첫 전체3912 passed/12 skipped/1 failed(780.96초). 기존 장부 미사용 명령의
   호출 순서 기대값을 c13f773에서 수정했고 관련104개(0.40초)·린트 통과.
-  `/tmp/claude-186-frame-final-full.log` 재검사 진행 중. 첫 검사는 전체 통과가 아니다.
+  최종 c13f773 전체3913 passed/12 skipped(765.67초), 종료0.
+  `/tmp/claude-186-frame-final-full.log`. 실제 서버 확인은 main 반영 후 수행한다.
 - [x] T014 FR010 국내·해외 현금 원본 대조 구현과 누락/변화/다중 페이지/비노출 검증.
   관련62 passed(0.37초), 린트 통과. 기존 수집기의 동일 원본·SQLite 경로에 연결했다.
 - [x] T015 FR010 전체3908 passed/12 skipped(788.78초), PR813/main cd1bec9.
