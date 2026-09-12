@@ -121,6 +121,7 @@ async def _query(*, transactions_from=None, transactions_through=None, execution
         result["domestic_account"] = public_domestic_account(domestic_account)
         result["account_models"] = assess_account_models(
             history.responses, current_account, domestic_account, observed_at=datetime.now(UTC),
+            product=os.environ["KIS_ACCOUNT_NO"][-2:],
         )
     if transactions is not None:
         result["transactions"] = transactions

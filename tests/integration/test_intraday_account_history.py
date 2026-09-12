@@ -2,6 +2,7 @@ import importlib.util
 import json
 import os
 import sqlite3
+from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -69,6 +70,17 @@ def setup(tmp_path, monkeypatch):
             row = dict.fromkeys(TABLE_FIELDS + ("whol_weit_rt",), "0")
             body = dict(rt_cd="0", output1=[dict(row) for _ in range(20)],
                         output2=dict.fromkeys(SUMMARY_FIELDS, "0"))
+            if state.get("model_ready"):
+                for index, amount in ((8, "123"), (16, "601370")):
+                    for field in ("pchs_amt", "evlu_amt", "real_nass_amt"):
+                        body["output1"][index][field] = amount
+                if state.get("model_fault") == "other_asset":
+                    body["output1"][0]["evlu_amt"] = "1"
+                if state.get("model_fault") == "other_loan":
+                    body["output2"]["cma_auto_loan_amt"] = "1"
+                for field in TABLE_FIELDS:
+                    body["output1"][-1][field] = str(sum(
+                        Decimal(item[field]) for item in body["output1"][:-1]))
         else:
             body = dict(rt_cd="0", output1=[], output2=[dict(
                 crcy_cd="USD", frcr_dncl_amt_2=state["amount"],
@@ -109,7 +121,8 @@ def rows(path):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("fault", [None, "cash_change", "quantity_change", "receivable"])
+@pytest.mark.parametrize("fault", [None, "cash_change", "quantity_change", "receivable",
+                                   "other_asset", "other_loan"])
 async def test_actual_owned_reports_reach_cash_and_holdings_models_without_extra_gets(setup, fault):
     module, history, execution, before, state = setup
     state.update(model_ready=True, model_fault=fault)
@@ -121,6 +134,18 @@ async def test_actual_owned_reports_reach_cash_and_holdings_models_without_extra
     assert execution.read_bytes() == before
     assert not models["full_account_scope_verified"] and not models["cash_aggregation_verified"]
     assert not models["nav_verified"] and not models["live_eligible"]
+    scope = models["reported_asset_scope"]
+    if fault is None:
+        assert scope["status"] == "MATCH"
+        assert scope["reported_asset_categories_matched"] is True
+        assert scope["category_count"] == 19 and scope["current_positive_holding_count"] == 1
+    else:
+        assert scope["status"] == "UNAVAILABLE"
+        assert scope["reported_asset_categories_matched"] is False
+        if fault == "other_asset":
+            assert scope["reason"] == "ASSET_SCOPE_OTHER_ASSET_PRESENT"
+        if fault == "other_loan":
+            assert scope["reason"] == "ASSET_SCOPE_OTHER_LIABILITY_PRESENT"
     if fault in {"cash_change", "receivable"}:
         assert models["zero_adjustment_cash"]["status"] == "UNAVAILABLE"
         assert models["reported_settlement_cash"]["status"] == "UNAVAILABLE"
