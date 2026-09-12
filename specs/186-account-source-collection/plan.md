@@ -1,5 +1,19 @@
 # 구현 계획
 
+FR009 (위험3): 공식 주식잔고조회 TTTC8434R를 읽기 전용으로 연결한다. 결제 기준
+자산표가 장중 국내 보유를 완전히 포함한다는 가정을 피하기 위한 현재 잔고 원본이다.
+INQR_DVSN=02, FUND_STTL_ICLD_YN=Y, PRCS_DVSN=00으로 같은 계좌의 전 페이지를
+수집한다. 호출자는 기존 제한/재시도/차단기를 사용하고 전체 읽기는30초로 제한한다.
+종목별 수량/매도가능/평가/대출과 반복 요약을 검증한다. 공개값은 건수/숫자 상태이며
+KRW 현금을 USD로 바꾸거나 전체 계좌/NAV 승인을 부여하지 않는다. 원본 기록기의
+고정 GET 목록에 이 경로만 추가하고 기존 계좌 묶음을 유지한다. 복구는 추가 조회를
+되돌리는 것이며 원본 기록은 삭제하지 않는다. 모의 다중 페이지/변화/오류/시각/취소,
+장부 재열기/비노출과 실제 승인된 서버 수집을 검증한다.
+공식 근거:
+https://raw.githubusercontent.com/koreainvestment/open-trading-api/main/examples_llm/domestic_stock/inquire_account_balance/inquire_account_balance.py
+https://raw.githubusercontent.com/koreainvestment/open-trading-api/main/examples_llm/domestic_stock/inquire_balance/inquire_balance.py
+https://raw.githubusercontent.com/koreainvestment/open-trading-api/main/examples_llm/domestic_stock/inquire_balance/chk_inquire_balance.py
+
 FR008은 추가 API 없이 같은 저장 원본을 분석한다. 전체 자산표는 원본 행 순번과
 고정5열의 숫자 상태만 남기며20/17행 이외의 표는 해석하지 않는다. 일반 잔고는 OTCB,
 지원 미국 거래소,그 외로 구분해 수량·가격·평가액의 상태별 건수를 반환한다. 현재/결제
