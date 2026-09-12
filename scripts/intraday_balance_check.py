@@ -5,7 +5,7 @@ import argparse
 import asyncio
 import json
 import os
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx
@@ -28,10 +28,11 @@ from auto_invest.broker.intraday_balance_evidence import (
     observe_balance_evidence,
     public_balance_evidence,
 )
+from auto_invest.broker.intraday_transactions import observe_transactions, public_transactions
 from auto_invest.execution.intraday_account_history import AccountHistory, AccountHistoryError
 
 
-async def _query(*, history=None):
+async def _query(*, history=None, recent_transactions=False):
     required = ("KIS_APP_KEY", "KIS_APP_SECRET", "KIS_ACCOUNT_NO")
     if any(not os.environ.get(key) for key in required):
         return dict(status="DATA_ACCESS_REQUIRED", orders_submitted=0, live_eligible=False), 2
@@ -52,6 +53,17 @@ async def _query(*, history=None):
         )
         if history is not None:
             client = history.client(client)
+        transactions = None
+        if recent_transactions:
+            end = datetime.now(UTC).date()
+            transaction_snapshot = await observe_transactions(
+                client, account=os.environ["KIS_ACCOUNT_NO"], access_token=token.access_token,
+                app_key=os.environ["KIS_APP_KEY"], app_secret=os.environ["KIS_APP_SECRET"],
+                start_date=(end - timedelta(days=2)).strftime("%Y%m%d"),
+                end_date=end.strftime("%Y%m%d"),
+            )
+            transactions = public_transactions(transaction_snapshot)
+            transactions["requested_registration_window_days"] = 3
         current_account = domestic_account = account_assets = None
 
         async def intermediate_reads():
@@ -79,6 +91,8 @@ async def _query(*, history=None):
             between_current_reads=intermediate_reads,
         )
     result = dict(public_balance_evidence(snapshot), account_assets=account_assets)
+    if transactions is not None:
+        result["transactions"] = transactions
     if current_account is not None:
         result["current_account"] = public_contract_result(current_account)
         result["domestic_account"] = public_domestic_account(domestic_account)
@@ -89,9 +103,9 @@ async def _query(*, history=None):
     return result, 0
 
 
-async def run(*, history_db=None, execution_db=None):
+async def run(*, history_db=None, execution_db=None, recent_transactions=False):
     history = None
-    if execution_db is not None and history_db is None:
+    if (execution_db is not None or recent_transactions) and history_db is None:
         raise AccountHistoryError("HISTORY_DATABASE_REQUIRED")
     if history_db is not None and all(os.environ.get(key) for key in (
         "KIS_APP_KEY", "KIS_APP_SECRET", "KIS_ACCOUNT_NO",
@@ -99,7 +113,7 @@ async def run(*, history_db=None, execution_db=None):
         history = AccountHistory(history_db, os.environ["KIS_ACCOUNT_NO"],
                                  execution_db=execution_db)
     try:
-        result, code = await _query(history=history)
+        result, code = await _query(history=history, recent_transactions=recent_transactions)
     except BaseException:
         if history is not None:
             history.finish("FAILED")
@@ -119,7 +133,8 @@ def main():
     parser.add_argument("--execution-db", type=Path, help="Existing execution ledger; read only")
     args = parser.parse_args()
     try:
-        result, code = asyncio.run(run(history_db=args.history_db, execution_db=args.execution_db))
+        result, code = asyncio.run(run(history_db=args.history_db, execution_db=args.execution_db,
+                                      recent_transactions=args.history_db is not None))
     except Exception as exc:
         result = dict(
             status="FAILED",
