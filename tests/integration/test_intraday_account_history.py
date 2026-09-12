@@ -101,6 +101,16 @@ async def test_actual_parsers_capture_baseline_and_resume_without_historical_dat
         assert result["nav_verified"] is result["cash_verified"] is False
         assert amount not in json.dumps(result)
         assert result["current_account"]["position_count"] == 1
+        profile = result["source_structure"]
+        assert profile["status"] == "SOURCE_STRUCTURE_REVIEWED"
+        assert profile["cash_aggregation_verified"] is False
+        assert profile["responses"][0]["USD"]["row_count"] == 1
+        assert profile["responses"][0]["USD"]["fields"]["frcr_dncl_amt1"]["zero_count"] == 0
+        comparison = result["cash_source_comparison"]
+        assert comparison["common_margin_cash_available"] is True
+        assert all(row["common_deposit_vs_reported_usd"] == "EQUAL"
+                   for row in comparison["comparisons"])
+        assert comparison["cash_aggregation_verified"] is False
     records = rows(history)
     assert len(records) == 2
     first, last = [json.loads(row[2]) for row in records]
