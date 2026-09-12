@@ -5,6 +5,7 @@ import argparse
 import asyncio
 import json
 import os
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
@@ -12,6 +13,7 @@ import httpx
 from auto_invest.broker.account_asset_evidence import observe_account_assets
 from auto_invest.broker.account_cash_comparison import compare_cash_sources
 from auto_invest.broker.account_component_profile import profile_account_components
+from auto_invest.broker.account_model_assessment import assess_account_models
 from auto_invest.broker.account_source_profile import profile_margin_responses
 from auto_invest.broker.auth import get_valid_token
 from auto_invest.broker.client import AsyncTokenBucket, CircuitBreaker, ResilientClient
@@ -55,14 +57,14 @@ async def _query(*, history=None):
         async def intermediate_reads():
             nonlocal current_account, domestic_account, account_assets
             if history is not None:
-                current_account = public_contract_result(await observe_account(
+                current_account = await observe_account(
                     client, account=os.environ["KIS_ACCOUNT_NO"], access_token=token.access_token,
                     app_key=os.environ["KIS_APP_KEY"], app_secret=os.environ["KIS_APP_SECRET"],
-                ))
-                domestic_account = public_domestic_account(await observe_domestic_account(
+                )
+                domestic_account = await observe_domestic_account(
                     client, account=os.environ["KIS_ACCOUNT_NO"], access_token=token.access_token,
                     app_key=os.environ["KIS_APP_KEY"], app_secret=os.environ["KIS_APP_SECRET"],
-                ))
+                )
             account_assets = await observe_account_assets(
                 client, account=os.environ["KIS_ACCOUNT_NO"], access_token=token.access_token,
                 app_key=os.environ["KIS_APP_KEY"], app_secret=os.environ["KIS_APP_SECRET"],
@@ -78,8 +80,11 @@ async def _query(*, history=None):
         )
     result = dict(public_balance_evidence(snapshot), account_assets=account_assets)
     if current_account is not None:
-        result["current_account"] = current_account
-        result["domestic_account"] = domestic_account
+        result["current_account"] = public_contract_result(current_account)
+        result["domestic_account"] = public_domestic_account(domestic_account)
+        result["account_models"] = assess_account_models(
+            history.responses, current_account, domestic_account, observed_at=datetime.now(UTC),
+        )
     return result, 0
 
 
