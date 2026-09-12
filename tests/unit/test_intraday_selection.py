@@ -110,6 +110,7 @@ def test_candidate_parameter_mutation_changes_execution_identity():
     "intraday_asset_scope.py",
     "account_asset_evidence.py", "intraday_balance_evidence.py",
     "intraday_reported_cash.py",
+    "fill_amounts.py", "0005_fill_notionals.sql",
 ])
 def test_new_input_sources_are_bound_to_execution_identity(monkeypatch, filename):
     candidate = build_candidate_registry(load_preregistration(PREREG))[0]

@@ -12,6 +12,7 @@ from pathlib import Path
 
 from auto_invest.broker.intraday_transactions import audit_settlements
 from auto_invest.broker.models import BrokerExecution
+from auto_invest.persistence.fill_amounts import fill_amounts
 
 
 class CostReconciliationError(ValueError):
@@ -53,6 +54,10 @@ def reconcile_cost_inputs(database: Path, executions, transaction_rows):
         connection = sqlite3.connect(path.as_uri() + "?mode=ro", uri=True, timeout=5)
         connection.row_factory = sqlite3.Row
         connection.execute("BEGIN")
+        try:
+            amounts = fill_amounts(connection)
+        except ValueError:
+            raise CostReconciliationError("COST_LEDGER_AMOUNT_INVALID") from None
         with localcontext() as context:
             context.prec = 80
             for execution in executions:
@@ -85,13 +90,13 @@ def reconcile_cost_inputs(database: Path, executions, transaction_rows):
                     continue
                 local_qty, local_notional = Decimal(0), Decimal(0)
                 for fill in connection.execute(
-                    "SELECT qty, price_usd FROM fills WHERE order_correlation_id=?",
+                    "SELECT kis_fill_id, qty, price_usd FROM fills WHERE order_correlation_id=?",
                     (order["correlation_id"],),
                 ):
                     if type(fill["qty"]) is not int or not 0 < fill["qty"] <= 10**18:
                         raise CostReconciliationError("COST_LEDGER_QUANTITY_INVALID")
                     local_qty += fill["qty"]
-                    local_notional += fill["qty"] * _decimal(fill["price_usd"])
+                    local_notional += amounts[fill["kis_fill_id"]]
                 if (local_qty, local_notional) != (qty, notional):
                     issues.add("LEDGER_FILL_TOTAL_MISMATCH")
                 else:

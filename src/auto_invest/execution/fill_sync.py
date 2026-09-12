@@ -24,7 +24,7 @@ import sqlite3
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from decimal import Decimal
+from decimal import Decimal, localcontext
 
 from auto_invest.broker.client import ResilientClient
 from auto_invest.broker.models import BrokerExecution
@@ -47,6 +47,7 @@ from auto_invest.persistence.audit import (
     FillPayload,
     OrderSubmissionRecoveredPayload,
 )
+from auto_invest.persistence.fill_amounts import fill_amounts
 
 logger = logging.getLogger(__name__)
 
@@ -113,6 +114,9 @@ class PlannedFill:
     price_usd: Decimal
     kis_fill_id: str
     executed_at_utc: datetime | None = None
+    notional_usd: Decimal | None = None
+    cumulative_qty: int | None = None
+    cumulative_avg_price_usd: Decimal | None = None
 
 
 @dataclass(frozen=True)
@@ -185,12 +189,16 @@ def plan_fill_ingestion(
             continue
         elif delta > 0:
             price = execution.avg_fill_price_usd
+            exact_notional = None
             if price.is_finite() and recorded_notional_by_corr is not None:
                 previous_notional = recorded_notional_by_corr.get(order.correlation_id)
                 if recorded and previous_notional is None:
                     plan.warnings.append(f"{order.correlation_id}: previous fill notional missing")
                     continue
-                price = (price * broker_filled - (previous_notional or Decimal("0"))) / delta
+                with localcontext() as context:
+                    context.prec = 100
+                    exact_notional = price * broker_filled - (previous_notional or Decimal("0"))
+                price = exact_notional / delta
             if not price.is_finite() or price <= 0:
                 plan.warnings.append(f"{order.correlation_id}: 체결가 {price} 비양수 — FILL 보류")
                 continue
@@ -210,14 +218,21 @@ def plan_fill_ingestion(
                         # KIS ord_dt/ord_tmd describe the order, not its fills.
                         # A cumulative quantity report has no execution instant.
                         executed_at_utc=None,
+                        notional_usd=exact_notional,
+                        cumulative_qty=broker_filled if exact_notional is not None else None,
+                        cumulative_avg_price_usd=(execution.avg_fill_price_usd
+                                                 if exact_notional is not None else None),
                     )
                 )
 
         elif recorded and recorded_notional_by_corr is not None:
             previous_notional = recorded_notional_by_corr.get(order.correlation_id)
             price = execution.avg_fill_price_usd
-            if (previous_notional is None or not price.is_finite() or price <= 0
-                    or price * broker_filled != previous_notional):
+            with localcontext() as context:
+                context.prec = 100
+                matches = (previous_notional is not None and price.is_finite() and price > 0
+                           and price * broker_filled == previous_notional)
+            if not matches:
                 plan.warnings.append(
                     f"{order.correlation_id}: unchanged fill quantity has unverified notional"
                 )
@@ -517,6 +532,16 @@ def _apply_fill(conn: sqlite3.Connection, fill: PlannedFill, ts_iso: str,
     if cursor.rowcount == 0:
         return False
 
+    evidence = (fill.notional_usd, fill.cumulative_qty, fill.cumulative_avg_price_usd)
+    if any(value is not None for value in evidence):
+        if any(value is None for value in evidence):
+            raise ValueError("FILL_NOTIONAL_EVIDENCE_INCOMPLETE")
+        conn.execute("INSERT INTO fill_notionals VALUES(?,?,?,?)", (
+            fill.kis_fill_id, str(fill.notional_usd), fill.cumulative_qty,
+            str(fill.cumulative_avg_price_usd),
+        ))
+        fill_amounts(conn, correlation_id=fill.correlation_id)
+
     audit.append(
         conn,
         FillPayload(
@@ -529,6 +554,11 @@ def _apply_fill(conn: sqlite3.Connection, fill: PlannedFill, ts_iso: str,
             ),
             observed_at_utc=ts_iso,
             broker_response_received_at_utc=response_received,
+            reported_notional_usd=(str(fill.notional_usd)
+                                   if fill.notional_usd is not None else None),
+            reported_cumulative_qty=fill.cumulative_qty,
+            reported_cumulative_avg_price_usd=(str(fill.cumulative_avg_price_usd)
+                if fill.cumulative_avg_price_usd is not None else None),
         ),
         rule_id=fill.rule_id,
         symbol=fill.symbol,
@@ -674,12 +704,13 @@ async def sync_fills(
     open_orders = _load_open_orders(conn)
     recorded = _recorded_qty_by_corr(conn, [o.correlation_id for o in open_orders])
     notionals: dict[str, Decimal] = {}
-    for row in conn.execute("SELECT order_correlation_id,qty,price_usd FROM fills"):
-        corr = row["order_correlation_id"]
-        if corr in recorded:
-            notionals[corr] = notionals.get(corr, Decimal("0")) + (
-                int(row["qty"]) * Decimal(row["price_usd"])
-            )
+    amounts = fill_amounts(conn)
+    with localcontext() as context:
+        context.prec = 100
+        for row in conn.execute("SELECT order_correlation_id,kis_fill_id FROM fills"):
+            corr = row["order_correlation_id"]
+            if corr in recorded:
+                notionals[corr] = notionals.get(corr, Decimal("0")) + amounts[row["kis_fill_id"]]
     plan = plan_fill_ingestion(open_orders, executions, recorded, notionals)
     fills_applied, qty_applied, transitions = apply_fill_plan(
         conn, plan, ts_iso=_iso_ms(moment), response_received=response_received,

@@ -43,6 +43,11 @@ def _ledger(connection):
     result["fill_audits"] = [dict(row) for row in connection.execute(
         "SELECT * FROM audit_log WHERE event_type='FILL' ORDER BY seq"
     )]
+    result["fill_notionals"] = [dict(row) for row in connection.execute(
+        "SELECT * FROM fill_notionals ORDER BY kis_fill_id"
+    )] if connection.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='fill_notionals'"
+    ).fetchone() else []
     result["execution_claims"] = [dict(row) for row in connection.execute(
         "SELECT * FROM intraday_execution_claims ORDER BY id"
     )] if connection.execute(
@@ -311,6 +316,9 @@ def assess_sources(*, database, account, selection, runtime_digest, window, exec
         key = "correlation_id" if table == "fill_audits" else "order_correlation_id"
         scoped_ledger[table] = [row for row in before.get(table, [])
                                 if row[key] in correlations]
+    fill_ids = {row["kis_fill_id"] for row in scoped_ledger["fills"]}
+    scoped_ledger["fill_notionals"] = [row for row in before.get("fill_notionals", [])
+                                     if row["kis_fill_id"] in fill_ids]
     digest = _digest(dict(identity=identity, checks=checks, issues=sorted(issues), missing=missing,
                           executions=[v.model_dump(mode="json") for v in executions],
                           transactions=rows, ledger=scoped_ledger,

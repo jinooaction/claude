@@ -25,6 +25,7 @@ from auto_invest.execution.fill_sync import sync_fills
 from auto_invest.execution.order_router import OrderRouter
 from auto_invest.market_data.intraday import CALENDAR, NY, SYMBOLS
 from auto_invest.market_data.intraday_pricing import limit_price
+from auto_invest.persistence.fill_amounts import fill_amounts
 
 EXCHANGES = {"SPY": "AMEX", "QQQ": "NASD", "IWM": "AMEX", "TLT": "NASD", "GLD": "AMEX"}
 OPEN = {"INTENT", "SUBMITTING", "SUBMISSION_UNKNOWN", "SUBMITTED", "PARTIALLY_FILLED"}
@@ -599,12 +600,13 @@ class IntradayExecutor:
             result.setdefault("reason", refusal)
             return result
         profit = sum(q * view.marks[s] for s, q in owned.items())
+        amounts = fill_amounts(self.conn)
         for row in self.conn.execute(
-            "SELECT o.side,f.qty,f.price_usd FROM fills f JOIN orders o "
+            "SELECT o.side,f.kis_fill_id FROM fills f JOIN orders o "
             "ON o.correlation_id=f.order_correlation_id WHERE substr(o.rule_id,1,?)=?",
             (len(self.prefix), self.prefix),
         ):
-            value = row["qty"] * Decimal(row["price_usd"])
+            value = amounts[row["kis_fill_id"]]
             profit += value * (-1 if row["side"] == "BUY" else 1) - value * Decimal(".0025")
         day_id = self.prefix + str(session)
         previous = self.conn.execute(
