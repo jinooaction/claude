@@ -103,6 +103,7 @@ def test_candidate_parameter_mutation_changes_execution_identity():
 
 @pytest.mark.parametrize("filename", [
     "intraday_observation.py", "intraday_selection.py", "intraday_cash_ledger.py",
+    "intraday_account.py", "intraday_cash_baseline.py", "account_source_profile.py",
 ])
 def test_new_input_sources_are_bound_to_execution_identity(monkeypatch, filename):
     candidate = build_candidate_registry(load_preregistration(PREREG))[0]

@@ -11,6 +11,7 @@ from decimal import Decimal, localcontext
 
 from auto_invest.broker.auth import get_valid_token
 from auto_invest.broker.intraday_account import observe_account
+from auto_invest.broker.intraday_cash_baseline import observe_cash_baseline
 from auto_invest.broker.intraday_inputs import EXCHANGES, PREFIXES, REST_URL, SourceQuote
 from auto_invest.execution.intraday import Observation, validate_observation
 from auto_invest.execution.intraday_cash_ledger import CashLedgerError, compute_net_cash
@@ -195,6 +196,12 @@ class KISExecutionObserver(ExecutionObserver):
         async with self._read_lock:
             await self.refresh_credentials()
             result = await observe_account(
+                self.broker, access_token=self.authority.access_token,
+                app_key=self.authority.app_key, app_secret=self.authority.app_secret,
+                account=self.account, now=self.now,
+            )
+            self._check_connection()
+            result["reported_cash_baseline"] = await observe_cash_baseline(
                 self.broker, access_token=self.authority.access_token,
                 app_key=self.authority.app_key, app_secret=self.authority.app_secret,
                 account=self.account, now=self.now,
