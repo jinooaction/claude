@@ -84,6 +84,7 @@ async def _query(*, history=None):
         result["domestic_account"] = public_domestic_account(domestic_account)
         result["account_models"] = assess_account_models(
             history.responses, current_account, domestic_account, observed_at=datetime.now(UTC),
+            product=os.environ["KIS_ACCOUNT_NO"][-2:],
         )
     return result, 0
 
