@@ -5,7 +5,7 @@ import argparse
 import asyncio
 import json
 import os
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx
@@ -42,7 +42,7 @@ from auto_invest.execution.intraday_cost_reconciliation import (
 
 
 async def _query(*, transactions_from=None, transactions_through=None, execution_db=None,
-                 history=None):
+                 history=None, recent_transactions=False):
     include_transactions = transactions_from is not None or transactions_through is not None
     if execution_db is not None:
         if include_transactions or history is None:
@@ -71,6 +71,17 @@ async def _query(*, transactions_from=None, transactions_through=None, execution
         )
         if history is not None:
             client = history.client(client)
+        transactions = None
+        if recent_transactions and not include_transactions:
+            end = datetime.now(UTC).date()
+            transaction_snapshot = await observe_transactions(
+                client, account=os.environ["KIS_ACCOUNT_NO"], access_token=token.access_token,
+                app_key=os.environ["KIS_APP_KEY"], app_secret=os.environ["KIS_APP_SECRET"],
+                start_date=(end - timedelta(days=2)).strftime("%Y%m%d"),
+                end_date=end.strftime("%Y%m%d"),
+            )
+            transactions = public_transactions(transaction_snapshot)
+            transactions["requested_registration_window_days"] = 3
         current_account = domestic_account = account_assets = None
 
         async def intermediate_reads():
@@ -97,7 +108,6 @@ async def _query(*, transactions_from=None, transactions_through=None, execution
             app_secret=os.environ["KIS_APP_SECRET"],
             between_current_reads=intermediate_reads,
         )
-        transactions = None
         if include_transactions:
             transaction_snapshot = await observe_transactions(
                 client, account=os.environ["KIS_ACCOUNT_NO"], access_token=token.access_token,
@@ -116,6 +126,8 @@ async def _query(*, transactions_from=None, transactions_through=None, execution
                     Path(execution_db), executions, transaction_snapshot["rows"],
                 )
     result = dict(public_balance_evidence(snapshot), account_assets=account_assets)
+    if transactions is not None:
+        result["transactions"] = transactions
     if current_account is not None:
         result["current_account"] = public_contract_result(current_account)
         result["domestic_account"] = public_domestic_account(domestic_account)
@@ -123,16 +135,17 @@ async def _query(*, transactions_from=None, transactions_through=None, execution
             history.responses, current_account, domestic_account, observed_at=datetime.now(UTC),
             product=os.environ["KIS_ACCOUNT_NO"][-2:],
         )
-    if transactions is not None:
-        result["transactions"] = transactions
     return result, 0
 
 
 async def run(*, transactions_from=None, transactions_through=None, execution_db=None,
-              history_db=None):
+              history_db=None, recent_transactions=False):
     if transactions_from is not None or transactions_through is not None:
         validate_window(transactions_from, transactions_through)
+        recent_transactions = False
     history = None
+    if recent_transactions and history_db is None:
+        raise AccountHistoryError("HISTORY_DATABASE_REQUIRED")
     if history_db is not None and all(os.environ.get(key) for key in (
         "KIS_APP_KEY", "KIS_APP_SECRET", "KIS_ACCOUNT_NO",
     )):
@@ -141,7 +154,7 @@ async def run(*, transactions_from=None, transactions_through=None, execution_db
     try:
         result, code = await _query(
             transactions_from=transactions_from, transactions_through=transactions_through,
-            execution_db=execution_db, history=history,
+            execution_db=execution_db, history=history, recent_transactions=recent_transactions,
         )
     except BaseException:
         if history is not None:
@@ -174,6 +187,7 @@ def main():
             transactions_through=args.transactions_through,
             execution_db=args.execution_db,
             history_db=args.history_db,
+            recent_transactions=args.history_db is not None,
         ))
     except Exception as exc:
         result = dict(
