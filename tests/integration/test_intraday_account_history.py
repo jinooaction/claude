@@ -9,6 +9,7 @@ import httpx
 import pytest
 
 from auto_invest.broker.account_asset_evidence import SUMMARY_FIELDS, TABLE_FIELDS
+from auto_invest.broker.domestic_account import SUMMARY_FIELDS as DOMESTIC_SUMMARY_FIELDS
 from auto_invest.broker.intraday_account import AccountReadError
 from auto_invest.execution.intraday_account_history import AccountHistory, AccountHistoryError
 from auto_invest.persistence.db import get_connection, migrate
@@ -44,7 +45,12 @@ def setup(tmp_path, monkeypatch):
         if state["calls"] == state["fail_at"]:
             return httpx.Response(500, json=dict(msg1="PRIVATE_BROKER_ERROR"))
         endpoint = request.url.path.split("/")[-1]
-        if endpoint == "inquire-balance":
+        if request.url.path == "/uapi/domestic-stock/v1/trading/inquire-balance":
+            assert request.url.params["FUND_STTL_ICLD_YN"] == "Y"
+            body = dict(rt_cd="0", output1=[],
+                        output2=[dict.fromkeys(DOMESTIC_SUMMARY_FIELDS, "0")],
+                        ctx_area_fk100="", ctx_area_nk100="")
+        elif endpoint == "inquire-balance":
             body = dict(rt_cd="0", output1=[dict(
                 ovrs_pdno="SPY", ovrs_cblc_qty="3", ord_psbl_qty="3", tr_crcy_cd="USD",
                 ovrs_excg_cd="NASD", now_pric2="41", ovrs_stck_evlu_amt="123",
@@ -97,10 +103,16 @@ async def test_actual_parsers_capture_baseline_and_resume_without_historical_dat
         result, code = await module.run(history_db=history, execution_db=execution)
         assert code == 0
         assert result["history"] == dict(status="COMPLETE", observation_sequence=index,
-                                          response_count=9, live_eligible=False)
+                                          response_count=10, live_eligible=False)
         assert result["nav_verified"] is result["cash_verified"] is False
         assert amount not in json.dumps(result)
         assert result["current_account"]["position_count"] == 1
+        assert result["domestic_account"]["holding_count"] == 0
+        assert not result["domestic_account"]["full_account_verified"]
+        recorded = json.loads(rows(history)[-1][2])["responses"][-1]
+        assert recorded["endpoint"] == "/uapi/domestic-stock/v1/trading/inquire-balance"
+        assert recorded["params"]["FUND_STTL_ICLD_YN"] == "Y"
+        assert recorded["data"]["output2"][0]["tot_loan_amt"] == "0"
         profile = result["source_structure"]
         assert profile["status"] == "SOURCE_STRUCTURE_REVIEWED"
         assert profile["cash_aggregation_verified"] is False

@@ -15,6 +15,7 @@ from auto_invest.broker.account_component_profile import profile_account_compone
 from auto_invest.broker.account_source_profile import profile_margin_responses
 from auto_invest.broker.auth import get_valid_token
 from auto_invest.broker.client import AsyncTokenBucket, CircuitBreaker, ResilientClient
+from auto_invest.broker.domestic_account import observe_domestic_account, public_domestic_account
 from auto_invest.broker.intraday_account import (
     AccountReadError,
     observe_account,
@@ -79,8 +80,13 @@ async def _query(*, transactions_from=None, transactions_through=None, execution
             app_key=os.environ["KIS_APP_KEY"], app_secret=os.environ["KIS_APP_SECRET"],
         )
         current_account = None
+        domestic_account = None
         if history is not None:
             current_account = public_contract_result(await observe_account(
+                client, account=os.environ["KIS_ACCOUNT_NO"], access_token=token.access_token,
+                app_key=os.environ["KIS_APP_KEY"], app_secret=os.environ["KIS_APP_SECRET"],
+            ))
+            domestic_account = public_domestic_account(await observe_domestic_account(
                 client, account=os.environ["KIS_ACCOUNT_NO"], access_token=token.access_token,
                 app_key=os.environ["KIS_APP_KEY"], app_secret=os.environ["KIS_APP_SECRET"],
             ))
@@ -105,6 +111,7 @@ async def _query(*, transactions_from=None, transactions_through=None, execution
     result = dict(public_balance_evidence(snapshot), account_assets=account_assets)
     if current_account is not None:
         result["current_account"] = current_account
+        result["domestic_account"] = domestic_account
     if transactions is not None:
         result["transactions"] = transactions
     return result, 0
