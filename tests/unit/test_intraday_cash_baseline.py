@@ -96,7 +96,8 @@ def test_uncertain_or_changed_cash_never_yields_a_baseline(fault, reason):
 
 
 @pytest.mark.asyncio
-async def test_actual_collector_owns_usd_query_scope_and_brackets_margin():
+@pytest.mark.parametrize("headers", [{"tr_cont": "D"}, {}, {"tr_cont": " "}])
+async def test_actual_collector_owns_usd_query_scope_and_brackets_margin(headers):
     source, calls = records(), []
 
     def handle(request):
@@ -109,7 +110,7 @@ async def test_actual_collector_owns_usd_query_scope_and_brackets_margin():
         if request.url.path == CURRENT:
             assert request.url.params["WCRC_FRCR_DVSN_CD"] == "02"
             assert request.url.params["NATN_CD"] == "000"
-        return httpx.Response(200, headers={"tr_cont": "D"}, json=source[index]["data"])
+        return httpx.Response(200, headers=headers, json=source[index]["data"])
 
     async with httpx.AsyncClient(base_url="https://kis.invalid",
                                 transport=httpx.MockTransport(handle)) as client:

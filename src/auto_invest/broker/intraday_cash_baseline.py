@@ -163,5 +163,5 @@ async def _collect_cash_baseline(client, *, access_token, app_key, app_secret, a
             raise AccountReadError("BASELINE_TRANSPORT_OR_JSON_ERROR") from None
         records.append(dict(endpoint=endpoint, started_at=start.isoformat(),
                             received_at=_stamp(now()).isoformat(), http_status=response.status_code,
-                            continuation=response.headers.get("tr_cont"), data=data))
+                            continuation=response.headers.get("tr_cont", "").strip(), data=data))
     return normalize_cash_baseline(records, observed_at=now())
