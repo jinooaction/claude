@@ -6,6 +6,7 @@ import pytest
 
 from auto_invest.broker.account_source_profile import CASH_FIELDS
 from auto_invest.broker.client import AsyncTokenBucket, CircuitBreaker, ResilientClient
+from auto_invest.broker.domestic_account import SUMMARY_FIELDS as DOMESTIC_SUMMARY_FIELDS
 from auto_invest.broker.intraday_inputs import REST_URL
 from auto_invest.execution.intraday_observation import KISExecutionObserver, ObservationError
 
@@ -27,7 +28,10 @@ async def test_cash_baseline_reaches_normal_account_reader_without_promoting_acc
         assert request.url.params["CANO"] == "12345678"
         assert request.url.params["ACNT_PRDT_CD"] == "01"
         endpoint = request.url.path.rsplit("/", 1)[1]
-        if endpoint == "inquire-balance":
+        if request.url.path == "/uapi/domestic-stock/v1/trading/inquire-balance":
+            data = dict(output1=[], output2=[dict.fromkeys(DOMESTIC_SUMMARY_FIELDS, "0")],
+                        ctx_area_fk100="", ctx_area_nk100="")
+        elif endpoint == "inquire-balance":
             row = dict(ovrs_pdno="ORANY", ovrs_excg_cd="OTCB", tr_crcy_cd="USD",
                        ovrs_cblc_qty=reported_quantity, ord_psbl_qty="0", now_pric2="40")
             if reported_value is not None:
@@ -62,7 +66,10 @@ async def test_cash_baseline_reaches_normal_account_reader_without_promoting_acc
         assert result["reported_asset_values"]["ORANY"] == dict(quantity=3,
             amount_usd=reported_value, observation_started_at=result["observation_started_at"],
             observation_completed_at=result["observation_completed_at"])
-    assert [request.method for request in calls] == ["POST"] + ["GET"] * 7
+    domestic = result["reported_domestic_account"]
+    assert domestic["positions"] == {} and domestic["pagination_complete"]
+    assert domestic["currency"] == "KRW" and not domestic["full_account_verified"]
+    assert [request.method for request in calls] == ["POST"] + ["GET"] * 8
 
 
 def authority(http):
@@ -76,6 +83,10 @@ def authority(http):
 
 
 def account_response(request):
+    if request.url.path == "/uapi/domestic-stock/v1/trading/inquire-balance":
+        return httpx.Response(200, headers={"tr_cont": "D"}, json=dict(rt_cd="0", output1=[],
+            output2=[dict.fromkeys(DOMESTIC_SUMMARY_FIELDS, "0")],
+            ctx_area_fk100="", ctx_area_nk100=""))
     endpoint = request.url.path.rsplit("/", 1)[1]
     rows = {
         "inquire-balance": dict(output1=[], ctx_area_fk200="", ctx_area_nk200=""),
@@ -107,7 +118,7 @@ async def test_real_authentication_and_reader_share_token_but_do_not_approve_nav
             with pytest.raises(ObservationError, match="^ACCOUNT_SCOPE_UNVERIFIED$"):
                 await observer()
             assert owner.access_token == "fresh"
-    assert [r.method for r in calls] == ["POST"] + ["GET"] * 14
+    assert [r.method for r in calls] == ["POST"] + ["GET"] * 16
     assert all(r.method == "GET" or r.url.path == "/oauth2/tokenP" for r in calls)
     assert (tmp_path / "token.json").stat().st_mode & 0o777 == 0o600
 
@@ -176,3 +187,24 @@ async def test_unofficial_origin_is_rejected_on_construction(tmp_path):
     async with httpx.AsyncClient(base_url="https://kis.invalid") as http:
         with pytest.raises(ObservationError, match="^ACCOUNT_CONNECTION_INVALID$"):
             KISExecutionObserver(authority(http), lambda: {}, token_cache=tmp_path / "token.json")
+
+
+@pytest.mark.asyncio
+async def test_domestic_failure_never_returns_a_partial_account_as_complete(tmp_path):
+    calls = []
+
+    def handle(request):
+        calls.append(request)
+        if request.url.path == "/oauth2/tokenP":
+            return httpx.Response(200, json=dict(access_token="fresh", expires_in=86400))
+        if request.url.path == "/uapi/domestic-stock/v1/trading/inquire-balance":
+            return httpx.Response(403, json=dict(msg1="PRIVATE_DOMESTIC_ERROR"))
+        return account_response(request)
+
+    async with httpx.AsyncClient(base_url=REST_URL, transport=httpx.MockTransport(handle)) as http:
+        observer = KISExecutionObserver(authority(http), lambda: {},
+                                       token_cache=tmp_path / "token.json")
+        with pytest.raises(ObservationError, match="^ACCOUNT_INPUT_UNAVAILABLE$"):
+            await observer()
+    assert calls[-1].url.path == "/uapi/domestic-stock/v1/trading/inquire-balance"
+    assert all(request.method == "GET" or request.url.path == "/oauth2/tokenP" for request in calls)

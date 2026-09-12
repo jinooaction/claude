@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from decimal import Decimal, localcontext
 
 from auto_invest.broker.auth import get_valid_token
+from auto_invest.broker.domestic_account import observe_domestic_account
 from auto_invest.broker.intraday_account import observe_account
 from auto_invest.broker.intraday_cash_baseline import observe_cash_baseline
 from auto_invest.broker.intraday_inputs import EXCHANGES, PREFIXES, REST_URL, SourceQuote
@@ -248,6 +249,12 @@ class KISExecutionObserver(ExecutionObserver):
             self._check_connection()
             result["reported_asset_values"] = _reported_asset_inputs(result)
             result["reported_cash_baseline"] = await observe_cash_baseline(
+                self.broker, access_token=self.authority.access_token,
+                app_key=self.authority.app_key, app_secret=self.authority.app_secret,
+                account=self.account, now=self.now,
+            )
+            self._check_connection()
+            result["reported_domestic_account"] = await observe_domestic_account(
                 self.broker, access_token=self.authority.access_token,
                 app_key=self.authority.app_key, app_secret=self.authority.app_secret,
                 account=self.account, now=self.now,

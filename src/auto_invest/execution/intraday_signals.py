@@ -37,6 +37,7 @@ def execution_fingerprint(candidate, provider):
         Path(__file__).with_name("fill_sync.py"),
         Path(__file__).parents[1] / "broker/intraday_inputs.py",
         Path(__file__).parents[1] / "broker/intraday_account.py",
+        Path(__file__).parents[1] / "broker/domestic_account.py",
         Path(__file__).parents[1] / "broker/intraday_cash_baseline.py",
         Path(__file__).parents[1] / "broker/account_source_profile.py",
         Path(__file__).parents[1] / "broker/overseas.py",
