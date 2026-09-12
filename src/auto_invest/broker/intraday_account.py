@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from datetime import UTC, datetime
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, localcontext
 
 from auto_invest.broker.overseas import _kis_headers, _split_account
 from auto_invest.execution.intraday_observation_models import settled_usd_cash
@@ -46,6 +46,23 @@ def _identifier(row, field):
     if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9._-]{1,32}", value.strip()):
         raise AccountReadError("INVALID_" + field.upper())
     return value.strip()
+
+
+def _optional_reported_number(row, field):
+    # Missing data remains missing; a present invalid value is not hidden.
+    return _number(row, field) if field in row else None
+
+
+def _reported_holdings_valuation(positions, unverified_assets):
+    values = [row["reported_valuation_usd"]
+              for row in (*positions.values(), *unverified_assets.values())]
+    complete = all(value is not None for value in values)
+    with localcontext() as context:
+        context.prec = 80
+        total = sum((Decimal(value) for value in values), Decimal(0)) if complete else None
+    return dict(scope="KIS_US_ORDINARY_REPORTED_HOLDINGS", complete=complete,
+                asset_count=len(values), amount_usd=str(total) if total is not None else None,
+                execution_nav_verified=False)
 
 
 def _usd_currency(row):
@@ -184,10 +201,20 @@ async def observe_account(
             symbol = _identifier(row, "ovrs_pdno")
             if symbol in positions or symbol in unverified_assets:
                 raise AccountReadError("DUPLICATE_ACCOUNT_POSITION")
+            quantity = _number(row, "ovrs_cblc_qty")
+            sellable = _optional_reported_number(row, "ord_psbl_qty")
+            if sellable is not None and sellable > quantity:
+                raise AccountReadError("SELLABLE_EXCEEDS_HOLDING")
+            mark = _optional_reported_number(row, "now_pric2")
+            valuation = _optional_reported_number(row, "ovrs_stck_evlu_amt")
             unverified_assets[symbol] = dict(
-                reported_quantity=str(_number(row, "ovrs_cblc_qty")),
+                reported_quantity=str(quantity),
                 reported_market_code="OTCB",
-                reported_valuation_usd=None,
+                reported_sellable_quantity=str(sellable) if sellable is not None else None,
+                reported_mark_usd=str(mark) if mark is not None else None,
+                reported_valuation_usd=str(valuation) if valuation is not None else None,
+                valuation_basis="BROKER_REPORTED_UNTIMED",
+                price_source_at=None,
                 valuation_verified=False,
                 exchange_verified=False,
                 tradability_verified=False,
@@ -290,6 +317,7 @@ async def observe_account(
         unclassified_margin_row_count=unclassified_margin_rows,
         positions=positions,
         unverified_assets=unverified_assets,
+        reported_holdings_valuation=_reported_holdings_valuation(positions, unverified_assets),
         open_orders=orders,
         pagination_complete=True,
         nav=None,
@@ -322,6 +350,11 @@ def public_contract_result(snapshot):
         ),
         position_count=len(snapshot["positions"]),
         unverified_asset_count=len(snapshot["unverified_assets"]),
+        unverified_asset_with_reported_value_count=sum(
+            row["reported_valuation_usd"] is not None
+            for row in snapshot["unverified_assets"].values()
+        ),
+        reported_valuation_complete=snapshot["reported_holdings_valuation"]["complete"],
         usd_margin_reported=snapshot["usd_margin_reported"],
         usd_margin_row_count=snapshot["usd_margin_row_count"],
         settled_cash_calculation={key: value for key, value in

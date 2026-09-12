@@ -180,3 +180,11 @@ dataset_fingerprint, 기존177 decision으로 구성한다. observation_type은
 HISTORICAL_RESEARCH이며 live_eligible=false, orders_submitted=0이다.
 합성 여부·부분 시장 수정 정책을 원본에서 보존하고 합성 또는 누락 자료를 연구 합격으로
 바꾸지 않는다. source.json의 archives에는 날짜별 원본/manifest 지문을 남긴다.
+FR056: unverified_assets에도 원본이 제공하면 reported_sellable_quantity,
+reported_mark_usd, reported_valuation_usd를 보존한다. valuation_basis는
+BROKER_REPORTED_UNTIMED, price_source_at은None이다. 원본에 없는 가격 발생 시각은
+만들지 않는다. 제공된 잘못된 숫자·음수·보유보다 큰 매도가능 수량은 거절한다.
+reported_holdings_valuation은 scope=KIS_US_ORDINARY_REPORTED_HOLDINGS,
+complete, asset_count, 비공개 amount_usd를 가진다. 한 평가액이라도 없으면 합계도
+None이며 알려진 행만 합산한 수를 완결된 값으로 내보내지 않는다. 전체 계좌 NAV나
+실행 권한은 별개이며 public_contract_result는 금액 없이 완결 여부/제공 건수만 낸다.

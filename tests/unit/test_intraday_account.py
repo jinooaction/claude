@@ -13,6 +13,58 @@ from auto_invest.broker.intraday_account import (
 NOW = datetime(2026, 9, 7, tzinfo=UTC)
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("price,value", [("123.456", "246.912"), ("0", "0")])
+async def test_otc_reported_values_are_preserved_without_execution_price_authority(price, value):
+    from decimal import Decimal, localcontext
+
+    data = replies()
+    data["inquire-balance"]["output1"].append(dict(
+        ovrs_pdno="OTC.PRIVATE", ovrs_cblc_qty="2", ord_psbl_qty="1",
+        ovrs_excg_cd="OTCB", tr_crcy_cd="USD", now_pric2=price, ovrs_stck_evlu_amt=value,
+    ))
+    with localcontext() as context:
+        context.prec = 3
+        snapshot = await read(lambda request: httpx.Response(
+            200, json=data[request.url.path.split("/")[-1]],
+        ), now=lambda: NOW)
+    asset = snapshot["unverified_assets"]["OTC.PRIVATE"]
+    assert asset["reported_mark_usd"] == price
+    assert asset["reported_valuation_usd"] == value
+    assert asset["reported_sellable_quantity"] == "1"
+    assert asset["price_source_at"] is None
+    assert asset["valuation_verified"] is asset["tradability_verified"] is False
+    total = snapshot["reported_holdings_valuation"]
+    assert total["complete"] and total["asset_count"] == 2
+    assert Decimal(total["amount_usd"]) == Decimal("82.21") + Decimal(value)
+    assert not snapshot["nav_verified"] and snapshot["nav"] is None
+    public = public_contract_result(snapshot)
+    assert public["reported_valuation_complete"] is True
+    assert public["unverified_asset_with_reported_value_count"] == 1
+    assert "OTC.PRIVATE" not in str(public) and "246.912" not in str(public)
+    from auto_invest.execution.intraday_observation import ObservationError, build_observation
+
+    # Other claimed account checks cannot turn an untimed OTC report into a
+    # verified execution observation.
+    snapshot.update(full_account_scope_verified=True, cash_aggregation_verified=True)
+    with pytest.raises(ObservationError, match="ACCOUNT_UNVERIFIED_ASSETS"):
+        build_observation(snapshot, {}, now=NOW)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("field,value", [
+    ("now_pric2", "NaN"), ("now_pric2", None), ("ovrs_stck_evlu_amt", "-1"),
+    ("ovrs_stck_evlu_amt", True), ("ord_psbl_qty", "2"),
+])
+async def test_invalid_provided_otc_values_are_not_discarded_or_replaced(field, value):
+    data = replies()
+    data["inquire-balance"]["output1"][0].update(ovrs_excg_cd="OTCB", **{field: value})
+    with pytest.raises(AccountReadError):
+        await read(lambda request: httpx.Response(
+            200, json=data[request.url.path.split("/")[-1]],
+        ), now=lambda: NOW)
+
+
 def replies():
     return {
         "inquire-balance": dict(
@@ -263,6 +315,9 @@ async def test_observed_otcb_assets_remain_unverified_and_separate(quantity):
     assert asset["reported_quantity"] == quantity
     assert asset["reported_market_code"] == "OTCB"
     assert asset["reported_valuation_usd"] is None
+    assert asset["reported_mark_usd"] is asset["price_source_at"] is None
+    assert snapshot["reported_holdings_valuation"]["amount_usd"] is None
+    assert snapshot["reported_holdings_valuation"]["complete"] is False
     assert not asset["valuation_verified"] and not asset["tradability_verified"]
     assert not asset["exchange_verified"]
     assert snapshot["nav"] is None and not snapshot["full_account_scope_verified"]
@@ -270,6 +325,8 @@ async def test_observed_otcb_assets_remain_unverified_and_separate(quantity):
     public = public_contract_result(snapshot)
     assert public["status"] == "INTRADAY_ACCOUNT_READ_WITH_UNVERIFIED_ASSETS"
     assert public["unverified_asset_count"] == 1
+    assert public["unverified_asset_with_reported_value_count"] == 0
+    assert public["reported_valuation_complete"] is False
     assert public["position_count"] == 1
     assert public["live_eligible"] is False
     assert "OTC.TEST" not in str(public)
