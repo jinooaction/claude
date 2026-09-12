@@ -109,6 +109,10 @@ async def test_actual_parsers_capture_baseline_and_resume_without_historical_dat
         assert result["current_account"]["position_count"] == 1
         assert result["domestic_account"]["holding_count"] == 0
         assert not result["domestic_account"]["full_account_verified"]
+        domestic_comparison = result["domestic_cash_comparison"]
+        assert domestic_comparison["domestic_reference_status"] == "AVAILABLE"
+        assert not domestic_comparison["cash_aggregation_verified"]
+        assert len(domestic_comparison["comparisons"]) == 5
         recorded = json.loads(rows(history)[-1][2])["responses"][-1]
         assert recorded["endpoint"] == "/uapi/domestic-stock/v1/trading/inquire-balance"
         assert recorded["params"]["FUND_STTL_ICLD_YN"] == "Y"
