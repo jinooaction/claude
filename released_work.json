@@ -1,5 +1,5 @@
 {
-  "commit": "f69c4b01a49dc4089715c50e165cf95996776859",
+  "commit": "896678000fe30d2dfa3ea3043b9fd53f345011ed",
   "overall_status": "OK",
   "released_work": [
     {
@@ -684,6 +684,7 @@
     "175-pead-program-gate",
     "177-intraday-paper-challenger",
     "178-flutter-operator-mobile",
+    "184-intraday-operator-program",
     "185-intraday-archive-review",
     "186-account-source-collection"
   ],
@@ -914,5 +915,5 @@
       "spec_id": "183-mobile-capital-strategy-dashboard"
     }
   ],
-  "timestamp_utc": "2026-09-12T15:04:24.996722Z"
+  "timestamp_utc": "2026-09-13T13:28:30.338874Z"
 }
