@@ -110,6 +110,7 @@ async def run(
             state = dict(
                 schema=184,
                 mode="KIS_EXECUTION",
+                funding_basis="FIXED_BUDGET" if engine.budget_mode else "ACCOUNT_NAV",
                 fingerprint=engine.fingerprint,
                 run_id=uuid4().hex,
                 phase="STARTING",

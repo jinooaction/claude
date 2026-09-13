@@ -128,6 +128,17 @@ async def test_cash_baseline_reaches_normal_account_reader_without_promoting_acc
     assert result["reported_cash_valuation"]["observation_completed_at"] == clock.isoformat()
     assert len(result["account_frame"]["asset_reports"]) == 2
     assert result["reported_account_assets"]["reporting_basis"] == "SETTLEMENT_ACCOUNT_ASSET_TABLE"
+    from auto_invest.execution.intraday_budget_observation import build_budget_observation
+
+    if reported_value is None or reported_quantity == "0.5":
+        with pytest.raises(ObservationError, match="ACCOUNT_UNVERIFIED_ASSETS"):
+            build_budget_observation(result, {}, now=clock)
+    else:
+        view = build_budget_observation(result, {}, now=clock)
+        assert view.positions == {"ORANY": 3}
+        assert not hasattr(view, "nav") and not hasattr(view, "cash")
+        assert result["full_account_scope_verified"] is False
+        assert result["cash_aggregation_verified"] is False
 
 
 def authority(http):

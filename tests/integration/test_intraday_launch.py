@@ -127,6 +127,7 @@ async def test_failed_qualification_closes_ledger_without_network_or_token_cache
         assert router.execution_authority.broker_write_lock_path == launch.DEFAULT_BROKER_WRITE_LOCK
         assert kwargs["external_holdings"] == {}
         assert kwargs["capital_limit"] == 600
+        assert kwargs["budget_mode"] is True
         raise DataError("QUALIFICATION_FORWARD_NOT_ACCEPTED")
 
     async def forbidden(*a, **k):

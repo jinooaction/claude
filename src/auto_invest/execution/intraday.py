@@ -19,10 +19,12 @@ from pathlib import Path
 from time import monotonic
 from types import MappingProxyType
 
+from auto_invest.broker.intraday_inputs import BuyingPower
 from auto_invest.config.enums import OrderType, Side, StrategyStage
 from auto_invest.config.rules import Action, PriceTrigger, TradingRule
 from auto_invest.execution.cancellation import request_cancellation
 from auto_invest.execution.fill_sync import sync_fills
+from auto_invest.execution.intraday_budget import budget_usage
 from auto_invest.execution.order_router import OrderRouter
 from auto_invest.market_data.intraday import CALENDAR, NY, SYMBOLS
 from auto_invest.market_data.intraday_pricing import limit_price
@@ -55,6 +57,19 @@ class Observation:
     observed_at: datetime
     cash: Decimal
     nav: Decimal
+    positions: dict[str, int]
+    marks: dict[str, Decimal]
+    open_order_ids: tuple[str, ...]
+    sellable_positions: dict[str, int]
+    mark_times: dict[str, datetime]
+    reported_asset_values: dict[str, ReportedAssetValue] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class BudgetObservation:
+    """Positions for allocation sizing. Deliberately has no account cash or NAV."""
+
+    observed_at: datetime
     positions: dict[str, int]
     marks: dict[str, Decimal]
     open_order_ids: tuple[str, ...]
@@ -123,14 +138,18 @@ def validate_decision(d: Decision, fingerprint: str):
 
 
 def validate_observation(
-    v: Observation, now: datetime, required: set[str], *, require_fresh_marks=True
+    v: Observation | BudgetObservation, now: datetime, required: set[str], *,
+    require_fresh_marks=True,
 ):
     if v.observed_at.tzinfo is None or not 0 <= (now - v.observed_at).total_seconds() <= 30:
         raise ValueError("STALE_ACCOUNT")
-    _decimal(v.cash, zero=True)
-    _decimal(v.nav)
-    if v.cash > v.nav:
-        raise ValueError("INVALID_NAV")
+    if isinstance(v, Observation):
+        _decimal(v.cash, zero=True)
+        _decimal(v.nav)
+        if v.cash > v.nav:
+            raise ValueError("INVALID_NAV")
+    elif not isinstance(v, BudgetObservation):
+        raise ValueError("INVALID_OBSERVATION_TYPE")
     for qty in v.positions.values():
         if type(qty) is not int or qty < 0:
             raise ValueError("INVALID_POSITION")
@@ -177,6 +196,9 @@ class IntradayExecutor:
         external_holdings: Mapping[str, int] | None = None,
         entry_guard: Callable[[], str | None] | None = None,
         refresh_auth: Callable[[], Awaitable[None]] | None = None,
+        budget_mode: bool = False,
+        order_power: Callable[..., Awaitable[BuyingPower]] | None = None,
+        refresh_budget: Callable[..., Awaitable[object]] | None = None,
     ):
         if not re.fullmatch("[a-f0-9]{64}", fingerprint) or router.paper_mode:
             raise ValueError("EXECUTOR_CONFIGURATION")
@@ -203,6 +225,12 @@ class IntradayExecutor:
         self.refresh_auth = refresh_auth
         _decimal(capital_limit, zero=True)
         self.capital_limit = capital_limit
+        if type(budget_mode) is not bool or budget_mode and (
+                capital_limit <= 0 or not callable(order_power)):
+            raise ValueError("BUDGET_EXECUTOR_CONFIGURATION")
+        self.budget_mode, self.order_power = budget_mode, order_power
+        self.refresh_budget, self._budget_settlements = refresh_budget, None
+        self._last_power = None
         self._entry = True
         self._last_view_at = None
         self._last_mark_times = ()
@@ -310,8 +338,47 @@ class IntradayExecutor:
         if self._last_view_at is None or not 0 <= (now - self._last_view_at).total_seconds() <= 30:
             return "STALE_ACCOUNT"
         if not cancellation:
+            if entry and self.budget_mode:
+                if self._last_power is None:
+                    return "BUDGET_BUYING_POWER_REQUIRED"
+                power, clock = self._last_power
+                if (not 0 <= (now - power.started_at).total_seconds() <= 30
+                        or not 0 <= monotonic() - clock <= 30):
+                    return "BUDGET_BUYING_POWER_STALE"
+                if self._budget_usage().overrun:
+                    return "BUDGET_EXHAUSTED"
             return self._mark_refusal(now)
         return None
+
+    def _capital(self, view):
+        return self.capital_limit if self.budget_mode else min(view.nav, self.capital_limit)
+
+    def _available(self, view):
+        return (self._budget_usage().available
+                if self.budget_mode else view.cash)
+
+    def _budget_usage(self):
+        return budget_usage(self.conn, self.capital_limit, settlements=self._budget_settlements,
+                            account=self.router.account_no)
+
+    async def _check_order_power(self, symbol, limit, quantity):
+        self._last_power = None
+        clock = monotonic()
+        power = await self.order_power(symbol=symbol, limit_price=limit)
+        now = self.now()
+        if (not isinstance(power, BuyingPower) or power.symbol != symbol
+                or power.exchange != EXCHANGES[symbol] or power.limit_price != limit
+                or power.started_at.utcoffset() is None or power.completed_at.utcoffset() is None
+                or not power.started_at <= power.completed_at <= now
+                or not 0 <= (now - power.started_at).total_seconds() <= 30
+                or not 0 <= monotonic() - clock <= 30):
+            raise ValueError("BUDGET_BUYING_POWER_INVALID")
+        _decimal(power.foreign_orderable_amount, zero=True)
+        if (type(power.foreign_orderable_qty) is not int
+                or power.foreign_orderable_qty < quantity
+                or power.foreign_orderable_amount < limit * quantity):
+            raise ValueError("BUDGET_BUYING_POWER_INSUFFICIENT")
+        self._last_power = power, clock
 
     def _owned(self):
         rows = self.conn.execute(
@@ -417,6 +484,8 @@ class IntradayExecutor:
             raise ValueError("FILL_SYNC_UNCERTAIN")
         self._capture_cancel_orders(reports, read_at, read_clock)
         view = await self.observe()
+        if self.budget_mode != isinstance(view, BudgetObservation):
+            raise ValueError("ACCOUNT_FUNDING_MODE_MISMATCH")
         # Existing-order cancellation needs fresh reconciled account data, not
         # a new valuation price. Pricing is checked before any new order or P&L.
         validate_observation(view, self.now(), required, require_fresh_marks=False)
@@ -544,8 +613,8 @@ class IntradayExecutor:
                 owned=owned,
                 entry_times=entries,
                 entered_symbols=entered,
-                capital=min(view.nav, self.capital_limit),
-                cash=view.cash,
+                capital=self._capital(view),
+                cash=self._available(view),
             )
             validate_decision(decision, self.fingerprint)
             cycles = self._holding_cycles()
@@ -580,6 +649,24 @@ class IntradayExecutor:
             except BlockingIOError:
                 return dict(status="BUSY", actions=[])
             try:
+                if (self.budget_mode and self.refresh_budget is not None and decision is not None
+                        and not self.drain_requested() and not self.router.halt_path.exists()):
+                    self._budget_settlements = None
+                    try:
+                        self._budget_settlements = await self.refresh_budget()
+                        if self._budget_settlements is not None:
+                            self._budget_usage()
+                    except Exception:
+                        # Failed collection cannot invent a credit or block an owned exit.
+                        self._budget_settlements = None
+                        self._event("budget", "BUDGET_SETTLEMENT_UNAVAILABLE")
+                    if self._budget_settlements is not None:
+                        evidence = self._budget_settlements
+                        self._event("budget", "BUDGET_SETTLEMENT_OBSERVED",
+                                    source_digest=evidence.source_digest,
+                                    observed_at=evidence.observed_at.isoformat(),
+                                    group_count=len(evidence.groups),
+                                    source_json=evidence.source_json)
                 prepared = await decision() if callable(decision) else decision
                 return await self._step(prepared)
             except Exception as exc:
@@ -592,6 +679,7 @@ class IntradayExecutor:
                 self._event("system", "HALTED", reason=code)
                 return dict(status="HALTED", reason=code, actions=[])
         finally:
+            self._last_power = None
             os.close(fd)
 
     async def _step(self, d):
@@ -696,24 +784,29 @@ class IntradayExecutor:
                     self.fingerprint,
                     _json(
                         dict(
-                            nav=str(view.nav),
+                            nav=None if self.budget_mode else str(view.nav),
+                            funding_basis="FIXED_BUDGET" if self.budget_mode else "ACCOUNT_NAV",
                             profit=str(profit),
                             external_holdings_digest=self.external_holdings_digest,
                         )
                     ),
                 ),
             )
-            starting_nav = view.nav
+            starting_nav = None if self.budget_mode else view.nav
             starting_profit = profit
         else:
-            starting_nav = Decimal(json.loads(previous["payload"])["nav"])
-            starting_profit = Decimal(json.loads(previous["payload"])["profit"])
+            saved = json.loads(previous["payload"])
+            if saved.get("funding_basis", "ACCOUNT_NAV") != (
+                    "FIXED_BUDGET" if self.budget_mode else "ACCOUNT_NAV"):
+                raise ValueError("ACCOUNT_FUNDING_MODE_MISMATCH")
+            starting_nav = None if self.budget_mode else Decimal(saved["nav"])
+            starting_profit = Decimal(saved["profit"])
         halted = self.conn.execute(
             "SELECT 1 FROM intraday_execution_events WHERE claim_id=? AND kind='LOSS_HALT'",
             (day_id,),
         ).fetchone()
         if (
-            view.nav <= starting_nav * Decimal(".98")
+            (not self.budget_mode and view.nav <= starting_nav * Decimal(".98"))
             or (
                 self.capital_limit > 0
                 and profit - starting_profit <= -self.capital_limit * Decimal(".02")
@@ -763,11 +856,13 @@ class IntradayExecutor:
                 )
                 continue
             notional = abs(delta) * max(mark, limit)
-            capital = min(view.nav, self.capital_limit)
+            capital = self._capital(view)
             global_exposure = portfolio_exposure(view)
             if view.reported_asset_values:
                 self._event(day_id, "REPORTED_VALUATION_USED", currency="USD",
-                    nav=str(view.nav), global_exposure=str(global_exposure),
+                    nav=None if self.budget_mode else str(view.nav),
+                    funding_basis="FIXED_BUDGET" if self.budget_mode else "ACCOUNT_NAV",
+                    global_exposure=str(global_exposure),
                     reported_assets={name: dict(quantity=value.quantity,
                         amount_usd=str(value.amount_usd),
                         observation_started_at=value.observation_started_at.isoformat(),
@@ -777,7 +872,7 @@ class IntradayExecutor:
                 notional > capital * Decimal(".20")
                 or view.positions.get(symbol, 0) * mark + notional > capital * Decimal(".20")
                 or global_exposure + notional > capital * Decimal(".80")
-                or notional * Decimal("1.003") > view.cash
+                or notional * Decimal("1.003") > self._available(view)
             ):
                 actions.append(dict(kind="DENIED", symbol=symbol, reason="CASH_OR_EXPOSURE"))
                 continue
@@ -827,6 +922,8 @@ class IntradayExecutor:
             if previous:
                 actions.append(dict(kind="DUPLICATE_OR_PENDING", symbol=symbol))
                 continue
+            if self.budget_mode and side is Side.BUY:
+                await self._check_order_power(symbol, limit, abs(delta))
             signal_bar_end = None
             decision_kind = "DRAIN" if exit_only else "SIGNAL"
             if not exit_only:

@@ -92,6 +92,7 @@ async def launch(*, database, rules, archives, forward_database, registration,
                 forward_database=forward_database, registration=registration,
                 collect_bars=collect, capital_limit=Decimal(budget["capital_limit_usd"]),
                 external_holdings=baseline, now=lambda: datetime.now(UTC),
+                budget_mode=True,
             )
             return await program.run(stop_event=stop_event)
     except DataError:

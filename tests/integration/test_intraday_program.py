@@ -13,6 +13,7 @@ from auto_invest.analytics.intraday_paper_challenger import (
     load_preregistration,
 )
 from auto_invest.broker.account_asset_evidence import SUMMARY_FIELDS, TABLE_FIELDS
+from auto_invest.broker.account_source_profile import CASH_FIELDS
 from auto_invest.broker.domestic_account import SUMMARY_FIELDS as DOMESTIC_SUMMARY_FIELDS
 from auto_invest.broker.intraday_inputs import EXCHANGES, PREFIXES, SourceQuote
 from auto_invest.execution.intraday import Decision
@@ -402,3 +403,123 @@ async def test_async_authority_is_rejected_instead_of_becoming_an_unawaited_perm
         config["qualify"] = qualify
         with pytest.raises(ValueError, match="SYNCHRONOUS_AUTHORITY_REQUIRED"):
             build_program(**config)
+
+
+@pytest.mark.asyncio
+async def test_kis_budget_wire_assembly_partial_fill_restart_and_runtime_stop(
+    tmp_path, monkeypatch,
+):
+    from auto_invest.broker.intraday_inputs import REST_URL
+    from auto_invest.execution.intraday_program import build_kis_program
+    from auto_invest.execution.intraday_runtime import run
+
+    async with rehearsal_session(tmp_path / "budget-wire.db", mark=Decimal("20")) as book:
+        calls = []
+
+        def handle(request):
+            calls.append(request)
+            path = request.url.path
+            if path == "/oauth2/tokenP":
+                return httpx.Response(200, json=dict(access_token="fresh", expires_in=86400))
+            if request.method == "POST" or path.endswith("/inquire-ccnl"):
+                response = book.handle(request)
+                for row in book.orders.values():
+                    row["ft_ord_qty"] = str(row["qty"])
+                return response
+            positions = {}
+            for row in book.orders.values():
+                positions[row["pdno"]] = positions.get(row["pdno"], 0) + (
+                    int(row["ft_ccld_qty"]) * (1 if row["sll_buy_dvsn_cd"] == "02" else -1))
+            positions = {symbol: quantity for symbol, quantity in positions.items() if quantity}
+            if path == "/uapi/domestic-stock/v1/trading/inquire-balance":
+                data = dict(output1=[], output2=[dict.fromkeys(DOMESTIC_SUMMARY_FIELDS, "0")],
+                            ctx_area_fk100="", ctx_area_nk100="")
+            elif path.endswith("/inquire-balance"):
+                data = dict(output1=[dict(ovrs_pdno=symbol, ovrs_excg_cd="AMEX", tr_crcy_cd="USD",
+                    ovrs_cblc_qty=str(quantity), ord_psbl_qty=str(quantity), now_pric2="20",
+                    ovrs_stck_evlu_amt=str(quantity * 20))
+                    for symbol, quantity in positions.items()],
+                    ctx_area_fk200="", ctx_area_nk200="")
+            elif path.endswith("/inquire-nccs"):
+                data = dict(output=[dict(row, tr_crcy_cd="USD") for row in book.orders.values()
+                    if int(row["nccs_qty"]) and not row.get("prcs_stat_name")],
+                    ctx_area_fk200="", ctx_area_nk200="")
+            elif path.endswith("/inquire-psamount"):
+                data = dict(output=dict(tr_crcy_cd="USD", ovrs_ord_psbl_amt="600",
+                                        max_ord_psbl_qty="30"))
+            elif path.endswith("/foreign-margin"):
+                data = dict(output=[dict(dict.fromkeys(CASH_FIELDS, "0"), crcy_cd="USD",
+                                        frcr_dncl_amt1="600", frcr_gnrl_ord_psbl_amt="600")])
+            elif path.endswith("/inquire-present-balance"):
+                data = dict(output1=[dict(pdno=symbol, buy_crcy_cd="USD", ovrs_excg_cd="AMEX",
+                    ccld_qty_smtl1=str(quantity), ord_psbl_qty1=str(quantity), loan_rmnd="0")
+                    for symbol, quantity in positions.items()],
+                    output2=[dict(crcy_cd="USD", frcr_dncl_amt_2="600", frcr_buy_mgn_amt="0",
+                                  frcr_etc_mgna="0", frst_bltn_exrt="1000")],
+                    output3=dict.fromkeys(("dncl_amt", "cma_evlu_amt", "tot_loan_amt",
+                        "ustl_buy_amt_smtl", "ustl_sll_amt_smtl", "tot_dncl_amt"), "0"))
+            elif path.endswith("/inquire-account-balance"):
+                data = dict(output1=[dict.fromkeys(TABLE_FIELDS + ("whol_weit_rt",), "0")
+                                     for _ in range(20)],
+                            output2=dict.fromkeys(SUMMARY_FIELDS, "0"))
+                for index, amount in ((8, str(sum(positions.values()) * 20)), (16, "600000")):
+                    data["output1"][index].update(pchs_amt=amount, evlu_amt=amount,
+                                                  real_nass_amt=amount)
+                for field in TABLE_FIELDS:
+                    data["output1"][-1][field] = str(sum(
+                        int(row[field]) for row in data["output1"][:-1]))
+            else:
+                raise AssertionError(path)
+            return httpx.Response(200, headers={"tr_cont": "D"}, json=dict(rt_cd="0", **data))
+
+        config = configuration(book)
+        selected = config.pop("selection")
+        config.pop("observe")
+        config.pop("qualify")
+
+        class Qualification:
+            selection = selected
+
+            def __call__(self):
+                return None
+
+        async def qualify(**kwargs):
+            return Qualification()
+
+        monkeypatch.setattr("auto_invest.execution.intraday_program.prepare_qualification", qualify)
+        async with httpx.AsyncClient(
+            base_url=REST_URL, transport=httpx.MockTransport(handle),
+        ) as http:
+            book.engine.router.broker._client = http
+
+            async def assemble():
+                program = await build_kis_program(**config, token_cache=tmp_path / "token.json",
+                    archives=tmp_path, forward_database=tmp_path / "forward.db",
+                    registration=tmp_path / "registration.json", budget_mode=True)
+                program.engine.observe.quote_snapshot = lambda: {
+                    symbol: SourceQuote(symbol, exchange, PREFIXES[exchange] + symbol,
+                        Decimal("20"), None, None, book.now, book.now,
+                        "20260908", "000000", "20260908", "110000", "1")
+                    for symbol, exchange in EXCHANGES.items()}
+                return program
+
+            program = await assemble()
+            decision = replace(book.decision(5), fingerprint=program.engine.fingerprint)
+            assert (await program.engine.step(decision))["actions"] == [
+                {"kind": "SUBMITTED", "symbol": "SPY"}]
+            book.fill("1", 2, "20", terminal=True)
+            resumed = await assemble()
+            resumed.engine.request_drain()
+            assert (await resumed.engine.manage())["status"] == "EXIT_ONLY"
+            book.fill("2", 2, "19.99", terminal=True)
+            stop = asyncio.Event()
+            stop.set()
+            state = await run(resumed.engine, candidate=selected.candidate, provider=PROVIDER,
+                              collect_bars=config["collect_bars"], stop_event=stop,
+                              max_cycles=2, poll_seconds=.01)
+            assert state["phase"] == "STOPPED"
+            assert state["funding_basis"] == "FIXED_BUDGET"
+            assert not hasattr(await resumed.engine.observe(), "nav")
+        powers = [call for call in calls if call.url.path.endswith("inquire-psamount")
+                  and call.url.params["ITEM_CD"] == "SPY"]
+        assert len(powers) == 1 and powers[0].url.params["OVRS_ORD_UNPR"] == "20.00"

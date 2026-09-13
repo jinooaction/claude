@@ -9,9 +9,11 @@ from dataclasses import dataclass, replace
 from decimal import Decimal
 from pathlib import Path
 
-from auto_invest.broker.intraday_inputs import StrictQuoteFeed, approval_key
+from auto_invest.broker.intraday_inputs import StrictQuoteFeed, approval_key, buying_power
 from auto_invest.broker.overseas import QUOTE_TO_ORDER_EXCHANGE, get_quote_resolving_market
 from auto_invest.execution.intraday import IntradayExecutor
+from auto_invest.execution.intraday_budget_observation import KISBudgetObserver
+from auto_invest.execution.intraday_budget_settlements import read_budget_settlements
 from auto_invest.execution.intraday_execution_evidence import ExecutionCostSource
 from auto_invest.execution.intraday_observation import KISExecutionObserver
 from auto_invest.execution.intraday_qualification import prepare_qualification
@@ -22,7 +24,7 @@ from auto_invest.execution.preparation import confirmed_budget
 from auto_invest.market_data.intraday import SYMBOLS
 
 
-def runtime_identity(router, baseline):
+def runtime_identity(router, baseline, *, budget_mode=False):
     """Bind the operating approval to the actual ledger, halt path and risk config."""
     database = router.conn.execute("PRAGMA database_list").fetchone()[2]
     payload = dict(
@@ -30,6 +32,8 @@ def runtime_identity(router, baseline):
         whitelist=router.whitelist.model_dump(mode="json"),
         caps=router.caps.model_dump(mode="json"), external_holdings=baseline,
     )
+    if budget_mode:
+        payload["funding_basis"] = "FIXED_BUDGET_REPORTED_ALL_HOLDINGS_V1"
     # Whitelist uses sets; JSON list ordering must not change an approval identity.
     for name, value in payload["whitelist"].items():
         if isinstance(value, list):
@@ -106,7 +110,7 @@ class IntradayProgram:
 
 
 async def build_kis_program(*, router, token_cache, archives, forward_database, registration,
-                      collect_bars, capital_limit, external_holdings=None, now):
+                      collect_bars, capital_limit, external_holdings=None, now, budget_mode=False):
     """Bind real authenticated account reads to the same router's authority.
 
     Preparation may authenticate and read cost evidence, never broker writes. Account valuation
@@ -115,7 +119,7 @@ async def build_kis_program(*, router, token_cache, archives, forward_database, 
     if router.execution_authority is None:
         raise ValueError("PROGRAM_ROUTER_CONFIGURATION_INVALID")
     baseline = dict(external_holdings or {})
-    runtime_digest = runtime_identity(router, baseline)
+    runtime_digest = runtime_identity(router, baseline, budget_mode=budget_mode)
     qualification = await prepare_qualification(
         archives=archives, forward_database=forward_database, registration=registration,
         account=router.account_no, capital_limit=capital_limit, runtime_digest=runtime_digest,
@@ -125,7 +129,7 @@ async def build_kis_program(*, router, token_cache, archives, forward_database, 
     if refusal := qualification():
         raise ValueError(refusal)
     feed = StrictQuoteFeed(now=now)
-    observer = KISExecutionObserver(
+    observer = (KISBudgetObserver if budget_mode else KISExecutionObserver)(
         router.execution_authority, feed.snapshot, token_cache=token_cache, now=now,
     )
     shared_holdings = {row["symbol"] for row in router.conn.execute(
@@ -143,14 +147,30 @@ async def build_kis_program(*, router, token_cache, archives, forward_database, 
         router.access_token = router.execution_authority.access_token
 
     def qualify():
-        if runtime_identity(router, baseline) != runtime_digest:
+        if runtime_identity(router, baseline, budget_mode=budget_mode) != runtime_digest:
             return "PROGRAM_RUNTIME_CONFIGURATION_CHANGED"
         return qualification()
+
+    async def order_power(*, symbol, limit_price):
+        await refresh_auth()
+        observer._check_connection()
+        result = await buying_power(
+            observer.broker, symbol=symbol, limit_price=limit_price, account=observer.account,
+            access_token=observer.authority.access_token, app_key=observer.authority.app_key,
+            app_secret=observer.authority.app_secret, now=now,
+        )
+        observer._check_connection()
+        return result
+
+    async def refresh_budget():
+        return await read_budget_settlements(observer, router.conn)
 
     program = build_program(
         selection=qualification.selection, router=router, observe=observer, qualify=qualify,
         collect_bars=collect_bars, capital_limit=capital_limit,
         external_holdings=baseline, now=now, refresh_auth=refresh_auth,
+        budget_mode=budget_mode, order_power=order_power if budget_mode else None,
+        refresh_budget=refresh_budget if budget_mode else None,
     )
 
     async def approval():
@@ -218,7 +238,8 @@ class _ValuationFeed:
 
 def build_program(
     *, selection, router, observe, qualify, collect_bars, capital_limit,
-    external_holdings=None, now, refresh_auth=None,
+    external_holdings=None, now, refresh_auth=None, budget_mode=False, order_power=None,
+    refresh_budget=None,
 ):
     """Compose trusted in-process dependencies; no user-imported plugin or PASS flag.
 
@@ -264,6 +285,9 @@ def build_program(
                 return "PROGRAM_ACCOUNT_CHANGED"
             if engine.capital_limit != capital_limit:
                 return "PROGRAM_CAPITAL_CHANGED"
+            if (engine.budget_mode != budget_mode or engine.order_power is not order_power
+                    or engine.refresh_budget is not refresh_budget):
+                return "PROGRAM_FUNDING_MODE_CHANGED"
             if execution_fingerprint(selection.candidate, selection.provider) != identity:
                 return "PROGRAM_STRATEGY_CHANGED"
             reason = qualify()
@@ -278,5 +302,7 @@ def build_program(
         router, fingerprint=identity, observe=observe, authority_guard=guard,
         capital_limit=capital_limit, now=now, external_holdings=external_holdings,
         refresh_auth=refresh_auth,
+        budget_mode=budget_mode, order_power=order_power,
+        refresh_budget=refresh_budget,
     )
     return IntradayProgram(engine, selection, collect_bars)
