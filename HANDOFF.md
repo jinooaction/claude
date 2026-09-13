@@ -1,5 +1,13 @@
 # auto-invest — 다음 세션 인수인계 (main 베이스라인)
 
+2026-09-14 KST 운영자는 새 코드 전략 검증과 운영 권한 처리를 허용했다.
+같은 범위의 허락을 다시 묻지 않는다. 실제34767824895에서KIS11개 통과(21.38초),
+현재 서비스 식별자의 연구 보관 묶음은1/756일·부족755일로 INSUFFICIENT_EVIDENCE.
+타이머 active/서비스 success/최근 보관2026-09-11 확인(34767799668).
+통과 후보가 없어 서버 실행 권한 파일을 발급하지 않았다. 승인 의사와 검증 통과를
+구분하며 실제 주문/자금 배정/단타 가동 없음. 자세한 범위와 이어갈 조건은
+specs/184-intraday-operator-program/operator-authorization-review.md에 기록했다.
+
 2026-09-13: PR793을 main8966780으로 머지했다. 고정 예산 실행 경로의 소프트웨어
 구현·모의 통합 검사가 완료됐다. 실행 코드9c818fc의 전체4751 passed/12 skipped,
 린트·하네스·인계 통과. 배포34759932179 성공, 감사34760010544에서
@@ -786,7 +794,7 @@ T009/T010과 현재 진단 수집기의 정식 전진 검증 부재는 이 보�
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `8966780` — Merge pull request #793 from jinooaction/codex/184-intraday-operator-program |
+| 마지막 main 커밋 | `98c96bb` — Merge pull request #823 from jinooaction/codex/184-fixed-budget-handoff |
 | main 테스트 | 실행 코드9c818fc/main8966780 전체4751 passed/12 skipped(847.89초). 실제 KIS11개와 가동 전 전용1개 제외. 새 고정 예산 모의 KIS 시작·부분 체결·재시작·정리·STOPPED 포함. |
 | main 린트 | 실행 코드9c818fc/main8966780의 `uv run ruff check src tests` 및 하네스14/14 검사 통과. |
 | 열린 PR | #793 머지 완료. 후속 인계 문서만 갱신하며 미완료 코드 PR로 보고하지 않는다. |
