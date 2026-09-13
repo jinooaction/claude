@@ -1,5 +1,11 @@
 # 자료 모형
 
+ArchiveInventory: status=ARCHIVE_INVENTORY_REVIEWED, epochs(각 독립 ArchiveReview),
+epochs_without_sessions, coverage(provider/synthetic/session_dates/unique_sessions).
+observation_type=HISTORICAL_INVENTORY, combined_research_verified=false,
+live_eligible=false, orders_submitted=0. 원본을 합쳐 전략을 검증한 결과와 구분한다.
+64개 이하의 코드 식별자만 탐색하며 sessions가 아직 없는 폴더는 별도로 센다.
+
 ArchiveReview: status, session_count, required_sessions, missing_sessions,
 missing_calendar_sessions, incomplete_archive_count, provider, synthetic,
 dataset_fingerprint, decision, observation_type=HISTORICAL_RESEARCH,

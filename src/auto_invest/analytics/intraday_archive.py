@@ -144,6 +144,48 @@ def review_archives(archives: Path, output: Path, preregistration: Path, code_co
     return result
 
 
+def review_service_archives(root: Path, output: Path, preregistration: Path,
+                            code_commit: str) -> dict:
+    """Inventory independently validated epochs, never pool strategy/forward results."""
+    if not root.is_dir() or root.is_symlink():
+        raise DataError("ARCHIVE_ROOT_INVALID")
+    if output.exists() or output.is_symlink():
+        raise DataError("ARCHIVE_OUTPUT_EXISTS")
+    if output.resolve().is_relative_to(root.resolve()):
+        raise DataError("ARCHIVE_OUTPUT_INSIDE_SOURCE")
+    epochs = sorted(p for p in root.iterdir() if re.fullmatch(r"[0-9a-f]{64}", p.name))
+    if not 1 <= len(epochs) <= 64:
+        raise DataError("ARCHIVE_EPOCH_COUNT_INVALID")
+    reports, coverage, empty = [], {}, 0
+    for epoch in epochs:
+        if not epoch.is_dir() or epoch.is_symlink():
+            raise DataError("ARCHIVE_EPOCH_INVALID")
+        sessions = epoch / "sessions"
+        if sessions.is_symlink():
+            raise DataError("ARCHIVE_ROOT_INVALID")
+        if not sessions.exists():
+            empty += 1
+            continue
+        report = review_archives(sessions, output / epoch.name, preregistration, code_commit)
+        source = json.loads((output / epoch.name / "source.json").read_bytes())
+        dates = {row["session"] for row in source["archives"]}
+        key = (report["provider"], report["synthetic"])
+        coverage.setdefault(key, set()).update(dates)
+        reports.append(dict(epoch=epoch.name, **report))
+    if not reports:
+        raise DataError("ARCHIVE_NO_COMPLETE_SESSIONS")
+    result = dict(
+        status="ARCHIVE_INVENTORY_REVIEWED", epochs=reports, epochs_without_sessions=empty,
+        coverage=[dict(provider=p, synthetic=s, session_dates=sorted(dates),
+                       unique_sessions=len(dates)) for (p, s), dates in sorted(coverage.items())],
+        observation_type="HISTORICAL_INVENTORY", combined_research_verified=False,
+        live_eligible=False, orders_submitted=0,
+    )
+    # Written only after every discovered normal archive passed source validation.
+    (output / "inventory.json").write_bytes(encode(result))
+    return result
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="보관 자료 결합·기존 전략 연구 검증")
     parser.add_argument("--archives", type=Path, required=True)

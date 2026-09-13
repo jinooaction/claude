@@ -1,5 +1,12 @@
 # auto-invest — 다음 세션 인수인계 (main 베이스라인)
 
+185 후속 자료 재고: 최신 코드 폴더만 읽는 연구 결과를 전체 서버 보관량으로
+해석하지 않도록, 이전64자리 코드 폴더도 독립 검증하는 연결을 추가했다.
+날짜 합집합은 공급자/합성 여부별 재고이고 합친 전략 연구나 전진 실적이 아니다.
+관련22개, 전체4755 passed/12 skipped(859.46초)·린트·하네스·인계 통과.
+실제 서버 재고는 후속 확인한다. /tmp/claude-185-inventory-full.log.
+실제 주문·자금 배정·운영 권한 발급은 수행하지 않았다.
+
 2026-09-14 KST 운영자는 새 코드 전략 검증과 운영 권한 처리를 허용했다.
 같은 범위의 허락을 다시 묻지 않는다. 실제34767824895에서KIS11개 통과(21.38초),
 현재 서비스 식별자의 연구 보관 묶음은1/756일·부족755일로 INSUFFICIENT_EVIDENCE.
@@ -794,7 +801,7 @@ T009/T010과 현재 진단 수집기의 정식 전진 검증 부재는 이 보�
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `98c96bb` — Merge pull request #823 from jinooaction/codex/184-fixed-budget-handoff |
+| 마지막 main 커밋 | `cfbd0c3` — Merge pull request #824 from jinooaction/codex/184-authorization-evidence-review |
 | main 테스트 | 실행 코드9c818fc/main8966780 전체4751 passed/12 skipped(847.89초). 실제 KIS11개와 가동 전 전용1개 제외. 새 고정 예산 모의 KIS 시작·부분 체결·재시작·정리·STOPPED 포함. |
 | main 린트 | 실행 코드9c818fc/main8966780의 `uv run ruff check src tests` 및 하네스14/14 검사 통과. |
 | 열린 PR | #793 머지 완료. 후속 인계 문서만 갱신하며 미완료 코드 PR로 보고하지 않는다. |

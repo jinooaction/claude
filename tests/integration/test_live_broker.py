@@ -197,7 +197,7 @@ def test_live_intraday_archived_research(tmp_path) -> None:
     import re
     import subprocess
 
-    from auto_invest.analytics.intraday_archive import review_archives
+    from auto_invest.analytics.intraday_archive import review_archives, review_service_archives
     from auto_invest.analytics.intraday_service import read_service_status
     from auto_invest.market_data.intraday import DataError
 
@@ -221,6 +221,13 @@ def test_live_intraday_archived_research(tmp_path) -> None:
     assert result["orders_submitted"] == 0 and result["live_eligible"] is False
     assert result["session_count"] > 0
     print("\nIntraday archive research: " + json.dumps(result, sort_keys=True))
+    inventory = review_service_archives(
+        root, tmp_path / "all-archive-review",
+        repo / "specs/177-intraday-paper-challenger/contracts/intraday-preregistration.json",
+        commit,
+    )
+    assert inventory["live_eligible"] is False and inventory["orders_submitted"] == 0
+    print("\nIntraday archive inventory: " + json.dumps(inventory, sort_keys=True))
 
 
 @pytest.mark.asyncio

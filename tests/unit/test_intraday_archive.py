@@ -7,11 +7,46 @@ from pathlib import Path
 
 import pytest
 
-from auto_invest.analytics.intraday_archive import review_archives
+from auto_invest.analytics.intraday_archive import review_archives, review_service_archives
 from auto_invest.market_data.intraday import CALENDAR, SYMBOLS, DataError, digest, iso, write_batch
 
 ROOT = Path(__file__).resolve().parents[2]
 PREREG = ROOT / "specs/177-intraday-paper-challenger/contracts/intraday-preregistration.json"
+
+
+def test_service_inventory_includes_old_epochs_without_double_counting_or_pooling(tmp_path):
+    root = tmp_path / "service"
+    day(root / ("a" * 64) / "sessions", "2026-09-03")
+    day(root / ("b" * 64) / "sessions", "2026-09-03")
+    day(root / ("b" * 64) / "sessions", "2026-09-04")
+    (root / ("c" * 64)).mkdir()
+    (root / "status.json").write_text("not an archive")
+    before = {p: p.read_bytes() for p in root.rglob("*") if p.is_file()}
+    result = review_service_archives(root, tmp_path / "review", PREREG, "a" * 40)
+    assert [r["session_count"] for r in result["epochs"]] == [1, 2]
+    assert result["coverage"][0]["unique_sessions"] == 2
+    assert result["epochs_without_sessions"] == 1
+    assert result["combined_research_verified"] is False
+    assert result["live_eligible"] is False
+    assert all(p.read_bytes() == value for p, value in before.items())
+
+
+@pytest.mark.parametrize("change", ["epoch_link", "sessions_link", "corruption"])
+def test_service_inventory_does_not_hide_invalid_old_epochs(tmp_path, change):
+    root = tmp_path / "service"
+    epoch = root / ("a" * 64)
+    folder = day(epoch / "sessions", "2026-09-03")
+    if change == "epoch_link":
+        (root / ("b" * 64)).symlink_to(epoch, target_is_directory=True)
+    elif change == "sessions_link":
+        (epoch / "sessions").rename(epoch / "original")
+        (epoch / "sessions").symlink_to(epoch / "original", target_is_directory=True)
+    else:
+        (folder / "SPY.csv").write_text("bad")
+    output = tmp_path / "review"
+    with pytest.raises(DataError):
+        review_service_archives(root, output, PREREG, "a" * 40)
+    assert not (output / "inventory.json").exists()
 
 
 def day(root, session, *, provider="kis-nasdaq-partial-unadjusted", synthetic=False):
