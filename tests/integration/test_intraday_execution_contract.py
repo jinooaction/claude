@@ -13,6 +13,20 @@ from auto_invest.execution.intraday_rehearsal import FINGERPRINT, rehearsal_sess
 
 
 @pytest.mark.asyncio
+async def test_drain_sell_preserves_exact_six_basis_point_limit(tmp_path):
+    async with rehearsal_session(
+        tmp_path / "drain.db", capital_limit=Decimal("600"), mark=Decimal("25"),
+    ) as book:
+        await book.engine.step(book.decision(1))
+        book.fill("1", 1, "25", terminal=True)
+        book.engine.request_drain()
+        await book.engine.manage()
+        assert book.orders["2"]["sll_buy_dvsn_cd"] == "01"
+        assert Decimal(book.orders["2"]["ft_ord_unpr3"]) == Decimal("24.99")
+        assert book.orders["2"]["qty"] == 1
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "response",
     [
@@ -188,6 +202,137 @@ async def test_market_time_rechecked_after_authority_wait(tmp_path):
             row[0] for row in book.conn.execute("SELECT payload_json FROM audit_log")
         )
         assert "STALE_EXECUTION_MARK" in payloads
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("reason", ["ACCOUNT_SCOPE_UNVERIFIED", "ACCOUNT_CASH_UNVERIFIED",
+                                    "ACCOUNT_NAV_UNVERIFIED"])
+@pytest.mark.parametrize("trigger", ["stop", "expired"])
+async def test_stop_can_cancel_known_order_without_certifying_cash(tmp_path, reason, trigger):
+    from datetime import timedelta
+
+    async with rehearsal_session(tmp_path / "cancel-only.db") as book:
+        await book.engine.step(book.decision(5))
+        book.orders["1"]["ft_ord_qty"] = str(book.orders["1"]["qty"])
+        if trigger == "stop":
+            book.engine.request_drain()
+        else:
+            book.now += timedelta(minutes=5)
+        original_account_time = book.engine._last_view_at
+
+        async def missing_value():
+            raise ValueError(reason)
+
+        book.engine.observe = missing_value
+        result = await book.engine.manage()
+        assert result["status"] == "WAIT_BROKER" and result["reason"] == reason
+        assert result["actions"] == [dict(kind="CANCEL_REQUEST", result="ACKNOWLEDGED")]
+        assert book.requests[-1][0].endswith("/order-rvsecncl")
+        assert book.engine._last_view_at == original_account_time
+        count = len(book.requests)
+        again = await book.engine.manage()
+        assert again["actions"][0]["result"] == "WAIT_BROKER_CONFIRMATION"
+        assert len(book.requests) == count
+        assert book.engine.drain_requested() == (trigger == "stop")
+        assert book.engine.management_state()["pending_orders"] == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("fault", ["signal", "other_error", "stale", "revoked", "quantity",
+                                   "missing_quantity"])
+async def test_order_only_cancellation_keeps_scope_time_and_authority_guards(tmp_path, fault):
+    from datetime import timedelta
+
+    async with rehearsal_session(tmp_path / "cancel-denied.db") as book:
+        await book.engine.step(book.decision(5))
+        book.orders["1"]["ft_ord_qty"] = str(book.orders["1"]["qty"])
+        book.engine.request_drain()
+        if fault == "quantity":
+            book.orders["1"]["ft_ord_qty"] = "99"
+        if fault == "missing_quantity":
+            del book.orders["1"]["ft_ord_qty"]
+
+        async def missing_value():
+            if fault == "stale":
+                book.now += timedelta(seconds=31)
+            if fault == "revoked":
+                book.engine.guard = lambda: "AUTHORITY_REVOKED"
+            raise ValueError("ACCOUNT_INPUT_UNAVAILABLE" if fault == "other_error"
+                             else "ACCOUNT_CASH_UNVERIFIED")
+
+        book.engine.observe = missing_value
+        count = len(book.requests)
+        result = (await book.engine.step(book.decision(5)) if fault == "signal"
+                  else await book.engine.manage())
+        assert result["status"] == "HALTED" and result["actions"] == []
+        assert len(book.requests) == count
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("fault", ["wall_time", "snapshot_time", "authority"])
+async def test_order_only_guard_runs_after_cancel_lock_before_claim(tmp_path, monkeypatch, fault):
+    from contextlib import asynccontextmanager
+    from datetime import timedelta
+
+    elapsed = [0.0]
+    monkeypatch.setattr("auto_invest.execution.intraday.monotonic", lambda: elapsed[0])
+    async with rehearsal_session(tmp_path / "cancel-lock.db") as book:
+        await book.engine.step(book.decision(5))
+        book.orders["1"]["ft_ord_qty"] = "5"
+        book.engine.request_drain()
+
+        async def missing_value():
+            raise ValueError("ACCOUNT_CASH_UNVERIFIED")
+
+        book.engine.observe = missing_value
+        original_lock = book.engine.router.execution_authority.account_lock
+
+        @asynccontextmanager
+        async def delayed_lock(context):
+            async with original_lock(context):
+                if fault == "wall_time":
+                    elapsed[0] = 31
+                elif fault == "snapshot_time":
+                    book.now += timedelta(seconds=31)
+                else:
+                    book.engine.guard = lambda: "AUTHORITY_REVOKED"
+                yield
+
+        book.engine.router.execution_authority.account_lock = delayed_lock
+        result = await book.engine.manage()
+        assert result["actions"] == [dict(kind="CANCEL_REQUEST", result="DEFERRED_BEFORE_WRITE")]
+        assert len(book.requests) == 1
+        assert book.conn.execute(
+            "SELECT COUNT(*) FROM audit_log WHERE event_type='ORDER_CANCEL_REQUEST'"
+        ).fetchone()[0] == 0
+
+
+@pytest.mark.asyncio
+async def test_order_only_uncertain_cancel_restart_keeps_late_fills_and_blocks_new_sells(tmp_path):
+    async with rehearsal_session(tmp_path / "cancel-restart.db") as book:
+        await book.engine.step(book.decision(5))
+        book.orders["1"]["ft_ord_qty"] = "5"
+        book.engine.request_drain()
+
+        async def missing_value():
+            raise ValueError("ACCOUNT_CASH_UNVERIFIED")
+
+        book.engine.observe = missing_value
+        book.cancel_timeout = True
+        first = await book.engine.manage()
+        assert first["actions"][0]["result"] == "UNCERTAIN"
+        engine = IntradayExecutor(book.engine.router, fingerprint=FINGERPRINT,
+            observe=missing_value, authority_guard=lambda: None, capital_limit=Decimal("10000"),
+            now=lambda: book.now)
+        repeated = await engine.manage()
+        assert repeated["actions"][0]["result"] == "WAIT_BROKER_CONFIRMATION"
+        assert len(book.requests) == 2
+        book.fill("1", 2, "99", terminal=True)
+        result = await engine.manage()
+        assert result["status"] == "HALTED" and not result["actions"]
+        assert engine.management_state()["owned_symbols"] == 1
+        assert engine.management_state()["pending_orders"] == 0
+        assert engine.drain_requested() and len(book.requests) == 2
 
 
 @pytest.mark.asyncio

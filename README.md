@@ -31,6 +31,9 @@ every feature begins as a spec under [`specs/`](specs/).
 
 ## Operator quickstart
 
+**단타 실행 창(개발 브랜치184):** [시작·상태·중지·시세·구매력 안내](specs/184-intraday-operator-program/quickstart.md).
+KIS 모의 자동 운용과 실제 시세·구매력 조회를 제공한다. 단타 실주문 연결은 아직 미완료다.
+
 **GitHub Actions로 위임 (가장 자율 수행, 권장):** [`docs/OPERATOR_GITHUB_ACTIONS_KR.md`](docs/OPERATOR_GITHUB_ACTIONS_KR.md) — GitHub Secrets에 Vultr 토큰 한 번 박고 Actions 탭에서 "Run workflow" 한 번 클릭하면 인스턴스 자동 생성. KIS 키만 Vultr 콘솔에서 한 번 입력.
 
 **Vultr 콘솔에서 직접 만들기:** [`docs/OPERATOR_VULTR_ONE_STEP_KR.md`](docs/OPERATOR_VULTR_ONE_STEP_KR.md) — GitHub Actions 안 쓰고 Vultr 콘솔에서 직접 인스턴스 만드는 경로. cloud-init User-Data에 자본금 한 줄만 박음.

@@ -39,6 +39,7 @@ from auto_invest.market_data.intraday import (
     utc,
     write_batch,
 )
+from auto_invest.market_data.intraday_attestation import collect_attested_kis
 
 ROOT = Path(__file__).resolve().parents[1]
 PREREG = ROOT / "specs/177-intraday-paper-challenger/contracts/intraday-preregistration.json"
@@ -99,17 +100,22 @@ async def service_cycle(args, *, now=None):
             return publish(root, result, datetime.now(UTC))
 
 
-def _apply(runtime, bars, *, observed=None):
+def _apply(runtime, bars, *, observed=None, collection_proofs=None):
     grouped = {}
     for bar in bars:
         grouped.setdefault(bar["timestamp_utc"], []).append(bar)
     for stamp in sorted(grouped):
-        runtime.process(grouped[stamp], observed or utc(stamp) + timedelta(minutes=5))
+        runtime.process(grouped[stamp], observed or utc(stamp) + timedelta(minutes=5),
+                        collection_proof=(collection_proofs or {}).get(stamp))
 
 
 async def _collect(args, transport, now, start=None, end=None):
     start = start or utc(args.start)
     end = end or utc(args.end)
+    if getattr(args, "attest_market_data", False):
+        if args.provider != "kis":
+            raise DataError("COLLECTION_PROVIDER_INVALID")
+        return await collect_attested_kis(os.environ, start, end, args.token_cache)
     if args.provider == "alpaca":
         return await collect_alpaca(transport, os.environ, start, end, now)
     return await collect_kis(transport, os.environ, start, end, now, args.token_cache)
@@ -179,7 +185,8 @@ async def execute(args):
                             runtime = PaperRuntime(
                                 args.state, config, batch["provider"], False, "forward"
                             )
-                        _apply(runtime, batch["bars"], observed=datetime.now(UTC))
+                        _apply(runtime, batch["bars"], observed=datetime.now(UTC),
+                               collection_proofs=batch.get("collection_proofs"))
                         last_status = runtime.status()
                 print(json.dumps(last_status, ensure_ascii=False), flush=True)
                 count += 1
@@ -236,6 +243,7 @@ def main(argv=None):
     run.add_argument("--poll-seconds", type=int, default=60)
     run.add_argument("--cycles", type=int, default=0)
     for command in (collect, run):
+        command.add_argument("--attest-market-data", action="store_true")
         command.add_argument(
             "--token-cache", type=Path, default=ROOT / "data/intraday-auth/token.json"
         )

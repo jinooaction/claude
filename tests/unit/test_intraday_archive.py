@@ -148,10 +148,14 @@ def test_synthetic_history_remains_synthetic(tmp_path):
     assert "synthetic_dataset_not_promotion_evidence" in result["decision"]["reasons"]
 
 
-def test_cli_runs_without_broker_credentials_or_a_trading_database(archives):
+@pytest.mark.parametrize("command", [
+    ["scripts/intraday_operator.py", "history-review"],
+    ["-m", "auto_invest.analytics.intraday_archive"],
+])
+def test_cli_runs_without_broker_credentials_or_a_trading_database(archives, command):
     env = {k: v for k, v in os.environ.items() if not k.startswith(("KIS_", "APCA_"))}
     result = subprocess.run(
-        [sys.executable, "-m", "auto_invest.analytics.intraday_archive", "--archives",
+        [sys.executable, *command, "--archives",
          str(archives), "--out", str(archives.parent / "review")], cwd=ROOT, env=env,
         text=True, capture_output=True, timeout=30,
     )

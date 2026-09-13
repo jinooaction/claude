@@ -191,6 +191,26 @@ def test_existing_server_command_collects_transactions_without_new_host_options(
     assert result["orders_submitted"] == 0 and execution.read_bytes() == before
 
 
+def test_explicit_transaction_window_takes_precedence_without_duplicate_recent_query(
+    setup, monkeypatch, capsys,
+):
+    module, history, execution, before, state = setup
+    state["model_ready"] = True
+    monkeypatch.setattr("sys.argv", [module.__file__, "--history-db", str(history),
+        "--transactions-from", "20260801", "--transactions-through", "20260901"])
+    assert module.main() == 0
+    result = json.loads(capsys.readouterr().out)
+    assert state["calls"] == 11
+    assert "requested_registration_window_days" not in result["transactions"]
+    reports = json.loads(rows(history)[0][2])["responses"]
+    transactions = [record for record in reports
+                    if record["endpoint"].endswith("inquire-period-trans")]
+    assert len(transactions) == 1 and transactions[0] is reports[-1]
+    assert transactions[0]["params"]["ERLM_STRT_DT"] == "20260801"
+    assert transactions[0]["params"]["ERLM_END_DT"] == "20260901"
+    assert execution.read_bytes() == before and result["orders_submitted"] == 0
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("fault", [None, "cash_change", "quantity_change", "receivable",
                                    "other_asset", "other_loan"])

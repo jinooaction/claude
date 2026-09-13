@@ -28,11 +28,29 @@ from auto_invest.broker.intraday_balance_evidence import (
     observe_balance_evidence,
     public_balance_evidence,
 )
-from auto_invest.broker.intraday_transactions import observe_transactions, public_transactions
+from auto_invest.broker.intraday_transactions import (
+    observe_transactions,
+    public_transactions,
+    validate_window,
+)
+from auto_invest.broker.overseas import get_order_executions_resolving_market
 from auto_invest.execution.intraday_account_history import AccountHistory, AccountHistoryError
+from auto_invest.execution.intraday_cost_reconciliation import (
+    CostReconciliationError,
+    reconcile_cost_inputs,
+)
 
 
-async def _query(*, history=None, recent_transactions=False):
+async def _query(*, transactions_from=None, transactions_through=None, execution_db=None,
+                 history=None, recent_transactions=False):
+    include_transactions = transactions_from is not None or transactions_through is not None
+    if execution_db is not None:
+        if include_transactions or history is None:
+            validate_window(transactions_from, transactions_through)
+        if not Path(execution_db).is_file():
+            raise CostReconciliationError("COST_LEDGER_UNAVAILABLE")
+    if include_transactions:
+        validate_window(transactions_from, transactions_through)
     required = ("KIS_APP_KEY", "KIS_APP_SECRET", "KIS_ACCOUNT_NO")
     if any(not os.environ.get(key) for key in required):
         return dict(status="DATA_ACCESS_REQUIRED", orders_submitted=0, live_eligible=False), 2
@@ -54,7 +72,7 @@ async def _query(*, history=None, recent_transactions=False):
         if history is not None:
             client = history.client(client)
         transactions = None
-        if recent_transactions:
+        if recent_transactions and not include_transactions:
             end = datetime.now(UTC).date()
             transaction_snapshot = await observe_transactions(
                 client, account=os.environ["KIS_ACCOUNT_NO"], access_token=token.access_token,
@@ -90,6 +108,23 @@ async def _query(*, history=None, recent_transactions=False):
             app_secret=os.environ["KIS_APP_SECRET"],
             between_current_reads=intermediate_reads,
         )
+        if include_transactions:
+            transaction_snapshot = await observe_transactions(
+                client, account=os.environ["KIS_ACCOUNT_NO"], access_token=token.access_token,
+                app_key=os.environ["KIS_APP_KEY"], app_secret=os.environ["KIS_APP_SECRET"],
+                start_date=transactions_from, end_date=transactions_through,
+            )
+            transactions = public_transactions(transaction_snapshot)
+            if execution_db is not None:
+                executions = await get_order_executions_resolving_market(
+                    client, account=os.environ["KIS_ACCOUNT_NO"], access_token=token.access_token,
+                    app_key=os.environ["KIS_APP_KEY"], app_secret=os.environ["KIS_APP_SECRET"],
+                    order_date_yyyymmdd=transactions_from, end_date_yyyymmdd=transactions_through,
+                    strict_contract=True,
+                )
+                transactions["ledger_comparison"] = reconcile_cost_inputs(
+                    Path(execution_db), executions, transaction_snapshot["rows"],
+                )
     result = dict(public_balance_evidence(snapshot), account_assets=account_assets)
     if transactions is not None:
         result["transactions"] = transactions
@@ -103,9 +138,13 @@ async def _query(*, history=None, recent_transactions=False):
     return result, 0
 
 
-async def run(*, history_db=None, execution_db=None, recent_transactions=False):
+async def run(*, transactions_from=None, transactions_through=None, execution_db=None,
+              history_db=None, recent_transactions=False):
+    if transactions_from is not None or transactions_through is not None:
+        validate_window(transactions_from, transactions_through)
+        recent_transactions = False
     history = None
-    if (execution_db is not None or recent_transactions) and history_db is None:
+    if recent_transactions and history_db is None:
         raise AccountHistoryError("HISTORY_DATABASE_REQUIRED")
     if history_db is not None and all(os.environ.get(key) for key in (
         "KIS_APP_KEY", "KIS_APP_SECRET", "KIS_ACCOUNT_NO",
@@ -113,7 +152,10 @@ async def run(*, history_db=None, execution_db=None, recent_transactions=False):
         history = AccountHistory(history_db, os.environ["KIS_ACCOUNT_NO"],
                                  execution_db=execution_db)
     try:
-        result, code = await _query(history=history, recent_transactions=recent_transactions)
+        result, code = await _query(
+            transactions_from=transactions_from, transactions_through=transactions_through,
+            execution_db=execution_db, history=history, recent_transactions=recent_transactions,
+        )
     except BaseException:
         if history is not None:
             history.finish("FAILED")
@@ -129,16 +171,30 @@ async def run(*, history_db=None, execution_db=None, recent_transactions=False):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--history-db", type=Path, help="Private account source journal")
-    parser.add_argument("--execution-db", type=Path, help="Existing execution ledger; read only")
+    parser.add_argument("--transactions-from", help="Registration start date, YYYYMMDD")
+    parser.add_argument("--transactions-through", help="Registration end date, YYYYMMDD")
+    parser.add_argument(
+        "--execution-db", type=Path, help="Existing execution DB; read-only comparison",
+    )
+    parser.add_argument(
+        "--history-db", type=Path,
+        help="Private account observation journal; records from now, no historical window required",
+    )
     args = parser.parse_args()
     try:
-        result, code = asyncio.run(run(history_db=args.history_db, execution_db=args.execution_db,
-                                      recent_transactions=args.history_db is not None))
+        result, code = asyncio.run(run(
+            transactions_from=args.transactions_from,
+            transactions_through=args.transactions_through,
+            execution_db=args.execution_db,
+            history_db=args.history_db,
+            recent_transactions=args.history_db is not None,
+        ))
     except Exception as exc:
         result = dict(
             status="FAILED",
-            reason=str(exc) if isinstance(exc, (AccountReadError, AccountHistoryError))
+            reason=str(exc) if isinstance(exc, (
+                AccountReadError, CostReconciliationError, AccountHistoryError,
+            ))
             else type(exc).__name__,
             orders_submitted=0,
             live_eligible=False,

@@ -11,6 +11,7 @@ import json
 import math
 import sqlite3
 from datetime import datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
 
 from auto_invest.analytics.intraday_paper_challenger import (
@@ -30,6 +31,7 @@ from auto_invest.market_data.intraday import (
     normalize,
     utc,
 )
+from auto_invest.market_data.intraday_pricing import limit_price
 
 MODEL = "limit-next-5m-v1"
 INITIAL = 100_000.0
@@ -129,6 +131,9 @@ class PaperRuntime:
             signal_source=digest(
                 Path(__file__).with_name("intraday_paper_challenger.py").read_bytes()
             ),
+            pricing_source=digest(
+                (Path(__file__).parents[1] / "market_data/intraday_pricing.py").read_bytes()
+            ),
             config=digest(encode(preregistration)),
             provider=provider,
             synthetic=synthetic,
@@ -199,7 +204,7 @@ class PaperRuntime:
             },
         )
 
-    def process(self, bars: list[dict], observed: datetime) -> bool:
+    def process(self, bars: list[dict], observed: datetime, *, collection_proof=None) -> bool:
         if len(bars) != 5 or {b.get("symbol") for b in bars} != set(SYMBOLS):
             raise DataError("BAR_COVERAGE")
         rows = {}
@@ -318,7 +323,7 @@ class PaperRuntime:
                         limit = (
                             existing["limit"]
                             if existing and existing["side"] == "SELL"
-                            else math.ceil(rows[symbol]["close"] * 0.9994 * 100) / 100
+                            else float(limit_price(Decimal(str(rows[symbol]["close"])), buy=False))
                         )
                         account["pending"][symbol] = dict(
                             side="SELL", qty=qty, limit=limit, eligible=iso(end)
@@ -334,7 +339,7 @@ class PaperRuntime:
                             and symbol in account["entered"]
                         ):
                             continue
-                        limit = math.floor(rows[symbol]["close"] * 1.0006 * 100) / 100
+                        limit = float(limit_price(Decimal(str(rows[symbol]["close"])), buy=True))
                         allocation = min(
                             self._nav(account, rows) * 0.16, account["cash"] / (1 + COMMISSION)
                         )
@@ -365,6 +370,10 @@ class PaperRuntime:
                 actions=actions,
                 state=state,
             )
+            if collection_proof is not None:
+                if not isinstance(collection_proof, dict) or len(encode(collection_proof)) > 4096:
+                    raise DataError("COLLECTION_PROOF_FORMAT")
+                payload["collection_proof"] = collection_proof
             conn.execute(
                 "INSERT INTO intraday_events(timestamp,previous_hash,hash,payload) VALUES(?,?,?,?)",
                 (stamp, previous, digest(encode([previous, payload])), encode(payload).decode()),

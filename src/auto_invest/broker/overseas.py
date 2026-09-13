@@ -997,6 +997,15 @@ def _parse_execution_snapshots(rows: list[dict], market: str) -> list[BrokerExec
         number = _first_str(row, "odno", "ODNO")
         if not number or not _first_str(row, "pdno", "PDNO", "ovrs_pdno"):
             raise ValueError("EXECUTIONS_IDENTITY_MISSING")
+        raw_day = _first_str(row, "ord_dt", "ORD_DT")
+        reported_day = None
+        if raw_day is not None:
+            try:
+                if len(raw_day) != 8 or not raw_day.isascii() or not raw_day.isdigit():
+                    raise ValueError
+                reported_day = date.fromisoformat(raw_day)
+            except ValueError:
+                raise ValueError("EXECUTIONS_ORDER_DATE_INVALID") from None
         for keys in (("ft_ccld_qty", "ccld_qty", "tot_ccld_qty"), ("nccs_qty", "ord_psbl_qty")):
             raw = _first_str(row, *keys)
             try:
@@ -1006,9 +1015,22 @@ def _parse_execution_snapshots(rows: list[dict], market: str) -> list[BrokerExec
                 valid = False
             if not valid:
                 raise ValueError("EXECUTIONS_QUANTITY_INVALID")
+        raw_quantity = _first_str(row, "ft_ord_qty", "FT_ORD_QTY", "ord_qty", "ORD_QTY")
+        reported_quantity = None
+        if raw_quantity is not None:
+            try:
+                amount = Decimal(raw_quantity)
+                if (not amount.is_finite() or not 0 < amount <= 10**18
+                        or amount != amount.to_integral_value()):
+                    raise ValueError
+                reported_quantity = int(amount)
+            except (ValueError, InvalidOperation):
+                raise ValueError("EXECUTIONS_ORDER_QUANTITY_INVALID") from None
         execution = _parse_executions([row])[0].model_copy(
             update={
                 "ordered_at_utc": None,
+                "reported_order_date": reported_day,
+                "reported_order_quantity": reported_quantity,
                 "terminal": (_first_str(row, "prcs_stat_name", "ord_stat_name") or "").lower()
                 in {
                     "취소",
@@ -1029,11 +1051,15 @@ def _parse_execution_snapshots(rows: list[dict], market: str) -> list[BrokerExec
             and (not execution.avg_fill_price_usd.is_finite() or execution.avg_fill_price_usd <= 0)
         ):
             raise ValueError("EXECUTIONS_FILL_INVALID")
+        if reported_quantity is not None and execution.filled_qty > reported_quantity:
+            raise ValueError("EXECUTIONS_ORDER_QUANTITY_INVALID")
         previous = best.get(number)
         if previous is not None:
             if (
                 previous.symbol != execution.symbol
                 or previous.side != execution.side
+                or previous.reported_order_date != execution.reported_order_date
+                or previous.reported_order_quantity != execution.reported_order_quantity
                 or (
                     previous.filled_qty == execution.filled_qty
                     and previous.avg_fill_price_usd != execution.avg_fill_price_usd
