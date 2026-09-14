@@ -36,7 +36,8 @@ async def run(tmp_path, monkeypatch, bodies, limit=80):
 @pytest.mark.asyncio
 async def test_old_history_is_observed_and_cursor_follows_last_bar(tmp_path, monkeypatch):
     bodies = [dict(rt_cd="0", output2=[bar(time="093500")]),
-              dict(rt_cd="0", output2=[bar()]), dict(rt_cd="0", output2=[])]
+              dict(rt_cd="0", output2=[bar()]), dict(rt_cd="0", output2=[]),
+              dict(rt_cd="0", output2=[])]
     result, calls = await run(tmp_path, monkeypatch, bodies)
     assert calls[0]["KEYB"] == "" and calls[1]["KEYB"] == "20230103093000"
     assert calls[1]["NEXT"] == "1" and calls[2]["KEYB"] == "20230103092500"
@@ -44,7 +45,9 @@ async def test_old_history_is_observed_and_cursor_follows_last_bar(tmp_path, mon
     assert result["observed_older_than_30_days"] is True
     assert result["provider_history_limit_proven"] is False and result["live_eligible"] is False
     source = next((tmp_path / "history").glob("run-*"))
-    assert len(list(source.glob("page-*.json"))) == 3
+    assert len(list(source.glob("page-*.json"))) == 4
+    assert calls[3]["KEYB"] == "20230103092900"
+    assert result["boundary_one_minute_attempts"] == 1
     assert source.stat().st_mode & 0o077 == 0
     for path in source.glob("*.json"):
         assert path.stat().st_mode & 0o077 == 0
@@ -57,6 +60,30 @@ async def test_page_cap_does_not_claim_supplier_limit(tmp_path, monkeypatch):
     result, calls = await run(tmp_path, monkeypatch, [dict(rt_cd="0", output2=[bar()])], limit=1)
     assert result["stop_reason"] == "PAGE_LIMIT_REACHED" and len(calls) == 1
     assert result["provider_history_limit_proven"] is False
+
+
+@pytest.mark.asyncio
+async def test_boundary_retry_recovers_older_data_then_stops(tmp_path, monkeypatch):
+    empty = dict(rt_cd="0", output2=[])
+    result, calls = await run(tmp_path, monkeypatch, [
+        dict(rt_cd="0", output2=[bar(time="093500")]), empty,
+        dict(rt_cd="0", output2=[bar()]), empty, empty,
+    ])
+    assert result["regular_bars"] == 2 and result["boundary_one_minute_attempts"] == 2
+    assert calls[2]["KEYB"] == "20230103093400"
+    assert result["stop_reason"] == "EMPTY_PAGE" and len(calls) == 5
+
+
+@pytest.mark.asyncio
+async def test_boundary_retry_never_exceeds_cap_or_loops_on_duplicate(tmp_path, monkeypatch):
+    empty = dict(rt_cd="0", output2=[])
+    result, calls = await run(tmp_path, monkeypatch, [dict(rt_cd="0", output2=[bar()]),
+                                                   empty], limit=2)
+    assert len(calls) == 2 and result["boundary_one_minute_attempts"] == 0
+    result, calls = await run(tmp_path, monkeypatch, [dict(rt_cd="0", output2=[bar()]),
+                                                   empty, dict(rt_cd="0", output2=[bar()])])
+    assert len(calls) == 3 and result["stop_reason"] == "CURSOR_NOT_ADVANCING"
+    assert result["raw_unique_bars"] == 1
 
 
 @pytest.mark.asyncio

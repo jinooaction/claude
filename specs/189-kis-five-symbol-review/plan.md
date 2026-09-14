@@ -1,5 +1,13 @@
 # 계획
 
+후속 보정: 기존5분 전 커서가 빈 페이지를 받으면 공식 문서의1분 전 커서를 같은 경계에서
+한 번 확인한다. 기존80회 한도 안에서만 요청하며 원본과 시각/해시를 그대로 보관한다.
+중복 응답은 진행 중단, 두 방식 모두 빈 응답은 EMPTY_PAGE로 종료한다. 기존 수집의
+경계 누락 가능성 보정이며 새 공급자·주문·외부 API 안전 경계는 추가/변경하지 않는다.
+실패 복구는 이 재시도만 되돌리는 커밋으로 처리한다. 관련 반례와 전체 회귀 후 실제
+5종목 결과에서 추가 날짜 여부를 확인한다. 자료 부족 자체가 해소됐다고 미리 간주하지 않는다.
+공식 근거: https://github.com/koreainvestment/open-trading-api/blob/main/examples_llm/overseas_stock/inquire_time_itemchartprice/inquire_time_itemchartprice.py
+
 kis_history_depth의 symbol 인수를 허용 목록으로 제한하고 기본값SPY를 유지한다.
 별도 kis_history_review 함수가5종목을 순서대로 호출하고 비공개 원본에서 정규장 봉을 읽는다.
 write_batch/기존 연구 로더/사전등록/독립 증거 검사를 재사용한다. 공통 범위 중간 달력
