@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-09-14T14:12:36.571119Z)
+# 완료 후보 소비 장부 (as of 2026-09-14T14:20:15.574747Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -9,7 +9,7 @@
 |------|-----|
 | overall_status | OK |
 | released_count | 61 |
-| scanned_specs | 124 |
+| scanned_specs | 125 |
 
 ## 완료 후보
 
@@ -137,7 +137,6 @@
 | 181-intraday-runtime | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 182-intraday-kis-execution | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 183-mobile-capital-strategy-dashboard | 체크박스 작업이 없거나 완료되지 않았습니다. |
-| 189-kis-five-symbol-review | 체크박스 작업이 없거나 완료되지 않았습니다. |
 
 ## 안전 경계
 
@@ -154,7 +153,7 @@
 
 ```json
 {
-  "commit": "3c8656930d7e16cf73d1afc98f91a101cef4e37a",
+  "commit": "0983960cd858d2320aa66aa923804abf270d7b59",
   "overall_status": "OK",
   "released_work": [
     {
@@ -842,7 +841,8 @@
     "184-intraday-operator-program",
     "185-intraday-archive-review",
     "186-account-source-collection",
-    "188-kis-history-depth"
+    "188-kis-history-depth",
+    "189-kis-five-symbol-review"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -1069,12 +1069,8 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "183-mobile-capital-strategy-dashboard"
-    },
-    {
-      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "189-kis-five-symbol-review"
     }
   ],
-  "timestamp_utc": "2026-09-14T14:12:36.571119Z"
+  "timestamp_utc": "2026-09-14T14:20:15.574747Z"
 }
 ```
