@@ -10,8 +10,10 @@ GET `/v2/stocks/bars`, 5Min, sip, split, limit10000, next_page_token을 끝까�
 근거: https://docs.alpaca.markets/us/reference/stockbars
 
 KIS는 `/uapi/overseas-price/v1/quotations/inquire-time-itemchartprice`, HHDFS76950200,
-NMIN5, PINC1, NREC120, NEXT/KEYB를 사용한다. 약 한 달 보존이며 나스닥 부분시장
-시세와 정정 가능성을 기록한다. 756세션의 대체 자료가 아니다.
+NMIN5, PINC1, NREC120, NEXT/KEYB를 사용한다. 나스닥 부분시장 시세와 정정 가능성을
+기록한다. 2026-09-14 정정: 이전의 약 한 달 보존은 공식 예제로 입증되지 않았다.
+로컬 수집기의30일/40페이지 제한과 공급자의 실제 보관 기간을 구분한다.
+현재756세션 대체 가능 여부는 미확인이다. 후속187/free-source-review.md 참고.
 근거: https://apiportal.koreainvestment.com/apiservice 및
 https://github.com/koreainvestment/open-trading-api/tree/main/examples_llm/overseas_stock/inquire_time_itemchartprice
 
