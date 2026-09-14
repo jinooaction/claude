@@ -1,5 +1,5 @@
 {
-  "commit": "d72325bbf92abc01d480e111a0f29bc420b38b42",
+  "commit": "56979310decbf3b5646cd2dab163a260e2a807cf",
   "overall_status": "OK",
   "released_work": [
     {
@@ -913,7 +913,11 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "183-mobile-capital-strategy-dashboard"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "188-kis-history-depth"
     }
   ],
-  "timestamp_utc": "2026-09-13T23:44:28.421023Z"
+  "timestamp_utc": "2026-09-14T13:42:44.871409Z"
 }
