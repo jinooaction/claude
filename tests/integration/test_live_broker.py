@@ -294,21 +294,21 @@ async def test_live_kis_intraday_data_contract(kis_token_bundle: dict, tmp_path)
 
 @pytest.mark.asyncio
 async def test_live_kis_history_depth(kis_token_bundle: dict) -> None:
-    """Observe bounded historical access using the existing server token cache."""
+    """Acquire and review bounded five-symbol history using the server token cache."""
     from auto_invest.market_data.intraday import DataError, ReadTransport
-    from auto_invest.market_data.kis_history_depth import probe_kis_history_depth
+    from auto_invest.market_data.kis_history_review import acquire_kis_history_review
 
     cache = Path(os.environ.get("KIS_TOKEN_CACHE_PATH", "data/kis_token.json"))
     try:
         async with httpx.AsyncClient(timeout=30, follow_redirects=False) as client:
-            result = await probe_kis_history_depth(
-                ReadTransport(client), os.environ, cache, cache.parent / "kis-history-depth",
+            result = await acquire_kis_history_review(
+                ReadTransport(client), os.environ, cache, cache.parent / "kis-history-reviews",
             )
     except Exception as exc:
         code = str(exc) if isinstance(exc, DataError) else type(exc).__name__
         pytest.fail("KIS history depth: " + code, pytrace=False)
     assert result["orders_submitted"] == 0 and result["live_eligible"] is False
-    print("\nKIS history depth: " + json.dumps(result, sort_keys=True))
+    print("\nKIS history review: " + json.dumps(result, sort_keys=True))
 
 
 @pytest.mark.asyncio

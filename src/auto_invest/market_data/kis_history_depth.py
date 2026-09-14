@@ -1,4 +1,4 @@
-"""Bounded SPY history observation, independent of collection/qualification policy."""
+"""Bounded allowlisted history observation, independent of qualification policy."""
 
 import os
 from datetime import UTC, datetime, timedelta
@@ -10,6 +10,7 @@ from auto_invest.market_data.intraday import (
     KIS_BARS,
     KIS_BASE,
     NY,
+    SYMBOLS,
     DataError,
     digest,
     encode,
@@ -28,7 +29,10 @@ def _save(path, value, secrets):
     return digest(raw)
 
 
-async def probe_kis_history_depth(transport, env, cache_path, output_root, *, max_pages=80):
+async def probe_kis_history_depth(transport, env, cache_path, output_root, *, max_pages=80,
+                                  symbol="SPY"):
+    if symbol not in SYMBOLS:
+        raise DataError("DEPTH_SYMBOL_DENIED")
     if type(max_pages) is not int or not 1 <= max_pages <= 80:
         raise DataError("DEPTH_PAGE_LIMIT_INVALID")
     key, secret = env.get("KIS_APP_KEY"), env.get("KIS_APP_SECRET")
@@ -48,7 +52,8 @@ async def probe_kis_history_depth(transport, env, cache_path, output_root, *, ma
     secrets = (key, secret, token.access_token)
     headers = dict(authorization="Bearer " + token.access_token, appkey=key,
                    appsecret=secret, tr_id="HHDFS76950200", custtype="P", tr_cont="")
-    params = dict(AUTH="", EXCD="AMS", SYMB="SPY", NMIN="5", PINC="1", NEXT="",
+    params = dict(AUTH="", EXCD="NAS" if symbol in {"QQQ", "TLT"} else "AMS",
+                  SYMB=symbol, NMIN="5", PINC="1", NEXT="",
                   NREC="120", FILL="", KEYB="")
     previous, first, last = None, None, None
     bars, raw_rows, lineage = {}, {}, []
@@ -81,7 +86,7 @@ async def probe_kis_history_depth(transport, env, cache_path, output_root, *, ma
                 if stamp in raw_rows and raw_rows[stamp] != values:
                     raise DataError("DEPTH_CONFLICTING_BAR")
                 raw_rows[stamp] = values
-                row = normalize("SPY", values, observed)
+                row = normalize(symbol, values, observed)
             except (KeyError, TypeError, ValueError, OverflowError) as exc:
                 if isinstance(exc, DataError):
                     raise
@@ -103,7 +108,7 @@ async def probe_kis_history_depth(transport, env, cache_path, output_root, *, ma
                       .strftime("%Y%m%d%H%M%S"))
     _save(run / "regular-bars.json", [bars[k] for k in sorted(bars)], secrets)
     result = dict(
-        status="OBSERVED", symbol="SPY", provider="kis-nasdaq-partial-unadjusted",
+        status="OBSERVED", symbol=symbol, provider="kis-nasdaq-partial-unadjusted",
         page_limit=max_pages, pages=len(lineage), raw_unique_bars=len(raw_rows),
         regular_bars=len(bars), regular_sessions=len({t.astimezone(NY).date() for t in bars}),
         oldest_utc=iso(first) if first else None, newest_utc=iso(last) if last else None,
