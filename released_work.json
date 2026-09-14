@@ -1,5 +1,5 @@
 {
-  "commit": "7ac4beb83a14aad3901e4e390f6262682b9d6eeb",
+  "commit": "3c8656930d7e16cf73d1afc98f91a101cef4e37a",
   "overall_status": "OK",
   "released_work": [
     {
@@ -914,7 +914,11 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "183-mobile-capital-strategy-dashboard"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "189-kis-five-symbol-review"
     }
   ],
-  "timestamp_utc": "2026-09-14T13:49:23.814207Z"
+  "timestamp_utc": "2026-09-14T14:12:36.571119Z"
 }
