@@ -49,7 +49,7 @@ async def test_http_sources_and_open_day_filter(tmp_path, monkeypatch, gap):
         result = await acquire_kis_history_review(ReadTransport(client, interval=0), ENV,
             tmp_path / "token.json", tmp_path / "history",
             now=datetime(2023, 1, 5, 15, tzinfo=UTC))
-    assert counts == {s: 3 for s in SYMBOLS}
+    assert counts == {s: 4 for s in SYMBOLS}
     assert result["first_common_date"] == "2023-01-03"
     assert result["last_common_date"] == "2023-01-04"
     assert result["complete_sessions"] == (1 if gap else 2)
@@ -60,7 +60,7 @@ async def test_http_sources_and_open_day_filter(tmp_path, monkeypatch, gap):
     source = json.loads((run / "dataset/source.json").read_text())
     assert len(source["source_runs"]) == 5
     assert all(not r["timestamp_utc"].startswith("2023-01-05") for r in source["bars"])
-    assert len(list((run / "sources").glob("run-*/page-*.json"))) == 15
+    assert len(list((run / "sources").glob("run-*/page-*.json"))) == 20
     assert (run / "completed.json").exists()
     diagnostic = json.loads((run / "short-window-diagnostic.json").read_text())
     assert diagnostic["promotion_eligible"] is False

@@ -58,6 +58,8 @@ async def probe_kis_history_depth(transport, env, cache_path, output_root, *, ma
     previous, first, last = None, None, None
     bars, raw_rows, lineage = {}, {}, []
     reason = "PAGE_LIMIT_REACHED"
+    boundary_retry = False
+    boundary_attempts = 0
     for page in range(max_pages):
         requested = datetime.now(UTC)
         response = await transport.request("GET", KIS_BARS, headers=headers, params=dict(params))
@@ -95,6 +97,14 @@ async def probe_kis_history_depth(transport, env, cache_path, output_root, *, ma
             if row:
                 bars[stamp] = row
         if not times:
+            # KIS documents both one-minute and NMIN-minute cursor offsets.
+            # Retry the same boundary once; count it inside the existing page cap.
+            if previous is not None and not boundary_retry and page + 1 < max_pages:
+                boundary_retry = True
+                boundary_attempts += 1
+                params.update(NEXT="1", KEYB=(previous - timedelta(minutes=1))
+                              .astimezone(NY).strftime("%Y%m%d%H%M%S"))
+                continue
             reason = "EMPTY_PAGE"
             break
         oldest, newest = min(times), max(times)
@@ -104,6 +114,7 @@ async def probe_kis_history_depth(transport, env, cache_path, output_root, *, ma
             reason = "CURSOR_NOT_ADVANCING"
             break
         previous = oldest
+        boundary_retry = False
         params.update(NEXT="1", KEYB=(oldest - timedelta(minutes=5)).astimezone(NY)
                       .strftime("%Y%m%d%H%M%S"))
     _save(run / "regular-bars.json", [bars[k] for k in sorted(bars)], secrets)
@@ -115,6 +126,7 @@ async def probe_kis_history_depth(transport, env, cache_path, output_root, *, ma
         oldest_regular_utc=iso(min(bars)) if bars else None,
         observed_older_than_30_days=bool(first and first < started - timedelta(days=30)),
         stop_reason=reason, provider_history_limit_proven=False,
+        boundary_one_minute_attempts=boundary_attempts,
         source_path=str(run), page_digests=lineage, orders_submitted=0, live_eligible=False,
     )
     _save(run / "completed.json", result, secrets)
