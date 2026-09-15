@@ -1,0 +1,120 @@
+{
+  "packages": [
+    {
+      "block_reason_ko": "기계 판독 검증 결과에 실패가 있어 승격 증거로 병합하지 않는다.",
+      "candidate_id": "candidate-1ed634d8bf6d",
+      "commands": [
+        "uv run auto-invest portfolio-walk-forward --portfolio deploy/micro-gtaa-live-portfolio.toml --trailing-years 5 --history-root /tmp/candidate_result_history/micro-gtaa/hist --db data/candidate-factory/candidate-1ed634d8bf6d.db --halt-path data/candidate-factory/candidate-1ed634d8bf6d.halt.flag --json",
+        "uv run python scripts/deep_walk_forward_probe.py --segment-months 60"
+      ],
+      "domain_key": "strategy_design",
+      "package_id": "pkg-c9a284fa4235",
+      "package_kind": "strategy_backtest",
+      "produces_evidence": [
+        "historical_backtest",
+        "recent_oos",
+        "walk_forward",
+        "forward_track"
+      ],
+      "promotion_patch": {
+        "factory_block_reason_ko": "기계 판독 검증 결과에 실패가 있어 승격 증거로 병합하지 않는다.",
+        "factory_diagnostics": [
+          {
+            "code": "insufficient_pass_evidence",
+            "details": {},
+            "evidence_source": "output",
+            "next_actions": [
+              {
+                "action_code": "emit_machine_readable_verdict",
+                "owner": "future_spec",
+                "safe_to_auto_run": false,
+                "summary_ko": "검증 명령이 명확한 pass/fail verdict와 핵심 통계를 내도록 보강한다."
+              }
+            ],
+            "retryable": false,
+            "severity": "warning",
+            "summary_ko": "실행 출력에 통과 verdict가 충분히 없다."
+          },
+          {
+            "code": "mixed_horizon_evidence",
+            "details": {},
+            "evidence_source": "output",
+            "next_actions": [
+              {
+                "action_code": "continue_forward_validation",
+                "owner": "automation",
+                "safe_to_auto_run": true,
+                "summary_ko": "통과한 장기 증거를 보존하고 최근 forward 기준이 충족될 때까지 관측한다."
+              }
+            ],
+            "retryable": false,
+            "severity": "warning",
+            "summary_ko": "장기 통과와 최근 실패 증거가 함께 있어 전진 검증이 더 필요하다."
+          }
+        ],
+        "factory_kind": "strategy_backtest",
+        "factory_next_actions": [
+          {
+            "action_code": "emit_machine_readable_verdict",
+            "owner": "future_spec",
+            "safe_to_auto_run": false,
+            "summary_ko": "검증 명령이 명확한 pass/fail verdict와 핵심 통계를 내도록 보강한다."
+          },
+          {
+            "action_code": "continue_forward_validation",
+            "owner": "automation",
+            "safe_to_auto_run": true,
+            "summary_ko": "통과한 장기 증거를 보존하고 최근 forward 기준이 충족될 때까지 관측한다."
+          }
+        ],
+        "factory_package_id": "pkg-c9a284fa4235",
+        "factory_retryable": false,
+        "factory_source": "candidate-implementation-factory",
+        "factory_status": "blocked"
+      },
+      "required_inputs": [
+        "candidate history support datasets",
+        "portfolio TOML",
+        "candidate result evidence"
+      ],
+      "safety_note_ko": "읽기 전용 또는 backtest/paper 검증 계획만 생성한다. 주문, 자본, live 설정, whitelist, caps, sentinel은 변경하지 않는다.",
+      "source_stage": "DISCARD",
+      "status": "blocked",
+      "title_ko": "micro GTAA 의도 손익 재검토와 대체 전략 연구"
+    },
+    {
+      "block_reason_ko": "기계 판독 검증 결과에 실패가 있어 승격 증거로 병합하지 않는다.",
+      "candidate_id": "candidate-cc96b35062da",
+      "commands": [
+        "uv run auto-invest portfolio-walk-forward --portfolio deploy/global-trend-wide-portfolio.toml --trailing-years 5 --history-root /tmp/candidate_result_history/global-trend-wide/hist --db data/candidate-factory/candidate-cc96b35062da-wide.db --halt-path data/candidate-factory/candidate-cc96b35062da.halt.flag --json",
+        "uv run auto-invest portfolio-walk-forward --portfolio deploy/multi-asset-trend-portfolio.toml --trailing-years 5 --history-root /tmp/candidate_result_history/multi-asset-trend/hist --db data/candidate-factory/candidate-cc96b35062da-multi.db --halt-path data/candidate-factory/candidate-cc96b35062da.halt.flag --json"
+      ],
+      "domain_key": "portfolio_design",
+      "package_id": "pkg-8aae8cb99874",
+      "package_kind": "portfolio_backtest",
+      "produces_evidence": [
+        "historical_backtest",
+        "recent_oos",
+        "walk_forward",
+        "forward_track"
+      ],
+      "promotion_patch": {
+        "factory_block_reason_ko": "기계 판독 검증 결과에 실패가 있어 승격 증거로 병합하지 않는다.",
+        "factory_kind": "portfolio_backtest",
+        "factory_package_id": "pkg-8aae8cb99874",
+        "factory_source": "candidate-implementation-factory",
+        "factory_status": "blocked"
+      },
+      "required_inputs": [
+        "candidate history support datasets",
+        "portfolio TOML",
+        "candidate result evidence"
+      ],
+      "safety_note_ko": "읽기 전용 또는 backtest/paper 검증 계획만 생성한다. 주문, 자본, live 설정, whitelist, caps, sentinel은 변경하지 않는다.",
+      "source_stage": "DISCARD",
+      "status": "blocked",
+      "title_ko": "비상관 포트폴리오 후보 비교력 강화"
+    }
+  ],
+  "schema_version": "1.0"
+}
