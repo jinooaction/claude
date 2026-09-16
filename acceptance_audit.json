@@ -1,0 +1,60 @@
+{
+  "calibration_coverage": {
+    "claim_limit": "The calibration covers the statistical core, not simultaneous passage of all eight historical gates.",
+    "directly_calibrated_gates": [
+      "family_pbo",
+      "holdout_active_psr"
+    ],
+    "family_16_null_research_entry_acceptance_rate": 0.01,
+    "family_16_planted_research_entry_detection_rate": 0.84,
+    "status": "PARTIAL_COVERAGE",
+    "uncalibrated_full_path_gates": [
+      "holdout_cagr",
+      "holdout_sharpe",
+      "holdout_drawdown",
+      "recent_segment_wins",
+      "latest_60_month_sharpe",
+      "annual_turnover"
+    ]
+  },
+  "candidate_id": "regime-corr24-thr0p2-weak6-cash",
+  "conclusion": {
+    "full_path_power_calibrated": false,
+    "historical_signal": "PROMISING_NOT_APPROVED",
+    "live_capital_eligible": false,
+    "research_gate_approved": false
+  },
+  "forward_power": {
+    "live_detection_rate": 0.1545,
+    "minimum_detection_rate": 0.8,
+    "observations": 48,
+    "paper_detection_rate": 0.424,
+    "planted_active_sharpe_annual": 1.5,
+    "verdict": "UNDERPOWERED"
+  },
+  "historical_gate_summary": {
+    "failed_gates": [
+      "recent_segment_wins"
+    ],
+    "passed_count": 7,
+    "passed_gates": [
+      "family_pbo",
+      "holdout_active_psr",
+      "holdout_cagr",
+      "holdout_sharpe",
+      "holdout_drawdown",
+      "latest_60_month_sharpe",
+      "annual_turnover"
+    ],
+    "total_count": 8,
+    "verdict": "NO_RESEARCH_EDGE"
+  },
+  "incumbent_id": "globalfixed-ensemble-3-6-9-12",
+  "safety": {
+    "capital_changed": false,
+    "live_strategy_changed": false,
+    "orders_submitted": 0,
+    "promotion_allowed": false
+  },
+  "schema_version": "strategy-acceptance-path-audit-v1"
+}
