@@ -2,19 +2,19 @@
 
 ## Phase 1 — 사전등록
 - [x] T001 명세·계획·계약을 작성한다: `specs/191-shock-recovery-research/`.
-- [ ] T002 성과를 읽기 전에 계약을 커밋하고 지문을 고정한다: `specs/191-shock-recovery-research/contracts/preregistration.json`.
+- [x] T002 성과를 읽기 전에 계약을 커밋하고 지문을 고정한다: `specs/191-shock-recovery-research/contracts/preregistration.json`. 사전등록 fdaa14b, SHA256 6665cab7eb7fb87b6ee11258f8323455087b00471036ed149006948961af9761.
 
 ## Phase 2 — US1 신호
-- [ ] T003 [US1]4후보·신호·하루1시도를 구현한다: `src/auto_invest/analytics/shock_recovery_intraday.py`, `intraday_paper_challenger.py`.
-- [ ] T004 [US1] 미래불변·임계값·미체결·갭·재진입·청산 반례를 검증한다: `tests/unit/test_shock_recovery_intraday.py`.
+- [x] T003 [US1]4후보·신호·하루1시도를 구현한다: `src/auto_invest/analytics/shock_recovery_intraday.py`, `intraday_paper_challenger.py`.
+- [x] T004 [US1] 미래불변·임계값·미체결·갭·재진입·청산 반례를 검증한다: `tests/unit/test_shock_recovery_intraday.py`.
 
 ## Phase 3 — US2 개발 실행
-- [ ] T005 [US2] 입력 고정·두 비용 재생·탈락/확인 필요 판정을 구현한다: `src/auto_invest/analytics/shock_recovery_intraday.py`.
-- [ ] T006 [US2] 커밋된 코드와 새 출력만 받는 명령을 구현한다: `scripts/shock_recovery_probe.py`.
+- [x] T005 [US2] 입력 고정·두 비용 재생·탈락/확인 필요 판정을 구현한다: `src/auto_invest/analytics/shock_recovery_intraday.py`.
+- [x] T006 [US2] 커밋된 코드와 새 출력만 받는 명령을 구현한다: `scripts/shock_recovery_probe.py`.
 
 ## Phase 4 — US3 재현 검사
-- [ ] T007 [US3] 해시·코드 계보·원본 재계산을 구현한다: `scripts/shock_recovery_probe.py`, `src/auto_invest/analytics/shock_recovery_intraday.py`.
-- [ ] T008 [US3] 변조·잘못된 입력·덮어쓰기·확인 명령 부재를 검사한다: `tests/integration/test_shock_recovery_cli.py`.
+- [x] T007 [US3] 해시·코드 계보·원본 재계산을 구현한다: `scripts/shock_recovery_probe.py`, `src/auto_invest/analytics/shock_recovery_intraday.py`.
+- [x] T008 [US3] 변조·잘못된 입력·덮어쓰기·확인 명령 부재를 검사한다: `tests/integration/test_shock_recovery_cli.py`.
 
 ## Phase 5 — 실제 결과와 출시
 - [ ] T009 커밋 후 실제1645일 재생/재계산을 완료한다: `specs/191-shock-recovery-research/results.md`.
