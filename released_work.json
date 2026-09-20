@@ -1,5 +1,5 @@
 {
-  "commit": "6580c056d35e66f960b97262c986c8809dd70636",
+  "commit": "9b8c9e1089a8cc5f969ebc1576e84ea8e1471842",
   "overall_status": "OK",
   "released_work": [
     {
@@ -915,7 +915,11 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "183-mobile-capital-strategy-dashboard"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "190-cost-aware-intraday"
     }
   ],
-  "timestamp_utc": "2026-09-20T22:26:47.431910Z"
+  "timestamp_utc": "2026-09-20T23:07:26.869355Z"
 }
