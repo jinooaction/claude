@@ -28,5 +28,7 @@ verdict=DEVELOPMENT_REJECTED, capital_eligible=false, ledger_row_count=4616.
 존재하지 않는 확인 입력 경로를 지정해도 자료 열기 오류보다 이 거부가 먼저 발생했고
 `/tmp/cost-aware-confirmation-must-not-exist` 산출물은 생성되지 않았다.
 확인 판정의24후보·기간247/248 분리·후보 유지·선택/판정 변조 거부는 모의 입력으로 검증했다.
-전체 회귀는 세션64634, `/tmp/cost-aware-full-tests.log`에서 진행 중이다.
+전체 회귀 세션64634 exit0, 코드8ca0c9c 기준4797 passed/13 skipped(828.14초).
+`/tmp/cost-aware-full-tests.log`에 결과 보존. 생략은 실제 KIS12개와 가동 전 전용1개다.
+ruff·하네스14/14·HANDOFF 사실 검사 통과. 코드 이후 변경은 문서뿐이다.
 결과를 근거로 등록 폭을 바꾸거나 최종 확인 기간에서 유리한 후보를 찾지 않는다.

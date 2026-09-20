@@ -19,7 +19,7 @@
 - [x] T012 [US2] `specs/190-cost-aware-intraday/results.md`에 개발 탈락과 confirm 실제 거부(exit2)/확인 산출물 미생성 증거를 기록했다.
 
 ## Phase 4 — 검증과 인계
-- [ ] T013 `tests/unit/test_cost_aware_intraday.py`와 통합 검사 뒤 전체 pytest/ruff 및 하네스·HANDOFF 사실 검사를 통과한다.
+- [x] T013 관련55개, 코드8ca0c9c 전체4797 passed/13 skipped(828.14초), ruff·하네스14/14·HANDOFF 사실 검사 통과. 실제 KIS12개·가동 전 전용1개 생략.
 - [ ] T014 `HANDOFF.md`에 원본·등록·선택·결과·미완료 실사용 조건을 연결하고 PR 검사·병합·배포를 확인한다.
 
 ## 의존성과 실행 전략
