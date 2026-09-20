@@ -1,5 +1,11 @@
 # auto-invest — 다음 세션 인수인계 (main 베이스라인)
 
+2026-09-20 원천 추적 후속: 공개표본 원본/복제본2025-07 파일LFS해시 동일, 재다운로드로
+충돌 해결 불가. 원천 정정/허용 근거는 계속 미확인. 대안HF Data Library는 별도사이트로
+무료/허용조건을 명시하나 API실제403/1010, 다운로드안내는무료계정필요(홈페이지와상이).
+Zenodo에는README만있고분봉없음. 가입/결제/추가분봉/운영변경없음.189/public-source-audit.md
+후속절과로컬upstream-comparison.json/hf-library-access.json참고. 현재장기검증미완료.
+
 2026-09-20 외부 공개 자료 조사 진전: ggaddam/OHLCV-1m 고정 버전에서
 2025년7월5종목79,510행을 인증 없이 실제 추출했다. 전체84GB 대신33회 범위 조회로
 69.5MB를 읽었다. 표본 가격 순서/음수 거래량 오류는 없지만 충돌 중복4건(정규장IWM1건),
@@ -862,7 +868,7 @@ T009/T010과 현재 진단 수집기의 정식 전진 검증 부재는 이 보�
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `d244c62` — Merge pull request #833 from jinooaction/codex/189-kis-boundary-handoff |
+| 마지막 main 커밋 | `1d07363` — Merge pull request #834 from jinooaction/codex/189-public-source-audit |
 | main 테스트 | 실행3a0cb59 전체4769 passed/13 skipped(808.63초). 실제34857636042 KIS12개 통과(114.62초), 경계 재시도 후20완결일/36회 단기 재생 유지. |
 | main 린트 | 실행3a0cb59의 `uv run ruff check src tests` 및 하네스14/14 검사 통과. |
 | 열린 PR | #827 유료 공급자 초안 보류. #830 머지 완료,189 실제 결과 인계 후속. |
