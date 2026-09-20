@@ -809,6 +809,10 @@ def simulate_candidate(
                         )
                 elif (
                     pending is None
+                    # Reserve a later executable bar for the mandatory exit.
+                    # A signal on the penultimate bar buys on the final bar,
+                    # where no subsequent same-session fill can close it.
+                    and index < len(bars) - 2
                     and not (candidate.family == "opening_range_breakout" and entered_once)
                     and _entry_signal(candidate, bars, index)
                 ):

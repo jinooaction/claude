@@ -151,6 +151,36 @@ def test_preregistration_has_exact_registry_and_zero_money_boundary() -> None:
     }
 
 
+@pytest.mark.parametrize("remaining_bars", [2, 3])
+@pytest.mark.parametrize("session", ["2024-01-02", "2024-11-29"])
+def test_entry_reserves_a_later_session_exit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, remaining_bars: int, session: str,
+) -> None:
+    bars_dir, manifest = _write_dataset(tmp_path, session_labels=(session,))
+    prereg = load_preregistration(PREREGISTRATION)
+    dataset = load_intraday_dataset(bars_dir, manifest, prereg)
+    candidate = build_candidate_registry(prereg)[0]
+    bars = resample_dataset(dataset, 15)
+    tail = {symbol: {day: rows[-remaining_bars:] for day, rows in days.items()}
+            for symbol, days in bars.items()}
+    monkeypatch.setattr(
+        "auto_invest.analytics.intraday_paper_challenger._entry_signal", lambda *args: True,
+    )
+    monkeypatch.setattr(
+        "auto_invest.analytics.intraday_paper_challenger._exit_signal", lambda *args: False,
+    )
+    run = simulate_candidate(candidate, tail, dataset.sessions, prereg, cost_model_name="base")
+    assert run.unclosed_quantity == 0
+    if remaining_bars == 2:
+        assert run.ledger_rows == ()
+    else:
+        for symbol in SYMBOLS:
+            fills = [r for r in run.ledger_rows if r["symbol"] == symbol]
+            assert [r["side"] for r in fills] == ["BUY", "SELL"]
+            assert fills[1]["reason"] == "session_close"
+            assert fills[0]["filled_qty"] == fills[1]["filled_qty"]
+
+
 def test_preregistration_rejects_post_result_cost_or_candidate_changes(tmp_path: Path) -> None:
     payload = json.loads(PREREGISTRATION.read_text(encoding="utf-8"))
     payload["cost_models"]["base"]["commission_bps_per_side"] = 0
