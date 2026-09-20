@@ -17,7 +17,7 @@
 - [x] T008 [US3] 변조·잘못된 입력·덮어쓰기·확인 명령 부재를 검사한다: `tests/integration/test_shock_recovery_cli.py`.
 
 ## Phase 5 — 실제 결과와 출시
-- [ ] T009 커밋 후 실제1645일 재생/재계산을 완료한다: `specs/191-shock-recovery-research/results.md`.
+- [x] T009 커밋 후 실제1645일 재생/재계산을 완료한다: `specs/191-shock-recovery-research/results.md`. 수정91a2b55, 재계산83436 exit0,4208행 일치,4후보 모두 탈락.
 - [ ] T010 전체 pytest/ruff·하네스·HANDOFF·PR 품질을 검증한다: `specs/191-shock-recovery-research/results.md`.
 - [ ] T011 PR 병합·필요한 배포 확인·인계를 완료한다: `HANDOFF.md`.
 
