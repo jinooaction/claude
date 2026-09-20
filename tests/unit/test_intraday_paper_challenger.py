@@ -5,7 +5,7 @@ import csv
 import hashlib
 import json
 from dataclasses import replace
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import exchange_calendars as xcals
@@ -14,6 +14,8 @@ import pytest
 from auto_invest.analytics.intraday_paper_challenger import (
     DatasetContractError,
     PreregistrationContractError,
+    SimulationResult,
+    _window_metrics,
     build_candidate_registry,
     load_intraday_dataset,
     load_preregistration,
@@ -27,6 +29,27 @@ PREREGISTRATION = Path(
     "specs/177-intraday-paper-challenger/contracts/intraday-preregistration.json"
 )
 SYMBOLS = ("SPY", "QQQ", "IWM", "TLT", "GLD")
+
+
+@pytest.mark.parametrize(
+    ("pnls", "expected_drawdown", "expected_return"),
+    [([-100.0], 100.0, -100.0), ([20.0, -150.0, 200.0], 125.0, 70.0),
+     ([20.0, -30.0], 25.0, -10.0)],
+)
+def test_window_metrics_preserve_capital_exhaustion(pnls, expected_drawdown, expected_return):
+    sessions = tuple(date(2024, 1, 2) + timedelta(days=i) for i in range(len(pnls)))
+    run = SimulationResult(
+        candidate_id="loss-fixture", cost_model_name="base",
+        daily_pnl_usd=dict(zip(sessions, pnls, strict=True)),
+        trade_records=(), ledger_rows=(), total_net_pnl_usd=sum(pnls),
+        total_cost_usd=0.0, turnover_usd=0.0, unclosed_quantity=0,
+    )
+    metrics = _window_metrics(run, sessions, capital=100.0)
+    assert metrics["max_drawdown_pct"] == expected_drawdown
+    assert metrics["net_return_pct"] == expected_return
+    assert metrics["daily_returns"] == [pnl / 100.0 for pnl in pnls]
+    # Recovery after exhaustion cannot erase the existing confirmation gate's loss.
+    assert metrics["max_drawdown_pct"] > 15.0
 
 
 def _write_dataset(
@@ -126,6 +149,36 @@ def test_preregistration_has_exact_registry_and_zero_money_boundary() -> None:
         "broker_access": False,
         "live_configuration_mutation": False,
     }
+
+
+@pytest.mark.parametrize("remaining_bars", [2, 3])
+@pytest.mark.parametrize("session", ["2024-01-02", "2024-11-29"])
+def test_entry_reserves_a_later_session_exit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, remaining_bars: int, session: str,
+) -> None:
+    bars_dir, manifest = _write_dataset(tmp_path, session_labels=(session,))
+    prereg = load_preregistration(PREREGISTRATION)
+    dataset = load_intraday_dataset(bars_dir, manifest, prereg)
+    candidate = build_candidate_registry(prereg)[0]
+    bars = resample_dataset(dataset, 15)
+    tail = {symbol: {day: rows[-remaining_bars:] for day, rows in days.items()}
+            for symbol, days in bars.items()}
+    monkeypatch.setattr(
+        "auto_invest.analytics.intraday_paper_challenger._entry_signal", lambda *args: True,
+    )
+    monkeypatch.setattr(
+        "auto_invest.analytics.intraday_paper_challenger._exit_signal", lambda *args: False,
+    )
+    run = simulate_candidate(candidate, tail, dataset.sessions, prereg, cost_model_name="base")
+    assert run.unclosed_quantity == 0
+    if remaining_bars == 2:
+        assert run.ledger_rows == ()
+    else:
+        for symbol in SYMBOLS:
+            fills = [r for r in run.ledger_rows if r["symbol"] == symbol]
+            assert [r["side"] for r in fills] == ["BUY", "SELL"]
+            assert fills[1]["reason"] == "session_close"
+            assert fills[0]["filled_qty"] == fills[1]["filled_qty"]
 
 
 def test_preregistration_rejects_post_result_cost_or_candidate_changes(tmp_path: Path) -> None:
