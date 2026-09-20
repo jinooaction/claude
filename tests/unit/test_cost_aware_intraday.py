@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -12,7 +12,11 @@ from auto_invest.analytics.cost_aware_intraday import (
     select_development,
     validate_development,
 )
-from auto_invest.analytics.intraday_paper_challenger import IntradayDataset
+from auto_invest.analytics.intraday_paper_challenger import (
+    IntradayDataset,
+    ResampledBar,
+    _entry_signal,
+)
 
 CONTRACT = Path("specs/190-cost-aware-intraday/contracts/preregistration.json")
 PRIOR = Path("specs/177-intraday-paper-challenger/contracts/intraday-preregistration.json")
@@ -40,6 +44,29 @@ def test_frozen_contract_registry_and_tampering(tmp_path: Path) -> None:
     altered.write_bytes(PRIOR.read_bytes() + b" ")
     with pytest.raises(ValueError, match="prior contract"):
         load_contract(CONTRACT, altered)
+
+
+def test_all_six_signals_use_only_completed_opening_range_and_known_close() -> None:
+    contract, _ = load_contract(CONTRACT, PRIOR)
+    moment = datetime(2024, 1, 2, 14, 30, tzinfo=UTC)
+    for candidate in candidate_registry(contract):
+        width = timedelta(minutes=candidate.timeframe_minutes)
+        opening = ResampledBar(
+            symbol="SPY", session_date=moment.date(), timestamp_utc=moment,
+            end_utc=moment + width, timeframe_minutes=candidate.timeframe_minutes,
+            bar_index=0, open=99, high=100, low=98, close=99,
+            volume=10000, base_bar_count=candidate.timeframe_minutes // 5,
+            complete=True, entry_eligible=True,
+        )
+        threshold = 100 * (1 + candidate.parameters["breakout_buffer_bps"] / 10000)
+        signal = replace(opening, timestamp_utc=moment + width, end_utc=moment + 2 * width,
+                         bar_index=1, high=threshold + 1, close=threshold + 0.01)
+        assert not _entry_signal(candidate, [opening], 0)
+        assert _entry_signal(candidate, [opening, signal], 1)
+        assert not _entry_signal(candidate, [opening, replace(signal, close=threshold)], 1)
+        assert not _entry_signal(candidate, [opening, replace(signal, entry_eligible=False)], 1)
+        future = replace(signal, high=1000, close=900)
+        assert _entry_signal(candidate, [opening, signal, future], 1)
 
 
 @pytest.mark.parametrize("model,field,value", [

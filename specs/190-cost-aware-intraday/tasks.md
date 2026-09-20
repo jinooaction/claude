@@ -6,11 +6,11 @@
 - [x] T003 `specs/190-cost-aware-intraday/contracts/preregistration.json`을 성과 계산 전 b85a074로 커밋했다. SHA256=234d71ad3418c10d1f8bcd6c0e6fcf72eece1a6b41d75bed2d912423d8efd181.
 
 ## Phase 2 — US1 개발 전용 연구
-- [ ] T004 [US1] `tests/unit/test_cost_aware_intraday.py`에 계약 변조·후보6개·미래 봉 금지·개발 탈락 반례를 추가한다.
+- [x] T004 [US1] `tests/unit/test_cost_aware_intraday.py`에 계약 변조·후보6개·미래 봉 금지·개발 탈락 반례를 추가한다. 관련37개 통과.
 - [x] T005 [US1] `src/auto_invest/analytics/cost_aware_intraday.py`에 exact 계약·입력 검사와 기존177 체결기 기반 후보 평가를 구현한다.
 - [x] T006 [US1] `scripts/cost_aware_intraday_probe.py` develop 명령과 출력 독점 생성·실패 상태를 연결한다.
 - [ ] T007 [US1] `tests/integration/test_cost_aware_intraday_cli.py`에서 실제 명령·장부·파일 보존·출력 변조 검사를 확인한다.
-- [ ] T008 [US1] `specs/190-cost-aware-intraday/results.md`에 실제1,645세션 개발 결과와 모든 후보 지문을 기록한다.
+- [x] T008 [US1] `specs/190-cost-aware-intraday/results.md`에 실제1,645세션 개발 결과와 모든 후보 지문을 기록한다.6개 모두 비용 후 손실, 확인 자료 미개봉.
 
 ## Phase 3 — US2 독립 확인 경계
 - [ ] T009 [US2] `tests/unit/test_cost_aware_intraday.py`에 선택 조작·기간 중복·미개봉 파일 접근 차단·기존18후보 비교 누락 반례를 추가한다.
