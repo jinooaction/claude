@@ -32,3 +32,11 @@ verdict=DEVELOPMENT_REJECTED, capital_eligible=false, ledger_row_count=4616.
 `/tmp/cost-aware-full-tests.log`에 결과 보존. 생략은 실제 KIS12개와 가동 전 전용1개다.
 ruff·하네스14/14·HANDOFF 사실 검사 통과. 코드 이후 변경은 문서뿐이다.
 결과를 근거로 등록 폭을 바꾸거나 최종 확인 기간에서 유리한 후보를 찾지 않는다.
+
+## 출시
+
+PR837을 main9b8c9e1089a8cc5f969ebc1576e84ea8e1471842로 병합했다.
+배포35543697028 success. 코드 이후 최종 검증 변경은 문서뿐이다.
+감사35543740327: correlation_id4768f30e2192eccffab2c5e6cce190da,
+AUDIT_STATUS=ok, 시작/완료2행, DEPLOY_COMPLETED, target9b8c9e1089a8.
+연구 실행·실패 보존·독립 확인 기능의 출시이며 실거래 전략 승격은 없다.
