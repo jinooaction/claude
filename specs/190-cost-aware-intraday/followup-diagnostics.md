@@ -5,6 +5,11 @@
 
 ## 실제 계좌 비용 근거
 
+PR836 main6580c05의 서버 배포도 감사 실행35543294293에서 확인했다.
+correlation_id=847fe4339b5c4562683c169b7b9396b8, 시작/완료2행, AUDIT_STATUS=ok,
+DEPLOY_COMPLETED, target=6580c056d35e. 완료 행의 기존 워커 모드는 live다.
+이는 기존 서버의 코드 배포 상태이며 신규 단타190 전략의 실거래 허용을 뜻하지 않는다.
+
 main6580c05의 실제KIS 검사35541770144는12개 통과했다. 함께 실행한 서버 원본 수집은
 observation_sequence=27, response_count=11, COMPLETE다. 최근3일 등록기간 거래내역은
 row_count=0, page_count=1, pagination_complete=true, NO_TRANSACTIONS였다.
