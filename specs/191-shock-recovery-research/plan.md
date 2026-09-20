@@ -10,7 +10,7 @@
 
 ## Technical Context
 
-Python3.12, 기존numpy/거래일 달력/pytest/ruff. 새 의존성 없음.
+현재 uv 환경 Python3.11, 기존numpy/거래일 달력/pytest/ruff. 새 의존성 없음.
 입력은 지문 고정1645일 CSV/manifest, 출력은 새 디렉터리 JSON/JSONL이다.
 4후보×2비용. 실제 개발 재생과 동일 모형 재계산을 별도로 수행한다.
 기존 체결 모형의 전체 봉 거래량 사용·조정가격 한계는 신호 인과성과 구별한다.

@@ -726,12 +726,16 @@ def simulate_candidate(
             entry_index = -1
             pending: tuple[str, datetime, str] | None = None
             entered_once = False
+            recovery_exit_started = False
             for index, bar in enumerate(bars):
                 if pending is not None:
                     side, signal_at, reason = pending
                     if side == "BUY" and candidate.family == "shock_recovery":
                         # The frozen recovery policy consumes even an unfilled attempt.
                         entered_once = True
+                    if side == "SELL" and candidate.family == "shock_recovery":
+                        # A partial/unfilled exit stays active even if its signal reverses.
+                        recovery_exit_started = True
                     requested_qty = (
                         math.floor(allocation / bar.open) if side == "BUY" else position_qty
                     )
@@ -821,7 +825,8 @@ def simulate_candidate(
                     continue
                 if position_qty > 0:
                     must_exit_next = index == len(bars) - 2
-                    if must_exit_next or _exit_signal(candidate, bars, index, entry_index):
+                    if (must_exit_next or recovery_exit_started
+                            or _exit_signal(candidate, bars, index, entry_index)):
                         pending = (
                             "SELL",
                             bar.end_utc,

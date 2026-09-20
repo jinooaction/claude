@@ -140,12 +140,15 @@ def test_zero_volume_consumes_buy_attempt_and_does_not_retry():
     assert run.unclosed_quantity == 0
 
 
-def test_partial_exit_retries_remainder_and_failed_last_exit_is_reported():
+@pytest.mark.parametrize("exit_volume", [0, 200])
+def test_partial_exit_retries_remainder_and_failed_last_exit_is_reported(exit_volume):
     rows = bars()
-    rows[5] = replace(rows[5], volume=200)
+    rows[5] = replace(rows[5], volume=exit_volume, low=99.4, close=99.5)
+    assert not paper._exit_signal(candidates()[0], rows, 5, 3)
     run = simulate(candidates()[0], rows)
     ledger = [r for r in run.ledger_rows if r["symbol"] == "SPY"]
-    assert ledger[1]["fill_status"] == "PARTIAL"
+    assert ledger[1]["fill_status"] == ("PARTIAL" if exit_volume else "UNFILLED")
+    assert ledger[2]["eligible_at_utc"] == paper._iso(rows[6].timestamp_utc)
     assert sum(r["filled_qty"] for r in ledger if r["side"] == "SELL") == ledger[0]["filled_qty"]
     assert run.unclosed_quantity == 0
     rows = bars()
