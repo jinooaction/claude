@@ -1,0 +1,53 @@
+{
+  "schema_version": "1.0",
+  "family_id": "shock-recovery-intraday-v1",
+  "purpose": "development_diagnostic_only",
+  "prior_contract_sha256": "757b4fe7beafd747f3167e3ea03a49fced3f2c44419a95678146099f978adf6c",
+  "development": {
+    "first_session": "2013-08-23",
+    "last_session": "2020-03-06",
+    "sessions": 1645,
+    "dataset_fingerprint": "sha256:5d6ae81596425c147f3456bbbd10798834ec4260da2a03cf8a889f6a13c7b357",
+    "previously_observed": true,
+    "minimum_base_closed_trades": 200,
+    "base_and_stress_net_return_gt": 0,
+    "maximum_unclosed_quantity": 0
+  },
+  "candidate_count": 4,
+  "timeframes_minutes": [15, 30],
+  "exit_variants": ["anchor", "session"],
+  "shock_bps": 124,
+  "headroom_bps": 82,
+  "stop_bps": 82,
+  "anchor": "first_session_bar_open",
+  "shock": "previous_close <= anchor * (1 - shock_bps / 10000)",
+  "recovery": "current_close > previous_high",
+  "headroom": "current_close <= anchor / (1 + headroom_bps / 10000)",
+  "stop": "current_close <= entry_bar_open * (1 - stop_bps / 10000)",
+  "anchor_exit": "current_close >= anchor",
+  "signals_from_completed_bars_only": true,
+  "fills": "next_bar_open_inherited_model",
+  "maximum_buy_attempts_per_symbol_session": 1,
+  "session_exit": "final_resampled_bar_open_not_exchange_close",
+  "selection_metric": "development_base_cost_annualized_sharpe",
+  "tie_breakers": ["lower_max_drawdown", "lower_turnover", "candidate_id"],
+  "costs_portfolio_and_acceptance": "exact_prior_contract",
+  "future_confirmation": {
+    "implemented_here": false,
+    "first_session": "2020-03-19",
+    "last_session": "2022-03-04",
+    "sessions": 495,
+    "must_remain_unopened_here": true,
+    "minimum_cumulative_trials": 28,
+    "reselection_allowed": false,
+    "acceptance": "unchanged_177_plus_181_forward_execution_requirements"
+  },
+  "safety": {
+    "capital_fraction": 0,
+    "live_eligible": false,
+    "promotion_allowed": false,
+    "orders_submitted": 0,
+    "broker_access": false,
+    "live_configuration_mutation": false
+  }
+}
