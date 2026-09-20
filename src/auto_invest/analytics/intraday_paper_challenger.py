@@ -865,6 +865,18 @@ def _window_metrics(
     equity = [capital]
     for pnl in pnls:
         equity.append(equity[-1] + pnl)
+    # Fixed-notional research can exhaust its initial capital. Preserve the
+    # uncapped loss instead of aborting the whole candidate batch or clipping
+    # equity. The shared metric intentionally accepts positive equity only.
+    if min(equity) <= 0:
+        peak = capital
+        drawdown = 0.0
+        for value in equity:
+            peak = max(peak, value)
+            drawdown = max(drawdown, (peak - value) / peak * 100.0)
+        drawdown = round(drawdown, 6)
+    else:
+        drawdown = float(max_drawdown_pct(equity))
     trades = [
         row for row in run.trade_records if date.fromisoformat(str(row["session_date"])) in selected
     ]
@@ -899,7 +911,7 @@ def _window_metrics(
         "net_return_pct": round((equity[-1] / capital - 1.0) * 100.0, 8),
         "annualized_sharpe": float(sharpe_ratio(returns)),
         "psr": float(psr) if psr is not None else None,
-        "max_drawdown_pct": float(max_drawdown_pct(equity)),
+        "max_drawdown_pct": drawdown,
         "profit_factor": float(stats.profit_factor) if stats.profit_factor is not None else None,
         "positive_quarter_fraction": round(positive_quarter_fraction, 8),
         "max_single_symbol_positive_contribution_fraction": round(single_symbol_fraction, 8),
