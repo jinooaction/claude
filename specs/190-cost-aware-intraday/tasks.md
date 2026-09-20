@@ -9,14 +9,14 @@
 - [x] T004 [US1] `tests/unit/test_cost_aware_intraday.py`에 계약 변조·후보6개·미래 봉 금지·개발 탈락 반례를 추가한다. 관련37개 통과.
 - [x] T005 [US1] `src/auto_invest/analytics/cost_aware_intraday.py`에 exact 계약·입력 검사와 기존177 체결기 기반 후보 평가를 구현한다.
 - [x] T006 [US1] `scripts/cost_aware_intraday_probe.py` develop 명령과 출력 독점 생성·실패 상태를 연결한다.
-- [ ] T007 [US1] `tests/integration/test_cost_aware_intraday_cli.py`에서 실제 명령·장부·파일 보존·출력 변조 검사를 확인한다.
+- [x] T007 [US1] `tests/integration/test_cost_aware_intraday_cli.py`에서 명령·파일 보존·출력 변조 검사를 확인했다. 실제 장부4616행 원본 재계산도 valid=true.
 - [x] T008 [US1] `specs/190-cost-aware-intraday/results.md`에 실제1,645세션 개발 결과와 모든 후보 지문을 기록한다.6개 모두 비용 후 손실, 확인 자료 미개봉.
 
 ## Phase 3 — US2 독립 확인 경계
-- [ ] T009 [US2] `tests/unit/test_cost_aware_intraday.py`에 선택 조작·기간 중복·미개봉 파일 접근 차단·기존18후보 비교 누락 반례를 추가한다.
-- [ ] T010 [US2] `src/auto_invest/analytics/cost_aware_intraday.py`에 개발 재구성·247/248일 분리·24후보 비교·기존177 합격 기준 판정을 구현한다.
-- [ ] T011 [US2] `scripts/cost_aware_intraday_probe.py` confirm 명령과 `scripts/cost_aware_intraday_evidence_gate.py` 독립 재생 검사를 연결한다.
-- [ ] T012 [US2] `specs/190-cost-aware-intraday/results.md`에 실제 확인 결과 또는 개발 탈락으로 확인 파일을 열지 않았다는 검증 증거를 기록한다.
+- [x] T009 [US2] `tests/unit/test_cost_aware_intraday.py`에 선택 조작·기간 중복·미개봉 파일 접근 차단·기존18후보 비교 누락 반례를 추가했다.
+- [x] T010 [US2] `src/auto_invest/analytics/cost_aware_intraday.py`에 개발 재구성·247/248일 분리·24후보 비교·기존177 합격 기준 판정을 구현했다. 모의 입력으로 검증.
+- [x] T011 [US2] `scripts/cost_aware_intraday_probe.py` confirm 명령과 `scripts/cost_aware_intraday_evidence_gate.py` 원본 재생 검사를 연결했다. 관련55개 통과.
+- [x] T012 [US2] `specs/190-cost-aware-intraday/results.md`에 개발 탈락과 confirm 실제 거부(exit2)/확인 산출물 미생성 증거를 기록했다.
 
 ## Phase 4 — 검증과 인계
 - [ ] T013 `tests/unit/test_cost_aware_intraday.py`와 통합 검사 뒤 전체 pytest/ruff 및 하네스·HANDOFF 사실 검사를 통과한다.

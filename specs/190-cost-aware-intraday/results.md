@@ -18,7 +18,15 @@
 보존 위치 `/Users/mason/Projects/claude-data-research/20260921-hf-raw/cost-aware-development-v1/`의
 result.json 및 ledger.jsonl. 원본 개발 지문은 사전등록과 일치한다.
 
-관련37개 시험/ruff 통과. 미래 봉을 덧붙여도 기존 시점6후보의 신호가 바뀌지 않고,
+관련55개 시험/ruff 통과. 미래 봉을 덧붙여도 기존 시점6후보의 신호가 바뀌지 않고,
 비용 폭 경계·진입 불가 봉·거래 수 부족·양비용 손실·미청산·비유한 숫자를 검사했다.
-전체 회귀, 독립 증거 재구성, confirm 명령 및 선택·확인 변조 반례는 아직 미완료다.
+코드8ca0c9c에서 원본부터 개발 결과·장부를 재계산한 독립 검사 valid=true,
+verdict=DEVELOPMENT_REJECTED, capital_eligible=false, ledger_row_count=4616.
+이는 다른 체결 모델로 시장 실행을 입증한 검사가 아니라 같은 고정 모델의 결과 재현 검사다.
+실제 탈락 결과로 confirm 명령을 실행하면 exit2와
+`development rejected; holdout must remain unopened`로 거부된다.
+존재하지 않는 확인 입력 경로를 지정해도 자료 열기 오류보다 이 거부가 먼저 발생했고
+`/tmp/cost-aware-confirmation-must-not-exist` 산출물은 생성되지 않았다.
+확인 판정의24후보·기간247/248 분리·후보 유지·선택/판정 변조 거부는 모의 입력으로 검증했다.
+전체 회귀는 세션64634, `/tmp/cost-aware-full-tests.log`에서 진행 중이다.
 결과를 근거로 등록 폭을 바꾸거나 최종 확인 기간에서 유리한 후보를 찾지 않는다.
