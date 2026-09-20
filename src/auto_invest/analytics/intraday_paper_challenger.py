@@ -621,6 +621,16 @@ def _entry_signal(candidate: IntradayCandidate, bars: Sequence[ResampledBar], in
     params = candidate.parameters
     if not bar.entry_eligible:
         return False
+    if candidate.family == "shock_recovery":
+        if index < 1 or not all(value.complete for value in (bars[0], bars[index - 1], bar)):
+            return False
+        anchor = bars[0].open
+        previous = bars[index - 1]
+        return (
+            previous.close <= anchor * (1.0 - float(params["shock_bps"]) / 10_000.0)
+            and bar.close > previous.high
+            and bar.close <= anchor / (1.0 + float(params["headroom_bps"]) / 10_000.0)
+        )
     if candidate.family == "momentum":
         lookback = int(params["lookback_bars"])
         if index < lookback:
@@ -647,6 +657,13 @@ def _exit_signal(
     index: int,
     entry_index: int,
 ) -> bool:
+    if candidate.family == "shock_recovery":
+        if not bars[index].complete:
+            return False
+        stop = bars[entry_index].open * (1.0 - float(candidate.parameters["stop_bps"]) / 10_000.0)
+        return bars[index].close <= stop or (
+            bool(candidate.parameters["exit_at_anchor"]) and bars[index].close >= bars[0].open
+        )
     if candidate.family == "opening_range_breakout":
         return False
     hold_bars = int(candidate.parameters["hold_bars"])
@@ -709,9 +726,16 @@ def simulate_candidate(
             entry_index = -1
             pending: tuple[str, datetime, str] | None = None
             entered_once = False
+            recovery_exit_started = False
             for index, bar in enumerate(bars):
                 if pending is not None:
                     side, signal_at, reason = pending
+                    if side == "BUY" and candidate.family == "shock_recovery":
+                        # The frozen recovery policy consumes even an unfilled attempt.
+                        entered_once = True
+                    if side == "SELL" and candidate.family == "shock_recovery":
+                        # A partial/unfilled exit stays active even if its signal reverses.
+                        recovery_exit_started = True
                     requested_qty = (
                         math.floor(allocation / bar.open) if side == "BUY" else position_qty
                     )
@@ -801,7 +825,8 @@ def simulate_candidate(
                     continue
                 if position_qty > 0:
                     must_exit_next = index == len(bars) - 2
-                    if must_exit_next or _exit_signal(candidate, bars, index, entry_index):
+                    if (must_exit_next or recovery_exit_started
+                            or _exit_signal(candidate, bars, index, entry_index)):
                         pending = (
                             "SELL",
                             bar.end_utc,
@@ -813,7 +838,10 @@ def simulate_candidate(
                     # A signal on the penultimate bar buys on the final bar,
                     # where no subsequent same-session fill can close it.
                     and index < len(bars) - 2
-                    and not (candidate.family == "opening_range_breakout" and entered_once)
+                    and not (
+                        candidate.family in {"opening_range_breakout", "shock_recovery"}
+                        and entered_once
+                    )
                     and _entry_signal(candidate, bars, index)
                 ):
                     pending = ("BUY", bar.end_utc, "strategy_entry")
