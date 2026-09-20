@@ -1,0 +1,30 @@
+# 비용 고려 단타 연구 작업
+
+## Phase 1 — 명세와 고정
+- [x] T001 `specs/190-cost-aware-intraday/spec.md`에 사용자 흐름·완료 기준·비목표를 정의한다.
+- [x] T002 `specs/190-cost-aware-intraday/plan.md`와 research/data-model/quickstart에 구현 경로와 헌법 준수를 기록한다.
+- [ ] T003 `specs/190-cost-aware-intraday/contracts/preregistration.json`을 실제 성과 계산 전 커밋하고 해시를 기록한다.
+
+## Phase 2 — US1 개발 전용 연구
+- [ ] T004 [US1] `tests/unit/test_cost_aware_intraday.py`에 계약 변조·후보6개·미래 봉 금지·개발 탈락 반례를 추가한다.
+- [ ] T005 [US1] `src/auto_invest/analytics/cost_aware_intraday.py`에 exact 계약·입력 검사와 기존177 체결기 기반 후보 평가를 구현한다.
+- [ ] T006 [US1] `scripts/cost_aware_intraday_probe.py` develop 명령과 출력 독점 생성·실패 상태를 연결한다.
+- [ ] T007 [US1] `tests/integration/test_cost_aware_intraday_cli.py`에서 실제 명령·장부·파일 보존·출력 변조 검사를 확인한다.
+- [ ] T008 [US1] `specs/190-cost-aware-intraday/results.md`에 실제1,645세션 개발 결과와 모든 후보 지문을 기록한다.
+
+## Phase 3 — US2 독립 확인 경계
+- [ ] T009 [US2] `tests/unit/test_cost_aware_intraday.py`에 선택 조작·기간 중복·미개봉 파일 접근 차단·기존18후보 비교 누락 반례를 추가한다.
+- [ ] T010 [US2] `src/auto_invest/analytics/cost_aware_intraday.py`에 개발 재구성·247/248일 분리·24후보 비교·기존177 합격 기준 판정을 구현한다.
+- [ ] T011 [US2] `scripts/cost_aware_intraday_probe.py` confirm 명령과 `scripts/cost_aware_intraday_evidence_gate.py` 독립 재생 검사를 연결한다.
+- [ ] T012 [US2] `specs/190-cost-aware-intraday/results.md`에 실제 확인 결과 또는 개발 탈락으로 확인 파일을 열지 않았다는 검증 증거를 기록한다.
+
+## Phase 4 — 검증과 인계
+- [ ] T013 `tests/unit/test_cost_aware_intraday.py`와 통합 검사 뒤 전체 pytest/ruff 및 하네스·HANDOFF 사실 검사를 통과한다.
+- [ ] T014 `HANDOFF.md`에 원본·등록·선택·결과·미완료 실사용 조건을 연결하고 PR 검사·병합·배포를 확인한다.
+
+## 의존성과 실행 전략
+
+T001→T002→T003→T004~T007→T008. T009~T011은 실제 확인 성과 접근 없이 모의 입력으로
+개발할 수 있으나 T012는 개발 통과 여부와 독립 선택 검사에 종속된다. T013/T014는 마지막이다.
+같은 파일을 수정하므로 직렬 수행한다. 독립 병렬 가능 범위는 읽기 전용 문서 검토와 코드 검사다.
+개발 탈락은 해당 가설의 결과이며 전체 목표 완료가 아니다. 다음 가설은 새 사전등록을 요구한다.

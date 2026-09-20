@@ -1,0 +1,51 @@
+{
+  "schema_version": "1.0",
+  "family_id": "cost-aware-intraday-breakout-v1",
+  "purpose": "diagnostic_only",
+  "prior_contract_sha256": "757b4fe7beafd747f3167e3ea03a49fced3f2c44419a95678146099f978adf6c",
+  "development": {
+    "first_session": "2013-08-23",
+    "last_session": "2020-03-06",
+    "sessions": 1645,
+    "dataset_fingerprint": "sha256:5d6ae81596425c147f3456bbbd10798834ec4260da2a03cf8a889f6a13c7b357",
+    "previously_observed": true,
+    "base_net_return_gt": 0,
+    "stress_net_return_gt": 0,
+    "minimum_base_closed_trades": 200,
+    "maximum_unclosed_quantity": 0,
+    "pbo_segments": 8
+  },
+  "holdout": {
+    "first_session": "2020-03-19",
+    "last_session": "2022-03-04",
+    "sessions": 495,
+    "block_sessions": 247,
+    "confirmation_sessions": 248,
+    "selection_must_be_sealed_before_read": true,
+    "reselection_allowed": false
+  },
+  "candidate_count": 6,
+  "timeframes_minutes": [30, 60],
+  "opening_range_bars": 1,
+  "breakout_buffer_bps": [62, 124, 186],
+  "maximum_entries_per_symbol_session": 1,
+  "selection_metric": "development_base_cost_annualized_sharpe",
+  "tie_breakers": ["lower_max_drawdown", "lower_turnover", "candidate_id"],
+  "costs_portfolio_and_acceptance": "exact_prior_contract",
+  "multiplicity": {
+    "prior_candidate_count": 18,
+    "new_candidate_count": 6,
+    "total_trial_count": 24,
+    "pbo_same_development_period": true,
+    "dsr_same_confirmation_period": true,
+    "prior_candidates_selectable": false
+  },
+  "safety": {
+    "capital_fraction": 0,
+    "live_eligible": false,
+    "promotion_allowed": false,
+    "orders_submitted": 0,
+    "broker_access": false,
+    "live_configuration_mutation": false
+  }
+}
