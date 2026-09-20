@@ -1,5 +1,5 @@
 {
-  "commit": "6a6216ef7c77baa29f64d7a43bcb75ca4621bd1a",
+  "commit": "ca8e1c1deb1233d142011dd12ccd94ca1dba3aad",
   "overall_status": "OK",
   "released_work": [
     {
@@ -916,7 +916,11 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "183-mobile-capital-strategy-dashboard"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "191-shock-recovery-research"
     }
   ],
-  "timestamp_utc": "2026-09-20T23:10:50.562019Z"
+  "timestamp_utc": "2026-09-20T23:55:21.837945Z"
 }
