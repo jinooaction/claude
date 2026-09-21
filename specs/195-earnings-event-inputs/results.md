@@ -28,7 +28,13 @@ input-195-v1.json, bundle-195-v1/, query-195-historical-v1.json, query-195-obser
 - `uv run ruff check src tests scripts/earnings_event_inputs.py`: 통과.
 - 하네스14/14, HANDOFF 사실 검사 통과. 최초 검사에서 오래된 main 요약행을 발견해 실제748b14e로 정정했다.
 - 독립 검토의 동률 시각 정정본·저장 후 manifest 크기 초과를 반례로 재현한 뒤 수정했다.
-- 전체 회귀 검사는 아직 결과 대기. 병합·배포는 아직 미완료다.
+- 전체 회귀71555는 exit0, **4927 passed/13 skipped,817.90초**로 종료했다.
+  `/tmp/195-full-pytest.log`에 보존했다. 코드522ac3d 기준이며 이후157f8fa는 조사 문서만 추가했다.
+  건너뜀은 실제 KIS 조건부 검사12개와 이미 가동 중인 기존 사다리의 가동 전 전용 검사1개다.
+  이번에 실제 KIS 연결 검사를 새로 통과했다고 주장하지 않는다.
+- 병합·배포 확인은 아직 남아 있다. 종료된 전체 검사를 재시작하지 않는다.
+- 후속 무료 자료 조사에서 SEC 접속 로그와 날짜별 공시 원문을 실제 확보했다.
+  [archival-source-pilot.md](archival-source-pilot.md) 참조. 수익률은 조회하지 않았다.
 
 ## 남은 전체 목표
 

@@ -18,7 +18,7 @@
 
 ## Phase 5: 실제 자료와 완료 검사
 - [x] T007 실제 보존 원문 2개로 import/query 실행 후 specs/195-earnings-event-inputs/results.md에 기록.
-- [ ] T008 전체 회귀·린트·하네스·인계 검사 결과를 specs/195-earnings-event-inputs/results.md에 기록하고 PR 검증.
+- [x] T008 전체 회귀·린트·하네스·인계 검사 결과를 specs/195-earnings-event-inputs/results.md에 기록하고 PR 검증.
 - [ ] T009 병합·필요 배포 증거와 다음 작업을 HANDOFF.md 및 specs/195-earnings-event-inputs/results.md에 인계.
 
 ## Dependencies and execution
