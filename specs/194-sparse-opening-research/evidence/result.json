@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "sessions": 1515,
+  "scenarios": {
+    "base": {
+      "cash": 1200.0468506571126,
+      "reserved": 0,
+      "unsettled": 1927.067514,
+      "event_count": 13558,
+      "minimum_cash": 0.206324532884139,
+      "unobserved_references": 0,
+      "input_unavailable_counts": {
+        "WARMUP": 420,
+        "LOOKBACK_MISSING": 8004,
+        "OPENING_MISSING": 1271
+      },
+      "realized_profit": -6872.8856353428955,
+      "net_profit": -6872.885635342887,
+      "net_return": -0.6872885635342887,
+      "closed_roundtrips": 571,
+      "unclosed_quantity": 0,
+      "positions": {},
+      "live_eligible": false,
+      "promotion_allowed": false,
+      "fill_verified": false,
+      "capacity_unknown": true,
+      "lineage_verified": false,
+      "orders_submitted": 0,
+      "actual_capital_fraction": 0
+    },
+    "stress": {
+      "cash": 37.4844717479923,
+      "reserved": 0,
+      "unsettled": 1925.32776,
+      "event_count": 13489,
+      "minimum_cash": 0.11933120633283778,
+      "unobserved_references": 0,
+      "input_unavailable_counts": {
+        "WARMUP": 420,
+        "LOOKBACK_MISSING": 8004,
+        "OPENING_MISSING": 1271
+      },
+      "realized_profit": -8037.187768251998,
+      "net_profit": -8037.187768252008,
+      "net_return": -0.8037187768252008,
+      "closed_roundtrips": 554,
+      "unclosed_quantity": 0,
+      "positions": {},
+      "live_eligible": false,
+      "promotion_allowed": false,
+      "fill_verified": false,
+      "capacity_unknown": true,
+      "lineage_verified": false,
+      "orders_submitted": 0,
+      "actual_capital_fraction": 0
+    }
+  },
+  "minimum_total_trials": 31,
+  "limitations": [
+    "Adjusted prices and minute volume are not execution certification.",
+    "DD corporate-action price lineage remains unverified.",
+    "UTX uses an unverified RTX file alias; price differences remain.",
+    "Previously observed development period; future holdout unopened."
+  ],
+  "status": "DEVELOPMENT_REJECTED",
+  "live_eligible": false,
+  "promotion_allowed": false,
+  "orders_submitted": 0,
+  "actual_capital_fraction": 0,
+  "manifest_sha256": "3ec002d68f0b62af9d9c0379eb829f4a5e22376b2993a701d134db2e5fb6046c",
+  "contract_sha256": "d80a899952f84daa84bf62e821587fb59b3943d3b8863b98551691aec388279e",
+  "inventory_sha256": "8b36761ecb4a01a67a1e97aafbb9a6207def836cb1e025618fe0988c588c7c1f",
+  "ledger_sha256": {
+    "base": "657b43ee0c41d5b3e7eb31b0e2d0ae460d349465f126cb33360d4b1866c71931",
+    "stress": "d237937dedb2530e1491d6f47a4d92806101ef68a380243fa864a2c5cea41a91"
+  },
+  "code_sha256": {
+    "scripts/sparse_opening_research.py": "591723c34018c2e5d2a47d5edf79fa7b8e9561eba99efd90db5d66c381e5c3f0",
+    "src/auto_invest/analytics/sparse_opening_research.py": "a479d0af6ba15c13148c9d6e196b1979ad036fbbadaeda628fa7cdcdf8fab233",
+    "src/auto_invest/analytics/observed_intraday_inputs.py": "1c2e951091865fdf62f9b8797c14f2307340c14896b1560b753e165f8c5c4b8f"
+  }
+}

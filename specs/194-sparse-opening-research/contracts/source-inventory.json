@@ -1,0 +1,152 @@
+{
+  "AXP": {
+    "file_symbol": "AXP",
+    "lineage_verified": false,
+    "sha256": "40d1591496b6ad0a9d8c659cb354ea4f183ed862c2356b60ee0c141d752711a8"
+  },
+  "BA": {
+    "file_symbol": "BA",
+    "lineage_verified": false,
+    "sha256": "d844ea5223501a909dd77cfcf1e41b5bdad37e763ad96ce5e18e53e8ca73eb85"
+  },
+  "CAT": {
+    "file_symbol": "CAT",
+    "lineage_verified": false,
+    "sha256": "b26535e35c08efde94f89b34782f21358cd8194b331cfec8d75ad42bc962d7ef"
+  },
+  "CSCO": {
+    "file_symbol": "CSCO",
+    "lineage_verified": false,
+    "sha256": "2e901665a6231765ae81fa13afbaba8d53be33fe4ee2b8d65d51905eb441d7c6"
+  },
+  "CVX": {
+    "file_symbol": "CVX",
+    "lineage_verified": false,
+    "sha256": "a814a635fb99ff147c924971761b259172358c9b10bb8e15bfed155c5bf05b46"
+  },
+  "DD": {
+    "file_symbol": "DD",
+    "lineage_verified": false,
+    "sha256": "c755e7bed254d25292cd2fe05e3a51295d5775c3063260dbc6f59325c5c91162"
+  },
+  "DIS": {
+    "file_symbol": "DIS",
+    "lineage_verified": false,
+    "sha256": "716c6f8f65cfbcd1a84e825e56a2c31ed5898804106fd3578300c07b9656c846"
+  },
+  "GE": {
+    "file_symbol": "GE",
+    "lineage_verified": false,
+    "sha256": "ef90b09dd52170c484a95bdbf0e334cdfe43f0f5aaef2830c6dafa1f62bad73a"
+  },
+  "GS": {
+    "file_symbol": "GS",
+    "lineage_verified": false,
+    "sha256": "cc4ab84d1b1a5f0b1964b9e6b186da8b0decb53e63c64e22a34f3b7222c81b91"
+  },
+  "HD": {
+    "file_symbol": "HD",
+    "lineage_verified": false,
+    "sha256": "a4a3c184622b4fd6cfd472c6b18d4e4c5b0fd6dba15aa3c34cb0ccd796772707"
+  },
+  "IBM": {
+    "file_symbol": "IBM",
+    "lineage_verified": false,
+    "sha256": "bdf02d949c42aa7de18facef75a941e081ea6934dedc416c37062790d640708f"
+  },
+  "INTC": {
+    "file_symbol": "INTC",
+    "lineage_verified": false,
+    "sha256": "dc5dd7124ff4fb9375f35f103c336ca9c05cdc0b2abf43bcccb7b17f4260df1b"
+  },
+  "JNJ": {
+    "file_symbol": "JNJ",
+    "lineage_verified": false,
+    "sha256": "3a2fc93c0a4b2524379b6dbdf6647b98a28bd209b2a026ca890a616b479fa4ad"
+  },
+  "JPM": {
+    "file_symbol": "JPM",
+    "lineage_verified": false,
+    "sha256": "d9f7cd2d49438bd85d872486503ef6c3eb140a4adc000d0a89b7fdd3b4a4f410"
+  },
+  "KO": {
+    "file_symbol": "KO",
+    "lineage_verified": false,
+    "sha256": "c9af435b2f3f1c845c1bf8c088cb00aefe644e0181e6210747652d449efaddca"
+  },
+  "MCD": {
+    "file_symbol": "MCD",
+    "lineage_verified": false,
+    "sha256": "4d60e613bd9b96403aedfe324e76af18bb077c81a01febcc7c2e0ba8cb70c8cb"
+  },
+  "MMM": {
+    "file_symbol": "MMM",
+    "lineage_verified": false,
+    "sha256": "4e9e97b461e6017a683d1835a7b10374a13e1a010425ecc43a7cbadd2233f104"
+  },
+  "MRK": {
+    "file_symbol": "MRK",
+    "lineage_verified": false,
+    "sha256": "35b4c28d73b0a1ae59b29cebf59216431b74843845a03b4f441e196b5ebef78b"
+  },
+  "MSFT": {
+    "file_symbol": "MSFT",
+    "lineage_verified": false,
+    "sha256": "6f1ce5381ace4ff1780297350113e45c0fc7e89f997c4509615d30dc7d229863"
+  },
+  "NKE": {
+    "file_symbol": "NKE",
+    "lineage_verified": false,
+    "sha256": "10ea0a75eab29f92c8b7cfb31b797c3b38d3cdb8f72d4cc660f5301e0d827cc6"
+  },
+  "PFE": {
+    "file_symbol": "PFE",
+    "lineage_verified": false,
+    "sha256": "2fb9f4bc9d5e6dbae7d3c03840502381b8200d4cdff963d05e3ae0e32d6824d1"
+  },
+  "PG": {
+    "file_symbol": "PG",
+    "lineage_verified": false,
+    "sha256": "04030e5017362656deb9c4bb5e19e88ef0a74f6bc080e77c050734ef7d26ace8"
+  },
+  "T": {
+    "file_symbol": "T",
+    "lineage_verified": false,
+    "sha256": "54b450784d1c194f4b4b55fe6f101ac1310b511240b4c81fb2f4ce664b8f6a17"
+  },
+  "TRV": {
+    "file_symbol": "TRV",
+    "lineage_verified": false,
+    "sha256": "0ee8205afcf181ad32401aa96d7284a48fb8cb97dc63a72fdc646b4a4f8c8e49"
+  },
+  "UNH": {
+    "file_symbol": "UNH",
+    "lineage_verified": false,
+    "sha256": "821965e9749526b73506868cb56bdb55cf720fdae519e09de7135a088ffd8b37"
+  },
+  "UTX": {
+    "file_symbol": "RTX",
+    "lineage_verified": false,
+    "sha256": "84ddd4398b936e67f9e8879da53f24048aea300018d450a253a93bec43c9f2cd"
+  },
+  "V": {
+    "file_symbol": "V",
+    "lineage_verified": false,
+    "sha256": "74f5222e18f7fef6562c938d3db37b3893aedfc062c1a0f62c9e81de439238d9"
+  },
+  "VZ": {
+    "file_symbol": "VZ",
+    "lineage_verified": false,
+    "sha256": "5b080f099a39491cb269b8a6878ff799b3c4193884213309196eb1a87b6d9aaf"
+  },
+  "WMT": {
+    "file_symbol": "WMT",
+    "lineage_verified": false,
+    "sha256": "e9e706ce30e9d0ba38268ff170dfe75fea5fb249f724400f4f8baaeb1981df33"
+  },
+  "XOM": {
+    "file_symbol": "XOM",
+    "lineage_verified": false,
+    "sha256": "89eb0c544ff9c4b2bcbbb0d368d64ee664a12682f9514dd16e3930aca368b24d"
+  }
+}

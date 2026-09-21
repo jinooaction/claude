@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "family_id": "sparse-opening-volume-long-v1",
+  "purpose": "development_diagnostic_only",
+  "candidate_count": 1,
+  "minimum_prior_trials": 30,
+  "minimum_total_trials": 31,
+  "source_audit_sha256": "ef3b36dbf237f8f00d72c3ddc933b6f4a1cc19ff548577f1a84198be9ffa51c9",
+  "members": ["MMM","AXP","T","CAT","CVX","CSCO","DD","XOM","GE","INTC","IBM","JNJ","JPM","MCD","MRK","MSFT","NKE","PFE","BA","KO","GS","HD","PG","TRV","DIS","UTX","UNH","VZ","V","WMT"],
+  "unverified_file_aliases": {"UTX": "RTX"},
+  "period": {"first": "2014-03-01", "last": "2020-03-06", "calendar": "XNYS", "warmup_sessions": 14, "previously_observed": true},
+  "signal": {"opening_minutes": 5, "lookback_sessions": 14, "relative_volume_min": 2, "opening_close_gt_open": true, "trigger": "complete_5m_close_gt_opening_high", "first_signal_minutes_after_open": 10, "last_signal_minutes_after_open": 60, "attempts_per_symbol_session": 1},
+  "entry": {"limit_above_signal_close_bps": 10, "size_from": "signal_limit_and_available_cash_including_cost", "reference": "next_1m_open_if_positive_volume_and_open_le_limit", "available_after_minutes": 1, "participation_fraction": 0.01, "round_quantity": "floor", "unfilled_remainder": "cancel_after_one_reference_minute", "missed_attempt_consumed": true},
+  "exit": {"trigger": "complete_5m_close_le_opening_low_or_exchange_close_minus_5m", "reference": "next_1m_open", "participation_fraction": 0.01, "retry": "every_following_regular_minute_until_flat_including_next_sessions", "new_entries_while_any_exit_pending": false, "terminal_unresolved": "retain_quantity_basis_and_last_observation_never_force_close"},
+  "portfolio": {"initial_research_cash_usd": 10000, "per_trade_including_cost_usd": 2000, "per_symbol_including_cost_usd": 2000, "global_cost_basis_and_reservations_usd": 8000, "max_positions_and_entry_reservations": 4, "settlement_exchange_sessions": 2, "same_timestamp_order": ["observe_pending_intents", "release_unused_reservations", "release_due_settlements", "generate_exit_then_entry_intents"], "symbol_order": "ascending_original_member", "cash_topups": false},
+  "costs": {"base_per_side_bps": 31, "stress_per_side_bps": 40, "application": "cash_cost_once_no_duplicate_price_adjustment"},
+  "development_screen": {"minimum_base_closed_roundtrips": 200, "both_cost_net_profit_gt": 0, "unclosed_quantity": 0, "positive_status": "INDEPENDENT_VALIDATION_REQUIRED", "otherwise": "DEVELOPMENT_REJECTED", "live_admission": false},
+  "future_confirmation": {"first": "2020-03-19", "last": "2022-03-04", "must_remain_unopened": true},
+  "safety": {"orders_submitted": 0, "actual_capital_fraction": 0, "live_eligible": false, "promotion_allowed": false, "fill_verified": false, "capacity_unknown": true, "lineage_verified": false, "broker_access": false}
+}
