@@ -11,7 +11,7 @@
 - [x] T007 [US3] 지문/재계산/덮어쓰기 거부: `scripts/noise_band_probe.py`.
 - [x] T008 [US3] 명령/변조/holdout미접근 시험: `tests/integration/test_noise_band_cli.py`.
 ## Phase 4 — 실제 검증과 출시
-- [ ] T009 실제 개발/재계산 결과: `results.md`.
+- [x] T009 실제 개발/재계산 결과: `results.md`. dfced27,21316/51925 exit0,10160장부행 일치, 단일 후보 양비용 탈락.
 - [ ] T010 전체 pytest/ruff·하네스/HANDOFF/PR검증: `results.md`.
 - [ ] T011 PR병합·배포·인계: `HANDOFF.md`.
 
