@@ -1,5 +1,5 @@
 {
-  "commit": "f6ff5363576b00540480c4f3fcdaac220f282bf3",
+  "commit": "230383a5e251f1bfea107e081021017f746ba723",
   "overall_status": "OK",
   "released_work": [
     {
@@ -917,7 +917,11 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "183-mobile-capital-strategy-dashboard"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "192-noise-band-research"
     }
   ],
-  "timestamp_utc": "2026-09-21T00:04:01.382910Z"
+  "timestamp_utc": "2026-09-21T01:35:22.550808Z"
 }
