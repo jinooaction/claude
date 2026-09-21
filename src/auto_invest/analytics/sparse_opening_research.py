@@ -6,6 +6,7 @@ import csv
 import hashlib
 import io
 import json
+import math
 import tempfile
 from contextlib import ExitStack, contextmanager
 from datetime import UTC, date, datetime, timedelta
@@ -192,3 +193,158 @@ class OpeningSignals:
             return False
         window = data.window(day, int(offset)-5, 5, as_of)
         return window.ohlcv is not None and window.ohlcv[3] <= opening_low
+
+
+class ResearchAccount:
+    """Cash-constrained reference ledger, never a broker execution account."""
+
+    def __init__(self, cost_bps: int):
+        if type(cost_bps) is not int or cost_bps not in (31, 40):
+            raise ValueError('sealed cost scenario required')
+        self.rate = cost_bps/10000
+        self.cash = 10000.0
+        self.entries: dict[str, dict] = {}
+        self.positions: dict[str, dict] = {}
+        self.settlements: list[dict] = []
+        self.events: list[dict] = []
+        self.closed_roundtrips = 0
+        self.realized_profit = 0.0
+        self._last_time: datetime | None = None
+
+    @property
+    def reserved(self):
+        return sum(entry['reserved'] for entry in self.entries.values())
+
+    def _time(self, stamp):
+        if (stamp.tzinfo is None or stamp.utcoffset() != timedelta(0)
+                or stamp.second or stamp.microsecond
+                or (self._last_time is not None and stamp < self._last_time)):
+            raise ValueError('chronological UTC minute required')
+
+    def _record(self, kind, stamp, symbol=None, **details):
+        self._last_time = stamp
+        if self.cash < -1e-8 or self.reserved < -1e-8:
+            raise ValueError('negative research cash or reservation')
+        self.events.append({'kind': kind, 'at': stamp.isoformat(), 'symbol': symbol,
+                            **details, 'cash_after': self.cash,
+                            'reserved_after': self.reserved})
+
+    def reserve(self, symbol, stamp, signal_close, opening_low):
+        self._time(stamp)
+        if (not symbol or not all(math.isfinite(p) and p > 0
+                                  for p in (signal_close, opening_low))):
+            raise ValueError('positive finite signal prices required')
+        reason = None
+        if symbol in self.entries or symbol in self.positions:
+            reason = 'SYMBOL_ACTIVE'
+        elif any(p['exit_pending'] for p in self.positions.values()):
+            reason = 'EXIT_PENDING'
+        elif len(self.entries)+len(self.positions) >= 4:
+            reason = 'POSITION_LIMIT'
+        limit = signal_close*1.001
+        room = 8000-self.reserved-sum(p['basis'] for p in self.positions.values())
+        quantity = math.floor(max(0, min(2000, self.cash, room))/(limit*(1+self.rate)))
+        if reason is None and quantity == 0:
+            reason = 'INSUFFICIENT_CASH_OR_CAPACITY'
+        if reason:
+            self._record('ENTRY_REJECTED', stamp, symbol, reason=reason)
+            return False
+        reserved = quantity*limit*(1+self.rate)
+        self.cash -= reserved
+        self.entries[symbol] = {'at': stamp, 'limit': limit, 'quantity': quantity,
+                                'reserved': reserved, 'opening_low': opening_low}
+        self._record('ENTRY_RESERVED', stamp, symbol, quantity=quantity,
+                     limit=limit, amount=reserved, opening_low=opening_low)
+        return True
+
+    def _observation(self, symbol, data, requested, as_of):
+        self._time(as_of)
+        if data.source.symbol != symbol:
+            raise ValueError('observation symbol mismatch')
+        if requested+MINUTE != as_of:
+            raise ValueError('reference minute not yet observable or observed late')
+        price = data.exact_price(requested, as_of)
+        lo, _ = data.bounds(requested.date())
+        window = data.window(requested.date(), int((requested-lo)/MINUTE), 1, as_of)
+        volume = window.ohlcv[4] if window.ohlcv else 0
+        return price.reference_open, math.floor(volume*.01), price.status
+
+    def observe_entry(self, symbol, data, as_of):
+        entry = self.entries[symbol]
+        price, capacity, status = self._observation(symbol, data, entry['at'], as_of)
+        quantity = (min(entry['quantity'], capacity)
+                    if price is not None and price <= entry['limit'] else 0)
+        basis = quantity*price*(1+self.rate) if quantity else 0.0
+        self.cash += entry['reserved']-basis
+        del self.entries[symbol]
+        if quantity:
+            self.positions[symbol] = {'quantity': quantity, 'basis': basis,
+                                      'opening_low': entry['opening_low'],
+                                      'exit_pending': False, 'exit_at': None,
+                                      'last_reference': entry['at'].isoformat()}
+        self._record('ENTRY_OBSERVED', as_of, symbol, quantity=quantity, price=price,
+                     basis=basis, released=entry['reserved']-basis, status=status,
+                     reference_at=entry['at'].isoformat())
+
+    def request_exit(self, symbol, stamp):
+        self._time(stamp)
+        position = self.positions[symbol]
+        if position['exit_pending']:
+            self._last_time = stamp
+            return
+        position['exit_pending'] = True
+        position['exit_at'] = stamp
+        self._record('EXIT_REQUESTED', stamp, symbol, quantity=position['quantity'])
+
+    def observe_exit(self, symbol, data, requested, as_of):
+        position = self.positions[symbol]
+        if (not position['exit_pending'] or requested < position['exit_at']
+                or requested.isoformat() <= position['last_reference']):
+            raise ValueError('invalid or repeated exit reference')
+        price, capacity, status = self._observation(symbol, data, requested, as_of)
+        quantity = min(position['quantity'], capacity) if price is not None else 0
+        basis = position['basis']*quantity/position['quantity']
+        proceeds = quantity*price*(1-self.rate) if quantity else 0.0
+        due = None
+        if quantity:
+            calendar = xc.get_calendar('XNYS', start=requested.date()-timedelta(days=7),
+                                       end=requested.date()+timedelta(days=15))
+            days = calendar.sessions_in_range(str(requested.date()),
+                                             str(requested.date()+timedelta(days=15)))
+            due = calendar.session_open(days[2]).to_pydatetime()
+            self.settlements.append({'due': due, 'amount': proceeds, 'symbol': symbol})
+            self.realized_profit += proceeds-basis
+            position['quantity'] -= quantity
+            position['basis'] -= basis
+        position['last_reference'] = requested.isoformat()
+        if position['quantity'] == 0:
+            self.closed_roundtrips += 1
+            del self.positions[symbol]
+        self._record('EXIT_OBSERVED', as_of, symbol, quantity=quantity, price=price,
+                     basis=basis, proceeds=proceeds, due=due.isoformat() if due else None,
+                     status=status, reference_at=requested.isoformat())
+
+    def release_settlements(self, stamp):
+        self._time(stamp)
+        self._last_time = stamp
+        released = [s for s in self.settlements if s['due'] <= stamp]
+        self.settlements = [s for s in self.settlements if s['due'] > stamp]
+        for settlement in released:
+            self.cash += settlement['amount']
+            self._record('SETTLEMENT_RELEASED', stamp, settlement['symbol'],
+                         amount=settlement['amount'], due=settlement['due'].isoformat())
+
+    def summary(self):
+        unsettled = sum(s['amount'] for s in self.settlements)
+        unresolved = bool(self.positions or self.entries)
+        profit = None if unresolved else self.cash+unsettled-10000
+        return {'cash': self.cash, 'reserved': self.reserved, 'unsettled': unsettled,
+                'realized_profit': self.realized_profit, 'net_profit': profit,
+                'net_return': None if profit is None else profit/10000,
+                'closed_roundtrips': self.closed_roundtrips,
+                'unclosed_quantity': sum(p['quantity'] for p in self.positions.values()),
+                'positions': {s: {k: (v.isoformat() if isinstance(v, datetime) else v)
+                                  for k, v in p.items()} for s, p in self.positions.items()},
+                'live_eligible': False, 'promotion_allowed': False, 'fill_verified': False,
+                'capacity_unknown': True, 'lineage_verified': False,
+                'orders_submitted': 0, 'actual_capital_fraction': 0}

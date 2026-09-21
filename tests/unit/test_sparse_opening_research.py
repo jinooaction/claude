@@ -13,6 +13,7 @@ from auto_invest.analytics.observed_intraday_inputs import (
 )
 from auto_invest.analytics.sparse_opening_research import (
     OpeningSignals,
+    ResearchAccount,
     research_inputs,
     sealed_contract,
 )
@@ -155,3 +156,99 @@ def test_exchange_close_exit_does_not_need_last_observation():
     _, close = data.bounds(day)
     assert OpeningSignals.exit_due(data, day, close-timedelta(minutes=5), 9)
     assert not OpeningSignals.exit_due(data, day, close-timedelta(minutes=10), 9)
+
+
+def account_fixture():
+    data, days = fixture()
+    lo, _ = data.bounds(days[0])
+    return ResearchAccount(31), data, days, lo
+
+
+def test_reservations_compete_for_shared_cash_and_slots():
+    account, _, _, lo = account_fixture()
+    for symbol in ('A', 'B', 'C', 'D'):
+        assert account.reserve(symbol, lo, 10, 9)
+    assert not account.reserve('E', lo, 10, 9)
+    assert not account.reserve('A', lo, 10, 9)
+    assert account.cash + account.reserved == pytest.approx(10000)
+    assert account.reserved <= 8000
+
+
+def test_partial_entry_releases_unused_cash_and_charges_cost_once():
+    account, data, days, lo = account_fixture()
+    assert account.reserve('TEST', lo, 10, 9)
+    # Only 1 share is observable; remaining reservation must be cancelled.
+    data = ObservedSeries(SOURCE, days[0], days[0], [Minute(lo, 10, 11, 9, 10, 100)])
+    account.observe_entry('TEST', data, lo+timedelta(minutes=1))
+    assert account.positions['TEST']['quantity'] == 1
+    assert account.positions['TEST']['basis'] == pytest.approx(10.031)
+    assert account.cash == pytest.approx(9989.969)
+    assert account.reserved == 0
+    assert account.summary()['net_profit'] is None
+
+
+@pytest.mark.parametrize('open_price,volume', [(11, 10000), (10, 99), (10, 0)])
+def test_unfilled_entry_is_cancelled(open_price, volume):
+    account, _, days, lo = account_fixture()
+    account.reserve('TEST', lo, 10, 9)
+    data = ObservedSeries(SOURCE, days[0], days[0],
+                          [Minute(lo, open_price, 12, 9, 10, volume)])
+    account.observe_entry('TEST', data, lo+timedelta(minutes=1))
+    assert not account.positions and not account.entries
+    assert account.cash == pytest.approx(10000)
+
+
+def test_pending_minute_cannot_release_reservation():
+    account, data, _, lo = account_fixture()
+    account.reserve('TEST', lo, 10, 9)
+    before = account.cash
+    with pytest.raises(ValueError, match='not yet observable'):
+        account.observe_entry('TEST', data, lo)
+    assert account.cash == before and 'TEST' in account.entries
+
+
+def test_missing_entry_does_not_seek_later_price():
+    account, _, days, lo = account_fixture()
+    account.reserve('TEST', lo, 10, 9)
+    data = ObservedSeries(SOURCE, days[0], days[0],
+                          [Minute(lo+timedelta(minutes=1), 10, 11, 9, 10, 10000)])
+    account.observe_entry('TEST', data, lo+timedelta(minutes=1))
+    assert not account.positions and account.cash == pytest.approx(10000)
+
+
+def test_empty_settlement_step_still_prevents_clock_reversal():
+    account, _, _, lo = account_fixture()
+    account.release_settlements(lo+timedelta(minutes=1))
+    with pytest.raises(ValueError, match='chronological'):
+        account.reserve('TEST', lo, 10, 9)
+
+
+def test_exit_retries_missing_minutes_and_settles_two_sessions_later():
+    account, _, days, lo = account_fixture()
+    data = ObservedSeries(SOURCE, days[0], days[0],
+                          [Minute(lo, 10, 11, 9, 10, 200),
+                           Minute(lo+timedelta(minutes=2), 11, 12, 10, 11, 100)])
+    account.reserve('TEST', lo, 10, 9)
+    account.observe_entry('TEST', data, lo+timedelta(minutes=1))
+    account.request_exit('TEST', lo+timedelta(minutes=1))
+    assert not account.reserve('OTHER', lo+timedelta(minutes=1), 10, 9)
+    account.observe_exit('TEST', data, lo+timedelta(minutes=1), lo+timedelta(minutes=2))
+    assert account.positions['TEST']['quantity'] == 2
+    account.observe_exit('TEST', data, lo+timedelta(minutes=2), lo+timedelta(minutes=3))
+    assert account.positions['TEST']['quantity'] == 1
+    assert account.positions['TEST']['basis'] == pytest.approx(10.031)
+    assert account.closed_roundtrips == 0
+    with pytest.raises(ValueError, match='repeated exit'):
+        account.observe_exit('TEST', data, lo+timedelta(minutes=2), lo+timedelta(minutes=3))
+    cash = account.cash
+    next_lo, _ = ObservedSeries(SOURCE, days[1], days[1], []).bounds(days[1])
+    account.release_settlements(next_lo)
+    assert account.cash == cash
+    second_lo, _ = ObservedSeries(SOURCE, days[2], days[2], []).bounds(days[2])
+    account.release_settlements(second_lo)
+    assert account.cash == pytest.approx(cash+10.9659)
+    next_data = ObservedSeries(SOURCE, days[2], days[2],
+                               [Minute(second_lo, 12, 13, 11, 12, 100)])
+    account.observe_exit('TEST', next_data, second_lo, second_lo+timedelta(minutes=1))
+    assert not account.positions and account.closed_roundtrips == 1
+    assert account.summary()['net_profit'] == pytest.approx(22.9287-20.062)
