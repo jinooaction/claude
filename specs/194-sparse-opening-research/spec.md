@@ -2,7 +2,7 @@
 
 **Feature Branch**: `codex/194-sparse-opening-research`
 **Created**: 2026-09-21
-**Status**: 구현·실제 재생·장부 대조·전체 검사 완료, 후보 탈락 — 출시 확인 대기
+**Status**: 연구 도구 출시와 배포 확인 완료, 후보 탈락 — 전체 실사용 목표는 미완료
 **Input**: 기존 한국투자 단타 프로그램 완성을 위해 확보한30개 후보 원본과193 관측 입력을 실제 전략 연구에 연결한다.
 
 ## User Scenarios & Testing
