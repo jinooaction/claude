@@ -32,9 +32,20 @@ input-195-v1.json, bundle-195-v1/, query-195-historical-v1.json, query-195-obser
   `/tmp/195-full-pytest.log`에 보존했다. 코드522ac3d 기준이며 이후157f8fa는 조사 문서만 추가했다.
   건너뜀은 실제 KIS 조건부 검사12개와 이미 가동 중인 기존 사다리의 가동 전 전용 검사1개다.
   이번에 실제 KIS 연결 검사를 새로 통과했다고 주장하지 않는다.
-- 병합·배포 확인은 아직 남아 있다. 종료된 전체 검사를 재시작하지 않는다.
+- PR851은 main `da11ad8935739405e12344ff27cc4f4b73e9705e`에 merge 방식으로 병합했다.
+  최신24062cc의 GitHub 품질 검사35562581697도 통과했고 병합 직전 CLEAN/MERGEABLE이었다.
+  종료된 전체 검사를 재시작하지 않는다.
 - 후속 무료 자료 조사에서 SEC 접속 로그와 날짜별 공시 원문을 실제 확보했다.
   [archival-source-pilot.md](archival-source-pilot.md) 참조. 수익률은 조회하지 않았다.
+
+## 배포 확인
+
+- Deploy on merge 실행35562612202: success, 대상 main da11ad8935739405e12344ff27cc4f4b73e9705e.
+- 읽기 전용 배포 감사35562644448: success. 최신 sidecar를 명시적 원격 ref로 갱신해 읽었다.
+- 상관키 `c3f3a5c7230bc610d956434891748403`의 DEPLOY_STARTED19221
+  (2026-09-21T04:54:43.964Z), DEPLOY_COMPLETED19226(04:54:48.043Z), target da11ad893573 일치.
+- 기존 서버 모드는 live이며 이번 배포가 단타 전략 채택·실주문·자본 배정을 뜻하지 않는다.
+- 인계 변경은 문서뿐이므로 별도 재배포 대상이 아니다. T001~T009 완료.
 
 ## 남은 전체 목표
 

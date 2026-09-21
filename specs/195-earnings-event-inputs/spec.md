@@ -2,7 +2,7 @@
 
 **Feature Branch**: `codex/195-earnings-event-inputs`  
 **Created**: 2026-09-21  
-**Status**: Specified  
+**Status**: Released (research input only; whole intraday goal incomplete)
 **Input**: 기존 한국투자 계좌용 단타 프로그램 완성. 가격 조건 반복 대신 실제 공시 자료를 확보하고 검증한다.
 
 ## User Scenarios & Testing
