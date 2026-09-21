@@ -2,7 +2,7 @@
 
 **Feature Branch**: `codex/193-observed-intraday-inputs`
 **Created**: 2026-09-21
-**Status**: 구현 완료, 전체 회귀 진행 중 — 출시 전
+**Status**: 구현·전체 회귀 완료 — 병합·배포 확인 전
 **Input**: 기존 한국투자 계좌용 단타 프로그램 완성을 위해 실제 종목 자료의 누락을 사후 날짜 선택이나 가격 생성 없이 처리한다.
 
 ## User Scenarios & Testing

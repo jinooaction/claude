@@ -3,12 +3,13 @@
 2026-09-21 진행 중: PR845/193은 누락 보존 연구 입력과 읽기 전용 감사 CLI를
 코드4873dd9로 구현했다. 관련23시험·전체ruff·하네스14/14·인계 검사 통과.
 실제 RTX/DD1515일의 날짜별 누락 마스크가 독립 검사와 정확히 일치했다.
-전체pytest는 실행13601, `/tmp/observed-inputs-full-tests.log`에서 진행 중이며
-종료 결과를 확인하기 전에는 통과/출시로 취급하지 않는다. 동일 실행을 재시작하지 않는다.
-T001~T011완료, 전체회귀/출시 T012~T013은 미완료다.193 tasks.md에서 이어받는다.
+전체pytest13601은 exit0,4864 passed/13 skipped,959.91초로 종료했다.
+로그는 `/tmp/observed-inputs-full-tests.log`다. 종료된 검사를 재시작하지 않는다.
+T001~T012완료, 병합·배포 확인 T013은 미완료다.193 tasks.md에서 이어받는다.
 기존177~192계약/주문/자본은 그대로다. 시가 관측은 실제 체결 증거가 아니다.
 종목 확대 조사는 당시30종목 목록을 찾았으며 RTX/DD Raw만 추가 확보했다.
-나머지28개는 다운로드 목록 등록까지만 됐고 Raw선택/취득은 미완료다.
+나머지28개는 개별 Raw 다운로드 중이다. MMM/AXP/T 확보를 확인했으며
+download_historical_members.py의 실행29486과 /tmp/historical-member-downloads-retry.log를 확인한다.
 RTX/DD 회사별 과거 가격 연결과 공식 목록의 공개일은 여전히 미확인이다.
 로컬 근거는 `/Users/mason/Projects/claude-data-research/20260921-hf-raw/`의
 historical-universe-inventory-v1.json, identity-raw-audit-v1.json,

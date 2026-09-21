@@ -18,4 +18,7 @@
 issuer_lineage_status=unverified, strategy_admitted=false, live_eligible=false,
 generated_prices=0, orders_submitted=0을 유지했다.
 원본 경로는 `/Users/mason/Projects/claude-data-research/20260921-hf-raw/` 아래다.
-전체 회귀·출시·배포 해당 여부 확인은 아직 남았다.
+전체 회귀13601 exit0:4864 passed,13 skipped,959.91초.
+코드4873dd9 기준이며 이후 변경은 문서뿐이다. 기존192검사를 포함한다.
+전체 src/tests·신규 CLI ruff, 하네스14/14, 인계 사실 검사 모두 통과했다.
+병합·배포 확인은 아직 남았다.
