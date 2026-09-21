@@ -1,5 +1,5 @@
 {
-  "commit": "9df3a25f02a6ff01c0701285442929f91d38bf4a",
+  "commit": "56c0b7275be2b80e3dd1fb26b11a3a64c0131548",
   "overall_status": "OK",
   "released_work": [
     {
@@ -692,7 +692,8 @@
     "190-cost-aware-intraday",
     "191-shock-recovery-research",
     "192-noise-band-research",
-    "193-observed-intraday-inputs"
+    "193-observed-intraday-inputs",
+    "194-sparse-opening-research"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -919,11 +920,7 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "183-mobile-capital-strategy-dashboard"
-    },
-    {
-      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "194-sparse-opening-research"
     }
   ],
-  "timestamp_utc": "2026-09-21T04:05:15.409952Z"
+  "timestamp_utc": "2026-09-21T04:10:07.316292Z"
 }
