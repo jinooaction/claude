@@ -1,6 +1,6 @@
 # 검증 순서
 
-구현 전 문서다. 아래 명령은 구현 후 실행한다.
+구현된 연구 입력 도구의 검사 순서다. 전체 회귀·출시 상태는 results.md를 확인한다.
 1. `uv run pytest tests/unit/test_observed_intraday_inputs.py tests/integration/test_observed_intraday_cli.py`
 2. 실제 RTX/DD Raw를 지문 확인 후1분 CSV로 변환하고 source/adjustment/식별 미확인을 manifest에 보존한다.
 3. `uv run python scripts/observed_intraday_probe.py --manifest <manifest.json> --output <new-report.json>`
