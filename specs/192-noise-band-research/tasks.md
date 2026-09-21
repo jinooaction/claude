@@ -13,7 +13,7 @@
 ## Phase 4 — 실제 검증과 출시
 - [x] T009 실제 개발/재계산 결과: `results.md`. dfced27,21316/51925 exit0,10160장부행 일치, 단일 후보 양비용 탈락.
 - [x] T010 전체 pytest/ruff·하네스/HANDOFF/PR검증: `results.md`. dfced27,4841 passed/13 skipped,9308 exit0,ruff·하네스14/14·HANDOFF·PR품질 통과.
-- [ ] T011 PR병합·배포·인계: `HANDOFF.md`.
+- [x] T011 PR병합·배포·인계: `HANDOFF.md`. PR841/main230383a, 배포35551371254·감사35551419380 성공. target230383a DEPLOY_COMPLETED 확인. codex/192-release-handoff 문서 인계.
 
 T001→T002→T003/T004→T005→T006/T007/T008→T009→T010→T011.
 독립 시험은 신호,판정,재현 경계로 나눈다. 읽기 전용 설계검토만 병렬 수행했다.
