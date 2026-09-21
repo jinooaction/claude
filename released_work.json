@@ -1,5 +1,5 @@
 {
-  "commit": "8ed24c61e2b27da9cc0bc35a5aec2084443189cd",
+  "commit": "83c6d2061b45a5b3a978d7b06ccb3b5fe96b983c",
   "overall_status": "OK",
   "released_work": [
     {
@@ -918,7 +918,11 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "183-mobile-capital-strategy-dashboard"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "193-observed-intraday-inputs"
     }
   ],
-  "timestamp_utc": "2026-09-21T01:51:53.802255Z"
+  "timestamp_utc": "2026-09-21T02:41:05.311757Z"
 }
