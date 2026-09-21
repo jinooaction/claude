@@ -9,11 +9,13 @@ T001~T013완료. 배포35554975946 성공, 읽기 전용 감사35555021310에서
 상관키 f015a6ea678d480af45b3a1c3b1e55b9의 시작19195/완료19200,
 target83c6d2061b45·DEPLOY_COMPLETED·기존모드live를 확인했다.
 기존177~192계약/주문/자본은 그대로다. 시가 관측은 실제 체결 증거가 아니다.
-종목 확대 조사는 당시30종목 목록을 찾았으며 RTX/DD Raw만 추가 확보했다.
-나머지28개는 개별 Raw 다운로드 중이다. MMM/AXP/T 확보를 확인했으며
-download_historical_members.py의 실행97160과 /tmp/historical-member-downloads-resume.log를 확인한다.
-이전29486은 브라우저 여러 파일 다운로드 권한 창 때문에 종료됐고 허용 후 재개했다.
-RTX/DD 회사별 과거 가격 연결과 공식 목록의 공개일은 여전히 미확인이다.
+종목 확대 조사30개 후보 원본 확보 완료:4152 exit0,69,042,717행,
+비정상값/중복0.6950원본검사·40206달력검사 exit0.
+각1515거래일 관측,누락분봉19262개·공통완전일48개이며 누락을 채우지 않았다.
+SEC분기 공식목록에서 실제공개일2014-02-24를 확인했다.
+RTX/DD 회사별 과거 가격 연결은 여전히 미확인이다. 전체 근거는
+specs/193-observed-intraday-inputs/expanded-universe-evidence.md를 읽는다.
+이전97160/29486과 최신4152는 모두 종료했으며 다운로드를 재시작하지 않는다.
 로컬 근거는 `/Users/mason/Projects/claude-data-research/20260921-hf-raw/`의
 historical-universe-inventory-v1.json, identity-raw-audit-v1.json,
 identity-calendar-audit-v1.json, observed-input-193/report-v1.json이다.
