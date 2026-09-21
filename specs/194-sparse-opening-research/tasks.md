@@ -21,7 +21,7 @@
 독립 검사:실제 CLI와 별도 장부 산술,미청산 결과의 승격 거부를 확인한다.
 - [x] T008 [US3] scripts/sparse_opening_research.py에 replay/verify를 구현한다.
 - [x] T009 [US3] tests/integration/test_sparse_opening_research_cli.py에 지문/입력오류/덮어쓰기/재계산 검사를 작성한다.
-- [ ] T010 [US3] specs/194-sparse-opening-research/results.md에 실제30파일 재생과 독립 검증을 기록한다.
+- [x] T010 [US3] specs/194-sparse-opening-research/results.md에 실제30파일 재생과 독립 검증을 기록한다.
 
 ## 출시
 - [ ] T011 specs/194-sparse-opening-research/results.md에 전체 pytest/ruff·하네스·인계 검사 결과를 기록한다.

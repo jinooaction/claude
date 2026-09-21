@@ -1,0 +1,30 @@
+{
+  "verified": true,
+  "code_commit": "4d22e7b",
+  "strategy_decisions_unchanged": true,
+  "scenarios": {
+    "base": {
+      "matched_decision_and_observation_events": 3288,
+      "input_unavailable_counts": {
+        "WARMUP": 420,
+        "LOOKBACK_MISSING": 8004,
+        "OPENING_MISSING": 1271
+      },
+      "net_profit": -6872.885635342887,
+      "closed_roundtrips": 571,
+      "ledger_sha256": "657b43ee0c41d5b3e7eb31b0e2d0ae460d349465f126cb33360d4b1866c71931"
+    },
+    "stress": {
+      "matched_decision_and_observation_events": 3236,
+      "input_unavailable_counts": {
+        "WARMUP": 420,
+        "LOOKBACK_MISSING": 8004,
+        "OPENING_MISSING": 1271
+      },
+      "net_profit": -8037.187768252008,
+      "closed_roundtrips": 554,
+      "ledger_sha256": "d237937dedb2530e1491d6f47a4d92806101ef68a380243fa864a2c5cea41a91"
+    }
+  },
+  "result_sha256": "ea67e13165471927da71c948a5361ae89a5a1a4b0af76d27fcf2861b2c41885e"
+}
