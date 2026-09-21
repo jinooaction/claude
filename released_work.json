@@ -1,5 +1,5 @@
 {
-  "commit": "56c0b7275be2b80e3dd1fb26b11a3a64c0131548",
+  "commit": "da11ad8935739405e12344ff27cc4f4b73e9705e",
   "overall_status": "OK",
   "released_work": [
     {
@@ -920,7 +920,11 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "183-mobile-capital-strategy-dashboard"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "195-earnings-event-inputs"
     }
   ],
-  "timestamp_utc": "2026-09-21T04:10:07.316292Z"
+  "timestamp_utc": "2026-09-21T04:54:36.389128Z"
 }
