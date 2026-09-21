@@ -26,7 +26,7 @@
 - [x] T010 scripts/observed_intraday_probe.py 및 tests/integration/test_observed_intraday_cli.py에 읽기 전용 감사 CLI/지문/덮어쓰기 거부를 구현·검증한다.
 - [x] T011 실제 RTX/DD 감사 대조와 미확인 식별 상태를 specs/193-observed-intraday-inputs/results.md에 기록한다.
 - [x] T012 전체pytest/ruff·기존192 회귀·하네스/인계 결과를 specs/193-observed-intraday-inputs/results.md에 기록한다.
-- [ ] T013 PR 준비/머지와 실제 배포 해당 여부를 확인하고 HANDOFF.md를 갱신한다.
+- [x] T013 PR 준비/머지와 실제 배포 해당 여부를 확인하고 HANDOFF.md를 갱신한다.
 
 의존 순서: T001~T003→US1→US2/US3→통합→실자료→전체검증→출시.
 단일 구현 파일을 공유하므로 구현은 직렬화한다. 각 이야기의 읽기 전용 반례 검토는
