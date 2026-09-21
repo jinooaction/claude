@@ -2,7 +2,7 @@
 
 ## 준비
 - [x] T001 specs/194-sparse-opening-research/spec.md와 research.md에 요구·독립 검토를 기록한다.
-- [ ] T002 specs/194-sparse-opening-research/contracts/preregistration.json의 경계 사례와30개 원본 지문 연결을 검토하고 성과 조회 전 봉인한다.
+- [x] T002 specs/194-sparse-opening-research/contracts/preregistration.json의 경계 사례와30개 원본 지문 연결을 검토하고 성과 조회 전 봉인한다.
 
 ## 기반
 - [ ] T003 src/auto_invest/analytics/sparse_opening_research.py에 계약/manifest 검증과 날짜별 관측 입력을 구현한다.
