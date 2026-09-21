@@ -1,7 +1,7 @@
 # Codex 작업 운영 규칙
 
 <!-- SPECKIT START -->
-현재 명세 계획: [급락 후 회복 확인 단타 연구](specs/191-shock-recovery-research/plan.md).
+현재 명세 계획: [과거 시각 변동 폭 단타 연구](specs/192-noise-band-research/plan.md).
 <!-- SPECKIT END -->
 
 이 저장소의 기본 방식은 자율 진행이다. 운영자가 한 번 작업을 지시하면, 실제 막힘이 생기거나 작업이 끝날 때까지 중간 허락을 묻지 말고 진행한다.
