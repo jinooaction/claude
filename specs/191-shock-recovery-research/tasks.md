@@ -19,7 +19,7 @@
 ## Phase 5 — 실제 결과와 출시
 - [x] T009 커밋 후 실제1645일 재생/재계산을 완료한다: `specs/191-shock-recovery-research/results.md`. 수정91a2b55, 재계산83436 exit0,4208행 일치,4후보 모두 탈락.
 - [x] T010 전체 pytest/ruff·하네스·HANDOFF·PR 품질을 검증한다: `specs/191-shock-recovery-research/results.md`.4820 passed/13 skipped,7491 exit0,ruff·하네스14/14·HANDOFF·PR품질 통과.
-- [ ] T011 PR 병합·필요한 배포 확인·인계를 완료한다: `HANDOFF.md`.
+- [x] T011 PR 병합·필요한 배포 확인·인계를 완료한다: `HANDOFF.md`. PR839/mainca8e1c1, 배포35546033949 성공, 읽기 전용 감사35546215493에서 DEPLOY_COMPLETED/targetca8e1c1 확인. 출시 인계는 codex/191-release-handoff 문서 변경으로 반영한다.
 
 ## 의존성과 검증 단위
 
