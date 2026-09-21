@@ -5,12 +5,12 @@
 - [x] T002 specs/194-sparse-opening-research/contracts/preregistration.json의 경계 사례와30개 원본 지문 연결을 검토하고 성과 조회 전 봉인한다.
 
 ## 기반
-- [ ] T003 src/auto_invest/analytics/sparse_opening_research.py에 계약/manifest 검증과 날짜별 관측 입력을 구현한다.
+- [x] T003 src/auto_invest/analytics/sparse_opening_research.py에 계약/manifest 검증과 날짜별 관측 입력을 구현한다.
 
 ## US1 당시 신호
 독립 검사:미래 행 변경·정확14일 누락·09:40/10:30경계를 확인한다.
-- [ ] T004 [US1] tests/unit/test_sparse_opening_research.py에 신호와 시도권 반례를 작성한다.
-- [ ] T005 [US1] src/auto_invest/analytics/sparse_opening_research.py에 단일 후보의 시초 창·돌파·청산 의도를 구현한다.
+- [x] T004 [US1] tests/unit/test_sparse_opening_research.py에 신호와 시도권 반례를 작성한다.
+- [x] T005 [US1] src/auto_invest/analytics/sparse_opening_research.py에 단일 후보의 시초 창·돌파·청산 의도를 구현한다.
 
 ## US2 현금과 잔량
 독립 검사:동시 현금 경합·부분 참조·익일 청산·결제 지연·자본 소진을 대조한다.
