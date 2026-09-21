@@ -310,3 +310,17 @@ def test_replay_rejects_skipped_session_and_missing_member():
     inputs['days'][0][1].clear()
     with pytest.raises(ValueError, match='every calendar session'):
         replay_research(inputs)
+
+
+def test_friday_sale_settles_tuesday_when_calendar_end_is_weekend():
+    day = date(2014, 3, 21)
+    lo, _ = ObservedSeries(SOURCE, day, day, []).bounds(day)
+    data = ObservedSeries(SOURCE, day, day, [Minute(lo, 10, 11, 9, 10, 200),
+                                           Minute(lo+timedelta(minutes=1), 11, 12, 10, 11, 200)])
+    account = ResearchAccount(31)
+    account.reserve('TEST', lo, 10, 9)
+    account.observe_entry('TEST', data, lo+timedelta(minutes=1))
+    account.request_exit('TEST', lo+timedelta(minutes=1))
+    account.observe_exit('TEST', data, lo+timedelta(minutes=1), lo+timedelta(minutes=2))
+    assert account.settlements[0]['due'].date() == date(2014, 3, 25)
+    assert account.closed_roundtrips == 1

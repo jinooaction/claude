@@ -322,8 +322,8 @@ class ResearchAccount:
         if quantity:
             calendar = xc.get_calendar('XNYS', start=requested.date()-timedelta(days=7),
                                        end=requested.date()+timedelta(days=15))
-            days = calendar.sessions_in_range(str(requested.date()),
-                                             str(requested.date()+timedelta(days=15)))
+            # The requested calendar end may be a weekend beyond its last session.
+            days = calendar.sessions[calendar.sessions.date >= requested.date()]
             due = calendar.session_open(days[2]).to_pydatetime()
             self.settlements.append({'due': due, 'amount': proceeds, 'symbol': symbol})
             self.realized_profit += proceeds-basis
