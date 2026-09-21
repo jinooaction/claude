@@ -39,6 +39,7 @@ def verify_ledger(path, summary, cost):
     cash, realized, minimum = 10000.0, 0.0, 10000.0
     reservations, positions, settlements = {}, {}, []
     closed = missing = sequence = 0
+    unavailable = {}
     previous = None
     with path.open() as handle:
         for line in handle:
@@ -121,7 +122,12 @@ def verify_ledger(path, summary, cost):
                 require(datetime.fromisoformat(settlement[1]) <= stamp)
                 cash += settlement[2]
             else:
-                require(kind in ('SIGNAL', 'ENTRY_REJECTED'))
+                require(kind in ('SIGNAL', 'ENTRY_REJECTED', 'INPUT_UNAVAILABLE'))
+                if kind == 'INPUT_UNAVAILABLE':
+                    reason = event['reason']
+                    require(reason in ('WARMUP', 'OPENING_MISSING', 'LOOKBACK_MISSING',
+                                       'ZERO_LOOKBACK_VOLUME'))
+                    unavailable[reason] = unavailable.get(reason, 0)+1
             if event.get('status') in ('MISSING', 'ZERO_VOLUME'):
                 missing += 1
                 require(event['quantity'] == 0)
@@ -137,6 +143,7 @@ def verify_ledger(path, summary, cost):
                        'unclosed_quantity': sum(p['quantity'] for p in positions.values())}.items():
         equal(summary[key], value)
     require(set(summary['positions']) == set(positions))
+    require(summary.get('input_unavailable_counts', {}) == unavailable)
     for symbol, position in positions.items():
         for key in ('quantity', 'basis'):
             equal(summary['positions'][symbol][key], position[key])
@@ -176,6 +183,10 @@ def verify(directory):
 
 
 def replay(manifest, output):
+    code_paths = (Path(__file__).resolve(),
+                  ROOT/'src/auto_invest/analytics/sparse_opening_research.py',
+                  ROOT/'src/auto_invest/analytics/observed_intraday_inputs.py')
+    code_sha256 = {str(path.relative_to(ROOT)): fingerprint(path) for path in code_paths}
     from auto_invest.analytics.sparse_opening_research import (
         CONTRACT_SHA256,
         INVENTORY_SHA256,
@@ -195,13 +206,12 @@ def replay(manifest, output):
                             handle.write(json.dumps(event, allow_nan=False)+'\n'))
                      for name, handle in files.items()}
             result = replay_research(inputs, sinks)
+        require(code_sha256 == {str(path.relative_to(ROOT)): fingerprint(path)
+                                for path in code_paths})
         result.update(manifest_sha256=inputs['manifest_sha256'],
                       contract_sha256=CONTRACT_SHA256, inventory_sha256=INVENTORY_SHA256,
                       ledger_sha256={name: fingerprint(output/f'{name}.jsonl') for name in files},
-                      code_sha256={str(path.relative_to(ROOT)): fingerprint(path) for path in (
-                          Path(__file__).resolve(),
-                          ROOT/'src/auto_invest/analytics/sparse_opening_research.py',
-                          ROOT/'src/auto_invest/analytics/observed_intraday_inputs.py')})
+                      code_sha256=code_sha256)
         (output/'result.json').write_text(json.dumps(result, indent=2, allow_nan=False)+'\n')
     return verify(output)
 

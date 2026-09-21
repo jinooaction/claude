@@ -137,6 +137,7 @@ class OpeningSignals:
         self._attempted: set[date] = set()
         self._source: Source | None = None
         self._last_seen: datetime | None = None
+        self.input_unavailable: dict | None = None
 
     def entry(self, data: ObservedSeries, day: date, as_of: datetime) -> dict | None:
         if day not in self._indices:
@@ -160,14 +161,24 @@ class OpeningSignals:
         self._openings = {d: w for d, w in self._openings.items() if d in keep}
         if day in self._attempted or offset < 10 or offset > 60 or offset % 5:
             return None
+        self.input_unavailable = None
         opening = self._openings[day]
         previous = [self._openings.get(d) for d in prior_days]
-        if (len(previous) != 14 or not opening.complete
-                or any(w is None or not w.complete for w in previous)):
+        if len(previous) != 14:
+            self.input_unavailable = {'reason': 'WARMUP'}
+            return None
+        if not opening.complete:
+            self.input_unavailable = {'reason': 'OPENING_MISSING'}
+            return None
+        missing = [d.isoformat() for d, w in zip(prior_days, previous, strict=True)
+                   if w is None or not w.complete]
+        if missing:
+            self.input_unavailable = {'reason': 'LOOKBACK_MISSING', 'missing_sessions': missing}
             return None
         assert opening.ohlcv is not None
         mean_volume = sum(w.ohlcv[4] for w in previous if w and w.ohlcv)/14
         if mean_volume <= 0:
+            self.input_unavailable = {'reason': 'ZERO_LOOKBACK_VOLUME'}
             return None
         o, high, low, close, volume = opening.ohlcv
         if close <= o or volume < 2*mean_volume:
@@ -211,6 +222,7 @@ class ResearchAccount:
         self.event_count = 0
         self.minimum_cash = self.cash
         self.unobserved_references = 0
+        self.input_unavailable_counts: dict[str, int] = {}
         self.closed_roundtrips = 0
         self.realized_profit = 0.0
         self._last_time: datetime | None = None
@@ -233,6 +245,9 @@ class ResearchAccount:
         self.minimum_cash = min(self.minimum_cash, self.cash)
         if details.get('status') in ('MISSING', 'ZERO_VOLUME'):
             self.unobserved_references += 1
+        if kind == 'INPUT_UNAVAILABLE':
+            reason = details['reason']
+            self.input_unavailable_counts[reason] = self.input_unavailable_counts.get(reason, 0)+1
         event = {'sequence': self.event_count, 'kind': kind, 'at': stamp.isoformat(),
                  'symbol': symbol, **details, 'cash_after': self.cash,
                  'reserved_after': self.reserved}
@@ -343,7 +358,7 @@ class ResearchAccount:
         self._last_time = stamp
         released = [s for s in self.settlements if s['due'] <= stamp]
         self.settlements = [s for s in self.settlements if s['due'] > stamp]
-        for settlement in released:
+        for settlement in sorted(released, key=lambda s: s['symbol']):
             self.cash += settlement['amount']
             self._record('SETTLEMENT_RELEASED', stamp, settlement['symbol'],
                          amount=settlement['amount'], due=settlement['due'].isoformat())
@@ -355,6 +370,7 @@ class ResearchAccount:
         return {'cash': self.cash, 'reserved': self.reserved, 'unsettled': unsettled,
                 'event_count': self.event_count, 'minimum_cash': self.minimum_cash,
                 'unobserved_references': self.unobserved_references,
+                'input_unavailable_counts': dict(self.input_unavailable_counts),
                 'realized_profit': self.realized_profit, 'net_profit': profit,
                 'net_return': None if profit is None else profit/10000,
                 'closed_roundtrips': self.closed_roundtrips,
@@ -409,6 +425,10 @@ def replay_research(inputs: dict, event_sinks=None) -> dict:
                 if 5 <= offset <= 60:
                     for symbol in members:
                         signal = signals[symbol].entry(data[symbol], day, stamp)
+                        if offset == 10 and signals[symbol].input_unavailable:
+                            for account in accounts.values():
+                                account._record('INPUT_UNAVAILABLE', stamp, symbol,
+                                                **signals[symbol].input_unavailable)
                         if signal is not None:
                             for account in accounts.values():
                                 account._record('SIGNAL', stamp, **signal)
@@ -422,6 +442,11 @@ def replay_research(inputs: dict, event_sinks=None) -> dict:
         result['net_profit'] is not None and result['net_profit'] > 0
         and result['unclosed_quantity'] == 0 for result in results.values()))
     return {'schema_version': 1, 'sessions': count, 'scenarios': results,
+            'minimum_total_trials': 31,
+            'limitations': ['Adjusted prices and minute volume are not execution certification.',
+                            'DD corporate-action price lineage remains unverified.',
+                            'UTX uses an unverified RTX file alias; price differences remain.',
+                            'Previously observed development period; future holdout unopened.'],
             'status': ('INDEPENDENT_VALIDATION_REQUIRED' if passed else 'DEVELOPMENT_REJECTED'),
             'live_eligible': False, 'promotion_allowed': False,
             'orders_submitted': 0, 'actual_capital_fraction': 0}

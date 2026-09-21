@@ -112,3 +112,33 @@ def test_replay_existing_output_is_refused_after_input_check(tmp_path, monkeypat
     with pytest.raises(FileExistsError):
         script['replay'](manifest, tmp_path)
     assert manifest.read_text() == '{}'
+
+
+def test_replay_refuses_success_if_code_changes_during_execution(tmp_path, monkeypatch):
+    from contextlib import contextmanager
+
+    import auto_invest.analytics.sparse_opening_research as engine
+
+    manifest = tmp_path/'input.json'
+    manifest.write_text('{}')
+
+    @contextmanager
+    def inputs(*args):
+        yield {'manifest_sha256': hashlib.sha256(manifest.read_bytes()).hexdigest()}
+
+    monkeypatch.setattr(engine, 'research_inputs', inputs)
+    monkeypatch.setattr(engine, 'replay_research', lambda *args: {})
+    script = runpy.run_path(str(SCRIPT))
+    calls = []
+    original = script['fingerprint']
+
+    def changing_fingerprint(path):
+        if path == SCRIPT:
+            calls.append(path)
+            return ('0' if len(calls) == 1 else '1')*64
+        return original(path)
+
+    monkeypatch.setitem(script['replay'].__globals__, 'fingerprint', changing_fingerprint)
+    with pytest.raises(ValueError):
+        script['replay'](manifest, tmp_path/'output')
+    assert not (tmp_path/'output/result.json').exists()

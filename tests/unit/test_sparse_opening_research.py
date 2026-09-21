@@ -79,7 +79,7 @@ def test_csv_hash_change_is_rejected(tmp_path):
         pass
 
 
-def fixture(missing_prior=False, afternoon=False, volume=20):
+def fixture(missing_prior=False, afternoon=False, volume=20, prior_volume=10):
     start, end = date(2014, 3, 3), date(2014, 3, 24)
     empty = ObservedSeries(SOURCE, start, end, [])
     days = empty.sessions[:15]
@@ -90,7 +90,7 @@ def fixture(missing_prior=False, afternoon=False, volume=20):
             if missing_prior and i == 10 and m == 2:
                 continue
             rows.append(Minute(lo+timedelta(minutes=m), 10, 11, 9, 10.5,
-                               10 if i < 14 else volume))
+                               prior_volume if i < 14 else volume))
         if i == 14:
             rows.extend(Minute(lo+timedelta(minutes=m), 11, 13, 10, 12, 10)
                         for m in range(5, 65))
@@ -124,6 +124,16 @@ def test_missing_prior_window_is_not_skipped():
     signals = prepare(data, days)
     lo, _ = data.bounds(days[-1])
     assert signals.entry(data, days[-1], lo+timedelta(minutes=10)) is None
+    assert signals.input_unavailable['reason'] == 'LOOKBACK_MISSING'
+    assert signals.input_unavailable['missing_sessions'] == [days[10].isoformat()]
+
+
+def test_zero_volume_lookback_retains_insufficient_input_reason():
+    data, days = fixture(prior_volume=0)
+    signals = prepare(data, days)
+    lo, _ = data.bounds(days[-1])
+    assert signals.entry(data, days[-1], lo+timedelta(minutes=10)) is None
+    assert signals.input_unavailable['reason'] == 'ZERO_LOOKBACK_VOLUME'
 
 
 def test_future_afternoon_does_not_change_entry():
@@ -278,6 +288,7 @@ def test_replay_keeps_overnight_quantity_and_uses_original_cash():
     events = {'base': [], 'stress': []}
     result = replay_research(replay_fixture(), {s: rows.append for s, rows in events.items()})
     for name, scenario in result['scenarios'].items():
+        assert scenario['input_unavailable_counts'] == {'WARMUP': 14}
         assert scenario['closed_roundtrips'] == 1
         assert scenario['unclosed_quantity'] == 0 and scenario['net_profit'] > 0
         assert scenario['cash'] < 10000 and scenario['unsettled'] > 0
@@ -324,3 +335,21 @@ def test_friday_sale_settles_tuesday_when_calendar_end_is_weekend():
     account.observe_exit('TEST', data, lo+timedelta(minutes=1), lo+timedelta(minutes=2))
     assert account.settlements[0]['due'].date() == date(2014, 3, 25)
     assert account.closed_roundtrips == 1
+
+
+def test_due_settlements_follow_symbol_order_after_different_sale_times():
+    day = date(2014, 3, 3)
+    lo, _ = ObservedSeries(SOURCE, day, day, []).bounds(day)
+    account = ResearchAccount(31)
+    for index, symbol in enumerate(('B', 'A')):
+        start = lo+timedelta(minutes=index*3)
+        source = Source(symbol, '0'*64, 'synthetic', 'none', 'unverified')
+        data = ObservedSeries(source, day, day, [Minute(start, 10, 11, 9, 10, 200),
+                              Minute(start+timedelta(minutes=1), 11, 12, 10, 11, 200)])
+        account.reserve(symbol, start, 10, 9)
+        account.observe_entry(symbol, data, start+timedelta(minutes=1))
+        account.request_exit(symbol, start+timedelta(minutes=1))
+        account.observe_exit(symbol, data, start+timedelta(minutes=1), start+timedelta(minutes=2))
+    account.release_settlements(account.settlements[0]['due'])
+    released = [e['symbol'] for e in account.events if e['kind'] == 'SETTLEMENT_RELEASED']
+    assert released == ['A', 'B']
