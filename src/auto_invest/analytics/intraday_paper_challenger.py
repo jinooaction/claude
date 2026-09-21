@@ -700,7 +700,22 @@ def simulate_candidate(
     preregistration: Mapping[str, Any],
     *,
     cost_model_name: str,
+    signal_plan: Mapping[tuple[str, date, int], tuple[bool, bool]] | None = None,
 ) -> SimulationResult:
+    if candidate.family == "noise_band":
+        expected = {
+            (symbol, session, bar.bar_index)
+            for symbol in EXPECTED_UNIVERSE for session in sessions
+            for bar in resampled[symbol][session]
+        }
+        if signal_plan is None or set(signal_plan) != expected:
+            raise ValueError("noise-band signal plan must cover exactly every bar")
+        if any(not isinstance(value, tuple) or len(value) != 2
+               or any(type(flag) is not bool for flag in value)
+               for value in signal_plan.values()):
+            raise ValueError("noise-band signals must be boolean pairs")
+    elif signal_plan is not None:
+        raise ValueError("signal plan is only allowed for noise_band")
     cost_model = preregistration["cost_models"].get(cost_model_name)
     if not isinstance(cost_model, Mapping):
         raise ValueError(f"unknown cost model: {cost_model_name}")
@@ -730,10 +745,10 @@ def simulate_candidate(
             for index, bar in enumerate(bars):
                 if pending is not None:
                     side, signal_at, reason = pending
-                    if side == "BUY" and candidate.family == "shock_recovery":
+                    if side == "BUY" and candidate.family in {"shock_recovery", "noise_band"}:
                         # The frozen recovery policy consumes even an unfilled attempt.
                         entered_once = True
-                    if side == "SELL" and candidate.family == "shock_recovery":
+                    if side == "SELL" and candidate.family in {"shock_recovery", "noise_band"}:
                         # A partial/unfilled exit stays active even if its signal reverses.
                         recovery_exit_started = True
                     requested_qty = (
@@ -826,7 +841,9 @@ def simulate_candidate(
                 if position_qty > 0:
                     must_exit_next = index == len(bars) - 2
                     if (must_exit_next or recovery_exit_started
-                            or _exit_signal(candidate, bars, index, entry_index)):
+                            or (signal_plan[(symbol, session_date, bar.bar_index)][1]
+                                if signal_plan is not None else
+                                _exit_signal(candidate, bars, index, entry_index))):
                         pending = (
                             "SELL",
                             bar.end_utc,
@@ -839,10 +856,12 @@ def simulate_candidate(
                     # where no subsequent same-session fill can close it.
                     and index < len(bars) - 2
                     and not (
-                        candidate.family in {"opening_range_breakout", "shock_recovery"}
+                        candidate.family in {"opening_range_breakout", "shock_recovery",
+                                             "noise_band"}
                         and entered_once
                     )
-                    and _entry_signal(candidate, bars, index)
+                    and (signal_plan[(symbol, session_date, bar.bar_index)][0]
+                         if signal_plan is not None else _entry_signal(candidate, bars, index))
                 ):
                     pending = ("BUY", bar.end_utc, "strategy_entry")
             if position_qty > 0:

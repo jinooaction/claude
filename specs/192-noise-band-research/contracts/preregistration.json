@@ -1,0 +1,53 @@
+{
+  "schema_version": "1.0",
+  "family_id": "noise-band-long-intraday-v1",
+  "purpose": "development_diagnostic_only",
+  "prior_contract_sha256": "757b4fe7beafd747f3167e3ea03a49fced3f2c44419a95678146099f978adf6c",
+  "development": {
+    "first_session": "2013-08-23",
+    "last_session": "2020-03-06",
+    "sessions": 1645,
+    "dataset_fingerprint": "sha256:5d6ae81596425c147f3456bbbd10798834ec4260da2a03cf8a889f6a13c7b357",
+    "previously_observed": true,
+    "warmup_sessions": 14,
+    "evaluation_sessions": 1631,
+    "minimum_base_closed_trades": 200,
+    "base_and_stress_net_return_gt": 0,
+    "maximum_unclosed_quantity": 0
+  },
+  "candidate_count": 1,
+  "timeframe_minutes": 30,
+  "lookback_sessions": 14,
+  "calendar": "XNYS",
+  "history": "exact_previous_14_exchange_sessions_excluding_current_missing_session_or_slot_no_signal",
+  "slot": "bar_index_from_regular_session_open",
+  "mean_move": "mean(abs(prior_slot_close / prior_session_open - 1))",
+  "upper": "max(current_session_open, previous_exchange_session_close) * (1 + mean_move)",
+  "vwap": "cumulative_completed_30m_typical_price_times_volume_over_volume",
+  "entry": "completed_close > max(upper, vwap)",
+  "exit": "completed_close <= max(upper, vwap)",
+  "maximum_buy_attempts_per_symbol_session": 1,
+  "exit_retry_until_flat": true,
+  "fills": "next_bar_open_inherited_model",
+  "session_exit": "final_resampled_bar_open_not_exchange_close",
+  "costs_portfolio_and_acceptance": "exact_prior_contract",
+  "future_confirmation": {
+    "implemented_here": false,
+    "first_session": "2020-03-19",
+    "last_session": "2022-03-04",
+    "sessions": 495,
+    "must_remain_unopened_here": true,
+    "minimum_cumulative_trials": 29,
+    "reselection_allowed": false,
+    "acceptance": "unchanged_177_plus_181_forward_execution_requirements",
+    "source_paper_period_overlaps_confirmation": true
+  },
+  "safety": {
+    "capital_fraction": 0,
+    "live_eligible": false,
+    "promotion_allowed": false,
+    "orders_submitted": 0,
+    "broker_access": false,
+    "live_configuration_mutation": false
+  }
+}
