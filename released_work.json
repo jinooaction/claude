@@ -1,5 +1,5 @@
 {
-  "commit": "83c6d2061b45a5b3a978d7b06ccb3b5fe96b983c",
+  "commit": "510022f38bf1c9cd7a969ec7e0f9507521ccc0f1",
   "overall_status": "OK",
   "released_work": [
     {
@@ -691,7 +691,8 @@
     "189-kis-five-symbol-review",
     "190-cost-aware-intraday",
     "191-shock-recovery-research",
-    "192-noise-band-research"
+    "192-noise-band-research",
+    "193-observed-intraday-inputs"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -918,11 +919,7 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "183-mobile-capital-strategy-dashboard"
-    },
-    {
-      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "193-observed-intraday-inputs"
     }
   ],
-  "timestamp_utc": "2026-09-21T02:41:05.311757Z"
+  "timestamp_utc": "2026-09-21T02:45:45.769607Z"
 }
