@@ -80,3 +80,11 @@ v2와기준3288개·가혹3236개의결정/관측기록을대조해시각·종�
 공개집계[evidence/result.json](evidence/result.json),대조[evidence/comparison-v2-v3.json](evidence/comparison-v2-v3.json).
 최종결과SHA:ea67e13165471927da71c948a5361ae89a5a1a4b0af76d27fcf2861b2c41885e.
 전체pytest88769는계속진행중이며T011~T012는아직미완료다.
+
+## 전체 검증 완료
+
+전체pytest88769는 종료0, **4901 passed / 13 skipped / 830.94초**로 완료됐다.
+코드는4d22e7b이며 이후 변경은 문서·결과 증거뿐이다. 로그는 /tmp/194-full-pytest-final.log다.
+실제 KIS 검사12개는 KIS_LIVE_TEST 가드로, 가동 전 전용 검사1개는 이미 가동된 상태라 건너뛰었다.
+전체ruff와 신규CLI 검사도 통과했다. 하네스와 HANDOFF 사실 검사는 별도 통과했다.
+T001~T011 완료. T012 병합·배포 확인과 전체 목표의 미완료 조건 인계가 남았다.

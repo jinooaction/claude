@@ -24,7 +24,7 @@
 - [x] T010 [US3] specs/194-sparse-opening-research/results.md에 실제30파일 재생과 독립 검증을 기록한다.
 
 ## 출시
-- [ ] T011 specs/194-sparse-opening-research/results.md에 전체 pytest/ruff·하네스·인계 검사 결과를 기록한다.
+- [x] T011 specs/194-sparse-opening-research/results.md에 전체 pytest/ruff·하네스·인계 검사 결과를 기록한다.
 - [ ] T012 HANDOFF.md에 PR병합·배포 해당 여부와 전체 목표 미완료 항목을 기록한다.
 
 의존:T001→T002→T003→US1→US2→US3→출시. 같은 구현파일은 직렬로 수정한다.

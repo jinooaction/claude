@@ -7,9 +7,9 @@ T001~T010 완료. 공유 현금·예약·결제·익일 잔량·별도 장부 �
 기준 571청산/-68.73%, 가혹 554청산/-80.37%, 양쪽 미청산0으로 후보는 탈락했다.
 v2/v3의 결정·관측 6524개가 일치했고 코드 지문도 4d22e7b 파일과 일치했다.
 관련53검사와 후속194검사37개, 전체ruff·하네스·인계 검사 통과.
-최종 전체pytest88769는 실행 중이며 로그는 /tmp/194-full-pytest-final.log다. 같은 핸들로 확인한다.
+최종 전체pytest88769는 exit0,4901 passed/13 skipped(830.94초)로 완료됐다. 로그는 /tmp/194-full-pytest-final.log다.
 이전75098은 코드 보정 때문에 1785통과/13건너뜀에서 중단됐고 전체 통과 근거가 아니다.
-T011 전체 검사와 T012 출시 확인부터 이어간다. PR848은 초안이며 병합/배포 미완료다.
+T001~T011 완료. T012 출시 확인부터 이어간다. PR848 병합/배포는 아직 미완료다.
 194의 evidence/result.json, comparison-v2-v3.json, followup-decision.md에서 근거를 확인한다.
 DD/RTX별도일봉 대조는 대부분 유사하나 일부가격차이가 미해결이다.
 로컬 lineage-diagnostic-decision.md와 next-research-decision.md에 근거가 있다.
