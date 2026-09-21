@@ -1,15 +1,15 @@
 # 작업표
 ## Phase 1 — 사전등록
 - [x] T001 명세/원문/설계/계약 작성: `specs/192-noise-band-research/`.
-- [ ] T002 성과 확인 전 계약 커밋: `contracts/preregistration.json`.
+- [x] T002 성과 확인 전 계약 커밋: `contracts/preregistration.json`.
 ## Phase 2 — US1 인과적 신호
-- [ ] T003 [US1]14일/갭/시간/누락/경계 시험: `tests/unit/test_noise_band_intraday.py`.
-- [ ] T004 [US1] 슬롯별 신호 계산: `src/auto_invest/analytics/noise_band_intraday.py`.
-- [ ] T005 [US1] 매핑/시도/청산 연결·기존 회귀: `src/auto_invest/analytics/intraday_paper_challenger.py`.
+- [x] T003 [US1]14일/갭/시간/누락/경계 시험: `tests/unit/test_noise_band_intraday.py`.
+- [x] T004 [US1] 슬롯별 신호 계산: `src/auto_invest/analytics/noise_band_intraday.py`.
+- [x] T005 [US1] 매핑/시도/청산 연결·기존 회귀: `src/auto_invest/analytics/intraday_paper_challenger.py`.
 ## Phase 3 — US2/US3 개발과 재현
-- [ ] T006 [US2] 고정입력·두비용·1631일 지표: `src/auto_invest/analytics/noise_band_intraday.py`.
-- [ ] T007 [US3] 지문/재계산/덮어쓰기 거부: `scripts/noise_band_probe.py`.
-- [ ] T008 [US3] 명령/변조/holdout미접근 시험: `tests/integration/test_noise_band_cli.py`.
+- [x] T006 [US2] 고정입력·두비용·1631일 지표: `src/auto_invest/analytics/noise_band_intraday.py`.
+- [x] T007 [US3] 지문/재계산/덮어쓰기 거부: `scripts/noise_band_probe.py`.
+- [x] T008 [US3] 명령/변조/holdout미접근 시험: `tests/integration/test_noise_band_cli.py`.
 ## Phase 4 — 실제 검증과 출시
 - [ ] T009 실제 개발/재계산 결과: `results.md`.
 - [ ] T010 전체 pytest/ruff·하네스/HANDOFF/PR검증: `results.md`.
