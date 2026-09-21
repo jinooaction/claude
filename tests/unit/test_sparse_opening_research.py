@@ -14,6 +14,7 @@ from auto_invest.analytics.observed_intraday_inputs import (
 from auto_invest.analytics.sparse_opening_research import (
     OpeningSignals,
     ResearchAccount,
+    replay_research,
     research_inputs,
     sealed_contract,
 )
@@ -252,3 +253,60 @@ def test_exit_retries_missing_minutes_and_settles_two_sessions_later():
     account.observe_exit('TEST', next_data, second_lo, second_lo+timedelta(minutes=1))
     assert not account.positions and account.closed_roundtrips == 1
     assert account.summary()['net_profit'] == pytest.approx(22.9287-20.062)
+
+
+def replay_fixture(next_day=True):
+    calendar = ObservedSeries(SOURCE, date(2014, 3, 3), date(2014, 3, 24), [])
+    days = calendar.sessions[:16 if next_day else 15]
+    inputs = []
+    for index, day in enumerate(days):
+        lo, _ = calendar.bounds(day)
+        rows = [Minute(lo+timedelta(minutes=m), 10, 11, 9, 10.5,
+                       100 if index != 14 else 200) for m in range(5)]
+        if index == 14:
+            rows += [Minute(lo+timedelta(minutes=m), 11, 13, 10, 12, 100)
+                     for m in range(5, 10)]
+            rows += [Minute(lo+timedelta(minutes=10), 12, 13, 11, 12, 100000)]
+        if index == 15:
+            rows = [Minute(lo+timedelta(minutes=m), 13, 14, 12, 13, 10000)
+                    for m in range(5)]
+        inputs.append((day, {'TEST': ObservedSeries(SOURCE, day, day, rows)}))
+    return {'sessions': days, 'contract': {'members': ['TEST']}, 'days': inputs}
+
+
+def test_replay_keeps_overnight_quantity_and_uses_original_cash():
+    events = {'base': [], 'stress': []}
+    result = replay_research(replay_fixture(), {s: rows.append for s, rows in events.items()})
+    for name, scenario in result['scenarios'].items():
+        assert scenario['closed_roundtrips'] == 1
+        assert scenario['unclosed_quantity'] == 0 and scenario['net_profit'] > 0
+        assert scenario['cash'] < 10000 and scenario['unsettled'] > 0
+        assert scenario['cash']+scenario['unsettled']-10000 == pytest.approx(
+            scenario['net_profit'])
+        sales = [e for e in events[name] if e['kind'] == 'EXIT_OBSERVED' and e['quantity']]
+        assert [e['quantity'] for e in sales] == [100, 65]
+        assert all(e['at'].startswith('2014-03-24') for e in sales)
+        assert all(e['due'].startswith('2014-03-26') for e in sales)
+        assert [e['sequence'] for e in events[name]] == list(range(1, len(events[name])+1))
+    assert result['status'] == 'DEVELOPMENT_REJECTED'  # One roundtrip is not 200.
+    assert result['orders_submitted'] == 0 and not result['live_eligible']
+
+
+def test_terminal_unclosed_replay_has_no_invented_liquidation():
+    result = replay_research(replay_fixture(next_day=False))
+    for scenario in result['scenarios'].values():
+        assert scenario['unclosed_quantity'] == 165
+        assert scenario['net_profit'] is None and scenario['net_return'] is None
+        assert scenario['closed_roundtrips'] == 0
+        assert scenario['positions']['TEST']['exit_pending']
+
+
+def test_replay_rejects_skipped_session_and_missing_member():
+    inputs = replay_fixture()
+    inputs['days'] = inputs['days'][1:]
+    with pytest.raises(ValueError, match='every calendar session'):
+        replay_research(inputs)
+    inputs = replay_fixture()
+    inputs['days'][0][1].clear()
+    with pytest.raises(ValueError, match='every calendar session'):
+        replay_research(inputs)

@@ -198,7 +198,7 @@ class OpeningSignals:
 class ResearchAccount:
     """Cash-constrained reference ledger, never a broker execution account."""
 
-    def __init__(self, cost_bps: int):
+    def __init__(self, cost_bps: int, event_sink=None):
         if type(cost_bps) is not int or cost_bps not in (31, 40):
             raise ValueError('sealed cost scenario required')
         self.rate = cost_bps/10000
@@ -207,6 +207,10 @@ class ResearchAccount:
         self.positions: dict[str, dict] = {}
         self.settlements: list[dict] = []
         self.events: list[dict] = []
+        self._event_sink = event_sink
+        self.event_count = 0
+        self.minimum_cash = self.cash
+        self.unobserved_references = 0
         self.closed_roundtrips = 0
         self.realized_profit = 0.0
         self._last_time: datetime | None = None
@@ -225,9 +229,17 @@ class ResearchAccount:
         self._last_time = stamp
         if self.cash < -1e-8 or self.reserved < -1e-8:
             raise ValueError('negative research cash or reservation')
-        self.events.append({'kind': kind, 'at': stamp.isoformat(), 'symbol': symbol,
-                            **details, 'cash_after': self.cash,
-                            'reserved_after': self.reserved})
+        self.event_count += 1
+        self.minimum_cash = min(self.minimum_cash, self.cash)
+        if details.get('status') in ('MISSING', 'ZERO_VOLUME'):
+            self.unobserved_references += 1
+        event = {'sequence': self.event_count, 'kind': kind, 'at': stamp.isoformat(),
+                 'symbol': symbol, **details, 'cash_after': self.cash,
+                 'reserved_after': self.reserved}
+        if self._event_sink is None:
+            self.events.append(event)
+        else:
+            self._event_sink(event)
 
     def reserve(self, symbol, stamp, signal_close, opening_low):
         self._time(stamp)
@@ -284,6 +296,7 @@ class ResearchAccount:
                                       'last_reference': entry['at'].isoformat()}
         self._record('ENTRY_OBSERVED', as_of, symbol, quantity=quantity, price=price,
                      basis=basis, released=entry['reserved']-basis, status=status,
+                     reference_capacity=capacity, source_sha256=data.source.sha256,
                      reference_at=entry['at'].isoformat())
 
     def request_exit(self, symbol, stamp):
@@ -322,6 +335,7 @@ class ResearchAccount:
             del self.positions[symbol]
         self._record('EXIT_OBSERVED', as_of, symbol, quantity=quantity, price=price,
                      basis=basis, proceeds=proceeds, due=due.isoformat() if due else None,
+                     reference_capacity=capacity, source_sha256=data.source.sha256,
                      status=status, reference_at=requested.isoformat())
 
     def release_settlements(self, stamp):
@@ -339,6 +353,8 @@ class ResearchAccount:
         unresolved = bool(self.positions or self.entries)
         profit = None if unresolved else self.cash+unsettled-10000
         return {'cash': self.cash, 'reserved': self.reserved, 'unsettled': unsettled,
+                'event_count': self.event_count, 'minimum_cash': self.minimum_cash,
+                'unobserved_references': self.unobserved_references,
                 'realized_profit': self.realized_profit, 'net_profit': profit,
                 'net_return': None if profit is None else profit/10000,
                 'closed_roundtrips': self.closed_roundtrips,
@@ -348,3 +364,64 @@ class ResearchAccount:
                 'live_eligible': False, 'promotion_allowed': False, 'fill_verified': False,
                 'capacity_unknown': True, 'lineage_verified': False,
                 'orders_submitted': 0, 'actual_capital_fraction': 0}
+
+
+def replay_research(inputs: dict, event_sinks=None) -> dict:
+    """Replay both cost cases on one clock and one causal stream of signals."""
+    sessions = inputs['sessions']
+    members = sorted(inputs['contract']['members'])
+    signals = {s: OpeningSignals(sessions) for s in members}
+    accounts = {name: ResearchAccount(cost, (event_sinks or {}).get(name))
+                for name, cost in [('base', 31), ('stress', 40)]}
+    count = 0
+    for day, data in inputs['days']:
+        if count >= len(sessions) or day != sessions[count] or set(data) != set(members):
+            raise ValueError('replay requires every calendar session and original member')
+        count += 1
+        lo, hi = data[members[0]].bounds(day)
+        if any(series.source.symbol != symbol or series.bounds(day) != (lo, hi)
+               for symbol, series in data.items()):
+            raise ValueError('replay source or exchange bounds mismatch')
+        stamp = lo
+        while stamp <= hi:
+            for account in accounts.values():
+                # Previous-minute outcomes become observable before new decisions.
+                if stamp > lo:
+                    pending = set(account.entries) | {
+                        s for s, p in account.positions.items() if p['exit_pending']}
+                    for symbol in sorted(pending):
+                        if symbol in account.entries:
+                            account.observe_entry(symbol, data[symbol], stamp)
+                        else:
+                            account.observe_exit(symbol, data[symbol], stamp-MINUTE, stamp)
+                account.release_settlements(stamp)
+            if stamp == hi:
+                break
+            offset = int((stamp-lo)/MINUTE)
+            if offset % 5 == 0:
+                for account in accounts.values():
+                    for symbol in sorted(account.positions):
+                        position = account.positions[symbol]
+                        if (not position['exit_pending'] and OpeningSignals.exit_due(
+                                data[symbol], day, stamp, position['opening_low'])):
+                            account.request_exit(symbol, stamp)
+                # Opening history is updated even when cash or pending exits bar entry.
+                if 5 <= offset <= 60:
+                    for symbol in members:
+                        signal = signals[symbol].entry(data[symbol], day, stamp)
+                        if signal is not None:
+                            for account in accounts.values():
+                                account._record('SIGNAL', stamp, **signal)
+                                account.reserve(symbol, stamp, signal['signal_close'],
+                                                signal['opening_low'])
+            stamp += MINUTE
+    if count != len(sessions):
+        raise ValueError('replay ended before final calendar session')
+    results = {name: account.summary() for name, account in accounts.items()}
+    passed = (results['base']['closed_roundtrips'] >= 200 and all(
+        result['net_profit'] is not None and result['net_profit'] > 0
+        and result['unclosed_quantity'] == 0 for result in results.values()))
+    return {'schema_version': 1, 'sessions': count, 'scenarios': results,
+            'status': ('INDEPENDENT_VALIDATION_REQUIRED' if passed else 'DEVELOPMENT_REJECTED'),
+            'live_eligible': False, 'promotion_allowed': False,
+            'orders_submitted': 0, 'actual_capital_fraction': 0}
