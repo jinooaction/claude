@@ -20,7 +20,7 @@
 
 ## Phase 5 — 통합과 인계
 - [x] T009 실제 WMT 자료로 실행해 specs/196-archived-event-evidence/release-evidence.md에 원본·결과 지문과 범위를 기록한다.
-- [ ] T010 전체 pytest·ruff 및 하네스·인계 검사를 실행하고 release-evidence.md에 기록한다.
+- [x] T010 전체 pytest·ruff 및 하네스·인계 검사를 실행하고 release-evidence.md에 기록한다. 코드1b02509: 4989 passed/13 skipped(793.89초), ruff·하네스14/14·인계 사실 검사 통과.
 - [ ] T011 품질 관문 PR을 검토·병합하고 HANDOFF.md 및 release-evidence.md에 배포 결과와 전체 목표 잔여 조건을 남긴다.
 
 ## Dependencies and implementation strategy
