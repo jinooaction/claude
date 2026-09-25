@@ -2,7 +2,7 @@
 
 **Feature Branch**: `codex/196-archived-event-evidence`  
 **Created**: 2026-09-25  
-**Status**: Draft — 전체 단타 목표의 입력 검증 단계  
+**Status**: Released — 전체 단타 목표의 입력 검증 단계이며 전체 실사용 완료는 아님
 **Input**: 기존 한국투자 계좌용 단타 프로그램 완성. 실제 과거 자료와 관측 구간을 검증해 재현 가능한 연구 입력을 마련한다.
 
 ## User Scenarios & Testing
