@@ -8,7 +8,7 @@
 
 ## Technical Context
 
-Python 3.12+, 표준 라이브러리 hashlib/json/zlib/datetime/html.parser. 새 패키지·네트워크 요청 없음.
+Python 3.11+, 표준 라이브러리 hashlib/json/zlib/datetime/html.parser. 새 패키지·네트워크 요청 없음.
 압축 및 해제 기록 각각 10 MiB, 고정된 세 파일, gzip 단일 멤버만 허용한다.
 Linux/macOS CLI. pytest 단위·CLI·실물 검사와 ruff·하네스·인계 검사를 수행한다.
 
