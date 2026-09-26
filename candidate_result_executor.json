@@ -1,0 +1,101 @@
+{
+  "commit": "37829096639c7ef60c3df43bf899fce516667fc4",
+  "counts": {
+    "blocked": 2,
+    "fail": 0,
+    "pass": 0,
+    "pending": 0
+  },
+  "diagnostic_counts": {
+    "execution_failed": 2
+  },
+  "missing_inputs": [],
+  "overall_status": "degraded",
+  "results": [
+    {
+      "block_reason_ko": "후보 구현 공장에서 이미 blocked 상태로 표시한 패키지다.",
+      "candidate_id": "candidate-1ed634d8bf6d",
+      "diagnostics": [
+        {
+          "code": "execution_failed",
+          "details": {
+            "package_kind": "strategy_backtest",
+            "reason": "후보 구현 공장에서 이미 blocked 상태로 표시한 패키지다."
+          },
+          "evidence_source": "package",
+          "next_actions": [
+            {
+              "action_code": "inspect_validation_failure",
+              "owner": "automation",
+              "safe_to_auto_run": true,
+              "summary_ko": "종료 코드와 제한된 출력을 바탕으로 실패 원인을 더 좁힌다."
+            }
+          ],
+          "retryable": true,
+          "severity": "warning",
+          "summary_ko": "검증 명령이 비정상 종료했다."
+        }
+      ],
+      "executions": [],
+      "next_actions": [
+        {
+          "action_code": "inspect_validation_failure",
+          "owner": "automation",
+          "safe_to_auto_run": true,
+          "summary_ko": "종료 코드와 제한된 출력을 바탕으로 실패 원인을 더 좁힌다."
+        }
+      ],
+      "output_summary_ko": "안전 또는 지원 범위 밖이라 실행하지 않았다.",
+      "package_id": "pkg-c9a284fa4235",
+      "package_kind": "strategy_backtest",
+      "raw_metrics": {},
+      "retryable": true,
+      "source_ref": "candidate-result-executor:pkg-c9a284fa4235",
+      "status": "blocked"
+    },
+    {
+      "block_reason_ko": "후보 구현 공장에서 이미 blocked 상태로 표시한 패키지다.",
+      "candidate_id": "candidate-cc96b35062da",
+      "diagnostics": [
+        {
+          "code": "execution_failed",
+          "details": {
+            "package_kind": "portfolio_backtest",
+            "reason": "후보 구현 공장에서 이미 blocked 상태로 표시한 패키지다."
+          },
+          "evidence_source": "package",
+          "next_actions": [
+            {
+              "action_code": "inspect_validation_failure",
+              "owner": "automation",
+              "safe_to_auto_run": true,
+              "summary_ko": "종료 코드와 제한된 출력을 바탕으로 실패 원인을 더 좁힌다."
+            }
+          ],
+          "retryable": true,
+          "severity": "warning",
+          "summary_ko": "검증 명령이 비정상 종료했다."
+        }
+      ],
+      "executions": [],
+      "next_actions": [
+        {
+          "action_code": "inspect_validation_failure",
+          "owner": "automation",
+          "safe_to_auto_run": true,
+          "summary_ko": "종료 코드와 제한된 출력을 바탕으로 실패 원인을 더 좁힌다."
+        }
+      ],
+      "output_summary_ko": "안전 또는 지원 범위 밖이라 실행하지 않았다.",
+      "package_id": "pkg-8aae8cb99874",
+      "package_kind": "portfolio_backtest",
+      "raw_metrics": {},
+      "retryable": true,
+      "source_ref": "candidate-result-executor:pkg-8aae8cb99874",
+      "status": "blocked"
+    }
+  ],
+  "run_id": "[REDACTED_ACCOUNT]",
+  "schema_version": "1.0",
+  "timestamp_utc": "2026-09-26T13:23:08Z"
+}
