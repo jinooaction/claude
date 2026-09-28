@@ -34,7 +34,6 @@ def test_artifact_precedes_publish_and_failures_remain_observable():
     assert 'exit "${COLLECT_STATUS:-2}"' in text
     assert "--diff-filter=CDMRTUXB" in text
     assert 'push origin "HEAD:refs/heads/$branch"' in text
-    assert "schedule:" not in text  # No unattended collection before real acceptance.
     actions = re.findall(r"uses: ([^\s]+)", text)
     assert actions and all(re.search(r"@[a-f0-9]{40}$", action) for action in actions)
 
@@ -96,4 +95,14 @@ def test_fixed_sources_have_separate_history_and_contact_headers():
     assert "'automation/issuer-observations' || 'automation/filing-observations'" in text
     assert "ref: ${{ env.OBSERVATION_BRANCH }}" in text
     assert 'branch="$OBSERVATION_BRANCH"' in text
-    assert "inputs.source != 'microsoft' && secrets.SEC_USER_AGENT || ''" in text
+    assert ("github.event_name == 'workflow_dispatch' && inputs.source == 'sec' "
+            "&& secrets.SEC_USER_AGENT || ''") in text
+
+
+def test_schedule_collects_only_verified_issuer_without_sec_contact():
+    text = WORKFLOW.read_text()
+    assert "cron: '7,22,37,52 * * * *'" in text
+    assert "github.event_name == 'schedule' && 'microsoft' || inputs.source" in text
+    assert "(github.event_name == 'schedule' || inputs.source == 'microsoft')" in text
+    assert ("github.event_name == 'workflow_dispatch' && inputs.source == 'sec' "
+            "&& secrets.SEC_USER_AGENT || ''") in text

@@ -9,8 +9,10 @@ on:
         required: true
         default: sec
         options: [sec, microsoft]
-  # The initial probe registered this workflow. Further probes are explicit;
-  # schedule is enabled only after two verified runs.
+  # Only the issuer path passed two remote collections and the reviewed-input bridge.
+  # SEC remains an explicit manual probe; scheduled runs carry no SEC contact.
+  schedule:
+    - cron: '7,22,37,52 * * * *'
 
 permissions:
   contents: read
@@ -21,8 +23,8 @@ concurrency:
 
 env:
   UV_PYTHON: '3.11'
-  OBSERVATION_SOURCE: ${{ inputs.source || 'sec' }}
-  OBSERVATION_BRANCH: ${{ inputs.source == 'microsoft' && 'automation/issuer-observations' || 'automation/filing-observations' }}
+  OBSERVATION_SOURCE: ${{ github.event_name == 'schedule' && 'microsoft' || inputs.source }}
+  OBSERVATION_BRANCH: ${{ (github.event_name == 'schedule' || inputs.source == 'microsoft') && 'automation/issuer-observations' || 'automation/filing-observations' }}
 
 jobs:
   collect:
@@ -84,7 +86,7 @@ jobs:
         id: collect
         working-directory: code
         env:
-          SEC_USER_AGENT: ${{ inputs.source != 'microsoft' && secrets.SEC_USER_AGENT || '' }}
+          SEC_USER_AGENT: ${{ github.event_name == 'workflow_dispatch' && inputs.source == 'sec' && secrets.SEC_USER_AGENT || '' }}
         run: |
           set -uo pipefail
           case "$OBSERVATION_SOURCE" in
