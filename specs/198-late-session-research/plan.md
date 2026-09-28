@@ -10,14 +10,22 @@
 
 ## Technical Context
 
-**Language/Version**: Python 3.11 이상, 기존 uv 환경  
-**Primary Dependencies**: 기존 exchange_calendars·numpy, 새 의존성 없음  
-**Storage**: 고정 CSV 입력, 새 JSON 판정·JSONL 장부  
-**Testing**: pytest·ruff, 시간 경계·장부 보존 반례  
-**Target Platform**: 기존 Linux 연구/CI 환경, Mac은 가벼운 편집·검사만  
-**Project Type**: 연구 CLI와 분석 모듈  
-**Performance Goals**: 후보 1개 × 비용 2개, 별도 병렬 검색 없음  
-**Constraints**: 화면 조작·계좌 연결·최종 확인 자료 접근 금지, 덮어쓰기 거부  
+**Language/Version**: Python 3.11 이상, 기존 uv 환경
+
+**Primary Dependencies**: 기존 exchange_calendars·numpy, 새 의존성 없음
+
+**Storage**: 고정 CSV 입력, 새 JSON 판정·JSONL 장부
+
+**Testing**: pytest·ruff, 시간 경계·장부 보존 반례
+
+**Target Platform**: 기존 Linux 연구/CI 환경, Mac은 가벼운 편집·검사만
+
+**Project Type**: 연구 CLI와 분석 모듈
+
+**Performance Goals**: 후보 1개 × 비용 2개, 별도 병렬 검색 없음
+
+**Constraints**: 화면 조작·계좌 연결·최종 확인 자료 접근 금지, 덮어쓰기 거부
+
 **Scale/Scope**: ETF 5개 × 개발 1,645거래일, 첫날 준비 후 평가 1,644일
 
 ## Constitution Check

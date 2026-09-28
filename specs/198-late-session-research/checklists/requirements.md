@@ -1,7 +1,9 @@
 # Specification Quality Checklist: 장 마감 전 단일 후보 검증
 
-**Purpose**: 계획 수립 전 명세의 완결성 검토  
-**Created**: 2026-09-28  
+**Purpose**: 계획 수립 전 명세의 완결성 검토
+
+**Created**: 2026-09-28
+
 **Feature**: [spec.md](../spec.md)
 
 ## Content Quality
