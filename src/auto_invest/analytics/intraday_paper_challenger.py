@@ -563,8 +563,8 @@ def resample_dataset(
     dataset: IntradayDataset,
     timeframe_minutes: int,
 ) -> dict[str, dict[date, tuple[ResampledBar, ...]]]:
-    if timeframe_minutes not in EXPECTED_TIMEFRAMES:
-        raise ValueError("timeframe must be 15, 30, or 60 minutes")
+    if timeframe_minutes not in (5, *EXPECTED_TIMEFRAMES):
+        raise ValueError("timeframe must be 5, 15, 30, or 60 minutes")
     expected_base_count = timeframe_minutes // 5
     output: dict[str, dict[date, tuple[ResampledBar, ...]]] = {}
     for symbol in EXPECTED_UNIVERSE:
@@ -702,20 +702,20 @@ def simulate_candidate(
     cost_model_name: str,
     signal_plan: Mapping[tuple[str, date, int], tuple[bool, bool]] | None = None,
 ) -> SimulationResult:
-    if candidate.family == "noise_band":
+    if candidate.family in {"noise_band", "late_session"}:
         expected = {
             (symbol, session, bar.bar_index)
             for symbol in EXPECTED_UNIVERSE for session in sessions
             for bar in resampled[symbol][session]
         }
         if signal_plan is None or set(signal_plan) != expected:
-            raise ValueError("noise-band signal plan must cover exactly every bar")
+            raise ValueError("external signal plan must cover exactly every bar")
         if any(not isinstance(value, tuple) or len(value) != 2
                or any(type(flag) is not bool for flag in value)
                for value in signal_plan.values()):
-            raise ValueError("noise-band signals must be boolean pairs")
+            raise ValueError("external signals must be boolean pairs")
     elif signal_plan is not None:
-        raise ValueError("signal plan is only allowed for noise_band")
+        raise ValueError("signal plan is only allowed for noise_band or late_session")
     cost_model = preregistration["cost_models"].get(cost_model_name)
     if not isinstance(cost_model, Mapping):
         raise ValueError(f"unknown cost model: {cost_model_name}")
@@ -745,10 +745,14 @@ def simulate_candidate(
             for index, bar in enumerate(bars):
                 if pending is not None:
                     side, signal_at, reason = pending
-                    if side == "BUY" and candidate.family in {"shock_recovery", "noise_band"}:
+                    if side == "BUY" and candidate.family in {
+                        "shock_recovery", "noise_band", "late_session",
+                    }:
                         # The frozen recovery policy consumes even an unfilled attempt.
                         entered_once = True
-                    if side == "SELL" and candidate.family in {"shock_recovery", "noise_band"}:
+                    if side == "SELL" and candidate.family in {
+                        "shock_recovery", "noise_band", "late_session",
+                    }:
                         # A partial/unfilled exit stays active even if its signal reverses.
                         recovery_exit_started = True
                     requested_qty = (
@@ -857,7 +861,7 @@ def simulate_candidate(
                     and index < len(bars) - 2
                     and not (
                         candidate.family in {"opening_range_breakout", "shock_recovery",
-                                             "noise_band"}
+                                             "noise_band", "late_session"}
                         and entered_once
                     )
                     and (signal_plan[(symbol, session_date, bar.bar_index)][0]

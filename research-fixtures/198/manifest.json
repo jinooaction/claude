@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0",
+  "dataset_id": "hf-pitrading-coverage-frozen-20130823-20200306",
+  "provider": "HF Data Library / PiTrading consolidated CTA-UTP (provider documented)",
+  "retrieved_at_utc": "2026-09-20T21:56:16.926205+00:00",
+  "adjustment_policy": "source split and dividend adjusted; no inverse adjustment applied; Raw; pitrading only; observed minute OHLCV aggregated without gap filling",
+  "base_timeframe_minutes": 5,
+  "synthetic": false,
+  "files": {
+    "SPY": {
+      "path": "SPY.csv",
+      "sha256": "sha256:4faf70d156183d9b46714e2e4f1938a39e9d551d7a5c3cb063a600133a232f4e",
+      "rows": 127734
+    },
+    "QQQ": {
+      "path": "QQQ.csv",
+      "sha256": "sha256:d913e9276e2cb58e2756c8b35f0a2524a5db5e726477f3ec652f21f01dc21955",
+      "rows": 127734
+    },
+    "IWM": {
+      "path": "IWM.csv",
+      "sha256": "sha256:f324dc78acd35dd0c4acdbff0a8010f226c9751c0fe56920492b339383855f8b",
+      "rows": 127734
+    },
+    "TLT": {
+      "path": "TLT.csv",
+      "sha256": "sha256:7b2f59c287c83f233c4c14e7c744f8c479dcab57a87f1cb31a4f1f11e34ed30d",
+      "rows": 127734
+    },
+    "GLD": {
+      "path": "GLD.csv",
+      "sha256": "sha256:8f33ef6eae3a11bb7a8d04bb8f8e4636adeebf3a7b9c109c8bb51b88c49bce75",
+      "rows": 127734
+    }
+  },
+  "source_audit": "../audit.json",
+  "coverage_selection": "longest common consecutive complete 5-minute interval chosen without inspecting strategy returns",
+  "sessions": 1645,
+  "citation": "Elkassabgi, A. (2026). HF Data Library: Free 1-Minute Intraday U.S. Equity Data. Zenodo. https://doi.org/10.5281/zenodo.19501605",
+  "limitations": [
+    "source-adjusted prices differ from executable unadjusted prices",
+    "historical research only; no provider execution equivalence established"
+  ]
+}

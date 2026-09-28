@@ -1,0 +1,52 @@
+{
+  "schema_version": "1.0",
+  "family_id": "late-session-long-intraday-v1",
+  "purpose": "development_diagnostic_only",
+  "prior_contract_sha256": "757b4fe7beafd747f3167e3ea03a49fced3f2c44419a95678146099f978adf6c",
+  "development_manifest_sha256": "c4b6c6336ee0747464fde730f6d894ba3b8814c14567406f49cb0e528ea8fdfc",
+  "development": {
+    "first_session": "2013-08-23",
+    "last_session": "2020-03-06",
+    "sessions": 1645,
+    "dataset_fingerprint": "sha256:5d6ae81596425c147f3456bbbd10798834ec4260da2a03cf8a889f6a13c7b357",
+    "previously_observed": true,
+    "warmup_sessions": 1,
+    "evaluation_sessions": 1644,
+    "minimum_base_closed_trades": 200,
+    "base_and_stress_net_return_gt": 0,
+    "maximum_unclosed_quantity": 0
+  },
+  "universe": ["SPY", "QQQ", "IWM", "TLT", "GLD"],
+  "candidate_count": 1,
+  "timeframe_minutes": 5,
+  "calendar": "XNYS",
+  "previous_close": "exact_previous_exchange_session_final_complete_bar_close",
+  "first_observation": "complete_bar_ending_at_session_open_plus_30_minutes",
+  "entry_observation": "complete_bar_ending_at_session_close_minus_30_minutes",
+  "entry": "first_observation_close > previous_close and entry_observation_close > previous_close",
+  "missing_required_observation": "no_entry_no_substitution",
+  "maximum_buy_attempts_per_symbol_session": 1,
+  "exit_retry_until_flat": true,
+  "fills": "next_bar_open_inherited_model",
+  "session_exit": "final_5m_bar_open_not_exchange_close",
+  "costs_portfolio_and_acceptance": "exact_prior_contract",
+  "future_confirmation": {
+    "implemented_here": false,
+    "first_session": "2020-03-19",
+    "last_session": "2022-03-04",
+    "sessions": 495,
+    "must_remain_unopened_here": true,
+    "minimum_cumulative_trials": 32,
+    "reselection_allowed": false,
+    "acceptance": "unchanged_177_plus_181_forward_execution_requirements",
+    "source_paper_period_overlaps_confirmation": true
+  },
+  "safety": {
+    "capital_fraction": 0,
+    "live_eligible": false,
+    "promotion_allowed": false,
+    "orders_submitted": 0,
+    "broker_access": false,
+    "live_configuration_mutation": false
+  }
+}
