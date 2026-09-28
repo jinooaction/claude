@@ -258,7 +258,17 @@ def _manifest(value: dict) -> None:
         seen.add(identity)
         _digest(reference["sha256"])
     for failure in value["failures"]:
-        _fields(failure, {"issuer_cik", "code"})
+        expected = {"issuer_cik", "code"}
+        if isinstance(failure, dict) and "source_kind" in failure:
+            expected |= {"source_kind", "accession"}
+        _fields(failure, expected)
+        if "source_kind" in failure:
+            _require(failure["source_kind"] in {"listing", "primary"}, "invalid failure kind")
+            if failure["source_kind"] == "listing":
+                _require(failure["accession"] is None, "invalid listing failure accession")
+            else:
+                _require(_matches(failure["accession"], r"[0-9]{10}-[0-9]{2}-[0-9]{6}"),
+                         "invalid primary failure accession")
         _require(_matches(failure["issuer_cik"], r"[0-9]{10}")
                  and int(failure["issuer_cik"]) > 0, "invalid failure issuer")
         _require(failure["code"] in {

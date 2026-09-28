@@ -17,8 +17,13 @@ RunStore 부재로 실패하는 것을 확인하고 구현했다. 추가 반례�
 
 ## Phase 3 — US1 원문 관측
 독립검사: 가짜HTTP로수신/차단/잘림/시계역행/잘못된문서/일부실패를검사한다.
-- [ ] T005 [US1] HTTP·속도·재시도·냉각·한도·부분범위 반례 작성: tests/unit/test_filing_collector.py.
-- [ ] T006 [US1] SEC목록/고정CIK본문 수집·관측구간·실패기록 구현: src/auto_invest/market_data/filing_collector.py.
+- [x] T005 [US1] HTTP·속도·재시도·냉각·한도·부분범위 반례 작성: tests/unit/test_filing_collector.py.
+- [x] T006 [US1] SEC목록/고정CIK본문 수집·관측구간·실패기록 구현: src/auto_invest/market_data/filing_collector.py.
+
+2026-09-29 진행: 수집기 모듈 부재의 실패를 먼저 확인했다. 모의HTTP로 원문 성공,
+최근5개 한도, 403즉시차단, 429/5xx/접속실패 제한재시도, 지속냉각/재개,
+잘린응답/다른회사/크기초과/잘못된목록/시계역행/느린연속응답을 검사했다.
+실제 SEC접속과 원격수집은 T011에 남아 있으며 이 단계로 실수집 성공을 주장하지 않는다.
 
 ## Phase 4 — US2 과거 조회와 기존195연결
 독립검사: 정정/실패를추가해도과거조회불변, 수신완료만으로조기노출0건.

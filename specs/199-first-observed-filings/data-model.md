@@ -6,6 +6,10 @@
   requested_at/received_at/verified_at UTC, source_claims(접수일 등). 시각 순서와 URL/CIK 일치 필수.
 - Run: 고유run_id, source_commit, config_sha256, started/ended UTC, observations 목록,
   failures 목록, coverage(관측/실패/한도생략), previous_run_sha256, circuit 상태.
+  수집기 failures는 회사·목록/본문 구분·접수번호·고정오류코드를 남기며 예외원문/헤더는 제외한다.
+  failed는 재시도 중 실패도 포함한 실패기록 수다. skipped는 받은 최근 목록에서
+  본문 한도로 제외한 개수이며, 목록을 받지 못했거나 과거 추가목록을 읽지 않은 범위는
+  전체성 unknown이다. 본문 이름/CIK/서식 검사는 최소 동일성 검사이고 실적 의미 검토가 아니다.
 - Commit marker: 원문/관측/manifest 검증을 마친 뒤의 finalized_at. 조회 가능 시각은
   관측verified_at과finalized_at 중 늦은 값이다. 원격 게시 시각/다른 소비자 수신은 별도이며 자동 추정하지 않는다.
 - Query: 기준UTC 전에 검증 완료된 원문 버전만 반환. 관측되지 않은 범위/수집만 완료된 상태를 함께 표시.
