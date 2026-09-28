@@ -33,7 +33,10 @@ RunStore 부재로 실패하는 것을 확인하고 구현했다. 추가 반례�
   적용하며 연락헤더를 환경에서만 받는다. recover는 원본 snapshot을 지문별 blob으로
   보존하고 새 완료시각 이후에만 노출한다. 동일관측 중복·내용충돌·원본변조·재복구와
   CLI내보내기 연결을 모의검사했다. 실제 원격수집과195연결은 다음 단계다.
-- [ ] T008 [US2] 실제195import/query와의원문연결·현재검토시각보존·ID충돌반례: tests/integration/test_filing_observations_cli.py.
+- [x] T008 [US2] 실제195import/query와의원문연결·현재검토시각보존·ID충돌반례: tests/integration/test_filing_observations_cli.py.
+  합성원문을199 CLI로 내보낸 뒤195 실제 import_bundle/query_bundle에 연결했다.
+  수집일 조회는 빈결과, 검토시각부터 노출, live_eligible=false, 원문바이트 동일,
+  같은문서ID 거부, 명시적 새ID 정정 후 과거조회 불변을 확인했다. 실공시 해석 검증은 아니다.
 
 ## Phase 5 — US3 원격 누적
 독립검사: 쓰기권한분리·기존파일불변·게시충돌·복구artifact·정기누락범위를확인한다.

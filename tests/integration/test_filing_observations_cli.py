@@ -22,7 +22,8 @@ def run_cli(*args):
 
 def sample_store(root):
     store = RunStore(root, clock=lambda: "2026-09-28T12:00:05Z")
-    raw = b"<html>Offline test evidence</html>"
+    raw = (b"<html>Offline TEST scheduled earnings September 30, 2026 "
+           b"after market close.</html>")
     item = Observation(
         "84dc0271-07f0-41ea-856b-510002131b80", "0000789019",
         "0000789019-26-000001", "primary",
@@ -135,3 +136,56 @@ def test_recovery_command_exports_original_without_review_claim(tmp_path, monkey
     assert result.returncode == 0, result.stderr
     assert (output / "source.bin").read_bytes() == raw
     assert json.loads((output / "metadata.json").read_bytes())["reviewed_event"] is False
+
+
+def test_export_to_existing195_preserves_current_review_time_and_document_identity(tmp_path):
+    from freezegun import freeze_time
+
+    from auto_invest.analytics.earnings_event_inputs import import_bundle, query_bundle
+
+    root = tmp_path / "store"
+    item, raw = sample_store(root)
+    exported = tmp_path / "export"
+    result = run_cli("export", "--store", root, "--observation", item.observation_id,
+                     "--output", exported)
+    assert result.returncode == 0, result.stderr
+    metadata = json.loads((exported / "metadata.json").read_bytes())
+    # Deliberately supplied review of a synthetic fixture, never auto-generated
+    # from an 8-K form or promoted to a research/live candidate.
+    reviewed = {
+        "schema_version": 1, "issuers": [item.issuer_cik],
+        "documents": [{"id": "reviewed-doc-1", "path": "source.bin",
+                       "sha256": metadata["observation"]["blob_sha256"], "url": item.url,
+                       "source_claims": [f"collector receipt {item.observation_id}"]}],
+        "events": [{"id": "reviewed-event-1", "event_key": "fixture-2026-q3",
+                    "issuer_cik": item.issuer_cik, "kind": "scheduled",
+                    "report_period_end": None, "event_date": "2026-09-30",
+                    "time_label": "after_close", "document_id": "reviewed-doc-1",
+                    "evidence_quotes": ["September 30, 2026 after market close."],
+                    "supersedes": None, "symbol": "MSFT", "lineage_status": "unverified"}],
+    }
+    reviewed_path = exported / "reviewed-input.json"
+    reviewed_path.write_text(json.dumps(reviewed))
+    bundle = tmp_path / "reviewed-bundle"
+    with freeze_time("2026-09-29T10:00:00Z"):
+        import_bundle(reviewed_path, bundle)
+    assert query_bundle(bundle, "2026-09-28T12:00:05Z")["events"] == []
+    visible = query_bundle(bundle, "2026-09-29T10:00:00Z")
+    assert len(visible["events"]) == 1
+    assert visible["live_eligible"] is False
+    manifest = json.loads((bundle / "manifest.json").read_bytes())
+    assert manifest["events"][0]["verified_at"].startswith("2026-09-29T10:00:00")
+    assert manifest["documents"][0]["observed_start"].startswith("2026-09-29T10:00:00")
+    assert (bundle / "documents/reviewed-doc-1.html").read_bytes() == raw
+    # Reobserving identical bytes does not authorize reusing a reviewed ID.
+    with freeze_time("2026-09-29T11:00:00Z"), pytest.raises(ValueError, match="duplicate document"):
+        import_bundle(reviewed_path, tmp_path / "collision", previous=bundle)
+    reviewed["documents"][0]["id"] = "reviewed-doc-2"
+    reviewed["events"][0].update(id="reviewed-event-2", document_id="reviewed-doc-2",
+                                 supersedes="reviewed-event-1")
+    reviewed_path.write_text(json.dumps(reviewed))
+    revised = tmp_path / "revised-bundle"
+    with freeze_time("2026-09-29T11:00:00Z"):
+        import_bundle(reviewed_path, revised, previous=bundle)
+    assert query_bundle(revised, "2026-09-29T10:30:00Z")["events"] == visible["events"]
+    assert query_bundle(revised, "2026-09-29T11:00:00Z")["events"][0]["id"] == "reviewed-event-2"
