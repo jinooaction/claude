@@ -2,6 +2,13 @@ name: Collect first-observed public filings
 
 on:
   workflow_dispatch:
+    inputs:
+      source:
+        description: Fixed public source (separate evidence and circuit history)
+        type: choice
+        required: true
+        default: sec
+        options: [sec, microsoft]
   # The initial probe registered this workflow. Further probes are explicit;
   # schedule is enabled only after two verified runs.
 
@@ -14,6 +21,8 @@ concurrency:
 
 env:
   UV_PYTHON: '3.11'
+  OBSERVATION_SOURCE: ${{ inputs.source || 'sec' }}
+  OBSERVATION_BRANCH: ${{ inputs.source == 'microsoft' && 'automation/issuer-observations' || 'automation/filing-observations' }}
 
 jobs:
   collect:
@@ -38,10 +47,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          case "$OBSERVATION_SOURCE" in sec|microsoft) ;; *) exit 2 ;; esac
           gh auth setup-git
           set +e
           git ls-remote --exit-code "https://github.com/${GITHUB_REPOSITORY}.git" \
-            refs/heads/automation/filing-observations > "$RUNNER_TEMP/history-ref"
+            "refs/heads/$OBSERVATION_BRANCH" > "$RUNNER_TEMP/history-ref"
           status=$?
           set -e
           if [[ "$status" == 0 ]]; then
@@ -55,7 +65,7 @@ jobs:
         if: steps.history.outputs.exists == 'true'
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: automation/filing-observations
+          ref: ${{ env.OBSERVATION_BRANCH }}
           path: previous
           persist-credentials: false
       - name: Restore verified working store
@@ -74,12 +84,17 @@ jobs:
         id: collect
         working-directory: code
         env:
-          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+          SEC_USER_AGENT: ${{ inputs.source != 'microsoft' && secrets.SEC_USER_AGENT || '' }}
         run: |
           set -uo pipefail
+          case "$OBSERVATION_SOURCE" in
+            sec) command=collect; config=deploy/filing-observations.json ;;
+            microsoft) command=collect-issuer; config=deploy/issuer-filings.json ;;
+            *) exit 2 ;;
+          esac
           set +e
-          uv run python scripts/filing_observations.py collect \
-            --config deploy/filing-observations.json \
+          uv run python scripts/filing_observations.py "$command" \
+            --config "$config" \
             --store "$RUNNER_TEMP/filing-store" \
             --run-id "actions-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           status=$?
@@ -112,6 +127,7 @@ jobs:
         run: |
           {
             echo '## 공시 관측 결과'
+            echo "출처: $OBSERVATION_SOURCE / 보존 브랜치: $OBSERVATION_BRANCH"
             echo "수집 종료코드: ${COLLECT_STATUS:-미실행}"
             echo "복구 산출물: ${ARTIFACT_URL:-없음}"
             echo '산출물 보존은 90일이며, 별도 게시 성공 전에는 영구 보존 완료가 아닙니다.'
@@ -148,7 +164,7 @@ jobs:
           set -euo pipefail
           gh auth setup-git
           remote="https://github.com/${GITHUB_REPOSITORY}.git"
-          branch=automation/filing-observations
+          branch="$OBSERVATION_BRANCH"
           sidecar="$RUNNER_TEMP/filing-sidecar"
           set +e
           git ls-remote --exit-code "$remote" "refs/heads/$branch" > "$RUNNER_TEMP/publish-ref"

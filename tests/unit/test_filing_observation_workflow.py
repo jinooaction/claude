@@ -68,16 +68,32 @@ def test_deployed_scope_contains_only_public_collection_settings():
 
 
 @pytest.mark.parametrize("collect_code, step_code", [(0, 0), (3, 0), (2, 2)])
-def test_collection_exit_is_recorded_under_github_errexit(tmp_path, collect_code, step_code):
+@pytest.mark.parametrize("source", ["sec", "microsoft"])
+def test_collection_exit_is_recorded_under_github_errexit(
+        tmp_path, collect_code, step_code, source):
     text = WORKFLOW.read_text()
     section = text.split("      - name: Collect within fixed limits\n", 1)[1]
     block = section.split("        run: |\n", 1)[1].split("      - name:", 1)[0]
-    script = "uv() { return \"$TEST_CODE\"; }\n" + "\n".join(
+    script = 'uv() { echo "$*" > "$TEST_ARGS"; return "$TEST_CODE"; }\n' + "\n".join(
         line[10:] for line in block.splitlines())
     output = tmp_path / "outputs"
     environment = dict(os.environ, TEST_CODE=str(collect_code), GITHUB_OUTPUT=str(output),
-                       RUNNER_TEMP=str(tmp_path), GITHUB_RUN_ID="1", GITHUB_RUN_ATTEMPT="1")
+                       RUNNER_TEMP=str(tmp_path), GITHUB_RUN_ID="1", GITHUB_RUN_ATTEMPT="1",
+                       OBSERVATION_SOURCE=source, TEST_ARGS=str(tmp_path / "arguments"))
     result = subprocess.run(["bash", "-e", "-c", script], env=environment,
                             capture_output=True, text=True, timeout=5)
     assert result.returncode == step_code, result.stderr
     assert output.read_text() == f"status={collect_code}\n"
+    arguments = (tmp_path / "arguments").read_text().split()
+    assert arguments[3] == ("collect-issuer" if source == "microsoft" else "collect")
+    assert arguments[5] == ("deploy/issuer-filings.json" if source == "microsoft"
+                            else "deploy/filing-observations.json")
+
+
+def test_fixed_sources_have_separate_history_and_contact_headers():
+    text = WORKFLOW.read_text()
+    assert "options: [sec, microsoft]" in text
+    assert "'automation/issuer-observations' || 'automation/filing-observations'" in text
+    assert "ref: ${{ env.OBSERVATION_BRANCH }}" in text
+    assert 'branch="$OBSERVATION_BRANCH"' in text
+    assert "inputs.source != 'microsoft' && secrets.SEC_USER_AGENT || ''" in text
