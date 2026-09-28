@@ -1013,7 +1013,7 @@ T009/T010과 현재 진단 수집기의 정식 전진 검증 부재는 이 보�
 
 | 항목 | 상태 |
 |------|------|
-| 마지막 main 커밋 | `454877a` — Merge pull request #855 from jinooaction/codex/197-execution-source-identity |
+| 마지막 main 커밋 | `fe046b2a7f359e1b2daa66cfd60c8376c7e61e0d` — Merge pull request #856 from jinooaction/codex/197-release-evidence |
 | main 테스트 | 코드968b387 전체5005 passed/13 skipped(893.46초), 관련114개. 이후 문서만 변경. 생략은 실제KIS12개·가동 전 전용1개. 오프라인 자체 시험 통과·실주문0. |
 | main 린트 | 코드968b387의 `uv run ruff check src tests` 통과. 하네스14/14·인계 사실 검사 통과. |
 | 열린 PR | #827 유료 공급자 초안 보류.196 PR853은 병합 완료; 출시 근거 문서 후속 반영. |

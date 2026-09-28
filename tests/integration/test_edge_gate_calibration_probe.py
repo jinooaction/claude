@@ -25,7 +25,9 @@ def test_calibration_probe_writes_promotable_machine_evidence(tmp_path) -> None:
         check=False,
         capture_output=True,
         text=True,
-        timeout=120,
+        # Keep all 500 repetitions and acceptance checks on slower CI runners.
+        # This bounds the test process, not the calibration or trading contract.
+        timeout=600,
     )
     assert result.returncode == 0, result.stderr
     payload = json.loads(output.read_text(encoding="utf-8"))

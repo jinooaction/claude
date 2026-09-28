@@ -33,7 +33,7 @@
 
 ## Phase 6 — 실제 검증과 인계
 
-- [ ] T011 원격 실행 위치·자료 전송 범위 확인 및 실제 개발/재계산: `specs/198-late-session-research/results.md`.
+- [x] T011 원격 실행 위치·자료 전송 범위 확인 및 실제 개발/재계산: `specs/198-late-session-research/results.md`. 3047c78, 실행 36441780300의 development 작업 성공, 13,784행 일치, 양비용 탈락 보존.
 - [ ] T012 원격 전체 pytest·ruff, 하네스·HANDOFF·PR 품질 검사 기록: `specs/198-late-session-research/results.md`.
 - [ ] T013 PR 병합·필요한 배포 검증·현재 상태 인계: `HANDOFF.md`.
 
