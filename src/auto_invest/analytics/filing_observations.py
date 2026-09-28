@@ -240,10 +240,14 @@ def _publish_file(path: Path, raw: bytes) -> None:
 
 
 def _manifest(value: dict) -> None:
-    _fields(value, {
+    expected = {
         "schema_version", "run_id", "source_commit", "config_sha256", "started_at",
         "ended_at", "previous_run_sha256", "observations", "failures", "coverage", "circuit",
-    })
+    }
+    if isinstance(value, dict) and "recovery_sha256" in value:
+        expected.add("recovery_sha256")
+        _digest(value["recovery_sha256"])
+    _fields(value, expected)
     _require(type(value["schema_version"]) is int and value["schema_version"] == 1,
              "invalid schema version")
     _require(_matches(value["run_id"], r"[A-Za-z0-9][A-Za-z0-9_-]{0,99}"), "invalid run ID")
@@ -302,7 +306,8 @@ class RunStore:
     """
 
     def __init__(self, root: Path, *, clock: Callable[[], str] | None = None,
-                 read_only: bool = False) -> None:
+                 read_only: bool = False, _recovery_depth: int = 0) -> None:
+        self.recovery_depth = _recovery_depth
         self.blobs = BlobStore(root, read_only=read_only)
         self.read_only = read_only
         self.root = self.blobs.root
@@ -335,6 +340,14 @@ class RunStore:
         directory = self.root / "runs"
         _no_symlink(directory)
         children = {}
+        identities = {}
+
+        def register(item):
+            identity = item["observation_id"]
+            receipt = {field.name: item[field.name] for field in fields(Observation)}
+            _require(identity not in identities or identities[identity] == receipt,
+                     "conflicting recovered observation ID")
+            identities[identity] = receipt
         for path in directory.iterdir():
             _no_symlink(path)
             if path.name.startswith(".pending-"):
@@ -349,7 +362,16 @@ class RunStore:
             _require(path.name == f"{manifest['run_id']}.json", "run filename mismatch")
             _require(utc(manifest["ended_at"]) <= utc(envelope["finalized_at"]),
                      "finalization clock reversal")
-            self._receipts(manifest)
+            for receipt in self._receipts(manifest):
+                register(receipt.to_dict())
+            if "recovery_sha256" in manifest:
+                from auto_invest.analytics.filing_recovery import recovery_view
+
+                recovered = recovery_view(self, manifest["recovery_sha256"])
+                for item in recovered["observations"]:
+                    register(item)
+                _require(all(utc(item["finalized_at"]) <= utc(manifest["started_at"])
+                             for item in recovered["runs"]), "recovery clock reversal")
             parent = manifest["previous_run_sha256"]
             _require(parent not in children, "forked run chain")
             children[parent] = {**envelope, "sha256": _hash(raw)}
@@ -373,10 +395,8 @@ class RunStore:
         """Publish a run after all referenced bytes verify; never rewrite an ID."""
         _require(not self.read_only, "read-only run store")
         manifest = json.loads(_encode(manifest))
-        _fields(manifest, {
-            "schema_version", "run_id", "source_commit", "config_sha256", "started_at",
-            "ended_at", "previous_run_sha256", "observations", "failures", "coverage", "circuit",
-        })
+        _require(isinstance(manifest, dict) and "observations" in manifest,
+                 "missing manifest fields")
         _require(manifest["observations"] == [], "caller cannot inject receipt references")
         manifest["observations"] = [{"observation_id": item.observation_id,
                                      "sha256": _hash(_encode(item.to_dict()))}
@@ -390,7 +410,13 @@ class RunStore:
         if runs:
             _require(utc(runs[-1]["finalized_at"]) <= utc(manifest["started_at"]),
                      "cross-run clock reversal")
+        existing = {}
+        if runs and ("recovery_sha256" in manifest or any(
+                "recovery_sha256" in run["manifest"] for run in runs)):
+            existing = {item["observation_id"]: item
+                        for item in self.query(runs[-1]["finalized_at"])["observations"]}
         for item in observations:
+            _require(item.observation_id not in existing, "duplicate recovered observation ID")
             _require(utc(manifest["started_at"]) <= utc(item.requested_at)
                      <= utc(item.verified_at) <= utc(manifest["ended_at"]),
                      "receipt outside run interval")
@@ -399,6 +425,17 @@ class RunStore:
             _publish_file(self.root / "observations" / f"{item.observation_id}.json",
                           _encode(item.to_dict()))
         self._receipts(manifest)
+        if "recovery_sha256" in manifest:
+            from auto_invest.analytics.filing_recovery import recovery_view
+
+            recovered = recovery_view(self, manifest["recovery_sha256"])
+            for item in recovered["observations"]:
+                old = existing.get(item["observation_id"])
+                _require(old is None or all(old[field.name] == item[field.name]
+                                           for field in fields(Observation)),
+                         "conflicting recovered observation ID")
+            _require(all(utc(item["finalized_at"]) <= utc(manifest["started_at"])
+                         for item in recovered["runs"]), "recovery clock reversal")
         finalized = self.clock()
         _require(utc(manifest["ended_at"]) <= utc(finalized), "finalization clock reversal")
         raw = _encode({"manifest": manifest, "manifest_sha256": _hash(_encode(manifest)),
@@ -408,7 +445,17 @@ class RunStore:
 
     def query(self, as_of: str) -> dict:
         cutoff = utc(as_of)
-        runs, observations = [], []
+        runs, observations, recovered_runs = [], [], []
+        seen = {}
+
+        def add(item):
+            identity = item["observation_id"]
+            receipt = {field.name: item[field.name] for field in fields(Observation)}
+            if identity in seen:
+                _require(seen[identity] == receipt, "conflicting recovered observation ID")
+                return
+            seen[identity] = receipt
+            observations.append(item)
         for run in self.verify():
             if utc(run["finalized_at"]) > cutoff:
                 continue
@@ -416,7 +463,15 @@ class RunStore:
             runs.append(run)
             for item in self._receipts(manifest):
                 if utc(item.verified_at) <= cutoff:
-                    observations.append({**item.to_dict(), "run_id": manifest["run_id"],
-                                         "available_at": run["finalized_at"]})
+                    add({**item.to_dict(), "run_id": manifest["run_id"],
+                         "available_at": run["finalized_at"]})
+            if "recovery_sha256" in manifest:
+                from auto_invest.analytics.filing_recovery import recovery_view
+
+                recovered = recovery_view(self, manifest["recovery_sha256"])
+                recovered_runs.extend(recovered["runs"] + recovered["recovered_runs"])
+                for item in recovered["observations"]:
+                    add({**item, "recovered_from_run_id": item["run_id"],
+                         "run_id": manifest["run_id"], "available_at": run["finalized_at"]})
         return {"as_of": as_of, "scope": "collector_local_observation_only",
-                "observations": observations, "runs": runs}
+                "observations": observations, "runs": runs, "recovered_runs": recovered_runs}

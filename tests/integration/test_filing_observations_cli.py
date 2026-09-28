@@ -114,3 +114,24 @@ def test_query_cannot_write_inside_store(tmp_path):
     assert result.returncode == 2
     assert "Filing operation refused:" in result.stderr
     assert not (root / "runs/poison.json").exists()
+
+
+def test_recovery_command_exports_original_without_review_claim(tmp_path, monkeypatch, capsys):
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("filing_cli", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    monkeypatch.setattr(module, "source_commit", lambda: "a" * 40)
+    artifact = tmp_path / "artifact"
+    item, raw = sample_store(artifact)
+    store = tmp_path / "store"
+    assert module.main(["recover", "--store", str(store), "--artifact", str(artifact),
+                        "--run-id", "recovered"]) == 0
+    assert json.loads(capsys.readouterr().out)["new_network_observations"] == 0
+    output = tmp_path / "exported"
+    result = run_cli("export", "--store", store, "--observation", item.observation_id,
+                     "--output", output)
+    assert result.returncode == 0, result.stderr
+    assert (output / "source.bin").read_bytes() == raw
+    assert json.loads((output / "metadata.json").read_bytes())["reviewed_event"] is False

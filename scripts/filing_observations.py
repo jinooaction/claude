@@ -6,11 +6,13 @@ import json
 import os
 import subprocess
 import sys
+from dataclasses import fields
 from pathlib import Path
 
 import httpx
 
-from auto_invest.analytics.filing_observations import RunStore
+from auto_invest.analytics.filing_observations import Observation, RunStore
+from auto_invest.analytics.filing_recovery import recover
 from auto_invest.market_data.filing_collector import Collector, Scope, _json
 
 
@@ -28,12 +30,14 @@ def external_output(store: RunStore, path: Path) -> None:
 def export_observation(store: RunStore, identity: str, output: Path) -> dict:
     external_output(store, output)
     selected = None
-    for run in store.verify():
-        for reference in run["manifest"]["observations"]:
-            if reference["observation_id"] == identity:
-                for receipt in store._receipts(run["manifest"]):
-                    if receipt.observation_id == identity:
-                        selected = receipt, run
+    runs = store.verify()
+    if runs:
+        for item in store.query(runs[-1]["finalized_at"])["observations"]:
+            if item["observation_id"] == identity:
+                receipt = Observation.from_dict({field.name: item[field.name]
+                                                 for field in fields(Observation)})
+                run = next(run for run in runs if run["manifest"]["run_id"] == item["run_id"])
+                selected = receipt, run
     if selected is None or selected[0].source_kind != "primary":
         raise ValueError("completed primary observation required")
     receipt, run = selected
@@ -52,6 +56,26 @@ def export_observation(store: RunStore, identity: str, output: Path) -> dict:
     return {"exported": True, "observation_id": identity, "reviewed_event": False}
 
 
+def source_commit() -> str:
+    repository = Path(__file__).resolve().parents[1]
+    subprocess.run(["git", "-C", str(repository), "diff", "--quiet", "HEAD"],
+                   check=True, capture_output=True, timeout=10)
+    return subprocess.check_output(
+        ["git", "-C", str(repository), "rev-parse", "HEAD"], text=True, timeout=10).strip()
+
+
+def recover_command(args) -> dict:
+    commit = source_commit()
+    store = RunStore(args.store)
+    descriptor = os.open(store.root / ".collector.lock", os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW,
+                         0o600)
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return recover(store, args.artifact, run_id=args.run_id, source_commit=commit)
+    finally:
+        os.close(descriptor)
+
+
 def collect(args) -> tuple[dict, int]:
     user_agent = os.environ.get("SEC_USER_AGENT", "")
     if (not 5 <= len(user_agent) <= 256 or "@" not in user_agent
@@ -62,11 +86,7 @@ def collect(args) -> tuple[dict, int]:
     if len(raw) > 65536:
         raise ValueError("scope file size limit exceeded")
     scope = Scope.from_dict(_json(raw))
-    repository = Path(__file__).resolve().parents[1]
-    subprocess.run(["git", "-C", str(repository), "diff", "--quiet", "HEAD"],
-                   check=True, capture_output=True, timeout=10)
-    commit = subprocess.check_output(
-        ["git", "-C", str(repository), "rev-parse", "HEAD"], text=True, timeout=10).strip()
+    commit = source_commit()
     store = RunStore(args.store)
     # The lock spans initial chain verification, collection, and publication.
     # Keep the inode: unlinking a flock file can split concurrent writers.
@@ -85,11 +105,14 @@ def collect(args) -> tuple[dict, int]:
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    for name in ("collect", "verify", "query", "export"):
+    for name in ("collect", "verify", "query", "export", "recover"):
         command = commands.add_parser(name)
         command.add_argument("--store", type=Path, required=True)
         if name == "collect":
             command.add_argument("--config", type=Path, required=True)
+            command.add_argument("--run-id", required=True)
+        elif name == "recover":
+            command.add_argument("--artifact", type=Path, required=True)
             command.add_argument("--run-id", required=True)
         elif name == "query":
             command.add_argument("--as-of", required=True)
@@ -102,6 +125,8 @@ def main(argv=None):
         status = 0
         if args.command == "collect":
             result, status = collect(args)
+        elif args.command == "recover":
+            result = recover_command(args)
         else:
             store = RunStore(args.store, read_only=True)
             if args.command == "verify":
