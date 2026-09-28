@@ -52,6 +52,9 @@ X(측정에 근거한 개선)는 과거 실패와 누적 시도 수 보존.
 - `scripts/late_session_probe.py`: develop/verify, 깨끗한 코드·새 출력·과거 코드 연결.
 - `tests/unit/test_late_session_intraday.py`: 시간·누락·미래 불변·비용·미청산 반례.
 - `tests/integration/test_late_session_cli.py`: 계약·입력·출력·재계산 경계.
+- `.github/workflows/intraday-research-checks.yml`: 관련 PR의 정확한 head 커밋에서
+  잠금 의존성 설치·전체 pytest·ruff. 읽기 권한만 있고 증권사 비밀값·SSH·배포 단계가 없다.
+  동일 PR의 새 커밋은 이전 검사만 취소하며 실행 제한은 40분이다.
 
 ## Design and Verification
 
@@ -68,6 +71,10 @@ X(측정에 근거한 개선)는 과거 실패와 누적 시도 수 보존.
 6. 가벼운 표적 검사 후 원격 CI/연구 환경에서 전체 pytest·ruff·실자료 재생을 수행한다.
    실행 위치 확인 전 대규모 자료를 임의 업로드하지 않는다. 커밋·명령·종료 코드를 남긴다.
 7. 하네스·HANDOFF·PR 검사 후 완성 시 병합한다. 배포 증거 없이 배포 완료라 쓰지 않는다.
+
+원격 검증 추가는 기존 검증을 제거하지 않는다. 관련 파일·의존성 변경에만 반응하며,
+문제 발생 시 이 워크플로 변경을 되돌리고 전체 검증 미완료 상태를 유지한다.
+새로운 클라우드 상품 가입·유료 자료 구매·별도 서버 생성은 하지 않는다.
 
 ## Complexity Tracking
 

@@ -7,29 +7,29 @@
 
 ## Phase 2 — 공통 기반
 
-- [ ] T003 고정 계약·manifest 검사와 후보 정체성 구현: `src/auto_invest/analytics/late_session_intraday.py`.
+- [x] T003 고정 계약·manifest 검사와 후보 정체성 구현: `src/auto_invest/analytics/late_session_intraday.py`.
 
 ## Phase 3 — US1 시각이 정확한 단일 신호
 
 독립 검사: 정상장·반일장·휴일·동일가·입력 누락·미래 변경 반례로 신호를 확인한다.
 
-- [ ] T004 [US1] 시간·전일·누락·미래 불변 시험: `tests/unit/test_late_session_intraday.py`.
-- [ ] T005 [US1] 직전 종가·두 관측 시점의 신호 계산: `src/auto_invest/analytics/late_session_intraday.py`.
-- [ ] T006 [US1] 별도 계열·매핑 범위·매수 시도 제한 연결과 기존 계열 회귀: `src/auto_invest/analytics/intraday_paper_challenger.py`.
+- [x] T004 [US1] 시간·전일·누락·미래 불변 시험: `tests/unit/test_late_session_intraday.py`.
+- [x] T005 [US1] 직전 종가·두 관측 시점의 신호 계산: `src/auto_invest/analytics/late_session_intraday.py`.
+- [x] T006 [US1] 별도 계열·매핑 범위·매수 시도 제한 연결과 기존 계열 회귀: `src/auto_invest/analytics/intraday_paper_challenger.py`.
 
 ## Phase 4 — US2 비용과 미체결 판정
 
 독립 검사: 미체결 매수·부분 청산·마지막 봉 유동성 부족을 장부와 판정에서 확인한다.
 
-- [ ] T007 [US2] 두 비용·시도·청산 잔여 수량 시험: `tests/unit/test_late_session_intraday.py`.
-- [ ] T008 [US2] 준비 1일·평가 1,644일·기존 통과 기준·한계 보고 구현: `src/auto_invest/analytics/late_session_intraday.py`.
+- [x] T007 [US2] 두 비용·시도·청산 잔여 수량 시험: `tests/unit/test_late_session_intraday.py`.
+- [x] T008 [US2] 준비 1일·평가 1,644일·기존 통과 기준·한계 보고 구현: `src/auto_invest/analytics/late_session_intraday.py`.
 
 ## Phase 5 — US3 원자료로 재현
 
 독립 검사: 자료·계약·장부·판정 변조, 잘못된 입력·출력 거부와 원자료 재계산.
 
-- [ ] T009 [US3] 명령·변조·최종 확인 미접근 시험: `tests/integration/test_late_session_cli.py`.
-- [ ] T010 [US3] develop/verify·깨끗한 코드·새 출력·재계산 구현: `scripts/late_session_probe.py`.
+- [x] T009 [US3] 명령·변조·최종 확인 미접근 시험: `tests/integration/test_late_session_cli.py`.
+- [x] T010 [US3] develop/verify·깨끗한 코드·새 출력·재계산 구현: `scripts/late_session_probe.py`.
 
 ## Phase 6 — 실제 검증과 인계
 
