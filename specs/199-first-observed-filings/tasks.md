@@ -47,10 +47,10 @@ RunStore 부재로 실패하는 것을 확인하고 구현했다. 추가 반례�
 - [ ] T011 [US3] 원격실제수집2회·기존원문불변·복구/재조회·195연결 확인: specs/199-first-observed-filings/results.md.
 
 ## Phase 6 — Validation and handoff
-- [ ] T012 정확한PR커밋 원격전체pytest/ruff 워크플로 연결·성공확인: .github/workflows/filing-observation-checks.yml.
+- [x] T012 정확한PR커밋 원격전체pytest/ruff 워크플로 연결·성공확인: .github/workflows/filing-observation-checks.yml.
   35c345d 정확한커밋은 run36459472345에서5131 passed/13 skipped와전체lint를 통과했다.
-  이후 실제전달 결함 보정의 최신커밋 전체검사는 별도로 확인한다.
-- [ ] T013 하네스·인계·PR품질검사와실제검증근거기록: specs/199-first-observed-filings/results.md.
+  실제전달 결함 보정7951980도 run36493749383에서5134 passed/13 skipped·전체lint를 통과했다.
+- [x] T013 하네스·인계·PR품질검사와실제검증근거기록: specs/199-first-observed-filings/results.md.
 - [ ] T014 병합·필요배포·정기수집첫실행/영구보존확인 및남은전체목표인계: HANDOFF.md.
 
 ## Dependencies and strategy

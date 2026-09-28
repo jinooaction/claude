@@ -95,3 +95,32 @@
 - 후속 관련검사123개가2.80초에 통과했다. 실제artifact를 다시 내려받아 구조복원·검증했으며
   원격완료기록 지문98c58f0a5607bdd765dbc3b4cbc48f6425b701b914a46482ddfd9fea23850649가
   복사후에도 동일했다. 하네스14/14, HANDOFF별도검사, 변경파일lint·diff공백검사 통과.
+
+## 보정 코드 검증·원격 보존·복구
+
+- 보정7951980efbf624686bb4241bdf28fc6679aa724c의 원격전체검사36493749383/
+  job109168346926는22:57:03Z 성공.5134 passed/13 skipped(993.10초), 전체lint통과.
+  생략은실제KIS연결12개와가동전전용1개이며 실주문·수집성공을뜻하지않는다.
+- 첫실패완료기록을지문그대로 automation/filing-observations의3d7b510에보존했다.
+  냉각후재실행36493778484는다시목록403,성공관측0,실패1이었다.
+  게시job109168521144는성공했다. 이전파일바이트불변,부모지문연결,완료기록2개검증통과.
+  두번째완료지문6aa65008a3710f1cc4e18ec4964ae0049deb999d7314110c43d780fcbde90497.
+- 실제두기록artifact를새복구표지로보존했다. 복구전조회0건/복구후회복기록2건/관측0건.
+  복구지문88b5d336a09003daaa57ef3d4e0753c5522b15f65e60fe79fd40f783cbe38a37,
+  완료지문28ba894d3f19c5efcbcbafb87aa4f1566ae8dc21ec0c4a793ab80f11eb08b41c.
+  실제자료는 /Users/mason/Projects/claude-data-research/199-recovery-proof 에보존했다.
+- T011의실제성공원문2회·199에서195원문연결은미완료다. 정기수집과병합을활성화하지않았다.
+
+## 공식 회사 자료 대안
+
+- Microsoft공식뉴스룸의 https://news.microsoft.com/source/2026/07/29/microsoft-cloud-and-ai-strength-fuels-fourth-quarter-results-4/
+  를단일제한요청으로확보했다.HTTP200/169221bytes,
+  sha256 ca0d69f07dc2aee72cdf7ade09b3789542355fe8c9bfc945dfd3d95e0a99224c.
+- 요청/수신22:42:40.870319~22:42:41.348861Z,195실제가져오기22:43:21.375111Z.
+  현재조회1건/과거2026-07-30조회0건/live_eligible=false확인. SEC성공으로대체하지않는다.
+- 페이지가직접선언한RSS https://news.microsoft.com/source/feed/ 는21749bytes/10개항목,
+  sha256 5e78ffa3e0a27acd6323215caf8fa43cfb4de61b48a3df3eabd74e73a047c43a.
+  외부LinkedIn링크와일반뉴스를포함하며7월실적발표문은현재목록에없다. 전체실적목록이아니다.
+- 보존위치 /Users/mason/Projects/claude-data-research/199-microsoft-official-alternative 의
+  source.html,receipt.json,reviewed-input.json,bundle,두조회JSON,feed.xml,assessment.md.
+  새무인수집이나과거가용시각증거는없다. 다음구현전고정공식범위와누락계약부터명세화한다.
