@@ -129,14 +129,19 @@ class BlobStore:
     evidence: completed run manifests will supply the visibility boundary.
     """
 
-    def __init__(self, root: Path, *, max_bytes: int = MAX_BYTES) -> None:
+    def __init__(self, root: Path, *, max_bytes: int = MAX_BYTES,
+                 read_only: bool = False) -> None:
         self.root = Path(root).absolute()
         _no_symlink(self.root)
         _require(type(max_bytes) is int and 0 < max_bytes <= MAX_BYTES, "invalid size limit")
         self.max_bytes = max_bytes
+        self.read_only = read_only
         self.directory = self.root / "blobs"
         _no_symlink(self.directory)
-        self.directory.mkdir(parents=True, exist_ok=True)
+        if read_only:
+            _require(self.directory.is_dir(), "missing blob directory")
+        else:
+            self.directory.mkdir(parents=True, exist_ok=True)
 
     def read(self, digest: str) -> bytes:
         _digest(digest)
@@ -150,6 +155,7 @@ class BlobStore:
         return raw
 
     def put(self, raw: bytes) -> str:
+        _require(not self.read_only, "read-only blob store")
         _require(isinstance(raw, bytes) and len(raw) <= self.max_bytes,
                  "blob size or type invalid")
         digest = hashlib.sha256(raw).hexdigest()
@@ -295,14 +301,19 @@ class RunStore:
     an entire history; remote append-only publication supplies that anchor.
     """
 
-    def __init__(self, root: Path, *, clock: Callable[[], str] | None = None) -> None:
-        self.blobs = BlobStore(root)
+    def __init__(self, root: Path, *, clock: Callable[[], str] | None = None,
+                 read_only: bool = False) -> None:
+        self.blobs = BlobStore(root, read_only=read_only)
+        self.read_only = read_only
         self.root = self.blobs.root
         self.clock = clock or (lambda: datetime.now(UTC).isoformat().replace("+00:00", "Z"))
         for name in ("runs", "observations"):
             path = self.root / name
             _no_symlink(path)
-            path.mkdir(exist_ok=True)
+            if read_only:
+                _require(path.is_dir(), "missing evidence directory")
+            else:
+                path.mkdir(exist_ok=True)
 
     def _receipts(self, manifest: dict) -> list[Observation]:
         result = []
@@ -360,6 +371,7 @@ class RunStore:
 
     def publish(self, manifest: dict, observations: list[Observation]) -> str:
         """Publish a run after all referenced bytes verify; never rewrite an ID."""
+        _require(not self.read_only, "read-only run store")
         manifest = json.loads(_encode(manifest))
         _fields(manifest, {
             "schema_version", "run_id", "source_commit", "config_sha256", "started_at",

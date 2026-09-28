@@ -28,6 +28,9 @@ RunStore 부재로 실패하는 것을 확인하고 구현했다. 추가 반례�
 ## Phase 4 — US2 과거 조회와 기존195연결
 독립검사: 정정/실패를추가해도과거조회불변, 수신완료만으로조기노출0건.
 - [ ] T007 [US2] collect/verify/query/export/recover CLI와 새출력검사 구현: scripts/filing_observations.py.
+  진행: collect/verify/query/export 연결. 읽기 전용 검증·조회는 저장소 생성/변경을
+  금지하고 출력 덮어쓰기를 거부한다. collect는 전체 작업에 단일작성자 파일잠금을
+  적용하며 연락헤더를 환경에서만 받는다. recover는 아직 미구현이므로 T007은 미완료다.
 - [ ] T008 [US2] 실제195import/query와의원문연결·현재검토시각보존·ID충돌반례: tests/integration/test_filing_observations_cli.py.
 
 ## Phase 5 — US3 원격 누적
