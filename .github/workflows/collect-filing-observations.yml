@@ -82,6 +82,12 @@ jobs:
               --source "$GITHUB_WORKSPACE/previous/store" \
               --destination "$RUNNER_TEMP/filing-store"
           fi
+      - name: Reserve retained capacity before network collection
+        working-directory: code
+        run: |
+          set -euo pipefail
+          uv run python scripts/filing_publication.py --mode capacity \
+            --source "$RUNNER_TEMP/filing-store"
       - name: Collect within fixed limits
         id: collect
         working-directory: code
@@ -106,11 +112,17 @@ jobs:
       - name: Validate clean artifact tree
         id: stage
         working-directory: code
+        env:
+          HISTORY_EXISTS: ${{ steps.history.outputs.exists }}
         run: |
           set -euo pipefail
-          uv run python scripts/filing_publication.py \
+          base=()
+          if [[ "$HISTORY_EXISTS" == true ]]; then
+            base=(--base "$GITHUB_WORKSPACE/previous/store")
+          fi
+          uv run python scripts/filing_publication.py --mode pack-delta "${base[@]}" \
             --source "$RUNNER_TEMP/filing-store" \
-            --destination "$RUNNER_TEMP/filing-backup/store"
+            --destination "$RUNNER_TEMP/filing-backup/delta"
           echo 'ready=true' >> "$GITHUB_OUTPUT"
       - name: Retain recovery artifact before publication
         id: backup
@@ -133,6 +145,8 @@ jobs:
             echo "수집 종료코드: ${COLLECT_STATUS:-미실행}"
             echo "복구 산출물: ${ARTIFACT_URL:-없음}"
             echo '산출물 보존은 90일이며, 별도 게시 성공 전에는 영구 보존 완료가 아닙니다.'
+            echo '복구 산출물은 증분입니다. delta.json의 기준 지문과 일치하는 기존 브랜치 자료도 필요합니다.'
+            echo '누적 원문 한도는 512MiB이며 매 수집 전 64MiB 여유를 확인합니다. 기존 자료는 자동 삭제하지 않습니다.'
             echo '0=범위 내 성공, 3=실패/미관측 범위 있음, 2=계약·저장 거부.'
           } >> "$GITHUB_STEP_SUMMARY"
           exit "${COLLECT_STATUS:-2}"
@@ -180,9 +194,9 @@ jobs:
           else
             exit "$status"
           fi
-          uv run python scripts/filing_publication.py \
+          uv run python scripts/filing_publication.py --mode apply-delta \
             --restore-layout \
-            --source "$GITHUB_WORKSPACE/retained/store" --destination "$sidecar/store"
+            --source "$GITHUB_WORKSPACE/retained/delta" --destination "$sidecar/store"
           git -C "$sidecar" config user.name filing-observation-bot
           git -C "$sidecar" config user.email filing-observation-bot@noreply.github.com
           git -C "$sidecar" add -- store

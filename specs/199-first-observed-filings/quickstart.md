@@ -23,3 +23,14 @@ events는 실제 원문을 검토한 주장·근거 인용으로 따로 작성�
 
 자동 검사 `test_export_to_existing195_preserves_current_review_time_and_document_identity`는
 이 연결을 합성원문으로 재현한다. 실제 SEC원문 검토, 수익성, 역사전체성, 거래자격의 증거는 아니다.
+
+## 증분 산출물 복구
+
+새artifact의delta폴더는독립전체사본이아니다. delta.json의base_sha256과일치하는기존
+브랜치자료를먼저준비하고filing_publication.py --mode apply-delta --restore-layout
+--source DELTA --destination STORE를실행한다. 기준불일치면수정/우회하지말고해당기준을찾는다.
+빈기준은최초실행만가능하다. 전체목록지문/원문/완료연결검증전에는대상원문을추가하지않는다.
+이미같은증분이게시된경우에는검증후추가0건이다. 기존전체artifact는기존stage/recover경로를쓴다.
+
+누적원문512MiB 또는100000파일한도에서다음실행64MiB/32파일여유가없으면HTTP전에중단한다.
+기존파일을삭제하거나한도를자동증액하지않는다. 실행실패와복구기준을확인하고별도보존계획을세운다.

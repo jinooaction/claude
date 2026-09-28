@@ -189,3 +189,19 @@ def test_delta_rejects_other_base_and_size_excess(tmp_path, monkeypatch):
     with pytest.raises(ValueError, match="size"):
         module.apply_delta(delta, tmp_path / "refused")
     assert not (tmp_path / "refused").exists()
+
+
+def test_capacity_reserves_next_run_without_modifying_history(tmp_path, monkeypatch):
+    module = publisher()
+    missing = tmp_path / "missing"
+    assert module.check_capacity(missing)["retained_bytes"] == 0
+    assert not missing.exists()
+    source, _ = empty_run(tmp_path / "source")
+    before = module.inventory(source.root)
+    size = module.check_capacity(source.root)["retained_bytes"]
+    monkeypatch.setattr(module, "STORE_MAX_BYTES", size + module.DELTA_MAX_BYTES)
+    assert module.check_capacity(source.root)["capacity_available"]
+    monkeypatch.setattr(module, "STORE_MAX_BYTES", size + module.DELTA_MAX_BYTES - 1)
+    with pytest.raises(ValueError, match="capacity"):
+        module.check_capacity(source.root)
+    assert module.inventory(source.root) == before

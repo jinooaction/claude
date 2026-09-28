@@ -19,6 +19,22 @@ from auto_invest.analytics.filing_observations import (
 from auto_invest.analytics.filing_recovery import _allowed
 
 DELTA_MAX_BYTES = 64 * 1024 * 1024
+STORE_MAX_BYTES = 512 * 1024 * 1024
+STORE_MAX_FILES = 100_000
+RUN_FILE_RESERVE = 32
+
+
+def check_capacity(source: Path) -> dict:
+    """Reserve one bounded run before any HTTP request; never prune old evidence."""
+    _no_symlink(source)
+    items = inventory(source) if source.exists() else {}
+    size = sum((source / name).stat().st_size for name in items)
+    _require(size + DELTA_MAX_BYTES <= STORE_MAX_BYTES
+             and len(items) + RUN_FILE_RESERVE <= STORE_MAX_FILES,
+             "retained store capacity exhausted")
+    return {"capacity_available": True, "retained_bytes": size,
+            "retained_files": len(items), "maximum_bytes": STORE_MAX_BYTES,
+            "reserved_bytes": DELTA_MAX_BYTES}
 
 
 def inventory_digest(items: dict[str, str]) -> str:
@@ -206,18 +222,26 @@ def stage(source: Path, destination: Path, *, restore_layout: bool = False) -> d
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", type=Path, required=True)
-    parser.add_argument("--destination", type=Path, required=True)
-    parser.add_argument("--mode", choices=("stage", "pack-delta", "apply-delta"), default="stage")
+    parser.add_argument("--destination", type=Path)
+    parser.add_argument("--mode", choices=("stage", "pack-delta", "apply-delta", "capacity"),
+                        default="stage")
     parser.add_argument("--base", type=Path, help="Verified previous store for delta packing")
     parser.add_argument("--restore-layout", action="store_true",
                         help="Recreate structural empty directories lost during transport only")
     args = parser.parse_args()
     try:
         _require(args.base is None or args.mode == "pack-delta", "base requires packing")
-        _require(not args.restore_layout or args.mode == "stage", "layout requires staging")
-        if args.mode == "pack-delta":
+        _require((args.destination is None) == (args.mode == "capacity"),
+                 "destination required except for capacity check")
+        _require(not args.restore_layout or args.mode in {"stage", "apply-delta"},
+                 "layout requires staging or delta application")
+        if args.mode == "capacity":
+            result = check_capacity(args.source)
+        elif args.mode == "pack-delta":
             result = pack_delta(args.source, args.base, args.destination)
         elif args.mode == "apply-delta":
+            if args.restore_layout and args.destination.exists():
+                restore_transport_layout(args.destination)
             result = apply_delta(args.source, args.destination)
         else:
             result = stage(args.source, args.destination, restore_layout=args.restore_layout)

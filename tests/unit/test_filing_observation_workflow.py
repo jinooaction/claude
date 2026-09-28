@@ -106,3 +106,13 @@ def test_schedule_collects_only_verified_issuer_without_sec_contact():
     assert "(github.event_name == 'schedule' || inputs.source == 'microsoft')" in text
     assert ("github.event_name == 'workflow_dispatch' && inputs.source == 'sec' "
             "&& secrets.SEC_USER_AGENT || ''") in text
+
+
+def test_capacity_precedes_http_and_backup_requires_verified_base():
+    text = WORKFLOW.read_text()
+    assert text.index("--mode capacity") < text.index("      - name: Collect within fixed limits")
+    assert '--base "$GITHUB_WORKSPACE/previous/store"' in text
+    assert '--destination "$RUNNER_TEMP/filing-backup/delta"' in text
+    assert '--source "$GITHUB_WORKSPACE/retained/delta"' in text
+    assert "--mode apply-delta" in text
+    assert "--mode pack-delta" in text
