@@ -3,6 +3,10 @@
 명령 구현과 표적 시험을 마쳤다. 실제 재생은 계약·코드 커밋 뒤 실행한다.
 전체 테스트·가격 재생은 Mac 자원을 점유하지 않는 원격 실행 위치를 먼저 확인한다.
 
+원격 CI는 `research-fixtures/198/README.md`에 출처를 표시한 고정 개발 묶음을
+`scripts/unpack_late_session_input.py --output-dir <새입력폴더>`로 검증·복원한다.
+다섯 종목의 2013-08-23~2020-03-06 자료만 있으며 계좌·최종 확인 자료는 없다.
+
 ```sh
 uv run python scripts/late_session_probe.py develop --bars-dir <개발자료폴더> --manifest <고정manifest> --output-dir <새결과폴더>
 uv run python scripts/late_session_probe.py verify --bars-dir <동일개발자료폴더> --manifest <동일manifest> --evidence <결과폴더>

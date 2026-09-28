@@ -40,3 +40,17 @@
 **Alternatives considered**: noise_band 이름으로 새 가설을 숨기지 않고 late_session을 추가한다.
 새 의존성과 외부 API는 필요 없다. 무거운 전체 검증은 사용자 Mac 대신 원격 CI의
 정확한 커밋 결과를 확인한다. 실제 재생도 자원을 분리한 실행 위치부터 확인한다.
+
+## 원격 계산용 개발 자료 전달
+
+**Decision**: 사전등록 개발 파일만 출처를 표시한 압축 검증 자료로 제공한다.
+**Rationale**: 공급자 [license](https://hfdatalibrary.com/pages/license)는 CC BY 4.0의
+범위에 2022년 이전 자료를 명시한다. [cite](https://hfdatalibrary.com/pages/cite)는
+그 구간의 원천을 PiTrading으로 구분한다. 2026-09-28 UTC 본문을 확인했다.
+**Alternatives considered**: 운영 서버의 제한 명령을 우회하지 않는다. 기존 SSH
+원격 Mac은 접속 시도에서 시간 초과였다. 로그인 화면을 조작하거나 현재 Mac에서
+대량 연구 계산을 실행하지 않고 기존 GitHub CI에서 처리한다.
+
+입력 준비는 기존 5개 CSV의 지문·7개 필드·날짜 범위·행 수를 검사하고 압축 포장만
+했다. 각 127,734행, 총 638,670행이며 전략 성과 계산은 수행하지 않았다.
+후보 결과에 따라 구간이나 파일을 바꾸지 않도록 원본 manifest 바이트를 유지한다.

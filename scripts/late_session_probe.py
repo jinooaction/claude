@@ -14,7 +14,8 @@ from auto_invest.analytics import late_session_intraday as research
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = ROOT / "specs/198-late-session-research/contracts/preregistration.json"
 PRIOR = ROOT / "specs/177-intraday-paper-challenger/contracts/intraday-preregistration.json"
-SOURCE_PATHS = ["src", "scripts/late_session_probe.py", "pyproject.toml", "uv.lock",
+SOURCE_PATHS = ["src", "scripts/late_session_probe.py", "scripts/unpack_late_session_input.py",
+                "pyproject.toml", "uv.lock",
                 str(CONTRACT.relative_to(ROOT)), str(PRIOR.relative_to(ROOT))]
 
 

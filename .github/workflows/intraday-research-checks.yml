@@ -7,8 +7,11 @@ on:
       - 'src/auto_invest/analytics/late_session_intraday.py'
       - 'src/auto_invest/analytics/intraday_paper_challenger.py'
       - 'scripts/late_session_probe.py'
+      - 'scripts/unpack_late_session_input.py'
+      - 'research-fixtures/198/**'
       - 'tests/unit/test_late_session_intraday.py'
       - 'tests/integration/test_late_session_cli.py'
+      - 'tests/integration/test_late_session_input.py'
       - 'specs/198-late-session-research/**'
       - '.github/workflows/intraday-research-checks.yml'
       - 'pyproject.toml'
@@ -42,6 +45,48 @@ jobs:
       - name: Record tested source
         run: git rev-parse HEAD
       - name: Lint source and tests
-        run: uv run ruff check src tests scripts/late_session_probe.py
+        run: uv run ruff check src tests scripts/late_session_probe.py scripts/unpack_late_session_input.py
       - name: Full regression without broker credentials
         run: uv run pytest
+
+  development:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      KIS_LIVE_TEST: '0'
+      UV_PYTHON: '3.11'
+    steps:
+      - name: Checkout exact candidate source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86
+      - name: Install locked dependencies
+        run: uv sync --locked --dev
+      - name: Restore authenticated development input
+        run: uv run python scripts/unpack_late_session_input.py --output-dir "$RUNNER_TEMP/late-session-input"
+      - name: Evaluate fixed candidate
+        run: |
+          uv run python scripts/late_session_probe.py develop \
+            --bars-dir "$RUNNER_TEMP/late-session-input" \
+            --manifest "$RUNNER_TEMP/late-session-input/manifest.json" \
+            --output-dir "$RUNNER_TEMP/late-session-result"
+      - name: Replay from input and verify all evidence
+        run: |
+          uv run python scripts/late_session_probe.py verify \
+            --bars-dir "$RUNNER_TEMP/late-session-input" \
+            --manifest "$RUNNER_TEMP/late-session-input/manifest.json" \
+            --evidence "$RUNNER_TEMP/late-session-result"
+      - name: Print development verdict and limitations
+        run: cat "$RUNNER_TEMP/late-session-result/result.json"
+      - name: Retain research evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: late-session-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/late-session-result/
+          if-no-files-found: warn
+          retention-days: 30
