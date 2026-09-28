@@ -66,6 +66,7 @@ jobs:
           set -euo pipefail
           if [[ "$HISTORY_EXISTS" == true ]]; then
             uv run python scripts/filing_publication.py \
+              --restore-layout \
               --source "$GITHUB_WORKSPACE/previous/store" \
               --destination "$RUNNER_TEMP/filing-store"
           fi
@@ -162,6 +163,7 @@ jobs:
             exit "$status"
           fi
           uv run python scripts/filing_publication.py \
+            --restore-layout \
             --source "$GITHUB_WORKSPACE/retained/store" --destination "$sidecar/store"
           git -C "$sidecar" config user.name filing-observation-bot
           git -C "$sidecar" config user.email filing-observation-bot@noreply.github.com

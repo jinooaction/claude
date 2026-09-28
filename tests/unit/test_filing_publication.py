@@ -74,3 +74,47 @@ def test_local_lock_is_excluded_and_unknown_files_refused(tmp_path):
     (source.root / "contact.txt").write_text("private")
     with pytest.raises(ValueError, match="unexpected"):
         module.stage(source.root, tmp_path / "refused")
+
+
+def test_transport_restores_empty_directories_without_changing_evidence(tmp_path):
+    module = publisher()
+    source, first = empty_run(tmp_path / "source")
+    original = (source.root / "runs/one.json").read_bytes()
+    for name in ("blobs", "observations"):
+        (source.root / name).rmdir()  # Git and artifact transports omit empty directories.
+    destination = tmp_path / "destination"
+    with pytest.raises(ValueError, match="missing"):
+        module.stage(source.root, destination)
+    module.stage(source.root, destination, restore_layout=True)
+    assert (source.root / "runs/one.json").read_bytes() == original
+    assert (destination / "runs/one.json").read_bytes() == original
+    for name in ("blobs", "observations"):
+        (destination / name).rmdir()
+    empty_run(source.root, "two", first, "13")
+    result = module.stage(source.root, destination, restore_layout=True)
+    assert result["added_files"] == 1
+    assert (destination / "runs/one.json").read_bytes() == original
+
+
+def test_transport_layout_does_not_repair_tampered_evidence(tmp_path):
+    module = publisher()
+    source, _ = empty_run(tmp_path / "source")
+    path = source.root / "runs/one.json"
+    path.write_bytes(path.read_bytes().replace(b'"schema_version":1', b'"schema_version":2'))
+    with pytest.raises(ValueError):
+        module.stage(source.root, tmp_path / "destination", restore_layout=True)
+    assert not (tmp_path / "destination").exists()
+
+
+def test_transport_layout_rejects_symlinks_before_creating_directories(tmp_path):
+    module = publisher()
+    source, _ = empty_run(tmp_path / "source")
+    (source.root / "blobs").rmdir()
+    (source.root / "observations").rmdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (source.root / "observations").symlink_to(outside)
+    with pytest.raises(ValueError, match="symlink"):
+        module.stage(source.root, tmp_path / "destination", restore_layout=True)
+    assert not (source.root / "blobs").exists()
+    assert list(outside.iterdir()) == []

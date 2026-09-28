@@ -45,14 +45,39 @@ def inventory(root: Path) -> dict[str, str]:
     return result
 
 
-def stage(source: Path, destination: Path) -> dict:
+def restore_transport_layout(root: Path) -> None:
+    """Restore only structural directories omitted by Git/artifact transport.
+
+    Receipts, blobs and run files are never reconstructed. The usual complete
+    verification still rejects missing referenced bytes or altered history.
+    """
+    _no_symlink(root)
+    _require(root.is_dir(), "missing store root")
+    for path in root.iterdir():
+        _no_symlink(path)
+        _require(path.name in {"blobs", "observations", "runs", ".collector.lock"},
+                 "unexpected store entry")
+    directories = [root / name for name in ("blobs", "observations", "runs")]
+    for path in directories:
+        _no_symlink(path)
+        _require(not path.exists() or path.is_dir(), "invalid evidence directory")
+    _require((root / "runs").is_dir(), "missing completed run directory")
+    for path in directories:
+        path.mkdir(exist_ok=True)
+
+
+def stage(source: Path, destination: Path, *, restore_layout: bool = False) -> dict:
     source, destination = Path(source).absolute(), Path(destination).absolute()
     _no_symlink(source)
     _no_symlink(destination)
     left, right = source.resolve(), destination.resolve()
     _require(not left.is_relative_to(right) and not right.is_relative_to(left),
              "publication paths overlap")
+    if restore_layout:
+        restore_transport_layout(source)
     incoming = inventory(source)
+    if restore_layout and destination.exists():
+        restore_transport_layout(destination)
     previous = inventory(destination) if destination.exists() else {}
     _require(all(incoming.get(name) == digest for name, digest in previous.items()),
              "publication would change or delete history")
@@ -74,9 +99,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--destination", type=Path, required=True)
+    parser.add_argument("--restore-layout", action="store_true",
+                        help="Recreate structural empty directories lost during transport only")
     args = parser.parse_args()
     try:
-        print(json.dumps(stage(args.source, args.destination), sort_keys=True))
+        print(json.dumps(stage(args.source, args.destination,
+                               restore_layout=args.restore_layout), sort_keys=True))
         return 0
     except (ValueError, TypeError, OSError):
         print("Filing publication refused: existing history must remain unchanged.",
