@@ -2,7 +2,7 @@
 
 **Feature Branch**: `codex/197-execution-source-identity`
 **Created**: 2026-09-28
-**Status**: Draft
+**Status**: Implemented; release verification pending
 **Input**: 기존 한국투자 단타 프로그램 완성. 실제 코드 변경 검출 누락을 재현했으므로 과거 검증과 현재 실행의 연결을 보완한다.
 
 ## User Scenarios & Testing

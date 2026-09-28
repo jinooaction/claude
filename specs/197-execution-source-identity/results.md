@@ -1,7 +1,7 @@
 # 실행 소스 연결 검증 기록
 
 기준 main: `37829096639c7ef60c3df43bf899fce516667fc4`. 검증일: 2026-09-28.
-현재 상태: 구현 및 관련 검사 통과, 전체 회귀 검사 진행 중. 아직 병합·배포 완료가 아니다.
+현재 상태: 구현 및 관련/전체 회귀 검사 통과. 아직 병합·배포 완료가 아니다.
 
 ## 확인한 변화
 
@@ -16,7 +16,7 @@
 - 실제 CLI 자체 시험: `uv run python scripts/intraday_operator.py self-test` — 부분 체결/취소, 영구 중지/재시작 통과. 오프라인 실행, 실제 주문0건, 실거래 적격 false.
 - 하네스: `uv run python scripts/agent_harness_probe.py --strict` — **14/14 통과**.
 - 인계 사실 검사: `uv run python scripts/check_handoff_facts.py` — 통과. main의 인계 전 코드 기준 `dda232f`와 일치.
-- 전체 검사: `/tmp/197-full-pytest.log`에 진행 중. 종료 결과 확인 전 통과로 처리하지 않는다.
+- 전체 검사: `uv run pytest -q` — **5005 passed, 13 skipped in 893.46s**, 종료 코드0. `/tmp/197-full-pytest.log` 보존. 12개는 명시적인 실 KIS 검사 조건이 꺼져 있어, 1개는 이미 가동된 사다리의 가동 전 전용 검사라 건너뛰었다. 실 KIS 검증 통과를 뜻하지 않는다. 실행48628은 종료했으므로 다시 대기하거나 재시작하지 않는다.
 
 ## 계산 비용
 
