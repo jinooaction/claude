@@ -1,0 +1,177 @@
+name: Collect first-observed public filings
+
+on:
+  workflow_dispatch:
+  # Initial probe before release. Schedule is enabled only after two verified runs.
+  push:
+    branches: [codex/199-first-observed-filings]
+    paths: ['.github/workflows/collect-filing-observations.yml']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: first-observed-filings
+  cancel-in-progress: false
+
+env:
+  UV_PYTHON: '3.11'
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      ready: ${{ steps.stage.outputs.ready }}
+      artifact_id: ${{ steps.backup.outputs.artifact-id }}
+      collect_status: ${{ steps.collect.outputs.status }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: code
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86
+      - name: Install locked dependencies
+        working-directory: code
+        run: uv sync --locked --dev
+      - name: Discover retained history
+        id: history
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh auth setup-git
+          set +e
+          git ls-remote --exit-code "https://github.com/${GITHUB_REPOSITORY}.git" \
+            refs/heads/automation/filing-observations > "$RUNNER_TEMP/history-ref"
+          status=$?
+          set -e
+          if [[ "$status" == 0 ]]; then
+            echo 'exists=true' >> "$GITHUB_OUTPUT"
+          elif [[ "$status" == 2 ]]; then
+            echo 'exists=false' >> "$GITHUB_OUTPUT"
+          else
+            exit "$status"
+          fi
+      - name: Read previous published store
+        if: steps.history.outputs.exists == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: automation/filing-observations
+          path: previous
+          persist-credentials: false
+      - name: Restore verified working store
+        working-directory: code
+        env:
+          HISTORY_EXISTS: ${{ steps.history.outputs.exists }}
+        run: |
+          set -euo pipefail
+          if [[ "$HISTORY_EXISTS" == true ]]; then
+            uv run python scripts/filing_publication.py \
+              --source "$GITHUB_WORKSPACE/previous/store" \
+              --destination "$RUNNER_TEMP/filing-store"
+          fi
+      - name: Collect within fixed limits
+        id: collect
+        working-directory: code
+        env:
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+        run: |
+          set -uo pipefail
+          uv run python scripts/filing_observations.py collect \
+            --config deploy/filing-observations.json \
+            --store "$RUNNER_TEMP/filing-store" \
+            --run-id "actions-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          if [[ "$status" != 0 && "$status" != 3 ]]; then exit "$status"; fi
+      - name: Validate clean artifact tree
+        id: stage
+        working-directory: code
+        run: |
+          set -euo pipefail
+          uv run python scripts/filing_publication.py \
+            --source "$RUNNER_TEMP/filing-store" \
+            --destination "$RUNNER_TEMP/filing-backup/store"
+          echo 'ready=true' >> "$GITHUB_OUTPUT"
+      - name: Retain recovery artifact before publication
+        id: backup
+        if: steps.stage.outputs.ready == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: filing-store-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/filing-backup/
+          retention-days: 90
+          if-no-files-found: error
+      - name: Report recovery location and collection outcome
+        if: always()
+        env:
+          ARTIFACT_URL: ${{ steps.backup.outputs.artifact-url }}
+          COLLECT_STATUS: ${{ steps.collect.outputs.status }}
+        run: |
+          {
+            echo '## 공시 관측 결과'
+            echo "수집 종료코드: ${COLLECT_STATUS:-미실행}"
+            echo "복구 산출물: ${ARTIFACT_URL:-없음}"
+            echo '산출물 보존은 90일이며, 별도 게시 성공 전에는 영구 보존 완료가 아닙니다.'
+            echo '0=범위 내 성공, 3=실패/미관측 범위 있음, 2=계약·저장 거부.'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "${COLLECT_STATUS:-2}"
+
+  publish:
+    needs: collect
+    if: always() && needs.collect.outputs.ready == 'true' && needs.collect.outputs.artifact_id != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: code
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86
+      - name: Install locked dependencies
+        working-directory: code
+        run: uv sync --locked --dev
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: filing-store-${{ github.run_id }}-${{ github.run_attempt }}
+          path: retained
+      - name: Append verified evidence and push without rewriting history
+        working-directory: code
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh auth setup-git
+          remote="https://github.com/${GITHUB_REPOSITORY}.git"
+          branch=automation/filing-observations
+          sidecar="$RUNNER_TEMP/filing-sidecar"
+          set +e
+          git ls-remote --exit-code "$remote" "refs/heads/$branch" > "$RUNNER_TEMP/publish-ref"
+          status=$?
+          set -e
+          if [[ "$status" == 0 ]]; then
+            git clone --single-branch --depth 1 --branch "$branch" "$remote" "$sidecar"
+          elif [[ "$status" == 2 ]]; then
+            git init -b "$branch" "$sidecar"
+            git -C "$sidecar" remote add origin "$remote"
+          else
+            exit "$status"
+          fi
+          uv run python scripts/filing_publication.py \
+            --source "$GITHUB_WORKSPACE/retained/store" --destination "$sidecar/store"
+          git -C "$sidecar" config user.name filing-observation-bot
+          git -C "$sidecar" config user.email filing-observation-bot@noreply.github.com
+          git -C "$sidecar" add -- store
+          if [[ -n "$(git -C "$sidecar" diff --cached --name-only --diff-filter=CDMRTUXB)" ]]; then
+            echo 'Existing evidence changed; publication refused.' >&2
+            exit 2
+          fi
+          if ! git -C "$sidecar" diff --cached --quiet; then
+            git -C "$sidecar" commit -m "filing observations ${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            git -C "$sidecar" push origin "HEAD:refs/heads/$branch"
+          fi
+          echo '추가 전용 브랜치 게시 완료. 수집 성공·전략 통과와는 별도입니다.' >> "$GITHUB_STEP_SUMMARY"

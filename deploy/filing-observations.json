@@ -1,0 +1,10 @@
+{
+  "ciks": ["0000789019"],
+  "forms": ["8-K", "8-K/A"],
+  "max_documents": 5,
+  "max_bytes": 8388608,
+  "interval_seconds": 1.0,
+  "timeout_seconds": 20.0,
+  "budget_seconds": 180.0,
+  "retries": 2
+}

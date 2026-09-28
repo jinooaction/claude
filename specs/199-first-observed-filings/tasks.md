@@ -40,12 +40,15 @@ RunStore 부재로 실패하는 것을 확인하고 구현했다. 추가 반례�
 
 ## Phase 5 — US3 원격 누적
 독립검사: 쓰기권한분리·기존파일불변·게시충돌·복구artifact·정기누락범위를확인한다.
-- [ ] T009 [US3] 고정회사/한도설정과 원격수집·추가전용발행·복구위치보고 구현: deploy/filing-observations.json, .github/workflows/collect-filing-observations.yml.
-- [ ] T010 [US3] 권한·비밀값출력금지·force금지·원본보존 검사: tests/unit/test_filing_observation_workflow.py.
+- [x] T009 [US3] 고정회사/한도설정과 원격수집·추가전용발행·복구위치보고 구현: deploy/filing-observations.json, .github/workflows/collect-filing-observations.yml.
+- [x] T010 [US3] 권한·비밀값출력금지·force금지·원본보존 검사: tests/unit/test_filing_observation_workflow.py.
+  scripts/filing_publication.py는 전체 파일목록·지문·참조를 검사하고 기존파일 수정/삭제를
+  거부한다. 읽기권한 수집→90일artifact→별도쓰기권한 게시를 연결했다. 실제실행은 T011에 남긴다.
 - [ ] T011 [US3] 원격실제수집2회·기존원문불변·복구/재조회·195연결 확인: specs/199-first-observed-filings/results.md.
 
 ## Phase 6 — Validation and handoff
 - [ ] T012 정확한PR커밋 원격전체pytest/ruff 워크플로 연결·성공확인: .github/workflows/filing-observation-checks.yml.
+  원격검사 연결을 먼저 준비해 T011 설정 대기 중 전체 회귀를 실행한다. 성공확인은 미완료다.
 - [ ] T013 하네스·인계·PR품질검사와실제검증근거기록: specs/199-first-observed-filings/results.md.
 - [ ] T014 병합·필요배포·정기수집첫실행/영구보존확인 및남은전체목표인계: HANDOFF.md.
 
