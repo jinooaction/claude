@@ -540,6 +540,22 @@ async def test_unavailable_error_is_closed(prepared, monkeypatch):
     assert result() == "QUALIFICATION_AUTHORIZATION_UNAVAILABLE"
 
 
+async def test_shared_source_change_revokes_existing_qualification(prepared, monkeypatch):
+    from pathlib import Path
+
+    result = await q.prepare_qualification(**prepared[0])
+    approved = grant(result)
+    monkeypatch.setattr(q, "_read_authorization", lambda: approved)
+    original = Path.read_bytes
+
+    def changed(path):
+        raw = original(path)
+        return raw + b"\n# changed shared authority" if path.name == "authority.py" else raw
+
+    monkeypatch.setattr(Path, "read_bytes", changed)
+    assert result() == "QUALIFICATION_STRATEGY_CHANGED"
+
+
 async def test_protected_file_missing_world_writable_or_symlink_is_refused(tmp_path, monkeypatch):
     path = tmp_path / "authorization.json"
     monkeypatch.setattr(q, "AUTHORIZATION_PATH", path)
