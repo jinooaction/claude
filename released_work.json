@@ -1,5 +1,5 @@
 {
-  "commit": "454877a149128be1dd8c96b3fc6b6507becaca50",
+  "commit": "30e807e77a5a964387f1b7997bd57d8fb2921fd3",
   "overall_status": "OK",
   "released_work": [
     {
@@ -926,7 +926,11 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "197-execution-source-identity"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "198-late-session-research"
     }
   ],
-  "timestamp_utc": "2026-09-28T13:30:46.495961Z"
+  "timestamp_utc": "2026-09-28T16:32:41.898388Z"
 }
