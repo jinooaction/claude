@@ -1,9 +1,12 @@
 """Prevent research publication from inheriting trading authority or losing history."""
 
 import json
+import os
 import re
 import subprocess
 from pathlib import Path
+
+import pytest
 
 from auto_invest.market_data.filing_collector import Scope
 
@@ -62,3 +65,19 @@ def test_deployed_scope_contains_only_public_collection_settings():
     assert scope.ciks == ("0000789019",)
     assert scope.max_documents == 5
     assert "@" not in json.dumps(config)
+
+
+@pytest.mark.parametrize("collect_code, step_code", [(0, 0), (3, 0), (2, 2)])
+def test_collection_exit_is_recorded_under_github_errexit(tmp_path, collect_code, step_code):
+    text = WORKFLOW.read_text()
+    section = text.split("      - name: Collect within fixed limits\n", 1)[1]
+    block = section.split("        run: |\n", 1)[1].split("      - name:", 1)[0]
+    script = "uv() { return \"$TEST_CODE\"; }\n" + "\n".join(
+        line[10:] for line in block.splitlines())
+    output = tmp_path / "outputs"
+    environment = dict(os.environ, TEST_CODE=str(collect_code), GITHUB_OUTPUT=str(output),
+                       RUNNER_TEMP=str(tmp_path), GITHUB_RUN_ID="1", GITHUB_RUN_ATTEMPT="1")
+    result = subprocess.run(["bash", "-e", "-c", script], env=environment,
+                            capture_output=True, text=True, timeout=5)
+    assert result.returncode == step_code, result.stderr
+    assert output.read_text() == f"status={collect_code}\n"

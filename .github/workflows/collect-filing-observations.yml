@@ -2,10 +2,8 @@ name: Collect first-observed public filings
 
 on:
   workflow_dispatch:
-  # Initial probe before release. Schedule is enabled only after two verified runs.
-  push:
-    branches: [codex/199-first-observed-filings]
-    paths: ['.github/workflows/collect-filing-observations.yml']
+  # The initial probe registered this workflow. Further probes are explicit;
+  # schedule is enabled only after two verified runs.
 
 permissions:
   contents: read
@@ -78,11 +76,13 @@ jobs:
           SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
         run: |
           set -uo pipefail
+          set +e
           uv run python scripts/filing_observations.py collect \
             --config deploy/filing-observations.json \
             --store "$RUNNER_TEMP/filing-store" \
             --run-id "actions-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           status=$?
+          set -e
           echo "status=$status" >> "$GITHUB_OUTPUT"
           if [[ "$status" != 0 && "$status" != 3 ]]; then exit "$status"; fi
       - name: Validate clean artifact tree
