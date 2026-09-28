@@ -6,11 +6,11 @@ import hashlib
 import json
 from datetime import timedelta
 from decimal import Decimal
-from pathlib import Path
 
 from auto_invest.analytics.intraday_paper_challenger import _entry_signal, _exit_signal
 from auto_invest.analytics.intraday_runtime import PaperRuntime
 from auto_invest.execution.intraday import Decision
+from auto_invest.execution.intraday_identity import source_identity
 from auto_invest.market_data.intraday import CALENDAR, NY, SYMBOLS, normalize, utc
 from auto_invest.market_data.intraday_pricing import limit_price
 
@@ -18,50 +18,11 @@ from auto_invest.market_data.intraday_pricing import limit_price
 def execution_fingerprint(candidate, provider):
     if provider != "kis-nasdaq-partial-unadjusted":
         raise ValueError("EXECUTION_PROVIDER")
-    sources = [
-        Path(__file__),
-        Path(__file__).with_name("intraday.py"),
-        Path(__file__).with_name("intraday_runtime.py"),
-        Path(__file__).with_name("intraday_observation.py"),
-        Path(__file__).with_name("intraday_cash_ledger.py"),
-        Path(__file__).with_name("intraday_budget.py"),
-        Path(__file__).with_name("intraday_budget_observation.py"),
-        Path(__file__).with_name("intraday_budget_settlements.py"),
-        Path(__file__).with_name("intraday_selection.py"),
-        Path(__file__).with_name("intraday_program.py"),
-        Path(__file__).with_name("intraday_forward.py"),
-        Path(__file__).with_name("intraday_registration.py"),
-        Path(__file__).with_name("intraday_qualification.py"),
-        Path(__file__).with_name("intraday_execution_evidence.py"),
-        Path(__file__).with_name("intraday_observation_models.py"),
-        Path(__file__).with_name("intraday_cost_reconciliation.py"),
-        Path(__file__).parents[1] / "broker/intraday_transactions.py",
-        Path(__file__).with_name("intraday_launch.py"),
-        Path(__file__).with_name("fill_sync.py"),
-        Path(__file__).parents[1] / "persistence/fill_amounts.py",
-        Path(__file__).parents[1] / "persistence/migrations/0005_fill_notionals.sql",
-        Path(__file__).parents[1] / "broker/intraday_inputs.py",
-        Path(__file__).parents[1] / "broker/intraday_account.py",
-        Path(__file__).parents[1] / "broker/domestic_account.py",
-        Path(__file__).parents[1] / "broker/intraday_holdings_coverage.py",
-        Path(__file__).parents[1] / "broker/intraday_account_frame.py",
-        Path(__file__).parents[1] / "broker/intraday_asset_scope.py",
-        Path(__file__).parents[1] / "broker/account_asset_evidence.py",
-        Path(__file__).parents[1] / "broker/intraday_balance_evidence.py",
-        Path(__file__).parents[1] / "broker/intraday_reported_cash.py",
-        Path(__file__).parents[1] / "broker/intraday_cash_baseline.py",
-        Path(__file__).parents[1] / "broker/account_source_profile.py",
-        Path(__file__).parents[1] / "broker/overseas.py",
-        Path(__file__).parents[1] / "persistence/audit.py",
-        Path(__file__).parents[1] / "analytics/intraday_paper_challenger.py",
-        Path(__file__).parents[1] / "analytics/intraday_runtime.py",
-        Path(__file__).parents[1] / "market_data/intraday_pricing.py",
-        Path(__file__).parents[1] / "market_data/intraday_attestation.py",
-    ]
     identity = dict(
+        schema=2,
         candidate=candidate.as_dict(),
         provider=provider,
-        sources=[hashlib.sha256(p.read_bytes()).hexdigest() for p in sources],
+        sources=source_identity(),
     )
     return hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
 
