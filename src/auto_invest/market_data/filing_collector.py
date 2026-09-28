@@ -187,12 +187,20 @@ class _FetchFailure(Exception):
 class Collector:
     """One serialized run. Callers own the client and may inject clocks for tests."""
 
+    @staticmethod
+    def valid_agent(value):
+        return (isinstance(value, str) and 5 <= len(value) <= 256 and "@" in value
+                and all(32 <= ord(char) < 127 for char in value))
+
+    @staticmethod
+    def source_kind(accession):
+        return "listing" if accession is None else "primary"
+
     def __init__(self, store: RunStore, scope: Scope, *, user_agent: str, client: httpx.Client,
                  utc_now: Callable[[], str] | None = None,
                  monotonic: Callable[[], float] = time.monotonic,
                  sleep: Callable[[float], None] = time.sleep):
-        _require(isinstance(user_agent, str) and 5 <= len(user_agent) <= 256
-                 and "@" in user_agent and all(32 <= ord(char) < 127 for char in user_agent),
+        _require(self.valid_agent(user_agent),
                  "SEC_USER_AGENT identification required")
         self.store, self.scope, self.client = store, scope, client
         self._user_agent = user_agent
@@ -223,7 +231,7 @@ class Collector:
 
     def _failure(self, cik: str, code: str, accession: str | None, *, count: bool = True) -> None:
         self.failures.append({"issuer_cik": cik, "code": code, "accession": accession,
-                              "source_kind": "listing" if accession is None else "primary"})
+                              "source_kind": self.source_kind(accession)})
         if count:
             self.circuit["consecutive_failures"] += 1
         if code == "http_403" or (count and self.circuit["consecutive_failures"] >= 3):
@@ -330,7 +338,7 @@ class Collector:
                 self.circuit["cooldown_until"] = None
         return None
 
-    def collect(self, *, run_id: str, source_commit: str) -> dict:
+    def begin(self, run_id: str, source_commit: str):
         _require(not self.used, "collector instance is single-use")
         self.used = True
         _require(isinstance(run_id, str)
@@ -345,7 +353,38 @@ class Collector:
         started = self._now()
         if history:
             _require(utc(history[-1]["finalized_at"]) <= utc(started), "cross-run clock reversal")
+            view = self.store.query(history[-1]["finalized_at"])
+            kinds = {self.source_kind(None), self.source_kind("document")}
+            _require(all(item["source_kind"] in kinds for item in view["observations"]),
+                     "collector source stores must remain separate")
+            _require(all(failure.get("source_kind", "listing") in kinds
+                         for run in view["runs"] + view["recovered_runs"]
+                         for failure in run["manifest"]["failures"]),
+                     "collector failure states must remain separate")
             self.circuit = dict(history[-1]["manifest"]["circuit"])
+        return history, started
+
+    def finish(self, run_id, source_commit, history, started, observations, skipped,
+               selection=None):
+        manifest = {
+            "schema_version": 1, "run_id": run_id, "source_commit": source_commit,
+            "config_sha256": self.scope.sha256, "started_at": started, "ended_at": self._now(),
+            "previous_run_sha256": history[-1]["sha256"] if history else None,
+            "observations": [], "failures": self.failures,
+            "coverage": {"succeeded": len(observations), "failed": len(self.failures),
+                         "skipped": skipped},
+            "circuit": self.circuit,
+        }
+        if selection is not None:
+            manifest["selection"] = selection
+        digest = self.store.publish(manifest, observations)
+        uncollected = skipped if selection is None else selection["limit_skipped"]
+        return {"run_id": run_id, "run_sha256": digest,
+                "complete": not self.failures and uncollected == 0,
+                "historical_completeness": "unknown", "coverage": manifest["coverage"]}
+
+    def collect(self, *, run_id: str, source_commit: str) -> dict:
+        history, started = self.begin(run_id, source_commit)
         observations, skipped, documents = [], 0, 0
 
         def record(cik, accession, kind, url, fetched, claims):
@@ -378,16 +417,4 @@ class Collector:
                               "filing_date": row["filingDate"], "report_date": row["reportDate"],
                               "form": row["form"], "primary_document": row["primaryDocument"]}
                     record(cik, accession, "primary", url, fetched, claims)
-        manifest = {
-            "schema_version": 1, "run_id": run_id, "source_commit": source_commit,
-            "config_sha256": self.scope.sha256, "started_at": started, "ended_at": self._now(),
-            "previous_run_sha256": history[-1]["sha256"] if history else None,
-            "observations": [], "failures": self.failures,
-            "coverage": {"succeeded": len(observations), "failed": len(self.failures),
-                         "skipped": skipped},
-            "circuit": self.circuit,
-        }
-        digest = self.store.publish(manifest, observations)
-        return {"run_id": run_id, "run_sha256": digest,
-                "complete": not self.failures and skipped == 0,
-                "historical_completeness": "unknown", "coverage": manifest["coverage"]}
+        return self.finish(run_id, source_commit, history, started, observations, skipped)

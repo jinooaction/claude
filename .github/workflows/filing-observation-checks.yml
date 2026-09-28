@@ -13,6 +13,7 @@ on:
       - 'tests/integration/test_filing_observations_cli.py'
       - 'specs/199-first-observed-filings/**'
       - 'deploy/filing-observations.json'
+      - 'deploy/issuer-filings.json'
       - '.github/workflows/*filing*.yml'
       - 'pyproject.toml'
       - 'uv.lock'

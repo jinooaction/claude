@@ -41,3 +41,7 @@ issuer_primary는고정회사공식발표URL만허용하며accession=SHA256(URL 
 이값은SEC접수번호가아니다. source_claims는title/published_at만허용하고기존SEC종류의
 허용필드·URL·접수번호검증은변경하지않는다. 실패자료도출처종류와URL지문으로문서를구별한다.
 RSS일반항목·상한초과는skipped,실패는failed로남기고전체성unknown을유지한다.
+발행사run의selection은unselected와limit_skipped의정수이며합이coverage.skipped와같아야한다.
+의도적으로선택하지않은일반보도자료는수집오류가아니다. complete는선택대상실패/상한초과가
+없는지를뜻하며역사전체성은계속unknown이다. SEC의기존complete판정은변경하지않는다.
+수집기시작시일반·복구관측과실패출처를확인해다른공급자저장소를네트워크요청전에거부한다.

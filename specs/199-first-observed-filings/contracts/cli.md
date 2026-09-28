@@ -5,6 +5,13 @@
 기존 store 검증 후 새run을 추가. 응답/재시도 한도·실패·미시도 범위를 보고한다.
 수집 코드는 커밋된 상태여야 하며 실행 중 다른 작성자는 파일잠금으로 거부한다.
 
+`filing_observations.py collect-issuer --config deploy/issuer-filings.json --store DIR --run-id ID`
+고정Microsoft보도자료RSS와최대3개선택본문만수집한다. SEC_USER_AGENT를읽거나전송하지않으며
+고정된개인정보없는식별자를쓴다. 임의주소인자없음. SEC기록이있는저장소는요청전에거부한다.
+selection.unselected는일반보도자료,selection.limit_skipped는선택대상의상한초과다.
+반환0은선택대상의실패/상한초과없음을뜻하며전체역사성공은아니다. 출처의전체성은unknown이다.
+발행사본문도export가능하지만195의검토시각과사건주장은자동으로생성하지않는다.
+
 `filing_observations.py verify --store DIR`
 모든 완료run의 계약·지문·이전연결·원문을 검증한다. 불완전/변조를 성공으로 만들지 않는다.
 

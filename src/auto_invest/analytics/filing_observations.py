@@ -273,6 +273,11 @@ def _manifest(value: dict) -> None:
     if isinstance(value, dict) and "recovery_sha256" in value:
         expected.add("recovery_sha256")
         _digest(value["recovery_sha256"])
+    if isinstance(value, dict) and "selection" in value:
+        expected.add("selection")
+        selection = _fields(value["selection"], {"unselected", "limit_skipped"})
+        _require(all(type(count) is int and count >= 0 for count in selection.values()),
+                 "invalid selection counts")
     _fields(value, expected)
     _require(type(value["schema_version"]) is int and value["schema_version"] == 1,
              "invalid schema version")
@@ -322,6 +327,9 @@ def _manifest(value: dict) -> None:
              "invalid coverage count")
     _require(coverage["succeeded"] == len(value["observations"])
              and coverage["failed"] == len(value["failures"]), "coverage mismatch")
+    if "selection" in value:
+        _require(sum(value["selection"].values()) == coverage["skipped"],
+                 "selection coverage mismatch")
     circuit = _fields(value["circuit"], {"consecutive_failures", "cooldown_until"})
     _require(type(circuit["consecutive_failures"]) is int
              and circuit["consecutive_failures"] >= 0, "invalid circuit counter")

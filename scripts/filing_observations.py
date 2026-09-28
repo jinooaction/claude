@@ -14,6 +14,7 @@ import httpx
 from auto_invest.analytics.filing_observations import Observation, RunStore
 from auto_invest.analytics.filing_recovery import recover
 from auto_invest.market_data.filing_collector import Collector, Scope, _json
+from auto_invest.market_data.issuer_filings import USER_AGENT, IssuerCollector, IssuerScope
 
 
 def write_json(path: Path, value: dict) -> None:
@@ -38,7 +39,7 @@ def export_observation(store: RunStore, identity: str, output: Path) -> dict:
                                                  for field in fields(Observation)})
                 run = next(run for run in runs if run["manifest"]["run_id"] == item["run_id"])
                 selected = receipt, run
-    if selected is None or selected[0].source_kind != "primary":
+    if selected is None or selected[0].source_kind not in {"primary", "issuer_primary"}:
         raise ValueError("completed primary observation required")
     receipt, run = selected
     raw = store.blobs.read(receipt.blob_sha256)
@@ -77,15 +78,16 @@ def recover_command(args) -> dict:
 
 
 def collect(args) -> tuple[dict, int]:
-    user_agent = os.environ.get("SEC_USER_AGENT", "")
-    if (not 5 <= len(user_agent) <= 256 or "@" not in user_agent
-            or not all(32 <= ord(char) < 127 for char in user_agent)):
+    issuer = args.command == "collect-issuer"
+    user_agent = USER_AGENT if issuer else os.environ.get("SEC_USER_AGENT", "")
+    collector_class = IssuerCollector if issuer else Collector
+    if not collector_class.valid_agent(user_agent):
         raise ValueError("SEC_USER_AGENT identification required")
     with args.config.open("rb") as source:
         raw = source.read(65537)
     if len(raw) > 65536:
         raise ValueError("scope file size limit exceeded")
-    scope = Scope.from_dict(_json(raw))
+    scope = (IssuerScope if issuer else Scope).from_dict(_json(raw))
     commit = source_commit()
     store = RunStore(args.store)
     # The lock spans initial chain verification, collection, and publication.
@@ -95,7 +97,7 @@ def collect(args) -> tuple[dict, int]:
     try:
         fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
         with httpx.Client(trust_env=False, follow_redirects=False) as client:
-            result = Collector(store, scope, user_agent=user_agent, client=client).collect(
+            result = collector_class(store, scope, user_agent=user_agent, client=client).collect(
                 run_id=args.run_id, source_commit=commit)
     finally:
         os.close(descriptor)
@@ -105,10 +107,10 @@ def collect(args) -> tuple[dict, int]:
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    for name in ("collect", "verify", "query", "export", "recover"):
+    for name in ("collect", "collect-issuer", "verify", "query", "export", "recover"):
         command = commands.add_parser(name)
         command.add_argument("--store", type=Path, required=True)
-        if name == "collect":
+        if name in {"collect", "collect-issuer"}:
             command.add_argument("--config", type=Path, required=True)
             command.add_argument("--run-id", required=True)
         elif name == "recover":
@@ -123,7 +125,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         status = 0
-        if args.command == "collect":
+        if args.command in {"collect", "collect-issuer"}:
             result, status = collect(args)
         elif args.command == "recover":
             result = recover_command(args)
