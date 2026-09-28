@@ -35,7 +35,7 @@
 
 - [x] T011 원격 실행 위치·자료 전송 범위 확인 및 실제 개발/재계산: `specs/198-late-session-research/results.md`. 3047c78, 실행 36441780300의 development 작업 성공, 13,784행 일치, 양비용 탈락 보존.
 - [x] T012 원격 전체 pytest·ruff, 하네스·HANDOFF·PR 품질 검사 기록: `specs/198-late-session-research/results.md`. bcbcc0a, 원격 5036 passed/13 skipped, 린트·하네스14/14·인계·PR 품질 통과. 병합 전 최신 커밋 검사 확인은 T013에서 수행.
-- [ ] T013 PR 병합·필요한 배포 검증·현재 상태 인계: `HANDOFF.md`.
+- [ ] T013 PR 병합·필요한 배포 검증·현재 상태 인계: `HANDOFF.md`. PR857/main30e807e 병합, 최신6b62a23 전체5036 passed/13 skipped(1105.80초). 배포36451777408은 16:32:53Z 장중 거부, 20:00Z 이후 서버 완료 감사 대기. 결과·인계 기록 반영, 서버 완료 증거 전 체크하지 않음.
 
 ## 의존성과 구현 순서
 
