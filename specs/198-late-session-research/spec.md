@@ -2,7 +2,7 @@
 
 **Feature Branch**: `codex/198-late-session-research`  
 **Created**: 2026-09-28  
-**Status**: 사전등록 작성 중 — 성과 미조회  
+**Status**: 사전등록 완료 — 구현·성과 검증 미완료  
 **Input**: 기존 한국투자 계좌용 단타 실사용 프로그램을 완성하며, 자료 막힘에는 다른 검증 가능한 전략을 찾는다. 사용자의 맥북 화면 조작과 무거운 로컬 작업은 하지 않는다.
 
 ## User Scenarios & Testing *(mandatory)*

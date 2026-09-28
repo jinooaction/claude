@@ -3,7 +3,7 @@
 ## Phase 1 — 명세와 사전등록
 
 - [x] T001 명세·설계·자료 구조·계약 작성: `specs/198-late-session-research/`.
-- [ ] T002 성과 확인 전 계약 검증·커밋·초안 PR 보존: `contracts/preregistration.json`.
+- [x] T002 성과 확인 전 계약 검증·커밋·초안 PR 보존: `contracts/preregistration.json`. 사전등록 f77301e, 초안 PR #857, 가격 미조회.
 
 ## Phase 2 — 공통 기반
 
