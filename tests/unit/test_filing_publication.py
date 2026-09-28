@@ -1,6 +1,7 @@
 """Publishing may append verified files; it cannot replace or remove history."""
 
 import importlib.util
+import json
 from pathlib import Path
 
 import pytest
@@ -118,3 +119,73 @@ def test_transport_layout_rejects_symlinks_before_creating_directories(tmp_path)
         module.stage(source.root, tmp_path / "destination", restore_layout=True)
     assert not (source.root / "blobs").exists()
     assert list(outside.iterdir()) == []
+
+
+def test_delta_reconstructs_history_without_repacking_old_files(tmp_path):
+    module = publisher()
+    source, first = empty_run(tmp_path / "source")
+    base = tmp_path / "base"
+    module.stage(source.root, base)
+    original = (base / "runs/one.json").read_bytes()
+    empty_run(source.root, "two", first, "13")
+    delta = tmp_path / "delta"
+    report = module.pack_delta(source.root, base, delta)
+    assert report["added_files"] == 1
+    assert not (delta / "files/runs/one.json").exists()
+    assert module.apply_delta(delta, base)["completed_runs"] == 2
+    assert (base / "runs/one.json").read_bytes() == original
+    assert module.inventory(base) == module.inventory(source.root)
+    assert module.apply_delta(delta, base)["already_applied"] is True
+
+
+def test_initial_delta_needs_no_previous_store(tmp_path):
+    module = publisher()
+    source, _ = empty_run(tmp_path / "source")
+    delta, target = tmp_path / "delta", tmp_path / "target"
+    module.pack_delta(source.root, None, delta)
+    assert module.apply_delta(delta, target)["completed_runs"] == 1
+
+
+@pytest.mark.parametrize("damage", ["missing", "tamper", "extra", "symlink", "target"])
+def test_invalid_delta_leaves_existing_history_untouched(tmp_path, damage):
+    module = publisher()
+    source, first = empty_run(tmp_path / "source")
+    base, delta = tmp_path / "base", tmp_path / "delta"
+    module.stage(source.root, base)
+    before = module.inventory(base)
+    empty_run(source.root, "two", first, "13")
+    module.pack_delta(source.root, base, delta)
+    path = delta / "files/runs/two.json"
+    if damage == "missing":
+        path.unlink()
+    elif damage == "tamper":
+        path.write_bytes(b"altered")
+    elif damage == "extra":
+        (delta / "private.txt").write_text("unrelated")
+    elif damage == "symlink":
+        path.unlink()
+        path.symlink_to(source.root / "runs/two.json")
+    else:
+        manifest = json.loads((delta / "delta.json").read_text())
+        manifest["target_sha256"] = "0" * 64
+        (delta / "delta.json").write_text(json.dumps(manifest))
+    with pytest.raises(ValueError):
+        module.apply_delta(delta, base)
+    assert module.inventory(base) == before
+
+
+def test_delta_rejects_other_base_and_size_excess(tmp_path, monkeypatch):
+    module = publisher()
+    source, _ = empty_run(tmp_path / "source")
+    other, _ = empty_run(tmp_path / "other", "other")
+    delta = tmp_path / "delta"
+    module.pack_delta(source.root, None, delta)
+    with pytest.raises(ValueError, match="base"):
+        module.apply_delta(delta, other.root)
+    monkeypatch.setattr(module, "DELTA_MAX_BYTES", 1)
+    with pytest.raises(ValueError, match="size"):
+        module.pack_delta(source.root, None, tmp_path / "oversize")
+    assert not (tmp_path / "oversize").exists()
+    with pytest.raises(ValueError, match="size"):
+        module.apply_delta(delta, tmp_path / "refused")
+    assert not (tmp_path / "refused").exists()
