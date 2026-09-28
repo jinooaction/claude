@@ -5,13 +5,15 @@
 - [x] T002 .specify/feature.json과AGENTS.md계획 포인터 연결, 독립설계검토 반영: specs/199-first-observed-filings/research.md.
 
 ## Phase 2 — Foundation
-- [ ] T003 불변저장·완료manifest·실행간시계역행·변조·경로반례 먼저 작성: tests/unit/test_filing_observations.py.
-- [ ] T004 폐쇄계약·blob/영수증/run/완료표지 검증·추가전용저장 구현: src/auto_invest/analytics/filing_observations.py.
+- [x] T003 불변저장·완료manifest·실행간시계역행·변조·경로반례 먼저 작성: tests/unit/test_filing_observations.py.
+- [x] T004 폐쇄계약·blob/영수증/run/완료표지 검증·추가전용저장 구현: src/auto_invest/analytics/filing_observations.py.
 
 2026-09-29 진행: 관측 영수증 폐쇄계약, UTC 순서, SEC URL 회사/문서 일치,
 원문 지문·크기·경로 검증과 원문 추가전용 저장을 구현했다. 먼저 작성한 시험은
-모듈 부재로 실패했고 구현 후 18개가 0.12초에 통과했다. 실행 manifest/완료표지,
-실행 간 시계 역행과 과거 조회 시험은 아직 남아 있으므로 T003/T004는 미완료다.
+모듈 부재로 실패했고 구현 후 18개가 0.12초에 통과했다. 이어 완료 기록 시험6개가
+RunStore 부재로 실패하는 것을 확인하고 구현했다. 추가 반례까지37개가0.18초에
+통과했다. 실행 간 시계 역행, 완료 전 노출, 실패 기록, 정정 후 과거 조회 불변,
+분기/부모 유실, 변조, 잘못된 계약, 저장 중단을 검사했다. 실제 수집/원격 보존은 미완료다.
 
 ## Phase 3 — US1 원문 관측
 독립검사: 가짜HTTP로수신/차단/잘림/시계역행/잘못된문서/일부실패를검사한다.

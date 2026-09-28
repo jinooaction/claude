@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
 import tempfile
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, fields
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from types import MappingProxyType
 from uuid import UUID
@@ -113,6 +114,14 @@ def _no_symlink(path: Path) -> None:
         _require(not component.is_symlink(), "symlink in evidence path")
 
 
+def _sync_directory(path: Path) -> None:
+    descriptor = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
 class BlobStore:
     """Content-addressed, bounded, exclusive publication of original bytes.
 
@@ -158,8 +167,234 @@ class BlobStore:
                 os.fsync(target.fileno())
             try:
                 os.link(temporary, path)
+                _sync_directory(path.parent)
             except FileExistsError:
                 self.read(digest)
         finally:
             os.unlink(temporary)
         return digest
+
+
+def _fields(value: object, expected: set[str]) -> dict:
+    _require(isinstance(value, dict) and set(value) == expected,
+             "unexpected or missing fields")
+    return value
+
+
+def _encode(value: dict) -> bytes:
+    return (json.dumps(value, sort_keys=True, separators=(",", ":"),
+                       ensure_ascii=True, allow_nan=False) + "\n").encode()
+
+
+def _hash(raw: bytes) -> str:
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _load(path: Path) -> tuple[dict, bytes]:
+    _no_symlink(path)
+    _require(path.is_file(), "missing evidence file")
+    with path.open("rb") as source:
+        raw = source.read(MAX_BYTES + 1)
+    _require(len(raw) <= MAX_BYTES, "JSON size limit exceeded")
+
+    def unique(pairs):
+        result = {}
+        for key, value in pairs:
+            _require(key not in result, "duplicate JSON field")
+            result[key] = value
+        return result
+
+    def invalid_constant(_):
+        raise ValueError("invalid JSON constant")
+
+    try:
+        value = json.loads(raw, object_pairs_hook=unique, parse_constant=invalid_constant)
+    except (UnicodeError, RecursionError) as exc:
+        raise ValueError("invalid JSON encoding or nesting") from exc
+    _require(isinstance(value, dict), "expected JSON object")
+    return value, raw
+
+
+def _publish_file(path: Path, raw: bytes) -> None:
+    _no_symlink(path)
+    _require(len(raw) <= MAX_BYTES, "JSON size limit exceeded")
+    descriptor, temporary = tempfile.mkstemp(prefix=".pending-", dir=path.parent)
+    try:
+        with os.fdopen(descriptor, "wb") as target:
+            target.write(raw)
+            target.flush()
+            os.fsync(target.fileno())
+        try:
+            os.link(temporary, path)
+            _sync_directory(path.parent)
+        except FileExistsError as exc:
+            raise ValueError("duplicate evidence file") from exc
+    finally:
+        os.unlink(temporary)
+
+
+def _manifest(value: dict) -> None:
+    _fields(value, {
+        "schema_version", "run_id", "source_commit", "config_sha256", "started_at",
+        "ended_at", "previous_run_sha256", "observations", "failures", "coverage", "circuit",
+    })
+    _require(type(value["schema_version"]) is int and value["schema_version"] == 1,
+             "invalid schema version")
+    _require(_matches(value["run_id"], r"[A-Za-z0-9][A-Za-z0-9_-]{0,99}"), "invalid run ID")
+    _require(_matches(value["source_commit"], r"[a-f0-9]{40}"), "invalid source commit")
+    _digest(value["config_sha256"])
+    if value["previous_run_sha256"] is not None:
+        _digest(value["previous_run_sha256"])
+    _require(utc(value["started_at"]) <= utc(value["ended_at"]), "run clock reversal")
+    _require(isinstance(value["observations"], list) and isinstance(value["failures"], list),
+             "invalid run evidence lists")
+    seen = set()
+    for reference in value["observations"]:
+        _fields(reference, {"observation_id", "sha256"})
+        identity = reference["observation_id"]
+        _require(_matches(identity, r"[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}"),
+                 "invalid observation reference")
+        _require(identity not in seen, "duplicate observation reference")
+        seen.add(identity)
+        _digest(reference["sha256"])
+    for failure in value["failures"]:
+        _fields(failure, {"issuer_cik", "code"})
+        _require(_matches(failure["issuer_cik"], r"[0-9]{10}")
+                 and int(failure["issuer_cik"]) > 0, "invalid failure issuer")
+        _require(failure["code"] in {
+            "http_403", "http_429", "http_4xx", "http_5xx", "network", "timeout",
+            "invalid_response", "size_limit", "clock_reversal", "cooldown", "run_budget",
+        }, "invalid failure code")
+    coverage = _fields(value["coverage"], {"succeeded", "failed", "skipped"})
+    _require(all(type(count) is int and count >= 0 for count in coverage.values()),
+             "invalid coverage count")
+    _require(coverage["succeeded"] == len(value["observations"])
+             and coverage["failed"] == len(value["failures"]), "coverage mismatch")
+    circuit = _fields(value["circuit"], {"consecutive_failures", "cooldown_until"})
+    _require(type(circuit["consecutive_failures"]) is int
+             and circuit["consecutive_failures"] >= 0, "invalid circuit counter")
+    if circuit["cooldown_until"] is not None:
+        utc(circuit["cooldown_until"])
+
+
+class RunStore:
+    """Single-writer chain of completed manifests and their immutable receipts.
+
+    A run envelope is the atomic completion marker. Its digest links the next
+    run. Hashes detect corruption against that chain, not hostile rewriting of
+    an entire history; remote append-only publication supplies that anchor.
+    """
+
+    def __init__(self, root: Path, *, clock: Callable[[], str] | None = None) -> None:
+        self.blobs = BlobStore(root)
+        self.root = self.blobs.root
+        self.clock = clock or (lambda: datetime.now(UTC).isoformat().replace("+00:00", "Z"))
+        for name in ("runs", "observations"):
+            path = self.root / name
+            _no_symlink(path)
+            path.mkdir(exist_ok=True)
+
+    def _receipts(self, manifest: dict) -> list[Observation]:
+        result = []
+        for reference in manifest["observations"]:
+            path = self.root / "observations" / f"{reference['observation_id']}.json"
+            value, raw = _load(path)
+            _require(_hash(raw) == reference["sha256"], "receipt digest mismatch")
+            item = Observation.from_dict(value)
+            _require(item.observation_id == reference["observation_id"], "receipt ID mismatch")
+            _require(utc(manifest["started_at"]) <= utc(item.requested_at)
+                     <= utc(item.verified_at) <= utc(manifest["ended_at"]),
+                     "receipt outside run interval")
+            self.blobs.read(item.blob_sha256)
+            result.append(item)
+        return result
+
+    def verify(self) -> list[dict]:
+        """Validate the entire completed chain; return it in causal order."""
+        directory = self.root / "runs"
+        _no_symlink(directory)
+        children = {}
+        for path in directory.iterdir():
+            _no_symlink(path)
+            if path.name.startswith(".pending-"):
+                continue
+            _require(path.suffix == ".json", "unexpected run file")
+            envelope, raw = _load(path)
+            _fields(envelope, {"manifest", "manifest_sha256", "finalized_at"})
+            manifest = envelope["manifest"]
+            _require(_hash(_encode(manifest)) == envelope["manifest_sha256"],
+                     "manifest digest mismatch")
+            _manifest(manifest)
+            _require(path.name == f"{manifest['run_id']}.json", "run filename mismatch")
+            _require(utc(manifest["ended_at"]) <= utc(envelope["finalized_at"]),
+                     "finalization clock reversal")
+            self._receipts(manifest)
+            parent = manifest["previous_run_sha256"]
+            _require(parent not in children, "forked run chain")
+            children[parent] = {**envelope, "sha256": _hash(raw)}
+        ordered, seen = [], set()
+        parent, previous_time = None, None
+        while parent in children:
+            run = children.pop(parent)
+            manifest = run["manifest"]
+            if previous_time is not None:
+                _require(previous_time <= utc(manifest["started_at"]), "cross-run clock reversal")
+            for reference in manifest["observations"]:
+                _require(reference["observation_id"] not in seen, "duplicate receipt across runs")
+                seen.add(reference["observation_id"])
+            ordered.append(run)
+            previous_time = utc(run["finalized_at"])
+            parent = run["sha256"]
+        _require(not children, "broken or cyclic previous run chain")
+        return ordered
+
+    def publish(self, manifest: dict, observations: list[Observation]) -> str:
+        """Publish a run after all referenced bytes verify; never rewrite an ID."""
+        manifest = json.loads(_encode(manifest))
+        _fields(manifest, {
+            "schema_version", "run_id", "source_commit", "config_sha256", "started_at",
+            "ended_at", "previous_run_sha256", "observations", "failures", "coverage", "circuit",
+        })
+        _require(manifest["observations"] == [], "caller cannot inject receipt references")
+        manifest["observations"] = [{"observation_id": item.observation_id,
+                                     "sha256": _hash(_encode(item.to_dict()))}
+                                    for item in observations]
+        _manifest(manifest)
+        runs = self.verify()
+        _require(all(run["manifest"]["run_id"] != manifest["run_id"] for run in runs),
+                 "duplicate run ID")
+        expected_parent = runs[-1]["sha256"] if runs else None
+        _require(manifest["previous_run_sha256"] == expected_parent, "previous run mismatch")
+        if runs:
+            _require(utc(runs[-1]["finalized_at"]) <= utc(manifest["started_at"]),
+                     "cross-run clock reversal")
+        for item in observations:
+            _require(utc(manifest["started_at"]) <= utc(item.requested_at)
+                     <= utc(item.verified_at) <= utc(manifest["ended_at"]),
+                     "receipt outside run interval")
+            self.blobs.read(item.blob_sha256)
+        for item in observations:
+            _publish_file(self.root / "observations" / f"{item.observation_id}.json",
+                          _encode(item.to_dict()))
+        self._receipts(manifest)
+        finalized = self.clock()
+        _require(utc(manifest["ended_at"]) <= utc(finalized), "finalization clock reversal")
+        raw = _encode({"manifest": manifest, "manifest_sha256": _hash(_encode(manifest)),
+                       "finalized_at": finalized})
+        _publish_file(self.root / "runs" / f"{manifest['run_id']}.json", raw)
+        return _hash(raw)
+
+    def query(self, as_of: str) -> dict:
+        cutoff = utc(as_of)
+        runs, observations = [], []
+        for run in self.verify():
+            if utc(run["finalized_at"]) > cutoff:
+                continue
+            manifest = run["manifest"]
+            runs.append(run)
+            for item in self._receipts(manifest):
+                if utc(item.verified_at) <= cutoff:
+                    observations.append({**item.to_dict(), "run_id": manifest["run_id"],
+                                         "available_at": run["finalized_at"]})
+        return {"as_of": as_of, "scope": "collector_local_observation_only",
+                "observations": observations, "runs": runs}
