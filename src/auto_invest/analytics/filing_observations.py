@@ -9,12 +9,14 @@ import re
 import tempfile
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, fields
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from types import MappingProxyType
 from uuid import UUID
 
 MAX_BYTES = 8 * 1024 * 1024
+ISSUER_CIK = "0000789019"
+ISSUER_FEED = "https://news.microsoft.com/source/tag/press-releases/feed/"
 
 
 def _require(condition: bool, reason: str) -> None:
@@ -35,6 +37,17 @@ def utc(value: str) -> datetime:
 
 def _digest(value: str) -> None:
     _require(_matches(value, r"[0-9a-f]{64}"), "invalid digest")
+
+
+def issuer_document_id(url: str) -> str:
+    """Fixed issuer URL identity, explicitly not an SEC accession number."""
+    _require(isinstance(url, str), "invalid issuer URL")
+    match = re.fullmatch(
+        r"https://news\.microsoft\.com/source/(\d{4})/(\d{2})/(\d{2})/"
+        r"[a-z0-9][a-z0-9-]{0,199}/", url)
+    _require(match is not None, "invalid issuer URL")
+    date(*(int(part) for part in match.groups()))
+    return hashlib.sha256(url.encode("utf-8")).hexdigest()
 
 
 @dataclass(frozen=True)
@@ -65,9 +78,12 @@ class Observation:
         _require(utc(self.requested_at) <= utc(self.received_at) <= utc(self.verified_at),
                  "observation clock reversal")
         _require(isinstance(self.source_claims, Mapping), "invalid source claims")
-        _require(set(self.source_claims) <= {
+        allowed_claims = {"title", "published_at"} if self.source_kind == "issuer_primary" else {
             "acceptance_datetime", "filing_date", "report_date", "form", "primary_document",
-        }, "unexpected source claim")
+        }
+        if self.source_kind == "issuer_listing":
+            allowed_claims = set()
+        _require(set(self.source_claims) <= allowed_claims, "unexpected source claim")
         _require(all(isinstance(value, str) and len(value) <= 256
                      and all(ord(char) >= 32 for char in value)
                      for value in self.source_claims.values()), "invalid source claim")
@@ -89,6 +105,16 @@ class Observation:
             if "primary_document" in self.source_claims:
                 _require(self.source_claims["primary_document"] == name,
                          "primary document claim mismatch")
+        elif self.source_kind in {"issuer_listing", "issuer_primary"}:
+            _require(self.issuer_cik == ISSUER_CIK, "issuer identity mismatch")
+            if self.source_kind == "issuer_listing":
+                _require(self.accession is None and self.url == ISSUER_FEED,
+                         "issuer feed identity mismatch")
+            else:
+                _require(self.accession == issuer_document_id(self.url),
+                         "issuer URL fingerprint mismatch")
+                if "published_at" in self.source_claims:
+                    utc(self.source_claims["published_at"])
         else:
             raise ValueError("invalid source kind")
 
@@ -273,9 +299,15 @@ def _manifest(value: dict) -> None:
             expected |= {"source_kind", "accession"}
         _fields(failure, expected)
         if "source_kind" in failure:
-            _require(failure["source_kind"] in {"listing", "primary"}, "invalid failure kind")
-            if failure["source_kind"] == "listing":
+            _require(failure["source_kind"] in {
+                "listing", "primary", "issuer_listing", "issuer_primary",
+            }, "invalid failure kind")
+            if failure["source_kind"].startswith("issuer_"):
+                _require(failure["issuer_cik"] == ISSUER_CIK, "invalid failure issuer")
+            if failure["source_kind"] in {"listing", "issuer_listing"}:
                 _require(failure["accession"] is None, "invalid listing failure accession")
+            elif failure["source_kind"] == "issuer_primary":
+                _digest(failure["accession"])
             else:
                 _require(_matches(failure["accession"], r"[0-9]{10}-[0-9]{2}-[0-9]{6}"),
                          "invalid primary failure accession")

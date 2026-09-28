@@ -124,3 +124,19 @@
 - 보존위치 /Users/mason/Projects/claude-data-research/199-microsoft-official-alternative 의
   source.html,receipt.json,reviewed-input.json,bundle,두조회JSON,feed.xml,assessment.md.
   새무인수집이나과거가용시각증거는없다. 다음구현전고정공식범위와누락계약부터명세화한다.
+
+## 발행사 대안 계약 구현
+
+- 공식보도자료페이지가직접선언한별도RSS를확보했다.
+  https://news.microsoft.com/source/tag/press-releases/feed/ ,136389bytes,
+  sha256 01bc016c52b983e655684019cafd66864077ba66e996fc4de1426aabea0f9063.
+  일반RSS와달리실적예정·실적원문·IR안내3건이포함됐다. 전체역사자료로보지않는다.
+- 이근거로spec/plan/data-model/tasks에별도고정발행사출처범위를추가했다.
+  issuer_listing/issuer_primary는Microsoft만허용하고URL지문을SEC번호와구분한다.
+  SEC주소·주장필드·접수번호검증은유지했다. 날짜주장은가용시각이아니다.
+- 모듈부재실패를먼저확인한후RSS파서/원문제목검증을구현했다.
+  외부주소·쿼리·잘못된날짜·다른회사·SEC번호위장·중복·DTD/ENTITY·스크립트속제목을거부한다.
+  새11개와기존저장/복구44개가0.35초에통과했다. 실제원본피드선택3개/미선택7개,
+  저장한실적발표문제목일치확인. 이단계는무인수집이나실적의미확정이아니다.
+- 원격검사경로에새모듈/시험을추가했다. 새출처로거래안전경계를넓히지않으며
+  되돌림은발행사경로중단,기존SEC와발행사증거는보존한다.

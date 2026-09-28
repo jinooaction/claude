@@ -6,8 +6,10 @@ on:
     paths:
       - 'src/auto_invest/analytics/filing_*.py'
       - 'src/auto_invest/market_data/filing_collector.py'
+      - 'src/auto_invest/market_data/issuer_filings.py'
       - 'scripts/filing_*.py'
       - 'tests/unit/test_filing_*.py'
+      - 'tests/unit/test_issuer_filing_*.py'
       - 'tests/integration/test_filing_observations_cli.py'
       - 'specs/199-first-observed-filings/**'
       - 'deploy/filing-observations.json'

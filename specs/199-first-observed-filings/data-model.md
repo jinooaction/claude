@@ -35,3 +35,9 @@ recovered_runs에 보존한다. 같은 관측ID·내용은 중복노출하지 �
 복구 중 원본/대상 겹침은 거부하고 기존 차단상태는 더 엄격한 값을 유지한다.
 195 export의 영수증 참조는 별도 metadata로 남긴다.195의 시각 필드에주입하지 않으며,
 같은 원문을 새195문서로import할 때 기존문서ID와 겹치지 않는 명시적ID를 사용한다.
+
+발행사출처확장: issuer_listing은고정Microsoft보도자료RSS이며accession=null이다.
+issuer_primary는고정회사공식발표URL만허용하며accession=SHA256(URL UTF-8)이다.
+이값은SEC접수번호가아니다. source_claims는title/published_at만허용하고기존SEC종류의
+허용필드·URL·접수번호검증은변경하지않는다. 실패자료도출처종류와URL지문으로문서를구별한다.
+RSS일반항목·상한초과는skipped,실패는failed로남기고전체성unknown을유지한다.
