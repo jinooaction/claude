@@ -1,5 +1,5 @@
 {
-  "commit": "b33ef5123280cfd03714bfa9070482e253eeaddc",
+  "commit": "02f30e17743f03c6dfa8f8ca5410ecd60d74c2ae",
   "overall_status": "OK",
   "released_work": [
     {
@@ -695,7 +695,9 @@
     "193-observed-intraday-inputs",
     "194-sparse-opening-research",
     "195-earnings-event-inputs",
-    "196-archived-event-evidence"
+    "196-archived-event-evidence",
+    "197-execution-source-identity",
+    "198-late-session-research"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -925,12 +927,8 @@
     },
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "197-execution-source-identity"
-    },
-    {
-      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "198-late-session-research"
+      "spec_id": "199-first-observed-filings"
     }
   ],
-  "timestamp_utc": "2026-09-28T17:28:15.481932Z"
+  "timestamp_utc": "2026-09-29T00:58:15.684080Z"
 }
