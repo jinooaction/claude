@@ -1,0 +1,207 @@
+"""Publishing may append verified files; it cannot replace or remove history."""
+
+import importlib.util
+import json
+from pathlib import Path
+
+import pytest
+
+from auto_invest.analytics.filing_observations import RunStore
+
+SCRIPT = Path(__file__).resolve().parents[2] / "scripts/filing_publication.py"
+
+
+def publisher():
+    spec = importlib.util.spec_from_file_location("filing_publication", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def empty_run(root, identity="one", parent=None, hour="12"):
+    stamp = f"2026-09-28T{hour}:00:00Z"
+    store = RunStore(root, clock=lambda: stamp)
+    digest = store.publish({
+        "schema_version": 1, "run_id": identity, "source_commit": "a" * 40,
+        "config_sha256": "b" * 64, "started_at": stamp, "ended_at": stamp,
+        "previous_run_sha256": parent, "observations": [], "failures": [],
+        "coverage": {"succeeded": 0, "failed": 0, "skipped": 0},
+        "circuit": {"consecutive_failures": 0, "cooldown_until": None},
+    }, [])
+    return store, digest
+
+
+def test_publish_append_retains_existing_bytes(tmp_path):
+    module = publisher()
+    source, first = empty_run(tmp_path / "source")
+    destination = tmp_path / "destination"
+    module.stage(source.root, destination)
+    before = (destination / "runs/one.json").read_bytes()
+    empty_run(source.root, "two", first, "13")
+    result = module.stage(source.root, destination)
+    assert result["added_files"] == 1
+    assert (destination / "runs/one.json").read_bytes() == before
+    assert len(RunStore(destination, read_only=True).verify()) == 2
+
+
+def test_divergent_or_deleted_history_rejected_before_copy(tmp_path):
+    module = publisher()
+    source, _ = empty_run(tmp_path / "source")
+    destination, _ = empty_run(tmp_path / "destination", "another")
+    with pytest.raises(ValueError, match="history"):
+        module.stage(source.root, destination.root)
+    assert not (destination.root / "runs/one.json").exists()
+
+
+def test_unreferenced_symlink_never_uploaded(tmp_path):
+    module = publisher()
+    source, _ = empty_run(tmp_path / "source")
+    private = tmp_path / "private"
+    private.write_text("not public")
+    (source.root / "blobs" / ("a" * 64)).symlink_to(private)
+    destination = tmp_path / "destination"
+    with pytest.raises(ValueError, match="symlink"):
+        module.stage(source.root, destination)
+    assert not destination.exists()
+
+
+def test_local_lock_is_excluded_and_unknown_files_refused(tmp_path):
+    module = publisher()
+    source, _ = empty_run(tmp_path / "source")
+    (source.root / ".collector.lock").touch()
+    destination = tmp_path / "destination"
+    module.stage(source.root, destination)
+    assert not (destination / ".collector.lock").exists()
+    (source.root / "contact.txt").write_text("private")
+    with pytest.raises(ValueError, match="unexpected"):
+        module.stage(source.root, tmp_path / "refused")
+
+
+def test_transport_restores_empty_directories_without_changing_evidence(tmp_path):
+    module = publisher()
+    source, first = empty_run(tmp_path / "source")
+    original = (source.root / "runs/one.json").read_bytes()
+    for name in ("blobs", "observations"):
+        (source.root / name).rmdir()  # Git and artifact transports omit empty directories.
+    destination = tmp_path / "destination"
+    with pytest.raises(ValueError, match="missing"):
+        module.stage(source.root, destination)
+    module.stage(source.root, destination, restore_layout=True)
+    assert (source.root / "runs/one.json").read_bytes() == original
+    assert (destination / "runs/one.json").read_bytes() == original
+    for name in ("blobs", "observations"):
+        (destination / name).rmdir()
+    empty_run(source.root, "two", first, "13")
+    result = module.stage(source.root, destination, restore_layout=True)
+    assert result["added_files"] == 1
+    assert (destination / "runs/one.json").read_bytes() == original
+
+
+def test_transport_layout_does_not_repair_tampered_evidence(tmp_path):
+    module = publisher()
+    source, _ = empty_run(tmp_path / "source")
+    path = source.root / "runs/one.json"
+    path.write_bytes(path.read_bytes().replace(b'"schema_version":1', b'"schema_version":2'))
+    with pytest.raises(ValueError):
+        module.stage(source.root, tmp_path / "destination", restore_layout=True)
+    assert not (tmp_path / "destination").exists()
+
+
+def test_transport_layout_rejects_symlinks_before_creating_directories(tmp_path):
+    module = publisher()
+    source, _ = empty_run(tmp_path / "source")
+    (source.root / "blobs").rmdir()
+    (source.root / "observations").rmdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (source.root / "observations").symlink_to(outside)
+    with pytest.raises(ValueError, match="symlink"):
+        module.stage(source.root, tmp_path / "destination", restore_layout=True)
+    assert not (source.root / "blobs").exists()
+    assert list(outside.iterdir()) == []
+
+
+def test_delta_reconstructs_history_without_repacking_old_files(tmp_path):
+    module = publisher()
+    source, first = empty_run(tmp_path / "source")
+    base = tmp_path / "base"
+    module.stage(source.root, base)
+    original = (base / "runs/one.json").read_bytes()
+    empty_run(source.root, "two", first, "13")
+    delta = tmp_path / "delta"
+    report = module.pack_delta(source.root, base, delta)
+    assert report["added_files"] == 1
+    assert not (delta / "files/runs/one.json").exists()
+    assert module.apply_delta(delta, base)["completed_runs"] == 2
+    assert (base / "runs/one.json").read_bytes() == original
+    assert module.inventory(base) == module.inventory(source.root)
+    assert module.apply_delta(delta, base)["already_applied"] is True
+
+
+def test_initial_delta_needs_no_previous_store(tmp_path):
+    module = publisher()
+    source, _ = empty_run(tmp_path / "source")
+    delta, target = tmp_path / "delta", tmp_path / "target"
+    module.pack_delta(source.root, None, delta)
+    assert module.apply_delta(delta, target)["completed_runs"] == 1
+
+
+@pytest.mark.parametrize("damage", ["missing", "tamper", "extra", "symlink", "target"])
+def test_invalid_delta_leaves_existing_history_untouched(tmp_path, damage):
+    module = publisher()
+    source, first = empty_run(tmp_path / "source")
+    base, delta = tmp_path / "base", tmp_path / "delta"
+    module.stage(source.root, base)
+    before = module.inventory(base)
+    empty_run(source.root, "two", first, "13")
+    module.pack_delta(source.root, base, delta)
+    path = delta / "files/runs/two.json"
+    if damage == "missing":
+        path.unlink()
+    elif damage == "tamper":
+        path.write_bytes(b"altered")
+    elif damage == "extra":
+        (delta / "private.txt").write_text("unrelated")
+    elif damage == "symlink":
+        path.unlink()
+        path.symlink_to(source.root / "runs/two.json")
+    else:
+        manifest = json.loads((delta / "delta.json").read_text())
+        manifest["target_sha256"] = "0" * 64
+        (delta / "delta.json").write_text(json.dumps(manifest))
+    with pytest.raises(ValueError):
+        module.apply_delta(delta, base)
+    assert module.inventory(base) == before
+
+
+def test_delta_rejects_other_base_and_size_excess(tmp_path, monkeypatch):
+    module = publisher()
+    source, _ = empty_run(tmp_path / "source")
+    other, _ = empty_run(tmp_path / "other", "other")
+    delta = tmp_path / "delta"
+    module.pack_delta(source.root, None, delta)
+    with pytest.raises(ValueError, match="base"):
+        module.apply_delta(delta, other.root)
+    monkeypatch.setattr(module, "DELTA_MAX_BYTES", 1)
+    with pytest.raises(ValueError, match="size"):
+        module.pack_delta(source.root, None, tmp_path / "oversize")
+    assert not (tmp_path / "oversize").exists()
+    with pytest.raises(ValueError, match="size"):
+        module.apply_delta(delta, tmp_path / "refused")
+    assert not (tmp_path / "refused").exists()
+
+
+def test_capacity_reserves_next_run_without_modifying_history(tmp_path, monkeypatch):
+    module = publisher()
+    missing = tmp_path / "missing"
+    assert module.check_capacity(missing)["retained_bytes"] == 0
+    assert not missing.exists()
+    source, _ = empty_run(tmp_path / "source")
+    before = module.inventory(source.root)
+    size = module.check_capacity(source.root)["retained_bytes"]
+    monkeypatch.setattr(module, "STORE_MAX_BYTES", size + module.DELTA_MAX_BYTES)
+    assert module.check_capacity(source.root)["capacity_available"]
+    monkeypatch.setattr(module, "STORE_MAX_BYTES", size + module.DELTA_MAX_BYTES - 1)
+    with pytest.raises(ValueError, match="capacity"):
+        module.check_capacity(source.root)
+    assert module.inventory(source.root) == before

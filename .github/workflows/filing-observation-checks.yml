@@ -1,0 +1,49 @@
+name: Filing observation regression
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'src/auto_invest/analytics/filing_*.py'
+      - 'src/auto_invest/market_data/filing_collector.py'
+      - 'src/auto_invest/market_data/issuer_filings.py'
+      - 'scripts/filing_*.py'
+      - 'tests/unit/test_filing_*.py'
+      - 'tests/unit/test_issuer_filing_*.py'
+      - 'tests/integration/test_filing_observations_cli.py'
+      - 'specs/199-first-observed-filings/**'
+      - 'deploy/filing-observations.json'
+      - 'deploy/issuer-filings.json'
+      - '.github/workflows/*filing*.yml'
+      - 'pyproject.toml'
+      - 'uv.lock'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: filing-observation-checks-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      KIS_LIVE_TEST: '0'
+      UV_PYTHON: '3.11'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86
+      - name: Install locked dependencies
+        run: uv sync --locked --dev
+      - name: Record tested source
+        run: git rev-parse HEAD
+      - name: Lint source, tests, and filing commands
+        run: uv run ruff check src tests scripts/filing_observations.py scripts/filing_publication.py
+      - name: Full regression without broker credentials
+        run: uv run pytest
