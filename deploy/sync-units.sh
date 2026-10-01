@@ -35,6 +35,8 @@ UNITS=(
     auto-invest-telegram-alerts.service
     auto-invest-intraday-paper.service
     auto-invest-intraday-paper.timer
+    auto-invest-issuer-observations.service
+    auto-invest-issuer-observations.timer
 )
 
 if install -d -m 0700 -o root -g root "$TMP_ROOT" 2>/dev/null; then
@@ -123,6 +125,14 @@ if [ -f /etc/systemd/system/auto-invest-intraday-paper.timer ] \
     systemd-analyze verify /etc/systemd/system/auto-invest-intraday-paper.service \
         /etc/systemd/system/auto-invest-intraday-paper.timer
     systemctl enable --now auto-invest-intraday-paper.timer
+fi
+# Public issuer observation is isolated from the worker and KIS environment.
+# The service refuses to run until its matching deployed helper and CLI exist.
+if [ -f /etc/systemd/system/auto-invest-issuer-observations.timer ] \
+        && [ -f /etc/systemd/system/auto-invest-issuer-observations.service ]; then
+    systemd-analyze verify /etc/systemd/system/auto-invest-issuer-observations.service \
+        /etc/systemd/system/auto-invest-issuer-observations.timer
+    systemctl enable --now auto-invest-issuer-observations.timer
 fi
 # Telegram alerts are optional and require operator-provided TELEGRAM_* secrets.
 # The unit is installed above but intentionally not enabled automatically.
