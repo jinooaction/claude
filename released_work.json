@@ -1,5 +1,5 @@
 {
-  "commit": "2cc0ddb396b6a5357db70a0d176e0ee4f43dd71e",
+  "commit": "2be0bd0fcb253a17b30967d32d4797934dbb52fb",
   "overall_status": "OK",
   "released_work": [
     {
@@ -928,7 +928,11 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "199-first-observed-filings"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "200-issuer-timer-reliability"
     }
   ],
-  "timestamp_utc": "2026-10-01T23:02:52.872278Z"
+  "timestamp_utc": "2026-10-01T23:51:51.409971Z"
 }
