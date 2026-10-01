@@ -1,7 +1,7 @@
 # Codex 작업 운영 규칙
 
 <!-- SPECKIT START -->
-현재 명세 계획: [최초 관측 원문 누적 수집](specs/199-first-observed-filings/plan.md).
+현재 명세 계획: [발행사 관측의 서버 정기 실행](specs/200-issuer-timer-reliability/plan.md).
 <!-- SPECKIT END -->
 
 이 저장소의 기본 방식은 자율 진행이다. 운영자가 한 번 작업을 지시하면, 실제 막힘이 생기거나 작업이 끝날 때까지 중간 허락을 묻지 말고 진행한다.

@@ -1,0 +1,11 @@
+[Unit]
+Description=Check fixed public issuer listing every 15 minutes
+
+[Timer]
+OnCalendar=*-*-* *:00/15:00
+AccuracySec=1min
+Persistent=true
+Unit=auto-invest-issuer-observations.service
+
+[Install]
+WantedBy=timers.target

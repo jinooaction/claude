@@ -289,6 +289,28 @@ def test_invalid_run_writes_no_receipts(tmp_path, changes):
     assert list((tmp_path / "observations").iterdir()) == []
 
 
+def test_legacy_and_explicit_unchanged_selection_both_verify(tmp_path):
+    from auto_invest.analytics.filing_observations import RunStore
+
+    times = iter(["2026-09-28T12:00:05Z", "2026-09-28T12:00:15Z"])
+    store = RunStore(tmp_path, clock=lambda: next(times))
+    first = publish(store, selection={"unselected": 0, "limit_skipped": 0})
+    assert store.verify()[0]["manifest"]["selection"] == {
+        "unselected": 0, "limit_skipped": 0,
+    }
+    store.publish(run_manifest(
+        run_id="run-2", previous_run_sha256=first,
+        started_at="2026-09-28T12:00:10Z", ended_at="2026-09-28T12:00:12Z",
+        coverage={"succeeded": 0, "failed": 0, "skipped": 1},
+        selection={"unselected": 0, "limit_skipped": 0, "unchanged": 1}), [])
+    assert store.verify()[-1]["manifest"]["selection"]["unchanged"] == 1
+    with pytest.raises(ValueError, match="selection coverage"):
+        store.publish(run_manifest(run_id="bad", previous_run_sha256=store.verify()[-1]["sha256"],
+                                   coverage={"succeeded": 0, "failed": 0, "skipped": 0},
+                                   selection={"unselected": 0, "limit_skipped": 0,
+                                              "unchanged": 1}), [])
+
+
 def test_interrupted_completion_cannot_expose_receipt(tmp_path, monkeypatch):
     from auto_invest.analytics import filing_observations as module
 

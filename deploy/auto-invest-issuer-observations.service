@@ -1,0 +1,30 @@
+[Unit]
+Description=Bounded public issuer observation (no broker environment or orders)
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/opt/auto-invest/deploy/issuer-observations-on-instance.sh
+ConditionPathExists=/opt/auto-invest/.venv/bin/python
+
+[Service]
+Type=oneshot
+User=auto-invest
+Group=auto-invest
+WorkingDirectory=/opt/auto-invest
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONPATH=/opt/auto-invest/src
+ExecCondition=/opt/auto-invest/.venv/bin/python /opt/auto-invest/scripts/filing_observations.py collect-issuer-server --help
+ExecStart=/bin/bash /opt/auto-invest/deploy/issuer-observations-on-instance.sh
+StateDirectory=auto-invest-issuer-observations
+StateDirectoryMode=0700
+UMask=0077
+TimeoutStartSec=190
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/auto-invest-issuer-observations
+InaccessiblePaths=-/opt/auto-invest/.env -/opt/auto-invest/data
+MemoryMax=512M
+CPUQuota=50%
+StandardOutput=journal
+StandardError=journal

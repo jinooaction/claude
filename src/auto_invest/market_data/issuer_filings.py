@@ -5,7 +5,7 @@ import json
 import re
 import xml.etree.ElementTree as ET
 from dataclasses import asdict, dataclass, fields
-from datetime import UTC
+from datetime import UTC, timedelta
 from email.utils import parsedate_to_datetime
 from uuid import uuid4
 
@@ -16,6 +16,7 @@ from auto_invest.analytics.filing_observations import (
     MAX_BYTES,
     Observation,
     issuer_document_id,
+    utc,
 )
 from auto_invest.market_data.filing_collector import Collector, Scope
 
@@ -124,11 +125,43 @@ class IssuerCollector(Collector):
     def source_kind(accession):
         return "issuer_listing" if accession is None else "issuer_primary"
 
-    def collect(self, *, run_id: str, source_commit: str) -> dict:
+    def _may_reuse_primaries(self, history, listing_sha, selected, verified_at):
+        """Only an identical latest listing and recent complete GETs permit skips."""
+        if not history or not selected:
+            return False
+        latest = history[-1]["manifest"]
+        if latest["failures"] or latest.get("selection", {}).get("limit_skipped", 0):
+            return False
+        latest_listings = [item for item in self.store._receipts(latest)
+                           if item.source_kind == "issuer_listing"]
+        if len(latest_listings) != 1 or latest_listings[0].blob_sha256 != listing_sha:
+            return False
+        expected = {row["document_id"] for row in selected}
+        for run in reversed(history):
+            manifest = run["manifest"]
+            if manifest["failures"] or manifest.get("selection", {}).get("unchanged", 0):
+                continue
+            receipts = self.store._receipts(manifest)
+            listings = [item for item in receipts if item.source_kind == "issuer_listing"]
+            if len(listings) != 1 or listings[0].blob_sha256 != listing_sha:
+                continue
+            verified = utc(run["finalized_at"])
+            if not verified <= utc(verified_at) < verified + timedelta(hours=24):
+                return False
+            primary_ids = {item.accession for item in receipts
+                           if item.source_kind == "issuer_primary"}
+            return expected <= primary_ids
+        return False
+
+    def collect(self, *, run_id: str, source_commit: str,
+                reuse_unchanged: bool = False) -> dict:
         _require(isinstance(self.scope, IssuerScope), "issuer scope required")
+        _require(type(reuse_unchanged) is bool, "invalid issuer reuse option")
         history, started = self.begin(run_id, source_commit)
         observations = []
         selection = {"unselected": 0, "limit_skipped": 0}
+        if reuse_unchanged:
+            selection["unchanged"] = 0
 
         def record(url, identity, fetched, claims):
             raw, _, requested, received, verified = fetched
@@ -142,6 +175,10 @@ class IssuerCollector(Collector):
             candidates, selection["unselected"] = fetched[1]
             selected = candidates[:self.scope.max_documents]
             selection["limit_skipped"] = len(candidates) - len(selected)
+            if reuse_unchanged and self._may_reuse_primaries(
+                    history, hashlib.sha256(fetched[0]).hexdigest(), selected, fetched[4]):
+                selection["unchanged"] = len(selected)
+                selected = []
             for row in selected:
                 fetched = self._fetch(
                     ISSUER_CIK, row["url"],

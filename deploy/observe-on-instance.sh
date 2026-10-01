@@ -522,6 +522,29 @@ main() {
             sudo -u "${APP_USER}" -H /opt/auto-invest/.venv/bin/python \
                 scripts/intraday_runtime.py service-status
             ;;
+        issuer-status)
+            [[ "$#" -eq 0 ]] || die "issuer-status takes no args"
+            require_repo
+            echo "ISSUER_TIMER=$(systemctl is-active auto-invest-issuer-observations.timer 2>/dev/null || true)"
+            echo "ISSUER_SERVICE_RESULT=$(systemctl show auto-invest-issuer-observations.service --property=Result --value)"
+            sudo -u "${APP_USER}" -H /opt/auto-invest/.venv/bin/python \
+                scripts/filing_observations.py server-status \
+                --store /var/lib/auto-invest-issuer-observations/store
+            ;;
+        issuer-store-export)
+            [[ "$#" -eq 0 ]] || die "issuer-store-export takes no args"
+            require_repo
+            store=/var/lib/auto-invest-issuer-observations/store
+            [[ -f "${store}/.collector.lock" ]] || die "issuer store not initialized"
+            # A shared lock freezes the single writer through verification and
+            # tar creation. Stdout is only the fixed public-source archive.
+            exec 9<"${store}/.collector.lock"
+            flock -s -w 190 9 || die "issuer store writer lock timeout"
+            sudo -u "${APP_USER}" -H /opt/auto-invest/.venv/bin/python \
+                scripts/filing_server_snapshot.py inspect-store --source "${store}" >/dev/null
+            sudo -u "${APP_USER}" -H tar -C "${store}" -czf - \
+                blobs observations runs
+            ;;
         halt-status)
             [[ "$#" -eq 0 ]] || die "halt-status takes no args"
             halt_status

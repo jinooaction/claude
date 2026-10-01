@@ -275,7 +275,10 @@ def _manifest(value: dict) -> None:
         _digest(value["recovery_sha256"])
     if isinstance(value, dict) and "selection" in value:
         expected.add("selection")
-        selection = _fields(value["selection"], {"unselected", "limit_skipped"})
+        selection_fields = {"unselected", "limit_skipped"}
+        if isinstance(value["selection"], dict) and "unchanged" in value["selection"]:
+            selection_fields.add("unchanged")
+        selection = _fields(value["selection"], selection_fields)
         _require(all(type(count) is int and count >= 0 for count in selection.values()),
                  "invalid selection counts")
     _fields(value, expected)

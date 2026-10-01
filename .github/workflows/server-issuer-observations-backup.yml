@@ -1,0 +1,172 @@
+name: Preserve server issuer observations
+
+on:
+  workflow_dispatch:
+  # Backup timing is not an observation timestamp. The server timer is primary.
+  schedule:
+    - cron: '13 0 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: server-issuer-observations-backup
+  cancel-in-progress: false
+
+env:
+  UV_PYTHON: '3.11'
+  OBSERVATION_BRANCH: automation/server-issuer-observations
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      ready: ${{ steps.stage.outputs.ready }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: code
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86
+      - name: Install locked dependencies
+        working-directory: code
+        run: uv sync --locked --dev
+      - name: Configure restricted server identity
+        working-directory: code
+        env:
+          VULTR_SSH_PRIVATE_KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+          VULTR_SSH_KNOWN_HOSTS: ${{ secrets.VULTR_SSH_KNOWN_HOSTS }}
+          VULTR_SSH_USER: ${{ secrets.VULTR_SSH_USER }}
+        run: ./scripts/ci_secure_ssh.sh
+      - name: Read fixed public-source snapshot
+        working-directory: code
+        env:
+          HOST: ${{ secrets.VULTR_SSH_HOST }}
+          USER: ${{ secrets.VULTR_SSH_USER }}
+          PORT: ${{ secrets.VULTR_SSH_PORT }}
+        run: |
+          set -euo pipefail
+          [[ -n "${HOST:-}" && -n "${USER:-}" ]] || exit 2
+          port="${PORT:-22}"
+          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts \
+              -o ConnectTimeout=15 -o BatchMode=yes -p "$port" -i ~/.ssh/id_ed25519 \
+              "${USER}@${HOST}" "observe issuer-store-export" \
+              > "$RUNNER_TEMP/server-issuer.tar.gz"
+          uv run python scripts/filing_server_snapshot.py unpack \
+            --archive "$RUNNER_TEMP/server-issuer.tar.gz" \
+            --destination "$RUNNER_TEMP/server-issuer-store"
+      - name: Discover separate retained branch
+        id: history
+        working-directory: code
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh auth setup-git
+          set +e
+          git ls-remote --exit-code "https://github.com/${GITHUB_REPOSITORY}.git" \
+            "refs/heads/$OBSERVATION_BRANCH" > "$RUNNER_TEMP/server-issuer-ref"
+          status=$?
+          set -e
+          case "$status" in
+            0) echo 'exists=true' >> "$GITHUB_OUTPUT" ;;
+            2) echo 'exists=false' >> "$GITHUB_OUTPUT" ;;
+            *) exit "$status" ;;
+          esac
+      - name: Checkout previous separate copy
+        if: steps.history.outputs.exists == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.OBSERVATION_BRANCH }}
+          path: previous
+          persist-credentials: false
+      - name: Validate append-only delta
+        id: stage
+        working-directory: code
+        env:
+          HISTORY_EXISTS: ${{ steps.history.outputs.exists }}
+        run: |
+          set -euo pipefail
+          base=()
+          if [[ "$HISTORY_EXISTS" == true ]]; then
+            base=(--base "$GITHUB_WORKSPACE/previous/store")
+          fi
+          uv run python scripts/filing_publication.py --mode pack-delta "${base[@]}" \
+            --source "$RUNNER_TEMP/server-issuer-store" \
+            --destination "$RUNNER_TEMP/server-issuer-backup/delta"
+          echo 'ready=true' >> "$GITHUB_OUTPUT"
+      - name: Retain recovery delta before publication
+        if: steps.stage.outputs.ready == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: server-issuer-store-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/server-issuer-backup/
+          retention-days: 90
+          if-no-files-found: error
+
+  publish:
+    needs: snapshot
+    if: needs.snapshot.outputs.ready == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: code
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86
+      - name: Install locked dependencies
+        working-directory: code
+        run: uv sync --locked --dev
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: server-issuer-store-${{ github.run_id }}-${{ github.run_attempt }}
+          path: retained
+      - name: Append verified server evidence
+        working-directory: code
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh auth setup-git
+          remote="https://github.com/${GITHUB_REPOSITORY}.git"
+          branch="$OBSERVATION_BRANCH"
+          sidecar="$RUNNER_TEMP/server-issuer-sidecar"
+          set +e
+          git ls-remote --exit-code "$remote" "refs/heads/$branch" > "$RUNNER_TEMP/server-issuer-publish-ref"
+          status=$?
+          set -e
+          if [[ "$status" == 0 ]]; then
+            git clone --single-branch --depth 1 --branch "$branch" "$remote" "$sidecar"
+          elif [[ "$status" == 2 ]]; then
+            git init -b "$branch" "$sidecar"
+            git -C "$sidecar" remote add origin "$remote"
+          else
+            exit "$status"
+          fi
+          uv run python scripts/filing_publication.py --mode apply-delta \
+            --restore-layout --source "$GITHUB_WORKSPACE/retained/delta" \
+            --destination "$sidecar/store"
+          summary="$(uv run python scripts/filing_server_snapshot.py inspect-store \
+            --source "$sidecar/store")"
+          git -C "$sidecar" config user.name filing-observation-bot
+          git -C "$sidecar" config user.email filing-observation-bot@noreply.github.com
+          git -C "$sidecar" add -- store
+          if [[ -n "$(git -C "$sidecar" diff --cached --name-only --diff-filter=CDMRTUXB)" ]]; then
+            echo 'Existing evidence changed; publication refused.' >&2
+            exit 2
+          fi
+          if ! git -C "$sidecar" diff --cached --quiet; then
+            git -C "$sidecar" commit -m "server issuer observations ${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            git -C "$sidecar" push origin "HEAD:refs/heads/$branch"
+          fi
+          {
+            echo '서버 발행사 원본의 별도 추가 전용 사본 게시 완료.'
+            echo "보존 검증 시각: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "보존 브랜치: $branch"
+            echo "검증된 사본 지문: $summary"
+          } >> "$GITHUB_STEP_SUMMARY"

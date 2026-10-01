@@ -130,6 +130,12 @@ case "${cmd}" in
     observe\ intraday-paper-status)
         exec sudo -n /usr/local/sbin/auto-invest-observe intraday-paper-status
         ;;
+    observe\ issuer-status)
+        exec sudo -n /usr/local/sbin/auto-invest-observe issuer-status
+        ;;
+    observe\ issuer-store-export)
+        exec sudo -n /usr/local/sbin/auto-invest-observe issuer-store-export
+        ;;
     observe\ signal-ic\ trend)
         exec sudo -n /usr/local/sbin/auto-invest-observe signal-ic trend
         ;;

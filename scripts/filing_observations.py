@@ -4,14 +4,16 @@ import argparse
 import fcntl
 import json
 import os
+import re
 import subprocess
 import sys
 from dataclasses import fields
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx
 
-from auto_invest.analytics.filing_observations import Observation, RunStore
+from auto_invest.analytics.filing_observations import Observation, RunStore, utc
 from auto_invest.analytics.filing_recovery import recover
 from auto_invest.market_data.filing_collector import Collector, Scope, _json
 from auto_invest.market_data.issuer_filings import USER_AGENT, IssuerCollector, IssuerScope
@@ -77,8 +79,62 @@ def recover_command(args) -> dict:
         os.close(descriptor)
 
 
+def server_status(store: RunStore, now: datetime) -> dict:
+    """Report actual receipts against the last 96 elapsed calendar slots."""
+    if now.tzinfo is None or now.utcoffset() is None:
+        raise ValueError("status clock must be timezone-aware")
+    now = now.astimezone(UTC)
+    runs = store.verify()
+    for run in runs:
+        manifest = run["manifest"]
+        if re.fullmatch(r"server-[0-9a-f]{32}", manifest["run_id"]) is None:
+            raise ValueError("server store contains a different run identity")
+        if any(item.source_kind not in {"issuer_listing", "issuer_primary"}
+               for item in store._receipts(manifest)):
+            raise ValueError("server store contains a different source")
+        if any(failure.get("source_kind") not in {"issuer_listing", "issuer_primary"}
+               for failure in manifest["failures"]):
+            raise ValueError("server store contains a different failure source")
+    latest = runs[-1] if runs else None
+    complete = [run for run in runs if not run["manifest"]["failures"]
+                and run["manifest"].get("selection", {}).get("limit_skipped", 0) == 0
+                and any(item.source_kind == "issuer_listing"
+                        for item in store._receipts(run["manifest"]))]
+    last_elapsed = now - timedelta(minutes=20)
+    last_slot = last_elapsed.replace(minute=(last_elapsed.minute // 15) * 15,
+                                     second=0, microsecond=0)
+    starts = [last_slot - timedelta(minutes=15 * index) for index in range(96)]
+    by_slot = {}
+    for run in runs:
+        manifest = run["manifest"]
+        started, ended = utc(manifest["started_at"]), utc(manifest["ended_at"])
+        slot = started.replace(minute=(started.minute // 15) * 15,
+                               second=0, microsecond=0)
+        by_slot.setdefault(slot, []).append(ended)
+    attempted = sum(slot in by_slot for slot in starts)
+    within_20 = sum(any(end <= slot + timedelta(minutes=20)
+                        for end in by_slot.get(slot, [])) for slot in starts)
+    return {
+        "source": "server_issuer_observations_only",
+        "completed_runs": len(runs),
+        "head_sha256": latest["sha256"] if latest else None,
+        "last_attempt_at": latest["manifest"]["started_at"] if latest else None,
+        "last_completed_at": complete[-1]["finalized_at"] if complete else None,
+        "last_failure_count": len(latest["manifest"]["failures"]) if latest else None,
+        "elapsed_slots_24h": 96,
+        "attempted_slots_24h": attempted,
+        "within_20_minutes_24h": within_20,
+        "missing_slots_24h": 96 - attempted,
+        "late_slots_24h": attempted - within_20,
+        "backup_status": "not_checked_locally",
+    }
+
+
 def collect(args) -> tuple[dict, int]:
-    issuer = args.command == "collect-issuer"
+    issuer = args.command in {"collect-issuer", "collect-issuer-server"}
+    if args.command == "collect-issuer-server" and re.fullmatch(
+            r"server-[0-9a-f]{32}", args.run_id) is None:
+        raise ValueError("server collection requires invocation identity")
     user_agent = USER_AGENT if issuer else os.environ.get("SEC_USER_AGENT", "")
     collector_class = IssuerCollector if issuer else Collector
     if not collector_class.valid_agent(user_agent):
@@ -97,8 +153,9 @@ def collect(args) -> tuple[dict, int]:
     try:
         fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
         with httpx.Client(trust_env=False, follow_redirects=False) as client:
+            options = {"reuse_unchanged": True} if args.command == "collect-issuer-server" else {}
             result = collector_class(store, scope, user_agent=user_agent, client=client).collect(
-                run_id=args.run_id, source_commit=commit)
+                run_id=args.run_id, source_commit=commit, **options)
     finally:
         os.close(descriptor)
     return result, 0 if result["complete"] else 3
@@ -107,10 +164,11 @@ def collect(args) -> tuple[dict, int]:
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    for name in ("collect", "collect-issuer", "verify", "query", "export", "recover"):
+    for name in ("collect", "collect-issuer", "collect-issuer-server", "verify", "query",
+                 "export", "recover", "server-status"):
         command = commands.add_parser(name)
         command.add_argument("--store", type=Path, required=True)
-        if name in {"collect", "collect-issuer"}:
+        if name in {"collect", "collect-issuer", "collect-issuer-server"}:
             command.add_argument("--config", type=Path, required=True)
             command.add_argument("--run-id", required=True)
         elif name == "recover":
@@ -125,7 +183,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         status = 0
-        if args.command in {"collect", "collect-issuer"}:
+        if args.command in {"collect", "collect-issuer", "collect-issuer-server"}:
             result, status = collect(args)
         elif args.command == "recover":
             result = recover_command(args)
@@ -135,6 +193,8 @@ def main(argv=None):
                 runs = store.verify()
                 result = {"verified": True, "completed_runs": len(runs),
                           "head_sha256": runs[-1]["sha256"] if runs else None}
+            elif args.command == "server-status":
+                result = server_status(store, datetime.now(UTC))
             elif args.command == "query":
                 external_output(store, args.output)
                 query = store.query(args.as_of)

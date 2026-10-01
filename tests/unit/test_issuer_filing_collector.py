@@ -9,7 +9,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from auto_invest.analytics.filing_observations import ISSUER_FEED, RunStore
+from auto_invest.analytics.filing_observations import ISSUER_FEED, RunStore, utc
 from auto_invest.market_data.filing_collector import Collector, Scope
 from auto_invest.market_data.issuer_filings import USER_AGENT, IssuerCollector, IssuerScope
 
@@ -38,11 +38,12 @@ class Clock:
         self.elapsed += seconds
 
 
-def run(store, clock, client, identity='one', cls=IssuerCollector):
+def run(store, clock, client, identity='one', cls=IssuerCollector, reuse=False):
     collector = cls(store, IssuerScope() if cls is IssuerCollector else Scope(),
                     user_agent=USER_AGENT if cls is IssuerCollector else 'Test a@example.invalid',
                     client=client, utc_now=clock.utc, monotonic=clock.monotonic, sleep=clock.sleep)
-    return collector.collect(run_id=identity, source_commit='a' * 40)
+    options = {'reuse_unchanged': reuse} if cls is IssuerCollector else {}
+    return collector.collect(run_id=identity, source_commit='a' * 40, **options)
 
 
 def test_collect_two_runs_preserves_bytes_and_reports_selection(tmp_path):
@@ -65,6 +66,58 @@ def test_collect_two_runs_preserves_bytes_and_reports_selection(tmp_path):
     assert store.verify()[0]['manifest']['selection'] == {'unselected': 1, 'limit_skipped': 0}
     assert len(store.query(clock.utc())['observations']) == 4
     assert (tmp_path/'runs/one.json').read_bytes() == first and len(seen) == 4
+
+
+def test_server_reuse_skips_only_recent_identical_complete_primaries(tmp_path):
+    seen = []
+    feed = [FEED]
+
+    def handler(request):
+        seen.append(str(request.url))
+        return httpx.Response(200, content=feed[0] if str(request.url) == ISSUER_FEED
+                              else DOCUMENT)
+
+    clock = Clock()
+    store = RunStore(tmp_path, clock=clock.utc)
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        run(store, clock, client, 'first', reuse=True)
+        clock.sleep(900)
+        run(store, clock, client, 'same', reuse=True)
+        assert len(seen) == 3
+        assert store.verify()[-1]['manifest']['selection'] == {
+            'unselected': 1, 'limit_skipped': 0, 'unchanged': 1,
+        }
+        feed[0] = FEED.replace(b'<rss', b'<rss  ')
+        clock.sleep(900)
+        run(store, clock, client, 'changed', reuse=True)
+        assert len(seen) == 5
+        clock.sleep(24 * 3600)
+        run(store, clock, client, 'expired', reuse=True)
+    assert len(seen) == 7
+    assert [item['manifest']['selection']['unchanged'] for item in store.verify()] == [
+        0, 1, 0, 0,
+    ]
+
+
+def test_server_retries_primary_after_previous_failure(tmp_path):
+    seen = []
+    valid = [False]
+
+    def handler(request):
+        seen.append(str(request.url))
+        if str(request.url) == ISSUER_FEED:
+            return httpx.Response(200, content=FEED)
+        return httpx.Response(200, content=DOCUMENT if valid[0] else b'<html>wrong</html>')
+
+    clock = Clock()
+    store = RunStore(tmp_path, clock=clock.utc)
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        assert not run(store, clock, client, 'failed', reuse=True)['complete']
+        valid[0] = True
+        clock.sleep(900)
+        assert run(store, clock, client, 'retried', reuse=True)['complete']
+    assert len(seen) == 4
+    assert store.verify()[-1]['manifest']['selection']['unchanged'] == 0
 
 
 def test_403_persists_and_rejects_switching_collectors_before_http(tmp_path):
@@ -100,8 +153,9 @@ def test_issuer_cli_ignores_sec_secret_and_exports_original(tmp_path, monkeypatc
         requests.append(request)
         return httpx.Response(200, content=FEED if str(request.url) == ISSUER_FEED else DOCUMENT)
 
-    client = httpx.Client(transport=httpx.MockTransport(handler))
-    monkeypatch.setattr(cli.httpx, 'Client', lambda **kwargs: client)
+    native_client = httpx.Client
+    monkeypatch.setattr(cli.httpx, 'Client',
+                        lambda **kwargs: native_client(transport=httpx.MockTransport(handler)))
     monkeypatch.setattr(cli, 'source_commit', lambda: 'a' * 40)
     monkeypatch.setattr(IssuerCollector, '_wait', lambda self, seconds: None)
     monkeypatch.setenv('SEC_USER_AGENT', 'Private private@example.invalid')
@@ -121,6 +175,45 @@ def test_issuer_cli_ignores_sec_secret_and_exports_original(tmp_path, monkeypatc
                      '--output', str(output)]) == 0
     assert (output/'source.bin').read_bytes() == DOCUMENT
     assert not json.loads((output/'metadata.json').read_bytes())['reviewed_event']
+
+
+def test_server_cli_keeps_sec_contact_out_and_skips_verified_primary(tmp_path, monkeypatch):
+    path = Path(__file__).resolve().parents[2] / 'scripts/filing_observations.py'
+    spec = importlib.util.spec_from_file_location('issuer_server_cli', path)
+    cli = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cli)
+    requests = []
+
+    def handler(request):
+        requests.append(request)
+        return httpx.Response(200, content=FEED if str(request.url) == ISSUER_FEED else DOCUMENT)
+
+    native_client = httpx.Client
+    monkeypatch.setattr(cli.httpx, 'Client',
+                        lambda **kwargs: native_client(transport=httpx.MockTransport(handler)))
+    monkeypatch.setattr(cli, 'source_commit', lambda: 'a' * 40)
+    monkeypatch.setattr(IssuerCollector, '_wait', lambda self, seconds: None)
+    monkeypatch.setenv('SEC_USER_AGENT', 'Private private@example.invalid')
+    config = tmp_path/'config.json'
+    config.write_text(json.dumps(asdict(IssuerScope())))
+    root = tmp_path/'store'
+    for run_id in ('server-' + 'a' * 32, 'server-' + 'b' * 32):
+        assert cli.main(['collect-issuer-server', '--store', str(root),
+                         '--config', str(config), '--run-id', run_id]) == 0
+    assert len(requests) == 3
+    assert all(request.headers['User-Agent'] == USER_AGENT for request in requests)
+    read_only = RunStore(root, read_only=True)
+    assert read_only.verify()[-1]['manifest']['selection']['unchanged'] == 1
+    state = cli.server_status(read_only, utc(read_only.verify()[-1]['finalized_at'])
+                              + timedelta(minutes=20))
+    assert state['source'] == 'server_issuer_observations_only'
+    assert state['completed_runs'] == 2
+    assert state['attempted_slots_24h'] == 1
+    assert state['missing_slots_24h'] == 95
+    assert state['backup_status'] == 'not_checked_locally'
+    assert cli.main(['collect-issuer-server', '--store', str(root),
+                     '--config', str(config), '--run-id', 'actions-wrong']) == 2
+    assert len(requests) == 3
 
 
 def test_failed_primary_remains_identifiable_and_not_success(tmp_path):
