@@ -34,6 +34,8 @@ def inspect(source: Path) -> dict:
     if any(re.fullmatch(r"server-[0-9a-f]{32}", run["manifest"]["run_id"]) is None
            for run in runs):
         raise ValueError("snapshot contains a different run identity")
+    if any("recovery_sha256" in run["manifest"] for run in runs):
+        raise ValueError("snapshot cannot splice a recovered source")
     if any(item.source_kind not in {"issuer_listing", "issuer_primary"}
            for run in runs for item in store._receipts(run["manifest"])):
         raise ValueError("snapshot contains a different source")

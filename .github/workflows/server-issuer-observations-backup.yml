@@ -51,6 +51,11 @@ jobs:
           port="${PORT:-22}"
           ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts \
               -o ConnectTimeout=15 -o BatchMode=yes -p "$port" -i ~/.ssh/id_ed25519 \
+              "${USER}@${HOST}" "observe issuer-status" \
+              > "$RUNNER_TEMP/server-issuer-status.txt"
+          cat "$RUNNER_TEMP/server-issuer-status.txt"
+          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts \
+              -o ConnectTimeout=15 -o BatchMode=yes -p "$port" -i ~/.ssh/id_ed25519 \
               "${USER}@${HOST}" "observe issuer-store-export" \
               > "$RUNNER_TEMP/server-issuer.tar.gz"
           uv run python scripts/filing_server_snapshot.py unpack \

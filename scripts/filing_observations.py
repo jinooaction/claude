@@ -89,6 +89,8 @@ def server_status(store: RunStore, now: datetime) -> dict:
         manifest = run["manifest"]
         if re.fullmatch(r"server-[0-9a-f]{32}", manifest["run_id"]) is None:
             raise ValueError("server store contains a different run identity")
+        if "recovery_sha256" in manifest:
+            raise ValueError("server store cannot splice a recovered source")
         if any(item.source_kind not in {"issuer_listing", "issuer_primary"}
                for item in store._receipts(manifest)):
             raise ValueError("server store contains a different source")
@@ -107,13 +109,23 @@ def server_status(store: RunStore, now: datetime) -> dict:
     by_slot = {}
     for run in runs:
         manifest = run["manifest"]
-        started, ended = utc(manifest["started_at"]), utc(manifest["ended_at"])
+        started = utc(manifest["started_at"])
         slot = started.replace(minute=(started.minute // 15) * 15,
                                second=0, microsecond=0)
-        by_slot.setdefault(slot, []).append(ended)
-    attempted = sum(slot in by_slot for slot in starts)
-    within_20 = sum(any(end <= slot + timedelta(minutes=20)
-                        for end in by_slot.get(slot, [])) for slot in starts)
+        by_slot.setdefault(slot, []).append(run)
+    slots = []
+    for slot in reversed(starts):
+        selected = by_slot.get(slot, [])
+        timely = [run for run in selected if utc(run["manifest"]["ended_at"])
+                  <= slot + timedelta(minutes=20)]
+        successful = any(run in complete for run in timely)
+        state = ("missing" if not selected else "success" if successful else
+                 "failed" if timely else "late")
+        slots.append({"scheduled_at": slot.isoformat().replace("+00:00", "Z"),
+                      "state": state,
+                      "run_ids": [run["manifest"]["run_id"] for run in selected]})
+    attempted = sum(slot["state"] != "missing" for slot in slots)
+    within_20 = sum(slot["state"] in {"success", "failed"} for slot in slots)
     return {
         "source": "server_issuer_observations_only",
         "completed_runs": len(runs),
@@ -126,6 +138,7 @@ def server_status(store: RunStore, now: datetime) -> dict:
         "within_20_minutes_24h": within_20,
         "missing_slots_24h": 96 - attempted,
         "late_slots_24h": attempted - within_20,
+        "slots_24h": slots,
         "backup_status": "not_checked_locally",
     }
 

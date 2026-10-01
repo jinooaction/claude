@@ -36,6 +36,13 @@ def _stage(source, destination):
     return json.loads(result.stdout)
 
 
+def _inspect(source):
+    result = subprocess.run([sys.executable, str(SCRIPT), "inspect-store", "--source",
+                             str(source)], cwd=ROOT, capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stderr
+    return json.loads(result.stdout)
+
+
 def _manifest(run_id, parent, started, ended, observations):
     return {
         "schema_version": 1, "run_id": run_id, "source_commit": "a" * 40,
@@ -80,6 +87,7 @@ def test_two_exports_replay_only_additions_and_preserve_first_run(tmp_path):
     assert two["head_sha256"] == source.verify()[-1]["sha256"]
     assert _stage(unpacked2, offsite)["added_files"] == 1
     assert (offsite / "runs" / f"{FIRST}.json").read_bytes() == first_bytes
+    assert _inspect(offsite)["inventory_sha256"] == two["inventory_sha256"]
 
     # A changed old run is neither an acceptable server snapshot nor an update
     # to the off-server append-only copy.
@@ -104,3 +112,19 @@ def test_snapshot_rejects_symlinks_and_unexpected_paths(tmp_path):
     result = _unpack(archive, tmp_path / "refused")
     assert result.returncode == 2
     assert not (tmp_path / "account.env").exists()
+
+
+def test_snapshot_rejects_regulatory_source_even_with_server_run_id(tmp_path):
+    source = RunStore(tmp_path / "wrong-source", clock=lambda: "2026-10-01T00:00:05Z")
+    digest = source.blobs.put(b"regulatory listing")
+    receipt = Observation(
+        "84dc0271-07f0-41ea-856b-510002131b80", ISSUER_CIK, None,
+        "listing", f"https://data.sec.gov/submissions/CIK{ISSUER_CIK}.json", digest,
+        "2026-10-01T00:00:00Z", "2026-10-01T00:00:01Z",
+        "2026-10-01T00:00:02Z", {},
+    )
+    source.publish(_manifest(FIRST, None, "2026-10-01T00:00:00Z",
+                             "2026-10-01T00:00:03Z", 1), [receipt])
+    archive = tmp_path / "wrong-source.tar.gz"
+    _snapshot(source.root, archive)
+    assert _unpack(archive, tmp_path / "refused-source").returncode == 2

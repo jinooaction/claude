@@ -210,10 +210,31 @@ def test_server_cli_keeps_sec_contact_out_and_skips_verified_primary(tmp_path, m
     assert state['completed_runs'] == 2
     assert state['attempted_slots_24h'] == 1
     assert state['missing_slots_24h'] == 95
+    assert len(state['slots_24h']) == 96
+    assert [slot['state'] for slot in state['slots_24h']].count('success') == 1
+    assert [slot['state'] for slot in state['slots_24h']].count('missing') == 95
     assert state['backup_status'] == 'not_checked_locally'
     assert cli.main(['collect-issuer-server', '--store', str(root),
                      '--config', str(config), '--run-id', 'actions-wrong']) == 2
     assert len(requests) == 3
+
+
+def test_server_status_marks_actual_failed_slot_without_backdating(tmp_path):
+    path = Path(__file__).resolve().parents[2] / 'scripts/filing_observations.py'
+    spec = importlib.util.spec_from_file_location('issuer_status_cli', path)
+    cli = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cli)
+    clock = Clock()
+    store = RunStore(tmp_path, clock=clock.utc)
+    with httpx.Client(transport=httpx.MockTransport(
+            lambda request: httpx.Response(403))) as client:
+        assert not run(store, clock, client, 'server-' + 'a' * 32, reuse=True)['complete']
+    status = cli.server_status(store, utc(store.verify()[-1]['finalized_at'])
+                               + timedelta(minutes=20))
+    assert status['attempted_slots_24h'] == 1
+    assert status['within_20_minutes_24h'] == 1
+    assert [slot['state'] for slot in status['slots_24h']].count('failed') == 1
+    assert [slot['state'] for slot in status['slots_24h']].count('missing') == 95
 
 
 def test_failed_primary_remains_identifiable_and_not_success(tmp_path):
