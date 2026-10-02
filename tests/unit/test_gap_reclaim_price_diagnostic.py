@@ -69,6 +69,16 @@ def test_positive_reference_pairs_cannot_grant_live_authority():
     assert mod.summarize(rows[:199], 200)['verdict'] == 'INSUFFICIENT_REFERENCE_PAIRS'
 
 
+def test_insufficient_count_does_not_hide_both_cost_losses():
+    data = observed(exit={'open': '98', 'close': '98', 'volume': '1'})
+    rows = [mod.score_day('MSFT', '2017-01-03', data, {'base': 31, 'stress': 40})] * 175
+    summary = mod.summarize(rows, 200)
+    assert summary['verdict'] == 'INSUFFICIENT_REFERENCE_PAIRS'
+    assert summary['reasons'] == ['reference_pairs_below_minimum',
+                                  'base_mean_not_positive', 'stress_mean_not_positive']
+    assert mod.summarize(rows[:0], 200)['reasons'] == ['reference_pairs_below_minimum']
+
+
 @pytest.fixture
 def fixed_slice(tmp_path, monkeypatch):
     source = tmp_path / 'source'

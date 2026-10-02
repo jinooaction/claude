@@ -89,6 +89,13 @@ jobs:
           summary = result['summary']
           assert len(pairs) == summary['reference_pairs_not_fills']
           assert sum(summary['state_counts'].values()) == len(result['observations'])
+          reasons = []
+          if len(pairs) < 200:
+              reasons.append('reference_pairs_below_minimum')
+          if pairs:
+              reasons.extend(key+'_mean_not_positive' for key in ('base', 'stress')
+                             if sum(calculated[key])/len(pairs) <= 0)
+          assert summary['reasons'] == reasons
           assert not summary['live_eligible'] and not summary['promotion_allowed']
           assert summary['orders_submitted'] == summary['actual_capital_fraction'] == 0
           print(json.dumps({'independent_arithmetic': True, 'summary': summary}, sort_keys=True))

@@ -264,12 +264,18 @@ def summarize(rows, minimum):
     for key in ('gross', 'base', 'stress'):
         values = [Decimal(row['returns'][key]) for row in pairs]
         means[key] = str(sum(values) / len(values)) if values else None
-    verdict = 'EXECUTION_MODEL_REQUIRED'
+    reasons = []
     if len(pairs) < minimum:
+        reasons.append('reference_pairs_below_minimum')
+    if pairs:
+        reasons.extend(f'{key}_mean_not_positive' for key in ('base', 'stress')
+                       if Decimal(means[key]) <= 0)
+    verdict = 'EXECUTION_MODEL_REQUIRED'
+    if 'reference_pairs_below_minimum' in reasons:
         verdict = 'INSUFFICIENT_REFERENCE_PAIRS'
-    elif any(Decimal(means[k]) <= 0 for k in ('base', 'stress')):
+    elif reasons:
         verdict = 'REJECTED_DEVELOPMENT'
-    return {'verdict': verdict, 'reference_pairs_not_fills': len(pairs),
+    return {'verdict': verdict, 'reasons': reasons, 'reference_pairs_not_fills': len(pairs),
             'equal_weighted_mean_reference_returns': means,
             'state_counts': dict(sorted(Counter(row['status'] for row in rows).items())),
             'orders_submitted': 0, 'actual_capital_fraction': 0,
