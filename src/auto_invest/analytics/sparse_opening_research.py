@@ -383,7 +383,14 @@ class ResearchAccount:
 
 
 def replay_research(inputs: dict, event_sinks=None) -> dict:
+    """Keep the sealed 194 public path in original member-symbol order."""
+    return _replay_research(inputs, event_sinks)
+
+
+def _replay_research(inputs: dict, event_sinks=None, *, relative_volume_priority=False) -> dict:
     """Replay both cost cases on one clock and one causal stream of signals."""
+    if type(relative_volume_priority) is not bool:
+        raise ValueError('invalid research priority mode')
     sessions = inputs['sessions']
     members = sorted(inputs['contract']['members'])
     signals = {s: OpeningSignals(sessions) for s in members}
@@ -423,6 +430,7 @@ def replay_research(inputs: dict, event_sinks=None) -> dict:
                             account.request_exit(symbol, stamp)
                 # Opening history is updated even when cash or pending exits bar entry.
                 if 5 <= offset <= 60:
+                    ready = []
                     for symbol in members:
                         signal = signals[symbol].entry(data[symbol], day, stamp)
                         if offset == 10 and signals[symbol].input_unavailable:
@@ -430,9 +438,23 @@ def replay_research(inputs: dict, event_sinks=None) -> dict:
                                 account._record('INPUT_UNAVAILABLE', stamp, symbol,
                                                 **signals[symbol].input_unavailable)
                         if signal is not None:
+                            if relative_volume_priority:
+                                ready.append(signal)
+                            else:
+                                # Preserve original event ordering as well as reservations.
+                                for account in accounts.values():
+                                    account._record('SIGNAL', stamp, **signal)
+                                    account.reserve(symbol, stamp, signal['signal_close'],
+                                                    signal['opening_low'])
+                    if relative_volume_priority:
+                        from auto_invest.analytics.volume_priority_research import (
+                            rank_ready_signals,
+                        )
+
+                        for signal in rank_ready_signals(ready, stamp):
                             for account in accounts.values():
                                 account._record('SIGNAL', stamp, **signal)
-                                account.reserve(symbol, stamp, signal['signal_close'],
+                                account.reserve(signal['symbol'], stamp, signal['signal_close'],
                                                 signal['opening_low'])
             stamp += MINUTE
     if count != len(sessions):

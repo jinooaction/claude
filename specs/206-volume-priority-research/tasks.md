@@ -6,15 +6,15 @@
 
 - [x] T001 `spec.md`에 새 가설·위험 등급3·완료 기준과 전체181 미완료 범위를 정의한다.
 - [x] T002 `research.md`에194·논문 차이·최소35시도·자료 공개/기기 제약을 확인한다.
-- [ ] T003 `contracts/preregistration.json`의 새 한 후보를 성과 조회 전에 커밋·푸시하고 지문을 남긴다.
+- [x] T003 `contracts/preregistration.json`의 새 한 후보를 성과 조회 전에 커밋·푸시하고 지문을 남긴다.39dc9de601c244cd633b4af353bb42991c436294,계약0eb8c1b04bacb8e347f0fc1708d7b392cb37b8526ffe6b18a57d388716546a85.실제 성과 미조회.
 
 ## Phase 2 — US1 처리 순서
 
 독립 검사: 거래량·동률·서로 다른 시각·미래 가격·기존194 장부.
 
-- [ ] T004 [US1] `tests/unit/test_volume_priority_research.py`에 작은 실패 반례를 먼저 작성한다.
-- [ ] T005 [US1] `src/auto_invest/analytics/sparse_opening_research.py`에서194 기본 경로를 유지하며 내부 재생기를 분리한다.
-- [ ] T006 [US1] `src/auto_invest/analytics/volume_priority_research.py`에 봉인 계약·순서·최소36·새 결과 정체성을 구현한다.
+- [x] T004 [US1] `tests/unit/test_volume_priority_research.py`에 작은 실패 반례를 먼저 작성한다.구현 전 모듈 부재로수집 실패0.91초를 확인했다.
+- [x] T005 [US1] `src/auto_invest/analytics/sparse_opening_research.py`에서194 기본 경로를 유지하며 내부 재생기를 분리한다.기존 공개 실행/장부 전체 동일 반례 통과.
+- [x] T006 [US1] `src/auto_invest/analytics/volume_priority_research.py`에 봉인 계약·순서·최소36·새 결과 정체성을 구현한다.두 비용·4보유·부분 매수 반례와기존194 관련54개/9.03초·린트 통과.실제 재생은 T014.
 
 ## Phase 3 — US2 현금·체결 재현
 

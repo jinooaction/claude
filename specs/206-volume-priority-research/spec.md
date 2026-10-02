@@ -2,7 +2,7 @@
 
 **Feature Branch**: `codex/206-volume-priority-research`
 **Created**: 2026-10-03
-**Status**: 사전등록; 구현·실제 재생 미완료
+**Status**: 사전등록과 핵심 순서 구현; 자료 전달·실제 재생·전체 검증 미완료
 **Input**: 기존 한국투자 단타 실사용 프로그램을 완성하고, 실패한 가설을 억지로 승인하지 않으며 다른 검증 가능한 대안을 진행한다.
 
 ## User Scenarios & Testing
