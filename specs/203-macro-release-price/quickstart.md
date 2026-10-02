@@ -11,5 +11,14 @@
 4. 비용 후 결과가 음수면 차단/최종 수익을 열지 않는다. 양수라도
    Spec 177의 정식 후보 선별과 Spec 181 T014~T016은 별도다.
 
-`scripts/macro_release_price_diagnostic.py`의 정확한 명령줄 인자는
-구현 후 이 문서에 추가한다. 이 단계에서 브로커 비밀값·주문은 사용하지 않는다.
+재생 명령은 다음과 같다. 출력 파일이 이미 있으면 실패한다.
+
+```sh
+nice -n 10 uv run python scripts/macro_release_price_diagnostic.py \
+  --calendar-dir /Users/mason/Projects/claude-data-research/20261002-macro-calendar \
+  --bars-dir /Users/mason/Projects/claude-data-research/20260921-hf-raw/research-input \
+  --output /Users/mason/Projects/claude-data-research/20261002-macro-calendar/macro-release-price-203-development-v2.json
+```
+
+이 단계에서 브로커 비밀값·주문은 사용하지 않는다. 실제 결과는
+[results.md](results.md)에 기록했다.

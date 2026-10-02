@@ -2,7 +2,7 @@
 
 **Feature Branch**: `codex/203-macro-release-price`  
 **Created**: 2026-10-02  
-**Status**: 사전등록 — 가격 결과 미열람  
+**Status**: 개발 구간 비용 후 탈락 — 연구 전용
 **Input**: 한국투자 계좌용 단타 프로그램의 통과 전략을 찾되 실제 주문 전 비용과 시간 분리로 검증한다.
 
 ## User Scenarios & Testing
