@@ -1,0 +1,40 @@
+{
+  "verified": true,
+  "remote_recomputed": true,
+  "source_commit": "e1566818f08707165b247290b8d5b32993c334ad",
+  "run_id": 37046328250,
+  "research_job_id": 110968554241,
+  "status": "DEVELOPMENT_REJECTED",
+  "sessions": 1515,
+  "result_sha256": "59bfb3c43237a12c90e05cbb371fdd66d85852f3e6fba683b5e3a72eb718197a",
+  "ledger_sha256": {
+    "base": "4a43bb9e63fd0179b90defcb513aef7df9639544453a284a5b64b57ae85c9fd6",
+    "stress": "37a1dab7031ccae33380c053f640476a7b2625876815c7f2a8cddcb3cf9349c8"
+  },
+  "code_file_count": 10,
+  "scenarios": {
+    "base": {
+      "closed_reference_roundtrips": 572,
+      "event_count": 13560,
+      "net_profit": -6704.90193265349,
+      "net_return": -0.670490193265349,
+      "same_executed_path_price_profit": -424.76019600000046,
+      "same_executed_path_charged_cost": 6280.141736653494,
+      "unclosed_quantity": 0
+    },
+    "stress": {
+      "closed_reference_roundtrips": 550,
+      "event_count": 13472,
+      "net_profit": -7913.275843712009,
+      "net_return": -0.7913275843712009,
+      "same_executed_path_price_profit": -432.28685799999727,
+      "same_executed_path_charged_cost": 7480.98898571201,
+      "unclosed_quantity": 0
+    }
+  },
+  "raw_minute_input_replayed_locally": false,
+  "holdout_read": false,
+  "orders_submitted": 0,
+  "actual_capital_fraction": 0,
+  "note": "Cashflow decomposition holds recorded quantities/prices fixed; it is not a counterfactual zero-cost backtest."
+}

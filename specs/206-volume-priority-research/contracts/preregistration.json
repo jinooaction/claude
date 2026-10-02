@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "family_id": "opening-relative-volume-priority-long-v1",
+  "purpose": "development_diagnostic_only",
+  "candidate_count": 1,
+  "minimum_prior_trials": 35,
+  "minimum_total_trials": 36,
+  "prior_trial_audit_sha256": "b69f19ae0e2f204204c9678b6d024dc5e1dd1825bbeb87125f60331aa6236a20",
+  "parent_contract_sha256": "d80a899952f84daa84bf62e821587fb59b3943d3b8863b98551691aec388279e",
+  "source_inventory_sha256": "8b36761ecb4a01a67a1e97aafbb9a6207def836cb1e025618fe0988c588c7c1f",
+  "input_manifest_sha256": "3ec002d68f0b62af9d9c0379eb829f4a5e22376b2993a701d134db2e5fb6046c",
+  "scope": "exact_parent_30_members_2014-03-01_to_2020-03-06",
+  "changed_rule": "same_decision_time_ready_entry_signals_only_relative_volume_descending_then_original_symbol_ascending",
+  "unchanged_rules": "exact_parent_signals_cash_caps_settlement_fills_exits_costs_and_development_acceptance",
+  "future_signals_used_for_priority": false,
+  "missed_attempt_consumed": true,
+  "later_signals_waited_for": false,
+  "holdout_read": false,
+  "future_confirmation": {"first": "2020-03-19", "last": "2022-03-04", "must_remain_unopened": true},
+  "safety": {
+    "orders_submitted": 0,
+    "actual_capital_fraction": 0,
+    "live_eligible": false,
+    "promotion_allowed": false,
+    "fill_verified": false,
+    "capacity_unknown": true,
+    "lineage_verified": false,
+    "broker_access": false
+  }
+}

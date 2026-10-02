@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "source_commit": "e1566818f08707165b247290b8d5b32993c334ad",
+  "price_rows_read": 0,
+  "broker_calls": 0,
+  "execution_symbols": [
+    "SPY",
+    "QQQ",
+    "IWM",
+    "TLT",
+    "GLD"
+  ],
+  "registered_candidate_count": 18,
+  "registered_families": [
+    "momentum",
+    "opening_range_breakout",
+    "vwap_mean_reversion"
+  ],
+  "research_family": "opening-relative-volume-priority-long-v1",
+  "research_symbols": [
+    "MMM",
+    "AXP",
+    "T",
+    "CAT",
+    "CVX",
+    "CSCO",
+    "DD",
+    "XOM",
+    "GE",
+    "INTC",
+    "IBM",
+    "JNJ",
+    "JPM",
+    "MCD",
+    "MRK",
+    "MSFT",
+    "NKE",
+    "PFE",
+    "BA",
+    "KO",
+    "GS",
+    "HD",
+    "PG",
+    "TRV",
+    "DIS",
+    "UTX",
+    "UNH",
+    "VZ",
+    "V",
+    "WMT"
+  ],
+  "symbol_overlap": [],
+  "current_runtime_accepts_206": false,
+  "findings": [
+    "Current selection recomputes the fixed Spec177 registry; 206 is not registered there.",
+    "Current signal compiler rejects symbols outside the existing five-symbol universe.",
+    "Current execution identity accepts only kis-nasdaq-partial-unadjusted.",
+    "206 development evidence alone cannot issue live qualification or replace parity."
+  ],
+  "source_sha256": {
+    "specs/177-intraday-paper-challenger/contracts/intraday-preregistration.json": "757b4fe7beafd747f3167e3ea03a49fced3f2c44419a95678146099f978adf6c",
+    "src/auto_invest/execution/intraday_selection.py": "aa6ef267ff6ea2ab9fba1ab42f7f1fe4ab2cc30b9df31ab1f61ab9f9b1802a2c",
+    "src/auto_invest/execution/intraday_signals.py": "868d33adf35c2e80ce8f743444915a910169013e12c8c6ca65a9876372053eef",
+    "src/auto_invest/execution/intraday_qualification.py": "3620336fb4e7187c25a50fda95574f99593a8bbb18af9d6e5820ac68be0f7a3a",
+    "src/auto_invest/market_data/intraday.py": "bda2b033970ca9e661a13e5fcd57ddd85420e7c0e0b01f24a053475bb93e09b4",
+    "specs/184-intraday-operator-program/contracts/runtime.md": "cd2046e0494c60be3acc505638421cfb62db15e9fc71f4a952133ddfb188c62d"
+  }
+}

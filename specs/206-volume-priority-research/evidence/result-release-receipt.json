@@ -1,0 +1,34 @@
+{
+  "id": 402078981,
+  "tag_name": "research-206-result-e1566818",
+  "target_commitish": "e1566818f08707165b247290b8d5b32993c334ad",
+  "prerelease": true,
+  "html_url": "https://github.com/jinooaction/claude/releases/tag/research-206-result-e1566818",
+  "assets": [
+    {
+      "name": "development-e1566818.zip",
+      "size": 525792,
+      "digest": "sha256:879494cff39d6eab85739695d4009514fb0572fb28331a191bcff1dba41f1cd8",
+      "browser_download_url": "https://github.com/jinooaction/claude/releases/download/research-206-result-e1566818/development-e1566818.zip"
+    },
+    {
+      "name": "program-binding-audit.json",
+      "size": 2000,
+      "digest": "sha256:0af0d656981e28264b59634f43e119a04e636137947c50a15a18e8fd12bb4a13",
+      "browser_download_url": "https://github.com/jinooaction/claude/releases/download/research-206-result-e1566818/program-binding-audit.json"
+    },
+    {
+      "name": "verified-regression.json",
+      "size": 476,
+      "digest": "sha256:3ab504db50822429a1e49d0e3dc27ea29d06e308a18acb4cf52d35fa9b9cc010",
+      "browser_download_url": "https://github.com/jinooaction/claude/releases/download/research-206-result-e1566818/verified-regression.json"
+    },
+    {
+      "name": "verified-remote-result.json",
+      "size": 1447,
+      "digest": "sha256:0ad95151af2d944f16ccad67416e459303eb55a3260e2892ee946ca3a3e4df7a",
+      "browser_download_url": "https://github.com/jinooaction/claude/releases/download/research-206-result-e1566818/verified-remote-result.json"
+    }
+  ],
+  "remote_asset_digest_verified": true
+}
