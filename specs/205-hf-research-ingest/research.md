@@ -46,3 +46,9 @@ Finnhub 원천의 1992–2026 월별 분봉이라고 주장한다. 별도 ggadda
 실제 거래소 범위와 누락은 미확인이다. 업로더의 MIT 표시가 공급자 허가도 증명한다고
 추론하지 않으며 실제 가격 행·최종 성과는 열지 않았다. 두 공개 저장소 모두
 계정 없는 대안 후보이고 검증된 원본이나 통과 전략의 증거는 아니다.
+
+공식 [Zenodo19501605](https://zenodo.org/records/19501605)는 설명서5135바이트1개만
+공개하며 실제 가격 자료는 공급자 사이트에서 취득하라고 명시한다.
+공급자의 [Hugging Face 설명서](https://raw.githubusercontent.com/elkassabgi/hfdatalibrary/main/huggingface_README.md)도
+설명서만 제공한다고 밝힌다. 공식 인용 주소를 인증 없는 가격 원본 사본으로 오인하지 않는다.
+공개 목록의 새 실제200 응답은 results.md에 기록했지만 인증 키를 대체하지는 않는다.

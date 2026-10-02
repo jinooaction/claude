@@ -2,7 +2,7 @@
 
 **Feature Branch**: `codex/205-hf-research-ingest`  
 **Created**: 2026-10-02  
-**Status**: 구현 준비  
+**Status**: 소프트웨어 검사 통과 / 인증 원본 취득 미완료
 **Input**: 기존 무료 계정을 사용하고 맥북 화면을 방해하지 않으며 실제 자료 확보를 계속한다.
 
 ## 문제 정의와 안전 경계
