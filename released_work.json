@@ -1,5 +1,5 @@
 {
-  "commit": "19cae6c16a22e0162ef0c4c2e835d4a6b8690d43",
+  "commit": "d05b3b7764e3d61cf5774e9edf7cc71ea3370ef1",
   "overall_status": "OK",
   "released_work": [
     {
@@ -700,7 +700,8 @@
     "198-late-session-research",
     "201-earnings-clock-input",
     "202-earnings-event-price",
-    "203-macro-release-price"
+    "203-macro-release-price",
+    "204-gap-reclaim-price"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -935,11 +936,7 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "200-issuer-timer-reliability"
-    },
-    {
-      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "204-gap-reclaim-price"
     }
   ],
-  "timestamp_utc": "2026-10-02T07:32:25.995462Z"
+  "timestamp_utc": "2026-10-02T07:43:32.288010Z"
 }
