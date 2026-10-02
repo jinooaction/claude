@@ -12,13 +12,23 @@ from uuid import uuid4
 
 from auto_invest.market_data.intraday import DataError, digest, encode, iso, utc
 
-BLOCKERS = [
+LEGACY_BLOCKERS = [
     "HISTORY_756_SESSIONS_REQUIRED",
     "HISTORICAL_ACCEPTANCE_REQUIRED",
     "QUALIFIED_FORWARD_60_SESSIONS_REQUIRED",
     "PROVIDER_EXECUTION_PARITY_REQUIRED",
     "LIVE_ADAPTER_NOT_IMPLEMENTED",
     "PRODUCTION_FILLS_NOT_VERIFIED",
+]
+SCOPE = "DIAGNOSTIC_PAPER_SERVICE"
+PROGRAM_READINESS = "NOT_ASSESSED"
+BLOCKERS = [
+    "DIAGNOSTIC_PAPER_ONLY",
+    "HISTORICAL_ACCEPTANCE_NOT_ASSESSED",
+    "QUALIFIED_FORWARD_NOT_ASSESSED",
+    "PROVIDER_EXECUTION_PARITY_NOT_ASSESSED",
+    "LIVE_EXECUTION_AUTHORIZATION_NOT_ASSESSED",
+    "PRODUCTION_FILLS_NOT_ASSESSED",
 ]
 FIELDS = {
     "status",
@@ -58,7 +68,9 @@ def publish(root: Path, result: dict, now: datetime) -> dict:
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
     result = {k: v for k, v in result.items() if k in FIELDS}
     result.update(
-        schema_version="1.0",
+        schema_version="1.1",
+        scope=SCOPE,
+        program_readiness=PROGRAM_READINESS,
         observed_at_utc=iso(now),
         orders_submitted=0,
         live_eligible=False,
@@ -78,7 +90,8 @@ def publish(root: Path, result: dict, now: datetime) -> dict:
 
 def read_service_status(root: Path, now: datetime) -> dict:
     path = root / "status.json"
-    unavailable = dict(orders_submitted=0, live_eligible=False, forward_promotion_eligible=False)
+    unavailable = dict(scope=SCOPE, program_readiness=PROGRAM_READINESS, orders_submitted=0,
+                       live_eligible=False, forward_promotion_eligible=False)
     if path.is_symlink():
         return dict(unavailable, status="INVALID_STATUS")
     if not path.exists():
@@ -87,17 +100,27 @@ def read_service_status(root: Path, now: datetime) -> dict:
         if path.stat().st_size > 16000:
             raise ValueError
         data = json.loads(path.read_text())
+        version = data["schema_version"]
+        if version not in {"1.0", "1.1"}:
+            raise ValueError
+        scope_fields = set()
+        expected_blockers = LEGACY_BLOCKERS
+        if version == "1.1":
+            if data["scope"] != SCOPE or data["program_readiness"] != PROGRAM_READINESS:
+                raise ValueError
+            scope_fields = {"scope", "program_readiness"}
+            expected_blockers = BLOCKERS
         if (
-            data["schema_version"] != "1.0"
-            or data["status"] not in STATES
+            data["status"] not in STATES
             or data["orders_submitted"] != 0
             or data["live_eligible"] is not False
             or data["forward_promotion_eligible"] is not False
             or data["qualified_forward_sessions"] != 0
-            or data["blockers"] != BLOCKERS
+            or data["blockers"] != expected_blockers
             or set(data)
             - (
                 FIELDS
+                | scope_fields
                 | {
                     "schema_version",
                     "observed_at_utc",
@@ -113,6 +136,10 @@ def read_service_status(root: Path, now: datetime) -> dict:
         age = (now - utc(data["observed_at_utc"])).total_seconds()
         if age < 0:
             raise ValueError
+        if version == "1.0":
+            # A scoped view is not an on-disk migration or a readiness assessment.
+            data.update(schema_version="1.1", source_schema_version="1.0", scope=SCOPE,
+                        program_readiness=PROGRAM_READINESS, blockers=BLOCKERS)
         if age > 180:
             data["last_status"] = data["status"]
             data["status"] = "STALE"
