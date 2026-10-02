@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "family_id": "negative-opening-gap-reclaim-long-v1",
+  "purpose": "development_diagnostic_only",
+  "candidate_count": 1,
+  "minimum_prior_trials": 33,
+  "price_manifest_sha256": "3ec002d68f0b62af9d9c0379eb829f4a5e22376b2993a701d134db2e5fb6046c",
+  "universe": ["AXP","BA","CAT","CSCO","CVX","DIS","GE","GS","HD","IBM","INTC","JNJ","JPM","KO","MCD","MMM","MRK","MSFT","NKE","PFE","PG","T","TRV","UNH","V","VZ","WMT","XOM"],
+  "excluded_symbols": ["DD","UTX"],
+  "development_sessions": ["2014-03-03", "2017-12-29"],
+  "blocked_sessions": ["2018-01-02", "2018-12-31"],
+  "final_sessions": ["2019-01-02", "2020-03-06"],
+  "gap_max": "-0.02",
+  "signal": "0930_open_le_0.98_times_exact_previous_session_last_close_and_0945_close_gt_0930_open",
+  "entry_reference": "0947_one_minute_open_positive_volume_after_0946_signal_completion",
+  "exit_reference": "1556_one_minute_open_positive_volume_same_session",
+  "costs_per_side_bps": {"base": 31, "stress": 40},
+  "minimum_reference_pairs": 200,
+  "result_scope": "equal_weighted_price_reference_pairs_not_executable_fills_or_portfolio",
+  "safety": {"orders_submitted": 0, "actual_capital_fraction": 0, "live_eligible": false, "promotion_allowed": false, "historical_asof_proven": false, "fill_verified": false, "capacity_verified": false}
+}
