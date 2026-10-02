@@ -5,6 +5,7 @@ import json
 import math
 import os
 import re
+import shutil
 import signal
 import threading
 import time
@@ -220,6 +221,14 @@ def write_json(path: Path, value: dict):
         partial.unlink(missing_ok=True)
 
 
+def sync_directory(path: Path):
+    descriptor = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
 def stage_output(source: Path, destination: Path):
     """Only manifest-listed, rehashed finalized files enter the recovery artifact."""
     if (source.resolve() != source.absolute() or destination.resolve() != destination.absolute()
@@ -276,14 +285,58 @@ def stage_output(source: Path, destination: Path):
                 while chunk := incoming.read(64 * 1024):
                     digest.update(chunk)
                     outgoing.write(chunk)
+                outgoing.flush()
+                os.fsync(outgoing.fileno())
             if digest.hexdigest() != receipt["sha256"]:
                 raise ValueError("SOURCE_CHANGED")
+        sync_directory(destination)
         write_json(destination / "manifest.json", value)
+        sync_directory(destination)
+        sync_directory(destination.parent)
     except Exception:
         # The stage is new and unpublished. Prior evidence is never touched.
         for path in destination.iterdir():
             path.unlink()
         destination.rmdir()
+        raise
+
+
+def retain_complete(source: Path, destination: Path) -> dict:
+    """Offline integrity retention; never evidence of authenticated source access."""
+    if (source.resolve() != source.absolute() or destination.resolve() != destination.absolute()
+            or destination.exists() or not destination.parent.is_dir()):
+        raise ValueError("NEW_OUTPUT_REQUIRED")
+    manifest = source / "manifest.json"
+    if manifest.is_symlink() or manifest.stat().st_size > 16384:
+        raise ValueError("INVALID_MANIFEST")
+    original = manifest.read_bytes()
+    value = json.loads(original)
+    if (not isinstance(value, dict) or value.get("result") != "COMPLETE"
+            or not isinstance(value.get("source_commit"), str)):
+        raise ValueError("COMPLETE_SOURCE_REQUIRED")
+    destination.mkdir(exist_ok=False)
+    try:
+        retained = destination / "source"
+        stage_output(source, retained)
+        copied_manifest = (retained / "manifest.json").read_bytes()
+        if manifest.read_bytes() != original or json.loads(copied_manifest) != value:
+            raise ValueError("SOURCE_CHANGED")
+        receipt = {
+            "schema_version": 1, "scope": "HF_ARCHIVE_V1", "result": "RETAINED",
+            "archived_at": datetime.now(UTC).isoformat(), "source_commit": value["source_commit"],
+            "input_manifest_sha256": hashlib.sha256(original).hexdigest(),
+            "retained_manifest_sha256": hashlib.sha256(copied_manifest).hexdigest(),
+            "files": value["files"], "live_eligible": False, "orders_submitted": 0,
+            "returns_evaluated": False, "source_parity_verified": False,
+            "historical_universe_verified": False,
+        }
+        write_json(destination / "retention.json", receipt)
+        sync_directory(destination)
+        sync_directory(destination.parent)
+        return receipt
+    except Exception:
+        # Only this new, unpublished copy is removed. Original evidence is untouched.
+        shutil.rmtree(destination)
         raise
 
 

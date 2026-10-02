@@ -304,6 +304,182 @@ def test_partial_real_files_remain_partial(tmp_path, parquet):
     assert not (tmp_path / "artifact" / "NVDA.parquet").exists()
 
 
+def completed_source(tmp_path, parquet):
+    def handler(request):
+        if request.url.path.endswith("symbols"):
+            return httpx.Response(200, json=catalogue())
+        return httpx.Response(200, content=parquet,
+                              headers={"content-type": "application/octet-stream"})
+
+    run(tmp_path, handler, source_commit="a" * 40)
+    return tmp_path / "new"
+
+
+def test_offline_retention_preserves_bytes_and_records_integrity(tmp_path, parquet, monkeypatch):
+    import hashlib
+
+    import auto_invest.market_data.hf_research as module
+
+    source = completed_source(tmp_path, parquet)
+    before = {p.name: p.read_bytes() for p in source.iterdir()}
+
+    def forbidden_client(**kwargs):
+        raise AssertionError("offline retention attempted network")
+
+    monkeypatch.setattr(module.httpx, "Client", forbidden_client)
+    monkeypatch.setenv("HF_DATA_API_KEY", KEY)
+    receipt = module.retain_complete(source, tmp_path / "archive")
+    retained = tmp_path / "archive" / "source"
+    assert json.loads((tmp_path / "archive" / "retention.json").read_text()) == receipt
+    assert receipt["input_manifest_sha256"] == hashlib.sha256(before["manifest.json"]).hexdigest()
+    assert receipt["retained_manifest_sha256"] == hashlib.sha256(
+        (retained / "manifest.json").read_bytes()).hexdigest()
+    assert receipt["result"] == "RETAINED" and receipt["live_eligible"] is False
+    assert receipt["orders_submitted"] == 0 and receipt["source_commit"] == "a" * 40
+    for filename in ("catalogue.json", "AMZN.parquet", "NVDA.parquet"):
+        assert (retained / filename).read_bytes() == before[filename]
+    assert {p.name: p.read_bytes() for p in source.iterdir()} == before
+    assert KEY not in (tmp_path / "archive" / "retention.json").read_text()
+
+
+def test_offline_retention_refuses_partial_source(tmp_path):
+    import auto_invest.market_data.hf_research as module
+
+    run(tmp_path, lambda request: httpx.Response(200, json=catalogue()), key="",
+        source_commit="a" * 40)
+    with pytest.raises(ValueError):
+        module.retain_complete(tmp_path / "new", tmp_path / "archive")
+    assert not (tmp_path / "archive").exists()
+
+
+def test_offline_retention_tamper_cannot_leave_success_receipt(tmp_path, parquet):
+    import auto_invest.market_data.hf_research as module
+
+    source = completed_source(tmp_path, parquet)
+    (source / "NVDA.parquet").write_bytes(b"tampered")
+    with pytest.raises(ValueError):
+        module.retain_complete(source, tmp_path / "archive")
+    assert not (tmp_path / "archive").exists()
+    assert (source / "NVDA.parquet").read_bytes() == b"tampered"
+
+
+def test_offline_retention_preserves_existing_archive(tmp_path, parquet):
+    import auto_invest.market_data.hf_research as module
+
+    source = completed_source(tmp_path, parquet)
+    output = tmp_path / "archive"
+    output.mkdir()
+    (output / "original").write_text("keep")
+    with pytest.raises(ValueError):
+        module.retain_complete(source, output)
+    assert (output / "original").read_text() == "keep"
+    assert len(list(output.iterdir())) == 1
+
+
+def test_staged_raw_fsync_failure_removes_unpublished_copy(tmp_path, parquet, monkeypatch):
+    import auto_invest.market_data.hf_research as module
+
+    source = completed_source(tmp_path, parquet)
+
+    def failed_fsync(descriptor):
+        raise OSError(KEY)
+
+    monkeypatch.setattr(module.os, "fsync", failed_fsync)
+    with pytest.raises(OSError):
+        stage_output(source, tmp_path / "artifact")
+    assert not (tmp_path / "artifact").exists()
+    assert (source / "manifest.json").exists()
+
+
+def test_completion_marker_requires_durable_raw_files(tmp_path, parquet, monkeypatch):
+    import os
+
+    import auto_invest.market_data.hf_research as module
+
+    source = completed_source(tmp_path, parquet)
+    synced = set()
+    original_sync = module.os.fsync
+    original_write = module.write_json
+
+    def track_sync(descriptor):
+        status = os.fstat(descriptor)
+        synced.add((status.st_dev, status.st_ino))
+        original_sync(descriptor)
+
+    def require_durable_files(path, value):
+        if path.name == "manifest.json":
+            for filename in ("catalogue.json", "AMZN.parquet", "NVDA.parquet"):
+                status = (path.parent / filename).stat()
+                assert (status.st_dev, status.st_ino) in synced
+        original_write(path, value)
+
+    monkeypatch.setattr(module.os, "fsync", track_sync)
+    monkeypatch.setattr(module, "write_json", require_durable_files)
+    stage_output(source, tmp_path / "artifact")
+
+
+def test_retention_receipt_failure_preserves_source(tmp_path, parquet, monkeypatch):
+    import auto_invest.market_data.hf_research as module
+
+    source = completed_source(tmp_path, parquet)
+    original = module.write_json
+
+    def failed_receipt(path, value):
+        if path.name == "retention.json":
+            raise OSError(KEY)
+        original(path, value)
+
+    monkeypatch.setattr(module, "write_json", failed_receipt)
+    with pytest.raises(OSError):
+        module.retain_complete(source, tmp_path / "archive")
+    assert not (tmp_path / "archive").exists()
+    assert (source / "manifest.json").exists()
+
+
+def test_retention_directory_failure_removes_final_receipt(tmp_path, parquet, monkeypatch):
+    import auto_invest.market_data.hf_research as module
+
+    source = completed_source(tmp_path, parquet)
+    output = tmp_path / "archive"
+    original = module.sync_directory
+
+    def fail_final_directory(path):
+        if path == output and (output / "retention.json").exists():
+            raise OSError(KEY)
+        original(path)
+
+    monkeypatch.setattr(module, "sync_directory", fail_final_directory)
+    with pytest.raises(OSError):
+        module.retain_complete(source, output)
+    assert not output.exists() and (source / "manifest.json").exists()
+
+
+def test_retention_cli_success_and_private_failure(tmp_path, parquet, monkeypatch, capsys):
+    import runpy
+
+    source = completed_source(tmp_path, parquet)
+    script = Path(__file__).resolve().parents[2] / "scripts" / "hf_research_retain.py"
+    main = runpy.run_path(str(script))["main"]
+    monkeypatch.setenv("HF_DATA_API_KEY", KEY)
+    monkeypatch.setattr("sys.argv", [str(script), "--source", str(source),
+                                    "--output", str(tmp_path / "archive")])
+    assert main() == 0
+    stdout = capsys.readouterr().out
+    assert KEY not in stdout and json.loads(stdout)["result"] == "RETAINED"
+    before = (tmp_path / "archive" / "retention.json").read_bytes()
+    # The same command must refuse to overwrite an existing completed archive.
+    assert main() == 2
+    assert json.loads(capsys.readouterr().out)["result"] == "RETENTION_REFUSED"
+    assert (tmp_path / "archive" / "retention.json").read_bytes() == before
+    (source / "manifest.json").write_text(KEY)
+    monkeypatch.setattr("sys.argv", [str(script), "--source", str(source),
+                                    "--output", str(tmp_path / "refused")])
+    assert main() == 2
+    stdout = capsys.readouterr().out
+    assert KEY not in stdout and json.loads(stdout)["result"] == "RETENTION_REFUSED"
+    assert not (tmp_path / "refused").exists()
+
+
 def test_symlink_output_and_unverified_first_history_refused(tmp_path):
     (tmp_path / "target").mkdir()
     (tmp_path / "link").symlink_to(tmp_path / "target", target_is_directory=True)

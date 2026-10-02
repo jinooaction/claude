@@ -42,6 +42,15 @@
 - [ ] T015 main 수동 실행의 실제 접근/키 부재 결과를 specs/205-hf-research-ingest/results.md와 HANDOFF.md에 기록한다.
 - [ ] T016 실제 인증 원본 두 파일과 영구 보관 지문을 specs/205-hf-research-ingest/results.md에 검증한다.
 
+## 장기 보관 보완
+
+- [x] T017 부분/변조/기존 폴더/저장 실패 반례를 tests/unit/test_hf_research_ingest.py에 먼저 작성한다.
+- [x] T018 재검증·저장 동기화·영수증을 src/auto_invest/market_data/hf_research.py와 scripts/hf_research_retain.py에 구현한다.
+- [ ] T019 적용 경로·관련 검사·원격 전체 검사 결과와 계약을 보관 보완 기준으로 갱신한다.
+
+T017 → T018 → T019는 키 없이 수행할 수 있다. 새 코드 뒤에는 전체 회귀를 다시 확인한다.
+T015–T016의 실제 실행/원본 증거는 그대로 미완료로 두며 모의 보관으로 대체하지 않는다.
+
 ## Dependencies & Execution Order
 
 T001–T002 → T003–T004 → 각 이야기의 검사/구현 → T013–T015 순서다.

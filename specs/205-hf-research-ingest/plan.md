@@ -12,7 +12,7 @@
 
 **Language/Version**: Python 3.11  
 **Primary Dependencies**: 기존 httpx, 개발 의존성 duckdb 1.4.1, GitHub Actions  
-**Storage**: 새 원본 디렉터리와 90일 Actions artifact, 작은 상태 JSON  
+**Storage**: 새 원본 디렉터리와 90일 Actions artifact, 작은 상태 JSON, 별도 장기 보관 폴더
 **Testing**: pytest, ruff, 모의 HTTP, 느린 스트림의 실제 경과시간 반례  
 **Target Platform**: Linux Actions; POSIX 주 스레드의 신호 기반 시간 제한  
 **Project Type**: 연구 CLI  
@@ -34,6 +34,7 @@ III: LLM 호출 없음. IV: 기존 감사·원본 변경 없음. V: HF 키는 �
 ```text
 src/auto_invest/market_data/hf_research.py
 scripts/hf_research_ingest.py
+scripts/hf_research_retain.py
 tests/unit/test_hf_research_ingest.py
 .github/workflows/collect-hf-research.yml
 .github/workflows/filing-observation-checks.yml
@@ -45,6 +46,17 @@ specs/205-hf-research-ingest/contracts/cli.md
 이전 완료 실행의 상태가 없으면 종료 시각+900초의 보수 차단 후 실패 3회 반개방으로 복원한다.
 최종 상태/원본 산출물은 분리하고 미완료 파일은 업로드하지 않는다. 정상 두 파일만 COMPLETE다.
 실제 인증 원본 취득과 영구 보관은 외부 키와 증거 확인이 필요한 별도 미완료 항목으로 둔다.
+
+## 장기 보관 보완 — 2026-10-02
+
+기존 90일 산출물의 만료는 장기 연구 입력의 보존을 보장하지 않는다. 기존 명세의 원본
+보존 단계를 오프라인 CLI로 구체화한다. 위험 등급 3의 기존 수집 기능 보완이며 새 외부
+요청·비밀 입력·예약·운영 배포·돈 경로는 없다. 기존 자료와 차단 상태는 제거하지 않는다.
+공유 stage_output은 복사본의 파일/디렉터리 저장을 동기화하며 보관은 새 폴더의 source/
+아래에 이를 사용한다. 최종 retention.json은 입력 및 보관 manifest 지문·UTC 시각과
+연구 경계를 가진다. 보관 실패 시 이번에 만든 폴더만 정리하고 원본은 그대로 둔다.
+보관 명령을 중단하면 되돌릴 수 있으며 이미 보존된 원본은 삭제하지 않는다.
+모의 자료 보관 성공을 T016의 실제 인증 취득 증거로 사용하지 않는다.
 
 ## Complexity Tracking
 

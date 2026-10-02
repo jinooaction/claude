@@ -12,3 +12,9 @@
 `returns_evaluated=false`, `historical_universe_verified=false`, `source_parity_verified=false`,
 `live_eligible=false`, `orders_submitted=0`를 가진다. 공개 목록도 이력 전체의 종목 구성을
 증명하지 않는다. 모든 파일이 검증된 경우에만 원본 취득 결과를 `COMPLETE`로 표시한다.
+
+장기 보관은 새 폴더의 `source/`에 검증된 파일/manifest를 두고 마지막에 `retention.json`을
+쓴다. 보관 영수증 버전1/범위 `HF_ARCHIVE_V1`은 UTC `archived_at`, `source_commit`,
+`input_manifest_sha256`, `retained_manifest_sha256`, 원본 `files` 영수증과 연구 경계를 가진다.
+입력 manifest의 바이트 지문과 정규화한 보관 manifest의 지문을 구별한다.
+`RETAINED`는 보관 무결성만 의미하며 실제 HTTP/인증/전략 자격은 원격 증거가 필요하다.

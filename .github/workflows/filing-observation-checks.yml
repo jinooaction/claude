@@ -24,6 +24,7 @@ on:
       - '.github/workflows/intraday-paper-status.yml'
       - 'src/auto_invest/market_data/hf_research.py'
       - 'scripts/hf_research_ingest.py'
+      - 'scripts/hf_research_retain.py'
       - 'tests/unit/test_hf_research_ingest.py'
       - '.github/workflows/collect-hf-research.yml'
       - 'specs/205-hf-research-ingest/**'
@@ -59,6 +60,6 @@ jobs:
       - name: Record tested source
         run: git rev-parse HEAD
       - name: Lint source, tests, and filing commands
-        run: uv run ruff check src tests scripts/filing_observations.py scripts/filing_publication.py scripts/earnings_metadata_audit.py scripts/earnings_event_price_diagnostic.py scripts/hf_research_ingest.py
+        run: uv run ruff check src tests scripts/filing_observations.py scripts/filing_publication.py scripts/earnings_metadata_audit.py scripts/earnings_event_price_diagnostic.py scripts/hf_research_ingest.py scripts/hf_research_retain.py
       - name: Full regression without broker credentials
         run: uv run pytest
