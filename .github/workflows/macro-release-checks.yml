@@ -6,7 +6,7 @@ on:
     paths:
       - 'scripts/macro_release_price_diagnostic.py'
       - 'tests/unit/test_macro_release_price_diagnostic.py'
-      - 'specs/203-macro-release-price/**'
+      - 'specs/203-macro-release-price/contracts/preregistration.json'
       - '.github/workflows/macro-release-checks.yml'
       - 'pyproject.toml'
       - 'uv.lock'
