@@ -38,7 +38,7 @@
 ## Phase 6: Verification and Handoff
 
 - [x] T013 관련 반례·린트·하네스·HANDOFF 사실 검사를 specs/205-hf-research-ingest/results.md에 남긴다.
-- [ ] T014 원격 전체 pytest/ruff 결과를 specs/205-hf-research-ingest/results.md에 기록하고 PR 품질 관문을 통과한다.
+- [x] T014 원격 전체 pytest/ruff 결과를 specs/205-hf-research-ingest/results.md에 기록하고 PR 품질 관문을 통과한다.
 - [ ] T015 main 수동 실행의 실제 접근/키 부재 결과를 specs/205-hf-research-ingest/results.md와 HANDOFF.md에 기록한다.
 - [ ] T016 실제 인증 원본 두 파일과 영구 보관 지문을 specs/205-hf-research-ingest/results.md에 검증한다.
 

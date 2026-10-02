@@ -26,3 +26,23 @@ IEX 단일 거래소 자료로 바뀐다. 자료 정리로 제거할 수 없는 
 
 Parquet 검사에는 기존 고정 개발 의존성 DuckDB를 사용한다. footer와 열 구조만 읽고 가격
 행을 쿼리하지 않는다. 원격 연구 전용이며 운영 서버의 의존성·서비스·주문 경로를 바꾸지 않는다.
+
+## 2026-10-02 공개 대체 경로 확인
+
+공식 [MCP 안내](https://hfdatalibrary.com/pages/mcp)도 실제 파일 취득에는 같은 기존
+계정 키가 필요하다고 명시한다. 연결 방식 변경만으로 키 부재가 해결되지는 않는다.
+새 가입이나 맥북 화면 조작 없이 기존 계정 키를 비밀 설정에 등록하는 경로를 유지한다.
+
+공개 [mito0o852/OHLCV-1m 설명](https://huggingface.co/datasets/mito0o852/OHLCV-1m/blob/main/README.md)은
+Finnhub 원천의 1992–2026 월별 분봉이라고 주장한다. 별도 ggaddam 사본의 공개 파일
+목록도 확인했으나 설명의 집계 크기와 파일 목록의 전체 크기는 같지 않다.
+업로더의 설명만으로 실제 기간·누락·기업 계보·이용 허가를 확정하지 않는다.
+[Finnhub 공식 약관](https://finnhub.io/terms-of-service)은 자료 또는 파생 결과의 공유에
+서면 허가를 요구한다. 이 업로드에 그 허가가 있다는 증거는 확인하지 못했으므로
+가격 파일을 취득하거나 연구 입력으로 승격하지 않았다.
+
+공개 [CryptoSpartan/stocks_bars_1m 설명](https://huggingface.co/datasets/CryptoSpartan/stocks_bars_1m/blob/main/README.md)은
+2016년 이후 Alpaca 분봉과 MIT 표시를 확인할 수 있다. 공급자 원천의 재배포 권한,
+실제 거래소 범위와 누락은 미확인이다. 업로더의 MIT 표시가 공급자 허가도 증명한다고
+추론하지 않으며 실제 가격 행·최종 성과는 열지 않았다. 두 공개 저장소 모두
+계정 없는 대안 후보이고 검증된 원본이나 통과 전략의 증거는 아니다.
