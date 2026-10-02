@@ -23,7 +23,7 @@
 
 ## Phase 6 — 검증과 인계
 
-- [ ] T007 전체 원격 회귀·린트·하네스·인계 사실·PR 품질 검사를 통과하고 `specs/203-macro-release-price/results.md`에 기록한다.
+- [x] T007 전체 원격 회귀·린트·하네스·인계 사실·PR 품질 검사를 통과하고 `specs/203-macro-release-price/results.md`에 기록한다. 최종 코드 `17a68497`의 `36967129406`: 5195 passed/13 skipped, 린트 통과; 하네스 14/14·HANDOFF 사실·PR 품질 검사 통과.
 - [ ] T008 병합·배포 해당 여부를 확인하고 Spec 181 T013~T016을 `HANDOFF.md`에 정확히 인계한다.
 
 의존성: T001→T002/T003→T004/T005→T006→T007→T008.
