@@ -20,12 +20,17 @@
 약한 양수이나, 봉인된 실제 연구 비용을 감당하지 못했다. 이 단일 가설은 개발
 구간에서 거절한다. 차단 2018년·최종 2019~2020년 수익은 열지 않았다.
 
-출력은 로컬 저장소 밖
-`/Users/mason/Projects/claude-data-research/20260921-hf-raw/earnings-event-price-202-development-v1.json`에
+독립 검토에서 전일 마지막 분봉이 누락될 때 더 이른 가격을 받아들일 가능성을
+찾아 정확한 정규장 마지막 분봉을 요구하도록 고쳤다. 실제 30개 파일을 다시
+지문 검사한 v2 재생에서 461개 사건의 상태·222개 가격쌍·모든 비용별 수익은
+v1과 완전히 동일했다. 누락을 조용히 대체하지 않는 반례를 추가했다.
+
+최종 출력은 로컬 저장소 밖
+`/Users/mason/Projects/claude-data-research/20260921-hf-raw/earnings-event-price-202-development-v2.json`에
 보존했다. 출력 SHA-256은
-`7795fdba41d5db179f5ab407f6f5ea8e72a6a7ebe4faf195d91e49e8f78344b5`다.
+`ab02369b8c2a0118b18edee2415edbcb2f2ee50186bd9832e49c332b9506d7fc`다.
 실행 스크립트 SHA-256은
-`17c00653208d85f91ce1a5a23d8f116c24e6e62b50c3b76359e130f8913f583d`다.
+`7617878de842f7ee61a3fb30813d11e882e6795b988467eff77405794d55fbe4`다.
 별도 산술로 222개 각 가격쌍의 총·기준·가혹 수익률과 평균을 재계산해
 `1e-25` 이내로 일치시켰다. 안전 표식은 주문0·실제 자본0·승격 불가다.
 

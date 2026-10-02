@@ -81,6 +81,20 @@ def test_price_digest_and_previous_session_must_match(tmp_path):
         raise AssertionError('modified input accepted')
 
 
+def test_missing_previous_closing_minute_cannot_use_stale_price(tmp_path):
+    calendar = xcals.get_calendar('XNYS')
+    path = tmp_path / 'AXP.csv'
+    path.write_text(
+        'timestamp_utc,symbol,open,high,low,close,volume\n'
+        '2014-03-07T20:58:00+00:00,AXP,100,100,100,100,10\n'
+        '2014-03-10T13:45:00+00:00,AXP,101,101,101,101,10\n'
+    )
+    observed = MODULE.observe_symbol(
+        path, 'AXP', {'2014-03-10'}, calendar, MODULE.sha256_file(path)
+    )
+    assert observed['2014-03-10']['previous_close'] is None
+
+
 def test_only_declared_legacy_file_alias_is_accepted():
     assert MODULE.file_symbol_matches('UTX', 'RTX')
     assert MODULE.file_symbol_matches('AXP', 'AXP')

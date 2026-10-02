@@ -6,7 +6,7 @@ import argparse
 import hashlib
 import json
 from collections import Counter
-from datetime import UTC, datetime, time
+from datetime import UTC, datetime, time, timedelta
 from decimal import Decimal
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -120,7 +120,11 @@ def observe_symbol(
     path: Path, symbol: str, dates: set[str], calendar: object, expected_sha: str
 ) -> dict[str, dict]:
     expected_previous = {
-        day: calendar.previous_session(day).date().isoformat() for day in dates
+        day: calendar.previous_session(day) for day in dates
+    }
+    expected_last_stamp = {
+        day: (calendar.session_close(previous) - timedelta(minutes=1)).isoformat().encode()
+        for day, previous in expected_previous.items()
     }
     clock_map = {
         day: {utc_stamp(day, *clock): clock for clock in REQUIRED_CLOCKS}
@@ -130,6 +134,7 @@ def observe_symbol(
     digest = hashlib.sha256()
     prior_day = None
     last_close = None
+    last_stamp = None
     current_day = None
     with path.open('rb') as handle:
         header = handle.readline()
@@ -143,12 +148,18 @@ def observe_symbol(
                 prior_day, current_day = current_day, day
                 if day in dates:
                     observations[day]['previous_close'] = (
-                        last_close if prior_day == expected_previous[day] else None
+                        last_close
+                        if (
+                            prior_day == expected_previous[day].date().isoformat()
+                            and last_stamp == expected_last_stamp[day]
+                        )
+                        else None
                     )
             parts = row.rstrip(b'\r\n').split(b',')
             if len(parts) != 7 or parts[1].decode('ascii') != symbol:
                 raise ValueError(f'{symbol}: malformed or mismatched price row')
             last_close = parts[5].decode('ascii')
+            last_stamp = parts[0]
             if day in dates:
                 clock = clock_map[day].get(parts[0])
                 if clock is not None:
