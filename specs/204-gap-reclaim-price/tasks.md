@@ -10,7 +10,7 @@
 - [x] T005 [US2] research-fixtures/204에 고정 관측과 출처를 전달하고 contracts/input-lock.json 지문을 성과 확인 전 고정한다. 30원본 전체 확인,28종목134761행·8225387원문바이트·1809936gzip바이트. 성과는 아직 계산하지 않았다.
 
 ## Phase 3 — US3 원격 검증
-- [ ] T006 [US3] score/verify와 .github/workflows/gap-reclaim-checks.yml에 원격 실제 개발·독립 산술 대조·증거 보존을 연결한다.
+- [x] T006 [US3] score/verify와 .github/workflows/gap-reclaim-checks.yml에 원격 실제 개발·독립 산술 대조·증거 보존을 연결한다. 실제 종료 증거는T007로 확인한다.
 - [ ] T007 [US3] 원격 실제 결과·최종 전체 pytest/ruff·하네스·인계·PR 품질 검사를 results.md에 남긴다.
 
 ## Phase 4 — Release

@@ -152,3 +152,36 @@ def test_unlocked_input_cannot_score(fixed_slice, monkeypatch):
     monkeypatch.setattr(mod, 'LOCK_SHA', '0' * 64)
     with pytest.raises(ValueError, match='input not locked'):
         mod.calculate(fixture)
+
+
+def test_duplicate_source_timestamp_is_not_silently_deduplicated(fixed_slice, tmp_path):
+    _, _, source, manifest = fixed_slice
+    path = source / 'MSFT.csv'
+    first = path.read_bytes().splitlines(keepends=True)[1]
+    with path.open('ab') as handle:
+        handle.write(first)
+    with pytest.raises(ValueError, match='out-of-order source'):
+        mod.stage(manifest, source, tmp_path / 'duplicate', 0)
+
+
+def test_future_or_out_of_session_slice_is_rejected_even_with_new_lock(fixed_slice, monkeypatch):
+    fixture, _, _, _ = fixed_slice
+    path = fixture / 'MSFT.csv.gz'
+    raw = gzip.decompress(path.read_bytes()) + b'2018-01-03T20:56:00+00:00,MSFT,100,101,99,100,1\n'
+    path.write_bytes(gzip.compress(raw, mtime=0))
+    index_path = fixture / 'index.json'
+    index = json.loads(index_path.read_text())
+    index['files']['MSFT']['gzip_sha256'] = mod.digest(path)
+    index_path.write_text(json.dumps(index))
+    mod.LOCK.write_text(json.dumps({'index_sha256': mod.digest(index_path)}))
+    monkeypatch.setattr(mod, 'LOCK_SHA', mod.digest(mod.LOCK))
+    with pytest.raises(ValueError, match='slice timestamp'):
+        mod.calculate(fixture)
+
+
+def test_preregistration_tamper_cannot_change_rule(tmp_path, monkeypatch):
+    path = tmp_path / 'contract.json'
+    path.write_bytes(mod.CONTRACT.read_bytes() + b' ')
+    monkeypatch.setattr(mod, 'CONTRACT', path)
+    with pytest.raises(ValueError, match='preregistration changed'):
+        mod.read_contract()

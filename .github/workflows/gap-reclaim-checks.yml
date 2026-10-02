@@ -1,0 +1,103 @@
+name: Opening gap reclaim regression
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'scripts/gap_reclaim_price_diagnostic.py'
+      - 'tests/unit/test_gap_reclaim_price_diagnostic.py'
+      - 'research-fixtures/204/**'
+      - 'specs/204-gap-reclaim-price/contracts/**'
+      - '.github/workflows/gap-reclaim-checks.yml'
+      - 'pyproject.toml'
+      - 'uv.lock'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gap-reclaim-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      KIS_LIVE_TEST: '0'
+      UV_PYTHON: '3.11'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86
+      - name: Install locked dependencies
+        run: uv sync --locked --dev
+      - name: Record tested source
+        run: git rev-parse HEAD
+      - name: Lint source and tests
+        run: uv run ruff check src tests scripts/gap_reclaim_price_diagnostic.py
+      - name: Full regression without broker credentials
+        run: uv run pytest
+
+  development:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      KIS_LIVE_TEST: '0'
+      UV_PYTHON: '3.11'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86
+      - name: Install locked dependencies
+        run: uv sync --locked --dev
+      - name: Evaluate only frozen development observations
+        run: |
+          uv run python scripts/gap_reclaim_price_diagnostic.py score \
+            --fixture-dir research-fixtures/204 --output "$RUNNER_TEMP/gap-result.json"
+          uv run python scripts/gap_reclaim_price_diagnostic.py verify \
+            --fixture-dir research-fixtures/204 --evidence "$RUNNER_TEMP/gap-result.json"
+      - name: Independently audit price-pair arithmetic and safety
+        env:
+          GAP_RESULT: ${{ runner.temp }}/gap-result.json
+        run: |
+          uv run python - <<'PY'
+          import json, os
+          from decimal import Decimal
+          from pathlib import Path
+          result = json.loads(Path(os.environ['GAP_RESULT']).read_text())
+          pairs = [r for r in result['observations'] if r['status'] == 'REFERENCE_PAIR']
+          calculated = {'gross': [], 'base': [], 'stress': []}
+          for row in pairs:
+              buy, sell = Decimal(row['entry']), Decimal(row['exit'])
+              independent = {'gross': sell / buy - 1}
+              for key, bps in (('base', 31), ('stress', 40)):
+                  independent[key] = sell * (10000-bps) / (buy * (10000+bps)) - 1
+              for key, value in independent.items():
+                  assert abs(value - Decimal(row['returns'][key])) < Decimal('1e-25')
+                  calculated[key].append(value)
+          for key, values in calculated.items():
+              recorded = result['summary']['equal_weighted_mean_reference_returns'][key]
+              assert (recorded is None) == (not values)
+              if values:
+                  assert abs(sum(values)/len(values)-Decimal(recorded)) < Decimal('1e-25')
+          summary = result['summary']
+          assert len(pairs) == summary['reference_pairs_not_fills']
+          assert sum(summary['state_counts'].values()) == len(result['observations'])
+          assert not summary['live_eligible'] and not summary['promotion_allowed']
+          assert summary['orders_submitted'] == summary['actual_capital_fraction'] == 0
+          print(json.dumps({'independent_arithmetic': True, 'summary': summary}, sort_keys=True))
+          PY
+      - name: Retain actual research evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: gap-reclaim-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/gap-result.json
+          if-no-files-found: warn
+          retention-days: 90
