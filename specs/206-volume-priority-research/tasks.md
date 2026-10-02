@@ -20,17 +20,17 @@
 
 독립 검사: 현금·부분 체결·정산·청산 대기와 원본 반복 재생.
 
-- [ ] T007 [US2] `tests/unit/test_volume_priority_research.py`에 현금 부족·시도권·부분 청산·누락·194 호환 반례를 추가한다.
-- [ ] T008 [US2] `scripts/volume_priority_research.py`에 새 출력·장부/코드 지문·194 독립 산술 검증을 연결한다.
-- [ ] T009 [US2] `tests/integration/test_volume_priority_research_cli.py`에 실제 명령·재계산·변조/덮어쓰기 거부를 검증한다.
+- [x] T007 [US2] `tests/unit/test_volume_priority_research.py`에 현금 부족·시도권·부분 청산·누락·194 호환 반례를 추가한다. 양비용 현금 부족·예약 반환 뒤 재시도 금지·청산 대기·누락 수량0 통과.
+- [x] T008 [US2] `scripts/volume_priority_research.py`에 새 출력·장부/코드 지문·194 독립 산술 검증을 연결한다. 전체 원본 재생 후 독립 현금 계산·같은 원본 재계산/장부 일치 명령 구현.
+- [x] T009 [US2] `tests/integration/test_volume_priority_research_cli.py`에 실제 명령·재계산·변조/덮어쓰기 거부를 검증한다. 작은 CLI 재생/재계산과 현금 산술·지문을 모두 재봉인한 가짜 장부도 원본 재생이 거부함을 확인. 관련87개/10.01초.
 
 ## Phase 4 — US3 원본과 원격
 
 독립 검사: 키·암호문·압축·종목·지문 실패를 재생 전 거부.
 
-- [ ] T010 [US3] `scripts/volume_priority_research.py`에 제한된 준비·AES-GCM 인증·원본 지문·비밀 비노출을 구현한다.
-- [ ] T011 [US3] `tests/integration/test_volume_priority_research_cli.py`에 잘못된 키·인증/크기·nonce/종목 중복·원본 혼입 반례를 검사한다.
-- [ ] T012 [US3] `research-fixtures/206/`에 평문 원본 없는 봉인 암호문·입력 잠금을 준비한다.
+- [x] T010 [US3] `scripts/volume_priority_research.py`에 제한된 준비·AES-GCM 인증·원본 지문·비밀 비노출을 구현한다. 낮은 우선순위·1MiB마다0.05초 제한으로 실제 준비, 키는0600 개인 파일/전용 비밀 설정에만 보관.
+- [x] T011 [US3] `tests/integration/test_volume_priority_research_cli.py`에 잘못된 키·인증/크기·nonce/종목 중복·원본 혼입 반례를 검사한다. 인증된 압축 팽창·AAD 변경·기존 출력·심볼릭 링크/중간 경로/FIFO·변조·중복 JSON·미완료 영수증·비밀/연락처 비출력 반례 포함87개 통과.
+- [x] T012 [US3] `research-fixtures/206/`에 평문 원본 없는 봉인 암호문·입력 잠금을 준비한다. 실제30종목1070241004바이트 대조·암호문244235959바이트, 입력 목록839ff5bb0a9de5f4ccad085b44a17ee9fe8cc89714e991756439d081d8e4bc88. 가격 없는4영수증은Git에, 암호문은research-206-input-v1 자산34개/244260329바이트에 보관했다. 원격 자산34개 모두업로드 지문/크기 일치 확인. 실제 성과 미조회.
 - [ ] T013 [US3] `.github/workflows/volume-priority-checks.yml`에 신뢰된 코드·분리 키·원격 재생/재계산·전체 회귀·산출물 보존을 연결한다.
 
 ## Phase 5 — 실제 결과와 인계

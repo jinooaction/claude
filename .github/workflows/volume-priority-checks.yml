@@ -1,0 +1,118 @@
+name: Volume priority research regression
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'src/auto_invest/analytics/volume_priority_research.py'
+      - 'src/auto_invest/analytics/sparse_opening_research.py'
+      - 'src/auto_invest/analytics/observed_intraday_inputs.py'
+      - 'scripts/volume_priority_research.py'
+      - 'scripts/sparse_opening_research.py'
+      - 'scripts/volume-priority-requirements.txt'
+      - 'tests/unit/test_volume_priority_research.py'
+      - 'tests/integration/test_volume_priority_research_cli.py'
+      - 'research-fixtures/206/**'
+      - 'specs/206-volume-priority-research/**'
+      - '.github/workflows/volume-priority-checks.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: volume-priority-checks-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      KIS_LIVE_TEST: '0'
+      UV_PYTHON: '3.11'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86
+      - run: uv sync --locked --dev
+      - name: Lint source and research command
+        run: uv run ruff check src tests scripts/volume_priority_research.py
+      - name: Full regression with mandatory pinned encryption runtime
+        run: >-
+          uv run --with-requirements scripts/volume-priority-requirements.txt
+          pytest --junitxml="$RUNNER_TEMP/volume-priority-regression.xml"
+      - name: Require execution of encryption and recomputation counterexamples
+        run: |
+          python - <<'PY'
+          import os
+          import xml.etree.ElementTree as ET
+          root = ET.parse(os.environ['RUNNER_TEMP']+'/volume-priority-regression.xml')
+          cases = [c for c in root.iter('testcase')
+                   if 'test_volume_priority_research_cli' in c.get('classname', '')]
+          assert len(cases) >= 29 and all(c.find('skipped') is None for c in cases)
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: volume-priority-regression-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/volume-priority-regression.xml
+          if-no-files-found: warn
+
+  sealed-research:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (github.actor == github.repository_owner || github.actor == 'masonoh-kidsnote') &&
+      vars.SPARSE_RESEARCH_SOURCE_SHA == github.event.pull_request.head.sha
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      KIS_LIVE_TEST: '0'
+      UV_PYTHON: '3.11'
+      REVIEWED_SHA: ${{ vars.SPARSE_RESEARCH_SOURCE_SHA }}
+      REQUESTED_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Confirm exact reviewed source before key access
+        run: |
+          test "$REVIEWED_SHA" = "$REQUESTED_SHA"
+          test "$(git rev-parse HEAD)" = "$REVIEWED_SHA"
+          git rev-parse HEAD > "$RUNNER_TEMP/volume-priority-source.txt"
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86
+      - run: uv sync --locked --dev
+      - name: Download encrypted inputs only
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir "$RUNNER_TEMP/volume-priority-input"
+          gh release download research-206-input-v1 --repo jinooaction/claude \
+            --dir "$RUNNER_TEMP/volume-priority-input" --pattern '*.aesgcm' \
+            --pattern 'index.json' --pattern 'input-manifest.json' \
+            --pattern 'input-lock.json' --pattern 'COMPLETE.json'
+      - name: Replay and independently recompute sealed development source
+        env:
+          SPARSE_RESEARCH_INPUT_KEY: ${{ secrets.SPARSE_RESEARCH_INPUT_KEY }}
+        run: |
+          uv run --with-requirements scripts/volume-priority-requirements.txt \
+            python scripts/volume_priority_research.py replay \
+            --fixture "$RUNNER_TEMP/volume-priority-input" \
+            --output "$RUNNER_TEMP/volume-priority-evidence"
+          uv run --with-requirements scripts/volume-priority-requirements.txt \
+            python scripts/volume_priority_research.py verify \
+            --fixture "$RUNNER_TEMP/volume-priority-input" \
+            --evidence "$RUNNER_TEMP/volume-priority-evidence" \
+            > "$RUNNER_TEMP/volume-priority-verification.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: volume-priority-development-${{ github.event.pull_request.head.sha }}
+          path: |
+            ${{ runner.temp }}/volume-priority-evidence/
+            ${{ runner.temp }}/volume-priority-verification.json
+            ${{ runner.temp }}/volume-priority-source.txt
+          if-no-files-found: warn

@@ -11,7 +11,7 @@
 
 ## Technical Context
 
-- Python3.11, 기존 exchange-calendars·pytest·ruff. 새 연구 개발 의존성은 cryptography AES-256-GCM이며 직접 암호를 구현하지 않는다.
+- Python3.11, 기존 exchange-calendars·pytest·ruff. 별도 연구 실행 요구사항에 cryptography46.0.5·cffi2.1.1·pycparser3.0을 고정한다. 운영 의존성/잠금 파일을 바꾸지 않고 연구 전체 검사에서 암호화 반례의 실행·미생략을 확인한다. AES-256-GCM을 사용하며 직접 암호를 구현하지 않는다.
 - 입력은194의30종목 CSV와 고정 manifest. 원본 최대64MiB/파일·1536MiB/묶음, 암호문 최대64MiB/파일·512MiB/묶음.
 - 스트리밍 gzip/지문 준비는 nice19와1MiB마다 최소0.05초 휴식으로 제한한다. 실제 가격 재생·전체 검사는 원격에서 수행한다.
 - 새256비트 연구 키 `SPARSE_RESEARCH_INPUT_KEY`는 비밀 설정에서만 읽는다. 증권사·계좌·SEC·이메일 비밀값은 주입하지 않는다.
@@ -41,7 +41,8 @@
 - `scripts/volume_priority_research.py`: 제한된 자료 준비/복호화/재생/독립 장부 검증.
 - `tests/unit/test_volume_priority_research.py`, `tests/integration/test_volume_priority_research_cli.py`: 순서·기존194 호환·현금/체결·암호문/키/크기/기간/덮어쓰기 반례.
 - `.github/workflows/volume-priority-checks.yml`: 정확한 코드의 원격 전체 회귀와 개발 재생·재계산·산출물 보존.
-- `research-fixtures/206/`: 가격 없는 원본 지문과 암호문. 키·평문 가격 없음.
+- `research-fixtures/206/`: 가격 없는 입력 잠금·목록·manifest·완료 영수증. 약244MB 암호문은 Git 기록을 키우지 않도록 별도 `research-206-input-v1` 연구 자산에 보관한다. 원격에서는 이 고정 이름으로 받은 자료를 입력 잠금·암호문 지문·인증 태그·원본 지문으로 다시 검증한다. 자산 변경/삭제는 연구 실패로 닫히며 키·평문 가격은 공개하지 않는다.
+- `.github/workflows/volume-priority-checks.yml`: 같은 저장소·등록된 실행 주체·운영자가 설정한 정확한 `SPARSE_RESEARCH_SOURCE_SHA`와 일치한 PR 코드에서만 새 연구 키를 사용한다. 이 비밀 설정은 계좌·운영 승인 권한이 없다. 일반 전체 검사는 이 키를 받지 않는다.
 
 ## Phases
 

@@ -7,5 +7,10 @@
 5. 원격 전체 pytest/ruff·엄격 하네스·HANDOFF 사실·PR 품질을 확인한다.
 6. 실제 결과와 코드·계약·장부 지문을 보존한다. 후보 탈락이면 그대로 기록한다.
 
-명령줄 구현과 실제 개발 재생은 아직 없다. 키를 채팅이나 코드에 붙여 넣지 않는다.
+명령줄은 다음과 같으며 키는 `SPARSE_RESEARCH_INPUT_KEY` 비밀 환경에서만 받는다.
+`uv run --with-requirements scripts/volume-priority-requirements.txt python scripts/volume_priority_research.py stage --manifest <원본_manifest> --output <새_암호문_경로>`
+`uv run --with-requirements scripts/volume-priority-requirements.txt python scripts/volume_priority_research.py replay --fixture <검증된_암호문_경로> --output <새_결과_경로>`
+`uv run --with-requirements scripts/volume-priority-requirements.txt python scripts/volume_priority_research.py verify --fixture <검증된_암호문_경로> --evidence <결과_경로>`
+마지막 명령은 현금 장부를 독립 계산하고 원본 전체를 다시 재생해 결과/장부 지문을 비교한다.
+키를 채팅이나 코드에 붙여 넣지 않는다. 실제 원격 개발 재생은 아직 확인 전이다.
 기존194/205·원본·결과는 유지하며 최종 확인495세션과 전체181 관문은 별도다.

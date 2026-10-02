@@ -61,9 +61,10 @@ def test_wrong_input_identity_is_refused_before_consuming_prices():
         replay_volume_priority({'manifest_sha256': '0'*64, 'days': forbidden()})
 
 
-@pytest.mark.parametrize('entry_volume', [100000, 100])
+@pytest.mark.parametrize('entry_volume,highest_price', [
+    (100000, 10.2), (100, 10.2), (0, 10.2), (None, 10.2), (100000, 3000)])
 def test_shared_cash_and_position_limit_allocate_ready_signals_in_new_order(
-        monkeypatch, entry_volume):
+        monkeypatch, entry_volume, highest_price):
     day = date(2014, 3, 3)
     members = ['AAA', 'BBB', 'CCC', 'DDD', 'EEE']
     data = {}
@@ -71,8 +72,10 @@ def test_shared_cash_and_position_limit_allocate_ready_signals_in_new_order(
         source = Source(symbol, '0'*64, 'synthetic', 'none', 'unverified')
         series = ObservedSeries(source, day, day, [])
         lo, hi = series.bounds(day)
-        bars = [Minute(lo+timedelta(minutes=10), 10.2, 10.2, 10.2, 10.2, entry_volume),
-                Minute(hi-timedelta(minutes=5), 11, 11, 11, 11, 100000)]
+        bars = [Minute(hi-timedelta(minutes=5), 11, 11, 11, 11, 100000)]
+        if entry_volume is not None:
+            bars.insert(0, Minute(lo+timedelta(minutes=10), 10.2, 10.2, 10.2, 10.2,
+                                  entry_volume))
         data[symbol] = ObservedSeries(source, day, day, bars)
 
     class ReadySignals:
@@ -85,7 +88,10 @@ def test_shared_cash_and_position_limit_allocate_ready_signals_in_new_order(
             if stamp != STAMP or self.attempted:
                 return None
             self.attempted = True
-            return signal(series.source.symbol, members.index(series.source.symbol)+2, stamp)
+            row = signal(series.source.symbol, members.index(series.source.symbol)+2, stamp)
+            if series.source.symbol == 'EEE':
+                row['signal_close'] = highest_price
+            return row
 
         @staticmethod
         def exit_due(series, session, stamp, opening_low):
@@ -111,16 +117,26 @@ def test_shared_cash_and_position_limit_allocate_ready_signals_in_new_order(
 
     for name in ('base', 'stress'):
         assert reserved(old_events[name]) == ['AAA', 'BBB', 'CCC', 'DDD']
-        assert reserved(new_events[name]) == ['EEE', 'DDD', 'CCC', 'BBB']
+        assert reserved(new_events[name]) == (
+            ['DDD', 'CCC', 'BBB', 'AAA'] if highest_price == 3000 else ['EEE', 'DDD', 'CCC', 'BBB'])
         assert [r['symbol'] for r in new_events[name]
-                if r['kind'] == 'ENTRY_REJECTED'] == ['AAA']
-        assert ranked['scenarios'][name]['closed_roundtrips'] == 4
+                if r['kind'] == 'ENTRY_REJECTED'] == (['EEE'] if highest_price == 3000 else ['AAA'])
+        if highest_price == 3000:
+            assert next(r for r in new_events[name] if r['kind'] == 'ENTRY_REJECTED')[
+                'reason'] == 'INSUFFICIENT_CASH_OR_CAPACITY'
+        assert ranked['scenarios'][name]['closed_roundtrips'] == (4 if entry_volume else 0)
         assert ranked['scenarios'][name]['unclosed_quantity'] == 0
         assert ranked['scenarios'][name]['minimum_cash'] >= 0
-        assert ranked['scenarios'][name]['unsettled'] > 0
+        assert (ranked['scenarios'][name]['unsettled'] > 0) == bool(entry_volume)
         if entry_volume == 100:
             observed = [row for row in new_events[name] if row['kind'] == 'ENTRY_OBSERVED']
             assert len(observed) == 4 and all(row['quantity'] == 1 for row in observed)
+        if not entry_volume:
+            observed = [row for row in new_events[name] if row['kind'] == 'ENTRY_OBSERVED']
+            assert len(observed) == 4 and all(row['quantity'] == 0 for row in observed)
+            assert ranked['scenarios'][name]['cash'] == 10000
+            # Released cash does not recreate the once-per-session rejected attempt.
+            assert reserved(new_events[name]) == ['EEE', 'DDD', 'CCC', 'BBB']
     assert not original['live_eligible'] and not ranked['live_eligible']
 
     public_events = {'base': [], 'stress': []}
@@ -144,3 +160,48 @@ def test_contract_tampering_is_refused(tmp_path, monkeypatch):
 def test_original_public_replay_has_no_priority_override():
     with pytest.raises(TypeError):
         parent.replay_research({}, relative_volume_priority=True)
+
+
+def test_partial_exit_blocks_later_signal_and_missing_minutes_do_not_fill(monkeypatch):
+    day, members = date(2014, 3, 3), ['AAA', 'BBB', 'CCC', 'DDD', 'EEE', 'FFF']
+    data = {}
+    for symbol in members:
+        source = Source(symbol, '0'*64, 'synthetic', 'none', 'unverified')
+        rows = [Minute(STAMP, 10.2, 10.2, 10.2, 10.2, 100000),
+                Minute(STAMP+timedelta(minutes=5), 10, 10, 10, 10, 100),
+                Minute(STAMP+timedelta(minutes=20), 10, 10, 10, 10, 100000)]
+        data[symbol] = ObservedSeries(source, day, day, rows)
+
+    class ReadySignals:
+        input_unavailable = None
+
+        def __init__(self, sessions):
+            self.attempted = False
+
+        def entry(self, series, session, stamp):
+            symbol = series.source.symbol
+            ready = STAMP+timedelta(minutes=10) if symbol == 'FFF' else STAMP
+            if self.attempted or stamp != ready:
+                return None
+            self.attempted = True
+            return signal(symbol, members.index(symbol)+2, stamp)
+
+        @staticmethod
+        def exit_due(series, session, stamp, opening_low):
+            return stamp >= STAMP+timedelta(minutes=5)
+
+    monkeypatch.setattr(parent, 'OpeningSignals', ReadySignals)
+    events = {'base': [], 'stress': []}
+    result = parent._replay_research(
+        dict(sessions=(day,), contract=dict(members=members), days=iter([(day, data)])),
+        {name: rows.append for name, rows in events.items()}, relative_volume_priority=True)
+    for name, rows in events.items():
+        rejected = [r for r in rows if r['kind'] == 'ENTRY_REJECTED' and r['symbol'] == 'FFF']
+        assert len(rejected) == 1 and rejected[0]['reason'] == 'EXIT_PENDING'
+        exits = [r for r in rows if r['kind'] == 'EXIT_OBSERVED']
+        assert len([r for r in exits if r['quantity'] == 1]) == 4
+        missing = [r for r in exits if r['status'] == 'MISSING']
+        assert missing and all(r['quantity'] == 0 and r['proceeds'] == 0 for r in missing)
+        assert result['scenarios'][name]['closed_roundtrips'] == 4
+        assert result['scenarios'][name]['unclosed_quantity'] == 0
+        assert result['scenarios'][name]['minimum_cash'] >= 0
