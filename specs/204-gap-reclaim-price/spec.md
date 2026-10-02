@@ -2,7 +2,7 @@
 
 **Feature Branch**: `codex/204-gap-reclaim-price`
 **Created**: 2026-10-02
-**Status**: Draft
+**Status**: Released research tool; candidate failed development; full intraday goal incomplete
 **Input**: 기존 한국투자 단타 프로그램 완성. 비용 후 탈락한 기존 후보를 승인하지 않고 다른 고정 가설을 실제 자료로 검증한다.
 
 ## User Scenarios & Testing
