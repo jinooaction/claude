@@ -2,7 +2,7 @@
 
 **Feature Branch**: `codex/202-earnings-event-price`  
 **Created**: 2026-10-02  
-**Status**: Draft — research only  
+**Status**: Development rejected — research only
 **Input**: 기존 한국투자 단타 프로그램의 실제 자료 전략 검증을 계속한다.
 
 ## User Scenarios & Testing
