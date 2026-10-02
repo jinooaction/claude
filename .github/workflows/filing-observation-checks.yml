@@ -12,6 +12,9 @@ on:
       - 'tests/unit/test_issuer_filing_*.py'
       - 'tests/integration/test_filing_observations_cli.py'
       - 'specs/199-first-observed-filings/**'
+      - 'specs/201-earnings-clock-input/**'
+      - 'scripts/earnings_metadata_audit.py'
+      - 'tests/unit/test_earnings_metadata_audit.py'
       - 'deploy/filing-observations.json'
       - 'deploy/issuer-filings.json'
       - '.github/workflows/*filing*.yml'
@@ -44,6 +47,6 @@ jobs:
       - name: Record tested source
         run: git rev-parse HEAD
       - name: Lint source, tests, and filing commands
-        run: uv run ruff check src tests scripts/filing_observations.py scripts/filing_publication.py
+        run: uv run ruff check src tests scripts/filing_observations.py scripts/filing_publication.py scripts/earnings_metadata_audit.py
       - name: Full regression without broker credentials
         run: uv run pytest
