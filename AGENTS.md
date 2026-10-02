@@ -1,7 +1,7 @@
 # Codex 작업 운영 규칙
 
 <!-- SPECKIT START -->
-현재 명세 계획: [단타 수집·지속 운용의 진단 상태 보정](specs/181-intraday-runtime/plan.md).
+현재 명세 계획: [동시 신호의 개장 거래량 우선 처리 검증](specs/206-volume-priority-research/plan.md).
 <!-- SPECKIT END -->
 
 이 저장소의 기본 방식은 자율 진행이다. 운영자가 한 번 작업을 지시하면, 실제 막힘이 생기거나 작업이 끝날 때까지 중간 허락을 묻지 말고 진행한다.
