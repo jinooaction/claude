@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "contract_sha256": "c70380833a8d954f68ffc9dc2b42e233da25eb57921edfc06c95416edf56655c",
+  "index_sha256": "ae84164f8add75fa02dd6a34f24bc33b8049732aa3295dd8c45f762edb707f7b",
+  "source_manifest_sha256": "3ec002d68f0b62af9d9c0379eb829f4a5e22376b2993a701d134db2e5fb6046c",
+  "returns_computed_before_lock": false
+}
