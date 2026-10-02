@@ -4,6 +4,8 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
+      - 'pyproject.toml'
+      - 'uv.lock'
       - 'src/auto_invest/analytics/volume_priority_research.py'
       - 'src/auto_invest/analytics/sparse_opening_research.py'
       - 'src/auto_invest/analytics/observed_intraday_inputs.py'
@@ -11,7 +13,9 @@ on:
       - 'scripts/sparse_opening_research.py'
       - 'scripts/volume-priority-requirements.txt'
       - 'tests/unit/test_volume_priority_research.py'
+      - 'tests/unit/test_sparse_opening_research.py'
       - 'tests/integration/test_volume_priority_research_cli.py'
+      - 'tests/integration/test_sparse_opening_research_cli.py'
       - 'research-fixtures/206/**'
       - 'specs/206-volume-priority-research/**'
       - '.github/workflows/volume-priority-checks.yml'
