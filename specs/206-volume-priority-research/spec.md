@@ -2,7 +2,7 @@
 
 **Feature Branch**: `codex/206-volume-priority-research`
 **Created**: 2026-10-03
-**Status**: 도구 구현·실제 원격 재생/재계산·전체5278 검사 통과; 후보 DEVELOPMENT_REJECTED; 최종 인계 병합 대기
+**Status**: PR877/main738583dd에 연구 도구 병합·실제 재계산/최종5278 검사·장외 서버 반영 확인; 후보 DEVELOPMENT_REJECTED; 후속 인계 검증 중
 **Input**: 기존 한국투자 단타 실사용 프로그램을 완성하고, 실패한 가설을 억지로 승인하지 않으며 다른 검증 가능한 대안을 진행한다.
 
 ## User Scenarios & Testing

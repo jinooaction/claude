@@ -1,0 +1,10 @@
+{
+  "verified": true,
+  "run_id": 37046682564,
+  "source_commit": "f8f86d94b4eab1acb2717fb24bb790282f46a767",
+  "outcome": "http_403",
+  "new_observations": 0,
+  "contact_in_public_receipt": false,
+  "manifest_sha256": "57e0a93d77508f6165ef5eac79444b7145986a5e3ab835e5ba9e5d3049d70068",
+  "cooldown_until": "2026-10-02T18:35:00.426181Z"
+}

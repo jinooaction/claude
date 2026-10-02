@@ -1,0 +1,22 @@
+{
+  "target_commit": "738583ddf7a204b1c775de2d29a36ed20c1b5139",
+  "deploy_run_id": 37057770872,
+  "deploy_job_id": 111006601390,
+  "deploy_completed_at": "2026-10-02T20:01:01Z",
+  "audit_run_id": 37057911290,
+  "audit_job_id": 111007055489,
+  "audit_reported_at": "2026-10-02T20:01:47Z",
+  "correlation_id": "703b76cc720d9d60e318175ea3723191",
+  "started_seq": 19716,
+  "completed_seq": 19721,
+  "server_completed_at": "2026-10-02T20:00:47.938Z",
+  "sha_before_prefix": "bde560036e8d",
+  "sha_after_prefix": "738583ddf7a2",
+  "terminal_event": "DEPLOY_COMPLETED",
+  "existing_server_phase": "live",
+  "server_mode_changed": false,
+  "emergency_override_used": false,
+  "new_candidate_orders_submitted": 0,
+  "actual_capital_assigned": 0,
+  "strategy_qualified": false
+}

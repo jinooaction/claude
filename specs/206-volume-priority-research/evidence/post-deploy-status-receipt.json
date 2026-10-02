@@ -1,0 +1,21 @@
+{
+  "run_id": 37058022908,
+  "job_id": 111007426334,
+  "source_commit": "738583ddf7a204b1c775de2d29a36ed20c1b5139",
+  "workflow_completed_at": "2026-10-02T20:02:56Z",
+  "observed_at_utc": "2026-10-02T20:02:19.576352Z",
+  "schema_version": "1.1",
+  "scope": "DIAGNOSTIC_PAPER_SERVICE",
+  "program_readiness": "NOT_ASSESSED",
+  "status": "WAIT_SESSION",
+  "age_seconds_at_read": 32.1,
+  "identity": "f53f8b576adbedaad14869df9454c8adee9a03766806f24d371a1f5edd825237",
+  "archive_status": "COMPLETE",
+  "archived_session": "2026-10-02",
+  "halt_reasons": ["PAPER_DAILY_LOSS"],
+  "open_quantity": 0,
+  "orders_submitted": 0,
+  "live_eligible": false,
+  "qualified_forward_sessions": 0,
+  "forward_promotion_eligible": false
+}

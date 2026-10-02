@@ -1,0 +1,18 @@
+{
+  "source_commit": "58e4d4237ac4f7c3375c442d0c7d7cb4135d1693",
+  "run_id": 37052020849,
+  "job_id": 110987476040,
+  "passed": 5278,
+  "skipped": 13,
+  "failed": 0,
+  "crypto_cli_cases": 29,
+  "crypto_cli_skipped": 0,
+  "junit_sha256": "b2e23cedf926e057f7d14b93614eda4f99f17e8db186f5235adf85b7837af015",
+  "suite_seconds": 801.202,
+  "lint": "passed",
+  "research_job_skipped_reason": "reviewed research source remains e1566818; original run37046328250 verified actual recomputation",
+  "calculation_source_files_identical_to_e1566818": 10,
+  "execution_boundary_audit": "final-execution-boundary-audit.json",
+  "orders_submitted": 0,
+  "actual_capital_fraction": 0
+}

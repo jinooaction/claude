@@ -1,0 +1,28 @@
+{
+  "id": 402095535,
+  "tag_name": "research-206-validation-58e4d423",
+  "target_commitish": "58e4d4237ac4f7c3375c442d0c7d7cb4135d1693",
+  "prerelease": true,
+  "html_url": "https://github.com/jinooaction/claude/releases/tag/research-206-validation-58e4d423",
+  "assets": [
+    {
+      "name": "final-execution-boundary-audit.json",
+      "size": 621,
+      "digest": "sha256:d4083cf3ac3f2b80f28b13490907d4732802642a66781a1f8ae8f4fcf7952402",
+      "browser_download_url": "https://github.com/jinooaction/claude/releases/download/research-206-validation-58e4d423/final-execution-boundary-audit.json"
+    },
+    {
+      "name": "regression-58e4d423.zip",
+      "size": 94076,
+      "digest": "sha256:e75756acce1c1a90eddcfce2f4c400f765deef206adebe561e11acb2260740ea",
+      "browser_download_url": "https://github.com/jinooaction/claude/releases/download/research-206-validation-58e4d423/regression-58e4d423.zip"
+    },
+    {
+      "name": "verified-final-regression.json",
+      "size": 669,
+      "digest": "sha256:572671527585d4cbae3b6161baa4b4f9b20f540c896662c266ec3997e45686e2",
+      "browser_download_url": "https://github.com/jinooaction/claude/releases/download/research-206-validation-58e4d423/verified-final-regression.json"
+    }
+  ],
+  "remote_asset_digest_verified": true
+}
