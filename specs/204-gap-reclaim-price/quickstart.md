@@ -9,5 +9,5 @@ uv run python scripts/gap_reclaim_price_diagnostic.py score --fixture-dir resear
 uv run python scripts/gap_reclaim_price_diagnostic.py verify --fixture-dir research-fixtures/204 --evidence /absolute/new-result.json
 ```
 
-score/verify는 원격에서 실행한다。 축소본 지문 잠금이 없으면 score를 거부한다.
+score/verify는 원격에서 실행한다. 축소본 지문 잠금이 없으면 score를 거부한다.
 verify는 기존 산출물을 읽기 전용으로 재계산한다. 양수여도 자본이나177 합격·181 완료를 만들지 않는다.

@@ -1,0 +1,310 @@
+{
+  "calendar": "XNYS",
+  "end": "2020-03-06",
+  "files": {
+    "AXP": {
+      "adjustment": "source-split-dividend-adjusted",
+      "file_symbol": "AXP",
+      "issuer_lineage_status": "unverified",
+      "original_sha256": "40d1591496b6ad0a9d8c659cb354ea4f183ed862c2356b60ee0c141d752711a8",
+      "path": "AXP.csv",
+      "provider": "hfdatalibrary-pitrading",
+      "sha256": "0c8b6ef4f2a1879b1a45f2263c0bab03d0f5fd131c89ed9018fcce966c3c3d51"
+    },
+    "BA": {
+      "adjustment": "source-split-dividend-adjusted",
+      "file_symbol": "BA",
+      "issuer_lineage_status": "unverified",
+      "original_sha256": "d844ea5223501a909dd77cfcf1e41b5bdad37e763ad96ce5e18e53e8ca73eb85",
+      "path": "BA.csv",
+      "provider": "hfdatalibrary-pitrading",
+      "sha256": "2f037133e6fc1d6db2ee4df3b93cbb38c65c91e39613de3c681693fdd37cadba"
+    },
+    "CAT": {
+      "adjustment": "source-split-dividend-adjusted",
+      "file_symbol": "CAT",
+      "issuer_lineage_status": "unverified",
+      "original_sha256": "b26535e35c08efde94f89b34782f21358cd8194b331cfec8d75ad42bc962d7ef",
+      "path": "CAT.csv",
+      "provider": "hfdatalibrary-pitrading",
+      "sha256": "668c19a5b708fc48cf3d45b363d0cf19701915a4bc34746545e23d7a3b067ec4"
+    },
+    "CSCO": {
+      "adjustment": "source-split-dividend-adjusted",
+      "file_symbol": "CSCO",
+      "issuer_lineage_status": "unverified",
+      "original_sha256": "2e901665a6231765ae81fa13afbaba8d53be33fe4ee2b8d65d51905eb441d7c6",
+      "path": "CSCO.csv",
+      "provider": "hfdatalibrary-pitrading",
+      "sha256": "d2873805e8a49b02eeaa7e303f36df960a4c940678d96ac99c54e0999e26af82"
+    },
+    "CVX": {
+      "adjustment": "source-split-dividend-adjusted",
+      "file_symbol": "CVX",
+      "issuer_lineage_status": "unverified",
+      "original_sha256": "a814a635fb99ff147c924971761b259172358c9b10bb8e15bfed155c5bf05b46",
+      "path": "CVX.csv",
+      "provider": "hfdatalibrary-pitrading",
+      "sha256": "045dc17b30438792974331b84fb311a910805ce66ad7841125491929b9f1a3cf"
+    },
+    "DD": {
+      "adjustment": "source-split-dividend-adjusted",
+      "file_symbol": "DD",
+      "issuer_lineage_status": "unverified",
+      "original_sha256": "c755e7bed254d25292cd2fe05e3a51295d5775c3063260dbc6f59325c5c91162",
+      "path": "DD.csv",
+      "provider": "hfdatalibrary-pitrading",
+      "sha256": "5d9632acea9afa614473961bdd53499d4cc06b3b018f29bb2b49cd48af3c5e38"
+    },
+    "DIS": {
+      "adjustment": "source-split-dividend-adjusted",
+      "file_symbol": "DIS",
+      "issuer_lineage_status": "unverified",
+      "original_sha256": "716c6f8f65cfbcd1a84e825e56a2c31ed5898804106fd3578300c07b9656c846",
+      "path": "DIS.csv",
+      "provider": "hfdatalibrary-pitrading",
+      "sha256": "7df63de30a4e30c0f63795bebe45f8a70d526a301e0bb169ed502e5d72dfbb8a"
+    },
+    "GE": {
+      "adjustment": "source-split-dividend-adjusted",
+      "file_symbol": "GE",
+      "issuer_lineage_status": "unverified",
+      "original_sha256": "ef90b09dd52170c484a95bdbf0e334cdfe43f0f5aaef2830c6dafa1f62bad73a",
+      "path": "GE.csv",
+      "provider": "hfdatalibrary-pitrading",
+      "sha256": "5958670427c3dec5e4c4dec23cedcc7c7619a84d3385286ca04ba5d4442fb67f"
+    },
+    "GS": {
+      "adjustment": "source-split-dividend-adjusted",
+      "file_symbol": "GS",
+      "issuer_lineage_status": "unverified",
+      "original_sha256": "cc4ab84d1b1a5f0b1964b9e6b186da8b0decb53e63c64e22a34f3b7222c81b91",
+      "path": "GS.csv",
+      "provider": "hfdatalibrary-pitrading",
+      "sha256": "d6000a704448af922af0133eeed67f7f18e8f942849638be1c4e974f395577d0"
+    },
+    "HD": {
+      "adjustment": "source-split-dividend-adjusted",
+      "file_symbol": "HD",
+      "issuer_lineage_status": "unverified",
+      "original_sha256": "a4a3c184622b4fd6cfd472c6b18d4e4c5b0fd6dba15aa3c34cb0ccd796772707",
+      "path": "HD.csv",
+      "provider": "hfdatalibrary-pitrading",
+      "sha256": "67a19824b64e974ef9e3cf80869ba2ba5d246d5fb2b5f707817b64a51733483f"
+    },
+    "IBM": {
+      "adjustment": "source-split-dividend-adjusted",
+      "file_symbol": "IBM",
+      "issuer_lineage_status": "unverified",
+      "original_sha256": "bdf02d949c42aa7de18facef75a941e081ea6934dedc416c37062790d640708f",
+      "path": "IBM.csv",
+      "provider": "hfdatalibrary-pitrading",
+      "sha256": "ecedc3d729bd8069fb47d47085498a8416bdfd85000c23e95458064f8e5f04a5"
+    },
+    "INTC": {
+      "adjustment": "source-split-dividend-adjusted",
+      "file_symbol": "INTC",
+      "issuer_lineage_status": "unverified",
+      "original_sha256": "dc5dd7124ff4fb9375f35f103c336ca9c05cdc0b2abf43bcccb7b17f4260df1b",
+      "path": "INTC.csv",
+      "provider": "hfdatalibrary-pitrading",
+      "sha256": "39a3814575abbab05a610cef58e321c2dc63fb7ec6937ade7f36e19efe470d4f"
+    },
+    "JNJ": {
+      "adjustment": "source-split-dividend-adjusted",
+      "file_symbol": "JNJ",
+      "issuer_lineage_status": "unverified",
+      "original_sha256": "3a2fc93c0a4b2524379b6dbdf6647b98a28bd209b2a026ca890a616b479fa4ad",
+      "path": "JNJ.csv",
+      "provider": "hfdatalibrary-pitrading",
+      "sha256": "3b81ff74b1b602d8fcb28763c9b07e50304ce075d7e8e6522fa68d09742ed513"
+    },
+    "JPM": {
+      "adjustment": "source-split-dividend-adjusted",
+      "file_symbol": "JPM",
+      "issuer_lineage_status": "unverified",
+      "original_sha256": "d9f7cd2d49438bd85d872486503ef6c3eb140a4adc000d0a89b7fdd3b4a4f410",
+      "path": "JPM.csv",
+      "provider": "hfdatalibrary-pitrading",
+      "sha256": "6b3822823ffd943d94f5e7ce4e4126906508ffe87fc5e4d9e9f08b348fc73787"
+    },
+    "KO": {
+      "adjustment": "source-split-dividend-adjusted",
+      "file_symbol": "KO",
+      "issuer_lineage_status": "unverified",
+      "original_sha256": "c9af435b2f3f1c845c1bf8c088cb00aefe644e0181e6210747652d449efaddca",
+      "path": "KO.csv",
+      "provider": "hfdatalibrary-pitrading",
+      "sha256": "108981f052b37997bd2851d357c57436e996c9ababdf9b82dd6e96588a724725"
+    },
+    "MCD": {
+      "adjustment": "source-split-dividend-adjusted",
+      "file_symbol": "MCD",
+      "issuer_lineage_status": "unverified",
+      "original_sha256": "4d60e613bd9b96403aedfe324e76af18bb077c81a01febcc7c2e0ba8cb70c8cb",
+      "path": "MCD.csv",
+      "provider": "hfdatalibrary-pitrading",
+      "sha256": "6fdbcb34769654927b3ac772d94c7e586adf57fd4947b6f2738749616e5bb5af"
+    },
+    "MMM": {
+      "adjustment": "source-split-dividend-adjusted",
+      "file_symbol": "MMM",
+      "issuer_lineage_status": "unverified",
+      "original_sha256": "4e9e97b461e6017a683d1835a7b10374a13e1a010425ecc43a7cbadd2233f104",
+      "path": "MMM.csv",
+      "provider": "hfdatalibrary-pitrading",
+      "sha256": "20660e639c9f81eb352c9d3b29ade3ecc4d5f04baaefa70aada5e847b002c2ee"
+    },
+    "MRK": {
+      "adjustment": "source-split-dividend-adjusted",
+      "file_symbol": "MRK",
+      "issuer_lineage_status": "unverified",
+      "original_sha256": "35b4c28d73b0a1ae59b29cebf59216431b74843845a03b4f441e196b5ebef78b",
+      "path": "MRK.csv",
+      "provider": "hfdatalibrary-pitrading",
+      "sha256": "1c76e365f13226a5833fdb29a987a0ebca0abb52c4fef5a02ff8d60c02b2ad0c"
+    },
+    "MSFT": {
+      "adjustment": "source-split-dividend-adjusted",
+      "file_symbol": "MSFT",
+      "issuer_lineage_status": "unverified",
+      "original_sha256": "6f1ce5381ace4ff1780297350113e45c0fc7e89f997c4509615d30dc7d229863",
+      "path": "MSFT.csv",
+      "provider": "hfdatalibrary-pitrading",
+      "sha256": "f9dc44c11e7e485733c998a8077fd3322d6f4861e202a9d7c5627a25a2aaec6d"
+    },
+    "NKE": {
+      "adjustment": "source-split-dividend-adjusted",
+      "file_symbol": "NKE",
+      "issuer_lineage_status": "unverified",
+      "original_sha256": "10ea0a75eab29f92c8b7cfb31b797c3b38d3cdb8f72d4cc660f5301e0d827cc6",
+      "path": "NKE.csv",
+      "provider": "hfdatalibrary-pitrading",
+      "sha256": "13cbe69016da370579bb5ac227533ef93067caebe892c736428b35caebe2d8c9"
+    },
+    "PFE": {
+      "adjustment": "source-split-dividend-adjusted",
+      "file_symbol": "PFE",
+      "issuer_lineage_status": "unverified",
+      "original_sha256": "2fb9f4bc9d5e6dbae7d3c03840502381b8200d4cdff963d05e3ae0e32d6824d1",
+      "path": "PFE.csv",
+      "provider": "hfdatalibrary-pitrading",
+      "sha256": "29b337be1163fc6315f4dd7326b04c6f9ec25e512c99217f5277dec43e861962"
+    },
+    "PG": {
+      "adjustment": "source-split-dividend-adjusted",
+      "file_symbol": "PG",
+      "issuer_lineage_status": "unverified",
+      "original_sha256": "04030e5017362656deb9c4bb5e19e88ef0a74f6bc080e77c050734ef7d26ace8",
+      "path": "PG.csv",
+      "provider": "hfdatalibrary-pitrading",
+      "sha256": "330639a5a5058beb254ffafc2e04f2c89713e3f3d07e420d45207fa302c0ef06"
+    },
+    "T": {
+      "adjustment": "source-split-dividend-adjusted",
+      "file_symbol": "T",
+      "issuer_lineage_status": "unverified",
+      "original_sha256": "54b450784d1c194f4b4b55fe6f101ac1310b511240b4c81fb2f4ce664b8f6a17",
+      "path": "T.csv",
+      "provider": "hfdatalibrary-pitrading",
+      "sha256": "56f2c5c6f7f24cbf6b62c6681adfa7adf29be8f41728e0a25c7983e0ca7c64f5"
+    },
+    "TRV": {
+      "adjustment": "source-split-dividend-adjusted",
+      "file_symbol": "TRV",
+      "issuer_lineage_status": "unverified",
+      "original_sha256": "0ee8205afcf181ad32401aa96d7284a48fb8cb97dc63a72fdc646b4a4f8c8e49",
+      "path": "TRV.csv",
+      "provider": "hfdatalibrary-pitrading",
+      "sha256": "c84af5ddb1f608b8bee1c51242ca7cd628c59e48d1ff8421733a72e1257cead4"
+    },
+    "UNH": {
+      "adjustment": "source-split-dividend-adjusted",
+      "file_symbol": "UNH",
+      "issuer_lineage_status": "unverified",
+      "original_sha256": "821965e9749526b73506868cb56bdb55cf720fdae519e09de7135a088ffd8b37",
+      "path": "UNH.csv",
+      "provider": "hfdatalibrary-pitrading",
+      "sha256": "b0e515e60d775a0499138bb71b20aa1fcc9f960aee85c91e95b9d99486ab9a2a"
+    },
+    "UTX": {
+      "adjustment": "source-split-dividend-adjusted",
+      "file_symbol": "RTX",
+      "issuer_lineage_status": "unverified",
+      "original_sha256": "84ddd4398b936e67f9e8879da53f24048aea300018d450a253a93bec43c9f2cd",
+      "path": "UTX.csv",
+      "provider": "hfdatalibrary-pitrading",
+      "sha256": "ecc2d8c83bb88ada0d690d8e33b3cebd93a3327ceeebb1aa4682d9cbad5c0318"
+    },
+    "V": {
+      "adjustment": "source-split-dividend-adjusted",
+      "file_symbol": "V",
+      "issuer_lineage_status": "unverified",
+      "original_sha256": "74f5222e18f7fef6562c938d3db37b3893aedfc062c1a0f62c9e81de439238d9",
+      "path": "V.csv",
+      "provider": "hfdatalibrary-pitrading",
+      "sha256": "644d710b56acdca5cabad9dc11b4694efa72a87ecb24dfe3ce56f398a6cfb5dd"
+    },
+    "VZ": {
+      "adjustment": "source-split-dividend-adjusted",
+      "file_symbol": "VZ",
+      "issuer_lineage_status": "unverified",
+      "original_sha256": "5b080f099a39491cb269b8a6878ff799b3c4193884213309196eb1a87b6d9aaf",
+      "path": "VZ.csv",
+      "provider": "hfdatalibrary-pitrading",
+      "sha256": "84ecd133a51d2170742ef2f9894dbb3b84c55b629e4f87f5e6dc6539829942ae"
+    },
+    "WMT": {
+      "adjustment": "source-split-dividend-adjusted",
+      "file_symbol": "WMT",
+      "issuer_lineage_status": "unverified",
+      "original_sha256": "e9e706ce30e9d0ba38268ff170dfe75fea5fb249f724400f4f8baaeb1981df33",
+      "path": "WMT.csv",
+      "provider": "hfdatalibrary-pitrading",
+      "sha256": "31baa044424e0ce9ac09165c4978d642934efe052dfe9bccc986508df4b4b3c2"
+    },
+    "XOM": {
+      "adjustment": "source-split-dividend-adjusted",
+      "file_symbol": "XOM",
+      "issuer_lineage_status": "unverified",
+      "original_sha256": "89eb0c544ff9c4b2bcbbb0d368d64ee664a12682f9514dd16e3930aca368b24d",
+      "path": "XOM.csv",
+      "provider": "hfdatalibrary-pitrading",
+      "sha256": "b2b90db0e0dea25328bb6b3011fb6d68b709e0398a884dcd7105fee78fe952b9"
+    }
+  },
+  "schema_version": 2,
+  "start": "2014-03-01",
+  "symbols": [
+    "AXP",
+    "BA",
+    "CAT",
+    "CSCO",
+    "CVX",
+    "DD",
+    "DIS",
+    "GE",
+    "GS",
+    "HD",
+    "IBM",
+    "INTC",
+    "JNJ",
+    "JPM",
+    "KO",
+    "MCD",
+    "MMM",
+    "MRK",
+    "MSFT",
+    "NKE",
+    "PFE",
+    "PG",
+    "T",
+    "TRV",
+    "UNH",
+    "UTX",
+    "V",
+    "VZ",
+    "WMT",
+    "XOM"
+  ]
+}

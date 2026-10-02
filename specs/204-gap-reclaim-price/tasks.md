@@ -5,9 +5,9 @@
 - [x] T002 plan.md·research.md·data-model.md·quickstart.md와 체크리스트를 완성한다.
 
 ## Phase 2 — US1/US2 관측과 고정 입력
-- [ ] T003 [US1] tests/unit/test_gap_reclaim_price_diagnostic.py에 시각·누락·변조·비용·양수 무승격 반례를 작성한다.
-- [ ] T004 [US2] scripts/gap_reclaim_price_diagnostic.py에 전체 지문·정렬·시각 추출·덮어쓰기 거부를 구현한다.
-- [ ] T005 [US2] research-fixtures/204에 고정 관측과 출처를 전달하고 contracts/input-lock.json 지문을 성과 확인 전 고정한다.
+- [x] T003 [US1] tests/unit/test_gap_reclaim_price_diagnostic.py에 시각·누락·변조·비용·양수 무승격 반례를 작성한다. 최초15개 통과.
+- [x] T004 [US2] scripts/gap_reclaim_price_diagnostic.py에 전체 지문·정렬·시각 추출·덮어쓰기 거부를 구현한다.
+- [x] T005 [US2] research-fixtures/204에 고정 관측과 출처를 전달하고 contracts/input-lock.json 지문을 성과 확인 전 고정한다. 30원본 전체 확인,28종목134761행·8225387원문바이트·1809936gzip바이트. 성과는 아직 계산하지 않았다.
 
 ## Phase 3 — US3 원격 검증
 - [ ] T006 [US3] score/verify와 .github/workflows/gap-reclaim-checks.yml에 원격 실제 개발·독립 산술 대조·증거 보존을 연결한다.
