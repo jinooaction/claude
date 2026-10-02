@@ -37,9 +37,16 @@ jobs:
           lines = Path('/tmp/intraday-status.txt').read_text().splitlines()
           assert 'INTRADAY_TIMER=active' in lines, 'diagnostic timer inactive'
           status = json.loads(lines[-1])
+          assert status['schema_version'] == '1.1'
+          assert status.get('source_schema_version', '1.1') == '1.1', 'legacy producer remains'
+          assert status['scope'] == 'DIAGNOSTIC_PAPER_SERVICE'
+          assert status['program_readiness'] == 'NOT_ASSESSED'
           assert status['status'] in {'WAIT_SESSION', 'DIAGNOSTIC_PAPER', 'ENTRY_HALTED'}
           assert status['orders_submitted'] == 0 and status['live_eligible'] is False
           assert status['forward_promotion_eligible'] is False
+          assert status['qualified_forward_sessions'] == 0
+          assert 'LIVE_ADAPTER_NOT_IMPLEMENTED' not in status['blockers']
+          assert 'HISTORY_756_SESSIONS_REQUIRED' not in status['blockers']
           assert 0 <= status['age_seconds'] <= 180
           sources = [
               'scripts/intraday_runtime.py',

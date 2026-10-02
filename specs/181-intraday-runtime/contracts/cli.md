@@ -23,3 +23,9 @@
 오형식 INVALID_STATUS를 구분한다. 고정 원격 명령 `observe intraday-paper-status`는
 인수 없이 timer 상태, service 결과, 생산 커밋과 이 JSON을 반환한다. 원격 명령으로
 수집/서비스 시작/주문 실행은 할 수 없다. 60세션 자격은 항상 0으로 표시한다.
+
+2026-10-02 보정: service-status1.1의 scope는DIAGNOSTIC_PAPER_SERVICE,
+program_readiness는NOT_ASSESSED다. 자격 세션0과거짓/0 표식은 이 서비스 범위이며
+전체 프로그램의 역사 자료 부재/실주문 엔진 미구현을 뜻하지 않는다. 정확한 옛1.0
+상태는파일수정없이1.1 보기와source_schema_version=1.0으로 반환한다. 새 생산 관측은
+1.1 원본 생산자·현재코드지문까지 확인하고 옛보기변환만으로 배포성공을 선언하지 않는다.
