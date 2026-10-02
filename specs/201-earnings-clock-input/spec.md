@@ -2,7 +2,7 @@
 
 **Branch**: `codex/201-earnings-clock-input`
 **Created**: 2026-10-02
-**Status**: In progress (research input only; whole intraday goal incomplete)
+**Status**: Released (research input only; whole intraday goal incomplete)
 
 ## Goal and scope
 
