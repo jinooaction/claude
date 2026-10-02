@@ -1,0 +1,42 @@
+name: Macro release research regression
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'scripts/macro_release_price_diagnostic.py'
+      - 'tests/unit/test_macro_release_price_diagnostic.py'
+      - 'specs/203-macro-release-price/contracts/preregistration.json'
+      - '.github/workflows/macro-release-checks.yml'
+      - 'pyproject.toml'
+      - 'uv.lock'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macro-release-checks-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      KIS_LIVE_TEST: '0'
+      UV_PYTHON: '3.11'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86
+      - name: Install locked dependencies
+        run: uv sync --locked --dev
+      - name: Record tested source
+        run: git rev-parse HEAD
+      - name: Lint source, tests, and macro release command
+        run: uv run ruff check src tests scripts/macro_release_price_diagnostic.py
+      - name: Full regression without broker credentials
+        run: uv run pytest

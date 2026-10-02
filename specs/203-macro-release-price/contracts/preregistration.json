@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "family_id": "bls-release-follow-through-long-v1",
+  "purpose": "development_diagnostic_only",
+  "candidate_count": 1,
+  "minimum_prior_trials": 32,
+  "source_sha256": {
+    "hf_calendar_api_json": "968b318dcc89f6ddc479e39940f8fa5a4193384a6f1c5cbeba45959c7ffa62f6",
+    "hf_calendar_parquet": "a37cf25ae1be98a397542d6de2eb607962b34331715d08fbe1d3d12ff4c5a76c",
+    "alfred_cpi_dates": "8bb0facbc230eb22b0de47cbeb7fb02e0358a8de7c8d037a5b6ddda74ad72756",
+    "alfred_employment_dates": "746539406687a2b1e10ad77bc80be54e86ebb9c0da6271b3a93dbfe8ae7fd8ce",
+    "price_manifest": "c4b6c6336ee0747464fde730f6d894ba3b8814c14567406f49cb0e528ea8fdfc"
+  },
+  "hf_revision": "8592a1067bbacc9bf5cfc6a274dcff65728cbbf1",
+  "universe": ["SPY", "QQQ", "IWM", "TLT", "GLD"],
+  "allowed_release_families": ["CPI", "EMPLOYMENT"],
+  "event_clock_et": "08:30:00",
+  "event_source_rule": "hf_family_date_clock_intersect_alfred_release_dates_ignore_hf_status_and_knowledge_time",
+  "event_session_rule": "same_date_complete_xnys_regular_session_else_exclude",
+  "development_sessions": ["2013-08-23", "2017-12-29"],
+  "blocked_sessions": ["2018-01-02", "2018-12-31"],
+  "final_sessions": ["2019-01-02", "2020-03-06"],
+  "signal": "observed_0945_five_minute_close_gt_exact_previous_session_last_regular_five_minute_close",
+  "entry_reference": "observed_0955_five_minute_open_positive_volume",
+  "exit_reference": "observed_1555_five_minute_open_positive_volume_same_session",
+  "costs_per_side_bps": {"base": 31, "stress": 40},
+  "minimum_base_cost_closed_trades": 200,
+  "result_scope": "equal_weighted_price_reference_pairs_not_executable_fills_or_portfolio",
+  "safety": {
+    "orders_submitted": 0,
+    "actual_capital_fraction": 0,
+    "live_eligible": false,
+    "promotion_allowed": false,
+    "historical_asof_proven": false,
+    "fill_verified": false,
+    "capacity_verified": false
+  }
+}
