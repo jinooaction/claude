@@ -1,0 +1,140 @@
+name: Fixed HF research raw access
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: fixed-hf-research-raw-pilot-v1
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      UV_PYTHON: '3.11'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86
+      - name: Install locked research dependencies
+        run: uv sync --locked --dev
+      - name: Discover all prior conclusions without assuming a first run
+        id: history
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, subprocess, time
+          from pathlib import Path
+          # listWorkflowRuns equivalent: no success/status filter, all branches.
+          assert os.environ['GITHUB_REPOSITORY'] == 'jinooaction/claude'
+          command = ['gh', 'api', 'repos/jinooaction/claude/actions/workflows/collect-hf-research.yml/runs?per_page=100']
+          data = None
+          for attempt in range(3):
+              time.sleep(2 ** attempt)
+              try:
+                  result = subprocess.run(command, check=True, capture_output=True, timeout=20)
+                  if len(result.stdout) > 4 * 1024 * 1024:
+                      raise ValueError('history size')
+                  data = json.loads(result.stdout)
+                  break
+              except Exception:
+                  if attempt == 2:
+                      raise SystemExit('HISTORY_QUERY_REFUSED') from None
+          rows = data['workflow_runs']
+          current = int(os.environ['GITHUB_RUN_ID'])
+          # Re-runs refuse in the collector; include failures/cancellations here.
+          prior = [row for row in rows if row['id'] != current]
+          previous = None
+          if prior:
+              row = max(prior, key=lambda item: (item['updated_at'], item['id']))
+              previous = {key: row[key] for key in ('id', 'status', 'updated_at')}
+          elif data['total_count'] != 1 or not any(row['id'] == current for row in rows):
+              raise SystemExit('HISTORY_QUERY_UNVERIFIED')
+          proof = {'schema_version': 1, 'run_attempt': int(os.environ['GITHUB_RUN_ATTEMPT']),
+                   'previous': previous}
+          Path(os.environ['RUNNER_TEMP'], 'hf-history.json').write_text(json.dumps(proof))
+          if previous:
+              with open(os.environ['GITHUB_OUTPUT'], 'a') as target:
+                  target.write('previous-id=' + str(previous['id']) + '\n')
+          PY
+      - name: Restore latest state including failed or cancelled runs
+        if: steps.history.outputs.previous-id != ''
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: hf-source-circuit-state
+          run-id: ${{ steps.history.outputs.previous-id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/hf-previous
+      - name: Collect fixed source without private logs
+        id: collect
+        env:
+          HF_DATA_API_KEY: ${{ secrets.HF_DATA_API_KEY }}
+        run: |
+          set -uo pipefail
+          uv run python scripts/hf_research_ingest.py \
+            --history "$RUNNER_TEMP/hf-history.json" \
+            --previous-state "$RUNNER_TEMP/hf-previous/circuit-state.json" \
+            --output "$RUNNER_TEMP/hf-output"
+          status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          if [[ -f "$RUNNER_TEMP/hf-output/circuit-state.json" ]]; then
+            echo 'state-ready=true' >> "$GITHUB_OUTPUT"
+          fi
+          if [[ -f "$RUNNER_TEMP/hf-output/manifest.json" ]]; then
+            echo 'result-ready=true' >> "$GITHUB_OUTPUT"
+          fi
+          if [[ "$status" != 0 && "$status" != 3 ]]; then exit "$status"; fi
+      - name: Retain separate small circuit state even after failed access
+        if: always() && steps.collect.outputs.state-ready == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hf-source-circuit-state
+          path: ${{ runner.temp }}/hf-output/circuit-state.json
+          retention-days: 90
+          if-no-files-found: error
+      - name: Retain only finalized source files and result
+        if: always() && steps.collect.outputs.result-ready == 'true'
+        id: stage
+        run: |
+          uv run python - <<'PY'
+          import os
+          from pathlib import Path
+          from auto_invest.market_data.hf_research import stage_output
+          root = Path(os.environ['RUNNER_TEMP'])
+          try:
+              stage_output(root / 'hf-output', root / 'hf-artifact')
+          except Exception:
+              raise SystemExit('ARTIFACT_STAGE_REFUSED') from None
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as target:
+              target.write('ready=true\n')
+          PY
+      - name: Retain verified research artifact
+        if: always() && steps.stage.outputs.ready == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hf-research-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/hf-artifact/
+          retention-days: 90
+          if-no-files-found: error
+      - name: Report bounded research outcome
+        if: always()
+        env:
+          COLLECT_STATUS: ${{ steps.collect.outputs.status }}
+        run: |
+          {
+            echo '## 무료 연구 원본 취득'
+            echo "수집 종료코드: ${COLLECT_STATUS:-미실행}"
+            echo '0=두 원본 검증 완료, 3=접근 불가/키 부재/부분 취득/차단, 2=계약·저장 거부.'
+            echo '자료/차단 상태 산출물은 90일 보존이다. 영구 보관 완료와 다르다.'
+            echo '수집은 수익률 평가·실거래 승격·주문·자금 배정과 연결되지 않는다.'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "${COLLECT_STATUS:-2}"
