@@ -15,7 +15,7 @@
 - [x] T005 [US1] Add a fixed server-only collection command and read-only freshness status in `scripts/filing_observations.py`.
 - [x] T006 [US1] Add a no-broker-environment systemd service and 15-minute timer in `deploy/auto-invest-issuer-observations.service` and `deploy/auto-invest-issuer-observations.timer`.
 - [x] T007 [US1] Install only the new issuer units after source compatibility checks in `deploy/sync-units.sh`.
-- [ ] T008 [US1] Verify missed schedule slots, restart behavior, and service isolation in `tests/unit/test_issuer_timer.py`.
+- [x] T008 [US1] Verify missed schedule slots, restart behavior, and service isolation in `tests/unit/test_issuer_timer.py`. 모의 재개 시 빠진 00:15/00:30칸은 누락으로 남고 00:45 성공은 별도 기록된다. 실제 호스트 재시작은 수행하지 않았으므로 현장 내구성 주장에는 사용하지 않는다.
 
 ## Phase 4: User Story 2 — bounded unchanged handling (P1)
 
@@ -31,8 +31,8 @@
 
 ## Phase 6: Release evidence
 
-- [ ] T015 Run targeted local checks, remote full `uv run pytest` and `uv run ruff check src tests`, strict harness, HANDOFF facts, and PR body gate; record results in `specs/200-issuer-timer-reliability/results.md`.
-- [ ] T016 Merge a reviewable PR only after gates pass; verify source deployment, two real server collections, one off-server backup, and source fingerprints in `specs/200-issuer-timer-reliability/results.md`.
+- [x] T015 Run targeted local checks, remote full `uv run pytest` and `uv run ruff check src tests`, strict harness, HANDOFF facts, and PR body gate; record results in `specs/200-issuer-timer-reliability/results.md`. PR862 code `3a5be4c0`, run `36941200854`: 5175 passed/13 skipped, lint pass; harness 14/14 and HANDOFF facts pass.
+- [x] T016 Merge a reviewable PR only after gates pass; verify source deployment, two real server collections, one off-server backup, and source fingerprints in `specs/200-issuer-timer-reliability/results.md`. PR862/main2be0bd0, 감사 `36943253742`, 서버 00:00/00:15 두 실행과 원격 백업 `36943837760`·`36945093011`의 기준/최종 지문 일치.
 - [ ] T017 Observe 24 actual server hours and compare 96 scheduled slots with real receipts; only then mark SC-001 and the feature complete in `specs/200-issuer-timer-reliability/results.md`.
 
 The release cannot mark T016 or T017 complete using simulated clock data. The
