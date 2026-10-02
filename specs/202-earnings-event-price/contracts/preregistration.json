@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "family_id": "earnings-filing-follow-through-long-v1",
+  "purpose": "development_diagnostic_only",
+  "candidate_count": 1,
+  "minimum_prior_trials": 31,
+  "source_audit_sha256": "269dc7bd8bbf9f0c2b1aa796cf1fc9fd0db0a164535ca2a3eaa2515f1970de44",
+  "price_manifest_sha256": "3ec002d68f0b62af9d9c0379eb829f4a5e22376b2993a701d134db2e5fb6046c",
+  "development_entry_sessions": ["2014-03-03", "2017-12-29"],
+  "blocked_entry_sessions": ["2018-01-02", "2018-12-31"],
+  "final_entry_sessions": ["2019-01-02", "2020-03-06"],
+  "excluded_symbols": ["DD", "UTX"],
+  "excluded_events": ["amendment", "estimated_knowledge_time", "before_universe_publication"],
+  "event_session": "pre_0930_et_same_session_else_next_exchange_session",
+  "duplicate_key": "symbol_entry_session_keep_earliest_acceptance",
+  "signal": "observed_0945_close_gt_previous_session_last_close",
+  "entry_reference": "observed_0947_open_positive_volume",
+  "exit_reference": "observed_1556_open_positive_volume_same_session",
+  "costs_per_side_bps": {"base": 31, "stress": 40},
+  "result_scope": "equal_weighted_one_share_reference_pair_not_executable_fill_or_portfolio",
+  "safety": {"orders_submitted": 0, "actual_capital_fraction": 0, "live_eligible": false, "promotion_allowed": false, "historical_asof_proven": false, "fill_verified": false, "capacity_verified": false}
+}
