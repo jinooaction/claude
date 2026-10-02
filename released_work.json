@@ -1,5 +1,5 @@
 {
-  "commit": "1057e66302333cc1d04e84730f6a4d049a273905",
+  "commit": "59c625ee6dbd6ef4a79a85cc175583aea6704b89",
   "overall_status": "OK",
   "released_work": [
     {
@@ -697,7 +697,8 @@
     "195-earnings-event-inputs",
     "196-archived-event-evidence",
     "197-execution-source-identity",
-    "198-late-session-research"
+    "198-late-session-research",
+    "201-earnings-clock-input"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -932,11 +933,7 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "200-issuer-timer-reliability"
-    },
-    {
-      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "201-earnings-clock-input"
     }
   ],
-  "timestamp_utc": "2026-10-02T02:39:17.845165Z"
+  "timestamp_utc": "2026-10-02T03:03:00.751829Z"
 }

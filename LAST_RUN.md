@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-10-02T02:39:17.845165Z)
+# 완료 후보 소비 장부 (as of 2026-10-02T03:03:00.751829Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -9,7 +9,7 @@
 |------|-----|
 | overall_status | OK |
 | released_count | 61 |
-| scanned_specs | 134 |
+| scanned_specs | 135 |
 
 ## 완료 후보
 
@@ -139,7 +139,6 @@
 | 183-mobile-capital-strategy-dashboard | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 199-first-observed-filings | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 200-issuer-timer-reliability | 체크박스 작업이 없거나 완료되지 않았습니다. |
-| 201-earnings-clock-input | 체크박스 작업이 없거나 완료되지 않았습니다. |
 
 ## 안전 경계
 
@@ -156,7 +155,7 @@
 
 ```json
 {
-  "commit": "1057e66302333cc1d04e84730f6a4d049a273905",
+  "commit": "59c625ee6dbd6ef4a79a85cc175583aea6704b89",
   "overall_status": "OK",
   "released_work": [
     {
@@ -854,7 +853,8 @@
     "195-earnings-event-inputs",
     "196-archived-event-evidence",
     "197-execution-source-identity",
-    "198-late-session-research"
+    "198-late-session-research",
+    "201-earnings-clock-input"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -1089,12 +1089,8 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "200-issuer-timer-reliability"
-    },
-    {
-      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "201-earnings-clock-input"
     }
   ],
-  "timestamp_utc": "2026-10-02T02:39:17.845165Z"
+  "timestamp_utc": "2026-10-02T03:03:00.751829Z"
 }
 ```
