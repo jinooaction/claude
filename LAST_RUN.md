@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-10-02T15:32:14.252724Z)
+# 완료 후보 소비 장부 (as of 2026-10-02T19:25:57.168626Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -139,6 +139,7 @@
 | 183-mobile-capital-strategy-dashboard | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 199-first-observed-filings | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 200-issuer-timer-reliability | 체크박스 작업이 없거나 완료되지 않았습니다. |
+| 206-volume-priority-research | 체크박스 작업이 없거나 완료되지 않았습니다. |
 
 ## 안전 경계
 
@@ -155,7 +156,7 @@
 
 ```json
 {
-  "commit": "f8f86d94b4eab1acb2717fb24bb790282f46a767",
+  "commit": "738583ddf7a204b1c775de2d29a36ed20c1b5139",
   "overall_status": "OK",
   "released_work": [
     {
@@ -1092,8 +1093,12 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "200-issuer-timer-reliability"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "206-volume-priority-research"
     }
   ],
-  "timestamp_utc": "2026-10-02T15:32:14.252724Z"
+  "timestamp_utc": "2026-10-02T19:25:57.168626Z"
 }
 ```
