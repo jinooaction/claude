@@ -1,10 +1,14 @@
 """Server issuer timer has a fixed public-source command and no broker credentials."""
 
+import importlib.util
 import shutil
 import subprocess
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+
+from auto_invest.analytics.filing_observations import ISSUER_CIK, ISSUER_FEED, Observation, RunStore
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -52,3 +56,39 @@ def test_systemd_accepts_issuer_calendar_when_available():
     result = subprocess.run([binary, "calendar", "*-*-* *:00/15:00"],
                             capture_output=True, text=True, check=False)
     assert result.returncode == 0, result.stderr
+
+
+def test_status_keeps_missed_slots_after_observer_resumes(tmp_path):
+    script = ROOT / "scripts/filing_observations.py"
+    spec = importlib.util.spec_from_file_location("issuer_timer_status", script)
+    cli = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cli)
+    stamps = iter(["2026-10-01T00:00:05Z", "2026-10-01T00:45:05Z"])
+    store = RunStore(tmp_path, clock=lambda: next(stamps))
+    digest = store.blobs.put(b"issuer listing")
+
+    def publish(index, started, parent):
+        run_id = "server-" + str(index) * 32
+        second = started.replace(":01Z", ":02Z")
+        receipt = Observation(
+            f"84dc0271-07f0-41ea-856b-510002131b8{index}", ISSUER_CIK, None,
+            "issuer_listing", ISSUER_FEED, digest, started, second, second, {},
+        )
+        manifest = {
+            "schema_version": 1, "run_id": run_id, "source_commit": "a" * 40,
+            "config_sha256": "b" * 64, "started_at": started, "ended_at": second,
+            "previous_run_sha256": parent, "observations": [], "failures": [],
+            "coverage": {"succeeded": 1, "failed": 0, "skipped": 0},
+            "selection": {"unselected": 0, "limit_skipped": 0},
+            "circuit": {"consecutive_failures": 0, "cooldown_until": None},
+        }
+        return store.publish(manifest, [receipt])
+
+    first = publish(1, "2026-10-01T00:00:01Z", None)
+    publish(2, "2026-10-01T00:45:01Z", first)
+    status = cli.server_status(store, datetime(2026, 10, 1, 1, 15, tzinfo=UTC))
+    by_time = {slot["scheduled_at"]: slot["state"] for slot in status["slots_24h"]}
+    assert by_time["2026-10-01T00:00:00Z"] == "success"
+    assert by_time["2026-10-01T00:15:00Z"] == "missing"
+    assert by_time["2026-10-01T00:30:00Z"] == "missing"
+    assert by_time["2026-10-01T00:45:00Z"] == "success"

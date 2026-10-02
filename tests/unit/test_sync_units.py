@@ -1,6 +1,6 @@
 """Tests for deploy/sync-units.sh — the server-side systemd unit installer.
 
-deploy-on-merge.yml pipes this script to the host's `sudo bash`. It must
+deploy-on-merge.yml invokes this script through the fixed SSH gateway. It must
 install/refresh the deploy unit files and enable the timers WITHOUT ever
 restarting the worker, and WITHOUT dirtying the git working tree (so it cannot
 collide with the spec 006 deploy state machine's clean-tree check). These
@@ -9,7 +9,10 @@ assertions lock those safety properties in.
 
 from __future__ import annotations
 
+import os
 import re
+import subprocess
+import textwrap
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -190,6 +193,42 @@ def test_deploy_workflow_syncs_units_before_deploy():
     units_idx = wf.index("id: units")
     deploy_idx = wf.index("id: deploy")
     assert units_idx < deploy_idx, "units/sudoers sync must precede the deploy step"
+
+
+def test_deploy_workflow_resyncs_new_units_after_helper_refresh():
+    """The first sync can run the previous helper, so a successful deploy must
+    use its refreshed helper before reporting new timers as installed."""
+    wf = (REPO_ROOT / ".github" / "workflows" / "deploy-on-merge.yml").read_text(
+        encoding="utf-8"
+    )
+    assert (wf.index("id: units") < wf.index("id: deploy")
+            < wf.index("id: emergency_deploy") < wf.index("id: post_units"))
+    post = wf.split("id: post_units", 1)[1].split("- name: Summarise result", 1)[0]
+    assert "steps.deploy.outputs.start_exit == '0'" in post
+    assert "steps.emergency_deploy.outputs.emergency_exit == '0'" in post
+    assert '"sync-units"' in post
+    assert "post_units_exit=${post_units_exit}" in post
+    assert "POST_UNITS_EXIT: ${{ steps.post_units.outputs.post_units_exit }}" in wf
+    assert 'effective_exit=1' in wf.split('POST_UNITS_EXIT: ', 1)[1]
+
+
+def test_deploy_summary_fails_when_post_sync_fails(tmp_path):
+    wf = (REPO_ROOT / ".github" / "workflows" / "deploy-on-merge.yml").read_text(
+        encoding="utf-8"
+    )
+    script = textwrap.dedent(
+        wf.split("      - name: Summarise result", 1)[1].split("        run: |\n", 1)[1]
+    )
+    for post_exit, expected in (("0", 0), ("2", 1)):
+        summary = tmp_path / f"summary-{post_exit}.md"
+        env = {**os.environ, "GITHUB_STEP_SUMMARY": str(summary),
+               "GITHUB_SHA": "a" * 40, "START_EXIT": "0", "UNITS_EXIT": "0",
+               "POST_UNITS_EXIT": post_exit, "OWNER_EMERGENCY": "false",
+               "EMERGENCY_EXIT": "", "EMERGENCY_USED": ""}
+        result = subprocess.run(["bash", "-e", "-c", script], cwd=REPO_ROOT,
+                                env=env, capture_output=True, text=True, check=False)
+        assert result.returncode == expected, result.stderr
+        assert "배포 후 유닛 동기화" in summary.read_text(encoding="utf-8")
 
 
 def test_deploy_workflow_uses_gateway_deploy_commands():
