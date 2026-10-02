@@ -1,5 +1,5 @@
 {
-  "commit": "59c625ee6dbd6ef4a79a85cc175583aea6704b89",
+  "commit": "fe01e351aa0900e6ee88860a7c40753fbb1837c0",
   "overall_status": "OK",
   "released_work": [
     {
@@ -933,7 +933,11 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "200-issuer-timer-reliability"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "202-earnings-event-price"
     }
   ],
-  "timestamp_utc": "2026-10-02T03:03:00.751829Z"
+  "timestamp_utc": "2026-10-02T03:54:53.736817Z"
 }
