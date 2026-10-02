@@ -12,5 +12,9 @@
 `uv run --with-requirements scripts/volume-priority-requirements.txt python scripts/volume_priority_research.py replay --fixture <검증된_암호문_경로> --output <새_결과_경로>`
 `uv run --with-requirements scripts/volume-priority-requirements.txt python scripts/volume_priority_research.py verify --fixture <검증된_암호문_경로> --evidence <결과_경로>`
 마지막 명령은 현금 장부를 독립 계산하고 원본 전체를 다시 재생해 결과/장부 지문을 비교한다.
-키를 채팅이나 코드에 붙여 넣지 않는다. 실제 원격 개발 재생은 아직 확인 전이다.
+키를 채팅이나 코드에 붙여 넣지 않는다. 실제 원격 개발 재생/전체 원본 재계산은
+e1566818의37046328250에서 완료했고 후보는 DEVELOPMENT_REJECTED다.
+최종58e4d423의37052020849도5278 passed/13 skipped·암호화/명령29개 무생략과
+린트를 통과했다. 원래 장부와 최종 XML은 각각 별도 결과/검사 자산에 보존했다.
+새 실제 재생을 불필요하게 반복하지 말고 results.md와 evidence/의 지문을 확인한다.
 기존194/205·원본·결과는 유지하며 최종 확인495세션과 전체181 관문은 별도다.

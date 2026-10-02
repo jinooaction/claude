@@ -1,0 +1,16 @@
+{
+  "main_merge_commit": "738583ddf7a204b1c775de2d29a36ed20c1b5139",
+  "pull_request": 877,
+  "merged_at": "2026-10-02T19:25:40Z",
+  "deploy_run_id": 37054041540,
+  "deploy_job_id": 110994209388,
+  "workflow_conclusion": "success",
+  "server_deploy_state": "DEFERRED_MARKET_OPEN",
+  "observed_guard_at": "2026-10-02T19:26:06Z",
+  "next_allowed_deploy": "2026-10-02T20:00:00Z",
+  "production_deploy_completed": false,
+  "emergency_override_used": false,
+  "orders_submitted": 0,
+  "actual_capital_fraction": 0,
+  "source": "current deployment journal: deploy refused: US market is open (NYSE session in progress). Next allowed deploy: 2026-10-02T20:00:00Z."
+}

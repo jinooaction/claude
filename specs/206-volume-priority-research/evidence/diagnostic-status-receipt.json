@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.1",
+  "halt_reasons": [
+    "PAPER_DAILY_LOSS"
+  ],
+  "status": "ENTRY_HALTED",
+  "scope": "DIAGNOSTIC_PAPER_SERVICE",
+  "program_readiness": "NOT_ASSESSED",
+  "age_seconds": 1.4,
+  "orders_submitted": 0,
+  "live_eligible": false,
+  "identity": "f53f8b576adbedaad14869df9454c8adee9a03766806f24d371a1f5edd825237",
+  "qualified_forward_sessions": 0,
+  "forward_promotion_eligible": false,
+  "run_id": 37054352513,
+  "job_id": 110995263220,
+  "checkout_main": "738583ddf7a204b1c775de2d29a36ed20c1b5139",
+  "workflow_conclusion": "success",
+  "workflow_completed_at": "2026-10-02T19:28:52Z",
+  "operating_sources_match_main": true,
+  "whole_program_ready": false
+}

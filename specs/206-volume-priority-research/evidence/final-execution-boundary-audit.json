@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "branch_source_commit": "58e4d4237ac4f7c3375c442d0c7d7cb4135d1693",
+  "baseline_main": "f8f86d94b4eab1acb2717fb24bb790282f46a767",
+  "execution_source_files_checked": 117,
+  "changed_execution_source_paths": [],
+  "protected_files_checked": [
+    ".specify/memory/constitution.md",
+    ".specify/memory/kernel.toml"
+  ],
+  "protected_changed": false,
+  "price_rows_read": 0,
+  "broker_calls": 0,
+  "orders_submitted": 0,
+  "actual_capital_fraction": 0,
+  "note": "Static source equality preserves this existing dependency identity; this does not certify operational readiness or live fills."
+}
