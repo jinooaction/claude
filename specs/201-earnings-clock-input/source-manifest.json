@@ -5,6 +5,8 @@
   "earnings_sha256": "ef1beab3a08d13a068f34dbeb817e38984793667d45b295596e515b5204070c5",
   "market_date_start": "2013-08-23",
   "market_date_end": "2020-03-06",
+  "universe_public_date": "2014-02-24",
+  "universe_public_source": "https://www.sec.gov/Archives/edgar/data/1041130/000119312514065112/d632035d497.htm",
   "universe": [
     {"symbol": "MMM", "cik": 66740, "lineage_blocked": false},
     {"symbol": "AXP", "cik": 4962, "lineage_blocked": false},

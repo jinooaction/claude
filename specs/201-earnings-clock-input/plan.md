@@ -5,7 +5,8 @@
 ## Technical context and structure
 
 Python 3.11, DuckDB 1.4.1 개발 의존성, 외부 호출 없는 단일 오프라인 명령.
-`source-manifest.json`에 공급자 개정·SHA-256·30개 CIK·시장 날짜 범위를 고정한다.
+`source-manifest.json`에 공급자 개정·SHA-256·30개 CIK·시장 날짜 범위·
+2014-02-24 공개된 고정 기업 목록의 출처를 고정한다.
 `scripts/earnings_metadata_audit.py`가 원본 지문과 137 본문 연결을 확인한 뒤
 `Item 2.02` 사건을 결합한다. `tests/unit/test_earnings_metadata_audit.py`는
 날짜 차이·과거 자격 거절·원본 변조·기업 불일치를 검증한다.
@@ -30,6 +31,7 @@ VIII.A: 장중 생산 코드 배포와 무관한 연구 도구다. IX: 커널·�
    거절한다. `filing date`와 접수 날짜를 합치지 않는다.
 3. 실적 사건을 accession+CIK로 연결하고 고정 XNYS 달력에서 접수 기준 세션을 계산한다.
    공급자가 주장하는 `knowledge_date` 일치 여부를 기록하되 과거 공개 증거로 쓰지 않는다.
+   기업 목록의 공개 근거 전 사건은 원자료에 남겨도 후보 수에서는 제외한다.
 4. 출력은 새 파일로만 쓰고 연구·실거래 자격을 모두 거짓으로 고정한다.
    변조 반례·실제 자료 재생·린트·하네스·HANDOFF 사실성·원격 전체 회귀 후 병합한다.
 5. 오류가 발견되면 새 도구와 포인터/CI 경로를 되돌린다. 기존 공시 원본과

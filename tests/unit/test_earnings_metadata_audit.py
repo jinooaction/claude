@@ -60,6 +60,7 @@ def _fixture(tmp_path):
         'acceptance_sha256': hashlib.sha256(acceptance.read_bytes()).hexdigest(),
         'earnings_sha256': hashlib.sha256(earnings.read_bytes()).hexdigest(),
         'market_date_start': '2014-01-01', 'market_date_end': '2014-03-31',
+        'universe_public_date': '2014-02-24', 'universe_public_source': 'https://sec.gov/example',
         'universe': universe,
     }))
     return manifest, acceptance, earnings, mirrors
@@ -70,8 +71,8 @@ def test_acceptance_join_keeps_claims_distinct_from_historical_publication(tmp_p
     report = _module().audit(*inputs)
     assert report['counts']['mirror_rows_matched'] == 1
     assert report['counts']['mirror_filing_date_differs_from_acceptance_et'] == 1
-    assert report['counts']['unblocked_unestimated_nonamendment_by_session'] == {
-        'after_market': 1}
+    assert report['counts']['universe_known_unestimated_nonamendment_by_session'] == {}
+    assert report['counts']['before_universe_public_date'] == 1
     assert report['counts']['publisher_session_disagreements'] == 0
     assert len(report['mirror_json_sha256']) == 64
     event = report['events'][0]
@@ -79,6 +80,18 @@ def test_acceptance_join_keeps_claims_distinct_from_historical_publication(tmp_p
     assert event['historical_asof_proven'] is False
     assert event['strategy_admitted'] is False
     assert event['live_eligible'] is False
+    assert event['universe_known_at_acceptance'] is False
+
+
+def test_public_universe_date_changes_only_research_count(tmp_path):
+    manifest, acceptance, earnings, mirrors = _fixture(tmp_path)
+    data = json.loads(manifest.read_text())
+    data['universe_public_date'] = '2013-12-31'
+    manifest.write_text(json.dumps(data))
+    report = _module().audit(manifest, acceptance, earnings, mirrors)
+    assert report['counts']['universe_known_unestimated_nonamendment_by_session'] == {
+        'after_market': 1}
+    assert report['events'][0]['historical_asof_proven'] is False
 
 
 def test_exchange_calendar_handles_holiday_and_early_close():

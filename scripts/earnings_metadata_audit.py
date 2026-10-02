@@ -27,6 +27,8 @@ def _load_manifest(path: Path) -> dict:
         raise ValueError('unexpected dataset')
     if len(manifest['revision']) != 40:
         raise ValueError('revision must be a fixed commit')
+    if not manifest['universe_public_date'] or not manifest['universe_public_source']:
+        raise ValueError('universe publication evidence missing')
     universe = manifest['universe']
     if len(universe) != 30 or len({row['symbol'] for row in universe}) != 30:
         raise ValueError('universe must contain 30 unique symbols')
@@ -137,6 +139,7 @@ def audit(manifest_path: Path, acceptance_path: Path, earnings_path: Path,
             raise ValueError('Item 2.02 identity or timestamp claim is incomplete')
         session = _session_label(accepted_utc, calendar)
         lineage_blocked = by_cik[cik]['lineage_blocked']
+        universe_known = accepted_et[:10] > manifest['universe_public_date']
         events.append({
             'accession': accession,
             'symbol': by_cik[cik]['symbol'],
@@ -153,6 +156,7 @@ def audit(manifest_path: Path, acceptance_path: Path, earnings_path: Path,
             'acceptance_time_session': session,
             'is_amendment': amendment,
             'lineage_blocked': lineage_blocked,
+            'universe_known_at_acceptance': universe_known,
             'publisher_item_text_present': item_text_present,
             'publisher_exhibit_text_present': exhibit_text_present,
             'historical_asof_proven': False,
@@ -160,7 +164,8 @@ def audit(manifest_path: Path, acceptance_path: Path, earnings_path: Path,
             'live_eligible': False,
         })
     counts = Counter(row['acceptance_time_session'] for row in events
-                     if not row['lineage_blocked'] and not row['is_amendment']
+                     if row['universe_known_at_acceptance']
+                     and not row['lineage_blocked'] and not row['is_amendment']
                      and not row['publisher_knowledge_estimated'])
     publisher_session_disagreements = sorted(
         row['accession'] for row in events
@@ -177,10 +182,15 @@ def audit(manifest_path: Path, acceptance_path: Path, earnings_path: Path,
                    'acceptance_sha256': manifest['acceptance_sha256'],
                    'earnings_sha256': manifest['earnings_sha256']},
         'market_date_range_et': [start, end],
+        'universe_public_date': manifest['universe_public_date'],
+        'universe_public_source': manifest['universe_public_source'],
         'mirror_json_sha256': _mirror_digest(mirror_dir),
         'counts': {'universe': len(by_cik), 'acceptance_rows': len(acceptance_rows),
                    'mirror_rows_matched': len(mirrors), 'item_202_events': len(events),
-                   'unblocked_unestimated_nonamendment_by_session': dict(sorted(counts.items())),
+                   'before_universe_public_date': sum(
+                       not row['universe_known_at_acceptance'] for row in events),
+                   'universe_known_unestimated_nonamendment_by_session': dict(
+                       sorted(counts.items())),
                    'publisher_session_disagreements': len(publisher_session_disagreements),
                    'mirror_filing_date_differs_from_acceptance_et': len(filing_date_mismatches)},
         'mirror_filing_date_mismatch_accessions': filing_date_mismatches,
