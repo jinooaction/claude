@@ -2,7 +2,7 @@
 
 **Feature Branch**: `codex/200-issuer-timer-reliability`
 **Created**: 2026-10-02
-**Status**: Draft
+**Status**: 코드/서버 가동 출시 완료, 실제96칸/24시간 관측·원본/사본 지문 대조 완료
 **Input**: 기존 한국투자 단타 프로그램 완성. 공식 발행사 자료의 원격 정기 수집은 실제로 가동했으나 설정 15분에 비해 174~438분 간격이어서, 사용자 맥북이나 추가 가입에 의존하지 않는 관측 경로를 마련한다.
 
 ## User Scenarios & Testing

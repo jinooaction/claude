@@ -1,0 +1,37 @@
+{
+  "base_inventory_sha256": "863c859b626b6bcab6c6895cf628e989eb0bebaad8ead83770e6ee980eff4e15",
+  "current_server_freshness_proven": false,
+  "delta_added_files": 98,
+  "late": 0,
+  "missing": 0,
+  "observed_at": "2026-10-03T05:12:21.972357+00:00",
+  "orders_submitted": 0,
+  "program_readiness": "NOT_ASSESSED",
+  "publish_job": 111134880221,
+  "recomputed_from_actual_receipts": true,
+  "retained_branch_sha": "66ada408080b8187c5b8d4c8c48274f561c7a62a",
+  "sc_001_passed": true,
+  "schema_version": 1,
+  "simulated_observations": false,
+  "slots": 96,
+  "snapshot_job": 111134819961,
+  "source": "actual_server_issuer_observations",
+  "states": {
+    "failed": 5,
+    "success": 91
+  },
+  "store": {
+    "bytes": 2522145,
+    "completed_runs": 117,
+    "files": 261,
+    "head_sha256": "35955d1ce4ec495675b22e8df3f97f67b194726ea8cdc5cfda9d7cc6a5824bc5",
+    "inventory_sha256": "6577db048d23ab6ad6c6aa9e7bac2dbbf1d2f8e79a12297213cec8e8cb475642"
+  },
+  "strategy_eligible": false,
+  "window_first": "2026-10-02T05:00:00Z",
+  "window_last": "2026-10-03T04:45:00Z",
+  "within_20_minutes": 96,
+  "workflow_run": 37099058421,
+  "zip_bytes": 66118,
+  "zip_sha256": "b79f1ebae50fa69e67d803a91d84974c1b6a26f151d749ff4af6f737e02aa250"
+}
