@@ -1,21 +1,21 @@
 {
   "benchmarks": {
     "incumbent_wide_trend_25bp": {
-      "cagr_pct": 2.541801,
+      "cagr_pct": 2.642967,
       "max_dd_pct": 5.51141,
-      "sharpe": 0.604198,
-      "total_return_pct": 5.861185
+      "sharpe": 0.627655,
+      "total_return_pct": 6.098334
     },
     "passive_equal_weight_25bp": {
-      "cagr_pct": 12.877056,
+      "cagr_pct": 12.966781,
       "max_dd_pct": 5.325608,
-      "sharpe": 1.631602,
-      "total_return_pct": 31.635919
+      "sharpe": 1.644817,
+      "total_return_pct": 31.873485
     }
   },
   "candidate_package": {
     "candidate_id": "candidate-low-turnover-daily-cross-asset-ml-v2",
-    "data": "sha256:ed870a2c87d230347aa1165b1ca20fa322caca8178b2f234422315d1df1d6bb5",
+    "data": "sha256:606f9551818036c5627ae8a17b70f8ef4621dd8947a2aa10cad41fe9543a2a81",
     "domain_key": "investment_edge",
     "eligible": false,
     "evidence_refs": [
@@ -69,21 +69,21 @@
     }
   ],
   "data": {
-    "common_week_end": "2026-10-01",
+    "common_week_end": "2026-10-02",
     "common_week_start": "2021-06-25",
     "common_weeks": 276,
     "daily_counts": {
-      "DBC": 1325,
-      "EEM": 1325,
-      "EFA": 1325,
-      "GLD": 1325,
-      "IEF": 1325,
-      "LQD": 1325,
-      "QQQ": 1325,
-      "SPY": 1325,
-      "TLT": 1325,
-      "UUP": 1325,
-      "VNQ": 1325
+      "DBC": 1326,
+      "EEM": 1326,
+      "EFA": 1326,
+      "GLD": 1326,
+      "IEF": 1326,
+      "LQD": 1326,
+      "QQQ": 1326,
+      "SPY": 1326,
+      "TLT": 1326,
+      "UUP": 1326,
+      "VNQ": 1326
     },
     "symbols": [
       "SPY",
@@ -101,7 +101,7 @@
   },
   "experiment_id": "low-turnover-daily-cross-asset-ml-v2",
   "fingerprints": {
-    "data": "sha256:ed870a2c87d230347aa1165b1ca20fa322caca8178b2f234422315d1df1d6bb5",
+    "data": "sha256:606f9551818036c5627ae8a17b70f8ef4621dd8947a2aa10cad41fe9543a2a81",
     "features": "sha256:b718803406484520f8584307a9c467c8339d7d4a9d85af564d768ef64646dfc1",
     "model": "sha256:f5f929ec8238d932511ae75b9f5395c8a8845a96794e5fefec4a7bad50b0dcc6"
   },
@@ -316,13 +316,13 @@
       "required": "> 0"
     },
     {
-      "actual": -0.5540560000000001,
+      "actual": -0.5672710000000001,
       "gate_id": "sharpe_margin",
       "passed": false,
       "required": ">= 0.20 over both benchmarks"
     },
     {
-      "actual": 0.2020429385492642,
+      "actual": 0.1964841887017426,
       "gate_id": "psr",
       "passed": false,
       "required": ">= 0.95"
@@ -406,7 +406,7 @@
   "schema_version": "1.1",
   "significance": {
     "dsr_model_trials": 0.8748977304114935,
-    "psr_vs_better_benchmark": 0.2020429385492642
+    "psr_vs_better_benchmark": 0.1964841887017426
   },
   "verdict": "NO_EDGE"
 }
