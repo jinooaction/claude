@@ -1,0 +1,19 @@
+{
+  "artifact_id": 11277974543,
+  "failed": 0,
+  "mandatory_pilot_cases": 40,
+  "mandatory_pilot_skipped": 0,
+  "orders_submitted": 0,
+  "passed": 5318,
+  "raw_source_acquisition_proven": false,
+  "regression_job": 111241318738,
+  "run_id": 37136269000,
+  "seconds": 952.339,
+  "skipped": 13,
+  "source_sha": "fcfd9a6c3fe2209830aeaa7adf1725be62788d6f",
+  "strategy_eligible": false,
+  "total": 5331,
+  "xml_sha256": "dd712d88a7ee9d9f0b57640900f4065da30bc4e08414ca103bd337794c414fbe",
+  "zip_bytes": 95200,
+  "zip_sha256": "5a2b7c980ffdf5a0569e7e5c8da9ec354fd40404d8569e478996198b912fc7f9"
+}

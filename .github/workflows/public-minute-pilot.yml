@@ -1,0 +1,142 @@
+name: Public minute source pilot
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'src/auto_invest/market_data/public_minute.py'
+      - 'scripts/public_minute_pilot.py'
+      - 'tests/unit/test_public_minute.py'
+      - 'tests/integration/test_public_minute_pilot.py'
+      - 'specs/207-public-minute-pilot/**'
+      - '.github/workflows/public-minute-pilot.yml'
+      - 'scripts/volume-priority-requirements.txt'
+      - 'pyproject.toml'
+      - 'uv.lock'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-minute-pilot-${{ github.event.pull_request.head.sha }}
+  cancel-in-progress: false
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      KIS_LIVE_TEST: '0'
+      UV_PYTHON: '3.11'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86
+      - run: uv sync --locked --dev
+      - run: uv run ruff check src tests scripts/public_minute_pilot.py
+      - name: Full regression with mandatory authenticated archive runtime
+        run: >-
+          uv run --with-requirements scripts/volume-priority-requirements.txt
+          pytest --junitxml="$RUNNER_TEMP/public-minute-regression.xml"
+      - name: No skipped pilot counterexamples
+        run: |
+          python - <<'PY'
+          import os, xml.etree.ElementTree as ET
+          cases = [c for c in ET.parse(os.environ['RUNNER_TEMP']+'/public-minute-regression.xml').iter('testcase')
+                   if 'test_public_minute' in c.get('classname','')]
+          assert len(cases) >= 35 and all(c.find('skipped') is None for c in cases)
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: public-minute-regression-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/public-minute-regression.xml
+
+  source-pilot:
+    needs: regression
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (github.actor == github.repository_owner || github.actor == 'masonoh-kidsnote') &&
+      vars.PUBLIC_MINUTE_SOURCE_SHA == github.event.pull_request.head.sha
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write
+    env:
+      KIS_LIVE_TEST: '0'
+      UV_PYTHON: '3.11'
+      REVIEWED_SHA: ${{ vars.PUBLIC_MINUTE_SOURCE_SHA }}
+      REQUESTED_SHA: ${{ github.event.pull_request.head.sha }}
+      GH_TOKEN: ${{ github.token }}
+      PILOT_TAG: research-207-public-minute-${{ github.event.pull_request.head.sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Exact reviewed source and permanent first-attempt claim
+        id: claim
+        run: |
+          test "$REVIEWED_SHA" = "$REQUESTED_SHA"
+          test "$(git rev-parse HEAD)" = "$REVIEWED_SHA"
+          mkdir "$RUNNER_TEMP/minute-safe"
+          python - <<'PY'
+          import json, os
+          with open(os.environ['RUNNER_TEMP']+'/minute-safe/claim.json','x') as f:
+            json.dump({'source_sha':os.environ['REQUESTED_SHA'], 'run_id':os.environ['GITHUB_RUN_ID'],
+                       'archive_complete':False, 'strategy_eligible':False, 'orders_submitted':0},f)
+          PY
+          gh release create "$PILOT_TAG" "$RUNNER_TEMP/minute-safe/claim.json" \
+            --repo jinooaction/claude --target "$REQUESTED_SHA" --prerelease \
+            --title "207 anonymous source attempt $REQUESTED_SHA" \
+            --notes "Single reviewed-source attempt. Raw acquisition, quality and encrypted archival remain separate. No trading eligibility."
+          echo 'claimed=true' >> "$GITHUB_OUTPUT"
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86
+      - run: uv sync --locked --dev
+      - name: Anonymous whole-source collection and quality diagnosis
+        run: |
+          uv run python scripts/public_minute_pilot.py collect \
+            --raw "$RUNNER_TEMP/minute-raw" --output "$RUNNER_TEMP/minute-report"
+      - name: Encrypt and independently authenticate retained originals
+        env:
+          SPARSE_RESEARCH_INPUT_KEY: ${{ secrets.SPARSE_RESEARCH_INPUT_KEY }}
+        run: |
+          uv run --with-requirements scripts/volume-priority-requirements.txt \
+            python scripts/public_minute_pilot.py pack \
+            --raw "$RUNNER_TEMP/minute-raw" --output "$RUNNER_TEMP/minute-archive"
+      - name: Retain only safe report and encrypted original assets
+        if: always() && steps.claim.outputs.claimed == 'true'
+        run: |
+          test ! -f "$RUNNER_TEMP/minute-report/report.json" || \
+            cp "$RUNNER_TEMP/minute-report/report.json" "$RUNNER_TEMP/minute-safe/report.json"
+          test ! -f "$RUNNER_TEMP/minute-archive/archive-index.json" || \
+            cp "$RUNNER_TEMP/minute-archive/"* "$RUNNER_TEMP/minute-safe/"
+          for asset in "$RUNNER_TEMP/minute-safe/"*; do
+            test "$(basename "$asset")" = 'claim.json' || \
+              gh release upload "$PILOT_TAG" "$asset" --repo jinooaction/claude
+          done
+      - name: Verify remote retained asset bytes and SHA digests
+        if: success()
+        env:
+          SPARSE_RESEARCH_INPUT_KEY: ${{ secrets.SPARSE_RESEARCH_INPUT_KEY }}
+        run: |
+          gh release view "$PILOT_TAG" --repo jinooaction/claude --json apiUrl --jq .apiUrl \
+            > "$RUNNER_TEMP/minute-api-url"
+          gh api "$(cat "$RUNNER_TEMP/minute-api-url")/assets?per_page=100" \
+            > "$RUNNER_TEMP/minute-assets.json"
+          uv run --with-requirements scripts/volume-priority-requirements.txt \
+            python scripts/public_minute_pilot.py verify-assets \
+            --raw "$RUNNER_TEMP/minute-safe" --assets "$RUNNER_TEMP/minute-assets.json" \
+            --output "$RUNNER_TEMP/archive-receipt.json"
+          gh release upload "$PILOT_TAG" "$RUNNER_TEMP/archive-receipt.json" --repo jinooaction/claude
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always() && steps.claim.outputs.claimed == 'true'
+        with:
+          name: public-minute-safe-${{ github.event.pull_request.head.sha }}
+          path: |
+            ${{ runner.temp }}/minute-report/report.json
+            ${{ runner.temp }}/minute-safe/claim.json
+            ${{ runner.temp }}/archive-receipt.json

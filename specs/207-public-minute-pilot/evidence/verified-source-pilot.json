@@ -1,0 +1,126 @@
+{
+  "archive_authentication_verified": true,
+  "archive_complete": true,
+  "asset_sha256_verified": true,
+  "calendar_sessions": [
+    21,
+    21
+  ],
+  "ciphertext_downloaded_to_mac": false,
+  "limitations": [
+    "UPLOADER_PROVENANCE_ONLY",
+    "ADJUSTMENTS_UNVERIFIED",
+    "POINT_IN_TIME_UNIVERSE_UNVERIFIED",
+    "LICENSE_UNDECLARED",
+    "EXECUTION_PARITY_UNVERIFIED"
+  ],
+  "orders_submitted": 0,
+  "provider_eligible": false,
+  "raw_bytes": 514450366,
+  "raw_files": [
+    {
+      "month": "2014-01",
+      "sha256": "55925f7870effd4cad312f365133a7f405915d88130038791f28b6f6e5142871",
+      "size": 256575689
+    },
+    {
+      "month": "2019-12",
+      "sha256": "6f7a8b521cd70c41ebf5296d9ee1920f8c41ccd6e376626e18798438471c3e1e",
+      "size": 257874677
+    }
+  ],
+  "regular_coverage_complete": false,
+  "release_id": 402595786,
+  "release_tag": "research-207-public-minute-fcfd9a6c3fe2209830aeaa7adf1725be62788d6f",
+  "retained_assets": 6,
+  "retained_bytes": 517681604,
+  "returns_examined": false,
+  "run_id": 37136269000,
+  "runtime_universe_coverage": [
+    {
+      "GLD": {
+        "complete_sessions": 6,
+        "missing_regular_minutes": 47,
+        "observed_sessions": 21,
+        "regular_rows": 8143,
+        "symbol": "GLD"
+      },
+      "IWM": {
+        "complete_sessions": 21,
+        "missing_regular_minutes": 0,
+        "observed_sessions": 21,
+        "regular_rows": 8190,
+        "symbol": "IWM"
+      },
+      "QQQ": {
+        "complete_sessions": 17,
+        "missing_regular_minutes": 6,
+        "observed_sessions": 21,
+        "regular_rows": 8184,
+        "symbol": "QQQ"
+      },
+      "SPY": {
+        "complete_sessions": 21,
+        "missing_regular_minutes": 0,
+        "observed_sessions": 21,
+        "regular_rows": 8190,
+        "symbol": "SPY"
+      },
+      "TLT": {
+        "complete_sessions": 1,
+        "missing_regular_minutes": 161,
+        "observed_sessions": 21,
+        "regular_rows": 8029,
+        "symbol": "TLT"
+      }
+    },
+    {
+      "GLD": {
+        "complete_sessions": 5,
+        "missing_regular_minutes": 80,
+        "observed_sessions": 21,
+        "regular_rows": 7930,
+        "symbol": "GLD"
+      },
+      "IWM": {
+        "complete_sessions": 21,
+        "missing_regular_minutes": 0,
+        "observed_sessions": 21,
+        "regular_rows": 8010,
+        "symbol": "IWM"
+      },
+      "QQQ": {
+        "complete_sessions": 21,
+        "missing_regular_minutes": 0,
+        "observed_sessions": 21,
+        "regular_rows": 8010,
+        "symbol": "QQQ"
+      },
+      "SPY": {
+        "complete_sessions": 21,
+        "missing_regular_minutes": 0,
+        "observed_sessions": 21,
+        "regular_rows": 8010,
+        "symbol": "SPY"
+      },
+      "TLT": {
+        "complete_sessions": 5,
+        "missing_regular_minutes": 73,
+        "observed_sessions": 21,
+        "regular_rows": 7937,
+        "symbol": "TLT"
+      }
+    }
+  ],
+  "schema_version": 1,
+  "source_job": 111244209220,
+  "source_job_completed_at": "2026-10-03T16:34:54Z",
+  "source_revision": "ef1551b11d8ee3e35c7521cf36deee155b43e77d",
+  "source_rows": [
+    21998266,
+    21868641
+  ],
+  "source_sha": "fcfd9a6c3fe2209830aeaa7adf1725be62788d6f",
+  "strategy_eligible": false,
+  "structural_quality_accepted": true
+}

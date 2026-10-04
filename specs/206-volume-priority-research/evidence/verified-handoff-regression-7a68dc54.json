@@ -1,0 +1,18 @@
+{
+  "tests": 5291,
+  "passed": 5278,
+  "skipped": 13,
+  "failed": 0,
+  "mandatory_cli_tests": 29,
+  "mandatory_cli_skipped": 0,
+  "run_id": 37058839331,
+  "job_id": 111010117610,
+  "source_commit": "7a68dc541432b62c7421a436e76e135085657664",
+  "xml_seconds": 1001.624,
+  "xml_sha256": "2f48ae2d8b22301e70886f3b9e4cd807562397db0d08de18763c0aad2b278554",
+  "artifact_id": 11249214690,
+  "artifact_bytes": 94773,
+  "artifact_sha256": "3dd1c8189663039787c16a477a313fbe1a21a6dc843598a654cd2d018c6c64f5",
+  "lint_passed": true,
+  "workflow_completed_at": "2026-10-02T20:27:16Z"
+}
