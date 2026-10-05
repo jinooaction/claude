@@ -1,0 +1,17 @@
+{
+  "run_id": 37339143058,
+  "job_id": 111861452161,
+  "artifact_id": 11359640165,
+  "source_sha": "c64a9ddc1295a093a81286bec12d6b2014b0987e",
+  "tests": 5371,
+  "passed": 5358,
+  "skipped": 13,
+  "failures": 0,
+  "seconds": 1474.687,
+  "bridge_cases": 40,
+  "old_command_cases": 29,
+  "mandatory_skipped": 0,
+  "zip_bytes": 95554,
+  "zip_sha256": "96d8651bc2648f10d124234a0356594321b286feb98c580481c234fb5a6604f5",
+  "xml_sha256": "8de6621144569d12e155da52a9d8a736e70dabc9820a6ef7e883360287af0acc"
+}

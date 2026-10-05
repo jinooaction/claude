@@ -1,0 +1,121 @@
+{
+  "source_sha": "c64a9ddc1295a093a81286bec12d6b2014b0987e",
+  "run_id": 37339143058,
+  "analysis_job_id": 111872338050,
+  "result_release_id": 403924138,
+  "source_authenticated": true,
+  "analysis_complete": true,
+  "remote_assets_verified": [
+    {
+      "apiUrl": "https://api.github.com/repos/jinooaction/claude/releases/assets/613109417",
+      "contentType": "application/json",
+      "createdAt": "2026-10-05T16:38:27Z",
+      "digest": "sha256:34a54cc1225bfbeea8cc54d80b04bf0719f8321a35085ff45fc22ceccb058462",
+      "downloadCount": 0,
+      "id": "RA_kwDORjzfDM4ki06p",
+      "label": "",
+      "name": "claim.json",
+      "size": 162,
+      "state": "uploaded",
+      "updatedAt": "2026-10-05T16:38:28Z",
+      "url": "https://github.com/jinooaction/claude/releases/download/research-208-observation-c64a9ddc1295a093a81286bec12d6b2014b0987e/claim.json"
+    },
+    {
+      "apiUrl": "https://api.github.com/repos/jinooaction/claude/releases/assets/613110312",
+      "contentType": "application/json",
+      "createdAt": "2026-10-05T16:38:52Z",
+      "digest": "sha256:2dae7863fccbff2d7cfc93d6f6e29f7cca876532ceef0f0ad7f0dd90f5a2f471",
+      "downloadCount": 0,
+      "id": "RA_kwDORjzfDM4ki1Io",
+      "label": "",
+      "name": "report.json",
+      "size": 100846,
+      "state": "uploaded",
+      "updatedAt": "2026-10-05T16:38:53Z",
+      "url": "https://github.com/jinooaction/claude/releases/download/research-208-observation-c64a9ddc1295a093a81286bec12d6b2014b0987e/report.json"
+    },
+    {
+      "apiUrl": "https://api.github.com/repos/jinooaction/claude/releases/assets/613110380",
+      "contentType": "application/json",
+      "createdAt": "2026-10-05T16:38:54Z",
+      "digest": "sha256:12d4a073c6a0cafbbe9595beb579bf8766113680b27fd3d1a5bfe4589eaeccfd",
+      "downloadCount": 0,
+      "id": "RA_kwDORjzfDM4ki1Js",
+      "label": "",
+      "name": "retention-receipt.json",
+      "size": 424,
+      "state": "uploaded",
+      "updatedAt": "2026-10-05T16:38:55Z",
+      "url": "https://github.com/jinooaction/claude/releases/download/research-208-observation-c64a9ddc1295a093a81286bec12d6b2014b0987e/retention-receipt.json"
+    }
+  ],
+  "remote_total_bytes": 101432,
+  "monthly_summary": [
+    {
+      "month": "2014-01",
+      "common_minute_dates": [],
+      "common_runtime_model_dates": [],
+      "runtime_complete_by_symbol": {
+        "GLD": 6,
+        "IWM": 21,
+        "QQQ": 17,
+        "SPY": 21,
+        "TLT": 1
+      },
+      "missing_bins_by_symbol": {
+        "GLD": 45,
+        "IWM": 0,
+        "QQQ": 6,
+        "SPY": 0,
+        "TLT": 147
+      },
+      "zero_volume_bins_by_symbol": {
+        "GLD": 0,
+        "IWM": 0,
+        "QQQ": 0,
+        "SPY": 0,
+        "TLT": 0
+      }
+    },
+    {
+      "month": "2019-12",
+      "common_minute_dates": [
+        "2019-12-02",
+        "2019-12-12",
+        "2019-12-24"
+      ],
+      "common_runtime_model_dates": [
+        "2019-12-02",
+        "2019-12-12",
+        "2019-12-24"
+      ],
+      "runtime_complete_by_symbol": {
+        "GLD": 5,
+        "IWM": 21,
+        "QQQ": 21,
+        "SPY": 21,
+        "TLT": 5
+      },
+      "missing_bins_by_symbol": {
+        "GLD": 76,
+        "IWM": 0,
+        "QQQ": 0,
+        "SPY": 0,
+        "TLT": 64
+      },
+      "zero_volume_bins_by_symbol": {
+        "GLD": 0,
+        "IWM": 0,
+        "QQQ": 0,
+        "SPY": 0,
+        "TLT": 0
+      }
+    }
+  ],
+  "provider_eligible": false,
+  "strategy_eligible": false,
+  "orders_submitted": 0,
+  "returns_examined": false,
+  "heldout_sessions_opened": 0,
+  "whole_program_complete": false
+}
