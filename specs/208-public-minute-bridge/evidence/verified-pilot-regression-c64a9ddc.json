@@ -1,0 +1,16 @@
+{
+  "run_id": 37339143232,
+  "artifact_id": 11358288404,
+  "source_sha": "c64a9ddc1295a093a81286bec12d6b2014b0987e",
+  "tests": 5371,
+  "passed": 5358,
+  "skipped": 13,
+  "failures": 0,
+  "seconds": 1310.628,
+  "bridge_cases": 40,
+  "old_command_cases": 29,
+  "mandatory_skipped": 0,
+  "zip_bytes": 94928,
+  "zip_sha256": "c4ec19295cad3c6e9e1d9bcf74017290b77227f9f0c5fa17b606c66698c3194a",
+  "xml_sha256": "f5242c96adfd91d60fdfa8688b4292106e72d7ac89ed0bddfa09788db4de1297"
+}
