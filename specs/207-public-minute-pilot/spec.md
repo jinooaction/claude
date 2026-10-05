@@ -2,7 +2,7 @@
 
 **Feature Branch**: `codex/207-public-minute-pilot`
 **Created**: 2026-10-04
-**Status**: 실제 전체 원본/구조/암호화 보관·전체5318검사 완료, PR879 최종 기록/병합 확인 중
+**Status**: 실제 전체 원본/구조/암호화 보관·최종 전체5318검사·PR879 병합/서버 반영 완료. 전체181 미완료.
 **Input**: 무료 과거 자료의 다른 경로를 찾아 단타 프로그램 완성을 계속한다.
 
 ## User Scenarios & Testing

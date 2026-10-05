@@ -1,0 +1,155 @@
+name: Retained minute observation bridge
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'src/auto_invest/market_data/public_minute_bridge.py'
+      - 'src/auto_invest/market_data/public_minute.py'
+      - 'src/auto_invest/market_data/intraday.py'
+      - 'scripts/public_minute_bridge.py'
+      - 'scripts/public_minute_pilot.py'
+      - 'tests/unit/test_public_minute_bridge.py'
+      - 'tests/integration/test_public_minute_bridge_cli.py'
+      - 'specs/208-public-minute-bridge/**'
+      - '.github/workflows/public-minute-bridge.yml'
+      - 'scripts/volume-priority-requirements.txt'
+      - 'pyproject.toml'
+      - 'uv.lock'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: retained-minute-bridge-${{ github.event.pull_request.head.sha }}
+  cancel-in-progress: false
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      KIS_LIVE_TEST: '0'
+      UV_PYTHON: '3.11'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86
+      - run: uv sync --locked --dev
+      - run: uv run ruff check src tests scripts/public_minute_bridge.py
+      - name: Full regression with mandatory pinned archive runtime
+        run: >-
+          uv run --with-requirements scripts/volume-priority-requirements.txt
+          pytest --junitxml="$RUNNER_TEMP/retained-minute-bridge-regression.xml"
+      - name: Require all new observation and input counterexamples
+        run: |
+          python - <<'PY'
+          import os, xml.etree.ElementTree as ET
+          cases = [c for c in ET.parse(os.environ['RUNNER_TEMP']+'/retained-minute-bridge-regression.xml').iter('testcase')
+                   if 'test_public_minute_bridge' in c.get('classname', '')]
+          assert len(cases) >= 35 and all(c.find('skipped') is None for c in cases)
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: retained-minute-bridge-regression-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/retained-minute-bridge-regression.xml
+
+  retained-analysis:
+    needs: regression
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (github.actor == github.repository_owner || github.actor == 'masonoh-kidsnote') &&
+      vars.PUBLIC_MINUTE_BRIDGE_SHA == github.event.pull_request.head.sha
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write
+    env:
+      UV_PYTHON: '3.11'
+      GH_TOKEN: ${{ github.token }}
+      REVIEWED_SHA: ${{ vars.PUBLIC_MINUTE_BRIDGE_SHA }}
+      REQUESTED_SHA: ${{ github.event.pull_request.head.sha }}
+      RESULT_TAG: research-208-observation-${{ github.event.pull_request.head.sha }}
+      INPUT_TAG: research-207-public-minute-fcfd9a6c3fe2209830aeaa7adf1725be62788d6f
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Exact reviewed source and permanent first-attempt claim
+        id: claim
+        run: |
+          test "$REVIEWED_SHA" = "$REQUESTED_SHA"
+          test "$(git rev-parse HEAD)" = "$REVIEWED_SHA"
+          mkdir "$RUNNER_TEMP/bridge-safe" "$RUNNER_TEMP/retained-input"
+          python - <<'PY'
+          import json, os
+          with open(os.environ['RUNNER_TEMP']+'/bridge-safe/claim.json', 'x') as f:
+            json.dump({'source_sha':os.environ['REQUESTED_SHA'], 'run_id':os.environ['GITHUB_RUN_ID'],
+                       'analysis_complete':False, 'strategy_eligible':False, 'orders_submitted':0}, f)
+          PY
+          gh release create "$RESULT_TAG" "$RUNNER_TEMP/bridge-safe/claim.json" \
+            --repo jinooaction/claude --target "$REQUESTED_SHA" --prerelease \
+            --title "208 retained observation attempt $REQUESTED_SHA" \
+            --notes "One reviewed-source analysis of already retained development inputs. No source requests, returns or trading authority."
+          echo 'claimed=true' >> "$GITHUB_OUTPUT"
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86
+      - run: uv sync --locked --dev
+      - name: Read fixed existing encrypted archive only
+        run: |
+          gh api repos/jinooaction/claude/releases/402595786/assets?per_page=100 \
+            > "$RUNNER_TEMP/retained-assets.json"
+          gh release download "$INPUT_TAG" --repo jinooaction/claude \
+            --dir "$RUNNER_TEMP/retained-input"
+      - name: Authenticate original bytes and validate observation model
+        env:
+          SPARSE_RESEARCH_INPUT_KEY: ${{ secrets.SPARSE_RESEARCH_INPUT_KEY }}
+        run: |
+          uv run --with-requirements scripts/volume-priority-requirements.txt \
+            python scripts/public_minute_bridge.py \
+            --archive "$RUNNER_TEMP/retained-input" --assets "$RUNNER_TEMP/retained-assets.json" \
+            --output "$RUNNER_TEMP/bridge-report"
+      - name: Preserve safe success or explicit failure receipt
+        if: always() && steps.claim.outputs.claimed == 'true'
+        run: |
+          if test -f "$RUNNER_TEMP/bridge-report/report.json"; then
+            cp "$RUNNER_TEMP/bridge-report/report.json" "$RUNNER_TEMP/bridge-safe/report.json"
+            gh release upload "$RESULT_TAG" "$RUNNER_TEMP/bridge-safe/report.json" --repo jinooaction/claude
+          fi
+      - name: Verify retained result digests without inputs or keys
+        if: success()
+        run: |
+          gh release view "$RESULT_TAG" --repo jinooaction/claude --json apiUrl --jq .apiUrl \
+            > "$RUNNER_TEMP/result-url"
+          gh api "$(cat "$RUNNER_TEMP/result-url")/assets?per_page=100" > "$RUNNER_TEMP/result-assets.json"
+          python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          base=Path(os.environ['RUNNER_TEMP'])
+          safe=base/'bridge-safe'
+          values=json.loads((base/'result-assets.json').read_text())
+          names={v['name']:v for v in values}
+          assert len(values)==2 and set(names)=={'claim.json','report.json'}
+          report=json.loads((safe/'report.json').read_text())
+          assert report['source_authenticated'] is True and report['analysis_complete'] is True
+          assert report['provider_eligible'] is False and report['strategy_eligible'] is False
+          assert report['promotion_eligible'] is False and report['orders_submitted']==0
+          assert report['returns_examined'] is False and report['heldout_sessions_opened']==0
+          for name,item in names.items():
+              raw=(safe/name).read_bytes()
+              assert item['size']==len(raw) and item['digest']=='sha256:'+hashlib.sha256(raw).hexdigest()
+          with (safe/'retention-receipt.json').open('x') as f:
+              json.dump({'source_sha':os.environ['REQUESTED_SHA'], 'retention_verified':True,
+                         'analysis_complete':True, 'strategy_eligible':False, 'orders_submitted':0,
+                         'assets':[{k:v[k] for k in ('name','size','digest')} for v in values]}, f)
+          PY
+          gh release upload "$RESULT_TAG" "$RUNNER_TEMP/bridge-safe/retention-receipt.json" --repo jinooaction/claude
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: retained-minute-observation-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/bridge-safe/
