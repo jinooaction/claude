@@ -1,5 +1,5 @@
 {
-  "commit": "60a538623a0ac90d30bc3e06070fe5a1d38c12f3",
+  "commit": "d22dea93f3d9740ebdc9f58349d5aa84fc8eb446",
   "overall_status": "OK",
   "released_work": [
     {
@@ -703,7 +703,8 @@
     "202-earnings-event-price",
     "203-macro-release-price",
     "204-gap-reclaim-price",
-    "206-volume-priority-research"
+    "206-volume-priority-research",
+    "207-public-minute-pilot"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -937,8 +938,8 @@
     },
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "207-public-minute-pilot"
+      "spec_id": "208-public-minute-bridge"
     }
   ],
-  "timestamp_utc": "2026-10-04T15:53:36.566036Z"
+  "timestamp_utc": "2026-10-05T17:23:20.617273Z"
 }
