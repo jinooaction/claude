@@ -15,7 +15,7 @@
 - [x] T006 [US3] .github/workflows/intraday-paper-status.yml에키없는전체PR검사와기존관측JSON artifact보관을연결한다.
 
 ## Closure
-- [x] T007 AGENTS/.specify·208완료/HANDOFF·results·작은증거를남기고합성54개/린트/하네스14·14/인계/본문을검증한다.
+- [x] T007 AGENTS/.specify·208완료/HANDOFF·results·작은증거를남기고합성56개/린트/하네스14·14/인계/본문을검증한다. 실제 shell의 SSH 오류를 tee가 덮는 실패도 재현·보정했다.
 - [ ] T008 실제원격전체XML/필수반례/린트와같은검토코드의관측artifact를대조하고본문·병합을완료한다.
 
 T001→T002→T003→T004→T005→T006→T007→T008. 같은파일병렬수정없음.

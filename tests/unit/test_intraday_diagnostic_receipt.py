@@ -1,8 +1,10 @@
 import copy
 import hashlib
 import json
+import os
 import subprocess
 import sys
+import textwrap
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -179,3 +181,21 @@ def test_cli_real_entrypoint_and_safe_failure(tmp_path, scenario):
             assert target.read_text() == "preserved"
         else:
             assert not target.exists()
+
+
+@pytest.mark.parametrize("ssh_exit", [0, 42])
+def test_actual_workflow_read_step_keeps_transport_failure(tmp_path, ssh_exit):
+    workflow = Path(".github/workflows/intraday-paper-status.yml").read_text()
+    step = workflow.split("      - name: Read diagnostic status only\n")[1]
+    script = textwrap.dedent(step.split("        run: |\n")[1].split("      - name:")[0])
+    script = script.replace("/tmp/intraday-status.txt", str(tmp_path / "status.txt"))
+    s = status()
+    hashes = ["sha256:" + hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in SOURCES]
+    s["identity"] = hashlib.sha256(json.dumps(hashes, separators=(",", ":")).encode()).hexdigest()
+    env = dict(os.environ, HOST="synthetic-host", USER="synthetic-user", PORT="22",
+               TEST_STDOUT=raw(s), TEST_SSH_EXIT=str(ssh_exit))
+    # The actual checked-in shell step runs; no network command or credentials are used.
+    fake = 'ssh() { printf "%s\\n" "$TEST_STDOUT"; return "$TEST_SSH_EXIT"; }\n'
+    result = subprocess.run(["bash", "-e", "-c", fake + script], env=env,
+                            capture_output=True, text=True, timeout=15)
+    assert (result.returncode == 0) is (ssh_exit == 0)

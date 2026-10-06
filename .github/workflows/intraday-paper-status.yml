@@ -43,7 +43,7 @@ jobs:
           python - <<'PY'
           import os, xml.etree.ElementTree as ET
           cases = list(ET.parse(os.environ['RUNNER_TEMP']+'/diagnostic-receipt-regression.xml').iter('testcase'))
-          for fragment, minimum in [('test_intraday_diagnostic_receipt', 54),
+          for fragment, minimum in [('test_intraday_diagnostic_receipt', 56),
                                     ('test_public_minute_bridge', 40),
                                     ('test_volume_priority_research_cli', 29)]:
               selected = [c for c in cases if fragment in c.get('classname', '')]
@@ -79,6 +79,7 @@ jobs:
           USER: ${{ secrets.VULTR_SSH_USER }}
           PORT: ${{ secrets.VULTR_SSH_PORT }}
         run: |
+          set -euo pipefail
           ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts \
               -o ConnectTimeout=15 -o BatchMode=yes -p "${PORT:-22}" \
               -i ~/.ssh/id_ed25519 "${USER}@${HOST}" \

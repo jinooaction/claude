@@ -2,7 +2,7 @@
 
 **Feature Branch**: `codex/209-diagnostic-receipt`
 **Created**: 2026-10-07
-**Status**: 구현·합성54개·린트·하네스 완료. 원격 전체 검사/실제 영수증/병합 전.
+**Status**: 구현·합성56개·전송 오류 보존·린트·하네스 완료. 최종 원격 전체 검사/실제 영수증/병합 전.
 **Input**: 기존 한국투자 프로그램의 실제 운용 증거를 가린 로그의 추측 복원 없이 검증한다.
 
 ## User Scenarios & Testing
