@@ -56,4 +56,22 @@ jobs:
       - name: Lint source, tests, and filing commands
         run: uv run ruff check src tests scripts/filing_observations.py scripts/filing_publication.py scripts/earnings_metadata_audit.py scripts/earnings_event_price_diagnostic.py
       - name: Full regression without broker credentials
-        run: uv run pytest
+        run: >-
+          uv run --with-requirements scripts/volume-priority-requirements.txt
+          pytest --junitxml="$RUNNER_TEMP/filing-observation-regression.xml"
+      - name: Require existing encrypted archive commands without skips
+        run: |
+          python - <<'PY'
+          import os, xml.etree.ElementTree as ET
+          cases = list(ET.parse(os.environ['RUNNER_TEMP']+'/filing-observation-regression.xml').iter('testcase'))
+          for fragment, minimum in [('test_public_minute_bridge', 40),
+                                    ('test_volume_priority_research_cli', 29)]:
+              selected = [c for c in cases if fragment in c.get('classname', '')]
+              assert len(selected) >= minimum and all(c.find('skipped') is None for c in selected), fragment
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: filing-observation-regression-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/filing-observation-regression.xml
+          if-no-files-found: error

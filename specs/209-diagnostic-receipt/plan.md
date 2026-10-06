@@ -30,6 +30,7 @@
 - `src/auto_invest/analytics/intraday_diagnostic_receipt.py`: 입력/타입/신선도/모형범위 검증·CLI
 - `tests/unit/test_intraday_diagnostic_receipt.py`: 안전실패/원본값/투영·덮어쓰기 반례
 - `.github/workflows/intraday-paper-status.yml`: 기존관측 + 안전JSON artifact, PR전체회귀는키없음
+- `.github/workflows/filing-observation-checks.yml`: 함께 발동하는 기존 전체 검사의 암호화 런타임 누락을 기존 고정 requirements로 보정, 실제XML 보관/필수 명령 무생략 확인
 - 이 폴더 research/data-model/contracts/quickstart/tasks/results·포인터
 - 208 결과/작업·HANDOFF의지난병합/예약배포 사실을이번정당한후속변경에서닫는다.
 
