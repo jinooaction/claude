@@ -1,0 +1,135 @@
+name: KIS quote handoff once (sealed, price only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      payload_b64:
+        description: Exact reviewed three-file payload; no commands or paths
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kis-quote-handoff-once
+  cancel-in-progress: false
+
+jobs:
+  handoff:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Validate exact reviewed payload without executing it
+        env:
+          PAYLOAD_B64: ${{ inputs.payload_b64 }}
+        run: |
+          python3 -I -S - <<'PY'
+          import base64, hashlib, json, os
+          expected = {'kis_quotes.py': 'e0ea3f45e0e4a8c76c634de3a9f7292422e404d7153a50057e8d8a56b430f12f', 'quote_handoff.py': 'c4c8b2473e3c5bdccd6df32bd415ecbf2be2cef7210a7b49a7cd8c03967dfb2d', 'paper-quote-config.json': 'faa70ff94f86fec83cdffd2a23af05c485c7ab7745e3668cfc9e0e195dfe32f2'}
+          def unique(pairs):
+              result = {}
+              for key, value in pairs:
+                  if key in result:
+                      raise ValueError('DUPLICATE_JSON_FIELD')
+                  result[key] = value
+              return result
+          try:
+              raw = os.environ['PAYLOAD_B64'].encode('ascii')
+              if len(raw) > 50000:
+                  raise ValueError('PAYLOAD_TOO_LARGE')
+              data = json.loads(base64.b64decode(raw, validate=True), object_pairs_hook=unique)
+              if (set(data) != {'schema_version', 'files'} or type(data['schema_version']) is not int
+                      or data['schema_version'] != 1 or set(data['files']) != set(expected)):
+                  raise ValueError('ONLY_THREE_APPROVED_FILES')
+              for name, digest in expected.items():
+                  row = data['files'][name]
+                  if set(row) != {'content_b64'}:
+                      raise ValueError('FILE_SCHEMA_INVALID')
+                  content = base64.b64decode(row['content_b64'], validate=True)
+                  if hashlib.sha256(content).hexdigest() != digest:
+                      raise ValueError('APPROVED_FILE_HASH_MISMATCH')
+          except Exception:
+              raise SystemExit('APPROVED_PAYLOAD_VALIDATION_FAILED') from None
+          print('THREE_PINNED_FILES_VALIDATED_NO_CODE_EXECUTED')
+          PY
+      - name: Install existing restricted SSH identity
+        env:
+          VULTR_SSH_PRIVATE_KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+          VULTR_SSH_KNOWN_HOSTS: ${{ secrets.VULTR_SSH_KNOWN_HOSTS }}
+          VULTR_SSH_USER: ${{ secrets.VULTR_SSH_USER }}
+        run: ./scripts/ci_secure_ssh.sh
+      - name: Send stdin to the exact sealed gateway command once
+        env:
+          DEPLOY_HOST: ${{ secrets.VULTR_SSH_HOST }}
+          DEPLOY_USER: ${{ secrets.VULTR_SSH_USER }}
+          DEPLOY_PORT: ${{ secrets.VULTR_SSH_PORT }}
+          PAYLOAD_B64: ${{ inputs.payload_b64 }}
+        run: |
+          set +e
+          printf '%s' "$PAYLOAD_B64" | timeout --kill-after=2s 75s \
+            ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts \
+                -o ConnectTimeout=10 -o BatchMode=yes -o IdentitiesOnly=yes \
+                -p "${DEPLOY_PORT:-22}" -i ~/.ssh/id_ed25519 \
+                "${DEPLOY_USER}@${DEPLOY_HOST}" 'kis-quote-handoff-once' \
+                > "$RUNNER_TEMP/kis-quote-handoff-receipt.json"
+          command_status=$?
+          set -e
+          export QUOTE_COMMAND_STATUS="$command_status"
+          python3 -I -S - <<'PY'
+          import json, os, re
+          from pathlib import Path
+          try:
+              raw = Path(os.environ['RUNNER_TEMP'], 'kis-quote-handoff-receipt.json').read_bytes()
+              if len(raw) > 16384:
+                  raise ValueError()
+              result = json.loads(raw)
+              if result.get('status') == 'BLOCKED':
+                  reason = result.get('reason', 'SEALED_HELPER_FAILED')
+                  if not isinstance(reason, str) or not re.fullmatch('[A-Z_]{1,80}', reason):
+                      reason = 'SEALED_HELPER_FAILED'
+                  print(json.dumps({'status': 'BLOCKED', 'reason': reason, 'orders_submitted': 0}))
+                  raise SystemExit(2)
+              expected = {'kis_quotes.py': 'e0ea3f45e0e4a8c76c634de3a9f7292422e404d7153a50057e8d8a56b430f12f', 'quote_handoff.py': 'c4c8b2473e3c5bdccd6df32bd415ecbf2be2cef7210a7b49a7cd8c03967dfb2d', 'paper-quote-config.json': 'faa70ff94f86fec83cdffd2a23af05c485c7ab7745e3668cfc9e0e195dfe32f2'}
+              if (result['status'] not in {'SUCCESS', 'PARTIAL_OR_BLOCKED'}
+                      or result['contract'] != 'KIS_QUOTE_HANDOFF_ONCE_V2'
+                      or result['installed_files_sha256'] != expected
+                      or result['orders_submitted'] != 0 or result['token_issuance_or_refresh'] is not False
+                      or result['maximum_GET_requests'] != 12 or result['maximum_requests_per_second'] != 1
+                      or result['maximum_total_seconds'] != 60 or result['real_time_verified'] is not False
+                      or result['source_trade_time_verified'] is not False
+                      or type(result['quote_request_attempts']) is not int
+                      or not 0 <= result['quote_request_attempts'] <= 12):
+                  raise ValueError()
+              symbols = {'AAPL', 'SCHX', 'SPTI', 'IAUM'}
+              rows = result['quotes']
+              fields = {'symbol', 'currency', 'last_USD', 'bid_USD', 'ask_USD', 'exchange',
+                        'observed_at_utc', 'source_trade_time', 'source_latency_verified', 'source_response_sha256'}
+              if (any(set(row) != fields or row['symbol'] not in symbols for row in rows)
+                      or not set(result['unknown']) <= symbols):
+                  raise ValueError()
+              for row in rows:
+                  for field in ('last_USD', 'bid_USD', 'ask_USD'):
+                      value = row[field]
+                      if value is None and field != 'last_USD':
+                          continue
+                      if not isinstance(value, str) or not re.fullmatch(r'[0-9]+(?:\.[0-9]+)?', value):
+                          raise ValueError()
+                  if (row['currency'] != 'USD' or row['source_trade_time'] is not None
+                          or row['source_latency_verified'] is not False
+                          or not re.fullmatch('[0-9a-f]{64}', row['source_response_sha256'])
+                          or not re.fullmatch(r'[0-9T:.+Z-]{20,40}', row['observed_at_utc'])
+                          or row['exchange'] not in {'NAS', 'NYS', 'AMS'}):
+                      raise ValueError()
+              print(json.dumps({'status': result['status'], 'quote_request_attempts': result['quote_request_attempts'],
+                                'quotes': rows, 'unknown_symbols': sorted(result['unknown']),
+                                'real_time_verified': False, 'orders_submitted': 0}, sort_keys=True))
+              if os.environ['QUOTE_COMMAND_STATUS'] != '0' or result['status'] != 'SUCCESS':
+                  raise SystemExit(2)
+          except Exception:
+              raise SystemExit('SEALED_RECEIPT_VALIDATION_FAILED_NO_RAW_OUTPUT') from None
+          PY

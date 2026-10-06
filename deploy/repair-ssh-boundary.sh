@@ -113,6 +113,9 @@ case "${cmd}" in
     sync-units)
         exec sudo -n /usr/local/sbin/auto-invest-sync-units
         ;;
+    kis-quote-handoff-once)
+        exec sudo -n /usr/local/sbin/auto-invest-kis-smoke --quote-handoff-once
+        ;;
     kis-smoke)
         exec sudo -n /usr/local/sbin/auto-invest-kis-smoke
         ;;
