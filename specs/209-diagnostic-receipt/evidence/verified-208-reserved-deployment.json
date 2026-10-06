@@ -1,0 +1,15 @@
+{
+  "audit_conclusion": "success",
+  "audit_run": 37490467545,
+  "completed_at_utc": "2026-10-05T21:00:44.194Z",
+  "completed_seq": 19773,
+  "correlation_id": "bb97ec28aa245a3e7e4872c0fcddf822",
+  "phase": "live",
+  "production_commit": "d22dea93f3d9740ebdc9f58349d5aa84fc8eb446",
+  "quantity_from_masked_log_inferred": false,
+  "scope": "EXISTING_DEPLOYMENT_ONLY",
+  "sidecar_blob_sha": "47c5fd97ca28f1b69638dad6d2c91c35c218259e",
+  "sidecar_sha256": "bbc0dce2b52bcd67fcfdeb91fffdeb8eeba9b4c3f32e73df56f5c1d8fac0cbea",
+  "started_seq": 19768,
+  "terminal_event": "DEPLOY_COMPLETED"
+}

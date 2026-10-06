@@ -1,7 +1,7 @@
 # Feature Specification: 보관 분봉의 운영 관측 연결 검증
 
 **Branch**: `codex/208-public-minute-bridge` | **Created**: 2026-10-06
-**Status**: 실제전체원본재인증/관측계산/원격보관·최초5358검사 완료, 최종기록회귀/병합 확인 중
+**Status**: 실제 전체 원본 재인증/관측 계산/원격 보관·최종5358검사/병합/예약 배포 완료. 전체 프로그램은 별도 미완료.
 **Input**: 확보한 공개1분 자료를 현재 운영5ETF/5분의 관측 방식과 연결해 검증한다.
 
 ## User Scenarios & Testing
