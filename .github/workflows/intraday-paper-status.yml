@@ -1,6 +1,15 @@
 name: Intraday paper service status (read-only)
 
 on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'src/auto_invest/analytics/intraday_diagnostic_receipt.py'
+      - 'tests/unit/test_intraday_diagnostic_receipt.py'
+      - 'specs/209-diagnostic-receipt/**'
+      - '.github/workflows/intraday-paper-status.yml'
+      - 'pyproject.toml'
+      - 'uv.lock'
   workflow_dispatch:
   schedule:
     - cron: '25 21 * * 1-5'
@@ -9,11 +18,55 @@ permissions:
   contents: read
 
 jobs:
-  observe:
+  regression:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 45
+    env:
+      KIS_LIVE_TEST: '0'
+      UV_PYTHON: '3.11'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86
+      - run: uv sync --locked --dev
+      - run: uv run ruff check src tests
+      - name: Full regression with existing pinned archive runtime
+        run: >-
+          uv run --with-requirements scripts/volume-priority-requirements.txt
+          pytest --junitxml="$RUNNER_TEMP/diagnostic-receipt-regression.xml"
+      - name: Require receipt and existing archive counterexamples without skips
+        run: |
+          python - <<'PY'
+          import os, xml.etree.ElementTree as ET
+          cases = list(ET.parse(os.environ['RUNNER_TEMP']+'/diagnostic-receipt-regression.xml').iter('testcase'))
+          for fragment, minimum in [('test_intraday_diagnostic_receipt', 54),
+                                    ('test_public_minute_bridge', 40),
+                                    ('test_volume_priority_research_cli', 29)]:
+              selected = [c for c in cases if fragment in c.get('classname', '')]
+              assert len(selected) >= minimum and all(c.find('skipped') is None for c in selected), fragment
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: diagnostic-receipt-regression-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/diagnostic-receipt-regression.xml
+          if-no-files-found: error
+  observe:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      UV_PYTHON: '3.11'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86
+      - run: uv sync --locked
       - name: Install existing restricted SSH identity
         env:
           VULTR_SSH_PRIVATE_KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
@@ -60,3 +113,13 @@ jobs:
           expected = hashlib.sha256(json.dumps(hashes, separators=(',', ':')).encode()).hexdigest()
           assert status['identity'] == expected, 'service code differs from observed main'
           PY
+      - name: Validate original stdout before log masking and project safe receipt
+        run: |
+          uv run python -m auto_invest.analytics.intraday_diagnostic_receipt \
+            --input /tmp/intraday-status.txt --output "$RUNNER_TEMP/intraday-diagnostic.json" \
+            --source-sha "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: intraday-diagnostic-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/intraday-diagnostic.json
+          if-no-files-found: error
