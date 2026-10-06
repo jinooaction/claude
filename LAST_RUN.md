@@ -1,4 +1,4 @@
-# 완료 후보 소비 장부 (as of 2026-10-06T15:45:35.433256Z)
+# 완료 후보 소비 장부 (as of 2026-10-06T17:33:40.067234Z)
 
 읽기 전용 보고입니다. 완료된 작업 후보를 다음 자율 작업 선택에서 제외하기 위한 장부입니다.
 주문, 자본 배분, live 설정 변경, 코드 자동 수정, PR 자동 생성은 하지 않습니다.
@@ -9,7 +9,7 @@
 |------|-----|
 | overall_status | OK |
 | released_count | 61 |
-| scanned_specs | 141 |
+| scanned_specs | 142 |
 
 ## 완료 후보
 
@@ -138,7 +138,7 @@
 | 182-intraday-kis-execution | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 183-mobile-capital-strategy-dashboard | 체크박스 작업이 없거나 완료되지 않았습니다. |
 | 199-first-observed-filings | 체크박스 작업이 없거나 완료되지 않았습니다. |
-| 208-public-minute-bridge | 체크박스 작업이 없거나 완료되지 않았습니다. |
+| 209-diagnostic-receipt | 체크박스 작업이 없거나 완료되지 않았습니다. |
 
 ## 안전 경계
 
@@ -155,7 +155,7 @@
 
 ```json
 {
-  "commit": "d22dea93f3d9740ebdc9f58349d5aa84fc8eb446",
+  "commit": "07932c8115d687bc8bbe7fac55495e9e2744b9ba",
   "overall_status": "OK",
   "released_work": [
     {
@@ -860,7 +860,8 @@
     "203-macro-release-price",
     "204-gap-reclaim-price",
     "206-volume-priority-research",
-    "207-public-minute-pilot"
+    "207-public-minute-pilot",
+    "208-public-minute-bridge"
   ],
   "schema_version": "1.0",
   "skipped_specs": [
@@ -1094,9 +1095,9 @@
     },
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
-      "spec_id": "208-public-minute-bridge"
+      "spec_id": "209-diagnostic-receipt"
     }
   ],
-  "timestamp_utc": "2026-10-06T15:45:35.433256Z"
+  "timestamp_utc": "2026-10-06T17:33:40.067234Z"
 }
 ```
