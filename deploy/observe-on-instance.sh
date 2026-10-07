@@ -519,8 +519,15 @@ main() {
             echo "INTRADAY_TIMER=$(systemctl is-active auto-invest-intraday-paper.timer 2>/dev/null || true)"
             echo "INTRADAY_SERVICE_RESULT=$(systemctl show auto-invest-intraday-paper.service --property=Result --value)"
             echo "INTRADAY_PRODUCTION_COMMIT=$(sudo -u "${APP_USER}" git rev-parse HEAD)"
-            sudo -u "${APP_USER}" -H /opt/auto-invest/.venv/bin/python \
-                scripts/intraday_runtime.py service-status
+            # Helpers may refresh before the market guard permits the code checkout.
+            # Preserve the old producer until the reviewed wrapper is actually deployed.
+            if [[ -f scripts/intraday_timing_status.py ]]; then
+                sudo -u "${APP_USER}" -H /opt/auto-invest/.venv/bin/python \
+                    scripts/intraday_timing_status.py service-status
+            else
+                sudo -u "${APP_USER}" -H /opt/auto-invest/.venv/bin/python \
+                    scripts/intraday_runtime.py service-status
+            fi
             ;;
         issuer-status)
             [[ "$#" -eq 0 ]] || die "issuer-status takes no args"

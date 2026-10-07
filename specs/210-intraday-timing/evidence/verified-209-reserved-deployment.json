@@ -1,0 +1,16 @@
+{
+  "completed_at": "2026-10-06T21:00:15.743Z",
+  "completed_row": 19823,
+  "correlation_id": "ffa5c5244ae5ac28b1e362732cffe29c",
+  "existing_phase": "live",
+  "job_id": 112880774412,
+  "masked_run_id_reconstructed": false,
+  "new_orders_or_capital_changed": false,
+  "observed_at": "2026-10-07T15:50:07Z",
+  "production_sha_after": "07932c8115d687bc8bbe7fac55495e9e2744b9ba",
+  "run_id": 37647142926,
+  "schema": 1,
+  "sidecar_sha256": "29706bb78f3f35c4cf1235f5b55cd1ccd49f0d0853a2710a7e2cc18e6914df6e",
+  "started_row": 19818,
+  "terminal_event": "DEPLOY_COMPLETED"
+}

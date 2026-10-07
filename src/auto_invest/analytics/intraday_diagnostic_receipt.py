@@ -10,6 +10,8 @@ import re
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
+from auto_invest.analytics.intraday_timing import validate_timing
+
 SOURCES = (
     "scripts/intraday_runtime.py",
     "specs/177-intraday-paper-challenger/contracts/intraday-preregistration.json",
@@ -124,6 +126,8 @@ def build_receipt(raw, *, source_sha, run_id, identity, captured):
             value = status["archive_status"]
             require(isinstance(value, str) and re.fullmatch("[A-Z_]{1,40}", value))
             selected["archive_status"] = value
+        if "timing" in status:
+            selected["timing"] = validate_timing(status["timing"], status)
         return dict(receipt_schema_version="1.0", observer_source_sha=source_sha, run_id=run_id,
                     captured_at_utc=captured.isoformat(),
                     production_commit=headers["INTRADAY_PRODUCTION_COMMIT"],
