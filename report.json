@@ -1,21 +1,21 @@
 {
   "benchmarks": {
     "incumbent_wide_trend_25bp": {
-      "cagr_pct": 2.642967,
+      "cagr_pct": 2.677605,
       "max_dd_pct": 5.51141,
-      "sharpe": 0.627655,
-      "total_return_pct": 6.098334
+      "sharpe": 0.637988,
+      "total_return_pct": 6.233567
     },
     "passive_equal_weight_25bp": {
-      "cagr_pct": 12.966781,
+      "cagr_pct": 12.872573,
       "max_dd_pct": 5.325608,
-      "sharpe": 1.644817,
-      "total_return_pct": 31.873485
+      "sharpe": 1.640224,
+      "total_return_pct": 31.930918
     }
   },
   "candidate_package": {
     "candidate_id": "candidate-low-turnover-daily-cross-asset-ml-v2",
-    "data": "sha256:606f9551818036c5627ae8a17b70f8ef4621dd8947a2aa10cad41fe9543a2a81",
+    "data": "sha256:bea297d2b12e0452cb271841793875f1f923ffc1840661cc7b4fe900a20b8280",
     "domain_key": "investment_edge",
     "eligible": false,
     "evidence_refs": [
@@ -40,9 +40,9 @@
     {
       "cost_bps": 10,
       "metrics": {
-        "cagr_pct": 9.315463,
+        "cagr_pct": 9.233675,
         "max_dd_pct": 9.124835,
-        "sharpe": 1.187946,
+        "sharpe": 1.18285,
         "total_return_pct": 22.398889
       },
       "turnover": 12.790537
@@ -50,9 +50,9 @@
     {
       "cost_bps": 25,
       "metrics": {
-        "cagr_pct": 8.395697,
+        "cagr_pct": 8.322288,
         "max_dd_pct": 9.227839,
-        "sharpe": 1.077546,
+        "sharpe": 1.072946,
         "total_return_pct": 20.074395
       },
       "turnover": 12.790537
@@ -60,30 +60,30 @@
     {
       "cost_bps": 50,
       "metrics": {
-        "cagr_pct": 6.87848,
+        "cagr_pct": 6.81875,
         "max_dd_pct": 9.399397,
-        "sharpe": 0.892622,
+        "sharpe": 0.888838,
         "total_return_pct": 16.294369
       },
       "turnover": 12.790537
     }
   ],
   "data": {
-    "common_week_end": "2026-10-02",
+    "common_week_end": "2026-10-07",
     "common_week_start": "2021-06-25",
-    "common_weeks": 276,
+    "common_weeks": 277,
     "daily_counts": {
-      "DBC": 1326,
-      "EEM": 1326,
-      "EFA": 1326,
-      "GLD": 1326,
-      "IEF": 1326,
-      "LQD": 1326,
-      "QQQ": 1326,
-      "SPY": 1326,
-      "TLT": 1326,
-      "UUP": 1326,
-      "VNQ": 1326
+      "DBC": 1329,
+      "EEM": 1329,
+      "EFA": 1329,
+      "GLD": 1329,
+      "IEF": 1329,
+      "LQD": 1329,
+      "QQQ": 1329,
+      "SPY": 1329,
+      "TLT": 1329,
+      "UUP": 1329,
+      "VNQ": 1329
     },
     "symbols": [
       "SPY",
@@ -101,7 +101,7 @@
   },
   "experiment_id": "low-turnover-daily-cross-asset-ml-v2",
   "fingerprints": {
-    "data": "sha256:606f9551818036c5627ae8a17b70f8ef4621dd8947a2aa10cad41fe9543a2a81",
+    "data": "sha256:bea297d2b12e0452cb271841793875f1f923ffc1840661cc7b4fe900a20b8280",
     "features": "sha256:b718803406484520f8584307a9c467c8339d7d4a9d85af564d768ef64646dfc1",
     "model": "sha256:f5f929ec8238d932511ae75b9f5395c8a8845a96794e5fefec4a7bad50b0dcc6"
   },
@@ -294,8 +294,8 @@
       "chronology_ok": true,
       "fold_id": 15,
       "ridge_rmse": 0.02528561184171035,
-      "test_end": "2026-09-25",
-      "test_rows": 66,
+      "test_end": "2026-10-02",
+      "test_rows": 77,
       "test_start": "2026-08-21",
       "train_label_end": "2026-08-14",
       "train_rows": 2376,
@@ -310,31 +310,31 @@
       "required": ">= 10"
     },
     {
-      "actual": 8.395697,
+      "actual": 8.322288,
       "gate_id": "positive_25bp_cagr",
       "passed": true,
       "required": "> 0"
     },
     {
-      "actual": -0.5672710000000001,
+      "actual": -0.567278,
       "gate_id": "sharpe_margin",
       "passed": false,
       "required": ">= 0.20 over both benchmarks"
     },
     {
-      "actual": 0.1964841887017426,
+      "actual": 0.19541285150037413,
       "gate_id": "psr",
       "passed": false,
       "required": ">= 0.95"
     },
     {
-      "actual": 0.8748977304114935,
+      "actual": 0.8749662617853903,
       "gate_id": "dsr",
       "passed": false,
       "required": ">= 0.95"
     },
     {
-      "actual": 0.4,
+      "actual": 0.3333333333333333,
       "gate_id": "fold_win_rate",
       "passed": false,
       "required": ">= 0.60"
@@ -360,7 +360,7 @@
   ],
   "latest_allocation": {
     "cash_weight": 1.0,
-    "date": "2026-09-25",
+    "date": "2026-10-02",
     "weights": {
       "DBC": 0.0,
       "EEM": 0.0,
@@ -380,17 +380,17 @@
     "boosting_mean_validation_rmse": 0.019910674883748182,
     "candidate_turnover": 12.790537,
     "estimated_trade_cost_bps": 25,
-    "fold_win_rate": 0.4,
-    "fold_wins": 6,
+    "fold_win_rate": 0.3333333333333333,
+    "fold_wins": 5,
     "minimum_hold_weeks": 4,
-    "prediction_weeks": 118,
+    "prediction_weeks": 119,
     "ridge_mean_validation_rmse": 0.020698650855973468,
     "suppressed_trades": 65,
     "trade_threshold": 0.08,
     "trial_sharpes_annual": [
-      0.597764,
-      1.321387,
-      1.077546
+      0.595252,
+      1.315684,
+      1.072946
     ],
     "turnover_reduction_pct": 64.822506
   },
@@ -405,8 +405,8 @@
   },
   "schema_version": "1.1",
   "significance": {
-    "dsr_model_trials": 0.8748977304114935,
-    "psr_vs_better_benchmark": 0.1964841887017426
+    "dsr_model_trials": 0.8749662617853903,
+    "psr_vs_better_benchmark": 0.19541285150037413
   },
   "verdict": "NO_EDGE"
 }
