@@ -14,7 +14,7 @@
 - [x] T007 [US2] .github/workflows/intraday-paper-status.yml의 새반례/전체원격 검사를 연결한다.
 
 ## Closure
-- [x] T008 AGENTS/.specify/209완료/HANDOFF/results/작은근거를 갱신하고 합성121개·린트·하네스14/14·인계·본문을 확인한다.
+- [x] T008 AGENTS/.specify/209완료/HANDOFF/results/작은근거를 갱신하고 최초121개 뒤 손상메타 할당 제한 포함124개·린트·하네스14/14·인계·본문을 확인한다.
 - [ ] T009 정확SHA의 실제원격XML/필수반례/린트·머지가능·최신본문 확인과 병합을 완료한다.
 
 T001→T002→T003→T004→T005→T006→T007→T008→T009. 같은파일 동시수정 없음.

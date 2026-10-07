@@ -148,6 +148,8 @@ def _read_timing(root, status):
                                uri=True, timeout=2)
         try:
             conn.row_factory = sqlite3.Row
+            # Bound corrupt columns before SQLite materializes the result row.
+            conn.setlimit(sqlite3.SQLITE_LIMIT_LENGTH, 1024 * 1024 + 16384)
             conn.set_progress_handler(lambda: int(time.monotonic() > deadline), 1000)
             conn.execute("PRAGMA query_only=ON")
             require(conn.execute("PRAGMA user_version").fetchone()[0] == 181)

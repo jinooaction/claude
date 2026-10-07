@@ -48,7 +48,7 @@ jobs:
           python - <<'PY'
           import os, xml.etree.ElementTree as ET
           cases = list(ET.parse(os.environ['RUNNER_TEMP']+'/diagnostic-receipt-regression.xml').iter('testcase'))
-          for fragment, minimum in [('test_intraday_timing', 62),
+          for fragment, minimum in [('test_intraday_timing', 65),
                                     ('test_intraday_diagnostic_receipt', 56),
                                     ('test_public_minute_bridge', 40),
                                     ('test_volume_priority_research_cli', 29)]:

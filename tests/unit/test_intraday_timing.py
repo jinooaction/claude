@@ -5,6 +5,7 @@ import json
 import sqlite3
 import subprocess
 import sys
+import tracemalloc
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -143,6 +144,22 @@ def test_valid_second_record_has_only_local_link_scope(tmp_path):
     result = read_timing(tmp_path, status)
     assert result["status"] == "RECORDED"
     assert result["source_integrity_scope"] == "LATEST_RECORD_LOCAL_LINK"
+
+
+@pytest.mark.parametrize("column", ["hash", "previous_hash", "timestamp"])
+def test_sqlite_itself_bounds_corrupt_metadata_columns(tmp_path, column):
+    path, event, status = store(tmp_path)
+    with sqlite3.connect(path) as conn:
+        conn.execute(f"UPDATE intraday_events SET {column}=?", ("x" * (1024 * 1024 + 16385),))
+    tracemalloc.start()
+    try:
+        result = read_timing(tmp_path, status)
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert peak < 512 * 1024
+    assert result["status"] == "UNAVAILABLE"
+    assert result["event_hash"] is None
 
 
 def test_timing_is_preserved_in_existing_price_free_receipt():
