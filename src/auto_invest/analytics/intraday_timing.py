@@ -128,7 +128,7 @@ def timing_lock(root):
             os.close(descriptor)
 
 
-def _read_timing(root, status):
+def _read_timing(root, status, *, projector=project_timing):
     """Caller holds the existing diagnostic writer's shared lock."""
     try:
         identity = status["identity"]
@@ -180,7 +180,7 @@ def _read_timing(root, status):
                                        (row["id"],)).fetchone()[0])
             require(row["timestamp"] == event["timestamp"]
                     and row["hash"] == _hash([row["previous_hash"], event]))
-            report = project_timing(event, status, row["hash"])
+            report = projector(event, status, row["hash"])
         finally:
             conn.close()
         after = path.stat()

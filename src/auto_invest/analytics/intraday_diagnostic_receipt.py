@@ -10,6 +10,7 @@ import re
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
+from auto_invest.analytics.intraday_collection_record import validate_collection
 from auto_invest.analytics.intraday_timing import validate_timing
 
 SOURCES = (
@@ -128,6 +129,8 @@ def build_receipt(raw, *, source_sha, run_id, identity, captured):
             selected["archive_status"] = value
         if "timing" in status:
             selected["timing"] = validate_timing(status["timing"], status)
+        if "collection_record" in status:
+            selected["collection_record"] = validate_collection(status["collection_record"], status)
         return dict(receipt_schema_version="1.0", observer_source_sha=source_sha, run_id=run_id,
                     captured_at_utc=captured.isoformat(),
                     production_commit=headers["INTRADAY_PRODUCTION_COMMIT"],
