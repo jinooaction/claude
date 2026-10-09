@@ -1,5 +1,5 @@
 {
-  "commit": "e15a841ef04a66e02b8064f02807feb269aac8a4",
+  "commit": "4c1926f8da19bea6c2fbeaf6ccc8120c9212d63e",
   "overall_status": "OK",
   "released_work": [
     {
@@ -938,7 +938,11 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "199-first-observed-filings"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "211-collection-record"
     }
   ],
-  "timestamp_utc": "2026-10-09T15:56:00.984765Z"
+  "timestamp_utc": "2026-10-09T16:33:20.967103Z"
 }
