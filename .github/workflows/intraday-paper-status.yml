@@ -7,9 +7,12 @@ on:
       - 'src/auto_invest/analytics/intraday_diagnostic_receipt.py'
       - 'tests/unit/test_intraday_diagnostic_receipt.py'
       - 'src/auto_invest/analytics/intraday_timing.py'
+      - 'src/auto_invest/analytics/intraday_collection_record.py'
       - 'scripts/intraday_timing_status.py'
       - 'deploy/observe-on-instance.sh'
       - 'tests/unit/test_intraday_timing.py'
+      - 'tests/unit/test_intraday_collection_record.py'
+      - 'specs/211-collection-record/**'
       - 'specs/210-intraday-timing/**'
       - 'specs/209-diagnostic-receipt/**'
       - '.github/workflows/intraday-paper-status.yml'
@@ -48,7 +51,8 @@ jobs:
           python - <<'PY'
           import os, xml.etree.ElementTree as ET
           cases = list(ET.parse(os.environ['RUNNER_TEMP']+'/diagnostic-receipt-regression.xml').iter('testcase'))
-          for fragment, minimum in [('test_intraday_timing', 65),
+          for fragment, minimum in [('test_intraday_collection_record', 76),
+                                    ('test_intraday_timing', 65),
                                     ('test_intraday_diagnostic_receipt', 56),
                                     ('test_public_minute_bridge', 40),
                                     ('test_volume_priority_research_cli', 29)]:
