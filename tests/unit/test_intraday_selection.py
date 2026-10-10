@@ -102,7 +102,8 @@ def test_candidate_parameter_mutation_changes_execution_identity():
 
 
 @pytest.mark.parametrize("filename", [
-    "intraday_observation.py", "intraday_selection.py", "intraday_cash_ledger.py",
+    "intraday_observation.py", "intraday_selection.py", "intraday_research_identity.py",
+    "intraday_cash_ledger.py",
     "intraday_account.py", "intraday_cash_baseline.py", "account_source_profile.py",
     "domestic_account.py",
     "intraday_holdings_coverage.py",

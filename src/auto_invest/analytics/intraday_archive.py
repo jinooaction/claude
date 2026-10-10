@@ -14,6 +14,7 @@ from auto_invest.analytics.intraday_paper_challenger import (
     load_preregistration,
     run_intraday_paper_challenger,
 )
+from auto_invest.analytics.intraday_research_identity import archive_input_identity
 from auto_invest.market_data.intraday import (
     CALENDAR,
     SYMBOLS,
@@ -116,6 +117,10 @@ def review_archives(archives: Path, output: Path, preregistration: Path, code_co
     write_batch(output, dict(provider=identity[0], synthetic=identity[1],
                              retrieved_at_utc=now, pages=[], bars=rows, archives=lineage))
     combined = load_intraday_dataset(output, output / "manifest.json", config)
+    input_identity = archive_input_identity(*identity, lineage)
+    # A fresh generated manifest contains review time. Bind the original verified
+    # input instead; its source/manifest hashes still include original timestamps.
+    combined = replace(combined, dataset_fingerprint=digest(encode(input_identity)))
     expected = {s.date() for s in CALENDAR.sessions_in_range(min(sessions), max(sessions))}
     missing_calendar = len(expected - sessions)
     if missing_calendar:
@@ -125,6 +130,7 @@ def review_archives(archives: Path, output: Path, preregistration: Path, code_co
         combined, config, preregistration_bytes=prereg_bytes,
         code_commit=code_commit, generated_at_utc=now,
     )
+    payload["archive_input_identity"] = input_identity
     required = config["minimum_evidence"]["minimum_total_sessions"]
     result = dict(
         status="HISTORY_REVIEWED", session_count=len(combined.sessions),

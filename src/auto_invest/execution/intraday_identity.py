@@ -17,6 +17,7 @@ SOURCE_PATHS = (
     "src/auto_invest/analytics/intraday_capital_review.py",
     "src/auto_invest/analytics/intraday_operator.py",
     "src/auto_invest/analytics/intraday_paper_challenger.py",
+    "src/auto_invest/analytics/intraday_research_identity.py",
     "src/auto_invest/analytics/intraday_runtime.py",
     "src/auto_invest/backtest/__init__.py",
     "src/auto_invest/backtest/broker_mock.py",

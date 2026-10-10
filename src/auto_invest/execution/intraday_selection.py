@@ -11,8 +11,8 @@ from auto_invest.analytics.intraday_paper_challenger import (
     build_candidate_registry,
     load_preregistration,
 )
+from auto_invest.analytics.intraday_research_identity import research_content_digest
 from auto_invest.execution.intraday_signals import execution_fingerprint
-from auto_invest.market_data.intraday import digest
 
 
 @dataclass(frozen=True)
@@ -64,7 +64,8 @@ def select_research(archives: Path, preregistration: Path, code_commit: str) -> 
                     if selected and result["provider"] == "kis-nasdaq-partial-unadjusted"
                     else None)
         return ResearchSelection(
-            selected, result["provider"], code_commit, result["dataset_fingerprint"], digest(raw),
+            selected, result["provider"], code_commit, result["dataset_fingerprint"],
+            research_content_digest(report),
             identity, result["decision"]["verdict"], result["session_count"],
             result["missing_sessions"],
         )

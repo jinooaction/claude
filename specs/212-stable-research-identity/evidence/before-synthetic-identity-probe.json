@@ -1,0 +1,29 @@
+{
+  "scope": "SYNTHETIC_IDENTITY_RECOMPUTATION_ONLY",
+  "synthetic": true,
+  "same_original_inputs": true,
+  "original_files_unchanged": true,
+  "same_code_commit": true,
+  "recomputation_time_difference_seconds": 1,
+  "original_files": 7,
+  "original_sessions": 1,
+  "synthetic_rows": 390,
+  "dataset_fingerprint_changes_with_clock": true,
+  "research_digest_changes_with_clock": true,
+  "first_dataset_fingerprint": "sha256:a17c3e40cb3b69f0c27ae83278b4c9f916c2ffba32d9648420e8df917dfe591b",
+  "second_dataset_fingerprint": "sha256:1f88d199c52d6b48760a089674f3f3b2d2260c7a8af641099e13851dd94cf3af",
+  "first_research_digest": "sha256:3e2fbb539cef30b10938188a8178c9b3041da25099530ae22cea99807ee7441c",
+  "second_research_digest": "sha256:966303ea70b5c4948e885727828fee1f8428d442db676d505816aede11c1d5bc",
+  "verdict": "INSUFFICIENT_EVIDENCE",
+  "accepted_strategy": false,
+  "registration_issued": false,
+  "keys_read": false,
+  "real_prices_read": false,
+  "real_orders": 0,
+  "source_head": "3a03ac5df68a7f12616d96b890ae262857f294a0",
+  "pre_fix_test_counts": {
+    "failed": 3,
+    "passed": 10,
+    "seconds": 1.64
+  }
+}
