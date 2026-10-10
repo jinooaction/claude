@@ -1,0 +1,34 @@
+{
+  "assets": [
+    {
+      "name": "audit-sidecar-original.md",
+      "sha256": "ac6ee099d63f4d67a8c55bf458662f36e99086724d82090c62f1520385bbfaf4",
+      "size": 1182
+    },
+    {
+      "name": "diagnostic-original.zip",
+      "sha256": "9e1add60807e4d6ec7350c8adb1202d29b92bf2326e6b1874a3e3d4f86359e1e",
+      "size": 1226
+    },
+    {
+      "name": "native-metadata-bundle.json",
+      "sha256": "9d502cb49edc8418b85d6179a20813b3151f58dc7eee2b605a38448628236632",
+      "size": 7677
+    },
+    {
+      "name": "verified-211-actual-deployment-collection.json",
+      "sha256": "93fb4bc52e700585073f7a36a8d99f6a5f4ace7ffdd80a15d0bfece1c761ae6a",
+      "size": 4094
+    },
+    {
+      "name": "verify-actual.py",
+      "sha256": "c89022b75c27496bc30b472ff149c1e6470ffb7683251575a8b4175e875232ba",
+      "size": 4700
+    }
+  ],
+  "release_id": 409047098,
+  "remote_content_verified": true,
+  "tag": "research-211-actual-4c1926f8",
+  "target": "4c1926f8da19bea6c2fbeaf6ccc8120c9212d63e",
+  "total_bytes": 18879
+}

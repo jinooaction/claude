@@ -2,7 +2,7 @@
 
 **Feature Branch**: `codex/211-collection-record`  
 **Created**: 2026-10-10  
-**Status**: 검증 전  
+**Status**: 구현·전체검증·병합·예약반영·실제 부재 보존 확인 완료(전체181 미완료)
 **Input**: 기존 한국투자 프로그램의 수집 기록과 실제 모의 진단을 구분하고, 최초 처리에 저장된 같은 봉의 원래 시각만 검증한다.
 
 ## User Scenarios & Testing
