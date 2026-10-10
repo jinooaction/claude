@@ -1,0 +1,26 @@
+{
+  "actions": [],
+  "blocked": [],
+  "canary_submissions_next": {
+    "schema_version": "1.0",
+    "submissions": []
+  },
+  "commit": "4c1926f8da19bea6c2fbeaf6ccc8120c9212d63e",
+  "counts": {
+    "already_registered": 0,
+    "already_submitted": 0,
+    "blocked": 0,
+    "registered": 0,
+    "reported": 0,
+    "submitted": 0
+  },
+  "forward_registry_next": {
+    "schema_version": "1.0",
+    "tracks": []
+  },
+  "missing_inputs": [],
+  "overall_status": "ok",
+  "run_id": "[REDACTED_ACCOUNT]",
+  "schema_version": "1.0",
+  "timestamp_utc": "2026-10-10T14:58:22Z"
+}
