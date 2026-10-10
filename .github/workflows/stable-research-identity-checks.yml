@@ -1,0 +1,65 @@
+name: Stable research identity regression
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'src/auto_invest/analytics/intraday_archive.py'
+      - 'src/auto_invest/analytics/intraday_research_identity.py'
+      - 'src/auto_invest/execution/intraday_selection.py'
+      - 'src/auto_invest/execution/intraday_identity.py'
+      - 'tests/unit/test_intraday_research_identity.py'
+      - 'specs/212-stable-research-identity/**'
+      - '.github/workflows/stable-research-identity-checks.yml'
+      - 'pyproject.toml'
+      - 'uv.lock'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stable-research-identity-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      KIS_LIVE_TEST: '0'
+      UV_PYTHON: '3.11'
+    steps:
+      - name: Checkout exact reviewed source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86
+      - run: uv sync --locked --dev
+      - name: Lint source and tests
+        run: uv run ruff check src tests
+      - name: Full regression with existing pinned archive runtime
+        run: >-
+          uv run --with-requirements scripts/volume-priority-requirements.txt
+          pytest --junitxml="$RUNNER_TEMP/stable-research-identity.xml"
+      - name: Require identity and existing counterexamples without skips
+        run: |
+          python - <<'PY'
+          import os, xml.etree.ElementTree as ET
+          cases = list(ET.parse(os.environ['RUNNER_TEMP']+'/stable-research-identity.xml').iter('testcase'))
+          for fragment, minimum in [('test_intraday_research_identity', 21),
+                                    ('test_intraday_collection_record', 76),
+                                    ('test_intraday_timing', 65),
+                                    ('test_intraday_diagnostic_receipt', 56),
+                                    ('test_public_minute_bridge', 40),
+                                    ('test_volume_priority_research_cli', 29)]:
+              selected = [c for c in cases if fragment in c.get('classname', '')]
+              assert len(selected) >= minimum and all(c.find('skipped') is None for c in selected)
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: stable-research-identity-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/stable-research-identity.xml
+          if-no-files-found: error
+          retention-days: 90
