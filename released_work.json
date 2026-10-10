@@ -1,5 +1,5 @@
 {
-  "commit": "1c2e0fc12acae06885d984c12e595c5efba410b6",
+  "commit": "e05a7ad38452d82b7e84ad47fdfd63b263d9f466",
   "overall_status": "OK",
   "released_work": [
     {
@@ -939,7 +939,11 @@
     {
       "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
       "spec_id": "199-first-observed-filings"
+    },
+    {
+      "reason_ko": "체크박스 작업이 없거나 완료되지 않았습니다.",
+      "spec_id": "212-stable-research-identity"
     }
   ],
-  "timestamp_utc": "2026-10-10T16:25:04.648079Z"
+  "timestamp_utc": "2026-10-10T16:53:10.515359Z"
 }
