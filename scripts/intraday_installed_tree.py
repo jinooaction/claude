@@ -224,8 +224,36 @@ def _snapshot(root, deadline):
         if _state(before) != _state(os.fstat(directory)):
             raise TreeError("TREE_CHANGED")
 
+    def verify_states(directory, prefix, seen):
+        _check_time(deadline)
+        if _state(os.fstat(directory)) != states.get(prefix):
+            raise TreeError("TREE_CHANGED")
+        seen.add(prefix)
+        with os.scandir(directory) as scan:
+            for entry in scan:
+                _check_time(deadline)
+                path = _path(prefix + "/" + entry.name if prefix else entry.name)
+                info = os.stat(entry.name, dir_fd=directory, follow_symlinks=False)
+                if _state(info) != states.get(path):
+                    raise TreeError("TREE_CHANGED")
+                seen.add(path)
+                if stat.S_ISDIR(info.st_mode):
+                    child = os.open(
+                        entry.name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=directory
+                    )
+                    try:
+                        verify_states(child, path, seen)
+                    finally:
+                        os.close(child)
+        if _state(os.fstat(directory)) != states.get(prefix):
+            raise TreeError("TREE_CHANGED")
+
     try:
         walk(root_fd, "")
+        seen = set()
+        verify_states(root_fd, "", seen)
+        if seen != set(states):
+            raise TreeError("TREE_CHANGED")
         if _state(os.fstat(root_fd)) != _state(root.lstat()) or root.resolve() != root:
             raise TreeError("TREE_CHANGED")
     finally:

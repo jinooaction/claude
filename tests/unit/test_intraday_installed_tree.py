@@ -1,6 +1,7 @@
 """Small synthetic install images; no installed candidate, broker or secret."""
 
 import copy
+from contextlib import contextmanager
 import hashlib
 import importlib.util
 import json
@@ -391,3 +392,30 @@ def test_inspector_preserves_original_bytes_modes_and_directory_entries(image):
         for p in sorted(image[0].rglob("*"))
     ]
     assert before == after and expected == image[2].read_bytes()
+
+
+def test_earlier_file_changes_while_later_file_is_read_refused(image, monkeypatch):
+    target = image[0] / "lib/pkg/code.py"
+    late_inode = (image[0] / "empty.dat").stat().st_ino
+    original = os.read
+    original_scan = os.scandir
+    reads = 0
+
+    @contextmanager
+    def ordered_scan(fd):
+        with original_scan(fd) as scan:
+            entries = sorted(scan, key=lambda item: (item.name == "empty.dat", item.name))
+        yield iter(entries)
+
+    def read(fd, size):
+        nonlocal reads
+        content = original(fd, size)
+        if os.fstat(fd).st_ino == late_inode:
+            reads += 1
+            if reads == 2:
+                target.write_bytes(b"SAFE = 0\n")
+        return content
+
+    monkeypatch.setattr(os, "read", read)
+    monkeypatch.setattr(os, "scandir", ordered_scan)
+    assert check(image)["status"] == "UNAVAILABLE"
