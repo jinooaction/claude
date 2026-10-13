@@ -1,0 +1,34 @@
+{
+  "all_remote_content_verified": true,
+  "asset_count": 5,
+  "assets": [
+    {
+      "bytes": 1182,
+      "name": "audit-sidecar-original.md",
+      "sha256": "e3837b52d312a3537c33cad3e02dc653f476d0cd38698b986540f629917fc72c"
+    },
+    {
+      "bytes": 1214,
+      "name": "diagnostic-original.zip",
+      "sha256": "55ff4b8d5a14eea58ba907c8e39a6f94055ef35bc594855bcac708e56ef1cf1c"
+    },
+    {
+      "bytes": 4076,
+      "name": "native-metadata-bundle.json",
+      "sha256": "bf3485fae7f5b79c4066785c28f032bcac2b248c56530e804991fd9a1e1bf224"
+    },
+    {
+      "bytes": 4000,
+      "name": "verified-213-actual-deployment.json",
+      "sha256": "0a5c9ae50c35d2c671535f249cd78896fa6e84e8fe3cd5c18116d6fc65093664"
+    },
+    {
+      "bytes": 4871,
+      "name": "verify-actual.py",
+      "sha256": "bf4e4c8c0f347819cc6ad2c38e8814ab459c94124e13ef7a8a3c57dfb7e7520a"
+    }
+  ],
+  "release_id": 411859400,
+  "tag": "research-213-actual-19e77b6b",
+  "total_bytes": 15343
+}
