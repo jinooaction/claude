@@ -1,13 +1,13 @@
 """Small synthetic install images; no installed candidate, broker or secret."""
 
 import copy
-from contextlib import contextmanager
 import hashlib
 import importlib.util
 import json
 import os
 import subprocess
 import sys
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
