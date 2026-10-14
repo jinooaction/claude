@@ -7,7 +7,7 @@
 | C02 | 같은 metadata 버전·설치 파일 변조 | 214 불일치 + 원래 설치 입력 대조 | 설치 연결 |
 | C03 | 같은 image digest·다른 args/env | 기동 불일치 | 실제 runtime config |
 | C04 | -I만 사용·허용 site의 실행 .pth | 기동안전 미평가 | site 정책/실제 module origin |
-| C05 | -S로 venv prefix·의존성 경로 달라짐 | ROOT/기동 불일치 | 정확 Python3.11 실제 기동 |
+| C05 | -S로 venv prefix·의존성 경로 달라짐 | 기동·의존성 불일치 또는 미평가; ROOT/정확HEAD는 별도 확인 | 정확 Python3.11 실제 기동 |
 | C06 | 깨끗한 이미지 위에 source bind mount | 격리 미평가/불일치 | actual mount/쓰기 주체 |
 | C07 | 이미지 동일·native loader 외부 라이브러리 | 기반/기동 미평가 | 실제 loader/플랫폼 |
 | C08 | 비교 직후 경로/이미지 교체 | CHANGED/연결 부재 | read→execute/지속 유지 |
