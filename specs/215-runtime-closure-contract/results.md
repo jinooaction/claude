@@ -1,0 +1,44 @@
+# Results: 문서 계약과 실제214 반영
+2026-10-15. 이 기능은 설계 문서만 제공하며 환경 설치/기동/실행 검증기는 구현하지 않았다.
+여섯 증거 범주와 열두 반례는 문서 검토이며 신규 실행 시험12통과로 집계하지 않는다.
+기존 코드의 실제ROOT/정확HEAD/등록HMAC·독립재계산을 보존하는 OCI 참조 형태와 후속 등급3 단계가 정리됐다.
+실제 서버 OCI지원·Python/설치파일·mount·기동·지속불변·독립 신뢰 입력은 미평가다.
+
+## 실제214 예약 반영
+PR888/main9e82075d3ec2a934a4770f7f96e12b3a27aca128는2026-10-13 16:55:15UTC merge 병합됐다.
+과거 장중16:55:40 거절 뒤 정상예약은21:00:21.656UTC에 실제 완료됐다.
+읽기전용감사38592736852/job115951548589는2026-10-14 15:49:49UTC SUCCESS다.
+원래 sidecar 상관키e25e6be39f4cf946ed74988e4f841ec4·START20032/21:00:14.700·COMPLETE20037/21:00:21.656,
+19e77b6b60c1→9e82075d3ec2/DEPLOY_COMPLETED/existingphase=live를 확인했다.
+가린 sidecar run_id를 복원하지 않고 native GitHub metadata로 별도 연결했다.
+재배포·긴급우회·새모드/후보주문/자금배정0. 기존 예약과 실제완료를 구분한다.
+
+## 원래 정기 진단 — 재실행 없음
+이미 종료된38490130809/observe115613101285는2026-10-14 00:26:10UTC SUCCESS다.
+regression115613103322 SKIPPED는 정기 실행에서 정상이며 새 전체검사 아니다.
+artifact11860869180 원래ZIP1214/SHAf61b4d428d9000b0142a8a1c96fa5044f1cac298f57afeb3710b9b436d297902,
+원래JSON2539/SHA35d354f7b1f98cdd986b69660f44064ab332b04359872daf012361a28b92e6c1를 원격digest/원본과 대조했다.
+생산/조회SHA9e·운용6파일지문f53f8b576adbedaad14869df9454c8adee9a03766806f24d371a1f5edd825237·타이머active/서비스success다.
+원래관측2026-10-14 00:25:38.659774UTC/당시age29.0/WAIT_SESSION/COMPLETEOct13,
+처리624봉/모의체결1206/모의열림0/실주문0/정식전진0/자격·승격거짓이다.
+collection_record UNAVAILABLE/PROOF_ABSENT/detailsnull·인증false를 보존했다.
+Oct13 19:55봉/모형20:00/원래runtime관측20:00:04.398329은4.398329초,
+게시차이15938.659774초다. 이는 runtime 인자/게시 차이이며 처리완료/API수신/자료원게시/정식90초·60세션 합격이 아니다.
+당시age를 현재신선도로 쓰거나 야간게시차이를KIS지연으로 해석하지 않는다.
+halt_reasons[]는 원래Oct13세션이며 과거 모의PAPER_DAILY_LOSS를 해제한 것이 아니다.
+기존 strict timing/collection/schema·scope·identity와 원래captured시각 영수증 왕복을 확인했다.
+
+## 고정 실제 증거
+[research-214-actual-9e82075d](https://github.com/jinooaction/claude/releases/tag/research-214-actual-9e82075d),
+id412904093/정확5자산15160바이트/정확9e태그다. 원래ZIP·가린감사sidecar·안전native묶음·검증JSON·재현스크립트다.
+전 원격 내용/크기/SHA를 재다운로드 대조하고 받은5자산만으로 원래 검증 결과를 재현했다.
+고정5자산에 추가/덮어쓰기/삭제하지 않는다. 기존214검사411903999의8자산과213실제5자산도 유지한다.
+작은원본·nativeJSON·검증기는 claude-data-research/20261015-214-actual-deployment에 있고 작은영수증은evidence/다.
+
+## 현재 문서 검사
+포인터/문서 작성 중 하네스12/14가 tasks.md부재/지난 main19e 요약을 정확히 지적했다. 작성 완료 뒤14/14·HANDOFF사실·린트가 통과했다.
+문서diff의추가EOF빈줄1건도보정했다. 계산코드변경은없지만 .specify/feature.json 변경은 기존정상배포 trigger 대상이다.
+정확 새 문서HEAD의 전체 원격/린트·본문/하네스/머지가능·병합은 아직 별도 확인 대상이다.
+최종 종료 근거는 PR본문과 별도 고정보관에 남겨 문서→CI→문서 반복을 만들지 않는다.
+src/scripts/tests/.github/deploy/의존성/헌법/Kernel 변경0. 신규 수집/실제환경/키·권한·장부·등록/돈 변경0.
+전체181·통과전략·독립확인·같은후보60세션·생산체결/청산/감사/대사는 여전히 미완료다.

@@ -1,0 +1,35 @@
+{
+  "asset_count": 5,
+  "assets": [
+    {
+      "bytes": 1182,
+      "name": "audit-sidecar-original.md",
+      "sha256": "152541d6087af1afca66c72f6fac9a8f219bae7da1697d61b048d6482ea053af"
+    },
+    {
+      "bytes": 1214,
+      "name": "diagnostic-original.zip",
+      "sha256": "f61b4d428d9000b0142a8a1c96fa5044f1cac298f57afeb3710b9b436d297902"
+    },
+    {
+      "bytes": 3423,
+      "name": "native-metadata-bundle.json",
+      "sha256": "3a7eff531e6b379181b830998a1ee795b819900a18fb527428cd42773d523755"
+    },
+    {
+      "bytes": 4001,
+      "name": "verified-214-actual-deployment.json",
+      "sha256": "a49f5bca4bc75df69c8a16f1a4c21df429e5b8340ed11bc00e7671b0770de9c4"
+    },
+    {
+      "bytes": 5340,
+      "name": "verify-actual.py",
+      "sha256": "7b0a782c1a42d84b7a4da78cfef19575ed4bcccf0e7385a70ee9dcb387ff7e83"
+    }
+  ],
+  "exact_target": "9e82075d3ec2a934a4770f7f96e12b3a27aca128",
+  "release_id": 412904093,
+  "remote_content_verified": true,
+  "tag": "research-214-actual-9e82075d",
+  "total_bytes": 15160
+}
