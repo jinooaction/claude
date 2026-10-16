@@ -32,6 +32,8 @@ on:
       - 'tests/unit/test_security_workflow_hardening.py'
       - '.github/workflows/live-canary-server-status.yml'
       - 'tests/unit/test_live_canary_server_status_workflow.py'
+      - 'deploy/live-canary-scheduled-on-instance.sh'
+      - 'tests/unit/test_live_canary_active_track.py'
       - 'research-fixtures/206/**'
       - 'specs/206-volume-priority-research/**'
       - '.github/workflows/volume-priority-checks.yml'
@@ -81,6 +83,7 @@ jobs:
                                     ('test_operator_status', 1),
                                     ('test_public_sidecar_markdown', 36),
                                     ('test_live_canary_server_status_workflow', 14),
+                                    ('test_live_canary_active_track', 23),
                                     ('test_security_workflow_hardening', 1)]:
               selected = [c for c in all_cases if fragment in c.get('classname', '')]
               assert len(selected) >= minimum and all(c.find('skipped') is None for c in selected)
