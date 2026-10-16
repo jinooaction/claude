@@ -146,12 +146,14 @@ def test_design_workflows_do_not_sudo_server_mutable_helper():
 def test_public_sidecar_redaction_covers_publish_directory():
     violations: list[str] = []
     for path, text in _workflow_texts().items():
-        if "redact_public_sidecar.py" not in text:
-            continue
-        if 'redact_public_sidecar.py" LAST_RUN.md' in text:
-            violations.append(path.name)
-        if 'redact_public_sidecar.py" .' not in text:
-            violations.append(f"{path.name}: not directory-wide")
+        # Path filters and lint arguments are references, not publication commands.
+        commands = re.findall(
+            r"(?m)^\s*(?:uv run )?python(?:3)?\s+[^\n]*redact_public_sidecar\.py[^\n]*",
+            text,
+        )
+        for command in commands:
+            if not re.search(r"redact_public_sidecar\.py[\"']?\s+\.(?:\s|$)", command):
+                violations.append(f"{path.name}: not directory-wide")
     assert violations == []
 
 

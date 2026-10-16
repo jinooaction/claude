@@ -25,6 +25,7 @@ TABLE_KEYS = (
 )
 SENSITIVE_JSON_KEYS = {
     "account",
+    "accountnavusd",
     "accountno",
     "accountnumber",
     "account_no",
@@ -161,6 +162,50 @@ def _redact_json_value(value: object) -> object:
     return value
 
 
+def redact_markdown(text: str) -> str:
+    """Apply structured redaction only inside complete, valid JSON fences.
+
+    Other code blocks are consumed as a whole so their nested examples cannot
+    opt out of the ordinary text policy. Malformed evidence is never repaired.
+    """
+    lines = text.splitlines(keepends=True)
+    chunks: list[str] = []
+    start = index = 0
+    while index < len(lines):
+        opening = re.fullmatch(r" {0,3}(`{3,}|~{3,})([^\r\n]*)\r?\n", lines[index])
+        if opening is None:
+            index += 1
+            continue
+        fence, info = opening.groups()
+        closing = re.compile(
+            r" {0,3}" + re.escape(fence[0]) + "{" + str(len(fence)) + r",}[ \t]*(?:\r?\n)?"
+        )
+        end = index + 1
+        while end < len(lines) and closing.fullmatch(lines[end]) is None:
+            end += 1
+        if end == len(lines):
+            break
+        chunks.append(redact("".join(lines[start:index])))
+        block = "".join(lines[index:end + 1])
+        if info.strip().lower() == "json":
+            try:
+                payload = json.loads("".join(lines[index + 1:end]))
+                protected = json.dumps(
+                    _redact_json_value(payload), ensure_ascii=False, indent=2, sort_keys=True
+                )
+            except (ValueError, RecursionError):
+                # Publishers may ignore a script error. Parser/recursion limits
+                # must retain the old text protection rather than leave raw data.
+                chunks.append(redact(block))
+            else:
+                chunks.append(lines[index] + protected + "\n" + lines[end])
+        else:
+            chunks.append(redact(block))
+        start = index = end + 1
+    chunks.append(redact("".join(lines[start:])))
+    return "".join(chunks)
+
+
 def _iter_files(path: Path) -> Iterator[Path]:
     if path.is_dir():
         for child in path.rglob("*"):
@@ -218,7 +263,7 @@ def _redact_path(path: Path) -> None:
                 encoding="utf-8",
             )
         else:
-            file_path.write_text(redact(raw), encoding="utf-8")
+            file_path.write_text(redact_markdown(raw), encoding="utf-8")
 
 
 def main(argv: list[str]) -> int:
@@ -226,7 +271,7 @@ def main(argv: list[str]) -> int:
         for raw in argv:
             _redact_path(Path(raw))
     else:
-        sys.stdout.write(redact(sys.stdin.read()))
+        sys.stdout.write(redact_markdown(sys.stdin.read()))
     return 0
 
 
