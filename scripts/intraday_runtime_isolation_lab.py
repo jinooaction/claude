@@ -243,7 +243,7 @@ def validate_report(report):
     require(report["cases"]["source_write"]["output"]["write_errno"] == errno.EROFS)
     require(report["cases"]["site_positive"]["pth_executed_without_S"] is True)
     require(report["program_readiness"] == "NOT_ASSESSED" and same(report["orders_submitted"], 0))
-    require(len(json.dumps(report).encode()) <= 32768)
+    require(len(json.dumps(report).encode()) + 1 <= 32768)  # Include stored newline.
     return report
 
 
