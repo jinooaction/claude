@@ -132,6 +132,7 @@ jobs:
           echo "source=$(jq -r '.source' /tmp/live_canary_server_summary.json)" >> "$GITHUB_OUTPUT"
           echo "orders_submitted=$(jq -r '.orders_submitted' /tmp/live_canary_server_summary.json)" >> "$GITHUB_OUTPUT"
           echo "result=$(jq -r '.result' /tmp/live_canary_server_summary.json)" >> "$GITHUB_OUTPUT"
+          echo "summary_finished_at_utc=$(jq -r '.finished_at_utc' /tmp/live_canary_server_summary.json)" >> "$GITHUB_OUTPUT"
           echo "attempt_kind=$(jq -r '.attempt_kind // "legacy_initial"' /tmp/live_canary_server_summary.json)" >> "$GITHUB_OUTPUT"
           echo "first_run_id=$(jq -r '.first_run_id // .run_id' /tmp/live_canary_server_summary.json)" >> "$GITHUB_OUTPUT"
           echo "retry_run_id=$(jq -r '.retry_run_id // "none"' /tmp/live_canary_server_summary.json)" >> "$GITHUB_OUTPUT"
@@ -252,7 +253,8 @@ jobs:
 
       - name: Read fixed server timer runtime diagnostics
         id: runtime
-        if: always() && steps.status.outputs.query_status != 'ok'
+        # The last completed summary may predate a newer pre-order failure.
+        if: always()
         env:
           HOST: ${{ secrets.VULTR_SSH_HOST }}
           USER: ${{ secrets.VULTR_SSH_USER }}
@@ -326,6 +328,7 @@ jobs:
           SERVER_SOURCE: ${{ steps.status.outputs.source }}
           ORDERS_SUBMITTED: ${{ steps.status.outputs.orders_submitted }}
           SERVER_RESULT: ${{ steps.status.outputs.result }}
+          SUMMARY_FINISHED_AT_UTC: ${{ steps.status.outputs.summary_finished_at_utc }}
           ATTEMPT_KIND: ${{ steps.status.outputs.attempt_kind }}
           FIRST_RUN_ID: ${{ steps.status.outputs.first_run_id }}
           RETRY_RUN_ID: ${{ steps.status.outputs.retry_run_id }}
@@ -379,6 +382,8 @@ jobs:
           {
             echo "# Live canary server timer status — latest observation"
             echo
+            echo "과거 실행 요약과 현재 서버 상태는 서로 다른 관측이다. 조회 성공은 오늘 매매 성공을 뜻하지 않는다."
+            echo
             echo "| 항목 | 값 |"
             echo "|------|-----|"
             echo "| workflow_run_id | ${GITHUB_RUN_ID} |"
@@ -390,6 +395,7 @@ jobs:
             echo "| server_source | ${SERVER_SOURCE:-unavailable} |"
             echo "| orders_submitted | ${ORDERS_SUBMITTED:-unavailable} |"
             echo "| server_result | ${SERVER_RESULT:-unavailable} |"
+            echo "| summary_finished_at_utc | ${SUMMARY_FINISHED_AT_UTC:-unavailable} |"
             echo "| attempt_kind | ${ATTEMPT_KIND:-unavailable} |"
             echo "| first_run_id | ${FIRST_RUN_ID:-unavailable} |"
             echo "| retry_run_id | ${RETRY_RUN_ID:-none} |"
@@ -404,6 +410,12 @@ jobs:
             echo "| timer_next_elapse | ${TIMER_NEXT_ELAPSE:-unavailable} |"
             echo "| service_result | ${SERVICE_RESULT:-unavailable} |"
             echo "| service_exit | ${SERVICE_EXIT:-unavailable} |"
+            if [[ "${RUNTIME_STATUS:-}" == "ok" ]]; then
+              jq -r '"| runtime_observed_at_utc | " + .observed_at_utc + " |",
+                "| journal_readable | " + (.journal_readable | tostring) + " |",
+                "| recent_events | " + (.recent_events | join(", ")) + " |"' \
+                /tmp/live_canary_runtime_status.json
+            fi
           } > LAST_RUN.md
 
           git checkout --orphan publish
@@ -430,7 +442,13 @@ jobs:
           QUERY_STATUS: ${{ steps.status.outputs.query_status }}
           ORDERS_SUBMITTED: ${{ steps.status.outputs.orders_submitted }}
           DIAGNOSTIC_STATUS: ${{ steps.order_diagnostics.outputs.diagnostic_status }}
+          RUNTIME_STATUS: ${{ steps.runtime.outputs.runtime_status }}
+          RUNTIME_EXIT: ${{ steps.runtime.outputs.runtime_exit }}
         run: |
+          if [[ "${RUNTIME_EXIT:-1}" != "0" || "${RUNTIME_STATUS:-}" != "ok" ]]; then
+            echo "::error::current server runtime was not observed"
+            exit 1
+          fi
           if [[ "${QUERY_EXIT:-1}" != "0" || "${QUERY_STATUS:-}" != "ok" ]]; then
             echo "::error::valid server timer summary was not observed"
             exit 1
