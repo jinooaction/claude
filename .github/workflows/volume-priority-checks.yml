@@ -34,6 +34,7 @@ on:
       - 'tests/unit/test_live_canary_server_status_workflow.py'
       - 'research-fixtures/206/**'
       - 'specs/206-volume-priority-research/**'
+      - 'specs/218-source-installation-contract/**'
       - '.github/workflows/volume-priority-checks.yml'
 
 permissions:
