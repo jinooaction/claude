@@ -14,7 +14,7 @@
 **Project Type**: 공개 전 파일/표준 입력 CLI
 **Performance Goals**: 보고서 줄 순회, 외부 호출 0회
 **Constraints**: 비밀값 유지 금지, 손상 수치 추정 금지
-**Scale/Scope**: 기존 33개 발행 workflow가 공통 스크립트를 사용
+**Scale/Scope**: 기존 32개 발행 workflow가 공통 스크립트를 사용
 
 ## Constitution Check
 - I/II/III: 주문·한도·종목·LLM 호출 변경 없음.
@@ -38,7 +38,7 @@
 순차 줄 탐색으로 backtick/tilde 최소3개, 최대3칸 들여쓰기의 코드 구분선을 인식한다.
 JSON 언어 표시만 구조화하고, 다른 코드 블록은 통째 텍스트로 처리해 내부 가짜 구분선을 오인하지 않는다.
 닫힘은 같은 문자/길이 이상이다. json.loads 성공 시 _redact_json_value 후 json.dumps;
-실패/미닫힘은 기존 redact 처리. CLI 파일 일반 경로와 stdin에 연결한다.
+실패/미닫힘은 기존 redact 처리. 파싱뿐 아니라 재귀 가림·직렬화의 ValueError/RecursionError도 기존 보호로 복귀한다. CLI 파일 일반 경로와 stdin에 연결한다.
 JSON 파일과 JSONL 파싱은 그대로 둔다. 계좌 NAV 필드도 모든 구조화 경로에서 가린다.
 
 ## Verification and Rollback

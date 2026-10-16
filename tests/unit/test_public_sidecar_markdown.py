@@ -128,3 +128,24 @@ def test_directory_cli_preserves_json_jsonl_and_git_exclusion(tmp_path):
     for name in ("evidence.json", "ledger.jsonl"):
         assert json.loads((tmp_path / name).read_text()) == expected
     assert ignored.read_text() == "account_no=1234567801"
+
+
+@pytest.mark.parametrize("depth", [600, 2000])
+def test_deep_json_falls_back_to_text_protection(tmp_path, depth):
+    raw = ('```json\n' + '[' * depth + '"account_no=1234567801"'
+           + ']' * depth + '\n```\n')
+    result = _process(tmp_path, raw)
+    assert result == REDACTOR.redact(raw)
+    assert "1234567801" not in result
+
+
+def test_integer_limit_failure_falls_back_to_text_protection(tmp_path):
+    raw = '```json\n{"huge":' + '1' * 1000 + ',"account_no":"1234567801"}\n```\n'
+    previous_limit = sys.get_int_max_str_digits()
+    try:
+        sys.set_int_max_str_digits(640)
+        result = _process(tmp_path, raw)
+    finally:
+        sys.set_int_max_str_digits(previous_limit)
+    assert result == REDACTOR.redact(raw)
+    assert "1234567801" not in result

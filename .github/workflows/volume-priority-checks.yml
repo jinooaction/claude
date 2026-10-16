@@ -77,7 +77,7 @@ jobs:
                                     ('test_capital_path_readiness', 1),
                                     ('test_money_gate_alignment', 1),
                                     ('test_operator_status', 1),
-                                    ('test_public_sidecar_markdown', 33),
+                                    ('test_public_sidecar_markdown', 36),
                                     ('test_security_workflow_hardening', 1)]:
               selected = [c for c in all_cases if fragment in c.get('classname', '')]
               assert len(selected) >= minimum and all(c.find('skipped') is None for c in selected)

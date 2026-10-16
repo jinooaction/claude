@@ -190,15 +190,15 @@ def redact_markdown(text: str) -> str:
         if info.strip().lower() == "json":
             try:
                 payload = json.loads("".join(lines[index + 1:end]))
-            except json.JSONDecodeError:
+                protected = json.dumps(
+                    _redact_json_value(payload), ensure_ascii=False, indent=2, sort_keys=True
+                )
+            except (ValueError, RecursionError):
+                # Publishers may ignore a script error. Parser/recursion limits
+                # must retain the old text protection rather than leave raw data.
                 chunks.append(redact(block))
             else:
-                chunks.append(
-                    lines[index]
-                    + json.dumps(_redact_json_value(payload), ensure_ascii=False,
-                                 indent=2, sort_keys=True)
-                    + "\n" + lines[end]
-                )
+                chunks.append(lines[index] + protected + "\n" + lines[end])
         else:
             chunks.append(redact(block))
         start = index = end + 1

@@ -11,6 +11,7 @@
 - [x] T006 [US1] tests/unit/test_public_sidecar_markdown.py에서 파일·디렉터리·표준 입력·소비자 파싱을 확인한다.
 ## Phase 4: US2 손상 증거·경계
 - [x] T007 [US2] tests/unit/test_public_sidecar_markdown.py에서 손상·미닫힘·중첩·일반 코드·반복 처리 반례를 확인한다.
+- [x] T012 [US2] tests/unit/test_public_sidecar_markdown.py에 재귀/정수 한도 실패3개를 재현하고 scripts/redact_public_sidecar.py에서 기존 보호 복귀를 확인한다.
 - [x] T008 [US2] specs/217-sidecar-json-redaction/results.md에 실제 손상 원본 비복원 및 되돌림 검토를 기록한다.
 ## Phase 5: 검증과 인계
 - [x] T009 .github/workflows/volume-priority-checks.yml에 정확 경로/필수 반례를 연결한다. 전체 실행 결과는 아래 출시 관문으로 별도 추적한다.
