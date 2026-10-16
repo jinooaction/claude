@@ -14,6 +14,8 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Any
 
+from auto_invest.analytics.money_path_status import live_blocking_detail
+
 SCHEMA_VERSION = "1.0"
 
 PARSE_OK = "ok"
@@ -376,7 +378,9 @@ def _money_path_surface(raw: str | None) -> OperatorSurface:
     if isinstance(live_state, Mapping):
         live_status = _str(live_state.get("status"), "UNKNOWN")
     stage = _str(parsed.get("stage"), "UNKNOWN")
-    blocker = _str(parsed.get("blocking_gate") or parsed.get("next_action"), "")
+    blocker = live_blocking_detail(parsed) or _str(
+        parsed.get("blocking_gate") or parsed.get("next_action"), ""
+    )
     if live_status == "BLOCKED" or stage == "BLOCKED":
         severity = SEVERITY_ACTION
         summary = f"실제 돈 경로가 차단 상태입니다: {blocker or live_status}"

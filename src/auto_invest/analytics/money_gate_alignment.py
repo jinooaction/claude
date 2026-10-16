@@ -19,6 +19,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from auto_invest.analytics.evolution_loop import mask_sensitive_values
+from auto_invest.analytics.money_path_status import live_blocking_detail
 from auto_invest.analytics.pipeline_liveness import parse_timestamp_utc
 
 SCHEMA_VERSION = "1.0"
@@ -361,7 +362,7 @@ def _observation_counts(
 ) -> dict[str, tuple[int | None, int | None]]:
     counts: dict[str, tuple[int | None, int | None]] = {}
     money_n = _int_value(_nested(money, "forward_n_obs"))
-    blocker_n, blocker_min = _ratio_from_text(_money_blocking_gate(money))
+    blocker_n, blocker_min = _ratio_from_text(_money_blocking_gate(money, prefer_live=False))
     if money_n is None:
         money_n = blocker_n
     if money_n is not None:
@@ -470,9 +471,11 @@ def _money_stage(money: Mapping[str, Any] | None) -> str:
     return _str_field(money, "stage") or _str_field(money, "capital_ladder_stage", STAGE_UNKNOWN)
 
 
-def _money_blocking_gate(money: Mapping[str, Any] | None) -> str:
+def _money_blocking_gate(money: Mapping[str, Any] | None, *, prefer_live: bool = True) -> str:
     if not money:
         return "money-path evidence missing"
+    if prefer_live and (detail := live_blocking_detail(money)):
+        return _clean(detail)
     for key in ("blocking_gate", "blocker", "reason"):
         if money.get(key):
             return _clean(money.get(key))

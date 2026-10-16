@@ -5,6 +5,14 @@
 
 ## Summary
 
+2026-10-16 보정 계획: 공통 순수 함수 `money_path_status.live_blocking_detail`에서
+명시된 실제 차단 설명만 선택한다. 076 준비도·078 정렬·080 운영판·183 모바일 소비자를
+같이 보정하고 기존 JSON 스키마/상태 판정·주문 권한은 보존한다. 실제 원본 재생과
+추가 반례를 작은 로컬 검사로 확인하고 기존 volume-priority 전체 회귀의 경로 필터에
+이 소비자/검사들을 연결해 정확 PR HEAD를 GitHub에서 검증한다. 새 스케줄/생산 실행 경로는 없다.
+기존 암호화 검사와 필수 반례는 유지한다. 전체 큰 검사는 로컬에서 실행하지 않는다.
+원본 accb5f4d 시각을 현재 실시간 계좌 상태로 바꾸어 표시하지 않는다.
+
 Add a read-only capital path readiness loop that consumes already-published sidecars, classifies current capital readiness, highlights the nearest safe money action, suppresses rejected strategy/portfolio candidates, and publishes a durable sidecar for other loops and future sessions.
 
 ## Technical Context

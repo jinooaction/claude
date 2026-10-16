@@ -16,6 +16,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
+from auto_invest.analytics.money_path_status import live_blocking_detail
+
 SCHEMA_VERSION = "1.0"
 
 STATE_UNKNOWN = "UNKNOWN"
@@ -651,6 +653,8 @@ def _gate_list(money: Mapping[str, Any] | None) -> list[str]:
 
 
 def _blocking_gate(money: Mapping[str, Any] | None, reassign: Mapping[str, Any] | None) -> str:
+    if detail := live_blocking_detail(money):
+        return detail
     if money:
         for key in ("blocking_gate", "blocker", "reason"):
             value = money.get(key)
@@ -724,6 +728,8 @@ def _classify(money: Mapping[str, Any] | None) -> str:
 
 
 def _next_action(state: str, money: Mapping[str, Any] | None, priority_count: int) -> str:
+    if detail := live_blocking_detail(money):
+        return f"실주문 차단을 유지한 채 최신 원본 증거와 기존 안전 게이트를 확인한다: {detail}"
     if money and money.get("next_action"):
         return str(money["next_action"])
     if state == STATE_UNKNOWN:
