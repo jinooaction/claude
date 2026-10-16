@@ -99,6 +99,18 @@ def same(actual, expected):
     return type(actual) is type(expected) and actual == expected
 
 
+def environment(values):
+    require(type(values) is list, "LAB_INVALID_ENV")
+    result = {}
+    for item in values:
+        require(type(item) is str and "=" in item, "LAB_INVALID_ENV")
+        name, value = item.split("=", 1)
+        require(re.fullmatch(r"[A-Za-z_][A-Za-z_0-9]*", name) is not None, "LAB_INVALID_ENV")
+        require(name not in result, "LAB_DUPLICATE_ENV")
+        result[name] = value
+    return result
+
+
 def validate_container(obj, cid, image, image_env, case, bind=None):
     """Validate one same-ID created object. Fixed controls are internal lab cases."""
     try:
@@ -128,7 +140,12 @@ def validate_container(obj, cid, image, image_env, case, bind=None):
             "Env": env,
             "Image": image,
         }.items():
-            require(same(obj["Config"][key], expected), "INSPECT_CONFIG_" + key.upper())
+            if key == "Env":
+                require(
+                    environment(obj["Config"][key]) == environment(expected), "INSPECT_CONFIG_ENV"
+                )
+            else:
+                require(same(obj["Config"][key], expected), "INSPECT_CONFIG_" + key.upper())
         host = HOST.copy()
         mounts = []
         if case == "bind_control":
@@ -492,7 +509,7 @@ def run_lab(output):
             require(not cleanup_failed)
         # No success report if experiments or cleanup failed.
         with output.open("x") as handle:
-            handle.write(json.dumps(report, sort_keys=True, indent=2) + "\n")
+            handle.write(json.dumps(report, sort_keys=True) + "\n")
         return report
 
 

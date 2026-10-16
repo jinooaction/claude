@@ -177,3 +177,39 @@ def test_local_cli_rejects_before_docker_lookup(monkeypatch, tmp_path):
     with pytest.raises(LabError):
         lab.run_lab(tmp_path / "report.json")
     assert not lookup.called and not (tmp_path / "report.json").exists()
+
+
+def test_docker_user_env_precedes_image_defaults_without_changing_content():
+    obj = container()
+    obj["Args"][-1] = "environment_injection"
+    obj["Config"]["Cmd"] = ["environment_injection"]
+    obj["Config"]["Env"] = lab.INJECTION + ENV
+    validate_container(obj, CID, IMAGE, ENV, "environment_injection")
+
+
+@pytest.mark.parametrize("value", [ENV[0], "PATH=changed"])
+def test_duplicate_env_rejected_before_start(value):
+    obj = container()
+    obj["Config"]["Env"].append(value)
+    call = Mock(return_value=(0, json.dumps([obj]), ""))
+    with pytest.raises(LabError):
+        start_checked(call, CID, IMAGE, ENV, "baseline")
+    assert call.call_count == 1
+
+
+@pytest.mark.parametrize("values", [None, {}, ["INVALID"], ["=empty"], [True]])
+def test_bad_environment_structure(values):
+    obj = container()
+    obj["Config"]["Env"] = values
+    with pytest.raises(LabError):
+        validate_container(obj, CID, IMAGE, ENV, "baseline")
+
+
+def test_env_preserves_full_value_and_case():
+    obj = container()
+    expected = ENV + ["Exact=left=right "]
+    obj["Config"]["Env"] = list(reversed(expected))
+    validate_container(obj, CID, IMAGE, expected, "baseline")
+    obj["Config"]["Env"][0] = "exact=left=right "
+    with pytest.raises(LabError):
+        validate_container(obj, CID, IMAGE, expected, "baseline")

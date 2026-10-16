@@ -13,3 +13,5 @@
   [metadata](https://hub.docker.com/v2/repositories/library/python/tags/3.11.14-slim-bookworm).
 - 대안 제외: venv 버전 비교 반복, 전체 source/stdlib 인증 선언, 실제 server 설치·권한 변경.
 - 독립 runtime_contract_review 역할은 공식 문서만 읽어 자료형·image ID·주입 대조군·bind 한계를 확인했다. 실행 시험으로 집계하지 않는다.
+- 원래 초기 lab116873549306의 INSPECT_CONFIG_ENV 뒤 Docker의 --env 우선 병합을 확인했다. 중복 이름 거절 뒤 순서 없는 정확 내용 비교를 선택했다.
+  [공식 Engine 병합](https://github.com/moby/moby/blob/v28.3.3/daemon/commit.go#L36-L58), [CLI 환경 구성](https://github.com/docker/cli/blob/v28.3.3/cli/command/container/opts.go#L458-L462).

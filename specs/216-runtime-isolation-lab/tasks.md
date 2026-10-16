@@ -10,7 +10,7 @@
 - [x] T006 [US2] .github/workflows/runtime-isolation-lab.yml에 정확 HEAD 전체회귀·실험·artifact 연결.
 - [x] T007 [US3] evidence/HANDOFF·215 tasks/results를 원래 실제 반영·검증·병합 근거로 갱신.
 ## Closure
-- [x] T008 results.md의 작은 합성54/린트/하네스14/14/인계 actualmain44/본문·구문·보호파일 불변 확인. PR본문은 커밋 전 검증하고 정확SHA/원격종료 근거로 갱신한다.
+- [x] T008 results.md의 작은 합성63/린트/하네스14/14/인계 actualmain44/본문·구문·보호파일 불변 확인. PR본문은 커밋 전 검증하고 정확SHA/원격종료 근거로 갱신한다.
 - [ ] T009 정확 원격 전체XML/필수 반례·린트/실제 lab report·고정보관 확인.
 - [ ] T010 최신본문·준비·머지가능→merge/main/정상배포 현재시도 확인.
 T001→T002→T003→T004→T005→T006→T007→T008→T009→T010. 조사 외 편집은 순서대로 한다.

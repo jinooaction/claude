@@ -43,7 +43,7 @@ jobs:
           python - <<'PY'
           import os, xml.etree.ElementTree as ET
           cases = list(ET.parse(os.environ['RUNNER_TEMP']+'/runtime-lab.xml').iter('testcase'))
-          for fragment, minimum in [('test_intraday_runtime_isolation_lab', 54),
+          for fragment, minimum in [('test_intraday_runtime_isolation_lab', 63),
                                     ('test_intraday_installed_tree', 70),
                                     ('test_intraday_frozen_context', 57),
                                     ('test_intraday_research_identity', 21),
