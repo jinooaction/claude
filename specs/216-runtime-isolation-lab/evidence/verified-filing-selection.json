@@ -1,0 +1,17 @@
+{
+  "complete": false,
+  "coverage": {
+    "failed": 0,
+    "skipped": 7,
+    "succeeded": 4
+  },
+  "full_store_chain_verified": false,
+  "manifest_sha256": "8014e8c7e8bc5d172538195df5ae76f29f6fe7ff6dc014fecb420a9153ac1768",
+  "new_upstream_requests": 0,
+  "run_id": "actions-38582948800-1",
+  "scope": "RETAINED_SINGLE_RUN_MANIFEST",
+  "selection": {
+    "limit_skipped": 1,
+    "unselected": 6
+  }
+}
