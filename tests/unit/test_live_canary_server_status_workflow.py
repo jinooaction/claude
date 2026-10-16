@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
+import textwrap
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "live-canary-server-status.yml"
@@ -10,6 +15,52 @@ WORKFLOW = ROOT / ".github" / "workflows" / "live-canary-server-status.yml"
 
 def _body() -> str:
     return WORKFLOW.read_text(encoding="utf-8")
+
+
+def _step(name: str) -> str:
+    return _body().split("      - name: " + name + "\n", 1)[1].split(
+        "      - name:", 1
+    )[0]
+
+
+def test_historical_summary_does_not_suppress_current_runtime_read() -> None:
+    runtime = _step("Read fixed server timer runtime diagnostics")
+    # A valid September summary can coexist with an October pre-order failure.
+    assert "        if: always()\n" in runtime
+    publish = _step("Publish sanitized observation sidecar")
+    assert "summary_finished_at_utc" in publish
+    assert "과거 실행 요약" in publish
+    assert "현재 서버 상태" in publish
+
+
+@pytest.mark.parametrize(
+    "query_status,orders,diagnostic,runtime,runtime_exit,expected",
+    [
+        ("ok", "1", "", "ok", "0", 0),
+        ("ok", "1", "", "unavailable", "255", 1),
+        ("ok", "1", "", "invalid_runtime", "0", 1),
+        ("ok", "1", "", "", "", 1),
+        ("ok", "1", "", "ok", "255", 1),
+        ("unavailable", "", "", "ok", "0", 1),
+        ("invalid_summary", "", "", "ok", "0", 1),
+        ("ok", "0", "unavailable", "ok", "0", 1),
+        ("ok", "0", "ok", "ok", "0", 0),
+    ],
+)
+def test_observation_gate_executes_independent_evidence_checks(
+    query_status: str, orders: str, diagnostic: str, runtime: str,
+    runtime_exit: str, expected: int,
+) -> None:
+    gate = _step("Fail closed without valid summary or required zero-order diagnostics")
+    script = textwrap.dedent(gate.split("        run: |\n", 1)[1])
+    result = subprocess.run(
+        ["bash", "-c", script],
+        env={**os.environ, "QUERY_EXIT": "0", "QUERY_STATUS": query_status,
+             "ORDERS_SUBMITTED": orders, "DIAGNOSTIC_STATUS": diagnostic,
+             "RUNTIME_STATUS": runtime, "RUNTIME_EXIT": runtime_exit},
+        capture_output=True, text=True, check=False,
+    )
+    assert result.returncode == expected, result.stdout + result.stderr
 
 
 def test_server_status_workflow_has_only_manual_read_trigger() -> None:
