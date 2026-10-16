@@ -1,5 +1,12 @@
 # 빠른 실행: 증거 수렴형 실거래 검증 캐너리
 
+## 2026-10-16 후속 무주문 검사
+
+`uv run pytest tests/unit/test_live_canary_active_track.py tests/unit/test_live_canary_server_status_workflow.py tests/unit/test_live_canary_server_scheduler.py tests/unit/test_live_canary_operational_revision.py tests/unit/test_live_canary_gateway.py`
+
+원래 ACTIVE 결과와 첫진입0건, 불허·미지상태·불량수량·비정상 종료를 실제 shell 함수로
+검사한다. 외부 호출은 가짜다. 전체/강화 검사 근거를 PR에 남기고 승인 전 배포하지 않는다.
+
 ## 1. 좁은 계약 검사
 
 ```bash

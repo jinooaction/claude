@@ -21,6 +21,7 @@ RETRY_SESSION_FILE="${STATE_DIR}/order-session-retries.tsv"
 RETRY_MANIFEST_PATH="deploy/live-canary-retry-incident.json"
 DEPLOYED_CODE_COMMIT=""
 MAIN_CODE_COMMIT=""
+ENTRY_REVALIDATION_STATE=""
 
 die() {
     echo "ERROR: $*" >&2
@@ -200,6 +201,7 @@ run_entry_revalidation() {
     local factory_branch="automation/autonomous-strategy-factory-last-run"
     local now_epoch evidence_epoch factory_epoch evidence_age_hours factory_age_hours
     local backfill_exit canary_exit profit_exit parity_exit preview_exit probe_exit
+    ENTRY_REVALIDATION_STATE=""
 
     cd "${REPO}" || return 2
     git_as_app fetch --depth=1 origin \
@@ -264,8 +266,13 @@ run_entry_revalidation() {
     probe_exit=$?
     set -e
     [[ "${probe_exit}" -eq 0 ]] || return "${probe_exit}"
-    jq -e '.allowed == true and .state == "ENTRY_READY"' \
+    jq -e '.schema_version == "1.0" and .allowed == true and
+        (.fills_count | type == "number" and . >= 0 and . == floor) and
+        ((.state == "ENTRY_READY" and .fills_count == 0) or
+         (.state == "ACTIVE_LIVE_TRACK" and .fills_count > 0))' \
         "${work_dir}/entry_revalidation.json" >/dev/null || return 3
+    ENTRY_REVALIDATION_STATE="$(jq -er '.state' "${work_dir}/entry_revalidation.json")" \
+        || return 3
     return 0
 }
 
@@ -408,7 +415,7 @@ main() {
         --arg code_commit "${main_sha}" \
         --arg deployed_code_commit "${deployed_sha}" \
         --arg capital_usd "${capital}" \
-        --arg entry_state "ENTRY_READY" \
+        --arg entry_state "${ENTRY_REVALIDATION_STATE}" \
         --arg claim_status "${claim_status}" \
         --arg attempt_kind "${attempt_kind}" \
         --arg first_run_id "${first_run_id}" \

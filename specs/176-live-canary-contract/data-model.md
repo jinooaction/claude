@@ -1,5 +1,12 @@
 # 데이터 모델: 증거 수렴형 실거래 검증 캐너리
 
+## 2026-10-16 서버 재검증 결과
+
+기존 schema1.0/allowed true/정수 fills_count와 state를 함께 검사한다.
+ENTRY_READY는0, ACTIVE_LIVE_TRACK은양수다. 나머지는 거절한다.
+summary1.1의 entry_state에 실제 상태를 남긴다. 새 필드·서명·권한은 없다.
+기존 같은 날 복구는 ENTRY_READY 전용을 유지한다.
+
 ## OperationalCanaryEvidence
 
 장기 성과가 있는 기존 정확 배포 전략을 10% 운영 검증에 넣기 위한 불변 증거다.

@@ -84,7 +84,7 @@ jobs:
             (.deployed_code_commit | test("^[0-9a-f]{40}$")) and
             .operational_equivalent == true and
             (.capital_usd | test("^[0-9]+([.][0-9]+)?$")) and
-            .entry_state == "ENTRY_READY" and
+            (.entry_state | IN("ENTRY_READY", "ACTIVE_LIVE_TRACK")) and
             .entry_allowed == true and
             (.claim_status == "claimed" or .claim_status == "retry_claimed") and
             (.order_exit | type == "number") and
