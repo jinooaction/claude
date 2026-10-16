@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from auto_invest.analytics.capital_path_readiness import extract_json_after_header
+from auto_invest.analytics.money_path_status import live_blocking_detail
 from auto_invest.analytics.pipeline_liveness import (
     SidecarSpec,
     assess_liveness,
@@ -290,6 +291,10 @@ def _active_strategy(
         )
 
     live_state = _mapping(money_path.get("live_money_state")) or {}
+    blockers = [
+        _safe_string(live_blocking_detail(money_path)),
+        _safe_string(money_path.get("blocking_gate")),
+    ]
     return {
         "strategy_id": _safe_string(operational.get("candidate_id")),
         "role": "OPERATIONAL_CANARY",
@@ -309,11 +314,7 @@ def _active_strategy(
             "required": _safe_money(evidence.get("min_forward_psr")),
         },
         "promotion_status": "BLOCKED" if not operational.get("alpha_confirmed") else "ELIGIBLE",
-        "blockers_ko": [
-            value
-            for value in [_safe_string(money_path.get("blocking_gate"))]
-            if value is not None
-        ],
+        "blockers_ko": list(dict.fromkeys(value for value in blockers if value is not None)),
         "observed_at_utc": _safe_timestamp(parse_timestamp_utc(live_canary_raw)),
     }
 

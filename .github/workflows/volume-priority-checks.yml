@@ -16,6 +16,17 @@ on:
       - 'tests/unit/test_sparse_opening_research.py'
       - 'tests/integration/test_volume_priority_research_cli.py'
       - 'tests/integration/test_sparse_opening_research_cli.py'
+      # Existing full regression also covers the read-only operational reports.
+      - 'src/auto_invest/analytics/money_path_status.py'
+      - 'src/auto_invest/analytics/capital_path_readiness.py'
+      - 'src/auto_invest/analytics/money_gate_alignment.py'
+      - 'src/auto_invest/analytics/operator_status.py'
+      - 'src/auto_invest/analytics/mobile_operator_snapshot.py'
+      - 'tests/unit/test_money_path_status.py'
+      - 'tests/unit/test_capital_path_readiness.py'
+      - 'tests/unit/test_money_gate_alignment.py'
+      - 'tests/unit/test_operator_status.py'
+      - 'tests/unit/test_mobile_operator_snapshot.py'
       - 'research-fixtures/206/**'
       - 'specs/206-volume-priority-research/**'
       - '.github/workflows/volume-priority-checks.yml'
@@ -57,6 +68,14 @@ jobs:
           cases = [c for c in root.iter('testcase')
                    if 'test_volume_priority_research_cli' in c.get('classname', '')]
           assert len(cases) >= 29 and all(c.find('skipped') is None for c in cases)
+          all_cases = list(root.iter('testcase'))
+          for fragment, minimum in [('test_money_path_status', 17),
+                                    ('test_mobile_operator_snapshot', 8),
+                                    ('test_capital_path_readiness', 1),
+                                    ('test_money_gate_alignment', 1),
+                                    ('test_operator_status', 1)]:
+              selected = [c for c in all_cases if fragment in c.get('classname', '')]
+              assert len(selected) >= minimum and all(c.find('skipped') is None for c in selected)
           PY
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()

@@ -55,6 +55,14 @@
 
 ## Implementation Strategy
 
+2026-10-16 기존 소비자 보정:
+- [x] 실제 원본의 계좌 대사 차단 누락을 재현한다(수정 전 신규1실패/15통과).
+- [x] 준비도/정렬/운영판/모바일의 이유 선택과 호환 처리를 함께 고친다.
+- [x] 관련50개/0.20초·린트 및 원본accb5f4d 재생으로 실제 차단/NO_EDGE 동시 보존을 확인한다.
+- [ ] 정확 PR HEAD 전체 회귀/린트·필수 반례·품질 관문·병합과 후속 보고서 발행을 확인한다.
+  최종 근거는 PR 본문에 남긴다. 표시만을 위해 검사를 반복하지 않는다.
+  전체181 T013~T016, 정지 해제, 승인 발급·자금 배정·실제 주문 완료는 별개다.
+
 1. Build a pure read-only core that classifies readiness from dictionaries/text.
 2. Add a probe that mirrors existing sidecar collection patterns.
 3. Publish a dedicated workflow sidecar.

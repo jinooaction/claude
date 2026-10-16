@@ -4,9 +4,33 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
+
 from auto_invest.analytics.mobile_operator_snapshot import build_mobile_operator_summaries
 
 NOW = datetime(2026, 9, 8, 0, 0, tzinfo=UTC)
+
+
+@pytest.mark.parametrize("status", ["BLOCKED", "REAL_ORDER_PATH_ARMED"])
+def test_active_strategy_preserves_live_and_promotion_blockers(tmp_path: Path, status: str):
+    sidecars, budget, preflight = _write_inputs(tmp_path)
+    path = sidecars / "money-path.md"
+    money = json.loads(path.read_text().split("```json\n")[1].split("\n```")[0])
+    detail = "전역 halt 안전 게이트 차단: reconciliation recovery evidence stale"
+    money["live_money_state"].update(status=status, detail=detail, can_submit_real_orders=False)
+    path.write_text("## 결정 JSON\n\n```json\n" + json.dumps(money) + "\n```\n")
+    before = path.read_bytes()
+
+    capital, strategy = build_mobile_operator_summaries(
+        sidecar_dir=sidecars, budget_path=budget, preflight_path=preflight, now=NOW,
+    )
+    expected = [money["blocking_gate"]]
+    if status == "BLOCKED":
+        expected.insert(0, detail)
+    assert strategy["active"]["blockers_ko"] == expected
+    assert strategy["active"]["promotion_status"] == "BLOCKED"
+    assert capital["intraday_budget"]["orders_enabled"] is False
+    assert path.read_bytes() == before
 
 
 def _write_inputs(root: Path) -> tuple[Path, Path, Path]:
