@@ -5,8 +5,8 @@
 - [x] T117 spec FR046~048/plan/research/data-model/contracts/quickstart에 문제·범위·승인·되돌림을 고정한다.
 - [x] T118 [US6] tests/unit/test_live_canary_active_track.py에 원래 평가기→실제shell 거절과 반례를 작성했다. 수정 전5실패/14통과, 최종23개 통과.
 - [x] T119 [US6] deploy/live-canary-scheduled-on-instance.sh의 두 상태 계약·실제 요약과 관측 workflow를 연결했다. 관련88개/51.98초 및 후속 소비자4개 통과.
-- [ ] T120 [US6] 작은/원격 전체·강화 캐너리·린트·하네스·인계·PR 품질 검증을 active-live-timer-results.md/PR에 기록한다.
-- [ ] T121 운영자 명시 승인 후 병합·정상 장외 배포 감사·기존 예약 결과를 관측한다. 승인 전 배포/수동 주문0.
+- [x] T120 [US6] 정확5936416e의 작은/원격 전체·강화 합성 캐너리·린트·하네스·인계·PR 품질 검증을 active-live-timer-results.md/PR895에 기록했다. main76 통합 후 최종 HEAD 재검증은 PR895 종료 근거를 따른다.
+- [ ] T121 운영자 명시 승인 수령: "기존 한도 내 서버 예약 복구 승인". 병합·정상 장외 배포 감사·기존 예약 결과 관측은 남아 있다. 수동 주문·긴급 배포 제외.
 
 의존성 T117→T118→T119→T120→T121. 조회 보정 PR894는 별도다.
 전체181 통과전략/정식60세션/단타 생산 증거는 이 보정으로 완료하지 않는다.

@@ -135,4 +135,3 @@ def test_actual_observer_filter_accepts_only_known_entry_states(state, expected)
         input=json.dumps(payload), text=True, capture_output=True, check=False,
     )
     assert result.returncode == expected, result.stderr
-
