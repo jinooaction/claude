@@ -27,6 +27,9 @@ on:
       - 'tests/unit/test_money_gate_alignment.py'
       - 'tests/unit/test_operator_status.py'
       - 'tests/unit/test_mobile_operator_snapshot.py'
+      - 'scripts/redact_public_sidecar.py'
+      - 'tests/unit/test_public_sidecar_markdown.py'
+      - 'tests/unit/test_security_workflow_hardening.py'
       - 'research-fixtures/206/**'
       - 'specs/206-volume-priority-research/**'
       - '.github/workflows/volume-priority-checks.yml'
@@ -54,7 +57,7 @@ jobs:
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86
       - run: uv sync --locked --dev
       - name: Lint source and research command
-        run: uv run ruff check src tests scripts/volume_priority_research.py
+        run: uv run ruff check src tests scripts/volume_priority_research.py scripts/redact_public_sidecar.py
       - name: Full regression with mandatory pinned encryption runtime
         run: >-
           uv run --with-requirements scripts/volume-priority-requirements.txt
@@ -73,7 +76,9 @@ jobs:
                                     ('test_mobile_operator_snapshot', 8),
                                     ('test_capital_path_readiness', 1),
                                     ('test_money_gate_alignment', 1),
-                                    ('test_operator_status', 1)]:
+                                    ('test_operator_status', 1),
+                                    ('test_public_sidecar_markdown', 33),
+                                    ('test_security_workflow_hardening', 1)]:
               selected = [c for c in all_cases if fragment in c.get('classname', '')]
               assert len(selected) >= minimum and all(c.find('skipped') is None for c in selected)
           PY

@@ -1,7 +1,7 @@
 # Codex 작업 운영 규칙
 
 <!-- SPECKIT START -->
-현재 명세 계획: [자본 경로 준비도 — 실제 차단 사유 누락 보정, 기존 관문 유지](specs/076-capital-path-readiness-loop/plan.md).
+현재 명세 계획: [공개 보고서 JSON 보호 — 비밀 가림과 증거 수치 보존](specs/217-sidecar-json-redaction/plan.md).
 <!-- SPECKIT END -->
 
 이 저장소의 기본 방식은 자율 진행이다. 운영자가 한 번 작업을 지시하면, 실제 막힘이 생기거나 작업이 끝날 때까지 중간 허락을 묻지 말고 진행한다.
