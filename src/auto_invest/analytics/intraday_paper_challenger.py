@@ -715,7 +715,7 @@ def simulate_candidate(
                for value in signal_plan.values()):
             raise ValueError("external signals must be boolean pairs")
     elif signal_plan is not None:
-        raise ValueError("signal plan requires an explicitly supported research family")
+        raise ValueError("signal plan is only allowed for explicitly supported research families")
     cost_model = preregistration["cost_models"].get(cost_model_name)
     if not isinstance(cost_model, Mapping):
         raise ValueError(f"unknown cost model: {cost_model_name}")
