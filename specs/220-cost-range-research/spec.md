@@ -1,7 +1,7 @@
 # Feature Specification: 비용보다 큰 개장 범위의 단일 돌파 가설
 **Feature Branch**: `codex/220-cost-range-research`
 **Created**: 2026-10-17
-**Status**: 사전등록 준비
+**Status**: 사전등록 완료·원격 검증 준비
 **Input**: “전체 완성할때까지 멈추지마”의181 T013 실제 전략 근거 확보.
 
 ## User Scenarios & Testing

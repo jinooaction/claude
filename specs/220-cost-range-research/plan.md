@@ -14,7 +14,7 @@ src/auto_invest/analytics/cost_range_intraday.py: 봉인계약·후보·인과�
 src/auto_invest/analytics/intraday_paper_challenger.py: 새signal_plan family형식검사·1회시도목록만확장.
 scripts/cost_range_probe.py: develop/verify,깨끗한정확코드·원본재생.
 tests/unit/test_cost_range_intraday.py 및 tests/integration/test_cost_range_cli.py.
-.github/workflows/cost-range-research.yml: 정확원격전체회귀·개발·독립검증/원본artifact.
+.github/workflows/intraday-research-checks.yml: 기존전체회귀를재사용하고새개발·독립검증/원본artifact작업추가.기존198재생도공유엔진호환검사로유지.
 ## Phase 0 / 1
 research.md·data-model.md·contracts/preregistration.json·quickstart.md가판단과입출력을정의한다.
 원래198manifest를가격읽기전에확인한다.원래후보·연구결과를새후보로재표기하지않는다.
