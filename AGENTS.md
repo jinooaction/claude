@@ -1,7 +1,7 @@
 # Codex 작업 운영 규칙
 
 <!-- SPECKIT START -->
-현재 명세 계획: [기존 체결 전략의 서버 예약 상태 보정](specs/176-live-canary-contract/plan.md).
+현재 명세 계획: [소스·설치 입력 합성 검증](specs/219-source-input-lab/plan.md).
 병합된 별도 설계: [검토 소스·설치 입력과 고정 이미지의 연결 계약](specs/218-source-installation-contract/plan.md).
 <!-- SPECKIT END -->
 
